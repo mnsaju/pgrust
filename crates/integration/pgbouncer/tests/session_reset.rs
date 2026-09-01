@@ -1,4 +1,4 @@
-//! Live PgBouncer compatibility contract for pgrust's `DISCARD ALL` path.
+//! Live Rust PgBouncer compatibility contract for pgrust's `DISCARD ALL` path.
 //!
 //! PgBouncer runs `server_reset_query` when a server is released from a
 //! session pool.  Transaction pooling deliberately does not run that query by

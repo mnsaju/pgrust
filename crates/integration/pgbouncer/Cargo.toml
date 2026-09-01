@@ -1,0 +1,9 @@
+[package]
+name = "pgbouncer_compat"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+
+[lib]
+name = "pgbouncer_compat"
+path = "src/lib.rs"

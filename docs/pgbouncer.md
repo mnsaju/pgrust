@@ -14,7 +14,7 @@ and a built pgrust server binary:
 PGRUST_BIN=target/release/postgres \
 PGRUST_PGSHAREDIR=/usr/share/postgresql/18 \
 PGRUST_TZDIR=/usr/share/zoneinfo \
-cargo test -p discard --test pgbouncer_reset -- --ignored --nocapture
+cargo test -p pgbouncer_compat --test session_reset -- --ignored --nocapture
 ```
 
 The Rust integration test starts an isolated pgrust data directory and
