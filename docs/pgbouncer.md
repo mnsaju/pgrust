@@ -1,17 +1,18 @@
 # PgBouncer compatibility
 
-PgBouncer is an external PostgreSQL connection pooler. pgrust does not embed
-it and does not use it for query-aware replica routing. The first supported
-compatibility target is a PgBouncer **session pool** using
+`pgrust-pgbouncer` is a Rust reimplementation of the PgBouncer connection
+pooler role. It runs as a separate process and is not a query-aware replica
+router. Its first implemented mode is a **session pool** using
 `server_reset_query = DISCARD ALL`. PgBouncer does not run that reset query in
 transaction pools by default, because applications in that mode must not rely
-on session state.
+on session state; transaction and statement pooling are not implemented yet.
 
 Run the integration contract with a PostgreSQL 18 client toolset, PgBouncer,
 and a built pgrust server binary:
 
 ```sh
 PGRUST_BIN=target/release/postgres \
+PGBOUNCER=target/release/pgrust-pgbouncer \
 PGRUST_PGSHAREDIR=/usr/share/postgresql/18 \
 PGRUST_TZDIR=/usr/share/zoneinfo \
 cargo test -p pgbouncer_compat --test session_reset -- --ignored --nocapture

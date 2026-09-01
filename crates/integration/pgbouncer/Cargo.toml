@@ -7,3 +7,7 @@ publish.workspace = true
 [lib]
 name = "pgbouncer_compat"
 path = "src/lib.rs"
+
+[[bin]]
+name = "pgrust-pgbouncer"
+path = "src/main.rs"
