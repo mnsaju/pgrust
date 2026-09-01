@@ -23,3 +23,27 @@ administrative commands, cancellation, COPY, timeout and pool limits, DNS
 failover, replication, online restart, and peering. These remain tracked
 implementation work and must not be represented as passing until their Rust
 ports run successfully against pgrust.
+
+## Test runner
+
+Run the native Rust suite from the repository root with:
+
+```sh
+crates/integration/pgbouncer/tests/run-all.sh
+```
+
+To build pgrust as the Docker backend and run the full upstream PgBouncer
+pytest suite as well, install `docker`, `uv`, and PostgreSQL `psql`, then run:
+
+```sh
+crates/integration/pgbouncer/tests/run-all.sh --upstream
+```
+
+The upstream suite is intentionally exhaustive: unsupported compatibility
+areas will report failures until their Rust implementations are complete. Pass
+one or more pytest selectors after `--upstream` to run a focused subset, for
+example `test/test_admin.py::test_show_version`.
+
+The ignored `session_reset` contract remains separately environment-gated
+because it needs local PostgreSQL client/bootstrap tools. The Docker-backed
+upstream mode is the path for validating pgrust as the backend image.
