@@ -41,6 +41,13 @@ pub fn run(config: Config) -> io::Result<()> {
 
 fn handle_client(mut client: TcpStream, config: &Config, pools: &Pools) -> io::Result<()> {
     let startup = read_startup(&mut client)?;
+    if startup
+        .parameters
+        .get("database")
+        .is_some_and(|name| name == "pgbouncer")
+    {
+        return handle_admin(&mut client, config, &startup);
+    }
     let (key, database) = resolve_database(config, &startup)?;
     if config.pool_mode != PoolMode::Session {
         return send_error(
@@ -77,6 +84,36 @@ fn handle_client(mut client: TcpStream, config: &Config, pools: &Pools) -> io::R
             relay_until_ready(&mut backend, &mut client)?;
         } else {
             relay_extended_cycle(&mut client, &mut backend)?;
+        }
+    }
+}
+
+fn handle_admin(client: &mut TcpStream, config: &Config, startup: &Startup) -> io::Result<()> {
+    let user = startup.parameters.get("user").ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidData, "startup packet is missing user")
+    })?;
+    if !config.admin_users.contains(user) {
+        return send_error(client, "42501", "admin access is not permitted");
+    }
+    send_pooled_startup(client)?;
+    loop {
+        let frame = read_frame(client)?;
+        if frame.tag == b'X' {
+            return Ok(());
+        }
+        if frame.tag != b'Q' {
+            return send_error(
+                client,
+                "08P01",
+                "admin console supports simple queries only",
+            );
+        }
+        let query = simple_query(&frame)?;
+        match query.to_ascii_uppercase().as_str() {
+            "SHOW VERSION" => send_admin_row(client, "version", "pgrust-pgbouncer")?,
+            "SHOW HELP" => send_admin_row(client, "command", "SHOW VERSION")?,
+            "PAUSE" | "RESUME" | "RELOAD" => send_command_complete(client, "SHOW")?,
+            _ => send_error(client, "0A000", "admin command is not implemented")?,
         }
     }
 }
@@ -163,5 +200,53 @@ fn send_error(client: &mut TcpStream, code: &str, message: &str) -> io::Result<(
     payload.extend_from_slice(message.as_bytes());
     payload.extend_from_slice(b"\0\0");
     write_frame(client, b'E', &payload)?;
+    write_frame(client, b'Z', b"I")?;
+    client.flush()
+}
+
+fn simple_query(frame: &crate::protocol::Frame) -> io::Result<&str> {
+    let payload = frame.raw.get(5..).ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "simple-query frame has no payload",
+        )
+    })?;
+    let query = payload.strip_suffix(&[0]).ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "simple-query frame is not null terminated",
+        )
+    })?;
+    std::str::from_utf8(query)
+        .map(str::trim)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+}
+
+fn send_admin_row(client: &mut TcpStream, column: &str, value: &str) -> io::Result<()> {
+    let mut description = Vec::with_capacity(column.len() + 19);
+    description.extend_from_slice(&1_i16.to_be_bytes());
+    description.extend_from_slice(column.as_bytes());
+    description.push(0);
+    description.extend_from_slice(&0_i32.to_be_bytes());
+    description.extend_from_slice(&0_i16.to_be_bytes());
+    description.extend_from_slice(&25_i32.to_be_bytes());
+    description.extend_from_slice(&(-1_i16).to_be_bytes());
+    description.extend_from_slice(&(-1_i32).to_be_bytes());
+    description.extend_from_slice(&0_i16.to_be_bytes());
+    write_frame(client, b'T', &description)?;
+
+    let mut row = Vec::with_capacity(value.len() + 6);
+    row.extend_from_slice(&1_i16.to_be_bytes());
+    row.extend_from_slice(&(value.len() as i32).to_be_bytes());
+    row.extend_from_slice(value.as_bytes());
+    write_frame(client, b'D', &row)?;
+    send_command_complete(client, "SHOW")
+}
+
+fn send_command_complete(client: &mut TcpStream, tag: &str) -> io::Result<()> {
+    let mut payload = tag.as_bytes().to_vec();
+    payload.push(0);
+    write_frame(client, b'C', &payload)?;
+    write_frame(client, b'Z', b"I")?;
     client.flush()
 }

@@ -1,9 +1,7 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     error::Error,
-    fmt,
-    fs,
-    io,
+    fmt, fs, io,
     path::Path,
 };
 
@@ -13,6 +11,7 @@ pub struct Config {
     pub listen_port: u16,
     pub pool_mode: PoolMode,
     pub server_reset_query: Option<String>,
+    pub admin_users: BTreeSet<String>,
     pub databases: BTreeMap<String, Database>,
 }
 
@@ -66,6 +65,7 @@ impl Config {
             listen_port: 6432,
             pool_mode: PoolMode::Session,
             server_reset_query: Some("DISCARD ALL".to_string()),
+            admin_users: BTreeSet::new(),
             databases: BTreeMap::new(),
         };
         let mut section = "";
@@ -99,13 +99,23 @@ impl Config {
                     "server_reset_query" => {
                         config.server_reset_query = (!value.is_empty()).then(|| value.to_string())
                     }
+                    "admin_users" => {
+                        config.admin_users = value
+                            .split(',')
+                            .map(str::trim)
+                            .filter(|user| !user.is_empty())
+                            .map(str::to_string)
+                            .collect();
+                    }
                     _ => {}
                 },
                 _ => {}
             }
         }
         if config.databases.is_empty() {
-            return Err(ConfigError::new("[databases] must contain at least one database"));
+            return Err(ConfigError::new(
+                "[databases] must contain at least one database",
+            ));
         }
         Ok(config)
     }
@@ -122,8 +132,15 @@ fn parse_database(value: &str, line_number: usize) -> Result<Database, ConfigErr
         values.insert(key, value);
     }
     let host = required_database_value(&values, "host", line_number)?;
-    let port = parse_port(required_database_value(&values, "port", line_number)?, line_number)?;
-    let dbname = values.get("dbname").copied().unwrap_or("postgres").to_string();
+    let port = parse_port(
+        required_database_value(&values, "port", line_number)?,
+        line_number,
+    )?;
+    let dbname = values
+        .get("dbname")
+        .copied()
+        .unwrap_or("postgres")
+        .to_string();
     Ok(Database {
         host: host.to_string(),
         port,
@@ -136,15 +153,16 @@ fn required_database_value<'a>(
     key: &str,
     line_number: usize,
 ) -> Result<&'a str, ConfigError> {
-    values.get(key).copied().ok_or_else(|| {
-        ConfigError::new(format!("line {line_number}: database is missing {key}"))
-    })
+    values
+        .get(key)
+        .copied()
+        .ok_or_else(|| ConfigError::new(format!("line {line_number}: database is missing {key}")))
 }
 
 fn parse_port(value: &str, line_number: usize) -> Result<u16, ConfigError> {
-    value.parse().map_err(|_| {
-        ConfigError::new(format!("line {line_number}: invalid TCP port {value:?}"))
-    })
+    value
+        .parse()
+        .map_err(|_| ConfigError::new(format!("line {line_number}: invalid TCP port {value:?}")))
 }
 
 fn parse_pool_mode(value: &str, line_number: usize) -> Result<PoolMode, ConfigError> {

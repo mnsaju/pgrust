@@ -6,8 +6,7 @@
 //! test focused on the session-pool contract.
 
 use std::{
-    env,
-    fs,
+    env, fs,
     net::TcpListener,
     path::{Path, PathBuf},
     process::{Child, Command, Output},
@@ -56,8 +55,7 @@ impl Harness {
         let pgrust_bin = required_env("PGRUST_BIN");
         let initdb = env::var("INITDB").unwrap_or_else(|_| "initdb".to_string());
         let psql = env::var("PSQL").unwrap_or_else(|_| "psql".to_string());
-        let pgbouncer_bin =
-            env::var("PGBOUNCER").unwrap_or_else(|_| "pgbouncer".to_string());
+        let pgbouncer_bin = env::var("PGBOUNCER").unwrap_or_else(|_| "pgbouncer".to_string());
         for name in ["PGRUST_PGSHAREDIR", "PGRUST_TZDIR"] {
             let _ = required_env(name);
         }
@@ -65,10 +63,12 @@ impl Harness {
         let workdir = new_workdir();
         let data = workdir.join("data");
         run_success(
-            Command::new(&initdb)
-                .arg("-D")
-                .arg(&data)
-                .args(["--no-locale", "--encoding=UTF8", "-U", POSTGRES_USER]),
+            Command::new(&initdb).arg("-D").arg(&data).args([
+                "--no-locale",
+                "--encoding=UTF8",
+                "-U",
+                POSTGRES_USER,
+            ]),
             "initdb",
         );
         // This test owns the data directory and uses local loopback clients;
@@ -108,25 +108,16 @@ impl Harness {
         wait_for(&psql, pgrust_port, "pgrust", &workdir);
 
         let auth_file = workdir.join("users.txt");
-        fs::write(&auth_file, "\"postgres\" \"\"\n")
-            .expect("could not write PgBouncer auth file");
+        fs::write(&auth_file, "\"postgres\" \"\"\n").expect("could not write PgBouncer auth file");
         let config = workdir.join("pgbouncer.ini");
         fs::write(
             &config,
             format!(
-                concat!(
-                    "[databases]\n",
-                    "{DATABASE} = host=127.0.0.1 port={pgrust_port} dbname={DATABASE}\n\n",
-                    "[pgbouncer]\n",
-                    "listen_addr = 127.0.0.1\n",
-                    "listen_port = {pgbouncer_port}\n",
-                    "auth_type = trust\n",
-                    "auth_file = {}\n",
-                    "pool_mode = session\n",
-                    "server_reset_query = DISCARD ALL\n",
-                    "pidfile = {}\n",
-                    "logfile = {}\n",
-                ),
+                "[databases]\n{} = host=127.0.0.1 port={} dbname={}\n\n[pgbouncer]\nlisten_addr = 127.0.0.1\nlisten_port = {}\nauth_type = trust\nauth_file = {}\npool_mode = session\nserver_reset_query = DISCARD ALL\npidfile = {}\nlogfile = {}\n",
+                DATABASE,
+                pgrust_port,
+                DATABASE,
+                pgbouncer_port,
                 auth_file.display(),
                 workdir.join("pgbouncer.pid").display(),
                 workdir.join("pgbouncer.log").display(),
@@ -202,14 +193,15 @@ fn session_pool_reset_discards_client_session_state() {
         "server_reset_query leaked a GUC into the next PgBouncer client",
     );
     assert!(
-        !harness.pooled("EXECUTE pgbouncer_reset_plan").status.success(),
+        !harness
+            .pooled("EXECUTE pgbouncer_reset_plan")
+            .status
+            .success(),
         "server_reset_query leaked a SQL prepared statement into the next PgBouncer client",
     );
     assert_eq!(
         output_text(
-            harness.pooled(
-                "SELECT to_regclass('pg_temp.pgbouncer_reset_temp') IS NULL",
-            ),
+            harness.pooled("SELECT to_regclass('pg_temp.pgbouncer_reset_temp') IS NULL",),
             "check reset temporary table",
         ),
         "t",
@@ -242,10 +234,7 @@ fn new_workdir() -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .expect("clock moved before Unix epoch")
         .as_nanos();
-    let path = env::temp_dir().join(format!(
-        "pgrust-pgbouncer-{}-{nonce}",
-        std::process::id()
-    ));
+    let path = env::temp_dir().join(format!("pgrust-pgbouncer-{}-{nonce}", std::process::id()));
     fs::create_dir(&path).expect("could not create integration-test directory");
     path
 }

@@ -120,7 +120,10 @@ pub fn discard_until_ready(backend: &mut TcpStream, query: &str) -> io::Result<(
 
 pub fn write_frame(stream: &mut TcpStream, tag: u8, payload: &[u8]) -> io::Result<()> {
     let length = u32::try_from(payload.len() + 4).map_err(|_| {
-        io::Error::new(io::ErrorKind::InvalidInput, "PostgreSQL packet is too large")
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "PostgreSQL packet is too large",
+        )
     })?;
     stream.write_all(&[tag])?;
     stream.write_all(&length.to_be_bytes())?;
@@ -207,9 +210,9 @@ mod tests {
     #[test]
     fn parses_startup_parameter_pairs() {
         let raw = [
-            0, 0, 0, 41, 0, 3, 0, 0, b'u', b's', b'e', b'r', 0, b'p', b'o', b's', b't', b'g',
-            b'r', b'e', b's', 0, b'd', b'a', b't', b'a', b'b', b'a', b's', b'e', 0, b'p', b'o',
-            b's', b't', b'g', b'r', b'e', b's', 0, 0,
+            0, 0, 0, 41, 0, 3, 0, 0, b'u', b's', b'e', b'r', 0, b'p', b'o', b's', b't', b'g', b'r',
+            b'e', b's', 0, b'd', b'a', b't', b'a', b'b', b'a', b's', b'e', 0, b'p', b'o', b's',
+            b't', b'g', b'r', b'e', b's', 0, 0,
         ];
         let parameters = parse_startup_parameters(&raw).expect("startup parameters parse");
         assert_eq!(parameters.get("user"), Some(&"postgres".to_string()));

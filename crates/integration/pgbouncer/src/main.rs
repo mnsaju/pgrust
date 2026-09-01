@@ -3,7 +3,25 @@ use std::{env, process::ExitCode};
 use pgbouncer_compat::{run, Config};
 
 fn main() -> ExitCode {
-    let Some(path) = env::args_os().nth(1) else {
+    let arguments: Vec<_> = env::args_os().skip(1).collect();
+    if arguments
+        .iter()
+        .any(|argument| matches!(argument.to_str(), Some("--version")))
+    {
+        println!("pgrust-pgbouncer");
+        return ExitCode::SUCCESS;
+    }
+    if arguments
+        .iter()
+        .any(|argument| matches!(argument.to_str(), Some("-h" | "--help")))
+    {
+        println!("usage: pgrust-pgbouncer [--quiet] <config-file>");
+        return ExitCode::SUCCESS;
+    }
+    let path = arguments
+        .into_iter()
+        .find(|argument| !matches!(argument.to_str(), Some("-q" | "--quiet")));
+    let Some(path) = path else {
         eprintln!("usage: pgrust-pgbouncer <config-file>");
         return ExitCode::from(2);
     };

@@ -12511,6 +12511,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "pgbouncer_compat"
+version = "0.1.0"
+
+[[package]]
 name = "pgclient"
 version = "0.0.0"
 dependencies = [
