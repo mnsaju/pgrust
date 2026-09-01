@@ -341,6 +341,7 @@ members = [
     "crates/backend/utils/fmgr/fmgr_core",
     "crates/backend/utils/fmgr/dfmgr",
     "crates/backend/test_regress",
+    "crates/integration/pgbackrest",
     "crates/backend/storage/lmgr/lmgr",
     "crates/backend/access/transam/xact",
     "crates/backend/access/transam/transam_seams",
