@@ -9,12 +9,20 @@ use std::{
 use crate::{
     config::{Config, Database, PoolMode},
     protocol::{
-        begin_backend_session, discard_until_ready, read_frame, read_startup, relay_until_ready,
-        send_pooled_startup, write_frame, Startup,
+        begin_backend_session, discard_until_ready, read_frame, read_startup,
+        relay_flush_responses, relay_until_ready, send_pooled_startup, write_frame,
+        BackendParameters, Startup,
     },
 };
 
-type Pools = Arc<Mutex<BTreeMap<PoolKey, Vec<TcpStream>>>>;
+type Pool = Arc<Mutex<Vec<BackendConnection>>>;
+type Pools = Arc<Mutex<BTreeMap<PoolKey, Pool>>>;
+
+#[derive(Debug)]
+struct BackendConnection {
+    stream: TcpStream,
+    parameters: BackendParameters,
+}
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct PoolKey {
@@ -57,9 +65,10 @@ fn handle_client(mut client: TcpStream, config: &Config, pools: &Pools) -> io::R
         );
     }
 
+    let pool_size = database.pool_size.unwrap_or(config.default_pool_size);
     let mut backend = match take_backend(pools, &key)? {
         Some(backend) => {
-            send_pooled_startup(&mut client)?;
+            send_pooled_startup(&mut client, &backend.parameters)?;
             backend
         }
         None => connect_backend(&database, &mut client, &startup)?,
@@ -69,21 +78,33 @@ fn handle_client(mut client: TcpStream, config: &Config, pools: &Pools) -> io::R
         let frame = match read_frame(&mut client) {
             Ok(frame) => frame,
             Err(error) if error.kind() == io::ErrorKind::UnexpectedEof => {
-                release_backend(pools, key, backend, config.server_reset_query.as_deref())?;
+                release_backend(
+                    pools,
+                    key,
+                    backend,
+                    config.server_reset_query.as_deref(),
+                    pool_size,
+                )?;
                 return Ok(());
             }
             Err(error) => return Err(error),
         };
         if frame.tag == b'X' {
-            release_backend(pools, key, backend, config.server_reset_query.as_deref())?;
+            release_backend(
+                pools,
+                key,
+                backend,
+                config.server_reset_query.as_deref(),
+                pool_size,
+            )?;
             return Ok(());
         }
-        backend.write_all(&frame.raw)?;
-        backend.flush()?;
-        if frame.tag == b'Q' || frame.tag == b'S' {
-            relay_until_ready(&mut backend, &mut client)?;
-        } else {
-            relay_extended_cycle(&mut client, &mut backend)?;
+        backend.stream.write_all(&frame.raw)?;
+        backend.stream.flush()?;
+        match frame.tag {
+            b'Q' | b'S' => relay_until_ready(&mut backend.stream, &mut client)?,
+            b'H' => relay_flush_responses(&mut backend.stream, &mut client)?,
+            _ => relay_extended_cycle(&mut client, &mut backend.stream)?,
         }
     }
 }
@@ -95,7 +116,7 @@ fn handle_admin(client: &mut TcpStream, config: &Config, startup: &Startup) -> i
     if !config.admin_users.contains(user) {
         return send_error(client, "42501", "admin access is not permitted");
     }
-    send_pooled_startup(client)?;
+    send_pooled_startup(client, &BackendParameters::admin())?;
     loop {
         let frame = read_frame(client)?;
         if frame.tag == b'X' {
@@ -146,10 +167,13 @@ fn connect_backend(
     database: &Database,
     client: &mut TcpStream,
     startup: &Startup,
-) -> io::Result<TcpStream> {
+) -> io::Result<BackendConnection> {
     let mut backend = TcpStream::connect((database.host.as_str(), database.port))?;
-    begin_backend_session(client, &mut backend, startup)?;
-    Ok(backend)
+    let parameters = begin_backend_session(client, &mut backend, startup)?;
+    Ok(BackendConnection {
+        stream: backend,
+        parameters,
+    })
 }
 
 fn relay_extended_cycle(client: &mut TcpStream, backend: &mut TcpStream) -> io::Result<()> {
@@ -163,33 +187,72 @@ fn relay_extended_cycle(client: &mut TcpStream, backend: &mut TcpStream) -> io::
         }
         backend.write_all(&frame.raw)?;
         backend.flush()?;
-        if frame.tag == b'S' {
-            return relay_until_ready(backend, client);
+        match frame.tag {
+            b'S' => return relay_until_ready(backend, client),
+            b'H' => relay_flush_responses(backend, client)?,
+            _ => {}
         }
     }
 }
 
-fn take_backend(pools: &Pools, key: &PoolKey) -> io::Result<Option<TcpStream>> {
-    let mut pools = pools
+fn take_backend(pools: &Pools, key: &PoolKey) -> io::Result<Option<BackendConnection>> {
+    let pool = pool_for(pools, key)?;
+    let mut connections = pool
         .lock()
-        .map_err(|_| io::Error::other("connection-pool lock is poisoned"))?;
-    Ok(pools.get_mut(key).and_then(Vec::pop))
+        .map_err(|_| io::Error::other("per-database connection-pool lock is poisoned"))?;
+    while let Some(mut backend) = connections.pop() {
+        if backend_is_healthy(&mut backend.stream)? {
+            return Ok(Some(backend));
+        }
+    }
+    Ok(None)
 }
 
 fn release_backend(
     pools: &Pools,
     key: PoolKey,
-    mut backend: TcpStream,
+    mut backend: BackendConnection,
     reset_query: Option<&str>,
+    max_pool_size: usize,
 ) -> io::Result<()> {
     if let Some(reset_query) = reset_query {
-        discard_until_ready(&mut backend, reset_query)?;
+        discard_until_ready(&mut backend.stream, reset_query)?;
     }
+    let pool = pool_for(pools, &key)?;
+    let mut connections = pool
+        .lock()
+        .map_err(|_| io::Error::other("per-database connection-pool lock is poisoned"))?;
+    if connections.len() < max_pool_size {
+        connections.push(backend);
+    }
+    Ok(())
+}
+
+fn pool_for(pools: &Pools, key: &PoolKey) -> io::Result<Pool> {
     let mut pools = pools
         .lock()
-        .map_err(|_| io::Error::other("connection-pool lock is poisoned"))?;
-    pools.entry(key).or_default().push(backend);
-    Ok(())
+        .map_err(|_| io::Error::other("connection-pool map lock is poisoned"))?;
+    Ok(Arc::clone(
+        pools
+            .entry(key.clone())
+            .or_insert_with(|| Arc::new(Mutex::new(Vec::new()))),
+    ))
+}
+
+fn backend_is_healthy(backend: &mut TcpStream) -> io::Result<bool> {
+    backend.set_nonblocking(true)?;
+    let mut byte = [0; 1];
+    let health = match backend.peek(&mut byte) {
+        Ok(0) | Ok(_) => Ok(false),
+        Err(error) if error.kind() == io::ErrorKind::WouldBlock => Ok(true),
+        Err(error) => Err(error),
+    };
+    let restore = backend.set_nonblocking(false);
+    match (health, restore) {
+        (Err(error), _) => Err(error),
+        (Ok(_), Err(error)) => Err(error),
+        (Ok(healthy), Ok(())) => Ok(healthy),
+    }
 }
 
 fn send_error(client: &mut TcpStream, code: &str, message: &str) -> io::Result<()> {

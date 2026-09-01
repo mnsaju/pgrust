@@ -11,6 +11,7 @@ pub struct Config {
     pub listen_port: u16,
     pub pool_mode: PoolMode,
     pub server_reset_query: Option<String>,
+    pub default_pool_size: usize,
     pub admin_users: BTreeSet<String>,
     pub databases: BTreeMap<String, Database>,
 }
@@ -20,6 +21,7 @@ pub struct Database {
     pub host: String,
     pub port: u16,
     pub dbname: String,
+    pub pool_size: Option<usize>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -65,6 +67,7 @@ impl Config {
             listen_port: 6432,
             pool_mode: PoolMode::Session,
             server_reset_query: Some("DISCARD ALL".to_string()),
+            default_pool_size: 20,
             admin_users: BTreeSet::new(),
             databases: BTreeMap::new(),
         };
@@ -96,6 +99,9 @@ impl Config {
                     "listen_addr" => config.listen_addr = value.to_string(),
                     "listen_port" => config.listen_port = parse_port(value, line_number)?,
                     "pool_mode" => config.pool_mode = parse_pool_mode(value, line_number)?,
+                    "default_pool_size" => {
+                        config.default_pool_size = parse_pool_size(value, line_number)?
+                    }
                     "server_reset_query" => {
                         config.server_reset_query = (!value.is_empty()).then(|| value.to_string())
                     }
@@ -107,7 +113,9 @@ impl Config {
                             .map(str::to_string)
                             .collect();
                     }
-                    _ => {}
+                    _ => eprintln!(
+                        "pgrust-pgbouncer: WARNING: unsupported [pgbouncer] parameter {key:?} on line {line_number}"
+                    ),
                 },
                 _ => {}
             }
@@ -122,47 +130,52 @@ impl Config {
 }
 
 fn parse_database(value: &str, line_number: usize) -> Result<Database, ConfigError> {
-    let mut values = BTreeMap::new();
+    let mut host = None;
+    let mut port = None;
+    let mut dbname = None;
+    let mut pool_size = None;
     for item in value.split_whitespace() {
         let Some((key, value)) = item.split_once('=') else {
             return Err(ConfigError::new(format!(
                 "line {line_number}: invalid database option {item:?}"
             )));
         };
-        values.insert(key, value);
+        match key {
+            "host" => host = Some(value),
+            "port" => port = Some(value),
+            "dbname" => dbname = Some(value),
+            "pool_size" => pool_size = Some(parse_pool_size(value, line_number)?),
+            _ => {}
+        }
     }
-    let host = required_database_value(&values, "host", line_number)?;
+    let host = host.ok_or_else(|| missing_database_value("host", line_number))?;
     let port = parse_port(
-        required_database_value(&values, "port", line_number)?,
+        port.ok_or_else(|| missing_database_value("port", line_number))?,
         line_number,
     )?;
-    let dbname = values
-        .get("dbname")
-        .copied()
-        .unwrap_or("postgres")
-        .to_string();
+    let dbname = dbname.unwrap_or("postgres").to_string();
     Ok(Database {
         host: host.to_string(),
         port,
         dbname,
+        pool_size,
     })
 }
 
-fn required_database_value<'a>(
-    values: &'a BTreeMap<&str, &str>,
-    key: &str,
-    line_number: usize,
-) -> Result<&'a str, ConfigError> {
-    values
-        .get(key)
-        .copied()
-        .ok_or_else(|| ConfigError::new(format!("line {line_number}: database is missing {key}")))
+fn missing_database_value(key: &str, line_number: usize) -> ConfigError {
+    ConfigError::new(format!("line {line_number}: database is missing {key}"))
 }
 
 fn parse_port(value: &str, line_number: usize) -> Result<u16, ConfigError> {
     value
         .parse()
         .map_err(|_| ConfigError::new(format!("line {line_number}: invalid TCP port {value:?}")))
+}
+
+fn parse_pool_size(value: &str, line_number: usize) -> Result<usize, ConfigError> {
+    value
+        .parse()
+        .map_err(|_| ConfigError::new(format!("line {line_number}: invalid pool size {value:?}")))
 }
 
 fn parse_pool_mode(value: &str, line_number: usize) -> Result<PoolMode, ConfigError> {
@@ -194,13 +207,25 @@ mod tests {
         .expect("configuration parses");
         assert_eq!(config.listen_port, 6433);
         assert_eq!(config.pool_mode, PoolMode::Session);
+        assert_eq!(config.default_pool_size, 20);
         assert_eq!(
             config.databases.get("postgres"),
             Some(&Database {
                 host: "127.0.0.1".to_string(),
                 port: 5432,
                 dbname: "postgres".to_string(),
+                pool_size: None,
             })
         );
+    }
+
+    #[test]
+    fn parses_database_pool_size() {
+        let config = Config::parse(
+            "[databases]\npostgres = host=127.0.0.1 port=5432 pool_size=3\n\n[pgbouncer]\ndefault_pool_size = 7\n",
+        )
+        .expect("configuration parses");
+        assert_eq!(config.default_pool_size, 7);
+        assert_eq!(config.databases["postgres"].pool_size, Some(3));
     }
 }
