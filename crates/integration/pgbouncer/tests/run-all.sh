@@ -8,6 +8,7 @@ repo_root=$(cd -- "$script_dir/../../../.." && pwd)
 package=pgbouncer_compat
 image=${PGRUST_IMAGE:-pgrust:pgbouncer}
 upstream_dir=${PGBOUNCER_UPSTREAM_DIR:-"$repo_root/target/pgbouncer-upstream"}
+rust_image=${PGRUST_TEST_RUST_IMAGE:-rust:1-bookworm}
 run_upstream=false
 build_image=true
 selectors=()
@@ -32,6 +33,9 @@ Options:
 Prerequisites for --upstream: docker, git, uv, and a PostgreSQL client
 (psql) on PATH. The script builds pgrust-pgbouncer in release mode and uses
 the upstream Python suite without copying its C or Python implementation.
+
+When Cargo is not installed, native mode automatically re-runs itself in the
+official Rust Docker image. Set PGRUST_TEST_RUST_IMAGE to override that image.
 EOF
 }
 
@@ -70,6 +74,26 @@ while (($#)); do
     esac
     shift
 done
+
+if ! command -v cargo >/dev/null 2>&1; then
+    if "$run_upstream"; then
+        printf '%s\n' 'error: --upstream requires cargo, Docker, uv, and psql on the host' >&2
+        printf '%s\n' '       Run native mode without --upstream to use the automatic Rust container.' >&2
+        exit 2
+    fi
+    if [[ ${PGRUST_PGBOUNCER_TEST_IN_CONTAINER:-} == 1 ]]; then
+        printf '%s\n' 'error: Cargo is unavailable in the configured Rust test container' >&2
+        exit 2
+    fi
+    require_command docker
+    printf '%s\n' "==> Cargo is unavailable; running native tests in $rust_image"
+    exec docker run --rm --interactive \
+        --env PGRUST_PGBOUNCER_TEST_IN_CONTAINER=1 \
+        --volume "$repo_root:/workspace" \
+        --workdir /workspace \
+        "$rust_image" \
+        bash /workspace/crates/integration/pgbouncer/tests/run-all.sh
+fi
 
 require_command cargo
 printf '%s\n' '==> Running native Rust tests'

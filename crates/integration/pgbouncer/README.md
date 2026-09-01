@@ -32,6 +32,9 @@ Run the native Rust suite from the repository root with:
 crates/integration/pgbouncer/tests/run-all.sh
 ```
 
+If Cargo is not installed locally, native mode automatically runs in the
+official Rust Docker image; Docker is the only prerequisite in that case.
+
 To build pgrust as the Docker backend and run the full upstream PgBouncer
 pytest suite as well, install `docker`, `uv`, and PostgreSQL `psql`, then run:
 
