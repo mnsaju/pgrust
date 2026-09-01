@@ -1,6 +1,7 @@
-use std::{
-    collections::BTreeMap,
-    io::{self, Read, Write},
+use std::{collections::BTreeMap, io};
+
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
 };
 
@@ -42,10 +43,10 @@ impl BackendParameters {
     }
 }
 
-pub fn read_startup(client: &mut TcpStream) -> io::Result<Startup> {
+pub async fn read_startup(client: &mut TcpStream) -> io::Result<Startup> {
     let mut negotiation_rounds = 0;
     loop {
-        let raw = read_untyped_packet(client)?;
+        let raw = read_untyped_packet(client).await?;
         let code = u32::from_be_bytes(raw[4..8].try_into().expect("startup code length"));
         if matches!(code, SSL_REQUEST | GSSENC_REQUEST) {
             negotiation_rounds += 1;
@@ -55,7 +56,7 @@ pub fn read_startup(client: &mut TcpStream) -> io::Result<Startup> {
                     "too many encryption negotiation attempts",
                 ));
             }
-            client.write_all(b"N")?;
+            client.write_all(b"N").await?;
             continue;
         }
         if code != 196_608 {
@@ -71,129 +72,131 @@ pub fn read_startup(client: &mut TcpStream) -> io::Result<Startup> {
     }
 }
 
-pub fn read_frame(stream: &mut TcpStream) -> io::Result<Frame> {
+pub async fn read_frame(stream: &mut TcpStream) -> io::Result<Frame> {
     let mut tag = [0; 1];
-    stream.read_exact(&mut tag)?;
+    stream.read_exact(&mut tag).await?;
     let mut length = [0; 4];
-    stream.read_exact(&mut length)?;
+    stream.read_exact(&mut length).await?;
     let length = u32::from_be_bytes(length) as usize;
     validate_packet_length(length)?;
     let mut raw = Vec::with_capacity(length + 1);
     raw.push(tag[0]);
     raw.extend_from_slice(&(length as u32).to_be_bytes());
     raw.resize(length + 1, 0);
-    stream.read_exact(&mut raw[5..])?;
+    stream.read_exact(&mut raw[5..]).await?;
     Ok(Frame { tag: tag[0], raw })
 }
 
-pub fn begin_backend_session(
+pub async fn begin_backend_session(
     client: &mut TcpStream,
     backend: &mut TcpStream,
     startup: &Startup,
 ) -> io::Result<BackendParameters> {
-    backend.write_all(&startup.raw)?;
-    backend.flush()?;
+    backend.write_all(&startup.raw).await?;
+    backend.flush().await?;
     let mut parameters = BackendParameters::default();
     loop {
-        let frame = read_frame(backend)?;
-        client.write_all(&frame.raw)?;
+        let frame = read_frame(backend).await?;
+        client.write_all(&frame.raw).await?;
         if frame.tag == b'S' {
             parameters.record(&frame.raw)?;
         }
         if frame.tag == b'R' && authentication_needs_response(&frame.raw) {
-            client.flush()?;
-            let response = read_frame(client)?;
-            backend.write_all(&response.raw)?;
-            backend.flush()?;
+            client.flush().await?;
+            let response = read_frame(client).await?;
+            backend.write_all(&response.raw).await?;
+            backend.flush().await?;
         }
         if frame.tag == b'Z' {
-            client.flush()?;
+            client.flush().await?;
             return Ok(parameters);
         }
     }
 }
 
-pub fn send_pooled_startup(
+pub async fn send_pooled_startup(
     client: &mut TcpStream,
     parameters: &BackendParameters,
 ) -> io::Result<()> {
-    write_frame(client, b'R', &0_u32.to_be_bytes())?;
+    write_frame(client, b'R', &0_u32.to_be_bytes()).await?;
     for (key, value) in &parameters.statuses {
-        write_parameter_status(client, key, value)?;
+        write_parameter_status(client, key, value).await?;
     }
-    // Do not advertise a virtual BackendKeyData until CancelRequest routing exists.
-    // A predictable key would make the unsupported feature appear usable.
-    write_frame(client, b'Z', b"I")?;
-    client.flush()
+    write_frame(client, b'Z', b"I").await?;
+    client.flush().await
 }
 
-pub fn relay_until_ready(backend: &mut TcpStream, client: &mut TcpStream) -> io::Result<()> {
+pub async fn relay_until_ready(
+    backend: &mut TcpStream,
+    client: &mut TcpStream,
+) -> io::Result<()> {
     loop {
-        let frame = read_frame(backend)?;
-        client.write_all(&frame.raw)?;
+        let frame = read_frame(backend).await?;
+        client.write_all(&frame.raw).await?;
         if frame.tag == b'Z' {
-            client.flush()?;
+            client.flush().await?;
             return Ok(());
         }
     }
 }
 
-/// Relay responses that are immediately available after an extended-protocol Flush.
-///
-/// Flush does not guarantee a ReadyForQuery response, so waiting for one here would
-/// deadlock clients that issue `Flush` before their eventual `Sync`.
-pub fn relay_flush_responses(backend: &mut TcpStream, client: &mut TcpStream) -> io::Result<()> {
-    backend.set_nonblocking(true)?;
-    let result = (|| {
-        let mut first_byte = [0; 1];
-        loop {
-            match backend.peek(&mut first_byte) {
-                Ok(0) => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        "backend closed while relaying Flush responses",
-                    ));
-                }
-                Ok(_) => {
-                    // `peek` establishes that a frame has started arriving. Read the
-                    // complete frame in blocking mode so partial TCP frames are safe.
-                    backend.set_nonblocking(false)?;
-                    let frame = read_frame(backend)?;
-                    client.write_all(&frame.raw)?;
-                    if frame.tag == b'Z' {
-                        client.flush()?;
-                    }
-                    backend.set_nonblocking(true)?;
-                }
-                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                    client.flush()?;
-                    return Ok(());
-                }
-                Err(error) => return Err(error),
+pub async fn relay_flush_responses(
+    backend: &mut TcpStream,
+    client: &mut TcpStream,
+) -> io::Result<()> {
+    // Wait for the backend to produce at least one response after Flush.
+    backend.readable().await?;
+    loop {
+        let mut peek_buf = [0; 1];
+        match backend.try_read(&mut peek_buf) {
+            Ok(0) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "backend closed while relaying Flush responses",
+                ));
             }
+            Ok(_) => {
+                let frame = read_frame_with_first_byte(backend, peek_buf[0]).await?;
+                client.write_all(&frame.raw).await?;
+                if frame.tag == b'Z' {
+                    client.flush().await?;
+                }
+            }
+            Err(ref error) if error.kind() == io::ErrorKind::WouldBlock => {
+                client.flush().await?;
+                return Ok(());
+            }
+            Err(error) => return Err(error),
         }
-    })();
-    let restore = backend.set_nonblocking(false);
-    match (result, restore) {
-        (Err(error), _) => Err(error),
-        (Ok(()), Err(error)) => Err(error),
-        (Ok(()), Ok(())) => Ok(()),
     }
 }
 
-pub fn discard_until_ready(backend: &mut TcpStream, query: &str) -> io::Result<()> {
+async fn read_frame_with_first_byte(stream: &mut TcpStream, tag: u8) -> io::Result<Frame> {
+    let mut length = [0; 4];
+    stream.read_exact(&mut length).await?;
+    let length = u32::from_be_bytes(length) as usize;
+    validate_packet_length(length)?;
+    let mut raw = Vec::with_capacity(length + 1);
+    raw.push(tag);
+    raw.extend_from_slice(&(length as u32).to_be_bytes());
+    raw.resize(length + 1, 0);
+    stream.read_exact(&mut raw[5..]).await?;
+    Ok(Frame { tag, raw })
+}
+
+pub async fn discard_until_ready(backend: &mut TcpStream, query: &str) -> io::Result<()> {
     let mut payload = query.as_bytes().to_vec();
     payload.push(0);
-    write_frame(backend, b'Q', &payload)?;
-    backend.flush()?;
+    write_frame(backend, b'Q', &payload).await?;
+    backend.flush().await?;
     loop {
-        if read_frame(backend)?.tag == b'Z' {
+        if read_frame(backend).await?.tag == b'Z' {
             return Ok(());
         }
     }
 }
 
-pub fn write_frame(stream: &mut TcpStream, tag: u8, payload: &[u8]) -> io::Result<()> {
+pub async fn write_frame(stream: &mut TcpStream, tag: u8, payload: &[u8]) -> io::Result<()> {
     let length = u32::try_from(payload.len() + 4).map_err(|_| {
         io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -204,12 +207,12 @@ pub fn write_frame(stream: &mut TcpStream, tag: u8, payload: &[u8]) -> io::Resul
     frame.push(tag);
     frame.extend_from_slice(&length.to_be_bytes());
     frame.extend_from_slice(payload);
-    stream.write_all(&frame)
+    stream.write_all(&frame).await
 }
 
-fn read_untyped_packet(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
+async fn read_untyped_packet(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
     let mut length = [0; 4];
-    stream.read_exact(&mut length)?;
+    stream.read_exact(&mut length).await?;
     let length = u32::from_be_bytes(length) as usize;
     if length < 8 || length > MAX_PACKET_LENGTH {
         return Err(io::Error::new(
@@ -220,7 +223,7 @@ fn read_untyped_packet(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
     let mut raw = Vec::with_capacity(length);
     raw.extend_from_slice(&(length as u32).to_be_bytes());
     raw.resize(length, 0);
-    stream.read_exact(&mut raw[4..])?;
+    stream.read_exact(&mut raw[4..]).await?;
     Ok(raw)
 }
 
@@ -257,13 +260,17 @@ fn authentication_needs_response(raw: &[u8]) -> bool {
     )
 }
 
-fn write_parameter_status(stream: &mut TcpStream, key: &str, value: &str) -> io::Result<()> {
+async fn write_parameter_status(
+    stream: &mut TcpStream,
+    key: &str,
+    value: &str,
+) -> io::Result<()> {
     let mut payload = Vec::with_capacity(key.len() + value.len() + 2);
     payload.extend_from_slice(key.as_bytes());
     payload.push(0);
     payload.extend_from_slice(value.as_bytes());
     payload.push(0);
-    write_frame(stream, b'S', &payload)
+    write_frame(stream, b'S', &payload).await
 }
 
 impl BackendParameters {
@@ -316,9 +323,9 @@ mod tests {
     #[test]
     fn parses_startup_parameter_pairs() {
         let raw = [
-            0, 0, 0, 41, 0, 3, 0, 0, b'u', b's', b'e', b'r', 0, b'p', b'o', b's', b't', b'g', b'r',
-            b'e', b's', 0, b'd', b'a', b't', b'a', b'b', b'a', b's', b'e', 0, b'p', b'o', b's',
-            b't', b'g', b'r', b'e', b's', 0, 0,
+            0, 0, 0, 41, 0, 3, 0, 0, b'u', b's', b'e', b'r', 0, b'p', b'o', b's', b't', b'g',
+            b'r', b'e', b's', 0, b'd', b'a', b't', b'a', b'b', b'a', b's', b'e', 0, b'p', b'o',
+            b's', b't', b'g', b'r', b'e', b's', 0, 0,
         ];
         let parameters = parse_startup_parameters(&raw).expect("startup parameters parse");
         assert_eq!(parameters.get("user"), Some(&"postgres".to_string()));

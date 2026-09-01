@@ -3,6 +3,7 @@ use std::{
     error::Error,
     fmt, fs, io,
     path::Path,
+    time::Duration,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -12,6 +13,7 @@ pub struct Config {
     pub pool_mode: PoolMode,
     pub server_reset_query: Option<String>,
     pub default_pool_size: usize,
+    pub server_idle_timeout: Duration,
     pub admin_users: BTreeSet<String>,
     pub databases: BTreeMap<String, Database>,
 }
@@ -68,6 +70,7 @@ impl Config {
             pool_mode: PoolMode::Session,
             server_reset_query: Some("DISCARD ALL".to_string()),
             default_pool_size: 20,
+            server_idle_timeout: Duration::from_secs(600),
             admin_users: BTreeSet::new(),
             databases: BTreeMap::new(),
         };
@@ -101,6 +104,10 @@ impl Config {
                     "pool_mode" => config.pool_mode = parse_pool_mode(value, line_number)?,
                     "default_pool_size" => {
                         config.default_pool_size = parse_pool_size(value, line_number)?
+                    }
+                    "server_idle_timeout" => {
+                        config.server_idle_timeout =
+                            Duration::from_secs(parse_seconds(value, line_number)?)
                     }
                     "server_reset_query" => {
                         config.server_reset_query = (!value.is_empty()).then(|| value.to_string())
@@ -176,6 +183,14 @@ fn parse_pool_size(value: &str, line_number: usize) -> Result<usize, ConfigError
     value
         .parse()
         .map_err(|_| ConfigError::new(format!("line {line_number}: invalid pool size {value:?}")))
+}
+
+fn parse_seconds(value: &str, line_number: usize) -> Result<u64, ConfigError> {
+    value.parse().map_err(|_| {
+        ConfigError::new(format!(
+            "line {line_number}: invalid seconds value {value:?}"
+        ))
+    })
 }
 
 fn parse_pool_mode(value: &str, line_number: usize) -> Result<PoolMode, ConfigError> {

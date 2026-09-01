@@ -50,6 +50,8 @@ struct Harness {
     pgbouncer: Process,
 }
 
+const MAX_PORT_RETRIES: usize = 3;
+
 impl Harness {
     fn start() -> Self {
         let pgrust_bin = required_env("PGRUST_BIN");
@@ -80,13 +82,47 @@ impl Harness {
         )
         .expect("could not write isolated pg_hba.conf");
 
+        for attempt in 0..MAX_PORT_RETRIES {
+            match Self::try_start(
+                &pgrust_bin,
+                &psql,
+                &pgbouncer_bin,
+                &workdir,
+                &data,
+            ) {
+                Ok(harness) => return harness,
+                Err(error) => {
+                    if attempt + 1 < MAX_PORT_RETRIES {
+                        eprintln!(
+                            "harness start attempt {} failed (port conflict?), retrying: {error}",
+                            attempt + 1,
+                        );
+                        thread::sleep(Duration::from_millis(100));
+                    } else {
+                        panic!(
+                            "harness failed to start after {MAX_PORT_RETRIES} attempts: {error}"
+                        );
+                    }
+                }
+            }
+        }
+        unreachable!()
+    }
+
+    fn try_start(
+        pgrust_bin: &str,
+        psql: &str,
+        pgbouncer_bin: &str,
+        workdir: &Path,
+        data: &Path,
+    ) -> Result<Self, String> {
         let pgrust_port = unused_port();
         let pgbouncer_port = unused_port();
         let pgrust_log = workdir.join("pgrust.log");
         let mut pgrust_command = Command::new(pgrust_bin);
         pgrust_command
             .arg("-D")
-            .arg(&data)
+            .arg(data)
             .arg("-p")
             .arg(pgrust_port.to_string())
             .args([
@@ -105,10 +141,14 @@ impl Harness {
                     .expect("could not open pgrust log"),
             );
         let pgrust = Process::start(&mut pgrust_command, "pgrust");
-        wait_for(&psql, pgrust_port, "pgrust", &workdir);
+        if !try_wait_for(psql, pgrust_port) {
+            drop(pgrust);
+            return Err(format!("pgrust did not become ready on port {pgrust_port}"));
+        }
 
         let auth_file = workdir.join("users.txt");
-        fs::write(&auth_file, "\"postgres\" \"\"\n").expect("could not write PgBouncer auth file");
+        fs::write(&auth_file, "\"postgres\" \"\"\n")
+            .expect("could not write PgBouncer auth file");
         let config = workdir.join("pgbouncer.ini");
         fs::write(
             &config,
@@ -138,16 +178,22 @@ impl Harness {
                     .expect("could not open PgBouncer stdout log"),
             );
         let pgbouncer = Process::start(&mut pgbouncer_command, "PgBouncer");
-        wait_for(&psql, pgbouncer_port, "PgBouncer", &workdir);
+        if !try_wait_for(psql, pgbouncer_port) {
+            drop(pgbouncer);
+            drop(pgrust);
+            return Err(format!(
+                "PgBouncer did not become ready on port {pgbouncer_port}"
+            ));
+        }
 
-        Self {
-            workdir,
-            psql,
+        Ok(Self {
+            workdir: workdir.to_path_buf(),
+            psql: psql.to_string(),
             pgrust_port,
             pgbouncer_port,
             pgrust,
             pgbouncer,
-        }
+        })
     }
 
     fn pooled(&self, sql: &str) -> Output {
@@ -247,14 +293,14 @@ fn unused_port() -> u16 {
         .port()
 }
 
-fn wait_for(psql_bin: &str, port: u16, label: &str, workdir: &Path) {
+fn try_wait_for(psql_bin: &str, port: u16) -> bool {
     for _ in 0..100 {
         if psql(psql_bin, port, "SELECT 1").status.success() {
-            return;
+            return true;
         }
         thread::sleep(Duration::from_millis(100));
     }
-    panic!("timed out waiting for {label} in {}", workdir.display());
+    false
 }
 
 fn psql(psql_bin: &str, port: u16, sql: &str) -> Output {
