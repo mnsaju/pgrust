@@ -114,3 +114,54 @@ fn detoast_without_varlena_columns_takes_notoast_arm() {
     set_params(&mut dr, types_portal::TuplestoreHandle::NULL, true);
     dr.startup(1, &d).unwrap();
 }
+
+// CVE-2026-16239: FillPortalStore's PORTAL_UTIL_SELECT arm arms this
+// receiver with the OUTER portal's row shape before dispatch runs a
+// statement (EXECUTE, FETCH) that may create and run its own INNER
+// portal into the same receiver. `startup` must reject a divergent inner
+// result rather than silently streaming mismatched-type Datums into the
+// tuplestore the outer portal's caller will later read back out.
+#[test]
+fn required_shape_mismatch_is_rejected() {
+    let mcx = leaked_mcx();
+    let outer = desc(mcx, 4, true); // int4-shaped: the OUTER portal's row type
+    let inner = desc(mcx, -1, false); // text-shaped: a divergent INNER result
+
+    let shape: Vec<(types_core::Oid, bool)> =
+        (0..outer.natts as usize).map(|i| (outer.attr(i).atttypid, outer.attr(i).attisdropped)).collect();
+
+    let mut dr = tstore_create_DR();
+    set_params(&mut dr, tuplestore::hold::register(tuplestore::Tuplestore::begin_heap(false, true, 64)), false);
+    set_required_shape(&mut dr, shape);
+
+    let err = dr.startup(1, &inner).unwrap_err();
+    assert_eq!(err.sqlstate(), types_error::ERRCODE_DATATYPE_MISMATCH);
+}
+
+#[test]
+fn required_shape_match_is_accepted() {
+    let mcx = leaked_mcx();
+    let outer = desc(mcx, 4, true);
+    let same_shape = desc(mcx, 4, true);
+
+    let shape: Vec<(types_core::Oid, bool)> =
+        (0..outer.natts as usize).map(|i| (outer.attr(i).atttypid, outer.attr(i).attisdropped)).collect();
+
+    let mut dr = tstore_create_DR();
+    set_params(&mut dr, tuplestore::hold::register(tuplestore::Tuplestore::begin_heap(false, true, 64)), false);
+    set_required_shape(&mut dr, shape);
+
+    dr.startup(1, &same_shape).expect("identical shape must be accepted");
+}
+
+#[test]
+fn no_required_shape_is_unaffected() {
+    // Every tuplestore receiver use that is NOT the outer-portal-over-
+    // dispatched-inner-portal case (cursor fills, RETURNING capture, ...)
+    // never calls set_required_shape and must behave exactly as before.
+    let mcx = leaked_mcx();
+    let d = desc(mcx, -1, false);
+    let mut dr = tstore_create_DR();
+    set_params(&mut dr, tuplestore::hold::register(tuplestore::Tuplestore::begin_heap(false, true, 64)), false);
+    dr.startup(1, &d).expect("no required_shape armed => no check");
+}

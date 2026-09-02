@@ -4,16 +4,16 @@
 
 #![allow(non_snake_case)]
 
-use ::bufmgr_seams::BufferPin;
+use ::bufmgr_seams::{BufferPin, ContentLockGuard};
 use ::types_core::{
-    BlockNumber, Buffer, BufferIsValid, ForkNumber, InvalidBlockNumber, InvalidXLogRecPtr,
-    TransactionId, XLogRecPtr, BLCKSZ,
+    BLCKSZ, BlockNumber, Buffer, BufferIsValid, ForkNumber, InvalidBlockNumber, InvalidXLogRecPtr,
+    TransactionId, XLogRecPtr,
 };
 use ::types_error::PgResult;
 use ::types_rel::RelationData;
-use ::types_storage::bufpage::{PageMut, PageRef, SizeOfPageHeaderData};
 use ::types_storage::ReadBufferMode;
-use ::xloginsert_seams::{XLogRegBuf, REGBUF_NO_IMAGE, REGBUF_STANDARD};
+use ::types_storage::bufpage::{PageMut, PageRef, SizeOfPageHeaderData};
+use ::xloginsert_seams::{REGBUF_NO_IMAGE, REGBUF_STANDARD, XLogRegBuf};
 
 pub const VISIBILITYMAP_ALL_VISIBLE: u8 = 0x01;
 pub const VISIBILITYMAP_ALL_FROZEN: u8 = 0x02;
@@ -55,7 +55,23 @@ pub struct VmBuffer {
 impl VmBuffer {
     #[inline]
     pub const fn new() -> VmBuffer {
-        VmBuffer { pin: None, map_block: 0 }
+        VmBuffer {
+            pin: None,
+            map_block: 0,
+        }
+    }
+
+    /// Adopt a pin returned by recovery's buffer-read machinery.  The caller
+    /// remains responsible for releasing any content lock already held on
+    /// the buffer before releasing this `VmBuffer`.
+    #[inline]
+    pub fn adopt_recovery_buffer(buffer: Buffer) -> Option<VmBuffer> {
+        let pin = BufferPin::adopt(buffer)?;
+        let map_block = bufmgr_seams::buffer_get_block_number::call(buffer);
+        Some(VmBuffer {
+            pin: Some(pin),
+            map_block,
+        })
     }
 
     #[inline]
@@ -74,6 +90,22 @@ impl VmBuffer {
     #[inline]
     pub fn buffer(&self) -> Buffer {
         self.pin.as_ref().map_or(0, BufferPin::buffer)
+    }
+
+    /// Acquire the VM page's exclusive content lock.  Heap modification
+    /// callers that WAL-log a clear must retain this guard until after the
+    /// WAL record is inserted and the VM page LSN is advanced.
+    #[inline]
+    pub fn lock_exclusive(&self) -> PgResult<ContentLockGuard<'_>> {
+        let Some(pin) = self.pin.as_ref() else {
+            return Err(wrong_buffer("invalid VM buffer"));
+        };
+        pin.lock_exclusive()
+    }
+
+    #[inline]
+    pub fn block_number(&self) -> Option<BlockNumber> {
+        self.pin.as_ref().map(|_| self.map_block)
     }
 }
 
@@ -247,8 +279,18 @@ fn log_heap_visible(
         0,
         &[&xlrec],
         &[
-            XLogRegBuf { block_id: 0, buffer: vm_buffer, flags: 0, bufdata: &[] },
-            XLogRegBuf { block_id: 1, buffer: heap_buffer, flags: heap_flags, bufdata: &[] },
+            XLogRegBuf {
+                block_id: 0,
+                buffer: vm_buffer,
+                flags: 0,
+                bufdata: &[],
+            },
+            XLogRegBuf {
+                block_id: 1,
+                buffer: heap_buffer,
+                flags: heap_flags,
+                bufdata: &[],
+            },
         ],
     )
 }
@@ -273,10 +315,10 @@ pub fn visibilitymap_set(
     debug_assert!((flags & VISIBILITYMAP_VALID_BITS) == flags);
     debug_assert!(flags != VISIBILITYMAP_ALL_FROZEN);
 
-    if BufferIsValid(heapBuf)
-        && bufmgr_seams::buffer_get_block_number::call(heapBuf) != heapBlk
-    {
-        return Err(wrong_buffer("wrong heap buffer passed to visibilitymap_set"));
+    if BufferIsValid(heapBuf) && bufmgr_seams::buffer_get_block_number::call(heapBuf) != heapBlk {
+        return Err(wrong_buffer(
+            "wrong heap buffer passed to visibilitymap_set",
+        ));
     }
     let Some(pin) = vmbuf.pin.as_ref().filter(|_| vmbuf.map_block == mapBlock) else {
         return Err(wrong_buffer("wrong VM buffer passed to visibilitymap_set"));
@@ -295,7 +337,14 @@ pub fn visibilitymap_set(
         if flags != status {
             init_small::globals::StartCriticalSection();
             let res = set_bits_and_log(
-                rel, heapBuf, recptr, pin, cutoff_xid, flags, map_byte_ptr, mapOffset,
+                rel,
+                heapBuf,
+                recptr,
+                pin,
+                cutoff_xid,
+                flags,
+                map_byte_ptr,
+                mapOffset,
             );
             init_small::globals::EndCriticalSection();
             res?;
@@ -331,9 +380,8 @@ fn set_bits_and_log(
             if xlog_hint_bit_is_needed() {
                 // SAFETY: caller holds the heap buffer exclusively locked
                 // (visibilitymap_set contract).
-                let mut hp = unsafe {
-                    PageMut::from_raw(bufmgr_seams::buffer_get_page::call(heapBuf))
-                };
+                let mut hp =
+                    unsafe { PageMut::from_raw(bufmgr_seams::buffer_get_page::call(heapBuf)) };
                 hp.set_lsn(recptr);
             }
         }
@@ -354,6 +402,31 @@ pub fn visibilitymap_clear(
     flags: u8,
 ) -> PgResult<bool> {
     let mapBlock = HEAPBLK_TO_MAPBLOCK(heapBlk);
+    if vmbuf
+        .pin
+        .as_ref()
+        .filter(|_| vmbuf.map_block == mapBlock)
+        .is_none()
+    {
+        return Err(wrong_buffer("wrong buffer passed to visibilitymap_clear"));
+    }
+    let guard = vmbuf.lock_exclusive()?;
+    let result = visibilitymap_clear_locked(_rel, heapBlk, vmbuf, flags);
+    guard.unlock();
+    result
+}
+
+/// `visibilitymap_clear_locked` -> whether any bit was cleared.  The caller
+/// must hold the VM buffer's exclusive content lock.  Heap WAL callers use
+/// this form so the VM page remains locked until its block reference and LSN
+/// have been recorded.
+pub fn visibilitymap_clear_locked(
+    _rel: &RelationData<'_>,
+    heapBlk: BlockNumber,
+    vmbuf: &VmBuffer,
+    flags: u8,
+) -> PgResult<bool> {
+    let mapBlock = HEAPBLK_TO_MAPBLOCK(heapBlk);
     let mapByte = HEAPBLK_TO_MAPBYTE(heapBlk) as usize;
     let mapOffset = HEAPBLK_TO_OFFSET(heapBlk);
     let mask = flags << mapOffset;
@@ -365,8 +438,7 @@ pub fn visibilitymap_clear(
         return Err(wrong_buffer("wrong buffer passed to visibilitymap_clear"));
     };
 
-    let guard = pin.lock_exclusive()?;
-    // SAFETY: exclusive content lock held for `guard`'s lifetime; mapByte < MAPSIZE.
+    // SAFETY: caller holds the exclusive content lock; mapByte < MAPSIZE.
     let map_byte_ptr = unsafe {
         bufmgr_seams::buffer_get_page::call(pin.buffer())
             .as_ptr()
@@ -377,14 +449,9 @@ pub fn visibilitymap_clear(
     if unsafe { *map_byte_ptr } & mask != 0 {
         // SAFETY: as above.
         unsafe { *map_byte_ptr &= !mask };
-        let res = bufmgr_seams::mark_buffer_dirty::call(pin.buffer());
-        if let Err(e) = res {
-            guard.unlock();
-            return Err(e);
-        }
+        bufmgr_seams::mark_buffer_dirty::call(pin.buffer())?;
         cleared = true;
     }
-    guard.unlock();
     Ok(cleared)
 }
 
@@ -446,9 +513,7 @@ pub fn visibilitymap_prepare_truncate(
         truncBlock
     };
 
-    if smgr_seams::smgr_nblocks::call(rlocator, ForkNumber::VISIBILITYMAP_FORKNUM)?
-        <= newnblocks
-    {
+    if smgr_seams::smgr_nblocks::call(rlocator, ForkNumber::VISIBILITYMAP_FORKNUM)? <= newnblocks {
         return Ok(InvalidBlockNumber);
     }
     Ok(newnblocks)
@@ -463,7 +528,10 @@ fn heap_page(buf: Buffer) -> PageRef<'static> {
 #[cold]
 #[inline(never)]
 fn wrong_buffer(msg: &str) -> Box<types_error::PgError> {
-    Box::new(types_error::PgError::new(types_error::ERROR, msg.to_string()))
+    Box::new(types_error::PgError::new(
+        types_error::ERROR,
+        msg.to_string(),
+    ))
 }
 
 fn vm_readbuf(

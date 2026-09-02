@@ -8,19 +8,19 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 
-use types_core::{Buffer, InvalidBuffer, OffsetNumber, TransactionId, BLCKSZ};
+use types_core::{BLCKSZ, Buffer, InvalidBuffer, OffsetNumber, TransactionId};
 use types_error::{PgError, PgResult};
 use types_storage::bufpage::{
-    MaxHeapTupleSize, MaxHeapTuplesPerPage, PageMut, SizeofHeapTupleHeader, PAI_IS_HEAP,
-    PAI_OVERWRITE,
+    MaxHeapTupleSize, MaxHeapTuplesPerPage, PAI_IS_HEAP, PAI_OVERWRITE, PageMut,
+    SizeofHeapTupleHeader,
 };
 use types_tuple::{
-    HeapTupleHeaderData, ItemPointerData, HEAP_KEYS_UPDATED, HEAP_MOVED, HEAP_XMAX_BITS,
-    HEAP_XMAX_EXCL_LOCK, HEAP_XMAX_IS_LOCKED_ONLY, HEAP_XMAX_IS_MULTI, HEAP_XMAX_KEYSHR_LOCK,
-    HEAP_XMAX_LOCK_ONLY,
+    HEAP_KEYS_UPDATED, HEAP_MOVED, HEAP_XMAX_BITS, HEAP_XMAX_EXCL_LOCK, HEAP_XMAX_IS_LOCKED_ONLY,
+    HEAP_XMAX_IS_MULTI, HEAP_XMAX_KEYSHR_LOCK, HEAP_XMAX_LOCK_ONLY, HeapTupleHeaderData,
+    ItemPointerData,
 };
 use xlogreader_seams::XLogReaderState;
-use xlogutils::{XLogInitBufferForRedo, XLogReadBufferForRedo, BLK_NEEDS_REDO};
+use xlogutils::{BLK_NEEDS_REDO, XLogInitBufferForRedo, XLogReadBufferForRedo};
 
 pub const XLOG_HEAP_INSERT: u8 = 0x00;
 pub const XLOG_HEAP_DELETE: u8 = 0x10;
@@ -99,14 +99,21 @@ const SizeOfHeapHeader: usize = 5;
 const FirstCommandId: u32 = 0;
 
 fn main_data<'a>(record: &'a XLogReaderState) -> &'a [u8] {
-    let rec = record.record.as_ref().expect("heap redo with no decoded record");
+    let rec = record
+        .record
+        .as_ref()
+        .expect("heap redo with no decoded record");
     // SAFETY: points into the reader's decode buffer, valid for the redo
     // callback's duration.
     unsafe { rec.main_data_bytes() }
 }
 
 fn record_xid(record: &XLogReaderState) -> TransactionId {
-    record.record.as_ref().expect("heap redo with no decoded record").xl_xid
+    record
+        .record
+        .as_ref()
+        .expect("heap redo with no decoded record")
+        .xl_xid
 }
 
 fn panic_err(msg: String) -> Box<PgError> {
@@ -126,7 +133,8 @@ fn unlock_release(buffer: Buffer) -> PgResult<()> {
 }
 
 fn fix_infomask_from_infobits(infobits: u8, infomask: &mut u16, infomask2: &mut u16) {
-    *infomask &= !(HEAP_XMAX_IS_MULTI | HEAP_XMAX_LOCK_ONLY | HEAP_XMAX_KEYSHR_LOCK | HEAP_XMAX_EXCL_LOCK);
+    *infomask &=
+        !(HEAP_XMAX_IS_MULTI | HEAP_XMAX_LOCK_ONLY | HEAP_XMAX_KEYSHR_LOCK | HEAP_XMAX_EXCL_LOCK);
     *infomask2 &= !HEAP_KEYS_UPDATED;
     if infobits & XLHL_XMAX_IS_MULTI != 0 {
         *infomask |= HEAP_XMAX_IS_MULTI;
@@ -159,6 +167,81 @@ fn clear_vm_bits(
     Ok(())
 }
 
+/// Clear one heap block's VM bits, consuming the registered VM block when
+/// present so recovery applies FPIs and page-LSN rules correctly.  The
+/// fallback preserves replay compatibility with WAL generated before VM
+/// buffers were registered in heap records.
+fn clear_vm_bits_from_record(
+    record: &mut XLogReaderState,
+    rlocator: types_storage::RelFileLocator,
+    heap_blkno: types_core::BlockNumber,
+    vm_block_id: u8,
+    flags: u8,
+) -> PgResult<()> {
+    if !record.has_block_ref(vm_block_id) {
+        return clear_vm_bits(rlocator, heap_blkno, flags);
+    }
+
+    let lsn = record.EndRecPtr;
+    let (action, buffer) = XLogReadBufferForRedo(record, vm_block_id)?;
+    if action == BLK_NEEDS_REDO {
+        let mut vmbuf = visibilitymap::VmBuffer::adopt_recovery_buffer(buffer)
+            .expect("redo returned an invalid VM buffer");
+        let reln = xlogutils::CreateFakeRelcacheEntry(rlocator);
+        let cleared = visibilitymap::visibilitymap_clear_locked(&reln, heap_blkno, &vmbuf, flags)?;
+        xlogutils::FreeFakeRelcacheEntry(reln);
+        if cleared {
+            // SAFETY: recovery returned the buffer pinned and exclusively locked.
+            let mut page = unsafe { page_mut(buffer) };
+            page.set_lsn(lsn);
+        }
+        bufmgr_seams::lock_buffer::call(buffer, bufmgr_seams::BUFFER_LOCK_UNLOCK)?;
+        vmbuf.release();
+    } else if buffer != InvalidBuffer {
+        unlock_release(buffer)?;
+    }
+    Ok(())
+}
+
+fn clear_registered_update_vm_block(
+    record: &mut XLogReaderState,
+    rlocator: types_storage::RelFileLocator,
+    vm_block_id: u8,
+    heap_blocks: &[types_core::BlockNumber],
+) -> PgResult<()> {
+    let lsn = record.EndRecPtr;
+    let (action, buffer) = XLogReadBufferForRedo(record, vm_block_id)?;
+    if action == BLK_NEEDS_REDO {
+        let mut vmbuf = visibilitymap::VmBuffer::adopt_recovery_buffer(buffer)
+            .expect("redo returned an invalid VM buffer");
+        let reln = xlogutils::CreateFakeRelcacheEntry(rlocator);
+        let mut changed = false;
+        for &heap_blkno in heap_blocks {
+            if visibilitymap::visibilitymap_pin_ok(heap_blkno, &vmbuf)
+                && visibilitymap::visibilitymap_clear_locked(
+                    &reln,
+                    heap_blkno,
+                    &vmbuf,
+                    visibilitymap::VISIBILITYMAP_VALID_BITS,
+                )?
+            {
+                changed = true;
+            }
+        }
+        xlogutils::FreeFakeRelcacheEntry(reln);
+        if changed {
+            // SAFETY: recovery returned the buffer pinned and exclusively locked.
+            let mut page = unsafe { page_mut(buffer) };
+            page.set_lsn(lsn);
+        }
+        bufmgr_seams::lock_buffer::call(buffer, bufmgr_seams::BUFFER_LOCK_UNLOCK)?;
+        vmbuf.release();
+    } else if buffer != InvalidBuffer {
+        unlock_release(buffer)?;
+    }
+    Ok(())
+}
+
 fn page_set_prunable(pm: &mut PageMut<'_>, xid: TransactionId) {
     debug_assert!(xid != 0);
     let old = pm.as_ref().prune_xid();
@@ -181,7 +264,13 @@ fn heap_xlog_delete(record: &mut XLogReaderState) -> PgResult<()> {
     let target_tid = ItemPointerData::new(blkno, offnum);
 
     if flags & XLH_DELETE_ALL_VISIBLE_CLEARED != 0 {
-        clear_vm_bits(target_locator, blkno, visibilitymap::VISIBILITYMAP_VALID_BITS)?;
+        clear_vm_bits_from_record(
+            record,
+            target_locator,
+            blkno,
+            1,
+            visibilitymap::VISIBILITYMAP_VALID_BITS,
+        )?;
     }
 
     let (action, buffer) = XLogReadBufferForRedo(record, 0)?;
@@ -201,8 +290,7 @@ fn heap_xlog_delete(record: &mut XLogReaderState) -> PgResult<()> {
 
         let (ptr, len) = page.item_raw(lp);
         // SAFETY: in-page tuple image under the pin+lock; exclusive for this arm.
-        let htup =
-            unsafe { &mut *(ptr.cast_mut().cast::<HeapTupleHeaderData>()) };
+        let htup = unsafe { &mut *(ptr.cast_mut().cast::<HeapTupleHeaderData>()) };
         let _ = len;
 
         htup.t_infomask &= !(HEAP_XMAX_BITS | HEAP_MOVED);
@@ -253,7 +341,13 @@ fn heap_xlog_insert(record: &mut XLogReaderState) -> PgResult<()> {
     debug_assert!(flags & XLH_INSERT_ALL_FROZEN_SET == 0);
 
     if flags & XLH_INSERT_ALL_VISIBLE_CLEARED != 0 {
-        clear_vm_bits(target_locator, blkno, visibilitymap::VISIBILITYMAP_VALID_BITS)?;
+        clear_vm_bits_from_record(
+            record,
+            target_locator,
+            blkno,
+            1,
+            visibilitymap::VISIBILITYMAP_VALID_BITS,
+        )?;
     }
 
     let info = record.record.as_ref().unwrap().xl_info & !XLR_INFO_MASK;
@@ -352,7 +446,13 @@ fn heap_xlog_multi_insert(record: &mut XLogReaderState) -> PgResult<()> {
     );
 
     if flags & XLH_INSERT_ALL_VISIBLE_CLEARED != 0 {
-        clear_vm_bits(target_locator, blkno, visibilitymap::VISIBILITYMAP_VALID_BITS)?;
+        clear_vm_bits_from_record(
+            record,
+            target_locator,
+            blkno,
+            1,
+            visibilitymap::VISIBILITYMAP_VALID_BITS,
+        )?;
     }
 
     let info = record.record.as_ref().unwrap().xl_info & !XLR_INFO_MASK;
@@ -395,8 +495,7 @@ fn heap_xlog_multi_insert(record: &mut XLogReaderState) -> PgResult<()> {
             // xl_multi_insert_tuple is SHORTALIGNed relative to the block
             // data base (matches the writer's scratch-relative padding).
             off = (off + 1) & !1;
-            let datalen =
-                u16::from_ne_bytes(tupdata[off..off + 2].try_into().unwrap()) as usize;
+            let datalen = u16::from_ne_bytes(tupdata[off..off + 2].try_into().unwrap()) as usize;
             let xl_infomask2 = u16::from_ne_bytes(tupdata[off + 2..off + 4].try_into().unwrap());
             let xl_infomask = u16::from_ne_bytes(tupdata[off + 4..off + 6].try_into().unwrap());
             let xl_hoff = tupdata[off + 6];
@@ -549,14 +648,37 @@ fn heap_xlog_update(record: &mut XLogReaderState, hot_update: bool) -> PgResult<
     };
     let newtid = ItemPointerData::new(newblk, new_offnum);
 
-    if flags & XLH_UPDATE_OLD_ALL_VISIBLE_CLEARED != 0 {
-        clear_vm_bits(rlocator, oldblk, visibilitymap::VISIBILITYMAP_VALID_BITS)?;
+    let old_cleared = flags & XLH_UPDATE_OLD_ALL_VISIBLE_CLEARED != 0;
+    let new_cleared = flags & XLH_UPDATE_NEW_ALL_VISIBLE_CLEARED != 0;
+    if old_cleared || new_cleared {
+        let has_vm_new = record.has_block_ref(2);
+        let has_vm_old = record.has_block_ref(3);
+        if has_vm_new {
+            let mut heap_blocks = Vec::with_capacity(2);
+            if old_cleared {
+                heap_blocks.push(oldblk);
+            }
+            if new_cleared {
+                heap_blocks.push(newblk);
+            }
+            clear_registered_update_vm_block(record, rlocator, 2, &heap_blocks)?;
+        }
+        if has_vm_old {
+            clear_registered_update_vm_block(record, rlocator, 3, &[oldblk])?;
+        }
+        if !has_vm_new && !has_vm_old {
+            if old_cleared {
+                clear_vm_bits(rlocator, oldblk, visibilitymap::VISIBILITYMAP_VALID_BITS)?;
+            }
+            if new_cleared {
+                clear_vm_bits(rlocator, newblk, visibilitymap::VISIBILITYMAP_VALID_BITS)?;
+            }
+        }
     }
 
     // The old page stays locked until the new tuple is in place (C's Hot
     // Standby consistency rule); the raw old-tuple slice below relies on it.
-    let (oldaction, obuffer) =
-        XLogReadBufferForRedo(record, if oldblk == newblk { 0 } else { 1 })?;
+    let (oldaction, obuffer) = XLogReadBufferForRedo(record, if oldblk == newblk { 0 } else { 1 })?;
     let mut old_item: Option<(*const u8, u32)> = None;
     if oldaction == BLK_NEEDS_REDO {
         // SAFETY: pin + exclusive lock per the redo protocol (module contract).
@@ -592,7 +714,7 @@ fn heap_xlog_update(record: &mut XLogReaderState, hot_update: bool) -> PgResult<
 
         page_set_prunable(&mut pm, record_xid(record));
 
-        if flags & XLH_UPDATE_OLD_ALL_VISIBLE_CLEARED != 0 {
+        if old_cleared {
             pm.clear_all_visible();
         }
 
@@ -612,10 +734,6 @@ fn heap_xlog_update(record: &mut XLogReaderState, hot_update: bool) -> PgResult<
     } else {
         XLogReadBufferForRedo(record, 0)?
     };
-
-    if flags & XLH_UPDATE_NEW_ALL_VISIBLE_CLEARED != 0 {
-        clear_vm_bits(rlocator, newblk, visibilitymap::VISIBILITYMAP_VALID_BITS)?;
-    }
 
     let mut freespace = 0usize;
     if newaction == BLK_NEEDS_REDO {
@@ -661,16 +779,14 @@ fn heap_xlog_update(record: &mut XLogReaderState, hot_update: bool) -> PgResult<
             // SAFETY: old tuple image under obuffer's pin + lock, still held.
             let old = unsafe { core::slice::from_raw_parts(optr, olen as usize) };
             // SAFETY: header-sized normal item under the same pin + lock.
-            let old_hoff =
-                unsafe { (*(optr.cast::<HeapTupleHeaderData>())).t_hoff } as usize;
+            let old_hoff = unsafe { (*(optr.cast::<HeapTupleHeaderData>())).t_hoff } as usize;
 
             let len = xl_hoff as usize - SizeofHeapTupleHeader;
             tbuf.0[newp..newp + len].copy_from_slice(&data[rec..rec + len]);
             rec += len;
             newp += len;
 
-            tbuf.0[newp..newp + prefixlen]
-                .copy_from_slice(&old[old_hoff..old_hoff + prefixlen]);
+            tbuf.0[newp..newp + prefixlen].copy_from_slice(&old[old_hoff..old_hoff + prefixlen]);
             newp += prefixlen;
 
             let len = tuplen - (xl_hoff as usize - SizeofHeapTupleHeader);
@@ -688,8 +804,7 @@ fn heap_xlog_update(record: &mut XLogReaderState, hot_update: bool) -> PgResult<
             let (optr, olen) = old_item.expect("suffix decode without old tuple");
             // SAFETY: old tuple image under obuffer's pin + lock, still held.
             let old = unsafe { core::slice::from_raw_parts(optr, olen as usize) };
-            tbuf.0[newp..newp + suffixlen]
-                .copy_from_slice(&old[olen as usize - suffixlen..]);
+            tbuf.0[newp..newp + suffixlen].copy_from_slice(&old[olen as usize - suffixlen..]);
         }
 
         let newlen = SizeofHeapTupleHeader + tuplen + prefixlen + suffixlen;
@@ -712,7 +827,7 @@ fn heap_xlog_update(record: &mut XLogReaderState, hot_update: bool) -> PgResult<
             return Err(panic_err("failed to add tuple".into()));
         }
 
-        if flags & XLH_UPDATE_NEW_ALL_VISIBLE_CLEARED != 0 {
+        if new_cleared {
             pm.clear_all_visible();
         }
 
@@ -760,10 +875,8 @@ fn heap_xlog_confirm(record: &mut XLogReaderState) -> PgResult<()> {
         // SAFETY: in-page tuple image under the pin+lock; exclusive for this arm.
         let htup = unsafe { &mut *(ptr.cast_mut().cast::<HeapTupleHeaderData>()) };
 
-        htup.t_ctid = ItemPointerData::new(
-            bufmgr_seams::buffer_get_block_number::call(buffer),
-            offnum,
-        );
+        htup.t_ctid =
+            ItemPointerData::new(bufmgr_seams::buffer_get_block_number::call(buffer), offnum);
 
         pm.set_lsn(lsn);
         bufmgr_seams::mark_buffer_dirty::call(buffer)?;
@@ -793,7 +906,13 @@ fn heap_xlog_lock_common(record: &mut XLogReaderState, lock_updated: bool) -> Pg
         let (rlocator, _fork, block, _) = record
             .block_tag_extended(0)
             .expect("heap_xlog_lock: no block 0");
-        clear_vm_bits(rlocator, block, visibilitymap::VISIBILITYMAP_ALL_FROZEN)?;
+        clear_vm_bits_from_record(
+            record,
+            rlocator,
+            block,
+            1,
+            visibilitymap::VISIBILITYMAP_ALL_FROZEN,
+        )?;
     }
 
     let (action, buffer) = XLogReadBufferForRedo(record, 0)?;
@@ -980,8 +1099,7 @@ fn heap_xlog_prune_freeze(record: &mut XLogReaderState) -> PgResult<()> {
     }
 
     if buffer != InvalidBuffer {
-        if flags & (XLHP_HAS_REDIRECTIONS | XLHP_HAS_DEAD_ITEMS | XLHP_HAS_NOW_UNUSED_ITEMS) != 0
-        {
+        if flags & (XLHP_HAS_REDIRECTIONS | XLHP_HAS_DEAD_ITEMS | XLHP_HAS_NOW_UNUSED_ITEMS) != 0 {
             // SAFETY: pin + lock still held until the unlock below.
             let freespace = unsafe { page_mut(buffer) }.as_ref().heap_free_space();
             unlock_release(buffer)?;
@@ -1001,8 +1119,7 @@ fn heap_xlog_visible(record: &mut XLogReaderState) -> PgResult<()> {
         (u32::from_ne_bytes(x[0..4].try_into().unwrap()), x[4])
     };
     debug_assert!(
-        flags & (visibilitymap::VISIBILITYMAP_VALID_BITS | VISIBILITYMAP_XLOG_CATALOG_REL)
-            == flags
+        flags & (visibilitymap::VISIBILITYMAP_VALID_BITS | VISIBILITYMAP_XLOG_CATALOG_REL) == flags
     );
 
     let (rlocator, _fork, blkno, _) = record
@@ -1080,7 +1197,11 @@ fn heap_xlog_visible(record: &mut XLogReaderState) -> PgResult<()> {
 }
 
 pub fn heap_redo(record: &mut XLogReaderState) -> PgResult<()> {
-    let info = record.record.as_ref().expect("heap_redo with no decoded record").xl_info
+    let info = record
+        .record
+        .as_ref()
+        .expect("heap_redo with no decoded record")
+        .xl_info
         & !XLR_INFO_MASK;
     match info & XLOG_HEAP_OPMASK {
         XLOG_HEAP_INSERT => heap_xlog_insert(record),
@@ -1097,10 +1218,15 @@ pub fn heap_redo(record: &mut XLogReaderState) -> PgResult<()> {
 }
 
 pub fn heap2_redo(record: &mut XLogReaderState) -> PgResult<()> {
-    let info = record.record.as_ref().expect("heap2_redo with no decoded record").xl_info
+    let info = record
+        .record
+        .as_ref()
+        .expect("heap2_redo with no decoded record")
+        .xl_info
         & !XLR_INFO_MASK;
     match info & XLOG_HEAP_OPMASK {
-        XLOG_HEAP2_PRUNE_ON_ACCESS | XLOG_HEAP2_PRUNE_VACUUM_SCAN
+        XLOG_HEAP2_PRUNE_ON_ACCESS
+        | XLOG_HEAP2_PRUNE_VACUUM_SCAN
         | XLOG_HEAP2_PRUNE_VACUUM_CLEANUP => heap_xlog_prune_freeze(record),
         XLOG_HEAP2_VISIBLE => heap_xlog_visible(record),
         XLOG_HEAP2_MULTI_INSERT => heap_xlog_multi_insert(record),
@@ -1152,7 +1278,11 @@ fn heap_xlog_logical_rewrite(record: &mut XLogReaderState) -> PgResult<()> {
             ))
     };
 
-    let file = match std::fs::OpenOptions::new().create(true).write(true).open(&path) {
+    let file = match std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(&path)
+    {
         Ok(f) => f,
         Err(e) => return file_err("create", e),
     };

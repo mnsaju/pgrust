@@ -810,6 +810,23 @@ fn FillPortalStore(portal: &Portal<'static>, is_top_level: bool) -> PgResult<()>
             )?;
         }
         PORTAL_UTIL_SELECT => {
+            // CVE-2026-16239: EXECUTE and FETCH dispatch (ExecuteQuery,
+            // DoPortalRunFetch) each create and run their OWN inner portal,
+            // whose result rows are streamed into this SAME treceiver.
+            // Nothing before this point cross-checked that the inner
+            // portal's row type agrees with the OUTER portal's row type,
+            // already fixed above at PortalStart. Arm the check here, with
+            // the shape PortalStart already established as authoritative.
+            if let Some(tup_desc) = portal.borrow().tupDesc.as_deref() {
+                let natts = tup_desc.natts as usize;
+                let shape: Vec<(types_core::Oid, bool)> = (0..natts)
+                    .map(|i| {
+                        let a = tup_desc.attr(i);
+                        (a.atttypid, a.attisdropped)
+                    })
+                    .collect();
+                tcop_dest::SetTuplestoreRequiredShape(&mut treceiver, shape);
+            }
             let h = portal.borrow().stmts;
             PortalRunUtility(portal, h, 0, is_top_level, true, &mut treceiver, Some(&mut qc))?;
         }

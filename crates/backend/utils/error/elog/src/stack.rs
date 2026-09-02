@@ -10,7 +10,7 @@ use std::io::Write;
 
 use ::types_dest::CommandDest;
 use ::types_error::{
-    ErrorField, ErrorLevel, ErrorLocation, PgError, PgResult, SqlState, ERROR, FATAL, PANIC,
+    ERROR, ErrorField, ErrorLevel, ErrorLocation, FATAL, PANIC, PgError, PgResult, SqlState,
 };
 
 use crate::{config, errno, policy, report, sink};
@@ -172,7 +172,6 @@ pub fn errstart(elevel: ErrorLevel, domain: Option<&str>) -> bool {
         return false;
     }
 
-
     let overflow = STACK.with(|s| {
         let mut st = s.borrow_mut();
 
@@ -265,11 +264,9 @@ pub fn errfinish(filename: Option<&str>, lineno: i32, funcname: Option<&str>) ->
     }
 
     if elevel == ERROR {
-        // Minimal cleanup so handlers run in a sane state. C also zeroes
-        // InterruptHoldoffCount / QueryCancelHoldoffCount; those belong to
-        // the interrupt machinery and are reset by the catching block.
-        config::set_crit_section_count(0);
-
+        // Interrupt and critical-section counters are owned by init_small and
+        // reset by the catching block.  A real critical section cannot reach
+        // this arm: errstart promotes it to PANIC above.
         let error = pop_top_frame();
         return Err(Box::new(error));
     }
@@ -326,7 +323,11 @@ fn emit_top_frame() {
     let (error, mut output_to_server, output_to_client) = STACK.with(|s| {
         let st = s.borrow();
         let top = st.frames.last().expect("emit_top_frame on empty stack");
-        (top.error.clone(), top.output_to_server, top.output_to_client)
+        (
+            top.error.clone(),
+            top.output_to_server,
+            top.output_to_client,
+        )
     });
 
     report::reset_formatted_log_time();
@@ -464,7 +465,10 @@ pub fn errmsg_plural(fmt_singular: &str, fmt_plural: &str, n: u64) -> PgResult<(
 #[inline(never)]
 pub fn errdetail(detail: &str) -> PgResult<()> {
     with_current_mut(|error| {
-        error.detail = Some(errno::replace_percent_m(detail, error.saved_errno.unwrap_or(0)));
+        error.detail = Some(errno::replace_percent_m(
+            detail,
+            error.saved_errno.unwrap_or(0),
+        ));
     })
 }
 
@@ -515,7 +519,10 @@ pub fn errdetail_plural(fmt_singular: &str, fmt_plural: &str, n: u64) -> PgResul
 #[inline(never)]
 pub fn errhint(hint: &str) -> PgResult<()> {
     with_current_mut(|error| {
-        error.hint = Some(errno::replace_percent_m(hint, error.saved_errno.unwrap_or(0)));
+        error.hint = Some(errno::replace_percent_m(
+            hint,
+            error.saved_errno.unwrap_or(0),
+        ));
     })
 }
 

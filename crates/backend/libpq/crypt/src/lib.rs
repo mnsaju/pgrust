@@ -1,10 +1,10 @@
 //! crypt.c.
 
 use mcx::{Mcx, PgString};
-use pg_md5::{pg_md5_encrypt, MD5_PASSWD_CHARSET, MD5_PASSWD_LEN};
+use pg_md5::{MD5_PASSWD_CHARSET, MD5_PASSWD_LEN, pg_md5_encrypt};
 use types_error::{
-    ErrorLocation, PgResult, ERRCODE_PROGRAM_LIMIT_EXCEEDED, ERRCODE_WARNING_DEPRECATED_FEATURE,
-    ERROR, WARNING,
+    ERRCODE_PROGRAM_LIMIT_EXCEEDED, ERRCODE_WARNING_DEPRECATED_FEATURE, ERROR, ErrorLocation,
+    PgResult, WARNING,
 };
 
 use std::cell::Cell;
@@ -130,7 +130,8 @@ pub fn encrypt_password<'mcx>(
             .finish(loc("encrypt_password"))?;
     }
 
-    if md5_password_warnings() && get_password_type(encrypted_password.as_str()) == PasswordType::Md5
+    if md5_password_warnings()
+        && get_password_type(encrypted_password.as_str()) == PasswordType::Md5
     {
         elog::ereport(WARNING)
             .errcode(ERRCODE_WARNING_DEPRECATED_FEATURE)
@@ -162,7 +163,7 @@ pub fn md5_crypt_verify(
     // Stored password already encrypted, only do salt.
     let crypt_pwd = pg_md5_encrypt(&shadow_pass.as_bytes()[3..], md5_salt);
 
-    if client_pass.as_bytes() == &crypt_pwd[..] {
+    if password_bytes_eq(&crypt_pwd, client_pass.as_bytes()) {
         Ok(STATUS_OK)
     } else {
         *logdetail = Some(format!("Password does not match for user \"{role}\"."));
@@ -187,7 +188,7 @@ pub fn plain_crypt_verify(
         }
         PasswordType::Md5 => {
             let crypt_client_pass = pg_md5_encrypt(client_pass.as_bytes(), role.as_bytes());
-            if &crypt_client_pass[..] == shadow_pass.as_bytes() {
+            if password_bytes_eq(&crypt_client_pass, shadow_pass.as_bytes()) {
                 return Ok(STATUS_OK);
             }
             *logdetail = Some(format!("Password does not match for user \"{role}\"."));
@@ -201,6 +202,18 @@ pub fn plain_crypt_verify(
         "Password of user \"{role}\" is in unrecognized format."
     ));
     Ok(STATUS_ERROR)
+}
+
+/// Compare a fixed-size derived password with attacker-controlled bytes
+/// without data-dependent early exit.  The loop count depends only on the
+/// public hash format; length mismatches are folded into the result.
+#[inline(never)]
+fn password_bytes_eq(expected: &[u8], supplied: &[u8]) -> bool {
+    let mut diff = expected.len() ^ supplied.len();
+    for (idx, byte) in expected.iter().enumerate() {
+        diff |= (*byte ^ supplied.get(idx).copied().unwrap_or(0)) as usize;
+    }
+    diff == 0
 }
 
 pub fn init_seams() {

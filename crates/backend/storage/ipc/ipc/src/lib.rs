@@ -8,7 +8,7 @@
 use std::cell::Cell;
 
 use datum::Datum;
-use types_error::{ErrorLocation, PgError, PgResult, ERRCODE_PROGRAM_LIMIT_EXCEEDED, FATAL};
+use types_error::{ERRCODE_PROGRAM_LIMIT_EXCEEDED, ErrorLocation, FATAL, PgError, PgResult};
 
 #[cfg(test)]
 mod tests;
@@ -77,7 +77,6 @@ pub fn reset_exit_state_for_retained_park() {
     elog::config::set_proc_exit_inprogress(false);
     init_small::globals::SetInterruptHoldoffCount(0);
     init_small::globals::SetCritSectionCount(0);
-    elog::config::set_crit_section_count(0);
     elog::reset_statement_suppressed();
 }
 
@@ -132,9 +131,8 @@ pub fn run_deferred_exit_callbacks(mut code: i32) -> i32 {
         if !EXIT_CALLBACKS_DEFERRED.with(|c| c.replace(false)) {
             return code;
         }
-        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            drain_exit_callbacks(code)
-        }));
+        let outcome =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| drain_exit_callbacks(code)));
         match outcome {
             Ok(()) => return code,
             Err(payload) => match payload.downcast_ref::<ProcExitThread>() {
@@ -181,7 +179,6 @@ fn commit_to_exit() {
     init_small::globals::SetQueryCancelPending(false);
     init_small::globals::SetInterruptHoldoffCount(1);
     init_small::globals::SetCritSectionCount(0);
-    elog::config::set_crit_section_count(0);
 
     elog::clear_emit_context_callbacks();
     elog::suppress_statement();
@@ -212,7 +209,11 @@ fn run_callback_guarded(what: &str, f: impl FnOnce()) {
         .downcast_ref::<String>()
         .cloned()
         .or_else(|| payload.downcast_ref::<&str>().map(|s| s.to_string()))
-        .or_else(|| payload.downcast_ref::<PgError>().map(|e| e.message().to_string()))
+        .or_else(|| {
+            payload
+                .downcast_ref::<PgError>()
+                .map(|e| e.message().to_string())
+        })
         .unwrap_or_else(|| "unknown panic".to_string());
     let what = what.to_string();
     let _ = std::panic::catch_unwind(move || {
@@ -277,7 +278,11 @@ fn out_of_slots(which: &str) -> ! {
     let _ = elog::ereport(FATAL)
         .errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED)
         .errmsg_internal(format!("out of {which} slots"))
-        .finish(ErrorLocation { filename: None, lineno: 0, funcname: None });
+        .finish(ErrorLocation {
+            filename: None,
+            lineno: 0,
+            funcname: None,
+        });
     unreachable!("ereport(FATAL) returned");
 }
 

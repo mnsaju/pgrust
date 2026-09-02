@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use mcx::{Mcx, MemoryContext};
 use parser_small1::make_parsestate;
 use syscache_seams::{PgOperatorShape, PgProcShape};
-use types_core::catalog::{INT4OID, TEXTOID, UNKNOWNOID};
+use types_core::catalog::{INT4OID, INTERNALOID, TEXTOID, UNKNOWNOID};
 use types_core::InvalidOid;
 use types_error::ERRCODE_UNDEFINED_FUNCTION;
 use types_nodes::{Node, NodeList, String as PgStr};
@@ -21,6 +21,8 @@ const INT4_HASH_OPCLASS: types_core::Oid = 1979;
 const INT_BTREE_FAM: types_core::Oid = 1976;
 const INT_HASH_FAM: types_core::Oid = 1977;
 const NOSORT_OID: types_core::Oid = 9999;
+const LEAKY_INTERNAL_OP: types_core::Oid = 8001;
+const LEAKY_INTERNAL_PROC: types_core::Oid = 8002;
 
 static CANDIDATE_PROBES: AtomicUsize = AtomicUsize::new(0);
 
@@ -41,22 +43,44 @@ fn install_fixture() {
             if (name == "+" || name == "@@") && l == INT4OID && r == INT4OID {
                 v.push((INT4_PLUS_OP, PG_CATALOG));
             }
+            // CVE-2026-14680 fixture: an operator whose result is internal.
+            if name == "@!" && l == INT4OID && r == INT4OID {
+                v.push((LEAKY_INTERNAL_OP, PG_CATALOG));
+            }
             Ok(v)
         });
         syscache_seams::lookup_pg_operator_shape::set(|opno| {
-            Ok((opno == INT4_PLUS_OP).then_some(PgOperatorShape {
-                oprnamespace: 11,
-                oprleft: INT4OID,
-                oprright: INT4OID,
-                oprresult: INT4OID,
-                oprcom: INT4_PLUS_OP,
-                oprnegate: InvalidOid,
-                oprcode: INT4PL_PROC,
-                oprrest: InvalidOid,
-                oprjoin: InvalidOid,
-                oprcanmerge: false,
-                oprcanhash: false,
-            }))
+            if opno == INT4_PLUS_OP {
+                return Ok(Some(PgOperatorShape {
+                    oprnamespace: 11,
+                    oprleft: INT4OID,
+                    oprright: INT4OID,
+                    oprresult: INT4OID,
+                    oprcom: INT4_PLUS_OP,
+                    oprnegate: InvalidOid,
+                    oprcode: INT4PL_PROC,
+                    oprrest: InvalidOid,
+                    oprjoin: InvalidOid,
+                    oprcanmerge: false,
+                    oprcanhash: false,
+                }));
+            }
+            if opno == LEAKY_INTERNAL_OP {
+                return Ok(Some(PgOperatorShape {
+                    oprnamespace: 11,
+                    oprleft: INT4OID,
+                    oprright: INT4OID,
+                    oprresult: INTERNALOID,
+                    oprcom: InvalidOid,
+                    oprnegate: InvalidOid,
+                    oprcode: LEAKY_INTERNAL_PROC,
+                    oprrest: InvalidOid,
+                    oprjoin: InvalidOid,
+                    oprcanmerge: false,
+                    oprcanhash: false,
+                }));
+            }
+            Ok(None)
         });
         syscache_seams::pg_operator_name_candidates_exist::set(|name, oprkind| {
             Ok(name == "+" && oprkind == b'b' as i8)
@@ -230,6 +254,26 @@ fn unknown_operand_resolves_via_other_side() {
 
     let op = oper(&pstate, &name, UNKNOWNOID, INT4OID, false, -1).unwrap().unwrap();
     assert_eq!(op.oid, INT4_PLUS_OP);
+}
+
+// CVE-2026-14680: an operator whose result type is internal must not be
+// resolvable through ordinary `a OP b` syntax — the underlying function
+// would hand ordinary SQL a raw C pointer.
+#[test]
+fn internal_returning_operator_is_rejected() {
+    install_fixture();
+    let ctx = MemoryContext::new("t");
+    let mcx = ctx.mcx();
+    let pstate = make_parsestate(mcx, None);
+    let name = NodeList::make1(mcx, Node::mk(mcx, PgStr { sval: "@!" }).unwrap()).unwrap();
+
+    let err = oper(&pstate, &name, INT4OID, INT4OID, false, -1).map(|_| ()).unwrap_err();
+    assert_eq!(err.sqlstate(), ERRCODE_UNDEFINED_FUNCTION);
+    assert!(err.message().contains("internal"), "{}", err.message());
+
+    // The cache-hit path must reject it too, not just first resolution.
+    let err = oper(&pstate, &name, INT4OID, INT4OID, false, -1).map(|_| ()).unwrap_err();
+    assert!(err.message().contains("internal"), "{}", err.message());
 }
 
 #[test]

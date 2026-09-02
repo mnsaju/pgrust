@@ -3,11 +3,11 @@ use std::sync::Once;
 
 use mcx::{Mcx, MemoryContext, PgString};
 use types_core::{
-    InvalidOid, Oid, UserContext, DATEORDER_MDY, INTSTYLE_POSTGRES, INVALID_PROC_NUMBER,
-    MAXPGPATH, MAX_CANCEL_KEY_LENGTH, PG_DIR_MODE_OWNER, SECURITY_RESTRICTED_OPERATION,
-    USER_CONTEXT_NO_NEST_LEVEL, USE_ISO_DATES,
+    DATEORDER_MDY, INTSTYLE_POSTGRES, INVALID_PROC_NUMBER, InvalidOid, MAX_CANCEL_KEY_LENGTH,
+    MAXPGPATH, Oid, PG_DIR_MODE_OWNER, SECURITY_RESTRICTED_OPERATION, USE_ISO_DATES,
+    USER_CONTEXT_NO_NEST_LEVEL, UserContext,
 };
-use types_error::{PgResult, ERRCODE_INSUFFICIENT_PRIVILEGE};
+use types_error::{ERRCODE_INSUFFICIENT_PRIVILEGE, PgResult};
 
 use crate::globals;
 
@@ -199,6 +199,10 @@ fn guc_var_slots_reach_globals() {
     assert_eq!(vars::VacuumCostDelay.read(), 0.0);
     assert_eq!(vars::IntervalStyle.read(), INTSTYLE_POSTGRES);
     assert_eq!(init_small_seams::my_proc_pid::call(), globals::MyProcPid());
+
+    globals::SetCritSectionCount(1);
+    assert_eq!(init_small_seams::crit_section_count::call(), 1);
+    globals::SetCritSectionCount(0);
 }
 
 #[test]

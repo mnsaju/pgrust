@@ -379,6 +379,9 @@ fn tap_executor_start_counts_start_and_parked_rearm_reuse() {
         0,
     )
     .unwrap();
+    // The tap is process-global and this test can be rerun in the same process.
+    // Reset the test-local observation before selecting this query descriptor.
+    REARM_TAP_COUNT.store(0, std::sync::atomic::Ordering::Relaxed);
     REARM_TAP_TARGET.store(qd.0, std::sync::atomic::Ordering::Relaxed);
 
     // Fresh start: one Bind's worth of execution.

@@ -1,12 +1,12 @@
+use std::cell::Cell;
 use std::sync::Mutex;
 
 use ::types_dest::CommandDest;
 use ::types_error::{
-    make_sqlstate, ErrorLevel, ErrorLocation, PgError, DEBUG1, ERRCODE_CONNECTION_FAILURE,
-    ERRCODE_DISK_FULL, ERRCODE_DUPLICATE_FILE, ERRCODE_INSUFFICIENT_PRIVILEGE,
-    ERRCODE_INTERNAL_ERROR, ERRCODE_UNDEFINED_FILE, ERROR, FATAL, INFO, LOG,
-    LOG_DESTINATION_STDERR, LOG_DESTINATION_SYSLOG, LOG_SERVER_ONLY, NOTICE, PANIC, WARNING,
-    WARNING_CLIENT_ONLY,
+    DEBUG1, ERRCODE_CONNECTION_FAILURE, ERRCODE_DISK_FULL, ERRCODE_DUPLICATE_FILE,
+    ERRCODE_INSUFFICIENT_PRIVILEGE, ERRCODE_INTERNAL_ERROR, ERRCODE_UNDEFINED_FILE, ERROR,
+    ErrorLevel, ErrorLocation, FATAL, INFO, LOG, LOG_DESTINATION_STDERR, LOG_DESTINATION_SYSLOG,
+    LOG_SERVER_ONLY, NOTICE, PANIC, PgError, WARNING, WARNING_CLIENT_ONLY, make_sqlstate,
 };
 
 use super::*;
@@ -14,6 +14,14 @@ use super::*;
 const UNDEFINED_TABLE: SqlState = make_sqlstate(*b"42P01");
 
 static TEST_LOCK: Mutex<()> = Mutex::new(());
+
+thread_local! {
+    static TEST_CRIT_SECTION_COUNT: Cell<u32> = const { Cell::new(0) };
+}
+
+fn test_crit_section_count() -> u32 {
+    TEST_CRIT_SECTION_COUNT.get()
+}
 
 fn lock() -> std::sync::MutexGuard<'static, ()> {
     TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner())
@@ -24,6 +32,23 @@ fn set_guc(log_min: ErrorLevel, client_min: ErrorLevel, dest: CommandDest, auth:
     config::set_client_min_messages(client_min);
     config::set_where_to_send_output(dest);
     config::set_client_auth_in_progress(auth);
+}
+
+#[test]
+fn error_inside_authoritative_critical_section_is_promoted_to_panic() {
+    let _guard = lock();
+    if !init_small_seams::crit_section_count::is_installed() {
+        init_small_seams::crit_section_count::set(test_crit_section_count);
+    }
+    TEST_CRIT_SECTION_COUNT.set(1);
+    FlushErrorState();
+
+    assert!(errstart(ERROR, None));
+    let frame = CopyErrorData().expect("errstart must push an error frame");
+    assert_eq!(frame.level(), PANIC);
+
+    FlushErrorState();
+    TEST_CRIT_SECTION_COUNT.set(0);
 }
 
 fn reset_guc() {
@@ -138,7 +163,10 @@ fn errno_helpers_match_postgres_categories() {
         errno::sqlstate_for_file_access(errno::EEXIST),
         ERRCODE_DUPLICATE_FILE
     );
-    assert_eq!(errno::sqlstate_for_file_access(errno::ENOSPC), ERRCODE_DISK_FULL);
+    assert_eq!(
+        errno::sqlstate_for_file_access(errno::ENOSPC),
+        ERRCODE_DISK_FULL
+    );
     assert_eq!(
         errno::sqlstate_for_socket_access(errno::ECONNRESET),
         ERRCODE_CONNECTION_FAILURE
@@ -277,7 +305,9 @@ fn context_attaches_on_propagation_innermost_first() {
             .map_err(|e| e.add_context("inner frame"))
             .map_err(::core::convert::Into::into)
     }
-    let err = middle().map_err(|e| e.add_context("outer frame")).unwrap_err();
+    let err = middle()
+        .map_err(|e| e.add_context("outer frame"))
+        .unwrap_err();
     assert_eq!(err.context.as_deref(), Some("inner frame\nouter frame"));
 }
 
@@ -645,11 +675,15 @@ fn log_destination_check_rejects_unported_writers() {
         "Destination \"csvlog\" is not supported in this build."
     );
     assert_eq!(
-        check_log_destination("stderr, JSONLOG").unwrap_err().message,
+        check_log_destination("stderr, JSONLOG")
+            .unwrap_err()
+            .message,
         "Destination \"jsonlog\" is not supported in this build."
     );
     assert_eq!(
-        check_log_destination("\"stderr\", csvlog").unwrap_err().message,
+        check_log_destination("\"stderr\", csvlog")
+            .unwrap_err()
+            .message,
         "Destination \"csvlog\" is not supported in this build."
     );
 }
@@ -701,7 +735,10 @@ fn err_sendbytes_passes_raw_high_bytes() {
 
     let e = ::types_error::PgError::error_raw_message(b"unrecognized weight: \xE5".to_vec());
     assert_eq!(e.message(), "unrecognized weight: \u{FFFD}");
-    assert_eq!(e.message_raw.as_deref(), Some(&b"unrecognized weight: \xE5"[..]));
+    assert_eq!(
+        e.message_raw.as_deref(),
+        Some(&b"unrecognized weight: \xE5"[..])
+    );
     // The NUL variant: lossy message ends where C's cstring would.
     let e = ::types_error::PgError::error_raw_message(b"unrecognized weight: \0".to_vec());
     assert_eq!(e.message(), "unrecognized weight: ");

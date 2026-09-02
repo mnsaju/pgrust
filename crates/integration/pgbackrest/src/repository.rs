@@ -5,6 +5,7 @@ use std::{
     fmt,
     fs::{self, File},
     io::{self, BufRead, BufReader, Read, Write},
+    os::unix::fs::PermissionsExt,
     path::{Component, Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -98,16 +99,29 @@ impl Repository {
         let checksum = checksum_file(source)?;
         if destination.exists() {
             if checksum_file(&destination)? == checksum {
+                // A crash between the segment copy and the checksum-sidecar
+                // write below leaves the segment intact but the sidecar
+                // missing or stale. The natural operator/archiver response
+                // (retry) must repair that here, or the archive is
+                // permanently unreadable despite every retry reporting
+                // success (PGRA-003).
+                let sidecar = checksum_path(&destination);
+                let sidecar_matches = fs::read_to_string(&sidecar)
+                    .map(|contents| contents.trim() == checksum)
+                    .unwrap_or(false);
+                if !sidecar_matches {
+                    write_atomic(&sidecar, format!("{checksum}\n").as_bytes())?;
+                }
                 return Ok(());
             }
             return Err(RepositoryError::new(format!(
                 "archive file {name} already exists with a different checksum"
             )));
         }
-        copy_atomic(source, &destination)?;
+        let copied = copy_atomic(source, &destination)?;
         write_atomic(
             &checksum_path(&destination),
-            format!("{checksum}\n").as_bytes(),
+            format!("{}\n", copied.checksum).as_bytes(),
         )
     }
 
@@ -140,7 +154,8 @@ impl Repository {
                 "archive file {archive_name} is corrupt"
             )));
         }
-        copy_atomic(&source, destination.as_ref())
+        copy_atomic(&source, destination.as_ref())?;
+        Ok(())
     }
 
     pub fn backup_full(&self) -> Result<BackupInfo, RepositoryError> {
@@ -150,6 +165,17 @@ impl Repository {
                 "pg1-path {} is not a directory",
                 self.config.pg_path.display()
             )));
+        }
+        // A file-level copy of a running cluster is not a consistent backup:
+        // there is no online-backup protocol here (no backup_label, no WAL
+        // start/stop range), so recovery from it is not possible (PGRA-001).
+        // Refuse rather than silently produce a backup that reports success
+        // and cannot be restored. postmaster.pid is PostgreSQL's own
+        // liveness marker and is removed on every clean shutdown.
+        if self.config.pg_path.join("postmaster.pid").exists() {
+            return Err(RepositoryError::new(
+                "pg1-path appears to be an active PostgreSQL data directory                  (postmaster.pid is present); only backups of a stopped                  cluster are supported. Stop the server before running                  backup, or use a future online-backup implementation.",
+            ));
         }
         let label = self.next_backup_label()?;
         let partial = self.backup_root().join(format!(".{label}.partial"));
@@ -199,20 +225,36 @@ impl Repository {
                 .ok_or_else(|| RepositoryError::new("no backups are available"))?,
         };
         let backup = self.backup_root().join(&label);
+        let backup_data = backup.join("data");
         let entries = read_manifest(&backup.join("manifest"))?;
         let destination = destination.as_ref();
         ensure_empty_destination(destination)?;
+        // The manifest records only files, so a directory that was empty in
+        // the source data directory (pg_commit_ts, pg_twophase, pg_notify,
+        // and every other SLRU/runtime directory PostgreSQL expects to open
+        // at startup regardless of whether the feature it backs is in use)
+        // has no manifest entry and would never otherwise be created.
+        // Mirror the backup's actual directory structure directly, rather
+        // than hardcoding PostgreSQL's list of always-required directories
+        // — this is both correct today and self-maintaining as that list
+        // changes across PostgreSQL versions (PGRA-006).
+        for dir in list_dirs(&backup_data)? {
+            fs::create_dir_all(destination.join(dir))?;
+        }
         for entry in &entries {
-            let source = backup.join("data").join(&entry.path);
+            let source = backup_data.join(&entry.path);
             let target = destination.join(&entry.path);
-            if checksum_file(&source)? != entry.checksum {
+            let copied = copy_atomic(&source, &target)?;
+            if copied.checksum != entry.checksum {
                 return Err(RepositoryError::new(format!(
                     "backup file {} is corrupt",
                     entry.path.display()
                 )));
             }
-            copy_atomic(&source, &target)?;
         }
+        // PostgreSQL refuses to start unless PGDATA is exactly u=rwx or
+        // u=rwx,g=rx; tighten it now that every file is in place (PGRA-006).
+        fs::set_permissions(destination, fs::Permissions::from_mode(0o700))?;
         Ok(BackupInfo {
             label,
             files: entries.len(),
@@ -262,19 +304,39 @@ impl Repository {
         ] {
             let primary = root.join(name);
             let copy = primary.with_extension("info.copy");
-            if !primary.is_file() || !copy.is_file() {
-                return Err(RepositoryError::new(
-                    "stanza is not initialized; run stanza-create first",
-                ));
-            }
-            if fs::read(&primary)? != fs::read(&copy)? {
+            let primary_ok = fs::read(&primary)
+                .is_ok_and(|contents| self.info_pair_is_valid(&contents));
+            let copy_ok =
+                fs::read(&copy).is_ok_and(|contents| self.info_pair_is_valid(&contents));
+            // Primary-or-fallback: the redundant copy exists so that a crash
+            // between the two writes in write_info_pair leaves the stanza
+            // usable, not bricked (PGRA-005). Only fail if BOTH are
+            // missing, unreadable, or do not belong to this stanza.
+            if !primary_ok && !copy_ok {
                 return Err(RepositoryError::new(format!(
-                    "metadata copies disagree in {}",
+                    "stanza is not initialized, or both metadata copies in {} are                      missing or unreadable; run stanza-create first",
                     root.display()
                 )));
             }
         }
         Ok(())
+    }
+
+    /// A metadata file belongs to this stanza and this format version. Used
+    /// to decide, independently for the primary and the redundant copy,
+    /// whether each one is fit to rely on (PGRA-005) — deliberately not a
+    /// byte-for-byte comparison of the two, since backup.info legitimately
+    /// grows new `backup=` lines over time and a one-generation-old copy is
+    /// an expected transient state, not corruption.
+    fn info_pair_is_valid(&self, contents: &[u8]) -> bool {
+        let Ok(text) = std::str::from_utf8(contents) else {
+            return false;
+        };
+        let has_format = text.lines().any(|line| line == format!("format={FORMAT_VERSION}"));
+        let has_stanza = text
+            .lines()
+            .any(|line| line == format!("stanza={}", self.config.stanza));
+        has_format && has_stanza
     }
 
     fn archive_root(&self) -> PathBuf {
@@ -378,14 +440,37 @@ fn write_atomic(path: &Path, contents: &[u8]) -> Result<(), RepositoryError> {
     let temporary = path.with_extension(format!("tmp-{}", std::process::id()));
     {
         let mut file = File::create(&temporary)?;
+        file.set_permissions(fs::Permissions::from_mode(0o600))?;
         file.write_all(contents)?;
         file.sync_all()?;
     }
-    fs::rename(temporary, path)?;
+    fs::rename(&temporary, path)?;
+    // A rename is only durable once the directory entry itself is synced;
+    // without this an "atomic, durable" publish can still lose the file on
+    // power loss even though its bytes were fsynced (PGRA-004).
+    fsync_dir(parent)?;
     Ok(())
 }
 
-fn copy_atomic(source: &Path, destination: &Path) -> Result<(), RepositoryError> {
+/// fsync a directory so a preceding `rename` into it is durable, not merely
+/// atomic (PGRA-004). A rename is a directory-metadata operation; without
+/// this the new name can be lost on power failure even though the file's
+/// own contents were already fsynced.
+fn fsync_dir(path: &Path) -> Result<(), RepositoryError> {
+    File::open(path)?.sync_all()?;
+    Ok(())
+}
+
+/// Result of a verified copy: the checksum and byte count are derived from
+/// the bytes actually read from `source`, never from a later, separate read
+/// of the destination (PGRA-002) — the manifest and archive sidecars must
+/// describe what was backed up, not what a possibly-corrupted copy became.
+struct CopiedFile {
+    checksum: String,
+    size: u64,
+}
+
+fn copy_atomic(source: &Path, destination: &Path) -> Result<CopiedFile, RepositoryError> {
     let parent = destination
         .parent()
         .ok_or_else(|| RepositoryError::new("destination has no parent"))?;
@@ -393,10 +478,62 @@ fn copy_atomic(source: &Path, destination: &Path) -> Result<(), RepositoryError>
     let temporary = destination.with_extension(format!("tmp-{}", std::process::id()));
     let mut input = BufReader::new(File::open(source)?);
     let mut output = File::create(&temporary)?;
-    io::copy(&mut input, &mut output)?;
+    output.set_permissions(fs::Permissions::from_mode(0o600))?;
+    let mut hasher = PgSha256Ctx::init_sha256();
+    let mut size: u64 = 0;
+    let mut buffer = [0u8; 128 * 1024];
+    loop {
+        let bytes = input.read(&mut buffer)?;
+        if bytes == 0 {
+            break;
+        }
+        hasher.update(&buffer[..bytes]);
+        output.write_all(&buffer[..bytes])?;
+        size += bytes as u64;
+    }
     output.sync_all()?;
     drop(output);
-    fs::rename(temporary, destination)?;
+    let checksum = hex(&hasher.final_sha256());
+    // Verify the bytes that landed on disk match the bytes read from
+    // source, catching a short write or an I/O error that produced a
+    // valid-but-wrong copy, before the copy is ever published or trusted.
+    let written = checksum_file(&temporary)?;
+    if written != checksum {
+        let _ = fs::remove_file(&temporary);
+        return Err(RepositoryError::new(format!(
+            "copy of {} to {} did not verify after writing              (read checksum {checksum}, written checksum {written})",
+            source.display(),
+            destination.display()
+        )));
+    }
+    fs::rename(&temporary, destination)?;
+    fsync_dir(parent)?;
+    Ok(CopiedFile { checksum, size })
+}
+
+/// Every directory under `root`, relative to it, in root-to-leaf order (a
+/// parent always precedes its children) so callers can `create_dir_all`
+/// them in a single pass. Mirrors whatever directory structure the backup
+/// actually contains — see the call site in `restore` (PGRA-006).
+fn list_dirs(root: &Path) -> Result<Vec<PathBuf>, RepositoryError> {
+    let mut dirs = Vec::new();
+    list_dirs_into(root, Path::new(""), &mut dirs)?;
+    Ok(dirs)
+}
+
+fn list_dirs_into(
+    root: &Path,
+    relative: &Path,
+    out: &mut Vec<PathBuf>,
+) -> Result<(), RepositoryError> {
+    for entry in fs::read_dir(root.join(relative))? {
+        let entry = entry?;
+        if entry.file_type()?.is_dir() {
+            let child = relative.join(entry.file_name());
+            out.push(child.clone());
+            list_dirs_into(root, &child, out)?;
+        }
+    }
     Ok(())
 }
 
@@ -426,11 +563,11 @@ fn copy_tree(
             fs::create_dir_all(&target_path)?;
             copy_tree(&source_path, &target_path, &child_relative, entries)?;
         } else if file_type.is_file() {
-            copy_atomic(&source_path, &target_path)?;
+            let copied = copy_atomic(&source_path, &target_path)?;
             entries.push(ManifestEntry {
                 path: child_relative,
-                size: fs::metadata(&target_path)?.len(),
-                checksum: checksum_file(&target_path)?,
+                size: copied.size,
+                checksum: copied.checksum,
             });
         } else {
             return Err(RepositoryError::new(format!(
@@ -526,10 +663,7 @@ fn wal_prefix(name: &str) -> &str {
 }
 
 fn is_backup_excluded(name: &OsStr) -> bool {
-    matches!(
-        name.to_str(),
-        Some("pg_wal" | "postmaster.pid" | "postmaster.opts")
-    )
+    matches!(name.to_str(), Some("postmaster.pid" | "postmaster.opts"))
 }
 
 fn safe_relative_path(path: &Path) -> bool {
@@ -553,10 +687,12 @@ fn hex(bytes: &[u8]) -> String {
 mod tests {
     use std::{
         fs,
+        os::unix::fs::PermissionsExt,
         path::PathBuf,
         time::{SystemTime, UNIX_EPOCH},
     };
 
+    use super::*;
     use crate::{Config, Repository};
 
     fn temp(name: &str) -> PathBuf {
@@ -610,6 +746,126 @@ mod tests {
         fs::remove_dir_all(root).expect("cleanup");
     }
 
+    // PGRA-003: a crash between the segment copy and the checksum-sidecar
+    // write must be repairable by the retry pg_wal's archive_command
+    // performs automatically, not permanent.
+    #[test]
+    fn archive_push_repairs_a_missing_sidecar_on_retry() {
+        let (repository, root) = repository("archive-sidecar");
+        repository.stanza_create().expect("stanza");
+        let source = root.join("000000010000000000000002");
+        fs::write(&source, b"wal-segment").expect("wal");
+        repository.archive_push(&source).expect("push");
+
+        let sidecar = root.join(
+            "repo/archive/demo/wal/0000000100000000/000000010000000000000002.sha256",
+        );
+        assert!(sidecar.exists(), "sidecar written on the initial push");
+        fs::remove_file(&sidecar).expect("simulate the crash window");
+
+        let restored = root.join("restored-after-crash");
+        assert!(
+            repository
+                .archive_get("000000010000000000000002", &restored)
+                .is_err(),
+            "segment must be unreadable while the sidecar is missing"
+        );
+
+        // The retry PostgreSQL's archiver performs automatically.
+        repository
+            .archive_push(&source)
+            .expect("retry must repair the sidecar, not just report success");
+        assert!(sidecar.exists(), "retry must have rewritten the sidecar");
+
+        repository
+            .archive_get("000000010000000000000002", &restored)
+            .expect("segment must be readable again after the repair");
+        assert_eq!(fs::read(restored).expect("read"), b"wal-segment");
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    // PGRA-002: the manifest and archive checksums must be derived from the
+    // bytes read from source, never from a second, separate read of the
+    // destination copy_atomic just produced.
+    #[test]
+    fn copy_atomic_checksum_is_derived_from_source() {
+        let root = temp("copy-atomic");
+        fs::create_dir_all(&root).expect("root");
+        let source = root.join("source.bin");
+        let content = b"the quick brown fox jumps over the lazy dog";
+        fs::write(&source, content).expect("source");
+        let destination = root.join("nested/destination.bin");
+
+        let copied = copy_atomic(&source, &destination).expect("copy");
+
+        let mut expected = pg_sha2::PgSha256Ctx::init_sha256();
+        expected.update(content);
+        let expected_checksum = hex(&expected.final_sha256());
+
+        assert_eq!(copied.checksum, expected_checksum);
+        assert_eq!(copied.size, content.len() as u64);
+        assert_eq!(fs::read(&destination).expect("destination"), content);
+        assert_eq!(
+            fs::metadata(&destination).expect("metadata").permissions().mode() & 0o777,
+            0o600,
+            "copied files must not be group/world readable"
+        );
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    // PGRA-005: a crash between the primary and the redundant-copy write in
+    // write_info_pair must leave the stanza usable via the surviving valid
+    // file, not brick every later operation.
+    #[test]
+    fn ensure_stanza_tolerates_one_stale_metadata_copy() {
+        let (repository, root) = repository("stanza-fallback");
+        repository.stanza_create().expect("stanza");
+
+        let primary = root.join("repo/archive/demo/archive.info");
+        let copy = root.join("repo/archive/demo/archive.info.copy");
+        let good = fs::read(&primary).expect("primary readable");
+
+        fs::write(&copy, b"garbage").expect("corrupt the copy");
+        repository
+            .check()
+            .expect("stanza usable when only the redundant copy is stale");
+
+        fs::write(&primary, &good).expect("restore primary");
+        fs::write(&copy, &good).expect("restore copy");
+        fs::write(&primary, b"garbage").expect("corrupt the primary instead");
+        repository
+            .check()
+            .expect("stanza usable via fallback to the redundant copy");
+
+        fs::write(&copy, b"also garbage").expect("corrupt both copies");
+        assert!(
+            repository.check().is_err(),
+            "must fail only when BOTH copies are unusable"
+        );
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    // PGRA-001: a file-level copy of a live cluster has no backup_label and
+    // no WAL start/stop range, so it can never be restored. Refuse it
+    // rather than silently producing a backup that reports success.
+    #[test]
+    fn backup_refuses_a_live_cluster() {
+        let (repository, root) = repository("live-cluster");
+        let pg = root.join("pg");
+        fs::write(pg.join("postmaster.pid"), b"12345\n/pg\n").expect("liveness marker");
+        repository.stanza_create().expect("stanza");
+        assert!(
+            repository.backup_full().is_err(),
+            "must refuse to back up a cluster with postmaster.pid present"
+        );
+        fs::remove_file(pg.join("postmaster.pid")).expect("stop the cluster");
+        assert!(
+            repository.backup_full().is_ok(),
+            "must proceed once postmaster.pid is gone"
+        );
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
     #[test]
     fn full_backup_restores_and_detects_corruption() {
         let (repository, root) = repository("backup");
@@ -617,7 +873,18 @@ mod tests {
         fs::create_dir_all(pg.join("base")).expect("base");
         fs::create_dir_all(pg.join("pg_wal")).expect("wal");
         fs::write(pg.join("base/table"), b"table data").expect("table");
-        fs::write(pg.join("pg_wal/ignored"), b"wal").expect("wal");
+        // A real stopped cluster's pg_wal holds the shutdown checkpoint's
+        // WAL segment; restore cannot start without it (PGRA-001/006).
+        fs::write(pg.join("pg_wal/000000010000000000000001"), b"wal").expect("wal");
+        // A real cluster also has directories PostgreSQL requires to exist
+        // at startup that hold no files at all when the feature they back
+        // is unused (pg_commit_ts, pg_twophase, ...) or nested (pg_logical/
+        // snapshots) — none of these ever appear in the manifest, which
+        // records files only. Proven with a directory name PostgreSQL does
+        // not itself define, so this checks the general directory-mirroring
+        // property rather than pinning a hardcoded, version-specific list.
+        fs::create_dir_all(pg.join("pg_commit_ts")).expect("empty top-level dir");
+        fs::create_dir_all(pg.join("pg_logical/snapshots")).expect("empty nested dir");
         repository.stanza_create().expect("stanza");
         let backup = repository.backup_full().expect("backup");
         repository.check().expect("check");
@@ -629,7 +896,23 @@ mod tests {
             fs::read(restored.join("base/table")).expect("restored file"),
             b"table data"
         );
-        assert!(!restored.join("pg_wal").exists());
+        assert_eq!(
+            fs::read(restored.join("pg_wal/000000010000000000000001")).expect("restored wal"),
+            b"wal",
+            "pg_wal must be included, or the restored cluster can never recover"
+        );
+        for extra in ["pg_commit_ts", "pg_logical/snapshots"] {
+            assert!(
+                restored.join(extra).is_dir(),
+                "an empty source directory must survive restore even with \
+                 no manifest entry: {extra}"
+            );
+        }
+        assert_eq!(
+            fs::metadata(&restored).expect("root metadata").permissions().mode() & 0o777,
+            0o700,
+            "PostgreSQL refuses to start unless PGDATA is exactly u=rwx"
+        );
         fs::write(
             root.join("repo/backup/demo")
                 .join(&backup.label)
