@@ -2,6 +2,7 @@ use std::{
     collections::BTreeMap,
     error::Error,
     fmt, fs,
+    num::NonZeroUsize,
     path::{Path, PathBuf},
 };
 
@@ -10,6 +11,9 @@ pub struct Config {
     pub repo_path: PathBuf,
     pub pg_path: PathBuf,
     pub stanza: String,
+    pub compress: bool,
+    pub process_max: usize,
+    pub retention_full: Option<u32>,
 }
 
 #[derive(Debug)]
@@ -75,12 +79,47 @@ impl Config {
                 "stanza must be a non-empty path component",
             ));
         }
+        let compress = match values.get("compress") {
+            None => true,
+            Some(&"y") => true,
+            Some(&"n") => false,
+            Some(other) => {
+                return Err(ConfigError::new(format!(
+                    "option compress must be 'y' or 'n', found '{other}'"
+                )))
+            }
+        };
+        let process_max = match values.get("process-max") {
+            None => default_process_max(),
+            Some(value) => value.parse::<NonZeroUsize>().map_err(|_| {
+                ConfigError::new(format!(
+                    "option process-max must be a positive integer, found '{value}'"
+                ))
+            })?.get(),
+        };
+        let retention_full = match values.get("repo1-retention-full") {
+            None => None,
+            Some(value) => Some(value.parse::<u32>().map_err(|_| {
+                ConfigError::new(format!(
+                    "option repo1-retention-full must be a positive integer, found '{value}'"
+                ))
+            })?),
+        };
         Ok(Self {
             repo_path: PathBuf::from(repo_path),
             pg_path: PathBuf::from(pg_path),
             stanza,
+            compress,
+            process_max,
+            retention_full,
         })
     }
+}
+
+fn default_process_max() -> usize {
+    std::thread::available_parallelism()
+        .map(NonZeroUsize::get)
+        .unwrap_or(1)
 }
 
 pub(crate) fn valid_component(value: &str) -> bool {
@@ -100,5 +139,48 @@ mod tests {
         .expect("config parses");
         assert_eq!(config.stanza, "demo");
         assert_eq!(config.repo_path.to_string_lossy(), "/var/lib/pgbackrest");
+    }
+
+    #[test]
+    fn parses_phase1_hardening_options() {
+        let config = Config::parse(
+            "[global]\nrepo1-path=/repo\npg1-path=/pg\ncompress=n\nprocess-max=8\n\
+             repo1-retention-full=3\n",
+            "demo",
+        )
+        .expect("config parses");
+        assert!(!config.compress);
+        assert_eq!(config.process_max, 8);
+        assert_eq!(config.retention_full, Some(3));
+    }
+
+    #[test]
+    fn phase1_hardening_options_default_sensibly() {
+        let config = Config::parse("[global]\nrepo1-path=/repo\npg1-path=/pg\n", "demo")
+            .expect("config parses");
+        assert!(config.compress, "compression defaults on");
+        assert!(config.process_max >= 1);
+        assert_eq!(
+            config.retention_full, None,
+            "unset retention keeps every backup"
+        );
+    }
+
+    #[test]
+    fn rejects_an_invalid_compress_value() {
+        assert!(Config::parse(
+            "[global]\nrepo1-path=/repo\npg1-path=/pg\ncompress=maybe\n",
+            "demo"
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn rejects_a_non_numeric_process_max() {
+        assert!(Config::parse(
+            "[global]\nrepo1-path=/repo\npg1-path=/pg\nprocess-max=zero\n",
+            "demo"
+        )
+        .is_err());
     }
 }

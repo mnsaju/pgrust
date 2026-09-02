@@ -63,17 +63,28 @@ fn main() -> ExitCode {
                 })
             }
         }
-        "restore" => match arguments.as_slice() {
-            [destination] => repository
-                .restore(None, destination)
-                .map(|info| println!("restored {}", info.label)),
-            [label, destination] => repository
-                .restore(Some(label), destination)
-                .map(|info| println!("restored {}", info.label)),
-            _ => Err(pgbackrest_compat::RepositoryError::new(
-                "restore requires DESTINATION or LABEL DESTINATION",
-            )),
-        },
+        "restore" => {
+            let mut delta = false;
+            let mut positional: Vec<&str> = Vec::new();
+            for argument in &arguments {
+                if argument == "--delta" {
+                    delta = true;
+                } else {
+                    positional.push(argument.as_str());
+                }
+            }
+            match positional.as_slice() {
+                [destination] => repository
+                    .restore(None, destination, delta)
+                    .map(|info| println!("restored {}", info.label)),
+                [label, destination] => repository
+                    .restore(Some(label), destination, delta)
+                    .map(|info| println!("restored {}", info.label)),
+                _ => Err(pgbackrest_compat::RepositoryError::new(
+                    "restore requires DESTINATION or LABEL DESTINATION",
+                )),
+            }
+        }
         "check" | "verify" => repository.check(),
         "info" => repository.info().map(|backups| {
             for backup in backups {
@@ -81,6 +92,11 @@ fn main() -> ExitCode {
                     "{}: {} files, {} bytes",
                     backup.label, backup.files, backup.bytes
                 );
+            }
+        }),
+        "expire" => repository.expire().map(|removed| {
+            for label in removed {
+                println!("expired {label}");
             }
         }),
         _ => Err(pgbackrest_compat::RepositoryError::new(
@@ -123,6 +139,7 @@ fn two_arguments<'a>(
 fn print_help() {
     println!("usage: pgrust-pgbackrest --config=PATH --stanza=NAME COMMAND [ARGUMENTS]");
     println!(
-        "commands: stanza-create, archive-push, archive-get, backup, restore, check, verify, info"
+        "commands: stanza-create, archive-push, archive-get, backup, restore [--delta], \
+         check, verify, info, expire"
     );
 }

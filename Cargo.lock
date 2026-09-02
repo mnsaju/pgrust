@@ -12515,6 +12515,7 @@ name = "pgbackrest_compat"
 version = "0.1.0"
 dependencies = [
  "pg_sha2",
+ "pglz",
 ]
 
 [[package]]

@@ -14,3 +14,4 @@ path = "src/main.rs"
 
 [dependencies]
 pg_sha2 = { path = "../../common/sha2" }
+pglz = { path = "../../common/pglz" }
