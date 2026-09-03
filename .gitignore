@@ -5,3 +5,4 @@ fleet-results/
 **/target-*/
 scripts/__pycache__/
 /review/
+/regress-work/
