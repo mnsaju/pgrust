@@ -11642,6 +11642,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "pg_cron"
+version = "0.0.0"
+dependencies = [
+ "bgworker",
+ "dfmgr",
+ "elog",
+ "guc_file",
+ "guc_tables",
+ "init_small",
+ "interrupt",
+ "latch",
+ "mcx",
+ "miscinit",
+ "pgsync",
+ "postgres",
+ "postgres_seams",
+ "procsignal",
+ "snapmgr",
+ "spi",
+ "timestamp_seams",
+ "types_core",
+ "types_error",
+ "types_guc",
+ "types_storage",
+ "types_tuple",
+ "waitevent",
+ "xact",
+]
+
+[[package]]
 name = "pg_database"
 version = "0.0.0"
 dependencies = [
@@ -15795,6 +15825,7 @@ dependencies = [
  "pg_config",
  "pg_constraint",
  "pg_controldata",
+ "pg_cron",
  "pg_database",
  "pg_db_role_setting",
  "pg_enum",

@@ -247,6 +247,7 @@ pub fn init_all_with_transport(transport: Transport) {
     intarray::init_seams();
     pgcrypto::init_seams();
     pg_stat_statements::init_seams();
+    pg_cron::init_seams();
     pg_buffercache::init_seams();
     auto_explain::init_seams();
     pgvector::init_seams();

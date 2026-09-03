@@ -683,6 +683,7 @@ members = [
     "crates/backend/access/gin/gin_int4_seams",
     "crates/contrib/pgcrypto",
     "crates/contrib/pg_stat_statements",
+    "crates/contrib/pg_cron",
     "crates/contrib/pg_buffercache",
     "crates/contrib/auto_explain",
     "crates/contrib/exec_hooks",

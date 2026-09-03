@@ -809,7 +809,14 @@ fn tls_source_census_and_session_surface_are_pinned() {
     // NOTE for whoever merges this to main: the same one declaration lands on a
     // DIFFERENT absolute total there (562 -> 563 at t56). Re-derive the pin at
     // the tip it will be enforced against; do not carry this number across.
-    assert_eq!(count_tree(crates), 545, "TLS census changed; classify the delta in SESSION_ENVELOPE_MANIFEST or document it as non-session TLS");
+    // pg_cron delta (+1), deliberately NON-SESSION TLS:
+    //   contrib/pg_cron/src/scheduler.rs — the launcher's cached wait-event
+    //   id (Cell<u32>, WaitEventExtensionNew's result), the identical
+    //   established pattern already in contrib/postgres_fdw/src/connection.rs
+    //   and contrib/dblink/src/registry.rs. Looked up once per thread and
+    //   cached; carries no session identity, nothing an envelope could
+    //   capture or restore, dies with the launcher thread.
+    assert_eq!(count_tree(crates), 546, "TLS census changed; classify the delta in SESSION_ENVELOPE_MANIFEST or document it as non-session TLS");
     let session_sources = [
         ("backend/access/session/src/lib.rs", 1),
         ("backend/utils/init/init_small/src/globals.rs", 4),
