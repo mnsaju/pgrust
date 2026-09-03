@@ -1,4 +1,5 @@
 use crate::schedule::{is_due, parse, BrokenDownTime, CronSchedule};
+use crate::scheduler::{decide_slot, CronSlot, SlotDecision};
 
 fn tm(minute: u32, hour: u32, day_of_month: u32, month: u32, day_of_week: u32) -> BrokenDownTime {
     BrokenDownTime { minute, hour, day_of_month, month, day_of_week }
@@ -110,4 +111,37 @@ fn rejects_invalid_names_and_zero_step() {
 fn rejects_out_of_range_seconds_interval() {
     assert!(parse("0 seconds").is_err());
     assert!(parse("60 seconds").is_err());
+}
+
+fn slot(in_use: bool, jobid: i64) -> CronSlot {
+    CronSlot { in_use, jobid, command: String::new(), database: String::new(), username: String::new() }
+}
+
+#[test]
+fn already_running_job_is_refused_even_with_a_free_slot() {
+    let slots = [slot(true, 1), slot(false, 2)];
+    assert_eq!(decide_slot(&slots, 1, 32), SlotDecision::AlreadyRunning);
+}
+
+#[test]
+fn pool_full_when_in_use_count_reaches_max_running_with_no_free_slot() {
+    let slots = [slot(true, 1), slot(true, 2)];
+    assert_eq!(decide_slot(&slots, 3, 2), SlotDecision::PoolFull);
+}
+
+#[test]
+fn a_freed_slot_is_reused_by_index_rather_than_growing_the_pool() {
+    let slots = [slot(true, 1), slot(false, 2), slot(true, 3)];
+    assert_eq!(decide_slot(&slots, 4, 32), SlotDecision::Reuse(1));
+}
+
+#[test]
+fn no_free_slot_under_the_cap_appends() {
+    let slots = [slot(true, 1), slot(true, 2)];
+    assert_eq!(decide_slot(&slots, 3, 32), SlotDecision::Append);
+}
+
+#[test]
+fn max_running_jobs_zero_always_reports_pool_full() {
+    assert_eq!(decide_slot(&[], 1, 0), SlotDecision::PoolFull);
 }

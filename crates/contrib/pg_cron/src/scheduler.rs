@@ -54,12 +54,12 @@ fn wait_event() -> u32 {
     })
 }
 
-struct CronSlot {
-    in_use: bool,
-    jobid: i64,
-    command: String,
-    database: String,
-    username: String,
+pub(crate) struct CronSlot {
+    pub(crate) in_use: bool,
+    pub(crate) jobid: i64,
+    pub(crate) command: String,
+    pub(crate) database: String,
+    pub(crate) username: String,
 }
 
 struct CronCtx {
@@ -246,15 +246,34 @@ fn job_already_running(jobid: i64) -> bool {
     with_ctx(|ctx| ctx.slots.iter().any(|s| s.in_use && s.jobid == jobid))
 }
 
+/// Pure slot-pool decision for `launch_job_worker`, split out so the
+/// one-active-run-per-job / `cron.max_running_jobs` logic can be unit
+/// tested against plain `CronSlot` vectors, without a live bgworker/SPI
+/// stack backing `CTX`.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum SlotDecision {
+    AlreadyRunning,
+    PoolFull,
+    Reuse(usize),
+    Append,
+}
+
+pub(crate) fn decide_slot(slots: &[CronSlot], jobid: i64, max_running: usize) -> SlotDecision {
+    if slots.iter().any(|s| s.in_use && s.jobid == jobid) {
+        return SlotDecision::AlreadyRunning;
+    }
+    if slots.iter().filter(|s| s.in_use).count() >= max_running {
+        return SlotDecision::PoolFull;
+    }
+    match slots.iter().position(|s| !s.in_use) {
+        Some(idx) => SlotDecision::Reuse(idx),
+        None => SlotDecision::Append,
+    }
+}
+
 fn launch_job_worker(job: &CronJobRow) {
     let max_running = gucs::cron_max_running_jobs().max(0) as usize;
     let slot = with_ctx(|ctx| {
-        if ctx.slots.iter().any(|s| s.in_use && s.jobid == job.jobid) {
-            return None;
-        }
-        if ctx.slots.iter().filter(|s| s.in_use).count() >= max_running {
-            return Some(None);
-        }
         let filled = CronSlot {
             in_use: true,
             jobid: job.jobid,
@@ -262,12 +281,17 @@ fn launch_job_worker(job: &CronJobRow) {
             database: job.database.clone(),
             username: job.username.clone(),
         };
-        if let Some(idx) = ctx.slots.iter().position(|s| !s.in_use) {
-            ctx.slots[idx] = filled;
-            Some(Some(idx))
-        } else {
-            ctx.slots.push(filled);
-            Some(Some(ctx.slots.len() - 1))
+        match decide_slot(&ctx.slots, job.jobid, max_running) {
+            SlotDecision::AlreadyRunning => None,
+            SlotDecision::PoolFull => Some(None),
+            SlotDecision::Reuse(idx) => {
+                ctx.slots[idx] = filled;
+                Some(Some(idx))
+            }
+            SlotDecision::Append => {
+                ctx.slots.push(filled);
+                Some(Some(ctx.slots.len() - 1))
+            }
         }
     });
 

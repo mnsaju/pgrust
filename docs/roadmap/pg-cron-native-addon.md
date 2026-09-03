@@ -30,10 +30,16 @@ library through an unavailable extension ABI.
 
 - Differential SQL tests for `cron.schedule`, `schedule_in_database`,
   `alter_job`, and `unschedule`.
-- Minute, second, month-end, timezone, restart, and retry cases.
+- Minute, second, month-end, restart, and retry cases.
 - Concurrent execution, job cancellation, permissions, and recovery tests.
 
 ## Non-goals
 
 Loading the upstream C extension, remote-host job execution, or distributed
 scheduling semantics in the first version.
+
+Timezone-aware scheduling is also out of scope for v1: schedules are
+evaluated in UTC only (see `scheduler.rs`'s `broken_down_time`). Real
+pg_cron itself defaults to evaluating in the server's `log_timezone`; a
+per-job or GUC-configurable timezone here is legitimate future work, not
+a v1 requirement, and there is no acceptance test for it until that lands.
