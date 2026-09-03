@@ -5,35 +5,35 @@
 // C divergences: crit sections pend miscadmin; WAL prefix/suffix
 // compression off (XLogCheckBufferNeedsBackup pends xloginsert; C also
 // disables it under wal_level=logical), records stay redo-compatible.
-use ::bufmgr_seams::{BufferPin, BUFFER_LOCK_EXCLUSIVE, BUFFER_LOCK_UNLOCK};
+use ::bufmgr_seams::{BUFFER_LOCK_EXCLUSIVE, BUFFER_LOCK_UNLOCK, BufferPin};
 use ::tableam_vocab::{
     BulkInsertStateData, LockTupleMode, LockWaitPolicy, TM_FailureData, TM_Result, TU_UpdateIndexes,
 };
 use ::types_core::xact::{InvalidTransactionId, InvalidXLogRecPtr, TransactionIdIsValid};
 use ::types_core::{CommandId, InvalidBlockNumber, MultiXactId, TransactionId};
-use ::types_error::{PgError, PgResult, ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE};
+use ::types_error::{ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE, PgError, PgResult};
 use ::types_rel::{
-    RelationData, RELKIND_FOREIGN_TABLE, RELKIND_MATVIEW, RELKIND_RELATION, REPLICA_IDENTITY_FULL,
-    REPLICA_IDENTITY_NOTHING,
+    RELKIND_FOREIGN_TABLE, RELKIND_MATVIEW, RELKIND_RELATION, REPLICA_IDENTITY_FULL,
+    REPLICA_IDENTITY_NOTHING, RelationData,
 };
 use ::types_snapshot::SnapshotData;
 use ::types_storage::bufpage::{ItemIdData, PageMut, PageRef, SizeofHeapTupleHeader};
 use ::types_storage::lock::{
-    AccessExclusiveLock, AccessShareLock, ExclusiveLock, RowShareLock, LOCKMODE,
+    AccessExclusiveLock, AccessShareLock, ExclusiveLock, LOCKMODE, RowShareLock,
 };
 use ::types_storage::multixact::{
     ISUPDATE_from_mxstatus, MultiXactConflict, MultiXactMember, MultiXactStatus,
 };
 use ::types_tuple::{
-    FirstOffsetNumber, HeapTupleData, ItemPointerData, ItemPointerGetBlockNumber,
-    ItemPointerGetOffsetNumber, HEAP2_XACT_MASK, HEAP_COMBOCID, HEAP_KEYS_UPDATED,
-    HEAP_LOCKED_UPGRADED, HEAP_LOCK_MASK, HEAP_MOVED, HEAP_UPDATED, HEAP_XACT_MASK, HEAP_XMAX_BITS,
-    HEAP_XMAX_COMMITTED, HEAP_XMAX_EXCL_LOCK, HEAP_XMAX_INVALID, HEAP_XMAX_IS_LOCKED_ONLY,
-    HEAP_XMAX_IS_MULTI, HEAP_XMAX_KEYSHR_LOCK, HEAP_XMAX_LOCK_ONLY, HEAP_XMAX_SHR_LOCK,
+    FirstOffsetNumber, HEAP_COMBOCID, HEAP_KEYS_UPDATED, HEAP_LOCK_MASK, HEAP_LOCKED_UPGRADED,
+    HEAP_MOVED, HEAP_UPDATED, HEAP_XACT_MASK, HEAP_XMAX_BITS, HEAP_XMAX_COMMITTED,
+    HEAP_XMAX_EXCL_LOCK, HEAP_XMAX_INVALID, HEAP_XMAX_IS_LOCKED_ONLY, HEAP_XMAX_IS_MULTI,
+    HEAP_XMAX_KEYSHR_LOCK, HEAP_XMAX_LOCK_ONLY, HEAP_XMAX_SHR_LOCK, HEAP2_XACT_MASK, HeapTupleData,
+    ItemPointerData, ItemPointerGetBlockNumber, ItemPointerGetOffsetNumber,
 };
 use ::xloginsert_seams::{REGBUF_KEEP_DATA, REGBUF_STANDARD, REGBUF_WILL_INIT};
 
-use crate::hio::{RelationGetBufferForTuple, RelationPutHeapTuple, HEAP_INSERT_SPECULATIVE};
+use crate::hio::{HEAP_INSERT_SPECULATIVE, RelationGetBufferForTuple, RelationPutHeapTuple};
 use crate::{HeapTupleHeaderGetUpdateXid, MultiXactIdGetUpdateXid};
 use heapam_visibility_seams as hv_seam;
 
@@ -325,22 +325,26 @@ pub fn heap_insert(
     // C pins the VM page inside RelationGetBufferForTuple, before the content
     // lock, so the clear here never does IO under the lock; this pin-at-clear
     // shape is a recorded divergence (single-backend lane).
-    let mut all_visible_cleared = false;
-    if pin.page().is_all_visible() {
-        all_visible_cleared = true;
-        let mut vmb = visibilitymap::VmBuffer::new();
+    let mut vmb = visibilitymap::VmBuffer::new();
+    let clear_all_visible = pin.page().is_all_visible();
+    let vm_guard = if clear_all_visible {
         visibilitymap::visibilitymap_pin(relation, pin.block_number(), &mut vmb)?;
+        Some(vmb.lock_exclusive()?)
+    } else {
+        None
+    };
+    let mut vmb_modified = false;
+    if clear_all_visible {
         // SAFETY: pinned + exclusive content lock since RelationGetBufferForTuple.
         let mut pm =
             unsafe { PageMut::from_raw(bufmgr_seams::buffer_get_page::call(pin.buffer())) };
         pm.clear_all_visible();
-        visibilitymap::visibilitymap_clear(
+        vmb_modified = visibilitymap::visibilitymap_clear_locked(
             relation,
             pin.block_number(),
             &vmb,
             visibilitymap::VISIBILITYMAP_VALID_BITS,
         )?;
-        vmb.release();
     }
 
     bufmgr_seams::mark_buffer_dirty::call(pin.buffer())?;
@@ -361,7 +365,7 @@ pub fn heap_insert(
         }
 
         let mut flags = 0u8;
-        if all_visible_cleared {
+        if clear_all_visible {
             flags |= XLH_INSERT_ALL_VISIBLE_CLEARED;
         }
         if (options & HEAP_INSERT_SPECULATIVE) != 0 {
@@ -389,25 +393,42 @@ pub fn heap_insert(
             )
         };
 
-        let recptr = crate::wal::insert_record(
-            RM_HEAP_ID,
-            info,
-            XLOG_INCLUDE_ORIGIN,
-            &[&xlrec],
-            &[crate::wal::reg_block(
-                0,
+        let heap_bufdata: [&[u8]; 2] = [&xlhdr, body];
+        let heap_block = crate::wal::reg_block(
+            0,
+            relation.rd_locator.get(),
+            ItemPointerGetBlockNumber(&heaptup.t_self),
+            pin.buffer(),
+            bufflags,
+            &heap_bufdata,
+        );
+        let mut blocks = vec![heap_block];
+        if vmb_modified {
+            blocks.push(crate::wal::reg_vm_block(
+                1,
                 relation.rd_locator.get(),
-                ItemPointerGetBlockNumber(&heaptup.t_self),
-                pin.buffer(),
-                bufflags,
-                &[&xlhdr, body],
-            )],
-        )?;
+                vmb.block_number().expect("pinned VM buffer"),
+                vmb.buffer(),
+                0,
+                &[],
+            ));
+        }
+        let recptr =
+            crate::wal::insert_record(RM_HEAP_ID, info, XLOG_INCLUDE_ORIGIN, &[&xlrec], &blocks)?;
         // SAFETY: pinned + exclusively locked since RelationGetBufferForTuple.
         let mut pm =
             unsafe { PageMut::from_raw(bufmgr_seams::buffer_get_page::call(pin.buffer())) };
         pm.set_lsn(recptr);
+        if vmb_modified {
+            // SAFETY: the VM pin and exclusive content lock are retained.
+            let mut vm_page =
+                unsafe { PageMut::from_raw(bufmgr_seams::buffer_get_page::call(vmb.buffer())) };
+            vm_page.set_lsn(recptr);
+        }
     }
+
+    drop(vm_guard);
+    vmb.release();
 
     bufmgr_seams::lock_buffer::call(pin.buffer(), BUFFER_LOCK_UNLOCK)?;
     pin.release();
@@ -626,15 +647,21 @@ pub fn heap_multi_insert<'mcx>(
         // the incoming rows are NOT frozen; frozen rows keep it true. A page
         // we started empty under FREEZE becomes all-visible right here, so
         // the WAL record (and INIT_PAGE replay) carries the flag.
-        let mut all_visible_cleared = false;
-        if pin.page().is_all_visible() && (options & crate::hio::HEAP_INSERT_FROZEN) == 0 {
-            all_visible_cleared = true;
+        let clear_all_visible =
+            pin.page().is_all_visible() && (options & crate::hio::HEAP_INSERT_FROZEN) == 0;
+        let vm_guard = if clear_all_visible {
             visibilitymap::visibilitymap_pin(relation, pin.block_number(), &mut vmb)?;
+            Some(vmb.lock_exclusive()?)
+        } else {
+            None
+        };
+        let mut vmb_modified = false;
+        if clear_all_visible {
             // SAFETY: pinned + exclusive content lock since RelationGetBufferForTuple.
             let mut pm =
                 unsafe { PageMut::from_raw(bufmgr_seams::buffer_get_page::call(pin.buffer())) };
             pm.clear_all_visible();
-            visibilitymap::visibilitymap_clear(
+            vmb_modified = visibilitymap::visibilitymap_clear_locked(
                 relation,
                 pin.block_number(),
                 &vmb,
@@ -652,9 +679,9 @@ pub fn heap_multi_insert<'mcx>(
         if needwal {
             let init = starting_with_empty_page;
             // C heapam.c:2555: the two VM-state flags are mutually exclusive.
-            debug_assert!(!(all_visible_cleared && all_frozen_set));
+            debug_assert!(!(clear_all_visible && all_frozen_set));
             let mut xl_flags = 0u8;
-            if all_visible_cleared {
+            if clear_all_visible {
                 xl_flags |= XLH_INSERT_ALL_VISIBLE_CLEARED;
             }
             if all_frozen_set {
@@ -712,25 +739,46 @@ pub fn heap_multi_insert<'mcx>(
                 bufflags |= REGBUF_KEEP_DATA;
             }
 
+            let heap_bufdata: [&[u8]; 1] = [&scratch[tupledata_off..off]];
+            let heap_block = crate::wal::reg_block(
+                0,
+                relation.rd_locator.get(),
+                ItemPointerGetBlockNumber(&heaptuples[ndone].t_self),
+                pin.buffer(),
+                bufflags,
+                &heap_bufdata,
+            );
+            let mut blocks = vec![heap_block];
+            if vmb_modified {
+                blocks.push(crate::wal::reg_vm_block(
+                    1,
+                    relation.rd_locator.get(),
+                    vmb.block_number().expect("pinned VM buffer"),
+                    vmb.buffer(),
+                    0,
+                    &[],
+                ));
+            }
             let recptr = crate::wal::insert_record(
                 RM_HEAP2_ID,
                 info,
                 XLOG_INCLUDE_ORIGIN,
                 &[&scratch[..tupledata_off]],
-                &[crate::wal::reg_block(
-                    0,
-                    relation.rd_locator.get(),
-                    ItemPointerGetBlockNumber(&heaptuples[ndone].t_self),
-                    pin.buffer(),
-                    bufflags,
-                    &[&scratch[tupledata_off..off]],
-                )],
+                &blocks,
             )?;
             // SAFETY: pinned + exclusively locked since RelationGetBufferForTuple.
             let mut pm =
                 unsafe { PageMut::from_raw(bufmgr_seams::buffer_get_page::call(pin.buffer())) };
             pm.set_lsn(recptr);
+            if vmb_modified {
+                // SAFETY: VM pin and exclusive content lock are retained.
+                let mut vm_page =
+                    unsafe { PageMut::from_raw(bufmgr_seams::buffer_get_page::call(vmb.buffer())) };
+                vm_page.set_lsn(recptr);
+            }
         }
+
+        drop(vm_guard);
 
         // C heapam.c:2636-2654: set the VM bits after the multi-insert record,
         // still under the heap page's content lock. visibilitymap_set emits
@@ -809,7 +857,7 @@ fn get_mxact_status_for_lock(mode: LockTupleMode, is_update: bool) -> PgResult<M
                 "invalid lock tuple mode {}/{}",
                 mode as i32,
                 is_update
-            )))
+            )));
         }
     })
 }
@@ -1530,16 +1578,21 @@ pub fn heap_delete(
         true,
     )?;
 
-    let mut all_visible_cleared = false;
+    let clear_all_visible = pin.page().is_all_visible();
+    let vm_guard = if clear_all_visible {
+        Some(vmb.lock_exclusive()?)
+    } else {
+        None
+    };
+    let mut vmb_modified = false;
     {
         // SAFETY: pin + exclusive lock held.
         let mut pm =
             unsafe { PageMut::from_raw(bufmgr_seams::buffer_get_page::call(pin.buffer())) };
         page_set_prunable(&mut pm, xid);
-        if pm.as_ref().is_all_visible() {
-            all_visible_cleared = true;
+        if clear_all_visible {
             pm.clear_all_visible();
-            visibilitymap::visibilitymap_clear(
+            vmb_modified = visibilitymap::visibilitymap_clear_locked(
                 relation,
                 pin.block_number(),
                 &vmb,
@@ -1569,7 +1622,7 @@ pub fn heap_delete(
             log_heap_new_cid(relation, &tp)?;
         }
         let mut flags = 0u8;
-        if all_visible_cleared {
+        if clear_all_visible {
             flags |= XLH_DELETE_ALL_VISIBLE_CLEARED;
         }
         if changing_part {
@@ -1599,26 +1652,45 @@ pub fn heap_delete(
             }
             None => 1,
         };
+        let heap_block = crate::wal::reg_block(
+            0,
+            relation.rd_locator.get(),
+            ItemPointerGetBlockNumber(&tp.t_self),
+            pin.buffer(),
+            REGBUF_STANDARD,
+            &[],
+        );
+        let mut blocks = vec![heap_block];
+        if vmb_modified {
+            blocks.push(crate::wal::reg_vm_block(
+                1,
+                relation.rd_locator.get(),
+                vmb.block_number().expect("pinned VM buffer"),
+                vmb.buffer(),
+                0,
+                &[],
+            ));
+        }
         let recptr = crate::wal::insert_record(
             RM_HEAP_ID,
             XLOG_HEAP_DELETE,
             XLOG_INCLUDE_ORIGIN,
             &main_data[..n_main],
-            &[crate::wal::reg_block(
-                0,
-                relation.rd_locator.get(),
-                ItemPointerGetBlockNumber(&tp.t_self),
-                pin.buffer(),
-                REGBUF_STANDARD,
-                &[],
-            )],
+            &blocks,
         )?;
         // SAFETY: pin + exclusive lock held.
         let mut pm =
             unsafe { PageMut::from_raw(bufmgr_seams::buffer_get_page::call(pin.buffer())) };
         pm.set_lsn(recptr);
+        if vmb_modified {
+            // SAFETY: VM pin and exclusive content lock are retained.
+            let mut vm_page =
+                unsafe { PageMut::from_raw(bufmgr_seams::buffer_get_page::call(vmb.buffer())) };
+            vm_page.set_lsn(recptr);
+        }
     }
 
+    drop(vm_guard);
     bufmgr_seams::lock_buffer::call(pin.buffer(), BUFFER_LOCK_UNLOCK)?;
     vmb.release();
 
@@ -2046,6 +2118,13 @@ pub fn heap_lock_tuple(
         false,
     )?;
 
+    let clear_all_frozen = pin.page().is_all_visible();
+    let vm_guard = if clear_all_frozen {
+        Some(vmb.lock_exclusive()?)
+    } else {
+        None
+    };
+
     {
         let hdr = tp.t_data_mut();
         hdr.t_infomask &= !HEAP_XMAX_BITS;
@@ -2064,8 +2143,8 @@ pub fn heap_lock_tuple(
     // Locking doesn't change visibility, so only the all-frozen bit is
     // cleared (the locker's xmax falsifies it).
     let mut cleared_all_frozen = false;
-    if pin.page().is_all_visible()
-        && visibilitymap::visibilitymap_clear(
+    if clear_all_frozen
+        && visibilitymap::visibilitymap_clear_locked(
             relation,
             block,
             &vmb,
@@ -2088,26 +2167,39 @@ pub fn heap_lock_tuple(
             0
         };
 
-        let recptr = crate::wal::insert_record(
-            RM_HEAP_ID,
-            XLOG_HEAP_LOCK,
+        let heap_block = crate::wal::reg_block(
             0,
-            &[&xlrec],
-            &[crate::wal::reg_block(
-                0,
+            relation.rd_locator.get(),
+            ItemPointerGetBlockNumber(&tp.t_self),
+            pin.buffer(),
+            REGBUF_STANDARD,
+            &[],
+        );
+        let mut blocks = vec![heap_block];
+        if cleared_all_frozen {
+            blocks.push(crate::wal::reg_vm_block(
+                1,
                 relation.rd_locator.get(),
-                ItemPointerGetBlockNumber(&tp.t_self),
-                pin.buffer(),
-                REGBUF_STANDARD,
+                vmb.block_number().expect("pinned VM buffer"),
+                vmb.buffer(),
+                0,
                 &[],
-            )],
-        )?;
+            ));
+        }
+        let recptr = crate::wal::insert_record(RM_HEAP_ID, XLOG_HEAP_LOCK, 0, &[&xlrec], &blocks)?;
         // SAFETY: pin + exclusive lock held.
         let mut pm =
             unsafe { PageMut::from_raw(bufmgr_seams::buffer_get_page::call(pin.buffer())) };
         pm.set_lsn(recptr);
+        if cleared_all_frozen {
+            // SAFETY: VM pin and exclusive content lock are retained.
+            let mut vm_page =
+                unsafe { PageMut::from_raw(bufmgr_seams::buffer_get_page::call(vmb.buffer())) };
+            vm_page.set_lsn(recptr);
+        }
     }
 
+    drop(vm_guard);
     bufmgr_seams::lock_buffer::call(pin.buffer(), BUFFER_LOCK_UNLOCK)?;
     vmb.release();
     if have_tuple_lock {
@@ -2289,28 +2381,13 @@ pub fn heap_abort_speculative(relation: &RelationData<'_>, tid: &ItemPointerData
     Ok(())
 }
 
-// PageClearAllVisible + visibilitymap_clear, pin-at-clear (heap_insert shape).
-fn clear_page_all_visible(relation: &RelationData<'_>, pin: &BufferPin) -> PgResult<()> {
-    let mut vmb = visibilitymap::VmBuffer::new();
-    visibilitymap::visibilitymap_pin(relation, pin.block_number(), &mut vmb)?;
-    // SAFETY: pinned + exclusive content lock held by the caller.
-    let mut pm = unsafe { PageMut::from_raw(bufmgr_seams::buffer_get_page::call(pin.buffer())) };
-    pm.clear_all_visible();
-    visibilitymap::visibilitymap_clear(
-        relation,
-        pin.block_number(),
-        &vmb,
-        visibilitymap::VISIBILITYMAP_VALID_BITS,
-    )?;
-    vmb.release();
-    Ok(())
-}
-
 #[allow(clippy::too_many_arguments)]
 fn log_heap_update(
     relation: &RelationData<'_>,
     oldbuf: &BufferPin,
+    vmbuf_old: Option<&visibilitymap::VmBuffer>,
     newbuf: &BufferPin,
+    vmbuf_new: Option<&visibilitymap::VmBuffer>,
     oldtup: &HeapTupleData<'_>,
     newtup: &HeapTupleData<'_>,
     old_key_tuple: Option<&OldKeyTuple>,
@@ -2401,27 +2478,43 @@ fn log_heap_update(
         _ => 1,
     };
     let main_data = &main_data[..n_main];
-    if same_buf {
-        crate::wal::insert_record(RM_HEAP_ID, info, XLOG_INCLUDE_ORIGIN, main_data, &[new_reg])
-    } else {
-        crate::wal::insert_record(
-            RM_HEAP_ID,
-            info,
-            XLOG_INCLUDE_ORIGIN,
-            main_data,
-            &[
-                new_reg,
-                crate::wal::reg_block(
-                    1,
-                    rloc,
-                    ItemPointerGetBlockNumber(&oldtup.t_self),
-                    oldbuf.buffer(),
-                    REGBUF_STANDARD,
-                    &[],
-                ),
-            ],
-        )
+    debug_assert!(
+        vmbuf_old
+            .zip(vmbuf_new)
+            .is_none_or(|(old, new)| { old.buffer() != new.buffer() })
+    );
+    let mut blocks = vec![new_reg];
+    if !same_buf {
+        blocks.push(crate::wal::reg_block(
+            1,
+            rloc,
+            ItemPointerGetBlockNumber(&oldtup.t_self),
+            oldbuf.buffer(),
+            REGBUF_STANDARD,
+            &[],
+        ));
     }
+    if let Some(vm) = vmbuf_new {
+        blocks.push(crate::wal::reg_vm_block(
+            2,
+            rloc,
+            vm.block_number().expect("pinned new VM buffer"),
+            vm.buffer(),
+            0,
+            &[],
+        ));
+    }
+    if let Some(vm) = vmbuf_old {
+        blocks.push(crate::wal::reg_vm_block(
+            3,
+            rloc,
+            vm.block_number().expect("pinned old VM buffer"),
+            vm.buffer(),
+            0,
+            &[],
+        ));
+    }
+    crate::wal::insert_record(RM_HEAP_ID, info, XLOG_INCLUDE_ORIGIN, main_data, &blocks)
 }
 
 /// `heap_update` core. Index-attr bitmaps pend relcache
@@ -2745,6 +2838,15 @@ pub fn heap_update(
             )?;
         debug_assert!(HEAP_XMAX_IS_LOCKED_ONLY(infomask_lock_old_tuple));
 
+        let clear_all_frozen = pin.page().is_all_visible();
+        let mut vmb = visibilitymap::VmBuffer::new();
+        let vm_guard = if clear_all_frozen {
+            visibilitymap::visibilitymap_pin(relation, pin.block_number(), &mut vmb)?;
+            Some(vmb.lock_exclusive()?)
+        } else {
+            None
+        };
+
         {
             let self_tid = oldtup.t_self;
             let hdr = oldtup.t_data_mut();
@@ -2763,16 +2865,13 @@ pub fn heap_update(
         // frozen bit lies once the locker's xmax lands. Pin-at-clear
         // (clear_page_all_visible shape).
         let mut cleared_all_frozen = false;
-        if pin.page().is_all_visible() {
-            let mut vmb = visibilitymap::VmBuffer::new();
-            visibilitymap::visibilitymap_pin(relation, pin.block_number(), &mut vmb)?;
-            cleared_all_frozen = visibilitymap::visibilitymap_clear(
+        if clear_all_frozen {
+            cleared_all_frozen = visibilitymap::visibilitymap_clear_locked(
                 relation,
                 pin.block_number(),
                 &vmb,
                 visibilitymap::VISIBILITYMAP_ALL_FROZEN,
             )?;
-            vmb.release();
         }
 
         bufmgr_seams::mark_buffer_dirty::call(pin.buffer())?;
@@ -2787,26 +2886,41 @@ pub fn heap_update(
             } else {
                 0
             };
-            let recptr = crate::wal::insert_record(
-                RM_HEAP_ID,
-                XLOG_HEAP_LOCK,
+            let heap_block = crate::wal::reg_block(
                 0,
-                &[&xlrec],
-                &[crate::wal::reg_block(
-                    0,
+                relation.rd_locator.get(),
+                ItemPointerGetBlockNumber(&oldtup.t_self),
+                pin.buffer(),
+                REGBUF_STANDARD,
+                &[],
+            );
+            let mut blocks = vec![heap_block];
+            if cleared_all_frozen {
+                blocks.push(crate::wal::reg_vm_block(
+                    1,
                     relation.rd_locator.get(),
-                    ItemPointerGetBlockNumber(&oldtup.t_self),
-                    pin.buffer(),
-                    REGBUF_STANDARD,
+                    vmb.block_number().expect("pinned VM buffer"),
+                    vmb.buffer(),
+                    0,
                     &[],
-                )],
-            )?;
+                ));
+            }
+            let recptr =
+                crate::wal::insert_record(RM_HEAP_ID, XLOG_HEAP_LOCK, 0, &[&xlrec], &blocks)?;
             // SAFETY: pin + exclusive lock held.
             let mut pm =
                 unsafe { PageMut::from_raw(bufmgr_seams::buffer_get_page::call(pin.buffer())) };
             pm.set_lsn(recptr);
+            if cleared_all_frozen {
+                // SAFETY: VM pin and exclusive content lock are retained.
+                let mut vm_page =
+                    unsafe { PageMut::from_raw(bufmgr_seams::buffer_get_page::call(vmb.buffer())) };
+                vm_page.set_lsn(recptr);
+            }
         }
 
+        drop(vm_guard);
+        vmb.release();
         bufmgr_seams::lock_buffer::call(pin.buffer(), BUFFER_LOCK_UNLOCK)?;
 
         let ht_len = if need_toast {
@@ -2929,6 +3043,40 @@ pub fn heap_update(
     let old_key_tuple =
         extract_replica_identity(relation, &oldtup, id_modified || id_has_external)?;
 
+    let clear_all_visible = pin.page().is_all_visible();
+    let clear_all_visible_new = newpin.as_ref().is_some_and(|np| np.page().is_all_visible());
+    let mut vmb_old = visibilitymap::VmBuffer::new();
+    let mut vmb_new = visibilitymap::VmBuffer::new();
+    if clear_all_visible {
+        visibilitymap::visibilitymap_pin(relation, pin.block_number(), &mut vmb_old)?;
+    }
+    if clear_all_visible_new {
+        let np = newpin.as_ref().expect("new all-visible page has a pin");
+        visibilitymap::visibilitymap_pin(relation, np.block_number(), &mut vmb_new)?;
+    }
+    let shared_vm =
+        clear_all_visible && clear_all_visible_new && vmb_old.buffer() == vmb_new.buffer();
+
+    // VM pages cover many heap pages.  Acquire distinct VM locks in block
+    // order so opposing cross-page updates cannot deadlock.
+    let mut vm_old_guard = None;
+    let mut vm_new_guard = None;
+    if shared_vm {
+        vm_old_guard = Some(vmb_old.lock_exclusive()?);
+    } else if clear_all_visible && clear_all_visible_new {
+        if vmb_old.block_number() <= vmb_new.block_number() {
+            vm_old_guard = Some(vmb_old.lock_exclusive()?);
+            vm_new_guard = Some(vmb_new.lock_exclusive()?);
+        } else {
+            vm_new_guard = Some(vmb_new.lock_exclusive()?);
+            vm_old_guard = Some(vmb_old.lock_exclusive()?);
+        }
+    } else if clear_all_visible {
+        vm_old_guard = Some(vmb_old.lock_exclusive()?);
+    } else if clear_all_visible_new {
+        vm_new_guard = Some(vmb_new.lock_exclusive()?);
+    }
+
     {
         // SAFETY: pin + exclusive lock held.
         let mut pm =
@@ -2960,16 +3108,41 @@ pub fn heap_update(
         hdr.t_ctid = new_tid;
     }
 
-    let mut all_visible_cleared = false;
-    let mut all_visible_cleared_new = false;
-    if pin.page().is_all_visible() {
-        all_visible_cleared = true;
-        clear_page_all_visible(relation, &pin)?;
+    let mut vmb_old_modified = false;
+    let mut vmb_new_modified = false;
+    if clear_all_visible {
+        if visibilitymap::visibilitymap_clear_locked(
+            relation,
+            pin.block_number(),
+            &vmb_old,
+            visibilitymap::VISIBILITYMAP_VALID_BITS,
+        )? {
+            if shared_vm && clear_all_visible_new {
+                vmb_new_modified = true;
+            } else {
+                vmb_old_modified = true;
+            }
+        }
+        // SAFETY: pin + exclusive heap content lock held.
+        let mut pm =
+            unsafe { PageMut::from_raw(bufmgr_seams::buffer_get_page::call(pin.buffer())) };
+        pm.clear_all_visible();
     }
     if let Some(np) = &newpin {
-        if np.page().is_all_visible() {
-            all_visible_cleared_new = true;
-            clear_page_all_visible(relation, np)?;
+        if clear_all_visible_new {
+            let vm = if shared_vm { &vmb_old } else { &vmb_new };
+            if visibilitymap::visibilitymap_clear_locked(
+                relation,
+                np.block_number(),
+                vm,
+                visibilitymap::VISIBILITYMAP_VALID_BITS,
+            )? {
+                vmb_new_modified = true;
+            }
+            // SAFETY: pin + exclusive heap content lock held.
+            let mut pm =
+                unsafe { PageMut::from_raw(bufmgr_seams::buffer_get_page::call(np.buffer())) };
+            pm.clear_all_visible();
         }
         bufmgr_seams::mark_buffer_dirty::call(np.buffer())?;
     }
@@ -2983,12 +3156,14 @@ pub fn heap_update(
         let recptr = log_heap_update(
             relation,
             &pin,
+            vmb_old_modified.then_some(&vmb_old),
             put_pin,
+            vmb_new_modified.then_some(if shared_vm { &vmb_old } else { &vmb_new }),
             &oldtup,
             heaptup,
             old_key_tuple.as_ref(),
-            all_visible_cleared,
-            all_visible_cleared_new,
+            clear_all_visible,
+            clear_all_visible_new,
         )?;
         if let Some(np) = &newpin {
             // SAFETY: pin + exclusive lock held.
@@ -3000,7 +3175,25 @@ pub fn heap_update(
         let mut pm =
             unsafe { PageMut::from_raw(bufmgr_seams::buffer_get_page::call(pin.buffer())) };
         pm.set_lsn(recptr);
+        if vmb_old_modified {
+            // SAFETY: old VM pin and exclusive content lock are retained.
+            let mut vm_page =
+                unsafe { PageMut::from_raw(bufmgr_seams::buffer_get_page::call(vmb_old.buffer())) };
+            vm_page.set_lsn(recptr);
+        }
+        if vmb_new_modified {
+            let vm = if shared_vm { &vmb_old } else { &vmb_new };
+            // SAFETY: selected VM pin and exclusive content lock are retained.
+            let mut vm_page =
+                unsafe { PageMut::from_raw(bufmgr_seams::buffer_get_page::call(vm.buffer())) };
+            vm_page.set_lsn(recptr);
+        }
     }
+
+    drop(vm_new_guard);
+    drop(vm_old_guard);
+    vmb_new.release();
+    vmb_old.release();
 
     if let Some(np) = &newpin {
         bufmgr_seams::lock_buffer::call(np.buffer(), BUFFER_LOCK_UNLOCK)?;
@@ -3195,7 +3388,9 @@ fn datum_is_equal(v1: ::datum::Datum, v2: ::datum::Datum, typbyval: bool, typlen
 #[cold]
 #[inline(never)]
 fn unported_ret(typlen: i32) -> ! {
-    panic!("backend-access-heap-heapam reached unported unit: datumIsEqual cstring typlen {typlen} (datum.c)")
+    panic!(
+        "backend-access-heap-heapam reached unported unit: datumIsEqual cstring typlen {typlen} (datum.c)"
+    )
 }
 
 /// `heap_lock_updated_tuple` (heapam.c): lock all descendant versions of an
@@ -3424,9 +3619,15 @@ fn heap_lock_updated_tuple_rec(
                     mode,
                     false,
                 )?;
+                let clear_all_frozen = pin.page().is_all_visible();
+                let vm_guard = if clear_all_frozen {
+                    Some(vmb.lock_exclusive()?)
+                } else {
+                    None
+                };
                 let mut cleared_all_frozen = false;
-                if pin.page().is_all_visible()
-                    && visibilitymap::visibilitymap_clear(
+                if clear_all_frozen
+                    && visibilitymap::visibilitymap_clear_locked(
                         relation,
                         block,
                         &vmb,
@@ -3454,26 +3655,46 @@ fn heap_lock_updated_tuple_rec(
                     } else {
                         0
                     };
+                    let heap_block = crate::wal::reg_block(
+                        0,
+                        relation.rd_locator.get(),
+                        ItemPointerGetBlockNumber(&mytup.t_self),
+                        pin.buffer(),
+                        REGBUF_STANDARD,
+                        &[],
+                    );
+                    let mut blocks = vec![heap_block];
+                    if cleared_all_frozen {
+                        blocks.push(crate::wal::reg_vm_block(
+                            1,
+                            relation.rd_locator.get(),
+                            vmb.block_number().expect("pinned VM buffer"),
+                            vmb.buffer(),
+                            0,
+                            &[],
+                        ));
+                    }
                     let recptr = crate::wal::insert_record(
                         RM_HEAP2_ID,
                         XLOG_HEAP2_LOCK_UPDATED,
                         0,
                         &[&xlrec],
-                        &[crate::wal::reg_block(
-                            0,
-                            relation.rd_locator.get(),
-                            ItemPointerGetBlockNumber(&mytup.t_self),
-                            pin.buffer(),
-                            REGBUF_STANDARD,
-                            &[],
-                        )],
+                        &blocks,
                     )?;
                     // SAFETY: pin + exclusive lock held.
                     let mut pm = unsafe {
                         PageMut::from_raw(bufmgr_seams::buffer_get_page::call(pin.buffer()))
                     };
                     pm.set_lsn(recptr);
+                    if cleared_all_frozen {
+                        // SAFETY: VM pin and exclusive content lock are retained.
+                        let mut vm_page = unsafe {
+                            PageMut::from_raw(bufmgr_seams::buffer_get_page::call(vmb.buffer()))
+                        };
+                        vm_page.set_lsn(recptr);
+                    }
                 }
+                drop(vm_guard);
             }
 
             let hdr = mytup.t_data();

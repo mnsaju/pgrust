@@ -1,11 +1,11 @@
 use super::*;
 use ::mcx::MemoryContext;
-use ::types_core::{InvalidBuffer, Oid, BLCKSZ, INVALID_PROC_NUMBER, RELPERSISTENCE_PERMANENT};
+use ::types_core::{BLCKSZ, INVALID_PROC_NUMBER, InvalidBuffer, Oid, RELPERSISTENCE_PERMANENT};
 use ::types_rel::{FormData_pg_class, LockInfoData, LockRelId, RELKIND_RELATION};
 use ::types_scan::sdir::ForwardScanDirection;
 use ::types_snapshot::SnapshotType;
 use ::types_storage::bufpage::{
-    ItemIdData, SizeOfPageHeaderData, LP_DEAD, LP_NORMAL, LP_REDIRECT, LP_UNUSED, PD_ALL_VISIBLE,
+    ItemIdData, LP_DEAD, LP_NORMAL, LP_REDIRECT, LP_UNUSED, PD_ALL_VISIBLE, SizeOfPageHeaderData,
 };
 use ::types_tuple::{CompactAttribute, FormData_pg_attribute, NameData, TupleDescData};
 use datum::Datum;
@@ -821,9 +821,11 @@ fn tidrange_limits_and_empty_range() {
         &ItemPointerData::new(1, 1),
     );
     assert_eq!(scan.rs_numblocks, 0);
-    assert!(heap_getnext(&mut scan, ForwardScanDirection)
-        .unwrap()
-        .is_none());
+    assert!(
+        heap_getnext(&mut scan, ForwardScanDirection)
+            .unwrap()
+            .is_none()
+    );
     heap_endscan(scan).unwrap();
     quiesced();
 }
@@ -963,7 +965,14 @@ use ::types_tuple::{HEAP_KEYS_UPDATED, HEAP_UPDATED};
 const FAKE_XID: u32 = 100;
 
 static DML_INIT: Once = Once::new();
-static XLOG_RECS: Mutex<Vec<(u8, Vec<u8>, usize, Vec<(u8, Vec<u8>)>)>> = Mutex::new(Vec::new());
+type CapturedWal = (
+    u8,
+    Vec<u8>,
+    usize,
+    Vec<(u8, Vec<u8>)>,
+    Vec<(u8, ::types_core::ForkNumber, ::types_core::BlockNumber)>,
+);
+static XLOG_RECS: Mutex<Vec<CapturedWal>> = Mutex::new(Vec::new());
 static NEXT_LSN: AtomicUsize = AtomicUsize::new(0x1000);
 
 pub(crate) fn wal_insert_record_hook(
@@ -981,10 +990,14 @@ pub(crate) fn wal_insert_record_hook(
         .iter()
         .map(|b| (b.flags, b.bufdata.concat()))
         .collect();
+    let block_tags = blocks
+        .iter()
+        .map(|b| (b.block_id, b.forknum, b.block))
+        .collect();
     XLOG_RECS
         .lock()
         .unwrap()
-        .push((info, main, blocks.len(), regs));
+        .push((info, main, blocks.len(), regs, block_tags));
     Ok(NEXT_LSN.fetch_add(8, Ordering::Relaxed) as u64)
 }
 
@@ -1083,7 +1096,7 @@ impl Drop for LogicalOn {
     }
 }
 
-fn take_xlog() -> Vec<(u8, Vec<u8>, usize, Vec<(u8, Vec<u8>)>)> {
+fn take_xlog() -> Vec<CapturedWal> {
     core::mem::take(&mut *XLOG_RECS.lock().unwrap())
 }
 
@@ -1693,7 +1706,7 @@ fn install_vm_seams() {
             XLOG_RECS
                 .lock()
                 .unwrap()
-                .push((info, main, bufs.len(), regs));
+                .push((info, main, bufs.len(), regs, Vec::new()));
             Ok(NEXT_LSN.fetch_add(8, Ordering::Relaxed) as u64)
         });
     });
@@ -1862,6 +1875,14 @@ fn multi_insert_nonfrozen_clears_all_visible() {
     let recs = take_xlog();
     assert_eq!(recs.len(), 1);
     assert_ne!(recs[0].1[0] & dml::XLH_INSERT_ALL_VISIBLE_CLEARED, 0);
+    assert_eq!(recs[0].2, 2, "heap and VM buffers are registered");
+    assert_eq!(
+        recs[0].4,
+        vec![
+            (0, ::types_core::ForkNumber::MAIN_FORKNUM, 0),
+            (1, ::types_core::ForkNumber::VISIBILITYMAP_FORKNUM, 0),
+        ]
+    );
     quiesced();
 }
 
@@ -1908,7 +1929,7 @@ fn logical_insert_catalog_rel_logs_new_cid() {
 
     let recs = take_xlog();
     assert_eq!(recs.len(), 2);
-    let (info, main, nblocks, _) = &recs[0];
+    let (info, main, nblocks, _, _) = &recs[0];
     assert_eq!(*info, 0x70);
     assert_eq!(*nblocks, 0);
     assert_eq!(main.len(), 34);
@@ -1949,7 +1970,7 @@ fn logical_delete_catalog_rel_logs_new_cid_cmax() {
 
     let recs = take_xlog();
     assert_eq!(recs.len(), 2);
-    let (info, main, _, _) = &recs[0];
+    let (info, main, _, _, _) = &recs[0];
     assert_eq!(*info, 0x70);
     let f = |r: core::ops::Range<usize>| u32::from_ne_bytes(main[r].try_into().unwrap());
     assert_eq!(f(4..8), !0u32);
@@ -1983,7 +2004,7 @@ fn logical_delete_full_replident_logs_old_tuple() {
 
     let recs = take_xlog();
     assert_eq!(recs.len(), 1);
-    let (info, main, _, _) = &recs[0];
+    let (info, main, _, _, _) = &recs[0];
     assert_eq!(*info, dml::XLOG_HEAP_DELETE);
     assert_ne!(main[7] & dml::XLH_DELETE_CONTAINS_OLD_TUPLE, 0);
     assert_eq!(main[7] & dml::XLH_DELETE_CONTAINS_OLD_KEY, 0);
@@ -2023,7 +2044,7 @@ fn logical_delete_identity_index_logs_old_key() {
 
     let recs = take_xlog();
     assert_eq!(recs.len(), 1);
-    let (_, main, _, _) = &recs[0];
+    let (_, main, _, _, _) = &recs[0];
     assert_eq!(main[7] & dml::XLH_DELETE_CONTAINS_OLD_TUPLE, 0);
     assert_ne!(main[7] & dml::XLH_DELETE_CONTAINS_OLD_KEY, 0);
     assert_eq!(main.len(), 8 + 5 + 5);
@@ -2095,7 +2116,7 @@ fn logical_update_full_replident_logs_flags_and_old_tuple() {
 
     let recs = take_xlog();
     assert_eq!(recs.len(), 1);
-    let (info, main, _, regs) = &recs[0];
+    let (info, main, _, regs, _) = &recs[0];
     assert_eq!(*info, dml::XLOG_HEAP_HOT_UPDATE);
     let flags = main[7];
     assert_ne!(flags & dml::XLH_UPDATE_CONTAINS_NEW_TUPLE, 0);

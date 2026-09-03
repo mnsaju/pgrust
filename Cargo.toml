@@ -341,6 +341,7 @@ members = [
     "crates/backend/utils/fmgr/fmgr_core",
     "crates/backend/utils/fmgr/dfmgr",
     "crates/backend/test_regress",
+    "crates/integration/pgbackrest",
     "crates/backend/storage/lmgr/lmgr",
     "crates/backend/access/transam/xact",
     "crates/backend/access/transam/transam_seams",
@@ -682,6 +683,7 @@ members = [
     "crates/backend/access/gin/gin_int4_seams",
     "crates/contrib/pgcrypto",
     "crates/contrib/pg_stat_statements",
+    "crates/contrib/pg_cron",
     "crates/contrib/pg_buffercache",
     "crates/contrib/auto_explain",
     "crates/contrib/exec_hooks",
@@ -872,6 +874,8 @@ debug = 0
 strip = "symbols"
 lto = "thin"
 codegen-units = 1
+# Production correctness must not depend on debug-only arithmetic traps.
+overflow-checks = true
 
 # Optimized wasm artifact for the web demo (wasm). NATIVE-INERT:
 # nothing native selects this profile; only wasm/wasm-build.sh's optional

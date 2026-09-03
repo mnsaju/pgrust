@@ -1,0 +1,17 @@
+[package]
+name = "pgbackrest_compat"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+
+[lib]
+name = "pgbackrest_compat"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pgrust-pgbackrest"
+path = "src/main.rs"
+
+[dependencies]
+pg_sha2 = { path = "../../common/sha2" }
+pglz = { path = "../../common/pglz" }

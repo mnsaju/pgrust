@@ -1,0 +1,20 @@
+[package]
+name = "pg_cron-rig"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[[bin]]
+name = "pg_cron-rig"
+path = "src/main.rs"
+
+[dependencies]
+pg_cron = { path = "../.." }
+
+[profile.release]
+lto = "fat"
+opt-level = 3
+codegen-units = 1
+debug = 0

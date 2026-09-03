@@ -10,8 +10,8 @@ use ::types_tuple::varatt::{
     set_varsize_4b_c_word, varatt_is_1b, varsize_1b, varsize_4b, VARHDRSZ, VARHDRSZ_SHORT,
 };
 use toastdesc::{
-    compression_method_is_valid, VarattExternal, TOAST_LZ4_COMPRESSION, TOAST_PGLZ_COMPRESSION,
-    TOAST_PGLZ_COMPRESSION_ID, TOAST_POINTER_SIZE,
+    compression_method_is_valid, VarattExternal, TOAST_LZ4_COMPRESSION, TOAST_LZ4_COMPRESSION_ID,
+    TOAST_PGLZ_COMPRESSION, TOAST_PGLZ_COMPRESSION_ID, TOAST_POINTER_SIZE,
 };
 
 use crate::{check_for_interrupts, TOAST_MAX_CHUNK_SIZE};
@@ -21,16 +21,6 @@ pub(crate) const F_OIDEQ: Oid = 184;
 pub(crate) const F_INT4EQ: Oid = 65;
 pub(crate) const F_INT4LE: Oid = 149;
 pub(crate) const F_INT4GE: Oid = 150;
-
-#[track_caller]
-#[cold]
-#[inline(never)]
-fn no_lz4_support() -> Box<PgError> {
-    Box::new(
-        PgError::error("compression method lz4 not supported")
-            .with_sqlstate(::types_error::ERRCODE_FEATURE_NOT_SUPPORTED),
-    )
-}
 
 #[track_caller]
 #[cold]
@@ -64,9 +54,9 @@ pub fn toast_compress_datum<'mcx>(
         TOAST_PGLZ_COMPRESSION
     };
 
-    let tmp = match cmethod {
-        TOAST_PGLZ_COMPRESSION => pglz_compress_datum(mcx, data)?,
-        TOAST_LZ4_COMPRESSION => return Err(no_lz4_support()),
+    let (tmp, cm_id) = match cmethod {
+        TOAST_PGLZ_COMPRESSION => (pglz_compress_datum(mcx, data)?, TOAST_PGLZ_COMPRESSION_ID),
+        TOAST_LZ4_COMPRESSION => (lz4_compress_datum(mcx, data)?, TOAST_LZ4_COMPRESSION_ID),
         _ => return Err(invalid_compression_method(cmethod as i8)),
     };
 
@@ -76,11 +66,7 @@ pub fn toast_compress_datum<'mcx>(
 
     // C insists on > 2 bytes of savings (header + padding worst case).
     if tmp.len() < valsize - 2 {
-        toastdesc::toast_compress_set_size_and_compress_method(
-            &mut tmp,
-            valsize as i32,
-            TOAST_PGLZ_COMPRESSION_ID,
-        )?;
+        toastdesc::toast_compress_set_size_and_compress_method(&mut tmp, valsize as i32, cm_id)?;
         Ok(Some(tmp))
     } else {
         Ok(None)
@@ -108,6 +94,28 @@ fn pglz_compress_datum<'mcx>(mcx: Mcx<'mcx>, data: &[u8]) -> PgResult<Option<PgV
     };
     // SAFETY: header appended + len compressed bytes initialized.
     unsafe { tmp.set_len(VARHDRSZ_COMPRESSED + len) };
+    let word = set_varsize_4b_c_word((len + VARHDRSZ_COMPRESSED) as u32).to_ne_bytes();
+    tmp[..VARHDRSZ].copy_from_slice(&word);
+    Ok(Some(tmp))
+}
+
+// toast_compression.c lz4_compress_datum: header word patched by the caller.
+// Unlike pglz, C's lz4 arm has no min/max input-size gate -- it always
+// attempts compression and lets the caller's ">2 bytes saved" check (in
+// toast_compress_datum above) reject anything that didn't shrink.
+fn lz4_compress_datum<'mcx>(mcx: Mcx<'mcx>, data: &[u8]) -> PgResult<Option<PgVec<'mcx, u8>>> {
+    let max_out = lz4_flex::block::get_maximum_output_size(data.len());
+    let mut tmp = ::mcx::vec_with_capacity_in(mcx, VARHDRSZ_COMPRESSED + max_out)?;
+    ::mcx::vec_append_bytes(&mut tmp, &[0u8; VARHDRSZ_COMPRESSED])?;
+    // lz4_flex::block::compress_into takes an already-initialized `&mut
+    // [u8]` (no MaybeUninit-accepting variant, unlike pglz's compress_into
+    // above) -- zero-fill first, matching pgrcolumnar's own lz4_flex usage
+    // (loadsort.rs's write_lz4_frame: `comp.resize(max, 0)`).
+    tmp.resize(VARHDRSZ_COMPRESSED + max_out, 0);
+    let Ok(len) = lz4_flex::block::compress_into(data, &mut tmp[VARHDRSZ_COMPRESSED..]) else {
+        return Ok(None);
+    };
+    tmp.truncate(VARHDRSZ_COMPRESSED + len);
     let word = set_varsize_4b_c_word((len + VARHDRSZ_COMPRESSED) as u32).to_ne_bytes();
     tmp[..VARHDRSZ].copy_from_slice(&word);
     Ok(Some(tmp))

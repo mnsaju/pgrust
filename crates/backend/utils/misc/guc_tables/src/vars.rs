@@ -374,6 +374,12 @@ pub static pgss_track: GucEnumVar = GucSlot::new("pgss_track");
 pub static pgss_track_utility: GucBoolVar = GucSlot::new("pgss_track_utility");
 pub static pgss_track_planning: GucBoolVar = GucSlot::new("pgss_track_planning");
 pub static pgss_save: GucBoolVar = GucSlot::new("pgss_save");
+// pg_cron custom GUCs (pg_cron.c _PG_init), statically defined for the same
+// reason as pg_stat_statements' above.
+pub static cron_database_name: GucStringVar = GucSlot::new("cron_database_name");
+pub static cron_max_running_jobs: GucIntVar = GucSlot::new("cron_max_running_jobs");
+pub static cron_log_run: GucBoolVar = GucSlot::new("cron_log_run");
+pub static cron_log_statement: GucBoolVar = GucSlot::new("cron_log_statement");
 // pgvector hnsw.* (contrib GUCs, defined statically; C defines them at module load).
 pub static hnsw_ef_search: GucIntVar = GucSlot::new("hnsw_ef_search");
 pub static hnsw_iterative_scan: GucEnumVar = GucSlot::new("hnsw_iterative_scan");

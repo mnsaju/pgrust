@@ -1,9 +1,29 @@
-use std::sync::atomic::Ordering;
 use std::sync::Mutex;
+use std::sync::atomic::Ordering;
 
 use super::*;
 
+use ::types_error::PgError;
+
 use crate::session_tests::{LOCK_TIMEOUT_INDICATOR, STMT_TIMEOUT_INDICATOR};
+
+#[test]
+fn typed_pgerror_panic_remains_recoverable() {
+    let err = crate::main_loop::pg_error_from_panic(Box::new(PgError::error("expected")));
+    assert_eq!(err.level(), types_error::ERROR);
+    assert_eq!(err.message(), "expected");
+}
+
+#[test]
+fn raw_panic_is_promoted_to_backend_crash() {
+    let outcome = std::panic::catch_unwind(|| {
+        crate::main_loop::pg_error_from_panic(Box::new(String::from("invariant failed")))
+    });
+    match outcome {
+        Err(payload) => assert!(payload.is::<types_error::PanicExitThread>()),
+        Ok(_) => panic!("raw panic was incorrectly demoted to a recoverable error"),
+    }
+}
 
 // Serializes tests that reach the QueryCancel arm: the timeout-indicator
 // stubs are process-global while the flags they mimic are per-backend.
@@ -245,8 +265,7 @@ fn thread_signal_sigint_cancels_and_sigterm_terminates() {
             }
             proc_latch.is_set.store(0, Ordering::SeqCst);
             // The WaitLatch wake path: drain dispositions, then CFI.
-            if let Err(e) = procsignal::DrainThreadSignals().and_then(|_| check_for_interrupts())
-            {
+            if let Err(e) = procsignal::DrainThreadSignals().and_then(|_| check_for_interrupts()) {
                 let fatal = e.level() >= types_error::FATAL;
                 err_tx.send(e).unwrap();
                 if fatal {
@@ -260,13 +279,17 @@ fn thread_signal_sigint_cancels_and_sigterm_terminates() {
     let timeout = std::time::Duration::from_secs(10);
 
     assert_eq!(procsignal::SendThreadSignal(6161, libc::SIGINT), 0);
-    let err = err_rx.recv_timeout(timeout).expect("backend must surface the cancel");
+    let err = err_rx
+        .recv_timeout(timeout)
+        .expect("backend must surface the cancel");
     assert_eq!(err.level(), types_error::ERROR);
     assert_eq!(err.sqlstate, types_error::ERRCODE_QUERY_CANCELED); /* 57014 */
     assert!(err.message.contains("user request"));
 
     assert_eq!(procsignal::SendThreadSignal(6161, libc::SIGTERM), 0);
-    let err = err_rx.recv_timeout(timeout).expect("backend must surface the die");
+    let err = err_rx
+        .recv_timeout(timeout)
+        .expect("backend must surface the die");
     assert_eq!(err.level(), types_error::FATAL);
     assert_eq!(err.sqlstate, types_error::ERRCODE_ADMIN_SHUTDOWN); /* 57P01 */
     backend.join().unwrap();
@@ -351,7 +374,10 @@ fn log_sampling_fractional_rate_statistical_n1000() {
     }
     // Seeded, hence deterministic; the band guards the decision inequality
     // (<= rate) rather than the generator's exact stream.
-    assert!((200..=300).contains(&hits), "hits={hits} outside 200..=300 for rate 0.25");
+    assert!(
+        (200..=300).contains(&hits),
+        "hits={hits} outside 200..=300 for rate 0.25"
+    );
 }
 
 #[test]
@@ -362,8 +388,7 @@ fn log_sampling_xact_sampled_forces_logging() {
         simple_query::check_log_duration_impl(false, 2_000, &g, || panic!("no draw"));
     assert_eq!(code, 2);
     assert_eq!(msec, "2.000");
-    let (code, _) =
-        simple_query::check_log_duration_impl(true, 2_000, &g, || panic!("no draw"));
+    let (code, _) = simple_query::check_log_duration_impl(true, 2_000, &g, || panic!("no draw"));
     assert_eq!(code, 1);
 }
 

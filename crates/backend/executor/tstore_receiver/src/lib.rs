@@ -3,7 +3,8 @@
 
 use ::datum::Datum;
 use ::mcx::MemoryContext;
-use ::types_error::PgResult;
+use ::types_core::Oid;
+use ::types_error::{PgError, PgResult, ERRCODE_DATATYPE_MISMATCH};
 use ::types_portal::TuplestoreHandle;
 use ::types_slot::SlotData;
 use ::types_tuple::varatt::{
@@ -19,6 +20,16 @@ pub struct DrTstore {
     detoast: bool,
     needtoast: bool,
     scratch: Option<MemoryContext>,
+    /// CVE-2026-16239: when an EXECUTE or FETCH utility statement is run as
+    /// a portal (FillPortalStore's PORTAL_UTIL_SELECT arm), this receiver's
+    /// rows come from an INNER portal created deep inside dispatch — a
+    /// second, independent query whose result shape was never cross-checked
+    /// against the OUTER portal's row type fixed at PortalStart. Setting
+    /// this to that outer shape makes `startup` reject a divergent inner
+    /// result instead of silently streaming mismatched-type Datums through.
+    /// `None` for every other tuplestore receiver use (cursor fill, etc.),
+    /// where no such second, independently-typed query is involved.
+    required_shape: Option<Vec<(Oid, bool)>>,
     /// SE-R41 (notes/se-r41-retire.md §3.3): the §4.2 row-identity sidecar
     /// of a capture-batchable eligible cursor-store fill. Set ONLY by
     /// `fill_portal_store_to`'s capture-batch arm (knob-ON, store-armed
@@ -35,7 +46,24 @@ pub fn tstore_create_DR() -> DrTstore {
         needtoast: false,
         scratch: None,
         capture_sidecar: TuplestoreHandle::NULL,
+        required_shape: None,
     }
+}
+
+/// CVE-2026-16239: arm the outer-portal row-type cross-check (see the field
+/// doc). `shape` is (atttypid, attisdropped) per attribute, in order.
+pub fn set_required_shape(myState: &mut DrTstore, shape: Vec<(Oid, bool)>) {
+    myState.required_shape = Some(shape);
+}
+
+fn tupdesc_shape(typeinfo: &TupleDescData<'_>) -> Vec<(Oid, bool)> {
+    let natts = typeinfo.natts as usize;
+    (0..natts)
+        .map(|i| {
+            let a = typeinfo.attr(i);
+            (a.atttypid, a.attisdropped)
+        })
+        .collect()
 }
 
 // C's tContext lives inside the store behind the handle.
@@ -59,6 +87,15 @@ pub fn capture_sidecar(myState: &DrTstore) -> Option<TuplestoreHandle> {
 
 impl DrTstore {
     pub fn startup(&mut self, _operation: i32, typeinfo: &TupleDescData<'_>) -> PgResult<()> {
+        if let Some(required) = &self.required_shape {
+            if *required != tupdesc_shape(typeinfo) {
+                return Err(PgError::error(
+                    "portal result type changed between declaration and execution",
+                )
+                .with_sqlstate(ERRCODE_DATATYPE_MISMATCH)
+                .into());
+            }
+        }
         let natts = typeinfo.natts as usize;
         self.needtoast = self.detoast
             && typeinfo.compact_attrs[..natts]

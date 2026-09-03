@@ -47,12 +47,17 @@ fn table_counts_match_compiled_backend_shape() {
     //   -> 135), Int +4 (pgrust.memory_watchdog_interval / _threshold /
     //   _limit, plus the hidden developer hog pgrust.memory_watchdog_test_hog
     //   -> 166) = 453.
-    assert_eq!(ConfigureNamesBool.len(), 135);
-    assert_eq!(ConfigureNamesInt.len(), 166);
+    // pg_cron (docs/roadmap/pg-cron-native-addon.md, statically defined
+    //   custom GUCs like pg_stat_statements/auto_explain): Bool +2
+    //   (cron.log_run, cron.log_statement -> 137), Int +1
+    //   (cron.max_running_jobs -> 167), String +1 (cron.database_name -> 78)
+    //   = 457.
+    assert_eq!(ConfigureNamesBool.len(), 137);
+    assert_eq!(ConfigureNamesInt.len(), 167);
     assert_eq!(ConfigureNamesReal.len(), 28);
-    assert_eq!(ConfigureNamesString.len(), 77);
+    assert_eq!(ConfigureNamesString.len(), 78);
     assert_eq!(ConfigureNamesEnum.len(), 47);
-    assert_eq!(all_settings().count(), 453);
+    assert_eq!(all_settings().count(), 457);
     assert_eq!(GucContext_Names.len(), PGC_USERSET as usize + 1);
     assert_eq!(GucSource_Names.len(), PGC_S_SESSION as usize + 1);
     assert_eq!(config_group_names.len(), DEVELOPER_OPTIONS as usize + 1);
@@ -259,8 +264,12 @@ fn m5_probe_requires_a_live_pool() {
 
 #[test]
 fn lz4_build_config_is_reflected_in_option_sets() {
+    // TOAST lz4 is always available here (detoast/heaptoast's lz4_flex-backed
+    // implementation, unlike C's build-time USE_LZ4) -- but WAL compression's
+    // lz4/zstd arms are a separate, still-unported subsystem and correctly
+    // stay absent, matching the C reference build's #else branches.
     let opts = find("default_toast_compression").options().unwrap().entries();
-    assert!(!opts.iter().any(|o| o.name == "lz4"));
+    assert!(opts.iter().any(|o| o.name == "lz4"));
     let wal = find("wal_compression").options().unwrap().entries();
     assert!(!wal.iter().any(|o| o.name == "lz4" || o.name == "zstd"));
     let GucSetting::Enum(style) = find("IntervalStyle") else {

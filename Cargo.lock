@@ -4977,6 +4977,7 @@ version = "0.1.0"
 dependencies = [
  "datum",
  "detoast_seams",
+ "lz4_flex",
  "mcx",
  "pglz",
  "toast_internals_seams",
@@ -7445,6 +7446,7 @@ dependencies = [
  "heaptuple",
  "indexam",
  "init_small",
+ "lz4_flex",
  "mcx",
  "miscinit_seams",
  "multixact_seams",
@@ -11642,6 +11644,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "pg_cron"
+version = "0.0.0"
+dependencies = [
+ "bgworker",
+ "dfmgr",
+ "elog",
+ "guc_file",
+ "guc_tables",
+ "init_small",
+ "interrupt",
+ "latch",
+ "mcx",
+ "miscinit",
+ "pgsync",
+ "postgres",
+ "postgres_seams",
+ "procsignal",
+ "snapmgr",
+ "spi",
+ "timestamp_seams",
+ "types_core",
+ "types_error",
+ "types_guc",
+ "types_storage",
+ "types_tuple",
+ "waitevent",
+ "xact",
+]
+
+[[package]]
 name = "pg_database"
 version = "0.0.0"
 dependencies = [
@@ -12508,6 +12540,14 @@ dependencies = [
  "types_storage",
  "waitevent_seams",
  "xact_seams",
+]
+
+[[package]]
+name = "pgbackrest_compat"
+version = "0.1.0"
+dependencies = [
+ "pg_sha2",
+ "pglz",
 ]
 
 [[package]]
@@ -15787,6 +15827,7 @@ dependencies = [
  "pg_config",
  "pg_constraint",
  "pg_controldata",
+ "pg_cron",
  "pg_database",
  "pg_db_role_setting",
  "pg_enum",
@@ -18563,6 +18604,7 @@ dependencies = [
  "exectuples",
  "mcx",
  "tuplestore",
+ "types_core",
  "types_error",
  "types_portal",
  "types_slot",

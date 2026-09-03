@@ -1,6 +1,6 @@
 use mcx::{Mcx, MemoryContext};
 use parser_small1::{make_parsestate, ParseExprKind, ParseState};
-use types_core::catalog::{INT2OID, INT4OID, INT8OID, NUMERICOID, VOIDOID};
+use types_core::catalog::{INT2OID, INT4OID, INT8OID, INTERNALOID, NUMERICOID, VOIDOID};
 use types_core::{InvalidOid, Oid};
 use types_error::{ERRCODE_UNDEFINED_FUNCTION, ERRCODE_WRONG_OBJECT_TYPE};
 use types_nodes::rawnodes::FuncCall;
@@ -96,6 +96,11 @@ fn install_fixture() {
                 "nfunc" => {
                     v.push(proc_candidate(mcx, 8888, &[INT4OID]));
                 }
+                // CVE-2026-14680 fixture: a function callable via ordinary
+                // SQL name resolution whose signature mentions internal.
+                "leaky_internal" => {
+                    v.push(proc_candidate(mcx, 7777, &[]));
+                }
                 _ => {}
             }
             Ok(v)
@@ -120,6 +125,7 @@ fn install_fixture() {
                 2108 => Some(proc_shape(INT8OID, 1, b'a')),
                 2109 => Some(proc_shape(INT8OID, 1, b'a')),
                 9999 => Some(proc_shape(INT4OID, 0, b'f')),
+                7777 => Some(proc_shape(INTERNALOID, 0, b'f')),
                 _ => None,
             })
         });
@@ -309,6 +315,26 @@ fn count_of_int4_resolves_through_any() {
     assert_eq!(agg.args.nth(0).as_target_entry().unwrap().expr.as_var().unwrap().vartype, INT4OID);
     assert_eq!(agg.aggargtypes.len(), 1);
     assert_eq!(agg.aggargtypes.nth(0), INT4OID);
+}
+
+// CVE-2026-14680: type "internal" carries a raw C pointer; calling a
+// function whose return type or an argument type is internal via ordinary
+// SQL function-call syntax is a type confusion, not a legitimate use.
+#[test]
+fn internal_returning_function_is_rejected() {
+    install_fixture();
+    let ctx = MemoryContext::new("t");
+    let mcx = ctx.mcx();
+    let mut pstate = make_parsestate(mcx, None);
+
+    let fc = func_call(mcx, "leaky_internal", false, false);
+    let err = call(mcx, &mut pstate, fc, NodeList::nil(), &[]).map(|_| ()).unwrap_err();
+    assert_eq!(err.sqlstate(), ERRCODE_UNDEFINED_FUNCTION);
+    assert!(
+        err.message().contains("internal"),
+        "expected an internal-type rejection, got: {}",
+        err.message()
+    );
 }
 
 #[test]

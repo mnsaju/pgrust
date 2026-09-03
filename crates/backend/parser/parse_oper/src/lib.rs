@@ -12,13 +12,37 @@ use datum::Datum;
 use mcx::{Mcx, MemoryContext, PgHashMap};
 use parser_small1::{parser_errposition, ParseState};
 use syscache_seams::PgOperatorShape;
-use types_core::catalog::UNKNOWNOID;
+use types_core::catalog::{INTERNALOID, UNKNOWNOID};
 use types_core::{InvalidOid, Oid, OidIsValid, ParseLoc};
 use types_error::{
     ErrorLocation, PgError, PgResult, ERRCODE_AMBIGUOUS_FUNCTION, ERRCODE_SYNTAX_ERROR,
     ERRCODE_UNDEFINED_FUNCTION, ERRCODE_UNDEFINED_OBJECT, ERRCODE_WRONG_OBJECT_TYPE, ERROR,
 };
 use types_nodes::{CoercionForm, Node, NodeList, OpExpr, OptNodeList, ScalarArrayOpExpr};
+
+// CVE-2026-14680: "locks down ... operator syntax" — an operator whose
+// left/right operand type or result type is internal would let ordinary
+// `a OP b` SQL syntax construct or consume a raw C pointer, the same type
+// confusion parse_func.rs's func_get_detail guards against for direct
+// function-call syntax. oprresult tracks the underlying function's return
+// type by construction (CREATE OPERATOR requires them to agree), so no
+// extra pg_proc lookup is needed here.
+fn rejects_internal_operator(shape: &PgOperatorShape) -> bool {
+    shape.oprresult == INTERNALOID || shape.oprleft == INTERNALOID || shape.oprright == INTERNALOID
+}
+
+fn internal_operator_error() -> Box<PgError> {
+    Box::new(
+        elog::ereport(ERROR)
+            .errcode(ERRCODE_UNDEFINED_FUNCTION)
+            .errmsg(
+                "operators taking or returning type \"internal\" cannot be called \
+                 directly from SQL",
+            )
+            .into_error()
+            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "oper")),
+    )
+}
 
 pub struct Operator {
     pub oid: Oid,
@@ -216,6 +240,9 @@ pub fn oper(
         let cached = with_opr_cache(|map| map.get(&key).copied().unwrap_or(InvalidOid))?;
         if OidIsValid(cached) {
             if let Some(shape) = syscache_seams::lookup_pg_operator_shape::call(cached)? {
+                if rejects_internal_operator(&shape) {
+                    return Err(internal_operator_error());
+                }
                 return Ok(Some(Operator { oid: cached, shape }));
             }
         }
@@ -257,6 +284,9 @@ pub fn oper(
         if OidIsValid(operOid) { syscache_seams::lookup_pg_operator_shape::call(operOid)? } else { None };
     match shape {
         Some(shape) => {
+            if rejects_internal_operator(&shape) {
+                return Err(internal_operator_error());
+            }
             if key_ok {
                 with_opr_cache(|map| map.insert(key, operOid))?;
             }
@@ -289,6 +319,9 @@ pub fn left_oper(
         let cached = with_opr_cache(|map| map.get(&key).copied().unwrap_or(InvalidOid))?;
         if OidIsValid(cached) {
             if let Some(shape) = syscache_seams::lookup_pg_operator_shape::call(cached)? {
+                if rejects_internal_operator(&shape) {
+                    return Err(internal_operator_error());
+                }
                 return Ok(Some(Operator { oid: cached, shape }));
             }
         }
@@ -330,6 +363,9 @@ pub fn left_oper(
     };
     match shape {
         Some(shape) => {
+            if rejects_internal_operator(&shape) {
+                return Err(internal_operator_error());
+            }
             if key_ok {
                 with_opr_cache(|map| map.insert(key, operOid))?;
             }

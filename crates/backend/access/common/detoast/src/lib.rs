@@ -8,7 +8,7 @@
 //! flatten through `datum::expandeddatum`.
 
 use mcx::{Mcx, PgVec};
-use types_error::{PgError, PgResult, ERRCODE_DATA_CORRUPTED, ERRCODE_FEATURE_NOT_SUPPORTED};
+use types_error::{PgError, PgResult, ERRCODE_DATA_CORRUPTED};
 use types_tuple::varatt::{
     self, VARHDRSZ, VARHDRSZ_EXTERNAL, VARHDRSZ_SHORT, VARTAG_INDIRECT, VARTAG_ONDISK,
 };
@@ -343,9 +343,8 @@ fn corrupt_pglz() -> PgError {
 
 #[cold]
 #[inline(never)]
-fn no_lz4_support() -> PgError {
-    PgError::error("compression method lz4 not supported")
-        .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED)
+fn corrupt_lz4() -> PgError {
+    PgError::error("compressed lz4 data is corrupt").with_sqlstate(ERRCODE_DATA_CORRUPTED)
 }
 
 #[cold]
@@ -360,7 +359,7 @@ pub fn toast_decompress_datum<'mcx>(mcx: Mcx<'mcx>, attr: &[u8]) -> PgResult<PgV
     debug_assert!(is_compressed(attr));
     match toast_compress_method(attr) {
         TOAST_PGLZ_COMPRESSION_ID => pglz_decompress_datum(mcx, attr),
-        TOAST_LZ4_COMPRESSION_ID => Err(no_lz4_support().into()),
+        TOAST_LZ4_COMPRESSION_ID => lz4_decompress_datum(mcx, attr),
         cmid => Err(invalid_compression_id(cmid).into()),
     }
 }
@@ -378,7 +377,7 @@ pub fn toast_decompress_datum_slice<'mcx>(
     }
     match toast_compress_method(attr) {
         TOAST_PGLZ_COMPRESSION_ID => pglz_decompress_datum_slice(mcx, attr, slicelength as usize),
-        TOAST_LZ4_COMPRESSION_ID => Err(no_lz4_support().into()),
+        TOAST_LZ4_COMPRESSION_ID => lz4_decompress_datum_slice(mcx, attr, slicelength as usize),
         cmid => Err(invalid_compression_id(cmid).into()),
     }
 }
@@ -412,6 +411,58 @@ fn pglz_decompress_datum_slice<'mcx>(
     unsafe { result.set_len(VARHDRSZ + n) };
     let header = varatt::set_varsize_4b_word((VARHDRSZ + n) as u32).to_ne_bytes();
     result[..VARHDRSZ].copy_from_slice(&header);
+    Ok(result)
+}
+
+/// C `toast_compression.c`'s lz4 arm of `toast_decompress_datum`. C calls
+/// `LZ4_decompress_safe` directly (the liblz4 block API, no frame headers of
+/// its own) into a buffer sized from the varlena's own rawsize -- matches
+/// `lz4_flex::block::decompress_into` exactly (it expects the same unframed
+/// block C produces, and needs the exact output size up front).
+fn lz4_decompress_datum<'mcx>(mcx: Mcx<'mcx>, value: &[u8]) -> PgResult<PgVec<'mcx, u8>> {
+    let rawsize = toast_compress_extsize(value) as usize;
+    let mut result = mcx::vec_with_capacity_in(mcx, VARHDRSZ + rawsize)?;
+    mcx::vec_append_bytes(
+        &mut result,
+        &varatt::set_varsize_4b_word((VARHDRSZ + rawsize) as u32).to_ne_bytes(),
+    )?;
+    let src = &value[VARHDRSZ_COMPRESSED..varsize_4b(value)];
+    // Unlike pglz_decompress_datum above, lz4_flex::block::decompress_into
+    // requires an already-initialized `&mut [u8]` destination (it has no
+    // MaybeUninit-accepting variant) -- zero-fill before decompressing,
+    // matching pgrcolumnar's own lz4_flex usage (loadsort.rs's
+    // write_lz4_frame: `comp.resize(max, 0)` ahead of `compress_into`).
+    result.resize(VARHDRSZ + rawsize, 0);
+    let n = lz4_flex::block::decompress_into(src, &mut result[VARHDRSZ..]).map_err(|_| corrupt_lz4())?;
+    debug_assert_eq!(n, rawsize);
+    Ok(result)
+}
+
+/// C `toast_compression.c`'s lz4 arm of `toast_decompress_datum_slice`. C
+/// uses `LZ4_decompress_safe_partial` there to decode only a prefix of the
+/// block; lz4_flex exposes no equivalent (checked its `block` module: only
+/// full `decompress_into`/`decompress`). Recorded divergence, not a
+/// correctness gap: decompress the whole block, then take the prefix --
+/// same result, just without C's partial-decode efficiency for a small
+/// slice read off a large LZ4-compressed value.
+fn lz4_decompress_datum_slice<'mcx>(
+    mcx: Mcx<'mcx>,
+    value: &[u8],
+    slicelength: usize,
+) -> PgResult<PgVec<'mcx, u8>> {
+    let rawsize = toast_compress_extsize(value) as usize;
+    let src = &value[VARHDRSZ_COMPRESSED..varsize_4b(value)];
+    let mut full = mcx::vec_with_capacity_in(mcx, rawsize)?;
+    full.resize(rawsize, 0);
+    let n = lz4_flex::block::decompress_into(src, &mut full).map_err(|_| corrupt_lz4())?;
+    debug_assert_eq!(n, rawsize);
+
+    let mut result = mcx::vec_with_capacity_in(mcx, VARHDRSZ + slicelength)?;
+    mcx::vec_append_bytes(
+        &mut result,
+        &varatt::set_varsize_4b_word((VARHDRSZ + slicelength) as u32).to_ne_bytes(),
+    )?;
+    mcx::vec_append_bytes(&mut result, &full[..slicelength])?;
     Ok(result)
 }
 

@@ -1,0 +1,4 @@
+[toolchain]
+# Matches the main workspace's pin (see the repo root rust-toolchain.toml).
+channel = "1.96.0"
+components = ["rustfmt", "clippy"]

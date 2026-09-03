@@ -1,0 +1,35 @@
+[package]
+name = "pg_cron"
+version = "0.0.0"
+edition.workspace = true
+publish.workspace = true
+
+[lib]
+name = "pg_cron"
+path = "src/lib.rs"
+
+[dependencies]
+pgsync = { path = "../../_support/pgsync" }
+guc_tables = { path = "../../backend/utils/misc/guc_tables" }
+dfmgr = { path = "../../backend/utils/fmgr/dfmgr" }
+miscinit = { path = "../../backend/utils/init/miscinit" }
+init_small = { path = "../../backend/utils/init/init_small" }
+bgworker = { path = "../../backend/postmaster/bgworker" }
+elog = { path = "../../backend/utils/error/elog" }
+latch = { path = "../../backend/storage/ipc/latch" }
+xact = { path = "../../backend/access/transam/xact" }
+spi = { path = "../../backend/executor/spi" }
+snapmgr = { path = "../../backend/utils/time/snapmgr" }
+timestamp_seams = { path = "../../backend/utils/adt/timestamp_seams" }
+procsignal = { path = "../../backend/storage/ipc/procsignal" }
+postgres = { path = "../../backend/tcop/postgres" }
+postgres_seams = { path = "../../backend/tcop/postgres_seams" }
+interrupt = { path = "../../backend/postmaster/interrupt" }
+guc_file = { path = "../../backend/utils/misc/guc_file" }
+waitevent = { path = "../../backend/utils/activity/waitevent" }
+types_storage = { path = "../../_support/types/types_storage" }
+types_guc = { path = "../../_support/types/types_guc" }
+types_tuple = { path = "../../_support/types/types_tuple" }
+mcx = { path = "../../_support/mcx" }
+types_core = { path = "../../_support/types/types_core" }
+types_error = { path = "../../_support/types/types_error" }
