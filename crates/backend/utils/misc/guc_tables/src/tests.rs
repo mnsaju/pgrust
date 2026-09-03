@@ -264,8 +264,12 @@ fn m5_probe_requires_a_live_pool() {
 
 #[test]
 fn lz4_build_config_is_reflected_in_option_sets() {
+    // TOAST lz4 is always available here (detoast/heaptoast's lz4_flex-backed
+    // implementation, unlike C's build-time USE_LZ4) -- but WAL compression's
+    // lz4/zstd arms are a separate, still-unported subsystem and correctly
+    // stay absent, matching the C reference build's #else branches.
     let opts = find("default_toast_compression").options().unwrap().entries();
-    assert!(!opts.iter().any(|o| o.name == "lz4"));
+    assert!(opts.iter().any(|o| o.name == "lz4"));
     let wal = find("wal_compression").options().unwrap().entries();
     assert!(!wal.iter().any(|o| o.name == "lz4" || o.name == "zstd"));
     let GucSetting::Enum(style) = find("IntervalStyle") else {

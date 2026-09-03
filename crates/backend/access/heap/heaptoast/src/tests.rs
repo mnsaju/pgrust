@@ -644,6 +644,29 @@ fn compress_datum_thresholds() {
 }
 
 #[test]
+fn compress_datum_lz4_round_trips() {
+    let ctx = MemoryContext::new("t");
+    let mcx = ctx.mcx();
+
+    // incompressible random data: lz4 gives up too (no min-input-size gate,
+    // unlike pglz -- it always tries, then the outer >2-bytes-saved check
+    // in toast_compress_datum rejects the non-shrinking result).
+    let rand = text_value(mcx, &prng_bytes(1000));
+    assert!(toast_compress_datum(mcx, &rand, toastdesc::TOAST_LZ4_COMPRESSION as i8).unwrap().is_none());
+
+    let comp = text_value(mcx, &[b'a'; 1000]);
+    let out = toast_compress_datum(mcx, &comp, toastdesc::TOAST_LZ4_COMPRESSION as i8).unwrap().unwrap();
+    assert!(out.len() < 1000 - 2);
+    assert_eq!(toastdesc::toast_compress_extsize(&out).unwrap(), 1000);
+    assert_eq!(
+        toastdesc::toast_compress_method(&out).unwrap(),
+        toastdesc::TOAST_LZ4_COMPRESSION_ID
+    );
+    let back = detoast::toast_decompress_datum(mcx, &out).unwrap();
+    assert_eq!(&back[VARHDRSZ..], &[b'a'; 1000][..]);
+}
+
+#[test]
 fn small_tuple_does_not_toast() {
     install_seams();
     let _s = serial();

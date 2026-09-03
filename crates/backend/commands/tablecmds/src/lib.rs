@@ -183,8 +183,10 @@ fn GetColumnDefCollationPos(
 }
 
 // GetAttributeCompression (tablecmds.c) -> CompressionNameToMethod (compressamapi.c).
-// This build has no lz4 (USE_LZ4 undefined), so "lz4" takes C's
-// not-supported/DETAIL error rather than the generic invalid-name error.
+// Unlike C (USE_LZ4 is a compile-time build option there), lz4 TOAST
+// compression is always available here -- see detoast/heaptoast's
+// lz4_flex-backed implementation -- so "lz4" is accepted like "pglz"
+// rather than taking C's not-supported/DETAIL error.
 pub(crate) fn GetAttributeCompression(
     atttypid: Oid,
     compression: Option<&str>,
@@ -213,11 +215,7 @@ pub(crate) fn GetAttributeCompression(
     if compression == "pglz" {
         Ok(b'p' as i8)
     } else if compression == "lz4" {
-        Err(Box::new(
-            PgError::new(ERROR, "compression method lz4 not supported")
-                .with_detail("This functionality requires the server to be built with lz4 support.")
-                .with_sqlstate(types_error::ERRCODE_FEATURE_NOT_SUPPORTED),
-        ))
+        Ok(b'l' as i8)
     } else {
         Err(Box::new(
             PgError::new(ERROR, format!("invalid compression method \"{compression}\""))

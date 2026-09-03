@@ -4977,6 +4977,7 @@ version = "0.1.0"
 dependencies = [
  "datum",
  "detoast_seams",
+ "lz4_flex",
  "mcx",
  "pglz",
  "toast_internals_seams",
@@ -7445,6 +7446,7 @@ dependencies = [
  "heaptuple",
  "indexam",
  "init_small",
+ "lz4_flex",
  "mcx",
  "miscinit_seams",
  "multixact_seams",
