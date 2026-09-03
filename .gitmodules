@@ -1,0 +1,4 @@
+[submodule "vendor/postgresql"]
+	path = vendor/postgresql
+	url = https://github.com/postgres/postgres.git
+	shallow = true
