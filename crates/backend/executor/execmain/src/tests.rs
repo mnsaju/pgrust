@@ -351,11 +351,22 @@ fn select1_via_seams_returns_one_row() {
 // the crate's only test touching it; counting is filtered to this test's own
 // QueryDescHandle so it stays correct under the test harness's parallelism
 // (every other test's executor_start calls also fire the tap once installed).
+//
+// QueryDescHandle values are NOT process-wide unique: querydesc.rs's slot
+// table (ENTRIES/FREE/GENERATION) is thread_local, so idx/generation both
+// start from 0 on every thread. Filtering on the raw handle alone let any
+// other test's first query desc on a different thread (also handle value 1)
+// collide with this test's target and double-count it under `cargo test`'s
+// default parallelism (observed: left == 2, right == 1). Filtering on
+// (ThreadId, handle) restores the intended per-test isolation.
 static REARM_TAP_TARGET: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static REARM_TAP_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static REARM_TAP_THREAD: std::sync::Mutex<Option<std::thread::ThreadId>> =
+    std::sync::Mutex::new(None);
 
 fn count_start(h: ::types_portal::QueryDescHandle) {
-    if h.0 == REARM_TAP_TARGET.load(std::sync::atomic::Ordering::Relaxed) {
+    let same_thread = *REARM_TAP_THREAD.lock().unwrap() == Some(std::thread::current().id());
+    if same_thread && h.0 == REARM_TAP_TARGET.load(std::sync::atomic::Ordering::Relaxed) {
         REARM_TAP_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 }
@@ -383,6 +394,7 @@ fn tap_executor_start_counts_start_and_parked_rearm_reuse() {
     // Reset the test-local observation before selecting this query descriptor.
     REARM_TAP_COUNT.store(0, std::sync::atomic::Ordering::Relaxed);
     REARM_TAP_TARGET.store(qd.0, std::sync::atomic::Ordering::Relaxed);
+    *REARM_TAP_THREAD.lock().unwrap() = Some(std::thread::current().id());
 
     // Fresh start: one Bind's worth of execution.
     execmain_seams::executor_start::call(qd, EXEC_FLAG_SKIP_TRIGGERS).unwrap();
