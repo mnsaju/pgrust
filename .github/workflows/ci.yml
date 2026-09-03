@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on the same PR/branch.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  checks:
+    name: build / test / clippy / fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # rust-toolchain.toml pins 1.96.0; rustup (preinstalled on the runner)
+      # picks it up automatically on the first cargo/rustc invocation below.
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential pkg-config libre2-dev
+
+      - name: Install pinned toolchain
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: workspace
+
+      - name: cargo fmt --check
+        run: cargo fmt --check
+
+      - name: cargo build --workspace
+        run: cargo build --workspace --all-targets
+
+      - name: cargo clippy --workspace
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: cargo test --workspace
+        run: cargo test --workspace --no-fail-fast
+
+  regress:
+    name: PostgreSQL regression/isolation suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build pgrust image
+        run: docker build -t pgrust:regress .
+
+      - name: Run regression + isolation suites
+        run: regress/run-regress-docker.sh
