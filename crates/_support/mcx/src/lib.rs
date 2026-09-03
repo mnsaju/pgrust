@@ -61,6 +61,10 @@ pub type PgFxHashMap<'mcx, K, V> = hashbrown::HashMap<K, V, rustc_hash::FxBuildH
 enum Backend {
     // UnsafeCell, not RefCell: palloc's hot path pays no borrow flag (see aset_mut).
     Aset(core::cell::UnsafeCell<aset::AllocSet>),
+    // Handled throughout (allocate/deallocate/grow/shrink) but not yet
+    // reachable from any public constructor — reserved for a future
+    // MCXT_MALLOC-backed context, matching C's allocator set.
+    #[allow(dead_code)]
     Malloc,
     Bump(core::cell::UnsafeCell<bump::BumpArena>),
     // Bump + drop list: leaked owned values run their destructor once at reset.
@@ -443,7 +447,7 @@ fn acct_take() -> NonNull<AcctInner> {
             // TLS empty or gone (thread exiting): fresh block.
             return acct_alloc_global();
         }
-        return acct_take_from(&ACCT_POOL);
+        acct_take_from(&ACCT_POOL)
     }
     #[cfg(test)]
     acct_alloc_global()
@@ -1503,16 +1507,20 @@ impl fmt::Debug for Mcx<'_> {
     }
 }
 
-// SAFETY contract for callers: one-statement &mut, never re-entered; one context, one thread.
+// Raw pointer, not `&mut`: a `&mut` returned with the input's lifetime would
+// let a caller hold two live `&mut` to the same cell (clippy::mut_from_ref).
+// Callers must dereference in the narrowest possible scope and honor the
+// original contract: one-statement borrow, never re-entered; one context,
+// one thread.
 #[inline(always)]
-unsafe fn aset_mut(set: &core::cell::UnsafeCell<aset::AllocSet>) -> &mut aset::AllocSet {
-    &mut *set.get()
+unsafe fn aset_mut(set: &core::cell::UnsafeCell<aset::AllocSet>) -> *mut aset::AllocSet {
+    set.get()
 }
 
 // SAFETY contract: as aset_mut.
 #[inline(always)]
-unsafe fn bump_mut(a: &core::cell::UnsafeCell<bump::BumpArena>) -> &mut bump::BumpArena {
-    &mut *a.get()
+unsafe fn bump_mut(a: &core::cell::UnsafeCell<bump::BumpArena>) -> *mut bump::BumpArena {
+    a.get()
 }
 
 #[inline]
@@ -1530,7 +1538,7 @@ unsafe impl Allocator for Mcx<'_> {
             Backend::Aset(set) => {
                 self.0.charge(layout.size())?;
                 // SAFETY: single-statement borrow, never re-entered (aset_mut).
-                let result = unsafe { aset_mut(set) }.alloc(layout);
+                let result = unsafe { (*aset_mut(set)).alloc(layout) };
                 if result.is_err() {
                     self.0.uncharge(layout.size());
                 }
@@ -1546,7 +1554,7 @@ unsafe impl Allocator for Mcx<'_> {
             }
             Backend::Bump(a) | Backend::BumpDrop(a, _) | Backend::BumpForget(a) => {
                 // SAFETY: single-statement borrow, never re-entered (bump_mut).
-                unsafe { bump_mut(a) }.alloc(layout, &self.0.acct)
+                unsafe { (*bump_mut(a)).alloc(layout, &self.0.acct) }
             }
             Backend::Generation(a) => {
                 // SAFETY: single-statement borrow, never re-entered (as bump_mut).
@@ -1566,7 +1574,7 @@ unsafe impl Allocator for Mcx<'_> {
                 #[cfg(test)]
                 crate::churn_probe::bump();
                 // SAFETY: single-statement borrow, never re-entered (aset_mut).
-                unsafe { aset_mut(set) }.dealloc(ptr, layout)
+                unsafe { (*aset_mut(set)).dealloc(ptr, layout) }
             }
             Backend::Malloc => {
                 self.0.uncharge(layout.size());
@@ -1595,7 +1603,7 @@ unsafe impl Allocator for Mcx<'_> {
                 let delta = new_layout.size() - old_layout.size();
                 self.0.charge(delta)?;
                 // SAFETY: single-statement borrow, never re-entered (aset_mut).
-                let result = unsafe { aset_mut(set) }.realloc(ptr, old_layout, new_layout);
+                let result = unsafe { (*aset_mut(set)).realloc(ptr, old_layout, new_layout) };
                 if result.is_err() {
                     self.0.uncharge(delta);
                 }
@@ -1612,7 +1620,7 @@ unsafe impl Allocator for Mcx<'_> {
             }
             Backend::Bump(a) | Backend::BumpDrop(a, _) | Backend::BumpForget(a) => {
                 // SAFETY: single-statement borrow (bump_mut); ptr/layouts per trait contract.
-                unsafe { bump_mut(a).grow(ptr, old_layout, new_layout, &self.0.acct) }
+                unsafe { (*bump_mut(a)).grow(ptr, old_layout, new_layout, &self.0.acct) }
             }
             // SAFETY: single-statement borrow (as bump_mut); ptr/layouts per trait contract.
             Backend::Generation(a) => unsafe {
@@ -1621,7 +1629,7 @@ unsafe impl Allocator for Mcx<'_> {
             // slab.c: realloc only tolerates the identical chunk size.
             Backend::Slab(_) => {
                 if old_layout.size() == new_layout.size()
-                    && ptr.as_ptr() as usize % new_layout.align() == 0
+                    && (ptr.as_ptr() as usize).is_multiple_of(new_layout.align())
                 {
                     Ok(NonNull::slice_from_raw_parts(ptr, new_layout.size()))
                 } else {
@@ -1640,7 +1648,7 @@ unsafe impl Allocator for Mcx<'_> {
         match &self.0.backend {
             Backend::Aset(set) => {
                 // SAFETY: single-statement borrow, never re-entered (aset_mut).
-                let result = unsafe { aset_mut(set) }.realloc(ptr, old_layout, new_layout);
+                let result = unsafe { (*aset_mut(set)).realloc(ptr, old_layout, new_layout) };
                 if result.is_ok() {
                     self.0.uncharge(old_layout.size() - new_layout.size());
                 }
@@ -1655,7 +1663,7 @@ unsafe impl Allocator for Mcx<'_> {
             }
             // GenerationRealloc: a shrink stays in place (oldsize >= size branch).
             Backend::Generation(a) => {
-                if ptr.as_ptr() as usize % new_layout.align() == 0 {
+                if (ptr.as_ptr() as usize).is_multiple_of(new_layout.align()) {
                     return Ok(NonNull::slice_from_raw_parts(ptr, new_layout.size()));
                 }
                 // SAFETY: single-statement borrow (as bump_mut); copy fits new_layout.
@@ -1673,7 +1681,7 @@ unsafe impl Allocator for Mcx<'_> {
             }
             Backend::Slab(_) => {
                 if old_layout.size() == new_layout.size()
-                    && ptr.as_ptr() as usize % new_layout.align() == 0
+                    && (ptr.as_ptr() as usize).is_multiple_of(new_layout.align())
                 {
                     Ok(NonNull::slice_from_raw_parts(ptr, new_layout.size()))
                 } else {
@@ -1682,12 +1690,12 @@ unsafe impl Allocator for Mcx<'_> {
             }
             // bump.c model: narrow in place, nothing to uncharge.
             Backend::Bump(a) | Backend::BumpDrop(a, _) | Backend::BumpForget(a) => {
-                if ptr.as_ptr() as usize % new_layout.align() == 0 {
+                if (ptr.as_ptr() as usize).is_multiple_of(new_layout.align()) {
                     return Ok(NonNull::slice_from_raw_parts(ptr, new_layout.size()));
                 }
                 // SAFETY: single-statement borrow (bump_mut); copy fits new_layout.
                 unsafe {
-                    let new = bump_mut(a).alloc(new_layout, &self.0.acct)?;
+                    let new = (*bump_mut(a)).alloc(new_layout, &self.0.acct)?;
                     core::ptr::copy_nonoverlapping(
                         ptr.as_ptr(),
                         new.cast::<u8>().as_ptr(),
@@ -1857,7 +1865,10 @@ where
 }
 
 /// Move payload `P` out of an unsized `PgBox` without dropping `P`.
-/// # Safety: `data` — the payload's data pointer inside `sized`; runtime type `P` (tag-checked).
+///
+/// # Safety
+/// `data` — the payload's data pointer inside `sized`; runtime type `P`
+/// (tag-checked).
 pub unsafe fn box_read_payload<'mcx, P, U>(sized: PgBox<'mcx, U>, data: *const P) -> P
 where
     P: 'mcx,
