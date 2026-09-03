@@ -65,7 +65,9 @@ fn fc_triggered_change_notification(
 
     let trigger = td.tg_trigger;
     if trigger.tgnargs > 1 {
-        return Err(protocol_err("must not be called with more than one parameter"));
+        return Err(protocol_err(
+            "must not be called with more than one parameter",
+        ));
     }
     let channel = if trigger.tgnargs == 0 {
         "tcn"

@@ -32,10 +32,7 @@ pub fn blbeginscan<'mcx>(
 }
 
 /// Drops the computed signature; new keys arrive from the dispatcher.
-pub fn blrescan(
-    scan: &mut IndexScanDescData<'_>,
-    keys: Option<&[ScanKeyData]>,
-) -> PgResult<()> {
+pub fn blrescan(scan: &mut IndexScanDescData<'_>, keys: Option<&[ScanKeyData]>) -> PgResult<()> {
     let IndexScanOpaque::Bloom(so) = &mut scan.opaque else {
         unreachable!("blrescan on non-bloom opaque")
     };

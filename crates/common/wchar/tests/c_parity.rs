@@ -82,8 +82,7 @@ fn verifychar_pairs_match_c() {
 }
 
 const B2S: [u8; 16] = [
-    0x00, 0x20, 0x2f, 0x30, 0x39, 0x40, 0x7e, 0x7f, 0x80, 0x8f, 0x9f, 0xa0, 0xa1, 0xbf, 0xc0,
-    0xfe,
+    0x00, 0x20, 0x2f, 0x30, 0x39, 0x40, 0x7e, 0x7f, 0x80, 0x8f, 0x9f, 0xa0, 0xa1, 0xbf, 0xc0, 0xfe,
 ];
 
 #[test]
@@ -236,8 +235,14 @@ fn set_invalid_matches_c() {
 #[test]
 fn or_incomplete_edge_cases() {
     assert_eq!(pg_encoding_mblen_or_incomplete(PG_UTF8, &[]), i32::MAX);
-    assert_eq!(pg_encoding_mblen_or_incomplete(PG_GB18030, &[0x81]), i32::MAX);
-    assert_eq!(pg_encoding_mblen_or_incomplete(PG_GB18030, &[0x81, 0x30]), 4);
+    assert_eq!(
+        pg_encoding_mblen_or_incomplete(PG_GB18030, &[0x81]),
+        i32::MAX
+    );
+    assert_eq!(
+        pg_encoding_mblen_or_incomplete(PG_GB18030, &[0x81, 0x30]),
+        4
+    );
     assert_eq!(pg_encoding_mblen_or_incomplete(PG_GB18030, &[0x41]), 1);
     assert_eq!(pg_encoding_mblen_or_incomplete(PG_UTF8, &[0xf0]), 4);
 }

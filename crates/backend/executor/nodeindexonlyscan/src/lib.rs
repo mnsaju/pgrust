@@ -71,11 +71,7 @@ impl<'mcx> ScanNode<'mcx> for IndexOnlyScanState<'mcx> {
     }
 
     /// `IndexOnlyRecheck` (nodeIndexonlyscan.c): always an error.
-    fn epq_recheck(
-        &mut self,
-        _estate: &mut EStateData<'mcx>,
-        _slot: ExecSlotId,
-    ) -> PgResult<bool> {
+    fn epq_recheck(&mut self, _estate: &mut EStateData<'mcx>, _slot: ExecSlotId) -> PgResult<bool> {
         Err(Box::new(PgError::error(
             "EvalPlanQual recheck is not supported in index-only scans",
         )))
@@ -174,12 +170,8 @@ impl<'mcx> ScanNode<'mcx> for IndexOnlyScanState<'mcx> {
             // Btree never sets xs_recheck. SubPlan-carrying quals route
             // through the executils subplan driver inside the helper.
             if scandesc.xs_recheck {
-                let passes = exec_recheck_qual_and_reset(
-                    recheckqual.as_deref_mut(),
-                    estate,
-                    ecxt,
-                    slot_id,
-                )?;
+                let passes =
+                    exec_recheck_qual_and_reset(recheckqual.as_deref_mut(), estate, ecxt, slot_id)?;
                 if !passes {
                     continue;
                 }
@@ -226,8 +218,13 @@ impl<'mcx> IndexOnlyScanState<'mcx> {
             .expect("index-only scan requires es_snapshot");
         let mut scandesc = index_beginscan(
             mcx,
-            self.ss.ss_currentRelation.as_ref().expect("IOS has a relation"),
-            self.ioss_RelationDesc.as_ref().expect("index relation open"),
+            self.ss
+                .ss_currentRelation
+                .as_ref()
+                .expect("IOS has a relation"),
+            self.ioss_RelationDesc
+                .as_ref()
+                .expect("index relation open"),
             snapshot,
             self.ioss_ScanKeys.len() as i32,
             self.ioss_OrderByKeys.len() as i32,
@@ -262,7 +259,12 @@ pub fn index_only_scan_batch_next<'mcx>(
     // B8: es_direction combine narrowed to indexorderdir (see scan_next).
     let direction = node.ioss_OrderDir;
     let table_slot_id = node.ioss_TableSlot;
-    let IndexOnlyScanState { ss, ioss_ScanDesc, ioss_VMBuffer, .. } = node;
+    let IndexOnlyScanState {
+        ss,
+        ioss_ScanDesc,
+        ioss_VMBuffer,
+        ..
+    } = node;
     loop {
         // SAFETY: written by open_scandesc when None.
         let scandesc = unsafe { ioss_ScanDesc.as_deref_mut().unwrap_unchecked() };
@@ -305,7 +307,10 @@ pub fn index_only_scan_batch_store<'mcx>(
 ) -> PgResult<bool> {
     let mcx = estate.es_query_cxt;
     let slot_id = node.ss.ss_ScanTupleSlot;
-    let scandesc = node.ioss_ScanDesc.as_deref().expect("batch store before batch next");
+    let scandesc = node
+        .ioss_ScanDesc
+        .as_deref()
+        .expect("batch store before batch next");
     let Some(itup) = scandesc.xs_itup else {
         return Err(no_data_returned());
     };
@@ -496,11 +501,23 @@ pub fn exec_init_index_only_scan_rel<'mcx>(
                 ::execexpr::exec_init_qual_subplans(mcx, &node.recheckqual, params, env)?;
             let mut runtime_keys = PgVec::new_in(mcx);
             let scan_keys = exec_index_build_scan_keys(
-                mcx, &index_rel, &node.indexqual, params, false, &mut runtime_keys, env,
+                mcx,
+                &index_rel,
+                &node.indexqual,
+                params,
+                false,
+                &mut runtime_keys,
+                env,
             )?;
             // ORDER BY exprs become scankeys the same way (SK_ORDER_BY).
             let orderby_keys = exec_index_build_scan_keys(
-                mcx, &index_rel, &node.indexorderby, params, true, &mut runtime_keys, env,
+                mcx,
+                &index_rel,
+                &node.indexorderby,
+                params,
+                true,
+                &mut runtime_keys,
+                env,
             )?;
             Ok((qual, recheckqual, scan_keys, orderby_keys, runtime_keys))
         })?;
@@ -699,7 +716,10 @@ pub fn exec_index_only_scan_initialize_dsm<'mcx>(
         .ss_currentRelation
         .as_ref()
         .expect("IOS has a relation");
-    let index = node.ioss_RelationDesc.as_ref().expect("index relation open");
+    let index = node
+        .ioss_RelationDesc
+        .as_ref()
+        .expect("index relation open");
     let snapshot = estate
         .es_snapshot
         .as_ref()
@@ -748,7 +768,10 @@ pub fn exec_index_only_scan_initialize_worker<'mcx>(
         .ss_currentRelation
         .as_ref()
         .expect("IOS has a relation");
-    let index = node.ioss_RelationDesc.as_ref().expect("index relation open");
+    let index = node
+        .ioss_RelationDesc
+        .as_ref()
+        .expect("index relation open");
     let mut scandesc = ::indexam::index_beginscan_parallel(
         mcx,
         heap,

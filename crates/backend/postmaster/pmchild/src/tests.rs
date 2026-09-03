@@ -60,15 +60,24 @@ fn assign_release_roundtrip_and_masks() {
 
     let slot = pmchild_seams::assign_postmaster_child_slot::call(BackendType::Backend)
         .expect("backend pool must not be empty");
-    assert!(slot >= 1 && slot <= 220);
+    assert!((1..=220).contains(&slot));
     pmchild_seams::set_child_pid::call(slot, 4242);
 
-    assert_eq!(pmchild_seams::count_children::call(btmask(BackendType::Backend)), 1);
-    assert_eq!(pmchild_seams::count_children::call(btmask(BackendType::Checkpointer)), 0);
+    assert_eq!(
+        pmchild_seams::count_children::call(btmask(BackendType::Backend)),
+        1
+    );
+    assert_eq!(
+        pmchild_seams::count_children::call(btmask(BackendType::Checkpointer)),
+        0
+    );
     assert_eq!(FindPostmasterChildByPid(4242).unwrap().child_slot, slot);
 
     assert!(pmchild_seams::release_postmaster_child_slot::call(slot));
-    assert_eq!(pmchild_seams::count_children::call(btmask(BackendType::Backend)), 0);
+    assert_eq!(
+        pmchild_seams::count_children::call(btmask(BackendType::Backend)),
+        0
+    );
     assert!(FindPostmasterChildByPid(4242).is_none());
 
     let again = pmchild_seams::assign_postmaster_child_slot::call(BackendType::Backend).unwrap();
@@ -139,7 +148,9 @@ fn signal_children_delivers_to_registered_child_thread() {
             std::thread::yield_now();
         }
         procsignal::DrainThreadSignals().unwrap();
-        done_tx.send(SIGTERM_OBSERVED.load(std::sync::atomic::Ordering::SeqCst)).unwrap();
+        done_tx
+            .send(SIGTERM_OBSERVED.load(std::sync::atomic::Ordering::SeqCst))
+            .unwrap();
     });
 
     ready_rx.recv().unwrap();
@@ -147,7 +158,10 @@ fn signal_children_delivers_to_registered_child_thread() {
         libc_sigterm(),
         btmask(BackendType::BgWriter)
     ));
-    assert!(done_rx.recv().unwrap(), "child thread must observe the drained SIGTERM");
+    assert!(
+        done_rx.recv().unwrap(),
+        "child thread must observe the drained SIGTERM"
+    );
     child.join().unwrap();
     assert!(pmchild_seams::release_postmaster_child_slot::call(slot));
 }
@@ -164,7 +178,10 @@ fn signal_children_dead_end_delivery_is_tolerated_not_fatal() {
     let id = pmchild_seams::alloc_dead_end_child::call().unwrap();
     pmchild_seams::set_child_pid::call(id, 5512);
     let matched = pmchild_seams::signal_children::call(3, btmask(BackendType::DeadEndBackend));
-    assert!(matched, "dead-end backend must still count as matched/signaled, not skipped");
+    assert!(
+        matched,
+        "dead-end backend must still count as matched/signaled, not skipped"
+    );
     assert!(pmchild_seams::release_postmaster_child_slot::call(id));
 }
 

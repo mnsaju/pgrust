@@ -3,6 +3,11 @@
 //! through the dfmgr builtin-library registry (GISTENTRY fmgr protocol,
 //! pg_trgm precedent). siglen is read from real opclass options.
 
+// fc__* names are "fc" + C's own underscore-prefixed function name (e.g.
+// `_ltree_isparent`), matched verbatim against the registry table below.
+#![allow(non_snake_case)]
+#![allow(clippy::result_large_err)]
+
 mod array;
 mod crc;
 mod gist;
@@ -21,10 +26,9 @@ use types_tuple::varatt;
 
 const LIBRARY: &str = "ltree";
 
-
 // Full 4B-header image of a by-ref varlena arg; short/toasted forms are
 // canonicalized because the repr walkers read VARSIZE = word >> 2.
-unsafe fn arg_image<'a>(fcinfo: &'a Fcinfo, i: usize) -> PgResult<Vec<u8>> {
+unsafe fn arg_image(fcinfo: &Fcinfo, i: usize) -> PgResult<Vec<u8>> {
     // SAFETY: forwarded caller contract — non-null varlena arg (strict fn).
     let v = unsafe { fcinfo.arg_varlena_packed(i)? };
     let payload = v.data();
@@ -35,7 +39,7 @@ unsafe fn arg_image<'a>(fcinfo: &'a Fcinfo, i: usize) -> PgResult<Vec<u8>> {
     Ok(img)
 }
 
-unsafe fn arg_payload<'a>(fcinfo: &'a Fcinfo, i: usize) -> PgResult<&'a [u8]> {
+unsafe fn arg_payload(fcinfo: &Fcinfo, i: usize) -> PgResult<&[u8]> {
     // SAFETY: forwarded caller contract — non-null varlena arg (strict fn).
     Ok(unsafe { fcinfo.arg_varlena_packed(i)? }.data())
 }
@@ -58,7 +62,6 @@ fn ret_cstring(fcinfo: &Fcinfo, payload: &[u8]) -> PgResult<Datum> {
     v.push(0);
     Ok(cstring_result(v))
 }
-
 
 macro_rules! fc_type_in {
     ($($fname:ident: $parse:path;)*) => {$(
@@ -110,7 +113,7 @@ macro_rules! fc_type_recv {
     ($($fname:ident: $parse:path, $typname:literal;)*) => {$(
         fn $fname(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
             // SAFETY: recv arg 0 is the live StringInfo pointer per the recv ABI.
-            let buf = unsafe { fcinfo.arg_stringinfo(0) };
+            let buf = unsafe { &mut *fcinfo.arg_stringinfo(0) };
             let version = pqformat::pq_getmsgint(buf, 1)?;
             if version != LTREE_WIRE_VERSION {
                 // C elog(ERROR): internal-error sqlstate.
@@ -159,7 +162,6 @@ fn fc_ltxtq_send(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Dat
     ret_send_versioned(fcinfo, &text)
 }
 
-
 fn cmp_args(fcinfo: &Fcinfo) -> PgResult<(Vec<u8>, Vec<u8>)> {
     Ok(unsafe { (arg_image(fcinfo, 0)?, arg_image(fcinfo, 1)?) })
 }
@@ -195,9 +197,11 @@ fn fc_hash_ltree(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Dat
 fn fc_hash_ltree_extended(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let a = unsafe { arg_image(fcinfo, 0)? };
     let [_, seed] = fcinfo.args_n::<2>();
-    Ok(Datum::from_u64(op::hash_ltree_extended(&a, seed.value.as_u64())))
+    Ok(Datum::from_u64(op::hash_ltree_extended(
+        &a,
+        seed.value.as_u64(),
+    )))
 }
-
 
 fn fc_nlevel(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let a = unsafe { arg_image(fcinfo, 0)? };
@@ -280,7 +284,6 @@ fn fc_ltreeparentsel(_f: Option<&mut FmgrInfo>, _fcinfo: &mut Fcinfo) -> PgResul
     Ok(Datum::from_f64(0.001))
 }
 
-
 fn fc_ltq_regex(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let (tree, query) = cmp_args(fcinfo)?;
     Ok(Datum::from_bool(op::ltq_regex(&tree, &query)?))
@@ -321,7 +324,6 @@ fn fc_ltxtq_rexec(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Da
     let (query, tree) = cmp_args(fcinfo)?;
     Ok(Datum::from_bool(op::ltxtq_exec(&tree, &query)))
 }
-
 
 fn array_iter_isparent(la: &[u8], query: &[u8], risparent: bool) -> PgResult<Option<Vec<u8>>> {
     let arr = array::LtreeArray::parse(la);
@@ -435,7 +437,6 @@ fn fc__lca(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     }
 }
 
-
 // SAFETY helpers over the gist fmgr protocol (pg_trgm precedent).
 unsafe fn entry_arg<'a>(fcinfo: &Fcinfo, i: usize) -> &'a GISTENTRY {
     unsafe { &*(fcinfo.arg(i).as_usize() as *const GISTENTRY) }
@@ -443,7 +444,10 @@ unsafe fn entry_arg<'a>(fcinfo: &Fcinfo, i: usize) -> &'a GISTENTRY {
 
 fn entry_result(fcinfo: &Fcinfo, e: &GISTENTRY) -> PgResult<Datum> {
     let bytes = unsafe {
-        core::slice::from_raw_parts((e as *const GISTENTRY).cast::<u8>(), core::mem::size_of::<GISTENTRY>())
+        core::slice::from_raw_parts(
+            (e as *const GISTENTRY).cast::<u8>(),
+            core::mem::size_of::<GISTENTRY>(),
+        )
     };
     byref_result(fcinfo.result_mcx(), bytes)
 }
@@ -461,7 +465,10 @@ fn detoasted_image<'m>(mcx: mcx::Mcx<'m>, d: Datum) -> PgResult<&'m [u8]> {
             );
             let total = 4 + src.len();
             let mut buf: mcx::PgVec<'m, u8> = mcx::vec_with_capacity_in(mcx, total)?;
-            mcx::vec_append_bytes(&mut buf, &varatt::set_varsize_4b_word(total as u32).to_ne_bytes())?;
+            mcx::vec_append_bytes(
+                &mut buf,
+                &varatt::set_varsize_4b_word(total as u32).to_ne_bytes(),
+            )?;
             mcx::vec_append_bytes(&mut buf, src)?;
             let out = core::slice::from_raw_parts(buf.as_ptr(), buf.len());
             core::mem::forget(buf);
@@ -485,7 +492,9 @@ fn key_image<'a>(d: Datum) -> &'a [u8] {
 fn get_siglen(f: &Option<&mut FmgrInfo>, default: i32) -> usize {
     match f.as_ref().and_then(|f| f.opclass_options()) {
         Some(img) => i32::from_ne_bytes(
-            img[gist::OFFSETOF_SIGLEN..gist::OFFSETOF_SIGLEN + 4].try_into().unwrap(),
+            img[gist::OFFSETOF_SIGLEN..gist::OFFSETOF_SIGLEN + 4]
+                .try_into()
+                .unwrap(),
         ) as usize,
         None => default as usize,
     }
@@ -606,8 +615,14 @@ fn fc_ltree_consistent(f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResul
     let entry = unsafe { entry_arg(fcinfo, 0) };
     let strategy = fcinfo.arg(2).as_u32() as u16;
     let query = gist_query_image(fcinfo)?;
-    let (matched, rc) =
-        gist::ltree_consistent(entry.page_is_leaf, key_image(entry.key), false, &query, strategy, siglen)?;
+    let (matched, rc) = gist::ltree_consistent(
+        entry.page_is_leaf,
+        key_image(entry.key),
+        false,
+        &query,
+        strategy,
+        siglen,
+    )?;
     let recheck = fcinfo.arg(4).as_usize() as *mut bool;
     // SAFETY: recheck out-param live in the caller frame.
     unsafe { *recheck = rc };
@@ -718,7 +733,6 @@ fn fc__ltree_gist_options(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgR
     );
     Ok(Datum::from_usize(0))
 }
-
 
 fn lookup(function: &str) -> Option<PGFunction> {
     Some(match function {
@@ -866,10 +880,7 @@ mod tests {
             .to_vec()
     }
 
-    fn fcinfo_with_arg<'a>(
-        ctx: &'a mcx::MemoryContext,
-        arg: Datum,
-    ) -> types_fmgr::LocalFcinfo<1> {
+    fn fcinfo_with_arg<'a>(ctx: &'a mcx::MemoryContext, arg: Datum) -> types_fmgr::LocalFcinfo<1> {
         // pq_sendtext consults the client-encoding seams; identity here.
         static SEAMS: std::sync::Once = std::sync::Once::new();
         SEAMS.call_once(|| {
@@ -900,8 +911,10 @@ mod tests {
         // recv accepts exactly what send produced (strips the version byte).
         let mut si = stringinfo::StringInfo::new_in(ctx.mcx()).unwrap();
         si.append_bytes(&wire).unwrap();
-        let mut fcinfo =
-            fcinfo_with_arg(&ctx, Datum::from_usize(core::ptr::from_mut(&mut si) as usize));
+        let mut fcinfo = fcinfo_with_arg(
+            &ctx,
+            Datum::from_usize(core::ptr::from_mut(&mut si) as usize),
+        );
         let d = fc_ltree_recv(None, &mut fcinfo).unwrap();
         // SAFETY: recv returns a live 4B-header ltree varlena.
         let payload = unsafe { datum::VarlenaRef::from_ptr(d.as_usize() as *const u8) }.data();
@@ -933,8 +946,10 @@ mod tests {
         let ctx = mcx::MemoryContext::new("t");
         let mut si = stringinfo::StringInfo::new_in(ctx.mcx()).unwrap();
         si.append_bytes(b"\x02a.b").unwrap();
-        let mut fcinfo =
-            fcinfo_with_arg(&ctx, Datum::from_usize(core::ptr::from_mut(&mut si) as usize));
+        let mut fcinfo = fcinfo_with_arg(
+            &ctx,
+            Datum::from_usize(core::ptr::from_mut(&mut si) as usize),
+        );
         let e = fc_ltree_recv(None, &mut fcinfo).unwrap_err();
         assert_eq!(e.message(), "unsupported ltree version number 2");
     }

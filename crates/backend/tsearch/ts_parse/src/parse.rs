@@ -32,7 +32,11 @@ pub struct ParsedText<'mcx> {
 impl<'mcx> ParsedText<'mcx> {
     pub fn with_capacity(mcx: Mcx<'mcx>, n: usize) -> PgResult<Self> {
         Ok(ParsedText {
-            words: { let mut v = ::mcx::PgVec::new_in(mcx); v.try_reserve_exact(n).map_err(|_| mcx.oom(n))?; v },
+            words: {
+                let mut v = ::mcx::PgVec::new_in(mcx);
+                v.try_reserve_exact(n).map_err(|_| mcx.oom(n))?;
+                v
+            },
             pos: 0,
         })
     }
@@ -175,7 +179,10 @@ pub(crate) fn lexize_exec<'mcx, E: TsParseEnv<'mcx>>(
                         continue;
                     };
 
-                    if res.first().is_some_and(|l| l.flags & ::ts_locale::TSL_FILTER != 0) {
+                    if res
+                        .first()
+                        .is_some_and(|l| l.flags & ::ts_locale::TSL_FILTER != 0)
+                    {
                         let first = res.into_iter().next().expect("TSL_FILTER lexeme");
                         filtered = Some(first.lexeme);
                         i += 1;

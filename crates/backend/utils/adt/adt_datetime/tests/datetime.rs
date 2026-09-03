@@ -127,10 +127,13 @@ fn decode_units_and_special_use_position_cache() {
 #[test]
 fn parse_datetime_tokenizes_like_c() {
     let mut workbuf = [0u8; TS_BUFLEN];
-    let p = parse("2023-06-12 10:11:12.5 +03 America/New_York J2451187", &mut workbuf).unwrap();
+    let p = parse(
+        "2023-06-12 10:11:12.5 +03 America/New_York J2451187",
+        &mut workbuf,
+    )
+    .unwrap();
     assert_eq!(p.nf, 6);
-    let got: Vec<(&[u8], i32)> =
-        (0..p.nf).map(|i| (p.field[i], p.ftype[i])).collect();
+    let got: Vec<(&[u8], i32)> = (0..p.nf).map(|i| (p.field[i], p.ftype[i])).collect();
     assert_eq!(
         got,
         vec![
@@ -144,8 +147,7 @@ fn parse_datetime_tokenizes_like_c() {
     );
 
     let p = parse("20011225T040506.789-07", &mut workbuf).unwrap();
-    let got: Vec<(&[u8], i32)> =
-        (0..p.nf).map(|i| (p.field[i], p.ftype[i])).collect();
+    let got: Vec<(&[u8], i32)> = (0..p.nf).map(|i| (p.field[i], p.ftype[i])).collect();
     assert_eq!(
         got,
         vec![
@@ -157,8 +159,7 @@ fn parse_datetime_tokenizes_like_c() {
     );
 
     let p = parse("Jan 8, 1999 04:05 PM", &mut workbuf).unwrap();
-    let got: Vec<(&[u8], i32)> =
-        (0..p.nf).map(|i| (p.field[i], p.ftype[i])).collect();
+    let got: Vec<(&[u8], i32)> = (0..p.nf).map(|i| (p.field[i], p.ftype[i])).collect();
     assert_eq!(
         got,
         vec![
@@ -191,7 +192,10 @@ fn parse_datetime_enforces_workbuf_and_field_limits() {
     let many = "1 ".repeat(MAXDATEFIELDS + 1);
     assert_eq!(parse(&many, &mut workbuf).unwrap_err(), DTERR_BAD_FORMAT);
 
-    assert_eq!(parse("2023-06-12 \x01", &mut workbuf).unwrap_err(), DTERR_BAD_FORMAT);
+    assert_eq!(
+        parse("2023-06-12 \x01", &mut workbuf).unwrap_err(),
+        DTERR_BAD_FORMAT
+    );
 }
 
 #[test]
@@ -279,13 +283,34 @@ fn decode_doy_concatenated_julian_and_epoch() {
 
 #[test]
 fn decode_rejects_bad_inputs_with_c_error_codes() {
-    assert_eq!(decode_ts("1999-13-08", false).unwrap_err(), DTERR_MD_FIELD_OVERFLOW);
-    assert_eq!(decode_ts("1999-02-29", false).unwrap_err(), DTERR_FIELD_OVERFLOW);
-    assert_eq!(decode_ts("1999-01-08 25:00:00", false).unwrap_err(), DTERR_FIELD_OVERFLOW);
-    assert_eq!(decode_ts("1999-01-08 04:05:06 +08", false).unwrap_err(), DTERR_BAD_FORMAT);
-    assert_eq!(decode_ts("0000-01-08", false).unwrap_err(), DTERR_FIELD_OVERFLOW);
-    assert_eq!(decode_ts("1999-01-08 16:05 PM", false).unwrap_err(), DTERR_FIELD_OVERFLOW);
-    assert_eq!(decode_ts("04:05:06 04:05:06", false).unwrap_err(), DTERR_BAD_FORMAT);
+    assert_eq!(
+        decode_ts("1999-13-08", false).unwrap_err(),
+        DTERR_MD_FIELD_OVERFLOW
+    );
+    assert_eq!(
+        decode_ts("1999-02-29", false).unwrap_err(),
+        DTERR_FIELD_OVERFLOW
+    );
+    assert_eq!(
+        decode_ts("1999-01-08 25:00:00", false).unwrap_err(),
+        DTERR_FIELD_OVERFLOW
+    );
+    assert_eq!(
+        decode_ts("1999-01-08 04:05:06 +08", false).unwrap_err(),
+        DTERR_BAD_FORMAT
+    );
+    assert_eq!(
+        decode_ts("0000-01-08", false).unwrap_err(),
+        DTERR_FIELD_OVERFLOW
+    );
+    assert_eq!(
+        decode_ts("1999-01-08 16:05 PM", false).unwrap_err(),
+        DTERR_FIELD_OVERFLOW
+    );
+    assert_eq!(
+        decode_ts("04:05:06 04:05:06", false).unwrap_err(),
+        DTERR_BAD_FORMAT
+    );
 }
 
 fn setup_tz_engine() {
@@ -362,7 +387,10 @@ fn decode_time_only() {
     let (_, tm, _, _) = decode_time("04:05 PM", false).unwrap();
     assert_eq!(hms(&tm), (16, 5, 0));
 
-    assert_eq!(decode_time("25:00:00", false).unwrap_err(), DTERR_FIELD_OVERFLOW);
+    assert_eq!(
+        decode_time("25:00:00", false).unwrap_err(),
+        DTERR_FIELD_OVERFLOW
+    );
 }
 
 #[test]
@@ -403,25 +431,43 @@ fn encode_dt(tm: &mut pg_tm, fsec: fsec_t, tz: i32, tzn: Option<&[u8]>, style: i
 fn encode_datetime_all_styles() {
     set_date_order(DATEORDER_MDY);
     let mut tm = tm_at(2024, 1, 2, 3, 4, 5, 0);
-    assert_eq!(encode_dt(&mut tm, 678_000, -27_000, None, USE_ISO_DATES),
-        "2024-01-02 03:04:05.678+07:30");
-    assert_eq!(encode_dt(&mut tm, 678_000, -27_000, None, USE_XSD_DATES),
-        "2024-01-02T03:04:05.678+07:30");
-    assert_eq!(encode_dt(&mut tm, 678_000, -27_000, None, USE_SQL_DATES),
-        "01/02/2024 03:04:05.678+07:30");
-    assert_eq!(encode_dt(&mut tm, 0, -27_000, Some(b"XYZ"), USE_SQL_DATES),
-        "01/02/2024 03:04:05 XYZ");
-    assert_eq!(encode_dt(&mut tm, 678_000, -27_000, None, USE_GERMAN_DATES),
-        "02.01.2024 03:04:05.678+07:30");
-    assert_eq!(encode_dt(&mut tm, 678_000, -27_000, None, USE_POSTGRES_DATES),
-        "Tue Jan 02 03:04:05.678 2024 +07:30");
+    assert_eq!(
+        encode_dt(&mut tm, 678_000, -27_000, None, USE_ISO_DATES),
+        "2024-01-02 03:04:05.678+07:30"
+    );
+    assert_eq!(
+        encode_dt(&mut tm, 678_000, -27_000, None, USE_XSD_DATES),
+        "2024-01-02T03:04:05.678+07:30"
+    );
+    assert_eq!(
+        encode_dt(&mut tm, 678_000, -27_000, None, USE_SQL_DATES),
+        "01/02/2024 03:04:05.678+07:30"
+    );
+    assert_eq!(
+        encode_dt(&mut tm, 0, -27_000, Some(b"XYZ"), USE_SQL_DATES),
+        "01/02/2024 03:04:05 XYZ"
+    );
+    assert_eq!(
+        encode_dt(&mut tm, 678_000, -27_000, None, USE_GERMAN_DATES),
+        "02.01.2024 03:04:05.678+07:30"
+    );
+    assert_eq!(
+        encode_dt(&mut tm, 678_000, -27_000, None, USE_POSTGRES_DATES),
+        "Tue Jan 02 03:04:05.678 2024 +07:30"
+    );
     assert_eq!(tm.tm_wday, 2);
 
     let mut no_tz = tm_at(2024, 1, 2, 3, 4, 5, -1);
-    assert_eq!(encode_dt(&mut no_tz, 0, 0, None, USE_ISO_DATES), "2024-01-02 03:04:05");
+    assert_eq!(
+        encode_dt(&mut no_tz, 0, 0, None, USE_ISO_DATES),
+        "2024-01-02 03:04:05"
+    );
 
     let mut bc = tm_at(-1998, 1, 8, 4, 5, 6, -1);
-    assert_eq!(encode_dt(&mut bc, 0, 0, None, USE_ISO_DATES), "1999-01-08 04:05:06 BC");
+    assert_eq!(
+        encode_dt(&mut bc, 0, 0, None, USE_ISO_DATES),
+        "1999-01-08 04:05:06 BC"
+    );
 }
 
 #[test]
@@ -475,8 +521,13 @@ fn calendar_roundtrip() {
     assert!(isleap(2000) && isleap(2024) && !isleap(1900));
 
     let (mut h, mut mi, mut s, mut f) = (0, 0, 0, 0);
-    dt2time(4 * USECS_PER_HOUR + 5 * USECS_PER_MINUTE + 6 * USECS_PER_SEC + 7,
-        &mut h, &mut mi, &mut s, &mut f);
+    dt2time(
+        4 * USECS_PER_HOUR + 5 * USECS_PER_MINUTE + 6 * USECS_PER_SEC + 7,
+        &mut h,
+        &mut mi,
+        &mut s,
+        &mut f,
+    );
     assert_eq!((h, mi, s, f), (4, 5, 6, 7));
 
     assert!(!time_overflows(24, 0, 0, 0));
@@ -487,13 +538,28 @@ fn calendar_roundtrip() {
 
 #[test]
 fn validate_date_bc_and_two_digit_years() {
-    let mut tm = pg_tm { tm_year: 99, tm_mon: 1, tm_mday: 8, ..Default::default() };
+    let mut tm = pg_tm {
+        tm_year: 99,
+        tm_mon: 1,
+        tm_mday: 8,
+        ..Default::default()
+    };
     assert_eq!(ValidateDate(DTK_DATE_M, false, true, false, &mut tm), 0);
     assert_eq!(tm.tm_year, 1999);
-    let mut tm = pg_tm { tm_year: 69, tm_mon: 1, tm_mday: 8, ..Default::default() };
+    let mut tm = pg_tm {
+        tm_year: 69,
+        tm_mon: 1,
+        tm_mday: 8,
+        ..Default::default()
+    };
     assert_eq!(ValidateDate(DTK_DATE_M, false, true, false, &mut tm), 0);
     assert_eq!(tm.tm_year, 2069);
-    let mut tm = pg_tm { tm_year: 1999, tm_mon: 1, tm_mday: 8, ..Default::default() };
+    let mut tm = pg_tm {
+        tm_year: 1999,
+        tm_mon: 1,
+        tm_mday: 8,
+        ..Default::default()
+    };
     assert_eq!(ValidateDate(DTK_DATE_M, false, false, true, &mut tm), 0);
     assert_eq!(tm.tm_year, -1998);
 }
@@ -502,11 +568,19 @@ fn validate_date_bc_and_two_digit_years() {
 fn parse_error_mapping_carries_c_sqlstates() {
     use types_error::SoftErrorContext;
     let err = DateTimeParseError(DTERR_BAD_FORMAT, None, "junk", "timestamp", None).unwrap_err();
-    assert_eq!(err.message(), "invalid input syntax for type timestamp: \"junk\"");
-    let err = DateTimeParseError(DTERR_MD_FIELD_OVERFLOW, None, "13/13/99", "date", None).unwrap_err();
+    assert_eq!(
+        err.message(),
+        "invalid input syntax for type timestamp: \"junk\""
+    );
+    let err =
+        DateTimeParseError(DTERR_MD_FIELD_OVERFLOW, None, "13/13/99", "date", None).unwrap_err();
     assert!(err.hint().unwrap().contains("DateStyle"));
-    let extra = DateTimeErrorExtra { dtee_timezone: Some(b"Mars/Olympus"), dtee_abbrev: None };
-    let err = DateTimeParseError(DTERR_BAD_TIMEZONE, Some(&extra), "x", "timestamptz", None).unwrap_err();
+    let extra = DateTimeErrorExtra {
+        dtee_timezone: Some(b"Mars/Olympus"),
+        dtee_abbrev: None,
+    };
+    let err =
+        DateTimeParseError(DTERR_BAD_TIMEZONE, Some(&extra), "x", "timestamptz", None).unwrap_err();
     assert_eq!(err.message(), "time zone \"Mars/Olympus\" not recognized");
 
     let mut soft = SoftErrorContext::new(true);
@@ -519,7 +593,14 @@ fn decode_interval(input: &str, range: i32) -> Result<(i32, pg_itm_in), i32> {
     let p = parse(input, &mut workbuf)?;
     let mut dtype = 0;
     let mut itm_in = pg_itm_in::default();
-    let rc = DecodeInterval(&p.field[..p.nf], &p.ftype[..p.nf], p.nf, range, &mut dtype, &mut itm_in);
+    let rc = DecodeInterval(
+        &p.field[..p.nf],
+        &p.ftype[..p.nf],
+        p.nf,
+        range,
+        &mut dtype,
+        &mut itm_in,
+    );
     if rc != 0 {
         return Err(rc);
     }
@@ -537,12 +618,18 @@ fn decode_iso_interval(input: &str) -> Result<(i32, pg_itm_in), i32> {
 }
 
 fn itm(usec: i64, mday: i32, mon: i32, year: i32) -> pg_itm_in {
-    pg_itm_in { tm_usec: usec, tm_mday: mday, tm_mon: mon, tm_year: year }
+    pg_itm_in {
+        tm_usec: usec,
+        tm_mday: mday,
+        tm_mon: mon,
+        tm_year: year,
+    }
 }
 
 #[test]
 fn decode_interval_postgres_format() {
-    let (dtype, v) = decode_interval("1 year 2 mons 3 days 04:05:06.789", INTERVAL_FULL_RANGE).unwrap();
+    let (dtype, v) =
+        decode_interval("1 year 2 mons 3 days 04:05:06.789", INTERVAL_FULL_RANGE).unwrap();
     assert_eq!(dtype, DTK_DELTA);
     assert_eq!(v, itm(14_706_789_000, 3, 2, 1));
 
@@ -590,12 +677,21 @@ fn decode_interval_range_and_specials() {
     let (dtype, _) = decode_interval("-infinity", INTERVAL_FULL_RANGE).unwrap();
     assert_eq!(dtype, DTK_EARLY);
 
-    assert_eq!(decode_interval("infinity ago", INTERVAL_FULL_RANGE), Err(DTERR_BAD_FORMAT));
-    assert_eq!(decode_interval("day", INTERVAL_FULL_RANGE), Err(DTERR_BAD_FORMAT));
+    assert_eq!(
+        decode_interval("infinity ago", INTERVAL_FULL_RANGE),
+        Err(DTERR_BAD_FORMAT)
+    );
+    assert_eq!(
+        decode_interval("day", INTERVAL_FULL_RANGE),
+        Err(DTERR_BAD_FORMAT)
+    );
     // trailing bare number picks up the range-default unit (seconds)
     let (_, v) = decode_interval("1 day 2", INTERVAL_FULL_RANGE).unwrap();
     assert_eq!(v, itm(2 * USECS_PER_SEC, 1, 0, 0));
-    assert_eq!(decode_interval("1 day day", INTERVAL_FULL_RANGE), Err(DTERR_BAD_FORMAT));
+    assert_eq!(
+        decode_interval("1 day day", INTERVAL_FULL_RANGE),
+        Err(DTERR_BAD_FORMAT)
+    );
     assert_eq!(
         decode_interval("9999999999999999999 days", INTERVAL_FULL_RANGE),
         Err(DTERR_FIELD_OVERFLOW)
@@ -646,5 +742,8 @@ fn decode_iso8601_interval() {
     assert_eq!(decode_iso_interval("P"), Err(DTERR_BAD_FORMAT));
     assert_eq!(decode_iso_interval("1Y"), Err(DTERR_BAD_FORMAT));
     assert_eq!(decode_iso_interval("P1X"), Err(DTERR_BAD_FORMAT));
-    assert_eq!(decode_iso_interval("P9999999999999999Y"), Err(DTERR_FIELD_OVERFLOW));
+    assert_eq!(
+        decode_iso_interval("P9999999999999999Y"),
+        Err(DTERR_FIELD_OVERFLOW)
+    );
 }

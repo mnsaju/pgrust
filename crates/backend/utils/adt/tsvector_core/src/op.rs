@@ -7,7 +7,11 @@ use crate::query::{Operand, TsQueryRef};
 
 pub fn silly_cmp_tsvector(a: TsVec<'_>, b: TsVec<'_>) -> i32 {
     if a.payload.len() != b.payload.len() {
-        return if a.payload.len() < b.payload.len() { -1 } else { 1 };
+        return if a.payload.len() < b.payload.len() {
+            -1
+        } else {
+            1
+        };
     }
     if a.size() != b.size() {
         return if a.size() < b.size() { -1 } else { 1 };
@@ -30,10 +34,18 @@ pub fn silly_cmp_tsvector(a: TsVec<'_>, b: TsVec<'_>) -> i32 {
             }
             for (x, y) in pa.iter().zip(pb.iter()) {
                 if wep_getpos(*x) != wep_getpos(*y) {
-                    return if wep_getpos(*x) > wep_getpos(*y) { -1 } else { 1 };
+                    return if wep_getpos(*x) > wep_getpos(*y) {
+                        -1
+                    } else {
+                        1
+                    };
                 }
                 if wep_getweight(*x) != wep_getweight(*y) {
-                    return if wep_getweight(*x) > wep_getweight(*y) { -1 } else { 1 };
+                    return if wep_getweight(*x) > wep_getweight(*y) {
+                        -1
+                    } else {
+                        1
+                    };
                 }
             }
         }
@@ -75,8 +87,7 @@ pub fn tsvector_setweight_core<'mcx>(
         let e = out.entry(i);
         if e.haspos() {
             let off = str_off + shortalign(e.pos() + e.len());
-            let npos =
-                u16::from_ne_bytes(out.payload[off..off + 2].try_into().unwrap()) as usize;
+            let npos = u16::from_ne_bytes(out.payload[off..off + 2].try_into().unwrap()) as usize;
             spans.push((4 + off + 2, npos));
         }
     }
@@ -127,8 +138,7 @@ pub fn tsvector_setweight_by_filter_core<'mcx>(
                 if e.haspos() {
                     let off = str_off + shortalign(e.pos() + e.len());
                     let npos =
-                        u16::from_ne_bytes(out.payload[off..off + 2].try_into().unwrap())
-                            as usize;
+                        u16::from_ne_bytes(out.payload[off..off + 2].try_into().unwrap()) as usize;
                     spans.push((4 + off + 2, npos));
                 }
             }
@@ -152,7 +162,8 @@ pub fn tsvector_delete_by_indices<'mcx>(
 ) -> PgResult<PgVec<'mcx, u8>> {
     skip.sort_unstable();
     skip.dedup();
-    let mut b = TsVecBuilder::with_capacity(mcx, v.size().saturating_sub(skip.len()), v.payload.len())?;
+    let mut b =
+        TsVecBuilder::with_capacity(mcx, v.size().saturating_sub(skip.len()), v.payload.len())?;
     let mut k = 0usize;
     for i in 0..v.size() {
         if k < skip.len() && i == skip[k] {
@@ -167,11 +178,7 @@ pub fn tsvector_delete_by_indices<'mcx>(
 
 // add_pos: append src positions offset by maxpos, respecting MAXNUMPOS and the
 // position ceiling; dest may already hold positions.
-fn add_pos(
-    dest: &mut PgVec<'_, WordEntryPos>,
-    src: &[WordEntryPos],
-    maxpos: u32,
-) -> usize {
+fn add_pos(dest: &mut PgVec<'_, WordEntryPos>, src: &[WordEntryPos], maxpos: u32) -> usize {
     let startlen = dest.len();
     for &sp in src {
         if dest.len() >= MAXNUMPOS

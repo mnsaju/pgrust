@@ -143,6 +143,10 @@ pub fn get_stack_depth_rlimit() -> isize {
             rlim_cur: 0,
             rlim_max: 0,
         };
+        // Mirrors C's get_stack_depth_rlimit: RLIM_INFINITY and "too large to
+        // fit isize" are different reasons that happen to clamp to the same
+        // isize::MAX.
+        #[allow(clippy::if_same_then_else)]
         // SAFETY: getrlimit writes into the provided rlimit struct.
         let val = if unsafe { libc::getrlimit(libc::RLIMIT_STACK, &mut rlim) } < 0 {
             -1

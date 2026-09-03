@@ -81,7 +81,9 @@ fn rlimit_check_hook() {
         );
         assert_eq!(
             check.hint.as_deref(),
-            Some("Increase the platform's stack depth limit via \"ulimit -s\" or local equivalent.")
+            Some(
+                "Increase the platform's stack depth limit via \"ulimit -s\" or local equivalent."
+            )
         );
     }
 }

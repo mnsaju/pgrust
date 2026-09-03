@@ -32,7 +32,10 @@ pub enum BatchData {
     F32(Vec<f32>),
     F64(Vec<f64>),
     /// `ends[i]` is the arena end of row i; row start = previous end.
-    Bytes { ends: Vec<u32>, arena: Vec<u8> },
+    Bytes {
+        ends: Vec<u32>,
+        arena: Vec<u8>,
+    },
 }
 
 impl ColumnBatch {
@@ -43,14 +46,21 @@ impl ColumnBatch {
             Phys::Int64 => BatchData::I64(Vec::new()),
             Phys::Float => BatchData::F32(Vec::new()),
             Phys::Double => BatchData::F64(Vec::new()),
-            Phys::ByteArray => BatchData::Bytes { ends: Vec::new(), arena: Vec::new() },
+            Phys::ByteArray => BatchData::Bytes {
+                ends: Vec::new(),
+                arena: Vec::new(),
+            },
             // INT96/FLBA are refused at binding; a placeholder keeps the
             // constructor total.
-            Phys::Int96 | Phys::Flba(_) => {
-                BatchData::Bytes { ends: Vec::new(), arena: Vec::new() }
-            }
+            Phys::Int96 | Phys::Flba(_) => BatchData::Bytes {
+                ends: Vec::new(),
+                arena: Vec::new(),
+            },
         };
-        ColumnBatch { nulls: Vec::new(), data }
+        ColumnBatch {
+            nulls: Vec::new(),
+            data,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -114,9 +124,18 @@ impl Dict {
 enum ValState {
     /// Dictionary-index stream (bit-width byte already consumed).
     Dict(HybridState),
-    PlainFixed { pos: usize, end: usize },
-    PlainBytes { pos: usize, end: usize },
-    PlainBool { bits: BoolBits, end: usize },
+    PlainFixed {
+        pos: usize,
+        end: usize,
+    },
+    PlainBytes {
+        pos: usize,
+        end: usize,
+    },
+    PlainBool {
+        bits: BoolBits,
+        end: usize,
+    },
     /// RLE-encoded boolean data page (4-byte length prefix consumed).
     RleBool(HybridState),
 }
@@ -135,7 +154,11 @@ struct PageState {
 /// in-memory demux).
 pub(crate) enum ChunkBytes {
     Owned(Vec<u8>),
-    Shared { buf: std::sync::Arc<Vec<u8>>, start: usize, len: usize },
+    Shared {
+        buf: std::sync::Arc<Vec<u8>>,
+        start: usize,
+        len: usize,
+    },
 }
 
 impl ChunkBytes {
@@ -221,7 +244,9 @@ impl ColumnCursor {
                 None => true,
             };
             if need_page && !self.advance_page()? {
-                return Err(corrupt_page("column chunk ends before the declared row count"));
+                return Err(corrupt_page(
+                    "column chunk ends before the declared row count",
+                ));
             }
             let want = n - out.nulls.len();
             self.fill_from_page(out, want)?;
@@ -231,10 +256,22 @@ impl ColumnCursor {
 
     /// Decode up to `want` rows from the current page.
     fn fill_from_page(&mut self, out: &mut ColumnBatch, want: usize) -> PgResult<()> {
-        let ColumnCursor { chunk, page, scratch, dict, validate_utf8, name, values_left, .. } =
-            self;
+        let ColumnCursor {
+            chunk,
+            page,
+            scratch,
+            dict,
+            validate_utf8,
+            name,
+            values_left,
+            ..
+        } = self;
         let page_st = page.as_mut().expect("fill_from_page with a page");
-        let buf: &[u8] = if page_st.in_chunk { chunk.bytes() } else { scratch };
+        let buf: &[u8] = if page_st.in_chunk {
+            chunk.bytes()
+        } else {
+            scratch
+        };
         let k = want.min(page_st.values_left);
         debug_assert!(k > 0);
 
@@ -284,7 +321,13 @@ impl ColumnCursor {
                     (BatchData::F64(v), Dict::F64(dv)) => {
                         scatter_fixed(v, &ids, |i| dv[i as usize], &nulls_start, k, 0.0)?
                     }
-                    (BatchData::Bytes { ends, arena }, Dict::Bytes { ends: de, arena: da }) => {
+                    (
+                        BatchData::Bytes { ends, arena },
+                        Dict::Bytes {
+                            ends: de,
+                            arena: da,
+                        },
+                    ) => {
                         ends.try_reserve(k).map_err(|_| oom())?;
                         let mut id_it = ids.iter();
                         for row in 0..k {
@@ -384,7 +427,9 @@ impl ColumnCursor {
 
         page_st.values_left -= k;
         if (*values_left as usize) < k {
-            return Err(corrupt_page("pages hold more values than the chunk declares"));
+            return Err(corrupt_page(
+                "pages hold more values than the chunk declares",
+            ));
         }
         *values_left -= k as u64;
         Ok(())
@@ -398,7 +443,9 @@ impl ColumnCursor {
                 return Ok(false);
             }
             if self.walk >= self.chunk_len {
-                return Err(corrupt_page("column chunk ends before the declared value count"));
+                return Err(corrupt_page(
+                    "column chunk ends before the declared value count",
+                ));
             }
             let head =
                 parse_page_header(&self.chunk.bytes()[..self.chunk_len], self.walk, &self.name)?;
@@ -407,7 +454,10 @@ impl ColumnCursor {
             self.walk = payload_end;
             match head.kind {
                 PageKind::Skip => continue,
-                PageKind::Dict { num_values, encoding } => {
+                PageKind::Dict {
+                    num_values,
+                    encoding,
+                } => {
                     if self.dict.is_some() {
                         return Err(corrupt("second dictionary page in one column chunk"));
                     }
@@ -423,7 +473,11 @@ impl ColumnCursor {
                         head.compressed_size,
                         head.uncompressed_size,
                     )?;
-                    let buf: &[u8] = if in_chunk { self.chunk.bytes() } else { &self.scratch };
+                    let buf: &[u8] = if in_chunk {
+                        self.chunk.bytes()
+                    } else {
+                        &self.scratch
+                    };
                     self.dict = Some(decode_dict(
                         buf,
                         start,
@@ -435,13 +489,21 @@ impl ColumnCursor {
                     )?);
                     continue;
                 }
-                PageKind::Data { num_values, encoding, def_encoding } => {
+                PageKind::Data {
+                    num_values,
+                    encoding,
+                    def_encoding,
+                } => {
                     let (in_chunk, start, end) = self.page_payload(
                         payload_start,
                         head.compressed_size,
                         head.uncompressed_size,
                     )?;
-                    let buf: &[u8] = if in_chunk { self.chunk.bytes() } else { &self.scratch };
+                    let buf: &[u8] = if in_chunk {
+                        self.chunk.bytes()
+                    } else {
+                        &self.scratch
+                    };
                     // v1 page layout: [rep levels: absent at max_rep=0]
                     // [def levels: 4-byte len + RLE at max_def=1] [values].
                     let mut vpos = start;
@@ -453,8 +515,7 @@ impl ColumnCursor {
                                 self.name
                             )));
                         }
-                        let Some(lb) = buf.get(vpos..vpos + 4).filter(|_| vpos + 4 <= end)
-                        else {
+                        let Some(lb) = buf.get(vpos..vpos + 4).filter(|_| vpos + 4 <= end) else {
                             return Err(corrupt_page("definition levels overrun page"));
                         };
                         let dlen =
@@ -470,9 +531,10 @@ impl ColumnCursor {
                     };
                     let val = match encoding {
                         Enc::Plain => match self.phys {
-                            Phys::Boolean => {
-                                ValState::PlainBool { bits: BoolBits::new(vpos), end }
-                            }
+                            Phys::Boolean => ValState::PlainBool {
+                                bits: BoolBits::new(vpos),
+                                end,
+                            },
                             Phys::ByteArray => ValState::PlainBytes { pos: vpos, end },
                             Phys::Int32 | Phys::Int64 | Phys::Float | Phys::Double => {
                                 ValState::PlainFixed { pos: vpos, end }
@@ -507,8 +569,7 @@ impl ColumnCursor {
                                 return Err(corrupt_page("RLE boolean run overruns page"));
                             };
                             let rlen =
-                                u32::from_le_bytes(lb.try_into().expect("4-byte slice"))
-                                    as usize;
+                                u32::from_le_bytes(lb.try_into().expect("4-byte slice")) as usize;
                             if vpos + 4 + rlen > end {
                                 return Err(corrupt_page("RLE boolean run overruns page"));
                             }
@@ -522,7 +583,12 @@ impl ColumnCursor {
                             )))
                         }
                     };
-                    self.page = Some(PageState { in_chunk, values_left: num_values, def, val });
+                    self.page = Some(PageState {
+                        in_chunk,
+                        values_left: num_values,
+                        def,
+                        val,
+                    });
                     return Ok(true);
                 }
             }
@@ -679,7 +745,9 @@ fn decode_dict(
         Phys::ByteArray => {
             let mut ends = Vec::new();
             let mut arena = Vec::new();
-            plain_byte_array(buf, end, &mut pos, num_values, &mut ends, &mut arena, false, name)?;
+            plain_byte_array(
+                buf, end, &mut pos, num_values, &mut ends, &mut arena, false, name,
+            )?;
             if validate_utf8 {
                 // Batched validation, once per chunk: UTF-8 is closed under
                 // concatenation, so an invalid arena means some value is

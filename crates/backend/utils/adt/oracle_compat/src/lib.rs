@@ -379,7 +379,11 @@ pub fn translate<'mcx>(
         debug_assert!(old + bytes.len() <= image.capacity());
         // SAFETY: capacity = bytelen covers the worst case (above).
         unsafe {
-            core::ptr::copy_nonoverlapping(bytes.as_ptr(), image.as_mut_ptr().add(old), bytes.len());
+            core::ptr::copy_nonoverlapping(
+                bytes.as_ptr(),
+                image.as_mut_ptr().add(old),
+                bytes.len(),
+            );
             image.set_len(old + bytes.len());
         }
     };
@@ -439,8 +443,7 @@ pub fn ascii(string: &[u8]) -> PgResult<i32> {
             debug_assert!(b0 > 0xC0);
             ((b0 & 0x1F) as i32, 1)
         };
-        for i in 1..=tbytes {
-            let b = string[i];
+        for &b in string.iter().take(tbytes + 1).skip(1) {
             debug_assert!(b & 0xC0 == 0x80);
             result = (result << 6) + (b & 0x3F) as i32;
         }

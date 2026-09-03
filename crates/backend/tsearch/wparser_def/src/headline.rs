@@ -68,11 +68,10 @@ fn checkcondition_hl<'mcx>(
         }
         Some(data) => {
             for w in words {
-                if w.item == Some(item_idx) {
-                    if data.pos.is_empty() || *data.pos.last().unwrap() < w.pos {
+                if w.item == Some(item_idx)
+                    && (data.pos.is_empty() || *data.pos.last().unwrap() < w.pos) {
                         data.pos.push(w.pos);
                     }
-                }
             }
             if data.npos() > 0 {
                 Ternary::Yes
@@ -175,7 +174,12 @@ fn hl_cover<'mcx>(
 }
 
 // mark_fragment (wparser_def.c).
-fn mark_fragment(prs: &mut HeadlineParsedText<'_>, highlightall: bool, startpos: usize, endpos: usize) {
+fn mark_fragment(
+    prs: &mut HeadlineParsedText<'_>,
+    highlightall: bool,
+    startpos: usize,
+    endpos: usize,
+) {
     for i in startpos..=endpos {
         let w = &mut prs.words[i];
         if w.item.is_some() {
@@ -269,7 +273,14 @@ fn mark_hl_fragments<'mcx>(
         let mut startpos = p as i32;
         let mut endpos = q as i32;
         while startpos <= endpos {
-            get_next_fragment(prs, &mut startpos, &mut endpos, &mut curlen, &mut poslen, max_words);
+            get_next_fragment(
+                prs,
+                &mut startpos,
+                &mut endpos,
+                &mut curlen,
+                &mut poslen,
+                max_words,
+            );
             covers.push(CoverPos {
                 startpos,
                 endpos,
@@ -386,6 +397,7 @@ fn mark_hl_fragments<'mcx>(
 }
 
 // mark_hl_words (wparser_def.c): MaxFragments == 0 selector.
+#[allow(clippy::too_many_arguments)]
 fn mark_hl_words<'mcx>(
     mcx: Mcx<'mcx>,
     prs: &mut HeadlineParsedText<'mcx>,
@@ -582,7 +594,9 @@ pub fn prsd_headline_impl<'mcx>(
                 || val.eq_ignore_ascii_case("y")
                 || val.eq_ignore_ascii_case("yes");
         } else {
-            return Err(opt_err(format!("unrecognized headline parameter: \"{name}\"")));
+            return Err(opt_err(format!(
+                "unrecognized headline parameter: \"{name}\""
+            )));
         }
     }
 
@@ -620,7 +634,16 @@ pub fn prsd_headline_impl<'mcx>(
     };
 
     if max_fragments == 0 {
-        mark_hl_words(mcx, prs, query, &locations, highlightall, shortword, min_words, max_words)?;
+        mark_hl_words(
+            mcx,
+            prs,
+            query,
+            &locations,
+            highlightall,
+            shortword,
+            min_words,
+            max_words,
+        )?;
     } else {
         mark_hl_fragments(
             mcx,

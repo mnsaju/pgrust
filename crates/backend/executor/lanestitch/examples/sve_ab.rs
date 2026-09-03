@@ -16,7 +16,10 @@ use lanestitch::{
 };
 
 fn nd(d: Datum) -> NullableDatum {
-    NullableDatum { value: d, isnull: false }
+    NullableDatum {
+        value: d,
+        isnull: false,
+    }
 }
 
 struct Rng(u64);
@@ -48,7 +51,13 @@ fn bench(name: &str, param: &str, prog: &Program, cols: &[(Vec<Datum>, Vec<bool>
     };
     let batch = Batch {
         nrows: MAX_ROWS as u32,
-        lanes: cols.iter().map(|(v, n)| Lane { values: v, isnull: n }).collect(),
+        lanes: cols
+            .iter()
+            .map(|(v, n)| Lane {
+                values: v,
+                isnull: n,
+            })
+            .collect(),
     };
     // Autoscale to ~80ms, best-of-5.
     let mut sel = SelVec::all(MAX_ROWS as u32);
@@ -81,13 +90,26 @@ fn k1(sel_pct: u64) {
     prog.steps.extend([
         Step::LoadLane { col: 0, out: 0 },
         Step::LoadConst { k, out: 1 },
-        Step::Cmp { op: CmpOp::Int4Gt, a: 0, b: 1, out: 2 },
+        Step::Cmp {
+            op: CmpOp::Int4Gt,
+            a: 0,
+            b: 1,
+            out: 2,
+        },
         Step::Qual { a: 2 },
     ]);
     prog.steps.extend([
         Step::LoadLane { col: 1, out: 0 },
-        Step::NullTest { a: 0, out: 1, kind: NullTestKind::IsNotNull },
-        Step::BoolTest { a: 1, out: 2, kind: BoolTestKind::IsTrue },
+        Step::NullTest {
+            a: 0,
+            out: 1,
+            kind: NullTestKind::IsNotNull,
+        },
+        Step::BoolTest {
+            a: 1,
+            out: 2,
+            kind: BoolTestKind::IsTrue,
+        },
         Step::Qual { a: 2 },
     ]);
     let mut r = Rng(0x1234_5678_9abc_def1);
@@ -96,7 +118,12 @@ fn k1(sel_pct: u64) {
         .collect();
     let v1: Vec<Datum> = (0..MAX_ROWS).map(|_| Datum::from_i32(1)).collect();
     let nn = vec![false; MAX_ROWS];
-    bench("k1_survivors", &sel_pct.to_string(), &prog, &[(v0, nn.clone()), (v1, nn)]);
+    bench(
+        "k1_survivors",
+        &sel_pct.to_string(),
+        &prog,
+        &[(v0, nn.clone()), (v1, nn)],
+    );
 }
 
 /// K3 production shape: an Eq IN-list over u16-domain values (dict-code /
@@ -104,16 +131,23 @@ fn k1(sel_pct: u64) {
 fn k3(k: usize) {
     let mut r = Rng(0x0bad_cafe_0000_0001);
     let mut prog = Program::new();
-    let elems: Vec<NullableDatum> =
-        (0..k).map(|_| nd(Datum::from_i64((r.next() % 4096) as i64))).collect();
+    let elems: Vec<NullableDatum> = (0..k)
+        .map(|_| nd(Datum::from_i64((r.next() % 4096) as i64)))
+        .collect();
     let arr = prog.push_array(elems);
     prog.steps.extend([
         Step::LoadLane { col: 0, out: 0 },
-        Step::SaopAny { a: 0, out: 1, op: CmpOp::Int4Eq, arr },
+        Step::SaopAny {
+            a: 0,
+            out: 1,
+            op: CmpOp::Int4Eq,
+            arr,
+        },
         Step::Qual { a: 1 },
     ]);
-    let v0: Vec<Datum> =
-        (0..MAX_ROWS).map(|_| Datum::from_i32((r.next() % 4096) as i32)).collect();
+    let v0: Vec<Datum> = (0..MAX_ROWS)
+        .map(|_| Datum::from_i32((r.next() % 4096) as i32))
+        .collect();
     let nn = vec![false; MAX_ROWS];
     bench("k3_saop", &k.to_string(), &prog, &[(v0, nn)]);
 }

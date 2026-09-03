@@ -18,16 +18,19 @@ use crate::vfd::{
 pub const PG_IOV_MAX: usize = 128;
 
 fn vfd_raw(fd: &FdState, file: i32) -> RawFd {
-    fd.vfd_cache[file as usize].fd.as_ref().expect("I/O on closed VFD").as_raw()
+    fd.vfd_cache[file as usize]
+        .fd
+        .as_ref()
+        .expect("I/O on closed VFD")
+        .as_raw()
 }
 
 fn pg_preadv(fd: RawFd, iov: &mut [IoSliceMut<'_>], offset: i64) -> isize {
     // SAFETY: IoSliceMut is ABI-compatible with iovec; fd is live; the base
     // pointers are valid for writes of their lengths (the vfs caller
     // contract).
-    let iov_c = unsafe {
-        std::slice::from_raw_parts(iov.as_ptr().cast::<libc::iovec>(), iov.len())
-    };
+    let iov_c =
+        unsafe { std::slice::from_raw_parts(iov.as_ptr().cast::<libc::iovec>(), iov.len()) };
     vfs::preadv(fd, iov_c, offset as libc::off_t)
 }
 
@@ -43,9 +46,8 @@ const _: () = assert!(
 fn pg_pwritev(fd: RawFd, iov: &[WriteChunk<'_>], offset: i64) -> isize {
     // SAFETY: WriteChunk is ABI-compatible with iovec (asserted above); fd is
     // live. The kernel, not Rust, reads the bytes.
-    let iov_c = unsafe {
-        std::slice::from_raw_parts(iov.as_ptr().cast::<libc::iovec>(), iov.len())
-    };
+    let iov_c =
+        unsafe { std::slice::from_raw_parts(iov.as_ptr().cast::<libc::iovec>(), iov.len()) };
     vfs::pwritev(fd, iov_c, offset as libc::off_t)
 }
 
@@ -143,7 +145,12 @@ pub fn FileClose(file: File) -> PgResult<()> {
         } else {
             crate::vfd::data_sync_elevel(LOG)
         };
-        let name = with_fd(|fd| fd.vfd_cache[file as usize].file_name.clone().unwrap_or_default());
+        let name = with_fd(|fd| {
+            fd.vfd_cache[file as usize]
+                .file_name
+                .clone()
+                .unwrap_or_default()
+        });
         ereport(elevel)
             .with_saved_errno(en)
             .errmsg_internal(format!("could not close file \"{name}\": %m"))
@@ -328,7 +335,12 @@ pub fn FileRead(file: File, buf: &mut [u8], offset: i64, wait_event_info: u32) -
     FileReadV(file, &mut iov, offset, wait_event_info)
 }
 
-pub fn FileStartReadV(file: File, iovcnt: i32, offset: i64, _wait_event_info: u32) -> PgResult<i32> {
+pub fn FileStartReadV(
+    file: File,
+    iovcnt: i32,
+    offset: i64,
+    _wait_event_info: u32,
+) -> PgResult<i32> {
     let file = file.0;
     debug_assert!(with_fd(|fd| vfd::FileIsValid(fd, file)));
 
@@ -360,7 +372,13 @@ pub fn FileWriteV(
                 return Ok((rc, -1, 0, 0, 0));
             }
             let vfd_p = &fd.vfd_cache[file as usize];
-            Ok((rc, vfd_raw(fd, file), vfd_p.fdstate, vfd_p.file_size, fd.temporary_files_size))
+            Ok((
+                rc,
+                vfd_raw(fd, file),
+                vfd_p.fdstate,
+                vfd_p.file_size,
+                fd.temporary_files_size,
+            ))
         })?;
     if rc < 0 {
         return Ok(rc as isize);
@@ -470,9 +488,8 @@ pub fn FileZero(file: File, offset: i64, amount: i64, wait_event_info: u32) -> P
 // unaligned buffer addresses with EINVAL.
 #[repr(align(4096))]
 pub(crate) struct IoAlignedBlock(pub(crate) [u8; BLCKSZ]);
-const _: () = assert!(
-    core::mem::align_of::<IoAlignedBlock>() == ::types_storage::bufpage::PG_IO_ALIGN_SIZE
-);
+const _: () =
+    assert!(core::mem::align_of::<IoAlignedBlock>() == ::types_storage::bufpage::PG_IO_ALIGN_SIZE);
 
 // common/file_utils.c pg_pwrite_zeros' `static const PGIOAlignedBlock zbuffer`:
 // I/O-aligned, or FileZero-backed zero-extension EINVALs under
@@ -647,7 +664,10 @@ pub fn FileTruncate(file: File, offset: i64, wait_event_info: u32) -> PgResult<i
 pub fn FilePathName(file: File) -> String {
     with_fd(|fd| {
         debug_assert!(vfd::FileIsValid(fd, file.0));
-        fd.vfd_cache[file.0 as usize].file_name.clone().expect("FilePathName on unused VFD")
+        fd.vfd_cache[file.0 as usize]
+            .file_name
+            .clone()
+            .expect("FilePathName on unused VFD")
     })
 }
 

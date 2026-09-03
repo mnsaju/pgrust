@@ -122,10 +122,7 @@ fn text_body(image: &[u8]) -> &[u8] {
 
 // deconstruct_array_builtin(TEXTOID) over an argument datum, elements as
 // Option<&'mcx str> (None = SQL NULL element).
-fn deconstruct_text_array<'mcx>(
-    mcx: Mcx<'mcx>,
-    d: Datum,
-) -> PgResult<Vec<Option<&'mcx str>>> {
+fn deconstruct_text_array<'mcx>(mcx: Mcx<'mcx>, d: Datum) -> PgResult<Vec<Option<&'mcx str>>> {
     let img = detoast::detoast_attr(mcx, varlena_image(d))?;
     let (elems, nulls) =
         arrayfuncs::construct::deconstruct_array_builtin(mcx, &img, TEXTOID, true)?;
@@ -135,7 +132,10 @@ fn deconstruct_text_array<'mcx>(
             out.push(None);
         } else {
             let body = text_body(varlena_image(*elem));
-            let s = str_in(mcx, core::str::from_utf8(body).expect("text is valid UTF-8"))?;
+            let s = str_in(
+                mcx,
+                core::str::from_utf8(body).expect("text is valid UTF-8"),
+            )?;
             out.push(Some(s));
         }
     }
@@ -154,7 +154,7 @@ fn textarray_to_strvaluelist<'mcx>(mcx: Mcx<'mcx>, d: Datum) -> PgResult<Vec<Nod
     let mut out = Vec::with_capacity(elems.len());
     for elem in elems {
         let Some(s) = elem else {
-            return Err(null_element_err().into());
+            return Err(null_element_err());
         };
         out.push(Node::mk(mcx, types_nodes::String { sval: s })?);
     }
@@ -162,7 +162,10 @@ fn textarray_to_strvaluelist<'mcx>(mcx: Mcx<'mcx>, d: Datum) -> PgResult<Vec<Nod
 }
 
 fn text_datum(mcx: Mcx<'_>, s: &str) -> PgResult<Datum> {
-    Ok(fmgr::varlena_result(varlena::cstring_to_text(mcx, s.as_bytes())?))
+    Ok(fmgr::varlena_result(varlena::cstring_to_text(
+        mcx,
+        s.as_bytes(),
+    )?))
 }
 
 // strlist_to_textarray (objectaddress.c); empty list still yields an array.
@@ -200,7 +203,9 @@ fn composite_result(
     if resolved.class != funcapi::TypeFuncClass::Composite {
         return Err(Box::new(PgError::error("return type must be a row type")));
     }
-    let tupdesc = resolved.result_tuple_desc.expect("composite result has tupdesc");
+    let tupdesc = resolved
+        .result_tuple_desc
+        .expect("composite result has tupdesc");
     let tup = heaptuple::heap_form_tuple(mcx, &tupdesc, values, isnull)?;
     let d = Datum::from_usize(tup.header_ptr() as usize);
     core::mem::forget(tup); // leak into the arming context (C palloc ownership)
@@ -287,9 +292,7 @@ fn fc_pg_identify_object(
                 schema_oid = nspoid;
             }
             match name {
-                Some(Some(n)) => {
-                    objname = Some(format_type::quote_identifier(&n).into_owned())
-                }
+                Some(Some(n)) => objname = Some(format_type::quote_identifier(&n).into_owned()),
                 Some(None) => {
                     return Err(Box::new(PgError::error(format!(
                         "invalid null name in object {}/{}/{}",
@@ -388,7 +391,7 @@ fn fc_pg_get_object_address(
             return Err(param_err("name list length must be exactly 1".to_string()));
         }
         let Some(s) = elems[0] else {
-            return Err(null_element_err().into());
+            return Err(null_element_err());
         };
         typename = Some(parse_utilcmd::typeStringToTypeName(mcx, s)?);
     } else if objtype == OBJECT_LARGEOBJECT {
@@ -422,7 +425,7 @@ fn fc_pg_get_object_address(
         let mut out = Vec::with_capacity(elems.len());
         for elem in elems {
             let Some(s) = elem else {
-                return Err(null_element_err().into());
+                return Err(null_element_err());
             };
             let tn = parse_utilcmd::typeStringToTypeName(mcx, s)?;
             out.push(mk_type_name_node(mcx, tn)?);
@@ -438,13 +441,20 @@ fn fc_pg_get_object_address(
                 return Err(param_err("name list length must be exactly 1".to_string()));
             }
             if args.len() != 1 {
-                return Err(param_err("argument list length must be exactly 1".to_string()));
+                return Err(param_err(
+                    "argument list length must be exactly 1".to_string(),
+                ));
             }
         }
-        OBJECT_DOMCONSTRAINT | OBJECT_CAST | OBJECT_PUBLICATION_REL | OBJECT_DEFACL
+        OBJECT_DOMCONSTRAINT
+        | OBJECT_CAST
+        | OBJECT_PUBLICATION_REL
+        | OBJECT_DEFACL
         | OBJECT_TRANSFORM => {
             if args.len() != 1 {
-                return Err(param_err("argument list length must be exactly 1".to_string()));
+                return Err(param_err(
+                    "argument list length must be exactly 1".to_string(),
+                ));
             }
         }
         OBJECT_OPFAMILY | OBJECT_OPCLASS => {
@@ -457,14 +467,17 @@ fn fc_pg_get_object_address(
                 return Err(param_err("name list length must be at least 3".to_string()));
             }
             if args.len() != 2 {
-                return Err(param_err("argument list length must be exactly 2".to_string()));
+                return Err(param_err(
+                    "argument list length must be exactly 2".to_string(),
+                ));
             }
         }
-        OBJECT_OPERATOR => {
-            if args.len() != 2 {
-                return Err(param_err("argument list length must be exactly 2".to_string()));
+        OBJECT_OPERATOR
+            if args.len() != 2 => {
+                return Err(param_err(
+                    "argument list length must be exactly 2".to_string(),
+                ));
             }
-        }
         _ => {}
     }
 
@@ -474,17 +487,42 @@ fn fc_pg_get_object_address(
     }
 
     match objtype {
-        OBJECT_TABLE | OBJECT_SEQUENCE | OBJECT_VIEW | OBJECT_MATVIEW | OBJECT_INDEX
-        | OBJECT_FOREIGN_TABLE | OBJECT_COLUMN | OBJECT_ATTRIBUTE | OBJECT_COLLATION
-        | OBJECT_CONVERSION | OBJECT_STATISTIC_EXT | OBJECT_TSPARSER | OBJECT_TSDICTIONARY
-        | OBJECT_TSTEMPLATE | OBJECT_TSCONFIGURATION | OBJECT_DEFAULT | OBJECT_POLICY
-        | OBJECT_RULE | OBJECT_TRIGGER | OBJECT_TABCONSTRAINT | OBJECT_OPCLASS
+        OBJECT_TABLE
+        | OBJECT_SEQUENCE
+        | OBJECT_VIEW
+        | OBJECT_MATVIEW
+        | OBJECT_INDEX
+        | OBJECT_FOREIGN_TABLE
+        | OBJECT_COLUMN
+        | OBJECT_ATTRIBUTE
+        | OBJECT_COLLATION
+        | OBJECT_CONVERSION
+        | OBJECT_STATISTIC_EXT
+        | OBJECT_TSPARSER
+        | OBJECT_TSDICTIONARY
+        | OBJECT_TSTEMPLATE
+        | OBJECT_TSCONFIGURATION
+        | OBJECT_DEFAULT
+        | OBJECT_POLICY
+        | OBJECT_RULE
+        | OBJECT_TRIGGER
+        | OBJECT_TABCONSTRAINT
+        | OBJECT_OPCLASS
         | OBJECT_OPFAMILY => {
             objnode = Some(list_node(mcx, &name)?);
         }
-        OBJECT_ACCESS_METHOD | OBJECT_DATABASE | OBJECT_EVENT_TRIGGER | OBJECT_EXTENSION
-        | OBJECT_FDW | OBJECT_FOREIGN_SERVER | OBJECT_LANGUAGE | OBJECT_PARAMETER_ACL
-        | OBJECT_PUBLICATION | OBJECT_ROLE | OBJECT_SCHEMA | OBJECT_SUBSCRIPTION
+        OBJECT_ACCESS_METHOD
+        | OBJECT_DATABASE
+        | OBJECT_EVENT_TRIGGER
+        | OBJECT_EXTENSION
+        | OBJECT_FDW
+        | OBJECT_FOREIGN_SERVER
+        | OBJECT_LANGUAGE
+        | OBJECT_PARAMETER_ACL
+        | OBJECT_PUBLICATION
+        | OBJECT_ROLE
+        | OBJECT_SCHEMA
+        | OBJECT_SUBSCRIPTION
         | OBJECT_TABLESPACE => {
             if name.len() != 1 {
                 return Err(param_err("name list length must be exactly 1".to_string()));
@@ -531,16 +569,10 @@ fn fc_pg_get_object_address(
         _ => {}
     }
 
-    let objnode = objnode
-        .unwrap_or_else(|| panic!("unrecognized object type: {objtype:?}"));
+    let objnode = objnode.unwrap_or_else(|| panic!("unrecognized object type: {objtype:?}"));
 
-    let (addr, relation) = crate::get_object_address(
-        mcx,
-        objtype,
-        objnode,
-        types_rel::AccessShareLock,
-        false,
-    )?;
+    let (addr, relation) =
+        crate::get_object_address(mcx, objtype, objnode, types_rel::AccessShareLock, false)?;
     if let Some(rel) = relation {
         rel.close(types_rel::AccessShareLock)?;
     }
@@ -620,20 +652,21 @@ fn fc_pg_get_acl(
     }
 
     let img = if classid == types_core::RELATION_RELATION_ID && objsubid != 0 {
-        let rel =
-            table::table_open(mcx, types_core::ATTRIBUTE_RELATION_ID, types_rel::AccessShareLock)?;
+        let rel = table::table_open(
+            mcx,
+            types_core::ATTRIBUTE_RELATION_ID,
+            types_rel::AccessShareLock,
+        )?;
         let keys = [
             eq_key(1, types_core::fmgr::F_OIDEQ, Datum::from_oid(objid)),
-            eq_key(5, types_core::fmgr::F_INT2EQ, Datum::from_i16(objsubid as i16)),
+            eq_key(
+                5,
+                types_core::fmgr::F_INT2EQ,
+                Datum::from_i16(objsubid as i16),
+            ),
         ];
-        let mut scan = genam::systable_beginscan(
-            mcx,
-            &rel,
-            ATTRIBUTE_RELID_NUM_INDEX_ID,
-            true,
-            None,
-            &keys,
-        )?;
+        let mut scan =
+            genam::systable_beginscan(mcx, &rel, ATTRIBUTE_RELID_NUM_INDEX_ID, true, None, &keys)?;
         let img = genam::systable_getnext(mcx, &mut scan)?
             .and_then(|tup| acl_attr_image(tup, ANUM_PG_ATTRIBUTE_ATTACL, rel.descr()));
         genam::systable_endscan(mcx, scan)?;

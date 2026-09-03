@@ -54,7 +54,7 @@ fn install() {
             Ok(pos)
         });
         // Child's first cross-unit call in backend_initialize: capture here.
-        pqcomm_seams::pq_init::set(|client_sock| {
+        pqcomm_seams::pq_init::set(|_client_sock| {
             let timing = backend_startup::conn_timing::get();
             let masks = libpq_pqsignal::signal_masks();
             let mut cur: libc::sigset_t = unsafe { core::mem::zeroed() };
@@ -77,7 +77,13 @@ fn install() {
                 sigterm_blocked: unsafe { libc::sigismember(&cur, libc::SIGTERM) == 1 },
                 sigquit_in_blocksig: masks.block_sig_contains(libc::SIGQUIT),
             };
-            SNAPSHOT_TX.lock().unwrap().as_ref().unwrap().send(snap).unwrap();
+            SNAPSHOT_TX
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .send(snap)
+                .unwrap();
             panic!("test capture complete");
         });
     });
@@ -117,7 +123,10 @@ fn shmem_attach_matches_c_table() {
             bt,
             BackendType::Invalid | BackendType::StandaloneBackend | BackendType::Logger
         );
-        assert_eq!(CHILD_PROCESS_KINDS[bt as usize].shmem_attach, expect, "{bt:?}");
+        assert_eq!(
+            CHILD_PROCESS_KINDS[bt as usize].shmem_attach, expect,
+            "{bt:?}"
+        );
     }
 }
 
@@ -152,15 +161,23 @@ fn launch_backend_thread_runs_child_init_in_order() {
         BackendType::Backend,
         7,
         startup,
-        Some(ClientSocket { sock: 33, raddr: SockAddr::zeroed() }),
+        Some(ClientSocket {
+            sock: 33,
+            raddr: SockAddr::zeroed(),
+        }),
     );
     assert!(pid >= 1000, "synthetic pid, got {pid}");
 
-    let snap = rx.recv_timeout(Duration::from_secs(10)).expect("child snapshot");
+    let snap = rx
+        .recv_timeout(Duration::from_secs(10))
+        .expect("child snapshot");
     assert_eq!(snap.my_proc_pid, pid);
     assert!(snap.is_under_postmaster);
     assert_eq!(snap.work_mem, 4321);
-    assert_eq!(snap.max_safe_fds, 987, "max_safe_fds must inherit into child threads");
+    assert_eq!(
+        snap.max_safe_fds, 987,
+        "max_safe_fds must inherit into child threads"
+    );
     assert_eq!(snap.postmaster_pid, 42);
     assert_eq!(snap.data_dir, Some("/tmp/pg-launch-test"));
     assert!(snap.my_latch_set);
@@ -210,7 +227,10 @@ fn startup_failure_reaches_the_client_and_closes_the_socket() {
     let got = &buf[..n as usize];
     assert_eq!(got[0], b'E', "message must be an error frame: {got:?}");
     let text = String::from_utf8_lossy(&got[1..]);
-    assert!(text.starts_with("waiter wake pipe creation failed: errno 24"), "{text}");
+    assert!(
+        text.starts_with("waiter wake pipe creation failed: errno 24"),
+        "{text}"
+    );
     assert_eq!(got[got.len() - 1], 0, "message must be NUL-terminated");
 
     // ...and then EOF, because the server closed the socket. Without the

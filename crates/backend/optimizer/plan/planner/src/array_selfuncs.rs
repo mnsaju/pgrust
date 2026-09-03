@@ -11,8 +11,8 @@ use types_pathnodes::NodeId;
 
 use crate::run::PlannerRun;
 use crate::selfuncs::{
-    clamp_probability, examine_variable, get_restriction_variable,
-    statistic_proc_security_check, varlena_image_any, VariableStatData,
+    clamp_probability, examine_variable, get_restriction_variable, statistic_proc_security_check,
+    varlena_image_any, VariableStatData,
 };
 
 const DEFAULT_CONTAIN_SEL: f64 = 0.005;
@@ -26,7 +26,11 @@ const STATISTIC_KIND_MCELEM: i16 = 4;
 const STATISTIC_KIND_DECHIST: i16 = 5;
 
 fn default_sel(operator: Oid) -> f64 {
-    if operator == OID_ARRAY_OVERLAP_OP { DEFAULT_OVERLAP_SEL } else { DEFAULT_CONTAIN_SEL }
+    if operator == OID_ARRAY_OVERLAP_OP {
+        DEFAULT_OVERLAP_SEL
+    } else {
+        DEFAULT_CONTAIN_SEL
+    }
 }
 
 // Element comparisons run the type's default btree cmp proc under its default
@@ -44,12 +48,18 @@ impl<'mcx> ElemCmp<'mcx> {
         if finfo.fn_oid == 0 {
             return Ok(None);
         }
-        Ok(Some(ElemCmp { mcx, finfo, collation: entry.typcollation() }))
+        Ok(Some(ElemCmp {
+            mcx,
+            finfo,
+            collation: entry.typcollation(),
+        }))
     }
 
     fn cmp(&mut self, a: Datum, b: Datum) -> PgResult<i32> {
-        Ok(types_fmgr::function_call2_coll_in(&mut self.finfo, self.collation, self.mcx, a, b)?
-            .as_i32())
+        Ok(
+            types_fmgr::function_call2_coll_in(&mut self.finfo, self.collation, self.mcx, a, b)?
+                .as_i32(),
+        )
     }
 }
 
@@ -59,8 +69,7 @@ pub fn arraycontsel<'mcx>(
     args: &[NodeId],
     varrelid: i32,
 ) -> PgResult<f64> {
-    let Some((vardata, other, varonleft)) = get_restriction_variable(run, args, varrelid)?
-    else {
+    let Some((vardata, other, varonleft)) = get_restriction_variable(run, args, varrelid)? else {
         return Ok(default_sel(operator));
     };
     let Some(c) = other.as_const() else {
@@ -191,7 +200,11 @@ fn calc_arraycontsel<'mcx>(
     if finfo.fn_oid == 0 {
         return Ok(default_sel(operator));
     }
-    let mut cmp = ElemCmp { mcx, finfo, collation: entry.typcollation() };
+    let mut cmp = ElemCmp {
+        mcx,
+        finfo,
+        collation: entry.typcollation(),
+    };
     let array_img = varlena_image_any(mcx, constval)?;
     let (typlen, typbyval, typalign) = (entry.typlen(), entry.typbyval(), entry.typalign());
 
@@ -222,14 +235,32 @@ fn calc_arraycontsel<'mcx>(
                 )?
             }
             None => mcelem_array_selec(
-                mcx, array_img, typlen, typbyval, typalign, &mut cmp, &[], None, None, operator,
+                mcx,
+                array_img,
+                typlen,
+                typbyval,
+                typalign,
+                &mut cmp,
+                &[],
+                None,
+                None,
+                operator,
             )?,
         };
         // MCE stats count only non-null rows.
         Ok(selec * (1.0 - vardata.stats.as_ref().expect("checked above").stanullfrac as f64))
     } else {
         mcelem_array_selec(
-            mcx, array_img, typlen, typbyval, typalign, &mut cmp, &[], None, None, operator,
+            mcx,
+            array_img,
+            typlen,
+            typbyval,
+            typalign,
+            &mut cmp,
+            &[],
+            None,
+            None,
+            operator,
         )
     }
 }
@@ -249,7 +280,12 @@ fn mcelem_array_selec<'mcx>(
     operator: Oid,
 ) -> PgResult<f64> {
     let (mut elem_values, elem_nulls) = arrayfuncs::deconstruct_array(
-        mcx, array_img, typlen as i32, typbyval, typalign as u8, true,
+        mcx,
+        array_img,
+        typlen as i32,
+        typbyval,
+        typalign as u8,
+        true,
     )?;
 
     // Collapse out null elements.
@@ -330,7 +366,11 @@ fn mcelem_array_contain_overlap_selec(
 
     // "@>" starts at 1.0 and decreases per element; "&&" starts at 0.0 and
     // increases.
-    let mut selec: f64 = if operator == OID_ARRAY_CONTAINS_OP { 1.0 } else { 0.0 };
+    let mut selec: f64 = if operator == OID_ARRAY_CONTAINS_OP {
+        1.0
+    } else {
+        0.0
+    };
 
     let mut mcelem_index = 0usize;
     for i in 0..array_data.len() {
@@ -516,7 +556,11 @@ fn calc_hist(hist: &[f32], n: usize) -> Vec<f32> {
 
         if count > 0 {
             // k is an exact bound for at least one box.
-            next_interval = if i < nhist { hist[i] - hist[i - 1] } else { 0.0 };
+            next_interval = if i < nhist {
+                hist[i] - hist[i - 1]
+            } else {
+                0.0
+            };
             // count-1 boxes contain k exclusively; add the partial boxes on
             // either side.
             let mut val = (count - 1) as f32;

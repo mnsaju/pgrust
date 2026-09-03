@@ -39,12 +39,12 @@ const CONSTRAINT_TRIGGER: u8 = b't';
 const PRS2_OLD_VARNO: i32 = 1;
 const PRS2_NEW_VARNO: i32 = 2;
 
-const Anum_pg_trigger_oid: AttrNumber = 1;
-const Anum_pg_trigger_tgparentid: i32 = 3;
-const Anum_pg_trigger_tgisinternal: i32 = 8;
-const Anum_pg_trigger_tgconstraint: i32 = 11;
-const Natts_pg_trigger: usize = 19;
-const Anum_pg_class_relhastriggers: usize = 22;
+const ANUM_PG_TRIGGER_OID: AttrNumber = 1;
+const ANUM_PG_TRIGGER_TGPARENTID: i32 = 3;
+const ANUM_PG_TRIGGER_TGISINTERNAL: i32 = 8;
+const ANUM_PG_TRIGGER_TGCONSTRAINT: i32 = 11;
+const NATTS_PG_TRIGGER: usize = 19;
+const ANUM_PG_CLASS_RELHASTRIGGERS: usize = 22;
 
 pub struct InternalTriggerArgs<'a> {
     pub trigname_base: &'a str,
@@ -132,7 +132,10 @@ pub(crate) fn relkind_not_supported_detail(relkind: u8) -> &'static str {
         b'i' | b'I' => "This operation is not supported for indexes.",
         b'c' => "This operation is not supported for composite types.",
         b'm' => "This operation is not supported for materialized views.",
-        other => unported(&format!("errdetail_relkind_not_supported '{}'", other as char)),
+        other => unported(&format!(
+            "errdetail_relkind_not_supported '{}'",
+            other as char
+        )),
     }
 }
 
@@ -165,16 +168,22 @@ pub fn CreateTriggerFiringOn<'mcx>(
         RELKIND_RELATION => {
             if stmt.timing != TRIGGER_TYPE_BEFORE && stmt.timing != TRIGGER_TYPE_AFTER {
                 return Err(Box::new(
-                    (*err(format!("\"{relname}\" is a table"), ERRCODE_WRONG_OBJECT_TYPE))
-                        .with_detail("Tables cannot have INSTEAD OF triggers.".to_string()),
+                    (*err(
+                        format!("\"{relname}\" is a table"),
+                        ERRCODE_WRONG_OBJECT_TYPE,
+                    ))
+                    .with_detail("Tables cannot have INSTEAD OF triggers.".to_string()),
                 ));
             }
         }
         RELKIND_PARTITIONED_TABLE => {
             if stmt.timing != TRIGGER_TYPE_BEFORE && stmt.timing != TRIGGER_TYPE_AFTER {
                 return Err(Box::new(
-                    (*err(format!("\"{relname}\" is a table"), ERRCODE_WRONG_OBJECT_TYPE))
-                        .with_detail("Tables cannot have INSTEAD OF triggers.".to_string()),
+                    (*err(
+                        format!("\"{relname}\" is a table"),
+                        ERRCODE_WRONG_OBJECT_TYPE,
+                    ))
+                    .with_detail("Tables cannot have INSTEAD OF triggers.".to_string()),
                 ));
             }
             if stmt.row && !stmt.transitionRels.is_nil() {
@@ -194,17 +203,22 @@ pub fn CreateTriggerFiringOn<'mcx>(
         b'v' => {
             if stmt.timing != TRIGGER_TYPE_INSTEAD && stmt.row {
                 return Err(Box::new(
-                    (*err(format!("\"{relname}\" is a view"), ERRCODE_WRONG_OBJECT_TYPE))
-                        .with_detail(
-                            "Views cannot have row-level BEFORE or AFTER triggers."
-                                .to_string(),
-                        ),
+                    (*err(
+                        format!("\"{relname}\" is a view"),
+                        ERRCODE_WRONG_OBJECT_TYPE,
+                    ))
+                    .with_detail(
+                        "Views cannot have row-level BEFORE or AFTER triggers.".to_string(),
+                    ),
                 ));
             }
             if stmt.events & TRIGGER_TYPE_TRUNCATE != 0 {
                 return Err(Box::new(
-                    (*err(format!("\"{relname}\" is a view"), ERRCODE_WRONG_OBJECT_TYPE))
-                        .with_detail("Views cannot have TRUNCATE triggers.".to_string()),
+                    (*err(
+                        format!("\"{relname}\" is a view"),
+                        ERRCODE_WRONG_OBJECT_TYPE,
+                    ))
+                    .with_detail("Views cannot have TRUNCATE triggers.".to_string()),
                 ));
             }
         }
@@ -234,7 +248,7 @@ pub fn CreateTriggerFiringOn<'mcx>(
                     format!("relation \"{relname}\" cannot have triggers"),
                     ERRCODE_WRONG_OBJECT_TYPE,
                 ))
-                .with_detail(relkind_not_supported_detail(other as u8).to_string()),
+                .with_detail(relkind_not_supported_detail(other).to_string()),
             ));
         }
     }
@@ -272,8 +286,11 @@ pub fn CreateTriggerFiringOn<'mcx>(
             )?;
         }
         if constrrelid != InvalidOid {
-            let aclresult =
-                aclchk::pg_class_aclcheck(constrrelid, miscinit::GetUserId(), adt_acl::ACL_TRIGGER)?;
+            let aclresult = aclchk::pg_class_aclcheck(
+                constrrelid,
+                miscinit::GetUserId(),
+                adt_acl::ACL_TRIGGER,
+            )?;
             if aclresult != aclchk::ACLCHECK_OK {
                 let constrrelname = lsyscache::relation::get_rel_name(mcx, constrrelid)?
                     .map(|n| n.as_str().to_string())
@@ -331,7 +348,11 @@ pub fn CreateTriggerFiringOn<'mcx>(
     let (oldtablename, newtablename) = validate_transition_rels(mcx, stmt, &rel, tgtype)?;
 
     let (when_node, qual, when_rtable) = match when_clause {
-        Some(w) => (Some(w), Some(outfuncs::nodeToString(mcx, w)?), NodeList::nil()),
+        Some(w) => (
+            Some(w),
+            Some(outfuncs::nodeToString(mcx, w)?),
+            NodeList::nil(),
+        ),
         None => match stmt.whenClause {
             Some(when) => {
                 let (node, qual, rtable) =
@@ -382,14 +403,8 @@ pub fn CreateTriggerFiringOn<'mcx>(
             scan_key(2, F_OIDEQ, Datum::from_oid(rel.rd_id)),
             scan_key(4, F_NAMEEQ, Datum::from_usize(cname.as_ptr() as usize)),
         ];
-        let mut scan = genam::systable_beginscan(
-            mcx,
-            &tgrel,
-            TRIGGER_RELID_NAME_INDEX_ID,
-            true,
-            None,
-            &keys,
-        )?;
+        let mut scan =
+            genam::systable_beginscan(mcx, &tgrel, TRIGGER_RELID_NAME_INDEX_ID, true, None, &keys)?;
         if let Some(tup) = genam::systable_getnext(mcx, &mut scan)? {
             let td = tgrel.descr();
             let mut isnull = false;
@@ -397,16 +412,16 @@ pub fn CreateTriggerFiringOn<'mcx>(
             // own descriptor.
             unsafe {
                 trigoid =
-                    types_tuple::heap_getattr(tup, Anum_pg_trigger_oid as i32, td, &mut isnull)
+                    types_tuple::heap_getattr(tup, ANUM_PG_TRIGGER_OID as i32, td, &mut isnull)
                         .as_oid();
                 let excon =
-                    types_tuple::heap_getattr(tup, Anum_pg_trigger_tgconstraint, td, &mut isnull)
+                    types_tuple::heap_getattr(tup, ANUM_PG_TRIGGER_TGCONSTRAINT, td, &mut isnull)
                         .as_oid();
                 let exint =
-                    types_tuple::heap_getattr(tup, Anum_pg_trigger_tgisinternal, td, &mut isnull)
+                    types_tuple::heap_getattr(tup, ANUM_PG_TRIGGER_TGISINTERNAL, td, &mut isnull)
                         .as_bool();
                 let exparent =
-                    types_tuple::heap_getattr(tup, Anum_pg_trigger_tgparentid, td, &mut isnull)
+                    types_tuple::heap_getattr(tup, ANUM_PG_TRIGGER_TGPARENTID, td, &mut isnull)
                         .as_oid();
                 existing = Some((tup.t_self, excon, exint, exparent != InvalidOid));
             }
@@ -420,7 +435,7 @@ pub fn CreateTriggerFiringOn<'mcx>(
                 mcx,
                 &tgrel,
                 TRIGGER_OID_INDEX_ID,
-                Anum_pg_trigger_oid,
+                ANUM_PG_TRIGGER_OID,
             )?;
         }
         Some((_, existing_con, existing_int, existing_clone)) => {
@@ -478,8 +493,8 @@ pub fn CreateTriggerFiringOn<'mcx>(
         trigname_given
     };
 
-    let mut values = [Datum::null(); Natts_pg_trigger];
-    let mut nulls = [false; Natts_pg_trigger];
+    let mut values = [Datum::null(); NATTS_PG_TRIGGER];
+    let mut nulls = [false; NATTS_PG_TRIGGER];
     let cname = name_arg(mcx, trigname)?;
     let (columns, tgattr) = build_columns(mcx, &rel, &stmt.columns)?;
     let (tgnargs, tgargs) = build_args(mcx, &stmt.args)?;
@@ -720,8 +735,11 @@ fn validate_transition_rels<'mcx>(
         }
         if rel.rd_rel.relkind == b'v' {
             return Err(Box::new(
-                (*err(format!("\"{}\" is a view", rel.name()), ERRCODE_WRONG_OBJECT_TYPE))
-                    .with_detail("Triggers on views cannot have transition tables.".to_string()),
+                (*err(
+                    format!("\"{}\" is a view", rel.name()),
+                    ERRCODE_WRONG_OBJECT_TYPE,
+                ))
+                .with_detail("Triggers on views cannot have transition tables.".to_string()),
             ));
         }
         if tgtype & TRIGGER_TYPE_ROW != 0 && pg_inherits::has_superclass(mcx, rel.rd_id)? {
@@ -819,7 +837,10 @@ fn transform_when_clause<'mcx>(
 
     let old_alias = mcx::leak_in(mcx::alloc_in(
         mcx,
-        Alias { aliasname: Some("old"), colnames: NodeList::nil() },
+        Alias {
+            aliasname: Some("old"),
+            colnames: NodeList::nil(),
+        },
     )?);
     let nsitem = parse_relation::addRangeTableEntryForRelation(
         mcx,
@@ -833,7 +854,10 @@ fn transform_when_clause<'mcx>(
     parse_relation::addNSItemToQuery(mcx, &mut pstate, nsitem, false, true, true)?;
     let new_alias = mcx::leak_in(mcx::alloc_in(
         mcx,
-        Alias { aliasname: Some("new"), colnames: NodeList::nil() },
+        Alias {
+            aliasname: Some("new"),
+            colnames: NodeList::nil(),
+        },
     )?);
     let nsitem = parse_relation::addRangeTableEntryForRelation(
         mcx,
@@ -881,8 +905,7 @@ fn when_err(
     if let Some(d) = detail {
         e = e.with_detail(d);
     }
-    let pos =
-        parser_small1::parser_errposition(pstate, location, mbutils::GetDatabaseEncoding());
+    let pos = parser_small1::parser_errposition(pstate, location, mbutils::GetDatabaseEncoding());
     if pos > 0 {
         e = e.with_cursor_position(pos);
     }
@@ -895,7 +918,7 @@ fn check_when_var(
     var: &Var,
     tgtype: i16,
 ) -> PgResult<()> {
-    match var.varno as i32 {
+    match var.varno {
         PRS2_OLD_VARNO => {
             if tgtype & TRIGGER_TYPE_ROW == 0 {
                 return Err(when_err(
@@ -945,8 +968,8 @@ fn check_when_var(
                 ));
             }
             if tgtype & TRIGGER_TYPE_BEFORE != 0 && var.varattno == 0 {
-                let has_generated = (0..rel.rd_att.natts as usize)
-                    .any(|i| rel.rd_att.attr(i).attgenerated != 0);
+                let has_generated =
+                    (0..rel.rd_att.natts as usize).any(|i| rel.rd_att.attr(i).attgenerated != 0);
                 if has_generated {
                     return Err(when_err(
                         pstate,
@@ -992,11 +1015,17 @@ fn lookup_trigger_func<'mcx>(mcx: Mcx<'mcx>, funcname: &NodeList<'mcx>) -> PgRes
     let clist = catalog_namespace::FuncnameGetCandidates(mcx, &buf[..n], 0, &[], false, false)?;
     match clist.len() {
         0 => Err(err(
-            format!("function {}() does not exist", name_list_to_string(funcname)),
+            format!(
+                "function {}() does not exist",
+                name_list_to_string(funcname)
+            ),
             ERRCODE_UNDEFINED_FUNCTION,
         )),
         1 => Ok(clist[0].oid),
-        _ => panic!("multiple zero-argument candidates for {}", name_list_to_string(funcname)),
+        _ => panic!(
+            "multiple zero-argument candidates for {}",
+            name_list_to_string(funcname)
+        ),
     }
 }
 
@@ -1029,11 +1058,14 @@ fn build_columns<'mcx>(
         }
         if attnum == 0 {
             return Err(err(
-                format!("column \"{name}\" of relation \"{}\" does not exist", rel.name()),
+                format!(
+                    "column \"{name}\" of relation \"{}\" does not exist",
+                    rel.name()
+                ),
                 ERRCODE_UNDEFINED_COLUMN,
             ));
         }
-        if attnums.iter().any(|&a| a == attnum) {
+        if attnums.contains(&attnum) {
             return Err(err(
                 format!("column \"{name}\" specified more than once"),
                 ERRCODE_DUPLICATE_COLUMN,
@@ -1107,20 +1139,22 @@ pub fn TriggerSetParentTrigger<'mcx>(
     parent_trig_id: Oid,
     child_table_id: Oid,
 ) -> PgResult<()> {
-    const TriggerOidIndexId: Oid = 2702;
+    const TRIGGER_OID_INDEX_ID: Oid = 2702;
     let trig_rel = table::table_open(mcx, TRIGGER_RELATION_ID, RowExclusiveLock)?;
-    let keys = [scan_key(Anum_pg_trigger_oid, F_OIDEQ, Datum::from_oid(child_trig_id))];
-    let mut scan =
-        genam::systable_beginscan(mcx, &trig_rel, TriggerOidIndexId, true, None, &keys)?;
+    let keys = [scan_key(
+        ANUM_PG_TRIGGER_OID,
+        F_OIDEQ,
+        Datum::from_oid(child_trig_id),
+    )];
+    let mut scan = genam::systable_beginscan(mcx, &trig_rel, TRIGGER_OID_INDEX_ID, true, None, &keys)?;
     let tup = genam::systable_getnext(mcx, &mut scan)?
         .unwrap_or_else(|| panic!("could not find tuple for trigger {child_trig_id}"));
     let desc = trig_rel.descr();
     let mut isnull = false;
     // SAFETY: tgparentid is a fixed NOT NULL pg_trigger column.
-    let tgparentid = unsafe {
-        types_tuple::heap_getattr(tup, Anum_pg_trigger_tgparentid, desc, &mut isnull)
-    }
-    .as_oid();
+    let tgparentid =
+        unsafe { types_tuple::heap_getattr(tup, ANUM_PG_TRIGGER_TGPARENTID, desc, &mut isnull) }
+            .as_oid();
     let natts = desc.natts as usize;
     let mut values: PgVec<'_, Datum> = mcx::vec_with_capacity_in(mcx, natts)?;
     let mut nulls: PgVec<'_, bool> = mcx::vec_with_capacity_in(mcx, natts)?;
@@ -1131,8 +1165,8 @@ pub fn TriggerSetParentTrigger<'mcx>(
     if parent_trig_id != InvalidOid && tgparentid != InvalidOid {
         panic!("trigger {child_trig_id} already has a parent trigger");
     }
-    values[Anum_pg_trigger_tgparentid as usize - 1] = Datum::from_oid(parent_trig_id);
-    replace[Anum_pg_trigger_tgparentid as usize - 1] = true;
+    values[ANUM_PG_TRIGGER_TGPARENTID as usize - 1] = Datum::from_oid(parent_trig_id);
+    replace[ANUM_PG_TRIGGER_TGPARENTID as usize - 1] = true;
     let mut newtup = heaptuple::heap_modify_tuple(mcx, tup, desc, &values, &nulls, &replace)?;
     let otid = tup.t_self;
     genam::systable_endscan(mcx, scan)?;
@@ -1198,7 +1232,7 @@ fn set_relation_has_triggers<'mcx>(mcx: Mcx<'mcx>, relid: Oid) -> PgResult<()> {
     let mut isnull = false;
     // SAFETY: pg_class row under its own descriptor; relhastriggers declared.
     let has = unsafe {
-        types_tuple::heap_getattr(reltup, Anum_pg_class_relhastriggers as i32, td, &mut isnull)
+        types_tuple::heap_getattr(reltup, ANUM_PG_CLASS_RELHASTRIGGERS as i32, td, &mut isnull)
     }
     .as_bool();
     if !has {
@@ -1209,8 +1243,8 @@ fn set_relation_has_triggers<'mcx>(mcx: Mcx<'mcx>, relid: Oid) -> PgResult<()> {
         repl_values.resize(natts, Datum::null());
         repl_isnull.resize(natts, false);
         repl.resize(natts, false);
-        repl_values[Anum_pg_class_relhastriggers - 1] = Datum::from_bool(true);
-        repl[Anum_pg_class_relhastriggers - 1] = true;
+        repl_values[ANUM_PG_CLASS_RELHASTRIGGERS - 1] = Datum::from_bool(true);
+        repl[ANUM_PG_CLASS_RELHASTRIGGERS - 1] = true;
         let mut newtup =
             heaptuple::heap_modify_tuple(mcx, reltup, td, &repl_values, &repl_isnull, &repl)?;
         let otid = reltup.t_self;
@@ -1226,7 +1260,10 @@ fn set_relation_has_triggers<'mcx>(mcx: Mcx<'mcx>, relid: Oid) -> PgResult<()> {
 
 pub(crate) fn name_arg<'mcx>(mcx: Mcx<'mcx>, name: &str) -> PgResult<PgVec<'mcx, u8>> {
     let n = NAMEDATALEN as usize;
-    assert!(name.len() < n, "trigger name overflows NAMEDATALEN: {name:?}");
+    assert!(
+        name.len() < n,
+        "trigger name overflows NAMEDATALEN: {name:?}"
+    );
     let mut buf: PgVec<'mcx, u8> = mcx::vec_with_capacity_in(mcx, n)?;
     mcx::vec_append_bytes(&mut buf, name.as_bytes())?;
     mcx::vec_append_bytes(&mut buf, &[0u8; 64][..n - name.len()])?;

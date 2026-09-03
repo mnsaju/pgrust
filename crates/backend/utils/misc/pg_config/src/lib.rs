@@ -28,9 +28,18 @@ pub fn get_configdata() -> [(&'static str, String); 23] {
         ("BINDIR", clean(bindir)),
         ("DOCDIR", clean(pg_path::get_doc_path(&my_exec_path))),
         ("HTMLDIR", clean(pg_path::get_html_path(&my_exec_path))),
-        ("INCLUDEDIR", clean(pg_path::get_include_path(&my_exec_path))),
-        ("PKGINCLUDEDIR", clean(pg_path::get_pkginclude_path(&my_exec_path))),
-        ("INCLUDEDIR-SERVER", clean(pg_path::get_includeserver_path(&my_exec_path))),
+        (
+            "INCLUDEDIR",
+            clean(pg_path::get_include_path(&my_exec_path)),
+        ),
+        (
+            "PKGINCLUDEDIR",
+            clean(pg_path::get_pkginclude_path(&my_exec_path)),
+        ),
+        (
+            "INCLUDEDIR-SERVER",
+            clean(pg_path::get_includeserver_path(&my_exec_path)),
+        ),
         ("LIBDIR", clean(pg_path::get_lib_path(&my_exec_path))),
         ("PKGLIBDIR", clean(pg_path::get_pkglib_path(&my_exec_path))),
         ("LOCALEDIR", clean(pg_path::get_locale_path(&my_exec_path))),

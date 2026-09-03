@@ -1,4 +1,3 @@
-
 pub const PGP_S2K_SIMPLE: i32 = 0;
 pub const PGP_S2K_SALTED: i32 = 1;
 pub const PGP_S2K_ISALTED: i32 = 3;
@@ -18,10 +17,16 @@ pub const PGP_PKT_USER_ID: i32 = 13;
 pub const PGP_PKT_PUBLIC_SUBKEY: i32 = 14;
 pub const PGP_PKT_USER_ATTR: i32 = 17;
 pub const PGP_PKT_SYMENC_DATA_MDC: i32 = 18;
+// Kept for parity with C's pgp.h packet-tag table; no current path emits or
+// matches a standalone MDC packet (only PGP_PKT_SYMENC_DATA_MDC's trailer).
+#[allow(dead_code)]
 pub const PGP_PKT_MDC: i32 = 19;
 pub const PGP_PKT_PRIV_61: i32 = 61;
 pub const PGP_PKT_SIGNATURE: i32 = 2;
 
+// Kept for parity with C's pgp.h cipher-algorithm table (0 = unencrypted);
+// no current path constructs it.
+#[allow(dead_code)]
 pub const PGP_SYM_PLAIN: i32 = 0;
 pub const PGP_SYM_DES3: i32 = 2;
 pub const PGP_SYM_CAST5: i32 = 3;
@@ -43,6 +48,9 @@ pub const PGP_COMPR_ZLIB: i32 = 2;
 pub const PGP_COMPR_BZIP2: i32 = 3;
 
 pub const PGP_MAX_KEY: usize = 32;
+// Kept for parity with C's pgp.h; block sizes are read from the concrete
+// cipher (BlockEncryptor::block_size) rather than this upper bound.
+#[allow(dead_code)]
 pub const PGP_MAX_BLOCK: usize = 16;
 
 pub const MDC_DIGEST_LEN: usize = 20;
@@ -141,7 +149,11 @@ impl Digest {
             PGP_DIGEST_SHA512 => (Hasher::Sha512(::pg_sha2::PgSha512Ctx::init_sha512()), 64),
             _ => return None,
         };
-        Some(Digest { initial: state.clone(), state, len })
+        Some(Digest {
+            initial: state.clone(),
+            state,
+            len,
+        })
     }
 
     pub fn result_size(&self) -> usize {

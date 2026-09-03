@@ -12,7 +12,9 @@ use datum::Datum;
 use mcx::Mcx;
 use types_core::{catalog, TransactionId, INT4OID, TEXTOID, XIDOID};
 use types_error::{PgError, PgResult, ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_WRONG_OBJECT_TYPE};
-use types_fmgr::{byref_result, varlena_result, FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFunction};
+use types_fmgr::{
+    byref_result, varlena_result, FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFunction,
+};
 use types_rel::pg_class::{RELKIND_PARTITIONED_TABLE, RELKIND_RELATION};
 use types_storage::multixact::{MultiXactMember, MultiXactStatus};
 use types_tuple::htup::{
@@ -74,7 +76,10 @@ fn text_datum(mcx: Mcx<'_>, s: &str) -> PgResult<Datum> {
 }
 
 fn xid_array(mcx: Mcx<'_>, xids: &[TransactionId]) -> PgResult<Datum> {
-    let elems: Vec<Datum> = xids.iter().map(|&x| Datum::from_transaction_id(x)).collect();
+    let elems: Vec<Datum> = xids
+        .iter()
+        .map(|&x| Datum::from_transaction_id(x))
+        .collect();
     let image = datum::array_build::construct_array_image(mcx, &elems, XIDOID, 4, true, b'i')?;
     byref_result(mcx, &image)
 }
@@ -171,7 +176,7 @@ fn fc_pgrowlocks(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult
     // Must have SELECT on the table or be in pg_stat_scan_tables.
     let user = miscinit::GetUserId();
     let mut aclresult =
-        aclchk::pg_class_aclcheck(rel.rd_id, user, types_nodes::parsenodes::ACL_SELECT as u64)?;
+        aclchk::pg_class_aclcheck(rel.rd_id, user, types_nodes::parsenodes::ACL_SELECT)?;
     if aclresult != aclchk::ACLCHECK_OK {
         aclresult = if adt_acl::has_privs_of_role(user, ROLE_PG_STAT_SCAN_TABLES)? {
             aclchk::ACLCHECK_OK
@@ -195,19 +200,24 @@ fn fc_pgrowlocks(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult
     };
 
     loop {
-        let (t_len, t_self, t_table_oid, hdr) =
-            match heapam::heap_getnext(&mut hscan, types_scan::sdir::ScanDirection::ForwardScanDirection)? {
-                Some(t) => (t.t_len, t.t_self, t.t_tableOid, t.header_ptr()),
-                None => break,
-            };
+        let (t_len, t_self, t_table_oid, hdr) = match heapam::heap_getnext(
+            &mut hscan,
+            types_scan::sdir::ScanDirection::ForwardScanDirection,
+        )? {
+            Some(t) => (t.t_len, t.t_self, t.t_tableOid, t.header_ptr()),
+            None => break,
+        };
 
         // A buffer lock must be held to call HeapTupleSatisfiesUpdate.
-        let buf = hscan.rs_cbuf.as_ref().expect("current scan buffer").buffer();
+        let buf = hscan
+            .rs_cbuf
+            .as_ref()
+            .expect("current scan buffer")
+            .buffer();
         bufmgr::LockBuffer(buf, bufmgr::BUFFER_LOCK_SHARE)?;
 
         // SAFETY: the tuple image lives in the pinned current buffer.
-        let mut htup =
-            unsafe { HeapTupleData::from_raw_parts(hdr, t_len, t_self, t_table_oid) };
+        let mut htup = unsafe { HeapTupleData::from_raw_parts(hdr, t_len, t_self, t_table_oid) };
         let htsu = heapam_visibility::HeapTupleSatisfiesUpdate(&mut htup, curcid, buf)?;
         // SAFETY: header in the locked, pinned buffer.
         let (xmax, infomask, infomask2) = unsafe {
@@ -239,9 +249,15 @@ fn fc_pgrowlocks(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult
             } else {
                 let xids: Vec<TransactionId> = members.iter().map(|m| m.xid).collect();
                 let modes: Vec<&str> = members.iter().map(|m| mode_name(m.status)).collect();
-                let pids: Vec<i32> =
-                    members.iter().map(|m| procarray::BackendXidGetPid(m.xid)).collect();
-                (xid_array(mcx, &xids)?, text_array(mcx, &modes)?, int4_array(mcx, &pids)?)
+                let pids: Vec<i32> = members
+                    .iter()
+                    .map(|m| procarray::BackendXidGetPid(m.xid))
+                    .collect();
+                (
+                    xid_array(mcx, &xids)?,
+                    text_array(mcx, &modes)?,
+                    int4_array(mcx, &pids)?,
+                )
             }
         } else {
             let mode = single_locker_mode(infomask, infomask2);
@@ -293,7 +309,10 @@ mod tests {
     #[test]
     fn single_locker_mode_arms() {
         // pgrowlocks.c lock-mode decode over the C infomask combinations.
-        assert_eq!(single_locker_mode(HEAP_XMAX_LOCK_ONLY | HEAP_XMAX_SHR_LOCK, 0), "For Share");
+        assert_eq!(
+            single_locker_mode(HEAP_XMAX_LOCK_ONLY | HEAP_XMAX_SHR_LOCK, 0),
+            "For Share"
+        );
         assert_eq!(
             single_locker_mode(HEAP_XMAX_LOCK_ONLY | HEAP_XMAX_KEYSHR_LOCK, 0),
             "For Key Share"
@@ -306,7 +325,10 @@ mod tests {
             single_locker_mode(HEAP_XMAX_LOCK_ONLY | HEAP_XMAX_EXCL_LOCK, 0),
             "For No Key Update"
         );
-        assert_eq!(single_locker_mode(HEAP_XMAX_LOCK_ONLY, 0), "transient upgrade status");
+        assert_eq!(
+            single_locker_mode(HEAP_XMAX_LOCK_ONLY, 0),
+            "transient upgrade status"
+        );
         assert_eq!(single_locker_mode(0, HEAP_KEYS_UPDATED), "Update");
         assert_eq!(single_locker_mode(0, 0), "No Key Update");
     }
@@ -317,7 +339,10 @@ mod tests {
         assert_eq!(mode_name(MultiXactStatusUpdate), "Update");
         assert_eq!(mode_name(MultiXactStatusNoKeyUpdate), "No Key Update");
         assert_eq!(mode_name(MultiXactStatusForUpdate), "For Update");
-        assert_eq!(mode_name(MultiXactStatusForNoKeyUpdate), "For No Key Update");
+        assert_eq!(
+            mode_name(MultiXactStatusForNoKeyUpdate),
+            "For No Key Update"
+        );
         assert_eq!(mode_name(MultiXactStatusForShare), "For Share");
         assert_eq!(mode_name(MultiXactStatusForKeyShare), "For Key Share");
     }

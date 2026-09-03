@@ -96,7 +96,7 @@ pub fn arr_overhead_nonulls(ndims: i32) -> usize {
 
 #[inline]
 pub fn arr_overhead_withnulls(ndims: i32, nitems: i32) -> usize {
-    maxalign(ARRAYTYPE_HDRSZ + 2 * 4 * ndims as usize + (nitems as usize + 7) / 8)
+    maxalign(ARRAYTYPE_HDRSZ + 2 * 4 * ndims as usize + (nitems as usize).div_ceil(8))
 }
 
 #[inline]
@@ -119,17 +119,19 @@ pub fn arr_nullbitmap_off(a: &[u8]) -> Option<usize> {
 }
 
 // VARSIZE_ANY over a possibly-short varlena pointed to by p.
+/// # Safety
+/// `p` must address a live varlena header, readable for its full VARSIZE_ANY.
 #[inline]
-pub fn varsize_any(p: *const u8) -> usize {
+pub unsafe fn varsize_any(p: *const u8) -> usize {
     // SAFETY: p addresses a live varlena header.
     unsafe {
         let b0 = *p;
         if b0 == 0x01 {
             // 1B_E: 2-byte header + tag-determined body (C VARSIZE_EXTERNAL).
             2 + match *p.add(1) {
-                1 => 8,          // VARTAG_INDIRECT
-                2 | 3 => 8,      // VARTAG_EXPANDED_RO/RW
-                18 => 16,        // VARTAG_ONDISK
+                1 => 8,     // VARTAG_INDIRECT
+                2 | 3 => 8, // VARTAG_EXPANDED_RO/RW
+                18 => 16,   // VARTAG_ONDISK
                 other => panic!("unrecognized TOAST vartag {other}"),
             }
         } else if b0 & 0x01 != 0 {
@@ -158,8 +160,12 @@ fn cstr_len(p: *const u8) -> usize {
 // byref returns a real pointer into the image as the Datum word. Switched
 // direct loads (C's fetch_att macro shape) — a variable-length copy here
 // compiles to a memcpy call per element.
+/// # Safety
+/// `p` must point at `len` live, readable bytes when `byval` (`len` in
+/// {1,2,4,8}); always safe to call when `!byval` (returns the pointer as a
+/// Datum without dereferencing).
 #[inline(always)]
-pub fn fetch_att(p: *const u8, byval: bool, len: i32) -> Datum {
+pub unsafe fn fetch_att(p: *const u8, byval: bool, len: i32) -> Datum {
     if byval {
         // SAFETY: len in {1,2,4,8}; p points at len live bytes in the image.
         unsafe {
@@ -183,12 +189,15 @@ fn bad_fetch_att_len() -> ! {
 }
 
 // att_addlength over a data pointer for the element at p.
+/// # Safety
+/// As [`varsize_any`]/[`cstr_len`] when `attlen` is -1/-2 respectively;
+/// always safe when `attlen > 0`.
 #[inline]
-pub fn att_addlength_pointer(cur: usize, attlen: i32, p: *const u8) -> usize {
+pub unsafe fn att_addlength_pointer(cur: usize, attlen: i32, p: *const u8) -> usize {
     if attlen > 0 {
         cur + attlen as usize
     } else if attlen == -1 {
-        cur + varsize_any(p)
+        cur + unsafe { varsize_any(p) }
     } else {
         // attlen == -2 (cstring)
         cur + cstr_len(p) + 1
@@ -205,8 +214,7 @@ pub fn array_cast_and_set(
     typalign: u8,
     dest: &mut [u8],
 ) -> usize {
-    let inc;
-    if typlen > 0 {
+    let inc = if typlen > 0 {
         let n = typlen as usize;
         if typbyval {
             let bytes = src.as_u64().to_ne_bytes();
@@ -217,14 +225,15 @@ pub fn array_cast_and_set(
             let s = unsafe { core::slice::from_raw_parts(p, n) };
             dest[..n].copy_from_slice(s);
         }
-        inc = att_align_nominal(n, typalign);
+        att_align_nominal(n, typalign)
     } else {
         let p = src.as_usize() as *const u8;
-        let n = att_addlength_pointer(0, typlen, p);
+        // SAFETY: by-ref varlena/cstring datum points at a live image.
+        let n = unsafe { att_addlength_pointer(0, typlen, p) };
         // SAFETY: by-ref varlena/cstring datum points at n live bytes.
         let s = unsafe { core::slice::from_raw_parts(p, n) };
         dest[..n].copy_from_slice(s);
-        inc = att_align_nominal(n, typalign);
-    }
+        att_align_nominal(n, typalign)
+    };
     inc
 }

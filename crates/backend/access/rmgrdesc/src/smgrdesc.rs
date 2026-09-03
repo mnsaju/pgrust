@@ -13,10 +13,8 @@ pub fn smgr_desc(buf: &mut StringInfo<'_>, record: &XLogReaderState) -> PgResult
     if info == XLOG_SMGR_CREATE {
         // xl_smgr_create: rlocator 0..12, forkNum 12.
         let what = "xl_smgr_create";
-        let rlocator =
-            RelFileLocator::new(rec.u32(0, what)?, rec.u32(4, what)?, rec.u32(8, what)?);
-        let forknum = ForkNumber::from_i32(rec.i32(12, what)?)
-            .unwrap_or(ForkNumber::MAIN_FORKNUM);
+        let rlocator = RelFileLocator::new(rec.u32(0, what)?, rec.u32(4, what)?, rec.u32(8, what)?);
+        let forknum = ForkNumber::from_i32(rec.i32(12, what)?).unwrap_or(ForkNumber::MAIN_FORKNUM);
         buf.append_str(&relpath_seams::relpathperm::call(rlocator, forknum))?;
     } else if info == XLOG_SMGR_TRUNCATE {
         // xl_smgr_truncate: blkno 0, rlocator 4..16, flags 16.

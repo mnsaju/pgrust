@@ -3,7 +3,10 @@ use super::*;
 #[test]
 fn check_io_method_accepts_sync_and_worker_refuses_others() {
     let mut extra = None;
-    for v in [guc_tables::consts::IOMETHOD_SYNC, guc_tables::consts::IOMETHOD_WORKER] {
+    for v in [
+        guc_tables::consts::IOMETHOD_SYNC,
+        guc_tables::consts::IOMETHOD_WORKER,
+    ] {
         let mut v = v;
         assert!(check_io_method(&mut v, &mut extra, types_guc::GucSource::PGC_S_TEST).unwrap());
     }
@@ -15,11 +18,17 @@ fn check_io_method_accepts_sync_and_worker_refuses_others() {
 fn check_io_max_concurrency_bounds() {
     let mut extra = None;
     let mut v = -1;
-    assert!(check_io_max_concurrency(&mut v, &mut extra, types_guc::GucSource::PGC_S_TEST).unwrap());
+    assert!(
+        check_io_max_concurrency(&mut v, &mut extra, types_guc::GucSource::PGC_S_TEST).unwrap()
+    );
     let mut v = 0;
-    assert!(!check_io_max_concurrency(&mut v, &mut extra, types_guc::GucSource::PGC_S_TEST).unwrap());
+    assert!(
+        !check_io_max_concurrency(&mut v, &mut extra, types_guc::GucSource::PGC_S_TEST).unwrap()
+    );
     let mut v = 7;
-    assert!(check_io_max_concurrency(&mut v, &mut extra, types_guc::GucSource::PGC_S_TEST).unwrap());
+    assert!(
+        check_io_max_concurrency(&mut v, &mut extra, types_guc::GucSource::PGC_S_TEST).unwrap()
+    );
 }
 
 #[test]

@@ -79,8 +79,7 @@ fn assign<'mcx>(
 #[test]
 fn matching_tlist_needs_no_projection() {
     with_mcx(|mcx| {
-        let tlist =
-            NodeList::make2(mcx, var_tle(mcx, 1, 1, -1), var_tle(mcx, 2, 2, -1)).unwrap();
+        let tlist = NodeList::make2(mcx, var_tle(mcx, 1, 1, -1), var_tle(mcx, 2, 2, -1)).unwrap();
         assert!(assign(mcx, &tlist, 2).is_none());
     });
 }
@@ -88,8 +87,7 @@ fn matching_tlist_needs_no_projection() {
 #[test]
 fn out_of_order_vars_project() {
     with_mcx(|mcx| {
-        let tlist =
-            NodeList::make2(mcx, var_tle(mcx, 2, 1, -1), var_tle(mcx, 1, 2, -1)).unwrap();
+        let tlist = NodeList::make2(mcx, var_tle(mcx, 2, 1, -1), var_tle(mcx, 1, 2, -1)).unwrap();
         assert!(assign(mcx, &tlist, 2).is_some());
     });
 }
@@ -99,8 +97,7 @@ fn short_and_long_tlists_project() {
     with_mcx(|mcx| {
         let short = NodeList::make1(mcx, var_tle(mcx, 1, 1, -1)).unwrap();
         assert!(assign(mcx, &short, 2).is_some());
-        let long =
-            NodeList::make2(mcx, var_tle(mcx, 1, 1, -1), var_tle(mcx, 2, 2, -1)).unwrap();
+        let long = NodeList::make2(mcx, var_tle(mcx, 1, 1, -1), var_tle(mcx, 2, 2, -1)).unwrap();
         assert!(assign(mcx, &long, 1).is_some());
     });
 }

@@ -59,13 +59,12 @@ fn inet_net_ntop_ipv4(src: &[u8], bits: i32, dst: &mut [u8]) -> Option<usize> {
     let odst = 0usize;
     let mut d = 0usize;
     let mut size = dst.len();
-    let mut si = 0usize;
 
     if !(0..=32).contains(&bits) {
         return None;
     }
 
-    for _b in (1..=4).rev() {
+    for (si, _b) in (1..=4).rev().enumerate() {
         if size <= 5 {
             return None;
         }
@@ -78,7 +77,6 @@ fn inet_net_ntop_ipv4(src: &[u8], bits: i32, dst: &mut [u8]) -> Option<usize> {
             return None;
         }
         d += sprintf_u(dst, d, src[si] as u32);
-        si += 1;
         size -= d - t;
     }
 
@@ -98,15 +96,13 @@ fn decoct(src: &[u8], bytes: usize, dst: &mut [u8], d0: usize) -> usize {
     let odst = d0;
     let mut d = d0;
     let mut size = dst.len() - d0;
-    let mut si = 0usize;
 
-    for b in 1..=bytes {
+    for (si, b) in (1..=bytes).enumerate() {
         if size <= 5 {
             return 0;
         }
         let t = d;
         d += sprintf_u(dst, d, src[si] as u32);
-        si += 1;
         if b != bytes {
             dst[d] = b'.';
             d += 1;

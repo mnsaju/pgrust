@@ -1,6 +1,7 @@
 // Plan-tree nodes; field names/order mirror vendor/plannodes.h
 // (tests: plannedstmt_plan_result_field_order_match_c).
 #![allow(non_snake_case)]
+#![allow(non_camel_case_types)]
 
 use core::mem::offset_of;
 
@@ -357,25 +358,18 @@ impl Default for MergeAppend<'_> {
 }
 
 #[repr(C)]
+#[derive(Default)]
 pub struct PartitionPruneInfo<'mcx> {
     pub relids: Bitmapset<'mcx>,
     pub prune_infos: NodeList<'mcx>,
     pub other_subplans: Bitmapset<'mcx>,
 }
 
-impl Default for PartitionPruneInfo<'_> {
-    fn default() -> Self {
-        PartitionPruneInfo {
-            relids: Bitmapset::empty(),
-            prune_infos: NodeList::nil(),
-            other_subplans: Bitmapset::empty(),
-        }
-    }
-}
 
 /// Per-partition maps use C's empty entries: -1 (subplan/subpart maps) and
 /// 0 (leafpart_rti/relid maps).
 #[repr(C)]
+#[derive(Default)]
 pub struct PartitionedRelPruneInfo<'mcx> {
     pub rtindex: Index,
     pub present_parts: Bitmapset<'mcx>,
@@ -389,26 +383,11 @@ pub struct PartitionedRelPruneInfo<'mcx> {
     pub execparamids: Bitmapset<'mcx>,
 }
 
-impl Default for PartitionedRelPruneInfo<'_> {
-    fn default() -> Self {
-        PartitionedRelPruneInfo {
-            rtindex: 0,
-            present_parts: Bitmapset::empty(),
-            nparts: 0,
-            subplan_map: &[],
-            subpart_map: &[],
-            leafpart_rti_map: &[],
-            relid_map: &[],
-            initial_pruning_steps: NodeList::nil(),
-            exec_pruning_steps: NodeList::nil(),
-            execparamids: Bitmapset::empty(),
-        }
-    }
-}
 
 /// `opstrategy` 0 (InvalidStrategy) marks the IS NULL-only step and the list
 /// `<>` special case, per C.
 #[repr(C)]
+#[derive(Default)]
 pub struct PartitionPruneStepOp<'mcx> {
     pub step_id: i32,
     pub opstrategy: u16,
@@ -417,17 +396,6 @@ pub struct PartitionPruneStepOp<'mcx> {
     pub nullkeys: Bitmapset<'mcx>,
 }
 
-impl Default for PartitionPruneStepOp<'_> {
-    fn default() -> Self {
-        PartitionPruneStepOp {
-            step_id: 0,
-            opstrategy: 0,
-            exprs: NodeList::nil(),
-            cmpfns: OidList::nil(),
-            nullkeys: Bitmapset::empty(),
-        }
-    }
-}
 
 pub const PARTPRUNE_COMBINE_UNION: u32 = 0;
 pub const PARTPRUNE_COMBINE_INTERSECT: u32 = 1;
@@ -686,6 +654,7 @@ impl Default for WindowAgg<'_> {
 /// `aggstrategy`/`aggsplit` carry the C AggStrategy/AggSplit values
 /// (canonical consts in types_pathnodes); per-key arrays as in [`Sort`].
 #[repr(C)]
+#[derive(Default)]
 pub struct Agg<'mcx> {
     pub plan: Plan<'mcx>,
     pub aggstrategy: u32,
@@ -701,24 +670,6 @@ pub struct Agg<'mcx> {
     pub chain: NodeList<'mcx>,
 }
 
-impl Default for Agg<'_> {
-    fn default() -> Self {
-        Agg {
-            plan: Plan::default(),
-            aggstrategy: 0,
-            aggsplit: 0,
-            numCols: 0,
-            grpColIdx: &[],
-            grpOperators: &[],
-            grpCollations: &[],
-            numGroups: 0,
-            transitionSpace: 0,
-            aggParams: Bitmapset::empty(),
-            groupingSets: NodeList::nil(),
-            chain: NodeList::nil(),
-        }
-    }
-}
 
 /// `onConflictAction` carries the C OnConflictAction value (0 = NONE).
 #[repr(C)]
@@ -854,6 +805,7 @@ pub struct Material<'mcx> {
 
 /// Per-key arrays as in [`Sort`].
 #[repr(C)]
+#[derive(Default)]
 pub struct Memoize<'mcx> {
     pub plan: Plan<'mcx>,
     pub numKeys: i32,
@@ -866,21 +818,6 @@ pub struct Memoize<'mcx> {
     pub keyparamids: Bitmapset<'mcx>,
 }
 
-impl Default for Memoize<'_> {
-    fn default() -> Self {
-        Memoize {
-            plan: Plan::default(),
-            numKeys: 0,
-            hashOperators: &[],
-            collations: &[],
-            param_exprs: NodeList::nil(),
-            singlerow: false,
-            binary_mode: false,
-            est_entries: 0,
-            keyparamids: Bitmapset::empty(),
-        }
-    }
-}
 
 #[derive(Default)]
 #[repr(C)]
@@ -944,7 +881,8 @@ pub struct PlanInvalItem {
     pub hashValue: u32,
 }
 
-/// # Safety: implementors must be `repr(C)` with a [`Plan`] first field, so a
+/// # Safety
+/// Implementors must be `repr(C)` with a [`Plan`] first field, so a
 /// `NodeRep<Self>` reads as a `NodeRep<Plan>` prefix, and their tag must be
 /// listed in [`is_plan_tag`].
 pub unsafe trait PlanVariant<'mcx>: NodeVariant<'mcx> {}
@@ -1176,54 +1114,30 @@ unsafe impl<'mcx> PlanVariant<'mcx> for LockRows<'mcx> {}
 
 const _: () = {
     assert!(offset_of!(Result, plan) == 0);
-    assert!(
-        offset_of!(NodeRep<Result>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<Result>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(ProjectSet, plan) == 0);
-    assert!(
-        offset_of!(NodeRep<ProjectSet>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<ProjectSet>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(Scan, plan) == 0);
     assert!(offset_of!(SeqScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<SeqScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<SeqScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(SampleScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<SampleScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<SampleScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(TidScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<TidScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<TidScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(TidRangeScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<TidRangeScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<TidRangeScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(IndexScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<IndexScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<IndexScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(IndexOnlyScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<IndexOnlyScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<IndexOnlyScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(BitmapAnd, plan) == 0);
-    assert!(
-        offset_of!(NodeRep<BitmapAnd>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<BitmapAnd>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(BitmapOr, plan) == 0);
-    assert!(
-        offset_of!(NodeRep<BitmapOr>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<BitmapOr>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(BitmapIndexScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<BitmapIndexScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<BitmapIndexScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(BitmapHeapScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<BitmapHeapScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<BitmapHeapScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(Append, plan) == 0);
     assert!(offset_of!(NodeRep<Append>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(MergeAppend, plan) == 0);
@@ -1233,41 +1147,27 @@ const _: () = {
     assert!(offset_of!(GatherMerge, plan) == 0);
     assert!(offset_of!(NodeRep<GatherMerge>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(SubqueryScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<SubqueryScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<SubqueryScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(SetOp, plan) == 0);
     assert!(offset_of!(NodeRep<SetOp>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(FunctionScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<FunctionScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<FunctionScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(TableFuncScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<TableFuncScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<TableFuncScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(CteScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<CteScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<CteScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(NamedTuplestoreScan, scan) == 0);
     assert!(
         offset_of!(NodeRep<NamedTuplestoreScan>, payload) == offset_of!(NodeRep<Plan>, payload)
     );
     assert!(offset_of!(ValuesScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<ValuesScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<ValuesScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(ForeignScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<ForeignScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<ForeignScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(Sort, plan) == 0);
     assert!(offset_of!(NodeRep<Sort>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(IncrementalSort, sort) == 0);
-    assert!(
-        offset_of!(NodeRep<IncrementalSort>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<IncrementalSort>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(Group, plan) == 0);
     assert!(offset_of!(NodeRep<Group>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(Unique, plan) == 0);
@@ -1275,24 +1175,16 @@ const _: () = {
     assert!(offset_of!(Agg, plan) == 0);
     assert!(offset_of!(NodeRep<Agg>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(ModifyTable, plan) == 0);
-    assert!(
-        offset_of!(NodeRep<ModifyTable>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<ModifyTable>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(Limit, plan) == 0);
     assert!(offset_of!(NodeRep<Limit>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(Join, plan) == 0);
     assert!(offset_of!(NestLoop, join) == 0);
-    assert!(
-        offset_of!(NodeRep<NestLoop>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<NestLoop>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(MergeJoin, join) == 0);
-    assert!(
-        offset_of!(NodeRep<MergeJoin>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<MergeJoin>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(HashJoin, join) == 0);
-    assert!(
-        offset_of!(NodeRep<HashJoin>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<HashJoin>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(Hash, plan) == 0);
     assert!(offset_of!(NodeRep<Hash>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(LockRows, plan) == 0);

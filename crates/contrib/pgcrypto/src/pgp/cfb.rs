@@ -1,4 +1,3 @@
-
 use super::consts::*;
 use crate::cipher::BlockEncryptor;
 
@@ -38,10 +37,6 @@ impl PgpCfb {
             fre: vec![0u8; bs],
             encbuf: vec![0u8; bs],
         })
-    }
-
-    pub fn block_size(&self) -> usize {
-        self.block_size
     }
 
     fn ecb(&mut self) {

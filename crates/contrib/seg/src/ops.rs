@@ -233,16 +233,28 @@ mod tests {
     #[test]
     fn cmp_boundary_type_order() {
         // '-' lower bound sorts below an exact one at the same position
-        let open = Seg { l_ext: b'-', ..seg(1.0, 2.0) };
+        let open = Seg {
+            l_ext: b'-',
+            ..seg(1.0, 2.0)
+        };
         let exact = seg(1.0, 2.0);
         assert_eq!(seg_cmp(&open, &exact).unwrap(), -1);
         assert_eq!(seg_cmp(&exact, &open).unwrap(), 1);
         // fewer significant digits sorts first
-        let blurred = Seg { l_sigd: 1, ..seg(1.0, 2.0) };
-        let sharp = Seg { l_sigd: 3, ..seg(1.0, 2.0) };
+        let blurred = Seg {
+            l_sigd: 1,
+            ..seg(1.0, 2.0)
+        };
+        let sharp = Seg {
+            l_sigd: 3,
+            ..seg(1.0, 2.0)
+        };
         assert_eq!(seg_cmp(&blurred, &sharp).unwrap(), -1);
         // upper boundary: '-' sorts above
-        let uopen = Seg { u_ext: b'-', ..seg(1.0, 2.0) };
+        let uopen = Seg {
+            u_ext: b'-',
+            ..seg(1.0, 2.0)
+        };
         assert_eq!(seg_cmp(&uopen, &exact).unwrap(), 1);
         assert_eq!(seg_cmp(&exact, &exact).unwrap(), 0);
     }

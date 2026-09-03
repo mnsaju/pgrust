@@ -1,4 +1,3 @@
-
 use super::consts::*;
 use ::num_bigint::BigUint;
 use ::num_traits::{One, Zero};
@@ -45,7 +44,7 @@ pub fn read_mpi(data: &[u8], pos: &mut usize) -> Result<Mpi, String> {
     if bits > 0xFFFF {
         return Err(WRONG_KEY.to_string());
     }
-    let nbytes = (bits + 7) / 8;
+    let nbytes = bits.div_ceil(8);
     if *pos + nbytes > data.len() {
         return Err(WRONG_KEY.to_string());
     }
@@ -81,7 +80,7 @@ fn rand_bits(bits: usize) -> Result<BigUint, String> {
     if bits == 0 {
         return Ok(BigUint::zero());
     }
-    let nbytes = (bits + 7) / 8;
+    let nbytes = bits.div_ceil(8);
     let mut buf = vec![0u8; nbytes];
     if !pg_strong_random(&mut buf) {
         return Err("Failed to generate strong random bits".to_string());

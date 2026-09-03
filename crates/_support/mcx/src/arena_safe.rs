@@ -35,8 +35,8 @@ unsafe impl<'mcx, K: ForgetSafe, V: ForgetSafe> ForgetSafe
 {
 }
 // SAFETY (each): no drop glue at all.
-unsafe impl<'a, T: ?Sized> ForgetSafe for &'a T {}
-unsafe impl<'a, T: ?Sized> ForgetSafe for &'a mut T {}
+unsafe impl<T: ?Sized> ForgetSafe for &T {}
+unsafe impl<T: ?Sized> ForgetSafe for &mut T {}
 unsafe impl<T: ?Sized> ForgetSafe for *const T {}
 unsafe impl<T: ?Sized> ForgetSafe for *mut T {}
 unsafe impl<T: ?Sized> ForgetSafe for core::ptr::NonNull<T> {}
@@ -100,8 +100,23 @@ macro_rules! forget_safe_tuple {
 }
 
 forget_safe_nodrop!(
-    u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, f32, f64,
-    bool, char, ()
+    u8,
+    u16,
+    u32,
+    u64,
+    u128,
+    usize,
+    i8,
+    i16,
+    i32,
+    i64,
+    i128,
+    isize,
+    f32,
+    f64,
+    bool,
+    char,
+    ()
 );
 
 /// Stack owner whose destructor intentionally never runs (C model: the

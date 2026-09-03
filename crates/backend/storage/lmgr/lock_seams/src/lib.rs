@@ -74,6 +74,3 @@ seam_core::seam!(
         locallocks: Option<&'a [types_storage::lock::LOCALLOCKTAG]>,
     ) -> PgResult<()>
 );
-
-
-

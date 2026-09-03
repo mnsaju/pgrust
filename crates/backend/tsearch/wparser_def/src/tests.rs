@@ -9,7 +9,8 @@ fn tokenize(input: &str) -> Vec<(i32, String)> {
     let ctx = mcx::MemoryContext::new("wparser-test");
     let mcx = ctx.mcx();
     let bytes = input.as_bytes();
-    let mut prs = tparser_init(mcx, bytes.as_ptr(), bytes.len()).unwrap();
+    // SAFETY: bytes outlives prs within this call.
+    let mut prs = unsafe { tparser_init(mcx, bytes.as_ptr(), bytes.len()) }.unwrap();
     let mut out = Vec::new();
     while tparser_get(&mut prs).unwrap() {
         out.push((

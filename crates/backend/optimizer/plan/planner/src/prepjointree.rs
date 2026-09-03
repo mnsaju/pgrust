@@ -28,7 +28,9 @@ pub fn pull_up_subqueries<'mcx>(
                 break;
             }
         }
-        let Some((rti, lowest_outer_join)) = target else { return Ok(()) };
+        let Some((rti, lowest_outer_join)) = target else {
+            return Ok(());
+        };
         let rte_node = parse.rtable.nth(rti as usize - 1);
         let rte = rte_node.as_range_tbl_entry().expect("rtable cell");
         if rte.rtekind == RTEKind::RTE_VALUES {
@@ -69,8 +71,12 @@ pub fn flatten_simple_union_all<'mcx>(
     parse: &mut Query<'mcx>,
 ) -> PgResult<()> {
     let mcx = run.mcx;
-    let topop_node = parse.setOperations.expect("flatten_simple_union_all without setOperations");
-    let topop = topop_node.as_set_operation_stmt().expect("setOperations is a SetOperationStmt");
+    let topop_node = parse
+        .setOperations
+        .expect("flatten_simple_union_all without setOperations");
+    let topop = topop_node
+        .as_set_operation_stmt()
+        .expect("setOperations is a SetOperationStmt");
     if run.root.hasRecursion {
         return Ok(());
     }
@@ -81,7 +87,10 @@ pub fn flatten_simple_union_all<'mcx>(
     while let Some(op) = leftmost.as_set_operation_stmt() {
         leftmost = op.larg.expect("setop larg");
     }
-    let leftmost_rti = leftmost.as_range_tbl_ref().expect("setop leaf is a RangeTblRef").rtindex;
+    let leftmost_rti = leftmost
+        .as_range_tbl_ref()
+        .expect("setop leaf is a RangeTblRef")
+        .rtindex;
     let leftmost_rte_node = parse.rtable.nth(leftmost_rti as usize - 1);
     let leftmost_rte = leftmost_rte_node.as_range_tbl_entry().expect("rtable cell");
     debug_assert!(leftmost_rte.rtekind == RTEKind::RTE_SUBQUERY);
@@ -97,7 +106,13 @@ pub fn flatten_simple_union_all<'mcx>(
     debug_assert!(jt.fromlist.is_nil() && jt.quals.is_none());
     let mut fromlist = NodeList::nil();
     fromlist.lappend(mcx, Node::mk_range_tbl_ref(mcx, leftmost_rti)?)?;
-    parse.jointree = Some(mcx::alloc_leak_in(mcx, FromExpr { fromlist, quals: None })?);
+    parse.jointree = Some(mcx::alloc_leak_in(
+        mcx,
+        FromExpr {
+            fromlist,
+            quals: None,
+        },
+    )?);
     parse.setOperations = None;
 
     let setop_tlist = parse.targetList.clone_in(mcx)?;
@@ -166,7 +181,9 @@ fn pull_up_simple_union_all<'mcx>(
     pull_up_union_leaf_queries(
         run,
         parse,
-        subquery.setOperations.expect("union subquery has setOperations"),
+        subquery
+            .setOperations
+            .expect("union subquery has setOperations"),
         varno,
         &subquery.targetList,
         rtoffset,
@@ -288,7 +305,10 @@ pub(crate) fn query_has_uplevel_vars<'mcx>(q: &'mcx Query<'mcx>) -> PgResult<boo
                 NodeTag::T_PlaceHolderVar => {
                     // PHVs made by pullup_replace_vars carry uplevel refs the
                     // same way (C IncrementVarSublevelsUp adjusts them too).
-                    if node.as_place_holder_var().expect("PlaceHolderVar").phlevelsup
+                    if node
+                        .as_place_holder_var()
+                        .expect("PlaceHolderVar")
+                        .phlevelsup
                         > self.depth
                     {
                         self.found = true;
@@ -319,21 +339,27 @@ pub(crate) fn query_has_uplevel_vars<'mcx>(q: &'mcx Query<'mcx>) -> PgResult<boo
         }
         fn visit_query_ref(&mut self, q: &'mcx Query<'mcx>) -> PgResult<bool> {
             self.depth += 1;
-            let r =
-                nodes_core::query_tree_walker(q, self, nodes_core::QTW_EXAMINE_RTES_BEFORE)?;
+            let r = nodes_core::query_tree_walker(q, self, nodes_core::QTW_EXAMINE_RTES_BEFORE)?;
             self.depth -= 1;
             Ok(r)
         }
     }
-    let mut w = W { depth: 0, found: false };
+    let mut w = W {
+        depth: 0,
+        found: false,
+    };
     nodes_core::query_tree_walker(q, &mut w, nodes_core::QTW_EXAMINE_RTES_BEFORE)?;
     Ok(w.found)
 }
 
 // is_simple_union_all + is_simple_union_all_recurse (prepjointree.c).
 fn is_simple_union_all(subquery: &Query<'_>) -> bool {
-    let Some(topop_node) = subquery.setOperations else { return false };
-    let Some(topop) = topop_node.as_set_operation_stmt() else { return false };
+    let Some(topop_node) = subquery.setOperations else {
+        return false;
+    };
+    let Some(topop) = topop_node.as_set_operation_stmt() else {
+        return false;
+    };
     if !subquery.sortClause.is_nil()
         || subquery.limitOffset.is_some()
         || subquery.limitCount.is_some()
@@ -421,12 +447,16 @@ fn find_pullable_subquery<'mcx>(
     match node.node_tag() {
         NodeTag::T_RangeTblRef => {
             let rti = node.as_range_tbl_ref().expect("RangeTblRef").rtindex;
-            let rte = parse.rtable.nth(rti as usize - 1).as_range_tbl_entry().unwrap_or_else(|| {
-                // Known failure signature of a layout-sensitive mcx arena
-                // stomp (equivclass 3-way UNION ALL pull-up overwrites a live
-                // RTE's tag): P1 memory-safety charter, not a planner bug.
-                panic!("rtable cell: rti={rti} rtable_len={}", parse.rtable.len())
-            });
+            let rte = parse
+                .rtable
+                .nth(rti as usize - 1)
+                .as_range_tbl_entry()
+                .unwrap_or_else(|| {
+                    // Known failure signature of a layout-sensitive mcx arena
+                    // stomp (equivclass 3-way UNION ALL pull-up overwrites a live
+                    // RTE's tag): P1 memory-safety charter, not a planner bug.
+                    panic!("rtable cell: rti={rti} rtable_len={}", parse.rtable.len())
+                });
             // inh on a subquery RTE means pull_up_simple_union_all already
             // flattened it (possibly inside a pulled-up child, then spliced
             // here). C's single-pass recursion never revisits an RTR; this
@@ -664,7 +694,10 @@ fn pull_up_simple_values<'mcx>(
         if let Some(nq) = replace_var_expr(mcx, q, varno, &tlist, false, None)? {
             parse.jointree = Some(mcx::alloc_leak_in(
                 mcx,
-                FromExpr { fromlist: jt.fromlist.clone_in(mcx)?, quals: Some(nq) },
+                FromExpr {
+                    fromlist: jt.fromlist.clone_in(mcx)?,
+                    quals: Some(nq),
+                },
             )?);
         }
     }
@@ -672,7 +705,10 @@ fn pull_up_simple_values<'mcx>(
     // jointree is already index 1.
     let eref = Node::mk_mut(
         mcx,
-        types_nodes::Alias { aliasname: Some("*RESULT*"), colnames: NodeList::nil() },
+        types_nodes::Alias {
+            aliasname: Some("*RESULT*"),
+            colnames: NodeList::nil(),
+        },
     )?
     .seal_ref();
     parse.rtable = NodeList::make1(
@@ -761,9 +797,17 @@ fn pull_up_constant_function<'mcx>(
     if rte.funcordinality || rte.functions.len() != 1 {
         return Ok(false);
     }
-    let rtf = rte.functions.nth(0).as_range_tbl_function().expect("functions cell");
-    let Some(funcexpr) = rtf.funcexpr else { return Ok(false) };
-    let Some(c) = funcexpr.as_const() else { return Ok(false) };
+    let rtf = rte
+        .functions
+        .nth(0)
+        .as_range_tbl_function()
+        .expect("functions cell");
+    let Some(funcexpr) = rtf.funcexpr else {
+        return Ok(false);
+    };
+    let Some(c) = funcexpr.as_const() else {
+        return Ok(false);
+    };
     // funccolcount/funccolnames + TYPEFUNC_SCALAR via type_is_rowtype
     // (get_expr_result_type resolves a Const's class from its type).
     if rtf.funccolcount != 1
@@ -774,7 +818,10 @@ fn pull_up_constant_function<'mcx>(
     }
 
     let mut tlist = NodeList::nil();
-    tlist.lappend(mcx, Node::mk_target_entry(mcx, copy_expr(mcx, funcexpr, 0)?, 1, None, false)?)?;
+    tlist.lappend(
+        mcx,
+        Node::mk_target_entry(mcx, copy_expr(mcx, funcexpr, 0)?, 1, None, false)?,
+    )?;
 
     // C rvcontext: relids/nullinfo NULL (a Const has no lateral refs);
     // grouping sets force wrap_all as in pull_up_simple_subquery.
@@ -786,7 +833,11 @@ fn pull_up_constant_function<'mcx>(
     ));
     let empty_relids = types_nodes::Bitmapset::empty();
     let phc = PullupPhCtx {
-        wrap_option: core::cell::Cell::new(if parse.groupingSets.is_nil() { WRAP_NONE } else { WRAP_ALL }),
+        wrap_option: core::cell::Cell::new(if parse.groupingSets.is_nil() {
+            WRAP_NONE
+        } else {
+            WRAP_ALL
+        }),
         last_ph_id: &last_ph_id,
         rv_cache: &rv_cache,
         sub_relids: &empty_relids,
@@ -824,8 +875,14 @@ fn pull_up_constant_function<'mcx>(
         }
         .expect("MergeAction");
     }
-    parse.mergeJoinCondition =
-        replace_opt(mcx, parse.mergeJoinCondition, varno, &tlist, false, Some(&phc))?;
+    parse.mergeJoinCondition = replace_opt(
+        mcx,
+        parse.mergeJoinCondition,
+        varno,
+        &tlist,
+        false,
+        Some(&phc),
+    )?;
 
     // The jointree keeps its structure; splice_and_replace only rewrites
     // quals and lateral siblings when handed the RangeTblRef back as its own
@@ -836,12 +893,26 @@ fn pull_up_constant_function<'mcx>(
     for child in &jt.fromlist {
         new_fromlist.lappend(
             mcx,
-            splice_and_replace(mcx, &parse.rtable, child, varno, &tlist, false, Some(&phc), same_rtr)?,
+            splice_and_replace(
+                mcx,
+                &parse.rtable,
+                child,
+                varno,
+                &tlist,
+                false,
+                Some(&phc),
+                same_rtr,
+            )?,
         )?;
     }
     let new_quals = replace_opt(mcx, jt.quals, varno, &tlist, false, Some(&phc))?;
-    parse.jointree =
-        Some(mcx::alloc_leak_in(mcx, FromExpr { fromlist: new_fromlist, quals: new_quals })?);
+    parse.jointree = Some(mcx::alloc_leak_in(
+        mcx,
+        FromExpr {
+            fromlist: new_fromlist,
+            quals: new_quals,
+        },
+    )?);
 
     for i in 0..run.root.append_rel_list.len() {
         replace_appinfo_translated_vars(run, i, &mut |n| {
@@ -891,7 +962,13 @@ fn is_simple_subquery<'mcx>(
     lowest_outer_join: Option<Node<'mcx>>,
 ) -> PgResult<bool> {
     let sub = rte.subquery.expect("RTE_SUBQUERY has a subquery");
-    is_simple_subquery_sub(mcx, sub, rte.lateral, rte.security_barrier, lowest_outer_join)
+    is_simple_subquery_sub(
+        mcx,
+        sub,
+        rte.lateral,
+        rte.security_barrier,
+        lowest_outer_join,
+    )
 }
 
 // C passes the (possibly hacked-on) subquery separately from the RTE for the
@@ -1056,8 +1133,10 @@ fn pull_up_simple_subquery<'mcx>(
         let mut fresh_rtable = NodeList::nil();
         for srte_node in &sub_local.rtable {
             let srte = srte_node.as_range_tbl_entry().expect("rtable cell");
-            fresh_rtable
-                .lappend(mcx, rte_copy_with_perminfoindex(mcx, srte, srte.perminfoindex)?)?;
+            fresh_rtable.lappend(
+                mcx,
+                rte_copy_with_perminfoindex(mcx, srte, srte.perminfoindex)?,
+            )?;
         }
         sub_local.rtable = fresh_rtable;
         preprocess_function_rtes(run, &mut sub_local)?;
@@ -1102,7 +1181,10 @@ fn pull_up_simple_subquery<'mcx>(
     // dummy RTE_RESULT to supply its one row; it lands after the subquery's
     // own rtable entries in the combined range table.
     let result_rtr = if sub_jt.fromlist.is_nil() {
-        Some(Node::mk_range_tbl_ref(mcx, rtoffset + sub.rtable.len() as i32 + 1)?)
+        Some(Node::mk_range_tbl_ref(
+            mcx,
+            rtoffset + sub.rtable.len() as i32 + 1,
+        )?)
     } else {
         None
     };
@@ -1150,9 +1232,17 @@ fn pull_up_simple_subquery<'mcx>(
     }
     // C computes nullinfo from the outer jointree before the splice below
     // rewrites it; lateral-only, like C.
-    let nullinfo = if lateral { Some(get_nullingrels(mcx, parse)?) } else { None };
+    let nullinfo = if lateral {
+        Some(get_nullingrels(mcx, parse)?)
+    } else {
+        None
+    };
     let phc = PullupPhCtx {
-        wrap_option: core::cell::Cell::new(if parse.groupingSets.is_nil() { WRAP_NONE } else { WRAP_ALL }),
+        wrap_option: core::cell::Cell::new(if parse.groupingSets.is_nil() {
+            WRAP_NONE
+        } else {
+            WRAP_ALL
+        }),
         last_ph_id: &last_ph_id,
         rv_cache: &rv_cache,
         sub_relids: &full_relids,
@@ -1195,7 +1285,14 @@ fn pull_up_simple_subquery<'mcx>(
         })? {
             parse.targetList = l;
         }
-        parse.havingQual = replace_opt(mcx, parse.havingQual, varno, &off_tlist, lateral, Some(&phc))?;
+        parse.havingQual = replace_opt(
+            mcx,
+            parse.havingQual,
+            varno,
+            &off_tlist,
+            lateral,
+            Some(&phc),
+        )?;
         if let Some(l) = clauses::walker::mutate_list(mcx, &parse.returningList, &mut |n| {
             replace_var_expr(mcx, n, varno, &off_tlist, lateral, Some(&phc))
         })? {
@@ -1221,28 +1318,52 @@ fn pull_up_simple_subquery<'mcx>(
             }
             .expect("MergeAction");
         }
-        parse.mergeJoinCondition =
-            replace_opt(mcx, parse.mergeJoinCondition, varno, &off_tlist, lateral, Some(&phc))?;
+        parse.mergeJoinCondition = replace_opt(
+            mcx,
+            parse.mergeJoinCondition,
+            varno,
+            &off_tlist,
+            lateral,
+            Some(&phc),
+        )?;
 
         // pullup_replace_vars over the jointree: substitute Vars in every qual
         // and splice the offset sub-jointree in place of the RangeTblRef.
         let replacement = if off_quals.is_none() && off_fromlist.len() == 1 {
             off_fromlist.nth(0)
         } else {
-            Node::mk(mcx, FromExpr { fromlist: off_fromlist, quals: off_quals })?
+            Node::mk(
+                mcx,
+                FromExpr {
+                    fromlist: off_fromlist,
+                    quals: off_quals,
+                },
+            )?
         };
         let jt = parse.jointree.expect("jointree is a FromExpr");
         let mut new_fromlist = NodeList::nil();
         for child in &jt.fromlist {
             new_fromlist.lappend(
                 mcx,
-                splice_and_replace(mcx, &parse.rtable, child, varno, &off_tlist, lateral, Some(&phc), replacement)?,
+                splice_and_replace(
+                    mcx,
+                    &parse.rtable,
+                    child,
+                    varno,
+                    &off_tlist,
+                    lateral,
+                    Some(&phc),
+                    replacement,
+                )?,
             )?;
         }
         let new_quals = replace_opt(mcx, jt.quals, varno, &off_tlist, lateral, Some(&phc))?;
         parse.jointree = Some(mcx::alloc_leak_in(
             mcx,
-            FromExpr { fromlist: new_fromlist, quals: new_quals },
+            FromExpr {
+                fromlist: new_fromlist,
+                quals: new_quals,
+            },
         )?);
 
         // perform_pullup_replace_vars tail: pre-existing appendrels' translated
@@ -1420,9 +1541,7 @@ fn pull_up_simple_subquery<'mcx>(
                         rewrite_manip::IncrementVarSublevelsUp(deep, -1, 2)?;
                         let deep_q = deep.as_query().expect("Query round trip");
                         // SAFETY: exclusive pre-seal fixup of the fresh copy.
-                        unsafe {
-                            copy.with_mut::<RangeTblEntry, _>(|r| r.subquery = Some(deep_q))
-                        };
+                        unsafe { copy.with_mut::<RangeTblEntry, _>(|r| r.subquery = Some(deep_q)) };
                     }
                 }
                 // Retained (non-simple or sublink-pulled) child subqueries can
@@ -1449,7 +1568,10 @@ fn pull_up_simple_subquery<'mcx>(
     if result_rtr.is_some() {
         let eref = Node::mk_mut(
             mcx,
-            types_nodes::Alias { aliasname: Some("*RESULT*"), colnames: NodeList::nil() },
+            types_nodes::Alias {
+                aliasname: Some("*RESULT*"),
+                colnames: NodeList::nil(),
+            },
         )?
         .seal_ref();
         parse.rtable.lappend(
@@ -1477,7 +1599,9 @@ fn pull_up_simple_subquery<'mcx>(
         if pre_adjusted {
             parse.rowMarks.lappend(mcx, rc_node)?;
         } else {
-            let rc = rc_node.as_row_mark_clause().expect("rowMarks holds RowMarkClause");
+            let rc = rc_node
+                .as_row_mark_clause()
+                .expect("rowMarks holds RowMarkClause");
             parse.rowMarks.lappend(
                 mcx,
                 Node::mk(
@@ -1722,7 +1846,9 @@ pub(crate) fn remove_result_refs<'mcx>(
         debug_assert_ne!(run.root.append_rel_list[ai].parent_relid, varno as u32);
         if run.root.append_rel_list[ai].child_relid == varno as u32 {
             let sv = *subvarno.get_or_insert_with(|| {
-                subrelids.get_singleton_member().expect("singleton subrelids")
+                subrelids
+                    .get_singleton_member()
+                    .expect("singleton subrelids")
             });
             run.root.append_rel_list[ai].child_relid = sv as u32;
         }
@@ -1818,16 +1944,12 @@ fn splice_and_replace<'mcx>(
             if other.lateral {
                 match other.rtekind {
                     RTEKind::RTE_FUNCTION => {
-                        if let Some(l) =
-                            map_rtfunctions(mcx, &other.functions, &mut |n| {
-                                replace_var_expr(mcx, n, varno, tlist, lateral, ph)
-                            })?
-                        {
+                        if let Some(l) = map_rtfunctions(mcx, &other.functions, &mut |n| {
+                            replace_var_expr(mcx, n, varno, tlist, lateral, ph)
+                        })? {
                             // SAFETY: pre-seal tree owned by this planner
                             // invocation; exclusive fixup.
-                            unsafe {
-                                other_node.with_mut::<RangeTblEntry, _>(|r| r.functions = l)
-                            };
+                            unsafe { other_node.with_mut::<RangeTblEntry, _>(|r| r.functions = l) };
                         }
                     }
                     RTEKind::RTE_VALUES => {
@@ -1844,13 +1966,12 @@ fn splice_and_replace<'mcx>(
                     }
                     RTEKind::RTE_SUBQUERY => {
                         let subq = other.subquery.expect("RTE_SUBQUERY has a subquery");
-                        if let Some(newq) =
-                            replace_vars_in_lateral_subquery(mcx, subq, varno, tlist, lateral, ph, 1)?
-                        {
+                        if let Some(newq) = replace_vars_in_lateral_subquery(
+                            mcx, subq, varno, tlist, lateral, ph, 1,
+                        )? {
                             // SAFETY: as above.
                             unsafe {
-                                other_node
-                                    .with_mut::<RangeTblEntry, _>(|r| r.subquery = Some(newq))
+                                other_node.with_mut::<RangeTblEntry, _>(|r| r.subquery = Some(newq))
                             };
                         }
                     }
@@ -1866,7 +1987,9 @@ fn splice_and_replace<'mcx>(
                     RTEKind::RTE_RELATION => {
                         // C replace_vars_in_jointree: a LATERAL relation RTE
                         // carries its refs in the tablesample clause.
-                        let tsc = other.tablesample.expect("LATERAL relation has a tablesample");
+                        let tsc = other
+                            .tablesample
+                            .expect("LATERAL relation has a tablesample");
                         if let Some(n) = replace_var_expr(mcx, tsc, varno, tlist, lateral, ph)? {
                             // SAFETY: as above.
                             unsafe {
@@ -1890,13 +2013,18 @@ fn splice_and_replace<'mcx>(
             }
             Node::mk(
                 mcx,
-                FromExpr { fromlist, quals: replace_opt(mcx, f.quals, varno, tlist, lateral, ph)? },
+                FromExpr {
+                    fromlist,
+                    quals: replace_opt(mcx, f.quals, varno, tlist, lateral, ph)?,
+                },
             )
         }
         NodeTag::T_JoinExpr => {
             let j = node.as_join_expr().unwrap();
-            let larg = splice_and_replace(mcx, rtable, j.larg, varno, tlist, lateral, ph, replacement)?;
-            let rarg = splice_and_replace(mcx, rtable, j.rarg, varno, tlist, lateral, ph, replacement)?;
+            let larg =
+                splice_and_replace(mcx, rtable, j.larg, varno, tlist, lateral, ph, replacement)?;
+            let rarg =
+                splice_and_replace(mcx, rtable, j.rarg, varno, tlist, lateral, ph, replacement)?;
             // C replace_vars_in_jointree: var-free expressions in FULL-join
             // quals must be PHV-wrapped or the clause's side cannot be
             // identified and no merge/hash FULL plan can be made.
@@ -1932,11 +2060,7 @@ fn splice_and_replace<'mcx>(
 // OffsetVarNodes (rewriteManip.c), functional: changed nodes are rebuilt.
 // OffsetVarNodes' jointree leg (rewriteManip.c): RangeTblRef rtindex and
 // JoinExpr rtindex/quals shift by rtoffset; the tree is rebuilt, not scribbled.
-fn offset_jointree<'mcx>(
-    mcx: Mcx<'mcx>,
-    node: Node<'mcx>,
-    rtoffset: i32,
-) -> PgResult<Node<'mcx>> {
+fn offset_jointree<'mcx>(mcx: Mcx<'mcx>, node: Node<'mcx>, rtoffset: i32) -> PgResult<Node<'mcx>> {
     match node.node_tag() {
         NodeTag::T_RangeTblRef => {
             let r = node.as_range_tbl_ref().expect("RangeTblRef");
@@ -1950,7 +2074,10 @@ fn offset_jointree<'mcx>(
             }
             Node::mk(
                 mcx,
-                FromExpr { fromlist, quals: offset_opt(mcx, f.quals, rtoffset)? },
+                FromExpr {
+                    fromlist,
+                    quals: offset_opt(mcx, f.quals, rtoffset)?,
+                },
             )
         }
         NodeTag::T_JoinExpr => {
@@ -1968,7 +2095,11 @@ fn offset_jointree<'mcx>(
                     quals,
                     alias: j.alias,
                     // C: if (j->rtindex) j->rtindex += offset.
-                    rtindex: if j.rtindex != 0 { j.rtindex + rtoffset } else { 0 },
+                    rtindex: if j.rtindex != 0 {
+                        j.rtindex + rtoffset
+                    } else {
+                        0
+                    },
                 },
             )
         }
@@ -2061,7 +2192,11 @@ fn offset_var<'mcx>(mcx: Mcx<'mcx>, v: &Var<'mcx>, rtoffset: i32) -> PgResult<Va
         },
         varlevelsup: v.varlevelsup,
         varreturningtype: v.varreturningtype,
-        varnosyn: if v.varnosyn > 0 { v.varnosyn.wrapping_add(rtoffset as u32) } else { v.varnosyn },
+        varnosyn: if v.varnosyn > 0 {
+            v.varnosyn.wrapping_add(rtoffset as u32)
+        } else {
+            v.varnosyn
+        },
         varattnosyn: v.varattnosyn,
         location: v.location,
     })
@@ -2212,7 +2347,10 @@ fn replace_var_expr_su<'mcx>(
                 // System columns are not replaced.
                 return Ok(Some(Node::mk(
                     mcx,
-                    Var { varnullingrels: v.varnullingrels.clone_in(mcx)?, ..*v },
+                    Var {
+                        varnullingrels: v.varnullingrels.clone_in(mcx)?,
+                        ..*v
+                    },
                 )?));
             }
             let nulled = !v.varnullingrels.is_empty();
@@ -2315,43 +2453,40 @@ fn replace_var_expr_su<'mcx>(
                     // the subquery; a strict expression over the subquery's
                     // Vars (or over lateral rels under that same join) takes
                     // the nullingrels directly.
-                    let wrap = if ph.is_some_and(|p| p.wrap_option.get() == WRAP_ALL) || v.varattno == 0 {
-                        true
-                    } else if let Some(nv) = gen.as_var().filter(|nv| nv.varlevelsup == 0) {
-                        lateral
-                            && ph.is_some_and(|p| !p.sub_relids.is_member(nv.varno))
-                            && {
+                    let wrap =
+                        if ph.is_some_and(|p| p.wrap_option.get() == WRAP_ALL) || v.varattno == 0 {
+                            true
+                        } else if let Some(nv) = gen.as_var().filter(|nv| nv.varlevelsup == 0) {
+                            lateral && ph.is_some_and(|p| !p.sub_relids.is_member(nv.varno)) && {
                                 let ni = nullinfo();
                                 !ni[varno as usize].is_subset(&ni[nv.varno as usize])
                             }
-                    } else if let Some(nphv) =
-                        gen.as_place_holder_var().filter(|p| p.phlevelsup == 0)
-                    {
-                        lateral
-                            && ph.is_some_and(|p| !nphv.phrels.is_subset(p.sub_relids))
-                            && {
+                        } else if let Some(nphv) =
+                            gen.as_place_holder_var().filter(|p| p.phlevelsup == 0)
+                        {
+                            lateral && ph.is_some_and(|p| !nphv.phrels.is_subset(p.sub_relids)) && {
                                 let ni = nullinfo();
-                                nphv.phrels
-                                    .iter()
-                                    .any(|lvarno| !ni[varno as usize].is_subset(&ni[lvarno as usize]))
-                            }
-                    } else {
-                        let contain_nullable_vars = if !lateral {
-                            vars::contain_vars_of_level(gen, 0)?
-                        } else {
-                            let all_varnos = vars::pull_varnos(mcx, gen)?;
-                            let p = ph.expect("lateral pull-up carries PHV context");
-                            if all_varnos.overlap(p.sub_relids) {
-                                true
-                            } else {
-                                let ni = nullinfo();
-                                all_varnos.iter().any(|lvarno| {
-                                    ni[varno as usize].is_subset(&ni[lvarno as usize])
+                                nphv.phrels.iter().any(|lvarno| {
+                                    !ni[varno as usize].is_subset(&ni[lvarno as usize])
                                 })
                             }
+                        } else {
+                            let contain_nullable_vars = if !lateral {
+                                vars::contain_vars_of_level(gen, 0)?
+                            } else {
+                                let all_varnos = vars::pull_varnos(mcx, gen)?;
+                                let p = ph.expect("lateral pull-up carries PHV context");
+                                if all_varnos.overlap(p.sub_relids) {
+                                    true
+                                } else {
+                                    let ni = nullinfo();
+                                    all_varnos.iter().any(|lvarno| {
+                                        ni[varno as usize].is_subset(&ni[lvarno as usize])
+                                    })
+                                }
+                            };
+                            !(contain_nullable_vars && !clauses::contain_nonstrict_functions(gen)?)
                         };
-                        !(contain_nullable_vars && !clauses::contain_nonstrict_functions(gen)?)
-                    };
                     if wrap {
                         let Some(p) = ph else {
                             panic!(
@@ -2415,8 +2550,7 @@ fn replace_var_expr_su<'mcx>(
                     let mut lvarnos = vars::pull_varnos(mcx, newnode)?;
                     lvarnos.del_members(p.sub_relids);
                     for lvarno in lvarnos.iter() {
-                        let lnullingrels =
-                            v.varnullingrels.intersect(&ni[lvarno as usize], mcx)?;
+                        let lnullingrels = v.varnullingrels.intersect(&ni[lvarno as usize], mcx)?;
                         if !lnullingrels.is_empty() {
                             let target = types_nodes::Bitmapset::make_singleton(mcx, lvarno)?;
                             add_nulling_relids_expr(mcx, newnode, Some(&target), &lnullingrels)?;
@@ -2444,8 +2578,15 @@ fn replace_var_expr_su<'mcx>(
                 .subselect
                 .as_query()
                 .expect("transformed SubLink holds a Query");
-            let new_sub =
-                replace_vars_in_query_value(mcx, subq, varno, tlist, lateral, ph, sublevels_up + 1)?;
+            let new_sub = replace_vars_in_query_value(
+                mcx,
+                subq,
+                varno,
+                tlist,
+                lateral,
+                ph,
+                sublevels_up + 1,
+            )?;
             if new_test.is_none() && new_sub.is_none() {
                 return Ok(None);
             }
@@ -2532,7 +2673,7 @@ fn replace_vars_in_query_value<'mcx>(
     };
     newq.targetList = rep_list(&newq.targetList, &mut changed)?;
     newq.returningList = rep_list(&newq.returningList, &mut changed)?;
-    let mut rep_opt = |n: Option<Node<'mcx>>, changed: &mut bool| -> PgResult<Option<Node<'mcx>>> {
+    let rep_opt = |n: Option<Node<'mcx>>, changed: &mut bool| -> PgResult<Option<Node<'mcx>>> {
         match n {
             None => Ok(None),
             Some(x) => match replace_var_expr_su(mcx, x, varno, tlist, lateral, ph, su)? {
@@ -2554,7 +2695,16 @@ fn replace_vars_in_query_value<'mcx>(
     for child in &jt.fromlist {
         fromlist.lappend(
             mcx,
-            replace_in_sibling_jointree(mcx, child, varno, tlist, lateral, ph, su, &mut jt_changed)?,
+            replace_in_sibling_jointree(
+                mcx,
+                child,
+                varno,
+                tlist,
+                lateral,
+                ph,
+                su,
+                &mut jt_changed,
+            )?,
         )?;
     }
     let quals = rep_opt(jt.quals, &mut jt_changed)?;
@@ -2603,9 +2753,7 @@ fn replace_vars_in_query_value<'mcx>(
                     let copy = rte_copy_with_perminfoindex(mcx, srte, srte.perminfoindex)?;
                     let newsub = mcx::alloc_leak_in(mcx, q2)?;
                     // SAFETY: as above.
-                    unsafe {
-                        copy.with_mut::<RangeTblEntry, _>(|r| r.subquery = Some(newsub))
-                    };
+                    unsafe { copy.with_mut::<RangeTblEntry, _>(|r| r.subquery = Some(newsub)) };
                     replacement = Some(copy);
                 }
             }
@@ -2684,9 +2832,7 @@ fn replace_vars_in_query_value<'mcx>(
                     }
                     found
                 }
-                RTEKind::RTE_VALUES => {
-                    rewrite_manip::checkExprHasSubLink_list(&srte.values_lists)?
-                }
+                RTEKind::RTE_VALUES => rewrite_manip::checkExprHasSubLink_list(&srte.values_lists)?,
                 _ => false,
             };
             if rt_has {
@@ -2722,7 +2868,9 @@ fn replace_in_sibling_jointree<'mcx>(
             for child in &f.fromlist {
                 fromlist.lappend(
                     mcx,
-                    replace_in_sibling_jointree(mcx, child, varno, tlist, lateral, ph, su, changed)?,
+                    replace_in_sibling_jointree(
+                        mcx, child, varno, tlist, lateral, ph, su, changed,
+                    )?,
                 )?;
             }
             let quals = match f.quals {
@@ -2739,8 +2887,10 @@ fn replace_in_sibling_jointree<'mcx>(
         }
         NodeTag::T_JoinExpr => {
             let j = node.as_join_expr().unwrap();
-            let larg = replace_in_sibling_jointree(mcx, j.larg, varno, tlist, lateral, ph, su, changed)?;
-            let rarg = replace_in_sibling_jointree(mcx, j.rarg, varno, tlist, lateral, ph, su, changed)?;
+            let larg =
+                replace_in_sibling_jointree(mcx, j.larg, varno, tlist, lateral, ph, su, changed)?;
+            let rarg =
+                replace_in_sibling_jointree(mcx, j.rarg, varno, tlist, lateral, ph, su, changed)?;
             let quals = match j.quals {
                 None => None,
                 Some(q) => match replace_var_expr_su(mcx, q, varno, tlist, lateral, ph, su)? {
@@ -2780,12 +2930,14 @@ fn replace_opt<'mcx>(
 ) -> PgResult<Option<Node<'mcx>>> {
     match node {
         None => Ok(None),
-        Some(n) => Ok(Some(replace_var_expr(mcx, n, varno, tlist, lateral, ph)?.unwrap_or(n))),
+        Some(n) => Ok(Some(
+            replace_var_expr(mcx, n, varno, tlist, lateral, ph)?.unwrap_or(n),
+        )),
     }
 }
 
-fn get_tle_by_resno<'a, 'mcx>(
-    tlist: &'a NodeList<'mcx>,
+fn get_tle_by_resno<'mcx>(
+    tlist: &NodeList<'mcx>,
     resno: i16,
 ) -> Option<&'mcx TargetEntry<'mcx>> {
     tlist
@@ -2826,9 +2978,7 @@ pub(crate) fn copy_expr<'mcx>(
         }
         NodeTag::T_Const => Node::mk(mcx, *node.as_const().expect("Const")),
         NodeTag::T_Param => Node::mk(mcx, *node.as_param().expect("Param")),
-        NodeTag::T_CaseTestExpr => {
-            Node::mk(mcx, *node.as_case_test_expr().expect("CaseTestExpr"))
-        }
+        NodeTag::T_CaseTestExpr => Node::mk(mcx, *node.as_case_test_expr().expect("CaseTestExpr")),
         NodeTag::T_SetToDefault => Node::mk(mcx, *node.as_set_to_default().expect("SetToDefault")),
         NodeTag::T_SQLValueFunction => {
             let s = node.as_sql_value_function().expect("SQLValueFunction");
@@ -2954,7 +3104,10 @@ pub(crate) fn copy_expr<'mcx>(
             let f = node.as_field_select().expect("FieldSelect");
             Node::mk(
                 mcx,
-                pn::FieldSelect { arg: copy_expr(mcx, f.arg, levels_delta)?, ..*f },
+                pn::FieldSelect {
+                    arg: copy_expr(mcx, f.arg, levels_delta)?,
+                    ..*f
+                },
             )
         }
         NodeTag::T_CoerceViaIO => {
@@ -2985,14 +3138,20 @@ pub(crate) fn copy_expr<'mcx>(
             let c = node.as_convert_rowtype_expr().expect("ConvertRowtypeExpr");
             Node::mk(
                 mcx,
-                pn::ConvertRowtypeExpr { arg: copy_expr(mcx, c.arg, levels_delta)?, ..*c },
+                pn::ConvertRowtypeExpr {
+                    arg: copy_expr(mcx, c.arg, levels_delta)?,
+                    ..*c
+                },
             )
         }
         NodeTag::T_CoerceToDomain => {
             let c = node.as_coerce_to_domain().expect("CoerceToDomain");
             Node::mk(
                 mcx,
-                pn::CoerceToDomain { arg: copy_expr(mcx, c.arg, levels_delta)?, ..*c },
+                pn::CoerceToDomain {
+                    arg: copy_expr(mcx, c.arg, levels_delta)?,
+                    ..*c
+                },
             )
         }
         NodeTag::T_NullTest => {
@@ -3118,7 +3277,9 @@ pub(crate) fn copy_expr<'mcx>(
             )
         }
         NodeTag::T_JsonConstructorExpr => {
-            let c = node.as_json_constructor_expr().expect("JsonConstructorExpr");
+            let c = node
+                .as_json_constructor_expr()
+                .expect("JsonConstructorExpr");
             let mut args = NodeList::nil();
             for a in &c.args {
                 args.lappend(mcx, copy_expr(mcx, a, levels_delta)?)?;
@@ -3313,7 +3474,10 @@ pub fn reduce_outer_joins<'mcx>(
     }
     parse.jointree = Some(mcx::alloc_leak_in(
         mcx,
-        FromExpr { fromlist, quals: f.quals },
+        FromExpr {
+            fromlist,
+            quals: f.quals,
+        },
     )?);
 
     if !state2.inner_reduced.is_empty() {
@@ -3334,7 +3498,9 @@ fn reduce_outer_joins_pass1<'mcx>(mcx: Mcx<'mcx>, node: Node<'mcx>) -> PgResult<
     };
     match node.node_tag() {
         NodeTag::T_RangeTblRef => {
-            result.relids.add_member(mcx, node.as_range_tbl_ref().unwrap().rtindex)?;
+            result
+                .relids
+                .add_member(mcx, node.as_range_tbl_ref().unwrap().rtindex)?;
         }
         NodeTag::T_FromExpr => {
             let f = node.as_variant::<FromExpr>().unwrap();
@@ -3397,7 +3563,13 @@ fn reduce_outer_joins_pass2<'mcx>(
                 fromlist.lappend(mcx, child)?;
             }
         }
-        return Node::mk(mcx, FromExpr { fromlist, quals: f.quals });
+        return Node::mk(
+            mcx,
+            FromExpr {
+                fromlist,
+                quals: f.quals,
+            },
+        );
     }
     let j = node
         .as_join_expr()
@@ -3440,9 +3612,9 @@ fn reduce_outer_joins_pass2<'mcx>(
             }
         }
         types_nodes::JoinType::JOIN_SEMI | types_nodes::JoinType::JOIN_ANTI => {}
-        other => panic!(
-            "reduce_outer_joins_pass2 (prepjointree.c): unrecognized join type {other:?}"
-        ),
+        other => {
+            panic!("reduce_outer_joins_pass2 (prepjointree.c): unrecognized join type {other:?}")
+        }
     }
 
     // JOIN_RIGHT -> JOIN_LEFT by swapping inputs.
@@ -3613,7 +3785,11 @@ pub(crate) fn remove_nulling_relids<'mcx>(
             r.map(|_| false)
         }
     }
-    let mut w = W { removable, except, sublevels_up: 0 };
+    let mut w = W {
+        removable,
+        except,
+        sublevels_up: 0,
+    };
     nodes_core::query_tree_walker(parse, &mut w, 0)?;
     for appinfo in run.root.append_rel_list.iter() {
         for &tid in appinfo.translated_vars.iter() {
@@ -3648,7 +3824,7 @@ pub(crate) fn add_nulling_relids_expr<'mcx>(
                 NodeTag::T_Var => {
                     let v = node.as_var().expect("Var");
                     if v.varlevelsup == self.sublevels_up
-                        && self.target.map_or(true, |t| t.is_member(v.varno))
+                        && self.target.is_none_or(|t| t.is_member(v.varno))
                     {
                         let (mcx, added) = (self.mcx, self.added);
                         // SAFETY: exclusive tree (caller contract); the shared
@@ -3665,7 +3841,7 @@ pub(crate) fn add_nulling_relids_expr<'mcx>(
                     // assumed evaluated below the nulling join.
                     let phv = node.as_place_holder_var().expect("PlaceHolderVar");
                     if phv.phlevelsup == self.sublevels_up
-                        && self.target.map_or(true, |t| phv.phrels.overlap(t))
+                        && self.target.is_none_or(|t| phv.phrels.overlap(t))
                     {
                         let (mcx, added) = (self.mcx, self.added);
                         // SAFETY: exclusive tree (caller contract).
@@ -3695,7 +3871,12 @@ pub(crate) fn add_nulling_relids_expr<'mcx>(
             r.map(|_| false)
         }
     }
-    let mut w = W { mcx, target, added, sublevels_up: 0 };
+    let mut w = W {
+        mcx,
+        target,
+        added,
+        sublevels_up: 0,
+    };
     nodes_core::NodeWalker::visit(&mut w, node)?;
     Ok(())
 }
@@ -3744,8 +3925,10 @@ fn apply_var_returning_type<'mcx>(
 
 fn missing_attribute(attno: i16) -> Box<PgError> {
     Box::new(
-        PgError::error(format!("could not find attribute {attno} in subquery targetlist"))
-            .with_sqlstate(ERRCODE_INTERNAL_ERROR),
+        PgError::error(format!(
+            "could not find attribute {attno} in subquery targetlist"
+        ))
+        .with_sqlstate(ERRCODE_INTERNAL_ERROR),
     )
 }
 
@@ -3758,7 +3941,16 @@ mod tests {
     use types_nodes::{Node, NodeList};
 
     fn var<'mcx>(mcx: Mcx<'mcx>, varno: i32, attno: i16) -> Node<'mcx> {
-        Node::mk(mcx, Var { varno, varattno: attno, vartype: 23, ..Default::default() }).unwrap()
+        Node::mk(
+            mcx,
+            Var {
+                varno,
+                varattno: attno,
+                vartype: 23,
+                ..Default::default()
+            },
+        )
+        .unwrap()
     }
 
     fn tle<'mcx>(mcx: Mcx<'mcx>, expr: Node<'mcx>, resno: i16) -> Node<'mcx> {
@@ -3766,7 +3958,14 @@ mod tests {
     }
 
     fn perminfo<'mcx>(mcx: Mcx<'mcx>, relid: u32) -> Node<'mcx> {
-        Node::mk(mcx, RTEPermissionInfo { relid, ..Default::default() }).unwrap()
+        Node::mk(
+            mcx,
+            RTEPermissionInfo {
+                relid,
+                ..Default::default()
+            },
+        )
+        .unwrap()
     }
 
     fn from_expr<'mcx>(
@@ -3777,7 +3976,10 @@ mod tests {
         let rtr = Node::mk_range_tbl_ref(mcx, rti).unwrap();
         alloc_leak_in(
             mcx,
-            FromExpr { fromlist: NodeList::make1(mcx, rtr).unwrap(), quals },
+            FromExpr {
+                fromlist: NodeList::make1(mcx, rtr).unwrap(),
+                quals,
+            },
         )
         .unwrap()
     }
@@ -3867,7 +4069,12 @@ mod tests {
         assert_eq!(base.perminfoindex, 2);
         assert_eq!(parse.rteperminfos.len(), 2);
         assert_eq!(
-            parse.rteperminfos.nth(1).as_rte_permission_info().unwrap().relid,
+            parse
+                .rteperminfos
+                .nth(1)
+                .as_rte_permission_info()
+                .unwrap()
+                .relid,
             77
         );
 
@@ -3875,7 +4082,14 @@ mod tests {
         assert_eq!(jt.fromlist.len(), 1);
         assert_eq!(jt.fromlist.nth(0).as_range_tbl_ref().unwrap().rtindex, 2);
 
-        let out_var = parse.targetList.nth(0).as_target_entry().unwrap().expr.as_var().unwrap();
+        let out_var = parse
+            .targetList
+            .nth(0)
+            .as_target_entry()
+            .unwrap()
+            .expr
+            .as_var()
+            .unwrap();
         assert_eq!((out_var.varno, out_var.varattno), (2, 1));
 
         let q = jt.quals.unwrap().as_op_expr().unwrap();
@@ -3883,7 +4097,6 @@ mod tests {
         assert_eq!((qual_var.varno, qual_var.varattno), (2, 1));
         assert!(q.args.nth(1).as_const().is_some());
     }
-
 
     fn rel_rte<'mcx>(mcx: Mcx<'mcx>, relid: u32, perm: u32) -> Node<'mcx> {
         Node::mk(
@@ -3976,7 +4189,10 @@ mod tests {
                 jointree: Some(
                     alloc_leak_in(
                         mcx,
-                        FromExpr { fromlist: NodeList::make1(mcx, jexpr).unwrap(), quals: None },
+                        FromExpr {
+                            fromlist: NodeList::make1(mcx, jexpr).unwrap(),
+                            quals: None,
+                        },
                     )
                     .unwrap(),
                 ),
@@ -3996,8 +4212,24 @@ mod tests {
         super::pull_up_subqueries(&mut crate::run::PlannerRun::new(mcx), &mut parse).unwrap();
 
         assert_eq!(parse.rtable.len(), 4);
-        assert_eq!(parse.rtable.nth(1).as_range_tbl_entry().unwrap().perminfoindex, 2);
-        assert_eq!(parse.rtable.nth(2).as_range_tbl_entry().unwrap().perminfoindex, 3);
+        assert_eq!(
+            parse
+                .rtable
+                .nth(1)
+                .as_range_tbl_entry()
+                .unwrap()
+                .perminfoindex,
+            2
+        );
+        assert_eq!(
+            parse
+                .rtable
+                .nth(2)
+                .as_range_tbl_entry()
+                .unwrap()
+                .perminfoindex,
+            3
+        );
         let jrte = parse.rtable.nth(3).as_range_tbl_entry().unwrap();
         assert_eq!(jrte.rtekind, RTEKind::RTE_JOIN);
         let av0 = jrte.joinaliasvars.nth(0).as_var().unwrap();
@@ -4014,7 +4246,14 @@ mod tests {
         assert_eq!(jq.args.nth(0).as_var().unwrap().varno, 2);
         assert_eq!(jq.args.nth(1).as_var().unwrap().varno, 3);
 
-        let out_var = parse.targetList.nth(0).as_target_entry().unwrap().expr.as_var().unwrap();
+        let out_var = parse
+            .targetList
+            .nth(0)
+            .as_target_entry()
+            .unwrap()
+            .expr
+            .as_var()
+            .unwrap();
         assert_eq!((out_var.varno, out_var.varattno), (3, 1));
     }
 
@@ -4066,12 +4305,27 @@ mod tests {
         assert_eq!(base.relid, 77);
         assert_eq!(base.perminfoindex, 3);
         assert_eq!(parse.rteperminfos.len(), 3);
-        assert_eq!(parse.rteperminfos.nth(2).as_rte_permission_info().unwrap().relid, 77);
+        assert_eq!(
+            parse
+                .rteperminfos
+                .nth(2)
+                .as_rte_permission_info()
+                .unwrap()
+                .relid,
+            77
+        );
 
         let jt = parse.jointree.unwrap();
         assert_eq!(jt.fromlist.len(), 1);
         assert_eq!(jt.fromlist.nth(0).as_range_tbl_ref().unwrap().rtindex, 3);
-        let out_var = parse.targetList.nth(0).as_target_entry().unwrap().expr.as_var().unwrap();
+        let out_var = parse
+            .targetList
+            .nth(0)
+            .as_target_entry()
+            .unwrap()
+            .expr
+            .as_var()
+            .unwrap();
         assert_eq!((out_var.varno, out_var.varattno), (3, 1));
     }
 
@@ -4114,7 +4368,10 @@ mod tests {
             jointree: Some(
                 alloc_leak_in(
                     mcx,
-                    FromExpr { fromlist: NodeList::make1(mcx, outer).unwrap(), quals: None },
+                    FromExpr {
+                        fromlist: NodeList::make1(mcx, outer).unwrap(),
+                        quals: None,
+                    },
                 )
                 .unwrap(),
             ),
@@ -4163,7 +4420,10 @@ pub fn transform_MERGE_to_join<'mcx>(mcx: Mcx<'mcx>, parse: &mut Query<'mcx>) ->
 
     let eref = mcx::leak_in(mcx::alloc_in(
         mcx,
-        types_nodes::primnodes::Alias { aliasname: Some("*MERGE*"), colnames: NodeList::nil() },
+        types_nodes::primnodes::Alias {
+            aliasname: Some("*MERGE*"),
+            colnames: NodeList::nil(),
+        },
     )?);
     let joinrte = RangeTblEntry {
         rtekind: RTEKind::RTE_JOIN,
@@ -4178,13 +4438,22 @@ pub fn transform_MERGE_to_join<'mcx>(mcx: Mcx<'mcx>, parse: &mut Query<'mcx>) ->
     let jt = parse.jointree.expect("MERGE jointree is a FromExpr");
     let rtr = Node::mk(
         mcx,
-        types_nodes::primnodes::RangeTblRef { rtindex: parse.mergeTargetRelation },
+        types_nodes::primnodes::RangeTblRef {
+            rtindex: parse.mergeTargetRelation,
+        },
     )?;
     let target = Node::mk(
         mcx,
-        FromExpr { fromlist: NodeList::make1(mcx, rtr)?, quals: jt.quals },
+        FromExpr {
+            fromlist: NodeList::make1(mcx, rtr)?,
+            quals: jt.quals,
+        },
     )?;
-    assert_eq!(jt.fromlist.len(), 1, "MERGE jointree carries exactly the source");
+    assert_eq!(
+        jt.fromlist.len(),
+        1,
+        "MERGE jointree carries exactly the source"
+    );
     let source = jt.fromlist.nth(0);
     debug_assert!(matches!(
         source.node_tag(),
@@ -4208,7 +4477,10 @@ pub fn transform_MERGE_to_join<'mcx>(mcx: Mcx<'mcx>, parse: &mut Query<'mcx>) ->
     parse.jointree = Some(
         Node::mk_mut(
             mcx,
-            FromExpr { fromlist: NodeList::make1(mcx, joinexpr)?, quals: None },
+            FromExpr {
+                fromlist: NodeList::make1(mcx, joinexpr)?,
+                quals: None,
+            },
         )?
         .seal_ref(),
     );
@@ -4216,13 +4488,10 @@ pub fn transform_MERGE_to_join<'mcx>(mcx: Mcx<'mcx>, parse: &mut Query<'mcx>) ->
     // A non-empty targetList here is a trigger-updatable view target: its
     // wholerow Var (over the expanded view) is nullable when the target is on
     // the join's inner side (C prepjointree.c:304-315).
-    if !parse.targetList.is_nil()
-        && matches!(jointype, JoinType::JOIN_RIGHT | JoinType::JOIN_FULL)
+    if !parse.targetList.is_nil() && matches!(jointype, JoinType::JOIN_RIGHT | JoinType::JOIN_FULL)
     {
-        let copy = copyfuncs::copy_object(
-            mcx,
-            Node::mk_list(mcx, parse.targetList.clone_in(mcx)?)?,
-        )?;
+        let copy =
+            copyfuncs::copy_object(mcx, Node::mk_list(mcx, parse.targetList.clone_in(mcx)?)?)?;
         add_source_nulling(mcx, copy, parse.mergeTargetRelation, joinrti)?;
         parse.targetList = copy.as_list().expect("List").clone_in(mcx)?;
     }
@@ -4299,8 +4568,7 @@ pub fn transform_MERGE_to_join<'mcx>(mcx: Mcx<'mcx>, parse: &mut Query<'mcx>) ->
         wrv.varattno = 0;
         wrv.vartype = vartype;
         wrv.vartypmod = -1;
-        wrv.varnullingrels
-            .add_member(mcx, joinrti)?;
+        wrv.varnullingrels.add_member(mcx, joinrti)?;
         wrv.varnosyn = sourcerti as u32;
         wrv.varattnosyn = 0;
         wrv.location = -1;
@@ -4370,11 +4638,8 @@ fn add_source_nulling<'mcx>(
                 }
                 NodeTag::T_Query => {
                     self.sublevels_up += 1;
-                    let r = nodes_core::query_tree_walker(
-                        node.as_query().expect("Query"),
-                        self,
-                        0,
-                    )?;
+                    let r =
+                        nodes_core::query_tree_walker(node.as_query().expect("Query"), self, 0)?;
                     self.sublevels_up -= 1;
                     Ok(r)
                 }
@@ -4388,7 +4653,12 @@ fn add_source_nulling<'mcx>(
             Ok(r)
         }
     }
-    let mut w = W { mcx, source_rti, join_rti, sublevels_up: 0 };
+    let mut w = W {
+        mcx,
+        source_rti,
+        join_rti,
+        sublevels_up: 0,
+    };
     use nodes_core::NodeWalker;
     w.visit(node)?;
     Ok(())
@@ -4420,7 +4690,12 @@ pub fn expand_virtual_generated_columns<'mcx>(
             continue;
         }
         let rel = table::table_open(mcx, rte.relid, types_rel::NoLock)?;
-        if !rel.rd_att.constr.as_deref().is_some_and(|c| c.has_generated_virtual) {
+        if !rel
+            .rd_att
+            .constr
+            .as_deref()
+            .is_some_and(|c| c.has_generated_virtual)
+        {
             table::table_close(rel, types_rel::NoLock)?;
             continue;
         }
@@ -4453,7 +4728,10 @@ pub fn expand_virtual_generated_columns<'mcx>(
                     0,
                 )?
             };
-            tlist.lappend(mcx, Node::mk_target_entry(mcx, expr, (i + 1) as i16, None, false)?)?;
+            tlist.lappend(
+                mcx,
+                Node::mk_target_entry(mcx, expr, (i + 1) as i16, None, false)?,
+            )?;
         }
         table::table_close(rel, types_rel::NoLock)?;
 
@@ -4467,7 +4745,11 @@ pub fn expand_virtual_generated_columns<'mcx>(
         ));
         let empty_relids = types_nodes::Bitmapset::empty();
         let phc = PullupPhCtx {
-            wrap_option: core::cell::Cell::new(if parse.groupingSets.is_nil() { WRAP_NONE } else { WRAP_ALL }),
+            wrap_option: core::cell::Cell::new(if parse.groupingSets.is_nil() {
+                WRAP_NONE
+            } else {
+                WRAP_ALL
+            }),
             last_ph_id: &last_ph_id,
             rv_cache: &rv_cache,
             sub_relids: &empty_relids,
@@ -4483,7 +4765,9 @@ pub fn expand_virtual_generated_columns<'mcx>(
         }
         // query_tree_mutator's T_WithCheckOption arm replaces only wco->qual.
         for wco_node in &parse.withCheckOptions {
-            let wco = wco_node.as_with_check_option().expect("withCheckOptions cell");
+            let wco = wco_node
+                .as_with_check_option()
+                .expect("withCheckOptions cell");
             let new_qual = replace_opt(mcx, wco.qual, varno, &tlist, false, Some(&phc))?;
             // SAFETY: pre-seal tree owned by this planner invocation.
             unsafe {
@@ -4517,8 +4801,14 @@ pub fn expand_virtual_generated_columns<'mcx>(
             }
             .expect("MergeAction");
         }
-        parse.mergeJoinCondition =
-            replace_opt(mcx, parse.mergeJoinCondition, varno, &tlist, false, Some(&phc))?;
+        parse.mergeJoinCondition = replace_opt(
+            mcx,
+            parse.mergeJoinCondition,
+            varno,
+            &tlist,
+            false,
+            Some(&phc),
+        )?;
         let jt = parse.jointree.expect("jointree is a FromExpr");
         let mut new_fromlist = NodeList::nil();
         for child in &jt.fromlist {
@@ -4530,7 +4820,10 @@ pub fn expand_virtual_generated_columns<'mcx>(
         let new_quals = replace_opt(mcx, jt.quals, varno, &tlist, false, Some(&phc))?;
         parse.jointree = Some(mcx::alloc_leak_in(
             mcx,
-            FromExpr { fromlist: new_fromlist, quals: new_quals },
+            FromExpr {
+                fromlist: new_fromlist,
+                quals: new_quals,
+            },
         )?);
 
         // C runs pullup_replace_vars over the whole Query here, which also
@@ -4592,8 +4885,10 @@ fn replace_vars_in_jointree_expand<'mcx>(
             let f = node.as_from_expr().expect("FromExpr");
             let mut fromlist = NodeList::nil();
             for child in &f.fromlist {
-                fromlist
-                    .lappend(mcx, replace_vars_in_jointree_expand(mcx, child, varno, tlist, phc)?)?;
+                fromlist.lappend(
+                    mcx,
+                    replace_vars_in_jointree_expand(mcx, child, varno, tlist, phc)?,
+                )?;
             }
             Node::mk(
                 mcx,

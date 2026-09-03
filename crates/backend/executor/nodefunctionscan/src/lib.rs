@@ -8,20 +8,20 @@ use core::alloc::Layout;
 use core::ptr::NonNull;
 
 use ::datum::NullableDatum;
-use ::execexpr::{exec_eval_expr, exec_init_expr, exec_init_qual, EvalSlots, ExprState};
+use ::execexpr::{exec_eval_expr, exec_init_expr, EvalSlots, ExprState};
 use ::execscan::{exec_scan_epq, exec_scan_extended, ScanNode, ScanState};
 use ::executils::{EStateData, ExecSlotId};
 use ::mcx::{Allocator, Mcx, MemoryContext, PgBox, PgVec};
+use ::tuplestore::Tuplestore;
 use ::types_error::{PgError, PgResult, ERRCODE_E_R_I_E_SRF_PROTOCOL_VIOLATED};
 use ::types_fmgr::{
-    ExprDoneCond, FmgrInfo, LocalFcinfo, ReturnSetInfo, SetFunctionReturnMode, SFRM_Materialize,
-    SFRM_Materialize_Preferred, SFRM_Materialize_Random, SFRM_ValuePerCall,
+    ExprDoneCond, FmgrInfo, LocalFcinfo, ReturnSetInfo, SFRM_Materialize,
+    SFRM_Materialize_Preferred, SFRM_Materialize_Random, SFRM_ValuePerCall, SetFunctionReturnMode,
 };
 use ::types_nodes::plannodes::FunctionScan;
 use ::types_nodes::RangeTblFunction;
 use ::types_slot::{TupleSlotKind, EXEC_FLAG_BACKWARD};
 use ::types_tuple::TupleDescData;
-use ::tuplestore::Tuplestore;
 
 #[cfg(test)]
 mod tests;
@@ -98,17 +98,15 @@ impl<'mcx> ScanNode<'mcx> for FunctionScanState<'mcx> {
     }
 
     /// `FunctionRecheck`: nothing to check.
-    fn epq_recheck(
-        &mut self,
-        _estate: &mut EStateData<'mcx>,
-        _slot: ExecSlotId,
-    ) -> PgResult<bool> {
+    fn epq_recheck(&mut self, _estate: &mut EStateData<'mcx>, _slot: ExecSlotId) -> PgResult<bool> {
         Ok(true)
     }
 
     fn scan_next(&mut self, estate: &mut EStateData<'mcx>) -> PgResult<bool> {
-        let forward =
-            matches!(estate.es_direction, ::types_scan::ScanDirection::ForwardScanDirection);
+        let forward = matches!(
+            estate.es_direction,
+            ::types_scan::ScanDirection::ForwardScanDirection
+        );
         let mcx = estate.es_query_cxt;
 
         if self.simple {
@@ -129,7 +127,11 @@ impl<'mcx> ScanNode<'mcx> for FunctionScanState<'mcx> {
             }
             let fs = &mut self.funcstates[0];
             let slot = estate.slot_mut(self.ss.ss_ScanTupleSlot);
-            return fs.tstore.as_mut().unwrap().gettupleslot(forward, false, slot, mcx);
+            return fs
+                .tstore
+                .as_mut()
+                .unwrap()
+                .gettupleslot(forward, false, slot, mcx);
         }
 
         // Move the ordinal off either end by exactly one before the
@@ -274,8 +276,7 @@ pub fn exec_init_function_scan<'mcx>(
     let mut scan_tupdesc = if simple {
         tupdesc::CreateTupleDescCopy(mcx, &funcstates[0].tupdesc)?
     } else {
-        let mut d =
-            tupdesc::CreateTemplateTupleDesc(mcx, natts + if ordinality { 1 } else { 0 })?;
+        let mut d = tupdesc::CreateTemplateTupleDesc(mcx, natts + if ordinality { 1 } else { 0 })?;
         let mut attno: i16 = 0;
         for fs in funcstates.iter() {
             for j in 1..=fs.colcount {
@@ -302,7 +303,11 @@ pub fn exec_init_function_scan<'mcx>(
     let ps_ExprContext = estate.exec_assign_expr_context();
     let ss_ScanTupleSlot = estate.exec_init_extra_tuple_slot(
         Some(Rc::new(scan_tupdesc)),
-        if simple { TupleSlotKind::MinimalTuple } else { TupleSlotKind::Virtual },
+        if simple {
+            TupleSlotKind::MinimalTuple
+        } else {
+            TupleSlotKind::Virtual
+        },
     );
     if !simple {
         for fs in funcstates.iter_mut() {
@@ -366,8 +371,7 @@ fn exec_init_table_function_result<'mcx>(
     let mut args: PgVec<'mcx, PgBox<'mcx, ExprState<'mcx>>> = PgVec::new_in(mcx);
     for arg in &func.args {
         args.push(
-            exec_init_expr(mcx, Some(arg), estate.param_bind())?
-                .expect("non-NULL arg expression"),
+            exec_init_expr(mcx, Some(arg), estate.param_bind())?.expect("non-NULL arg expression"),
         );
     }
     // init_sexpr's ACL_EXECUTE check (execQual.c): contrib functions REVOKE
@@ -497,7 +501,11 @@ fn exec_make_table_function_result<'mcx>(
 ) -> PgResult<Tuplestore> {
     // ExecEvalParamExec pending-initplan arm, hoisted out of the interpreter
     // (execscan pattern): the funcexpr args may carry InitPlan Params.
-    for st in setexpr.elided_func_state.iter().map(|b| &**b).chain(setexpr.args.iter().map(|b| &**b))
+    for st in setexpr
+        .elided_func_state
+        .iter()
+        .map(|b| &**b)
+        .chain(setexpr.args.iter().map(|b| &**b))
     {
         let deps = st.param_exec_deps();
         if !deps.is_empty() {
@@ -541,15 +549,29 @@ fn run_elided<'mcx>(
     let work_mem = init_small::globals::work_mem();
     let mut store = Tuplestore::begin_heap(random_access, false, work_mem);
     estate.ecxt_mut(ecxt).reset();
-    let elided = setexpr.elided_func_state.as_mut().expect("run_elided has elidedFuncState");
+    let elided = setexpr
+        .elided_func_state
+        .as_mut()
+        .expect("run_elided has elidedFuncState");
     // The row is copied into the tuplestore before the next per-tuple reset.
     // SAFETY: the ExprContext outlives this call frame.
     unsafe { elided.arm_result_mcx_raw(estate.ecxt(ecxt).per_tuple_mcx()) };
-    let mut slots = EvalSlots { scan: None, inner: None, outer: None };
+    let mut slots = EvalSlots {
+        scan: None,
+        inner: None,
+        outer: None,
+    };
     let NullableDatum { value, isnull } = exec_eval_expr(elided, &mut slots)?;
     if setexpr.returns_tuple {
         let mut set_desc: Option<TupleDescData<'mcx>> = None;
-        put_composite_row(&mut store, expected_desc, &mut set_desc, value, isnull, estate)?;
+        put_composite_row(
+            &mut store,
+            expected_desc,
+            &mut set_desc,
+            value,
+            isnull,
+            estate,
+        )?;
         // C: cross-check the function-provided tupdesc against expectedDesc.
         if let Some(d) = &set_desc {
             tupledesc_match(expected_desc, d)?;
@@ -573,12 +595,14 @@ fn run_value_per_call<'mcx, const N: usize>(
     if random_access {
         allowed |= SFRM_Materialize_Random;
     }
-    let flinfo = setexpr.flinfo.as_mut().expect("ValuePerCall path has a resolved function");
+    let flinfo = setexpr
+        .flinfo
+        .as_mut()
+        .expect("ValuePerCall path has a resolved function");
     let mut rsinfo = ReturnSetInfo::new(allowed);
     // SAFETY: expectedDesc contract — points at the scan tupdesc, which
     // outlives this call frame; rsinfo dies with the frame.
-    rsinfo.expectedDesc =
-        Some(core::ptr::NonNull::from(expected_desc).cast::<core::ffi::c_void>());
+    rsinfo.expectedDesc = Some(core::ptr::NonNull::from(expected_desc).cast::<core::ffi::c_void>());
     let mut fcinfo = LocalFcinfo::<N>::new(setexpr.collation);
     // fcinfo.resultinfo and the result mcx are armed inside the loop, before
     // each invoke (miri F6/F9: per-invoke provenance re-arm).
@@ -591,7 +615,11 @@ fn run_value_per_call<'mcx, const N: usize>(
         // SAFETY: arg_mcx is owned by the scan state and outlives this loop;
         // it is only reset at the next scan start.
         unsafe { setexpr.args[i].arm_result_mcx_raw(arg_mcx.mcx()) };
-        let mut slots = EvalSlots { scan: None, inner: None, outer: None };
+        let mut slots = EvalSlots {
+            scan: None,
+            inner: None,
+            outer: None,
+        };
         let NullableDatum { value, isnull } = exec_eval_expr(&mut setexpr.args[i], &mut slots)?;
         if isnull {
             fcinfo.set_arg_null(i);
@@ -641,7 +669,9 @@ fn run_value_per_call<'mcx, const N: usize>(
         let fcu = if flinfo.fn_stats < ::types_fmgr::TRACK_FUNC_ALL
             && ::pgstat::function::pgstat_track_functions() > flinfo.fn_stats as i32
         {
-            Some(::pgstat::function::pgstat_init_function_usage(flinfo.fn_oid)?)
+            Some(::pgstat::function::pgstat_init_function_usage(
+                flinfo.fn_oid,
+            )?)
         } else {
             None
         };
@@ -802,8 +832,7 @@ fn put_composite_row<'mcx>(
     let _flat;
     let p = unsafe {
         if !::types_tuple::varatt::varatt_is_4b_u(src) {
-            let image =
-                core::slice::from_raw_parts(src, ::types_tuple::varatt::varsize_any(src));
+            let image = core::slice::from_raw_parts(src, ::types_tuple::varatt::varsize_any(src));
             _flat = ::detoast_seams::detoast_attr::call(mcx, image)?;
             _flat.as_ptr()
         } else {

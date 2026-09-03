@@ -11,12 +11,14 @@ pub use parallel::{
     ParallelIndexAmShared, ParallelIndexScanDescShared,
 };
 
-use ::mcx::{Mcx, PgBox, PgVec};
 use ::gin_vocab::GinScanOpaqueData;
-use ::types_core::{Oid, BRIN_AM_OID, BTREE_AM_OID, GIN_AM_OID, GIST_AM_OID, HASH_AM_OID, SPGIST_AM_OID};
-use ::types_hash::HashScanOpaqueData;
+use ::mcx::{Mcx, PgBox, PgVec};
+use ::types_core::{
+    Oid, BRIN_AM_OID, BTREE_AM_OID, GIN_AM_OID, GIST_AM_OID, HASH_AM_OID, SPGIST_AM_OID,
+};
 use ::types_error::PgResult;
 use ::types_gist::state::GISTScanOpaqueData;
+use ::types_hash::HashScanOpaqueData;
 use ::types_nbtree::BTScanOpaqueData;
 use ::types_rel::Relation;
 use ::types_scan::scankey::ScanKeyData;
@@ -254,6 +256,7 @@ impl IndexAmKind {
 
 // amapi.h OpFamilyMember: DDL carrier for opclass/opfamily member entries.
 #[derive(Clone, Copy, Debug)]
+#[derive(Default)]
 pub struct OpFamilyMember {
     pub is_func: bool,
     pub object: Oid,
@@ -266,21 +269,6 @@ pub struct OpFamilyMember {
     pub refobjid: Oid,
 }
 
-impl Default for OpFamilyMember {
-    fn default() -> Self {
-        OpFamilyMember {
-            is_func: false,
-            object: 0,
-            number: 0,
-            sortfamily: 0,
-            lefttype: 0,
-            righttype: 0,
-            ref_is_hard: false,
-            ref_is_family: false,
-            refobjid: 0,
-        }
-    }
-}
 
 // C resolves any pg_am row through its amhandler; the closed IndexAmKind set
 // gives non-builtin AMs (CREATE ACCESS METHOD over a builtin handler) a
@@ -310,9 +298,12 @@ pub fn set_index_am_resolver(f: fn(Oid) -> Option<IndexAmKind>) {
 #[cold]
 #[inline(never)]
 fn registered_index_am(relam: Oid) -> IndexAmKind {
-    if let Some(k) = REGISTERED_INDEX_AMS
-        .with(|v| v.borrow().iter().find(|&&(o, _)| o == relam).map(|&(_, k)| k))
-    {
+    if let Some(k) = REGISTERED_INDEX_AMS.with(|v| {
+        v.borrow()
+            .iter()
+            .find(|&&(o, _)| o == relam)
+            .map(|&(_, k)| k)
+    }) {
         return k;
     }
     let raw = INDEX_AM_RESOLVER.load(std::sync::atomic::Ordering::Relaxed);
@@ -495,7 +486,9 @@ pub struct IndexScanDescData<'mcx> {
 impl<'mcx> IndexScanDescData<'mcx> {
     #[inline]
     pub fn index_rel(&self) -> &Relation<'mcx> {
-        self.indexRelation.as_ref().expect("index scan parked (skeleton)")
+        self.indexRelation
+            .as_ref()
+            .expect("index scan parked (skeleton)")
     }
 }
 

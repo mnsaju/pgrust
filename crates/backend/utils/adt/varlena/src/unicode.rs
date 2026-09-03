@@ -3,9 +3,7 @@
 
 use datum::Varlena;
 use mcx::{Mcx, PgVec};
-use types_error::{
-    PgError, PgResult, ERRCODE_INVALID_PARAMETER_VALUE, ERRCODE_SYNTAX_ERROR,
-};
+use types_error::{PgError, PgResult, ERRCODE_INVALID_PARAMETER_VALUE, ERRCODE_SYNTAX_ERROR};
 use unicode_norm::{
     unicode_is_normalized_quickcheck, unicode_normalize, UnicodeNormalizationForm, UNICODE_NFC,
     UNICODE_NFD, UNICODE_NFKC, UNICODE_NFKD, UNICODE_NORM_QC_NO, UNICODE_NORM_QC_YES,

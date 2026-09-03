@@ -12,9 +12,7 @@ use ::ts_parse::{parsetext, ParsedText, TsParseEnv};
 use ::types_core::primitive::InvalidOid;
 use ::types_core::Oid;
 use ::types_error::PgResult;
-use ::types_fmgr::{
-    varlena_result, FmgrInfo, FunctionCallInfoBaseData as Fcinfo,
-};
+use ::types_fmgr::{varlena_result, FmgrInfo, FunctionCallInfoBaseData as Fcinfo};
 
 use crate::builtins::{text_data, tsquery_image};
 use crate::cache_bind;
@@ -63,7 +61,11 @@ pub(crate) fn json_to_tsvector_worker<'mcx, E: TsParseEnv<'mcx>>(
     make_tsvector(mcx, &mut prs)
 }
 
-fn jsonb_variant(fcinfo: &mut Fcinfo, cfg: Option<Oid>, flags_arg: Option<usize>) -> PgResult<Datum> {
+fn jsonb_variant(
+    fcinfo: &mut Fcinfo,
+    cfg: Option<Oid>,
+    flags_arg: Option<usize>,
+) -> PgResult<Datum> {
     // SAFETY: the armed result mcx outlives this call.
     let mcx = unsafe { fcinfo.result_mcx_detached() };
     let (base, cfg_known) = match cfg {
@@ -75,9 +77,8 @@ fn jsonb_variant(fcinfo: &mut Fcinfo, cfg: Option<Oid>, flags_arg: Option<usize>
     let flags = match flags_arg {
         Some(i) => {
             // SAFETY: strict fn; non-null jsonb flags arg.
-            let fl = unsafe {
-                ::adt_jsonb::builtins::jsonb_payload_from_datum(mcx, fcinfo.arg(i))
-            }?;
+            let fl =
+                unsafe { ::adt_jsonb::builtins::jsonb_payload_from_datum(mcx, fcinfo.arg(i)) }?;
             parse_jsonb_index_flags(mcx, fl.as_bytes())?
         }
         None => JTI_STRING,
@@ -94,7 +95,11 @@ fn jsonb_variant(fcinfo: &mut Fcinfo, cfg: Option<Oid>, flags_arg: Option<usize>
     Ok(varlena_result(Varlena::from_image(img)))
 }
 
-fn json_variant(fcinfo: &mut Fcinfo, cfg: Option<Oid>, flags_arg: Option<usize>) -> PgResult<Datum> {
+fn json_variant(
+    fcinfo: &mut Fcinfo,
+    cfg: Option<Oid>,
+    flags_arg: Option<usize>,
+) -> PgResult<Datum> {
     // SAFETY: the armed result mcx outlives this call.
     let mcx = unsafe { fcinfo.result_mcx_detached() };
     let (base, cfg_known) = match cfg {
@@ -105,9 +110,8 @@ fn json_variant(fcinfo: &mut Fcinfo, cfg: Option<Oid>, flags_arg: Option<usize>)
     let flags = match flags_arg {
         Some(i) => {
             // SAFETY: strict fn; non-null jsonb flags arg.
-            let fl = unsafe {
-                ::adt_jsonb::builtins::jsonb_payload_from_datum(mcx, fcinfo.arg(i))
-            }?;
+            let fl =
+                unsafe { ::adt_jsonb::builtins::jsonb_payload_from_datum(mcx, fcinfo.arg(i)) }?;
             parse_jsonb_index_flags(mcx, fl.as_bytes())?
         }
         None => JTI_STRING,
@@ -164,10 +168,7 @@ pub fn fc_json_string_to_tsvector(
     json_variant(fcinfo, None, None)
 }
 
-pub fn fc_json_to_tsvector_byid(
-    _f: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_json_to_tsvector_byid(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let cfg = fcinfo.arg_oid(0);
     json_variant(fcinfo, Some(cfg), Some(2))
 }
@@ -229,7 +230,9 @@ impl<'mcx> HeadlineJsonState<'mcx> {
     // C: headline_json_value — prs->curwords = 0, then the text lane.
     fn value(&mut self, elem: &[u8]) -> PgResult<PgVec<'mcx, u8>> {
         self.prs.words.clear();
-        let query = ::adt_tsvector_core::query::TsQueryRef { payload: &self.qimage[4..] };
+        let query = ::adt_tsvector_core::query::TsQueryRef {
+            payload: &self.qimage[4..],
+        };
         hlparsetext(self.mcx, &mut self.env, &mut self.prs, query, elem)?;
         let opts_datum = match &self.opts {
             Some(v) => Datum::from_usize(v as *const _ as usize),
@@ -260,9 +263,8 @@ fn ts_headline_jsonb_common(
     let mut st = HeadlineJsonState::setup(fcinfo, cfg, has_opts)?;
     // SAFETY: strict fn; non-null jsonb arg.
     let jb = unsafe { ::adt_jsonb::builtins::jsonb_payload_from_datum(mcx, fcinfo.arg(base)) }?;
-    let img = transform_jsonb_string_values(mcx, jb.as_bytes(), &mut |elem| {
-        Ok(st.value(elem)?.leak())
-    })?;
+    let img =
+        transform_jsonb_string_values(mcx, jb.as_bytes(), &mut |elem| Ok(st.value(elem)?.leak()))?;
     Ok(varlena_result(Varlena::from_image(img)))
 }
 
@@ -299,10 +301,7 @@ pub fn fc_ts_headline_jsonb_byid(
     ts_headline_jsonb_common(fcinfo, Some(cfg), false)
 }
 
-pub fn fc_ts_headline_jsonb_opt(
-    _f: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_ts_headline_jsonb_opt(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     ts_headline_jsonb_common(fcinfo, None, true)
 }
 
@@ -318,18 +317,12 @@ pub fn fc_ts_headline_json_byid_opt(
     ts_headline_json_common(fcinfo, Some(cfg), true)
 }
 
-pub fn fc_ts_headline_json_byid(
-    _f: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_ts_headline_json_byid(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let cfg = fcinfo.arg_oid(0);
     ts_headline_json_common(fcinfo, Some(cfg), false)
 }
 
-pub fn fc_ts_headline_json_opt(
-    _f: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_ts_headline_json_opt(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     ts_headline_json_common(fcinfo, None, true)
 }
 

@@ -270,7 +270,7 @@ pub fn RelationGetBufferForTuple<'mcx>(
     // at use time in dml.rs heap_multi_insert instead, which owns the FROZEN
     // all-visible marking + visibilitymap_set (heapam.c:2460-2654).
 
-    let save_free_space = relation.get_target_page_free_space(HEAP_DEFAULT_FILLFACTOR) as usize;
+    let save_free_space = relation.get_target_page_free_space(HEAP_DEFAULT_FILLFACTOR);
     let nearly_empty_free_space =
         MaxHeapTupleSize - (MaxHeapTuplesPerPage / 8 * core::mem::size_of::<ItemIdData>());
     let target_free_space = if len + save_free_space > nearly_empty_free_space {

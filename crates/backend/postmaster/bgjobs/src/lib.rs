@@ -249,7 +249,9 @@ impl Dispatcher {
     /// Bare-thread spawn (tests).
     pub fn spawn(rt: Arc<Runtime>) -> Dispatcher {
         Dispatcher::spawn_with(rt, |body| {
-            std::thread::Builder::new().name("pg-bgjobs-dispatcher".into()).spawn(body)
+            std::thread::Builder::new()
+                .name("pg-bgjobs-dispatcher".into())
+                .spawn(body)
         })
     }
 
@@ -262,7 +264,9 @@ impl Dispatcher {
             jobs.push(JobEntry {
                 job,
                 // Due immediately; the dispatcher submits the Startup cycle.
-                phase: Phase::Idle { due: Deadline::after(Duration::ZERO) },
+                phase: Phase::Idle {
+                    due: Deadline::after(Duration::ZERO),
+                },
                 never_ran: true,
                 wake_pending: false,
             });
@@ -336,7 +340,12 @@ impl TaskSetWork for CycleWork {
     }
 }
 
-fn submit_cycle(shared: &Arc<Shared>, id: JobId, job: Arc<dyn BgJob>, reason: CycleReason) -> Phase {
+fn submit_cycle(
+    shared: &Arc<Shared>,
+    id: JobId,
+    job: Arc<dyn BgJob>,
+    reason: CycleReason,
+) -> Phase {
     let outcome = Arc::new(Mutex::new(None));
     let work = Arc::new(CycleWork {
         shared: Arc::clone(shared),
@@ -386,12 +395,14 @@ fn dispatcher_pass(shared: &Arc<Shared>) -> Option<Duration> {
         // Harvest a finished in-flight cycle (immutable borrows only; the
         // phase swap happens after the borrow ends).
         let harvested: Option<Phase> = match &jobs[id].phase {
-            Phase::InFlight { waiter, outcome, .. } => waiter.try_wait().map(|rg_outcome| {
+            Phase::InFlight {
+                waiter, outcome, ..
+            } => waiter.try_wait().map(|rg_outcome| {
                 let cycle_outcome = outcome.lock().unwrap().take();
                 match (rg_outcome, cycle_outcome) {
-                    (RgOutcome::Completed, Some(CycleOutcome::Sleep(d))) => {
-                        Phase::Idle { due: now.deadline_after(d) }
-                    }
+                    (RgOutcome::Completed, Some(CycleOutcome::Sleep(d))) => Phase::Idle {
+                        due: now.deadline_after(d),
+                    },
                     (RgOutcome::Completed, Some(CycleOutcome::Exit)) => {
                         jobs_teardown.push(id);
                         Phase::Exited
@@ -477,19 +488,29 @@ fn dispatcher_pass(shared: &Arc<Shared>) -> Option<Duration> {
                     // pass is deliberate — handles are cheap and
                     // republication heals token reissue.
                     if let Some(l) = job.latch() {
-                        l.waker.store(shared.waker.load(Ordering::Acquire), Ordering::Release);
+                        l.waker
+                            .store(shared.waker.load(Ordering::Acquire), Ordering::Release);
                         l.set_maybe_sleeping(true);
                         if l.is_set() {
                             Act::Dispatch(CycleReason::Wake)
                         } else {
-                            Act::IdleFor(Duration::from_nanos(due.as_ns().saturating_sub(now.as_ns())))
+                            Act::IdleFor(Duration::from_nanos(
+                                due.as_ns().saturating_sub(now.as_ns()),
+                            ))
                         }
                     } else {
-                        Act::IdleFor(Duration::from_nanos(due.as_ns().saturating_sub(now.as_ns())))
+                        Act::IdleFor(Duration::from_nanos(
+                            due.as_ns().saturating_sub(now.as_ns()),
+                        ))
                     }
                 }
             }
-            Phase::InFlight { submitted, handle, stall_logged, .. } => Act::InFlightTick {
+            Phase::InFlight {
+                submitted,
+                handle,
+                stall_logged,
+                ..
+            } => Act::InFlightTick {
                 stall: !*stall_logged
                     && Duration::from_nanos(now.since_ns(*submitted)) >= wd
                     && handle.stats().tasks_claimed == 0,
@@ -508,7 +529,11 @@ fn dispatcher_pass(shared: &Arc<Shared>) -> Option<Duration> {
                 if let Some(l) = job.latch() {
                     l.set_maybe_sleeping(false);
                 }
-                let reason = if jobs[id].never_ran { CycleReason::Startup } else { reason };
+                let reason = if jobs[id].never_ran {
+                    CycleReason::Startup
+                } else {
+                    reason
+                };
                 if jobs[id].never_ran {
                     // Identity acquisition, once, on the dispatcher (§3.2).
                     match contain(job.as_ref(), "startup", || job.startup()) {
@@ -540,8 +565,11 @@ fn dispatcher_pass(shared: &Arc<Shared>) -> Option<Duration> {
             Act::InFlightTick { stall } => {
                 if stall {
                     let name = jobs[id].job.name();
-                    if let Phase::InFlight { stall_logged, submitted, .. } =
-                        &mut jobs[id].phase
+                    if let Phase::InFlight {
+                        stall_logged,
+                        submitted,
+                        ..
+                    } = &mut jobs[id].phase
                     {
                         *stall_logged = true;
                         let waited = now.since_ns(*submitted) / 1_000_000;
@@ -564,7 +592,9 @@ fn dispatcher_loop(shared: Arc<Shared>) {
     // Publish our waker BEFORE the first pass: producers that saw 0 unpark
     // nothing, but they only exist after register() returns, which unparks
     // through this word — and a pending unpark latches.
-    shared.waker.store(waiter::current_handle().as_u64(), Ordering::Release);
+    shared
+        .waker
+        .store(waiter::current_handle().as_u64(), Ordering::Release);
     loop {
         let bound = dispatcher_pass(&shared);
         // A wake that landed during the pass is latched in the waiter slot;

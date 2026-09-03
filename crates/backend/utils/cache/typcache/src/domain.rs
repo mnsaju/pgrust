@@ -105,7 +105,9 @@ pub(crate) fn load_domaintype_info(entry: &TypeCacheEntry) -> PgResult<()> {
         }
         let dcc: &'static DomainConstraintCache = mcx::leak_in(mcx::alloc_in(
             mcx,
-            DomainConstraintCache { constraints: v.leak() },
+            DomainConstraintCache {
+                constraints: v.leak(),
+            },
         )?);
         entry.domain_data.set(Some(dcc));
     }

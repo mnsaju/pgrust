@@ -10,7 +10,9 @@ use types_nodes::list::NodeList;
 use types_nodes::nodes_enums::CmdType;
 use types_nodes::parsenodes::{AlterTableCmd, AlterTableType, DefElem, DefElemAction, Query};
 use types_nodes::primnodes::RangeVar;
-use types_nodes::rawnodes::{ColumnDef, CreateStmt, OnCommitAction, TypeName, ViewCheckOption, ViewStmt};
+use types_nodes::rawnodes::{
+    ColumnDef, CreateStmt, OnCommitAction, TypeName, ViewCheckOption, ViewStmt,
+};
 use types_nodes::{Node, RawStmt};
 use types_portal::QueryEnvHandle;
 use types_rel::RELKIND_VIEW;
@@ -28,8 +30,13 @@ pub fn DefineView<'mcx>(
         stmt_location,
         stmt_len,
     };
-    let mut viewParse =
-        parser_analyze::parse_analyze_fixedparams(mcx, &rawstmt, query_string, &[], QueryEnvHandle::NULL)?;
+    let mut viewParse = parser_analyze::parse_analyze_fixedparams(
+        mcx,
+        &rawstmt,
+        query_string,
+        &[],
+        QueryEnvHandle::NULL,
+    )?;
 
     if viewParse.utilityStmt.is_some() {
         return Err(feature_not_supported("views must not contain SELECT INTO"));
@@ -85,11 +92,17 @@ pub fn DefineView<'mcx>(
             if te.resjunk {
                 continue;
             }
-            let alias = next_alias.expect("alias").as_string().expect("alias is a String").sval;
+            let alias = next_alias
+                .expect("alias")
+                .as_string()
+                .expect("alias is a String")
+                .sval;
             // SAFETY: tree is statement-owned; no derived refs live.
             unsafe {
-                item.with_mut::<types_nodes::primnodes::TargetEntry, _>(|t| t.resname = Some(alias))
-                    .expect("TargetEntry");
+                item.with_mut::<types_nodes::primnodes::TargetEntry, _>(|t| {
+                    t.resname = Some(alias)
+                })
+                .expect("TargetEntry");
             }
             next_alias = alias_iter.next();
         }
@@ -128,7 +141,11 @@ pub fn DefineView<'mcx>(
                 "view \"{}\" will be a temporary view",
                 view.relname.unwrap_or("")
             ))
-            .finish(types_error::ErrorLocation::new(file!(), line!() as i32, "DefineView"))?;
+            .finish(types_error::ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "DefineView",
+            ))?;
     }
 
     DefineVirtualRelation(mcx, stmt, view, options, &mut viewParse, query_string)
@@ -204,15 +221,13 @@ fn DefineVirtualRelation<'mcx>(
         relpersistence: view.relpersistence,
         location: view.location,
     };
-    let lockmode =
-        if stmt.replace { types_rel::AccessExclusiveLock } else { types_rel::NoLock };
-    let (namespace_id, view_oid, _relpersistence) =
-        catalog_namespace::RangeVarGetAndCheckCreationNamespace(
-            mcx,
-            &creation_rv,
-            lockmode,
-            true,
-        )?;
+    let lockmode = if stmt.replace {
+        types_rel::AccessExclusiveLock
+    } else {
+        types_rel::NoLock
+    };
+    let (_namespace_id, view_oid, _relpersistence) =
+        catalog_namespace::RangeVarGetAndCheckCreationNamespace(mcx, &creation_rv, lockmode, true)?;
 
     if stmt.replace && view_oid != InvalidOid {
         return ReplaceViewQuery(mcx, view_oid, attrList, options, viewParse);
@@ -228,7 +243,8 @@ fn DefineVirtualRelation<'mcx>(
     createStmt.tablespacename = None;
     createStmt.if_not_exists = false;
 
-    let view_oid = tablecmds::DefineRelation(mcx, &createStmt, RELKIND_VIEW, InvalidOid, query_string)?;
+    let view_oid =
+        tablecmds::DefineRelation(mcx, &createStmt, RELKIND_VIEW, InvalidOid, query_string)?;
     xact::CommandCounterIncrement()?;
     StoreViewQuery(mcx, view_oid, viewParse, stmt.replace)?;
     Ok(view_oid)
@@ -299,9 +315,7 @@ fn checkViewColumns(
     olddesc: &types_tuple::TupleDescData<'_>,
 ) -> PgResult<()> {
     let invalid = |msg: String| -> Box<PgError> {
-        Box::new(
-            PgError::error(msg).with_sqlstate(types_error::ERRCODE_INVALID_TABLE_DEFINITION),
-        )
+        Box::new(PgError::error(msg).with_sqlstate(types_error::ERRCODE_INVALID_TABLE_DEFINITION))
     };
     if newdesc.natts < olddesc.natts {
         return Err(invalid("cannot drop columns from view".to_string()));
@@ -314,10 +328,10 @@ fn checkViewColumns(
             return Err(invalid("cannot drop columns from view".to_string()));
         }
 
-        let newname = core::str::from_utf8(newattr.attname.name_str())
-            .expect("attribute name is UTF-8");
-        let oldname = core::str::from_utf8(oldattr.attname.name_str())
-            .expect("attribute name is UTF-8");
+        let newname =
+            core::str::from_utf8(newattr.attname.name_str()).expect("attribute name is UTF-8");
+        let oldname =
+            core::str::from_utf8(oldattr.attname.name_str()).expect("attribute name is UTF-8");
         if newname != oldname {
             return Err(Box::new(
                 PgError::error(format!(

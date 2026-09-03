@@ -66,12 +66,18 @@ pub fn exec_init_incremental_sort<'mcx>(
     debug_assert!(eflags & (EXEC_FLAG_BACKWARD | EXEC_FLAG_MARK) == 0);
     let mcx = estate.es_query_cxt;
     let ps_ExprContext = estate.exec_assign_expr_context();
-    let ps_ResultTupleSlot = estate
-        .exec_init_extra_tuple_slot(Some(result_desc.clone()), TupleSlotKind::MinimalTuple);
-    let group_pivot =
-        exectuples::make_tuple_table_slot(mcx, TupleSlotKind::MinimalTuple, Some(outer_desc.clone()));
-    let transfer_tuple =
-        exectuples::make_tuple_table_slot(mcx, TupleSlotKind::MinimalTuple, Some(outer_desc.clone()));
+    let ps_ResultTupleSlot =
+        estate.exec_init_extra_tuple_slot(Some(result_desc.clone()), TupleSlotKind::MinimalTuple);
+    let group_pivot = exectuples::make_tuple_table_slot(
+        mcx,
+        TupleSlotKind::MinimalTuple,
+        Some(outer_desc.clone()),
+    );
+    let transfer_tuple = exectuples::make_tuple_table_slot(
+        mcx,
+        TupleSlotKind::MinimalTuple,
+        Some(outer_desc.clone()),
+    );
     IncrementalSortState {
         plan: node,
         ps_ExprContext,
@@ -102,15 +108,17 @@ fn prepare_presorted_cols<'mcx>(
     for i in 0..n {
         let sortop = node.plan.sort.sortOperators[i];
         let (equality_op, _) = lsyscache::amop::get_equality_op_for_ordering_op(sortop)?
-            .unwrap_or_else(|| {
-                panic!("missing equality operator for ordering operator {sortop}")
-            });
+            .unwrap_or_else(|| panic!("missing equality operator for ordering operator {sortop}"));
         eqfuncoids.push(lsyscache::get_opcode(equality_op)?);
     }
     node.presorted_eq = Some(exec_build_grouping_equal(
         mcx,
-        node.outer_desc.as_ref().expect("incremental sort already ended"),
-        node.outer_desc.as_ref().expect("incremental sort already ended"),
+        node.outer_desc
+            .as_ref()
+            .expect("incremental sort already ended"),
+        node.outer_desc
+            .as_ref()
+            .expect("incremental sort already ended"),
         &node.plan.sort.sortColIdx[..n],
         &eqfuncoids,
         &node.plan.sort.collations[..n],
@@ -125,7 +133,11 @@ fn is_current_group<'a, 'mcx>(
     pivot: &'a mut SlotData<'mcx>,
     tuple: &'a mut SlotData<'mcx>,
 ) -> PgResult<bool> {
-    let mut slots = EvalSlots { scan: None, inner: Some(tuple), outer: Some(pivot) };
+    let mut slots = EvalSlots {
+        scan: None,
+        inner: Some(tuple),
+        outer: Some(pivot),
+    };
     exec_qual(Some(eq), &mut slots)
 }
 
@@ -137,12 +149,7 @@ fn fullsort_opts(bounded: bool) -> i32 {
     }
 }
 
-fn record_group(
-    estate: &mut EStateData<'_>,
-    plan_node_id: i32,
-    prefix: bool,
-    ts: &mut Tuplesort,
-) {
+fn record_group(estate: &mut EStateData<'_>, plan_node_id: i32, prefix: bool, ts: &mut Tuplesort) {
     let stats = ts.get_stats();
     let vec = &mut estate.es_incsort_instrumentation;
     let idx = match vec.iter().position(|(i, _)| *i == plan_node_id) {
@@ -174,7 +181,9 @@ fn switch_to_presorted_prefix_mode<'mcx>(
         None => {
             // Prefix columns are all equal within a group; sort only the rest.
             node.prefixsort_state = Some(Tuplesort::begin_heap(
-                node.outer_desc.clone().expect("incremental sort already ended"),
+                node.outer_desc
+                    .clone()
+                    .expect("incremental sort already ended"),
                 &plan.sort.sortColIdx[n_presorted..],
                 &plan.sort.sortOperators[n_presorted..],
                 &plan.sort.collations[n_presorted..],
@@ -186,7 +195,10 @@ fn switch_to_presorted_prefix_mode<'mcx>(
         Some(ts) => ts.reset(),
     }
     if node.bounded {
-        node.prefixsort_state.as_mut().unwrap().set_bound(node.bound - node.bound_done);
+        node.prefixsort_state
+            .as_mut()
+            .unwrap()
+            .set_bound(node.bound - node.bound_done);
     }
 
     let mut n_tuples: i64 = 0;
@@ -244,7 +256,12 @@ fn switch_to_presorted_prefix_mode<'mcx>(
     } else {
         let ts = node.prefixsort_state.as_mut().unwrap();
         ts.performsort()?;
-        record_group(estate, plan.sort.plan.plan_node_id, true, node.prefixsort_state.as_mut().unwrap());
+        record_group(
+            estate,
+            plan.sort.plan.plan_node_id,
+            true,
+            node.prefixsort_state.as_mut().unwrap(),
+        );
         if node.bounded {
             node.bound_done = node.bound.min(node.bound_done + n_tuples);
         }
@@ -271,7 +288,10 @@ where
     let plan = node.plan;
     let mut n_tuples: i64 = 0;
 
-    if matches!(node.execution_status, ExecStatus::ReadFullsort | ExecStatus::ReadPrefixsort) {
+    if matches!(
+        node.execution_status,
+        ExecStatus::ReadFullsort | ExecStatus::ReadPrefixsort
+    ) {
         let ts = if node.execution_status == ExecStatus::ReadFullsort {
             node.fullsort_state.as_mut().unwrap()
         } else {
@@ -310,7 +330,9 @@ where
                         .arm_result_mcx_raw(estate.ecxt(node.ps_ExprContext).per_tuple_mcx())
                 };
                 node.fullsort_state = Some(Tuplesort::begin_heap(
-                    node.outer_desc.clone().expect("incremental sort already ended"),
+                    node.outer_desc
+                        .clone()
+                        .expect("incremental sort already ended"),
                     plan.sort.sortColIdx,
                     plan.sort.sortOperators,
                     plan.sort.collations,
@@ -327,7 +349,10 @@ where
             // Full-sort batches stay small; top-n only pays below the minimum
             // group size.
             if current_bound < DEFAULT_MIN_GROUP_SIZE {
-                node.fullsort_state.as_mut().unwrap().set_bound(current_bound);
+                node.fullsort_state
+                    .as_mut()
+                    .unwrap()
+                    .set_bound(current_bound);
             }
             DEFAULT_MIN_GROUP_SIZE.min(current_bound)
         } else {
@@ -351,7 +376,12 @@ where
                 node.outer_node_done = true;
                 let ts = node.fullsort_state.as_mut().unwrap();
                 ts.performsort()?;
-                record_group(estate, plan.sort.plan.plan_node_id, false, node.fullsort_state.as_mut().unwrap());
+                record_group(
+                    estate,
+                    plan.sort.plan.plan_node_id,
+                    false,
+                    node.fullsort_state.as_mut().unwrap(),
+                );
                 node.execution_status = ExecStatus::ReadFullsort;
                 break;
             };
@@ -415,7 +445,12 @@ where
                 exectuples::exec_clear_tuple(&mut node.group_pivot, mcx);
                 let ts = node.fullsort_state.as_mut().unwrap();
                 ts.performsort()?;
-                record_group(estate, plan.sort.plan.plan_node_id, false, node.fullsort_state.as_mut().unwrap());
+                record_group(
+                    estate,
+                    plan.sort.plan.plan_node_id,
+                    false,
+                    node.fullsort_state.as_mut().unwrap(),
+                );
                 if node.fullsort_state.as_ref().unwrap().used_bound() {
                     let current_bound = node.bound - node.bound_done;
                     n_tuples = current_bound.min(n_tuples);
@@ -460,7 +495,12 @@ where
 
         let ts = node.prefixsort_state.as_mut().unwrap();
         ts.performsort()?;
-        record_group(estate, plan.sort.plan.plan_node_id, true, node.prefixsort_state.as_mut().unwrap());
+        record_group(
+            estate,
+            plan.sort.plan.plan_node_id,
+            true,
+            node.prefixsort_state.as_mut().unwrap(),
+        );
         node.execution_status = ExecStatus::ReadPrefixsort;
         if node.bounded {
             node.bound_done = node.bound.min(node.bound_done + n_tuples);
@@ -476,7 +516,11 @@ where
     };
     let slot = estate.slot_mut(node.ps_ResultTupleSlot);
     let got = ts.gettupleslot(forward, false, slot, mcx)?;
-    Ok(if got { Some(node.ps_ResultTupleSlot) } else { None })
+    Ok(if got {
+        Some(node.ps_ResultTupleSlot)
+    } else {
+        None
+    })
 }
 
 /// `ExecEndIncrementalSort` node-local half; the caller ends the outer child.

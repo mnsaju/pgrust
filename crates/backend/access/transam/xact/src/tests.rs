@@ -174,7 +174,18 @@ fn commit_record_round_trips_through_parser() {
     install_test_seams();
     reset_xact_state_for_tests();
 
-    XactLogCommitRecord(777, &[], &[], &[], &[], false, 0, InvalidTransactionId, None).unwrap();
+    XactLogCommitRecord(
+        777,
+        &[],
+        &[],
+        &[],
+        &[],
+        false,
+        0,
+        InvalidTransactionId,
+        None,
+    )
+    .unwrap();
     let (info, body) = CAPTURED.with(|c| c.borrow_mut().take()).unwrap();
     assert_eq!(info, XLOG_XACT_COMMIT);
     assert_eq!(body.len(), 8);
@@ -227,7 +238,18 @@ fn commit_record_no_origin_seam_child() {
     });
     reset_xact_state_for_tests();
 
-    XactLogCommitRecord(777, &[], &[], &[], &[], false, 0, InvalidTransactionId, None).unwrap();
+    XactLogCommitRecord(
+        777,
+        &[],
+        &[],
+        &[],
+        &[],
+        false,
+        0,
+        InvalidTransactionId,
+        None,
+    )
+    .unwrap();
     let (info, body) = CAPTURED.with(|c| c.borrow_mut().take()).unwrap();
     assert_eq!(info, XLOG_XACT_COMMIT);
     let parsed = parse_commit_record(info, &body).unwrap();

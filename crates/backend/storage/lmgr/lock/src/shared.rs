@@ -78,7 +78,9 @@ fn proclock_hash(key: &[u8], _keysize: Size) -> u32 {
 }
 
 pub fn LockTagHashCode(locktag: &LOCKTAG) -> u32 {
-    get_hash_value(shared().lock_hash, locktag as *const LOCKTAG as *const u8)
+    // SAFETY: lock_hash is a live table for the process lifetime; locktag is
+    // a valid reference for the call.
+    unsafe { get_hash_value(shared().lock_hash, locktag as *const LOCKTAG as *const u8) }
 }
 
 // Must match proclock_hash!
@@ -192,7 +194,10 @@ pub(crate) unsafe fn proclock_from_proc_link(node: *mut dlist_node) -> *mut PROC
     node.byte_sub(offset_of!(PROCLOCK, procLink)) as *mut PROCLOCK
 }
 
-// Iterates lock->procLocks, deletion-safe; SAFETY contract: partition LWLock held.
+/// Iterates lock->procLocks, deletion-safe.
+///
+/// # Safety
+/// Partition LWLock held; `lock` is a live entry.
 pub unsafe fn foreach_proclock_on_lock(
     lock: *mut LOCK,
     mut body: impl FnMut(*mut PROCLOCK) -> bool,
@@ -327,7 +332,10 @@ pub(crate) unsafe fn SetupLockInTable(
         (*proclock).holdMask = 0;
         (*proclock).releaseMask = 0;
         dlist_push_tail(&raw mut (*lock).procLocks, &raw mut (*proclock).lockLink);
-        dlist_push_tail(proc.myProcLocks[partition].ptr(), &raw mut (*proclock).procLink);
+        dlist_push_tail(
+            proc.myProcLocks[partition].ptr(),
+            &raw mut (*proclock).procLink,
+        );
     } else {
         debug_assert!(((*proclock).holdMask & !(*lock).grantMask) == 0);
     }
@@ -365,8 +373,10 @@ pub(crate) unsafe fn grant_lock_raw(lock: *mut LOCK, proclock: *mut PROCLOCK, lo
     debug_assert!((*lock).nGranted <= (*lock).nRequested);
 }
 
-pub fn GrantLock(lock: *mut LOCK, proclock: *mut PROCLOCK, lockmode: LOCKMODE) {
-    // SAFETY: caller holds the partition lock (C contract).
+/// # Safety
+/// As [`grant_lock_raw`]: caller holds the partition lock (C contract);
+/// `lock`/`proclock` are live entries in this partition's hash tables.
+pub unsafe fn GrantLock(lock: *mut LOCK, proclock: *mut PROCLOCK, lockmode: LOCKMODE) {
     unsafe { grant_lock_raw(lock, proclock, lockmode) }
 }
 
@@ -391,8 +401,7 @@ pub(crate) unsafe fn UnGrantLock(
         (*lock).grantMask &= LOCKBIT_OFF(lockmode);
     }
 
-    let wakeup_needed =
-        lockMethodTable.conflictTab[lockmode as usize] & (*lock).waitMask != 0;
+    let wakeup_needed = lockMethodTable.conflictTab[lockmode as usize] & (*lock).waitMask != 0;
 
     (*proclock).holdMask &= LOCKBIT_OFF(lockmode);
     wakeup_needed
@@ -411,7 +420,10 @@ pub(crate) unsafe fn CleanUpLock(
         let partition = LockHashPartition(hashcode) as usize;
         let proc = lmgr_proc::GetPGProcByNumber((*proclock).tag.myProc);
         dlist_delete(&raw mut (*lock).procLocks, &raw mut (*proclock).lockLink);
-        dlist_delete(proc.myProcLocks[partition].ptr(), &raw mut (*proclock).procLink);
+        dlist_delete(
+            proc.myProcLocks[partition].ptr(),
+            &raw mut (*proclock).procLink,
+        );
         let tag = (*proclock).tag;
         let removed = hash_search_with_hash_value(
             shared().proclock_hash,
@@ -459,6 +471,9 @@ pub(crate) unsafe fn lock_check_conflicts_raw(
     let myLocks = (*proclock).holdMask;
     let mut conflicts_remaining = [0i32; MAX_LOCKMODES];
     let mut total_conflicts = 0;
+    // i indexes both conflicts_remaining and (*lock).granted, and is also
+    // used directly as a LOCKMODE for the bit-test.
+    #[allow(clippy::needless_range_loop)]
     for i in 1..=numLockModes as usize {
         if conflictMask & LOCKBIT_ON(i as LOCKMODE) == 0 {
             continue;
@@ -495,9 +510,15 @@ pub(crate) unsafe fn lock_check_conflicts_raw(
             && (*other).holdMask & conflictMask != 0
         {
             let intersect = (*other).holdMask & conflictMask;
+            // i indexes conflicts_remaining and is also used directly as a
+            // LOCKMODE for the bit-test.
+            #[allow(clippy::needless_range_loop)]
             for i in 1..=numLockModes as usize {
                 if intersect & LOCKBIT_ON(i as LOCKMODE) != 0 {
-                    assert!(conflicts_remaining[i] > 0, "proclocks held do not match lock");
+                    assert!(
+                        conflicts_remaining[i] > 0,
+                        "proclocks held do not match lock"
+                    );
                     conflicts_remaining[i] -= 1;
                     total_conflicts -= 1;
                 }
@@ -512,13 +533,16 @@ pub(crate) unsafe fn lock_check_conflicts_raw(
     conflict
 }
 
-pub fn LockCheckConflicts(
+/// # Safety
+/// As [`lock_check_conflicts_raw`]: caller holds the partition lock (C
+/// contract); `lock`/`proclock` are live entries in this partition's hash
+/// tables.
+pub unsafe fn LockCheckConflicts(
     lockMethodTable: LockMethod,
     lockmode: LOCKMODE,
     lock: *mut LOCK,
     proclock: *mut PROCLOCK,
 ) -> bool {
-    // SAFETY: caller holds the partition lock (C contract).
     unsafe {
         lock_check_conflicts_raw(
             lockMethodTable,
@@ -549,7 +573,10 @@ pub(crate) fn LockRefindAndRelease(
         let lock = find_lock(locktag, hashcode)?;
         assert!(!lock.is_null(), "failed to re-find shared lock object");
         let proclock = find_proclock(lock, procno, hashcode)?;
-        assert!(!proclock.is_null(), "failed to re-find shared proclock object");
+        assert!(
+            !proclock.is_null(),
+            "failed to re-find shared proclock object"
+        );
 
         if (*proclock).holdMask & LOCKBIT_ON(lockmode) == 0 {
             lwlock::LWLockRelease(partition_lock)?;
@@ -570,7 +597,8 @@ pub(crate) fn LockRefindAndRelease(
 
     lwlock::LWLockRelease(partition_lock)?;
 
-    if decrement_strong_lock_count && crate::fastpath::ConflictsWithRelationFastPath(locktag, lockmode)
+    if decrement_strong_lock_count
+        && crate::fastpath::ConflictsWithRelationFastPath(locktag, lockmode)
     {
         crate::fastpath::decrement_strong_lock_count(hashcode);
     }
@@ -584,11 +612,13 @@ pub fn GetRunningTransactionLocks() -> PgResult<Vec<xl_standby_lock>> {
         lwlock::LWLockAcquire(LockHashPartitionLockByIndex(i), lwlock::LW_SHARED, procno)?;
     }
 
-    let els = dynahash::hash_get_num_entries(shared().proclock_hash);
+    // SAFETY: proclock_hash is a live table for the process lifetime; the
+    // partition LWLocks acquired above hold it stable for this scan.
+    let els = unsafe { dynahash::hash_get_num_entries(shared().proclock_hash) };
     let mut accessExclusiveLocks = Vec::with_capacity(els as usize);
 
     let mut seqstat = HASH_SEQ_STATUS::new();
-    dynahash::hash_seq_init(&mut seqstat, shared().proclock_hash)?;
+    unsafe { dynahash::hash_seq_init(&mut seqstat, shared().proclock_hash)? };
 
     // A granted relation AccessExclusiveLock has exactly one proclock holder,
     // so no dedup is needed (C's caveat about copying this elsewhere stands).

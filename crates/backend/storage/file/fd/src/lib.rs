@@ -10,8 +10,8 @@ pub mod buffile;
 pub mod copydir;
 pub mod desc;
 pub mod fileset;
-pub mod reinit;
 pub mod io;
+pub mod reinit;
 pub mod sync;
 pub mod temp;
 pub mod vfd;
@@ -20,19 +20,18 @@ pub use buffile::{
     BufFile, BufFileCreateFileSet, BufFileCreateTemp, BufFileDeleteFileSet, BufFileOpenFileSet,
     BufFileOpenFileSetMaybe, PrepareTempTablespaces,
 };
-pub use fileset::FileSet;
 pub use copydir::{copy_file, copydir, directory_is_empty, pg_mkdir_p, rmtree};
 pub use desc::{
     closeAllVfds, with_allocated_dir, with_allocated_stdio, AllocateDir, AllocateFile,
     ClosePipeStream, CloseTransientFile, FreeDir, FreeFile, OpenPipeStream, OpenTransientFile,
     OpenTransientFilePerm, PipeStreamGets, ReadDir, ReadDirExtended, TransientFileRawFd,
 };
+pub use fileset::FileSet;
 pub use io::{
-    pg_file_size_raw, pg_pread, pg_pwrite, FileClose, FileFallocate, FileGetRawDesc, FileGetRawFlags,
-    FileGetRawMode, FilePathName, FilePrefetch, FileRead, FileReadV, FileSize,
-    FileRawDescForAio, FileStartBufferRead, FileStartReadV, FileSync, FileTruncate, FileWrite,
-    FileWriteV,
-    FileWriteback, FileZero, PathNameOpenFile, PathNameOpenFilePerm,
+    pg_file_size_raw, pg_pread, pg_pwrite, FileClose, FileFallocate, FileGetRawDesc,
+    FileGetRawFlags, FileGetRawMode, FilePathName, FilePrefetch, FileRawDescForAio, FileRead,
+    FileReadV, FileSize, FileStartBufferRead, FileStartReadV, FileSync, FileTruncate, FileWrite,
+    FileWriteV, FileWriteback, FileZero, PathNameOpenFile, PathNameOpenFilePerm,
 };
 pub use sync::{
     data_sync_elevel, durable_rename, durable_unlink, fsync_fname, fsync_fname_ext,
@@ -66,7 +65,7 @@ pub fn init_seams() {
     });
     file_seams::close_transient_file::set(desc::CloseTransientFile);
     file_seams::pg_fsync::set(sync::pg_fsync);
-    file_seams::fsync_fname::set(|fname, isdir| sync::fsync_fname(fname, isdir));
+    file_seams::fsync_fname::set(sync::fsync_fname);
     file_seams::data_sync_elevel::set(sync::data_sync_elevel);
     file_seams::with_allocated_dir::set(desc::with_allocated_dir);
 

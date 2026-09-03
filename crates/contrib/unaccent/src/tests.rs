@@ -49,7 +49,10 @@ fn lexize_replaces_and_filters() {
     assert_eq!(lexize(mcx, &trie, "foobar"), None);
     assert_eq!(lexize(mcx, &trie, "caf\u{00e9}").as_deref(), Some("cafe"));
     assert_eq!(lexize(mcx, &trie, "\u{0153}uf").as_deref(), Some("oeuf"));
-    assert_eq!(lexize(mcx, &trie, "25\u{2103}").as_deref(), Some("25\u{00b0}C"));
+    assert_eq!(
+        lexize(mcx, &trie, "25\u{2103}").as_deref(),
+        Some("25\u{00b0}C")
+    );
 }
 
 #[test]

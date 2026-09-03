@@ -1,6 +1,10 @@
-use ::adt_float::{float8_div, float8_lt, float8_max, float8_mi, float8_min, float8_mul, float8_pl};
-use ::types_core::geo::{Point, BOX, PATH_HEADER_SIZE};
-use ::types_error::{PgError, PgResult, ERRCODE_INVALID_PARAMETER_VALUE, ERRCODE_PROGRAM_LIMIT_EXCEEDED};
+use ::adt_float::{
+    float8_div, float8_lt, float8_max, float8_mi, float8_min, float8_mul, float8_pl,
+};
+use ::types_core::geo::{BOX, PATH_HEADER_SIZE};
+use ::types_error::{
+    PgError, PgResult, ERRCODE_INVALID_PARAMETER_VALUE, ERRCODE_PROGRAM_LIMIT_EXCEEDED,
+};
 
 use crate::lseg::{lseg_interpt_lseg, statlseg_construct};
 use crate::proximity::lseg_closept_lseg;

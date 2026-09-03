@@ -14,3 +14,7 @@ elog = { path = "../../error/elog" }
 types_error = { path = "../../../../_support/types/types_error" }
 condition_variable = { path = "../../../storage/lmgr/condition_variable" }
 waitevent = { path = "../../activity/waitevent" }
+
+# pgsync::process_global! expands a #[cfg(loom)] arm into this crate.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(loom)"] }

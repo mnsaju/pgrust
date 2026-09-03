@@ -72,7 +72,11 @@ pub struct SupportRequestSimplify<'mcx> {
 
 impl<'mcx> SupportRequestSimplify<'mcx> {
     pub fn new(fcall: Option<Node<'mcx>>, mcx: Option<::mcx::Mcx<'mcx>>) -> Self {
-        SupportRequestSimplify { tag: NodeTag::T_SupportRequestSimplify, fcall, mcx }
+        SupportRequestSimplify {
+            tag: NodeTag::T_SupportRequestSimplify,
+            fcall,
+            mcx,
+        }
     }
 }
 
@@ -131,7 +135,12 @@ impl<'mcx> SupportRequestIndexCondition<'mcx> {
 
 impl<'mcx> SupportRequestRows<'mcx> {
     pub fn new(funcid: Oid, node: Option<Node<'mcx>>) -> Self {
-        SupportRequestRows { tag: NodeTag::T_SupportRequestRows, funcid, node, rows: 0.0 }
+        SupportRequestRows {
+            tag: NodeTag::T_SupportRequestRows,
+            funcid,
+            node,
+            rows: 0.0,
+        }
     }
 }
 

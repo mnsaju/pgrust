@@ -30,14 +30,14 @@ use crate::{
     PARTITION_STRATEGY_HASH, PARTITION_STRATEGY_LIST, PARTITION_STRATEGY_RANGE,
 };
 
-const BTLessStrategyNumber: i16 = 1;
-const BTLessEqualStrategyNumber: i16 = 2;
-const BTEqualStrategyNumber: i16 = 3;
-const BTGreaterEqualStrategyNumber: i16 = 4;
-const BTGreaterStrategyNumber: i16 = 5;
+const BTLESS_STRATEGY_NUMBER: i16 = 1;
+const BTLESS_EQUAL_STRATEGY_NUMBER: i16 = 2;
+const BTEQUAL_STRATEGY_NUMBER: i16 = 3;
+const BTGREATER_EQUAL_STRATEGY_NUMBER: i16 = 4;
+const BTGREATER_STRATEGY_NUMBER: i16 = 5;
 
 const RELOID: i32 = cache_syscache::cacheinfo::RELOID;
-const Anum_pg_class_relpartbound: i32 = 34;
+const ANUM_PG_CLASS_RELPARTBOUND: i32 = 34;
 pub const F_SATISFIES_HASH_PARTITION: Oid = 5028;
 
 pub fn get_qual_from_partbound<'mcx>(
@@ -140,7 +140,9 @@ fn make_key_var<'mcx>(mcx: Mcx<'mcx>, key: &PartitionKeyData, i: usize) -> PgRes
 
 // copyObject over a bound Const: the datum image is copied into `mcx`.
 fn copy_const_node<'mcx>(mcx: Mcx<'mcx>, node: Node<'_>) -> PgResult<Node<'mcx>> {
-    let c = node.as_variant::<Const>().expect("partition bound datum is not a Const");
+    let c = node
+        .as_variant::<Const>()
+        .expect("partition bound datum is not a Const");
     let mut copy = *c;
     if !copy.constisnull {
         copy.constvalue = datum_copy(mcx, copy.constvalue, copy.constbyval, copy.constlen as i16)?;
@@ -179,7 +181,14 @@ fn make_bool_expr<'mcx>(
     boolop: BoolExprType,
     args: NodeList<'mcx>,
 ) -> PgResult<Node<'mcx>> {
-    Node::mk(mcx, BoolExpr { boolop, args, location: -1 })
+    Node::mk(
+        mcx,
+        BoolExpr {
+            boolop,
+            args,
+            location: -1,
+        },
+    )
 }
 
 fn make_bool_const<'mcx>(mcx: Mcx<'mcx>, value: bool, isnull: bool) -> PgResult<Node<'mcx>> {
@@ -288,7 +297,10 @@ fn make_partition_op_expr<'mcx>(
             };
             make_opclause(mcx, operoid, arg1, a2, key.partcollation[keynum])
         }
-        other => panic!("make_partition_op_expr: unexpected strategy {}", other as char),
+        other => panic!(
+            "make_partition_op_expr: unexpected strategy {}",
+            other as char
+        ),
     }
 }
 
@@ -399,7 +411,9 @@ fn get_qual_for_list<'mcx>(
         }
     } else {
         for cell in spec.listdatums.iter() {
-            let val = cell.as_variant::<Const>().expect("list bound datum is not a Const");
+            let val = cell
+                .as_variant::<Const>()
+                .expect("list bound datum is not a Const");
             if val.constisnull {
                 list_has_null = true;
             } else {
@@ -413,7 +427,7 @@ fn get_qual_for_list<'mcx>(
             mcx,
             key,
             0,
-            BTEqualStrategyNumber,
+            BTEQUAL_STRATEGY_NUMBER,
             key_col,
             OpArg::List(elems),
         )?)
@@ -482,8 +496,8 @@ fn text_to_str<'mcx>(mcx: ::mcx::Mcx<'mcx>, d: Datum) -> &'mcx str {
             if w & 0x02 != 0 {
                 let total = ::types_tuple::varatt::varsize_any(p);
                 let raw = core::slice::from_raw_parts(p, total);
-                let flat = ::detoast_seams::detoast_attr::call(mcx, raw)
-                    .expect("detoast relpartbound");
+                let flat =
+                    ::detoast_seams::detoast_attr::call(mcx, raw).expect("detoast relpartbound");
                 let (ptr, len) = (flat.as_ptr(), flat.len());
                 core::mem::forget(flat);
                 // detoast_attr returns the full 4-byte-header image; the
@@ -499,7 +513,10 @@ fn text_to_str<'mcx>(mcx: ::mcx::Mcx<'mcx>, d: Datum) -> &'mcx str {
     }
 }
 
-pub fn read_boundspec<'mcx>(mcx: Mcx<'mcx>, relid: Oid) -> PgResult<&'mcx PartitionBoundSpec<'mcx>> {
+pub fn read_boundspec<'mcx>(
+    mcx: Mcx<'mcx>,
+    relid: Oid,
+) -> PgResult<&'mcx PartitionBoundSpec<'mcx>> {
     Ok(read_boundspec_opt(mcx, relid)?
         .unwrap_or_else(|| panic!("missing relpartbound for relation {relid}")))
 }
@@ -515,8 +532,7 @@ pub fn read_boundspec_opt<'mcx>(
         cache_syscache::SysCacheKey::Value(Datum::from_oid(relid)),
     )?
     .unwrap_or_else(|| panic!("cache lookup failed for relation {relid}"));
-    let (d, isnull) =
-        cache_syscache::SysCacheGetAttr(RELOID, &tuple, Anum_pg_class_relpartbound)?;
+    let (d, isnull) = cache_syscache::SysCacheGetAttr(RELOID, &tuple, ANUM_PG_CLASS_RELPARTBOUND)?;
     if isnull {
         cache_syscache::ReleaseSysCache(tuple);
         return Ok(None);
@@ -538,12 +554,18 @@ fn get_range_key_properties<'mcx>(
 ) -> PgResult<(Node<'mcx>, Option<Node<'mcx>>, Option<Node<'mcx>>)> {
     let key_col = make_key_var(mcx, key, keynum)?;
     let lower_val = if ldatum.kind == PartitionRangeDatumKind::Value {
-        Some(copy_const_node(mcx, ldatum.value.expect("PartitionRangeDatum value"))?)
+        Some(copy_const_node(
+            mcx,
+            ldatum.value.expect("PartitionRangeDatum value"),
+        )?)
     } else {
         None
     };
     let upper_val = if udatum.kind == PartitionRangeDatumKind::Value {
-        Some(copy_const_node(mcx, udatum.value.expect("PartitionRangeDatum value"))?)
+        Some(copy_const_node(
+            mcx,
+            udatum.value.expect("PartitionRangeDatum value"),
+        )?)
     } else {
         None
     };
@@ -616,18 +638,27 @@ fn get_qual_for_range<'mcx>(
         return Ok(result);
     }
 
-    let mut result =
-        if !for_default { get_range_nulltest(mcx, key)? } else { NodeList::nil() };
+    let mut result = if !for_default {
+        get_range_nulltest(mcx, key)?
+    } else {
+        NodeList::nil()
+    };
 
     let lowers: Vec<&PartitionRangeDatum<'_>> = spec
         .lowerdatums
         .iter()
-        .map(|n| n.as_variant::<PartitionRangeDatum>().expect("PartitionRangeDatum"))
+        .map(|n| {
+            n.as_variant::<PartitionRangeDatum>()
+                .expect("PartitionRangeDatum")
+        })
         .collect();
     let uppers: Vec<&PartitionRangeDatum<'_>> = spec
         .upperdatums
         .iter()
-        .map(|n| n.as_variant::<PartitionRangeDatum>().expect("PartitionRangeDatum"))
+        .map(|n| {
+            n.as_variant::<PartitionRangeDatum>()
+                .expect("PartitionRangeDatum")
+        })
         .collect();
     let npairs = lowers.len().min(uppers.len());
     let partnatts = key.partnatts as usize;
@@ -636,7 +667,9 @@ fn get_qual_for_range<'mcx>(
     while i < npairs {
         let (key_col, lower_val, upper_val) =
             get_range_key_properties(mcx, key, i, lowers[i], uppers[i])?;
-        let (Some(lv), Some(_uv)) = (lower_val, upper_val) else { break };
+        let (Some(lv), Some(_uv)) = (lower_val, upper_val) else {
+            break;
+        };
         let lc = lv.as_variant::<Const>().expect("Const");
         let uc = upper_val.unwrap().as_variant::<Const>().expect("Const");
         // C evaluates the btree = operator via the executor here; the
@@ -652,7 +685,14 @@ fn get_qual_for_range<'mcx>(
         }
         result.lappend(
             mcx,
-            make_partition_op_expr(mcx, key, i, BTEqualStrategyNumber, key_col, OpArg::Scalar(lv))?,
+            make_partition_op_expr(
+                mcx,
+                key,
+                i,
+                BTEQUAL_STRATEGY_NUMBER,
+                key_col,
+                OpArg::Scalar(lv),
+            )?,
         )?;
         i += 1;
     }
@@ -679,14 +719,13 @@ fn get_qual_for_range<'mcx>(
             if need_next_lower_arm {
                 if let Some(lv) = lower_val {
                     let strategy = if j - i < current_or_arm {
-                        BTEqualStrategyNumber
+                        BTEQUAL_STRATEGY_NUMBER
                     } else if j == partnatts - 1
-                        || ldatum_next
-                            .is_some_and(|d| d.kind == PartitionRangeDatumKind::Minvalue)
+                        || ldatum_next.is_some_and(|d| d.kind == PartitionRangeDatumKind::Minvalue)
                     {
-                        BTGreaterEqualStrategyNumber
+                        BTGREATER_EQUAL_STRATEGY_NUMBER
                     } else {
-                        BTGreaterStrategyNumber
+                        BTGREATER_STRATEGY_NUMBER
                     };
                     lower_or_arm_args.lappend(
                         mcx,
@@ -697,13 +736,13 @@ fn get_qual_for_range<'mcx>(
             if need_next_upper_arm {
                 if let Some(uv) = upper_val {
                     let strategy = if j - i < current_or_arm {
-                        BTEqualStrategyNumber
+                        BTEQUAL_STRATEGY_NUMBER
                     } else if udatum_next
                         .is_some_and(|d| d.kind == PartitionRangeDatumKind::Maxvalue)
                     {
-                        BTLessEqualStrategyNumber
+                        BTLESS_EQUAL_STRATEGY_NUMBER
                     } else {
-                        BTLessStrategyNumber
+                        BTLESS_STRATEGY_NUMBER
                     };
                     upper_or_arm_args.lappend(
                         mcx,
@@ -805,7 +844,7 @@ pub fn map_partition_varattnos<'mcx>(
         &attmap,
         to_rel.rd_rel.reltype,
     )?;
-    Ok(mapped.as_list().expect("List").clone_in(mcx)?)
+    mapped.as_list().expect("List").clone_in(mcx)
 }
 
 // make_ands_explicit (makefuncs.c).
@@ -873,7 +912,8 @@ pub fn check_default_partition_contents<'mcx>(
     let default_relid = default_rel.rd_id;
     let mut all_parts: Vec<Oid> = Vec::new();
     if default_rel.rd_rel.relkind == RELKIND_PARTITIONED_TABLE {
-        for &oid in pg_inherits::find_all_inheritors(mcx, default_relid, AccessExclusiveLock)?.iter()
+        for &oid in
+            pg_inherits::find_all_inheritors(mcx, default_relid, AccessExclusiveLock)?.iter()
         {
             all_parts.push(oid);
         }
@@ -936,8 +976,11 @@ pub fn check_default_partition_contents<'mcx>(
             types_scan::ScanDirection::ForwardScanDirection,
             &mut slot,
         )? {
-            let mut slots =
-                execexpr::EvalSlots { scan: Some(&mut slot), inner: None, outer: None };
+            let mut slots = execexpr::EvalSlots {
+                scan: Some(&mut slot),
+                inner: None,
+                outer: None,
+            };
             let r = execexpr::exec_eval_expr(&mut state, &mut slots)?;
             // ExecCheck: NULL passes.
             if !r.isnull && !r.value.as_bool() {
@@ -1018,14 +1061,17 @@ pub fn fc_satisfies_hash_partition(
         ));
     }
     if remainder >= modulus {
-        return Err(hash_param_error("remainder for hash partition must be less than modulus"));
+        return Err(hash_param_error(
+            "remainder for hash partition must be less than modulus",
+        ));
     }
     let flinfo = flinfo.expect("satisfies_hash_partition: NULL flinfo");
     // C's call-form dispatch: get_fn_expr_variadic(fcinfo->flinfo).
     let is_variadic = funcapi::get_fn_expr_variadic(Some(flinfo));
 
-    let stale =
-        flinfo.fn_extra_ref::<ColumnsHashData>().map_or(true, |x| x.relid != parent_id);
+    let stale = flinfo
+        .fn_extra_ref::<ColumnsHashData>()
+        .is_none_or(|x| x.relid != parent_id);
     if stale {
         let mcx = fcinfo.result_mcx();
         let parent = table::table_open(mcx, parent_id, AccessShareLock)?;
@@ -1119,7 +1165,9 @@ pub fn fc_satisfies_hash_partition(
         parent.close(NoLock)?;
     }
 
-    let my = flinfo.fn_extra_mut::<ColumnsHashData>().expect("just built");
+    let my = flinfo
+        .fn_extra_mut::<ColumnsHashData>()
+        .expect("just built");
     let seed = Datum::from_u64(HASH_PARTITION_SEED);
     let mut row_hash: u64 = 0;
 
@@ -1167,7 +1215,9 @@ pub fn fc_satisfies_hash_partition(
             row_hash = hash_combine64(row_hash, hash);
         }
     }
-    Ok(Datum::from_bool(row_hash % modulus as u64 == remainder as u64))
+    Ok(Datum::from_bool(
+        row_hash % modulus as u64 == remainder as u64,
+    ))
 }
 
 // Custom hash opclasses (SQL-function support procs) allocate by-ref
@@ -1185,7 +1235,10 @@ fn invoke_hash_support(
     call.set_arg(0, val);
     call.set_arg(1, seed);
     let hash = supfunc.invoke(&mut call)?;
-    assert!(!call.isnull, "partition hash support function returned NULL");
+    assert!(
+        !call.isnull,
+        "partition hash support function returned NULL"
+    );
     Ok(hash.as_u64())
 }
 
@@ -1220,9 +1273,7 @@ fn deconstruct_variadic_array<'mcx>(
 #[cold]
 #[inline(never)]
 fn hash_param_error(msg: &'static str) -> Box<PgError> {
-    Box::new(
-        PgError::new(ERROR, msg.to_string()).with_sqlstate(ERRCODE_INVALID_PARAMETER_VALUE),
-    )
+    Box::new(PgError::new(ERROR, msg.to_string()).with_sqlstate(ERRCODE_INVALID_PARAMETER_VALUE))
 }
 
 #[track_caller]
@@ -1233,8 +1284,19 @@ fn hash_param_error_owned(msg: String) -> Box<PgError> {
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: false, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: false,
+        retset: false,
+        func,
+    }
 }
 
-pub const PARTBOUNDS_BUILTINS: &[FmgrBuiltin] =
-    &[b(F_SATISFIES_HASH_PARTITION, "satisfies_hash_partition", 4, fc_satisfies_hash_partition)];
+pub const PARTBOUNDS_BUILTINS: &[FmgrBuiltin] = &[b(
+    F_SATISFIES_HASH_PARTITION,
+    "satisfies_hash_partition",
+    4,
+    fc_satisfies_hash_partition,
+)];

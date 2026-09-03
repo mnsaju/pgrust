@@ -66,7 +66,10 @@ pub(super) fn gimme_tree<'mcx>(
     for rel_count in 0..num_gene as usize {
         let cur_rel_index = tour[rel_count] as usize;
         let cur_rel = initial_rels[cur_rel_index - 1];
-        let cur_clump = Clump { joinrel: cur_rel, size: 1 };
+        let cur_clump = Clump {
+            joinrel: cur_rel,
+            size: 1,
+        };
         clumps = merge_clump(run, clumps, cur_clump, num_gene, false)?;
     }
 

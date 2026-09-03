@@ -73,7 +73,11 @@ impl QueuePosition {
 
     fn min(self, y: QueuePosition) -> QueuePosition {
         if self.page != y.page {
-            if async_queue_page_precedes(self.page, y.page) { self } else { y }
+            if async_queue_page_precedes(self.page, y.page) {
+                self
+            } else {
+                y
+            }
         } else if self.offset < y.offset {
             self
         } else {
@@ -83,7 +87,11 @@ impl QueuePosition {
 
     fn max(self, y: QueuePosition) -> QueuePosition {
         if self.page != y.page {
-            if async_queue_page_precedes(self.page, y.page) { y } else { self }
+            if async_queue_page_precedes(self.page, y.page) {
+                y
+            } else {
+                self
+            }
         } else if self.offset > y.offset {
             self
         } else {
@@ -135,12 +143,7 @@ fn hdr() -> *mut AsyncQueueControlHdr {
 fn backend(i: ProcNumber) -> *mut QueueBackendStatus {
     debug_assert!(i >= 0 && i < g::MaxBackends());
     // SAFETY: backend[] follows the header; i < MaxBackends per shmem sizing.
-    unsafe {
-        hdr()
-            .add(1)
-            .cast::<QueueBackendStatus>()
-            .add(i as usize)
-    }
+    unsafe { hdr().add(1).cast::<QueueBackendStatus>().add(i as usize) }
 }
 
 fn notify_ctl() -> &'static SlruCtlData {
@@ -298,7 +301,8 @@ fn async_queue_fill_warning(qlock: &LwGuard) -> PgResult<()> {
             i = next_listener(i, qlock);
         }
 
-        let mut b = ereport(WARNING).errmsg(format!("NOTIFY queue is {:.0}% full", fill_degree * 100.0));
+        let mut b =
+            ereport(WARNING).errmsg(format!("NOTIFY queue is {:.0}% full", fill_degree * 100.0));
         if min_pid != INVALID_PID {
             b = b
                 .errdetail(format!(
@@ -566,7 +570,10 @@ pub(crate) fn fetch_read_positions() -> PgResult<ReadPositions> {
     let my_procno = g::MyProcNumber();
     let qlock = LwGuard::acquire(notify_queue_lock(), LW_SHARED)?;
     debug_assert!(backend_pid(my_procno, &qlock) == g::MyProcPid());
-    let r = ReadPositions { pos: backend_pos(my_procno, &qlock), head: queue_head(&qlock) };
+    let r = ReadPositions {
+        pos: backend_pos(my_procno, &qlock),
+        head: queue_head(&qlock),
+    };
     qlock.release()?;
     Ok(r)
 }
@@ -676,7 +683,7 @@ pub(crate) fn advance_tail() -> PgResult<()> {
     qlock.release()?;
 
     let newtailpage = min.page;
-    let boundary = newtailpage - (newtailpage % SLRU_PAGES_PER_SEGMENT as i64);
+    let boundary = newtailpage - (newtailpage % SLRU_PAGES_PER_SEGMENT);
     if async_queue_page_precedes(oldtailpage, boundary) {
         SimpleLruTruncate(notify_ctl(), newtailpage)?;
         let qlock = LwGuard::acquire(notify_queue_lock(), LW_EXCLUSIVE)?;
@@ -718,7 +725,13 @@ pub fn AsyncNotifyFreezeXids(new_frozen_xid: TransactionId) -> PgResult<()> {
                 prev.release()?;
             }
             let mut b = LwGuard::acquire(SimpleLruGetBankLock(ctl, pageno), LW_EXCLUSIVE)?;
-            slotno = Some(SimpleLruReadPage(ctl, pageno, true, InvalidTransactionId, &mut b)?);
+            slotno = Some(SimpleLruReadPage(
+                ctl,
+                pageno,
+                true,
+                InvalidTransactionId,
+                &mut b,
+            )?);
             bank = Some(b);
             curpage = pageno;
         }
@@ -773,20 +786,35 @@ mod tests {
     fn advance_page_jump() {
         let mut p = QueuePosition { page: 0, offset: 0 };
         assert!(!p.advance(20));
-        assert_eq!(p, QueuePosition { page: 0, offset: 20 });
+        assert_eq!(
+            p,
+            QueuePosition {
+                page: 0,
+                offset: 20
+            }
+        );
         p.offset = (QUEUE_PAGESIZE - 20) as i32;
         assert!(p.advance(20));
         assert_eq!(p, QueuePosition { page: 1, offset: 0 });
         // Entry ending with < 20 bytes left also jumps.
-        let mut p = QueuePosition { page: 3, offset: (QUEUE_PAGESIZE - 30) as i32 };
+        let mut p = QueuePosition {
+            page: 3,
+            offset: (QUEUE_PAGESIZE - 30) as i32,
+        };
         assert!(p.advance(12));
     }
 
     #[test]
     fn pos_min_max() {
-        let a = QueuePosition { page: 1, offset: 100 };
+        let a = QueuePosition {
+            page: 1,
+            offset: 100,
+        };
         let b = QueuePosition { page: 2, offset: 0 };
-        let c = QueuePosition { page: 1, offset: 200 };
+        let c = QueuePosition {
+            page: 1,
+            offset: 200,
+        };
         assert_eq!(a.min(b), a);
         assert_eq!(a.max(b), b);
         assert_eq!(a.min(c), a);

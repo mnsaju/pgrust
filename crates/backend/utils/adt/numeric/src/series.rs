@@ -27,8 +27,16 @@ pub struct GenerateSeriesNumeric {
 
 impl GenerateSeriesNumeric {
     pub fn new(start: Num<'_>, stop: Num<'_>, step: Option<Num<'_>>) -> PgResult<Self> {
-        reject_special(start, "start value cannot be NaN", "start value cannot be infinity")?;
-        reject_special(stop, "stop value cannot be NaN", "stop value cannot be infinity")?;
+        reject_special(
+            start,
+            "start value cannot be NaN",
+            "start value cannot be infinity",
+        )?;
+        reject_special(
+            stop,
+            "stop value cannot be NaN",
+            "stop value cannot be infinity",
+        )?;
         let steploc = match step {
             Some(s) => {
                 reject_special(s, "step size cannot be NaN", "step size cannot be infinity")?;
@@ -47,6 +55,9 @@ impl GenerateSeriesNumeric {
         })
     }
 
+    // Result<Option<T>, E>, not Iterator's Option<Result<T, E>> — a step can
+    // itself fail (arithmetic overflow), which doesn't fit std::iter::Iterator.
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> PgResult<Option<NumericImage>> {
         let cmp = cmp_var(self.current.view(), self.stop.view());
         let more = (self.step.sign == NUMERIC_POS && cmp <= 0)

@@ -58,9 +58,7 @@ unsafe fn sjis2mic(src: &[u8], dest: *mut u8, no_error: bool) -> PgResult<i32> {
                 unsafe {
                     out.push(LC_JISX0208);
                     out.push((((c1 & 0x3f) << 1) + 0x9f + (c2 > 0x9e) as i32) as u8);
-                    out.push(
-                        (c2 + if c2 > 0x9e { 2 } else { 0x60 } + (c2 < 0x80) as i32) as u8,
-                    );
+                    out.push((c2 + if c2 > 0x9e { 2 } else { 0x60 } + (c2 < 0x80) as i32) as u8);
                 }
             } else if (0xeb40..0xf040).contains(&k) || (0xfc4c..=0xfcfc).contains(&k) {
                 unsafe {
@@ -73,18 +71,14 @@ unsafe fn sjis2mic(src: &[u8], dest: *mut u8, no_error: bool) -> PgResult<i32> {
                     out.push(LC_JISX0208);
                     c1 -= 0x6f;
                     out.push((((c1 & 0x3f) << 1) + 0xf3 + (c2 > 0x9e) as i32) as u8);
-                    out.push(
-                        (c2 + if c2 > 0x9e { 2 } else { 0x60 } + (c2 < 0x80) as i32) as u8,
-                    );
+                    out.push((c2 + if c2 > 0x9e { 2 } else { 0x60 } + (c2 < 0x80) as i32) as u8);
                 }
             } else if (0xf540..0xfa40).contains(&k) {
                 unsafe {
                     out.push(LC_JISX0212);
                     c1 -= 0x74;
                     out.push((((c1 & 0x3f) << 1) + 0xf3 + (c2 > 0x9e) as i32) as u8);
-                    out.push(
-                        (c2 + if c2 > 0x9e { 2 } else { 0x60 } + (c2 < 0x80) as i32) as u8,
-                    );
+                    out.push((c2 + if c2 > 0x9e { 2 } else { 0x60 } + (c2 < 0x80) as i32) as u8);
                 }
             } else if k >= 0xfa40 {
                 for e in IBMKANJI.iter() {
@@ -475,9 +469,7 @@ unsafe fn sjis2euc_jp(src: &[u8], dest: *mut u8, no_error: bool) -> PgResult<i32
             if k < 0xeb3f {
                 unsafe {
                     out.push((((c1 & 0x3f) << 1) + 0x9f + (c2 > 0x9e) as i32) as u8);
-                    out.push(
-                        (c2 + if c2 > 0x9e { 2 } else { 0x60 } + (c2 < 0x80) as i32) as u8,
-                    );
+                    out.push((c2 + if c2 > 0x9e { 2 } else { 0x60 } + (c2 < 0x80) as i32) as u8);
                 }
             } else if (0xeb40..0xf040).contains(&k) || (0xfc4c..=0xfcfc).contains(&k) {
                 unsafe {
@@ -488,18 +480,14 @@ unsafe fn sjis2euc_jp(src: &[u8], dest: *mut u8, no_error: bool) -> PgResult<i32
                 unsafe {
                     c1 -= 0x6f;
                     out.push((((c1 & 0x3f) << 1) + 0xf3 + (c2 > 0x9e) as i32) as u8);
-                    out.push(
-                        (c2 + if c2 > 0x9e { 2 } else { 0x60 } + (c2 < 0x80) as i32) as u8,
-                    );
+                    out.push((c2 + if c2 > 0x9e { 2 } else { 0x60 } + (c2 < 0x80) as i32) as u8);
                 }
             } else if (0xf540..0xfa40).contains(&k) {
                 unsafe {
                     out.push(SS3);
                     c1 -= 0x74;
                     out.push((((c1 & 0x3f) << 1) + 0xf3 + (c2 > 0x9e) as i32) as u8);
-                    out.push(
-                        (c2 + if c2 > 0x9e { 2 } else { 0x60 } + (c2 < 0x80) as i32) as u8,
-                    );
+                    out.push((c2 + if c2 > 0x9e { 2 } else { 0x60 } + (c2 < 0x80) as i32) as u8);
                 }
             } else if k >= 0xfa40 {
                 for e in IBMKANJI.iter() {

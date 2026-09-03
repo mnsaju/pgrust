@@ -69,15 +69,19 @@ pub fn StorePartitionKey<'mcx>(
         Some(node)
     };
 
-    let mut tuple =
-        heaptuple::heap_form_tuple(mcx, pg_partitioned_table.descr(), &values, &nulls)?;
+    let mut tuple = heaptuple::heap_form_tuple(mcx, pg_partitioned_table.descr(), &values, &nulls)?;
     catalog_indexing::CatalogTupleInsert(mcx, &pg_partitioned_table, &mut tuple)?;
     pg_partitioned_table.close(RowExclusiveLock)?;
 
     let myself = ObjectAddress::set(RELATION_RELATION_ID, rel.rd_id);
     for i in 0..n {
         let referenced = ObjectAddress::set(catalog::OperatorClassRelationId, partopclass[i]);
-        pg_depend::recordDependencyOn(mcx, &myself, &referenced, pg_depend::DependencyType::Normal)?;
+        pg_depend::recordDependencyOn(
+            mcx,
+            &myself,
+            &referenced,
+            pg_depend::DependencyType::Normal,
+        )?;
         if partcollation[i] != InvalidOid && partcollation[i] != DEFAULT_COLLATION_OID {
             let referenced = ObjectAddress::set(catalog::CollationRelationId, partcollation[i]);
             pg_depend::recordDependencyOn(
@@ -126,14 +130,8 @@ pub fn StorePartitionBound<'mcx>(
 ) -> PgResult<()> {
     let class_rel = table::table_open(mcx, RELATION_RELATION_ID, RowExclusiveLock)?;
     let keys = [crate::drop::oid_scankey(1, rel.rd_id)];
-    let mut scan = genam::systable_beginscan(
-        mcx,
-        &class_rel,
-        catalog::ClassOidIndexId,
-        true,
-        None,
-        &keys,
-    )?;
+    let mut scan =
+        genam::systable_beginscan(mcx, &class_rel, catalog::ClassOidIndexId, true, None, &keys)?;
     let tup = genam::systable_getnext(mcx, &mut scan)?
         .unwrap_or_else(|| panic!("cache lookup failed for relation {}", rel.rd_id));
     let desc = class_rel.descr();
@@ -200,14 +198,8 @@ pub fn update_default_partition_oid<'mcx>(
 ) -> PgResult<()> {
     let part_table = table::table_open(mcx, PartitionedRelationId, RowExclusiveLock)?;
     let keys = [crate::drop::oid_scankey(1, parent_id)];
-    let mut scan = genam::systable_beginscan(
-        mcx,
-        &part_table,
-        PartitionedRelidIndexId,
-        true,
-        None,
-        &keys,
-    )?;
+    let mut scan =
+        genam::systable_beginscan(mcx, &part_table, PartitionedRelidIndexId, true, None, &keys)?;
     let tup = genam::systable_getnext(mcx, &mut scan)?
         .unwrap_or_else(|| panic!("cache lookup failed for partition key of relation {parent_id}"));
     let desc = part_table.descr();

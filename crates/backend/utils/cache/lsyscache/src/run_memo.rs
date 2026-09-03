@@ -80,21 +80,26 @@ fn amoplist_memo_disabled() -> bool {
     *DISABLED.get_or_init(|| env_disabled("PGRUST_PLANNER_AMOPLIST_MEMO"))
 }
 
+// (relid, roleid, mask, how_all) -> pg_class_aclmask result.
+type AclmaskEntry = ((Oid, Oid, u64, bool), u64);
+// (opno, amop purpose, opfamily) -> pg_amop shape (None = not a member).
+type AmopByOpEntry = ((Oid, u8, Oid), Option<PgAmopShape>);
+// (opfamily, lefttype, righttype, strategy) -> member operator oid.
+type AmopMemberEntry = ((Oid, Oid, Oid, i16), Oid);
+
 struct MemoBlock<'mcx> {
     /// opno -> pg_operator shape (None = operator absent).
     op_shape: core::cell::RefCell<PgVec<'mcx, (Oid, Option<PgOperatorShape>)>>,
     /// (relid, roleid, mask, how_all) -> pg_class_aclmask result.
-    aclmask: core::cell::RefCell<PgVec<'mcx, ((Oid, Oid, u64, bool), u64)>>,
+    aclmask: core::cell::RefCell<PgVec<'mcx, AclmaskEntry>>,
     /// (opno, amop purpose, opfamily) -> pg_amop shape (None = not a member).
-    amop_by_op: core::cell::RefCell<PgVec<'mcx, ((Oid, u8, Oid), Option<PgAmopShape>)>>,
+    amop_by_op: core::cell::RefCell<PgVec<'mcx, AmopByOpEntry>>,
     /// (opfamily, lefttype, righttype, strategy) -> member operator oid.
-    amop_member: core::cell::RefCell<PgVec<'mcx, ((Oid, Oid, Oid, i16), Oid)>>,
+    amop_member: core::cell::RefCell<PgVec<'mcx, AmopMemberEntry>>,
     /// opno -> the operator's full pg_amop members list, arena-leaked and
     /// shared (`ops_are_compatible` fetches the same list once per
     /// inequality clause — same key, repeat within one cycle).
-    amop_members: core::cell::RefCell<
-        PgVec<'mcx, (Oid, &'mcx PgVec<'mcx, PgAmopMemberShape>)>,
-    >,
+    amop_members: core::cell::RefCell<PgVec<'mcx, (Oid, &'mcx PgVec<'mcx, PgAmopMemberShape>)>>,
 }
 
 // Arena-leaked via forget_box_in: drop glue never runs; every member is
@@ -183,15 +188,8 @@ pub fn get_commutator(run: &PlannerRun<'_>, opno: Oid) -> PgResult<Oid> {
 /// lsyscache::op_mergejoinable through the per-cycle shape memo. The
 /// record/array-eq arms are typcache-keyed (by inputtype, not opno) —
 /// those delegate to the incumbent untouched.
-pub fn op_mergejoinable(
-    run: &PlannerRun<'_>,
-    opno: Oid,
-    inputtype: Oid,
-) -> PgResult<bool> {
-    if opshape_memo_disabled()
-        || opno == crate::RECORD_EQ_OP
-        || opno == crate::ARRAY_EQ_OP
-    {
+pub fn op_mergejoinable(run: &PlannerRun<'_>, opno: Oid, inputtype: Oid) -> PgResult<bool> {
+    if opshape_memo_disabled() || opno == crate::RECORD_EQ_OP || opno == crate::ARRAY_EQ_OP {
         return crate::op_mergejoinable(opno, inputtype);
     }
     Ok(match operator_shape(run, opno)? {
@@ -258,11 +256,7 @@ fn amop_by_operator(
 }
 
 /// lsyscache::get_op_opfamily_strategy through the per-cycle amop memo.
-pub fn get_op_opfamily_strategy(
-    run: &PlannerRun<'_>,
-    opno: Oid,
-    opfamily: Oid,
-) -> PgResult<i32> {
+pub fn get_op_opfamily_strategy(run: &PlannerRun<'_>, opno: Oid, opfamily: Oid) -> PgResult<i32> {
     if amop_memo_disabled() {
         return crate::get_op_opfamily_strategy(opno, opfamily);
     }
@@ -328,15 +322,15 @@ pub fn get_op_opfamily_properties(
             "operator {opno} is not a member of opfamily {opfamily}"
         ))
     })?;
-    Ok((amop.amopstrategy as i32, amop.amoplefttype, amop.amoprighttype))
+    Ok((
+        amop.amopstrategy as i32,
+        amop.amoplefttype,
+        amop.amoprighttype,
+    ))
 }
 
 /// lsyscache::get_op_opfamily_sortfamily through the per-cycle amop memo.
-pub fn get_op_opfamily_sortfamily(
-    run: &PlannerRun<'_>,
-    opno: Oid,
-    opfamily: Oid,
-) -> PgResult<Oid> {
+pub fn get_op_opfamily_sortfamily(run: &PlannerRun<'_>, opno: Oid, opfamily: Oid) -> PgResult<Oid> {
     if amop_memo_disabled() {
         return crate::get_op_opfamily_sortfamily(opno, opfamily);
     }
@@ -367,8 +361,7 @@ fn amop_members<'mcx>(
         return Ok(v);
     }
     let fetched = syscache_seams::lookup_pg_amop_members_by_operator::call(run.mcx, opno)?;
-    let leaked: &'mcx PgVec<'mcx, PgAmopMemberShape> =
-        &*mcx::forget_box_in(run.mcx, fetched)?;
+    let leaked: &'mcx PgVec<'mcx, PgAmopMemberShape> = &*mcx::forget_box_in(run.mcx, fetched)?;
     block.amop_members.borrow_mut().push((opno, leaked));
     Ok(leaked)
 }
@@ -389,7 +382,11 @@ fn ops_are_compatible_run(
         if op_in_opfamily(run, opno2, op_form.amopfamily)? {
             let (consistent_eq, consistent_ord) =
                 crate::amop::index_am_consistent_flags(op_form.amopmethod);
-            if if check_ordering { consistent_ord } else { consistent_eq } {
+            if if check_ordering {
+                consistent_ord
+            } else {
+                consistent_eq
+            } {
                 return Ok(true);
             }
         }
@@ -412,11 +409,7 @@ pub fn comparison_ops_are_compatible(
 }
 
 /// lsyscache::equality_ops_are_compatible through the per-cycle memos.
-pub fn equality_ops_are_compatible(
-    run: &PlannerRun<'_>,
-    opno1: Oid,
-    opno2: Oid,
-) -> PgResult<bool> {
+pub fn equality_ops_are_compatible(run: &PlannerRun<'_>, opno1: Oid, opno2: Oid) -> PgResult<bool> {
     if amoplist_memo_disabled() {
         return crate::equality_ops_are_compatible(opno1, opno2);
     }

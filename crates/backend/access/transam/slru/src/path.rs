@@ -31,9 +31,9 @@ impl fmt::Display for SlruDir {
     }
 }
 
-/// Stack-built segment path (C: `char path[MAXPGPATH]` + snprintf); dir(≤63)
-/// + '/' + ≤15 hex digits always fits, and the untouched zeroed tail keeps it
-/// NUL-terminated for unlink(2).
+/// Stack-built segment path (C: `char path[MAXPGPATH]` + snprintf); dir(≤63),
+/// a `/` separator, and ≤15 hex digits always fit, and the untouched zeroed
+/// tail keeps it NUL-terminated for unlink(2).
 pub struct SlruPath {
     buf: [u8; PATH_CAP],
     len: u8,

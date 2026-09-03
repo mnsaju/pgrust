@@ -23,7 +23,7 @@ pub use io::{
 
 pub const M_PI: f64 = core::f64::consts::PI;
 // Exact decimal literal from <utils/float.h>, NOT recomputed (bit parity).
-pub const RADIANS_PER_DEGREE: f64 = 0.0174532925199432957692;
+pub const RADIANS_PER_DEGREE: f64 = 0.017_453_292_519_943_295;
 pub const FLT_DIG: i32 = 6;
 pub const DBL_DIG: i32 = 15;
 

@@ -59,7 +59,9 @@ impl BufferPin {
     #[inline]
     pub fn incr_clone(&self) -> BufferPin {
         incr_buffer_ref_count::call(self.buffer);
-        BufferPin { buffer: self.buffer }
+        BufferPin {
+            buffer: self.buffer,
+        }
     }
 
     #[inline]

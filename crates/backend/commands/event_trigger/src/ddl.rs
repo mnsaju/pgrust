@@ -5,7 +5,7 @@ use cache_evtcache::{
 use datum::Datum;
 use mcx::{Mcx, PgVec};
 use pg_depend::{DependencyType, ObjectAddress};
-use types_core::{CommandTag, InvalidOid, Oid, OidIsValid, NAMEDATALEN, TEXTOID};
+use types_core::{CommandTag, Oid, OidIsValid, NAMEDATALEN, TEXTOID};
 use types_error::{
     PgResult, ERRCODE_DUPLICATE_OBJECT, ERRCODE_FEATURE_NOT_SUPPORTED,
     ERRCODE_INSUFFICIENT_PRIVILEGE, ERRCODE_INVALID_OBJECT_DEFINITION, ERRCODE_SYNTAX_ERROR,
@@ -19,17 +19,16 @@ use crate::{TRIGGER_DISABLED, TRIGGER_FIRES_ON_ORIGIN};
 const PROCEDURE_RELATION_ID: Oid = 1255;
 const EVENT_TRIGGEROID: Oid = 3838;
 
-pub fn CreateEventTrigger<'mcx>(
-    mcx: Mcx<'mcx>,
-    stmt: &CreateEventTrigStmt<'mcx>,
-) -> PgResult<Oid> {
+pub fn CreateEventTrigger<'mcx>(mcx: Mcx<'mcx>, stmt: &CreateEventTrigStmt<'mcx>) -> PgResult<Oid> {
     let trigname = stmt.trigname.unwrap_or("");
     let eventname = stmt.eventname.unwrap_or("");
 
     if !superuser::superuser()? {
         return Err(elog::ereport(ERROR)
             .errcode(ERRCODE_INSUFFICIENT_PRIVILEGE)
-            .errmsg(format!("permission denied to create event trigger \"{trigname}\""))
+            .errmsg(format!(
+                "permission denied to create event trigger \"{trigname}\""
+            ))
             .errhint("Must be superuser to create an event trigger.")
             .into_error()
             .into());
@@ -181,7 +180,10 @@ fn LookupFuncName0(mcx: Mcx<'_>, funcname: &types_nodes::list::NodeList<'_>) -> 
     }
     Err(elog::ereport(ERROR)
         .errcode(ERRCODE_UNDEFINED_FUNCTION)
-        .errmsg(format!("function {}() does not exist", name_list_to_string_raw(&parts)))
+        .errmsg(format!(
+            "function {}() does not exist",
+            name_list_to_string_raw(&parts)
+        ))
         .into_error()
         .into())
 }
@@ -256,8 +258,16 @@ fn insert_event_trigger_tuple<'mcx>(
 fn filter_list_to_array<'mcx>(mcx: Mcx<'mcx>, tags: &[&str]) -> PgResult<PgVec<'mcx, u8>> {
     let mut elems: Vec<Datum> = Vec::with_capacity(tags.len());
     for tag in tags {
-        let upper: String =
-            tag.chars().map(|c| if c.is_ascii() { c.to_ascii_uppercase() } else { c }).collect();
+        let upper: String = tag
+            .chars()
+            .map(|c| {
+                if c.is_ascii() {
+                    c.to_ascii_uppercase()
+                } else {
+                    c
+                }
+            })
+            .collect();
         let t = varlena::cstring_to_text(mcx, upper.as_bytes())?;
         elems.push(Datum::from_usize(t.into_image().leak().as_ptr() as usize));
     }
@@ -277,7 +287,10 @@ fn filter_list_to_array<'mcx>(mcx: Mcx<'mcx>, tags: &[&str]) -> PgResult<PgVec<'
 
 fn name_arg<'mcx>(mcx: Mcx<'mcx>, name: &str) -> PgResult<PgVec<'mcx, u8>> {
     let n = NAMEDATALEN as usize;
-    assert!(name.len() < n, "event trigger name overflows NAMEDATALEN: {name:?}");
+    assert!(
+        name.len() < n,
+        "event trigger name overflows NAMEDATALEN: {name:?}"
+    );
     let mut buf: PgVec<'mcx, u8> = mcx::vec_with_capacity_in(mcx, n)?;
     mcx::vec_append_bytes(&mut buf, name.as_bytes())?;
     mcx::vec_append_bytes(&mut buf, &[0u8; 64][..n - name.len()])?;
@@ -424,18 +437,12 @@ pub fn AlterEventTriggerOwner<'mcx>(
         let otid = tup.t_self;
         catalog_indexing::CatalogTupleUpdate(mcx, &rel, &otid, &mut newtup)?;
 
-        pg_shdepend::changeDependencyOnOwner(
-            mcx,
-            EVENT_TRIGGER_RELATION_ID,
-            evt_oid,
-            newOwnerId,
-        )?;
+        pg_shdepend::changeDependencyOnOwner(mcx, EVENT_TRIGGER_RELATION_ID, evt_oid, newOwnerId)?;
     }
 
     rel.close(RowExclusiveLock)?;
     Ok(ObjectAddress::set(EVENT_TRIGGER_RELATION_ID, evt_oid))
 }
-
 
 // AlterEventTriggerOwner_oid + _internal (event_trigger.c).
 pub fn AlterEventTriggerOwner_oid<'mcx>(
@@ -465,7 +472,6 @@ pub fn AlterEventTriggerOwner_oid<'mcx>(
 
     rel.close(RowExclusiveLock)
 }
-
 
 fn AlterEventTriggerOwner_internal<'mcx>(
     mcx: Mcx<'mcx>,
@@ -539,14 +545,22 @@ fn AlterEventTriggerOwner_internal<'mcx>(
     pg_shdepend::changeDependencyOnOwner(mcx, EVENT_TRIGGER_RELATION_ID, trigoid, new_owner_id)
 }
 
-
 // SetDatabaseHasLoginEventTriggers (event_trigger.c): the shared-object lock
 // is a custom tag serializing this against EventTriggerOnLogin's flag reset;
 // SearchSysCacheLockedCopy1 is composed from Locked1 + copytuple here.
 pub(crate) fn SetDatabaseHasLoginEventTriggers(mcx: Mcx<'_>) -> PgResult<()> {
     let dbid = init_small::globals::MyDatabaseId();
-    let pg_db = table::table_open(mcx, types_core::catalog::DATABASE_RELATION_ID, RowExclusiveLock)?;
-    lmgr::LockSharedObject(types_core::catalog::DATABASE_RELATION_ID, dbid, 0, AccessExclusiveLock)?;
+    let pg_db = table::table_open(
+        mcx,
+        types_core::catalog::DATABASE_RELATION_ID,
+        RowExclusiveLock,
+    )?;
+    lmgr::LockSharedObject(
+        types_core::catalog::DATABASE_RELATION_ID,
+        dbid,
+        0,
+        AccessExclusiveLock,
+    )?;
     let Some(ctup) = cache_syscache::SearchSysCacheLocked1(
         cache_syscache::cacheinfo::DATABASEOID,
         cache_syscache::SysCacheKey::Value(Datum::from_oid(dbid)),

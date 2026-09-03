@@ -12,6 +12,7 @@ mod tests;
 extern crate alloc;
 
 use adt_date::{DateADT, TimeADT, TimeTzADT};
+use adt_datetime::consts::Timestamp;
 use adt_formatting::ParsedDatetime;
 use adt_jsonb::build::{convert_to_jsonb, ArenaVec, JsonbValue as BuildValue};
 use adt_jsonb::container::{
@@ -21,7 +22,6 @@ use adt_jsonb::container::{
 use adt_jsonb::iter::{JsonbIterator, WjbToken};
 use adt_jsonpath::path::{jsp_init, jsp_init_by_buffer, ItemType, JsonPathItem, JSONPATH_LAX};
 use adt_numeric::{Num, NumericImage};
-use adt_datetime::consts::Timestamp;
 use datum::Datum;
 use mcx::{Mcx, PgVec};
 use stack_depth::check_stack_depth;
@@ -198,9 +198,9 @@ type Found<'f, 'a, 'mcx> = Option<&'f mut JsonValueList<'a, 'mcx>>;
 macro_rules! return_error {
     ($cxt:expr, $err:expr) => {
         if $cxt.throw_errors {
-            return Err(Box::new($err))
+            return Err(Box::new($err));
         } else {
-            return Ok(Jper::Error)
+            return Ok(Jper::Error);
         }
     };
 }
@@ -359,9 +359,9 @@ impl<'a, 'x, 'mcx: 'a> ExecCtx<'a, 'x, 'mcx> {
         let name = item.get_string();
         let found: Option<(JbV<'a>, JbV<'a>, i32)> = match self.vars {
             JsonPathVars::None => None,
-            JsonPathVars::Jsonb(c) => get_key_value(c, name).map(|item| {
-                (jbv_from_item(item), JbV::Binary(c), 1)
-            }),
+            JsonPathVars::Jsonb(c) => {
+                get_key_value(c, name).map(|item| (jbv_from_item(item), JbV::Binary(c), 1))
+            }
             JsonPathVars::List(vars) => {
                 let mut hit = None;
                 for (i, var) in vars.iter().enumerate() {
@@ -470,23 +470,53 @@ impl<'a, 'x, 'mcx: 'a> ExecCtx<'a, 'x, 'mcx> {
             }
 
             ItemType::Add => {
-                return self.execute_binary_arithm_expr(jsp, jb, adt_numeric::numeric_add_common, found)
+                return self.execute_binary_arithm_expr(
+                    jsp,
+                    jb,
+                    adt_numeric::numeric_add_common,
+                    found,
+                )
             }
             ItemType::Sub => {
-                return self.execute_binary_arithm_expr(jsp, jb, adt_numeric::numeric_sub_common, found)
+                return self.execute_binary_arithm_expr(
+                    jsp,
+                    jb,
+                    adt_numeric::numeric_sub_common,
+                    found,
+                )
             }
             ItemType::Mul => {
-                return self.execute_binary_arithm_expr(jsp, jb, adt_numeric::numeric_mul_common, found)
+                return self.execute_binary_arithm_expr(
+                    jsp,
+                    jb,
+                    adt_numeric::numeric_mul_common,
+                    found,
+                )
             }
             ItemType::Div => {
-                return self.execute_binary_arithm_expr(jsp, jb, adt_numeric::numeric_div_common, found)
+                return self.execute_binary_arithm_expr(
+                    jsp,
+                    jb,
+                    adt_numeric::numeric_div_common,
+                    found,
+                )
             }
             ItemType::Mod => {
-                return self.execute_binary_arithm_expr(jsp, jb, adt_numeric::numeric_mod_common, found)
+                return self.execute_binary_arithm_expr(
+                    jsp,
+                    jb,
+                    adt_numeric::numeric_mod_common,
+                    found,
+                )
             }
             ItemType::Plus => return self.execute_unary_arithm_expr(jsp, jb, None, found),
             ItemType::Minus => {
-                return self.execute_unary_arithm_expr(jsp, jb, Some(adt_numeric::numeric_uminus), found)
+                return self.execute_unary_arithm_expr(
+                    jsp,
+                    jb,
+                    Some(adt_numeric::numeric_uminus),
+                    found,
+                )
             }
 
             ItemType::AnyArray => {
@@ -634,12 +664,8 @@ impl<'a, 'x, 'mcx: 'a> ExecCtx<'a, 'x, 'mcx> {
                 if jsp.content.anybounds.first == 0 {
                     let saved = self.ignore_structural_errors;
                     self.ignore_structural_errors = true;
-                    res = self.execute_next_item(
-                        Some(jsp),
-                        next.as_ref(),
-                        jb,
-                        found.as_deref_mut(),
-                    )?;
+                    res =
+                        self.execute_next_item(Some(jsp), next.as_ref(), jb, found.as_deref_mut())?;
                     self.ignore_structural_errors = saved;
                     if res == Jper::Ok && found.is_none() {
                         return Ok(res);
@@ -774,10 +800,22 @@ impl<'a, 'x, 'mcx: 'a> ExecCtx<'a, 'x, 'mcx> {
                 return self.execute_numeric_item_method(jsp, jb, unwrap, NumericMethod::Abs, found)
             }
             ItemType::Floor => {
-                return self.execute_numeric_item_method(jsp, jb, unwrap, NumericMethod::Floor, found)
+                return self.execute_numeric_item_method(
+                    jsp,
+                    jb,
+                    unwrap,
+                    NumericMethod::Floor,
+                    found,
+                )
             }
             ItemType::Ceiling => {
-                return self.execute_numeric_item_method(jsp, jb, unwrap, NumericMethod::Ceiling, found)
+                return self.execute_numeric_item_method(
+                    jsp,
+                    jb,
+                    unwrap,
+                    NumericMethod::Ceiling,
+                    found,
+                )
             }
 
             ItemType::Double => {
@@ -798,7 +836,10 @@ impl<'a, 'x, 'mcx: 'a> ExecCtx<'a, 'x, 'mcx> {
                             Some(&mut esc),
                         )?;
                         if esc.error_occurred() {
-                            return_error!(self, invalid_arg_error(as_str(tmp), op, "double precision"));
+                            return_error!(
+                                self,
+                                invalid_arg_error(as_str(tmp), op, "double precision")
+                            );
                         }
                         if val.is_infinite() || val.is_nan() {
                             return_error!(self, nan_or_inf_error(op));
@@ -816,7 +857,10 @@ impl<'a, 'x, 'mcx: 'a> ExecCtx<'a, 'x, 'mcx> {
                             Some(&mut esc),
                         )?;
                         if esc.error_occurred() {
-                            return_error!(self, invalid_arg_error(as_str(tmp), op, "double precision"));
+                            return_error!(
+                                self,
+                                invalid_arg_error(as_str(tmp), op, "double precision")
+                            );
                         }
                         if val.is_infinite() || val.is_nan() {
                             return_error!(self, nan_or_inf_error(op));
@@ -1273,13 +1317,7 @@ impl<'a, 'x, 'mcx: 'a> ExecCtx<'a, 'x, 'mcx> {
             | ItemType::GreaterOrEqual => {
                 let larg = jsp.left_arg();
                 let rarg = jsp.right_arg();
-                self.execute_predicate(
-                    PredOp::Compare(jsp.typ),
-                    &larg,
-                    Some(&rarg),
-                    jb,
-                    true,
-                )
+                self.execute_predicate(PredOp::Compare(jsp.typ), &larg, Some(&rarg), jb, true)
             }
             ItemType::StartsWith => {
                 let larg = jsp.left_arg();
@@ -1291,9 +1329,11 @@ impl<'a, 'x, 'mcx: 'a> ExecCtx<'a, 'x, 'mcx> {
                 let pos = jsp.content.like_regex.pattern_pos as usize;
                 let len = jsp.content.like_regex.patternlen as usize;
                 let pattern = &jsp.buffer[pos..pos + len];
-                let cflags =
-                    adt_jsonpath::gram::jsp_convert_regex_flags(jsp.content.like_regex.flags, None)?
-                        .expect("regex flags validated at parse time");
+                let cflags = adt_jsonpath::gram::jsp_convert_regex_flags(
+                    jsp.content.like_regex.flags,
+                    None,
+                )?
+                .expect("regex flags validated at parse time");
                 self.execute_predicate(
                     PredOp::LikeRegex { pattern, cflags },
                     &larg,
@@ -1323,7 +1363,8 @@ impl<'a, 'x, 'mcx: 'a> ExecCtx<'a, 'x, 'mcx> {
                         JpBool::True
                     })
                 } else {
-                    let res = self.execute_item_opt_unwrap_result_no_throw(&larg, jb, false, None)?;
+                    let res =
+                        self.execute_item_opt_unwrap_result_no_throw(&larg, jb, false, None)?;
                     if res == Jper::Error {
                         return Ok(JpBool::Unknown);
                     }
@@ -1686,14 +1727,17 @@ impl<'a, 'x, 'mcx: 'a> ExecCtx<'a, 'x, 'mcx> {
 
             let v = match func {
                 Some(f) => {
-                    let JbV::Numeric(image) = val else { unreachable!() };
+                    let JbV::Numeric(image) = val else {
+                        unreachable!()
+                    };
                     let img = f(num_of(image));
                     JbV::Numeric(leak_numeric(self.mcx, &img)?)
                 }
                 None => *val,
             };
 
-            let jper2 = self.execute_next_item(Some(jsp), next.as_ref(), &v, found.as_deref_mut())?;
+            let jper2 =
+                self.execute_next_item(Some(jsp), next.as_ref(), &v, found.as_deref_mut())?;
 
             if jper2 == Jper::Error {
                 return Ok(jper2);
@@ -1784,7 +1828,14 @@ impl<'a, 'x, 'mcx: 'a> ExecCtx<'a, 'x, 'mcx> {
 
             if self.throw_errors {
                 value = adt_formatting::parse_datetime(
-                    self.mcx, datetime, template, collid, true, &mut typmod, &mut tz, None,
+                    self.mcx,
+                    datetime,
+                    template,
+                    collid,
+                    true,
+                    &mut typmod,
+                    &mut tz,
+                    None,
                 )?;
             } else {
                 let mut esc = SoftErrorContext::new(false);
@@ -1870,7 +1921,9 @@ impl<'a, 'x, 'mcx: 'a> ExecCtx<'a, 'x, 'mcx> {
                             String::from_utf8_lossy(datetime)
                         ))
                         .with_sqlstate(ERRCODE_INVALID_ARGUMENT_FOR_SQL_JSON_DATETIME_FUNCTION)
-                        .with_hint("Use a datetime template argument to specify the input data format.")
+                        .with_hint(
+                            "Use a datetime template argument to specify the input data format."
+                        )
                     );
                 } else {
                     return_error!(
@@ -1939,7 +1992,9 @@ impl<'a, 'x, 'mcx: 'a> ExecCtx<'a, 'x, 'mcx> {
                 if time_precision != -1 {
                     // Warns when precision is reduced.
                     time_precision = adt_date::anytime_typmod_check(false, time_precision)?;
-                    let ParsedDatetime::Time(mut t) = value else { unreachable!() };
+                    let ParsedDatetime::Time(mut t) = value else {
+                        unreachable!()
+                    };
                     adt_date::AdjustTimeForTypmod(&mut t, time_precision);
                     value = ParsedDatetime::Time(t);
                     typmod = time_precision;
@@ -1961,7 +2016,9 @@ impl<'a, 'x, 'mcx: 'a> ExecCtx<'a, 'x, 'mcx> {
                 };
                 if time_precision != -1 {
                     time_precision = adt_date::anytime_typmod_check(true, time_precision)?;
-                    let ParsedDatetime::TimeTz(mut t) = value else { unreachable!() };
+                    let ParsedDatetime::TimeTz(mut t) = value else {
+                        unreachable!()
+                    };
                     adt_date::AdjustTimeForTypmod(&mut t.time, time_precision);
                     value = ParsedDatetime::TimeTz(t);
                     typmod = time_precision;
@@ -1969,7 +2026,9 @@ impl<'a, 'x, 'mcx: 'a> ExecCtx<'a, 'x, 'mcx> {
             }
             ItemType::Timestamp => {
                 value = match value {
-                    ParsedDatetime::Date(d) => ParsedDatetime::Timestamp(adt_date::date2timestamp(d)?),
+                    ParsedDatetime::Date(d) => {
+                        ParsedDatetime::Timestamp(adt_date::date2timestamp(d)?)
+                    }
                     ParsedDatetime::Time(_) | ParsedDatetime::TimeTz(_) => {
                         not_recognized!("timestamp")
                     }
@@ -1980,8 +2039,11 @@ impl<'a, 'x, 'mcx: 'a> ExecCtx<'a, 'x, 'mcx> {
                     }
                 };
                 if time_precision != -1 {
-                    time_precision = adt_timestamp::anytimestamp_typmod_check(false, time_precision)?;
-                    let ParsedDatetime::Timestamp(mut ts) = value else { unreachable!() };
+                    time_precision =
+                        adt_timestamp::anytimestamp_typmod_check(false, time_precision)?;
+                    let ParsedDatetime::Timestamp(mut ts) = value else {
+                        unreachable!()
+                    };
                     let mut esc2 = SoftErrorContext::new(false);
                     if !adt_timestamp::AdjustTimestampForTypmod(
                         &mut ts,
@@ -2044,8 +2106,11 @@ impl<'a, 'x, 'mcx: 'a> ExecCtx<'a, 'x, 'mcx> {
                     ParsedDatetime::TimestampTz(_) => value,
                 };
                 if time_precision != -1 {
-                    time_precision = adt_timestamp::anytimestamp_typmod_check(true, time_precision)?;
-                    let ParsedDatetime::TimestampTz(mut ts) = value else { unreachable!() };
+                    time_precision =
+                        adt_timestamp::anytimestamp_typmod_check(true, time_precision)?;
+                    let ParsedDatetime::TimestampTz(mut ts) = value else {
+                        unreachable!()
+                    };
                     let mut esc2 = SoftErrorContext::new(false);
                     if !adt_timestamp::AdjustTimestampForTypmod(
                         &mut ts,
@@ -2129,10 +2194,7 @@ impl<'a, 'x, 'mcx: 'a> ExecCtx<'a, 'x, 'mcx> {
         let next = jsp.next();
         let has_next = next.is_some();
 
-        let base_ptr = self
-            .base_object
-            .jbc
-            .map_or(0i64, |b| b.as_ptr() as i64);
+        let base_ptr = self.base_object.jbc.map_or(0i64, |b| b.as_ptr() as i64);
         let mut id = jbc.as_ptr() as i64 - base_ptr;
         id += (self.base_object.id as i64) * 10_000_000_000;
 
@@ -2278,10 +2340,7 @@ fn session_tz_offset(tm: &mut adt_datetime::consts::pg_tm) -> i32 {
 
 /// Deep-copy a read-side item into a build-side value tree (C: pushJsonbValue
 /// jbvBinary expansion).
-fn build_value_from_item<'mcx>(
-    mcx: Mcx<'mcx>,
-    item: JsonbItem<'_>,
-) -> PgResult<BuildValue<'mcx>> {
+fn build_value_from_item<'mcx>(mcx: Mcx<'mcx>, item: JsonbItem<'_>) -> PgResult<BuildValue<'mcx>> {
     match item {
         JsonbItem::Null => Ok(BuildValue::Null),
         JsonbItem::Bool(b) => Ok(BuildValue::Bool(b)),
@@ -2380,11 +2439,7 @@ fn build_value_from_jbv<'mcx>(mcx: Mcx<'mcx>, v: &JbV<'_>) -> PgResult<BuildValu
 }
 
 /// C: JsonEncodeDateTime over the executor's datetime carrier.
-fn encode_datetime<'mcx>(
-    mcx: Mcx<'mcx>,
-    value: &ParsedDatetime,
-    tz: i32,
-) -> PgResult<&'mcx [u8]> {
+fn encode_datetime<'mcx>(mcx: Mcx<'mcx>, value: &ParsedDatetime, tz: i32) -> PgResult<&'mcx [u8]> {
     let mut buf = [0u8; adt_datetime::consts::MAXDATELEN + 1];
     let ttz_store;
     let (datum, typid) = match value {
@@ -2473,24 +2528,25 @@ fn compare_items(op: ItemType, jb1: &JbV<'_>, jb2: &JbV<'_>, use_tz: bool) -> Pg
                 -1
             }
         }
-        (JbV::Numeric(n1), JbV::Numeric(n2)) => {
-            adt_numeric::cmp_numerics(num_of(n1), num_of(n2))
-        }
+        (JbV::Numeric(n1), JbV::Numeric(n2)) => adt_numeric::cmp_numerics(num_of(n1), num_of(n2)),
         (JbV::String(s1), JbV::String(s2)) => {
             if op == ItemType::Equal {
-                return Ok(if s1 == s2 { JpBool::True } else { JpBool::False });
+                return Ok(if s1 == s2 {
+                    JpBool::True
+                } else {
+                    JpBool::False
+                });
             }
             // Unicode-codepoint collation; the server encoding is UTF-8
             // (byte order == codepoint order), so binary compare suffices.
             compare_strings(s1, s2)
         }
-        (
-            JbV::Datetime { value: v1, .. },
-            JbV::Datetime { value: v2, .. },
-        ) => match compare_datetime(v1, v2, use_tz)? {
-            None => return Ok(JpBool::Unknown),
-            Some(c) => c,
-        },
+        (JbV::Datetime { value: v1, .. }, JbV::Datetime { value: v2, .. }) => {
+            match compare_datetime(v1, v2, use_tz)? {
+                None => return Ok(JpBool::Unknown),
+                Some(c) => c,
+            }
+        }
         (JbV::Binary(_), JbV::Binary(_)) => return Ok(JpBool::Unknown),
         _ => panic!("invalid jsonb value type"),
     };
@@ -3059,9 +3115,9 @@ pub fn json_path_value<'a, 'mcx: 'a>(
             return Ok(JsonPathValueResult::Error);
         }
         let msg = match column_name {
-            Some(col) => format!(
-                "JSON path expression for column \"{col}\" must return single scalar item"
-            ),
+            Some(col) => {
+                format!("JSON path expression for column \"{col}\" must return single scalar item")
+            }
             None => "JSON path expression in JSON_VALUE must return single scalar item".to_string(),
         };
         return Err(Box::new(
@@ -3072,9 +3128,7 @@ pub fn json_path_value<'a, 'mcx: 'a>(
     let mut res_v = *found.head().expect("len 1");
     if let JbV::Binary(c) = res_v {
         if container_is_scalar(c) {
-            res_v = jbv_from_item(
-                adt_jsonb::io::extract_scalar(c).expect("raw-scalar container"),
-            );
+            res_v = jbv_from_item(adt_jsonb::io::extract_scalar(c).expect("raw-scalar container"));
         }
     }
 
@@ -3083,9 +3137,9 @@ pub fn json_path_value<'a, 'mcx: 'a>(
             return Ok(JsonPathValueResult::Error);
         }
         let msg = match column_name {
-            Some(col) => format!(
-                "JSON path expression for column \"{col}\" must return single scalar item"
-            ),
+            Some(col) => {
+                format!("JSON path expression for column \"{col}\" must return single scalar item")
+            }
             None => "JSON path expression in JSON_VALUE must return single scalar item".to_string(),
         };
         return Err(Box::new(

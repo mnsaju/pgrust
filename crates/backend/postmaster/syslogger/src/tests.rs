@@ -44,7 +44,11 @@ fn feed(st: &mut SysLoggerState, wire: &[u8]) {
 #[test]
 fn header_layout_matches_elog_writer() {
     assert_eq!(PIPE_HEADER_SIZE, 9);
-    let c = chunk(0x0102_0304, PIPE_PROTO_IS_LAST | PIPE_PROTO_DEST_STDERR, b"xy");
+    let c = chunk(
+        0x0102_0304,
+        PIPE_PROTO_IS_LAST | PIPE_PROTO_DEST_STDERR,
+        b"xy",
+    );
     assert_eq!(c.len(), PIPE_HEADER_SIZE + 2);
     assert_eq!(&c[0..2], &[0, 0]);
     assert_eq!(u16::from_ne_bytes([c[2], c[3]]), 2);
@@ -61,7 +65,10 @@ fn single_chunk_message_is_written() {
     install_logfile(&path);
 
     let mut st = SysLoggerState::new();
-    feed(&mut st, &chunk(42, PIPE_PROTO_IS_LAST | PIPE_PROTO_DEST_STDERR, b"hello\n"));
+    feed(
+        &mut st,
+        &chunk(42, PIPE_PROTO_IS_LAST | PIPE_PROTO_DEST_STDERR, b"hello\n"),
+    );
     assert_eq!(drain_logfile(&path), b"hello\n");
 }
 
@@ -77,8 +84,16 @@ fn multi_chunk_message_reassembles_and_interleaves() {
     let mut wire = Vec::new();
     wire.extend_from_slice(&chunk(7, PIPE_PROTO_DEST_STDERR, b"AAAA"));
     wire.extend_from_slice(&chunk(8, PIPE_PROTO_DEST_STDERR, b"BBBB"));
-    wire.extend_from_slice(&chunk(7, PIPE_PROTO_IS_LAST | PIPE_PROTO_DEST_STDERR, b"aaaa\n"));
-    wire.extend_from_slice(&chunk(8, PIPE_PROTO_IS_LAST | PIPE_PROTO_DEST_STDERR, b"bbbb\n"));
+    wire.extend_from_slice(&chunk(
+        7,
+        PIPE_PROTO_IS_LAST | PIPE_PROTO_DEST_STDERR,
+        b"aaaa\n",
+    ));
+    wire.extend_from_slice(&chunk(
+        8,
+        PIPE_PROTO_IS_LAST | PIPE_PROTO_DEST_STDERR,
+        b"bbbb\n",
+    ));
     feed(&mut st, &wire);
     assert_eq!(drain_logfile(&path), b"AAAAaaaa\nBBBBbbbb\n");
 
@@ -167,7 +182,10 @@ fn csv_dest_without_csv_file_falls_back_to_syslog_file() {
     assert!(CSVLOG_FILE.load(Relaxed).is_null());
 
     let mut st = SysLoggerState::new();
-    feed(&mut st, &chunk(3, PIPE_PROTO_IS_LAST | PIPE_PROTO_DEST_CSVLOG, b"c,s,v\n"));
+    feed(
+        &mut st,
+        &chunk(3, PIPE_PROTO_IS_LAST | PIPE_PROTO_DEST_CSVLOG, b"c,s,v\n"),
+    );
     assert_eq!(drain_logfile(&path), b"c,s,v\n");
 }
 

@@ -1,4 +1,3 @@
-
 use core::ffi::{c_int, c_uchar, c_void};
 use core::mem::size_of;
 
@@ -23,9 +22,8 @@ unsafe fn sym_cmp(a: *const symbol, b: *const symbol, n: c_int) -> c_int {
 }
 
 pub unsafe fn create_s() -> *mut symbol {
-    let mem: *mut c_void = palloc(
-        HEAD.wrapping_add(((CREATE_SIZE + 1) as usize).wrapping_mul(size_of::<symbol>())),
-    );
+    let mem: *mut c_void =
+        palloc(HEAD.wrapping_add(((CREATE_SIZE + 1) as usize).wrapping_mul(size_of::<symbol>())));
     if mem.is_null() {
         return core::ptr::null_mut();
     }

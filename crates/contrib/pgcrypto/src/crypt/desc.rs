@@ -75,7 +75,10 @@ mod tests {
 
     #[test]
     fn desc_xdes_short_setting_invalid_salt() {
-        assert_eq!(crypt_xdes(b"foox", b"_J9..BWH").unwrap_err(), "invalid salt");
+        assert_eq!(
+            crypt_xdes(b"foox", b"_J9..BWH").unwrap_err(),
+            "invalid salt"
+        );
     }
 
     #[test]

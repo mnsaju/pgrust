@@ -11,7 +11,6 @@ use ::execexpr::{exec_build_grouping_equal, exec_qual, EvalSlots, ExprState};
 use ::executils::{EStateData, EcxtId, ExecSlotId};
 use ::mcx::{vec_with_capacity_in, PgBox, PgVec};
 use ::types_error::PgResult;
-use ::types_nodes::node_tree::Node;
 use ::types_nodes::plannodes::Unique;
 use ::types_slot::{SlotData, TupleSlotKind, EXEC_FLAG_BACKWARD, EXEC_FLAG_MARK};
 use ::types_tuple::TupleDescData;
@@ -62,8 +61,11 @@ pub fn exec_init_unique<'mcx>(
         &eqfuncoids,
         node.uniqCollations,
     )?;
-    let prev_slot =
-        exectuples::make_tuple_table_slot(mcx, TupleSlotKind::MinimalTuple, Some(outer_desc.clone()));
+    let prev_slot = exectuples::make_tuple_table_slot(
+        mcx,
+        TupleSlotKind::MinimalTuple,
+        Some(outer_desc.clone()),
+    );
     Ok(UniqueState {
         plan: node,
         ps_ExprContext,

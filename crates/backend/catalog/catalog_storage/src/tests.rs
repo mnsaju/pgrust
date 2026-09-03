@@ -47,7 +47,8 @@ fn subcommit_lowers_nest_level() {
     // stay >= level and get lowered to -1 == level-1 shape; assert mechanics
     // through direct state.
     AtSubCommit_smgr();
-    PENDING.with_borrow(|p| assert_eq!(p[0].nest_level, xact::GetCurrentTransactionNestLevel() - 1));
+    PENDING
+        .with_borrow(|p| assert_eq!(p[0].nest_level, xact::GetCurrentTransactionNestLevel() - 1));
     PENDING.with_borrow_mut(|p| p.clear());
 }
 
@@ -57,7 +58,9 @@ fn pending_syncs_registry_abort_and_parallel_discard() {
     let a = RelFileLocator::new(1663, 5, 16500);
     AddPendingSync(a);
     assert!(RelFileLocatorSkippingWAL(a));
-    assert!(!RelFileLocatorSkippingWAL(RelFileLocator::new(1663, 5, 16501)));
+    assert!(!RelFileLocatorSkippingWAL(RelFileLocator::new(
+        1663, 5, 16501
+    )));
 
     smgrDoPendingSyncs(false, false).unwrap();
     assert!(!RelFileLocatorSkippingWAL(a));

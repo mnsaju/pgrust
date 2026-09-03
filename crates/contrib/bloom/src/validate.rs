@@ -26,11 +26,16 @@ pub fn blvalidate(opclassoid: Oid) -> PgResult<bool> {
         .unwrap_or_else(|| panic!("cache lookup failed for operator class {opclassoid}"));
     let opfamilyoid = shape.opcfamily;
     let opcintype = shape.opcintype;
-    let opckeytype = if shape.opckeytype != InvalidOid { shape.opckeytype } else { opcintype };
+    let opckeytype = if shape.opckeytype != InvalidOid {
+        shape.opckeytype
+    } else {
+        opcintype
+    };
     let opclassname_data = syscache_seams::pg_opclass_opcname::call(opclassoid)?
         .unwrap_or_else(|| panic!("cache lookup failed for operator class {opclassoid}"));
-    let opclassname =
-        core::str::from_utf8(opclassname_data.name_str()).unwrap_or("").to_string();
+    let opclassname = core::str::from_utf8(opclassname_data.name_str())
+        .unwrap_or("")
+        .to_string();
 
     let opfamilyname = lsyscache::get_opfamily_name(mcx, opfamilyoid, false)?
         .expect("opfamily name")

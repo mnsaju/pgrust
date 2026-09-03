@@ -88,7 +88,10 @@ pub fn BackgroundWriterMain(startup_data: &StartupData) -> ! {
 
     {
         use procsignal::ThreadSignalHandler::{Ignore, Simple};
-        procsignal::pqsignal_thread(procsignal::signums::SIGHUP, Simple(interrupt::SignalHandlerForConfigReload));
+        procsignal::pqsignal_thread(
+            procsignal::signums::SIGHUP,
+            Simple(interrupt::SignalHandlerForConfigReload),
+        );
         procsignal::pqsignal_thread(procsignal::signums::SIGINT, Ignore);
         procsignal::pqsignal_thread(
             procsignal::signums::SIGTERM,

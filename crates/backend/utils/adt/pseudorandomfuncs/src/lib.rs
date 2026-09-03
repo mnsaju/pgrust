@@ -72,8 +72,12 @@ fn fmt_g(v: f64) -> String {
         return if v.is_sign_negative() { "-0" } else { "0" }.to_string();
     }
     let e_str = format!("{:.5e}", v);
-    let x: i32 = e_str.rsplit('e').next().and_then(|s| s.parse().ok()).unwrap_or(0);
-    if x < -4 || x >= 6 {
+    let x: i32 = e_str
+        .rsplit('e')
+        .next()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    if !(-4..6).contains(&x) {
         let (mant, _) = e_str.rsplit_once('e').unwrap();
         let mant = mant.trim_end_matches('0').trim_end_matches('.');
         return format!("{mant}e{}{:02}", if x < 0 { '-' } else { '+' }, x.abs());

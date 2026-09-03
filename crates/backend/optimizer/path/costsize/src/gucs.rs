@@ -4,14 +4,14 @@
 use guc_tables::session_guc_cluster;
 
 session_guc_cluster!(CostsizeGucs, COSTSIZE_GUCS:
-    (cpu_tuple_cost_cell, f64, cpu_tuple_cost, set_cpu_tuple_cost, guc_tables::consts::DEFAULT_CPU_TUPLE_COST as f64),
-    (seq_page_cost_cell, f64, seq_page_cost, set_seq_page_cost, guc_tables::consts::DEFAULT_SEQ_PAGE_COST as f64),
-    (random_page_cost_cell, f64, random_page_cost, set_random_page_cost, guc_tables::consts::DEFAULT_RANDOM_PAGE_COST as f64),
-    (cpu_index_tuple_cost_cell, f64, cpu_index_tuple_cost, set_cpu_index_tuple_cost, guc_tables::consts::DEFAULT_CPU_INDEX_TUPLE_COST as f64),
-    (cpu_operator_cost_cell, f64, cpu_operator_cost, set_cpu_operator_cost, guc_tables::consts::DEFAULT_CPU_OPERATOR_COST as f64),
-    (recursive_worktable_factor_cell, f64, recursive_worktable_factor, set_recursive_worktable_factor, guc_tables::consts::DEFAULT_RECURSIVE_WORKTABLE_FACTOR as f64),
-    (parallel_tuple_cost_cell, f64, parallel_tuple_cost, set_parallel_tuple_cost, guc_tables::consts::DEFAULT_PARALLEL_TUPLE_COST as f64),
-    (parallel_setup_cost_cell, f64, parallel_setup_cost, set_parallel_setup_cost, guc_tables::consts::DEFAULT_PARALLEL_SETUP_COST as f64),
+    (cpu_tuple_cost_cell, f64, cpu_tuple_cost, set_cpu_tuple_cost, guc_tables::consts::DEFAULT_CPU_TUPLE_COST),
+    (seq_page_cost_cell, f64, seq_page_cost, set_seq_page_cost, guc_tables::consts::DEFAULT_SEQ_PAGE_COST),
+    (random_page_cost_cell, f64, random_page_cost, set_random_page_cost, guc_tables::consts::DEFAULT_RANDOM_PAGE_COST),
+    (cpu_index_tuple_cost_cell, f64, cpu_index_tuple_cost, set_cpu_index_tuple_cost, guc_tables::consts::DEFAULT_CPU_INDEX_TUPLE_COST),
+    (cpu_operator_cost_cell, f64, cpu_operator_cost, set_cpu_operator_cost, guc_tables::consts::DEFAULT_CPU_OPERATOR_COST),
+    (recursive_worktable_factor_cell, f64, recursive_worktable_factor, set_recursive_worktable_factor, guc_tables::consts::DEFAULT_RECURSIVE_WORKTABLE_FACTOR),
+    (parallel_tuple_cost_cell, f64, parallel_tuple_cost, set_parallel_tuple_cost, guc_tables::consts::DEFAULT_PARALLEL_TUPLE_COST),
+    (parallel_setup_cost_cell, f64, parallel_setup_cost, set_parallel_setup_cost, guc_tables::consts::DEFAULT_PARALLEL_SETUP_COST),
     (effective_cache_size_cell, i32, effective_cache_size, set_effective_cache_size, guc_tables::consts::DEFAULT_EFFECTIVE_CACHE_SIZE),
     (enable_seqscan_cell, bool, enable_seqscan, set_enable_seqscan, true),
     (enable_tidscan_cell, bool, enable_tidscan, set_enable_tidscan, true),
@@ -245,14 +245,16 @@ pub const DEFAULT_PGRCOLUMNAR_LEADER_HASHAGG_ENTRY_SCALE: f64 = 1.8;
 /// numeric value overrides the scale for calibration sweeps.
 pub fn pgrcolumnar_leader_hashagg_entry_scale() -> Option<f64> {
     static V: std::sync::OnceLock<Option<f64>> = std::sync::OnceLock::new();
-    *V.get_or_init(|| match std::env::var("PGRUST_CBSTORE_LEADER_SPILL_COST").as_deref() {
-        Ok("0") | Ok("off") => None,
-        Ok(s) => match s.parse::<f64>() {
-            Ok(v) if v > 0.0 => Some(v),
-            _ => Some(DEFAULT_PGRCOLUMNAR_LEADER_HASHAGG_ENTRY_SCALE),
+    *V.get_or_init(
+        || match std::env::var("PGRUST_CBSTORE_LEADER_SPILL_COST").as_deref() {
+            Ok("0") | Ok("off") => None,
+            Ok(s) => match s.parse::<f64>() {
+                Ok(v) if v > 0.0 => Some(v),
+                _ => Some(DEFAULT_PGRCOLUMNAR_LEADER_HASHAGG_ENTRY_SCALE),
+            },
+            Err(_) => Some(DEFAULT_PGRCOLUMNAR_LEADER_HASHAGG_ENTRY_SCALE),
         },
-        Err(_) => Some(DEFAULT_PGRCOLUMNAR_LEADER_HASHAGG_ENTRY_SCALE),
-    })
+    )
 }
 
 /// Footer sorted-column scan pathkeys (was GUC `pgrcolumnar_scan_pathkeys`,
@@ -276,20 +278,34 @@ pub fn parallel_leader_participation() -> bool {
 
 pub fn install() {
     use guc_tables::GucVarAccessors;
-    guc_tables::vars::cpu_tuple_cost
-        .install(GucVarAccessors { get: cpu_tuple_cost, set: set_cpu_tuple_cost });
-    guc_tables::vars::seq_page_cost
-        .install(GucVarAccessors { get: seq_page_cost, set: set_seq_page_cost });
-    guc_tables::vars::random_page_cost
-        .install(GucVarAccessors { get: random_page_cost, set: set_random_page_cost });
-    guc_tables::vars::cpu_index_tuple_cost
-        .install(GucVarAccessors { get: cpu_index_tuple_cost, set: set_cpu_index_tuple_cost });
-    guc_tables::vars::cpu_operator_cost
-        .install(GucVarAccessors { get: cpu_operator_cost, set: set_cpu_operator_cost });
-    guc_tables::vars::effective_cache_size
-        .install(GucVarAccessors { get: effective_cache_size, set: set_effective_cache_size });
-    guc_tables::vars::enable_seqscan
-        .install(GucVarAccessors { get: enable_seqscan, set: set_enable_seqscan });
+    guc_tables::vars::cpu_tuple_cost.install(GucVarAccessors {
+        get: cpu_tuple_cost,
+        set: set_cpu_tuple_cost,
+    });
+    guc_tables::vars::seq_page_cost.install(GucVarAccessors {
+        get: seq_page_cost,
+        set: set_seq_page_cost,
+    });
+    guc_tables::vars::random_page_cost.install(GucVarAccessors {
+        get: random_page_cost,
+        set: set_random_page_cost,
+    });
+    guc_tables::vars::cpu_index_tuple_cost.install(GucVarAccessors {
+        get: cpu_index_tuple_cost,
+        set: set_cpu_index_tuple_cost,
+    });
+    guc_tables::vars::cpu_operator_cost.install(GucVarAccessors {
+        get: cpu_operator_cost,
+        set: set_cpu_operator_cost,
+    });
+    guc_tables::vars::effective_cache_size.install(GucVarAccessors {
+        get: effective_cache_size,
+        set: set_effective_cache_size,
+    });
+    guc_tables::vars::enable_seqscan.install(GucVarAccessors {
+        get: enable_seqscan,
+        set: set_enable_seqscan,
+    });
     guc_tables::vars::enable_partition_pruning.install(GucVarAccessors {
         get: enable_partition_pruning,
         set: set_enable_partition_pruning,
@@ -302,48 +318,90 @@ pub fn install() {
         get: enable_partitionwise_aggregate,
         set: set_enable_partitionwise_aggregate,
     });
-    guc_tables::vars::enable_tidscan
-        .install(GucVarAccessors { get: enable_tidscan, set: set_enable_tidscan });
-    guc_tables::vars::enable_indexscan
-        .install(GucVarAccessors { get: enable_indexscan, set: set_enable_indexscan });
-    guc_tables::vars::enable_indexonlyscan
-        .install(GucVarAccessors { get: enable_indexonlyscan, set: set_enable_indexonlyscan });
-    guc_tables::vars::enable_bitmapscan
-        .install(GucVarAccessors { get: enable_bitmapscan, set: set_enable_bitmapscan });
-    guc_tables::vars::enable_sort
-        .install(GucVarAccessors { get: enable_sort, set: set_enable_sort });
-    guc_tables::vars::enable_nestloop
-        .install(GucVarAccessors { get: enable_nestloop, set: set_enable_nestloop });
-    guc_tables::vars::enable_hashjoin
-        .install(GucVarAccessors { get: enable_hashjoin, set: set_enable_hashjoin });
-    guc_tables::vars::enable_mergejoin
-        .install(GucVarAccessors { get: enable_mergejoin, set: set_enable_mergejoin });
-    guc_tables::vars::enable_material
-        .install(GucVarAccessors { get: enable_material, set: set_enable_material });
-    guc_tables::vars::enable_memoize
-        .install(GucVarAccessors { get: enable_memoize, set: set_enable_memoize });
-    guc_tables::vars::enable_incremental_sort
-        .install(GucVarAccessors { get: enable_incremental_sort, set: set_enable_incremental_sort });
-    guc_tables::vars::enable_hashagg
-        .install(GucVarAccessors { get: enable_hashagg, set: set_enable_hashagg });
-    guc_tables::vars::enable_group_by_reordering
-        .install(GucVarAccessors { get: enable_group_by_reordering, set: set_enable_group_by_reordering });
-    guc_tables::vars::enable_distinct_reordering
-        .install(GucVarAccessors { get: enable_distinct_reordering, set: set_enable_distinct_reordering });
-    guc_tables::vars::enable_presorted_aggregate
-        .install(GucVarAccessors { get: enable_presorted_aggregate, set: set_enable_presorted_aggregate });
-    guc_tables::vars::recursive_worktable_factor
-        .install(GucVarAccessors { get: recursive_worktable_factor, set: set_recursive_worktable_factor });
-    guc_tables::vars::parallel_tuple_cost
-        .install(GucVarAccessors { get: parallel_tuple_cost, set: set_parallel_tuple_cost });
-    guc_tables::vars::parallel_setup_cost
-        .install(GucVarAccessors { get: parallel_setup_cost, set: set_parallel_setup_cost });
-    guc_tables::vars::enable_gathermerge
-        .install(GucVarAccessors { get: enable_gathermerge, set: set_enable_gathermerge });
-    guc_tables::vars::enable_parallel_hash
-        .install(GucVarAccessors { get: enable_parallel_hash, set: set_enable_parallel_hash });
-    guc_tables::vars::enable_parallel_append
-        .install(GucVarAccessors { get: enable_parallel_append, set: set_enable_parallel_append });
+    guc_tables::vars::enable_tidscan.install(GucVarAccessors {
+        get: enable_tidscan,
+        set: set_enable_tidscan,
+    });
+    guc_tables::vars::enable_indexscan.install(GucVarAccessors {
+        get: enable_indexscan,
+        set: set_enable_indexscan,
+    });
+    guc_tables::vars::enable_indexonlyscan.install(GucVarAccessors {
+        get: enable_indexonlyscan,
+        set: set_enable_indexonlyscan,
+    });
+    guc_tables::vars::enable_bitmapscan.install(GucVarAccessors {
+        get: enable_bitmapscan,
+        set: set_enable_bitmapscan,
+    });
+    guc_tables::vars::enable_sort.install(GucVarAccessors {
+        get: enable_sort,
+        set: set_enable_sort,
+    });
+    guc_tables::vars::enable_nestloop.install(GucVarAccessors {
+        get: enable_nestloop,
+        set: set_enable_nestloop,
+    });
+    guc_tables::vars::enable_hashjoin.install(GucVarAccessors {
+        get: enable_hashjoin,
+        set: set_enable_hashjoin,
+    });
+    guc_tables::vars::enable_mergejoin.install(GucVarAccessors {
+        get: enable_mergejoin,
+        set: set_enable_mergejoin,
+    });
+    guc_tables::vars::enable_material.install(GucVarAccessors {
+        get: enable_material,
+        set: set_enable_material,
+    });
+    guc_tables::vars::enable_memoize.install(GucVarAccessors {
+        get: enable_memoize,
+        set: set_enable_memoize,
+    });
+    guc_tables::vars::enable_incremental_sort.install(GucVarAccessors {
+        get: enable_incremental_sort,
+        set: set_enable_incremental_sort,
+    });
+    guc_tables::vars::enable_hashagg.install(GucVarAccessors {
+        get: enable_hashagg,
+        set: set_enable_hashagg,
+    });
+    guc_tables::vars::enable_group_by_reordering.install(GucVarAccessors {
+        get: enable_group_by_reordering,
+        set: set_enable_group_by_reordering,
+    });
+    guc_tables::vars::enable_distinct_reordering.install(GucVarAccessors {
+        get: enable_distinct_reordering,
+        set: set_enable_distinct_reordering,
+    });
+    guc_tables::vars::enable_presorted_aggregate.install(GucVarAccessors {
+        get: enable_presorted_aggregate,
+        set: set_enable_presorted_aggregate,
+    });
+    guc_tables::vars::recursive_worktable_factor.install(GucVarAccessors {
+        get: recursive_worktable_factor,
+        set: set_recursive_worktable_factor,
+    });
+    guc_tables::vars::parallel_tuple_cost.install(GucVarAccessors {
+        get: parallel_tuple_cost,
+        set: set_parallel_tuple_cost,
+    });
+    guc_tables::vars::parallel_setup_cost.install(GucVarAccessors {
+        get: parallel_setup_cost,
+        set: set_parallel_setup_cost,
+    });
+    guc_tables::vars::enable_gathermerge.install(GucVarAccessors {
+        get: enable_gathermerge,
+        set: set_enable_gathermerge,
+    });
+    guc_tables::vars::enable_parallel_hash.install(GucVarAccessors {
+        get: enable_parallel_hash,
+        set: set_enable_parallel_hash,
+    });
+    guc_tables::vars::enable_parallel_append.install(GucVarAccessors {
+        get: enable_parallel_append,
+        set: set_enable_parallel_append,
+    });
     guc_tables::vars::parallel_leader_participation.install_if_absent(GucVarAccessors {
         get: parallel_leader_participation_backing,
         set: set_parallel_leader_participation_backing,

@@ -71,8 +71,8 @@ fn read_char(s: &[u8], ix: &mut usize) -> u8 {
         0x5B..=0x5D => NA,
         c if c < 0x60 => c as u8,
         c if c < 0x100 => ISO8859_1_TO_ASCII_UPPER[(c - 0x60) as usize],
-        0x0104 | 0x0105 => b'[',  // A with ogonek
-        0x0118 | 0x0119 => b'\\', // E with ogonek
+        0x0104 | 0x0105 => b'[',                   // A with ogonek
+        0x0118 | 0x0119 => b'\\',                  // E with ogonek
         0x0162 | 0x0163 | 0x021A | 0x021B => b']', // T with cedilla / comma below
         _ => NA,
     }
@@ -145,7 +145,13 @@ impl DmState<'_, '_> {
         }
     }
 
-    fn set_leaf(&mut self, first_node: &mut [u32; 2], last_node: &mut [u32; 2], node: u32, ix: usize) {
+    fn set_leaf(
+        &mut self,
+        first_node: &mut [u32; 2],
+        last_node: &mut [u32; 2],
+        node: u32,
+        ix: usize,
+    ) {
         if self.arena[node as usize].is_leaf {
             return;
         }
@@ -335,7 +341,10 @@ pub(crate) fn daitch_mokotoff_coding<'mcx>(
         return Ok(false);
     };
 
-    let mut state = DmState { arena: mcx::vec_with_capacity_in(mcx, 16)?, out };
+    let mut state = DmState {
+        arena: mcx::vec_with_capacity_in(mcx, 16)?,
+        out,
+    };
     state.arena.push(start_node());
     first_node[ix_node] = 0;
 
@@ -396,14 +405,8 @@ pub(crate) fn fc_daitch_mokotoff(
     for code in codes.iter() {
         elems.push(varlena_result(varlena::cstring_to_text(mcx, code)?));
     }
-    let image = arrayfuncs::construct::construct_array(
-        mcx,
-        &elems,
-        types_core::TEXTOID,
-        -1,
-        false,
-        b'i',
-    )?;
+    let image =
+        arrayfuncs::construct::construct_array(mcx, &elems, types_core::TEXTOID, -1, false, b'i')?;
     let d = Datum::from_usize(image.as_ptr() as usize);
     core::mem::forget(image);
     Ok(d)

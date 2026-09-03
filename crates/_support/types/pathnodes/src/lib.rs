@@ -29,9 +29,9 @@ extern crate alloc;
 
 pub mod optimizer_plan;
 pub mod relids;
-pub mod run;
 #[cfg(test)]
 mod relids_differential_tests;
+pub mod run;
 
 use core::cell::{Cell, RefCell};
 
@@ -39,10 +39,10 @@ pub use ::mcx::{Mcx, PgBox, PgString, PgVec};
 
 use ::datum::datum::Datum;
 use ::types_core::fmgr::FmgrInfo;
+pub use ::types_core::primitive::Oid;
 use ::types_core::primitive::{
     AttrNumber, BlockNumber, Cardinality, Cost, Index, Selectivity, Size,
 };
-pub use ::types_core::primitive::Oid;
 pub use ::types_hash::hsearch::HTAB;
 
 pub type NodeTagValue = u16;
@@ -288,7 +288,10 @@ pub struct QueryId(pub u32);
 pub enum RangeTblEntryId {
     #[default]
     Invalid,
-    Parse { query: QueryId, index: u32 },
+    Parse {
+        query: QueryId,
+        index: u32,
+    },
     Flat(u32),
 }
 
@@ -2371,10 +2374,28 @@ mod tests {
 // arenas die with the query context (C: one wholesale context reset). The
 // census below makes a droppy-beyond-the-arena field a compile error.
 mcx::forget_safe_nodrop!(
-    RelId, PathId, PtId, RinfoId, EcId, EmId, PhInfoId, NodeId, PlanId,
-    QueryId, RangeTblEntryId, PlanRowMarkId, RtePermInfoId, JoinSearchPrivate,
-    ECDerivesKey, ECDerivesEntry, MergeScanSelCache, QualCost, PathKey,
-    MinMaxAggInfo, PlannerParamItem, AggClauseCosts,
+    RelId,
+    PathId,
+    PtId,
+    RinfoId,
+    EcId,
+    EmId,
+    PhInfoId,
+    NodeId,
+    PlanId,
+    QueryId,
+    RangeTblEntryId,
+    PlanRowMarkId,
+    RtePermInfoId,
+    JoinSearchPrivate,
+    ECDerivesKey,
+    ECDerivesEntry,
+    MergeScanSelCache,
+    QualCost,
+    PathKey,
+    MinMaxAggInfo,
+    PlannerParamItem,
+    AggClauseCosts,
 );
 
 mcx::forget_safe_struct!(
@@ -2516,11 +2537,7 @@ pub fn tag16(tag: ::types_nodes::NodeTag) -> u16 {
 pub fn is_outer_join(jointype: u32) -> bool {
     matches!(
         jointype,
-        JOIN_LEFT
-            | JOIN_FULL
-            | JOIN_RIGHT
-            | JOIN_ANTI
-            | JOIN_RIGHT_ANTI
+        JOIN_LEFT | JOIN_FULL | JOIN_RIGHT | JOIN_ANTI | JOIN_RIGHT_ANTI
     )
 }
 
@@ -2571,5 +2588,12 @@ pub fn pathkeys_contained_in(keys1: &[PathKey], keys2: &[PathKey]) -> bool {
     )
 }
 
-mcx::forget_safe_struct!(SemiAntiJoinFactors { outer_match_frac, match_count });
-mcx::forget_safe_struct!(CteScanParam { rti, plan_id, cte_param });
+mcx::forget_safe_struct!(SemiAntiJoinFactors {
+    outer_match_frac,
+    match_count
+});
+mcx::forget_safe_struct!(CteScanParam {
+    rti,
+    plan_id,
+    cte_param
+});

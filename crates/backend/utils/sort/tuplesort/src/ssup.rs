@@ -1,9 +1,9 @@
 use ::datum::Datum;
+use ::lsyscache::COMPARE_GT;
 use ::mcx::Mcx;
 use ::types_core::Oid;
 use ::types_error::PgResult;
-use ::types_fmgr::{direct_function_call2_coll_in, PGFunction};
-use ::lsyscache::COMPARE_GT;
+use ::types_fmgr::PGFunction;
 use ::types_nbtree::{BTORDER_PROC, BTSORTSUPPORT_PROC};
 
 // pg_proc.dat oids for the sortsupport routines with a live comparator arm.
@@ -486,14 +486,12 @@ pub fn prepare_sort_support_abbrev(
     ssup: &SortSupportInit,
     abbreviate: bool,
 ) -> PgResult<(SortSupport, Option<AbbrevArm>)> {
-    let Some((opfamily, opcintype, cmptype)) =
-        lsyscache::get_ordering_op_properties(ordering_op)?
+    let Some((opfamily, opcintype, cmptype)) = lsyscache::get_ordering_op_properties(ordering_op)?
     else {
         panic!("operator {ordering_op} is not a valid ordering operator");
     };
     let ssup_reverse = cmptype == COMPARE_GT;
-    let comparator =
-        comparator_for_opfamily(opfamily, opcintype, opcintype, ssup.ssup_collation)?;
+    let comparator = comparator_for_opfamily(opfamily, opcintype, opcintype, ssup.ssup_collation)?;
     let abbrev = if abbreviate {
         abbrev_arm_for(comparator)
     } else {
@@ -520,17 +518,26 @@ fn abbrev_arm_for(comparator: SortComparator) -> Option<AbbrevArm> {
         SortComparator::TextC => AbbrevKind::VarStrC,
         SortComparator::BpcharC => AbbrevKind::BpcharC,
         SortComparator::TextLocale(locale) if locale.pg_strxfrm_enabled() => {
-            AbbrevKind::VarStrXfrm { locale, bpchar: false }
+            AbbrevKind::VarStrXfrm {
+                locale,
+                bpchar: false,
+            }
         }
         SortComparator::BpcharLocale(locale) if locale.pg_strxfrm_enabled() => {
-            AbbrevKind::VarStrXfrm { locale, bpchar: true }
+            AbbrevKind::VarStrXfrm {
+                locale,
+                bpchar: true,
+            }
         }
         SortComparator::Uuid => AbbrevKind::Uuid,
         SortComparator::Network => AbbrevKind::Network,
         SortComparator::Numeric => AbbrevKind::Numeric,
         _ => return None,
     };
-    Some(AbbrevArm { kind, full_comparator: comparator })
+    Some(AbbrevArm {
+        kind,
+        full_comparator: comparator,
+    })
 }
 
 /// The MJExamineQuals (nodeMergejoin.c) comparator resolve: BTSORTSUPPORT_PROC
@@ -609,12 +616,8 @@ const F_GIST_POINT_SORTSUPPORT: Oid = 3435;
 /// is skipped like every index-build abbrev; gist_bbox_zorder_cmp is the
 /// abbrev arm's full tie-breaker, so the order is identical.
 pub fn comparator_for_gist_index_col(opfamily: Oid, opcintype: Oid) -> PgResult<SortComparator> {
-    let ssup_proc = lsyscache::get_opfamily_proc(
-        opfamily,
-        opcintype,
-        opcintype,
-        GIST_SORTSUPPORT_PROC_NUM,
-    )?;
+    let ssup_proc =
+        lsyscache::get_opfamily_proc(opfamily, opcintype, opcintype, GIST_SORTSUPPORT_PROC_NUM)?;
     match ssup_proc {
         F_GIST_POINT_SORTSUPPORT => Ok(SortComparator::GistPointZorder),
         F_RANGE_SORTSUPPORT => {

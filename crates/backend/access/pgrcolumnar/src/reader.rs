@@ -11,6 +11,22 @@ use crate::format::*;
 use crate::segfile::{SegFile, SegMap};
 use crate::writer::FooterRg;
 
+// Parsed footer: per-RG entries, per-column dict-page offsets, sum bytes,
+// null-count words, min/max bytes, the stitched-granule index, and the
+// (offset, len) span of the RG entries themselves.
+type ParsedFooter = (
+    Vec<FooterRg>,
+    Vec<u64>,
+    Vec<u8>,
+    Vec<u16>,
+    Vec<u8>,
+    FooterStitch,
+    Vec<(u64, u32)>,
+);
+// As ParsedFooter, plus the file's rg-entries base offset (the lazy/sectioned
+// read path needs it to seek back for a not-yet-loaded RG).
+type ParsedFooterWithBase = (Vec<FooterRg>, u64, Vec<u64>, Vec<u8>, Vec<u16>, Vec<u8>, FooterStitch, Vec<(u64, u32)>);
+
 // LZ4 frame decode target inside the u64-backed arena: `raw_len` payload
 // bytes + the decoder's OUT_PAD tail slack (wild-copy spill scratch, never
 // published). The arena is grown monotonically and NEVER shrunk/cleared, so
@@ -36,7 +52,9 @@ fn arena_frame(arena: &mut Vec<u64>, raw_len: usize) -> &mut [u8] {
 pub fn read_header(hdr: &[u8]) -> PgResult<(u64, u64, u32)> {
     let version = get_u32(hdr, 8);
     if get_u64(hdr, 0) != CB_MAGIC || !(CB_VERSION_V1..=CB_VERSION).contains(&version) {
-        return Err(Box::new(PgError::error("cbstore: bad part header".to_string())));
+        return Err(Box::new(PgError::error(
+            "cbstore: bad part header".to_string(),
+        )));
     }
     Ok((get_u64(hdr, 16), get_u64(hdr, 24), version))
 }
@@ -67,11 +85,27 @@ pub(crate) struct FooterLayout {
 pub(crate) fn footer_layout(version: u32, nrgs: usize, ncols: usize) -> FooterLayout {
     FooterLayout {
         // v7 prelude: nrgs u32 | ncols u32 | ncols length-stats flag bytes.
-        pre_len: if version >= CB_VERSION_V7 { 8 + ncols } else { 8 },
-        ndv_len: if version >= CB_VERSION_V2 { ncols * 8 } else { 0 },
-        sums_len: if version >= CB_VERSION_V4 { nrgs * ncols * 16 } else { 0 },
+        pre_len: if version >= CB_VERSION_V7 {
+            8 + ncols
+        } else {
+            8
+        },
+        ndv_len: if version >= CB_VERSION_V2 {
+            ncols * 8
+        } else {
+            0
+        },
+        sums_len: if version >= CB_VERSION_V4 {
+            nrgs * ncols * 16
+        } else {
+            0
+        },
         sorted_len: if version >= CB_VERSION_V5 { ncols } else { 0 },
-        ckey_len: if version >= CB_VERSION_V6 { CB_CLUSTER_KEY_SECTION_LEN } else { 0 },
+        ckey_len: if version >= CB_VERSION_V6 {
+            CB_CLUSTER_KEY_SECTION_LEN
+        } else {
+            0
+        },
     }
 }
 
@@ -107,7 +141,13 @@ impl FooterLayout {
     }
     // Byte offset (footer-relative) of the v7 zero-count section
     // (immediately after the stitch section).
-    pub(crate) fn zerocnt_off(&self, nrgs: usize, ncols: usize, nlencols: usize, version: u32) -> usize {
+    pub(crate) fn zerocnt_off(
+        &self,
+        nrgs: usize,
+        ncols: usize,
+        nlencols: usize,
+        version: u32,
+    ) -> usize {
         self.stitch_off(nrgs, ncols, nlencols) + self.stitch_len(nrgs, ncols, version)
     }
     // Byte length of the v7 zero-count section.
@@ -191,13 +231,18 @@ pub fn read_footer_rgs(
     ncols: usize,
     version: u32,
     want_sums: bool,
-) -> PgResult<(Vec<FooterRg>, u64, Vec<u64>, Vec<u8>, Vec<u16>, Vec<u8>, FooterStitch, Vec<(u64, u32)>)>
-{
+) -> PgResult<ParsedFooterWithBase> {
     let t0 = footer_debug().then(std::time::Instant::now);
     let total_len = file.total_len();
-    let pre_len = if version >= CB_VERSION_V7 { 8 + ncols } else { 8 };
+    let pre_len = if version >= CB_VERSION_V7 {
+        8 + ncols
+    } else {
+        8
+    };
     if footer_off < CB_HEADER_LEN
-        || footer_off.checked_add(pre_len as u64).is_none_or(|e| e > total_len)
+        || footer_off
+            .checked_add(pre_len as u64)
+            .is_none_or(|e| e > total_len)
     {
         return Err(Box::new(PgError::error(
             "cbstore: corrupt part (footer offset out of bounds)".to_string(),
@@ -208,7 +253,9 @@ pub fn read_footer_rgs(
     let nrgs = get_u32(&fixed, 0) as usize;
     let fncols = get_u32(&fixed, 4) as usize;
     if fncols != ncols {
-        return Err(Box::new(PgError::error("cbstore: footer ncols mismatch".to_string())));
+        return Err(Box::new(PgError::error(
+            "cbstore: footer ncols mismatch".to_string(),
+        )));
     }
     let lay = footer_layout(version, nrgs, ncols);
     let nlencols = if version >= CB_VERSION_V7 {
@@ -253,7 +300,10 @@ pub fn read_footer_rgs(
         let ranges = [
             (0usize, prefix_end),
             (sorted_off, sorted_off + lay.sorted_len + lay.ckey_len),
-            (stitch_off, stitch_off + lay.stitch_len(nrgs, ncols, version)),
+            (
+                stitch_off,
+                stitch_off + lay.stitch_len(nrgs, ncols, version),
+            ),
             (tail_start, body_len),
         ];
         // Overlap the section preads (cold-readahead lane): hint every
@@ -279,7 +329,16 @@ pub fn read_footer_rgs(
     }
     let out = parse_footer_checked(&buf, nrgs, ncols, version, want_sums, !lazy).map(
         |(rgs, ndv, sorted, ckey, lenflags, stitch, ndvregs)| {
-            (rgs, footer_off + body_len as u64, ndv, sorted, ckey, lenflags, stitch, ndvregs)
+            (
+                rgs,
+                footer_off + body_len as u64,
+                ndv,
+                sorted,
+                ckey,
+                lenflags,
+                stitch,
+                ndvregs,
+            )
         },
     );
     if let Some(t0) = t0 {
@@ -297,8 +356,7 @@ pub fn parse_footer(
     ncols: usize,
     version: u32,
     want_sums: bool,
-) -> PgResult<(Vec<FooterRg>, Vec<u64>, Vec<u8>, Vec<u16>, Vec<u8>, FooterStitch, Vec<(u64, u32)>)>
-{
+) -> PgResult<ParsedFooter> {
     parse_footer_checked(buf, nrgs, ncols, version, want_sums, true)
 }
 
@@ -312,14 +370,15 @@ fn parse_footer_checked(
     version: u32,
     want_sums: bool,
     check_crc: bool,
-) -> PgResult<(Vec<FooterRg>, Vec<u64>, Vec<u8>, Vec<u16>, Vec<u8>, FooterStitch, Vec<(u64, u32)>)>
-{
+) -> PgResult<ParsedFooter> {
     let tail = buf.len() - 16;
     if get_u32(buf, tail + 12) != CB_FOOTER_MAGIC
         || get_u64(buf, tail) != buf.len() as u64
         || (check_crc && get_u32(buf, tail + 8) != crc32c(&buf[..tail]))
     {
-        return Err(Box::new(PgError::error("cbstore: corrupt footer".to_string())));
+        return Err(Box::new(PgError::error(
+            "cbstore: corrupt footer".to_string(),
+        )));
     }
     // v7 prelude tail: per-column length-stats flags; all-0 on pre-v7 parts.
     let mut lenflags = vec![0u8; ncols];
@@ -328,7 +387,11 @@ fn parse_footer_checked(
     }
     let nlencols = lenflags.iter().filter(|&&b| b != 0).count();
     let mut rgs = Vec::with_capacity(nrgs);
-    let mut off = if version >= CB_VERSION_V7 { 8 + ncols } else { 8 };
+    let mut off = if version >= CB_VERSION_V7 {
+        8 + ncols
+    } else {
+        8
+    };
     for _ in 0..nrgs {
         rgs.push(FooterRg {
             file_off: get_u64(buf, off),
@@ -344,7 +407,11 @@ fn parse_footer_checked(
     }
     for rg in rgs.iter_mut() {
         for _ in 0..ncols {
-            rg.chunks.push((get_u64(buf, off), get_i64(buf, off + 8), get_i64(buf, off + 16)));
+            rg.chunks.push((
+                get_u64(buf, off),
+                get_i64(buf, off + 8),
+                get_i64(buf, off + 16),
+            ));
             off += 24;
         }
     }
@@ -383,7 +450,9 @@ fn parse_footer_checked(
     if version >= CB_VERSION_V6 {
         let nkeys = u16::from_le_bytes(buf[off..off + 2].try_into().unwrap()) as usize;
         if nkeys > CB_CLUSTER_KEY_MAX_COLS {
-            return Err(Box::new(PgError::error("cbstore: corrupt footer".to_string())));
+            return Err(Box::new(PgError::error(
+                "cbstore: corrupt footer".to_string(),
+            )));
         }
         for k in 0..nkeys {
             let o = off + 2 + k * 2;
@@ -472,7 +541,9 @@ pub fn part_footer_rows(path: &str, ncols: usize) -> PgResult<Option<u64>> {
     }
     let mut hdr = [0u8; CB_HEADER_LEN as usize];
     file.read_exact_at(&mut hdr, 0)?;
-    let Some((footer_off, _, version)) = read_header_opt(&hdr)? else { return Ok(None) };
+    let Some((footer_off, _, version)) = read_header_opt(&hdr)? else {
+        return Ok(None);
+    };
     if footer_off == 0 {
         return Ok(None);
     }
@@ -489,7 +560,9 @@ pub fn part_footer_ndv(path: &str, ncols: usize) -> PgResult<Option<Vec<u64>>> {
     }
     let mut hdr = [0u8; CB_HEADER_LEN as usize];
     file.read_exact_at(&mut hdr, 0)?;
-    let Some((footer_off, _, version)) = read_header_opt(&hdr)? else { return Ok(None) };
+    let Some((footer_off, _, version)) = read_header_opt(&hdr)? else {
+        return Ok(None);
+    };
     if footer_off == 0 || version < CB_VERSION_V2 {
         return Ok(None);
     }
@@ -504,14 +577,19 @@ pub fn part_footer_ndv(path: &str, ncols: usize) -> PgResult<Option<Vec<u64>>> {
 /// caller skips the child). Some(v): per-column Option<Hll>, None entries
 /// where the sketch is absent (pre-v8 part, append-invalidated chain,
 /// kill switch, or an unknown blob shape).
-pub fn part_footer_ndv_hll(path: &str, ncols: usize) -> PgResult<Option<Vec<Option<crate::hll::Hll>>>> {
+pub fn part_footer_ndv_hll(
+    path: &str,
+    ncols: usize,
+) -> PgResult<Option<Vec<Option<crate::hll::Hll>>>> {
     let mut file = SegFile::open_rw(path)?;
     if file.total_len() < CB_HEADER_LEN {
         return Ok(None);
     }
     let mut hdr = [0u8; CB_HEADER_LEN as usize];
     file.read_exact_at(&mut hdr, 0)?;
-    let Some((footer_off, _, version)) = read_header_opt(&hdr)? else { return Ok(None) };
+    let Some((footer_off, _, version)) = read_header_opt(&hdr)? else {
+        return Ok(None);
+    };
     if footer_off == 0 {
         return Ok(None);
     }
@@ -621,7 +699,9 @@ impl Part {
         }
         let mut hdr = [0u8; CB_HEADER_LEN as usize];
         file.read_exact_at(&mut hdr, 0)?;
-        let Some((footer_off, _fp, version)) = read_header_opt(&hdr)? else { return Ok(None) };
+        let Some((footer_off, _fp, version)) = read_header_opt(&hdr)? else {
+            return Ok(None);
+        };
         if footer_off == 0 {
             return Ok(None);
         }
@@ -697,7 +777,12 @@ impl Part {
                 },
                 // Unstat-able path (should be unreachable past open_rw):
                 // a null identity that the condition cache refuses to key on.
-                None => crate::condcache::PartIdent { dev: 0, ino: 0, len: 0, footer_off: 0 },
+                None => crate::condcache::PartIdent {
+                    dev: 0,
+                    ino: 0,
+                    len: 0,
+                    footer_off: 0,
+                },
             }
         };
         Ok(Some(Part {
@@ -737,12 +822,19 @@ impl Part {
             let ncols = self.ncols;
             let mut out = vec![0u64; ncols];
             for (r, rg) in self.rgs.iter().enumerate() {
-                let rg_end = self.rgs.get(r + 1).map_or(self.footer_off, |next| next.file_off);
+                let rg_end = self
+                    .rgs
+                    .get(r + 1)
+                    .map_or(self.footer_off, |next| next.file_off);
                 let body_len = rg_end.saturating_sub(rg.file_off);
-                for i in 0..ncols {
+                for (i, dst) in out.iter_mut().enumerate().take(ncols) {
                     let start = rg.chunks[i].0.min(body_len);
-                    let end = if i + 1 < ncols { rg.chunks[i + 1].0 } else { body_len };
-                    out[i] += end.min(body_len).saturating_sub(start);
+                    let end = if i + 1 < ncols {
+                        rg.chunks[i + 1].0
+                    } else {
+                        body_len
+                    };
+                    *dst += end.min(body_len).saturating_sub(start);
                 }
             }
             out
@@ -783,7 +875,10 @@ impl Part {
         // SAFETY: bounds and 4-alignment checked above; the mmap base is
         // page-aligned and outlives &self.
         Some(unsafe {
-            std::slice::from_raw_parts(bytes.as_ptr().add(off as usize).cast::<u32>(), count as usize)
+            std::slice::from_raw_parts(
+                bytes.as_ptr().add(off as usize).cast::<u32>(),
+                count as usize,
+            )
         })
     }
 
@@ -791,7 +886,10 @@ impl Part {
     // v4+ writer sets, so sums_off != 0 whenever the flag is present).
     pub fn rg_sum(&self, rg: usize, col: usize) -> i128 {
         debug_assert!(self.sums_off != 0 && self.rgs[rg].flags & RG_FLAG_SUMS != 0);
-        get_i128(self.bytes(), self.sums_off as usize + (rg * self.ncols + col) * 16)
+        get_i128(
+            self.bytes(),
+            self.sums_off as usize + (rg * self.ncols + col) * 16,
+        )
     }
 
     /// True when the part carries a v7 length-stats section with entries for
@@ -815,8 +913,7 @@ impl Part {
         }
         debug_assert!(g < GRANULES_PER_RG);
         let e = self.lenstats_off as usize
-            + ((rg * GRANULES_PER_RG + g) * self.nlencols + rank as usize)
-                * CB_LENSTATS_ENTRY_LEN;
+            + ((rg * GRANULES_PER_RG + g) * self.nlencols + rank as usize) * CB_LENSTATS_ENTRY_LEN;
         let b = self.bytes();
         Some((get_u64(b, e), get_u32(b, e + 8), get_u32(b, e + 12)))
     }
@@ -894,9 +991,15 @@ impl Part {
         let starts = self.granule_starts();
         match starts.binary_search(&granule) {
             // `granule` IS an RG start: the boundary is the next entry.
-            Ok(i) => starts.get(i + 1).copied().unwrap_or_else(|| self.total_granules()),
+            Ok(i) => starts
+                .get(i + 1)
+                .copied()
+                .unwrap_or_else(|| self.total_granules()),
             // Insertion point names the first entry > granule.
-            Err(i) => starts.get(i).copied().unwrap_or_else(|| self.total_granules()),
+            Err(i) => starts
+                .get(i)
+                .copied()
+                .unwrap_or_else(|| self.total_granules()),
         }
     }
 
@@ -927,7 +1030,11 @@ impl Part {
             Some(next) => next.file_off,
             None => self.data_end,
         };
-        if end <= self.rgs[rg].file_off { 0 } else { end }
+        if end <= self.rgs[rg].file_off {
+            0
+        } else {
+            end
+        }
     }
 
     /// Claim-time readahead (parallelism-redesign §2.8): madvise(WILLNEED)
@@ -940,7 +1047,9 @@ impl Part {
     /// columns coalesce into one madvise. Purely advisory: kernel errors
     /// are ignored; returns whether at least one advise was issued.
     pub fn advise_willneed(&self, rg: usize, cols: &[u16]) -> bool {
-        let Some(m) = self.rgs.get(rg) else { return false };
+        let Some(m) = self.rgs.get(rg) else {
+            return false;
+        };
         let rg_end = self.rg_end(rg);
         if rg_end == 0 {
             return false;
@@ -953,7 +1062,9 @@ impl Part {
         };
         for &c in cols {
             let c = c as usize;
-            let Some(&(off, _, _)) = m.chunks.get(c) else { continue };
+            let Some(&(off, _, _)) = m.chunks.get(c) else {
+                continue;
+            };
             let start = m.file_off + off;
             let end = match m.chunks.get(c + 1) {
                 Some(&(next_off, _, _)) => m.file_off + next_off,
@@ -996,7 +1107,11 @@ fn advise_extent(bytes: &[u8], start: u64, end: u64) -> bool {
     let page = *PAGE.get_or_init(|| {
         // SAFETY: sysconf is always safe to call.
         let p = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
-        if p > 0 { p as u64 } else { 4096 }
+        if p > 0 {
+            p as u64
+        } else {
+            4096
+        }
     });
     let a_start = start / page * page;
     let len = (end - a_start) as usize;
@@ -1262,7 +1377,15 @@ pub struct ChunkView<'a> {
 // bench/rig fixture path only: a ChunkView over a bare payload image.
 #[cfg(feature = "bench-internals")]
 pub fn chunk_view_for_bench(part: &[u8], hdr: ChunkHeader, nrows: u32) -> ChunkView<'_> {
-    ChunkView { part, hdr, gdir_off: 0, blockzm_off: 0, bloom_off: 0, payload_off: 0, nrows }
+    ChunkView {
+        part,
+        hdr,
+        gdir_off: 0,
+        blockzm_off: 0,
+        bloom_off: 0,
+        payload_off: 0,
+        nrows,
+    }
 }
 
 impl<'a> ChunkView<'a> {
@@ -1277,10 +1400,21 @@ impl<'a> ChunkView<'a> {
             0
         };
         let bloom_off = blockzm_off + blockzm_len;
-        let bloom_len =
-            if hdr.flags & CHUNK_FLAG_BLOOM != 0 { ng * crate::bloom::BLOOM_BYTES } else { 0 };
+        let bloom_len = if hdr.flags & CHUNK_FLAG_BLOOM != 0 {
+            ng * crate::bloom::BLOOM_BYTES
+        } else {
+            0
+        };
         let payload_off = align64((bloom_off + bloom_len) as u64) as usize;
-        ChunkView { part, hdr, gdir_off, blockzm_off, bloom_off, payload_off, nrows }
+        ChunkView {
+            part,
+            hdr,
+            gdir_off,
+            blockzm_off,
+            bloom_off,
+            payload_off,
+            nrows,
+        }
     }
 
     pub fn has_block_zm(&self) -> bool {
@@ -1324,12 +1458,7 @@ impl<'a> ChunkView<'a> {
     // Granule g's plain fixed-width payload bytes (n rows x width): the
     // in-file slice on unframed chunks, else the v6 granule frame
     // decompressed into `arena` (u64-backed scratch, reused per granule).
-    fn fixed_granule_bytes<'s>(
-        &'s self,
-        g: usize,
-        n: usize,
-        arena: &'s mut Vec<u64>,
-    ) -> &'s [u8] {
+    fn fixed_granule_bytes<'s>(&'s self, g: usize, n: usize, arena: &'s mut Vec<u64>) -> &'s [u8] {
         let w = self.hdr.width as usize;
         let p = self.payload();
         if self.hdr.codec == Codec::None {
@@ -1341,7 +1470,12 @@ impl<'a> ChunkView<'a> {
         let comp_len = get_u32(p, fo + 4) as usize;
         assert_eq!(raw_len, n * w, "cbstore: framed granule length mismatch");
         let dst = arena_frame(arena, raw_len);
-        decompress_frame_into(self.hdr.frame_codec(), &p[fo + 8..fo + 8 + comp_len], dst, raw_len);
+        decompress_frame_into(
+            self.hdr.frame_codec(),
+            &p[fo + 8..fo + 8 + comp_len],
+            dst,
+            raw_len,
+        );
         &dst[..raw_len]
     }
 
@@ -1390,12 +1524,7 @@ impl<'a> ChunkView<'a> {
                 let raw_len = get_u32(blob, 0) as usize;
                 let comp_len = get_u32(blob, 4) as usize;
                 let dst = arena_frame(arena, raw_len);
-                decompress_frame_into(
-                    self.hdr.frame_codec(),
-                    &blob[8..8 + comp_len],
-                    dst,
-                    raw_len,
-                );
+                decompress_frame_into(self.hdr.frame_codec(), &blob[8..8 + comp_len], dst, raw_len);
                 dst.as_ptr() as usize
             }
         } else {
@@ -1413,11 +1542,7 @@ impl<'a> ChunkView<'a> {
     /// ensure state; NO frame decompresses here. false = not a framed chunk
     /// (or lazy reads killed) — the caller takes the eager `build_dict`.
     /// Same dict.is_empty() rebuild key as `build_dict`.
-    fn build_dict_lazy(
-        &self,
-        dict: &mut Vec<Datum>,
-        lazy: &mut Option<Box<DictLazy>>,
-    ) -> bool {
+    fn build_dict_lazy(&self, dict: &mut Vec<Datum>, lazy: &mut Option<Box<DictLazy>>) -> bool {
         if self.hdr.encoding != Encoding::Lz4Dict
             || self.hdr.flags & CHUNK_FLAG_DICT_FRAMED == 0
             || !dict_lazy_read()
@@ -1628,8 +1753,9 @@ impl<'a> ChunkView<'a> {
                         }
                     }
                     2 => {
-                        for (d, c) in
-                            dst[1..].iter_mut().zip(packed[..(n - 1) * 2].chunks_exact(2))
+                        for (d, c) in dst[1..]
+                            .iter_mut()
+                            .zip(packed[..(n - 1) * 2].chunks_exact(2))
                         {
                             let b = u16::from_le_bytes(c.try_into().unwrap()) as i64;
                             acc = acc.wrapping_add(dmin.wrapping_add(b));
@@ -1637,8 +1763,9 @@ impl<'a> ChunkView<'a> {
                         }
                     }
                     4 => {
-                        for (d, c) in
-                            dst[1..].iter_mut().zip(packed[..(n - 1) * 4].chunks_exact(4))
+                        for (d, c) in dst[1..]
+                            .iter_mut()
+                            .zip(packed[..(n - 1) * 4].chunks_exact(4))
                         {
                             let b = u32::from_le_bytes(c.try_into().unwrap()) as i64;
                             acc = acc.wrapping_add(dmin.wrapping_add(b));
@@ -1646,8 +1773,9 @@ impl<'a> ChunkView<'a> {
                         }
                     }
                     _ => {
-                        for (d, c) in
-                            dst[1..].iter_mut().zip(packed[..(n - 1) * 8].chunks_exact(8))
+                        for (d, c) in dst[1..]
+                            .iter_mut()
+                            .zip(packed[..(n - 1) * 8].chunks_exact(8))
                         {
                             let b = i64::from_le_bytes(c.try_into().unwrap());
                             acc = acc.wrapping_add(dmin.wrapping_add(b));
@@ -1704,7 +1832,12 @@ impl<'a> ChunkView<'a> {
                 let raw_len = get_u32(p, fo) as usize;
                 let comp_len = get_u32(p, fo + 4) as usize;
                 let dst = arena_frame(arena, raw_len);
-                decompress_frame_into(self.hdr.frame_codec(), &p[fo + 8..fo + 8 + comp_len], dst, raw_len);
+                decompress_frame_into(
+                    self.hdr.frame_codec(),
+                    &p[fo + 8..fo + 8 + comp_len],
+                    dst,
+                    raw_len,
+                );
                 let base = dst.as_ptr() as usize;
                 let dst = &mut out.spare_capacity_mut()[..n];
                 for (d, c) in dst.iter_mut().zip(p[lo * 4..(lo + n) * 4].chunks_exact(4)) {
@@ -1722,7 +1855,15 @@ impl<'a> ChunkView<'a> {
 pub(crate) fn test_part(name: &str, rg_rows: &[u32], ncols: usize) -> String {
     let path = std::env::temp_dir().join(name);
     let path = path.to_str().unwrap().to_string();
-    tests::write_part_v(&path, CB_HEADER_LEN, rg_rows, ncols, CB_VERSION, &vec![1; ncols], &[]);
+    tests::write_part_v(
+        &path,
+        CB_HEADER_LEN,
+        rg_rows,
+        ncols,
+        CB_VERSION,
+        &vec![1; ncols],
+        &[],
+    );
     path
 }
 
@@ -1783,7 +1924,10 @@ mod tests {
         if version >= CB_VERSION_V7 {
             // Union v7 tail: empty length-stats (all-zero flags above),
             // all-zero stitch section, all-zero zero-count section.
-            f.resize(f.len() + ncols * 8 + rg_rows.len() * ncols * CB_STITCH_DIR_ENTRY_LEN, 0);
+            f.resize(
+                f.len() + ncols * 8 + rg_rows.len() * ncols * CB_STITCH_DIR_ENTRY_LEN,
+                0,
+            );
             for _ in rg_rows {
                 for _ in 0..GRANULES_PER_RG * ncols {
                     put_u32(&mut f, 0);
@@ -1821,7 +1965,8 @@ mod tests {
     }
 
     fn tmp(name: &str) -> String {
-        let p = std::env::temp_dir().join(format!("cbstore-footer-{}-{}", std::process::id(), name));
+        let p =
+            std::env::temp_dir().join(format!("cbstore-footer-{}-{}", std::process::id(), name));
         p.to_str().unwrap().to_string()
     }
 
@@ -1830,13 +1975,26 @@ mod tests {
     // every on-disk version.
     #[test]
     fn footer_lazy_sectioned_read_matches_eager() {
-        for version in
-            [CB_VERSION_V1, CB_VERSION_V2, CB_VERSION_V4, CB_VERSION_V5, CB_VERSION_V6, CB_VERSION]
-        {
+        for version in [
+            CB_VERSION_V1,
+            CB_VERSION_V2,
+            CB_VERSION_V4,
+            CB_VERSION_V5,
+            CB_VERSION_V6,
+            CB_VERSION,
+        ] {
             let path = tmp(&format!("lazy-parity-v{version}"));
             let ndv = [7, 0, 12_345_678];
             let sorted = [1u8, 0, 1];
-            write_part_v(&path, CB_HEADER_LEN, &[100, 200, 50], 3, version, &ndv, &sorted);
+            write_part_v(
+                &path,
+                CB_HEADER_LEN,
+                &[100, 200, 50],
+                3,
+                version,
+                &ndv,
+                &sorted,
+            );
             let mut file = SegFile::open_rw(&path).unwrap();
             let (l_rgs, l_end, l_ndv, l_sorted, l_ckey, l_lenflags, l_stitch, l_ndvregs) =
                 read_footer_rgs(&mut file, CB_HEADER_LEN, 3, version, false).unwrap();
@@ -1868,7 +2026,15 @@ mod tests {
     #[test]
     fn footer_lazy_rejects_torn_tail() {
         let path = tmp("lazy-torn-tail");
-        write_part_v(&path, CB_HEADER_LEN, &[100], 2, CB_VERSION, &[5, 9], &[1, 0]);
+        write_part_v(
+            &path,
+            CB_HEADER_LEN,
+            &[100],
+            2,
+            CB_VERSION,
+            &[5, 9],
+            &[1, 0],
+        );
         let mut bytes = std::fs::read(&path).unwrap();
         let n = bytes.len();
         bytes[n - 1] ^= 0xff; // clobber the CBFT magic
@@ -1904,19 +2070,46 @@ mod tests {
     #[test]
     fn footer_ndv_v2_roundtrip() {
         let path = tmp("ndv2");
-        write_part_v(&path, CB_HEADER_LEN, &[100, 200], 3, CB_VERSION_V2, &[7, 0, 12_345_678], &[]);
+        write_part_v(
+            &path,
+            CB_HEADER_LEN,
+            &[100, 200],
+            3,
+            CB_VERSION_V2,
+            &[7, 0, 12_345_678],
+            &[],
+        );
         assert_eq!(part_footer_rows(&path, 3).unwrap(), Some(300));
-        assert_eq!(part_footer_ndv(&path, 3).unwrap(), Some(vec![7, 0, 12_345_678]));
+        assert_eq!(
+            part_footer_ndv(&path, 3).unwrap(),
+            Some(vec![7, 0, 12_345_678])
+        );
         std::fs::remove_file(&path).unwrap();
     }
 
     #[test]
     fn footer_current_reads_and_future_rejected() {
         let path = tmp("v3v4");
-        write_part_v(&path, CB_HEADER_LEN, &[100], 2, CB_VERSION, &[5, 9], &[1, 0]);
+        write_part_v(
+            &path,
+            CB_HEADER_LEN,
+            &[100],
+            2,
+            CB_VERSION,
+            &[5, 9],
+            &[1, 0],
+        );
         assert_eq!(part_footer_rows(&path, 2).unwrap(), Some(100));
         assert_eq!(part_footer_ndv(&path, 2).unwrap(), Some(vec![5, 9]));
-        write_part_v(&path, CB_HEADER_LEN, &[100], 2, CB_VERSION + 1, &[5, 9], &[1, 0]);
+        write_part_v(
+            &path,
+            CB_HEADER_LEN,
+            &[100],
+            2,
+            CB_VERSION + 1,
+            &[5, 9],
+            &[1, 0],
+        );
         assert!(part_footer_rows(&path, 2).is_err());
         std::fs::remove_file(&path).unwrap();
     }
@@ -1958,8 +2151,7 @@ mod tests {
         std::fs::write(&path, &bytes).unwrap();
 
         let mut file = SegFile::open_rw(&path).unwrap();
-        let (rgs, ..) =
-            read_footer_rgs(&mut file, CB_HEADER_LEN, 2, CB_VERSION_V4, true).unwrap();
+        let (rgs, ..) = read_footer_rgs(&mut file, CB_HEADER_LEN, 2, CB_VERSION_V4, true).unwrap();
         assert_eq!(rgs[0].flags & RG_FLAG_SUMS, RG_FLAG_SUMS);
         assert_eq!(rgs[0].sums, vec![-(1i128 << 70), 42]);
         assert_eq!(rgs[1].flags & RG_FLAG_SUMS, 0);
@@ -2040,7 +2232,15 @@ mod tests {
     #[test]
     fn footer_v3_reads_sums_unknown() {
         let path = tmp("sums3");
-        write_part_v(&path, CB_HEADER_LEN, &[100, 200], 3, CB_VERSION_V3, &[1, 1, 1], &[]);
+        write_part_v(
+            &path,
+            CB_HEADER_LEN,
+            &[100, 200],
+            3,
+            CB_VERSION_V3,
+            &[1, 1, 1],
+            &[],
+        );
         let mut file = SegFile::open_rw(&path).unwrap();
         let (rgs, _, _, sorted, _, _, _, _) =
             read_footer_rgs(&mut file, CB_HEADER_LEN, 3, CB_VERSION_V3, true).unwrap();
@@ -2057,7 +2257,15 @@ mod tests {
         // Feature detection: pre-v7 footers carry no length-stats flags or
         // entries; readers see all-unknown and fall back to the row path.
         let path = tmp("lens6");
-        write_part_v(&path, CB_HEADER_LEN, &[100, 200], 3, CB_VERSION_V6, &[1, 1, 1], &[]);
+        write_part_v(
+            &path,
+            CB_HEADER_LEN,
+            &[100, 200],
+            3,
+            CB_VERSION_V6,
+            &[1, 1, 1],
+            &[],
+        );
         let mut file = SegFile::open_rw(&path).unwrap();
         let (rgs, _, _, _, _, lenflags, _, _) =
             read_footer_rgs(&mut file, CB_HEADER_LEN, 3, CB_VERSION_V6, true).unwrap();
@@ -2074,7 +2282,12 @@ mod tests {
     fn int_chunk(vals: &[i64]) -> (Vec<u8>, u32) {
         let ngranules = vals.len().div_ceil(GRANULE_ROWS) as u32;
         let mut body = Vec::new();
-        crate::writer::encode_int_chunk(&mut body, vals, ngranules, &crate::writer::test_codec_ctx());
+        crate::writer::encode_int_chunk(
+            &mut body,
+            vals,
+            ngranules,
+            &crate::writer::test_codec_ctx(),
+        );
         (body, vals.len() as u32)
     }
 
@@ -2137,15 +2350,18 @@ mod tests {
             assert!(cv.bloom_may_contain(i / GRANULE_ROWS, v));
         }
 
-        let lowndv: Vec<i64> =
-            (0..2 * GRANULE_ROWS as u64).map(|i| (crate::hll::mix64(i) % 100) as i64).collect();
+        let lowndv: Vec<i64> = (0..2 * GRANULE_ROWS as u64)
+            .map(|i| (crate::hll::mix64(i) % 100) as i64)
+            .collect();
         let cv_body = int_chunk(&lowndv);
         assert!(!ChunkView::at(&cv_body.0, 0, cv_body.1).has_bloom());
     }
 
     #[test]
     fn bloom_prunes_absent_admits_present() {
-        let vals: Vec<i64> = (0..GRANULE_ROWS as u64).map(|i| crate::hll::mix64(i) as i64).collect();
+        let vals: Vec<i64> = (0..GRANULE_ROWS as u64)
+            .map(|i| crate::hll::mix64(i) as i64)
+            .collect();
         let (body, nrows) = int_chunk(&vals);
         let cv = ChunkView::at(&body, 0, nrows);
         assert!(cv.has_bloom());
@@ -2174,7 +2390,15 @@ mod tests {
     // Expected values are computed independently of decode_granule's arms.
 
     fn view<'a>(part: &'a [u8], hdr: ChunkHeader, nrows: u32) -> ChunkView<'a> {
-        ChunkView { part, hdr, gdir_off: 0, blockzm_off: 0, bloom_off: 0, payload_off: 0, nrows }
+        ChunkView {
+            part,
+            hdr,
+            gdir_off: 0,
+            blockzm_off: 0,
+            bloom_off: 0,
+            payload_off: 0,
+            nrows,
+        }
     }
 
     fn for_payload(nrows: usize, width: u8) -> (Vec<u8>, Vec<i64>) {
@@ -2357,7 +2581,15 @@ mod tests {
             payload_len: payload.len() as u64,
             codec: Codec::None,
         };
-        let cv = ChunkView { part: &payload, hdr, gdir_off: 0, blockzm_off: 0, bloom_off: 0, payload_off: 0, nrows: nrows as u32 };
+        let cv = ChunkView {
+            part: &payload,
+            hdr,
+            gdir_off: 0,
+            blockzm_off: 0,
+            bloom_off: 0,
+            payload_off: 0,
+            nrows: nrows as u32,
+        };
         let mut out = Vec::new();
         let mut dict = Vec::new();
         let mut arena = Vec::new();
@@ -2376,32 +2608,39 @@ mod tests {
     #[test]
     fn shared_segmap_identity() {
         #[cfg(not(target_family = "wasm"))]
-use std::os::unix::fs::MetadataExt;
-#[cfg(target_family = "wasm")]
-use std::os::wasi::fs::MetadataExt;
+        use std::os::unix::fs::MetadataExt;
+        #[cfg(target_family = "wasm")]
+        use std::os::wasi::fs::MetadataExt;
         let path = test_part("cb_sharedmap_test.part", &[100, 100], 2);
         let md = std::fs::metadata(&path).unwrap();
-        let a = SegMap::open_shared(&path, md.dev(), md.ino()).unwrap().unwrap();
-        let b = SegMap::open_shared(&path, md.dev(), md.ino()).unwrap().unwrap();
+        let a = SegMap::open_shared(&path, md.dev(), md.ino())
+            .unwrap()
+            .unwrap();
+        let b = SegMap::open_shared(&path, md.dev(), md.ino())
+            .unwrap()
+            .unwrap();
         assert!(
             std::sync::Arc::ptr_eq(&a, &b),
             "same live part state must share one mapping"
         );
         // Cross-thread: a pool worker's open lands on the same mapping.
         let (path2, dev, ino) = (path.clone(), md.dev(), md.ino());
-        let from_thread = std::thread::spawn(move || {
-            SegMap::open_shared(&path2, dev, ino).unwrap().unwrap()
-        })
-        .join()
-        .unwrap();
+        let from_thread =
+            std::thread::spawn(move || SegMap::open_shared(&path2, dev, ino).unwrap().unwrap())
+                .join()
+                .unwrap();
         assert!(std::sync::Arc::ptr_eq(&a, &from_thread));
         // A different identity (recreate stand-in) maps privately.
-        let c = SegMap::open_shared(&path, md.dev(), md.ino() ^ 1).unwrap().unwrap();
+        let c = SegMap::open_shared(&path, md.dev(), md.ino() ^ 1)
+            .unwrap()
+            .unwrap();
         assert!(!std::sync::Arc::ptr_eq(&a, &c));
         // Weak registry: with every holder dropped the mapping dies and the
         // next open takes the upgrade-miss path (fresh map, still readable).
         drop((a, b, c, from_thread));
-        let d = SegMap::open_shared(&path, md.dev(), md.ino()).unwrap().unwrap();
+        let d = SegMap::open_shared(&path, md.dev(), md.ino())
+            .unwrap()
+            .unwrap();
         assert!(!d.bytes().is_empty());
     }
 }

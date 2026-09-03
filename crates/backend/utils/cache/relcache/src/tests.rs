@@ -106,7 +106,14 @@ fn form(oid: Oid, name: &str, relkind: u8) -> FormData_pg_class {
 
 fn seed(oid: Oid, name: &str, relkind: u8) {
     ROWS.with(|r| {
-        r.borrow_mut().insert(oid, FakeRel { form: form(oid, name, relkind), natts: 2, tupdesc_version: 0 })
+        r.borrow_mut().insert(
+            oid,
+            FakeRel {
+                form: form(oid, name, relkind),
+                natts: 2,
+                tupdesc_version: 0,
+            },
+        )
     });
 }
 
@@ -114,7 +121,11 @@ fn bump_tupdesc_version(oid: Oid) {
     ROWS.with(|r| r.borrow_mut().get_mut(&oid).unwrap().tupdesc_version += 1);
 }
 
-fn fake_scan(target: Oid, _index_ok: bool, _fnh: bool) -> PgResult<Option<relcache_build_seams::ScannedPgClass>> {
+fn fake_scan(
+    target: Oid,
+    _index_ok: bool,
+    _fnh: bool,
+) -> PgResult<Option<relcache_build_seams::ScannedPgClass>> {
     SCAN_LOG.with(|l| l.borrow_mut().push(target));
     if let Some((oid, n)) = INVALIDATE_DURING_BUILD.with(|c| c.get()) {
         if oid == target && n > 0 {
@@ -129,11 +140,15 @@ fn fake_scan(target: Oid, _index_ok: bool, _fnh: bool) -> PgResult<Option<relcac
         }
     }
     Ok(ROWS.with(|r| {
-        r.borrow().get(&target).map(|f| relcache_build_seams::ScannedPgClass {
-            relchecks: 0, relhastriggers: false, relhasrules: false,
-            form: f.form.clone(),
-            options: None,
-        })
+        r.borrow()
+            .get(&target)
+            .map(|f| relcache_build_seams::ScannedPgClass {
+                relchecks: 0,
+                relhastriggers: false,
+                relhasrules: false,
+                form: f.form.clone(),
+                options: None,
+            })
     }))
 }
 
@@ -143,8 +158,12 @@ fn fake_tupdesc(
     _form: &FormData_pg_class,
     _relchecks: i16,
 ) -> PgResult<Rc<types_tuple::TupleDescData<'static>>> {
-    let (natts, version) =
-        ROWS.with(|r| r.borrow().get(&relid).map(|f| (f.natts, f.tupdesc_version)).unwrap());
+    let (natts, version) = ROWS.with(|r| {
+        r.borrow()
+            .get(&relid)
+            .map(|f| (f.natts, f.tupdesc_version))
+            .unwrap()
+    });
     let mut attrs = Vec::new();
     for i in 0..natts {
         let mut a = FormData_pg_attribute {
@@ -186,8 +205,8 @@ fn fake_index_info(
             indisready: true,
             indkey,
             has_indpred: false,
-        indexprs_src: None,
-        indpred_src: None,
+            indexprs_src: None,
+            indpred_src: None,
         },
         opcintype: PgVec::new_in(mcx),
         opfamily: PgVec::new_in(mcx),
@@ -248,7 +267,10 @@ fn miss_builds_then_hit_clones_same_entry() {
     let b = get(16384);
     assert!(Rc::ptr_eq(&a, &b));
     assert_eq!(strong_count_in_cache(16384), 3);
-    assert_eq!(SCAN_LOG.with(|l| l.borrow().iter().filter(|&&o| o == 16384).count()), 1);
+    assert_eq!(
+        SCAN_LOG.with(|l| l.borrow().iter().filter(|&&o| o == 16384).count()),
+        1
+    );
 
     drop(a);
     drop(b);
@@ -360,14 +382,21 @@ fn build_retries_when_invalidated_mid_build() {
     let rel = get(16406);
     INVALIDATE_DURING_BUILD.with(|c| c.set(None));
     assert!(rel.rd_isvalid.get());
-    assert_eq!(SCAN_LOG.with(|l| l.borrow().iter().filter(|&&o| o == 16406).count()), 2);
+    assert_eq!(
+        SCAN_LOG.with(|l| l.borrow().iter().filter(|&&o| o == 16406).count()),
+        2
+    );
     drop(rel);
 }
 
 #[test]
 fn cache_invalidate_orders_pg_class_and_nailed_first() {
     install();
-    seed(types_core::RELATION_RELATION_ID, "pg_class", RELKIND_RELATION);
+    seed(
+        types_core::RELATION_RELATION_ID,
+        "pg_class",
+        RELKIND_RELATION,
+    );
     seed(CLASS_OID_INDEX_ID, "pg_class_oid_index", RELKIND_INDEX);
     seed(16407, "nailed_rel", RELKIND_RELATION);
     seed(16408, "plain_held", RELKIND_RELATION);
@@ -393,7 +422,12 @@ fn cache_invalidate_orders_pg_class_and_nailed_first() {
     let log = SCAN_LOG.with(|l| l.borrow().clone());
     assert_eq!(
         log,
-        vec![types_core::RELATION_RELATION_ID, CLASS_OID_INDEX_ID, 16407, 16408]
+        vec![
+            types_core::RELATION_RELATION_ID,
+            CLASS_OID_INDEX_ID,
+            16407,
+            16408
+        ]
     );
     drop((pc, ci, nr, ph));
 }
@@ -425,7 +459,11 @@ fn cache_invalidate_defers_unused_nailed() {
 #[test]
 fn cache_invalidate_phase2_reresolves_across_nested_reload() {
     install();
-    seed(types_core::RELATION_RELATION_ID, "pg_class", RELKIND_RELATION);
+    seed(
+        types_core::RELATION_RELATION_ID,
+        "pg_class",
+        RELKIND_RELATION,
+    );
     seed(CLASS_OID_INDEX_ID, "pg_class_oid_index", RELKIND_INDEX);
     seed(16460, "nailed_unused_later", RELKIND_RELATION);
 
@@ -450,7 +488,10 @@ fn cache_invalidate_phase2_reresolves_across_nested_reload() {
     // The unused nailed entry is deferred by both the nested arm and phase 2,
     // so it is never scanned: C RelationFlushRelation relcache.c:2876-2883 and
     // RelationCacheInvalidate relcache.c:3090-3091.
-    assert_eq!(SCAN_LOG.with(|l| l.borrow().iter().filter(|&&o| o == 16460).count()), 0);
+    assert_eq!(
+        SCAN_LOG.with(|l| l.borrow().iter().filter(|&&o| o == 16460).count()),
+        0
+    );
     // C rd_refcnt for an unused nailed entry is exactly 1, i.e. zero user refs
     // and one live allocation: nothing was rebuilt off an orphan and written
     // back over the cache's entry. Measured before taking a probe clone.
@@ -481,7 +522,11 @@ fn cache_invalidate_phase2_reresolves_across_nested_reload() {
 #[test]
 fn cache_invalidate_phase2_reresolves_multi_entry_and_referenced() {
     install();
-    seed(types_core::RELATION_RELATION_ID, "pg_class", RELKIND_RELATION);
+    seed(
+        types_core::RELATION_RELATION_ID,
+        "pg_class",
+        RELKIND_RELATION,
+    );
     seed(CLASS_OID_INDEX_ID, "pg_class_oid_index", RELKIND_INDEX);
     for (oid, name) in [(16470, "nailed_unused_a"), (16471, "nailed_unused_b")] {
         seed(oid, name, RELKIND_RELATION);
@@ -493,7 +538,12 @@ fn cache_invalidate_phase2_reresolves_multi_entry_and_referenced() {
     drop(get(16470));
     drop(get(16471));
     let held_ref = get(16472); // one real reference, C rd_refcnt == 1
-    for oid in [types_core::RELATION_RELATION_ID, CLASS_OID_INDEX_ID, 16470, 16471] {
+    for oid in [
+        types_core::RELATION_RELATION_ID,
+        CLASS_OID_INDEX_ID,
+        16470,
+        16471,
+    ] {
         with_state(|st| st.id_cache.get_mut(&oid).unwrap().nailed = true);
     }
     with_state(|st| st.critical_relcaches_built = true);
@@ -515,7 +565,11 @@ fn cache_invalidate_phase2_reresolves_multi_entry_and_referenced() {
             0,
             "unused nailed {oid} was rebuilt; C defers it"
         );
-        assert_eq!(crate::RelationUserRefcount(oid), 0, "stale lineage for {oid}");
+        assert_eq!(
+            crate::RelationUserRefcount(oid),
+            0,
+            "stale lineage for {oid}"
+        );
         let (rel, nailed) = store::lookup_ent(oid).unwrap();
         assert!(nailed);
         assert!(!rel.rd_isvalid.get());
@@ -523,10 +577,16 @@ fn cache_invalidate_phase2_reresolves_multi_entry_and_referenced() {
     // The referenced entry IS rebuilt (C relcache.c:3093), exactly once, and
     // the cache's entry is the rebuild's own output -- not something
     // reconstructed from an orphaned predecessor.
-    assert_eq!(SCAN_LOG.with(|l| l.borrow().iter().filter(|&&o| o == 16472).count()), 1);
+    assert_eq!(
+        SCAN_LOG.with(|l| l.borrow().iter().filter(|&&o| o == 16472).count()),
+        1
+    );
     let (fresh, _) = store::lookup_ent(16472).unwrap();
     assert!(fresh.rd_isvalid.get());
-    assert!(!Rc::ptr_eq(&fresh, &held_ref), "rebuild must replace the entry Rc");
+    assert!(
+        !Rc::ptr_eq(&fresh, &held_ref),
+        "rebuild must replace the entry Rc"
+    );
     // C rd_refcnt == 1: the pre-rebuild holder, counted through stale_refs.
     drop(fresh);
     assert_eq!(crate::RelationUserRefcount(16472), 1);
@@ -653,10 +713,21 @@ fn stale_holder(oid: Oid) -> Rc<RelationData<'static>> {
     held.rd_isvalid.set(false);
     // Rebuild: installs a new lineage as the cache entry, notes `held` stale.
     let fresh = get(oid);
-    assert!(!Rc::ptr_eq(&held, &fresh), "rebuild must replace the entry Rc");
+    assert!(
+        !Rc::ptr_eq(&held, &fresh),
+        "rebuild must replace the entry Rc"
+    );
     drop(fresh);
-    assert_eq!(strong_count_in_cache(oid), 1, "no handles on the current lineage");
-    assert_eq!(crate::RelationUserRefcount(oid), 1, "one handle, on a stale lineage");
+    assert_eq!(
+        strong_count_in_cache(oid),
+        1,
+        "no handles on the current lineage"
+    );
+    assert_eq!(
+        crate::RelationUserRefcount(oid),
+        1,
+        "one handle, on a stale lineage"
+    );
     held
 }
 
@@ -669,8 +740,15 @@ fn forget_relation_refuses_holder_of_superseded_lineage() {
     let stale = stale_holder(16480);
 
     let err = invalidate::RelationForgetRelation(16480).expect_err("C elog(ERROR) here");
-    assert!(err.message().contains("relation 16480 is still open"), "{}", err.message());
-    assert!(with_state(|st| st.id_cache.contains_key(&16480)), "entry must survive");
+    assert!(
+        err.message().contains("relation 16480 is still open"),
+        "{}",
+        err.message()
+    );
+    assert!(
+        with_state(|st| st.id_cache.contains_key(&16480)),
+        "entry must survive"
+    );
     drop(stale);
 }
 
@@ -733,7 +811,11 @@ fn eosubxact_abort_keeps_entry_when_superseded_lineage_held() {
     invalidate::AtEOSubXact_RelationCache(false, 7, 3).unwrap();
 
     let (cur, _) = store::lookup_ent(16482).expect("C daren't remove it; entry must survive");
-    assert_eq!(cur.rd_createSubid.get(), 3, "transferred to the parent subxact");
+    assert_eq!(
+        cur.rd_createSubid.get(),
+        3,
+        "transferred to the parent subxact"
+    );
     drop(cur);
     drop(stale);
 }
@@ -802,13 +884,23 @@ fn phase2_falls_back_to_formrdesc_without_init_file() {
 #[test]
 fn relation_id_is_in_init_file_matches_c() {
     install();
-    assert!(initfile::RelationIdIsInInitFile(schemapg::CAT_PG_SHSECLABEL.relid));
-    assert!(initfile::RelationIdIsInInitFile(schemapg::TRIGGER_RELID_NAME_INDEX_ID));
-    assert!(initfile::RelationIdIsInInitFile(schemapg::DATABASE_NAME_INDEX_ID));
-    assert!(initfile::RelationIdIsInInitFile(schemapg::SHARED_SEC_LABEL_OBJECT_INDEX_ID));
+    assert!(initfile::RelationIdIsInInitFile(
+        schemapg::CAT_PG_SHSECLABEL.relid
+    ));
+    assert!(initfile::RelationIdIsInInitFile(
+        schemapg::TRIGGER_RELID_NAME_INDEX_ID
+    ));
+    assert!(initfile::RelationIdIsInInitFile(
+        schemapg::DATABASE_NAME_INDEX_ID
+    ));
+    assert!(initfile::RelationIdIsInInitFile(
+        schemapg::SHARED_SEC_LABEL_OBJECT_INDEX_ID
+    ));
     assert!(!initfile::RelationIdIsInInitFile(16384));
     HAS_SYSCACHE.with(|v| v.borrow_mut().push(types_core::RELATION_RELATION_ID));
-    assert!(initfile::RelationIdIsInInitFile(types_core::RELATION_RELATION_ID));
+    assert!(initfile::RelationIdIsInInitFile(
+        types_core::RELATION_RELATION_ID
+    ));
 }
 
 #[test]
@@ -832,7 +924,10 @@ fn bootstrap_descriptor_oids_match_headers() {
     assert_eq!(schemapg::CAT_PG_SHSECLABEL.relid, 3592);
     assert_eq!(schemapg::CAT_PG_SUBSCRIPTION.relid, 6100);
     assert_eq!(schemapg::CLASS_OID_INDEX_ID, 2662);
-    for cat in schemapg::LOCAL_BOOTSTRAP_CATALOGS.iter().chain(&schemapg::SHARED_BOOTSTRAP_CATALOGS) {
+    for cat in schemapg::LOCAL_BOOTSTRAP_CATALOGS
+        .iter()
+        .chain(&schemapg::SHARED_BOOTSTRAP_CATALOGS)
+    {
         for (i, a) in cat.attrs.iter().enumerate() {
             assert_eq!(a.attrelid, cat.relid);
             assert_eq!(a.attnum as usize, i + 1);
@@ -859,8 +954,21 @@ fn index_list_scans_once_then_serves_cached() {
     seed(16500, "idxlist_tbl", RELKIND_RELATION);
     PG_INDEX_ROWS.with(|rows| {
         let mut rows = rows.borrow_mut();
-        rows.push((16500, FakeIndexRow { indisunique: true, indisprimary: true, ..idxrow(16510) }));
-        rows.push((16500, FakeIndexRow { indislive: false, ..idxrow(16511) }));
+        rows.push((
+            16500,
+            FakeIndexRow {
+                indisunique: true,
+                indisprimary: true,
+                ..idxrow(16510)
+            },
+        ));
+        rows.push((
+            16500,
+            FakeIndexRow {
+                indislive: false,
+                ..idxrow(16511)
+            },
+        ));
         rows.push((16500, idxrow(16505)));
         rows.push((16999, idxrow(16600)));
     });
@@ -897,7 +1005,9 @@ fn index_list_invalidation_forces_rescan() {
 
     let held = get(16520);
     assert_eq!(
-        crate::indexlist::RelationGetIndexList(ctx.mcx(), 16520).unwrap().as_slice(),
+        crate::indexlist::RelationGetIndexList(ctx.mcx(), 16520)
+            .unwrap()
+            .as_slice(),
         &[16521]
     );
     let scans = INDEX_SCANS.with(|c| c.get());
@@ -907,7 +1017,9 @@ fn index_list_invalidation_forces_rescan() {
 
     PG_INDEX_ROWS.with(|rows| rows.borrow_mut().push((16520, idxrow(16522))));
     assert_eq!(
-        crate::indexlist::RelationGetIndexList(ctx.mcx(), 16520).unwrap().as_slice(),
+        crate::indexlist::RelationGetIndexList(ctx.mcx(), 16520)
+            .unwrap()
+            .as_slice(),
         &[16521, 16522]
     );
     assert_eq!(INDEX_SCANS.with(|c| c.get()), scans + 1);
@@ -981,7 +1093,13 @@ fn codec_rel(
         opt.push(0i16);
         (one(3659), one(3659), one(0), sup, opt)
     } else {
-        (PgVec::new_in(mcx), PgVec::new_in(mcx), PgVec::new_in(mcx), PgVec::new_in(mcx), PgVec::new_in(mcx))
+        (
+            PgVec::new_in(mcx),
+            PgVec::new_in(mcx),
+            PgVec::new_in(mcx),
+            PgVec::new_in(mcx),
+            PgVec::new_in(mcx),
+        )
     };
     RelationData {
         rd_locator: Default::default(),
@@ -1090,7 +1208,10 @@ fn init_file_rejects_bad_header_and_corruption() {
 
     // Truncation anywhere inside the entry stream must reject the file.
     for cut in 9..good.len() {
-        assert!(initfile::parse_init_file(&good[..cut], mcx).is_none(), "cut={cut}");
+        assert!(
+            initfile::parse_init_file(&good[..cut], mcx).is_none(),
+            "cut={cut}"
+        );
     }
     assert!(initfile::parse_init_file(&[], mcx).is_none());
 }

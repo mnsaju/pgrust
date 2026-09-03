@@ -13,7 +13,9 @@ pub struct Hll {
 
 impl Default for Hll {
     fn default() -> Self {
-        Hll { regs: vec![0u8; M].into_boxed_slice().try_into().unwrap() }
+        Hll {
+            regs: vec![0u8; M].into_boxed_slice().try_into().unwrap(),
+        }
     }
 }
 
@@ -126,7 +128,11 @@ impl Hll {
             }
         }
         let e = alpha * m * m / sum;
-        let est = if e <= 2.5 * m && zeros > 0 { m * (m / zeros as f64).ln() } else { e };
+        let est = if e <= 2.5 * m && zeros > 0 {
+            m * (m / zeros as f64).ln()
+        } else {
+            e
+        };
         est.round() as u64
     }
 }
@@ -202,7 +208,7 @@ mod tests {
         assert!(Hll::from_blob(&[3, P as u8, 0, 0]).is_none()); // unknown tag
         assert!(Hll::from_blob(&[1, 13, 0, 0]).is_none()); // precision mismatch
         assert!(Hll::from_blob(&[1, P as u8, 0, 0, 7]).is_none()); // truncated dense
-        // Sparse with out-of-range index.
+                                                                   // Sparse with out-of-range index.
         let mut b = vec![2, P as u8, 0, 0];
         b.extend_from_slice(&1u32.to_le_bytes());
         b.extend_from_slice(&(M as u16).to_le_bytes());

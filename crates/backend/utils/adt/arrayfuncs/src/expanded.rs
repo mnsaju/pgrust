@@ -25,7 +25,12 @@ pub struct ArrayMetaState {
 
 impl ArrayMetaState {
     pub const fn invalid() -> Self {
-        ArrayMetaState { element_type: 0, typlen: 0, typbyval: false, typalign: 0 }
+        ArrayMetaState {
+            element_type: 0,
+            typlen: 0,
+            typbyval: false,
+            typalign: 0,
+        }
     }
 }
 
@@ -92,7 +97,9 @@ impl ExpandedArrayHeader {
     }
 
     pub fn dvalues(&self) -> Option<(&[Datum], Option<&[bool]>)> {
-        self.dvalues.as_ref().map(|v| (v.as_slice(), self.dnulls.as_deref()))
+        self.dvalues
+            .as_ref()
+            .map(|v| (v.as_slice(), self.dnulls.as_deref()))
     }
 }
 
@@ -129,7 +136,7 @@ pub fn expand_array(
     }
 
     let flat = copy_flat_source(&mut eah, arraydatum)?;
-    fill_from_flat(&mut eah, flat, metacache.as_deref_mut())?;
+    fill_from_flat(&mut eah, flat, metacache)?;
     Ok(install(eah, parentcontext))
 }
 
@@ -141,7 +148,7 @@ fn install(eah: Box<ExpandedArrayHeader>, parentcontext: &MemoryContext) -> Datu
     unsafe {
         eoh_init_header(&raw mut (*p).hdr, &EA_METHODS, &raw const (*p).ctx);
         // SAFETY: sole release of p; nothing dereferences it after the parent resets.
-        parentcontext.register_reset_callback(move || unsafe { drop(Box::from_raw(p)) });
+        parentcontext.register_reset_callback(move || drop(Box::from_raw(p)));
         eohp_get_rw_datum(&raw const (*p).hdr)
     }
 }
@@ -221,8 +228,7 @@ fn fill_from_flat(
             eah.typalign = m.typalign;
         }
         other => {
-            let (typlen, typbyval, typalign) =
-                ::lsyscache::get_typlenbyvalalign(eah.element_type)?;
+            let (typlen, typbyval, typalign) = ::lsyscache::get_typlenbyvalalign(eah.element_type)?;
             eah.typlen = typlen;
             eah.typbyval = typbyval;
             eah.typalign = typalign as u8;
@@ -275,7 +281,10 @@ unsafe fn ea_get_flat_size(eohptr: *mut ExpandedObjectHeader) -> usize {
         return eah.flat_size;
     }
     let nelems = eah.nelems as usize;
-    let dvalues = eah.dvalues.as_ref().expect("expanded array has neither fvalue nor dvalues");
+    let dvalues = eah
+        .dvalues
+        .as_ref()
+        .expect("expanded array has neither fvalue nor dvalues");
     let dnulls = eah.dnulls.as_deref();
     let mut nbytes = 0usize;
     for i in 0..nelems {
@@ -390,13 +399,22 @@ pub fn deconstruct_expanded_array(eah: &mut ExpandedArrayHeader) -> PgResult<()>
         return Ok(());
     }
     let mcx = eah.obj_mcx();
-    let fvalue = eah.fvalue.as_ref().expect("expanded array has neither fvalue nor dvalues");
+    let fvalue = eah
+        .fvalue
+        .as_ref()
+        .expect("expanded array has neither fvalue nor dvalues");
     // SAFETY(lifetime launder): dvalues' by-ref element datums point into
     // fvalue, which this object owns and never frees before them.
     let flat: &'static [u8] = unsafe { core::mem::transmute(fvalue.as_slice()) };
     let hasnull = arr_hasnull(flat);
-    let (dvalues, dnulls) =
-        deconstruct_array(mcx, flat, eah.typlen as i32, eah.typbyval, eah.typalign, true)?;
+    let (dvalues, dnulls) = deconstruct_array(
+        mcx,
+        flat,
+        eah.typlen as i32,
+        eah.typbyval,
+        eah.typalign,
+        true,
+    )?;
     let nelems = dvalues.len() as i32;
     eah.dvalues = Some(dvalues);
     eah.dnulls = if hasnull { Some(dnulls) } else { None };
@@ -406,5 +424,7 @@ pub fn deconstruct_expanded_array(eah: &mut ExpandedArrayHeader) -> PgResult<()>
 }
 
 pub fn expanded_array_data_bounds(eah: &ExpandedArrayHeader) -> Option<(usize, usize)> {
-    eah.fvalue.as_ref().map(|f| (arr_data_offset(f), arr_size(f)))
+    eah.fvalue
+        .as_ref()
+        .map(|f| (arr_data_offset(f), arr_size(f)))
 }

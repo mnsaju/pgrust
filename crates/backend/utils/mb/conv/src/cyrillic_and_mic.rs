@@ -72,7 +72,13 @@ macro_rules! with_table_pair {
     };
 }
 
-with_table_pair!(fc_iso_to_mic, fc_mic_to_iso, PG_ISO_8859_5, &ISO2KOI, &KOI2ISO);
+with_table_pair!(
+    fc_iso_to_mic,
+    fc_mic_to_iso,
+    PG_ISO_8859_5,
+    &ISO2KOI,
+    &KOI2ISO
+);
 with_table_pair!(
     fc_win1251_to_mic,
     fc_mic_to_win1251,

@@ -10,8 +10,7 @@ use types_storage::storage::NUM_SPECIAL_WORKER_PROCS;
 
 const MAX_CONNECTIONS: i32 = 8;
 const MAX_WORKER_PROCESSES: i32 = 2;
-const MAX_BACKENDS: i32 =
-    MAX_CONNECTIONS + 3 + MAX_WORKER_PROCESSES + 2 + NUM_SPECIAL_WORKER_PROCS;
+const MAX_BACKENDS: i32 = MAX_CONNECTIONS + 3 + MAX_WORKER_PROCESSES + 2 + NUM_SPECIAL_WORKER_PROCS;
 
 fn add_running(procno: ProcNumber, xid: u32) {
     let proc = lmgr_proc::GetPGProcByNumber(procno);

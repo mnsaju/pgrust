@@ -51,11 +51,9 @@ pub fn blbuild<'mcx>(
     index_info: &mut IndexInfo<'mcx>,
 ) -> PgResult<IndexBuildResult> {
     if bufmgr::RelationGetNumberOfBlocksInFork(index, ForkNumber::MAIN_FORKNUM)? != 0 {
-        return Err(PgError::error(format!(
-            "index \"{}\" already contains data",
-            index.name()
-        ))
-        .into());
+        return Err(
+            PgError::error(format!("index \"{}\" already contains data", index.name())).into(),
+        );
     }
 
     bloom_init_metapage(mcx, index, ForkNumber::MAIN_FORKNUM)?;
@@ -86,10 +84,9 @@ pub fn blbuild<'mcx>(
                 postgres_seams::check_for_interrupts::call()?;
                 init_cached_page(bs);
                 if !page_add_item(&mut bs.data[..], size, &itup) {
-                    return Err(PgError::error(
-                        "could not add new bloom tuple to empty page",
-                    )
-                    .into());
+                    return Err(
+                        PgError::error("could not add new bloom tuple to empty page").into(),
+                    );
                 }
                 bs.count += 1;
             }
@@ -113,4 +110,3 @@ pub fn blbuildempty(index: &Relation<'_>) -> PgResult<()> {
     let ctx = mcx::MemoryContext::new_bump("bloom buildempty");
     bloom_init_metapage(ctx.mcx(), index, ForkNumber::INIT_FORKNUM)
 }
-

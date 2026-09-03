@@ -26,7 +26,9 @@ pub struct TapeIdx(u32);
 #[inline]
 fn trailer_prev(buf: &[u8]) -> i64 {
     i64::from_ne_bytes(
-        buf[TAPE_BLOCK_PAYLOAD_SIZE..TAPE_BLOCK_PAYLOAD_SIZE + 8].try_into().unwrap(),
+        buf[TAPE_BLOCK_PAYLOAD_SIZE..TAPE_BLOCK_PAYLOAD_SIZE + 8]
+            .try_into()
+            .unwrap(),
     )
 }
 
@@ -342,11 +344,10 @@ impl<'m> LogicalTapeSet<'m> {
 
         let mut nread = 0usize;
         while nread < dst.len() {
-            if lt.pos >= lt.nbytes {
-                if !read_fill_buffer(core, lt)? {
+            if lt.pos >= lt.nbytes
+                && !read_fill_buffer(core, lt)? {
                     break;
                 }
-            }
             let nthistime = (lt.nbytes - lt.pos).min(dst.len() - nread);
             debug_assert!(nthistime > 0);
             dst[nread..nread + nthistime].copy_from_slice(&lt.buffer[lt.pos..lt.pos + nthistime]);
@@ -545,7 +546,9 @@ fn seek_failed(blocknum: i64) -> Box<PgError> {
     Box::new(
         ::elog::ereport(::types_error::ERROR)
             .errcode_for_file_access()
-            .errmsg(format!("could not seek to block {blocknum} of temporary file"))
+            .errmsg(format!(
+                "could not seek to block {blocknum} of temporary file"
+            ))
             .into_error(),
     )
 }

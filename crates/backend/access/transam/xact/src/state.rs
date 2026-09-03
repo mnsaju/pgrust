@@ -216,7 +216,10 @@ impl XactState {
             prepare_gid: None,
             unreported_xids: Vec::new(),
             stable_latest: (0, InvalidTransactionId),
-            stack: XactStack { top: TransactionNode::top(), subs: Vec::new() },
+            stack: XactStack {
+                top: TransactionNode::top(),
+                subs: Vec::new(),
+            },
             xact_callbacks: Vec::new(),
             subxact_callbacks: Vec::new(),
             top_transaction_context: None,
@@ -248,7 +251,11 @@ impl XactState {
 
     /// Back-to-front (current first): C's `s->parent` walk.
     pub(crate) fn nodes_rev(&self) -> impl Iterator<Item = &TransactionNode> {
-        self.stack.subs.iter().rev().chain(std::iter::once(&self.stack.top))
+        self.stack
+            .subs
+            .iter()
+            .rev()
+            .chain(std::iter::once(&self.stack.top))
     }
 
     /// Index of the innermost node matching `f`.
@@ -276,7 +283,10 @@ impl XactState {
         } else {
             self.stack.subs.last_mut().expect("non-empty subs")
         };
-        NodeMut { node, is_current: true }
+        NodeMut {
+            node,
+            is_current: true,
+        }
     }
 
     pub(crate) fn node_mut(&mut self, i: usize) -> NodeMut<'_> {

@@ -23,7 +23,9 @@ fn main() {
         .expect("num_keywords");
     let mult_a: u32 = capture(&kwlist_d, "a = a * ").parse().expect("mult_a");
     let mult_b: u32 = capture(&kwlist_d, "b = b * ").parse().expect("mult_b");
-    let hash_mod: u32 = capture(&kwlist_d, "return h[a % ").parse().expect("hash_mod");
+    let hash_mod: u32 = capture(&kwlist_d, "return h[a % ")
+        .parse()
+        .expect("hash_mod");
 
     let entries = parse_kwlist(&kwlist);
     assert_eq!(keywords.len(), num_keywords, "kw_string vs NUM_KEYWORDS");
@@ -42,34 +44,64 @@ fn main() {
         kw_string.push(0);
     }
     // Pad so the compare loop can never index past the buffer.
-    kw_string.extend(std::iter::repeat(0).take(max_kw_len + 1));
+    kw_string.extend(std::iter::repeat_n(0, max_kw_len + 1));
 
     let mut out = String::new();
-    let _ = writeln!(out, "pub const SCANKEYWORDS_NUM_KEYWORDS: usize = {num_keywords};");
-    let _ = writeln!(out, "pub const SCANKEYWORDS_MAX_KW_LEN: usize = {max_kw_len};");
+    let _ = writeln!(
+        out,
+        "pub const SCANKEYWORDS_NUM_KEYWORDS: usize = {num_keywords};"
+    );
+    let _ = writeln!(
+        out,
+        "pub const SCANKEYWORDS_MAX_KW_LEN: usize = {max_kw_len};"
+    );
     let _ = writeln!(out, "pub const KW_HASH_MULT_A: u32 = {mult_a};");
     let _ = writeln!(out, "pub const KW_HASH_MULT_B: u32 = {mult_b};");
     let _ = writeln!(out, "pub const KW_HASH_MOD: u32 = {hash_mod};");
-    let _ = writeln!(out, "pub static KW_STRING: [u8; {}] = {:?};", kw_string.len(), kw_string);
+    let _ = writeln!(
+        out,
+        "pub static KW_STRING: [u8; {}] = {:?};",
+        kw_string.len(),
+        kw_string
+    );
     let offs: Vec<u16> = offsets.iter().map(|&o| o as u16).collect();
-    let _ = writeln!(out, "pub static KW_OFFSETS: [u16; {}] = {:?};", offs.len(), offs);
+    let _ = writeln!(
+        out,
+        "pub static KW_OFFSETS: [u16; {}] = {:?};",
+        offs.len(),
+        offs
+    );
     let h16: Vec<i16> = h_table.iter().map(|&v| v as i16).collect();
-    let _ = writeln!(out, "pub static KW_HASH_H: [i16; {}] = {:?};", h16.len(), h16);
-    let _ = writeln!(out, "pub static KEYWORD_TEXT: [&str; {num_keywords}] = {keywords:?};");
+    let _ = writeln!(
+        out,
+        "pub static KW_HASH_H: [i16; {}] = {:?};",
+        h16.len(),
+        h16
+    );
+    let _ = writeln!(
+        out,
+        "pub static KEYWORD_TEXT: [&str; {num_keywords}] = {keywords:?};"
+    );
     let cats: Vec<u8> = entries.iter().map(|e| e.category).collect();
     let _ = writeln!(
         out,
         "pub static KEYWORD_CATEGORIES: [crate::KeywordCategory; {num_keywords}] = unsafe {{ core::mem::transmute::<[u8; {num_keywords}], [crate::KeywordCategory; {num_keywords}]>({cats:?}) }};"
     );
     let bare: Vec<bool> = entries.iter().map(|e| e.bare_label).collect();
-    let _ = writeln!(out, "pub static KEYWORD_BARE_LABEL: [bool; {num_keywords}] = {bare:?};");
+    let _ = writeln!(
+        out,
+        "pub static KEYWORD_BARE_LABEL: [bool; {num_keywords}] = {bare:?};"
+    );
 
     let out_path = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR")).join("keywords.rs");
     fs::write(out_path, out).expect("write keywords.rs");
 }
 
 fn capture<'a>(src: &'a str, prefix: &str) -> &'a str {
-    let start = src.find(prefix).unwrap_or_else(|| panic!("missing {prefix:?}")) + prefix.len();
+    let start = src
+        .find(prefix)
+        .unwrap_or_else(|| panic!("missing {prefix:?}"))
+        + prefix.len();
     let rest = &src[start..];
     let end = rest
         .find(|c: char| !c.is_ascii_digit())
@@ -84,7 +116,10 @@ fn parse_kw_string(src: &str) -> Vec<String> {
     for frag in src[start..end].split('"').skip(1).step_by(2) {
         for kw in frag.split("\\0") {
             if !kw.is_empty() {
-                assert!(kw.bytes().all(|b| b.is_ascii_lowercase() || b == b'_'), "{kw}");
+                assert!(
+                    kw.bytes().all(|b| b.is_ascii_lowercase() || b == b'_'),
+                    "{kw}"
+                );
                 out.push(kw.to_string());
             }
         }
@@ -93,14 +128,19 @@ fn parse_kw_string(src: &str) -> Vec<String> {
 }
 
 fn parse_i64_array(src: &str, marker: &str) -> Vec<i64> {
-    let start = src.find(marker).unwrap_or_else(|| panic!("missing {marker:?}"));
+    let start = src
+        .find(marker)
+        .unwrap_or_else(|| panic!("missing {marker:?}"));
     let start = start + src[start..].find('{').expect("array open");
     let end = start + src[start..].find('}').expect("array close");
     src[start + 1..end]
         .split(',')
         .map(str::trim)
         .filter(|s| !s.is_empty())
-        .map(|s| s.parse().unwrap_or_else(|e| panic!("bad number {s:?}: {e}")))
+        .map(|s| {
+            s.parse()
+                .unwrap_or_else(|e| panic!("bad number {s:?}: {e}"))
+        })
         .collect()
 }
 

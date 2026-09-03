@@ -34,8 +34,14 @@ fn compare_prefix_strategy_mapping() {
             assert_eq!(res, expect[i], "strategy {strategy} key {key}");
         }
     }
-    assert!(compare_prefix(T::Int4, Datum::from_i32(0), Datum::from_i32(0), 6, C_COLLATION)
-        .is_err());
+    assert!(compare_prefix(
+        T::Int4,
+        Datum::from_i32(0),
+        Datum::from_i32(0),
+        6,
+        C_COLLATION
+    )
+    .is_err());
 }
 
 #[test]
@@ -48,7 +54,10 @@ fn numeric_leftmost_sentinel() {
     let d = img_datum(v.as_bytes());
     assert_eq!(compare(T::Numeric, sentinel, d, C_COLLATION).unwrap(), -1);
     assert_eq!(compare(T::Numeric, d, sentinel, C_COLLATION).unwrap(), 1);
-    assert_eq!(compare(T::Numeric, sentinel, sentinel, C_COLLATION).unwrap(), 0);
+    assert_eq!(
+        compare(T::Numeric, sentinel, sentinel, C_COLLATION).unwrap(),
+        0
+    );
 }
 
 #[test]
@@ -64,8 +73,16 @@ fn numeric_cross_category_compare() {
     for (a, b, expect) in pairs {
         let (ia, ib) = (num_img(a), num_img(b));
         let (da, db) = (img_datum(ia.as_bytes()), img_datum(ib.as_bytes()));
-        assert_eq!(compare(T::Numeric, da, db, C_COLLATION).unwrap(), expect, "{a} vs {b}");
-        assert_eq!(compare(T::Numeric, db, da, C_COLLATION).unwrap(), -expect, "{b} vs {a}");
+        assert_eq!(
+            compare(T::Numeric, da, db, C_COLLATION).unwrap(),
+            expect,
+            "{a} vs {b}"
+        );
+        assert_eq!(
+            compare(T::Numeric, db, da, C_COLLATION).unwrap(),
+            -expect,
+            "{b} vs {a}"
+        );
     }
 }
 
@@ -75,7 +92,10 @@ fn enum_leftmost_sentinel_even_oids() {
     let (a, b) = (Datum::from_oid(16384), Datum::from_oid(16386));
     assert_eq!(compare(T::Enum, sentinel, a, C_COLLATION).unwrap(), -1);
     assert_eq!(compare(T::Enum, a, sentinel, C_COLLATION).unwrap(), 1);
-    assert_eq!(compare(T::Enum, sentinel, sentinel, C_COLLATION).unwrap(), 0);
+    assert_eq!(
+        compare(T::Enum, sentinel, sentinel, C_COLLATION).unwrap(),
+        0
+    );
     assert_eq!(compare(T::Enum, a, b, C_COLLATION).unwrap(), -1);
     assert_eq!(compare(T::Enum, b, a, C_COLLATION).unwrap(), 1);
     assert_eq!(compare(T::Enum, a, a, C_COLLATION).unwrap(), 0);
@@ -87,30 +107,53 @@ fn scalar_leftmost_precede_all_values() {
     let m = cx.mcx();
 
     let lm = leftmost(m, T::Int2).unwrap();
-    assert_eq!(compare(T::Int2, lm, Datum::from_i16(i16::MIN), C_COLLATION).unwrap(), 0);
-    assert_eq!(compare(T::Int2, lm, Datum::from_i16(-1), C_COLLATION).unwrap(), -1);
+    assert_eq!(
+        compare(T::Int2, lm, Datum::from_i16(i16::MIN), C_COLLATION).unwrap(),
+        0
+    );
+    assert_eq!(
+        compare(T::Int2, lm, Datum::from_i16(-1), C_COLLATION).unwrap(),
+        -1
+    );
 
     let lm = leftmost(m, T::Float8).unwrap();
-    assert_eq!(compare(T::Float8, lm, Datum::from_f64(f64::MIN), C_COLLATION).unwrap(), -1);
     assert_eq!(
-        compare(T::Float8, Datum::from_f64(f64::NAN), Datum::from_f64(f64::INFINITY), C_COLLATION)
-            .unwrap(),
+        compare(T::Float8, lm, Datum::from_f64(f64::MIN), C_COLLATION).unwrap(),
+        -1
+    );
+    assert_eq!(
+        compare(
+            T::Float8,
+            Datum::from_f64(f64::NAN),
+            Datum::from_f64(f64::INFINITY),
+            C_COLLATION
+        )
+        .unwrap(),
         1
     );
 
     let lm = leftmost(m, T::Timestamp).unwrap();
-    assert_eq!(compare(T::Timestamp, lm, Datum::from_i64(0), C_COLLATION).unwrap(), -1);
+    assert_eq!(
+        compare(T::Timestamp, lm, Datum::from_i64(0), C_COLLATION).unwrap(),
+        -1
+    );
 
     let lm = leftmost(m, T::Timetz).unwrap();
     let midnight_utc = adt_date::TimeTzADT { time: 0, zone: 0 };
     let mut b = [0u8; 12];
     b[..8].copy_from_slice(&midnight_utc.time.to_ne_bytes());
     b[8..].copy_from_slice(&midnight_utc.zone.to_ne_bytes());
-    assert_eq!(compare(T::Timetz, lm, img_datum(&b), C_COLLATION).unwrap(), -1);
+    assert_eq!(
+        compare(T::Timetz, lm, img_datum(&b), C_COLLATION).unwrap(),
+        -1
+    );
 
     let lm = leftmost(m, T::Interval).unwrap();
     let zero = [0u8; 16];
-    assert_eq!(compare(T::Interval, lm, img_datum(&zero), C_COLLATION).unwrap(), -1);
+    assert_eq!(
+        compare(T::Interval, lm, img_datum(&zero), C_COLLATION).unwrap(),
+        -1
+    );
 
     let lm = leftmost(m, T::Uuid).unwrap();
     let one = {
@@ -118,15 +161,24 @@ fn scalar_leftmost_precede_all_values() {
         u[15] = 1;
         u
     };
-    assert_eq!(compare(T::Uuid, lm, img_datum(&one), C_COLLATION).unwrap(), -1);
-    assert_eq!(compare(T::Uuid, lm, img_datum(&[0u8; 16]), C_COLLATION).unwrap(), 0);
+    assert_eq!(
+        compare(T::Uuid, lm, img_datum(&one), C_COLLATION).unwrap(),
+        -1
+    );
+    assert_eq!(
+        compare(T::Uuid, lm, img_datum(&[0u8; 16]), C_COLLATION).unwrap(),
+        0
+    );
 
     let lm = leftmost(m, T::Bit).unwrap();
     let mut bits = [0u8; 9];
     bits[..4].copy_from_slice(&varatt::set_varsize_4b_word(9).to_ne_bytes());
     bits[4..8].copy_from_slice(&3i32.to_ne_bytes());
     bits[8] = 0b1010_0000;
-    assert_eq!(compare(T::Bit, lm, img_datum(&bits), C_COLLATION).unwrap(), -1);
+    assert_eq!(
+        compare(T::Bit, lm, img_datum(&bits), C_COLLATION).unwrap(),
+        -1
+    );
 
     // network_cmp returns a raw difference; only the sign is contractual.
     let lm = leftmost(m, T::Inet).unwrap();
@@ -174,9 +226,18 @@ fn numeric_compare_realigns_short_keys() {
     let d_short = img_datum(&buf[o..o + total]);
     assert_eq!(var_payload(d_short).as_ptr() as usize % 2, 1);
     let d_flat = img_datum(img.as_bytes());
-    assert_eq!(compare(T::Numeric, d_short, d_flat, C_COLLATION).unwrap(), 0);
-    assert_eq!(compare(T::Numeric, d_flat, d_short, C_COLLATION).unwrap(), 0);
+    assert_eq!(
+        compare(T::Numeric, d_short, d_flat, C_COLLATION).unwrap(),
+        0
+    );
+    assert_eq!(
+        compare(T::Numeric, d_flat, d_short, C_COLLATION).unwrap(),
+        0
+    );
     let bigger = num_img("123.46");
     let d_bigger = img_datum(bigger.as_bytes());
-    assert_eq!(compare(T::Numeric, d_short, d_bigger, C_COLLATION).unwrap(), -1);
+    assert_eq!(
+        compare(T::Numeric, d_short, d_bigger, C_COLLATION).unwrap(),
+        -1
+    );
 }

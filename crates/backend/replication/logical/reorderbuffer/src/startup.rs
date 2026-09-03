@@ -31,8 +31,12 @@ pub(crate) fn ReorderBufferCleanupSerializedTXNs(slotname: &str) -> PgResult<()>
         Err(_) => return Ok(()),
         Ok(_) => {}
     }
-    let entries = std::fs::read_dir(&path)
-        .map_err(|e| rb_error(format!("could not open directory \"{}\": {e}", path.display())))?;
+    let entries = std::fs::read_dir(&path).map_err(|e| {
+        rb_error(format!(
+            "could not open directory \"{}\": {e}",
+            path.display()
+        ))
+    })?;
     for entry in entries {
         let Ok(entry) = entry else { continue };
         let name = entry.file_name();
@@ -54,11 +58,19 @@ pub fn StartupReorderBuffer() -> PgResult<()> {
     let Some(dir) = replslot_dir() else {
         return Ok(());
     };
-    let entries = std::fs::read_dir(&dir)
-        .map_err(|e| rb_error(format!("could not open directory \"{}\": {e}", dir.display())))?;
+    let entries = std::fs::read_dir(&dir).map_err(|e| {
+        rb_error(format!(
+            "could not open directory \"{}\": {e}",
+            dir.display()
+        ))
+    })?;
     for entry in entries {
-        let entry = entry
-            .map_err(|e| rb_error(format!("could not read directory \"{}\": {e}", dir.display())))?;
+        let entry = entry.map_err(|e| {
+            rb_error(format!(
+                "could not read directory \"{}\": {e}",
+                dir.display()
+            ))
+        })?;
         let name = entry.file_name();
         let name = name.to_string_lossy().into_owned();
         if !replication_slot_validate_name(&name) {

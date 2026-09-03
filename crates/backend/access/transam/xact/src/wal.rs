@@ -6,8 +6,8 @@
 // empty on a plain commit), so the hot plain-commit path allocates nothing.
 
 use crate::*;
-use types_core::{Oid, TransactionId};
 use types_core::xact::XlXactStatsItem;
+use types_core::{Oid, TransactionId};
 use types_storage::{RelFileLocator, SharedInvalidationMessage, SHARED_INVALIDATION_MESSAGE_SIZE};
 
 // C default: replorigin_session_origin = InvalidRepOriginId (origin.c);
@@ -21,7 +21,9 @@ pub(crate) fn session_origin_or_default() -> types_core::RepOriginId {
 }
 
 fn oom() -> Box<PgError> {
-    Box::new(PgError::error("out of memory building transaction WAL record"))
+    Box::new(PgError::error(
+        "out of memory building transaction WAL record",
+    ))
 }
 
 /// `RelFileLocator` array as `{ Oid spcOid; Oid dbOid; RelFileNumber relNumber; }` each.

@@ -42,7 +42,10 @@ impl SelVec {
     }
 
     pub fn none(nrows: u32) -> SelVec {
-        SelVec { words: [0; SEL_WORDS], nrows }
+        SelVec {
+            words: [0; SEL_WORDS],
+            nrows,
+        }
     }
 
     #[inline(always)]
@@ -66,7 +69,11 @@ impl SelVec {
 
     #[inline]
     pub fn iter(&self) -> SelIter<'_> {
-        SelIter { sel: self, word: 0, bits: self.words[0] }
+        SelIter {
+            sel: self,
+            word: 0,
+            bits: self.words[0],
+        }
     }
 }
 
@@ -101,20 +108,28 @@ impl Iterator for SelIter<'_> {
 /// columns / correlated params. Dict-coded columns never reach this
 /// interpreter — the dict tier (dict.rs) owns them.
 pub enum LaneRef<'a> {
-    Raw { values: &'a [Datum], isnull: &'a [bool] },
-    Scalar { value: Datum, isnull: bool },
+    Raw {
+        values: &'a [Datum],
+        isnull: &'a [bool],
+    },
+    Scalar {
+        value: Datum,
+        isnull: bool,
+    },
 }
 
 impl LaneRef<'_> {
     #[inline(always)]
     pub fn read(&self, i: u32) -> NullableDatum {
         match self {
-            LaneRef::Raw { values, isnull } => {
-                NullableDatum { value: values[i as usize], isnull: isnull[i as usize] }
-            }
-            LaneRef::Scalar { value, isnull } => {
-                NullableDatum { value: *value, isnull: *isnull }
-            }
+            LaneRef::Raw { values, isnull } => NullableDatum {
+                value: values[i as usize],
+                isnull: isnull[i as usize],
+            },
+            LaneRef::Scalar { value, isnull } => NullableDatum {
+                value: *value,
+                isnull: *isnull,
+            },
         }
     }
 }
@@ -128,23 +143,53 @@ pub struct Batch<'a> {
 #[derive(Clone, Copy, Debug)]
 pub enum BStep {
     /// reg[out] = lane[col] row value.
-    LoadLane { col: u16, out: u8 },
-    LoadConst { k: u16, out: u8 },
+    LoadLane {
+        col: u16,
+        out: u8,
+    },
+    LoadConst {
+        k: u16,
+        out: u8,
+    },
     /// Strict comparison: NULL if either input NULL.
-    Cmp { op: CmpOp, a: u8, b: u8, out: u8 },
-    IsNull { a: u8, out: u8 },
-    IsNotNull { a: u8, out: u8 },
+    Cmp {
+        op: CmpOp,
+        a: u8,
+        b: u8,
+        out: u8,
+    },
+    IsNull {
+        a: u8,
+        out: u8,
+    },
+    IsNotNull {
+        a: u8,
+        out: u8,
+    },
     /// BooleanTest (non-strict, EEOP_BOOLTEST_* parity):
     /// out = isnull(a) ? null_result : (bool(a) ^ negate), never NULL.
-    BoolTest { null_result: bool, negate: bool, a: u8, out: u8 },
+    BoolTest {
+        null_result: bool,
+        negate: bool,
+        a: u8,
+        out: u8,
+    },
     /// col <op> ANY(consts[k..k+n]) with OR semantics over a strict
     /// comparator (ExecEvalScalarArrayOp useOr parity): NULL input -> NULL;
     /// any element compare true -> true; else NULL if any element NULL,
     /// else false. Non-erroring because op is.
-    InListAnyConst { col: u16, op: CmpOp, k: u16, n: u16, out: u8 },
+    InListAnyConst {
+        col: u16,
+        op: CmpOp,
+        k: u16,
+        n: u16,
+        out: u8,
+    },
     /// Clause boundary: reg[a] NULL or false fails the row (short-circuit:
     /// later clauses never evaluate for this row).
-    Qual { a: u8 },
+    Qual {
+        a: u8,
+    },
 }
 
 pub struct Program {
@@ -154,7 +199,10 @@ pub struct Program {
 
 impl Program {
     pub fn new() -> Program {
-        Program { steps: Vec::new(), consts: Vec::new() }
+        Program {
+            steps: Vec::new(),
+            consts: Vec::new(),
+        }
     }
 
     pub fn push_const(&mut self, nd: NullableDatum) -> u16 {
@@ -210,10 +258,22 @@ fn eval_row_steps(prog: &Program, steps: &[BStep], batch: &Batch<'_>, i: u32) ->
                     isnull: false,
                 };
             }
-            BStep::BoolTest { null_result, negate, a, out } => {
+            BStep::BoolTest {
+                null_result,
+                negate,
+                a,
+                out,
+            } => {
                 let r = regs[a as usize];
-                let v = if r.isnull { null_result } else { r.value.as_bool() ^ negate };
-                regs[out as usize] = NullableDatum { value: Datum::from_bool(v), isnull: false };
+                let v = if r.isnull {
+                    null_result
+                } else {
+                    r.value.as_bool() ^ negate
+                };
+                regs[out as usize] = NullableDatum {
+                    value: Datum::from_bool(v),
+                    isnull: false,
+                };
             }
             BStep::InListAnyConst { col, op, k, n, out } => {
                 let v = batch.lanes[col as usize].read(i);
@@ -234,11 +294,17 @@ fn eval_row_steps(prog: &Program, steps: &[BStep], batch: &Batch<'_>, i: u32) ->
                         }
                     }
                     if hit {
-                        NullableDatum { value: Datum::from_bool(true), isnull: false }
+                        NullableDatum {
+                            value: Datum::from_bool(true),
+                            isnull: false,
+                        }
                     } else if saw_null {
                         NullableDatum::null()
                     } else {
-                        NullableDatum { value: Datum::from_bool(false), isnull: false }
+                        NullableDatum {
+                            value: Datum::from_bool(false),
+                            isnull: false,
+                        }
                     }
                 };
             }
@@ -267,7 +333,11 @@ enum ClausePlan {
     /// Bare boolean Var clause: !isnull(lane) && bool(lane) as one pass.
     BoolVarBitmap { col: u16 },
     /// col IS [NOT] TRUE/FALSE as one pass over both lanes (non-strict).
-    BoolTestBitmap { col: u16, null_result: bool, negate: bool },
+    BoolTestBitmap {
+        col: u16,
+        null_result: bool,
+        negate: bool,
+    },
     /// col <op> ANY(consts): one bitmap pass per non-null element, OR-folded.
     /// NULL elements never set a bit (they can only turn a false result
     /// NULL, and both fail a Qual), so skipping them is qual-exact.
@@ -291,7 +361,10 @@ pub fn compile_qual(prog: &Program) -> QualPlan {
         clauses.push(classify_clause(prog, clause, lo, hi));
         lo = hi;
     }
-    debug_assert!(lo == prog.steps.len(), "qual program must end each clause with Qual");
+    debug_assert!(
+        lo == prog.steps.len(),
+        "qual program must end each clause with Qual"
+    );
     QualPlan { clauses }
 }
 
@@ -318,28 +391,52 @@ fn classify_clause(prog: &Program, clause: &[BStep], lo: usize, hi: usize) -> Cl
             if konst.isnull {
                 return ClausePlan::RowLoop { lo, hi };
             }
-            ClausePlan::BitmapCmpConst { col: *col, op: *op, konst: konst.value }
+            ClausePlan::BitmapCmpConst {
+                col: *col,
+                op: *op,
+                konst: konst.value,
+            }
         }
         [BStep::LoadLane { col, out: r0 }, BStep::IsNull { a, out }, BStep::Qual { a: q }]
             if a == r0 && q == out =>
         {
-            ClausePlan::NullBitmap { col: *col, want_null: true }
+            ClausePlan::NullBitmap {
+                col: *col,
+                want_null: true,
+            }
         }
         [BStep::LoadLane { col, out: r0 }, BStep::IsNotNull { a, out }, BStep::Qual { a: q }]
             if a == r0 && q == out =>
         {
-            ClausePlan::NullBitmap { col: *col, want_null: false }
+            ClausePlan::NullBitmap {
+                col: *col,
+                want_null: false,
+            }
         }
         [BStep::LoadLane { col, out: r0 }, BStep::Qual { a: q }] if q == r0 => {
             ClausePlan::BoolVarBitmap { col: *col }
         }
-        [BStep::LoadLane { col, out: r0 }, BStep::BoolTest { null_result, negate, a, out }, BStep::Qual { a: q }]
+        [BStep::LoadLane { col, out: r0 }, BStep::BoolTest {
+            null_result,
+            negate,
+            a,
+            out,
+        }, BStep::Qual { a: q }]
             if a == r0 && q == out =>
         {
-            ClausePlan::BoolTestBitmap { col: *col, null_result: *null_result, negate: *negate }
+            ClausePlan::BoolTestBitmap {
+                col: *col,
+                null_result: *null_result,
+                negate: *negate,
+            }
         }
         [BStep::InListAnyConst { col, op, k, n, out }, BStep::Qual { a: q }] if q == out => {
-            ClausePlan::InListBitmap { col: *col, op: *op, k: *k, n: *n }
+            ClausePlan::InListBitmap {
+                col: *col,
+                op: *op,
+                k: *k,
+                n: *n,
+            }
         }
         _ => ClausePlan::RowLoop { lo, hi },
     }
@@ -360,21 +457,19 @@ pub fn eval_qual(
             return Ok(());
         }
         match clause {
-            ClausePlan::BitmapCmpConst { col, op, konst } => {
-                match &batch.lanes[*col as usize] {
-                    LaneRef::Raw { values, isnull } => {
-                        bitmap_cmp_const(*op, *konst, values, isnull, &mut scratch);
-                        for (w, s) in sel.words.iter_mut().zip(scratch.iter()) {
-                            *w &= *s;
-                        }
-                    }
-                    LaneRef::Scalar { value, isnull } => {
-                        if *isnull || !op.eval(*value, *konst) {
-                            sel.words = [0; SEL_WORDS];
-                        }
+            ClausePlan::BitmapCmpConst { col, op, konst } => match &batch.lanes[*col as usize] {
+                LaneRef::Raw { values, isnull } => {
+                    bitmap_cmp_const(*op, *konst, values, isnull, &mut scratch);
+                    for (w, s) in sel.words.iter_mut().zip(scratch.iter()) {
+                        *w &= *s;
                     }
                 }
-            }
+                LaneRef::Scalar { value, isnull } => {
+                    if *isnull || !op.eval(*value, *konst) {
+                        sel.words = [0; SEL_WORDS];
+                    }
+                }
+            },
             ClausePlan::BoolVarBitmap { col } => match &batch.lanes[*col as usize] {
                 LaneRef::Raw { values, isnull } => {
                     bitmap_bool_var(values, isnull, &mut scratch);
@@ -388,22 +483,28 @@ pub fn eval_qual(
                     }
                 }
             },
-            ClausePlan::BoolTestBitmap { col, null_result, negate } => {
-                match &batch.lanes[*col as usize] {
-                    LaneRef::Raw { values, isnull } => {
-                        bitmap_bool_test(values, isnull, *null_result, *negate, &mut scratch);
-                        for (w, s) in sel.words.iter_mut().zip(scratch.iter()) {
-                            *w &= *s;
-                        }
-                    }
-                    LaneRef::Scalar { value, isnull } => {
-                        let bit = if *isnull { *null_result } else { value.as_bool() ^ *negate };
-                        if !bit {
-                            sel.words = [0; SEL_WORDS];
-                        }
+            ClausePlan::BoolTestBitmap {
+                col,
+                null_result,
+                negate,
+            } => match &batch.lanes[*col as usize] {
+                LaneRef::Raw { values, isnull } => {
+                    bitmap_bool_test(values, isnull, *null_result, *negate, &mut scratch);
+                    for (w, s) in sel.words.iter_mut().zip(scratch.iter()) {
+                        *w &= *s;
                     }
                 }
-            }
+                LaneRef::Scalar { value, isnull } => {
+                    let bit = if *isnull {
+                        *null_result
+                    } else {
+                        value.as_bool() ^ *negate
+                    };
+                    if !bit {
+                        sel.words = [0; SEL_WORDS];
+                    }
+                }
+            },
             ClausePlan::InListBitmap { col, op, k, n } => {
                 let consts = &prog.consts[*k as usize..(*k + *n) as usize];
                 match &batch.lanes[*col as usize] {
@@ -790,7 +891,11 @@ pub fn bitmap_bool_test(
             word = movemask64(&b);
         } else {
             for i in 0..vch.len() {
-                let bit = if nch[i] { null_result } else { vch[i].as_bool() ^ negate };
+                let bit = if nch[i] {
+                    null_result
+                } else {
+                    vch[i].as_bool() ^ negate
+                };
                 word |= (bit as u64) << i;
             }
         }

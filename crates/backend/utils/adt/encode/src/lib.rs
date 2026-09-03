@@ -38,7 +38,7 @@ fn ascii_ci_eq(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len()
         && a.iter()
             .zip(b)
-            .all(|(&x, &y)| x.to_ascii_lowercase() == y.to_ascii_lowercase())
+            .all(|(&x, &y)| x.eq_ignore_ascii_case(&y))
 }
 
 pub fn pg_find_encoding(name: &[u8]) -> Option<Codec> {
@@ -162,7 +162,7 @@ const B64LOOKUP: [i8; 256] = {
 // C: 3 bytes -> 4 chars, a linefeed after each 76 output chars (upper bound).
 fn b64_enc_len(srclen: usize) -> u64 {
     let s = srclen as u64;
-    (s + 2) / 3 * 4 + s / (76 * 3 / 4)
+    s.div_ceil(3) * 4 + s / (76 * 3 / 4)
 }
 
 fn b64_encode(src: &[u8], out: &mut PgVec<'_, u8>) {
@@ -370,7 +370,9 @@ fn esc_encode(src: &[u8], out: &mut PgVec<'_, u8>) {
     // which set_len then covers.
     unsafe {
         let dst = core::slice::from_raw_parts_mut(
-            out.as_mut_ptr().add(old).cast::<core::mem::MaybeUninit<u8>>(),
+            out.as_mut_ptr()
+                .add(old)
+                .cast::<core::mem::MaybeUninit<u8>>(),
             spare,
         );
         let written = esc_encode_body(src, dst);
@@ -441,7 +443,9 @@ fn esc_decode(src: &[u8], out: &mut PgVec<'_, u8>) -> PgResult<()> {
     // which set_len then covers.
     unsafe {
         let dst = core::slice::from_raw_parts_mut(
-            out.as_mut_ptr().add(old).cast::<core::mem::MaybeUninit<u8>>(),
+            out.as_mut_ptr()
+                .add(old)
+                .cast::<core::mem::MaybeUninit<u8>>(),
             spare,
         );
         let written = esc_decode_body(src, dst)?;

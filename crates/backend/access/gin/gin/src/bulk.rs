@@ -193,7 +193,9 @@ impl<'s> BuildAccumulator<'s> {
             let e = &mut self.entries[idx as usize];
             if e.list.len() == e.list.capacity() {
                 self.allocated_memory -= chunk_space(e.list.capacity() * 6);
-                e.list.try_reserve_exact(e.list.capacity()).map_err(|_| crate::oom(e.list.capacity() * 6))?;
+                e.list
+                    .try_reserve_exact(e.list.capacity())
+                    .map_err(|_| crate::oom(e.list.capacity() * 6))?;
                 self.allocated_memory += chunk_space(e.list.capacity() * 6);
             }
             if !e.should_sort {
@@ -213,11 +215,10 @@ impl<'s> BuildAccumulator<'s> {
         } else {
             Datum::null()
         };
-        let mut list: PgVec<'s, ItemPointerData> =
-            mcx::vec_with_capacity_in(self.mcx, DEF_NPTR)?;
+        let mut list: PgVec<'s, ItemPointerData> = mcx::vec_with_capacity_in(self.mcx, DEF_NPTR)?;
         list.push(*heapptr);
         self.allocated_memory += chunk_space(DEF_NPTR * 6);
-        if self.entries.len() % DEF_NENTRY == 0 {
+        if self.entries.len().is_multiple_of(DEF_NENTRY) {
             // C's entryallocator chunks.
             self.allocated_memory += chunk_space(DEF_NENTRY * SIZEOF_C_ENTRY_ACCUMULATOR);
         }

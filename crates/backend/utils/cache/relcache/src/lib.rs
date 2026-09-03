@@ -2,32 +2,31 @@
 
 pub mod build;
 pub mod deform_jit;
+pub mod fkeylist;
+pub mod indexattr;
 pub mod indexlist;
-mod trigdesc;
 pub mod initfile;
 pub mod invalidate;
 pub mod local;
-pub mod indexattr;
-pub mod fkeylist;
-pub mod statextlist;
 pub mod rowsecurity;
 pub mod rules;
 pub mod schemapg;
+pub mod statextlist;
 pub mod store;
 #[cfg(test)]
 mod tests;
+mod trigdesc;
 
 use core::cell::RefCell;
 use core::mem::ManuallyDrop;
 use std::rc::{Rc, Weak};
 
-use mcx::{Mcx, MemoryContext, PgHashMap, PgVec};
+use mcx::{Mcx, PgHashMap, PgVec};
 use types_core::Oid;
 use types_rel::RelationData;
 
 pub use build::{formrdesc, RelationBuildDesc};
 pub use indexlist::RelationGetIndexList;
-pub use trigdesc::RelationGetTriggerDesc;
 pub use initfile::{
     RelationCacheInitFilePostInvalidate, RelationCacheInitFilePreInvalidate,
     RelationCacheInitFileRemove, RelationCacheInitialize, RelationCacheInitializePhase2,
@@ -40,6 +39,7 @@ pub use invalidate::{
 pub use rowsecurity::RelationGetRowSecurityDesc;
 pub use rules::RelationGetRules;
 pub use store::RelationIdGetRelation;
+pub use trigdesc::RelationGetTriggerDesc;
 
 pub const MAX_EOXACT_LIST: usize = 32;
 const INITRELCACHESIZE: usize = 400;

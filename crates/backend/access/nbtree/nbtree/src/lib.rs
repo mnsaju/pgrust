@@ -27,8 +27,8 @@ mod wal;
 mod tests;
 
 pub use insert::btinsert;
-pub use parallel::btparallelrescan;
 pub use page::{bt_getrootheight, bt_initmetapage, bt_metaversion, bt_pageinit};
+pub use parallel::btparallelrescan;
 pub use vacuum::{
     bt_chunked_bulkdelete_begin, bt_chunked_bulkdelete_finish, bt_chunked_cleanup_begin,
     bt_chunked_cleanup_finish, bt_chunked_scan_step, btbulkdelete, btbulkdelete_collect,
@@ -36,7 +36,7 @@ pub use vacuum::{
 };
 
 use ::mcx::Mcx;
-use ::types_core::{BLCKSZ, InvalidSubTransactionId};
+use ::types_core::{InvalidSubTransactionId, BLCKSZ};
 use ::types_error::PgResult;
 use ::types_nbtree::{BTScanOpaqueData, BTScanPosInvalidate, BTScanPosIsPinned, BTScanPosIsValid};
 use ::types_rel::Relation;
@@ -48,9 +48,9 @@ use ::types_snapshot::IsMVCCSnapshot;
 use search::{bt_first, bt_gettuple_continue, pos_unpin_if_pinned, restore_scanpos, ScanCtx};
 use utils::bt_killitems;
 
+pub use fcframe::OrderProcFrame;
 pub use search::{bt_peek_same_block_tids, BtScanInsert};
 pub use utils::{bt_check_third_page, bt_keep_natts_fast, bt_mkscankey, bt_truncate};
-pub use fcframe::OrderProcFrame;
 
 #[cold]
 #[inline(never)]
@@ -66,9 +66,7 @@ pub(crate) fn unported_phase2(what: &str) -> ! {
 /// `header` must be a SK_ROW_HEADER key whose subsidiary array (built by
 /// ExecIndexBuildScanKeys) outlives the scan; the caller must not hold
 /// another live reference to the array.
-pub(crate) unsafe fn row_compare_members_mut<'a>(
-    header: &ScanKeyData,
-) -> &'a mut [ScanKeyData] {
+pub(crate) unsafe fn row_compare_members_mut<'a>(header: &ScanKeyData) -> &'a mut [ScanKeyData] {
     use ::types_scan::scankey::{SK_ROW_END, SK_ROW_HEADER};
     debug_assert!(header.sk_flags & SK_ROW_HEADER != 0);
     let first = header.sk_argument.as_usize() as *mut ScanKeyData;
@@ -115,7 +113,9 @@ macro_rules! split_scan {
             non_btree_opaque()
         };
         ScanCtx {
-            rel: indexRelation.as_ref().expect("index scan parked (skeleton)"),
+            rel: indexRelation
+                .as_ref()
+                .expect("index scan parked (skeleton)"),
             so: &mut **so,
             snapshot: xs_snapshot.as_deref(),
             ignore_killed_tuples: *ignore_killed_tuples,
@@ -163,17 +163,19 @@ pub(crate) fn relation_needs_wal(rel: &Relation<'_>) -> bool {
 }
 
 /// btrescan. `scankey: None` restarts with the keys already in scan.keyData.
-pub fn btrescan(
-    scan: &mut IndexScanDescData<'_>,
-    scankey: Option<&[ScanKeyData]>,
-) -> PgResult<()> {
+pub fn btrescan(scan: &mut IndexScanDescData<'_>, scankey: Option<&[ScanKeyData]>) -> PgResult<()> {
     {
         let IndexScanOpaque::Btree(so) = &mut scan.opaque else {
             non_btree_opaque()
         };
         if BTScanPosIsValid(&so.currPos) {
             if so.numKilled > 0 {
-                bt_killitems(scan.indexRelation.as_ref().expect("index scan parked (skeleton)"), so)?;
+                bt_killitems(
+                    scan.indexRelation
+                        .as_ref()
+                        .expect("index scan parked (skeleton)"),
+                    so,
+                )?;
             }
             pos_unpin_if_pinned(&mut so.currPos)?;
             BTScanPosInvalidate(&mut so.currPos);
@@ -254,11 +256,10 @@ pub fn btgetbitmap(
 
             loop {
                 ctx.so.currPos.itemIndex += 1;
-                if ctx.so.currPos.itemIndex > ctx.so.currPos.lastItem {
-                    if !search::bt_next(&mut ctx, ::types_scan::sdir::ForwardScanDirection)? {
+                if ctx.so.currPos.itemIndex > ctx.so.currPos.lastItem
+                    && !search::bt_next(&mut ctx, ::types_scan::sdir::ForwardScanDirection)? {
                         break;
                     }
-                }
                 // SAFETY: itemIndex in [firstItem, lastItem], written by bt_readpage.
                 let item = unsafe { ctx.so.currPos.item(ctx.so.currPos.itemIndex as usize) };
                 tbm.add_tuples(core::slice::from_ref(&item.heapTid), false)?;
@@ -280,7 +281,12 @@ pub fn btendscan(scan: &mut IndexScanDescData<'_>) -> PgResult<()> {
 
     if BTScanPosIsValid(&so.currPos) {
         if so.numKilled > 0 {
-            bt_killitems(scan.indexRelation.as_ref().expect("index scan parked (skeleton)"), so)?;
+            bt_killitems(
+                scan.indexRelation
+                    .as_ref()
+                    .expect("index scan parked (skeleton)"),
+                so,
+            )?;
         }
         pos_unpin_if_pinned(&mut so.currPos)?;
     }
@@ -301,7 +307,12 @@ pub fn btparkscan(scan: &mut IndexScanDescData<'_>) -> PgResult<()> {
 
     if BTScanPosIsValid(&so.currPos) {
         if so.numKilled > 0 {
-            bt_killitems(scan.indexRelation.as_ref().expect("index scan parked (skeleton)"), so)?;
+            bt_killitems(
+                scan.indexRelation
+                    .as_ref()
+                    .expect("index scan parked (skeleton)"),
+                so,
+            )?;
         }
         pos_unpin_if_pinned(&mut so.currPos)?;
         BTScanPosInvalidate(&mut so.currPos);
@@ -344,7 +355,12 @@ pub fn btrestrpos(scan: &mut IndexScanDescData<'_>) -> PgResult<()> {
 
     if BTScanPosIsValid(&so.currPos) {
         if so.numKilled > 0 {
-            bt_killitems(scan.indexRelation.as_ref().expect("index scan parked (skeleton)"), so)?;
+            bt_killitems(
+                scan.indexRelation
+                    .as_ref()
+                    .expect("index scan parked (skeleton)"),
+                so,
+            )?;
         }
         pos_unpin_if_pinned(&mut so.currPos)?;
     }

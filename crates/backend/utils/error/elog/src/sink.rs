@@ -160,8 +160,7 @@ pub struct DebugQueryStringScope {
 }
 
 pub fn debug_query_string_scope(query: &str) -> DebugQueryStringScope {
-    let prev =
-        DEBUG_QUERY_STRING.with(|c| c.replace(Some((query.as_ptr(), query.len()))));
+    let prev = DEBUG_QUERY_STRING.with(|c| c.replace(Some((query.as_ptr(), query.len()))));
     DebugQueryStringScope { prev }
 }
 

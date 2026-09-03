@@ -94,9 +94,7 @@ fn text_payload<'x>(d: Datum) -> &'x [u8] {
 pub(crate) fn inline_image(d: Datum) -> bool {
     let p = d.as_usize() as *const u8;
     // SAFETY: non-null varlena datum readable through its header.
-    unsafe {
-        (varatt::varatt_is_1b(p) && !varatt::varatt_is_1b_e(p)) || varatt::varatt_is_4b_u(p)
-    }
+    unsafe { (varatt::varatt_is_1b(p) && !varatt::varatt_is_1b_e(p)) || varatt::varatt_is_4b_u(p) }
 }
 
 // index_form_tuple inline-compresses varlena index keys above the size
@@ -129,9 +127,7 @@ fn cmp_text_keys(a: Datum, b: Datum, f: impl Fn(&[u8], &[u8]) -> i32) -> i32 {
 /// compareFn: total order on two non-null key datums.
 pub(crate) fn compare(col: &GinColState, a: Datum, b: Datum) -> i32 {
     match col.opclass {
-        GinOpclass::JsonbOps => {
-            cmp_text_keys(a, b, ::adt_jsonb::gin::gin_compare_jsonb)
-        }
+        GinOpclass::JsonbOps => cmp_text_keys(a, b, ::adt_jsonb::gin::gin_compare_jsonb),
         // Per-type btree comparators; failures are corruption/lookup-class
         // (collation resolved, enum catalog rows exist by construction).
         GinOpclass::BtreeOps(ty) => {
@@ -140,8 +136,7 @@ pub(crate) fn compare(col: &GinColState, a: Datum, b: Datum) -> i32 {
         }
         // bttextcmp under the support collation (hstore FUNCTION 1).
         GinOpclass::HstoreOps => cmp_text_keys(a, b, |x, y| {
-            varlena::varstr_cmp(x, y, col.support_collation)
-                .expect("bttextcmp: varstr_cmp failed")
+            varlena::varstr_cmp(x, y, col.support_collation).expect("bttextcmp: varstr_cmp failed")
         }),
         GinOpclass::JsonbPathOps | GinOpclass::TrgmOps | GinOpclass::IntArrayOps => {
             // btint4cmp over uint32 path hashes stored via UInt32GetDatum
@@ -211,9 +206,7 @@ pub(crate) fn compare_partial(
     orig: Datum,
 ) -> i32 {
     match col.opclass {
-        GinOpclass::TsvectorOps => {
-            cmp_text_keys(partial_key, key, ::adt_tsginidx::gin_cmp_prefix)
-        }
+        GinOpclass::TsvectorOps => cmp_text_keys(partial_key, key, ::adt_tsginidx::gin_cmp_prefix),
         GinOpclass::BtreeOps(ty) => gin_btree_seams::btree_compare_prefix::call(
             ty,
             orig,
@@ -241,7 +234,10 @@ pub(crate) fn extract_value<'m>(
         }
         GinOpclass::JsonbPathOps => {
             let payload = detoast_payload(mcx, value)?;
-            Ok((::adt_jsonb::gin::gin_extract_jsonb_path(mcx, payload)?, no_nulls))
+            Ok((
+                ::adt_jsonb::gin::gin_extract_jsonb_path(mcx, payload)?,
+                no_nulls,
+            ))
         }
         GinOpclass::TsvectorOps => {
             let payload = detoast_payload(mcx, value)?;
@@ -373,7 +369,9 @@ pub(crate) fn extract_query<'m>(
             })
         }
         GinOpclass::TsvectorOps => {
-            let q = ::adt_tsvector_core::query::TsQueryRef { payload: &image[4..] };
+            let q = ::adt_tsvector_core::query::TsQueryRef {
+                payload: &image[4..],
+            };
             let out = ::adt_tsginidx::gin_extract_tsquery(mcx, q)?;
             Ok(ExtractedQuery {
                 entries: out.entries,
@@ -511,8 +509,11 @@ pub fn consistent(
         )),
         GinOpclass::TsvectorOps => {
             let image = detoast_image(mcx, query)?;
-            let q = ::adt_tsvector_core::query::TsQueryRef { payload: &image[4..] };
-            let (res, rc) = ::adt_tsginidx::gin_tsquery_consistent(mcx, check, q, map_item_operand)?;
+            let q = ::adt_tsvector_core::query::TsQueryRef {
+                payload: &image[4..],
+            };
+            let (res, rc) =
+                ::adt_tsginidx::gin_tsquery_consistent(mcx, check, q, map_item_operand)?;
             *recheck = rc;
             Ok(res)
         }
@@ -590,7 +591,9 @@ pub fn tri_consistent(
         )),
         GinOpclass::TsvectorOps => {
             let image = detoast_image(mcx, query)?;
-            let q = ::adt_tsvector_core::query::TsQueryRef { payload: &image[4..] };
+            let q = ::adt_tsvector_core::query::TsQueryRef {
+                payload: &image[4..],
+            };
             ::adt_tsginidx::gin_tsquery_triconsistent(mcx, check, q, map_item_operand)
         }
         // ginarraytriconsistent; queryCategories double as C's nullFlags.
@@ -681,7 +684,13 @@ fn shim_tri_consistent(
 
     if nmaybe == 0 {
         let (res, rc) = call(check)?;
-        return Ok(if res && rc { GIN_MAYBE } else if res { GIN_TRUE } else { GIN_FALSE });
+        return Ok(if res && rc {
+            GIN_MAYBE
+        } else if res {
+            GIN_TRUE
+        } else {
+            GIN_FALSE
+        });
     }
 
     let mut local: Vec<i8> = check[..nkeys].to_vec();
@@ -729,12 +738,8 @@ pub fn gincost_extract_query(
     query: Datum,
     strategy: StrategyNumber,
 ) -> PgResult<(i32, i32, i32)> {
-    let extract = lsyscache::get_opfamily_proc(
-        opfamily,
-        opcintype,
-        opcintype,
-        GIN_EXTRACTQUERY_PROC as i16,
-    )?;
+    let extract =
+        lsyscache::get_opfamily_proc(opfamily, opcintype, opcintype, GIN_EXTRACTQUERY_PROC as i16)?;
     if extract == ::types_core::InvalidOid {
         crate::unported("missing GIN extractQuery support proc (gincostestimate)");
     }
@@ -745,8 +750,7 @@ pub fn gincost_extract_query(
         F_GINQUERYARRAYEXTRACT => (GinOpclass::ArrayOps, false),
         other => {
             let cx = ::mcx::MemoryContext::new("gincost ext opclass probe");
-            let name = lsyscache::get_func_name(cx.mcx(), other)?
-                .map(|n| n.as_str().to_string());
+            let name = lsyscache::get_func_name(cx.mcx(), other)?.map(|n| n.as_str().to_string());
             let btree_ty = name
                 .as_deref()
                 .and_then(|n| n.strip_prefix("gin_extract_query_"))

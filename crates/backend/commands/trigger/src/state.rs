@@ -7,9 +7,7 @@ use types_core::{
     AttrNumber, Oid, RegProcedure, CONSTRAINT_NAME_NSP_INDEX_ID, CONSTRAINT_RELATION_ID,
     NAMEDATALEN,
 };
-use types_error::{
-    PgError, PgResult, ERRCODE_UNDEFINED_OBJECT, ERRCODE_WRONG_OBJECT_TYPE, ERROR,
-};
+use types_error::{PgError, PgResult, ERRCODE_UNDEFINED_OBJECT, ERRCODE_WRONG_OBJECT_TYPE, ERROR};
 use types_nodes::rawnodes::ConstraintsSetStmt;
 use types_rel::AccessShareLock;
 use types_scan::scankey::{BTEqualStrategyNumber, ScanKeyData};
@@ -20,14 +18,14 @@ use crate::queue;
 const CONSTRAINT_PARENT_INDEX_ID: Oid = 2579;
 const TRIGGER_CONSTRAINT_INDEX_ID: Oid = 2699;
 
-const Anum_pg_constraint_oid: i32 = 1;
-const Anum_pg_constraint_conname: AttrNumber = 2;
-const Anum_pg_constraint_connamespace: AttrNumber = 3;
-const Anum_pg_constraint_condeferrable: i32 = 5;
-const Anum_pg_constraint_conparentid: AttrNumber = 12;
-const Anum_pg_trigger_oid: i32 = 1;
-const Anum_pg_trigger_tgconstraint: AttrNumber = 11;
-const Anum_pg_trigger_tgdeferrable: i32 = 12;
+const ANUM_PG_CONSTRAINT_OID: i32 = 1;
+const ANUM_PG_CONSTRAINT_CONNAME: AttrNumber = 2;
+const ANUM_PG_CONSTRAINT_CONNAMESPACE: AttrNumber = 3;
+const ANUM_PG_CONSTRAINT_CONDEFERRABLE: i32 = 5;
+const ANUM_PG_CONSTRAINT_CONPARENTID: AttrNumber = 12;
+const ANUM_PG_TRIGGER_OID: i32 = 1;
+const ANUM_PG_TRIGGER_TGCONSTRAINT: AttrNumber = 11;
+const ANUM_PG_TRIGGER_TGDEFERRABLE: i32 = 12;
 
 #[track_caller]
 #[cold]
@@ -49,7 +47,10 @@ fn mk_key(attno: AttrNumber, func: RegProcedure, arg: Datum) -> ScanKeyData {
 
 fn name_arg<'mcx>(mcx: Mcx<'mcx>, name: &str) -> PgResult<mcx::PgVec<'mcx, u8>> {
     let n = NAMEDATALEN as usize;
-    assert!(name.len() < n, "constraint name overflows NAMEDATALEN: {name:?}");
+    assert!(
+        name.len() < n,
+        "constraint name overflows NAMEDATALEN: {name:?}"
+    );
     let mut buf: mcx::PgVec<'mcx, u8> = mcx::vec_with_capacity_in(mcx, n)?;
     mcx::vec_append_bytes(&mut buf, name.as_bytes())?;
     mcx::vec_append_bytes(&mut buf, &[0u8; 64][..n - name.len()])?;
@@ -67,7 +68,9 @@ pub fn AfterTriggerSetState<'mcx>(mcx: Mcx<'mcx>, stmt: &ConstraintsSetStmt<'_>)
         let mut conoidlist: Vec<Oid> = Vec::new();
         let conrel = table::table_open(mcx, CONSTRAINT_RELATION_ID, AccessShareLock)?;
         for lc in stmt.constraints.iter() {
-            let constraint = lc.as_range_var().expect("SET CONSTRAINTS name is a RangeVar");
+            let constraint = lc
+                .as_range_var()
+                .expect("SET CONSTRAINTS name is a RangeVar");
             let conname = constraint.relname.expect("RangeVar.relname");
             if constraint.catalogname.is_some() {
                 panic!("AfterTriggerSetState (trigger.c): catalog-qualified constraint name");
@@ -86,12 +89,12 @@ pub fn AfterTriggerSetState<'mcx>(mcx: Mcx<'mcx>, stmt: &ConstraintsSetStmt<'_>)
             for &namespace_id in namespacelist.iter() {
                 let keys = [
                     mk_key(
-                        Anum_pg_constraint_conname,
+                        ANUM_PG_CONSTRAINT_CONNAME,
                         F_NAMEEQ,
                         Datum::from_usize(cname.as_ptr() as usize),
                     ),
                     mk_key(
-                        Anum_pg_constraint_connamespace,
+                        ANUM_PG_CONSTRAINT_CONNAMESPACE,
                         F_OIDEQ,
                         Datum::from_oid(namespace_id),
                     ),
@@ -112,7 +115,7 @@ pub fn AfterTriggerSetState<'mcx>(mcx: Mcx<'mcx>, stmt: &ConstraintsSetStmt<'_>)
                     let deferrable = unsafe {
                         types_tuple::heap_getattr(
                             tup,
-                            Anum_pg_constraint_condeferrable,
+                            ANUM_PG_CONSTRAINT_CONDEFERRABLE,
                             td,
                             &mut isnull,
                         )
@@ -120,7 +123,7 @@ pub fn AfterTriggerSetState<'mcx>(mcx: Mcx<'mcx>, stmt: &ConstraintsSetStmt<'_>)
                     .as_bool();
                     if deferrable {
                         let oid = unsafe {
-                            types_tuple::heap_getattr(tup, Anum_pg_constraint_oid, td, &mut isnull)
+                            types_tuple::heap_getattr(tup, ANUM_PG_CONSTRAINT_OID, td, &mut isnull)
                         }
                         .as_oid();
                         conoidlist.push(oid);
@@ -152,8 +155,11 @@ pub fn AfterTriggerSetState<'mcx>(mcx: Mcx<'mcx>, stmt: &ConstraintsSetStmt<'_>)
         let mut i = 0;
         while i < conoidlist.len() {
             let parent = conoidlist[i];
-            let keys =
-                [mk_key(Anum_pg_constraint_conparentid, F_OIDEQ, Datum::from_oid(parent))];
+            let keys = [mk_key(
+                ANUM_PG_CONSTRAINT_CONPARENTID,
+                F_OIDEQ,
+                Datum::from_oid(parent),
+            )];
             let mut scan = genam::systable_beginscan(
                 mcx,
                 &conrel,
@@ -167,7 +173,7 @@ pub fn AfterTriggerSetState<'mcx>(mcx: Mcx<'mcx>, stmt: &ConstraintsSetStmt<'_>)
                 let mut isnull = false;
                 // SAFETY: declared pg_constraint column under its descriptor.
                 let oid = unsafe {
-                    types_tuple::heap_getattr(tup, Anum_pg_constraint_oid, td, &mut isnull)
+                    types_tuple::heap_getattr(tup, ANUM_PG_CONSTRAINT_OID, td, &mut isnull)
                 }
                 .as_oid();
                 conoidlist.push(oid);
@@ -180,7 +186,11 @@ pub fn AfterTriggerSetState<'mcx>(mcx: Mcx<'mcx>, stmt: &ConstraintsSetStmt<'_>)
         let mut tgoidlist: Vec<Oid> = Vec::new();
         let tgrel = table::table_open(mcx, TRIGGER_RELATION_ID, AccessShareLock)?;
         for &conoid in &conoidlist {
-            let keys = [mk_key(Anum_pg_trigger_tgconstraint, F_OIDEQ, Datum::from_oid(conoid))];
+            let keys = [mk_key(
+                ANUM_PG_TRIGGER_TGCONSTRAINT,
+                F_OIDEQ,
+                Datum::from_oid(conoid),
+            )];
             let mut scan = genam::systable_beginscan(
                 mcx,
                 &tgrel,
@@ -196,12 +206,12 @@ pub fn AfterTriggerSetState<'mcx>(mcx: Mcx<'mcx>, stmt: &ConstraintsSetStmt<'_>)
                 // SAFETY (both): declared pg_trigger columns under its
                 // descriptor.
                 let deferrable = unsafe {
-                    types_tuple::heap_getattr(tup, Anum_pg_trigger_tgdeferrable, td, &mut isnull)
+                    types_tuple::heap_getattr(tup, ANUM_PG_TRIGGER_TGDEFERRABLE, td, &mut isnull)
                 }
                 .as_bool();
                 if deferrable {
                     let oid = unsafe {
-                        types_tuple::heap_getattr(tup, Anum_pg_trigger_oid, td, &mut isnull)
+                        types_tuple::heap_getattr(tup, ANUM_PG_TRIGGER_OID, td, &mut isnull)
                     }
                     .as_oid();
                     tgoidlist.push(oid);

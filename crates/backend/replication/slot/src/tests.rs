@@ -134,12 +134,21 @@ fn checksum_covers_exact_range() {
 fn invalidation_cause_names() {
     use crate::{GetSlotInvalidationCause, GetSlotInvalidationCauseName};
     assert_eq!(GetSlotInvalidationCauseName(RS_INVAL_NONE), "none");
-    assert_eq!(GetSlotInvalidationCauseName(RS_INVAL_WAL_REMOVED), "wal_removed");
-    assert_eq!(GetSlotInvalidationCauseName(RS_INVAL_HORIZON), "rows_removed");
+    assert_eq!(
+        GetSlotInvalidationCauseName(RS_INVAL_WAL_REMOVED),
+        "wal_removed"
+    );
+    assert_eq!(
+        GetSlotInvalidationCauseName(RS_INVAL_HORIZON),
+        "rows_removed"
+    );
     assert_eq!(
         GetSlotInvalidationCauseName(RS_INVAL_WAL_LEVEL),
         "wal_level_insufficient"
     );
-    assert_eq!(GetSlotInvalidationCauseName(RS_INVAL_IDLE_TIMEOUT), "idle_timeout");
+    assert_eq!(
+        GetSlotInvalidationCauseName(RS_INVAL_IDLE_TIMEOUT),
+        "idle_timeout"
+    );
     assert_eq!(GetSlotInvalidationCause("rows_removed"), RS_INVAL_HORIZON);
 }

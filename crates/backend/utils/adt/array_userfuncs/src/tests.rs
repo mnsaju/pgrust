@@ -7,16 +7,35 @@ use ::types_error::PgResult;
 use ::types_fmgr::FunctionCallInfoBaseData as Fcinfo;
 
 fn int4_meta() -> ElemMeta {
-    ElemMeta { element_type: INT4OID, typlen: 4, typbyval: true, typalign: b'i' }
+    ElemMeta {
+        element_type: INT4OID,
+        typlen: 4,
+        typbyval: true,
+        typalign: b'i',
+    }
 }
 
 fn int4_arr<'m>(mcx: Mcx<'m>, elems: &[Option<i32>], lb: i32) -> PgVec<'m, u8> {
-    let dv: Vec<Datum> =
-        elems.iter().map(|e| Datum::from_i32(e.unwrap_or(0))).collect();
+    let dv: Vec<Datum> = elems
+        .iter()
+        .map(|e| Datum::from_i32(e.unwrap_or(0)))
+        .collect();
     let nulls: Vec<bool> = elems.iter().map(|e| e.is_none()).collect();
     let dims = [elems.len() as i32];
     let lbs = [lb];
-    construct_md_array(mcx, &dv, Some(&nulls), 1, &dims, &lbs, INT4OID, 4, true, b'i').unwrap()
+    construct_md_array(
+        mcx,
+        &dv,
+        Some(&nulls),
+        1,
+        &dims,
+        &lbs,
+        INT4OID,
+        4,
+        true,
+        b'i',
+    )
+    .unwrap()
 }
 
 fn int4_arr_md<'m>(
@@ -25,10 +44,24 @@ fn int4_arr_md<'m>(
     dims: &[i32],
     lbs: &[i32],
 ) -> PgVec<'m, u8> {
-    let dv: Vec<Datum> = elems.iter().map(|e| Datum::from_i32(e.unwrap_or(0))).collect();
+    let dv: Vec<Datum> = elems
+        .iter()
+        .map(|e| Datum::from_i32(e.unwrap_or(0)))
+        .collect();
     let nulls: Vec<bool> = elems.iter().map(|e| e.is_none()).collect();
-    construct_md_array(mcx, &dv, Some(&nulls), dims.len() as i32, dims, lbs, INT4OID, 4, true, b'i')
-        .unwrap()
+    construct_md_array(
+        mcx,
+        &dv,
+        Some(&nulls),
+        dims.len() as i32,
+        dims,
+        lbs,
+        INT4OID,
+        4,
+        true,
+        b'i',
+    )
+    .unwrap()
 }
 
 fn to_int4(mcx: Mcx<'_>, image: &[u8]) -> Vec<Option<i32>> {
@@ -42,11 +75,17 @@ fn to_int4(mcx: Mcx<'_>, image: &[u8]) -> Vec<Option<i32>> {
 
 fn dims_of(image: &[u8]) -> (i32, Vec<i32>, Vec<i32>) {
     let (nd, dims, lbs) = read_dims_lbounds(image);
-    (nd, dims[..nd as usize].to_vec(), lbs[..nd as usize].to_vec())
+    (
+        nd,
+        dims[..nd as usize].to_vec(),
+        lbs[..nd as usize].to_vec(),
+    )
 }
 
 fn fc_int4eq(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
-    Ok(Datum::from_bool(fcinfo.arg(0).as_i32() == fcinfo.arg(1).as_i32()))
+    Ok(Datum::from_bool(
+        fcinfo.arg(0).as_i32() == fcinfo.arg(1).as_i32(),
+    ))
 }
 
 fn int4eq_finfo() -> FmgrInfo {
@@ -89,7 +128,10 @@ fn append_multidim_rejected() {
     let mcx = ctx.mcx();
     let a = int4_arr_md(mcx, &[Some(1), Some(2), Some(3), Some(4)], &[2, 2], &[1, 1]);
     let err = array_append_internal(mcx, &a, Datum::from_i32(5), false, &int4_meta()).unwrap_err();
-    assert_eq!(err.message(), "argument must be empty or one-dimensional array");
+    assert_eq!(
+        err.message(),
+        "argument must be empty or one-dimensional array"
+    );
 }
 
 #[test]
@@ -143,8 +185,14 @@ fn cat_empty_identities() {
     let mcx = ctx.mcx();
     let e = construct_empty_array(mcx, INT4OID).unwrap();
     let a = int4_arr(mcx, &[Some(1)], 1);
-    assert_eq!(to_int4(mcx, &array_cat_internal(mcx, &e, &a).unwrap()), vec![Some(1)]);
-    assert_eq!(to_int4(mcx, &array_cat_internal(mcx, &a, &e).unwrap()), vec![Some(1)]);
+    assert_eq!(
+        to_int4(mcx, &array_cat_internal(mcx, &e, &a).unwrap()),
+        vec![Some(1)]
+    );
+    assert_eq!(
+        to_int4(mcx, &array_cat_internal(mcx, &a, &e).unwrap()),
+        vec![Some(1)]
+    );
     let ee = array_cat_internal(mcx, &e, &e).unwrap();
     assert_eq!(dims_of(&ee).0, 0);
 }
@@ -176,7 +224,16 @@ fn cat_dim_mismatch_errors() {
     let a = int4_arr(mcx, &[Some(1)], 1);
     let md3 = int4_arr_md(
         mcx,
-        &[Some(1), Some(2), Some(3), Some(4), Some(5), Some(6), Some(7), Some(8)],
+        &[
+            Some(1),
+            Some(2),
+            Some(3),
+            Some(4),
+            Some(5),
+            Some(6),
+            Some(7),
+            Some(8),
+        ],
         &[2, 2, 2],
         &[1, 1, 1],
     );
@@ -225,8 +282,14 @@ fn position_basics() {
         array_position_internal(mcx, &a, &s(Some(10), Some(2)), &meta, &mut eq).unwrap(),
         Some(4)
     );
-    assert_eq!(array_position_internal(mcx, &a, &s(None, None), &meta, &mut eq).unwrap(), Some(2));
-    assert_eq!(array_position_internal(mcx, &a, &s(Some(99), None), &meta, &mut eq).unwrap(), None);
+    assert_eq!(
+        array_position_internal(mcx, &a, &s(None, None), &meta, &mut eq).unwrap(),
+        Some(2)
+    );
+    assert_eq!(
+        array_position_internal(mcx, &a, &s(Some(99), None), &meta, &mut eq).unwrap(),
+        None
+    );
 
     let lb = int4_arr(mcx, &[Some(5), Some(6)], -3);
     assert_eq!(
@@ -297,19 +360,27 @@ fn agg_array_error_arms() {
     const INT4_ARRAY: Oid = 1007;
     let init = || init_array_result_arr(mcx, INT4_ARRAY, INT4OID).unwrap();
 
-    let err = accum_array_result_arr(mcx, Some(init()), None, INT4_ARRAY).err().unwrap();
+    let err = accum_array_result_arr(mcx, Some(init()), None, INT4_ARRAY)
+        .err()
+        .unwrap();
     assert_eq!(err.message(), "cannot accumulate null arrays");
 
     let empty = construct_empty_array(mcx, INT4OID).unwrap();
-    let err =
-        accum_array_result_arr(mcx, Some(init()), Some(&empty), INT4_ARRAY).err().unwrap();
+    let err = accum_array_result_arr(mcx, Some(init()), Some(&empty), INT4_ARRAY)
+        .err()
+        .unwrap();
     assert_eq!(err.message(), "cannot accumulate empty arrays");
 
     let a = int4_arr(mcx, &[Some(1), Some(2)], 1);
     let c = int4_arr(mcx, &[Some(1)], 1);
     let st = accum_array_result_arr(mcx, Some(init()), Some(&a), INT4_ARRAY).unwrap();
-    let err = accum_array_result_arr(mcx, Some(st), Some(&c), INT4_ARRAY).err().unwrap();
-    assert_eq!(err.message(), "cannot accumulate arrays of different dimensionality");
+    let err = accum_array_result_arr(mcx, Some(st), Some(&c), INT4_ARRAY)
+        .err()
+        .unwrap();
+    assert_eq!(
+        err.message(),
+        "cannot accumulate arrays of different dimensionality"
+    );
 
     let empty_state = init();
     let out = make_array_result_arr(mcx, &empty_state).unwrap();
@@ -364,9 +435,15 @@ fn trim_array_slices() {
     assert_eq!(dims_of(&out).0, 0);
 
     let err = trim_array_internal(mcx, &a, 4, 4, b'i').unwrap_err();
-    assert_eq!(err.message(), "number of elements to trim must be between 0 and 3");
+    assert_eq!(
+        err.message(),
+        "number of elements to trim must be between 0 and 3"
+    );
     let err = trim_array_internal(mcx, &a, -1, 4, b'i').unwrap_err();
-    assert_eq!(err.message(), "number of elements to trim must be between 0 and 3");
+    assert_eq!(
+        err.message(),
+        "number of elements to trim must be between 0 and 3"
+    );
 }
 
 #[test]
@@ -426,23 +503,34 @@ fn reverse_preserves_bounds_and_items() {
     assert_eq!(to_int4(mcx, &out), vec![Some(3), Some(4), Some(1), Some(2)]);
 }
 
-fn sort_int4s<'m>(
-    mcx: Mcx<'m>,
-    array: &[u8],
-    desc: bool,
-    nulls_first: bool,
-) -> PgVec<'m, u8> {
+fn sort_int4s<'m>(mcx: Mcx<'m>, array: &[u8], desc: bool, nulls_first: bool) -> PgVec<'m, u8> {
     array_sort_with(mcx, array, &int4_meta(), None, |items| {
         let mut v: Vec<NullableDatum> = items.to_vec();
         v.sort_by(|a, b| {
             use core::cmp::Ordering;
             match (a.isnull, b.isnull) {
                 (true, true) => Ordering::Equal,
-                (true, false) => if nulls_first { Ordering::Less } else { Ordering::Greater },
-                (false, true) => if nulls_first { Ordering::Greater } else { Ordering::Less },
+                (true, false) => {
+                    if nulls_first {
+                        Ordering::Less
+                    } else {
+                        Ordering::Greater
+                    }
+                }
+                (false, true) => {
+                    if nulls_first {
+                        Ordering::Greater
+                    } else {
+                        Ordering::Less
+                    }
+                }
                 (false, false) => {
                     let o = a.value.as_i32().cmp(&b.value.as_i32());
-                    if desc { o.reverse() } else { o }
+                    if desc {
+                        o.reverse()
+                    } else {
+                        o
+                    }
                 }
             }
         });
@@ -557,7 +645,10 @@ mod agg_array_serial {
         assert_eq!(back.array_type, INT4_ARRAY);
         assert_eq!(back.element_type, INT4OID);
         assert_eq!((back.abytes, back.aitems), (st.abytes, st.aitems));
-        assert_eq!((back.nbytes, back.nitems, back.ndims), (st.nbytes, st.nitems, st.ndims));
+        assert_eq!(
+            (back.nbytes, back.nitems, back.ndims),
+            (st.nbytes, st.nitems, st.ndims)
+        );
         let out = make_array_result_arr(mcx, &back).unwrap();
         assert_eq!(dims_of(&out), (2, vec![2, 2], vec![1, 1]));
         assert_eq!(to_int4(mcx, &out), vec![Some(1), Some(2), Some(3), None]);
@@ -605,6 +696,9 @@ mod agg_array_serial {
         let mut s1 = state_of(mcx, &[&[Some(1), Some(2)]]);
         let s2 = state_of(mcx, &[&[Some(1)]]);
         let err = combine_array_build_state_arr(&mut s1, &s2).err().unwrap();
-        assert_eq!(err.message(), "cannot accumulate arrays of different dimensionality");
+        assert_eq!(
+            err.message(),
+            "cannot accumulate arrays of different dimensionality"
+        );
     }
 }

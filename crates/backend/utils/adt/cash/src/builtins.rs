@@ -227,7 +227,7 @@ pub fn fc_numeric_cash(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> P
 
 pub fn fc_cash_recv(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: recv arg 0 is the live StringInfo pointer per the recv ABI.
-    let buf = unsafe { fcinfo.arg_stringinfo(0) };
+    let buf = unsafe { &mut *fcinfo.arg_stringinfo(0) };
     Ok(Datum::from_i64(crate::cash_recv(buf)?))
 }
 

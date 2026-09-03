@@ -16,7 +16,9 @@ pub mod tool;
 
 use datum::Datum;
 use types_error::{PgError, PgResult, ERRCODE_INVALID_PARAMETER_VALUE};
-use types_fmgr::{byref_result, cstring_result, FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFunction};
+use types_fmgr::{
+    byref_result, cstring_result, FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFunction,
+};
 use types_gist::GISTENTRY;
 use types_tuple::varatt;
 
@@ -84,7 +86,10 @@ pub(crate) fn detoasted_image<'m>(mcx: mcx::Mcx<'m>, d: Datum) -> PgResult<&'m [
             );
             let total = 4 + src.len();
             let mut buf: mcx::PgVec<'m, u8> = mcx::vec_with_capacity_in(mcx, total)?;
-            mcx::vec_append_bytes(&mut buf, &varatt::set_varsize_4b_word(total as u32).to_ne_bytes())?;
+            mcx::vec_append_bytes(
+                &mut buf,
+                &varatt::set_varsize_4b_word(total as u32).to_ne_bytes(),
+            )?;
             mcx::vec_append_bytes(&mut buf, src)?;
             let out = core::slice::from_raw_parts(buf.as_ptr(), buf.len());
             core::mem::forget(buf);
@@ -209,7 +214,10 @@ fn contains_core(fcinfo: &Fcinfo, ai: usize, bi: usize) -> PgResult<Datum> {
     b.check_valid()?;
     a.prepare();
     b.prepare();
-    Ok(Datum::from_bool(tool::inner_int_contains(a.elems(), b.elems())))
+    Ok(Datum::from_bool(tool::inner_int_contains(
+        a.elems(),
+        b.elems(),
+    )))
 }
 
 fn same_core(fcinfo: &Fcinfo) -> PgResult<bool> {
@@ -243,7 +251,10 @@ fn fc_int_overlap(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Da
     }
     a.sort(true);
     b.sort(true);
-    Ok(Datum::from_bool(tool::inner_int_overlap(a.elems(), b.elems())))
+    Ok(Datum::from_bool(tool::inner_int_overlap(
+        a.elems(),
+        b.elems(),
+    )))
 }
 
 fn fc_int_union(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -298,9 +309,11 @@ fn fc_sort(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
         Some(d) if d.len() == 3 && d.eq_ignore_ascii_case(b"asc") => true,
         Some(d) if d.len() == 4 && d.eq_ignore_ascii_case(b"desc") => false,
         Some(_) => {
-            return Err(PgError::error("second parameter must be \"ASC\" or \"DESC\"")
-                .with_sqlstate(ERRCODE_INVALID_PARAMETER_VALUE)
-                .into())
+            return Err(
+                PgError::error("second parameter must be \"ASC\" or \"DESC\"")
+                    .with_sqlstate(ERRCODE_INVALID_PARAMETER_VALUE)
+                    .into(),
+            )
         }
     };
     a.sort(dir);
@@ -348,7 +361,11 @@ fn fc_idx(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
 fn fc_subarray(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let a = unsafe { arg_array(fcinfo, 0)? };
     let mut start = fcinfo.arg(1).as_i32();
-    let len = if fcinfo.nargs() == 3 { fcinfo.arg(2).as_i32() } else { 0 };
+    let len = if fcinfo.nargs() == 3 {
+        fcinfo.arg(2).as_i32()
+    } else {
+        0
+    };
 
     start = if start > 0 { start - 1 } else { start };
 
@@ -493,7 +510,11 @@ fn int4_extract_query(image: &[u8], strategy: u16) -> PgResult<(Vec<i32>, i32)> 
             // No required primitive values (e.g. '!42'): full index scan.
             GIN_SEARCH_MODE_ALL
         };
-        let entries = items.iter().filter(|it| it.typ == VAL as i16).map(|it| it.val).collect();
+        let entries = items
+            .iter()
+            .filter(|it| it.typ == VAL as i16)
+            .map(|it| it.val)
+            .collect();
         Ok((entries, search_mode))
     } else {
         let arr = IntArray::from_image(image);

@@ -31,7 +31,9 @@ pub fn HeapTupleHeaderGetCmin(tup: &HeapTupleHeaderData) -> CommandId {
     let cid = tup.raw_command_id();
 
     debug_assert!((tup.t_infomask & HEAP_MOVED) == 0);
-    debug_assert!(xact_seams::transaction_id_is_current_transaction_id::call(tup.xmin()));
+    debug_assert!(xact_seams::transaction_id_is_current_transaction_id::call(
+        tup.xmin()
+    ));
 
     if (tup.t_infomask & HEAP_COMBOCID) != 0 {
         GetRealCmin(cid)
@@ -86,7 +88,10 @@ pub fn AtEOXact_ComboCid() {
 fn GetComboCommandId(cmin: CommandId, cmax: CommandId) -> CommandId {
     STATE.with(|s| {
         let mut s = s.borrow_mut();
-        let ComboCidState { comboCids, comboHash } = &mut *s;
+        let ComboCidState {
+            comboCids,
+            comboHash,
+        } = &mut *s;
         let next = comboCids.len() as CommandId;
         match comboHash.entry((cmin, cmax)) {
             std::collections::hash_map::Entry::Occupied(e) => *e.get(),
@@ -127,8 +132,12 @@ pub fn RestoreComboCIDState(state: &Arc<[(CommandId, CommandId)]>) {
         let mut s = s.borrow_mut();
         debug_assert!(s.comboCids.is_empty() && s.comboHash.is_empty());
         s.comboCids.extend_from_slice(state);
-        s.comboHash
-            .extend(state.iter().enumerate().map(|(i, &key)| (key, i as CommandId)));
+        s.comboHash.extend(
+            state
+                .iter()
+                .enumerate()
+                .map(|(i, &key)| (key, i as CommandId)),
+        );
     });
 }
 

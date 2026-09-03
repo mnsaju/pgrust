@@ -2,8 +2,9 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 
-use ::adt_geo::point::{point_above, point_below, point_eq, point_horiz, point_left,
-    point_right, point_vert};
+use ::adt_geo::point::{
+    point_above, point_below, point_eq, point_horiz, point_left, point_right, point_vert,
+};
 use ::adt_geo::proximity::box_contain_pt;
 use ::datum::Datum;
 use ::mcx::Mcx;
@@ -64,7 +65,10 @@ pub(crate) fn form_box_datum(mcx: Mcx<'_>, b: &BOX) -> PgResult<Datum> {
 pub(crate) fn orderby_traversal_bbox(input: &spgInnerConsistentIn<'_>) -> BOX {
     if input.level == 0 {
         let inf = f64::INFINITY;
-        BOX { high: Point { x: inf, y: inf }, low: Point { x: -inf, y: -inf } }
+        BOX {
+            high: Point { x: inf, y: inf },
+            low: Point { x: -inf, y: -inf },
+        }
     } else {
         debug_assert!(input.traversalValue != 0);
         // SAFETY: the parent stored a box in traversalValue on this path.
@@ -81,9 +85,8 @@ pub(crate) fn orderby_node_outputs(
 ) -> PgResult<(usize, *const f64)> {
     let box_datum = form_box_datum(input.traversalMemoryContext, child_box)?;
     // SAFETY: norderbys orderby scankeys per protocol.
-    let orderbys = unsafe {
-        core::slice::from_raw_parts(input.orderbys, input.norderbys.max(0) as usize)
-    };
+    let orderbys =
+        unsafe { core::slice::from_raw_parts(input.orderbys, input.norderbys.max(0) as usize) };
     let row = ::spgist_proc::spg_key_orderbys_distances(result_mcx, box_datum, false, orderbys)?;
     let row_ptr = row.as_ptr();
     core::mem::forget(row);
@@ -157,7 +160,11 @@ fn fc_spg_quad_choose(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResul
 
     // restDatum = PointPGetDatum(inPoint): C hands back the input pointer.
     if input.allTheSame {
-        *out = spgChooseOut::MatchNode { nodeN: 0, levelAdd: 0, restDatum: input.datum };
+        *out = spgChooseOut::MatchNode {
+            nodeN: 0,
+            levelAdd: 0,
+            restDatum: input.datum,
+        };
         return Ok(Datum::null());
     }
 
@@ -314,7 +321,11 @@ fn fc_spg_quad_inner_consistent(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) 
     out.levelAdds = level_adds.as_ptr();
     core::mem::forget(level_adds);
 
-    let bbox = if input.norderbys > 0 { Some(orderby_traversal_bbox(input)) } else { None };
+    let bbox = if input.norderbys > 0 {
+        Some(orderby_traversal_bbox(input))
+    } else {
+        None
+    };
     let mut nums: ::mcx::PgVec<'_, i32> = ::mcx::vec_with_capacity_in(mcx, 4)?;
     let mut tvals: ::mcx::PgVec<'_, usize> = ::mcx::vec_with_capacity_in(mcx, 4)?;
     let mut rows: ::mcx::PgVec<'_, *const f64> = ::mcx::vec_with_capacity_in(mcx, 4)?;
@@ -380,9 +391,8 @@ fn fc_spg_quad_leaf_consistent(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -
     if res && input.norderbys > 0 {
         // it passes -> compute the distances
         // SAFETY: norderbys orderby scankeys per protocol.
-        let orderbys = unsafe {
-            core::slice::from_raw_parts(input.orderbys, input.norderbys.max(0) as usize)
-        };
+        let orderbys =
+            unsafe { core::slice::from_raw_parts(input.orderbys, input.norderbys.max(0) as usize) };
         let row = ::spgist_proc::spg_key_orderbys_distances(
             fcinfo.result_mcx(),
             input.leafDatum,
@@ -395,14 +405,36 @@ fn fc_spg_quad_leaf_consistent(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -
     Ok(Datum::from_bool(res))
 }
 
-const fn b(foid: Oid, name: &'static str, nargs: i16, func: ::types_fmgr::PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+const fn b(
+    foid: Oid,
+    name: &'static str,
+    nargs: i16,
+    func: ::types_fmgr::PGFunction,
+) -> FmgrBuiltin {
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 pub const SPGIST_QUAD_BUILTINS: &[FmgrBuiltin] = &[
     b(4018, "spg_quad_config", 2, fc_spg_quad_config),
     b(4019, "spg_quad_choose", 2, fc_spg_quad_choose),
     b(4020, "spg_quad_picksplit", 2, fc_spg_quad_picksplit),
-    b(4021, "spg_quad_inner_consistent", 2, fc_spg_quad_inner_consistent),
-    b(4022, "spg_quad_leaf_consistent", 2, fc_spg_quad_leaf_consistent),
+    b(
+        4021,
+        "spg_quad_inner_consistent",
+        2,
+        fc_spg_quad_inner_consistent,
+    ),
+    b(
+        4022,
+        "spg_quad_leaf_consistent",
+        2,
+        fc_spg_quad_leaf_consistent,
+    ),
 ];

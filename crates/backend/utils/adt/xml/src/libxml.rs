@@ -40,8 +40,7 @@ pub const XML_SAVE_NO_DECL: c_int = 1 << 1;
 
 pub type xmlExternalEntityLoader =
     unsafe extern "C" fn(URL: *const c_char, ID: *const c_char, ctxt: *mut c_void) -> *mut c_void;
-pub type xmlStructuredErrorFunc =
-    unsafe extern "C" fn(user_data: *mut c_void, error: *mut c_void);
+pub type xmlStructuredErrorFunc = unsafe extern "C" fn(user_data: *mut c_void, error: *mut c_void);
 type xmlFreeFunc = unsafe extern "C" fn(mem: *mut c_void);
 
 // Prefixes of libxml2's public structs through the fields xml.c reads;
@@ -180,8 +179,7 @@ pub struct LibXml2 {
     pub xmlKeepBlanksDefault: unsafe extern "C" fn(val: c_int) -> c_int,
     pub xmlDocSetRootElement:
         unsafe extern "C" fn(doc: *mut xmlDoc, root: *mut xmlNode) -> *mut xmlNode,
-    pub xmlNewNode:
-        unsafe extern "C" fn(ns: *mut c_void, name: *const c_uchar) -> *mut xmlNode,
+    pub xmlNewNode: unsafe extern "C" fn(ns: *mut c_void, name: *const c_uchar) -> *mut xmlNode,
     pub xmlNewDocText:
         unsafe extern "C" fn(doc: *mut xmlDoc, content: *const c_uchar) -> *mut xmlNode,
     pub xmlAddChildList:
@@ -264,6 +262,8 @@ pub struct LibXml2 {
 impl LibXml2 {
     // xmlFree is a GLOBAL VARIABLE holding a fn pointer (xmlmemory.h);
     // calling the variable's address as code is a SIGBUS — read per call.
+    /// # Safety
+    /// `p` must be a live pointer previously allocated by libxml2 (or null).
     #[inline]
     pub unsafe fn xmlFree(&self, p: *mut c_void) {
         unsafe { (*self.xmlFreeVar)(p) }
@@ -318,8 +318,13 @@ fn load() -> Result<&'static LibXml2, String> {
                 return Err(format!("libxml2 symbol {} not found", stringify!($name)));
             }
             // SAFETY: non-null dlsym result transmuted to the C signature
-            // declared for this stable public libxml2 entry point.
-            unsafe { core::mem::transmute(p) }
+            // declared for this stable public libxml2 entry point. The
+            // target type is inferred per call site (the struct field being
+            // assigned), so a fixed turbofish annotation isn't possible here.
+            #[allow(clippy::missing_transmute_annotations)]
+            unsafe {
+                core::mem::transmute(p)
+            }
         }};
     }
     let xmlFreeVar = {
@@ -384,6 +389,8 @@ fn load() -> Result<&'static LibXml2, String> {
     })))
 }
 
+/// # Safety
+/// `node` must be a live libxml2 node.
 #[inline]
 pub unsafe fn node_type(node: *mut xmlNode) -> c_int {
     unsafe { (*(node as *const xmlNodeHdr)).type_ }
@@ -396,6 +403,8 @@ pub fn cstr(bytes: &[u8]) -> Vec<u8> {
     v
 }
 
+/// # Safety
+/// `p` must be a live, NUL-terminated libxml2 string, or null.
 pub unsafe fn xmlchar_to_vec(p: *const c_uchar) -> Vec<u8> {
     if p.is_null() {
         return Vec::new();
@@ -407,6 +416,8 @@ pub unsafe fn xmlchar_to_vec(p: *const c_uchar) -> Vec<u8> {
     }
 }
 
+/// # Safety
+/// `buf` must be a live libxml2 buffer.
 pub unsafe fn buffer_to_vec(buf: *mut xmlBuffer) -> Vec<u8> {
     // SAFETY: buf is a live xmlBuffer per caller contract.
     unsafe {

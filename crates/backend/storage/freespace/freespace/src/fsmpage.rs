@@ -19,7 +19,8 @@ pub const SLOTS_PER_FSM_PAGE: i32 = LEAF_NODES_PER_PAGE;
 pub struct FsmPage(NonNull<u8>);
 
 impl FsmPage {
-    /// SAFETY: `page` is a live BLCKSZ buffer page pinned for this value's
+    /// # Safety
+    /// `page` is a live BLCKSZ buffer page pinned for this value's
     /// lifetime; writes follow C's lock discipline.
     #[inline]
     pub unsafe fn from_raw(page: NonNull<u8>) -> FsmPage {

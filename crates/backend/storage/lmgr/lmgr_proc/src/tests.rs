@@ -121,15 +121,24 @@ fn init_proc_global_shapes() {
     thread_globals(9001);
     let hdr = ProcGlobal();
 
-    assert_eq!(hdr.allProcs.len(), (MAX_BACKENDS + NUM_AUXILIARY_PROCS + 2) as usize);
-    assert_eq!(hdr.allProcCount, (MAX_BACKENDS + NUM_AUXILIARY_PROCS) as u32);
+    assert_eq!(
+        hdr.allProcs.len(),
+        (MAX_BACKENDS + NUM_AUXILIARY_PROCS + 2) as usize
+    );
+    assert_eq!(
+        hdr.allProcCount,
+        (MAX_BACKENDS + NUM_AUXILIARY_PROCS) as u32
+    );
     assert_eq!(hdr.xids.len(), hdr.allProcs.len());
     assert_eq!(hdr.subxidStates.len(), hdr.allProcs.len());
     assert_eq!(hdr.statusFlags.len(), hdr.allProcs.len());
     assert_eq!(hdr.fpLockGroupsPerBackend, 1);
     assert_eq!(hdr.spins_per_delay.get(), DEFAULT_SPINS_PER_DELAY);
     assert_eq!(hdr.startupBufferPinWaitBufId.load(SeqCst), -1);
-    assert_eq!(SEMA_CREATED.load(SeqCst), (MAX_BACKENDS + NUM_AUXILIARY_PROCS) as usize);
+    assert_eq!(
+        SEMA_CREATED.load(SeqCst),
+        (MAX_BACKENDS + NUM_AUXILIARY_PROCS) as usize
+    );
 
     assert_eq!(AuxiliaryProcsBase(), MAX_BACKENDS);
     assert_eq!(PreparedXactProcsBase(), MAX_BACKENDS + NUM_AUXILIARY_PROCS);
@@ -141,7 +150,10 @@ fn init_proc_global_shapes() {
     let prepared = GetPGProcByNumber(PreparedXactProcsBase());
     assert!(!prepared.procLatch.is_shared.load(SeqCst));
     assert!(!GetPGProcByNumber(0).fpLockBits.get().is_null());
-    assert_eq!(GetPGProcByNumber(0).fpInfoLock.tranche, LWTRANCHE_LOCK_FASTPATH as u16);
+    assert_eq!(
+        GetPGProcByNumber(0).fpInfoLock.tranche,
+        LWTRANCHE_LOCK_FASTPATH as u16
+    );
 
     assert_eq!(
         freelist_len(FreeListId::Autovac),
@@ -189,7 +201,10 @@ fn backend_lifecycle_and_lock_groups() {
         let me = MyProc().unwrap();
         assert!(GetPGProcByNumber(me).procgloballist.get() == Some(FreeListId::Bgworker));
         assert!(BecomeLockGroupMember(leader_no, 101).unwrap());
-        assert_eq!(GetPGProcByNumber(me).lockGroupLeader.load(SeqCst), leader_no);
+        assert_eq!(
+            GetPGProcByNumber(me).lockGroupLeader.load(SeqCst),
+            leader_no
+        );
         ProcKill(0, 0);
         assert!(MyProc().is_none());
     });
@@ -314,10 +329,7 @@ fn guc_storage_and_installed_seams() {
     let node = lmgr_proc_seams::proclist_node { next: 5, prev: 6 };
     lmgr_proc_seams::set_proc_lw_wait_link::call(probe, node);
     assert_eq!(lmgr_proc_seams::proc_lw_wait_link::call(probe), node);
-    lmgr_proc_seams::set_proc_lw_wait_link::call(
-        probe,
-        lmgr_proc_seams::proclist_node::default(),
-    );
+    lmgr_proc_seams::set_proc_lw_wait_link::call(probe, lmgr_proc_seams::proclist_node::default());
 
     // The sema delegate reaches the pg_sema owner: unlock then lock returns.
     lmgr_proc_seams::pg_semaphore_unlock::call(0);

@@ -47,9 +47,7 @@ pub(crate) unsafe fn cube_payload<'a>(d: Datum) -> std::borrow::Cow<'a, [u8]> {
         } else {
             let total = varatt::varsize_any(p);
             let hdr = if varatt::varatt_is_1b(p) { 1 } else { 4 };
-            std::borrow::Cow::Owned(
-                core::slice::from_raw_parts(p.add(hdr), total - hdr).to_vec(),
-            )
+            std::borrow::Cow::Owned(core::slice::from_raw_parts(p.add(hdr), total - hdr).to_vec())
         }
     }
 }
@@ -228,7 +226,7 @@ pub fn fc_g_cube_picksplit(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> Pg
     let mut size_r = size_of_image(&datum_r);
 
     let maxoff = n - 1;
-    for i in 1..=maxoff {
+    for (i, img) in imgs.iter().enumerate().take(maxoff + 1).skip(1) {
         if i == seed_1 {
             spl_left.push(i as u16);
             continue;
@@ -239,8 +237,8 @@ pub fn fc_g_cube_picksplit(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> Pg
         }
 
         // which page needs least enlargement?
-        let union_dl = union_images(&datum_l, &imgs[i]);
-        let union_dr = union_images(&datum_r, &imgs[i]);
+        let union_dl = union_images(&datum_l, img);
+        let union_dr = union_images(&datum_r, img);
         let size_alpha = size_of_image(&union_dl);
         let size_beta = size_of_image(&union_dr);
 

@@ -16,10 +16,15 @@ pub fn raw_parser<'mcx>(
 ) -> PgResult<PgVec<'mcx, RawStmt<'mcx>>> {
     let list = gram_core::raw_parser(mcx, query_string, mode)?;
     let mut v = PgVec::new_in(mcx);
-    v.try_reserve_exact(list.len()).map_err(|_| mcx.oom(list.len()))?;
+    v.try_reserve_exact(list.len())
+        .map_err(|_| mcx.oom(list.len()))?;
     for n in list.iter() {
         let rs = n.as_raw_stmt().expect("raw_parser yields RawStmt");
-        v.push(RawStmt { stmt: rs.stmt, stmt_location: rs.stmt_location, stmt_len: rs.stmt_len });
+        v.push(RawStmt {
+            stmt: rs.stmt,
+            stmt_location: rs.stmt_location,
+            stmt_len: rs.stmt_len,
+        });
     }
     Ok(v)
 }

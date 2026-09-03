@@ -28,7 +28,9 @@ const BT_GREATER: u16 = 5;
 #[track_caller]
 #[cold]
 fn unrecognized_strategy(strategy: u16) -> Box<PgError> {
-    Box::new(PgError::error(format!("unrecognized strategy number: {strategy}")))
+    Box::new(PgError::error(format!(
+        "unrecognized strategy number: {strategy}"
+    )))
 }
 
 fn var_payload<'a>(d: Datum) -> &'a [u8] {
@@ -123,14 +125,13 @@ fn name_ref<'a>(d: Datum) -> &'a NameData {
 // parity == payload parity); realign by copy (C DatumGetNumeric; short <= 125B).
 fn aligned_num<'a>(payload: &'a [u8], buf: &'a mut [u16; 64]) -> adt_numeric::Num<'a> {
     let num = adt_numeric::Num::from_payload(payload);
-    if num.is_special() || payload.as_ptr() as usize % 2 == 0 {
+    if num.is_special() || (payload.as_ptr() as usize).is_multiple_of(2) {
         return num;
     }
     assert!(payload.len() <= 128);
     // SAFETY: u16 buffer reinterpreted as bytes, sized above payload.
-    let dst = unsafe {
-        core::slice::from_raw_parts_mut(buf.as_mut_ptr().cast::<u8>(), payload.len())
-    };
+    let dst =
+        unsafe { core::slice::from_raw_parts_mut(buf.as_mut_ptr().cast::<u8>(), payload.len()) };
     dst.copy_from_slice(payload);
     adt_numeric::Num::from_payload(dst)
 }
@@ -345,16 +346,21 @@ fn fc_internal_stub(_f: Option<&mut FmgrInfo>, _fcinfo: &mut Fcinfo) -> PgResult
 
 fn fc_gin_numeric_cmp(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: strict fn — non-null numeric varlenas.
-    let (a, b) = unsafe { (adt_numeric::builtins::num_arg(fcinfo, 0)?, adt_numeric::builtins::num_arg(fcinfo, 1)?) };
+    let (a, b) = unsafe {
+        (
+            adt_numeric::builtins::num_arg(fcinfo, 0)?,
+            adt_numeric::builtins::num_arg(fcinfo, 1)?,
+        )
+    };
     Ok(Datum::from_i32(adt_numeric::cmp_numerics(a, b)))
 }
 
-fn fc_gin_enum_cmp(mut f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+fn fc_gin_enum_cmp(f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let (a, b) = (fcinfo.arg(0).as_oid(), fcinfo.arg(1).as_oid());
     let res = if a == InvalidOid || b == InvalidOid {
         enum_sentinel_cmp(a, b)?
     } else {
-        adt_enum::enum_cmp_with_flinfo(a, b, f.as_deref_mut())?
+        adt_enum::enum_cmp_with_flinfo(a, b, f)?
     };
     Ok(Datum::from_i32(res))
 }
@@ -366,7 +372,11 @@ fn lookup(function: &str) -> Option<PGFunction> {
         "gin_enum_cmp" => return Some(fc_gin_enum_cmp),
         _ => {}
     }
-    for prefix in ["gin_extract_value_", "gin_extract_query_", "gin_compare_prefix_"] {
+    for prefix in [
+        "gin_extract_value_",
+        "gin_extract_query_",
+        "gin_compare_prefix_",
+    ] {
         if let Some(suffix) = function.strip_prefix(prefix) {
             if GinBtreeType::from_type_name(suffix).is_some() {
                 return Some(fc_internal_stub);

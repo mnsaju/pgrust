@@ -325,9 +325,7 @@ impl BtBuildPool {
     fn morsel_body(&self, range: runtime::MorselRange) -> PgResult<()> {
         let p = BT_CX.with(|c| c.get());
         if p.is_null() {
-            return Err(
-                PgError::new(ERROR, "index build morsel without a bound worker").into()
-            );
+            return Err(PgError::new(ERROR, "index build morsel without a bound worker").into());
         }
         // SAFETY: set by THIS thread's drive frame; the frame outlives the
         // drive, and run_morsel only executes on the claiming thread.
@@ -337,8 +335,13 @@ impl BtBuildPool {
 
         let mut batch: Vec<u8> = Vec::with_capacity(batch_bytes() + 512);
         let mut err: Option<Box<PgError>> = None;
-        let (mcx, heap, index, index_info, scratch) =
-            (cx.mcx, cx.heap, cx.index, &mut cx.index_info, &mut cx.scratch);
+        let (mcx, heap, index, index_info, scratch) = (
+            cx.mcx,
+            cx.heap,
+            cx.index,
+            &mut cx.index_info,
+            &mut cx.scratch,
+        );
         let reltuples = execindexing::table_index_build_range_scan_with_xmin(
             mcx,
             heap,
@@ -350,8 +353,15 @@ impl BtBuildPool {
             len,
             Some(self.oldest_xmin),
             |_index_rel, tid, values, isnull, tuple_is_alive| {
-                match self.form_record(scratch, index, tid, values, isnull, tuple_is_alive, &mut batch)
-                {
+                match self.form_record(
+                    scratch,
+                    index,
+                    tid,
+                    values,
+                    isnull,
+                    tuple_is_alive,
+                    &mut batch,
+                ) {
                     Ok(()) => {}
                     Err(e) => {
                         err = Some(e);
@@ -403,11 +413,12 @@ impl BtBuildPool {
         alive: bool,
         batch: &mut Vec<u8>,
     ) -> PgResult<()> {
-        let mut buf =
-            nbtree::itup::index_form_tuple(scratch.mcx(), &index.rd_att, values, isnull)?;
+        let mut buf = nbtree::itup::index_form_tuple(scratch.mcx(), &index.rd_att, values, isnull)?;
         // SAFETY: t_tid = first 6 bytes of the owned image (itup.h).
         unsafe {
-            buf.as_mut_ptr().cast::<ItemPointerData>().write_unaligned(*tid);
+            buf.as_mut_ptr()
+                .cast::<ItemPointerData>()
+                .write_unaligned(*tid);
         }
         let len = buf.size();
         batch.extend_from_slice(&(len as u32).to_ne_bytes());
@@ -422,9 +433,7 @@ impl BtBuildPool {
 
 /// The bound descriptor's serve: parallel::standing::pool_serve mapped onto
 /// the runtime's verdict (the M4.1 adapter shape).
-fn btbuild_pooldb_serve(
-    payload: &Arc<dyn std::any::Any + Send + Sync>,
-) -> runtime::BoundServe {
+fn btbuild_pooldb_serve(payload: &Arc<dyn std::any::Any + Send + Sync>) -> runtime::BoundServe {
     match parallel::standing::pool_serve(payload) {
         parallel::standing::PoolServe::Served => runtime::BoundServe::Served,
         parallel::standing::PoolServe::Refused => runtime::BoundServe::Refused,
@@ -439,8 +448,12 @@ fn btbuild_pooldb_serve(
 /// catalog rows — the index being built — resolve). Exit-committed unwinds
 /// (FATAL) rethrow to the pool glue.
 fn btbuild_pool_driver(shared: &parallel::ParallelShared) {
-    let Some(private) = shared.private() else { return };
-    let Ok(bp) = private.downcast::<BtBuildPool>() else { return };
+    let Some(private) = shared.private() else {
+        return;
+    };
+    let Ok(bp) = private.downcast::<BtBuildPool>() else {
+        return;
+    };
     // The submit → handle-store window: the publication wake can beat the
     // leader's rg-handle store; wait briefly (a never-stored handle
     // degrades to the drive body's fail-closed refusal).
@@ -596,7 +609,9 @@ fn pool_build_drive(bp: &Arc<BtBuildPool>) -> PgResult<()> {
 /// generation) and the standing join (close + await detach) so pool
 /// participants never outlive the leader arena.
 fn btbuild_pool_shutdown(private: &(dyn std::any::Any + Send + Sync)) {
-    let Some(bp) = private.downcast_ref::<BtBuildPool>() else { return };
+    let Some(bp) = private.downcast_ref::<BtBuildPool>() else {
+        return;
+    };
     bp.closing.store(true, SeqCst);
     bp.space.notify_all();
     if let Some(rt) = runtime::global() {
@@ -764,7 +779,9 @@ pub(crate) fn pool_feed_spools<'mcx>(
     let Some(nworkers) = pool_build_admit(heap, index_info, nblocks) else {
         return Ok(PoolFeed::Fallback);
     };
-    let Some(rt) = runtime::global() else { return Ok(PoolFeed::Fallback) };
+    let Some(rt) = runtime::global() else {
+        return Ok(PoolFeed::Fallback);
+    };
 
     // The serial scan's horizon, hoisted (one procarray read for the whole
     // build; per-tuple conservative — build_scan.rs banner).
@@ -852,8 +869,9 @@ pub(crate) fn pool_feed_spools<'mcx>(
     let (bp, entry) = engaged;
 
     static NEXT_QUERY_ID: AtomicU64 = AtomicU64::new(1);
-    let source: Arc<dyn runtime::MorselSource> =
-        Arc::new(BtBlockSource { nblocks: nblocks as u64 });
+    let source: Arc<dyn runtime::MorselSource> = Arc::new(BtBlockSource {
+        nblocks: nblocks as u64,
+    });
     let work: Arc<dyn runtime::TaskSetWork> = Arc::clone(&bp) as _;
     let descriptor = runtime::BoundDescriptor {
         serve: btbuild_pooldb_serve,
@@ -863,7 +881,11 @@ pub(crate) fn pool_feed_spools<'mcx>(
     let (rg, waiter) = rt.submit_pinned_bound_utility(
         runtime::QuerySpec {
             query_id: NEXT_QUERY_ID.fetch_add(1, SeqCst),
-            tasksets: vec![runtime::TaskSetSpec { source, work, deps: vec![] }],
+            tasksets: vec![runtime::TaskSetSpec {
+                source,
+                work,
+                deps: vec![],
+            }],
         },
         0,
         Some(runtime::WidthRequest::unbounded(nworkers.max(1) as u32)),
@@ -945,9 +967,8 @@ fn pool_leader_join(
             any = true;
             let mut off = 0usize;
             while off < batch.len() {
-                let len =
-                    u32::from_ne_bytes(batch[off..off + 4].try_into().expect("record header"))
-                        as usize;
+                let len = u32::from_ne_bytes(batch[off..off + 4].try_into().expect("record header"))
+                    as usize;
                 let alive = batch[off + 4] != 0;
                 let image = &batch[off + 5..off + 5 + len];
                 put(image, alive)?;
@@ -978,9 +999,7 @@ fn pool_leader_join(
             // the RG outcome.
             let final_drain = drain(bp, &mut consumed);
             cleanup(bp);
-            if let Err(e) = final_drain {
-                return Err(e);
-            }
+            final_drain?;
             if !traced {
                 btrace(&format!("engaged pooldb dop={}", entry.claimed()));
             }
@@ -1023,7 +1042,9 @@ fn pool_leader_join(
         if started == 0 && refused >= entry.tickets() {
             pool_drain_rg(rt, rg);
             cleanup(bp);
-            btrace(&format!("pooldb refused ({refused} refusals) — serial fallback"));
+            btrace(&format!(
+                "pooldb refused ({refused} refusals) — serial fallback"
+            ));
             debug_assert_eq!(consumed, 0, "fallback with consumed tuples");
             return Ok(PoolJoin::Fallback);
         }

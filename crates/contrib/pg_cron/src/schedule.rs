@@ -122,7 +122,13 @@ pub fn parse(schedule_text: &str) -> Result<CronSchedule, String> {
         day_of_week.matches[0] = true;
     }
 
-    Ok(CronSchedule::Fields { minute, hour, day_of_month, month, day_of_week })
+    Ok(CronSchedule::Fields {
+        minute,
+        hour,
+        day_of_month,
+        month,
+        day_of_week,
+    })
 }
 
 fn parse_field(text: &str, min: u32, max: u32, names: &[(&str, u32)]) -> Result<FieldSpec, String> {
@@ -171,7 +177,10 @@ fn parse_field(text: &str, min: u32, max: u32, names: &[(&str, u32)]) -> Result<
             };
         }
     }
-    Ok(FieldSpec { matches, is_wildcard })
+    Ok(FieldSpec {
+        matches,
+        is_wildcard,
+    })
 }
 
 fn resolve_value(text: &str, names: &[(&str, u32)]) -> Result<u32, String> {
@@ -195,8 +204,17 @@ pub fn is_due(schedule: &CronSchedule, now: BrokenDownTime) -> bool {
     match schedule {
         CronSchedule::Reboot => false,
         CronSchedule::Seconds(_) => true,
-        CronSchedule::Fields { minute, hour, day_of_month, month, day_of_week } => {
-            if !minute.contains(now.minute) || !hour.contains(now.hour) || !month.contains(now.month) {
+        CronSchedule::Fields {
+            minute,
+            hour,
+            day_of_month,
+            month,
+            day_of_week,
+        } => {
+            if !minute.contains(now.minute)
+                || !hour.contains(now.hour)
+                || !month.contains(now.month)
+            {
                 return false;
             }
             let dom_ok = day_of_month.contains(now.day_of_month);

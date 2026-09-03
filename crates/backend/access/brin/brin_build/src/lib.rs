@@ -84,8 +84,7 @@ fn initialize_brin_buildstate<'a, 'mcx>(
 fn terminate_brin_buildstate(state: BrinBuildState<'_, '_>) -> PgResult<()> {
     if state.bs_currentInsertBuf != InvalidBuffer {
         // SAFETY: pinned; unlocked freespace read, as C.
-        let page =
-            unsafe { PageRef::from_raw(buffer_get_page::call(state.bs_currentInsertBuf)) };
+        let page = unsafe { PageRef::from_raw(buffer_get_page::call(state.bs_currentInsertBuf)) };
         let freesp = page.free_space();
         let blk = buffer_get_block_number::call(state.bs_currentInsertBuf);
         release_buffer::call(state.bs_currentInsertBuf)?;
@@ -102,10 +101,8 @@ pub fn brinbuild<'mcx>(
     index: &Relation<'mcx>,
     indexInfo: &mut execindexing::IndexInfo<'mcx>,
 ) -> PgResult<BrinBuildResult> {
-    if bufmgr_seams::relation_get_number_of_blocks_in_fork::call(
-        index,
-        ForkNumber::MAIN_FORKNUM,
-    )? != 0
+    if bufmgr_seams::relation_get_number_of_blocks_in_fork::call(index, ForkNumber::MAIN_FORKNUM)?
+        != 0
     {
         panic!("index \"{}\" already contains data", index.name());
     }
@@ -148,10 +145,8 @@ pub fn brinbuild<'mcx>(
     release_buffer::call(meta)?;
 
     let (revmap, pagesPerRange) = brinRevmapInitialize(index)?;
-    let heap_blocks = bufmgr_seams::relation_get_number_of_blocks_in_fork::call(
-        heap,
-        ForkNumber::MAIN_FORKNUM,
-    )?;
+    let heap_blocks =
+        bufmgr_seams::relation_get_number_of_blocks_in_fork::call(heap, ForkNumber::MAIN_FORKNUM)?;
     let mut state = initialize_brin_buildstate(mcx, index, &revmap, pagesPerRange, heap_blocks)?;
 
     let reltuples = execindexing::table_index_build_scan(
@@ -174,7 +169,10 @@ pub fn brinbuild<'mcx>(
     terminate_brin_buildstate(state)?;
     brinRevmapTerminate(revmap)?;
 
-    Ok(BrinBuildResult { heap_tuples: reltuples, index_tuples: idxtuples })
+    Ok(BrinBuildResult {
+        heap_tuples: reltuples,
+        index_tuples: idxtuples,
+    })
 }
 
 // brinbuildCallback (serial arm).
@@ -209,7 +207,11 @@ pub fn brinbuildempty(index: &Relation<'_>) -> PgResult<()> {
     {
         // SAFETY: pinned + exclusively locked (EB_LOCK_FIRST).
         let mut page = unsafe { PageMut::from_raw(buffer_get_page::call(metabuf)) };
-        brin_metapage_init(&mut page, brin_get_pages_per_range(index), BRIN_CURRENT_VERSION);
+        brin_metapage_init(
+            &mut page,
+            brin_get_pages_per_range(index),
+            BRIN_CURRENT_VERSION,
+        );
     }
     mark_buffer_dirty::call(metabuf)?;
     ::xloginsert_seams::log_newpage_buffer::call(metabuf, true)?;
@@ -232,7 +234,7 @@ fn form_and_insert_tuple(state: &mut BrinBuildState<'_, '_>) -> PgResult<()> {
     brin_doinsert(
         state.bs_irel,
         state.bs_pagesPerRange,
-        &state.bs_rmAccess,
+        state.bs_rmAccess,
         &mut state.bs_currentInsertBuf,
         state.bs_currRangeStart,
         &tup,
@@ -259,8 +261,7 @@ fn brin_fill_empty_ranges<'mcx>(
     while blkno < nextRange {
         if state.bs_emptyTuple.is_none() {
             let mut dtuple = brin_new_memtuple(&state.bs_bdesc);
-            state.bs_emptyTuple =
-                Some(brin_form_tuple(mcx, &state.bs_bdesc, blkno, &mut dtuple)?);
+            state.bs_emptyTuple = Some(brin_form_tuple(mcx, &state.bs_bdesc, blkno, &mut dtuple)?);
         }
 
         let BrinBuildState {
@@ -313,7 +314,7 @@ fn summarize_range<'mcx>(
         &phtup,
     )?;
 
-    debug_assert!(heapBlk % state.bs_pagesPerRange == 0);
+    debug_assert!(heapBlk.is_multiple_of(state.bs_pagesPerRange));
     let scanNumBlks = if heapBlk + state.bs_pagesPerRange > heapNumBlks {
         // Possibly-partial final range: recompute the table size after the
         // placeholder insert (later extenders update the placeholder), and
@@ -350,8 +351,7 @@ fn summarize_range<'mcx>(
         postgres_seams::check_for_interrupts::call()?;
 
         let form = MemoryContext::new_bump("brin summarize newtup");
-        let newtup =
-            brin_form_tuple(form.mcx(), &state.bs_bdesc, heapBlk, &mut state.bs_dtuple)?;
+        let newtup = brin_form_tuple(form.mcx(), &state.bs_bdesc, heapBlk, &mut state.bs_dtuple)?;
         let samepage = brin_can_do_samepage_update(phbuf, phtup.len(), newtup.len());
         let didupdate = brin_doupdate(
             state.bs_irel,
@@ -527,10 +527,8 @@ pub fn brinvacuumcleanup<'mcx>(
     index: &Relation<'mcx>,
     strategy: BufferAccessStrategy,
 ) -> PgResult<(BlockNumber, f64)> {
-    let num_pages = bufmgr_seams::relation_get_number_of_blocks_in_fork::call(
-        index,
-        ForkNumber::MAIN_FORKNUM,
-    )?;
+    let num_pages =
+        bufmgr_seams::relation_get_number_of_blocks_in_fork::call(index, ForkNumber::MAIN_FORKNUM)?;
 
     let heapOid = index.rd_index.as_ref().expect("index").indrelid;
     let heapRel = table::table_open(mcx, heapOid, AccessShareLock)?;

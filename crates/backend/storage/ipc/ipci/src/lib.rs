@@ -55,7 +55,10 @@ pub fn CalculateShmemSize(cfg: &ProcGlobalConfig) -> PgResult<(usize, i32)> {
     size = shmem::add_size(size, dsm_core::dsm::dsm_estimate_size())?;
     size = shmem::add_size(size, dsm_registry::DSMRegistryShmemSize())?;
     size = shmem::add_size(size, lock::LockManagerShmemSize(cfg.max_prepared_xacts))?;
-    size = shmem::add_size(size, predicate::PredicateLockShmemSize(cfg.max_prepared_xacts))?;
+    size = shmem::add_size(
+        size,
+        predicate::PredicateLockShmemSize(cfg.max_prepared_xacts),
+    )?;
     size = shmem::add_size(size, lmgr_proc::ProcGlobalShmemSize(cfg)?)?;
     size = shmem::add_size(size, varsup::VarsupShmemSize())?;
     size = shmem::add_size(size, transam_xlog::XLOGShmemSize())?;
@@ -66,7 +69,10 @@ pub fn CalculateShmemSize(cfg: &ProcGlobalConfig) -> PgResult<(usize, i32)> {
     size = shmem::add_size(size, multixact::MultiXactShmemSize())?;
     size = shmem::add_size(size, twophase::TwoPhaseShmemSize())?;
     size = shmem::add_size(size, lwlock::LWLockShmemSize()?)?;
-    size = shmem::add_size(size, backend_status_seams::backend_status_shmem_size::call()?)?;
+    size = shmem::add_size(
+        size,
+        backend_status_seams::backend_status_shmem_size::call()?,
+    )?;
     size = shmem::add_size(size, sinval::SharedInvalShmemSize()?)?;
     size = shmem::add_size(
         size,
@@ -98,7 +104,12 @@ pub fn CreateSharedMemoryAndSemaphores(fastpath_lock_groups_per_backend: i32) ->
 
     // C reports this from PGSharedMemoryCreate; thread-shared state never
     // mmaps with MAP_HUGETLB, so huge pages are always off (never "unknown").
-    guc::SetConfigOption("huge_pages_status", Some("off"), PGC_INTERNAL, PGC_S_DYNAMIC_DEFAULT)?;
+    guc::SetConfigOption(
+        "huge_pages_status",
+        Some("off"),
+        PGC_INTERNAL,
+        PGC_S_DYNAMIC_DEFAULT,
+    )?;
 
     CreateOrAttachShmemStructs(&cfg)?;
 
@@ -113,7 +124,8 @@ pub fn CreateSharedMemoryAndSemaphores(fastpath_lock_groups_per_backend: i32) ->
         device: 0,
         inode: 0,
     }));
-    dsm_core::dsm::dsm_postmaster_startup(shim)?;
+    // SAFETY: postmaster boot, before any other backend can observe shim.
+    unsafe { dsm_core::dsm::dsm_postmaster_startup(shim)? };
 
     // shmem_startup_hook: none can exist, preload libraries are unported.
     Ok(())

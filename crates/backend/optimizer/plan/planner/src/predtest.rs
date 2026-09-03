@@ -3,7 +3,7 @@
 use core::cell::RefCell;
 use core::mem::ManuallyDrop;
 
-use mcx::{Mcx, MemoryContext, PgHashMap, PgVec};
+use mcx::{Mcx, PgHashMap, PgVec};
 use types_core::{InvalidOid, Oid, BOOLOID};
 use types_error::PgResult;
 use types_nodes::equal::equal;
@@ -114,7 +114,11 @@ fn predicate_classify<'mcx>(node: Node<'mcx>) -> (PredClass, PredIter<'mcx>) {
         return (PredClass::Or, PredIter::List(b.args.as_slice()));
     }
     if let Some(saop) = node.as_scalar_array_op_expr() {
-        let class = if saop.useOr { PredClass::Or } else { PredClass::And };
+        let class = if saop.useOr {
+            PredClass::Or
+        } else {
+            PredClass::And
+        };
         if let Some(arraynode) = saop.args.as_slice().get(1).copied() {
             if let Some(c) = arraynode.as_const() {
                 if !c.constisnull {
@@ -152,7 +156,11 @@ fn arrayconst_components<'mcx>(
     saop: &types_nodes::primnodes::ScalarArrayOpExpr<'mcx>,
 ) -> PgResult<PgVec<'mcx, Node<'mcx>>> {
     let scalar = saop.args.nth(0);
-    let arrayconst = saop.args.nth(1).as_const().expect("classified as Const array");
+    let arrayconst = saop
+        .args
+        .nth(1)
+        .as_const()
+        .expect("classified as Const array");
     let img = crate::selfuncs::varlena_image_any(mcx, arrayconst.constvalue)?;
     let elemtype = arrayfuncs::arr_elemtype(img);
     let (elmlen, elmbyval, elmalign) = lsyscache::get_typlenbyvalalign(elemtype)?;
@@ -183,7 +191,13 @@ fn arrayexpr_components<'mcx>(
     saop: &types_nodes::primnodes::ScalarArrayOpExpr<'mcx>,
 ) -> PgResult<PgVec<'mcx, Node<'mcx>>> {
     let scalar = saop.args.nth(0);
-    let elements = saop.args.nth(1).as_array_expr().expect("classified as ArrayExpr").elements.as_slice();
+    let elements = saop
+        .args
+        .nth(1)
+        .as_array_expr()
+        .expect("classified as ArrayExpr")
+        .elements
+        .as_slice();
     let mut out = PgVec::new_in(mcx);
     for &elem in elements {
         out.push(make_saop_op_expr(mcx, saop, scalar, elem)?);
@@ -462,10 +476,7 @@ fn predicate_implied_by_simple_clause<'mcx>(
 
     if let Some(predntest) = predicate.as_null_test() {
         // Strong implication of "foo IS NOT NULL" by a clause strict for foo.
-        if predntest.nulltesttype == NullTestType::IS_NOT_NULL
-            && !weak
-            && !predntest.argisrow
-        {
+        if predntest.nulltesttype == NullTestType::IS_NOT_NULL && !weak && !predntest.argisrow {
             if let Some(arg) = predntest.arg {
                 if clause_is_strict_for(clause, arg, true)? {
                     return Ok(true);
@@ -858,7 +869,11 @@ fn operator_same_subexprs_proof<'mcx>(
         return Ok(true);
     }
     let entry = lookup_proof_cache(mcx, pred_op, clause_op, refute_it)?;
-    Ok(if refute_it { entry.same_subexprs_refutes } else { entry.same_subexprs_implies })
+    Ok(if refute_it {
+        entry.same_subexprs_refutes
+    } else {
+        entry.same_subexprs_implies
+    })
 }
 
 fn get_btree_test_op<'mcx>(
@@ -868,7 +883,11 @@ fn get_btree_test_op<'mcx>(
     refute_it: bool,
 ) -> PgResult<Oid> {
     let entry = lookup_proof_cache(mcx, pred_op, clause_op, refute_it)?;
-    Ok(if refute_it { entry.refute_test_op } else { entry.implic_test_op })
+    Ok(if refute_it {
+        entry.refute_test_op
+    } else {
+        entry.implic_test_op
+    })
 }
 
 #[derive(Clone, Copy, Default)]
@@ -906,21 +925,26 @@ fn lookup_proof_cache<'mcx>(
         if slot.is_none() {
             // Backend-lifetime table (C: hash_create at first use); flushed
             // wholesale on pg_amop changes.
-            let cache_mcx =
-                ::mcx::session_root("Btree proof lookup cache").mcx();
+            let cache_mcx = ::mcx::session_root("Btree proof lookup cache").mcx();
             inval::invalidate::CacheRegisterSyscacheCallback(
                 cache_syscache::cacheinfo::AMOPOPID,
                 invalidate_opr_proof_cache_callback,
                 datum::Datum::null(),
             )?;
-            *slot = Some(ManuallyDrop::new(PgHashMap::with_capacity_in(256, cache_mcx)));
+            *slot = Some(ManuallyDrop::new(PgHashMap::with_capacity_in(
+                256, cache_mcx,
+            )));
         }
         Ok(slot.as_ref().unwrap().get(&key).copied())
     })?;
 
     let mut entry = match existing {
         Some(e) => {
-            if if refute_it { e.have_refute } else { e.have_implic } {
+            if if refute_it {
+                e.have_refute
+            } else {
+                e.have_implic
+            } {
                 return Ok(e);
             }
             e
@@ -955,8 +979,11 @@ fn lookup_proof_cache<'mcx>(
                 RC_IMPLIES_TABLE[cc][pc]
             };
 
-            let test_cmptype =
-                if refute_it { RC_REFUTE_TABLE[cc][pc] } else { RC_IMPLIC_TABLE[cc][pc] };
+            let test_cmptype = if refute_it {
+                RC_REFUTE_TABLE[cc][pc]
+            } else {
+                RC_IMPLIC_TABLE[cc][pc]
+            };
             if test_cmptype == 0 {
                 continue;
             }
@@ -1023,8 +1050,8 @@ fn lookup_proof_cache<'mcx>(
 mod tests {
     use super::*;
     use mcx::MemoryContext;
-    use types_nodes::primnodes::{BoolExpr, BoolExprType, NullTest, Var, VarReturningType};
     use types_nodes::bitmapset::Bitmapset;
+    use types_nodes::primnodes::{BoolExpr, BoolExprType, NullTest, Var, VarReturningType};
 
     fn var<'mcx>(mcx: Mcx<'mcx>, attno: i16) -> Node<'mcx> {
         Node::mk(

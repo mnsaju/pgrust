@@ -22,14 +22,18 @@ pub struct RemoteConn {
 
 impl RemoteConn {
     fn new(conn: PgConn) -> RemoteConn {
-        RemoteConn { conn, open_cursor_count: 0, new_xact_for_cursor: false }
+        RemoteConn {
+            conn,
+            open_cursor_count: 0,
+            new_xact_for_cursor: false,
+        }
     }
 }
 
 thread_local! {
     static PCONN: RefCell<Option<RemoteConn>> = const { RefCell::new(None) };
     static NAMED: RefCell<HashMap<String, RemoteConn, FxBuildHasher>> =
-        RefCell::new(HashMap::with_hasher(FxBuildHasher));
+        const { RefCell::new(HashMap::with_hasher(FxBuildHasher)) };
     static WE_CONNECT: Cell<u32> = const { Cell::new(0) };
     static WE_GET_CONN: Cell<u32> = const { Cell::new(0) };
     static WE_GET_RESULT: Cell<u32> = const { Cell::new(0) };
@@ -236,13 +240,28 @@ pub fn get_connect_string(mcx: mcx::Mcx<'_>, servername: &str) -> PgResult<Optio
     // options always carry values (grammar-enforced), so a NULL here is the
     // hand-built-text[] path C would crash on — error loudly instead.
     for opt in fdw.options.iter() {
-        append_opt(&mut buf, opt.name, opt.require_value()?, crate::fdw::FDW_CONTEXT);
+        append_opt(
+            &mut buf,
+            opt.name,
+            opt.require_value()?,
+            crate::fdw::FDW_CONTEXT,
+        );
     }
     for opt in server.options.iter() {
-        append_opt(&mut buf, opt.name, opt.require_value()?, crate::fdw::SERVER_CONTEXT);
+        append_opt(
+            &mut buf,
+            opt.name,
+            opt.require_value()?,
+            crate::fdw::SERVER_CONTEXT,
+        );
     }
     for opt in mapping.options.iter() {
-        append_opt(&mut buf, opt.name, opt.require_value()?, crate::fdw::USER_MAPPING_CONTEXT);
+        append_opt(
+            &mut buf,
+            opt.name,
+            opt.require_value()?,
+            crate::fdw::USER_MAPPING_CONTEXT,
+        );
     }
     Ok(Some(buf))
 }

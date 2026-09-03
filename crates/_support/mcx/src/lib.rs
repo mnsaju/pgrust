@@ -15,8 +15,8 @@ use core::ptr::NonNull;
 
 pub use allocator_api2::alloc::Allocator;
 
-use allocator_api2::alloc::{AllocError, Global};
 use ::types_error::{PgError, PgResult, ERRCODE_OUT_OF_MEMORY};
+use allocator_api2::alloc::{AllocError, Global};
 
 mod arena_safe;
 mod aset;
@@ -61,6 +61,10 @@ pub type PgFxHashMap<'mcx, K, V> = hashbrown::HashMap<K, V, rustc_hash::FxBuildH
 enum Backend {
     // UnsafeCell, not RefCell: palloc's hot path pays no borrow flag (see aset_mut).
     Aset(core::cell::UnsafeCell<aset::AllocSet>),
+    // Handled throughout (allocate/deallocate/grow/shrink) but not yet
+    // reachable from any public constructor — reserved for a future
+    // MCXT_MALLOC-backed context, matching C's allocator set.
+    #[allow(dead_code)]
     Malloc,
     Bump(core::cell::UnsafeCell<bump::BumpArena>),
     // Bump + drop list: leaked owned values run their destructor once at reset.
@@ -82,7 +86,9 @@ struct DropList {
 
 impl DropList {
     fn new() -> Self {
-        DropList { entries: alloc::vec::Vec::new() }
+        DropList {
+            entries: alloc::vec::Vec::new(),
+        }
     }
 
     // Pop-before-run: a panicking destructor leaks unrun entries, never double-runs.
@@ -292,9 +298,7 @@ impl<T> PoolMutex<T> {
 // ruling).
 pub fn local_pool_on() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| {
-        !std::env::var("PGRUST_MCX_POOL_STRIPE").is_ok_and(|v| v.trim() == "0")
-    })
+    *ON.get_or_init(|| !std::env::var("PGRUST_MCX_POOL_STRIPE").is_ok_and(|v| v.trim() == "0"))
 }
 
 /// Bounded per-thread free list. `Cell<Vec>` take/put keeps every access
@@ -311,7 +315,11 @@ pub(crate) struct LocalStack<T> {
 #[cfg(feature = "std")]
 impl<T> LocalStack<T> {
     pub(crate) const fn new(cap: usize, dispose: fn(T)) -> Self {
-        LocalStack { items: Cell::new(alloc::vec::Vec::new()), cap, dispose }
+        LocalStack {
+            items: Cell::new(alloc::vec::Vec::new()),
+            cap,
+            dispose,
+        }
     }
 
     pub(crate) fn take(&self) -> Option<T> {
@@ -402,7 +410,10 @@ fn child_vec_take() -> alloc::vec::Vec<AcctWeak> {
             .flatten()
             .unwrap_or_default();
     }
-    CHILD_VEC_POOL.try_with(|s| s.pop()).flatten().unwrap_or_default()
+    CHILD_VEC_POOL
+        .try_with(|s| s.pop())
+        .flatten()
+        .unwrap_or_default()
 }
 
 #[inline]
@@ -436,7 +447,7 @@ fn acct_take() -> NonNull<AcctInner> {
             // TLS empty or gone (thread exiting): fresh block.
             return acct_alloc_global();
         }
-        return acct_take_from(&ACCT_POOL);
+        acct_take_from(&ACCT_POOL)
     }
     #[cfg(test)]
     acct_alloc_global()
@@ -722,7 +733,8 @@ pub mod debug_census {
     const SLOTS: usize = 1024;
     // Open-addressed by name POINTER (each &'static str literal site is one
     // identity); snapshot merges equal strings from different sites.
-    static NAME_PTR: [AtomicPtr<u8>; SLOTS] = [const { AtomicPtr::new(core::ptr::null_mut()) }; SLOTS];
+    static NAME_PTR: [AtomicPtr<u8>; SLOTS] =
+        [const { AtomicPtr::new(core::ptr::null_mut()) }; SLOTS];
     static NAME_LEN: [AtomicUsize; SLOTS] = [const { AtomicUsize::new(0) }; SLOTS];
     static LIVE: [AtomicI64; SLOTS] = [const { AtomicI64::new(0) }; SLOTS];
 
@@ -947,7 +959,11 @@ pub struct MemoryContext {
 
 impl MemoryContext {
     pub fn new(name: &'static str) -> Self {
-        Self::with_backend(name, Backend::Aset(core::cell::UnsafeCell::new(aset::AllocSet::new())), None)
+        Self::with_backend(
+            name,
+            Backend::Aset(core::cell::UnsafeCell::new(aset::AllocSet::new())),
+            None,
+        )
     }
 
     pub fn new_bump(name: &'static str) -> Self {
@@ -987,7 +1003,11 @@ impl MemoryContext {
     }
 
     pub fn new_child_bumpforget(&self, name: &'static str) -> MemoryContext {
-        Self::with_backend(name, Backend::BumpForget(new_arena()), Some(self.acct.clone()))
+        Self::with_backend(
+            name,
+            Backend::BumpForget(new_arena()),
+            Some(self.acct.clone()),
+        )
     }
 
     pub fn new_generation(name: &'static str) -> Self {
@@ -1032,11 +1052,7 @@ impl MemoryContext {
         )
     }
 
-    fn with_backend(
-        name: &'static str,
-        backend: Backend,
-        parent: Option<AcctRc>,
-    ) -> Self {
+    fn with_backend(name: &'static str, backend: Backend, parent: Option<AcctRc>) -> Self {
         let (is_bump, kind, init_footprint, init_nblocks) = match &backend {
             Backend::Aset(_) => (false, "AllocSet", 0usize, 0usize),
             Backend::Malloc => (false, "Malloc", 0usize, 0usize),
@@ -1056,9 +1072,9 @@ impl MemoryContext {
                 (true, "Slab", a.footprint(), a.nblocks())
             }
         };
-        let limited_path = parent.as_ref().is_some_and(|p| {
-            p.limited_path.get() || p.limit.get() != usize::MAX
-        });
+        let limited_path = parent
+            .as_ref()
+            .is_some_and(|p| p.limited_path.get() || p.limit.get() != usize::MAX);
         let acct = AcctRc::new(Acct {
             name: Cell::new(name),
             ident: RefCell::new(None),
@@ -1097,7 +1113,11 @@ impl MemoryContext {
     /// Contract: set the limit before creating children (limited_path cache).
     pub fn with_limit(self, limit: usize) -> Self {
         debug_assert!(
-            self.acct.children.borrow().iter().all(|w| w.strong_count() == 0),
+            self.acct
+                .children
+                .borrow()
+                .iter()
+                .all(|w| w.strong_count() == 0),
             "with_limit must be set before creating children (limited_path cache would go stale)",
         );
         if limit != usize::MAX {
@@ -1487,16 +1507,20 @@ impl fmt::Debug for Mcx<'_> {
     }
 }
 
-// SAFETY contract for callers: one-statement &mut, never re-entered; one context, one thread.
+// Raw pointer, not `&mut`: a `&mut` returned with the input's lifetime would
+// let a caller hold two live `&mut` to the same cell (clippy::mut_from_ref).
+// Callers must dereference in the narrowest possible scope and honor the
+// original contract: one-statement borrow, never re-entered; one context,
+// one thread.
 #[inline(always)]
-unsafe fn aset_mut(set: &core::cell::UnsafeCell<aset::AllocSet>) -> &mut aset::AllocSet {
-    &mut *set.get()
+unsafe fn aset_mut(set: &core::cell::UnsafeCell<aset::AllocSet>) -> *mut aset::AllocSet {
+    set.get()
 }
 
 // SAFETY contract: as aset_mut.
 #[inline(always)]
-unsafe fn bump_mut(a: &core::cell::UnsafeCell<bump::BumpArena>) -> &mut bump::BumpArena {
-    &mut *a.get()
+unsafe fn bump_mut(a: &core::cell::UnsafeCell<bump::BumpArena>) -> *mut bump::BumpArena {
+    a.get()
 }
 
 #[inline]
@@ -1514,7 +1538,7 @@ unsafe impl Allocator for Mcx<'_> {
             Backend::Aset(set) => {
                 self.0.charge(layout.size())?;
                 // SAFETY: single-statement borrow, never re-entered (aset_mut).
-                let result = unsafe { aset_mut(set) }.alloc(layout);
+                let result = unsafe { (*aset_mut(set)).alloc(layout) };
                 if result.is_err() {
                     self.0.uncharge(layout.size());
                 }
@@ -1530,7 +1554,7 @@ unsafe impl Allocator for Mcx<'_> {
             }
             Backend::Bump(a) | Backend::BumpDrop(a, _) | Backend::BumpForget(a) => {
                 // SAFETY: single-statement borrow, never re-entered (bump_mut).
-                unsafe { bump_mut(a) }.alloc(layout, &self.0.acct)
+                unsafe { (*bump_mut(a)).alloc(layout, &self.0.acct) }
             }
             Backend::Generation(a) => {
                 // SAFETY: single-statement borrow, never re-entered (as bump_mut).
@@ -1550,7 +1574,7 @@ unsafe impl Allocator for Mcx<'_> {
                 #[cfg(test)]
                 crate::churn_probe::bump();
                 // SAFETY: single-statement borrow, never re-entered (aset_mut).
-                unsafe { aset_mut(set) }.dealloc(ptr, layout)
+                unsafe { (*aset_mut(set)).dealloc(ptr, layout) }
             }
             Backend::Malloc => {
                 self.0.uncharge(layout.size());
@@ -1561,9 +1585,7 @@ unsafe impl Allocator for Mcx<'_> {
             // bump.c: no BumpFree — bytes and charge release wholesale at reset.
             Backend::Bump(_) | Backend::BumpDrop(..) | Backend::BumpForget(_) => {}
             // SAFETY: single-statement borrow (as bump_mut); ptr/layout per trait contract.
-            Backend::Generation(a) => unsafe {
-                (*a.get()).dealloc(ptr, layout, &self.0.acct)
-            },
+            Backend::Generation(a) => unsafe { (*a.get()).dealloc(ptr, layout, &self.0.acct) },
             // SAFETY: as above.
             Backend::Slab(a) => unsafe { (*a.get()).dealloc(ptr, layout, &self.0.acct) },
         }
@@ -1581,7 +1603,7 @@ unsafe impl Allocator for Mcx<'_> {
                 let delta = new_layout.size() - old_layout.size();
                 self.0.charge(delta)?;
                 // SAFETY: single-statement borrow, never re-entered (aset_mut).
-                let result = unsafe { aset_mut(set) }.realloc(ptr, old_layout, new_layout);
+                let result = unsafe { (*aset_mut(set)).realloc(ptr, old_layout, new_layout) };
                 if result.is_err() {
                     self.0.uncharge(delta);
                 }
@@ -1598,7 +1620,7 @@ unsafe impl Allocator for Mcx<'_> {
             }
             Backend::Bump(a) | Backend::BumpDrop(a, _) | Backend::BumpForget(a) => {
                 // SAFETY: single-statement borrow (bump_mut); ptr/layouts per trait contract.
-                unsafe { bump_mut(a).grow(ptr, old_layout, new_layout, &self.0.acct) }
+                unsafe { (*bump_mut(a)).grow(ptr, old_layout, new_layout, &self.0.acct) }
             }
             // SAFETY: single-statement borrow (as bump_mut); ptr/layouts per trait contract.
             Backend::Generation(a) => unsafe {
@@ -1607,7 +1629,7 @@ unsafe impl Allocator for Mcx<'_> {
             // slab.c: realloc only tolerates the identical chunk size.
             Backend::Slab(_) => {
                 if old_layout.size() == new_layout.size()
-                    && ptr.as_ptr() as usize % new_layout.align() == 0
+                    && (ptr.as_ptr() as usize).is_multiple_of(new_layout.align())
                 {
                     Ok(NonNull::slice_from_raw_parts(ptr, new_layout.size()))
                 } else {
@@ -1626,7 +1648,7 @@ unsafe impl Allocator for Mcx<'_> {
         match &self.0.backend {
             Backend::Aset(set) => {
                 // SAFETY: single-statement borrow, never re-entered (aset_mut).
-                let result = unsafe { aset_mut(set) }.realloc(ptr, old_layout, new_layout);
+                let result = unsafe { (*aset_mut(set)).realloc(ptr, old_layout, new_layout) };
                 if result.is_ok() {
                     self.0.uncharge(old_layout.size() - new_layout.size());
                 }
@@ -1641,7 +1663,7 @@ unsafe impl Allocator for Mcx<'_> {
             }
             // GenerationRealloc: a shrink stays in place (oldsize >= size branch).
             Backend::Generation(a) => {
-                if ptr.as_ptr() as usize % new_layout.align() == 0 {
+                if (ptr.as_ptr() as usize).is_multiple_of(new_layout.align()) {
                     return Ok(NonNull::slice_from_raw_parts(ptr, new_layout.size()));
                 }
                 // SAFETY: single-statement borrow (as bump_mut); copy fits new_layout.
@@ -1659,7 +1681,7 @@ unsafe impl Allocator for Mcx<'_> {
             }
             Backend::Slab(_) => {
                 if old_layout.size() == new_layout.size()
-                    && ptr.as_ptr() as usize % new_layout.align() == 0
+                    && (ptr.as_ptr() as usize).is_multiple_of(new_layout.align())
                 {
                     Ok(NonNull::slice_from_raw_parts(ptr, new_layout.size()))
                 } else {
@@ -1668,12 +1690,12 @@ unsafe impl Allocator for Mcx<'_> {
             }
             // bump.c model: narrow in place, nothing to uncharge.
             Backend::Bump(a) | Backend::BumpDrop(a, _) | Backend::BumpForget(a) => {
-                if ptr.as_ptr() as usize % new_layout.align() == 0 {
+                if (ptr.as_ptr() as usize).is_multiple_of(new_layout.align()) {
                     return Ok(NonNull::slice_from_raw_parts(ptr, new_layout.size()));
                 }
                 // SAFETY: single-statement borrow (bump_mut); copy fits new_layout.
                 unsafe {
-                    let new = bump_mut(a).alloc(new_layout, &self.0.acct)?;
+                    let new = (*bump_mut(a)).alloc(new_layout, &self.0.acct)?;
                     core::ptr::copy_nonoverlapping(
                         ptr.as_ptr(),
                         new.cast::<u8>().as_ptr(),
@@ -1695,7 +1717,10 @@ pub const MAX_ALLOC_HUGE_SIZE: usize = usize::MAX / 2;
 
 #[cold]
 fn invalid_alloc_size(request: usize) -> alloc::boxed::Box<PgError> {
-    PgError::error(alloc::format!("invalid memory alloc request size {request}")).into()
+    PgError::error(alloc::format!(
+        "invalid memory alloc request size {request}"
+    ))
+    .into()
 }
 
 #[inline]
@@ -1710,8 +1735,7 @@ pub fn check_alloc_size(request: usize) -> PgResult<()> {
 #[inline]
 pub fn alloc_in<'mcx, T>(mcx: Mcx<'mcx>, value: T) -> PgResult<PgBox<'mcx, T>> {
     check_alloc_size(core::mem::size_of::<T>())?;
-    PgBox::try_new_in(value, mcx)
-        .map_err(|_| mcx.oom(core::mem::size_of::<T>()).into())
+    PgBox::try_new_in(value, mcx).map_err(|_| mcx.oom(core::mem::size_of::<T>()).into())
 }
 
 pub fn alloc_leak_in<'mcx, T>(mcx: Mcx<'mcx>, value: T) -> PgResult<&'mcx T> {
@@ -1728,11 +1752,8 @@ pub fn leak_in<'mcx, T>(b: PgBox<'mcx, T>) -> &'mcx mut T {
 /// BumpDrop leak: registers the destructor; droppy `T` is the point.
 pub fn arena_leak<'mcx, T>(b: PgBox<'mcx, T>) -> &'mcx mut T {
     // Register the raw pointer, then return a CHILD retag (a sibling would be invalidated: the SB trap).
-    let (raw, alloc): (*mut T, Mcx<'mcx>) =
-        allocator_api2::boxed::Box::into_raw_with_allocator(b);
-    let addr = core::ptr::with_exposed_provenance_mut::<u8>(
-        (raw as *mut u8).expose_provenance(),
-    );
+    let (raw, alloc): (*mut T, Mcx<'mcx>) = allocator_api2::boxed::Box::into_raw_with_allocator(b);
+    let addr = core::ptr::with_exposed_provenance_mut::<u8>((raw as *mut u8).expose_provenance());
     // SAFETY: live T unboxed into `alloc`'s arena, Drop suppressed; glue is the unique destructor.
     let registered = unsafe { alloc.context().register_drop(addr, drop_glue::<T>) };
     debug_assert!(
@@ -1746,8 +1767,7 @@ pub fn arena_leak<'mcx, T>(b: PgBox<'mcx, T>) -> &'mcx mut T {
 
 pub fn arena_box_in<'mcx, T>(mcx: Mcx<'mcx>, value: T) -> PgResult<&'mcx mut T> {
     check_alloc_size(core::mem::size_of::<T>())?;
-    let b = PgBox::try_new_in(value, mcx)
-        .map_err(|_| mcx.oom(core::mem::size_of::<T>()))?;
+    let b = PgBox::try_new_in(value, mcx).map_err(|_| mcx.oom(core::mem::size_of::<T>()))?;
     Ok(arena_leak(b))
 }
 
@@ -1757,14 +1777,17 @@ pub fn arena_vec_in<'mcx, T>(
     vec: PgVec<'mcx, T>,
 ) -> PgResult<&'mcx mut PgVec<'mcx, T>> {
     check_alloc_size(core::mem::size_of::<PgVec<'mcx, T>>())?;
-    let b = PgBox::try_new_in(vec, mcx)
-        .map_err(|_| mcx.oom(core::mem::size_of::<PgVec<'mcx, T>>()))?;
+    let b =
+        PgBox::try_new_in(vec, mcx).map_err(|_| mcx.oom(core::mem::size_of::<PgVec<'mcx, T>>()))?;
     let (raw, alloc): (*mut PgVec<'mcx, T>, Mcx<'mcx>) =
         allocator_api2::boxed::Box::into_raw_with_allocator(b);
-    let addr =
-        core::ptr::with_exposed_provenance_mut::<u8>((raw as *mut u8).expose_provenance());
+    let addr = core::ptr::with_exposed_provenance_mut::<u8>((raw as *mut u8).expose_provenance());
     // SAFETY: live header leaked into `alloc`'s arena; element-only glue is the unique destructor.
-    let registered = unsafe { alloc.context().register_drop(addr, drop_glue_vec_elems::<T>) };
+    let registered = unsafe {
+        alloc
+            .context()
+            .register_drop(addr, drop_glue_vec_elems::<T>)
+    };
     debug_assert!(
         registered || !core::mem::needs_drop::<T>(),
         "arena_vec_in: Vec of a Drop element type leaked into a non-BumpDrop \
@@ -1780,10 +1803,8 @@ pub fn arena_string_in<'mcx>(
     s: PgString<'mcx>,
 ) -> PgResult<&'mcx mut PgString<'mcx>> {
     let b = alloc_in(mcx, s)?;
-    let raw: *mut PgString<'mcx> =
-        allocator_api2::boxed::Box::into_raw_with_allocator(b).0;
-    let addr =
-        core::ptr::with_exposed_provenance_mut::<u8>((raw as *mut u8).expose_provenance());
+    let raw: *mut PgString<'mcx> = allocator_api2::boxed::Box::into_raw_with_allocator(b).0;
+    let addr = core::ptr::with_exposed_provenance_mut::<u8>((raw as *mut u8).expose_provenance());
     // SAFETY: PgString's only Drop is its POD-element Vec<u8>'s.
     let registered = unsafe { mcx.context().register_drop(addr, drop_glue_noop) };
     debug_assert!(registered, "arena_string_in: use a BumpDrop context");
@@ -1798,10 +1819,7 @@ pub fn forget_box_in<'mcx, T: ForgetSafe>(mcx: Mcx<'mcx>, value: T) -> PgResult<
     Ok(PgBox::leak(alloc_in(mcx, value)?))
 }
 
-pub fn arena_box_in_forget<'mcx, T: ArenaSafe>(
-    mcx: Mcx<'mcx>,
-    value: T,
-) -> PgResult<&'mcx mut T> {
+pub fn arena_box_in_forget<'mcx, T: ArenaSafe>(mcx: Mcx<'mcx>, value: T) -> PgResult<&'mcx mut T> {
     const { assert!(!core::mem::needs_drop::<T>()) };
     debug_assert!(
         mcx.context().is_bumpforget(),
@@ -1847,7 +1865,10 @@ where
 }
 
 /// Move payload `P` out of an unsized `PgBox` without dropping `P`.
-/// # Safety: `data` — the payload's data pointer inside `sized`; runtime type `P` (tag-checked).
+///
+/// # Safety
+/// `data` — the payload's data pointer inside `sized`; runtime type `P`
+/// (tag-checked).
 pub unsafe fn box_read_payload<'mcx, P, U>(sized: PgBox<'mcx, U>, data: *const P) -> P
 where
     P: 'mcx,
@@ -1898,7 +1919,9 @@ pub fn vec_with_capacity_in<'mcx, T>(mcx: Mcx<'mcx>, cap: usize) -> PgResult<PgV
     }
     // Thin shell: alloc via non-generic `alloc_uninit_bytes` (no per-T grow machinery).
     let layout = core::alloc::Layout::array::<T>(cap).map_err(|_| mcx.oom(request))?;
-    let p = mcx.alloc_uninit_bytes(layout).map_err(|_| mcx.oom(request))?;
+    let p = mcx
+        .alloc_uninit_bytes(layout)
+        .map_err(|_| mcx.oom(request))?;
     // SAFETY: `p` is a fresh arena allocation of exactly `Layout::array::<T>(cap)`
     // bytes from `mcx`; len 0 with capacity `cap` (the same layout Vec recomputes
     // on grow/drop), matching this allocator.
@@ -1910,10 +1933,7 @@ pub fn vec_with_capacity_in<'mcx, T>(mcx: Mcx<'mcx>, cap: usize) -> PgResult<PgV
 /// `MaxAllocSize`. simplehash's default `SH_ALLOCATE` allocates its element
 /// array this way, so hash-table bucket arrays may legally exceed 1GB.
 #[inline]
-pub fn vec_with_capacity_huge_in<'mcx, T>(
-    mcx: Mcx<'mcx>,
-    cap: usize,
-) -> PgResult<PgVec<'mcx, T>> {
+pub fn vec_with_capacity_huge_in<'mcx, T>(mcx: Mcx<'mcx>, cap: usize) -> PgResult<PgVec<'mcx, T>> {
     const { assert!(!core::mem::needs_drop::<T>()) };
     let request = cap.saturating_mul(core::mem::size_of::<T>());
     if request > MAX_ALLOC_HUGE_SIZE {

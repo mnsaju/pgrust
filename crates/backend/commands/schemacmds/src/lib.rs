@@ -18,9 +18,9 @@ use types_nodes::NodeList;
 use types_rel::{NoLock, Relation, RowExclusiveLock};
 use types_tuple::{HeapTupleData, NameData, TupleDescData};
 
-const Anum_pg_namespace_nspname: i32 = 2;
-const Anum_pg_namespace_nspowner: i32 = 3;
-const Anum_pg_namespace_nspacl: i32 = 4;
+const ANUM_PG_NAMESPACE_NSPNAME: i32 = 2;
+const ANUM_PG_NAMESPACE_NSPOWNER: i32 = 3;
+const ANUM_PG_NAMESPACE_NSPACL: i32 = 4;
 
 // check_can_set_role (acl.c).
 fn check_can_set_role(mcx: Mcx<'_>, member: Oid, role: Oid) -> PgResult<()> {
@@ -49,10 +49,9 @@ pub fn CreateSchemaCommand<'mcx>(
     let (saved_uid, save_sec_context) = miscinit::GetUserIdAndSecContext();
 
     let owner_uid = match stmt.authrole {
-        Some(role) => aclchk::get_rolespec_oid(
-            role.as_role_spec().expect("authrole is a RoleSpec"),
-            false,
-        )?,
+        Some(role) => {
+            aclchk::get_rolespec_oid(role.as_role_spec().expect("authrole is a RoleSpec"), false)?
+        }
         None => saved_uid,
     };
 
@@ -61,8 +60,7 @@ pub fn CreateSchemaCommand<'mcx>(
     let schema_name = match stmt.schemaname {
         Some(s) => s,
         None => {
-            owner_name =
-                miscinit::GetUserNameFromId(mcx, owner_uid, false)?.expect("noerr=false");
+            owner_name = miscinit::GetUserNameFromId(mcx, owner_uid, false)?.expect("noerr=false");
             owner_name.as_str()
         }
     };
@@ -74,13 +72,9 @@ pub fn CreateSchemaCommand<'mcx>(
         adt_acl::ACL_CREATE,
     )?;
     if aclresult != aclchk::ACLCHECK_OK {
-        let dbname = dbcommands::get_database_name(init_small::globals::MyDatabaseId())?
-            .unwrap_or_default();
-        aclchk_seams::aclcheck_error::call(
-            aclresult,
-            ObjectType::OBJECT_DATABASE as i32,
-            &dbname,
-        )?;
+        let dbname =
+            dbcommands::get_database_name(init_small::globals::MyDatabaseId())?.unwrap_or_default();
+        aclchk_seams::aclcheck_error::call(aclresult, ObjectType::OBJECT_DATABASE as i32, &dbname)?;
     }
 
     check_can_set_role(mcx, saved_uid, owner_uid)?;
@@ -93,16 +87,18 @@ pub fn CreateSchemaCommand<'mcx>(
         ));
     }
 
-    if stmt.if_not_exists
-        && catalog_namespace::get_namespace_oid(schema_name, true)? != InvalidOid
+    if stmt.if_not_exists && catalog_namespace::get_namespace_oid(schema_name, true)? != InvalidOid
     {
         // C: checkMembershipInCurrentExtension guards extension scripts
         // reusing pre-existing schemas; extension-script state is loud at the
         // extension lane, so the pre-existing-object hole cannot be reached
         // silently here.
         elog_seams::ereport::call(
-            PgError::new(NOTICE, format!("schema \"{schema_name}\" already exists, skipping"))
-                .with_sqlstate(types_error::ERRCODE_DUPLICATE_SCHEMA),
+            PgError::new(
+                NOTICE,
+                format!("schema \"{schema_name}\" already exists, skipping"),
+            )
+            .with_sqlstate(types_error::ERRCODE_DUPLICATE_SCHEMA),
         )?;
         return Ok(InvalidOid);
     }
@@ -124,7 +120,9 @@ pub fn CreateSchemaCommand<'mcx>(
     // it on error).
     let save_nestlevel = guc::NewGUCNestLevel();
     let mut pathbuf = String::from_utf8(
-        adt_quote::quote_identifier(mcx, schema_name.as_bytes())?.as_bytes().to_vec(),
+        adt_quote::quote_identifier(mcx, schema_name.as_bytes())?
+            .as_bytes()
+            .to_vec(),
     )
     .expect("identifier is UTF-8");
     let nsp = guc::GetConfigOption("search_path", false, false)?.unwrap_or_default();
@@ -194,8 +192,8 @@ fn database_create_aclcheck() -> PgResult<()> {
         adt_acl::ACL_CREATE,
     )?;
     if aclresult != aclchk::ACLCHECK_OK {
-        let dbname = dbcommands::get_database_name(init_small::globals::MyDatabaseId())?
-            .unwrap_or_default();
+        let dbname =
+            dbcommands::get_database_name(init_small::globals::MyDatabaseId())?.unwrap_or_default();
         aclchk::aclcheck_error(aclresult, ObjectType::OBJECT_DATABASE, &dbname)?;
     }
     Ok(())
@@ -240,7 +238,11 @@ pub fn RenameSchema<'mcx>(mcx: Mcx<'mcx>, oldname: &str, newname: &str) -> PgRes
     }
 
     if !aclchk::object_ownercheck(NAMESPACE_RELATION_ID, nsp_oid, miscinit::GetUserId())? {
-        aclchk::aclcheck_error(aclchk::ACLCHECK_NOT_OWNER, ObjectType::OBJECT_SCHEMA, oldname)?;
+        aclchk::aclcheck_error(
+            aclchk::ACLCHECK_NOT_OWNER,
+            ObjectType::OBJECT_SCHEMA,
+            oldname,
+        )?;
     }
     database_create_aclcheck()?;
 
@@ -258,7 +260,10 @@ pub fn RenameSchema<'mcx>(mcx: Mcx<'mcx>, oldname: &str, newname: &str) -> PgRes
         mcx,
         td,
         oldtup,
-        &[(Anum_pg_namespace_nspname, Datum::from_usize(name.data.as_ptr() as usize))],
+        &[(
+            ANUM_PG_NAMESPACE_NSPNAME,
+            Datum::from_usize(name.data.as_ptr() as usize),
+        )],
     )?;
     let otid = oldtup.t_self;
     genam::systable_endscan(mcx, scan)?;
@@ -300,18 +305,23 @@ fn AlterSchemaOwner_internal<'mcx>(
         ))));
     };
 
-    let old_owner = getattr(td, tup, Anum_pg_namespace_nspowner).0.as_oid();
+    let old_owner = getattr(td, tup, ANUM_PG_NAMESPACE_NSPOWNER).0.as_oid();
     if old_owner == newOwnerId {
         return genam::systable_endscan(mcx, scan);
     }
 
     if !aclchk::object_ownercheck(NAMESPACE_RELATION_ID, nsp_oid, miscinit::GetUserId())? {
-        let d = getattr(td, tup, Anum_pg_namespace_nspname).0;
+        let d = getattr(td, tup, ANUM_PG_NAMESPACE_NSPNAME).0;
         // SAFETY: a name attr datum addresses NAMEDATALEN in-tuple bytes.
         let nspname = unsafe { core::ptr::read_unaligned(d.as_usize() as *const NameData) };
-        let nspname =
-            core::str::from_utf8(nspname.name_str()).expect("catalog name is UTF-8").to_string();
-        aclchk::aclcheck_error(aclchk::ACLCHECK_NOT_OWNER, ObjectType::OBJECT_SCHEMA, &nspname)?;
+        let nspname = core::str::from_utf8(nspname.name_str())
+            .expect("catalog name is UTF-8")
+            .to_string();
+        aclchk::aclcheck_error(
+            aclchk::ACLCHECK_NOT_OWNER,
+            ObjectType::OBJECT_SCHEMA,
+            &nspname,
+        )?;
     }
 
     // check_can_set_role (acl.c).
@@ -328,15 +338,18 @@ fn AlterSchemaOwner_internal<'mcx>(
     database_create_aclcheck()?;
 
     let mut replacements: Vec<(i32, Datum)> =
-        vec![(Anum_pg_namespace_nspowner, Datum::from_oid(newOwnerId))];
+        vec![(ANUM_PG_NAMESPACE_NSPOWNER, Datum::from_oid(newOwnerId))];
     let acl_img;
-    let (acl_datum, isnull) = getattr(td, tup, Anum_pg_namespace_nspacl);
+    let (acl_datum, isnull) = getattr(td, tup, ANUM_PG_NAMESPACE_NSPACL);
     if !isnull {
         let new_acl = aclchk::with_acl_datum(acl_datum, |acl| {
             adt_acl::aclnewowner(mcx, acl, old_owner, newOwnerId)
         })?;
         acl_img = adt_acl::varlena::acl_image(mcx, &new_acl)?;
-        replacements.push((Anum_pg_namespace_nspacl, Datum::from_usize(acl_img.as_ptr() as usize)));
+        replacements.push((
+            ANUM_PG_NAMESPACE_NSPACL,
+            Datum::from_usize(acl_img.as_ptr() as usize),
+        ));
     }
 
     let mut newtup = modify_tuple(mcx, td, tup, &replacements)?;

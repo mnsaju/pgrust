@@ -121,8 +121,12 @@ fn process_boot(dir: &PathBuf) {
     let ctl = transam_xlog::ctl::XLogCtl();
     ctl.InsertTimeLineID.store(1, Relaxed);
     ctl.PrevTimeLineID.store(1, Relaxed);
-    ctl.Insert.CurrBytePos.store(XLogRecPtrToBytePos(END_OF_LOG), Relaxed);
-    ctl.Insert.PrevBytePos.store(XLogRecPtrToBytePos(prev_rec), Relaxed);
+    ctl.Insert
+        .CurrBytePos
+        .store(XLogRecPtrToBytePos(END_OF_LOG), Relaxed);
+    ctl.Insert
+        .PrevBytePos
+        .store(XLogRecPtrToBytePos(prev_rec), Relaxed);
     ctl.Insert.fullPageWrites.store(true, Relaxed);
     ctl.Insert.RedoRecPtr.store(prev_rec, Relaxed);
     ctl.RedoRecPtr.store(prev_rec, Relaxed);
@@ -143,7 +147,10 @@ fn install_stub_seams() {
     stub!(pg_sema_seams::pg_semaphore_reset, |_| {});
     stub!(pg_sema_seams::pg_semaphore_lock, |_| {});
     stub!(pg_sema_seams::pg_semaphore_unlock, |_| {});
-    stub!(s_lock_seams::perform_spin_delay, |_| std::thread::yield_now());
+    stub!(
+        s_lock_seams::perform_spin_delay,
+        |_| std::thread::yield_now()
+    );
     stub!(s_lock_seams::finish_spin_delay, |_| {});
     stub!(s_lock_seams::set_spins_per_delay, |_| {});
     stub!(s_lock_seams::update_spins_per_delay, |v| v);
@@ -165,7 +172,10 @@ fn install_stub_seams() {
     stub!(deadlock_seams::init_dead_lock_checking, || Ok(()));
     stub!(pmsignal_seams::register_postmaster_child_active, || {});
     stub!(syncrep_seams::sync_rep_cleanup_at_proc_exit, || {});
-    stub!(condition_variable_seams::condition_variable_cancel_sleep, || false);
+    stub!(
+        condition_variable_seams::condition_variable_cancel_sleep,
+        || false
+    );
     stub!(autovacuum_seams::wake_autovacuum_launcher, || {});
     stub!(lock_seams::abort_strong_lock_acquire, || {});
     stub!(lock_seams::get_awaited_lock_hashcode, || None);

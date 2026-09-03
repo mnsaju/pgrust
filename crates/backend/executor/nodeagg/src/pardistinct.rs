@@ -39,7 +39,7 @@
 //! leader memory stays budget-bounded and spilled sets replay through the
 //! existing spilled-set machinery at finalize.
 
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::Arc;
 
 use ::datum::Datum;
 use ::executils::{EStateData, EcxtId, ExecSlotId};
@@ -110,7 +110,10 @@ fn pack_span(off: usize, len: usize) -> i64 {
 
 #[inline]
 fn unpack_span(word: i64) -> (usize, usize) {
-    ((word as u64 >> 32) as usize, (word as u64 & 0xffff_ffff) as usize)
+    (
+        (word as u64 >> 32) as usize,
+        (word as u64 & 0xffff_ffff) as usize,
+    )
 }
 
 /// Chain a byte string into a running key hash: splitmix64 over 8-byte LE
@@ -226,7 +229,9 @@ pub fn pd_vec_plan(spec: &PdSpec) -> Option<PdVecPlan> {
     if spec.nkeys() != 1 || spec.sets.len() != 1 {
         return None;
     }
-    let PdKeyKind::Int(key_kind) = spec.key_kinds[0] else { return None };
+    let PdKeyKind::Int(key_kind) = spec.key_kinds[0] else {
+        return None;
+    };
     let set_kind = match spec.sets[0].kind {
         DistinctKeyKind::Int16 => PdInt::I16,
         DistinctKeyKind::Int32 => PdInt::I32,
@@ -262,7 +267,9 @@ impl PdSpec {
     /// context per row).
     #[inline]
     pub fn any_bytes_set(&self) -> bool {
-        self.sets.iter().any(|s| matches!(s.kind, DistinctKeyKind::Bytes))
+        self.sets
+            .iter()
+            .any(|s| matches!(s.kind, DistinctKeyKind::Bytes))
     }
 
     /// Any canonical-bytes GROUP KEY component (distinct-bytes car).
@@ -277,7 +284,6 @@ impl PdSpec {
     pub fn any_bytes(&self) -> bool {
         self.has_bytes_keys() || self.any_bytes_set()
     }
-
 }
 
 // ===========================================================================
@@ -338,9 +344,7 @@ fn pd_grow_project_enabled() -> bool {
 /// geometry denominator) sees fewer rows.
 fn pd_run_memo_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| {
-        std::env::var("PGRUST_RUNTIME_DISTINCT_RUN_MEMO").map_or(true, |v| v != "0")
-    })
+    *ON.get_or_init(|| std::env::var("PGRUST_RUNTIME_DISTINCT_RUN_MEMO").map_or(true, |v| v != "0"))
 }
 
 /// GL-VECACCEPT-1 probe-pass look-ahead distance: while resolving lane row
@@ -430,9 +434,8 @@ fn stage_bytes_keys(
         // SAFETY: non-null live text/varchar varlena (the leader's
         // admission proved the column type); detoast copies land in
         // per-tuple memory.
-        let v = unsafe {
-            ::types_fmgr::datum_varlena_packed(value, estate.ecxt(tmp).per_tuple_mcx())
-        }?;
+        let v =
+            unsafe { ::types_fmgr::datum_varlena_packed(value, estate.ecxt(tmp).per_tuple_mcx()) }?;
         let off = buf.len();
         buf.extend_from_slice(v.data());
         spans[i] = (off as u32, (buf.len() - off) as u32);
@@ -532,10 +535,8 @@ const MEMO_KEYS: usize = 4;
 impl<'mcx> PdBuilder<'mcx> {
     pub fn new(spec: Arc<PdSpec>, budget: usize, mcx: Option<Mcx<'mcx>>) -> Self {
         let nprobe = spec.nkeys();
-        let memo_on = pd_run_memo_enabled()
-            && !spec.has_bytes_keys()
-            && nprobe > 0
-            && nprobe <= MEMO_KEYS;
+        let memo_on =
+            pd_run_memo_enabled() && !spec.has_bytes_keys() && nprobe > 0 && nprobe <= MEMO_KEYS;
         PdBuilder {
             spec,
             table: vec![0u32; INIT_TABLE],
@@ -707,8 +708,7 @@ impl<'mcx> PdBuilder<'mcx> {
         // window (honest budget accounting).
         let expected = self.spec.expected_worker_rows;
         if expected > 0 && pd_grow_project_enabled() {
-            let ratio =
-                (expected as f64 / self.staged_rows.max(1) as f64).clamp(1.0, 64.0);
+            let ratio = (expected as f64 / self.staged_rows.max(1) as f64).clamp(1.0, 64.0);
             for &g in &self.stage_touch {
                 let d = &mut self.dsets[g as usize];
                 let len = d.len();
@@ -776,7 +776,8 @@ impl<'mcx> PdBuilder<'mcx> {
         vs.hashes.clear();
         vs.hashes.reserve(n);
         const SEED: u64 = 0x9e37_79b9_7f4a_7c15;
-        vs.hashes.extend(keys.iter().map(|&k| mix64(SEED ^ (k as u64))));
+        vs.hashes
+            .extend(keys.iter().map(|&k| mix64(SEED ^ (k as u64))));
         debug_assert!(n == 0 || vs.hashes[0] == key_hash(&keys[..1], 0));
         // Phase 2: probe/resolve with K-ahead slot-word prefetch. A grow
         // mid-pass re-bases the table — the hints are stale but harmless
@@ -923,13 +924,7 @@ impl<'mcx> PdBuilder<'mcx> {
         true
     }
 
-    fn probe(
-        &self,
-        words: &[i64],
-        nulls: u32,
-        h: u64,
-        src: &KeySrc<'_>,
-    ) -> (Option<u32>, usize) {
+    fn probe(&self, words: &[i64], nulls: u32, h: u64, src: &KeySrc<'_>) -> (Option<u32>, usize) {
         let mask = self.table.len() - 1;
         let mut slot = (h as usize) & mask;
         loop {
@@ -981,7 +976,8 @@ impl<'mcx> PdBuilder<'mcx> {
                 }
             }
         }
-        self.states.extend(core::iter::repeat(0i64).take(2 * self.spec.vocab.len()));
+        self.states
+            .extend(std::iter::repeat_n(0i64, 2 * self.spec.vocab.len()));
         for _ in 0..self.spec.sets.len() {
             self.dsets.push(DistinctSet::new());
         }
@@ -1064,8 +1060,7 @@ impl<'mcx> PdBuilder<'mcx> {
     #[cfg(test)]
     fn set_run_memo(&mut self, on: bool) {
         let nprobe = self.spec.nkeys();
-        self.memo_on =
-            on && !self.spec.has_bytes_keys() && nprobe > 0 && nprobe <= MEMO_KEYS;
+        self.memo_on = on && !self.spec.has_bytes_keys() && nprobe > 0 && nprobe <= MEMO_KEYS;
         self.memo_g = u32::MAX;
         self.last_sg = u32::MAX;
     }
@@ -1092,8 +1087,12 @@ impl<'mcx> PdBuilder<'mcx> {
         let mut nulls = 0u32;
         {
             let base = estate.slot_mut(id).base();
-            for (i, (&att, &kind)) in
-                self.spec.key_atts.iter().zip(self.spec.key_kinds.iter()).enumerate()
+            for (i, (&att, &kind)) in self
+                .spec
+                .key_atts
+                .iter()
+                .zip(self.spec.key_kinds.iter())
+                .enumerate()
             {
                 if base.tts_isnull[att as usize] {
                     nulls |= 1 << i;
@@ -1297,8 +1296,7 @@ impl<'mcx> PdBuilder<'mcx> {
             |(ti, ts, tb), (si, d)| match spec.sets[si % nsets.max(1)].kind {
                 DistinctKeyKind::Bytes => {
                     let nb = d.n_bytes();
-                    let blob: usize =
-                        (0..nb).map(|i| d.bytes_span(i).1 as usize).sum::<usize>();
+                    let blob: usize = (0..nb).map(|i| d.bytes_span(i).1 as usize).sum::<usize>();
                     (ti, ts + nb, tb + blob)
                 }
                 _ => (ti + d.ints().len(), ts, tb),
@@ -1310,8 +1308,11 @@ impl<'mcx> PdBuilder<'mcx> {
         let mut set_spans: Vec<PdSpan> = Vec::with_capacity(tot_spans);
         let mut set_span_offs: Vec<u32> = Vec::with_capacity(total_sets + 1);
         let mut set_null: Vec<bool> = Vec::with_capacity(total_sets);
-        let mut elem_parts: Vec<u32> =
-            Vec::with_capacity(if plain { total_sets * (PD_ELEM_PARTS + 1) } else { 0 });
+        let mut elem_parts: Vec<u32> = Vec::with_capacity(if plain {
+            total_sets * (PD_ELEM_PARTS + 1)
+        } else {
+            0
+        });
         set_int_offs.push(0);
         set_span_offs.push(0);
         for (si, d) in self.dsets.iter().enumerate() {
@@ -1345,7 +1346,11 @@ impl<'mcx> PdBuilder<'mcx> {
                             let content = d.bytes_content(off, len);
                             let noff = set_blob.len() as u32;
                             set_blob.extend_from_slice(content);
-                            set_spans.push(PdSpan { off: noff, len, hash: h });
+                            set_spans.push(PdSpan {
+                                off: noff,
+                                len,
+                                hash: h,
+                            });
                         }
                     } else {
                         for i in 0..d.n_bytes() {
@@ -1353,7 +1358,11 @@ impl<'mcx> PdBuilder<'mcx> {
                             let content = d.bytes_content(off, len);
                             let noff = set_blob.len() as u32;
                             set_blob.extend_from_slice(content);
-                            set_spans.push(PdSpan { off: noff, len, hash: h });
+                            set_spans.push(PdSpan {
+                                off: noff,
+                                len,
+                                hash: h,
+                            });
                         }
                     }
                 }
@@ -1419,7 +1428,6 @@ impl<'mcx> PdBuilder<'mcx> {
             live_sets: Vec::new(),
         })
     }
-
 }
 
 impl PdBuilder<'static> {
@@ -1540,8 +1548,16 @@ pub struct PdHandedTable {
 
 /// Iterator over one set's byte elements — both handed-table forms.
 enum SetBytesIter<'a> {
-    Flat { spans: &'a [PdSpan], blob: &'a [u8], i: usize },
-    Live { d: &'a DistinctSet<'static>, i: usize, n: usize },
+    Flat {
+        spans: &'a [PdSpan],
+        blob: &'a [u8],
+        i: usize,
+    },
+    Live {
+        d: &'a DistinctSet<'static>,
+        i: usize,
+        n: usize,
+    },
     Empty,
 }
 
@@ -1573,7 +1589,11 @@ impl PdHandedTable {
         if !self.live_sets.is_empty() {
             // SAFETY: single-claimer-per-partition contract (Sync note); a
             // taken set reads empty.
-            return unsafe { (*self.live_sets[si].get()).as_ref().map_or(&[], |d| d.ints()) };
+            return unsafe {
+                (*self.live_sets[si].get())
+                    .as_ref()
+                    .map_or(&[], |d| d.ints())
+            };
         }
         &self.set_ints[self.set_int_offs[si] as usize..self.set_int_offs[si + 1] as usize]
     }
@@ -1583,7 +1603,11 @@ impl PdHandedTable {
         if !self.live_sets.is_empty() {
             // SAFETY: as `set_ints`.
             return match unsafe { (*self.live_sets[si].get()).as_ref() } {
-                Some(d) => SetBytesIter::Live { d, i: 0, n: d.n_bytes() },
+                Some(d) => SetBytesIter::Live {
+                    d,
+                    i: 0,
+                    n: d.n_bytes(),
+                },
                 None => SetBytesIter::Empty,
             };
         }
@@ -1615,7 +1639,9 @@ impl PdHandedTable {
         if !self.live_sets.is_empty() {
             // SAFETY: as `set_ints`.
             return unsafe {
-                (*self.live_sets[si].get()).as_ref().map_or(0, |d| d.ints().len())
+                (*self.live_sets[si].get())
+                    .as_ref()
+                    .map_or(0, |d| d.ints().len())
             };
         }
         (self.set_int_offs[si + 1] - self.set_int_offs[si]) as usize
@@ -1684,7 +1710,12 @@ impl PdMerged<'_> {
             + self.keynulls.len() * 4
             + self.states.len() * 8
             + self.dsets.len() * core::mem::size_of::<Option<DistinctSet<'_>>>()
-            + self.dsets.iter().flatten().map(|d| d.mem_bytes()).sum::<usize>()
+            + self
+                .dsets
+                .iter()
+                .flatten()
+                .map(|d| d.mem_bytes())
+                .sum::<usize>()
     }
 }
 
@@ -1698,7 +1729,11 @@ impl PdMerged<'static> {
             key_arena: self.key_arena,
             keynulls: self.keynulls,
             states: self.states,
-            dsets: self.dsets.into_iter().map(|d| d.map(DistinctSet::unspilled_into)).collect(),
+            dsets: self
+                .dsets
+                .into_iter()
+                .map(|d| d.map(DistinctSet::unspilled_into))
+                .collect(),
         }
     }
 }
@@ -1847,7 +1882,9 @@ impl<'s> PdBucketMerger<'s> {
         // q9internals inc-3: donors still to come INCLUDING this one (>= 1;
         // 1 when the hint is unset/exhausted = the per-donor exact bound).
         let donors_left = (self.donor_hint + 1).saturating_sub(self.absorbed).max(1);
-        let PdBucketMerger { out, table, hashes, .. } = self;
+        let PdBucketMerger {
+            out, table, hashes, ..
+        } = self;
         let parts = t.parts.as_ref().expect("grouped tables are partitioned");
         let (s, e) = (parts.starts[b] as usize, parts.starts[b + 1] as usize);
         for &g in &parts.idx[s..e] {
@@ -1878,8 +1915,7 @@ impl<'s> PdBucketMerger<'s> {
                                         } else {
                                             let (o, l) = unpack_span(words[i]);
                                             let noff = out.key_arena.len();
-                                            out.key_arena
-                                                .extend_from_slice(&t.key_arena[o..o + l]);
+                                            out.key_arena.extend_from_slice(&t.key_arena[o..o + l]);
                                             out.keys.push(pack_span(noff, l));
                                         }
                                     }
@@ -1887,7 +1923,7 @@ impl<'s> PdBucketMerger<'s> {
                             }
                         }
                         out.keynulls.push(nulls);
-                        out.states.extend(core::iter::repeat(0i64).take(2 * nvocab));
+                        out.states.extend(std::iter::repeat_n(0i64, 2 * nvocab));
                         for _ in 0..nsets {
                             out.dsets.push(Some(DistinctSet::new()));
                         }
@@ -1922,8 +1958,7 @@ impl<'s> PdBucketMerger<'s> {
                                         } else {
                                             let (od, ld) = unpack_span(dw[i]);
                                             let (ot, lt) = unpack_span(words[i]);
-                                            out.key_arena[od..od + ld]
-                                                == t.key_arena[ot..ot + lt]
+                                            out.key_arena[od..od + ld] == t.key_arena[ot..ot + lt]
                                         }
                                     }
                                 })
@@ -2162,10 +2197,9 @@ impl PdSinkLocal {
         // borrow from `estate` (type invariant above); shortening `'static`
         // to `'mcx` on the receiver is the safe direction for every field
         // the call can touch.
-        let b: &mut PdBuilder<'mcx> =
-            unsafe { core::mem::transmute::<&mut PdBuilder<'static>, &mut PdBuilder<'mcx>>(
-                &mut self.builder,
-            ) };
+        let b: &mut PdBuilder<'mcx> = unsafe {
+            core::mem::transmute::<&mut PdBuilder<'static>, &mut PdBuilder<'mcx>>(&mut self.builder)
+        };
         b.accept(estate, id, tmp)
     }
 
@@ -2363,7 +2397,10 @@ pub enum PdParemitCol {
     SetCount(usize),
     /// Non-distinct vocab aggregate, keyed by transno until the spec's
     /// vocab table exists. `sum` = the SumInt NULL-iff-count-0 law.
-    Vocab { transno: u32, sum: bool },
+    Vocab {
+        transno: u32,
+        sum: bool,
+    },
 }
 
 /// The leader-derived paremit recipe (plain data; workers build ordered
@@ -2588,10 +2625,8 @@ pub fn pd_emit_bucket(
         let mut heap: std::collections::BinaryHeap<(u64, u32)> =
             std::collections::BinaryHeap::with_capacity(k.saturating_add(1));
         for (rank, &g) in order.iter().enumerate() {
-            let badness = crate::compact::topkfin_badness(
-                pd_topn_value(spec, m, t.key, g as usize),
-                t.desc,
-            );
+            let badness =
+                crate::compact::topkfin_badness(pd_topn_value(spec, m, t.key, g as usize), t.desc);
             let cand = (badness, rank as u32);
             if heap.len() < k {
                 heap.push(cand);
@@ -2602,8 +2637,8 @@ pub fn pd_emit_bucket(
         }
         let mut sel = heap.into_vec();
         sel.sort_unstable(); // (badness, rank) — the selection total order
-        // Ranks ascending = the bucket's row order; a winner's bucket row =
-        // its position in the rank-sorted list.
+                             // Ranks ascending = the bucket's row order; a winner's bucket row =
+                             // its position in the rank-sorted list.
         let mut ranks: Vec<u32> = sel.iter().map(|&(_, r)| r).collect();
         ranks.sort_unstable();
         cands = Some(
@@ -2661,8 +2696,7 @@ pub fn pd_emit_bucket(
                     out.arena.resize(out.arena.len() + pad, 0);
                     let img_off = out.arena.len();
                     out.arena.extend_from_slice(
-                        &::types_tuple::varatt::set_varsize_4b_word((len + 4) as u32)
-                            .to_ne_bytes(),
+                        &::types_tuple::varatt::set_varsize_4b_word((len + 4) as u32).to_ne_bytes(),
                     );
                     out.arena.extend_from_slice(&m.key_arena[off..off + len]);
                     img_offs[i] = img_off;
@@ -2766,7 +2800,10 @@ impl PdParemitState {
     pub fn row(&self, bucket: usize, row: usize) -> (&[Datum], &[bool]) {
         let b = &self.buckets[bucket];
         let base = row * b.natts;
-        (&b.values[base..base + b.natts], &b.nulls[base..base + b.natts])
+        (
+            &b.values[base..base + b.natts],
+            &b.nulls[base..base + b.natts],
+        )
     }
 
     /// Retained content bytes (the teardown-release floor's input).
@@ -2860,7 +2897,9 @@ fn pd_topn_keep(
     'take: while taken < bound {
         let mut best: Option<usize> = None;
         for bi in 0..cands.len() {
-            let Some(c) = cands[bi].get(cur[bi]) else { continue };
+            let Some(c) = cands[bi].get(cur[bi]) else {
+                continue;
+            };
             let better = match best {
                 None => true,
                 Some(bj) => {
@@ -2944,7 +2983,9 @@ pub fn pd_paremit_state(
 /// Next row in the global prefix order: `(bucket, row)` into
 /// [`PdParemitState::row`], or `None` at end of stream.
 pub fn pd_paremit_next(st: &mut PdParemitState) -> PgResult<Option<(usize, usize)>> {
-    let Some(&top) = st.heap.first() else { return Ok(None) };
+    let Some(&top) = st.heap.first() else {
+        return Ok(None);
+    };
     let b = top as usize;
     let row = st.cur_row(b);
     st.cursors[b] += 1;
@@ -3123,7 +3164,7 @@ impl PdBuilder<'_> {
                         let (off, len) = unpack_span(keys[i]);
                         img.extend_from_slice(&(len as u64).to_ne_bytes());
                         img.extend_from_slice(&self.key_arena[off..off + len]);
-                        while img.len() % 8 != 0 {
+                        while !img.len().is_multiple_of(8) {
                             img.push(0);
                         }
                     }
@@ -3177,8 +3218,10 @@ impl PdBuilder<'_> {
         if nsets > 0 {
             self.total_set_mem = 0;
             for g in 0..self.ngroups() {
-                let m: usize =
-                    self.dsets[g * nsets..(g + 1) * nsets].iter().map(|d| d.mem_bytes()).sum();
+                let m: usize = self.dsets[g * nsets..(g + 1) * nsets]
+                    .iter()
+                    .map(|d| d.mem_bytes())
+                    .sum();
                 self.set_mem[g] = m;
                 self.total_set_mem += m;
             }
@@ -3204,10 +3247,7 @@ impl PdSinkLocal {
     }
 
     /// See [`PdBuilder::spill_emit`].
-    pub fn pd_spill_emit(
-        &self,
-        emit: &mut dyn FnMut(u32, &[u8]) -> PgResult<()>,
-    ) -> PgResult<()> {
+    pub fn pd_spill_emit(&self, emit: &mut dyn FnMut(u32, &[u8]) -> PgResult<()>) -> PgResult<()> {
         self.builder.spill_emit(emit)
     }
 
@@ -3233,7 +3273,7 @@ pub fn pd_table_from_spill(spec: &Arc<PdSpec>, bytes: &[u8]) -> PgResult<PdHande
         return pd_table_from_spill_bytes(spec, bytes);
     }
     let width = pd_spill_record_width(spec);
-    if bytes.len() % width != 0 {
+    if !bytes.len().is_multiple_of(width) {
         return Err(pd_internal("torn distinct spill record (partial row)"));
     }
     let mut b = PdBuilder::new(Arc::clone(spec), usize::MAX, None);
@@ -3288,7 +3328,7 @@ fn pd_table_from_spill_bytes(spec: &Arc<PdSpec>, bytes: &[u8]) -> PgResult<PdHan
         }
         let rd = |o: usize| u64::from_ne_bytes(bytes[o..o + 8].try_into().unwrap());
         let rec_len = rd(off) as usize;
-        if rec_len < min_width || rec_len % 8 != 0 || rec_len > bytes.len() - off {
+        if rec_len < min_width || !rec_len.is_multiple_of(8) || rec_len > bytes.len() - off {
             return Err(pd_internal("torn distinct spill record (bytes rec_len)"));
         }
         let rec = &bytes[off..off + rec_len];
@@ -3318,13 +3358,17 @@ fn pd_table_from_spill_bytes(spec: &Arc<PdSpec>, bytes: &[u8]) -> PgResult<PdHan
             let len = u64::from_ne_bytes(rec[t..t + 8].try_into().unwrap()) as usize;
             let padded = len.div_ceil(8) * 8;
             if rec_len - t - 8 < padded {
-                return Err(pd_internal("torn distinct spill record (bytes tail length)"));
+                return Err(pd_internal(
+                    "torn distinct spill record (bytes tail length)",
+                ));
             }
             spans[i] = ((t + 8) as u32, len as u32);
             t += 8 + padded;
         }
         if t != rec_len {
-            return Err(pd_internal("corrupt distinct spill record (bytes tail residue)"));
+            return Err(pd_internal(
+                "corrupt distinct spill record (bytes tail residue)",
+            ));
         }
         let src = KeySrc::Staged(rec, &spans);
         let h = PdBuilder::row_hash(spec, &words, nulls, &src);
@@ -3372,10 +3416,11 @@ pub fn pd_route_value_records(
             if bytes.len() - off < min_width {
                 return Err(pd_internal("torn distinct spill record (bytes) in split"));
             }
-            let rec_len =
-                u64::from_ne_bytes(bytes[off..off + 8].try_into().unwrap()) as usize;
-            if rec_len < min_width || rec_len % 8 != 0 || rec_len > bytes.len() - off {
-                return Err(pd_internal("torn distinct spill record (bytes rec_len) in split"));
+            let rec_len = u64::from_ne_bytes(bytes[off..off + 8].try_into().unwrap()) as usize;
+            if rec_len < min_width || !rec_len.is_multiple_of(8) || rec_len > bytes.len() - off {
+                return Err(pd_internal(
+                    "torn distinct spill record (bytes rec_len) in split",
+                ));
             }
             let v = u64::from_ne_bytes(bytes[off + 24..off + 32].try_into().unwrap());
             let s = ((mix64(v) >> shift) & 0xFF) as usize;
@@ -3385,8 +3430,10 @@ pub fn pd_route_value_records(
         return Ok(());
     }
     let width = pd_spill_record_width(spec);
-    if bytes.len() % width != 0 {
-        return Err(pd_internal("torn distinct spill record (partial row) in split"));
+    if !bytes.len().is_multiple_of(width) {
+        return Err(pd_internal(
+            "torn distinct spill record (partial row) in split",
+        ));
     }
     let voff = width - 8;
     let mut off = 0usize;
@@ -3412,10 +3459,15 @@ pub fn pd_bucket_precount(
     t: &PdHandedTable,
     bucket: usize,
 ) -> (usize, usize, usize) {
-    let Some(parts) = t.parts.as_ref() else { return (0, 0, 0) };
+    let Some(parts) = t.parts.as_ref() else {
+        return (0, 0, 0);
+    };
     let nsets = spec.sets.len();
     let nkeys = spec.nkeys();
-    let (s, e) = (parts.starts[bucket] as usize, parts.starts[bucket + 1] as usize);
+    let (s, e) = (
+        parts.starts[bucket] as usize,
+        parts.starts[bucket + 1] as usize,
+    );
     let mut vals = 0usize;
     let mut key_bytes = 0usize;
     for &g in &parts.idx[s..e] {
@@ -3444,32 +3496,47 @@ mod tests {
     /// listed transfn proc oids and no vocab shape could ever derive.
     #[test]
     fn vocab_kind_keys_on_aggregate_oids() {
-        assert!(matches!(vocab_kind(2803, None), Some(PdVocabKind::CountStar)));
+        assert!(matches!(
+            vocab_kind(2803, None),
+            Some(PdVocabKind::CountStar)
+        ));
         assert!(matches!(
             vocab_kind(2147, Some((3, PdInt::I64))),
             Some(PdVocabKind::CountAny { att: 3 })
         ));
         assert!(matches!(
             vocab_kind(2109, Some((1, PdInt::I16))),
-            Some(PdVocabKind::SumInt { att: 1, kind: PdInt::I16 })
+            Some(PdVocabKind::SumInt {
+                att: 1,
+                kind: PdInt::I16
+            })
         ));
         assert!(matches!(
             vocab_kind(2108, Some((2, PdInt::I32))),
-            Some(PdVocabKind::SumInt { att: 2, kind: PdInt::I32 })
+            Some(PdVocabKind::SumInt {
+                att: 2,
+                kind: PdInt::I32
+            })
         ));
         assert!(matches!(
             vocab_kind(2102, Some((4, PdInt::I16))),
-            Some(PdVocabKind::AvgInt { att: 4, kind: PdInt::I16 })
+            Some(PdVocabKind::AvgInt {
+                att: 4,
+                kind: PdInt::I16
+            })
         ));
         assert!(matches!(
             vocab_kind(2101, Some((5, PdInt::I32))),
-            Some(PdVocabKind::AvgInt { att: 5, kind: PdInt::I32 })
+            Some(PdVocabKind::AvgInt {
+                att: 5,
+                kind: PdInt::I32
+            })
         ));
         // Width mismatches and the Int128/numeric families refuse.
         assert!(vocab_kind(2108, Some((2, PdInt::I16))).is_none());
         assert!(vocab_kind(2107, Some((2, PdInt::I64))).is_none()); // sum(int8)
         assert!(vocab_kind(2100, Some((2, PdInt::I64))).is_none()); // avg(int8)
-        // The OLD (buggy) transfn oids must NOT match.
+                                                                    // The OLD (buggy) transfn oids must NOT match.
         assert!(vocab_kind(1219, None).is_none());
         assert!(vocab_kind(2804, Some((0, PdInt::I64))).is_none());
     }
@@ -3481,10 +3548,19 @@ mod tests {
         Arc::new(PdSpec {
             key_atts: vec![0, 1],
             key_kinds: vec![PdKeyKind::Int(PdInt::I64), PdKeyKind::Int(PdInt::I32)],
-            vocab: vec![PdVocab { transno: 0, kind: PdVocabKind::CountStar }],
+            vocab: vec![PdVocab {
+                transno: 0,
+                kind: PdVocabKind::CountStar,
+            }],
             sets: vec![
-                PdSetSpec { att: 2, kind: DistinctKeyKind::Int64 },
-                PdSetSpec { att: 3, kind: DistinctKeyKind::Int32 },
+                PdSetSpec {
+                    att: 2,
+                    kind: DistinctKeyKind::Int64,
+                },
+                PdSetSpec {
+                    att: 3,
+                    kind: DistinctKeyKind::Int32,
+                },
             ],
             max_att: 4,
             worker_budget: usize::MAX,
@@ -3527,7 +3603,10 @@ mod tests {
 
     /// Canonical view of a merged bucket set: (keys, nulls, states,
     /// per-set sorted values + seen_null).
-    fn canon(spec: &PdSpec, m: &PdMerged<'_>) -> Vec<(Vec<i64>, u32, Vec<i64>, Vec<(Vec<i64>, bool)>)> {
+    fn canon(
+        spec: &PdSpec,
+        m: &PdMerged<'_>,
+    ) -> Vec<(Vec<i64>, u32, Vec<i64>, Vec<(Vec<i64>, bool)>)> {
         let nkeys = spec.nkeys();
         let nsets = spec.sets.len();
         let nvocab = spec.vocab.len();
@@ -3565,7 +3644,10 @@ mod tests {
             key_atts: vec![0],
             key_kinds: vec![PdKeyKind::Int(PdInt::I64)],
             vocab: vec![],
-            sets: vec![PdSetSpec { att: 1, kind: DistinctKeyKind::Int64 }],
+            sets: vec![PdSetSpec {
+                att: 1,
+                kind: DistinctKeyKind::Int64,
+            }],
             max_att: 2,
             worker_budget: usize::MAX,
             expected_worker_rows: 0,
@@ -3584,7 +3666,11 @@ mod tests {
                     None => b.create_group(&k, 0, h, slot, &KeySrc::None),
                 } as usize;
                 // near-unique values + planted duplicates + NULL face
-                let v = if i % 97 == 0 { Some(42) } else { Some(i * 104729 + 1) };
+                let v = if i % 97 == 0 {
+                    Some(42)
+                } else {
+                    Some(i * 104729 + 1)
+                };
                 let v = if i % 61 == 0 { None } else { v };
                 if staged {
                     assert!(matches!(b.stage_push(g, v).unwrap(), PdFeed::Ok));
@@ -3603,7 +3689,10 @@ mod tests {
         assert_eq!(a.keys, s.keys);
         assert_eq!(a.keynulls, s.keynulls);
         assert_eq!(a.states, s.states);
-        assert_eq!(a.set_ints, s.set_ints, "value arrays byte-identical incl. order");
+        assert_eq!(
+            a.set_ints, s.set_ints,
+            "value arrays byte-identical incl. order"
+        );
         assert_eq!(a.set_int_offs, s.set_int_offs);
         assert_eq!(a.set_null, s.set_null);
 
@@ -3613,7 +3702,10 @@ mod tests {
                 key_atts: vec![0],
                 key_kinds: vec![PdKeyKind::Int(PdInt::I64)],
                 vocab: vec![],
-                sets: vec![PdSetSpec { att: 1, kind: DistinctKeyKind::Bytes }],
+                sets: vec![PdSetSpec {
+                    att: 1,
+                    kind: DistinctKeyKind::Bytes,
+                }],
                 max_att: 2,
                 worker_budget: usize::MAX,
                 expected_worker_rows: 0,
@@ -3661,11 +3753,26 @@ mod tests {
             key_atts: vec![3],
             key_kinds: vec![PdKeyKind::Int(PdInt::I32)],
             vocab: vec![
-                PdVocab { transno: 0, kind: PdVocabKind::CountStar },
-                PdVocab { transno: 1, kind: PdVocabKind::SumInt { att: 2, kind: PdInt::I16 } },
-                PdVocab { transno: 2, kind: PdVocabKind::CountAny { att: 1 } },
+                PdVocab {
+                    transno: 0,
+                    kind: PdVocabKind::CountStar,
+                },
+                PdVocab {
+                    transno: 1,
+                    kind: PdVocabKind::SumInt {
+                        att: 2,
+                        kind: PdInt::I16,
+                    },
+                },
+                PdVocab {
+                    transno: 2,
+                    kind: PdVocabKind::CountAny { att: 1 },
+                },
             ],
-            sets: vec![PdSetSpec { att: 1, kind: DistinctKeyKind::Int32 }],
+            sets: vec![PdSetSpec {
+                att: 1,
+                kind: DistinctKeyKind::Int32,
+            }],
             max_att: 4,
             worker_budget: usize::MAX,
             expected_worker_rows: 0,
@@ -3677,16 +3784,28 @@ mod tests {
         assert!(p.riders[0].is_none() && p.riders[2].is_none());
         assert_eq!(p.riders[1], Some((2, PdInt::I16)));
         // Refusals: bytes set, bytes key, multi-key, multi-set.
-        let mut s = PdSpec { sets: vec![PdSetSpec { att: 1, kind: DistinctKeyKind::Bytes }], ..clone_spec(&good) };
+        let mut s = PdSpec {
+            sets: vec![PdSetSpec {
+                att: 1,
+                kind: DistinctKeyKind::Bytes,
+            }],
+            ..clone_spec(&good)
+        };
         assert!(pd_vec_plan(&s).is_none(), "bytes set refuses");
-        s = PdSpec { key_kinds: vec![PdKeyKind::Bytes], ..clone_spec(&good) };
+        s = PdSpec {
+            key_kinds: vec![PdKeyKind::Bytes],
+            ..clone_spec(&good)
+        };
         assert!(pd_vec_plan(&s).is_none(), "bytes key refuses");
         s = clone_spec(&good);
         s.key_atts.push(0);
         s.key_kinds.push(PdKeyKind::Int(PdInt::I64));
         assert!(pd_vec_plan(&s).is_none(), "multi-key refuses");
         s = clone_spec(&good);
-        s.sets.push(PdSetSpec { att: 2, kind: DistinctKeyKind::Int64 });
+        s.sets.push(PdSetSpec {
+            att: 2,
+            kind: DistinctKeyKind::Int64,
+        });
         assert!(pd_vec_plan(&s).is_none(), "multi-set refuses");
     }
 
@@ -3695,7 +3814,14 @@ mod tests {
             key_atts: s.key_atts.clone(),
             key_kinds: s.key_kinds.clone(),
             vocab: s.vocab.clone(),
-            sets: s.sets.iter().map(|x| PdSetSpec { att: x.att, kind: x.kind }).collect(),
+            sets: s
+                .sets
+                .iter()
+                .map(|x| PdSetSpec {
+                    att: x.att,
+                    kind: x.kind,
+                })
+                .collect(),
             max_att: s.max_att,
             worker_budget: s.worker_budget,
             expected_worker_rows: s.expected_worker_rows,
@@ -3718,18 +3844,45 @@ mod tests {
             key_atts: vec![0],
             key_kinds: vec![PdKeyKind::Int(PdInt::I32)],
             vocab: vec![
-                PdVocab { transno: 0, kind: PdVocabKind::CountStar },
-                PdVocab { transno: 1, kind: PdVocabKind::SumInt { att: 2, kind: PdInt::I32 } },
-                PdVocab { transno: 2, kind: PdVocabKind::CountAny { att: 1 } },
+                PdVocab {
+                    transno: 0,
+                    kind: PdVocabKind::CountStar,
+                },
+                PdVocab {
+                    transno: 1,
+                    kind: PdVocabKind::SumInt {
+                        att: 2,
+                        kind: PdInt::I32,
+                    },
+                },
+                PdVocab {
+                    transno: 2,
+                    kind: PdVocabKind::CountAny { att: 1 },
+                },
             ],
-            sets: vec![PdSetSpec { att: 1, kind: DistinctKeyKind::Int64 }],
+            sets: vec![PdSetSpec {
+                att: 1,
+                kind: DistinctKeyKind::Int64,
+            }],
             max_att: 3,
             worker_budget: usize::MAX,
             expected_worker_rows: 0,
         });
         let n: i64 = 3 * 8192 + 517; // partial trailing granule
-        let key = |i: i64| -> i64 { if i % 5 < 2 { (i / 7) % 300 } else { i % 300 } };
-        let val = |i: i64| -> i64 { if i % 11 == 0 { 42 } else { (i * 104_729) % 5000 } };
+        let key = |i: i64| -> i64 {
+            if i % 5 < 2 {
+                (i / 7) % 300
+            } else {
+                i % 300
+            }
+        };
+        let val = |i: i64| -> i64 {
+            if i % 11 == 0 {
+                42
+            } else {
+                (i * 104_729) % 5000
+            }
+        };
         let rid = |i: i64| -> i64 { i % 1000 - 500 };
 
         // Per-row oracle: the accept kernel minus the slot plumbing
@@ -3747,8 +3900,8 @@ mod tests {
                 st[2] += rid(i); // SumInt acc
                 st[3] += 1; // SumInt count
                 st[4] += 1; // CountAny (no NULLs in part lanes)
-                // Crossed verdicts are ignored: no spill in this harness,
-                // so the state trajectory is verdict-independent.
+                            // Crossed verdicts are ignored: no spill in this harness,
+                            // so the state trajectory is verdict-independent.
                 let _ = a.stage_push(g, Some(val(i))).unwrap();
             }
             a.freeze().unwrap()
@@ -3792,7 +3945,10 @@ mod tests {
             assert_eq!(a.keys, s.keys);
             assert_eq!(a.keynulls, s.keynulls);
             assert_eq!(a.states, s.states, "rider states identical");
-            assert_eq!(a.set_ints, s.set_ints, "value arrays byte-identical incl. order");
+            assert_eq!(
+                a.set_ints, s.set_ints,
+                "value arrays byte-identical incl. order"
+            );
             assert_eq!(a.set_int_offs, s.set_int_offs);
             assert_eq!(a.set_null, s.set_null);
         }
@@ -3809,7 +3965,10 @@ mod tests {
                 key_atts: vec![0],
                 key_kinds: vec![PdKeyKind::Int(PdInt::I64)],
                 vocab: vec![],
-                sets: vec![PdSetSpec { att: 1, kind: DistinctKeyKind::Int64 }],
+                sets: vec![PdSetSpec {
+                    att: 1,
+                    kind: DistinctKeyKind::Int64,
+                }],
                 max_att: 2,
                 worker_budget: usize::MAX,
                 expected_worker_rows: expected,
@@ -3829,8 +3988,11 @@ mod tests {
                     Some(g) => g,
                     None => b.create_group(&k, 0, h, slot, &KeySrc::None),
                 } as usize;
-                let v =
-                    if i % 89 == 0 { None } else { Some(i.wrapping_mul(6364136223846793005) + 3) };
+                let v = if i % 89 == 0 {
+                    None
+                } else {
+                    Some(i.wrapping_mul(6364136223846793005) + 3)
+                };
                 if staged {
                     assert!(matches!(b.stage_push(g, v).unwrap(), PdFeed::Ok));
                 } else {
@@ -3864,7 +4026,10 @@ mod tests {
         assert_eq!(oracle.ngroups, proj.ngroups);
         assert_eq!(oracle.keys, proj.keys);
         assert_eq!(oracle.states, proj.states);
-        assert_eq!(oracle.set_ints, proj.set_ints, "value arrays identical incl. order");
+        assert_eq!(
+            oracle.set_ints, proj.set_ints,
+            "value arrays identical incl. order"
+        );
         assert_eq!(oracle.set_int_offs, proj.set_int_offs);
         assert_eq!(oracle.set_null, proj.set_null);
         // Unknown expectation (0): projection inert, same identity.
@@ -3886,7 +4051,10 @@ mod tests {
             key_atts: vec![0],
             key_kinds: vec![PdKeyKind::Int(PdInt::I64)],
             vocab: vec![],
-            sets: vec![PdSetSpec { att: 1, kind: DistinctKeyKind::Int64 }],
+            sets: vec![PdSetSpec {
+                att: 1,
+                kind: DistinctKeyKind::Int64,
+            }],
             max_att: 2,
             worker_budget: usize::MAX,
             expected_worker_rows: 0,
@@ -3928,7 +4096,10 @@ mod tests {
             if staged {
                 b.flush_staged();
                 let exact: usize = b.dsets.iter().map(|d| d.mem_bytes()).sum();
-                assert_eq!(b.total_set_mem, exact, "delta accounting drifted under skip");
+                assert_eq!(
+                    b.total_set_mem, exact,
+                    "delta accounting drifted under skip"
+                );
             }
             b.freeze().unwrap()
         };
@@ -3941,7 +4112,10 @@ mod tests {
                 oracle.set_ints, t.set_ints,
                 "value arrays identical incl. order (memo={memo} staged={staged})"
             );
-            assert_eq!(oracle.set_int_offs, t.set_int_offs, "memo={memo} staged={staged}");
+            assert_eq!(
+                oracle.set_int_offs, t.set_int_offs,
+                "memo={memo} staged={staged}"
+            );
             assert_eq!(oracle.set_null, t.set_null, "memo={memo} staged={staged}");
         }
     }
@@ -3957,7 +4131,10 @@ mod tests {
             key_atts: vec![0],
             key_kinds: vec![PdKeyKind::Int(PdInt::I64)],
             vocab: vec![],
-            sets: vec![PdSetSpec { att: 1, kind: DistinctKeyKind::Int64 }],
+            sets: vec![PdSetSpec {
+                att: 1,
+                kind: DistinctKeyKind::Int64,
+            }],
             max_att: 2,
             worker_budget: usize::MAX,
             expected_worker_rows: 0,
@@ -3976,7 +4153,11 @@ mod tests {
                         Some(g) => g,
                         None => b.create_group(&k, 0, h, slot, &KeySrc::None),
                     } as usize;
-                    let v = if i % 97 == 0 { i } else { d * 1_000_000_000 + i };
+                    let v = if i % 97 == 0 {
+                        i
+                    } else {
+                        d * 1_000_000_000 + i
+                    };
                     b.dsets[g].insert_i64(v);
                 }
                 b.freeze().unwrap()
@@ -4021,7 +4202,9 @@ mod tests {
         let tables = [t1, t2];
         let direct = pd_concat_buckets(
             &spec,
-            (0..PD_GROUP_PARTS).map(|b| pd_merge_bucket(&spec, &tables, b)).collect(),
+            (0..PD_GROUP_PARTS)
+                .map(|b| pd_merge_bucket(&spec, &tables, b))
+                .collect(),
         );
 
         // Spill arm: same two workers, drained mid-build (values → records),
@@ -4067,8 +4250,7 @@ mod tests {
                     synth.push(pd_table_from_spill(&spec, bytes).unwrap());
                 }
             }
-            let refs: Vec<&PdHandedTable> =
-                remainders.iter().chain(synth.iter()).collect();
+            let refs: Vec<&PdHandedTable> = remainders.iter().chain(synth.iter()).collect();
             buckets.push(pd_merge_bucket_refs(&spec, &refs, bkt));
         }
         let merged = pd_concat_buckets(&spec, buckets);
@@ -4101,7 +4283,9 @@ mod tests {
         ];
         let direct = pd_concat_buckets(
             &spec,
-            (0..PD_GROUP_PARTS).map(|b| pd_merge_bucket(&spec, &flat, b)).collect(),
+            (0..PD_GROUP_PARTS)
+                .map(|b| pd_merge_bucket(&spec, &flat, b))
+                .collect(),
         );
 
         // Live pair, donors reordered.
@@ -4110,7 +4294,9 @@ mod tests {
         let refs: Vec<&PdHandedTable> = vec![&l2, &l1];
         let live_merged = pd_concat_buckets(
             &spec,
-            (0..PD_GROUP_PARTS).map(|b| pd_merge_bucket_refs(&spec, &refs, b)).collect(),
+            (0..PD_GROUP_PARTS)
+                .map(|b| pd_merge_bucket_refs(&spec, &refs, b))
+                .collect(),
         );
         assert_eq!(canon(&spec, &direct), canon(&spec, &live_merged));
 
@@ -4120,7 +4306,9 @@ mod tests {
         let refs: Vec<&PdHandedTable> = vec![&l3, &f5];
         let mixed_merged = pd_concat_buckets(
             &spec,
-            (0..PD_GROUP_PARTS).map(|b| pd_merge_bucket_refs(&spec, &refs, b)).collect(),
+            (0..PD_GROUP_PARTS)
+                .map(|b| pd_merge_bucket_refs(&spec, &refs, b))
+                .collect(),
         );
         assert_eq!(canon(&spec, &direct), canon(&spec, &mixed_merged));
 
@@ -4173,7 +4361,9 @@ mod tests {
         let tables = [t1, t2];
         let direct = pd_concat_buckets(
             &spec,
-            (0..PD_GROUP_PARTS).map(|b| pd_merge_bucket(&spec, &tables, b)).collect(),
+            (0..PD_GROUP_PARTS)
+                .map(|b| pd_merge_bucket(&spec, &tables, b))
+                .collect(),
         );
 
         // Spill arm: same two workers drained mid-build, then a second
@@ -4245,7 +4435,11 @@ mod tests {
                 buckets.push(merger.finish());
             }
             let merged = pd_concat_buckets(&spec, buckets);
-            assert_eq!(canon(&spec, &direct), canon(&spec, &merged), "depth {depth}");
+            assert_eq!(
+                canon(&spec, &direct),
+                canon(&spec, &merged),
+                "depth {depth}"
+            );
         }
     }
 
@@ -4283,8 +4477,14 @@ mod tests {
         Arc::new(PdSpec {
             key_atts: vec![0, 1],
             key_kinds: vec![PdKeyKind::Bytes, PdKeyKind::Int(PdInt::I32)],
-            vocab: vec![PdVocab { transno: 0, kind: PdVocabKind::CountStar }],
-            sets: vec![PdSetSpec { att: 2, kind: DistinctKeyKind::Int64 }],
+            vocab: vec![PdVocab {
+                transno: 0,
+                kind: PdVocabKind::CountStar,
+            }],
+            sets: vec![PdSetSpec {
+                att: 2,
+                kind: DistinctKeyKind::Int64,
+            }],
             max_att: 3,
             worker_budget: usize::MAX,
             expected_worker_rows: 0,
@@ -4297,7 +4497,10 @@ mod tests {
     fn feed_b(b: &mut PdBuilder<'static>, text: &[u8], k1: i64, nulls: u32, v: Option<i64>) {
         let spec = Arc::clone(&b.spec);
         let words = [0i64, k1];
-        let spans = [(0u32, if nulls & 1 != 0 { 0 } else { text.len() as u32 }), (0, 0)];
+        let spans = [
+            (0u32, if nulls & 1 != 0 { 0 } else { text.len() as u32 }),
+            (0, 0),
+        ];
         let src = KeySrc::Staged(text, &spans);
         let h = PdBuilder::row_hash(&spec, &words, nulls, &src);
         let (found, slot) = b.probe(&words, nulls, h, &src);
@@ -4451,7 +4654,10 @@ mod tests {
         let merged = pd_concat_buckets(&spec, buckets);
 
         assert_eq!(canon_b(&spec, &direct), canon_b(&spec, &merged));
-        assert!(direct.ngroups > 40, "corpus produced a real group population");
+        assert!(
+            direct.ngroups > 40,
+            "corpus produced a real group population"
+        );
 
         // Pre-count sanity: groups bound + key-bytes term populated.
         let mut groups = 0usize;
@@ -4529,7 +4735,9 @@ mod tests {
         let tables = [t1, t2];
         let direct = pd_concat_buckets(
             &spec,
-            (0..PD_GROUP_PARTS).map(|bk| pd_merge_bucket(&spec, &tables, bk)).collect(),
+            (0..PD_GROUP_PARTS)
+                .map(|bk| pd_merge_bucket(&spec, &tables, bk))
+                .collect(),
         );
 
         let mut spilled: Vec<std::collections::HashMap<u32, Vec<u8>>> = Vec::new();
@@ -4573,7 +4781,11 @@ mod tests {
                 buckets.push(merger.finish());
             }
             let merged = pd_concat_buckets(&spec, buckets);
-            assert_eq!(canon_b(&spec, &direct), canon_b(&spec, &merged), "depth {depth}");
+            assert_eq!(
+                canon_b(&spec, &direct),
+                canon_b(&spec, &merged),
+                "depth {depth}"
+            );
         }
     }
 
@@ -4590,7 +4802,10 @@ mod tests {
             key_kinds,
             vocab,
             sets: (0..nsets)
-                .map(|_| PdSetSpec { att: 0, kind: DistinctKeyKind::Int64 })
+                .map(|_| PdSetSpec {
+                    att: 0,
+                    kind: DistinctKeyKind::Int64,
+                })
                 .collect(),
             max_att: 8,
             worker_budget: usize::MAX,
@@ -4610,8 +4825,17 @@ mod tests {
             vec![PdKeyKind::Bytes, PdKeyKind::Int(PdInt::I32)],
             1,
             vec![
-                PdVocab { transno: 1, kind: PdVocabKind::CountStar },
-                PdVocab { transno: 2, kind: PdVocabKind::SumInt { att: 3, kind: PdInt::I16 } },
+                PdVocab {
+                    transno: 1,
+                    kind: PdVocabKind::CountStar,
+                },
+                PdVocab {
+                    transno: 2,
+                    kind: PdVocabKind::SumInt {
+                        att: 3,
+                        kind: PdInt::I16,
+                    },
+                },
             ],
         );
         // 5 groups: empty text, multi-byte UTF-8, NULL text key, NULL int
@@ -4655,11 +4879,27 @@ mod tests {
             3, 3, 0, 0, // g3: sum NULL
             1, 1, 8, 1, // g4
         ];
-        let m: PdMerged<'static> =
-            PdMerged { ngroups: 5, keys, key_arena, keynulls: keynulls.to_vec(), states, dsets };
+        let m: PdMerged<'static> = PdMerged {
+            ngroups: 5,
+            keys,
+            key_arena,
+            keynulls: keynulls.to_vec(),
+            states,
+            dsets,
+        };
         let order_spec = vec![
-            HashGroupOrderKey { key_idx: 0, desc: false, nulls_first: false, collation: C_COLL },
-            HashGroupOrderKey { key_idx: 1, desc: true, nulls_first: true, collation: 0 },
+            HashGroupOrderKey {
+                key_idx: 0,
+                desc: false,
+                nulls_first: false,
+                collation: C_COLL,
+            },
+            HashGroupOrderKey {
+                key_idx: 1,
+                desc: true,
+                nulls_first: true,
+                collation: 0,
+            },
         ];
         let recipe = pd_paremit_recipe(
             &spec,
@@ -4667,8 +4907,14 @@ mod tests {
                 PdParemitCol::Key(0),
                 PdParemitCol::Key(1),
                 PdParemitCol::SetCount(0),
-                PdParemitCol::Vocab { transno: 1, sum: false },
-                PdParemitCol::Vocab { transno: 2, sum: true },
+                PdParemitCol::Vocab {
+                    transno: 1,
+                    sum: false,
+                },
+                PdParemitCol::Vocab {
+                    transno: 2,
+                    sum: true,
+                },
             ],
             &order_spec,
         )
@@ -4678,9 +4924,16 @@ mod tests {
         assert_eq!(b.natts, 5);
         // The adopt reference order over the same partition.
         let kinds = recipe.hg_kinds();
-        let order =
-            order_groups(&m.keys, &m.keynulls, &recipe.order, 2, &kinds, &m.key_arena, 5)
-                .expect("reference order");
+        let order = order_groups(
+            &m.keys,
+            &m.keynulls,
+            &recipe.order,
+            2,
+            &kinds,
+            &m.key_arena,
+            5,
+        )
+        .expect("reference order");
         let expect_counts: [i64; 5] = [3, 0, 0, 1, 0];
         for (row, &g) in order.iter().enumerate() {
             let g = g as usize;
@@ -4740,7 +4993,10 @@ mod tests {
         let spec = paremit_spec(
             vec![PdKeyKind::Int(PdInt::I64)],
             0,
-            vec![PdVocab { transno: 0, kind: PdVocabKind::CountStar }],
+            vec![PdVocab {
+                transno: 0,
+                kind: PdVocabKind::CountStar,
+            }],
         );
         let order_spec = vec![HashGroupOrderKey {
             key_idx: 0,
@@ -4750,7 +5006,13 @@ mod tests {
         }];
         let recipe = pd_paremit_recipe(
             &spec,
-            &[PdParemitCol::Key(0), PdParemitCol::Vocab { transno: 0, sum: false }],
+            &[
+                PdParemitCol::Key(0),
+                PdParemitCol::Vocab {
+                    transno: 0,
+                    sum: false,
+                },
+            ],
             &order_spec,
         )
         .expect("recipe resolves");
@@ -4809,7 +5071,10 @@ mod tests {
         let tspec = paremit_spec(
             vec![PdKeyKind::Bytes],
             0,
-            vec![PdVocab { transno: 0, kind: PdVocabKind::CountStar }],
+            vec![PdVocab {
+                transno: 0,
+                kind: PdVocabKind::CountStar,
+            }],
         );
         let torder = vec![HashGroupOrderKey {
             key_idx: 0,
@@ -4819,7 +5084,13 @@ mod tests {
         }];
         let trecipe = pd_paremit_recipe(
             &tspec,
-            &[PdParemitCol::Key(0), PdParemitCol::Vocab { transno: 0, sum: false }],
+            &[
+                PdParemitCol::Key(0),
+                PdParemitCol::Vocab {
+                    transno: 0,
+                    sum: false,
+                },
+            ],
             &torder,
         )
         .expect("recipe resolves");
@@ -4861,7 +5132,11 @@ mod tests {
                 states: vec![1; n * 2],
                 dsets: Vec::new(),
             };
-            tbuckets.push(pd_emit_bucket(&tspec, &trecipe, &m, None).expect("bucket").0);
+            tbuckets.push(
+                pd_emit_bucket(&tspec, &trecipe, &m, None)
+                    .expect("bucket")
+                    .0,
+            );
         }
         let tkinds = trecipe.hg_kinds();
         let whole = order_groups(
@@ -4891,8 +5166,7 @@ mod tests {
             // SAFETY: the datum points into the state's live bucket arena.
             let hdr = unsafe { core::ptr::read_unaligned(ptr.cast::<u32>()) };
             let len = (::types_tuple::varatt::varsize_4b_word(hdr) as usize) - 4;
-            let content =
-                unsafe { core::slice::from_raw_parts(ptr.add(4), len) };
+            let content = unsafe { core::slice::from_raw_parts(ptr.add(4), len) };
             got.push(content.to_vec());
         }
         assert_eq!(got, expect);
@@ -4925,8 +5199,17 @@ mod tests {
         .expect("recipe resolves");
         // (key, distinct-count): counts 5,3,5,2,3,3,1,5,2 — ties at every
         // interesting boundary. Keys ascending = group order.
-        let groups: [(i64, usize); 9] =
-            [(1, 5), (2, 3), (3, 5), (4, 2), (5, 3), (6, 3), (7, 1), (8, 5), (9, 2)];
+        let groups: [(i64, usize); 9] = [
+            (1, 5),
+            (2, 3),
+            (3, 5),
+            (4, 2),
+            (5, 3),
+            (6, 3),
+            (7, 1),
+            (8, 5),
+            (9, 2),
+        ];
         let build = |bi: usize| -> PdMerged<'static> {
             let mut keys = Vec::new();
             let mut keynulls = Vec::new();
@@ -4981,12 +5264,15 @@ mod tests {
                 kept.sort_unstable();
                 let expect: Vec<(i64, i64)> = kept.iter().map(|&i| full[i]).collect();
                 // WINNERS arm.
-                let topn = PdTopnSpec { key: PdTopnKey::SetCount(0), desc, bound };
+                let topn = PdTopnSpec {
+                    key: PdTopnKey::SetCount(0),
+                    desc,
+                    bound,
+                };
                 let mut bufs = Vec::new();
                 let mut cands = Vec::new();
                 for bi in 0..2 {
-                    let (b, c) =
-                        pd_emit_bucket(&spec, &recipe, &build(bi), Some(&topn)).unwrap();
+                    let (b, c) = pd_emit_bucket(&spec, &recipe, &build(bi), Some(&topn)).unwrap();
                     let c = c.expect("armed selection returns candidates");
                     // Compact-materialization law: bucket rows ARE the
                     // candidates.
@@ -4995,8 +5281,7 @@ mod tests {
                     bufs.push(b);
                     cands.push(c);
                 }
-                let mut st =
-                    pd_paremit_state(&recipe, bufs, Some((&cands[..], bound))).unwrap();
+                let mut st = pd_paremit_state(&recipe, bufs, Some((&cands[..], bound))).unwrap();
                 assert_eq!(st.kept_rows(), Some(expect.len()));
                 let mut got: Vec<(i64, i64)> = Vec::new();
                 while let Some((b, row)) = pd_paremit_next(&mut st).unwrap() {
@@ -5008,5 +5293,4 @@ mod tests {
             }
         }
     }
-
 }

@@ -5,10 +5,10 @@ use types_core::Oid;
 use types_error::PgResult;
 use types_tuple::{HeapTupleData, ItemPointerData};
 
-use crate::compute::{compute_hash_value, hash_index, CatCKey, CCFastKind};
+use crate::compute::{compute_hash_value, hash_index, CCFastKind, CatCKey};
 use crate::graph::{
     compute_tuple_hash_value, create_entry_from_scan, pop_in_progress, push_in_progress,
-    remove_cl, remove_ct, rehash_cat_cache_lists,
+    rehash_cat_cache_lists, remove_cl, remove_ct,
 };
 use crate::search::build_scan_keys;
 use crate::{pack_ref, payload_alloc, with_state, CATCACHE_MAXKEYS, NONE};
@@ -35,7 +35,12 @@ impl MemberTuple<'_> {
         // SAFETY: the pinned list holds each member's refcount-protected
         // image alive; images are write-once.
         unsafe {
-            HeapTupleData::from_raw_parts(self.image.as_ptr(), self.t_len, self.t_self, self.t_tableoid)
+            HeapTupleData::from_raw_parts(
+                self.image.as_ptr(),
+                self.t_len,
+                self.t_self,
+                self.t_tableoid,
+            )
         }
     }
 }
@@ -114,7 +119,12 @@ pub fn SearchCatCacheList(
 
     let (l_hash, found) = hit;
     if let Some((slot, n_members, ordered)) = found {
-        return Ok(CatCList { cache_id, slot, n_members, ordered });
+        return Ok(CatCList {
+            cache_id,
+            slot,
+            n_members,
+            ordered,
+        });
     }
 
     build_list(cache_id, nkeys, l_hash, &keys)
@@ -155,10 +165,7 @@ fn build_list(
     let result = build_list_scan(cache_id, nkeys, reloid, indexoid, keys, &mut members);
     let in_progress_dead = with_state(pop_in_progress);
 
-    let ordered = match result {
-        Ok(v) => v,
-        Err(e) => return Err(e),
-    };
+    let ordered = result?;
     debug_assert!(!in_progress_dead, "list build retry loop exited dead");
 
     let (slot, n_members) = with_state(|st| -> PgResult<(u32, i32)> {
@@ -169,7 +176,10 @@ fn build_list(
         /* CatCacheCopyKeys */
         let mut byref_len = 0usize;
         for i in 0..nkeys as usize {
-            if matches!(kinds[i], CCFastKind::Name | CCFastKind::Text | CCFastKind::OidVector) {
+            if matches!(
+                kinds[i],
+                CCFastKind::Name | CCFastKind::Text | CCFastKind::OidVector
+            ) {
                 byref_len += keys[i].bytes().len();
             }
         }
@@ -231,7 +241,12 @@ fn build_list(
         Ok((slot, n_members))
     })?;
 
-    Ok(CatCList { cache_id, slot, n_members, ordered })
+    Ok(CatCList {
+        cache_id,
+        slot,
+        n_members,
+        ordered,
+    })
 }
 
 /// The `do { scan } while (in_progress_ent.dead)` retry loop.
@@ -245,7 +260,10 @@ fn build_list_scan(
 ) -> PgResult<bool> {
     loop {
         with_state(|st| {
-            st.in_progress.last_mut().expect("in-progress underflow").dead = false;
+            st.in_progress
+                .last_mut()
+                .expect("in-progress underflow")
+                .dead = false;
         });
         members.clear();
 
@@ -269,7 +287,10 @@ fn build_list_scan(
                 Ok(None) => {
                     /* C: member create failed stale — mark the list build dead. */
                     with_state(|st| {
-                        st.in_progress.last_mut().expect("in-progress underflow").dead = true;
+                        st.in_progress
+                            .last_mut()
+                            .expect("in-progress underflow")
+                            .dead = true;
                     });
                     Ok(false)
                 }
@@ -313,7 +334,13 @@ fn reuse_or_create_member(cache_id: i32, ntp: &HeapTupleData<'_>) -> PgResult<Op
     let found = with_state(|st| {
         let cache = st.cache(cache_id);
         let tupdesc = cache.cc_tupdesc.expect("list build before phase-2 init");
-        let hv = compute_tuple_hash_value(&cache.cc_kind, cache.cc_nkeys, &cache.cc_keyno, tupdesc, ntp);
+        let hv = compute_tuple_hash_value(
+            &cache.cc_kind,
+            cache.cc_nkeys,
+            &cache.cc_keyno,
+            tupdesc,
+            ntp,
+        );
         let bi = hash_index(hv, cache.cc_nbuckets);
         let mut cur = cache.cc_bucket[bi];
         while cur != NONE {

@@ -11,15 +11,14 @@ use core::sync::atomic::{AtomicI32, Ordering};
 use ::elog::elog;
 use ::mcx::{Allocator, MemoryContext};
 use ::types_core::Size;
-use ::types_error::{PgError, ERRCODE_OUT_OF_MEMORY, WARNING};
 use ::types_error::PgResult;
+use ::types_error::{PgError, ERRCODE_OUT_OF_MEMORY, WARNING};
 use ::types_hash::hsearch::{
-    HashCompareFunc, HashValueFunc, HASHACTION, HASHCTL, HASHELEMENT, HASHHDR, HASHSEGMENT, HTAB,
-    HASH_ALLOC, HASH_ATTACH, HASH_BLOBS, HASH_COMPARE, HASH_CONTEXT, HASH_DIRSIZE, HASH_ELEM,
-    HASH_ENTER,
-    HASH_ENTER_NULL, HASH_FIND, HASH_FIXED_SIZE, HASH_FUNCTION, HASH_KEYCOPY, HASH_PARTITION,
-    HASH_REMOVE, HASH_SEGMENT, HASH_SEQ_STATUS, HASH_SHARED_MEM, HASH_STRINGS, DEF_DIRSIZE,
-    DEF_SEGSIZE, DEF_SEGSIZE_SHIFT, NO_MAX_DSIZE, NUM_FREELISTS,
+    HashCompareFunc, HashValueFunc, DEF_DIRSIZE, DEF_SEGSIZE, DEF_SEGSIZE_SHIFT, HASHACTION,
+    HASHCTL, HASHELEMENT, HASHHDR, HASHSEGMENT, HASH_ALLOC, HASH_ATTACH, HASH_BLOBS, HASH_COMPARE,
+    HASH_CONTEXT, HASH_DIRSIZE, HASH_ELEM, HASH_ENTER, HASH_ENTER_NULL, HASH_FIND, HASH_FIXED_SIZE,
+    HASH_FUNCTION, HASH_KEYCOPY, HASH_PARTITION, HASH_REMOVE, HASH_SEGMENT, HASH_SEQ_STATUS,
+    HASH_SHARED_MEM, HASH_STRINGS, HTAB, NO_MAX_DSIZE, NUM_FREELISTS,
 };
 
 const MAX_SEQ_SCANS: usize = 100;
@@ -396,7 +395,11 @@ unsafe fn hash_create_in(
     }
 
     if (flags & HASH_SHARED_MEM != 0) || nelem < (*hctl).nelem_alloc as i64 {
-        let freelist_partitions = if IS_PARTITIONED(hctl) { NUM_FREELISTS as i32 } else { 1 };
+        let freelist_partitions = if IS_PARTITIONED(hctl) {
+            NUM_FREELISTS as i32
+        } else {
+            1
+        };
         let nelem_i = nelem as i32;
         let mut nelem_alloc = nelem_i / freelist_partitions;
         if nelem_alloc <= 0 {
@@ -409,7 +412,11 @@ unsafe fn hash_create_in(
         };
 
         for i in 0..freelist_partitions {
-            let temp = if i == 0 { nelem_alloc_first } else { nelem_alloc };
+            let temp = if i == 0 {
+                nelem_alloc_first
+            } else {
+                nelem_alloc
+            };
             if !element_alloc(hashp, temp, i as usize) {
                 return Err(oom_error(false));
             }
@@ -558,7 +565,10 @@ pub fn hash_get_shared_size(info: &HASHCTL, flags: i32) -> Size {
     size_of::<HASHHDR>() + info.dsize as usize * size_of::<HASHSEGMENT>()
 }
 
-pub fn hash_destroy(hashp: *mut HTAB) {
+/// # Safety
+/// `hashp`, if non-null, must be a live table returned by `hash_create` with
+/// no other live references (table is being torn down).
+pub unsafe fn hash_destroy(hashp: *mut HTAB) {
     if hashp.is_null() {
         return;
     }
@@ -593,14 +603,21 @@ pub unsafe fn hash_reset_after_crash(hashp: *mut HTAB) {
         }
         *slot = ptr::null_mut();
     }
-    let nlists = if IS_PARTITIONED(hctl) { NUM_FREELISTS } else { 1 };
+    let nlists = if IS_PARTITIONED(hctl) {
+        NUM_FREELISTS
+    } else {
+        1
+    };
     for i in 0..nlists {
         (*hctl).freeList[i].nentries = 0;
         SpinLockInit(&mut (*hctl).freeList[i].mutex);
     }
 }
 
-pub fn get_hash_value(hashp: *mut HTAB, key_ptr: *const u8) -> u32 {
+/// # Safety
+/// `hashp` must be a live table returned by `hash_create`; `key_ptr` must be
+/// readable for the table's keysize bytes.
+pub unsafe fn get_hash_value(hashp: *mut HTAB, key_ptr: *const u8) -> u32 {
     unsafe { do_hash(hashp, key_ptr) }
 }
 
@@ -621,17 +638,23 @@ unsafe fn calc_bucket(hctl: *const HASHHDR, hash_val: u32) -> u32 {
     bucket
 }
 
-pub fn hash_search(
+/// # Safety
+/// `hashp` must be a live table returned by `hash_create`; `key_ptr` must be
+/// readable for the table's keysize bytes.
+pub unsafe fn hash_search(
     hashp: *mut HTAB,
     key_ptr: *const u8,
     action: HASHACTION,
     found_ptr: Option<&mut bool>,
 ) -> PgResult<*mut u8> {
     let hashvalue = unsafe { do_hash(hashp, key_ptr) };
-    hash_search_with_hash_value(hashp, key_ptr, hashvalue, action, found_ptr)
+    unsafe { hash_search_with_hash_value(hashp, key_ptr, hashvalue, action, found_ptr) }
 }
 
-pub fn hash_search_with_hash_value(
+/// # Safety
+/// As [`hash_search`], with `hashvalue` the caller-computed hash of `key_ptr`
+/// (matching what `get_hash_value` would compute for this table).
+pub unsafe fn hash_search_with_hash_value(
     hashp: *mut HTAB,
     key_ptr: *const u8,
     hashvalue: u32,
@@ -737,7 +760,11 @@ pub fn hash_search_with_hash_value(
     }
 }
 
-pub fn hash_update_hash_key(
+/// # Safety
+/// `hashp` must be a live table returned by `hash_create`; `existing_entry`
+/// must be a live entry key pointer previously returned by this table's
+/// `hash_search`; `new_key_ptr` must be readable for the table's keysize.
+pub unsafe fn hash_update_hash_key(
     hashp: *mut HTAB,
     existing_entry: *mut u8,
     new_key_ptr: *const u8,
@@ -896,7 +923,9 @@ unsafe fn get_hash_entry(hashp: *mut HTAB, freelist_idx: usize) -> *mut HASHELEM
     new_element
 }
 
-pub fn hash_get_num_entries(hashp: *mut HTAB) -> i64 {
+/// # Safety
+/// `hashp` must be a live table returned by `hash_create`.
+pub unsafe fn hash_get_num_entries(hashp: *mut HTAB) -> i64 {
     unsafe {
         let hctl = (*hashp).hctl;
         let mut sum = (*hctl).freeList[0].nentries;
@@ -909,7 +938,10 @@ pub fn hash_get_num_entries(hashp: *mut HTAB) -> i64 {
     }
 }
 
-pub fn hash_seq_init(status: &mut HASH_SEQ_STATUS, hashp: *mut HTAB) -> PgResult<()> {
+/// # Safety
+/// `hashp` must be a live table returned by `hash_create`, kept alive for the
+/// duration of the scan (`status` borrows it by raw pointer).
+pub unsafe fn hash_seq_init(status: &mut HASH_SEQ_STATUS, hashp: *mut HTAB) -> PgResult<()> {
     status.hashp = hashp;
     status.curBucket = 0;
     status.curEntry = ptr::null_mut();
@@ -922,12 +954,14 @@ pub fn hash_seq_init(status: &mut HASH_SEQ_STATUS, hashp: *mut HTAB) -> PgResult
     Ok(())
 }
 
-pub fn hash_seq_init_with_hash_value(
+/// # Safety
+/// As [`hash_seq_init`].
+pub unsafe fn hash_seq_init_with_hash_value(
     status: &mut HASH_SEQ_STATUS,
     hashp: *mut HTAB,
     hashvalue: u32,
 ) -> PgResult<()> {
-    hash_seq_init(status, hashp)?;
+    unsafe { hash_seq_init(status, hashp)? };
     status.hasHashvalue = true;
     status.hashvalue = hashvalue;
     unsafe {
@@ -1022,7 +1056,9 @@ unsafe fn hash_seq_term_inner(hashp: *mut HTAB) -> PgResult<()> {
     Ok(())
 }
 
-pub fn hash_freeze(hashp: *mut HTAB) -> PgResult<()> {
+/// # Safety
+/// `hashp` must be a live table returned by `hash_create`.
+pub unsafe fn hash_freeze(hashp: *mut HTAB) -> PgResult<()> {
     unsafe {
         if (*hashp).isshared {
             return Err(Box::new(PgError::error(format!(
@@ -1116,7 +1152,11 @@ unsafe fn dir_realloc(hashp: *mut HTAB) -> bool {
     }
     let new_p = p as *mut HASHSEGMENT;
     ptr::copy_nonoverlapping(old_p as *const u8, new_p as *mut u8, old_dirsize);
-    ptr::write_bytes((new_p as *mut u8).add(old_dirsize), 0, new_dirsize - old_dirsize);
+    ptr::write_bytes(
+        (new_p as *mut u8).add(old_dirsize),
+        0,
+        new_dirsize - old_dirsize,
+    );
     (*hashp).dir = new_p;
     (*hctl).dsize = new_dsize;
 
@@ -1213,7 +1253,11 @@ unsafe fn tabname_str(hashp: *const HTAB) -> std::borrow::Cow<'static, str> {
 #[cold]
 #[inline(never)]
 fn oom_error(shared: bool) -> Box<PgError> {
-    let msg = if shared { "out of shared memory" } else { "out of memory" };
+    let msg = if shared {
+        "out of shared memory"
+    } else {
+        "out of memory"
+    };
     Box::new(PgError::error(msg).with_sqlstate(ERRCODE_OUT_OF_MEMORY))
 }
 

@@ -1,6 +1,4 @@
-
-const BASE64: &[u8; 64] =
-    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+const BASE64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 const ARMOR_HEADER: &str = "-----BEGIN PGP MESSAGE-----\n";
 const ARMOR_FOOTER: &str = "\n-----END PGP MESSAGE-----\n";
@@ -8,7 +6,7 @@ const ARMOR_FOOTER: &str = "\n-----END PGP MESSAGE-----\n";
 pub const CORRUPT_ARMOR: &str = "Corrupt ascii-armor";
 
 fn base64_encode(src: &[u8]) -> Vec<u8> {
-    let mut dst: Vec<u8> = Vec::with_capacity((src.len() + 2) / 3 * 4 + src.len() / 57 + 4);
+    let mut dst: Vec<u8> = Vec::with_capacity(src.len().div_ceil(3) * 4 + src.len() / 57 + 4);
     let mut pos: i32 = 2;
     let mut buf: u64 = 0;
     let mut line_chars = 0usize;
@@ -256,7 +254,9 @@ pub fn armor_decode(src: &[u8]) -> Result<Vec<u8>, ()> {
     }
 }
 
-pub fn extract_armor_headers(src: &[u8]) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ()> {
+type ArmorHeaders = Vec<(Vec<u8>, Vec<u8>)>;
+
+pub fn extract_armor_headers(src: &[u8]) -> Result<ArmorHeaders, ()> {
     let (start_off, hlen) = find_header(src, false)?;
     if hlen == 0 {
         return Err(());

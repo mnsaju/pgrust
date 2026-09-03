@@ -163,7 +163,10 @@ pub(crate) fn run_rtpool_demo() -> ! {
     // NO register_self: runs on the boot/driver thread, already registered
     // as "simnet-main" (the W-S2-1 one-door law — now a symbolic assert).
     let started = postmaster_seams::rtpool_start::call();
-    assert!(started >= 0, "rtpool demo requires PGRUST_RUNTIME=1 (start returned {started})");
+    assert!(
+        started >= 0,
+        "rtpool demo requires PGRUST_RUNTIME=1 (start returned {started})"
+    );
     // Rendezvous: when this park returns, every worker is at its eventcount
     // park (virtual time advances only when nothing is runnable).
     pgsync::thread::sleep(std::time::Duration::from_millis(10));

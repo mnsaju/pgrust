@@ -87,11 +87,13 @@ pub fn exec_init_nest_loop<'mcx>(
             .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED),
         ));
     }
-    let nl_fill_outer =
-        matches!(node.join.jointype, JoinType::JOIN_LEFT | JoinType::JOIN_ANTI);
+    let nl_fill_outer = matches!(
+        node.join.jointype,
+        JoinType::JOIN_LEFT | JoinType::JOIN_ANTI
+    );
     let nl_NullInnerTupleSlot = if nl_fill_outer {
-        let slot_id = estate
-            .exec_init_extra_tuple_slot(Some(inner_desc.clone()), TupleSlotKind::Virtual);
+        let slot_id =
+            estate.exec_init_extra_tuple_slot(Some(inner_desc.clone()), TupleSlotKind::Virtual);
         exectuples::exec_store_all_null_tuple(
             &mut estate.es_tupleTable[slot_id.0 as usize],
             estate.es_query_cxt,
@@ -112,7 +114,10 @@ pub fn exec_init_nest_loop<'mcx>(
             .as_var()
             .expect("NestLoopParam value is a simple Var");
         debug_assert!(v.varno == ::types_nodes::primnodes::OUTER_VAR && v.varattno > 0);
-        nest_params.push(NestParamSlot { paramno: nlp.paramno, attno: v.varattno });
+        nest_params.push(NestParamSlot {
+            paramno: nlp.paramno,
+            attno: v.varattno,
+        });
         nest_param_set.add_member(mcx, nlp.paramno)?;
     }
     let ps_ExprContext = estate.exec_assign_expr_context();
@@ -142,8 +147,7 @@ pub fn exec_init_nest_loop<'mcx>(
         proj,
         joinqual,
         otherqual,
-        js_single_match: node.join.inner_unique
-            || node.join.jointype == JoinType::JOIN_SEMI,
+        js_single_match: node.join.inner_unique || node.join.jointype == JoinType::JOIN_SEMI,
         nl_fill_outer,
         nl_NullInnerTupleSlot,
         nl_NeedNewOuter: true,
@@ -196,8 +200,7 @@ where
                     prm.value = value;
                     prm.isnull = isnull;
                 }
-                let inner_plan =
-                    node.plan.join.plan.righttree.expect("nestloop inner plan");
+                let inner_plan = node.plan.join.plan.righttree.expect("nestloop inner plan");
                 inner.rescan_with_chg(inner_plan, estate, &node.nest_param_set)?;
             }
         }
@@ -482,7 +485,11 @@ fn with_qual_slots<'mcx, R>(
     let [inner, outer] = table
         .get_disjoint_mut([inner_id.0 as usize, outer_id.0 as usize])
         .expect("distinct in-range nestloop slot ids");
-    let mut slots = EvalSlots { scan: None, inner: Some(inner), outer: Some(outer) };
+    let mut slots = EvalSlots {
+        scan: None,
+        inner: Some(inner),
+        outer: Some(outer),
+    };
     f(&mut slots)
 }
 
@@ -512,7 +519,11 @@ fn project_join_tuple<'mcx>(
     let [inner, outer, result] = table
         .get_disjoint_mut([inner_id.0 as usize, outer_id.0 as usize, result.0 as usize])
         .expect("distinct in-range nestloop slot ids");
-    let mut slots = EvalSlots { scan: None, inner: Some(inner), outer: Some(outer) };
+    let mut slots = EvalSlots {
+        scan: None,
+        inner: Some(inner),
+        outer: Some(outer),
+    };
     exec_project(proj, &mut slots, result, mcx)
 }
 

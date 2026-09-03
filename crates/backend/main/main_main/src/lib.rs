@@ -108,7 +108,9 @@ fn check_root(progname: &str) {
         std::process::exit(1);
     }
     if uid != euid {
-        elog::write_stderr(&format!("{progname}: real and effective user IDs must match\n"));
+        elog::write_stderr(&format!(
+            "{progname}: real and effective user IDs must match\n"
+        ));
         std::process::exit(1);
     }
 }
@@ -326,11 +328,23 @@ mod tests {
     fn dispatch_names_match_c() {
         assert_eq!(parse_dispatch_option("check"), DispatchOption::Check);
         assert_eq!(parse_dispatch_option("boot"), DispatchOption::Boot);
-        assert_eq!(parse_dispatch_option("describe-config"), DispatchOption::DescribeConfig);
+        assert_eq!(
+            parse_dispatch_option("describe-config"),
+            DispatchOption::DescribeConfig
+        );
         assert_eq!(parse_dispatch_option("single"), DispatchOption::Single);
-        assert_eq!(parse_dispatch_option("stdio-wire"), DispatchOption::StdioWire);
-        assert_eq!(parse_dispatch_option("forkchild"), DispatchOption::Postmaster);
-        assert_eq!(parse_dispatch_option("nonsense"), DispatchOption::Postmaster);
+        assert_eq!(
+            parse_dispatch_option("stdio-wire"),
+            DispatchOption::StdioWire
+        );
+        assert_eq!(
+            parse_dispatch_option("forkchild"),
+            DispatchOption::Postmaster
+        );
+        assert_eq!(
+            parse_dispatch_option("nonsense"),
+            DispatchOption::Postmaster
+        );
         assert_eq!(parse_dispatch_option(""), DispatchOption::Postmaster);
     }
 

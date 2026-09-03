@@ -42,7 +42,14 @@ pub fn fc_numeric_random(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) ->
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 pub const PSEUDORANDOM_BUILTINS: &[FmgrBuiltin] = &[

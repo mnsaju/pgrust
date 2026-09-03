@@ -35,7 +35,7 @@ pub fn RelationGetRowSecurityDesc<'mcx>(mcx: Mcx<'mcx>, relid: Oid) -> PgResult<
             policy_name: PgString::from_str_in(row.polname, cmcx)?,
             polcmd: row.polcmd,
             permissive: row.polpermissive,
-            roles: row.polroles.iter().copied().collect(),
+            roles: row.polroles.to_vec(),
             qual_src: match row.polqual {
                 Some(s) => Some(PgString::from_str_in(s, cmcx)?),
                 None => None,

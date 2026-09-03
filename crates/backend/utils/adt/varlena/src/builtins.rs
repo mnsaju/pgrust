@@ -25,7 +25,9 @@ fn no_flinfo(name: &str) -> ! {
 struct OutBuf(Vec<u8>);
 
 fn out_scratch<'a>(flinfo: Option<&'a mut FmgrInfo>, name: &'static str) -> &'a mut Vec<u8> {
-    let Some(flinfo) = flinfo else { no_flinfo(name) };
+    let Some(flinfo) = flinfo else {
+        no_flinfo(name)
+    };
     if !flinfo.has_fn_extra() {
         flinfo.set_fn_extra(OutBuf(Vec::new()));
     }
@@ -66,10 +68,7 @@ pub fn fc_hashtext(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRes
     Ok(Datum::from_u32(::hashfn::hash_bytes(key.data())))
 }
 
-pub fn fc_hashtextextended(
-    _flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_hashtextextended(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: catalog arg 0 is a non-null text varlena (strict fn).
     let key = unsafe { fcinfo.arg_varlena_packed(0)? };
     let [_, seed] = fcinfo.args_n::<2>();
@@ -77,7 +76,10 @@ pub fn fc_hashtextextended(
     if let Some(h) = hashtext_nondeterministic(fcinfo.get_collation(), key.data(), Some(seed))? {
         return Ok(Datum::from_u64(h));
     }
-    Ok(Datum::from_u64(::hashfn::hash_bytes_extended(key.data(), seed)))
+    Ok(Datum::from_u64(::hashfn::hash_bytes_extended(
+        key.data(),
+        seed,
+    )))
 }
 
 // hashvarlena/hashbytea (hashfunc.c): raw-byte hash, no collation leg.
@@ -95,7 +97,10 @@ pub fn fc_hashvarlenaextended(
     let key = unsafe { fcinfo.arg_varlena_packed(0)? };
     let [_, seed] = fcinfo.args_n::<2>();
     let seed = seed.value.as_u64();
-    Ok(Datum::from_u64(::hashfn::hash_bytes_extended(key.data(), seed)))
+    Ok(Datum::from_u64(::hashfn::hash_bytes_extended(
+        key.data(),
+        seed,
+    )))
 }
 
 #[track_caller]
@@ -224,7 +229,9 @@ pub fn fc_textin(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult
     let buf = out_scratch(flinfo, "textin");
     buf.clear();
     buf.reserve(datum::varlena::VARHDRSZ + s.len());
-    buf.extend_from_slice(&datum::varlena::set_varsize_4b(datum::varlena::VARHDRSZ + s.len()));
+    buf.extend_from_slice(&datum::varlena::set_varsize_4b(
+        datum::varlena::VARHDRSZ + s.len(),
+    ));
     buf.extend_from_slice(s);
     Ok(Datum::from_usize(buf.as_ptr() as usize))
 }
@@ -263,7 +270,11 @@ pub fn fc_textcat(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResu
     // SAFETY: catalog args are non-null text varlenas (strict fn).
     let (a, b) = unsafe { (fcinfo.arg_varlena_packed(0)?, fcinfo.arg_varlena_packed(1)?) };
     let mcx = fcinfo.result_mcx();
-    Ok(varlena_result(crate::text_catenate(mcx, a.data(), b.data())?))
+    Ok(varlena_result(crate::text_catenate(
+        mcx,
+        a.data(),
+        b.data(),
+    )?))
 }
 
 pub fn fc_byteacat(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -279,7 +290,7 @@ pub fn fc_byteacat(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRes
 
 pub fn fc_textrecv(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: recv arg0 is the live StringInfo pointer per the recv ABI.
-    let buf = unsafe { fcinfo.arg_stringinfo(0) };
+    let buf = unsafe { &mut *fcinfo.arg_stringinfo(0) };
     let mcx = fcinfo.result_mcx();
     Ok(varlena_result(crate::textrecv(mcx, buf)?))
 }
@@ -293,7 +304,7 @@ pub fn fc_textsend(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRes
 
 pub fn fc_bytearecv(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: recv arg0 is the live StringInfo pointer per the recv ABI.
-    let buf = unsafe { fcinfo.arg_stringinfo(0) };
+    let buf = unsafe { &mut *fcinfo.arg_stringinfo(0) };
     let mcx = fcinfo.result_mcx();
     Ok(varlena_result(crate::bytea::bytearecv(mcx, buf)?))
 }
@@ -329,7 +340,7 @@ pub fn fc_unknownin(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRe
 
 pub fn fc_unknownrecv(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: recv arg 0 is the live StringInfo pointer per the recv ABI.
-    let buf = unsafe { fcinfo.arg_stringinfo(0) };
+    let buf = unsafe { &mut *fcinfo.arg_stringinfo(0) };
     let mcx = fcinfo.result_mcx();
     Ok(cstring_result(crate::unknownrecv(mcx, buf)?))
 }
@@ -474,7 +485,6 @@ pub fn fc_textpos(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResu
     )?))
 }
 
-
 pub fn fc_replace_text(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: catalog args are non-null text varlenas (strict fn).
     let (src, from_sub, to_sub) = unsafe {
@@ -518,7 +528,10 @@ fn string_agg_transfn_common(fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     Ok(Datum::from_usize(state as usize))
 }
 
-pub fn fc_string_agg_transfn(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+pub fn fc_string_agg_transfn(
+    _flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     string_agg_transfn_common(fcinfo)
 }
 
@@ -539,7 +552,10 @@ fn string_agg_finalfn_common(fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     }
 }
 
-pub fn fc_string_agg_finalfn(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+pub fn fc_string_agg_finalfn(
+    _flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     string_agg_finalfn_common(fcinfo)
 }
 
@@ -582,8 +598,7 @@ pub fn fc_string_agg_serialize(
 ) -> PgResult<Datum> {
     // SAFETY: strict fn — arg0 is the aggcontext-lived state (transfn/combine
     // contract), read-only here.
-    let st =
-        unsafe { &*(fcinfo.arg(0).as_usize() as *const crate::string_agg::StringAggState) };
+    let st = unsafe { &*(fcinfo.arg(0).as_usize() as *const crate::string_agg::StringAggState) };
     let mcx = fcinfo.result_mcx();
     let out = crate::string_agg::string_agg_serialize(mcx, st)?;
     Ok(varlena_result(out))
@@ -631,17 +646,26 @@ pub fn fc_bytea_int8(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgR
 
 pub fn fc_int2_bytea(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let mcx = fcinfo.result_mcx();
-    Ok(varlena_result(crate::bytea::int_bytea(mcx, &fcinfo.arg_i16(0).to_be_bytes())?))
+    Ok(varlena_result(crate::bytea::int_bytea(
+        mcx,
+        &fcinfo.arg_i16(0).to_be_bytes(),
+    )?))
 }
 
 pub fn fc_int4_bytea(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let mcx = fcinfo.result_mcx();
-    Ok(varlena_result(crate::bytea::int_bytea(mcx, &fcinfo.arg_i32(0).to_be_bytes())?))
+    Ok(varlena_result(crate::bytea::int_bytea(
+        mcx,
+        &fcinfo.arg_i32(0).to_be_bytes(),
+    )?))
 }
 
 pub fn fc_int8_bytea(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let mcx = fcinfo.result_mcx();
-    Ok(varlena_result(crate::bytea::int_bytea(mcx, &fcinfo.arg_i64(0).to_be_bytes())?))
+    Ok(varlena_result(crate::bytea::int_bytea(
+        mcx,
+        &fcinfo.arg_i64(0).to_be_bytes(),
+    )?))
 }
 
 pub fn fc_bytea_reverse(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -710,7 +734,6 @@ pub fn fc_unicode_is_normalized(
     )?))
 }
 
-
 pub fn fc_textoverlay(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: catalog args 0/1 are non-null text varlenas (strict fn).
     // t1 stays the raw image: text_overlay substrings it via the
@@ -720,7 +743,13 @@ pub fn fc_textoverlay(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> Pg
     let sp = fcinfo.arg_i32(2);
     let sl = fcinfo.arg_i32(3);
     let mcx = fcinfo.result_mcx();
-    Ok(varlena_result(crate::text_overlay(mcx, t1, t2.data(), sp, sl)?))
+    Ok(varlena_result(crate::text_overlay(
+        mcx,
+        t1,
+        t2.data(),
+        sp,
+        sl,
+    )?))
 }
 
 pub fn fc_textoverlay_no_len(
@@ -734,7 +763,13 @@ pub fn fc_textoverlay_no_len(
     let sp = fcinfo.arg_i32(2);
     let sl = crate::text_length(t2.data())?;
     let mcx = fcinfo.result_mcx();
-    Ok(varlena_result(crate::text_overlay(mcx, t1, t2.data(), sp, sl)?))
+    Ok(varlena_result(crate::text_overlay(
+        mcx,
+        t1,
+        t2.data(),
+        sp,
+        sl,
+    )?))
 }
 
 pub fn fc_byteaoverlay(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -745,7 +780,13 @@ pub fn fc_byteaoverlay(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> P
     let sp = fcinfo.arg_i32(2);
     let sl = fcinfo.arg_i32(3);
     let mcx = fcinfo.result_mcx();
-    Ok(varlena_result(crate::bytea::bytea_overlay(mcx, t1, t2.data(), sp, sl)?))
+    Ok(varlena_result(crate::bytea::bytea_overlay(
+        mcx,
+        t1,
+        t2.data(),
+        sp,
+        sl,
+    )?))
 }
 
 pub fn fc_byteaoverlay_no_len(
@@ -759,7 +800,13 @@ pub fn fc_byteaoverlay_no_len(
     let sp = fcinfo.arg_i32(2);
     let sl = crate::bytea::byteaoctetlen(t2.data());
     let mcx = fcinfo.result_mcx();
-    Ok(varlena_result(crate::bytea::bytea_overlay(mcx, t1, t2.data(), sp, sl)?))
+    Ok(varlena_result(crate::bytea::bytea_overlay(
+        mcx,
+        t1,
+        t2.data(),
+        sp,
+        sl,
+    )?))
 }
 
 pub fn fc_bytea_bit_count(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -795,14 +842,18 @@ struct ArgTypLen(i16);
 #[cold]
 #[inline(never)]
 fn type_cache_lookup_failed(typid: Oid) -> Box<PgError> {
-    Box::new(PgError::error(format!("cache lookup failed for type {typid}")))
+    Box::new(PgError::error(format!(
+        "cache lookup failed for type {typid}"
+    )))
 }
 
 #[track_caller]
 #[cold]
 #[inline(never)]
 fn invalid_compression_method_id(cmid: u32) -> Box<PgError> {
-    Box::new(PgError::error(format!("invalid compression method id {cmid}")))
+    Box::new(PgError::error(format!(
+        "invalid compression method id {cmid}"
+    )))
 }
 
 // pub for proofs/strings-scalar (Kani stub target); behavior unchanged.
@@ -982,16 +1033,36 @@ pub const VARLENA_BUILTINS: &[FmgrBuiltin] = &[
     b(2085, "bytea_substr", 3, fc_bytea_substr),
     b(2086, "bytea_substr_no_len", 2, fc_bytea_substr_no_len),
     b(3058, "text_concat", 1, crate::concat_format::fc_text_concat),
-    b(3059, "text_concat_ws", 2, crate::concat_format::fc_text_concat_ws),
+    b(
+        3059,
+        "text_concat_ws",
+        2,
+        crate::concat_format::fc_text_concat_ws,
+    ),
     b(3539, "text_format", 2, crate::concat_format::fc_text_format),
-    b(3540, "text_format_nv", 1, crate::concat_format::fc_text_format),
+    b(
+        3540,
+        "text_format_nv",
+        1,
+        crate::concat_format::fc_text_format,
+    ),
     b(2087, "replace_text", 3, fc_replace_text),
     b(2088, "split_part", 3, fc_split_part),
     b(3255, "bttextsortsupport", 1, fc_bttextsortsupport),
     n(3535, "string_agg_transfn", 3, fc_string_agg_transfn),
     n(3536, "string_agg_finalfn", 1, fc_string_agg_finalfn),
-    n(3543, "bytea_string_agg_transfn", 3, fc_bytea_string_agg_transfn),
-    n(3544, "bytea_string_agg_finalfn", 1, fc_bytea_string_agg_finalfn),
+    n(
+        3543,
+        "bytea_string_agg_transfn",
+        3,
+        fc_bytea_string_agg_transfn,
+    ),
+    n(
+        3544,
+        "bytea_string_agg_finalfn",
+        1,
+        fc_bytea_string_agg_finalfn,
+    ),
     b(5050, "btvarstrequalimage", 1, fc_btvarstrequalimage),
     n(6299, "string_agg_combine", 2, fc_string_agg_combine),
     b(6300, "string_agg_serialize", 1, fc_string_agg_serialize),
@@ -1000,7 +1071,12 @@ pub const VARLENA_BUILTINS: &[FmgrBuiltin] = &[
     b(6393, "bytea_larger", 2, fc_bytea_larger),
     b(6394, "bytea_smaller", 2, fc_bytea_smaller),
     n(394, "text_to_array", 2, crate::split_text::fc_text_to_array),
-    n(376, "text_to_array_null", 3, crate::split_text::fc_text_to_array),
+    n(
+        376,
+        "text_to_array_null",
+        3,
+        crate::split_text::fc_text_to_array,
+    ),
     b(4350, "unicode_normalize_func", 2, fc_unicode_normalize_func),
     b(4351, "unicode_is_normalized", 2, fc_unicode_is_normalized),
     b(4549, "unicode_version", 0, fc_unicode_version),
@@ -1017,9 +1093,24 @@ pub const VARLENA_BUILTINS: &[FmgrBuiltin] = &[
     b(6331, "to_bin64", 1, fc_to_bin64),
     b(6332, "to_oct32", 1, fc_to_oct32),
     b(6333, "to_oct64", 1, fc_to_oct64),
-    srf(6160, "text_to_table", 2, crate::split_text::fc_text_to_table),
-    srf(6161, "text_to_table_null", 3, crate::split_text::fc_text_to_table),
+    srf(
+        6160,
+        "text_to_table",
+        2,
+        crate::split_text::fc_text_to_table,
+    ),
+    srf(
+        6161,
+        "text_to_table_null",
+        3,
+        crate::split_text::fc_text_to_table,
+    ),
     b(1269, "pg_column_size", 1, fc_pg_column_size),
     b(2121, "pg_column_compression", 1, fc_pg_column_compression),
-    b(6316, "pg_column_toast_chunk_id", 1, fc_pg_column_toast_chunk_id),
+    b(
+        6316,
+        "pg_column_toast_chunk_id",
+        1,
+        fc_pg_column_toast_chunk_id,
+    ),
 ];

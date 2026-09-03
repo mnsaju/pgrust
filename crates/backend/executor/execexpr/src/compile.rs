@@ -4,9 +4,7 @@ use alloc::format;
 use ::mcx::{Allocator, Mcx, PgBox, PgVec};
 use ::types_core::fmgr::FnExprErased;
 use ::types_core::{Oid, FUNC_MAX_ARGS};
-use ::types_error::{
-    PgError, PgResult, ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_TOO_MANY_ARGUMENTS,
-};
+use ::types_error::{PgError, PgResult, ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_TOO_MANY_ARGUMENTS};
 use ::types_fmgr::{FmNodePtr, FmgrInfo, TRACK_FUNC_ALL, TRACK_FUNC_OFF};
 use ::types_nodes::list::NodeList;
 use ::types_nodes::node_tree::Node;
@@ -130,7 +128,8 @@ pub struct SubplanCompileEnv {
     pub estate: NonNull<()>,
     /// None when the query has no subplans (the env still carries the
     /// rtable/junk-tlist legs); a SubPlan node reaching compile then louds.
-    pub init: Option<for<'x> unsafe fn(NonNull<()>, Node<'x>, Option<AggBind>) -> PgResult<NonNull<()>>>,
+    pub init:
+        Option<for<'x> unsafe fn(NonNull<()>, Node<'x>, Option<AggBind>) -> PgResult<NonNull<()>>>,
     /// Parent Agg's result-array binding: Aggrefs inside the SubPlan's
     /// testexpr/args compile against the owning AggState (C parent PlanState).
     pub agg: Option<AggBind>,
@@ -231,7 +230,7 @@ pub fn exec_init_qual_subplans<'mcx>(
 
     for node in qual.iter() {
         let rout = state.result_out();
-    init_expr_rec(node, &mut state, mcx, rout, None, params, sub)?;
+        init_expr_rec(node, &mut state, mcx, rout, None, params, sub)?;
         push_step(&mut state, mcx, Step::Qual { jumpdone: u32::MAX })?;
     }
     let done = state.steps.len() as u32;
@@ -274,11 +273,26 @@ pub fn exec_build_agg_qual_subplans<'mcx>(
     }
     let mut state = ExprState::new_boxed_in(mcx)?;
     state.flags = EEO_FLAG_IS_QUAL;
-    create_expr_setup_steps(&mut state, mcx, qual.as_slice(), Some(Bind::Agg(agg)), params, sub)?;
+    create_expr_setup_steps(
+        &mut state,
+        mcx,
+        qual.as_slice(),
+        Some(Bind::Agg(agg)),
+        params,
+        sub,
+    )?;
 
     for node in qual.iter() {
         let rout = state.result_out();
-        init_expr_rec(node, &mut state, mcx, rout, Some(Bind::Agg(agg)), params, sub)?;
+        init_expr_rec(
+            node,
+            &mut state,
+            mcx,
+            rout,
+            Some(Bind::Agg(agg)),
+            params,
+            sub,
+        )?;
         push_step(&mut state, mcx, Step::Qual { jumpdone: u32::MAX })?;
     }
     let done = state.steps.len() as u32;
@@ -336,7 +350,14 @@ pub fn exec_build_agg_projection_info<'mcx>(
     agg: AggBind,
     params: ParamBind<'mcx>,
 ) -> PgResult<PgBox<'mcx, ExprState<'mcx>>> {
-    build_projection_info(mcx, target_list, input_desc, Some(Bind::Agg(agg)), params, None)
+    build_projection_info(
+        mcx,
+        target_list,
+        input_desc,
+        Some(Bind::Agg(agg)),
+        params,
+        None,
+    )
 }
 
 /// [`exec_build_agg_projection_info`] with SubPlan compile support wired.
@@ -348,7 +369,14 @@ pub fn exec_build_agg_projection_info_subplans<'mcx>(
     params: ParamBind<'mcx>,
     sub: Option<SubplanCompileEnv>,
 ) -> PgResult<PgBox<'mcx, ExprState<'mcx>>> {
-    build_projection_info(mcx, target_list, input_desc, Some(Bind::Agg(agg)), params, sub)
+    build_projection_info(
+        mcx,
+        target_list,
+        input_desc,
+        Some(Bind::Agg(agg)),
+        params,
+        sub,
+    )
 }
 
 /// WindowAgg-node projection: WindowFuncs bound to the result arrays by
@@ -360,7 +388,14 @@ pub fn exec_build_window_projection_info<'mcx>(
     win: WinBind<'_, 'mcx>,
     params: ParamBind<'mcx>,
 ) -> PgResult<PgBox<'mcx, ExprState<'mcx>>> {
-    build_projection_info(mcx, target_list, input_desc, Some(Bind::Win(win)), params, None)
+    build_projection_info(
+        mcx,
+        target_list,
+        input_desc,
+        Some(Bind::Win(win)),
+        params,
+        None,
+    )
 }
 
 /// [`exec_build_window_projection_info`] with SubPlan compile support wired.
@@ -372,7 +407,14 @@ pub fn exec_build_window_projection_info_subplans<'mcx>(
     params: ParamBind<'mcx>,
     sub: Option<SubplanCompileEnv>,
 ) -> PgResult<PgBox<'mcx, ExprState<'mcx>>> {
-    build_projection_info(mcx, target_list, input_desc, Some(Bind::Win(win)), params, sub)
+    build_projection_info(
+        mcx,
+        target_list,
+        input_desc,
+        Some(Bind::Win(win)),
+        params,
+        sub,
+    )
 }
 
 fn build_projection_info<'mcx>(
@@ -400,9 +442,9 @@ fn build_projection_info_ext<'mcx>(
     create_expr_setup_steps(&mut state, mcx, target_list.as_slice(), agg, params, sub)?;
 
     for tle_node in target_list.iter() {
-        let tle = tle_node.as_target_entry().unwrap_or_else(|| {
-            panic!("expected TargetEntry, got tag {:?}", tle_node.node_tag())
-        });
+        let tle = tle_node
+            .as_target_entry()
+            .unwrap_or_else(|| panic!("expected TargetEntry, got tag {:?}", tle_node.node_tag()));
         let mut safe_var: Option<&Var<'_>> = None;
         if let Some(variable) = tle.expr.as_var() {
             if variable.varattno > 0 {
@@ -491,7 +533,14 @@ pub fn exec_build_agg_trans_gsets<'mcx>(
     agg_node: FmNodePtr,
     params: ParamBind<'mcx>,
 ) -> PgResult<PgBox<'mcx, ExprState<'mcx>>> {
-    build_agg_trans(mcx, specs, PergroupMode::Sets(set_bases), agg_node, params, None)
+    build_agg_trans(
+        mcx,
+        specs,
+        PergroupMode::Sets(set_bases),
+        agg_node,
+        params,
+        None,
+    )
 }
 
 enum PergroupMode<'a> {
@@ -499,7 +548,10 @@ enum PergroupMode<'a> {
     Indirect(NonNull<NonNull<AggPerGroup>>),
     Sets(&'a [NonNull<AggPerGroup>]),
     // C's dosort+dohash program: Sets bases plus one Indirect cell per hash set.
-    Mixed(&'a [NonNull<AggPerGroup>], &'a [NonNull<NonNull<AggPerGroup>>]),
+    Mixed(
+        &'a [NonNull<AggPerGroup>],
+        &'a [NonNull<NonNull<AggPerGroup>>],
+    ),
 }
 
 pub fn exec_build_agg_trans_mixed<'mcx>(
@@ -510,7 +562,14 @@ pub fn exec_build_agg_trans_mixed<'mcx>(
     agg_node: FmNodePtr,
     params: ParamBind<'mcx>,
 ) -> PgResult<PgBox<'mcx, ExprState<'mcx>>> {
-    build_agg_trans(mcx, specs, PergroupMode::Mixed(set_bases, cells), agg_node, params, None)
+    build_agg_trans(
+        mcx,
+        specs,
+        PergroupMode::Mixed(set_bases, cells),
+        agg_node,
+        params,
+        None,
+    )
 }
 
 /// AGG_HASHED variant: pergroup resolves per tuple through `base`, the cell
@@ -523,7 +582,14 @@ pub fn exec_build_agg_trans_hashed<'mcx>(
     agg_node: FmNodePtr,
     params: ParamBind<'mcx>,
 ) -> PgResult<PgBox<'mcx, ExprState<'mcx>>> {
-    build_agg_trans(mcx, specs, PergroupMode::Indirect(base), agg_node, params, None)
+    build_agg_trans(
+        mcx,
+        specs,
+        PergroupMode::Indirect(base),
+        agg_node,
+        params,
+        None,
+    )
 }
 
 /// [`exec_build_agg_trans_hashed`] with SubPlan compile support wired.
@@ -535,7 +601,15 @@ pub fn exec_build_agg_trans_hashed_subplans<'mcx>(
     params: ParamBind<'mcx>,
     sub: Option<SubplanCompileEnv>,
 ) -> PgResult<PgBox<'mcx, ExprState<'mcx>>> {
-    build_agg_trans_masked(mcx, specs, None, PergroupMode::Indirect(base), agg_node, params, sub)
+    build_agg_trans_masked(
+        mcx,
+        specs,
+        None,
+        PergroupMode::Indirect(base),
+        agg_node,
+        params,
+        sub,
+    )
 }
 
 /// [`exec_build_agg_trans_hashed_subplans`] over the `keep`-masked subset of
@@ -578,7 +652,15 @@ pub fn exec_build_agg_trans_plain_masked<'mcx>(
     sub: Option<SubplanCompileEnv>,
 ) -> PgResult<PgBox<'mcx, ExprState<'mcx>>> {
     debug_assert_eq!(specs.len(), keep.len());
-    build_agg_trans_masked(mcx, specs, Some(keep), PergroupMode::Fixed, agg_node, params, sub)
+    build_agg_trans_masked(
+        mcx,
+        specs,
+        Some(keep),
+        PergroupMode::Fixed,
+        agg_node,
+        params,
+        sub,
+    )
 }
 
 // The tag proves the FmNodePtr is an AggStateNode (WindowAgg passes None).
@@ -663,7 +745,10 @@ fn build_agg_trans_masked<'mcx>(
         let agg_argtypes = ::mcx::alloc_leak_in(
             mcx,
             ::types_core::fmgr::AggFnArgTypes {
-                rettype: argtypes.first().copied().unwrap_or(::types_core::InvalidOid),
+                rettype: argtypes
+                    .first()
+                    .copied()
+                    .unwrap_or(::types_core::InvalidOid),
                 argtypes,
             },
         )?;
@@ -682,8 +767,12 @@ fn build_agg_trans_masked<'mcx>(
         // SAFETY: fresh frame image; the caller's agg_node outlives the program.
         unsafe { crate::steps::fcinfo_mut(frame.fcinfo, nargs as u16).context = agg_node };
         let frame_ix = state.frames.len() as u32;
-        let call =
-            FuncCall { fcinfo: frame.fcinfo, flinfo: frame.flinfo, frame: frame_ix, nargs: nargs as u16 };
+        let call = FuncCall {
+            fcinfo: frame.fcinfo,
+            flinfo: frame.flinfo,
+            frame: frame_ix,
+            nargs: nargs as u16,
+        };
         state
             .frames
             .try_reserve(1)
@@ -701,7 +790,10 @@ fn build_agg_trans_masked<'mcx>(
             push_step(
                 &mut state,
                 mcx,
-                Step::JumpIfNotTrue { jumpdone: u32::MAX, out: rout },
+                Step::JumpIfNotTrue {
+                    jumpdone: u32::MAX,
+                    out: rout,
+                },
             )?;
         }
         let mut ds_bailout: Option<usize> = None;
@@ -734,8 +826,10 @@ fn build_agg_trans_masked<'mcx>(
             // type-safety dummy, written once at build time.
             let ds_arg0 = OutRef(unsafe { crate::steps::arg_slot_of(ds_call.fcinfo, 0) });
             unsafe {
-                crate::steps::arg_slot_of(ds_call.fcinfo, 1)
-                    .write(::datum::NullableDatum { value: ::datum::Datum::null(), isnull: false })
+                crate::steps::arg_slot_of(ds_call.fcinfo, 1).write(::datum::NullableDatum {
+                    value: ::datum::Datum::null(),
+                    isnull: false,
+                })
             };
             init_expr_rec(tle.expr, &mut state, mcx, ds_arg0, None, params, None)?;
             // SAFETY: slot 1 of the nargs >= 2 trans fcinfo image.
@@ -745,23 +839,36 @@ fn build_agg_trans_masked<'mcx>(
                 push_step(
                     &mut state,
                     mcx,
-                    Step::AggStrictDeserialize { call: ds_call, out: trans_arg1, jumpnull: u32::MAX },
+                    Step::AggStrictDeserialize {
+                        call: ds_call,
+                        out: trans_arg1,
+                        jumpnull: u32::MAX,
+                    },
                 )?;
             } else {
-                push_step(&mut state, mcx, Step::AggDeserialize { call: ds_call, out: trans_arg1 })?;
+                push_step(
+                    &mut state,
+                    mcx,
+                    Step::AggDeserialize {
+                        call: ds_call,
+                        out: trans_arg1,
+                    },
+                )?;
             }
         } else {
             let mut argno = 0usize;
             for tle_node in spec.args.iter() {
                 let tle = tle_node.as_target_entry().unwrap_or_else(|| {
-                    panic!("Aggref.args cell: expected TargetEntry, got {:?}", tle_node.node_tag())
+                    panic!(
+                        "Aggref.args cell: expected TargetEntry, got {:?}",
+                        tle_node.node_tag()
+                    )
                 });
                 if tle.resjunk {
                     continue;
                 }
                 // SAFETY: argno + 1 <= num_trans_inputs < nargs of `call.fcinfo`.
-                let arg_out =
-                    OutRef(unsafe { crate::steps::arg_slot_of(call.fcinfo, argno + 1) });
+                let arg_out = OutRef(unsafe { crate::steps::arg_slot_of(call.fcinfo, argno + 1) });
                 init_expr_rec(tle.expr, &mut state, mcx, arg_out, None, params, sub)?;
                 argno += 1;
             }
@@ -772,7 +879,10 @@ fn build_agg_trans_masked<'mcx>(
             // SAFETY: slot 1 of the nargs >= 2 fcinfo image (C's &args[1]).
             let args1 = unsafe { crate::steps::arg_slot_of(call.fcinfo, 1) };
             let step = if num_trans_inputs == 1 {
-                Step::AggStrictInputCheck1 { arg: args1, jumpnull: u32::MAX }
+                Step::AggStrictInputCheck1 {
+                    arg: args1,
+                    jumpnull: u32::MAX,
+                }
             } else {
                 Step::AggStrictInputCheck {
                     args: args1,
@@ -804,9 +914,21 @@ fn build_agg_trans_masked<'mcx>(
                     translen: spec.transtype_len,
                 };
                 match (fn_strict, spec.init_value_is_null) {
-                    (true, true) => Step::AggPlainTransInitStrictByRef { call, pergroup, byref },
-                    (true, false) => Step::AggPlainTransStrictByRef { call, pergroup, byref },
-                    (false, _) => Step::AggPlainTransByRef { call, pergroup, byref },
+                    (true, true) => Step::AggPlainTransInitStrictByRef {
+                        call,
+                        pergroup,
+                        byref,
+                    },
+                    (true, false) => Step::AggPlainTransStrictByRef {
+                        call,
+                        pergroup,
+                        byref,
+                    },
+                    (false, _) => Step::AggPlainTransByRef {
+                        call,
+                        pergroup,
+                        byref,
+                    },
                 }
             }
         };
@@ -823,9 +945,11 @@ fn build_agg_trans_masked<'mcx>(
                         base,
                         transno: transno as u16,
                     },
-                    (false, false) => {
-                        Step::AggTransByValIndirect { call, base, transno: transno as u16 }
-                    }
+                    (false, false) => Step::AggTransByValIndirect {
+                        call,
+                        base,
+                        transno: transno as u16,
+                    },
                 }
             } else {
                 let byref = crate::steps::AggByRef {
@@ -834,13 +958,24 @@ fn build_agg_trans_masked<'mcx>(
                 };
                 let transno = transno as u16;
                 match (fn_strict, spec.init_value_is_null) {
-                    (true, true) => {
-                        Step::AggTransInitStrictByRefIndirect { call, base, transno, byref }
-                    }
-                    (true, false) => {
-                        Step::AggTransStrictByRefIndirect { call, base, transno, byref }
-                    }
-                    (false, _) => Step::AggTransByRefIndirect { call, base, transno, byref },
+                    (true, true) => Step::AggTransInitStrictByRefIndirect {
+                        call,
+                        base,
+                        transno,
+                        byref,
+                    },
+                    (true, false) => Step::AggTransStrictByRefIndirect {
+                        call,
+                        base,
+                        transno,
+                        byref,
+                    },
+                    (false, _) => Step::AggTransByRefIndirect {
+                        call,
+                        base,
+                        transno,
+                        byref,
+                    },
                 }
             }
         };
@@ -861,8 +996,7 @@ fn build_agg_trans_masked<'mcx>(
                 for &base in bases.iter() {
                     // SAFETY: transno < numtrans slots of each once-allocated
                     // per-set pergroup array (nodeAgg contract).
-                    let pergroup =
-                        unsafe { NonNull::new_unchecked(base.as_ptr().add(transno)) };
+                    let pergroup = unsafe { NonNull::new_unchecked(base.as_ptr().add(transno)) };
                     push_step(&mut state, mcx, fixed_step(pergroup))?;
                 }
             }
@@ -872,8 +1006,7 @@ fn build_agg_trans_masked<'mcx>(
             PergroupMode::Mixed(bases, cells) => {
                 for &base in bases.iter() {
                     // SAFETY: as PergroupMode::Sets.
-                    let pergroup =
-                        unsafe { NonNull::new_unchecked(base.as_ptr().add(transno)) };
+                    let pergroup = unsafe { NonNull::new_unchecked(base.as_ptr().add(transno)) };
                     push_step(&mut state, mcx, fixed_step(pergroup))?;
                 }
                 for &cell in cells.iter() {
@@ -928,21 +1061,33 @@ fn build_agg_trans_ordered<'mcx>(
         let rout = state.result_out();
         init_expr_rec(f, state, mcx, rout, None, params, None)?;
         filter_jump = Some(state.steps.len());
-        push_step(state, mcx, Step::JumpIfNotTrue { jumpdone: u32::MAX, out: rout })?;
+        push_step(
+            state,
+            mcx,
+            Step::JumpIfNotTrue {
+                jumpdone: u32::MAX,
+                out: rout,
+            },
+        )?;
     }
     for (argno, tle_node) in spec.args.iter().enumerate() {
         let tle = tle_node.as_target_entry().unwrap_or_else(|| {
-            panic!("Aggref.args cell: expected TargetEntry, got {:?}", tle_node.node_tag())
+            panic!(
+                "Aggref.args cell: expected TargetEntry, got {:?}",
+                tle_node.node_tag()
+            )
         });
         // SAFETY: argno < the nodeagg-owned num-inputs scratch array length.
-        let out =
-            OutRef(unsafe { NonNull::new_unchecked(ord.scratch.as_ptr().add(argno)) });
+        let out = OutRef(unsafe { NonNull::new_unchecked(ord.scratch.as_ptr().add(argno)) });
         init_expr_rec(tle.expr, state, mcx, out, None, params, None)?;
     }
     let mut bailout: Option<usize> = None;
     if fn_strict && ord.num_trans_inputs > 0 {
         let step = if ord.num_trans_inputs == 1 {
-            Step::AggStrictInputCheck1 { arg: ord.scratch, jumpnull: u32::MAX }
+            Step::AggStrictInputCheck1 {
+                arg: ord.scratch,
+                jumpnull: u32::MAX,
+            }
         } else {
             Step::AggStrictInputCheck {
                 args: ord.scratch,
@@ -995,7 +1140,13 @@ pub fn exec_build_hash32_from_attrs<'mcx>(
 
     let last_attnum = key_col_idx.iter().copied().max().unwrap_or(0);
     if last_attnum > 0 {
-        push_step(&mut state, mcx, Step::InnerFetchSome { last_var: last_attnum as u16 })?;
+        push_step(
+            &mut state,
+            mcx,
+            Step::InnerFetchSome {
+                last_var: last_attnum as u16,
+            },
+        )?;
     }
 
     let mut first = true;
@@ -1008,7 +1159,10 @@ pub fn exec_build_hash32_from_attrs<'mcx>(
         push_step(
             &mut state,
             mcx,
-            Step::HashDatumSetInitVal { init_value: ::datum::Datum::from_u32(init_value), out },
+            Step::HashDatumSetInitVal {
+                init_value: ::datum::Datum::from_u32(init_value),
+                out,
+            },
         )?;
         first = false;
     }
@@ -1019,7 +1173,11 @@ pub fn exec_build_hash32_from_attrs<'mcx>(
         push_step(
             &mut state,
             mcx,
-            Step::Const { value: ::datum::Datum::from_u32(0), isnull: false, out },
+            Step::Const {
+                value: ::datum::Datum::from_u32(0),
+                isnull: false,
+                out,
+            },
         )?;
     }
 
@@ -1028,7 +1186,12 @@ pub fn exec_build_hash32_from_attrs<'mcx>(
         let flinfo = fmgr_core::fmgr_info(hash_fn_oids[i])?;
         let frame = FuncFrame::new_in(mcx, flinfo, 1, collations[i])?;
         let frame_ix = state.frames.len() as u32;
-        let call = FuncCall { fcinfo: frame.fcinfo, flinfo: frame.flinfo, frame: frame_ix, nargs: 1 };
+        let call = FuncCall {
+            fcinfo: frame.fcinfo,
+            flinfo: frame.flinfo,
+            frame: frame_ix,
+            nargs: 1,
+        };
         state
             .frames
             .try_reserve(1)
@@ -1038,7 +1201,15 @@ pub fn exec_build_hash32_from_attrs<'mcx>(
         // SAFETY: arg 0 of the frame's freshly allocated 1-arg fcinfo.
         let arg_out = OutRef(unsafe { crate::steps::arg_slot_of(call.fcinfo, 0) });
         let vartype = desc.attrs[attnum as usize].atttypid;
-        push_step(&mut state, mcx, Step::InnerVar { attnum, vartype, out: arg_out })?;
+        push_step(
+            &mut state,
+            mcx,
+            Step::InnerVar {
+                attnum,
+                vartype,
+                out: arg_out,
+            },
+        )?;
 
         let out = if i == num_cols - 1 {
             state.result_out()
@@ -1084,7 +1255,9 @@ pub fn exec_build_hash32_from_exprs<'mcx>(
     debug_assert!(hash_fn_oids.len() == num_cols && collations.len() == num_cols);
     'exprs: {
         let mut attnums: PgVec<'mcx, i16> = PgVec::new_in(mcx);
-        attnums.try_reserve(num_cols).map_err(|_| mcx.oom(num_cols * 2))?;
+        attnums
+            .try_reserve(num_cols)
+            .map_err(|_| mcx.oom(num_cols * 2))?;
         for k in hash_exprs.iter() {
             match k.as_var() {
                 Some(v) if v.varattno > 0 => attnums.push(v.varattno),
@@ -1112,11 +1285,23 @@ pub fn exec_build_hash32_from_exprs<'mcx>(
     for k in hash_exprs.iter() {
         setup_walker(k, &mut info);
     }
-    assert!(info.last_scan == 0, "ExecBuildHash32Expr: scan-slot Var in a hash key");
-    debug_assert!(info.multiexpr_subplans.is_empty(), "MULTIEXPR SubPlan in a hash key");
+    assert!(
+        info.last_scan == 0,
+        "ExecBuildHash32Expr: scan-slot Var in a hash key"
+    );
+    debug_assert!(
+        info.multiexpr_subplans.is_empty(),
+        "MULTIEXPR SubPlan in a hash key"
+    );
     let last_var = info.last_inner.max(info.last_outer);
     if last_var > 0 {
-        push_step(&mut state, mcx, Step::InnerFetchSome { last_var: last_var as u16 })?;
+        push_step(
+            &mut state,
+            mcx,
+            Step::InnerFetchSome {
+                last_var: last_var as u16,
+            },
+        )?;
     }
 
     let mut first = true;
@@ -1129,7 +1314,10 @@ pub fn exec_build_hash32_from_exprs<'mcx>(
         push_step(
             &mut state,
             mcx,
-            Step::HashDatumSetInitVal { init_value: ::datum::Datum::from_u32(init_value), out },
+            Step::HashDatumSetInitVal {
+                init_value: ::datum::Datum::from_u32(init_value),
+                out,
+            },
         )?;
         first = false;
     }
@@ -1138,7 +1326,12 @@ pub fn exec_build_hash32_from_exprs<'mcx>(
         let flinfo = fmgr_core::fmgr_info(hash_fn_oids[i])?;
         let frame = FuncFrame::new_in(mcx, flinfo, 1, collations[i])?;
         let frame_ix = state.frames.len() as u32;
-        let call = FuncCall { fcinfo: frame.fcinfo, flinfo: frame.flinfo, frame: frame_ix, nargs: 1 };
+        let call = FuncCall {
+            fcinfo: frame.fcinfo,
+            flinfo: frame.flinfo,
+            frame: frame_ix,
+            nargs: 1,
+        };
         state
             .frames
             .try_reserve(1)
@@ -1171,12 +1364,30 @@ pub fn exec_build_hash32_from_exprs<'mcx>(
 
     for s in state.steps.iter_mut() {
         match *s {
-            Step::OuterVar { attnum, vartype, out } => {
-                *s = Step::InnerVar { attnum, vartype, out }
+            Step::OuterVar {
+                attnum,
+                vartype,
+                out,
+            } => {
+                *s = Step::InnerVar {
+                    attnum,
+                    vartype,
+                    out,
+                }
             }
             Step::OuterSysVar { attnum, out } => *s = Step::InnerSysVar { attnum, out },
-            Step::WholeRow { src: SlotSrc::Outer, wr, frame, out } => {
-                *s = Step::WholeRow { src: SlotSrc::Inner, wr, frame, out }
+            Step::WholeRow {
+                src: SlotSrc::Outer,
+                wr,
+                frame,
+                out,
+            } => {
+                *s = Step::WholeRow {
+                    src: SlotSrc::Inner,
+                    wr,
+                    frame,
+                    out,
+                }
             }
             _ => {}
         }
@@ -1207,19 +1418,35 @@ pub fn exec_build_grouping_equal<'mcx>(
     // list set ops) every pair matches and no fetch/compare steps exist.
     if key_col_idx.is_empty() {
         let rout = state.result_out();
-        push_step(&mut state, mcx, Step::Const {
-            value: ::datum::Datum::from_bool(true),
-            isnull: false,
-            out: rout,
-        })?;
+        push_step(
+            &mut state,
+            mcx,
+            Step::Const {
+                value: ::datum::Datum::from_bool(true),
+                isnull: false,
+                out: rout,
+            },
+        )?;
         push_step(&mut state, mcx, Step::DoneReturn)?;
         ready_expr(&mut state);
         return Ok(state);
     }
 
     let maxatt = key_col_idx.iter().copied().max().unwrap();
-    push_step(&mut state, mcx, Step::InnerFetchSome { last_var: maxatt as u16 })?;
-    push_step(&mut state, mcx, Step::OuterFetchSome { last_var: maxatt as u16 })?;
+    push_step(
+        &mut state,
+        mcx,
+        Step::InnerFetchSome {
+            last_var: maxatt as u16,
+        },
+    )?;
+    push_step(
+        &mut state,
+        mcx,
+        Step::OuterFetchSome {
+            last_var: maxatt as u16,
+        },
+    )?;
 
     let userid = miscinit_seams::get_user_id::call();
     for natt in (0..key_col_idx.len()).rev() {
@@ -1234,7 +1461,12 @@ pub fn exec_build_grouping_equal<'mcx>(
         let flinfo = fmgr_core::fmgr_info(foid)?;
         let frame = FuncFrame::new_in(mcx, flinfo, 2, collations[natt])?;
         let frame_ix = state.frames.len() as u32;
-        let call = FuncCall { fcinfo: frame.fcinfo, flinfo: frame.flinfo, frame: frame_ix, nargs: 2 };
+        let call = FuncCall {
+            fcinfo: frame.fcinfo,
+            flinfo: frame.flinfo,
+            frame: frame_ix,
+            nargs: 2,
+        };
         state
             .frames
             .try_reserve(1)
@@ -1250,8 +1482,24 @@ pub fn exec_build_grouping_equal<'mcx>(
         };
         let ltype = ldesc.attrs[attnum as usize].atttypid;
         let rtype = rdesc.attrs[attnum as usize].atttypid;
-        push_step(&mut state, mcx, Step::InnerVar { attnum, vartype: ltype, out: arg0 })?;
-        push_step(&mut state, mcx, Step::OuterVar { attnum, vartype: rtype, out: arg1 })?;
+        push_step(
+            &mut state,
+            mcx,
+            Step::InnerVar {
+                attnum,
+                vartype: ltype,
+                out: arg0,
+            },
+        )?;
+        push_step(
+            &mut state,
+            mcx,
+            Step::OuterVar {
+                attnum,
+                vartype: rtype,
+                out: arg1,
+            },
+        )?;
         let rout = state.result_out();
         push_step(&mut state, mcx, Step::NotDistinct { call, out: rout })?;
         push_step(&mut state, mcx, Step::Qual { jumpdone: u32::MAX })?;
@@ -1315,7 +1563,9 @@ pub fn expr_type(node: Node<'_>) -> Oid {
         NodeTag::T_FieldSelect => node.as_field_select().unwrap().resulttype,
         NodeTag::T_FieldStore => node.as_field_store().unwrap().resulttype,
         NodeTag::T_NextValueExpr => {
-            node.as_variant::<::types_nodes::primnodes::NextValueExpr>().unwrap().typeId
+            node.as_variant::<::types_nodes::primnodes::NextValueExpr>()
+                .unwrap()
+                .typeId
         }
         NodeTag::T_SubPlan => {
             use ::types_nodes::primnodes::SubLinkType;
@@ -1337,14 +1587,27 @@ pub fn expr_type(node: Node<'_>) -> Oid {
         NodeTag::T_ConvertRowtypeExpr => node.as_convert_rowtype_expr().unwrap().resulttype,
         NodeTag::T_CoerceToDomain => node.as_coerce_to_domain().unwrap().resulttype,
         NodeTag::T_CoerceToDomainValue => node.as_coerce_to_domain_value().unwrap().typeId,
-        NodeTag::T_JsonValueExpr => {
-            expr_type(node.as_json_value_expr().unwrap().formatted_expr.expect("formatted_expr"))
-        }
+        NodeTag::T_JsonValueExpr => expr_type(
+            node.as_json_value_expr()
+                .unwrap()
+                .formatted_expr
+                .expect("formatted_expr"),
+        ),
         NodeTag::T_JsonConstructorExpr => {
-            node.as_json_constructor_expr().unwrap().returning.expect("returning").typid
+            node.as_json_constructor_expr()
+                .unwrap()
+                .returning
+                .expect("returning")
+                .typid
         }
         NodeTag::T_JsonIsPredicate => ::types_core::catalog::BOOLOID,
-        NodeTag::T_JsonExpr => node.as_json_expr().unwrap().returning.expect("returning").typid,
+        NodeTag::T_JsonExpr => {
+            node.as_json_expr()
+                .unwrap()
+                .returning
+                .expect("returning")
+                .typid
+        }
         NodeTag::T_ReturningExpr => expr_type(node.as_returning_expr().unwrap().retexpr),
         NodeTag::T_SubLink => {
             use ::types_nodes::primnodes::SubLinkType;
@@ -1487,19 +1750,49 @@ fn push_fetch_steps<'mcx>(
     info: &SetupInfo<'_>,
 ) -> PgResult<()> {
     if info.last_inner > 0 {
-        push_step(state, mcx, Step::InnerFetchSome { last_var: info.last_inner as u16 })?;
+        push_step(
+            state,
+            mcx,
+            Step::InnerFetchSome {
+                last_var: info.last_inner as u16,
+            },
+        )?;
     }
     if info.last_outer > 0 {
-        push_step(state, mcx, Step::OuterFetchSome { last_var: info.last_outer as u16 })?;
+        push_step(
+            state,
+            mcx,
+            Step::OuterFetchSome {
+                last_var: info.last_outer as u16,
+            },
+        )?;
     }
     if info.last_scan > 0 {
-        push_step(state, mcx, Step::ScanFetchSome { last_var: info.last_scan as u16 })?;
+        push_step(
+            state,
+            mcx,
+            Step::ScanFetchSome {
+                last_var: info.last_scan as u16,
+            },
+        )?;
     }
     if info.last_old > 0 {
-        push_step(state, mcx, Step::OldFetchSome { last_var: info.last_old as u16 })?;
+        push_step(
+            state,
+            mcx,
+            Step::OldFetchSome {
+                last_var: info.last_old as u16,
+            },
+        )?;
     }
     if info.last_new > 0 {
-        push_step(state, mcx, Step::NewFetchSome { last_var: info.last_new as u16 })?;
+        push_step(
+            state,
+            mcx,
+            Step::NewFetchSome {
+                last_var: info.last_new as u16,
+            },
+        )?;
     }
     Ok(())
 }
@@ -1524,7 +1817,9 @@ fn setup_walker<'mcx>(node: Node<'mcx>, info: &mut SetupInfo<'mcx>) {
                 },
             }
         }
-        NodeTag::T_Const | NodeTag::T_Param | NodeTag::T_SQLValueFunction
+        NodeTag::T_Const
+        | NodeTag::T_Param
+        | NodeTag::T_SQLValueFunction
         | NodeTag::T_NextValueExpr => {}
         // C expr_setup_walker: Aggref/WindowFunc args never eval in the
         // caller's econtext.
@@ -1612,9 +1907,7 @@ fn setup_walker<'mcx>(node: Node<'mcx>, info: &mut SetupInfo<'mcx>) {
                 setup_walker(d, info);
             }
         }
-        NodeTag::T_ReturningExpr => {
-            setup_walker(node.as_returning_expr().unwrap().retexpr, info)
-        }
+        NodeTag::T_ReturningExpr => setup_walker(node.as_returning_expr().unwrap().retexpr, info),
         NodeTag::T_RelabelType => setup_walker(node.as_relabel_type().unwrap().arg, info),
         NodeTag::T_CoerceViaIO => setup_walker(node.as_coerce_via_io().unwrap().arg, info),
         NodeTag::T_ArrayCoerceExpr => {
@@ -1694,9 +1987,10 @@ fn setup_walker<'mcx>(node: Node<'mcx>, info: &mut SetupInfo<'mcx>) {
                 setup_walker(e, info);
             }
         }
-        NodeTag::T_JsonIsPredicate => {
-            setup_walker(node.as_json_is_predicate().unwrap().expr.expect("expr"), info)
-        }
+        NodeTag::T_JsonIsPredicate => setup_walker(
+            node.as_json_is_predicate().unwrap().expr.expect("expr"),
+            info,
+        ),
         NodeTag::T_JsonBehavior => {
             if let Some(e) = node.as_json_behavior().unwrap().expr {
                 setup_walker(e, info);
@@ -1758,8 +2052,10 @@ fn init_whole_row<'mcx>(
             -1,
         )?;
         let desc_layout = core::alloc::Layout::new::<::types_tuple::TupleDescData<'static>>();
-        let p: NonNull<::types_tuple::TupleDescData<'static>> =
-            mcx.allocate(desc_layout).map_err(|_| mcx.oom(desc_layout.size()))?.cast();
+        let p: NonNull<::types_tuple::TupleDescData<'static>> = mcx
+            .allocate(desc_layout)
+            .map_err(|_| mcx.oom(desc_layout.size()))?
+            .cast();
         // SAFETY: fresh exact-layout allocation; the plan mcx outlives every
         // eval of this step, so the 'static restamp never escapes it.
         unsafe {
@@ -1790,8 +2086,10 @@ fn init_whole_row<'mcx>(
         None => None,
     };
     let wr_layout = core::alloc::Layout::new::<WholeRowState>();
-    let wr: NonNull<WholeRowState> =
-        mcx.allocate(wr_layout).map_err(|_| mcx.oom(wr_layout.size()))?.cast();
+    let wr: NonNull<WholeRowState> = mcx
+        .allocate(wr_layout)
+        .map_err(|_| mcx.oom(wr_layout.size()))?
+        .cast();
     // SAFETY: fresh exact-layout allocation; 'static restamps stay behind the
     // plan-lived state.
     unsafe {
@@ -1808,10 +2106,22 @@ fn init_whole_row<'mcx>(
 
     let frame_ix = state.frames.len() as u32;
     let frame = FuncFrame::new_in(mcx, FmgrInfo::unresolved(), 0, 0)?;
-    state.frames.try_reserve(1).map_err(|_| mcx.oom(core::mem::size_of::<FuncFrame<'_>>()))?;
+    state
+        .frames
+        .try_reserve(1)
+        .map_err(|_| mcx.oom(core::mem::size_of::<FuncFrame<'_>>()))?;
     state.frames.push(frame);
 
-    push_step(state, mcx, Step::WholeRow { src, wr, frame: frame_ix, out })
+    push_step(
+        state,
+        mcx,
+        Step::WholeRow {
+            src,
+            wr,
+            frame: frame_ix,
+            out,
+        },
+    )
 }
 
 // C ExecInitWholeRowVar's junk-filter leg: ExecInitJunkFilter (execJunk.c)
@@ -1821,16 +2131,16 @@ fn init_whole_row_junk<'mcx>(
     mcx: Mcx<'mcx>,
     tlist: &NodeList<'static>,
 ) -> PgResult<Option<NonNull<crate::steps::WholeRowJunk>>> {
-    let tle = |n: Node<'static>| {
-        n.as_target_entry().expect("targetlist holds TargetEntries")
-    };
+    let tle = |n: Node<'static>| n.as_target_entry().expect("targetlist holds TargetEntries");
     if !tlist.iter().any(|n| tle(n).resjunk) {
         return Ok(None);
     }
     let clean_len = tlist.iter().filter(|&n| !tle(n).resjunk).count();
     let mut desc = ::tupdesc::CreateTemplateTupleDesc(mcx, clean_len as i32)?;
     let mut clean_map: PgVec<'mcx, i16> = PgVec::new_in(mcx);
-    clean_map.try_reserve_exact(clean_len).map_err(|_| mcx.oom(clean_len * 2))?;
+    clean_map
+        .try_reserve_exact(clean_len)
+        .map_err(|_| mcx.oom(clean_len * 2))?;
     let mut resno: i16 = 1;
     for n in tlist.iter() {
         let t = tle(n);
@@ -1845,7 +2155,11 @@ fn init_whole_row_junk<'mcx>(
             expr_typmod_closed(t.expr),
             0,
         )?;
-        ::tupdesc::TupleDescInitEntryCollation(&mut desc, resno, ::nodes_core::expr_collation(t.expr));
+        ::tupdesc::TupleDescInitEntryCollation(
+            &mut desc,
+            resno,
+            ::nodes_core::expr_collation(t.expr),
+        );
         clean_map.push(t.resno);
         resno += 1;
     }
@@ -1855,8 +2169,10 @@ fn init_whole_row_junk<'mcx>(
         Some(alloc::rc::Rc::new(desc)),
     );
     let slot_layout = core::alloc::Layout::new::<::types_slot::SlotData<'mcx>>();
-    let slot_ptr: NonNull<::types_slot::SlotData<'mcx>> =
-        mcx.allocate(slot_layout).map_err(|_| mcx.oom(slot_layout.size()))?.cast();
+    let slot_ptr: NonNull<::types_slot::SlotData<'mcx>> = mcx
+        .allocate(slot_layout)
+        .map_err(|_| mcx.oom(slot_layout.size()))?
+        .cast();
     // SAFETY: fresh exact-layout allocation; plan-mcx slot behind a
     // plan-lived state, so the 'static restamp never escapes it.
     let junk = unsafe {
@@ -1870,8 +2186,10 @@ fn init_whole_row_junk<'mcx>(
         }
     };
     let junk_layout = core::alloc::Layout::new::<crate::steps::WholeRowJunk>();
-    let junk_ptr: NonNull<crate::steps::WholeRowJunk> =
-        mcx.allocate(junk_layout).map_err(|_| mcx.oom(junk_layout.size()))?.cast();
+    let junk_ptr: NonNull<crate::steps::WholeRowJunk> = mcx
+        .allocate(junk_layout)
+        .map_err(|_| mcx.oom(junk_layout.size()))?
+        .cast();
     // SAFETY: fresh exact-layout allocation.
     unsafe { junk_ptr.as_ptr().write(junk) };
     Ok(Some(junk_ptr))
@@ -1899,9 +2217,7 @@ pub(crate) fn init_expr_rec<'mcx>(
                     INNER_VAR => Step::InnerSysVar { attnum, out },
                     OUTER_VAR => Step::OuterSysVar { attnum, out },
                     _ => match variable.varreturningtype {
-                        VarReturningType::VAR_RETURNING_DEFAULT => {
-                            Step::ScanSysVar { attnum, out }
-                        }
+                        VarReturningType::VAR_RETURNING_DEFAULT => Step::ScanSysVar { attnum, out },
                         VarReturningType::VAR_RETURNING_OLD => {
                             state.flags |= crate::steps::EEO_FLAG_HAS_OLD;
                             Step::OldSysVar { attnum, out }
@@ -1917,19 +2233,37 @@ pub(crate) fn init_expr_rec<'mcx>(
             let attnum = (variable.varattno - 1) as u16;
             let vartype = variable.vartype;
             let step = match variable.varno {
-                INNER_VAR => Step::InnerVar { attnum, vartype, out },
-                OUTER_VAR => Step::OuterVar { attnum, vartype, out },
+                INNER_VAR => Step::InnerVar {
+                    attnum,
+                    vartype,
+                    out,
+                },
+                OUTER_VAR => Step::OuterVar {
+                    attnum,
+                    vartype,
+                    out,
+                },
                 _ => match variable.varreturningtype {
-                    VarReturningType::VAR_RETURNING_DEFAULT => {
-                        Step::ScanVar { attnum, vartype, out }
-                    }
+                    VarReturningType::VAR_RETURNING_DEFAULT => Step::ScanVar {
+                        attnum,
+                        vartype,
+                        out,
+                    },
                     VarReturningType::VAR_RETURNING_OLD => {
                         state.flags |= crate::steps::EEO_FLAG_HAS_OLD;
-                        Step::OldVar { attnum, vartype, out }
+                        Step::OldVar {
+                            attnum,
+                            vartype,
+                            out,
+                        }
                     }
                     VarReturningType::VAR_RETURNING_NEW => {
                         state.flags |= crate::steps::EEO_FLAG_HAS_NEW;
-                        Step::NewVar { attnum, vartype, out }
+                        Step::NewVar {
+                            attnum,
+                            vartype,
+                            out,
+                        }
                     }
                 },
             };
@@ -1940,7 +2274,11 @@ pub(crate) fn init_expr_rec<'mcx>(
             push_step(
                 state,
                 mcx,
-                Step::Const { value: con.constvalue, isnull: con.constisnull, out },
+                Step::Const {
+                    value: con.constvalue,
+                    isnull: con.constisnull,
+                    out,
+                },
             )
         }
         NodeTag::T_Param => {
@@ -1954,21 +2292,48 @@ pub(crate) fn init_expr_rec<'mcx>(
         NodeTag::T_FuncExpr => {
             let func = node.as_func_expr().unwrap();
             let step = init_func(
-                node, &func.args, func.funcid, func.inputcollid, state, mcx, out, agg, params, sub,
+                node,
+                &func.args,
+                func.funcid,
+                func.inputcollid,
+                state,
+                mcx,
+                out,
+                agg,
+                params,
+                sub,
             )?;
             push_step(state, mcx, step)
         }
         NodeTag::T_OpExpr => {
             let op = node.as_op_expr().unwrap();
             let step = init_func(
-                node, &op.args, op.opfuncid, op.inputcollid, state, mcx, out, agg, params, sub,
+                node,
+                &op.args,
+                op.opfuncid,
+                op.inputcollid,
+                state,
+                mcx,
+                out,
+                agg,
+                params,
+                sub,
             )?;
             push_step(state, mcx, step)
         }
         NodeTag::T_DistinctExpr => {
             let op = node.as_distinct_expr().unwrap();
             let step = init_func(
-                node, &op.args, op.opfuncid, op.inputcollid, state, mcx, out, agg, params, sub,
+                node,
+                &op.args,
+                op.opfuncid,
+                op.inputcollid,
+                state,
+                mcx,
+                out,
+                agg,
+                params,
+                sub,
             )?;
             let call = match step {
                 Step::FuncExpr { call, .. }
@@ -1982,7 +2347,16 @@ pub(crate) fn init_expr_rec<'mcx>(
         NodeTag::T_NullIfExpr => {
             let op = node.as_null_if_expr().unwrap();
             let step = init_func(
-                node, &op.args, op.opfuncid, op.inputcollid, state, mcx, out, agg, params, sub,
+                node,
+                &op.args,
+                op.opfuncid,
+                op.inputcollid,
+                state,
+                mcx,
+                out,
+                agg,
+                params,
+                sub,
             )?;
             let call = match step {
                 Step::FuncExpr { call, .. }
@@ -2000,7 +2374,15 @@ pub(crate) fn init_expr_rec<'mcx>(
         NodeTag::T_BooleanTest => {
             use ::types_nodes::BoolTestType;
             let bt = node.as_boolean_test().unwrap();
-            init_expr_rec(bt.arg.expect("BooleanTest.arg"), state, mcx, out, agg, params, sub)?;
+            init_expr_rec(
+                bt.arg.expect("BooleanTest.arg"),
+                state,
+                mcx,
+                out,
+                agg,
+                params,
+                sub,
+            )?;
             let step = match bt.booltesttype {
                 BoolTestType::IS_TRUE => Step::BoolTestIsTrue { out },
                 BoolTestType::IS_NOT_TRUE => Step::BoolTestIsNotTrue { out },
@@ -2040,14 +2422,15 @@ pub(crate) fn init_expr_rec<'mcx>(
             let cols_src = g.cols.as_slice();
             let ncols = cols_src.len();
             let cols = if bind.grouping.is_some() {
-                assert!(ncols > 0, "GroupingFunc.cols unset (setrefs must remap refs)");
+                assert!(
+                    ncols > 0,
+                    "GroupingFunc.cols unset (setrefs must remap refs)"
+                );
                 let layout = core::alloc::Layout::array::<i32>(ncols).unwrap();
                 let raw = mcx.allocate(layout).map_err(|_| mcx.oom(layout.size()))?;
                 let p: NonNull<i32> = raw.cast();
                 // SAFETY: fresh allocation of ncols i32 slots.
-                unsafe {
-                    core::ptr::copy_nonoverlapping(cols_src.as_ptr(), p.as_ptr(), ncols)
-                };
+                unsafe { core::ptr::copy_nonoverlapping(cols_src.as_ptr(), p.as_ptr(), ncols) };
                 p
             } else {
                 NonNull::dangling()
@@ -2101,11 +2484,19 @@ pub(crate) fn init_expr_rec<'mcx>(
                 12
             };
             let layout = core::alloc::Layout::from_size_align(size, 8).expect("svf layout");
-            let scratch = mcx.allocate(layout).map_err(|_| mcx.oom(layout.size()))?.cast();
+            let scratch = mcx
+                .allocate(layout)
+                .map_err(|_| mcx.oom(layout.size()))?
+                .cast();
             push_step(
                 state,
                 mcx,
-                Step::SqlValueFunction { op: svf.op, typmod: svf.typmod, scratch, out },
+                Step::SqlValueFunction {
+                    op: svf.op,
+                    typmod: svf.typmod,
+                    scratch,
+                    out,
+                },
             )
         }
         NodeTag::T_MergeSupportFunc => {
@@ -2116,9 +2507,8 @@ pub(crate) fn init_expr_rec<'mcx>(
             let cell = match state.merge_action_cell {
                 Some(c) => c,
                 None => {
-                    let layout = core::alloc::Layout::new::<
-                        Option<::types_nodes::nodes_enums::CmdType>,
-                    >();
+                    let layout =
+                        core::alloc::Layout::new::<Option<::types_nodes::nodes_enums::CmdType>>();
                     let c = mcx
                         .allocate(layout)
                         .map_err(|_| mcx.oom(layout.size()))?
@@ -2131,8 +2521,19 @@ pub(crate) fn init_expr_rec<'mcx>(
             };
             // 10-byte text image ("INSERT"/"UPDATE"/"DELETE"), 8-aligned.
             let layout = core::alloc::Layout::from_size_align(12, 8).expect("msf layout");
-            let scratch = mcx.allocate(layout).map_err(|_| mcx.oom(layout.size()))?.cast();
-            push_step(state, mcx, Step::MergeSupportFunc { action: cell, scratch, out })
+            let scratch = mcx
+                .allocate(layout)
+                .map_err(|_| mcx.oom(layout.size()))?
+                .cast();
+            push_step(
+                state,
+                mcx,
+                Step::MergeSupportFunc {
+                    action: cell,
+                    scratch,
+                    out,
+                },
+            )
         }
         NodeTag::T_BoolExpr => init_bool_expr(node, state, mcx, out, agg, params, sub),
         NodeTag::T_SubPlan => {
@@ -2144,7 +2545,11 @@ pub(crate) fn init_expr_rec<'mcx>(
                 return push_step(
                     state,
                     mcx,
-                    Step::Const { value: ::datum::Datum::null(), isnull: true, out },
+                    Step::Const {
+                        value: ::datum::Datum::null(),
+                        isnull: true,
+                        out,
+                    },
                 );
             }
             init_subplan_expr(node, state, mcx, out, agg, params, sub)
@@ -2174,12 +2579,22 @@ pub(crate) fn init_expr_rec<'mcx>(
         NodeTag::T_NullTest => {
             use ::types_nodes::primnodes::NullTestType;
             let nt = node.as_null_test().unwrap();
-            init_expr_rec(nt.arg.expect("NullTest.arg"), state, mcx, out, agg, params, sub)?;
+            init_expr_rec(
+                nt.arg.expect("NullTest.arg"),
+                state,
+                mcx,
+                out,
+                agg,
+                params,
+                sub,
+            )?;
             let step = if nt.argisrow {
                 use crate::steps::RowNullState;
                 let rn_layout = core::alloc::Layout::new::<RowNullState>();
-                let rn: NonNull<RowNullState> =
-                    mcx.allocate(rn_layout).map_err(|_| mcx.oom(rn_layout.size()))?.cast();
+                let rn: NonNull<RowNullState> = mcx
+                    .allocate(rn_layout)
+                    .map_err(|_| mcx.oom(rn_layout.size()))?
+                    .cast();
                 // SAFETY: fresh exact-layout allocation; the compile mcx
                 // outlives every eval of this step, so the 'static restamp
                 // never escapes it.
@@ -2199,10 +2614,16 @@ pub(crate) fn init_expr_rec<'mcx>(
                     .map_err(|_| mcx.oom(core::mem::size_of::<FuncFrame<'_>>()))?;
                 state.frames.push(frame);
                 match nt.nulltesttype {
-                    NullTestType::IS_NULL => Step::NullTestRowIsNull { rn, frame: frame_ix, out },
-                    NullTestType::IS_NOT_NULL => {
-                        Step::NullTestRowIsNotNull { rn, frame: frame_ix, out }
-                    }
+                    NullTestType::IS_NULL => Step::NullTestRowIsNull {
+                        rn,
+                        frame: frame_ix,
+                        out,
+                    },
+                    NullTestType::IS_NOT_NULL => Step::NullTestRowIsNotNull {
+                        rn,
+                        frame: frame_ix,
+                        out,
+                    },
                 }
             } else {
                 match nt.nulltesttype {
@@ -2212,9 +2633,15 @@ pub(crate) fn init_expr_rec<'mcx>(
             };
             push_step(state, mcx, step)
         }
-        NodeTag::T_RelabelType => {
-            init_expr_rec(node.as_relabel_type().unwrap().arg, state, mcx, out, agg, params, sub)
-        }
+        NodeTag::T_RelabelType => init_expr_rec(
+            node.as_relabel_type().unwrap().arg,
+            state,
+            mcx,
+            out,
+            agg,
+            params,
+            sub,
+        ),
         NodeTag::T_FieldSelect => {
             let f = node.as_field_select().unwrap();
             init_expr_rec(f.arg, state, mcx, out, agg, params, sub)?;
@@ -2244,7 +2671,11 @@ pub(crate) fn init_expr_rec<'mcx>(
             push_step(
                 state,
                 mcx,
-                Step::NextValueExpr { seqid: nve.seqid, seqtypid: nve.typeId, out },
+                Step::NextValueExpr {
+                    seqid: nve.seqid,
+                    seqtypid: nve.typeId,
+                    out,
+                },
             )
         }
         NodeTag::T_ReturningExpr => {
@@ -2254,7 +2685,15 @@ pub(crate) fn init_expr_rec<'mcx>(
             } else {
                 crate::steps::EEO_FLAG_NEW_IS_NULL
             };
-            push_step(state, mcx, Step::ReturningExprStep { nullflag, jumpdone: u32::MAX, out })?;
+            push_step(
+                state,
+                mcx,
+                Step::ReturningExprStep {
+                    nullflag,
+                    jumpdone: u32::MAX,
+                    out,
+                },
+            )?;
             let retstep = state.steps.len() - 1;
             init_expr_rec(rexpr.retexpr, state, mcx, out, agg, params, sub)?;
             let done = state.steps.len() as u32;
@@ -2287,7 +2726,9 @@ pub(crate) fn init_expr_rec<'mcx>(
                 push_step(state, mcx, step)
             }
         }
-        NodeTag::T_SubscriptingRef => init_subscripting_ref(node, state, mcx, out, agg, params, sub),
+        NodeTag::T_SubscriptingRef => {
+            init_subscripting_ref(node, state, mcx, out, agg, params, sub)
+        }
         NodeTag::T_RowExpr => {
             let r = node.as_row_expr().unwrap();
             let step = init_row_expr(r, state, mcx, out, agg, params, sub)?;
@@ -2295,7 +2736,15 @@ pub(crate) fn init_expr_rec<'mcx>(
         }
         NodeTag::T_JsonValueExpr => {
             let j = node.as_json_value_expr().unwrap();
-            init_expr_rec(j.raw_expr.expect("raw_expr"), state, mcx, out, agg, params, sub)?;
+            init_expr_rec(
+                j.raw_expr.expect("raw_expr"),
+                state,
+                mcx,
+                out,
+                agg,
+                params,
+                sub,
+            )?;
             init_expr_rec(
                 j.formatted_expr.expect("formatted_expr"),
                 state,
@@ -2366,7 +2815,14 @@ pub(crate) fn init_expr_rec<'mcx>(
             for e in co.args.iter() {
                 init_expr_rec(e, state, mcx, out, agg, params, sub)?;
                 adjust_jumps.push(state.steps.len());
-                push_step(state, mcx, Step::JumpIfNotNull { jumpdone: u32::MAX, out })?;
+                push_step(
+                    state,
+                    mcx,
+                    Step::JumpIfNotNull {
+                        jumpdone: u32::MAX,
+                        out,
+                    },
+                )?;
             }
             let done = state.steps.len() as u32;
             for ix in adjust_jumps.iter() {
@@ -2411,13 +2867,16 @@ fn init_scalar_array_op<'mcx>(
     };
 
     let element_type = lsyscache::get_element_type(expr_type(arrayarg))?;
-    assert!(element_type != 0, "init_scalar_array_op: operand is not an array");
+    assert!(
+        element_type != 0,
+        "init_scalar_array_op: operand is not an array"
+    );
     let (typlen, typbyval, typalign) = lsyscache::get_typlenbyvalalign(element_type)?;
 
     let mut flinfo = fmgr_core::fmgr_info(opfuncid)?;
     flinfo.fn_expr = Some(erase_fn_expr(mcx, node)?);
     let strict = flinfo.fn_strict;
-    let mut frame = FuncFrame::new_in(mcx, flinfo, 2, saop.inputcollid)?;
+    let frame = FuncFrame::new_in(mcx, flinfo, 2, saop.inputcollid)?;
 
     let frame_ix = state.frames.len() as u32;
     if let Some(con) = scalararg.as_const() {
@@ -2429,8 +2888,16 @@ fn init_scalar_array_op<'mcx>(
             })
         };
     }
-    let call = FuncCall { fcinfo: frame.fcinfo, flinfo: frame.flinfo, frame: frame_ix, nargs: 2 };
-    state.frames.try_reserve(1).map_err(|_| mcx.oom(core::mem::size_of::<FuncFrame<'_>>()))?;
+    let call = FuncCall {
+        fcinfo: frame.fcinfo,
+        flinfo: frame.flinfo,
+        frame: frame_ix,
+        nargs: 2,
+    };
+    state
+        .frames
+        .try_reserve(1)
+        .map_err(|_| mcx.oom(core::mem::size_of::<FuncFrame<'_>>()))?;
     state.frames.push(frame);
 
     if scalararg.as_const().is_none() {
@@ -2513,13 +2980,18 @@ fn init_array_expr<'mcx>(
 
     let layout = core::alloc::Layout::array::<::datum::NullableDatum>(nelems.max(1))
         .expect("elem scratch layout");
-    let elems: NonNull<::datum::NullableDatum> =
-        mcx.allocate(layout).map_err(|_| mcx.oom(layout.size()))?.cast();
+    let elems: NonNull<::datum::NullableDatum> = mcx
+        .allocate(layout)
+        .map_err(|_| mcx.oom(layout.size()))?
+        .cast();
 
     // An argless frame whose armed fcinfo supplies the per-eval result mcx.
     let frame_ix = state.frames.len() as u32;
     let frame = FuncFrame::new_in(mcx, FmgrInfo::unresolved(), 0, 0)?;
-    state.frames.try_reserve(1).map_err(|_| mcx.oom(core::mem::size_of::<FuncFrame<'_>>()))?;
+    state
+        .frames
+        .try_reserve(1)
+        .map_err(|_| mcx.oom(core::mem::size_of::<FuncFrame<'_>>()))?;
     state.frames.push(frame);
 
     for (i, e) in arr.elements.iter().enumerate() {
@@ -2539,7 +3011,6 @@ fn init_array_expr<'mcx>(
         out,
     })
 }
-
 
 // C ExecInitExprRec T_ArrayExpr, multidims leg (ExecEvalArrayExpr concat arm).
 fn init_array_expr_multidim<'mcx>(
@@ -2597,7 +3068,10 @@ fn alloc_array<'mcx, T>(mcx: Mcx<'mcx>, n: usize) -> PgResult<NonNull<T>> {
 // C's fn_extra arg_type_cache. No zero-init needed: callers write before read.
 fn alloc_array_nodrop_exempt<'mcx, T>(mcx: Mcx<'mcx>, n: usize) -> PgResult<NonNull<T>> {
     let layout = core::alloc::Layout::array::<T>(n.max(1)).expect("scratch layout");
-    Ok(mcx.allocate(layout).map_err(|_| mcx.oom(layout.size()))?.cast())
+    Ok(mcx
+        .allocate(layout)
+        .map_err(|_| mcx.oom(layout.size()))?
+        .cast())
 }
 
 fn alloc_state<'mcx, T>(mcx: Mcx<'mcx>, v: T) -> PgResult<NonNull<T>> {
@@ -2781,13 +3255,28 @@ fn init_subscripting_ref<'mcx>(
     register_alloc_state(state, mcx, stp)?;
 
     // Container value evaluates into `out` (overwritten by the final step).
-    init_expr_rec(sbsref.refexpr.expect("SubscriptingRef.refexpr"), state, mcx, out, agg, params, sub)?;
+    init_expr_rec(
+        sbsref.refexpr.expect("SubscriptingRef.refexpr"),
+        state,
+        mcx,
+        out,
+        agg,
+        params,
+        sub,
+    )?;
 
     let mut adjust_jumps: PgVec<'_, usize> = PgVec::new_in(mcx);
     if !is_assignment {
         // fetch_strict: NULL container => NULL result.
         adjust_jumps.push(state.steps.len());
-        push_step(state, mcx, Step::JumpIfNull { jumpdone: u32::MAX, out })?;
+        push_step(
+            state,
+            mcx,
+            Step::JumpIfNull {
+                jumpdone: u32::MAX,
+                out,
+            },
+        )?;
     }
 
     for (i, e) in sbsref.refupperindexpr.iter().enumerate() {
@@ -2801,9 +3290,7 @@ fn init_subscripting_ref<'mcx>(
             Some(e) => {
                 stref.upperprovided[i] = true;
                 let slot = unsafe {
-                    NonNull::new_unchecked(
-                        core::ptr::addr_of_mut!((*stp.as_ptr()).upperindex[i]),
-                    )
+                    NonNull::new_unchecked(core::ptr::addr_of_mut!((*stp.as_ptr()).upperindex[i]))
                 };
                 init_expr_rec(e, state, mcx, OutRef(slot), agg, params, sub)?;
             }
@@ -2819,9 +3306,7 @@ fn init_subscripting_ref<'mcx>(
             Some(e) => {
                 stref.lowerprovided[i] = true;
                 let slot = unsafe {
-                    NonNull::new_unchecked(
-                        core::ptr::addr_of_mut!((*stp.as_ptr()).lowerindex[i]),
-                    )
+                    NonNull::new_unchecked(core::ptr::addr_of_mut!((*stp.as_ptr()).lowerindex[i]))
                 };
                 init_expr_rec(e, state, mcx, OutRef(slot), agg, params, sub)?;
             }
@@ -2829,28 +3314,50 @@ fn init_subscripting_ref<'mcx>(
     }
 
     adjust_jumps.push(state.steps.len());
-    push_step(state, mcx, Step::SbsrefSubscripts { state: stp, jumpdone: u32::MAX, out })?;
+    push_step(
+        state,
+        mcx,
+        Step::SbsrefSubscripts {
+            state: stp,
+            jumpdone: u32::MAX,
+            out,
+        },
+    )?;
 
     if is_assignment {
         let assgn = sbsref.refassgnexpr.unwrap();
         if assgn_needs_old(assgn) {
             push_step(state, mcx, Step::SbsrefOld { state: stp, out })?;
         }
-        let replace_slot = unsafe {
-            NonNull::new_unchecked(core::ptr::addr_of_mut!((*stp.as_ptr()).replace))
-        };
+        let replace_slot =
+            unsafe { NonNull::new_unchecked(core::ptr::addr_of_mut!((*stp.as_ptr()).replace)) };
         // SBSREF_OLD puts the extracted value into `prev`; pass it down via
         // the CaseTestExpr mechanism (C innermost_caseval).
-        let prev_slot = unsafe {
-            NonNull::new_unchecked(core::ptr::addr_of_mut!((*stp.as_ptr()).prev))
-        };
+        let prev_slot =
+            unsafe { NonNull::new_unchecked(core::ptr::addr_of_mut!((*stp.as_ptr()).prev)) };
         let save_innermost = state.innermost_case;
         state.innermost_case = Some(prev_slot);
         init_expr_rec(assgn, state, mcx, OutRef(replace_slot), agg, params, sub)?;
         state.innermost_case = save_innermost;
-        push_step(state, mcx, Step::SbsrefAssign { state: stp, slice: is_slice, out })?;
+        push_step(
+            state,
+            mcx,
+            Step::SbsrefAssign {
+                state: stp,
+                slice: is_slice,
+                out,
+            },
+        )?;
     } else {
-        push_step(state, mcx, Step::SbsrefFetch { state: stp, slice: is_slice, out })?;
+        push_step(
+            state,
+            mcx,
+            Step::SbsrefFetch {
+                state: stp,
+                slice: is_slice,
+                out,
+            },
+        )?;
     }
 
     let done = state.steps.len() as u32;
@@ -2880,7 +3387,10 @@ fn init_jsonb_subscripting_ref<'mcx>(
     let sbsref = node.as_subscripting_ref().unwrap();
     let is_assignment = sbsref.refassgnexpr.is_some();
     let nupper = sbsref.refupperindexpr.len();
-    assert!(sbsref.reflowerindexpr.len() == 0, "jsonb subscript does not support slices");
+    assert!(
+        sbsref.reflowerindexpr.len() == 0,
+        "jsonb subscript does not support slices"
+    );
 
     let upperindex: NonNull<::datum::NullableDatum> = alloc_array(mcx, nupper)?;
     let index_oids: NonNull<Oid> = alloc_array(mcx, nupper)?;
@@ -2899,13 +3409,28 @@ fn init_jsonb_subscripting_ref<'mcx>(
     let stp = alloc_state(mcx, st)?;
     register_alloc_state(state, mcx, stp)?;
 
-    init_expr_rec(sbsref.refexpr.expect("SubscriptingRef.refexpr"), state, mcx, out, agg, params, sub)?;
+    init_expr_rec(
+        sbsref.refexpr.expect("SubscriptingRef.refexpr"),
+        state,
+        mcx,
+        out,
+        agg,
+        params,
+        sub,
+    )?;
 
     let mut adjust_jumps: PgVec<'_, usize> = PgVec::new_in(mcx);
     if !is_assignment {
         // fetch_strict: NULL container => NULL result.
         adjust_jumps.push(state.steps.len());
-        push_step(state, mcx, Step::JumpIfNull { jumpdone: u32::MAX, out })?;
+        push_step(
+            state,
+            mcx,
+            Step::JumpIfNull {
+                jumpdone: u32::MAX,
+                out,
+            },
+        )?;
     }
 
     for (i, e) in sbsref.refupperindexpr.iter().enumerate() {
@@ -2921,7 +3446,15 @@ fn init_jsonb_subscripting_ref<'mcx>(
     }
 
     adjust_jumps.push(state.steps.len());
-    push_step(state, mcx, Step::JsonbSbsrefSubscripts { state: stp, jumpdone: u32::MAX, out })?;
+    push_step(
+        state,
+        mcx,
+        Step::JsonbSbsrefSubscripts {
+            state: stp,
+            jumpdone: u32::MAX,
+            out,
+        },
+    )?;
 
     if is_assignment {
         let assgn = sbsref.refassgnexpr.unwrap();
@@ -2931,9 +3464,8 @@ fn init_jsonb_subscripting_ref<'mcx>(
                 "jsonb subscripted assignment referencing the old element",
             ));
         }
-        let replace_slot = unsafe {
-            NonNull::new_unchecked(core::ptr::addr_of_mut!((*stp.as_ptr()).replace))
-        };
+        let replace_slot =
+            unsafe { NonNull::new_unchecked(core::ptr::addr_of_mut!((*stp.as_ptr()).replace)) };
         init_expr_rec(assgn, state, mcx, OutRef(replace_slot), agg, params, sub)?;
         push_step(state, mcx, Step::JsonbSbsrefAssign { state: stp, out })?;
     } else {
@@ -2966,8 +3498,14 @@ fn init_hstore_subscripting_ref<'mcx>(
 ) -> PgResult<()> {
     let sbsref = node.as_subscripting_ref().unwrap();
     let is_assignment = sbsref.refassgnexpr.is_some();
-    assert!(sbsref.refupperindexpr.len() == 1, "hstore allows only one subscript");
-    assert!(sbsref.reflowerindexpr.len() == 0, "hstore subscript does not support slices");
+    assert!(
+        sbsref.refupperindexpr.len() == 1,
+        "hstore allows only one subscript"
+    );
+    assert!(
+        sbsref.reflowerindexpr.len() == 0,
+        "hstore subscript does not support slices"
+    );
 
     let st = crate::hstoresubs::HstoreSbsState {
         isassignment: is_assignment,
@@ -2978,19 +3516,38 @@ fn init_hstore_subscripting_ref<'mcx>(
     let stp = alloc_state(mcx, st)?;
     register_alloc_state(state, mcx, stp)?;
 
-    init_expr_rec(sbsref.refexpr.expect("SubscriptingRef.refexpr"), state, mcx, out, agg, params, sub)?;
+    init_expr_rec(
+        sbsref.refexpr.expect("SubscriptingRef.refexpr"),
+        state,
+        mcx,
+        out,
+        agg,
+        params,
+        sub,
+    )?;
 
     let mut adjust_jumps: PgVec<'_, usize> = PgVec::new_in(mcx);
     if !is_assignment {
         // fetch_strict: NULL container => NULL result.
         adjust_jumps.push(state.steps.len());
-        push_step(state, mcx, Step::JumpIfNull { jumpdone: u32::MAX, out })?;
+        push_step(
+            state,
+            mcx,
+            Step::JumpIfNull {
+                jumpdone: u32::MAX,
+                out,
+            },
+        )?;
     }
 
-    let e = sbsref.refupperindexpr.iter().next().unwrap().expect("hstore subscript present");
-    let sub_slot = unsafe {
-        NonNull::new_unchecked(core::ptr::addr_of_mut!((*stp.as_ptr()).subscript))
-    };
+    let e = sbsref
+        .refupperindexpr
+        .iter()
+        .next()
+        .unwrap()
+        .expect("hstore subscript present");
+    let sub_slot =
+        unsafe { NonNull::new_unchecked(core::ptr::addr_of_mut!((*stp.as_ptr()).subscript)) };
     init_expr_rec(e, state, mcx, OutRef(sub_slot), agg, params, sub)?;
 
     if is_assignment {
@@ -3001,9 +3558,8 @@ fn init_hstore_subscripting_ref<'mcx>(
                 "hstore subscripted assignment referencing the old element",
             ));
         }
-        let replace_slot = unsafe {
-            NonNull::new_unchecked(core::ptr::addr_of_mut!((*stp.as_ptr()).replace))
-        };
+        let replace_slot =
+            unsafe { NonNull::new_unchecked(core::ptr::addr_of_mut!((*stp.as_ptr()).replace)) };
         init_expr_rec(assgn, state, mcx, OutRef(replace_slot), agg, params, sub)?;
         push_step(state, mcx, Step::HstoreSbsrefAssign { state: stp, out })?;
     } else {
@@ -3032,7 +3588,8 @@ fn assgn_needs_old(expr: Node<'_>) -> bool {
         }
         NodeTag::T_SubscriptingRef => {
             let sr = expr.as_subscripting_ref().unwrap();
-            sr.refexpr.is_some_and(|e| e.node_tag() == NodeTag::T_CaseTestExpr)
+            sr.refexpr
+                .is_some_and(|e| e.node_tag() == NodeTag::T_CaseTestExpr)
         }
         NodeTag::T_CoerceToDomain => assgn_needs_old(expr.as_coerce_to_domain().unwrap().arg),
         NodeTag::T_RelabelType => assgn_needs_old(expr.as_relabel_type().unwrap().arg),
@@ -3063,22 +3620,38 @@ fn init_field_store<'mcx>(
     // SAFETY: fresh allocation of the exact layout; the plan mcx outlives
     // every eval of this step, so the 'static restamp never escapes it.
     unsafe {
-        desc_ptr
-            .as_ptr()
-            .write(core::mem::transmute::<TupleDescData<'mcx>, TupleDescData<'static>>(desc));
+        desc_ptr.as_ptr().write(core::mem::transmute::<
+            TupleDescData<'mcx>,
+            TupleDescData<'static>,
+        >(desc));
     }
     let columns: NonNull<::datum::NullableDatum> = alloc_array(mcx, ncolumns as usize)?;
 
     let frame_ix = state.frames.len() as u32;
     let frame = FuncFrame::new_in(mcx, FmgrInfo::unresolved(), 0, 0)?;
-    state.frames.try_reserve(1).map_err(|_| mcx.oom(core::mem::size_of::<FuncFrame<'_>>()))?;
+    state
+        .frames
+        .try_reserve(1)
+        .map_err(|_| mcx.oom(core::mem::size_of::<FuncFrame<'_>>()))?;
     state.frames.push(frame);
 
-    let fs = crate::steps::FieldStoreState { ncolumns: ncolumns as u16, desc: desc_ptr, columns };
+    let fs = crate::steps::FieldStoreState {
+        ncolumns: ncolumns as u16,
+        desc: desc_ptr,
+        columns,
+    };
     let fsp = alloc_state(mcx, fs)?;
 
     init_expr_rec(fstore.arg, state, mcx, out, agg, params, sub)?;
-    push_step(state, mcx, Step::FieldStoreDeForm { fs: fsp, frame: frame_ix, out })?;
+    push_step(
+        state,
+        mcx,
+        Step::FieldStoreDeForm {
+            fs: fsp,
+            frame: frame_ix,
+            out,
+        },
+    )?;
 
     for (e, fieldnum) in fstore.newvals.iter().zip(fstore.fieldnums.iter()) {
         if fieldnum <= 0 || fieldnum > ncolumns {
@@ -3091,16 +3664,22 @@ fn init_field_store<'mcx>(
         // (C innermost_caseval); the column slot doubles as caseval source
         // and result address, safe because DEFORM/FORM evaluate arg first.
         // SAFETY: 1 <= fieldnum <= ncolumns slots of the fresh allocation.
-        let slot = unsafe {
-            NonNull::new_unchecked(columns.as_ptr().add((fieldnum - 1) as usize))
-        };
+        let slot = unsafe { NonNull::new_unchecked(columns.as_ptr().add((fieldnum - 1) as usize)) };
         let save_innermost = state.innermost_case;
         state.innermost_case = Some(slot);
         init_expr_rec(e, state, mcx, OutRef(slot), agg, params, sub)?;
         state.innermost_case = save_innermost;
     }
 
-    push_step(state, mcx, Step::FieldStoreForm { fs: fsp, frame: frame_ix, out })
+    push_step(
+        state,
+        mcx,
+        Step::FieldStoreForm {
+            fs: fsp,
+            frame: frame_ix,
+            out,
+        },
+    )
 }
 
 // exprTypmod (nodeFuncs.c) over the families RowExpr args carry.
@@ -3152,7 +3731,10 @@ fn init_row_compare<'mcx>(
         flinfo.fn_expr = Some(erase_fn_expr(mcx, node)?);
         let strict = flinfo.fn_strict;
         let frame = FuncFrame::new_in(mcx, flinfo, 2, inputcollid)?;
-        let call = crate::steps::Call2 { fcinfo: frame.fcinfo, flinfo: frame.flinfo };
+        let call = crate::steps::Call2 {
+            fcinfo: frame.fcinfo,
+            flinfo: frame.flinfo,
+        };
         state
             .frames
             .try_reserve(1)
@@ -3181,14 +3763,31 @@ fn init_row_compare<'mcx>(
         )?;
     }
     if nopers == 0 {
-        push_step(state, mcx, Step::Const { value: ::datum::Datum::from_i32(0), isnull: false, out })?;
+        push_step(
+            state,
+            mcx,
+            Step::Const {
+                value: ::datum::Datum::from_i32(0),
+                isnull: false,
+                out,
+            },
+        )?;
     }
     let final_ix = state.steps.len() as u32;
-    push_step(state, mcx, Step::RowCompareFinal { cmptype: rc.cmptype, out })?;
+    push_step(
+        state,
+        mcx,
+        Step::RowCompareFinal {
+            cmptype: rc.cmptype,
+            out,
+        },
+    )?;
     let done = state.steps.len() as u32;
     for ix in adjust_jumps.iter() {
         match &mut state.steps[*ix] {
-            Step::RowCompareStep { jumpnull, jumpdone, .. } => {
+            Step::RowCompareStep {
+                jumpnull, jumpdone, ..
+            } => {
                 *jumpdone = final_ix;
                 *jumpnull = done;
             }
@@ -3238,31 +3837,39 @@ fn init_row_expr<'mcx>(
         // (columns added since the ROW() was parsed); extras read as NULLs
         // (execExpr.c:1990-1998).
         let desc = ::typcache::lookup_rowtype_tupdesc_copy(mcx, r.row_typeid, -1)?;
-        assert!(nelems <= desc.natts as usize, "RowExpr args exceed named rowtype");
+        assert!(
+            nelems <= desc.natts as usize,
+            "RowExpr args exceed named rowtype"
+        );
         nelems = nelems.max(desc.natts as usize);
         desc
     };
 
     let layout = core::alloc::Layout::array::<::datum::NullableDatum>(nelems.max(1))
         .expect("elem scratch layout");
-    let elems: NonNull<::datum::NullableDatum> =
-        mcx.allocate(layout).map_err(|_| mcx.oom(layout.size()))?.cast();
+    let elems: NonNull<::datum::NullableDatum> = mcx
+        .allocate(layout)
+        .map_err(|_| mcx.oom(layout.size()))?
+        .cast();
     // Dropped-column and extra-column slots are never written by a step;
     // preset every slot to NULL (C memsets elemnulls true, execExpr.c:2013).
     for i in 0..nelems.max(1) {
         // SAFETY: i < nelems.max(1) slots of the fresh scratch allocation.
         unsafe {
-            elems
-                .as_ptr()
-                .add(i)
-                .write(::datum::NullableDatum { value: ::datum::Datum::null(), isnull: true });
+            elems.as_ptr().add(i).write(::datum::NullableDatum {
+                value: ::datum::Datum::null(),
+                isnull: true,
+            });
         }
     }
 
     // An argless frame whose armed fcinfo supplies the per-eval result mcx.
     let frame_ix = state.frames.len() as u32;
     let frame = FuncFrame::new_in(mcx, FmgrInfo::unresolved(), 0, 0)?;
-    state.frames.try_reserve(1).map_err(|_| mcx.oom(core::mem::size_of::<FuncFrame<'_>>()))?;
+    state
+        .frames
+        .try_reserve(1)
+        .map_err(|_| mcx.oom(core::mem::size_of::<FuncFrame<'_>>()))?;
     state.frames.push(frame);
 
     for (i, e) in r.args.iter().enumerate() {
@@ -3299,12 +3906,19 @@ fn init_row_expr<'mcx>(
     // SAFETY: fresh allocation of the exact layout; the plan mcx outlives
     // every eval of this step, so the 'static restamp never escapes it.
     unsafe {
-        desc_ptr
-            .as_ptr()
-            .write(core::mem::transmute::<TupleDescData<'mcx>, TupleDescData<'static>>(desc));
+        desc_ptr.as_ptr().write(core::mem::transmute::<
+            TupleDescData<'mcx>,
+            TupleDescData<'static>,
+        >(desc));
     }
 
-    Ok(Step::RowExprStep { elems, nelems: nelems as u32, frame: frame_ix, desc: desc_ptr, out })
+    Ok(Step::RowExprStep {
+        elems,
+        nelems: nelems as u32,
+        frame: frame_ix,
+        desc: desc_ptr,
+        out,
+    })
 }
 
 // C ExecInitExprRec T_JsonConstructorExpr (execExpr.c:2379): args evaluate
@@ -3328,7 +3942,15 @@ fn init_json_constructor<'mcx>(
     } else if (ctor.r#type == JC::JSCTOR_JSON_PARSE && !ctor.unique)
         || ctor.r#type == JC::JSCTOR_JSON_SERIALIZE
     {
-        init_expr_rec(ctor.args.first().expect("args"), state, mcx, out, agg, params, sub)?;
+        init_expr_rec(
+            ctor.args.first().expect("args"),
+            state,
+            mcx,
+            out,
+            agg,
+            params,
+            sub,
+        )?;
     } else {
         let nargs = ctor.args.len();
         let n = nargs.max(1);
@@ -3353,7 +3975,12 @@ fn init_json_constructor<'mcx>(
             }
         }
 
-        let is_jsonb = ctor.returning.expect("returning").format.expect("format").format_type
+        let is_jsonb = ctor
+            .returning
+            .expect("returning")
+            .format
+            .expect("format")
+            .format_type
             == ::types_nodes::primnodes::JsonFormatType::JS_FORMAT_JSONB;
 
         let (scalar_json, scalar_jsonb) = if ctor.r#type == JC::JSCTOR_JSON_SCALAR {
@@ -3364,7 +3991,8 @@ fn init_json_constructor<'mcx>(
             // by arena drop.
             if is_jsonb {
                 let cat = ::adt_jsonb::tojsonb::json_categorize_type(typid)?;
-                let slot: NonNull<::adt_jsonb::tojsonb::ValCategory> = alloc_array_nodrop_exempt(mcx, 1)?;
+                let slot: NonNull<::adt_jsonb::tojsonb::ValCategory> =
+                    alloc_array_nodrop_exempt(mcx, 1)?;
                 // SAFETY: fresh exclusive allocation.
                 unsafe { slot.as_ptr().write(cat) };
                 (None, Some(slot))
@@ -3407,7 +4035,11 @@ fn init_json_constructor<'mcx>(
         push_step(
             state,
             mcx,
-            Step::JsonConstructor { jcstate: NonNull::from(jcstate), frame: frame_ix, out },
+            Step::JsonConstructor {
+                jcstate: NonNull::from(jcstate),
+                frame: frame_ix,
+                out,
+            },
         )?;
     }
 
@@ -3450,8 +4082,11 @@ fn init_json_expr<'mcx>(
     use core::ptr::addr_of_mut;
 
     let jsexpr = node.as_json_expr().unwrap();
-    let on_error: &JsonBehavior<'_> =
-        jsexpr.on_error.expect("JsonExpr.on_error").as_json_behavior().unwrap();
+    let on_error: &JsonBehavior<'_> = jsexpr
+        .on_error
+        .expect("JsonExpr.on_error")
+        .as_json_behavior()
+        .unwrap();
     let on_empty: Option<&JsonBehavior<'_>> =
         jsexpr.on_empty.map(|n| n.as_json_behavior().unwrap());
     let returning = jsexpr.returning.expect("JsonExpr.returning");
@@ -3473,9 +4108,9 @@ fn init_json_expr<'mcx>(
         crate::steps::JsonExprState {
             op: jsexpr.op,
             // SAFETY: the node arena outlives the program (RowNullState restamp shape).
-            column_name: jsexpr.column_name.map(|s| {
-                NonNull::from(unsafe { core::mem::transmute::<&str, &'static str>(s) })
-            }),
+            column_name: jsexpr
+                .column_name
+                .map(|s| NonNull::from(unsafe { core::mem::transmute::<&str, &'static str>(s) })),
             wrapper,
             returning_typid: returning.typid,
             use_io_coercion: jsexpr.use_io_coercion,
@@ -3520,16 +4155,44 @@ fn init_json_expr<'mcx>(
         sub,
     )?;
     jumps_return_null.push(state.steps.len());
-    push_step(state, mcx, Step::JumpIfNull { jumpdone: u32::MAX, out: fmt_out })?;
+    push_step(
+        state,
+        mcx,
+        Step::JumpIfNull {
+            jumpdone: u32::MAX,
+            out: fmt_out,
+        },
+    )?;
 
-    init_expr_rec(jsexpr.path_spec.expect("JsonExpr.path_spec"), state, mcx, path_out, agg, params, sub)?;
+    init_expr_rec(
+        jsexpr.path_spec.expect("JsonExpr.path_spec"),
+        state,
+        mcx,
+        path_out,
+        agg,
+        params,
+        sub,
+    )?;
     jumps_return_null.push(state.steps.len());
-    push_step(state, mcx, Step::JumpIfNull { jumpdone: u32::MAX, out: path_out })?;
+    push_step(
+        state,
+        mcx,
+        Step::JumpIfNull {
+            jumpdone: u32::MAX,
+            out: path_out,
+        },
+    )?;
 
-    for (i, (argexpr, argname)) in
-        jsexpr.passing_values.iter().zip(jsexpr.passing_names.iter()).enumerate()
+    for (i, (argexpr, argname)) in jsexpr
+        .passing_values
+        .iter()
+        .zip(jsexpr.passing_names.iter())
+        .enumerate()
     {
-        let name = argname.as_string().expect("passing name is a String node").sval;
+        let name = argname
+            .as_string()
+            .expect("passing name is a String node")
+            .sval;
         // SAFETY: i < nvars fresh slots; the node arena outlives the program.
         unsafe {
             vars.as_ptr().add(i).write(JsonPathVariable {
@@ -3547,9 +4210,20 @@ fn init_json_expr<'mcx>(
 
     let frame_ix = state.frames.len() as u32;
     let frame = FuncFrame::new_in(mcx, FmgrInfo::unresolved(), 0, 0)?;
-    state.frames.try_reserve(1).map_err(|_| mcx.oom(core::mem::size_of::<FuncFrame<'_>>()))?;
+    state
+        .frames
+        .try_reserve(1)
+        .map_err(|_| mcx.oom(core::mem::size_of::<FuncFrame<'_>>()))?;
     state.frames.push(frame);
-    push_step(state, mcx, Step::JsonExprPath { jsestate, frame: frame_ix, out })?;
+    push_step(
+        state,
+        mcx,
+        Step::JsonExprPath {
+            jsestate,
+            frame: frame_ix,
+            out,
+        },
+    )?;
 
     let null_target = state.steps.len() as u32;
     for ix in jumps_return_null.iter() {
@@ -3561,7 +4235,15 @@ fn init_json_expr<'mcx>(
             _ => unreachable!(),
         }
     }
-    push_step(state, mcx, Step::Const { value: ::datum::Datum::null(), isnull: true, out })?;
+    push_step(
+        state,
+        mcx,
+        Step::Const {
+            value: ::datum::Datum::null(),
+            isnull: true,
+            out,
+        },
+    )?;
 
     let soft = on_error.btype != JsonBehaviorType::JSON_BEHAVIOR_ERROR;
     // SAFETY: field projection of the live state; ErrorSaveNode leads with FmNode.
@@ -3620,12 +4302,18 @@ fn init_json_expr<'mcx>(
     }
 
     let null_const_shortcut = |b: &JsonBehavior<'_>| {
-        b.expr.and_then(|e| e.as_const()).is_some_and(|c| c.constisnull) && !returning_domain
+        b.expr
+            .and_then(|e| e.as_const())
+            .is_some_and(|c| c.constisnull)
+            && !returning_domain
     };
     let behavior_needs_finish = |b: &JsonBehavior<'_>| {
         b.coerce
             || b.expr.is_some_and(|e| {
-                matches!(e.node_tag(), NodeTag::T_CoerceViaIO | NodeTag::T_CoerceToDomain)
+                matches!(
+                    e.node_tag(),
+                    NodeTag::T_CoerceViaIO | NodeTag::T_CoerceToDomain
+                )
             })
     };
 
@@ -3634,15 +4322,38 @@ fn init_json_expr<'mcx>(
         // SAFETY: live compile-allocated state, sole reference here.
         unsafe { (*jsp).jump_error = state.steps.len() as i32 };
         jumps_to_end.push(state.steps.len());
-        push_step(state, mcx, Step::JumpIfNotTrue { jumpdone: u32::MAX, out: error_out })?;
+        push_step(
+            state,
+            mcx,
+            Step::JumpIfNotTrue {
+                jumpdone: u32::MAX,
+                out: error_out,
+            },
+        )?;
 
         let saved_escontext = state.escontext;
         state.escontext = esc_ptr;
-        init_expr_rec(on_error.expr.expect("JsonBehavior.expr"), state, mcx, out, agg, params, sub)?;
+        init_expr_rec(
+            on_error.expr.expect("JsonBehavior.expr"),
+            state,
+            mcx,
+            out,
+            agg,
+            params,
+            sub,
+        )?;
         state.escontext = saved_escontext;
 
         if on_error.coerce {
-            init_json_coercion(state, mcx, returning, esc_ptr, jsexpr.omit_quotes, false, out)?;
+            init_json_coercion(
+                state,
+                mcx,
+                returning,
+                esc_ptr,
+                jsexpr.omit_quotes,
+                false,
+                out,
+            )?;
         }
         if behavior_needs_finish(on_error) {
             push_step(state, mcx, Step::JsonCoercionFinish { jsestate, out })?;
@@ -3653,13 +4364,19 @@ fn init_json_expr<'mcx>(
     }
 
     if let Some(on_empty) = on_empty {
-        if on_empty.btype != JsonBehaviorType::JSON_BEHAVIOR_ERROR
-            && !null_const_shortcut(on_empty)
+        if on_empty.btype != JsonBehaviorType::JSON_BEHAVIOR_ERROR && !null_const_shortcut(on_empty)
         {
             // SAFETY: live compile-allocated state, sole reference here.
             unsafe { (*jsp).jump_empty = state.steps.len() as i32 };
             jumps_to_end.push(state.steps.len());
-            push_step(state, mcx, Step::JumpIfNotTrue { jumpdone: u32::MAX, out: empty_out })?;
+            push_step(
+                state,
+                mcx,
+                Step::JumpIfNotTrue {
+                    jumpdone: u32::MAX,
+                    out: empty_out,
+                },
+            )?;
 
             let saved_escontext = state.escontext;
             state.escontext = esc_ptr;
@@ -3675,7 +4392,15 @@ fn init_json_expr<'mcx>(
             state.escontext = saved_escontext;
 
             if on_empty.coerce {
-                init_json_coercion(state, mcx, returning, esc_ptr, jsexpr.omit_quotes, false, out)?;
+                init_json_coercion(
+                    state,
+                    mcx,
+                    returning,
+                    esc_ptr,
+                    jsexpr.omit_quotes,
+                    false,
+                    out,
+                )?;
             }
             if behavior_needs_finish(on_empty) {
                 push_step(state, mcx, Step::JsonCoercionFinish { jsestate, out })?;
@@ -3710,10 +4435,9 @@ fn init_json_coercion<'mcx>(
     exists_coerce: bool,
     out: OutRef,
 ) -> PgResult<()> {
-    let exists_cast_to_int = exists_coerce
-        && lsyscache::getBaseType(returning.typid)? == ::types_core::catalog::INT4OID;
-    let exists_check_domain =
-        exists_coerce && typcache::DomainHasConstraints(returning.typid)?;
+    let exists_cast_to_int =
+        exists_coerce && lsyscache::getBaseType(returning.typid)? == ::types_core::catalog::INT4OID;
+    let exists_check_domain = exists_coerce && typcache::DomainHasConstraints(returning.typid)?;
     let jc: NonNull<crate::steps::JsonCoercionState> = alloc_array_nodrop_exempt(mcx, 1)?;
     // SAFETY: fresh exclusive allocation; the compile mcx outlives every eval
     // of this step, so the 'static restamp never escapes it.
@@ -3732,9 +4456,20 @@ fn init_json_coercion<'mcx>(
     }
     let frame_ix = state.frames.len() as u32;
     let frame = FuncFrame::new_in(mcx, FmgrInfo::unresolved(), 0, 0)?;
-    state.frames.try_reserve(1).map_err(|_| mcx.oom(core::mem::size_of::<FuncFrame<'_>>()))?;
+    state
+        .frames
+        .try_reserve(1)
+        .map_err(|_| mcx.oom(core::mem::size_of::<FuncFrame<'_>>()))?;
     state.frames.push(frame);
-    push_step(state, mcx, Step::JsonCoercion { jc, frame: frame_ix, out })
+    push_step(
+        state,
+        mcx,
+        Step::JsonCoercion {
+            jc,
+            frame: frame_ix,
+            out,
+        },
+    )
 }
 
 // C ExecInitCoerceToDomain (execExpr.c:3524): constraints baked at compile
@@ -3796,7 +4531,8 @@ fn init_coerce_to_domain<'mcx>(
                 let save = state.innermost_domain;
                 state.innermost_domain = Some(dv);
                 init_expr_rec(
-                    con.check_expr.expect("CHECK DomainConstraintState carries check_expr"),
+                    con.check_expr
+                        .expect("CHECK DomainConstraintState carries check_expr"),
                     state,
                     mcx,
                     OutRef(check),
@@ -3854,14 +4590,33 @@ fn init_bool_expr<'mcx>(
     for (off, arg) in b.args.iter().enumerate() {
         init_expr_rec(arg, state, mcx, out, agg, params, sub)?;
         let step = match (is_and, off) {
-            (true, 0) => Step::BoolAndStepFirst { anynull, jumpdone: u32::MAX, out },
+            (true, 0) => Step::BoolAndStepFirst {
+                anynull,
+                jumpdone: u32::MAX,
+                out,
+            },
             (true, o) if o + 1 == nargs => Step::BoolAndStepLast { anynull, out },
-            (true, _) => Step::BoolAndStep { anynull, jumpdone: u32::MAX, out },
-            (false, 0) => Step::BoolOrStepFirst { anynull, jumpdone: u32::MAX, out },
+            (true, _) => Step::BoolAndStep {
+                anynull,
+                jumpdone: u32::MAX,
+                out,
+            },
+            (false, 0) => Step::BoolOrStepFirst {
+                anynull,
+                jumpdone: u32::MAX,
+                out,
+            },
             (false, o) if o + 1 == nargs => Step::BoolOrStepLast { anynull, out },
-            (false, _) => Step::BoolOrStep { anynull, jumpdone: u32::MAX, out },
+            (false, _) => Step::BoolOrStep {
+                anynull,
+                jumpdone: u32::MAX,
+                out,
+            },
         };
-        if !matches!(step, Step::BoolAndStepLast { .. } | Step::BoolOrStepLast { .. }) {
+        if !matches!(
+            step,
+            Step::BoolAndStepLast { .. } | Step::BoolOrStepLast { .. }
+        ) {
             adjust_jumps.push(state.steps.len());
         }
         push_step(state, mcx, step)?;
@@ -3911,13 +4666,36 @@ fn init_case_expr<'mcx>(
 
         let save_innermost = state.innermost_case;
         state.innermost_case = caseval;
-        init_expr_rec(cw.expr.expect("CaseWhen.expr"), state, mcx, out, agg, params, sub)?;
+        init_expr_rec(
+            cw.expr.expect("CaseWhen.expr"),
+            state,
+            mcx,
+            out,
+            agg,
+            params,
+            sub,
+        )?;
         state.innermost_case = save_innermost;
 
         let whenstep = state.steps.len();
-        push_step(state, mcx, Step::JumpIfNotTrue { jumpdone: u32::MAX, out })?;
+        push_step(
+            state,
+            mcx,
+            Step::JumpIfNotTrue {
+                jumpdone: u32::MAX,
+                out,
+            },
+        )?;
 
-        init_expr_rec(cw.result.expect("CaseWhen.result"), state, mcx, out, agg, params, sub)?;
+        init_expr_rec(
+            cw.result.expect("CaseWhen.result"),
+            state,
+            mcx,
+            out,
+            agg,
+            params,
+            sub,
+        )?;
 
         adjust_jumps.push(state.steps.len());
         push_step(state, mcx, Step::Jump { jumpdone: u32::MAX })?;
@@ -3932,7 +4710,9 @@ fn init_case_expr<'mcx>(
         }
     }
 
-    let defresult = c.defresult.expect("transformCaseExpr always adds a default");
+    let defresult = c
+        .defresult
+        .expect("transformCaseExpr always adds a default");
     init_expr_rec(defresult, state, mcx, out, agg, params, sub)?;
 
     let done = state.steps.len() as u32;
@@ -3991,14 +4771,24 @@ fn init_minmax<'mcx>(
     flinfo.fn_expr = Some(erase_fn_expr(mcx, node)?);
     let frame = FuncFrame::new_in(mcx, flinfo, 2, mm.inputcollid)?;
     let frame_ix = state.frames.len() as u32;
-    let call = FuncCall { fcinfo: frame.fcinfo, flinfo: frame.flinfo, frame: frame_ix, nargs: 2 };
-    state.frames.try_reserve(1).map_err(|_| mcx.oom(core::mem::size_of::<FuncFrame<'_>>()))?;
+    let call = FuncCall {
+        fcinfo: frame.fcinfo,
+        flinfo: frame.flinfo,
+        frame: frame_ix,
+        nargs: 2,
+    };
+    state
+        .frames
+        .try_reserve(1)
+        .map_err(|_| mcx.oom(core::mem::size_of::<FuncFrame<'_>>()))?;
     state.frames.push(frame);
 
-    let layout = core::alloc::Layout::array::<::datum::NullableDatum>(nelems)
-        .expect("minmax slots layout");
-    let slots: NonNull<::datum::NullableDatum> =
-        mcx.allocate(layout).map_err(|_| mcx.oom(layout.size()))?.cast();
+    let layout =
+        core::alloc::Layout::array::<::datum::NullableDatum>(nelems).expect("minmax slots layout");
+    let slots: NonNull<::datum::NullableDatum> = mcx
+        .allocate(layout)
+        .map_err(|_| mcx.oom(layout.size()))?
+        .cast();
     for (i, arg) in mm.args.iter().enumerate() {
         // SAFETY: i < nelems of the freshly allocated slot array.
         let arg_out = OutRef(unsafe { NonNull::new_unchecked(slots.as_ptr().add(i)) });
@@ -4018,8 +4808,10 @@ fn init_minmax<'mcx>(
 fn no_cmp_function(type_oid: Oid) -> PgResult<Box<PgError>> {
     let name = format_type::format_type_be(type_oid)?;
     Ok(Box::new(
-        PgError::error(format!("could not identify a comparison function for type {name}"))
-            .with_sqlstate(::types_error::ERRCODE_UNDEFINED_FUNCTION),
+        PgError::error(format!(
+            "could not identify a comparison function for type {name}"
+        ))
+        .with_sqlstate(::types_error::ERRCODE_UNDEFINED_FUNCTION),
     ))
 }
 
@@ -4054,7 +4846,10 @@ fn init_param(param: &Param, params: ParamBind<'_>, out: OutRef) -> PgResult<Ste
                 prm.ptype,
                 param.paramtype
             );
-            Ok(Step::ParamExtern { prm: NonNull::from(prm), out })
+            Ok(Step::ParamExtern {
+                prm: NonNull::from(prm),
+                out,
+            })
         }
         other => panic!(
             "execexpr ExecInitExprRec: Param kind {other:?} must not reach the executor \
@@ -4139,7 +4934,10 @@ fn init_coerce_via_io<'mcx>(
         frame: state.frames.len() as u32,
         nargs: 1,
     };
-    state.frames.try_reserve(2).map_err(|_| mcx.oom(2 * core::mem::size_of::<FuncFrame<'_>>()))?;
+    state
+        .frames
+        .try_reserve(2)
+        .map_err(|_| mcx.oom(2 * core::mem::size_of::<FuncFrame<'_>>()))?;
     state.frames.push(frame_out);
 
     let flinfo_in = fmgr_core::fmgr_info(infunc)?;
@@ -4170,7 +4968,11 @@ fn init_coerce_via_io<'mcx>(
     }
     state.frames.push(frame_in);
 
-    let calls = crate::steps::IoCoerceCalls { outcall, incall, in_strict };
+    let calls = crate::steps::IoCoerceCalls {
+        outcall,
+        incall,
+        in_strict,
+    };
     let raw = mcx
         .allocate(core::alloc::Layout::new::<crate::steps::IoCoerceCalls>())
         .map_err(|_| mcx.oom(core::mem::size_of::<crate::steps::IoCoerceCalls>()))?;
@@ -4201,9 +5003,11 @@ fn init_array_coerce<'mcx>(
 
     let resultelemtype = ::lsyscache::get_element_type(ace.resulttype)?;
     if !::types_core::OidIsValid(resultelemtype) {
-        return Err(::types_error::PgError::error("target type is not an array".to_string())
-            .with_sqlstate(::types_error::ERRCODE_INVALID_PARAMETER_VALUE)
-            .into());
+        return Err(
+            ::types_error::PgError::error("target type is not an array".to_string())
+                .with_sqlstate(::types_error::ERRCODE_INVALID_PARAMETER_VALUE)
+                .into(),
+        );
     }
     let (ret_typlen, ret_typbyval, ret_typalign) =
         ::lsyscache::get_typlenbyvalalign(resultelemtype)?;
@@ -4214,7 +5018,15 @@ fn init_array_coerce<'mcx>(
     create_expr_setup_steps(&mut substate, mcx, &[elemexpr], None, ParamBind::NONE, None)?;
     substate.innermost_case = Some(slot);
     let rout = substate.result_out();
-    init_expr_rec(elemexpr, &mut substate, mcx, rout, None, ParamBind::NONE, None)?;
+    init_expr_rec(
+        elemexpr,
+        &mut substate,
+        mcx,
+        rout,
+        None,
+        ParamBind::NONE,
+        None,
+    )?;
 
     let trivial =
         substate.steps.len() == 1 && matches!(substate.steps[0], Step::CaseTestVal { .. });
@@ -4269,8 +5081,10 @@ fn init_convert_rowtype<'mcx>(
 
     let alloc_desc = |desc: TupleDescData<'mcx>| -> PgResult<NonNull<TupleDescData<'static>>> {
         let layout = core::alloc::Layout::new::<TupleDescData<'static>>();
-        let p: NonNull<TupleDescData<'static>> =
-            mcx.allocate(layout).map_err(|_| mcx.oom(layout.size()))?.cast();
+        let p: NonNull<TupleDescData<'static>> = mcx
+            .allocate(layout)
+            .map_err(|_| mcx.oom(layout.size()))?
+            .cast();
         // SAFETY: fresh exact-layout allocation; the plan mcx outlives every
         // eval of this step, so the 'static restamp never escapes it.
         unsafe {
@@ -4286,12 +5100,27 @@ fn init_convert_rowtype<'mcx>(
 
     let frame_ix = state.frames.len() as u32;
     let frame = FuncFrame::new_in(mcx, FmgrInfo::unresolved(), 0, 0)?;
-    state.frames.try_reserve(1).map_err(|_| mcx.oom(core::mem::size_of::<FuncFrame<'_>>()))?;
+    state
+        .frames
+        .try_reserve(1)
+        .map_err(|_| mcx.oom(core::mem::size_of::<FuncFrame<'_>>()))?;
     state.frames.push(frame);
 
-    let crs = crate::steps::ConvertRowtypeState { indesc: indesc_ptr, outdesc: outdesc_ptr, map };
+    let crs = crate::steps::ConvertRowtypeState {
+        indesc: indesc_ptr,
+        outdesc: outdesc_ptr,
+        map,
+    };
     let p = alloc_state(mcx, crs)?;
-    push_step(state, mcx, Step::ConvertRowtype { state: p, frame: frame_ix, out })
+    push_step(
+        state,
+        mcx,
+        Step::ConvertRowtype {
+            state: p,
+            frame: frame_ix,
+            out,
+        },
+    )
 }
 
 // attmap.c build_attrmap_by_name + tupconvert.c convert_tuples_by_name's
@@ -4449,8 +5278,16 @@ fn init_func<'mcx>(
     }
     frame.const_args = const_bits;
     frame.const_null_args = const_null_bits;
-    let call = FuncCall { fcinfo: frame.fcinfo, flinfo: frame.flinfo, frame: frame_ix, nargs: nargs as u16 };
-    state.frames.try_reserve(1).map_err(|_| mcx.oom(core::mem::size_of::<FuncFrame<'_>>()))?;
+    let call = FuncCall {
+        fcinfo: frame.fcinfo,
+        flinfo: frame.flinfo,
+        frame: frame_ix,
+        nargs: nargs as u16,
+    };
+    state
+        .frames
+        .try_reserve(1)
+        .map_err(|_| mcx.oom(core::mem::size_of::<FuncFrame<'_>>()))?;
     state.frames.push(frame);
     for (argno, arg) in args.iter().enumerate() {
         if arg.as_const().is_none() {
@@ -4493,7 +5330,10 @@ pub(crate) fn ready_expr(state: &mut ExprState<'_>) {
     let steps = state.steps.as_slice();
     let len = steps.len();
     debug_assert!(len >= 1);
-    debug_assert!(matches!(steps[len - 1], Step::DoneReturn | Step::DoneNoReturn));
+    debug_assert!(matches!(
+        steps[len - 1],
+        Step::DoneReturn | Step::DoneNoReturn
+    ));
     #[cfg(debug_assertions)]
     for s in steps {
         match s {
@@ -4504,12 +5344,18 @@ pub(crate) fn ready_expr(state: &mut ExprState<'_>) {
             | Step::BoolAndStep { jumpdone, .. }
             | Step::BoolOrStepFirst { jumpdone, .. }
             | Step::BoolOrStep { jumpdone, .. } => {
-                assert!((*jumpdone as usize) < len, "boolexpr jump target out of range");
+                assert!(
+                    (*jumpdone as usize) < len,
+                    "boolexpr jump target out of range"
+                );
             }
             Step::AggStrictInputCheck { jumpnull, .. }
             | Step::AggStrictInputCheck1 { jumpnull, .. }
             | Step::AggStrictDeserialize { jumpnull, .. } => {
-                assert!((*jumpnull as usize) < len, "strict-input jump target out of range");
+                assert!(
+                    (*jumpnull as usize) < len,
+                    "strict-input jump target out of range"
+                );
             }
             Step::Jump { jumpdone }
             | Step::JumpIfNotTrue { jumpdone, .. }
@@ -4519,21 +5365,40 @@ pub(crate) fn ready_expr(state: &mut ExprState<'_>) {
             Step::JumpIfNull { jumpdone, .. }
             | Step::SbsrefSubscripts { jumpdone, .. }
             | Step::JsonbSbsrefSubscripts { jumpdone, .. } => {
-                assert!((*jumpdone as usize) < len, "sbsref jump target out of range");
+                assert!(
+                    (*jumpdone as usize) < len,
+                    "sbsref jump target out of range"
+                );
             }
             Step::JsonExprPath { jsestate, .. } => {
                 // SAFETY: compile-allocated state fully written by init_json_expr.
                 let js = unsafe { jsestate.as_ref() };
-                for j in [js.jump_error, js.jump_empty, js.jump_eval_coercion, js.jump_end] {
+                for j in [
+                    js.jump_error,
+                    js.jump_empty,
+                    js.jump_eval_coercion,
+                    js.jump_end,
+                ] {
                     assert!(j < len as i32, "jsonexpr jump target out of range");
                 }
             }
-            Step::RowCompareStep { jumpnull, jumpdone, .. } => {
-                assert!((*jumpnull as usize) < len, "rowcompare jump target out of range");
-                assert!((*jumpdone as usize) < len, "rowcompare jump target out of range");
+            Step::RowCompareStep {
+                jumpnull, jumpdone, ..
+            } => {
+                assert!(
+                    (*jumpnull as usize) < len,
+                    "rowcompare jump target out of range"
+                );
+                assert!(
+                    (*jumpdone as usize) < len,
+                    "rowcompare jump target out of range"
+                );
             }
             Step::ReturningExprStep { jumpdone, .. } => {
-                assert!((*jumpdone as usize) < len, "returningexpr jump target out of range");
+                assert!(
+                    (*jumpdone as usize) < len,
+                    "returningexpr jump target out of range"
+                );
             }
             Step::FuncExpr { call, .. }
             | Step::FuncExprStrict1 { call, .. }
@@ -4637,7 +5502,9 @@ fn for_each_jump_field_mut(step: &mut Step, mut f: impl FnMut(&mut u32)) {
         Step::AggStrictInputCheck { jumpnull, .. }
         | Step::AggStrictInputCheck1 { jumpnull, .. }
         | Step::AggStrictDeserialize { jumpnull, .. } => f(jumpnull),
-        Step::RowCompareStep { jumpnull, jumpdone, .. } => {
+        Step::RowCompareStep {
+            jumpnull, jumpdone, ..
+        } => {
             f(jumpnull);
             f(jumpdone);
         }
@@ -4666,7 +5533,10 @@ fn thin_call(call: &FuncCall) -> Option<crate::steps::CallThin> {
     // SAFETY: frame-owned mcx-boxed FmgrInfo, live for 'mcx.
     let fl = unsafe { call.flinfo.as_ref() };
     let f = fmgr_core::fmgr_thin_builtin(fl, call.nargs as i16)?;
-    Some(crate::steps::CallThin { fcinfo: call.fcinfo, f })
+    Some(crate::steps::CallThin {
+        fcinfo: call.fcinfo,
+        f,
+    })
 }
 
 fn thin2(call: &FuncCall) -> Option<crate::steps::CallThin> {
@@ -4676,26 +5546,37 @@ fn thin2(call: &FuncCall) -> Option<crate::steps::CallThin> {
 
 fn thin_single(step: &Step) -> Option<Step> {
     match step {
-        Step::FuncExprStrict1 { call, out } => {
-            Some(Step::FuncExprStrict1Thin { call: thin_call(call)?, out: *out })
-        }
-        Step::FuncExprStrict2 { call, out } => {
-            Some(Step::FuncExprStrict2Thin { call: thin_call(call)?, out: *out })
-        }
-        Step::AggTransStrictByValIndirect { call, base, transno } => {
-            Some(Step::AggTransStrictByValIndirectThin {
-                call: thin_call(call)?,
-                base: *base,
-                transno: *transno,
-            })
-        }
+        Step::FuncExprStrict1 { call, out } => Some(Step::FuncExprStrict1Thin {
+            call: thin_call(call)?,
+            out: *out,
+        }),
+        Step::FuncExprStrict2 { call, out } => Some(Step::FuncExprStrict2Thin {
+            call: thin_call(call)?,
+            out: *out,
+        }),
+        Step::AggTransStrictByValIndirect {
+            call,
+            base,
+            transno,
+        } => Some(Step::AggTransStrictByValIndirectThin {
+            call: thin_call(call)?,
+            base: *base,
+            transno: *transno,
+        }),
         _ => None,
     }
 }
 
 fn try_fuse(a: &Step, b: &Step) -> Option<Step> {
     match (a, b) {
-        (Step::ScanVar { attnum, vartype, out }, Step::FuncExprStrict2 { call, out: fout }) => {
+        (
+            Step::ScanVar {
+                attnum,
+                vartype,
+                out,
+            },
+            Step::FuncExprStrict2 { call, out: fout },
+        ) => {
             let argno = arg_index_of(call, *out)?;
             Some(match thin2(call) {
                 Some(c) => Step::ScanVarFuncStrict2Thin {
@@ -4715,17 +5596,26 @@ fn try_fuse(a: &Step, b: &Step) -> Option<Step> {
             })
         }
         (
-            Step::FuncExprStrict2 { call: call1, out: out1 },
-            Step::FuncExprStrict2 { call: call2, out: fout },
+            Step::FuncExprStrict2 {
+                call: call1,
+                out: out1,
+            },
+            Step::FuncExprStrict2 {
+                call: call2,
+                out: fout,
+            },
         ) => {
             if call1.fcinfo == call2.fcinfo {
                 return None;
             }
             let argno = arg_index_of(call2, *out1)?;
             Some(match (thin2(call1), thin2(call2)) {
-                (Some(c1), Some(c2)) => {
-                    Step::FuncFuncStrict2Thin { call1: c1, argno, call2: c2, out: *fout }
-                }
+                (Some(c1), Some(c2)) => Step::FuncFuncStrict2Thin {
+                    call1: c1,
+                    argno,
+                    call2: c2,
+                    out: *fout,
+                },
                 _ => Step::FuncFuncStrict2 {
                     call1: (*call1).into(),
                     argno,
@@ -4734,19 +5624,26 @@ fn try_fuse(a: &Step, b: &Step) -> Option<Step> {
                 },
             })
         }
-        (Step::FuncExprStrict2 { call, out }, Step::Qual { jumpdone }) => {
-            Some(match thin2(call) {
-                Some(c) => {
-                    Step::FuncStrict2QualThin { call: c, jumpdone: *jumpdone, out: *out }
-                }
-                None => Step::FuncStrict2Qual {
-                    call: (*call).into(),
-                    jumpdone: *jumpdone,
-                    out: *out,
-                },
-            })
-        }
-        (Step::OuterVar { attnum, vartype, out }, Step::NotDistinct { call, out: fout }) => {
+        (Step::FuncExprStrict2 { call, out }, Step::Qual { jumpdone }) => Some(match thin2(call) {
+            Some(c) => Step::FuncStrict2QualThin {
+                call: c,
+                jumpdone: *jumpdone,
+                out: *out,
+            },
+            None => Step::FuncStrict2Qual {
+                call: (*call).into(),
+                jumpdone: *jumpdone,
+                out: *out,
+            },
+        }),
+        (
+            Step::OuterVar {
+                attnum,
+                vartype,
+                out,
+            },
+            Step::NotDistinct { call, out: fout },
+        ) => {
             let argno = arg_index_of(call, *out)?;
             Some(match thin2(call) {
                 Some(c) => Step::OuterVarNotDistinctThin {
@@ -4767,9 +5664,11 @@ fn try_fuse(a: &Step, b: &Step) -> Option<Step> {
         }
         (Step::NotDistinct { call, out }, Step::Qual { jumpdone }) if call.nargs == 2 => {
             Some(match thin2(call) {
-                Some(c) => {
-                    Step::NotDistinctQualThin { call: c, jumpdone: *jumpdone, out: *out }
-                }
+                Some(c) => Step::NotDistinctQualThin {
+                    call: c,
+                    jumpdone: *jumpdone,
+                    out: *out,
+                },
                 None => Step::NotDistinctQual {
                     call: (*call).into(),
                     jumpdone: *jumpdone,
@@ -4778,8 +5677,16 @@ fn try_fuse(a: &Step, b: &Step) -> Option<Step> {
             })
         }
         (
-            Step::OuterVar { attnum, vartype, out },
-            Step::AggTransByValIndirect { call, base, transno },
+            Step::OuterVar {
+                attnum,
+                vartype,
+                out,
+            },
+            Step::AggTransByValIndirect {
+                call,
+                base,
+                transno,
+            },
         ) => {
             let argno = arg_index_of(call, *out)?;
             Some(Step::OuterVarAggTransByValIndirect {
@@ -4792,8 +5699,14 @@ fn try_fuse(a: &Step, b: &Step) -> Option<Step> {
             })
         }
         (
-            Step::AssignScanVar { attnum: attnum1, resultnum: resultnum1 },
-            Step::AssignScanVar { attnum: attnum2, resultnum: resultnum2 },
+            Step::AssignScanVar {
+                attnum: attnum1,
+                resultnum: resultnum1,
+            },
+            Step::AssignScanVar {
+                attnum: attnum2,
+                resultnum: resultnum2,
+            },
         ) => Some(Step::AssignScanVar2 {
             attnum1: *attnum1,
             resultnum1: *resultnum1,
@@ -4846,7 +5759,9 @@ pub struct EconomyWindow {
 }
 
 pub fn economy_window(active: bool) -> EconomyWindow {
-    EconomyWindow { prev: COMPILE_ECONOMY.with(|c| c.replace(active)) }
+    EconomyWindow {
+        prev: COMPILE_ECONOMY.with(|c| c.replace(active)),
+    }
 }
 
 impl Drop for EconomyWindow {
@@ -4881,8 +5796,11 @@ pub(crate) fn fuse_program(state: &mut ExprState<'_>) {
         .windows(2)
         .any(|w| try_fuse(&w[0], &w[1]).is_some());
     // JsonExprPath jump targets live in its state and would not be remapped.
-    let fuse_barrier =
-        state.steps.as_slice().iter().any(|s| matches!(s, Step::JsonExprPath { .. }));
+    let fuse_barrier = state
+        .steps
+        .as_slice()
+        .iter()
+        .any(|s| matches!(s, Step::JsonExprPath { .. }));
     if !has_pair || fuse_barrier {
         thin_steps(state);
         return;
@@ -4981,9 +5899,10 @@ fn select_kernel(state: &ExprState<'_>) -> Kernel {
     let steps = state.steps.as_slice();
     match steps.len() {
         2 => match &steps[0] {
-            Step::Const { value, isnull, out } if state.is_result(*out) => {
-                Kernel::JustConst { value: *value, isnull: *isnull }
-            }
+            Step::Const { value, isnull, out } if state.is_result(*out) => Kernel::JustConst {
+                value: *value,
+                isnull: *isnull,
+            },
             Step::FuncExpr { call, out }
             | Step::FuncExprStrict1 { call, out }
             | Step::FuncExprStrict2 { call, out }
@@ -5001,34 +5920,50 @@ fn select_kernel(state: &ExprState<'_>) -> Kernel {
                 if matches!(steps[1], Step::DoneNoReturn) =>
             {
                 match thin_call(call) {
-                    Some(c) => {
-                        Kernel::AggTransByValThin { call: c, pergroup: *pergroup, strict: false }
-                    }
-                    None => Kernel::AggTransByVal { call: *call, pergroup: *pergroup, strict: false },
+                    Some(c) => Kernel::AggTransByValThin {
+                        call: c,
+                        pergroup: *pergroup,
+                        strict: false,
+                    },
+                    None => Kernel::AggTransByVal {
+                        call: *call,
+                        pergroup: *pergroup,
+                        strict: false,
+                    },
                 }
             }
             Step::AggPlainTransStrictByVal { call, pergroup }
                 if matches!(steps[1], Step::DoneNoReturn) =>
             {
                 match thin_call(call) {
-                    Some(c) => {
-                        Kernel::AggTransByValThin { call: c, pergroup: *pergroup, strict: true }
-                    }
-                    None => Kernel::AggTransByVal { call: *call, pergroup: *pergroup, strict: true },
+                    Some(c) => Kernel::AggTransByValThin {
+                        call: c,
+                        pergroup: *pergroup,
+                        strict: true,
+                    },
+                    None => Kernel::AggTransByVal {
+                        call: *call,
+                        pergroup: *pergroup,
+                        strict: true,
+                    },
                 }
             }
             _ => match (var_src(&steps[0]), assign_var_src(&steps[0])) {
                 (Some((src, attnum, out)), _) if state.is_result(out) => {
                     Kernel::JustVarVirt { src, attnum }
                 }
-                (_, Some((src, attnum, resultnum))) => {
-                    Kernel::JustAssignVarVirt { src, attnum, resultnum }
-                }
+                (_, Some((src, attnum, resultnum))) => Kernel::JustAssignVarVirt {
+                    src,
+                    attnum,
+                    resultnum,
+                },
                 _ => Kernel::Program,
             },
         },
         3 => {
-            if let (Some(fsrc), Some((src, attnum, out))) = (fetch_src(&steps[0]), var_src(&steps[1])) {
+            if let (Some(fsrc), Some((src, attnum, out))) =
+                (fetch_src(&steps[0]), var_src(&steps[1]))
+            {
                 if fsrc == src && state.is_result(out) {
                     return Kernel::JustVar { src, attnum };
                 }
@@ -5037,14 +5972,22 @@ fn select_kernel(state: &ExprState<'_>) -> Kernel {
                 (fetch_src(&steps[0]), assign_var_src(&steps[1]))
             {
                 if fsrc == src {
-                    return Kernel::JustAssignVar { src, attnum, resultnum };
+                    return Kernel::JustAssignVar {
+                        src,
+                        attnum,
+                        resultnum,
+                    };
                 }
             }
             if let (Step::Const { value, isnull, out }, Step::AssignTmp { resultnum }) =
                 (&steps[0], &steps[1])
             {
                 if state.is_result(*out) {
-                    return Kernel::JustConstAssign { value: *value, isnull: *isnull, resultnum: *resultnum };
+                    return Kernel::JustConstAssign {
+                        value: *value,
+                        isnull: *isnull,
+                        resultnum: *resultnum,
+                    };
                 }
             }
             Kernel::Program
@@ -5074,7 +6017,11 @@ fn select_hash32_var(state: &ExprState<'_>) -> Option<Kernel> {
     if var_out.0 != frame.arg_slot(0) {
         return None;
     }
-    Some(Kernel::Hash32Var { src, attnum, frame: call.frame })
+    Some(Kernel::Hash32Var {
+        src,
+        attnum,
+        frame: call.frame,
+    })
 }
 
 // [FETCHSOME x2, VAR->arg x2, FUNCEXPR_STRICT_2 int comparator, QUAL, DONE].
@@ -5259,7 +6206,7 @@ fn select_scan_contains_clause(state: &ExprState<'_>) -> Option<crate::steps::Sc
         return None;
     }
     let needle = &bytes[lead..bytes.len() - trail];
-    if needle.iter().any(|&b| b == b'%') {
+    if needle.contains(&b'%') {
         return None;
     }
     Some(crate::steps::ScanContainsClause::new(
@@ -5287,7 +6234,9 @@ fn select_scan_cmp_clauses(state: &ExprState<'_>) -> Option<crate::steps::ScanCm
     }
     let mut i = 0usize;
     while i < done {
-        let Some(src) = fetch_src(&steps[i]) else { break };
+        let Some(src) = fetch_src(&steps[i]) else {
+            break;
+        };
         if src != SlotSrc::Scan {
             return None;
         }
@@ -5356,13 +6305,18 @@ fn select_scan_proj_cols(state: &ExprState<'_>) -> Option<crate::steps::ScanProj
     }
     let mut i = 0usize;
     while i < done {
-        let Some(src) = fetch_src(&steps[i]) else { break };
+        let Some(src) = fetch_src(&steps[i]) else {
+            break;
+        };
         if src != SlotSrc::Scan {
             return None;
         }
         i += 1;
     }
-    let mut out = ScanProjCols { cols: [ScanProjCol::Var { attnum: 0 }; SCAN_PROJ_MAX_COLS], n: 0 };
+    let mut out = ScanProjCols {
+        cols: [ScanProjCol::Var { attnum: 0 }; SCAN_PROJ_MAX_COLS],
+        n: 0,
+    };
     // One strict-2 arith call's (op, frame) when its fn is in the census set.
     let arith_call = |call: &crate::steps::FuncCall| -> Option<ProjArithOp> {
         // SAFETY: frame-owned mcx-boxed FmgrInfo, read-only here.
@@ -5379,10 +6333,18 @@ fn select_scan_proj_cols(state: &ExprState<'_>) -> Option<crate::steps::ScanProj
                 i += 1;
                 ScanProjCol::Var { attnum: *attnum }
             }
-            Step::ScanVar { attnum: a, out: a_out, .. } => match steps.get(i + 1) {
+            Step::ScanVar {
+                attnum: a,
+                out: a_out,
+                ..
+            } => match steps.get(i + 1) {
                 // Var op Var: both args evaluate into the call's arg slots.
-                Some(Step::ScanVar { attnum: b, out: b_out, .. }) => {
-                    if i + 3 >= done + 1 {
+                Some(Step::ScanVar {
+                    attnum: b,
+                    out: b_out,
+                    ..
+                }) => {
+                    if i + 3 > done {
                         return None;
                     }
                     let Step::FuncExprStrict2 { call, out: fout } = &steps[i + 2] else {
@@ -5405,7 +6367,7 @@ fn select_scan_proj_cols(state: &ExprState<'_>) -> Option<crate::steps::ScanProj
                 // Var op Const / Const op Var: the const arg was prefilled
                 // at compile (const_args bit), only the Var evaluates.
                 Some(Step::FuncExprStrict2 { call, out: fout }) => {
-                    if i + 2 >= done + 1 {
+                    if i + 2 > done {
                         return None;
                     }
                     let Step::AssignTmp { resultnum } = steps[i + 2] else {
@@ -5430,7 +6392,12 @@ fn select_scan_proj_cols(state: &ExprState<'_>) -> Option<crate::steps::ScanProj
                     // re-targeted (the qual census reads it the same way).
                     let konst = unsafe { frame.arg_slot(const_argno).read().value };
                     i += 3;
-                    ScanProjCol::ArithVK { op, attnum: *a, konst, var_is_arg0 }
+                    ScanProjCol::ArithVK {
+                        op,
+                        attnum: *a,
+                        konst,
+                        var_is_arg0,
+                    }
                 }
                 _ => return None,
             },
@@ -5461,7 +6428,9 @@ fn select_scan_proj_expr_key(state: &ExprState<'_>) -> Option<crate::steps::Scan
     }
     let mut i = 0usize;
     while i < done {
-        let Some(src) = fetch_src(&steps[i]) else { break };
+        let Some(src) = fetch_src(&steps[i]) else {
+            break;
+        };
         if src != SlotSrc::Scan {
             return None;
         }
@@ -5494,7 +6463,11 @@ fn select_scan_proj_expr_key(state: &ExprState<'_>) -> Option<crate::steps::Scan
                 out.cols[out.n as usize] = Some(*attnum);
                 i += 1;
             }
-            Step::ScanVar { attnum, vartype, out: vout } if !have_key => {
+            Step::ScanVar {
+                attnum,
+                vartype,
+                out: vout,
+            } if !have_key => {
                 out.input_col = *attnum;
                 out.input_type = *vartype;
                 out.key_out = idx;
@@ -5559,8 +6532,7 @@ fn select_scan_proj_expr_key(state: &ExprState<'_>) -> Option<crate::steps::Scan
                         // flat varlena results the admitted internal-builtin
                         // chains produce (fmgr results, never expanded).
                         Some(
-                            Step::AssignTmp { resultnum }
-                            | Step::AssignTmpMakeRo { resultnum },
+                            Step::AssignTmp { resultnum } | Step::AssignTmpMakeRo { resultnum },
                         ) if ncalls > 0 => {
                             if *resultnum != idx || !state.is_result(prev_out) {
                                 return None;
@@ -5622,18 +6594,30 @@ pub enum LaneBoolTest {
 pub enum LaneClause {
     Cmp(LaneCmpClause),
     /// col IS [NOT] NULL — NullTest is non-strict, non-erroring, no fn call.
-    NullTest { col: u16, want_null: bool },
+    NullTest {
+        col: u16,
+        want_null: bool,
+    },
     /// Bare boolean Var clause (`WHERE boolcol`): the Var writes the result
     /// slot and Qual tests it directly (NULL or false fails).
-    BoolVar { col: u16 },
+    BoolVar {
+        col: u16,
+    },
     /// col IS [NOT] TRUE/FALSE — BooleanTest is non-strict, non-erroring.
-    BoolTest { col: u16, kind: LaneBoolTest },
+    BoolTest {
+        col: u16,
+        kind: LaneBoolTest,
+    },
     /// col <op> ANY(non-null Const array): useOr SAOP over a strict
     /// comparator, elements decoded at classify time (flat byval arrays
     /// only, structurally capped). NULL elements are kept: they flip a miss
     /// to NULL, which a Qual fails exactly like false, so laneexec may skip
     /// them — the shape stays exact for the census.
-    InList { col: u16, fn_oid: Oid, elems: alloc::vec::Vec<::datum::NullableDatum> },
+    InList {
+        col: u16,
+        fn_oid: Oid,
+        elems: alloc::vec::Vec<::datum::NullableDatum>,
+    },
 }
 
 /// Trailing clauses the walker could not decode (the hybrid split's per-row
@@ -5709,7 +6693,11 @@ pub fn lane_scan_qual(state: &ExprState<'_>) -> Result<LaneQualShape, &'static s
     if clauses.is_empty() {
         return Err("no clauses");
     }
-    Ok(LaneQualShape { clauses, max_attnum, suffix })
+    Ok(LaneQualShape {
+        clauses,
+        max_attnum,
+        suffix,
+    })
 }
 
 /// One clause starting at `ix`; Ok returns (clause, clause max attnum, index
@@ -5803,9 +6791,21 @@ fn parse_lane_clause(
     // eval fast assumptions: OR semantics, strict comparator (NULL scalar ->
     // NULL -> row fails on both drives), flat uncompressed 4B varlena image,
     // byval fixed-width elements, small list.
-    if let Some(Step::Const { value, isnull, out: c_out }) = steps.get(ix).filter(|_| ix < done) {
-        let Some(Step::ScalarArrayOp { call, use_or, strict, typlen, typbyval, typalign, out }) =
-            steps.get(ix + 1).filter(|_| ix + 1 < done)
+    if let Some(Step::Const {
+        value,
+        isnull,
+        out: c_out,
+    }) = steps.get(ix).filter(|_| ix < done)
+    {
+        let Some(Step::ScalarArrayOp {
+            call,
+            use_or,
+            strict,
+            typlen,
+            typbyval,
+            typalign,
+            out,
+        }) = steps.get(ix + 1).filter(|_| ix + 1 < done)
         else {
             return Err("Const does not feed a SAOP");
         };
@@ -5841,7 +6841,15 @@ fn parse_lane_clause(
         if *jumpdone as usize != done {
             return Err("Qual jump is not the shared done");
         }
-        return Ok((LaneClause::InList { col: a, fn_oid, elems }, a, ix + 1));
+        return Ok((
+            LaneClause::InList {
+                col: a,
+                fn_oid,
+                elems,
+            },
+            a,
+            ix + 1,
+        ));
     }
     // The comparator call in any post-fusion spelling: fuse_program runs
     // on every Kernel::Program qual, so the fused Thin forms are the
@@ -5852,18 +6860,30 @@ fn parse_lane_clause(
             (state.frames[call.frame as usize].fcinfo, *out, None, None)
         }
         Some(Step::FuncExprStrict2Thin { call, out }) => (call.fcinfo, *out, None, None),
-        Some(Step::ScanVarFuncStrict2 { attnum, argno, call, out, .. }) => {
-            (call.fcinfo, *out, Some((*attnum, *argno)), None)
-        }
-        Some(Step::ScanVarFuncStrict2Thin { attnum, argno, call, out, .. }) => {
-            (call.fcinfo, *out, Some((*attnum, *argno)), None)
-        }
-        Some(Step::FuncStrict2Qual { call, jumpdone, out }) => {
-            (call.fcinfo, *out, None, Some(*jumpdone))
-        }
-        Some(Step::FuncStrict2QualThin { call, jumpdone, out }) => {
-            (call.fcinfo, *out, None, Some(*jumpdone))
-        }
+        Some(Step::ScanVarFuncStrict2 {
+            attnum,
+            argno,
+            call,
+            out,
+            ..
+        }) => (call.fcinfo, *out, Some((*attnum, *argno)), None),
+        Some(Step::ScanVarFuncStrict2Thin {
+            attnum,
+            argno,
+            call,
+            out,
+            ..
+        }) => (call.fcinfo, *out, Some((*attnum, *argno)), None),
+        Some(Step::FuncStrict2Qual {
+            call,
+            jumpdone,
+            out,
+        }) => (call.fcinfo, *out, None, Some(*jumpdone)),
+        Some(Step::FuncStrict2QualThin {
+            call,
+            jumpdone,
+            out,
+        }) => (call.fcinfo, *out, None, Some(*jumpdone)),
         _ => return Err("comparator is not a strict 2-arg fn"),
     };
     ix += 1;
@@ -5905,7 +6925,13 @@ fn parse_lane_clause(
     }
     let (clause, clause_max) = match arg_var {
         [Some(l), Some(r)] => (
-            LaneCmpClause { col: l, fn_oid, commuted: false, collation, rhs: LaneCmpRhs::Col(r) },
+            LaneCmpClause {
+                col: l,
+                fn_oid,
+                commuted: false,
+                collation,
+                rhs: LaneCmpRhs::Col(r),
+            },
             l.max(r),
         ),
         [var0, var1] => {
@@ -6002,10 +7028,17 @@ fn decode_saop_const_array(
             let elt = unsafe {
                 ::types_tuple::tupmacs::fetch_att(img.as_ptr().add(off), true, typlen as i32)
             };
-            off = ::arrayfuncs::foundation::att_addlength_pointer(off, typlen as i32, unsafe {
-                img.as_ptr().add(off)
+            off = unsafe {
+                ::arrayfuncs::foundation::att_addlength_pointer(
+                    off,
+                    typlen as i32,
+                    img.as_ptr().add(off),
+                )
+            };
+            elems.push(::datum::NullableDatum {
+                value: elt,
+                isnull: false,
             });
-            elems.push(::datum::NullableDatum { value: elt, isnull: false });
         }
         if bitmap_off.is_some() {
             bitmask <<= 1;
@@ -6026,8 +7059,9 @@ fn decode_saop_const_array(
 fn collect_suffix_calls(state: &ExprState<'_>, steps: &[Step]) -> LaneSuffix {
     let mut oids = alloc::vec::Vec::new();
     // SAFETY (all arms): frame-owned mcx-boxed FmgrInfo, read-only here.
-    let mut push_flinfo =
-        |oids: &mut alloc::vec::Vec<Oid>, fl: NonNull<FmgrInfo>| oids.push(unsafe { fl.as_ref() }.fn_oid);
+    let push_flinfo = |oids: &mut alloc::vec::Vec<Oid>, fl: NonNull<FmgrInfo>| {
+        oids.push(unsafe { fl.as_ref() }.fn_oid)
+    };
     for s in steps {
         match s {
             Step::ScanVar { .. }

@@ -2,7 +2,6 @@
 // es_worktable_shared[wtParam] entry the RecursiveUnion published.
 #![allow(non_snake_case)]
 
-use ::execexpr::exec_init_qual;
 use ::execscan::{exec_scan_epq, exec_scan_extended, ScanNode, ScanState};
 use ::executils::{EStateData, ExecSlotId};
 use ::mcx::Mcx;
@@ -26,24 +25,30 @@ impl<'mcx> ScanNode<'mcx> for WorkTableScanState<'mcx> {
     }
 
     /// `WorkTableScanRecheck`: nothing to check.
-    fn epq_recheck(
-        &mut self,
-        _estate: &mut EStateData<'mcx>,
-        _slot: ExecSlotId,
-    ) -> PgResult<bool> {
+    fn epq_recheck(&mut self, _estate: &mut EStateData<'mcx>, _slot: ExecSlotId) -> PgResult<bool> {
         Ok(true)
     }
 
     fn scan_next(&mut self, estate: &mut EStateData<'mcx>) -> PgResult<bool> {
-        debug_assert!(::types_scan::sdir::ScanDirectionIsForward(estate.es_direction));
+        debug_assert!(::types_scan::sdir::ScanDirectionIsForward(
+            estate.es_direction
+        ));
         let mcx = estate.es_query_cxt;
         let param = self.plan.wtParam as usize;
-        let mut shared = estate.worktable_shared_slot(param).take().unwrap_or_else(|| {
-            panic!("WorkTableScanNext (nodeWorktablescan.c): es_worktable_shared[{param}] missing")
-        });
-        let got = shared
-            .working_table
-            .gettupleslot(true, false, estate.slot_mut(self.ss.ss_ScanTupleSlot), mcx);
+        let mut shared = estate
+            .worktable_shared_slot(param)
+            .take()
+            .unwrap_or_else(|| {
+                panic!(
+                    "WorkTableScanNext (nodeWorktablescan.c): es_worktable_shared[{param}] missing"
+                )
+            });
+        let got = shared.working_table.gettupleslot(
+            true,
+            false,
+            estate.slot_mut(self.ss.ss_ScanTupleSlot),
+            mcx,
+        );
         *estate.worktable_shared_slot(param) = Some(shared);
         got
     }
@@ -82,9 +87,7 @@ fn resolve_rustate<'mcx>(
         .worktable_shared_slot(param)
         .as_ref()
         .unwrap_or_else(|| {
-            panic!(
-                "ExecWorkTableScan (nodeWorktablescan.c): es_worktable_shared[{param}] missing"
-            )
+            panic!("ExecWorkTableScan (nodeWorktablescan.c): es_worktable_shared[{param}] missing")
         })
         .desc
         .clone();
@@ -127,7 +130,11 @@ pub fn exec_init_work_table_scan<'mcx>(
         })?
     };
 
-    Ok(WorkTableScanState { ss, plan: node, rustate_resolved: false })
+    Ok(WorkTableScanState {
+        ss,
+        plan: node,
+        rustate_resolved: false,
+    })
 }
 
 pub fn exec_rescan_work_table_scan<'mcx>(

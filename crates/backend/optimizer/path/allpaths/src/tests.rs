@@ -22,7 +22,10 @@ fn with_rel<R>(f: impl FnOnce(&mut RelOptInfo<'_>) -> R) -> R {
 // to keep exercising the algorithm rather than the default value. Save/restore
 // keeps the process-global GUC clean for sibling tests.
 fn pin_c_thresholds() -> (i32, i32) {
-    let save = (gucs::min_parallel_table_scan_size(), gucs::min_parallel_index_scan_size());
+    let save = (
+        gucs::min_parallel_table_scan_size(),
+        gucs::min_parallel_index_scan_size(),
+    );
     gucs::set_min_parallel_table_scan_size(1024);
     gucs::set_min_parallel_index_scan_size(64);
     save
@@ -124,10 +127,19 @@ fn pgrcolumnar_rg_sizing_scales_linearly() {
         // 4 RGs = 1 worker; linear in claim units from there.
         assert_eq!(compute_pgrcolumnar_parallel_worker(rel, 262_144.0, 16), 1);
         assert_eq!(compute_pgrcolumnar_parallel_worker(rel, 1_000_000.0, 16), 4);
-        assert_eq!(compute_pgrcolumnar_parallel_worker(rel, 4_000_000.0, 16), 15);
+        assert_eq!(
+            compute_pgrcolumnar_parallel_worker(rel, 4_000_000.0, 16),
+            15
+        );
         // 10M rows = 153 RGs -> 38 pre-clamp: machine-sized on big banks.
-        assert_eq!(compute_pgrcolumnar_parallel_worker(rel, 10_000_000.0, 16), 16);
-        assert_eq!(compute_pgrcolumnar_parallel_worker(rel, 10_000_000.0, 64), 38);
+        assert_eq!(
+            compute_pgrcolumnar_parallel_worker(rel, 10_000_000.0, 16),
+            16
+        );
+        assert_eq!(
+            compute_pgrcolumnar_parallel_worker(rel, 10_000_000.0, 64),
+            38
+        );
     });
 }
 
@@ -136,10 +148,16 @@ fn pgrcolumnar_reloption_overrides_and_child_skips_gate() {
     let _g = test_lock();
     with_rel(|rel| {
         rel.rel_parallel_workers = 3;
-        assert_eq!(compute_pgrcolumnar_parallel_worker(rel, 10_000_000.0, 16), 3);
+        assert_eq!(
+            compute_pgrcolumnar_parallel_worker(rel, 10_000_000.0, 16),
+            3
+        );
         assert_eq!(compute_pgrcolumnar_parallel_worker(rel, 10_000_000.0, 2), 2);
         rel.rel_parallel_workers = 0;
-        assert_eq!(compute_pgrcolumnar_parallel_worker(rel, 10_000_000.0, 16), 0);
+        assert_eq!(
+            compute_pgrcolumnar_parallel_worker(rel, 10_000_000.0, 16),
+            0
+        );
         rel.rel_parallel_workers = -1;
         // Inheritance children skip the small-rel gate (C parity).
         rel.reloptkind = RELOPT_OTHER_MEMBER_REL;

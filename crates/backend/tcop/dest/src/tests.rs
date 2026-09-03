@@ -112,7 +112,11 @@ fn donothing_receiver_is_functional() {
 fn shell_receivers_panic_on_dispatch() {
     let ctx = setup();
     // Remote panics too: printtup's receive_slot on a descriptor-less slot.
-    for dest in [CommandDest::Debug, CommandDest::Remote, CommandDest::RemoteSimple] {
+    for dest in [
+        CommandDest::Debug,
+        CommandDest::Remote,
+        CommandDest::RemoteSimple,
+    ] {
         assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let mut r = CreateDestReceiver(dest);
             let mut slot = virtual_slot(ctx.mcx());
@@ -122,7 +126,9 @@ fn shell_receivers_panic_on_dispatch() {
     }
     // dest.c statics use donothingCleanup for rShutdown: real no-op.
     CreateDestReceiver(CommandDest::Debug).shutdown().unwrap();
-    CreateDestReceiver(CommandDest::RemoteSimple).shutdown().unwrap();
+    CreateDestReceiver(CommandDest::RemoteSimple)
+        .shutdown()
+        .unwrap();
     CreateDestReceiver(CommandDest::Spi).shutdown().unwrap();
 }
 
@@ -167,10 +173,7 @@ fn null_command_sends_empty_query_response_for_remote_only() {
     for dest in ALL_DESTS {
         NullCommand(dest).unwrap();
     }
-    assert_eq!(
-        sent(),
-        vec![(b'I', vec![]), (b'I', vec![]), (b'I', vec![])]
-    );
+    assert_eq!(sent(), vec![(b'I', vec![]), (b'I', vec![]), (b'I', vec![])]);
 }
 
 #[test]
@@ -181,7 +184,11 @@ fn ready_for_query_sends_status_and_flushes_for_remote_only() {
     }
     assert_eq!(
         sent(),
-        vec![(b'Z', b"I".to_vec()), (b'Z', b"I".to_vec()), (b'Z', b"I".to_vec())]
+        vec![
+            (b'Z', b"I".to_vec()),
+            (b'Z', b"I".to_vec()),
+            (b'Z', b"I".to_vec())
+        ]
     );
     assert_eq!(FLUSHES.with(|c| c.get()), 3);
 }

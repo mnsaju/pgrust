@@ -89,12 +89,11 @@ pub fn LookupNamespaceNoError(nspname: &str) -> PgResult<Oid> {
 }
 
 pub fn LookupExplicitNamespace(nspname: &str, missing_ok: bool) -> PgResult<Oid> {
-    if nspname == "pg_temp" {
-        if OidIsValid(my_temp_namespace()) {
+    if nspname == "pg_temp"
+        && OidIsValid(my_temp_namespace()) {
             return Ok(my_temp_namespace());
         }
         // Fall through: missing temp namespace means the object cannot exist.
-    }
 
     let namespaceId = get_namespace_oid(nspname, missing_ok)?;
     if missing_ok && !OidIsValid(namespaceId) {

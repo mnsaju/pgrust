@@ -99,7 +99,10 @@ fn activity_truncates_at_buffer_bound() {
     let long = "x".repeat(PS_BUFFER_SIZE * 2);
     set_ps_display(&long);
     let a = activity();
-    assert_eq!(a.len(), PS_BUFFER_SIZE - 1 - "postgres: trunc backend ".len());
+    assert_eq!(
+        a.len(),
+        PS_BUFFER_SIZE - 1 - "postgres: trunc backend ".len()
+    );
     assert!(a.bytes().all(|b| b == b'x'));
 
     set_ps_display("SELECT");

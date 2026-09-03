@@ -9,8 +9,8 @@ use mcx::Mcx;
 use types_core::Oid;
 use types_error::PgResult;
 use types_nodes::bitmapset::Bitmapset;
-use types_nodes::list::{IntList, NodeList, OidList, OptNodeList};
 use types_nodes::jointype::JoinType;
+use types_nodes::list::{IntList, NodeList, OidList};
 use types_nodes::nodes_enums::{CmdType, LimitOption};
 use types_nodes::parsenodes::{
     CTECycleClause, CTEMaterialize, CTESearchClause, CommonTableExpr, NotifyStmt, Query,
@@ -19,12 +19,11 @@ use types_nodes::parsenodes::{
 };
 use types_nodes::primnodes::{
     Aggref, Alias, ArrayExpr, BoolExpr, BoolExprType, CaseExpr, CaseTestExpr, CaseWhen,
-    CoalesceExpr, CoerceViaIO, CoercionForm, Const, FieldSelect, FieldStore, FromExpr, FuncExpr,
-    JoinExpr, MergeAction,
-    MergeMatchKind, MinMaxExpr, MinMaxOp, NamedArgExpr, NextValueExpr, NullTest, NullTestType,
-    OpExpr, OverridingKind, Param, ParamKind, RangeTblRef, CollateExpr, RelabelType,
-    ScalarArrayOpExpr, SubLink, SubLinkType, TableFunc, TableFuncType, TargetEntry, Var,
-    VarReturningType, WindowFunc, XmlExpr, XmlExprOp, XmlOptionType,
+    CoalesceExpr, CoercionForm, CollateExpr, Const, FieldSelect, FieldStore, FromExpr,
+    FuncExpr, JoinExpr, MergeAction, MergeMatchKind, MinMaxExpr, MinMaxOp, NamedArgExpr,
+    NextValueExpr, NullTest, NullTestType, OpExpr, OverridingKind, Param, ParamKind, RangeTblRef,
+    RelabelType, ScalarArrayOpExpr, SubLink, SubLinkType, TableFunc, TableFuncType, TargetEntry,
+    Var, VarReturningType, WindowFunc, XmlExpr, XmlExprOp, XmlOptionType,
 };
 use types_nodes::Node;
 
@@ -37,7 +36,11 @@ mod tests;
 // fresh catalog). C's stringToNode returns NULL there; this returns Ok(None).
 // SQL-reachable readers of such columns (pg_get_expr) MUST use this entry.
 pub fn stringToNodeNullable<'mcx>(mcx: Mcx<'mcx>, s: &str) -> PgResult<Option<Node<'mcx>>> {
-    let mut r = Reader { mcx, buf: s.as_bytes(), pos: 0 };
+    let mut r = Reader {
+        mcx,
+        buf: s.as_bytes(),
+        pos: 0,
+    };
     r.node_read().expect("stringToNode: empty input")
 }
 
@@ -149,7 +152,10 @@ impl<'a, 'mcx> Reader<'a, 'mcx> {
             .ok()
             .and_then(|s| s.parse::<i64>().ok())
             .unwrap_or_else(|| {
-                panic!("readfuncs.c: bad integer token {:?}", String::from_utf8_lossy(tok))
+                panic!(
+                    "readfuncs.c: bad integer token {:?}",
+                    String::from_utf8_lossy(tok)
+                )
             })
     }
 
@@ -217,10 +223,7 @@ impl<'a, 'mcx> Reader<'a, 'mcx> {
         }
     }
 
-    fn read_opt_node_list(
-        &mut self,
-        name: &str,
-    ) -> PgResult<types_nodes::list::OptNodeList<'mcx>> {
+    fn read_opt_node_list(&mut self, name: &str) -> PgResult<types_nodes::list::OptNodeList<'mcx>> {
         self.label(name);
         let t = self.token(name);
         if t.is_empty() {
@@ -488,7 +491,9 @@ impl<'a, 'mcx> Reader<'a, 'mcx> {
     }
 
     fn json_format_ref(&mut self, name: &str) -> PgResult<Option<&'mcx types_nodes::JsonFormat>> {
-        Ok(self.read_node(name)?.map(|n| n.as_json_format().expect("JsonFormat")))
+        Ok(self
+            .read_node(name)?
+            .map(|n| n.as_json_format().expect("JsonFormat")))
     }
 
     fn read_json_returning(&mut self) -> PgResult<Node<'mcx>> {
@@ -505,7 +510,9 @@ impl<'a, 'mcx> Reader<'a, 'mcx> {
         &mut self,
         name: &str,
     ) -> PgResult<Option<&'mcx types_nodes::JsonReturning<'mcx>>> {
-        Ok(self.read_node(name)?.map(|n| n.as_json_returning().expect("JsonReturning")))
+        Ok(self
+            .read_node(name)?
+            .map(|n| n.as_json_returning().expect("JsonReturning")))
     }
 
     fn read_json_value_expr(&mut self) -> PgResult<Node<'mcx>> {
@@ -781,8 +788,17 @@ impl<'a, 'mcx> Reader<'a, 'mcx> {
         let mcx = self.mcx;
         let retlevelsup = self.read_i32("retlevelsup");
         let retold = self.read_bool("retold");
-        let retexpr = self.read_node("retexpr")?.expect("ReturningExpr has a retexpr");
-        Node::mk(mcx, types_nodes::primnodes::ReturningExpr { retlevelsup, retold, retexpr })
+        let retexpr = self
+            .read_node("retexpr")?
+            .expect("ReturningExpr has a retexpr");
+        Node::mk(
+            mcx,
+            types_nodes::primnodes::ReturningExpr {
+                retlevelsup,
+                retold,
+                retexpr,
+            },
+        )
     }
 
     fn read_row_compare_expr(&mut self) -> PgResult<Node<'mcx>> {
@@ -804,7 +820,16 @@ impl<'a, 'mcx> Reader<'a, 'mcx> {
         let resulttype = self.read_u32("resulttype");
         let resulttypmod = self.read_i32("resulttypmod");
         let resultcollid = self.read_u32("resultcollid");
-        Node::mk(mcx, FieldSelect { arg, fieldnum, resulttype, resulttypmod, resultcollid })
+        Node::mk(
+            mcx,
+            FieldSelect {
+                arg,
+                fieldnum,
+                resulttype,
+                resulttypmod,
+                resultcollid,
+            },
+        )
     }
 
     fn read_field_store(&mut self) -> PgResult<Node<'mcx>> {
@@ -813,7 +838,15 @@ impl<'a, 'mcx> Reader<'a, 'mcx> {
         let newvals = self.read_node_list("newvals")?;
         let fieldnums = self.read_int_list("fieldnums")?;
         let resulttype = self.read_u32("resulttype");
-        Node::mk(mcx, FieldStore { arg, newvals, fieldnums, resulttype })
+        Node::mk(
+            mcx,
+            FieldStore {
+                arg,
+                newvals,
+                fieldnums,
+                resulttype,
+            },
+        )
     }
 
     fn read_merge_action(&mut self) -> PgResult<Node<'mcx>> {
@@ -833,7 +866,14 @@ impl<'a, 'mcx> Reader<'a, 'mcx> {
         let arg = self.read_node("arg")?.expect("CollateExpr has an arg");
         let collOid = self.read_u32("collOid");
         let location = self.read_location("location");
-        Node::mk(mcx, CollateExpr { arg, collOid, location })
+        Node::mk(
+            mcx,
+            CollateExpr {
+                arg,
+                collOid,
+                location,
+            },
+        )
     }
 
     fn read_set_to_default(&mut self) -> PgResult<Node<'mcx>> {
@@ -1268,7 +1308,9 @@ impl<'a, 'mcx> Reader<'a, 'mcx> {
     }
 
     fn read_convert_rowtype_expr(&mut self) -> PgResult<Node<'mcx>> {
-        let arg = self.read_node("arg")?.expect("ConvertRowtypeExpr has an arg");
+        let arg = self
+            .read_node("arg")?
+            .expect("ConvertRowtypeExpr has an arg");
         let c = types_nodes::ConvertRowtypeExpr {
             arg,
             resulttype: self.read_u32("resulttype"),
@@ -1279,7 +1321,9 @@ impl<'a, 'mcx> Reader<'a, 'mcx> {
     }
 
     fn read_place_holder_var(&mut self) -> PgResult<Node<'mcx>> {
-        let phexpr = self.read_node("phexpr")?.expect("PlaceHolderVar has a phexpr");
+        let phexpr = self
+            .read_node("phexpr")?
+            .expect("PlaceHolderVar has a phexpr");
         let phv = types_nodes::primnodes::PlaceHolderVar {
             phexpr,
             phrels: self.read_bitmapset("phrels")?,
@@ -1384,7 +1428,11 @@ impl<'a, 'mcx> Reader<'a, 'mcx> {
             }
         }
         let location = self.read_location("location");
-        let g = types_nodes::parsenodes::GroupingSet { kind, content, location };
+        let g = types_nodes::parsenodes::GroupingSet {
+            kind,
+            content,
+            location,
+        };
         Node::mk(self.mcx, g)
     }
 
@@ -1656,11 +1704,20 @@ impl<'a, 'mcx> Reader<'a, 'mcx> {
         let subLinkId = self.read_i32("subLinkId");
         let testexpr = self.read_node("testexpr")?;
         let operName = self.read_node_list("operName")?;
-        let subselect = self.read_node("subselect")?.expect("SubLink has a subselect");
+        let subselect = self
+            .read_node("subselect")?
+            .expect("SubLink has a subselect");
         let location = self.read_location("location");
         Node::mk(
             self.mcx,
-            SubLink { subLinkType, subLinkId, testexpr, operName, subselect, location },
+            SubLink {
+                subLinkType,
+                subLinkId,
+                testexpr,
+                operName,
+                subselect,
+                location,
+            },
         )
     }
 
@@ -1706,7 +1763,10 @@ impl<'a, 'mcx> Reader<'a, 'mcx> {
 
     fn read_alternative_sub_plan(&mut self) -> PgResult<Node<'mcx>> {
         let subplans = self.read_node_list("subplans")?;
-        Node::mk(self.mcx, types_nodes::primnodes::AlternativeSubPlan { subplans })
+        Node::mk(
+            self.mcx,
+            types_nodes::primnodes::AlternativeSubPlan { subplans },
+        )
     }
 
     fn read_param(&mut self) -> PgResult<Node<'mcx>> {

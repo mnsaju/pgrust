@@ -81,8 +81,10 @@ pub const MaxBlockNumber: BlockNumber = 0xFFFF_FFFE;
 
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[derive(Default)]
 pub enum ForkNumber {
     InvalidForkNumber = -1,
+    #[default]
     MAIN_FORKNUM = 0,
     FSM_FORKNUM = 1,
     VISIBILITYMAP_FORKNUM = 2,
@@ -104,11 +106,6 @@ impl ForkNumber {
     }
 }
 
-impl Default for ForkNumber {
-    fn default() -> Self {
-        ForkNumber::MAIN_FORKNUM
-    }
-}
 
 /// Buffer-pool slot index: positive = shared, negative = local, 0 = invalid.
 pub type Buffer = i32;

@@ -70,7 +70,11 @@ fn shared_universe_boot_cwd_and_ingest() {
     })
     .join()
     .unwrap();
-    assert_eq!(seen.as_deref(), Some(&b"CTRL"[..]), "secondary thread sees the shared disk");
+    assert_eq!(
+        seen.as_deref(),
+        Some(&b"CTRL"[..]),
+        "secondary thread sees the shared disk"
+    );
 
     // --- writes from a secondary thread visible on the main thread -------
     std::thread::spawn(|| {

@@ -16,6 +16,7 @@ use ::datum::{Datum, NullableDatum};
 use ::execexpr::{exec_eval_expr, AggPerGroup, EvalSlots};
 use ::execgrouping::TupleHashEntryData;
 use ::executils::{EStateData, ExecSlotId};
+use ::heaptuple::{heap_compute_data_size, heap_fill_tuple};
 use ::mcx::{Mcx, PgVec};
 use ::types_core::Oid;
 use ::types_error::{PgError, PgResult};
@@ -29,13 +30,12 @@ use ::types_slot::{SlotData, TupleSlotKind};
 use ::types_tuple::htup::MinimalTupleData;
 use ::types_tuple::tupmacs::{att_isnull, att_nominal_alignby, att_pointer_alignby, fetch_att};
 use ::types_tuple::varatt::{
-    varatt_is_1b, varatt_is_1b_e, varatt_is_4b_u, varsize_1b, varsize_4b, varsize_any,
-    VARHDRSZ, VARHDRSZ_SHORT,
+    varatt_is_1b, varatt_is_1b_e, varatt_is_4b_u, varsize_1b, varsize_4b, varsize_any, VARHDRSZ,
+    VARHDRSZ_SHORT,
 };
-use ::heaptuple::{heap_compute_data_size, heap_fill_tuple};
 use ::types_tuple::{
-    TupleDescData, BITMAPLEN, HEAP_HASNULL, MAXALIGN, MINIMAL_TUPLE_OFFSET,
-    SizeofMinimalTupleHeader,
+    SizeofMinimalTupleHeader, TupleDescData, BITMAPLEN, HEAP_HASNULL, MAXALIGN,
+    MINIMAL_TUPLE_OFFSET,
 };
 
 use crate::{
@@ -54,8 +54,8 @@ use crate::{
 // 2036 timestamp_larger, 2035 timestamp_smaller, 1196/1195 the timestamptz
 // pg_proc rows over the same int64 comparison.
 pub(crate) const COMBINE_WHITELIST: &[Oid] = &[
-    176, 177, 463, 768, 769, 770, 771, 1236, 1237, 2515, 2516, 1138, 1139, 1377, 1378, 2036,
-    2035, 1196, 1195,
+    176, 177, 463, 768, 769, 770, 771, 1236, 1237, 2515, 2516, 1138, 1139, 1377, 1378, 2036, 2035,
+    1196, 1195,
 ];
 
 // Internal-transtype combines the merge admits: the states hand across
@@ -93,7 +93,10 @@ const TEXTOID: Oid = 25;
 fn merge_byref_kinds_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
-        !matches!(std::env::var("PGRUST_AGG_MERGE_BYREF").as_deref(), Ok("0") | Ok("off"))
+        !matches!(
+            std::env::var("PGRUST_AGG_MERGE_BYREF").as_deref(),
+            Ok("0") | Ok("off")
+        )
     })
 }
 
@@ -101,8 +104,12 @@ fn merge_byref_kinds_enabled() -> bool {
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(crate) enum CombineKind {
     Byval,
-    PolyInt128 { sum_x2: bool },
-    NumericAgg { sum_x2: bool },
+    PolyInt128 {
+        sum_x2: bool,
+    },
+    NumericAgg {
+        sum_x2: bool,
+    },
     /// int4_avg_combine over the _int8[2] transarray (fixed 40-byte 4B-U
     /// image after relocation; payload at ARR_OVERHEAD_NONULLS_1).
     AvgInt8Array,
@@ -111,7 +118,9 @@ pub(crate) enum CombineKind {
     /// tiebreak — `varstrfastcmp_c` — and text ties are byte-equal, making
     /// merge order unobservable). bpchar is excluded (its trailing-blank tie
     /// survivors differ by padding).
-    VarlenaMinMax { larger: bool },
+    VarlenaMinMax {
+        larger: bool,
+    },
 }
 
 // One worker table, self-contained: `buf` owns the [pergroups][tuple][states]
@@ -185,15 +194,27 @@ pub struct AggTableHandoff {
 
 impl AggTableHandoff {
     fn new(kinds: Vec<CombineKind>, exchange_cap: Option<u32>) -> AggTableHandoff {
-        AggTableHandoff { slots: Mutex::new(HandoffSlots::default()), kinds, exchange_cap }
+        AggTableHandoff {
+            slots: Mutex::new(HandoffSlots::default()),
+            kinds,
+            exchange_cap,
+        }
     }
 
     fn install(&self, t: HandedAggTable) {
-        self.slots.lock().unwrap_or_else(|e| e.into_inner()).classic.push(t);
+        self.slots
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .classic
+            .push(t);
     }
 
     fn install_raw(&self, t: HandedRawTable) {
-        self.slots.lock().unwrap_or_else(|e| e.into_inner()).raw.push(t);
+        self.slots
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .raw
+            .push(t);
     }
 
     fn take_all(&self) -> (Vec<HandedAggTable>, Vec<HandedRawTable>) {
@@ -227,7 +248,9 @@ fn registry_remove(key: usize) {
 
 fn registry_get(key: usize) -> Option<Arc<AggTableHandoff>> {
     REGISTRY.with(|r| {
-        r.borrow().iter().find_map(|(k, w)| (*k == key).then(|| w.upgrade()).flatten())
+        r.borrow()
+            .iter()
+            .find_map(|(k, w)| (*k == key).then(|| w.upgrade()).flatten())
     })
 }
 
@@ -237,7 +260,10 @@ pub struct AggHandoffExport(Vec<(usize, Arc<AggTableHandoff>)>);
 
 pub fn export_registry() -> AggHandoffExport {
     AggHandoffExport(REGISTRY.with(|r| {
-        r.borrow().iter().filter_map(|(k, w)| w.upgrade().map(|a| (*k, a))).collect()
+        r.borrow()
+            .iter()
+            .filter_map(|(k, w)| w.upgrade().map(|a| (*k, a)))
+            .collect()
     }))
 }
 
@@ -501,7 +527,9 @@ fn build_emit_plan(node: &AggStateData<'_>) -> Option<EmitPlan> {
             if a.aggno < 0 || a.aggno as usize >= node.peragg.len() {
                 return None;
             }
-            cols.push(EmitCol::Agg { transno: node.peragg[a.aggno as usize].transno });
+            cols.push(EmitCol::Agg {
+                transno: node.peragg[a.aggno as usize].transno,
+            });
             continue;
         }
         // Expressions over aggregates/keys keep the projection interpreter.
@@ -545,7 +573,11 @@ fn emit_bucket(plan: &EmitPlan, key_len: i16, t: &::lanetable::LaneAggTable) -> 
             }
         }
     }
-    EmitBuf { values, nulls, nrows: n }
+    EmitBuf {
+        values,
+        nulls,
+        nrows: n,
+    }
 }
 
 // C advance_combine semantics, one incoming partial state (the
@@ -581,9 +613,14 @@ fn combine_one(
     fcinfo.context = Some(agg_node.cast());
     // SAFETY: the per-tuple context outlives this stack frame's single call.
     unsafe { fcinfo.set_result_mcx(per_tuple) };
-    fcinfo.args[0] =
-        NullableDatum { value: dst.trans_value, isnull: dst.trans_value_is_null };
-    fcinfo.args[1] = NullableDatum { value: src.trans_value, isnull: src.trans_value_is_null };
+    fcinfo.args[0] = NullableDatum {
+        value: dst.trans_value,
+        isnull: dst.trans_value_is_null,
+    };
+    fcinfo.args[1] = NullableDatum {
+        value: src.trans_value,
+        isnull: src.trans_value_is_null,
+    };
     let value = c.flinfo.invoke(&mut fcinfo)?;
     dst.trans_value = value;
     dst.trans_value_is_null = fcinfo.isnull;
@@ -593,7 +630,10 @@ fn combine_one(
 
 fn partial_agg_of<'mcx>(
     node: &'mcx Agg<'mcx>,
-) -> Option<(&'mcx ::types_nodes::plannodes::Gather<'mcx>, &'mcx Agg<'mcx>)> {
+) -> Option<(
+    &'mcx ::types_nodes::plannodes::Gather<'mcx>,
+    &'mcx Agg<'mcx>,
+)> {
     let gather = node.plan.lefttree?;
     if gather.node_tag() != NodeTag::T_Gather {
         return None;
@@ -612,10 +652,12 @@ fn tle_is_passthrough(tlist: &::types_nodes::list::NodeList<'_>, pos: i16) -> bo
     if pos < 1 || pos as usize > tlist.len() {
         return false;
     }
-    let Some(te) = tlist.nth((pos - 1) as usize).as_target_entry() else { return false };
-    te.expr.as_var().is_some_and(|v| {
-        v.varno == ::types_nodes::primnodes::OUTER_VAR && v.varattno == pos
-    })
+    let Some(te) = tlist.nth((pos - 1) as usize).as_target_entry() else {
+        return false;
+    };
+    te.expr
+        .as_var()
+        .is_some_and(|v| v.varno == ::types_nodes::primnodes::OUTER_VAR && v.varattno == pos)
 }
 
 // The leader-side engagement decision + carrier build (ExecInitAgg tail of
@@ -633,7 +675,9 @@ pub(crate) fn init_finalize_merge<'mcx>(
     outer_desc: Option<&Rc<TupleDescData<'static>>>,
 ) -> PgResult<Option<FinalizeMerge<'mcx>>> {
     let mcx = estate.es_query_cxt;
-    let Some(outer_desc) = outer_desc else { return Ok(None) };
+    let Some(outer_desc) = outer_desc else {
+        return Ok(None);
+    };
     if node.aggsplit != AGGSPLIT_FINAL_DESERIAL
         || estate.es_instrument != 0
         || !pertrans_sort_empty
@@ -641,7 +685,9 @@ pub(crate) fn init_finalize_merge<'mcx>(
     {
         return Ok(None);
     }
-    let Some((gather, partial)) = partial_agg_of(node) else { return Ok(None) };
+    let Some((gather, partial)) = partial_agg_of(node) else {
+        return Ok(None);
+    };
     let num_cols = node.numCols as usize;
     if partial.aggstrategy != AGG_HASHED
         || partial.aggsplit != AGGSPLIT_INITIAL_SERIAL
@@ -692,13 +738,16 @@ pub(crate) fn init_finalize_merge<'mcx>(
         if pos < 1 || pos as usize > partial.plan.targetlist.len() {
             return Ok(None);
         }
-        let Some(tle) = partial.plan.targetlist.nth((pos - 1) as usize).as_target_entry()
+        let Some(tle) = partial
+            .plan
+            .targetlist
+            .nth((pos - 1) as usize)
+            .as_target_entry()
         else {
             return Ok(None);
         };
         let matches = tle.expr.as_var().is_some_and(|v| {
-            v.varno == ::types_nodes::primnodes::OUTER_VAR
-                && v.varattno == partial.grpColIdx[i]
+            v.varno == ::types_nodes::primnodes::OUTER_VAR && v.varattno == partial.grpColIdx[i]
         });
         if !matches {
             return Ok(None);
@@ -752,7 +801,9 @@ pub(crate) fn init_finalize_merge<'mcx>(
             // order yields byte-identical survivors. Non-memcmp collations
             // refuse (locale order in worker threads + tie identity are not
             // in this increment's proof).
-            CombineKind::VarlenaMinMax { larger: trans_fnoid[t] == F_TEXT_LARGER }
+            CombineKind::VarlenaMinMax {
+                larger: trans_fnoid[t] == F_TEXT_LARGER,
+            }
         } else {
             return Ok(None);
         };
@@ -780,7 +831,9 @@ pub(crate) fn init_finalize_merge<'mcx>(
             .nth((var.varattno - 1) as usize)
             .as_target_entry()
             .and_then(|te| te.expr.as_aggref());
-        let Some(pref) = partial_te else { return Ok(None) };
+        let Some(pref) = partial_te else {
+            return Ok(None);
+        };
         if pref.aggtransno as usize != t || pref.aggtranstype != aggref.aggtranstype {
             return Ok(None);
         }
@@ -800,10 +853,13 @@ pub(crate) fn init_finalize_merge<'mcx>(
             },
         )?;
         // SAFETY: carrier is arena-backed for the query, see above.
-        flinfo.fn_expr =
-            Some(unsafe { ::types_core::fmgr::FnExprErased::from_node_ref(carrier) });
+        flinfo.fn_expr = Some(unsafe { ::types_core::fmgr::FnExprErased::from_node_ref(carrier) });
         let strict = flinfo.fn_strict;
-        combines.push(MergeCombine { flinfo, strict, collation: aggref.inputcollid });
+        combines.push(MergeCombine {
+            flinfo,
+            strict,
+            collation: aggref.inputcollid,
+        });
     }
 
     // Bucket-parallel qualification (increment 2): every key column's
@@ -812,7 +868,10 @@ pub(crate) fn init_finalize_merge<'mcx>(
     // buffers in the agg context). Failing shapes leave the engagement intact
     // on the serial bucket merge.
     let par = 'par: {
-        if kinds.iter().any(|k| matches!(k, CombineKind::NumericAgg { .. })) {
+        if kinds
+            .iter()
+            .any(|k| matches!(k, CombineKind::NumericAgg { .. }))
+        {
             break 'par None;
         }
         let mut atts = Vec::with_capacity(num_cols);
@@ -820,9 +879,7 @@ pub(crate) fn init_finalize_merge<'mcx>(
         for i in 0..num_cols {
             let eqfn = lsyscache::get_opcode(node.grpOperators[i])?;
             let a = hash_desc.compact_attr(i);
-            let memcmp_payload = if EQ_FIXED_WHITELIST.contains(&eqfn)
-                && a.attbyval
-                && a.attlen > 0
+            let memcmp_payload = if EQ_FIXED_WHITELIST.contains(&eqfn) && a.attbyval && a.attlen > 0
             {
                 false
             } else if eqfn == EQ_TEXT
@@ -851,14 +908,17 @@ pub(crate) fn init_finalize_merge<'mcx>(
                 kind,
             })
             .collect();
-        Some(ParSpec { atts, combines: par_combines, has_varlena })
+        Some(ParSpec {
+            atts,
+            combines: par_combines,
+            has_varlena,
+        })
     };
 
     let replay_slot = {
         // 'static desc narrows into the query lifetime (procnode's
         // exec_type_from_tl carriers are 'static-typed the same way).
-        let d: Rc<TupleDescData<'mcx>> =
-            unsafe { core::mem::transmute(outer_desc.clone()) };
+        let d: Rc<TupleDescData<'mcx>> = unsafe { core::mem::transmute(outer_desc.clone()) };
         estate.exec_init_extra_tuple_slot(Some(d), TupleSlotKind::Virtual)
     };
     let key_slot =
@@ -924,7 +984,9 @@ unsafe fn entry_state_bytes(
     additionalsize: usize,
     kinds: &[CombineKind],
 ) -> usize {
-    let Some(add) = e.additional(additionalsize) else { return 0 };
+    let Some(add) = e.additional(additionalsize) else {
+        return 0;
+    };
     // SAFETY: caller contract.
     unsafe { states_extra_bytes(add.as_ptr().cast::<AggPerGroup>(), kinds) }
 }
@@ -997,8 +1059,12 @@ unsafe fn relocate_states_into(
                 }
                 CombineKind::NumericAgg { .. } => {
                     let sp = &*(pg.trans_value.as_usize() as *const NumericAggState);
-                    let digits = state.add(core::mem::size_of::<NumericAggState>()).cast::<i32>();
-                    state.cast::<NumericAggState>().write(sp.relocated_into(digits));
+                    let digits = state
+                        .add(core::mem::size_of::<NumericAggState>())
+                        .cast::<i32>();
+                    state
+                        .cast::<NumericAggState>()
+                        .write(sp.relocated_into(digits));
                     off += align16(core::mem::size_of::<NumericAggState>() + sp.digits_bytes());
                 }
                 CombineKind::AvgInt8Array | CombineKind::VarlenaMinMax { .. } => {
@@ -1154,7 +1220,12 @@ pub(crate) fn export_handed_table(
             parts.is_some(),
         );
     }
-    HandedAggTable { entries, additionalsize, parts, _buf: buf }
+    HandedAggTable {
+        entries,
+        additionalsize,
+        parts,
+        _buf: buf,
+    }
 }
 
 #[cfg(test)]
@@ -1193,7 +1264,10 @@ fn install_compact_handoff<'mcx>(
     let ph = node.perhash.as_mut().expect("hashed Agg has perhash");
     debug_assert!(!ph.spill.mode, "compact builds never enter spill mode");
     let additionalsize = ph.hashtable.additionalsize();
-    let ch = ph.compact.take().expect("compact install requires an armed table");
+    let ch = ph
+        .compact
+        .take()
+        .expect("compact install requires an armed table");
     let nrows = ch.table.nrows();
     let desc = ph
         .hashslot
@@ -1225,14 +1299,12 @@ fn install_compact_handoff<'mcx>(
         if hasnull {
             hlen += BITMAPLEN(natts as i32) as usize;
         }
-        let t_len =
-            MAXALIGN(hlen) + heap_compute_data_size(&desc, &sb.tts_values, &sb.tts_isnull);
+        let t_len = MAXALIGN(hlen) + heap_compute_data_size(&desc, &sb.tts_values, &sb.tts_isnull);
         tlens.push(t_len as u32);
         bytes += (additionalsize + t_len + 15) & !15;
         // SAFETY: the row's state block holds kinds.len() live pergroups
         // (compact build contract; numtrans matches the engagement proof).
-        bytes +=
-            unsafe { states_extra_bytes(ch.table.row_states(row).cast_const().cast(), kinds) };
+        bytes += unsafe { states_extra_bytes(ch.table.row_states(row).cast_const().cast(), kinds) };
     }
     let mut buf: Vec<u128> = vec![0; bytes.div_ceil(16)];
     let mut entries: Vec<TupleHashEntryData> = Vec::with_capacity(nrows);
@@ -1301,7 +1373,12 @@ fn install_compact_handoff<'mcx>(
             parts.is_some(),
         );
     }
-    handoff.install(HandedAggTable { entries, additionalsize, parts, _buf: buf });
+    handoff.install(HandedAggTable {
+        entries,
+        additionalsize,
+        parts,
+        _buf: buf,
+    });
     Ok(())
 }
 
@@ -1326,7 +1403,10 @@ fn install_raw_handoff<'mcx>(
     debug_assert!(!ph.spill.mode, "raw installs never run in spill mode");
     let additionalsize = ph.hashtable.additionalsize();
     let stride16 = additionalsize.div_ceil(16);
-    let mut ch = ph.compact.take().expect("raw install requires an armed table");
+    let mut ch = ph
+        .compact
+        .take()
+        .expect("raw install requires an armed table");
     let width = match &ch.key {
         crate::compact::CompactKeySpec::Single { width } => *width,
         // Reduced is unreachable too: raw exchange admission requires the
@@ -1367,7 +1447,8 @@ fn install_raw_handoff<'mcx>(
             unsafe { states_extra_bytes(ch.table.row_states(row).cast_const().cast(), kinds) };
     }
     let mut hashes: Vec<u32> = Vec::new();
-    ph.hashtable.hash_staged(&key_datums, &isnull, &mut hashes)?;
+    ph.hashtable
+        .hash_staged(&key_datums, &isnull, &mut hashes)?;
     // Rebase the bucket-routing hashes onto the leader's IV=0 mapping,
     // exactly like the classic export (export_handed_table's byref-merge
     // invariant note): the finalize's consume side buckets its OWN entries
@@ -1479,20 +1560,25 @@ pub(crate) enum ExchangeState {
 #[inline(never)]
 fn exchange_resolve(node: &mut AggStateData<'_>) {
     let state = 'r: {
-        if node.plan.aggsplit != AGGSPLIT_INITIAL_SERIAL
-            || node.plan.aggstrategy != AGG_HASHED
-        {
+        if node.plan.aggsplit != AGGSPLIT_INITIAL_SERIAL || node.plan.aggstrategy != AGG_HASHED {
             break 'r ExchangeState::Off;
         }
         let Some(handoff) = registry_get(node.plan as *const Agg<'_> as usize) else {
             break 'r ExchangeState::Off;
         };
         match handoff.exchange_cap {
-            Some(cap) => ExchangeState::On { handoff, cap, installed_bytes: 0 },
+            Some(cap) => ExchangeState::On {
+                handoff,
+                cap,
+                installed_bytes: 0,
+            },
             None => ExchangeState::Off,
         }
     };
-    node.perhash.as_mut().expect("hashed Agg has perhash").exchange = state;
+    node.perhash
+        .as_mut()
+        .expect("hashed Agg has perhash")
+        .exchange = state;
 }
 
 /// The exchange bound for this build (compact-arm sizing hook): a bounded
@@ -1505,12 +1591,20 @@ pub(crate) fn exchange_cap_for_build(node: &mut AggStateData<'_>) -> Option<u32>
         return Some(cap);
     }
     if matches!(
-        node.perhash.as_ref().expect("hashed Agg has perhash").exchange,
+        node.perhash
+            .as_ref()
+            .expect("hashed Agg has perhash")
+            .exchange,
         ExchangeState::Unresolved
     ) {
         exchange_resolve(node);
     }
-    match node.perhash.as_ref().expect("hashed Agg has perhash").exchange {
+    match node
+        .perhash
+        .as_ref()
+        .expect("hashed Agg has perhash")
+        .exchange
+    {
         ExchangeState::On { cap, .. } => Some(cap),
         _ => None,
     }
@@ -1574,7 +1668,10 @@ fn exchange_flush<'mcx>(
     let id = node.plan.plan.plan_node_id;
     let bytes = install_raw_handoff(node, estate, &handoff, id, true)?;
     let ph = node.perhash.as_mut().expect("hashed Agg has perhash");
-    if let ExchangeState::On { installed_bytes, .. } = &mut ph.exchange {
+    if let ExchangeState::On {
+        installed_bytes, ..
+    } = &mut ph.exchange
+    {
         *installed_bytes += bytes;
         // Budget discipline: handed buffers are this build's real footprint.
         // Over the limit, stop exchanging — the table then grows classically
@@ -1594,7 +1691,9 @@ pub(crate) fn consume_handoff<'mcx>(
     node: &mut AggStateData<'mcx>,
     estate: &mut EStateData<'mcx>,
 ) -> PgResult<()> {
-    let Some(m) = node.merge.as_ref() else { return Ok(()) };
+    let Some(m) = node.merge.as_ref() else {
+        return Ok(());
+    };
     let (tables, raw_tables) = m.handoff.take_all();
     if tables.is_empty() && raw_tables.is_empty() {
         return Ok(());
@@ -1634,11 +1733,15 @@ pub(crate) fn consume_handoff<'mcx>(
         // any classic sources (the leader's own row-built table; fallback
         // workers). Raw installs exist only under the exchange admission,
         // which required the parallel-qualified spec.
-        let spec = m.par.as_ref().expect("raw handoff implies a parallel-qualified merge");
+        let spec = m
+            .par
+            .as_ref()
+            .expect("raw handoff implies a parallel-qualified merge");
         let raw_key_len = spec.atts[0].attlen;
         let null_hash = {
             let mut v: Vec<u32> = Vec::new();
-            ph.hashtable.hash_staged(&[Datum::null()], &[true], &mut v)?;
+            ph.hashtable
+                .hash_staged(&[Datum::null()], &[true], &mut v)?;
             v[0]
         };
         // Parallel-finalize emit plan (order-relaxation lane): built here so
@@ -1680,9 +1783,13 @@ pub(crate) fn consume_handoff<'mcx>(
         return Ok(());
     }
     let pre = match &m.par {
-        Some(spec) if !parallel_merge_disabled() => {
-            parallel_merge(spec, ph.hashtable.entries(), &tables, &parts, additionalsize)?
-        }
+        Some(spec) if !parallel_merge_disabled() => parallel_merge(
+            spec,
+            ph.hashtable.entries(),
+            &tables,
+            &parts,
+            additionalsize,
+        )?,
         _ => None,
     };
     if let Some(t0) = t0 {
@@ -1691,7 +1798,11 @@ pub(crate) fn consume_handoff<'mcx>(
         eprintln!(
             "AGG_MERGE_STATS merge-wall-us={} mode={}",
             t0.elapsed().as_micros(),
-            if pre.is_some() { "parallel" } else { "serial-buckets-deferred" },
+            if pre.is_some() {
+                "parallel"
+            } else {
+                "serial-buckets-deferred"
+            },
         );
     }
     node.merge.as_mut().unwrap().run = Some(MergeRun {
@@ -1767,10 +1878,12 @@ fn replay_handed_rows<'mcx>(
             match lookup_hash_entry(node, estate, m.replay_slot) {
                 Ok(true) => {
                     let replay = estate.slot_mut(m.replay_slot);
-                    let mut slots =
-                        EvalSlots { scan: None, inner: None, outer: Some(replay) };
-                    if let Err(e) = exec_eval_expr(node.evaltrans.as_mut().unwrap(), &mut slots)
-                    {
+                    let mut slots = EvalSlots {
+                        scan: None,
+                        inner: None,
+                        outer: Some(replay),
+                    };
+                    if let Err(e) = exec_eval_expr(node.evaltrans.as_mut().unwrap(), &mut slots) {
                         result = Err(e);
                         break 'outer;
                     }
@@ -1821,9 +1934,13 @@ fn replay_raw_rows<'mcx>(
         return Ok(());
     }
     let mcx = estate.es_query_cxt;
-    let mut m = node.merge.take().expect("replay under an engaged merge");
-    let key_len =
-        m.par.as_ref().expect("raw handoff implies a parallel-qualified merge").atts[0].attlen;
+    let m = node.merge.take().expect("replay under an engaged merge");
+    let key_len = m
+        .par
+        .as_ref()
+        .expect("raw handoff implies a parallel-qualified merge")
+        .atts[0]
+        .attlen;
     let key_attno = node
         .perhash
         .as_ref()
@@ -1848,7 +1965,9 @@ fn replay_raw_rows<'mcx>(
                 };
                 (raw_key_datum(key_len, t.keys[i]), false, pg)
             } else {
-                let Some(block) = &t.null_states else { continue };
+                let Some(block) = &t.null_states else {
+                    continue;
+                };
                 let pg = if t.stride16 == 0 {
                     NonNull::dangling()
                 } else {
@@ -1885,9 +2004,12 @@ fn replay_raw_rows<'mcx>(
             match lookup_hash_entry(node, estate, m.replay_slot) {
                 Ok(true) => {
                     let replay = estate.slot_mut(m.replay_slot);
-                    let mut slots = EvalSlots { scan: None, inner: None, outer: Some(replay) };
-                    if let Err(e) = exec_eval_expr(node.evaltrans.as_mut().unwrap(), &mut slots)
-                    {
+                    let mut slots = EvalSlots {
+                        scan: None,
+                        inner: None,
+                        outer: Some(replay),
+                    };
+                    if let Err(e) = exec_eval_expr(node.evaltrans.as_mut().unwrap(), &mut slots) {
                         result = Err(e);
                         break 'outer;
                     }
@@ -1952,7 +2074,10 @@ unsafe fn synth_state_vals_pg(
                 // Byval rides inline; the byref non-internal kinds cross the
                 // classic row path as their PLAIN datum (these transtypes
                 // have no serialfn) — the handed image outlives the replay.
-                NullableDatum { value: s.trans_value, isnull: s.trans_value_is_null }
+                NullableDatum {
+                    value: s.trans_value,
+                    isnull: s.trans_value_is_null,
+                }
             } else {
                 let mut buf = ::pqformat::pq_begintypsend(per_tuple)?;
                 match *k {
@@ -2006,8 +2131,14 @@ pub(crate) fn agg_retrieve_merged<'mcx>(
             node.agg_done = true;
             return Ok(None);
         };
-        let additionalsize =
-            node.merge.as_ref().unwrap().run.as_ref().unwrap().additionalsize;
+        let additionalsize = node
+            .merge
+            .as_ref()
+            .unwrap()
+            .run
+            .as_ref()
+            .unwrap()
+            .additionalsize;
         let pergroup = {
             let ph = node.perhash.as_mut().expect("hashed Agg has perhash");
             // SAFETY: merged entry images live in the run's buffers (or the
@@ -2019,7 +2150,10 @@ pub(crate) fn agg_retrieve_merged<'mcx>(
             exectuples::exec_store_all_null_tuple(&mut ph.first_slot, mcx);
             {
                 let PerHashData {
-                    retrieve_slot: hashslot, first_slot, hash_grp_col_idx_input, ..
+                    retrieve_slot: hashslot,
+                    first_slot,
+                    hash_grp_col_idx_input,
+                    ..
                 } = &mut *ph;
                 let src = hashslot.base();
                 let dst = first_slot.base_mut();
@@ -2029,22 +2163,31 @@ pub(crate) fn agg_retrieve_merged<'mcx>(
                     dst.tts_isnull[v] = src.tts_isnull[i];
                 }
             }
-            entry.additional(additionalsize).map_or(NonNull::dangling(), |p| p.cast())
+            entry
+                .additional(additionalsize)
+                .map_or(NonNull::dangling(), |p| p.cast())
         };
         finalize_aggregates(node, estate, pergroup)?;
 
         {
             let AggStateData { perhash, qual, .. } = node;
             let ph = perhash.as_mut().unwrap();
-            let mut slots =
-                EvalSlots { scan: None, inner: None, outer: Some(&mut ph.first_slot) };
+            let mut slots = EvalSlots {
+                scan: None,
+                inner: None,
+                outer: Some(&mut ph.first_slot),
+            };
             if !::execexpr::exec_qual(qual.as_deref_mut(), &mut slots)? {
                 continue;
             }
         }
         let result_slot = estate.slot_mut(node.ps_ResultTupleSlot);
         let ph = node.perhash.as_mut().unwrap();
-        let mut slots = EvalSlots { scan: None, inner: None, outer: Some(&mut ph.first_slot) };
+        let mut slots = EvalSlots {
+            scan: None,
+            inner: None,
+            outer: Some(&mut ph.first_slot),
+        };
         ::execexpr::exec_project(&mut node.proj, &mut slots, result_slot, mcx)?;
         return Ok(Some(node.ps_ResultTupleSlot));
     }
@@ -2067,7 +2210,10 @@ fn agg_retrieve_emitted<'mcx>(
             .as_mut()
             .and_then(|m| m.run.as_mut())
             .expect("emitted retrieve under a built run");
-        let bufs = run.emit_pre.as_ref().expect("emitted retrieve under a prepared run");
+        let bufs = run
+            .emit_pre
+            .as_ref()
+            .expect("emitted retrieve under a prepared run");
         loop {
             if run.bucket >= 256 {
                 break None;
@@ -2143,8 +2289,7 @@ fn agg_retrieve_merged_raw<'mcx>(
         };
         // SAFETY: merge-table rows are live for the run; the state block is
         // the kinds.len()-pergroup array the finalize reads.
-        let pergroup: NonNull<AggPerGroup> =
-            unsafe { NonNull::new_unchecked(states.cast()) };
+        let pergroup: NonNull<AggPerGroup> = unsafe { NonNull::new_unchecked(states.cast()) };
         {
             let ph = node.perhash.as_mut().expect("hashed Agg has perhash");
             exectuples::exec_store_all_null_tuple(&mut ph.first_slot, mcx);
@@ -2160,15 +2305,22 @@ fn agg_retrieve_merged_raw<'mcx>(
         {
             let AggStateData { perhash, qual, .. } = node;
             let ph = perhash.as_mut().unwrap();
-            let mut slots =
-                EvalSlots { scan: None, inner: None, outer: Some(&mut ph.first_slot) };
+            let mut slots = EvalSlots {
+                scan: None,
+                inner: None,
+                outer: Some(&mut ph.first_slot),
+            };
             if !::execexpr::exec_qual(qual.as_deref_mut(), &mut slots)? {
                 continue;
             }
         }
         let result_slot = estate.slot_mut(node.ps_ResultTupleSlot);
         let ph = node.perhash.as_mut().unwrap();
-        let mut slots = EvalSlots { scan: None, inner: None, outer: Some(&mut ph.first_slot) };
+        let mut slots = EvalSlots {
+            scan: None,
+            inner: None,
+            outer: Some(&mut ph.first_slot),
+        };
         ::execexpr::exec_project(&mut node.proj, &mut slots, result_slot, mcx)?;
         return Ok(Some(node.ps_ResultTupleSlot));
     }
@@ -2215,7 +2367,12 @@ fn merge_next_bucket<'mcx>(
     let AggStateData { perhash, merge, .. } = node;
     let ph = perhash.as_mut().expect("hashed Agg has perhash");
     let m = merge.as_mut().expect("merge engaged");
-    let FinalizeMerge { run, key_slot, combines, .. } = m;
+    let FinalizeMerge {
+        run,
+        key_slot,
+        combines,
+        ..
+    } = m;
     let run = run.as_mut().expect("run built");
     let b = run.bucket;
     run.bucket += 1;
@@ -2233,7 +2390,14 @@ fn merge_next_bucket<'mcx>(
     run.probe.clear();
     run.probe.resize(cap, (0, PROBE_EMPTY));
     let mask = (cap - 1) as u32;
-    let MergeRun { tables, parts, probe, out, additionalsize, .. } = run;
+    let MergeRun {
+        tables,
+        parts,
+        probe,
+        out,
+        additionalsize,
+        ..
+    } = run;
     let additionalsize = *additionalsize;
 
     for (src, part) in parts.iter().enumerate() {
@@ -2260,8 +2424,12 @@ fn merge_next_bucket<'mcx>(
                 if h == e.hash() {
                     let cand = out[oix as usize];
                     if ph.hashtable.match_tuple(key_slot, input_key, &cand, mcx)? {
-                        let dst = cand.additional(additionalsize).map(|p| p.cast::<AggPerGroup>());
-                        let sp = e.additional(additionalsize).map(|p| p.cast::<AggPerGroup>());
+                        let dst = cand
+                            .additional(additionalsize)
+                            .map(|p| p.cast::<AggPerGroup>());
+                        let sp = e
+                            .additional(additionalsize)
+                            .map(|p| p.cast::<AggPerGroup>());
                         if let (Some(dst), Some(sp)) = (dst, sp) {
                             for (transno, c) in combines.iter_mut().enumerate() {
                                 // SAFETY: additionalsize holds numtrans
@@ -2444,7 +2612,10 @@ fn combine_one_par(c: &ParCombine, dst: &mut AggPerGroup, src: &AggPerGroup) -> 
         }
         return Ok(());
     }
-    if matches!(c.kind, CombineKind::AvgInt8Array | CombineKind::VarlenaMinMax { .. }) {
+    if matches!(
+        c.kind,
+        CombineKind::AvgInt8Array | CombineKind::VarlenaMinMax { .. }
+    ) {
         // Native byref arms (both combines are strict): NULL handling is the
         // strict adopt-pointer path (the PolyInt128 precedent — relocated
         // states are owned by the run and consumed exactly once).
@@ -2513,8 +2684,14 @@ fn combine_one_par(c: &ParCombine, dst: &mut AggPerGroup, src: &AggPerGroup) -> 
         }
     }
     let mut fcinfo = LocalFcinfo::<2>::fresh(c.collation);
-    fcinfo.args[0] = NullableDatum { value: dst.trans_value, isnull: dst.trans_value_is_null };
-    fcinfo.args[1] = NullableDatum { value: src.trans_value, isnull: src.trans_value_is_null };
+    fcinfo.args[0] = NullableDatum {
+        value: dst.trans_value,
+        isnull: dst.trans_value_is_null,
+    };
+    fcinfo.args[1] = NullableDatum {
+        value: src.trans_value,
+        isnull: src.trans_value_is_null,
+    };
     let value = (c.func)(None, &mut fcinfo)?;
     dst.trans_value = value;
     dst.trans_value_is_null = fcinfo.isnull;
@@ -2631,11 +2808,22 @@ fn merge_bucket_par(
                     break;
                 }
                 if h == e.hash()
-                    && keys_equal(&ctx.spec.atts, &s.group_keys, &s.group_nulls, oix, &s.inv, &s.invn)
+                    && keys_equal(
+                        &ctx.spec.atts,
+                        &s.group_keys,
+                        &s.group_nulls,
+                        oix,
+                        &s.inv,
+                        &s.invn,
+                    )
                 {
                     let cand = out[oix as usize];
-                    let dst = cand.additional(ctx.additionalsize).map(|p| p.cast::<AggPerGroup>());
-                    let sp = e.additional(ctx.additionalsize).map(|p| p.cast::<AggPerGroup>());
+                    let dst = cand
+                        .additional(ctx.additionalsize)
+                        .map(|p| p.cast::<AggPerGroup>());
+                    let sp = e
+                        .additional(ctx.additionalsize)
+                        .map(|p| p.cast::<AggPerGroup>());
                     if let (Some(dst), Some(sp)) = (dst, sp) {
                         for (transno, c) in ctx.spec.combines.iter().enumerate() {
                             // SAFETY: additionalsize holds numtrans pergroups
@@ -2686,9 +2874,8 @@ fn parallel_merge(
                     }
                     let p = values[i].as_usize() as *const u8;
                     // SAFETY: non-null varlena datum in a live image.
-                    let plain = unsafe {
-                        (varatt_is_1b(p) && !varatt_is_1b_e(p)) || varatt_is_4b_u(p)
-                    };
+                    let plain =
+                        unsafe { (varatt_is_1b(p) && !varatt_is_1b_e(p)) || varatt_is_4b_u(p) };
                     if !plain {
                         return false;
                     }
@@ -2738,9 +2925,11 @@ fn parallel_merge(
             let mut s = ParScratch::new(ncols);
             claim_loop(&ctx, &mut s)
         };
-        for res in core::iter::once(leader_res)
-            .chain(handles.into_iter().map(|h| h.join().expect("merge claimer panicked")))
-        {
+        for res in core::iter::once(leader_res).chain(
+            handles
+                .into_iter()
+                .map(|h| h.join().expect("merge claimer panicked")),
+        ) {
             match res {
                 Ok(n) => claims.push(n),
                 Err(e) => {
@@ -2842,11 +3031,8 @@ fn merge_bucket_raw(ctx: &RawParCtx<'_>, b: usize) -> PgResult<::lanetable::Lane
     for rt in ctx.raw {
         total += (rt.starts[b + 1] - rt.starts[b]) as usize;
     }
-    let mut t = ::lanetable::LaneAggTable::new(
-        ::lanetable::KeyRepr::Int,
-        ctx.additionalsize,
-        total.max(4),
-    );
+    let mut t =
+        ::lanetable::LaneAggTable::new(::lanetable::KeyRepr::Int, ctx.additionalsize, total.max(4));
     let mut values = [Datum::null(); 1];
     let mut nulls = [false; 1];
     // Classic sources first (leader = source 0), in install order — the
@@ -2862,7 +3048,14 @@ fn merge_bucket_raw(ctx: &RawParCtx<'_>, b: usize) -> PgResult<::lanetable::Lane
             };
             // SAFETY: live entry images under the single-key KeyAtt plan
             // (the raw admission proved the key shape).
-            unsafe { deform_key_prefix(e.tuple(), core::slice::from_ref(&ctx.key_att), &mut values, &mut nulls) };
+            unsafe {
+                deform_key_prefix(
+                    e.tuple(),
+                    core::slice::from_ref(&ctx.key_att),
+                    &mut values,
+                    &mut nulls,
+                )
+            };
             let pr = if nulls[0] {
                 t.probe_null()
             } else {
@@ -2881,7 +3074,13 @@ fn merge_bucket_raw(ctx: &RawParCtx<'_>, b: usize) -> PgResult<::lanetable::Lane
             // SAFETY: states holds one stride16 block per key (install
             // layout, alive for the run).
             let src = unsafe {
-                NonNull::new_unchecked(rt.states.as_ptr().add(i * rt.stride16).cast_mut().cast::<u8>())
+                NonNull::new_unchecked(
+                    rt.states
+                        .as_ptr()
+                        .add(i * rt.stride16)
+                        .cast_mut()
+                        .cast::<u8>(),
+                )
             };
             raw_absorb(ctx, pr, (ctx.additionalsize > 0).then_some(src))?;
         }
@@ -2889,9 +3088,7 @@ fn merge_bucket_raw(ctx: &RawParCtx<'_>, b: usize) -> PgResult<::lanetable::Lane
             if let Some(block) = &rt.null_states {
                 let pr = t.probe_null();
                 // SAFETY: the NULL block holds one stride16 block.
-                let src = unsafe {
-                    NonNull::new_unchecked(block.as_ptr().cast_mut().cast::<u8>())
-                };
+                let src = unsafe { NonNull::new_unchecked(block.as_ptr().cast_mut().cast::<u8>()) };
                 raw_absorb(ctx, pr, (ctx.additionalsize > 0).then_some(src))?;
             }
         }
@@ -2959,7 +3156,9 @@ fn parallel_merge_raw(
             })
             .collect(),
         emit,
-        out_emit: (0..256).map(|_| UnsafeCell::new(EmitBuf::default())).collect(),
+        out_emit: (0..256)
+            .map(|_| UnsafeCell::new(EmitBuf::default()))
+            .collect(),
     };
     let mut claims: Vec<usize> = Vec::with_capacity(nthreads + 1);
     let mut first_err: Option<Box<PgError>> = None;
@@ -2968,9 +3167,11 @@ fn parallel_merge_raw(
             .map(|_| scope.spawn(|| raw_claim_loop(&ctx)))
             .collect();
         let leader_res = raw_claim_loop(&ctx);
-        for res in core::iter::once(leader_res)
-            .chain(handles.into_iter().map(|h| h.join().expect("raw merge claimer panicked")))
-        {
+        for res in core::iter::once(leader_res).chain(
+            handles
+                .into_iter()
+                .map(|h| h.join().expect("raw merge claimer panicked")),
+        ) {
             match res {
                 Ok(n) => claims.push(n),
                 Err(e) => {
@@ -2988,14 +3189,15 @@ fn parallel_merge_raw(
     let out_emit = ctx.out_emit;
     let pre: Vec<::lanetable::LaneAggTable> =
         ctx.out.into_iter().map(UnsafeCell::into_inner).collect();
-    let emit_pre =
-        has_emit.then(|| out_emit.into_iter().map(UnsafeCell::into_inner).collect());
+    let emit_pre = has_emit.then(|| out_emit.into_iter().map(UnsafeCell::into_inner).collect());
     if merge_stats_enabled() {
         eprintln!(
             "AGG_MERGE_STATS parallel: mode=raw claimers={} claims={:?} groups={} emit={}",
             nthreads + 1,
             claims,
-            pre.iter().map(::lanetable::LaneAggTable::nrows).sum::<usize>(),
+            pre.iter()
+                .map(::lanetable::LaneAggTable::nrows)
+                .sum::<usize>(),
             if has_emit { "pre" } else { "serial" },
         );
     }
@@ -3006,7 +3208,9 @@ fn parallel_merge_raw(
 // combine pass, so a rescan always rebuilds from a fresh worker run (the
 // caller rescans the outer Gather, which relaunches workers).
 pub(crate) fn reset_merge_for_rescan(node: &mut AggStateData<'_>) -> bool {
-    let Some(m) = node.merge.as_mut() else { return false };
+    let Some(m) = node.merge.as_mut() else {
+        return false;
+    };
     let had_run = m.run.take().is_some();
     m.handoff.take_all();
     had_run

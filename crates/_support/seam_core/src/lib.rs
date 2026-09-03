@@ -1,3 +1,6 @@
+// Seam signatures mirror the C callback they replace, argument-for-argument.
+#![allow(clippy::too_many_arguments)]
+
 // INVARIANT (set-once): SLOT is written only by `set()` during single-threaded
 // startup, before any call, never again; it always holds a fn pointer of the
 // seam's exact `Signature` — so `call()` is one relaxed load + indirect call.

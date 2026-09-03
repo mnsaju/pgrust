@@ -28,7 +28,9 @@ use types_nodes::rawnodes::{
 };
 use types_rel::RowExclusiveLock;
 
-use cache_syscache::cacheinfo::{FOREIGNDATAWRAPPERNAME, FOREIGNSERVERNAME, FOREIGNSERVEROID, USERMAPPINGUSERSERVER};
+use cache_syscache::cacheinfo::{
+    FOREIGNDATAWRAPPERNAME, FOREIGNSERVERNAME, FOREIGNSERVEROID, USERMAPPINGUSERSERVER,
+};
 use cache_syscache::{ReleaseSysCache, SearchSysCacheCopy, SysCacheGetAttrNotNull, SysCacheKey};
 
 use crate::foreign::*;
@@ -324,7 +326,9 @@ pub fn AlterForeignDataWrapper<'mcx>(
             )?;
         }
     } else {
-        fdwvalidator = getattr(Anum_pg_foreign_data_wrapper_fdwvalidator).0.as_oid();
+        fdwvalidator = getattr(Anum_pg_foreign_data_wrapper_fdwvalidator)
+            .0
+            .as_oid();
     }
 
     let new_options;
@@ -463,7 +467,7 @@ fn AlterForeignDataWrapperOwner_internal<'mcx>(
 
     if old_owner != new_owner_id {
         let mut repl_val = [Datum::null(); Natts_pg_foreign_data_wrapper];
-        let mut repl_null = [false; Natts_pg_foreign_data_wrapper];
+        let repl_null = [false; Natts_pg_foreign_data_wrapper];
         let mut repl_repl = [false; Natts_pg_foreign_data_wrapper];
         repl_val[Anum_pg_foreign_data_wrapper_fdwowner as usize - 1] =
             Datum::from_oid(new_owner_id);
@@ -606,7 +610,7 @@ fn AlterForeignServerOwner_internal<'mcx>(
         }
 
         let mut repl_val = [Datum::null(); Natts_pg_foreign_server];
-        let mut repl_null = [false; Natts_pg_foreign_server];
+        let repl_null = [false; Natts_pg_foreign_server];
         let mut repl_repl = [false; Natts_pg_foreign_server];
         repl_val[Anum_pg_foreign_server_srvowner as usize - 1] = Datum::from_oid(new_owner_id);
         repl_repl[Anum_pg_foreign_server_srvowner as usize - 1] = true;
@@ -627,7 +631,12 @@ fn AlterForeignServerOwner_internal<'mcx>(
         let otid = tp.t_self;
         catalog_indexing::CatalogTupleUpdate(mcx, rel, &otid, &mut newtup)?;
 
-        pg_shdepend::changeDependencyOnOwner(mcx, FOREIGN_SERVER_RELATION_ID, srv_id, new_owner_id)?;
+        pg_shdepend::changeDependencyOnOwner(
+            mcx,
+            FOREIGN_SERVER_RELATION_ID,
+            srv_id,
+            new_owner_id,
+        )?;
     }
 
     Ok(srv_id)
@@ -648,7 +657,11 @@ pub fn CreateForeignServer<'mcx>(
             ::elog::ereport(NOTICE)
                 .errcode(ERRCODE_DUPLICATE_OBJECT)
                 .errmsg(format!("server \"{servername}\" already exists, skipping"))
-                .finish(types_error::ErrorLocation::new(file!(), line!() as i32, "CreateForeignServer"))?;
+                .finish(types_error::ErrorLocation::new(
+                    file!(),
+                    line!() as i32,
+                    "CreateForeignServer",
+                ))?;
             rel.close(RowExclusiveLock)?;
             return Ok(InvalidOid);
         }
@@ -667,7 +680,11 @@ pub fn CreateForeignServer<'mcx>(
         adt_acl::ACL_USAGE,
     )? != aclchk::ACLCHECK_OK
     {
-        aclchk::aclcheck_error(aclchk::ACLCHECK_NO_PRIV, ObjectType::OBJECT_FDW, fdw.fdwname)?;
+        aclchk::aclcheck_error(
+            aclchk::ACLCHECK_NO_PRIV,
+            ObjectType::OBJECT_FDW,
+            fdw.fdwname,
+        )?;
     }
 
     let srv_id = catalog::GetNewOidWithIndex(
@@ -816,9 +833,8 @@ fn user_mapping_ddl_aclcheck(umuserid: Oid, serverid: Oid, servername: &str) -> 
         else {
             panic!("cache lookup failed for foreign server {serverid}");
         };
-        let owner =
-            SysCacheGetAttrNotNull(FOREIGNSERVEROID, &tp, Anum_pg_foreign_server_srvowner)?
-                .as_oid();
+        let owner = SysCacheGetAttrNotNull(FOREIGNSERVEROID, &tp, Anum_pg_foreign_server_srvowner)?
+            .as_oid();
         ReleaseSysCache(tp);
         owner
     };
@@ -867,7 +883,11 @@ pub fn CreateUserMapping<'mcx>(
                     "user mapping for \"{}\" already exists for server \"{servername}\", skipping",
                     MappingUserName(mcx, use_id)?
                 ))
-                .finish(types_error::ErrorLocation::new(file!(), line!() as i32, "CreateUserMapping"))?;
+                .finish(types_error::ErrorLocation::new(
+                    file!(),
+                    line!() as i32,
+                    "CreateUserMapping",
+                ))?;
             rel.close(RowExclusiveLock)?;
             // C: return InvalidObjectAddress on the IF NOT EXISTS skip.
             return Ok(ObjectAddress::set(InvalidOid, InvalidOid));
@@ -994,7 +1014,10 @@ pub fn RemoveUserMapping<'mcx>(mcx: Mcx<'mcx>, stmt: &DropUserMappingStmt<'mcx>)
         if oid == InvalidOid {
             elog_seams::ereport_msg::call(
                 NOTICE,
-                format!("role \"{}\" does not exist, skipping", role.rolename.unwrap_or("")),
+                format!(
+                    "role \"{}\" does not exist, skipping",
+                    role.rolename.unwrap_or("")
+                ),
                 None,
             )?;
             return Ok(());
@@ -1109,7 +1132,9 @@ pub fn ImportForeignSchema<'mcx>(
     mcx: Mcx<'mcx>,
     stmt: &ImportForeignSchemaStmt<'mcx>,
 ) -> PgResult<()> {
-    let servername = stmt.server_name.expect("ImportForeignSchemaStmt.server_name");
+    let servername = stmt
+        .server_name
+        .expect("ImportForeignSchemaStmt.server_name");
     let server = GetForeignServerByName(mcx, servername, false)?.expect("missing_ok=false");
     if aclchk::object_aclcheck(
         FOREIGN_SERVER_RELATION_ID,
@@ -1126,14 +1151,18 @@ pub fn ImportForeignSchema<'mcx>(
     }
     catalog_namespace::LookupCreationNamespace(
         mcx,
-        stmt.local_schema.expect("ImportForeignSchemaStmt.local_schema"),
+        stmt.local_schema
+            .expect("ImportForeignSchemaStmt.local_schema"),
     )?;
     // The no-handler error is the live surface; a handler-bearing FDW is loud.
     let fdw = GetForeignDataWrapper(mcx, server.fdwid)?;
     if fdw.fdwhandler == InvalidOid {
         return Err(::elog::ereport(ERROR)
             .errcode(types_error::ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE)
-            .errmsg(format!("foreign-data wrapper \"{}\" has no handler", fdw.fdwname))
+            .errmsg(format!(
+                "foreign-data wrapper \"{}\" has no handler",
+                fdw.fdwname
+            ))
             .into_error()
             .into());
     }

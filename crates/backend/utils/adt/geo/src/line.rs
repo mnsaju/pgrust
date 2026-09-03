@@ -1,4 +1,6 @@
-use ::adt_float::{float8_div, float8_eq, float8_mi, float8_mul, float8_pl, get_float8_infinity, get_float8_nan};
+use ::adt_float::{
+    float8_div, float8_eq, float8_mi, float8_mul, float8_pl, get_float8_infinity, get_float8_nan,
+};
 use ::types_core::geo::{Point, LINE};
 use ::types_error::{PgError, PgResult, ERRCODE_INVALID_PARAMETER_VALUE};
 

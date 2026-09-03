@@ -70,7 +70,12 @@ fn ident_quoted_forms() {
         ("日本語".as_bytes(), "\"日本語\"".as_bytes()),
     ];
     for (input, expect) in cases {
-        assert_eq!(qi(mcx, input), *expect, "{}", String::from_utf8_lossy(input));
+        assert_eq!(
+            qi(mcx, input),
+            *expect,
+            "{}",
+            String::from_utf8_lossy(input)
+        );
     }
 }
 
@@ -102,6 +107,11 @@ fn literal_forms() {
         (b"NULL", b"'NULL'"),
     ];
     for (input, expect) in cases {
-        assert_eq!(ql(mcx, input), *expect, "{}", String::from_utf8_lossy(input));
+        assert_eq!(
+            ql(mcx, input),
+            *expect,
+            "{}",
+            String::from_utf8_lossy(input)
+        );
     }
 }

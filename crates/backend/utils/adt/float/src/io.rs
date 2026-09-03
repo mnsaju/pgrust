@@ -20,7 +20,10 @@ fn strncasecmp_eq(s: &[u8], lit: &[u8]) -> bool {
     if s.len() < lit.len() {
         return false;
     }
-    s[..lit.len()].iter().zip(lit).all(|(a, b)| a.eq_ignore_ascii_case(b))
+    s[..lit.len()]
+        .iter()
+        .zip(lit)
+        .all(|(a, b)| a.eq_ignore_ascii_case(b))
 }
 
 // ldexp without a libm dep: exact powers of two via exponent-field bits.
@@ -240,7 +243,11 @@ fn round_to_float(token: &[u8], mantissa_bits: u32, exp_bits: u32) -> f64 {
     let min_normal_exp = 1 - bias;
 
     if unbiased_msb > max_exp {
-        return if neg { f64::NEG_INFINITY } else { f64::INFINITY };
+        return if neg {
+            f64::NEG_INFINITY
+        } else {
+            f64::INFINITY
+        };
     }
 
     let keep_bits: i64 = if unbiased_msb >= min_normal_exp {
@@ -291,11 +298,18 @@ fn round_to_float(token: &[u8], mantissa_bits: u32, exp_bits: u32) -> f64 {
     let result_msb = lsb_weight + (kept_bits - 1);
 
     if result_msb > max_exp {
-        return if neg { f64::NEG_INFINITY } else { f64::INFINITY };
+        return if neg {
+            f64::NEG_INFINITY
+        } else {
+            f64::INFINITY
+        };
     }
 
     let mant_f = kept as f64;
-    let scaled = ldexp(mant_f, lsb_weight.clamp(i32::MIN as i64, i32::MAX as i64) as i32);
+    let scaled = ldexp(
+        mant_f,
+        lsb_weight.clamp(i32::MIN as i64, i32::MAX as i64) as i32,
+    );
     if neg {
         -scaled
     } else {
@@ -389,7 +403,7 @@ pub fn float8in_internal(
         *slot = end;
     } else if end != bytes.len() {
         return ereturn(
-            escontext.as_deref_mut(),
+            escontext,
             0.0,
             invalid_input(type_name, orig_string),
         );
@@ -459,7 +473,7 @@ pub fn float4in_internal(
         *slot = end;
     } else if end != bytes.len() {
         return ereturn(
-            escontext.as_deref_mut(),
+            escontext,
             0.0,
             invalid_input(type_name, orig_string),
         );
@@ -486,9 +500,14 @@ fn nan_payload_len(s: &[u8]) -> usize {
 fn special_float8(s: &[u8]) -> Option<(f64, usize)> {
     if strncasecmp_eq(s, b"NaN") {
         Some((get_float8_nan(), nan_payload_len(s)))
-    } else if (s.first() == Some(&b'+') || s.first() == Some(&b'-')) && strncasecmp_eq(&s[1..], b"NaN")
+    } else if (s.first() == Some(&b'+') || s.first() == Some(&b'-'))
+        && strncasecmp_eq(&s[1..], b"NaN")
     {
-        let v = if s[0] == b'-' { -get_float8_nan() } else { get_float8_nan() };
+        let v = if s[0] == b'-' {
+            -get_float8_nan()
+        } else {
+            get_float8_nan()
+        };
         Some((v, 1 + nan_payload_len(&s[1..])))
     } else if strncasecmp_eq(s, b"Infinity") {
         Some((get_float8_infinity(), 8))
@@ -510,9 +529,14 @@ fn special_float8(s: &[u8]) -> Option<(f64, usize)> {
 fn special_float4(s: &[u8]) -> Option<(f32, usize)> {
     if strncasecmp_eq(s, b"NaN") {
         Some((get_float4_nan(), nan_payload_len(s)))
-    } else if (s.first() == Some(&b'+') || s.first() == Some(&b'-')) && strncasecmp_eq(&s[1..], b"NaN")
+    } else if (s.first() == Some(&b'+') || s.first() == Some(&b'-'))
+        && strncasecmp_eq(&s[1..], b"NaN")
     {
-        let v = if s[0] == b'-' { -get_float4_nan() } else { get_float4_nan() };
+        let v = if s[0] == b'-' {
+            -get_float4_nan()
+        } else {
+            get_float4_nan()
+        };
         Some((v, 1 + nan_payload_len(&s[1..])))
     } else if strncasecmp_eq(s, b"Infinity") {
         Some((get_float4_infinity(), 8))
@@ -668,7 +692,12 @@ fn format_g(val: f64, mut prec: i32, out: &mut [u8]) -> usize {
             w.buf[start..start + frac_end].copy_from_slice(&digits[1..1 + frac_end]);
             w.len += frac_end;
         }
-        let _ = write!(w, "e{}{:02}", if exp < 0 { "-" } else { "+" }, exp.unsigned_abs());
+        let _ = write!(
+            w,
+            "e{}{:02}",
+            if exp < 0 { "-" } else { "+" },
+            exp.unsigned_abs()
+        );
     } else if exp >= 0 {
         let intlen = (exp + 1) as usize;
         if intlen >= digits.len() {

@@ -8,6 +8,9 @@ use crate::fcinfo::{FmNode, FmNodePtr, FunctionCallInfoBaseData};
 // nodetags.h value, parity-asserted in fmgr_core tests.
 pub const T_AGG_STATE: u32 = 429;
 
+// C's curaggcontext ExprContext_CB chain: (callback fn, arg) pairs.
+type AggCallbacks = ::alloc::vec::Vec<(unsafe fn(*mut ()), *mut ())>;
+
 /// The trans/final-fn-visible slice of C's `AggState`: rides `fcinfo->context`
 /// (C `AggCheckCallContext`) and owns the aggcontext arena. Wholesale reset:
 /// allocating transfns assert `!needs_drop` for their state (docs/no-drop.md).
@@ -20,7 +23,7 @@ pub struct AggStateNode {
     node: FmNode,
     aggcontext: MemoryContext,
     cur_agg: Cell<Option<(NonNull<()>, bool)>>,
-    callbacks: UnsafeCell<::alloc::vec::Vec<(unsafe fn(*mut ()), *mut ())>>,
+    callbacks: UnsafeCell<AggCallbacks>,
 }
 
 impl AggStateNode {

@@ -136,10 +136,7 @@ pub fn get_tsearch_config_filename<'mcx>(
     }
     let mut dir = tsearch_data_dir();
     if let Some(staged) = staged_tsearch_data_dir() {
-        let candidate = format!(
-            "{staged}/{}.{extension}",
-            String::from_utf8_lossy(basename)
-        );
+        let candidate = format!("{staged}/{}.{extension}", String::from_utf8_lossy(basename));
         if std::path::Path::new(&candidate).is_file() {
             dir = staged;
         }
@@ -226,7 +223,5 @@ pub fn byte_isspace(b: u8) -> bool {
 }
 
 pub fn searchstoplist(s: &StopList<'_>, key: &[u8]) -> bool {
-    s.stop
-        .binary_search_by(|w| w.as_slice().cmp(key))
-        .is_ok()
+    s.stop.binary_search_by(|w| w.as_slice().cmp(key)).is_ok()
 }

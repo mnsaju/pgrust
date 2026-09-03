@@ -6,7 +6,9 @@
 #![allow(non_snake_case)]
 
 use mcx::Mcx;
-use types_error::{PgError, PgResult, ERRCODE_CONNECTION_FAILURE, ERRCODE_UNDEFINED_OBJECT, WARNING};
+use types_error::{
+    PgError, PgResult, ERRCODE_CONNECTION_FAILURE, ERRCODE_UNDEFINED_OBJECT, WARNING,
+};
 
 use walreceiver::client::{ExecStatus, PgConn, QueryResult};
 
@@ -47,13 +49,23 @@ pub(crate) fn check_publications(conn: &mut PgConn, publications: &[&str]) -> Pg
         "SELECT t.pubname FROM pg_catalog.pg_publication t WHERE t.pubname IN ({})",
         publications_str(publications)
     );
-    let res = exec_or_fail(conn, &cmd, "receive list of publications from the publisher")?;
+    let res = exec_or_fail(
+        conn,
+        &cmd,
+        "receive list of publications from the publisher",
+    )?;
 
     let found: Vec<String> = res.rows.iter().map(|r| row_text(r, 0)).collect();
-    let missing: Vec<&&str> =
-        publications.iter().filter(|p| !found.iter().any(|f| f == **p)).collect();
+    let missing: Vec<&&str> = publications
+        .iter()
+        .filter(|p| !found.iter().any(|f| f == **p))
+        .collect();
     if !missing.is_empty() {
-        let list = missing.iter().map(|p| format!("\"{p}\"")).collect::<Vec<_>>().join(", ");
+        let list = missing
+            .iter()
+            .map(|p| format!("\"{p}\""))
+            .collect::<Vec<_>>()
+            .join(", ");
         elog::ereport(WARNING)
             .errcode(ERRCODE_UNDEFINED_OBJECT)
             .errmsg(if missing.len() == 1 {
@@ -90,10 +102,18 @@ pub(crate) fn check_publications_origin(
          C.relnamespace) WHERE C.oid = GPT.relid AND P.pubname IN ({})",
         publications_str(publications)
     );
-    let res = exec_or_fail(conn, &cmd, "receive list of replicated tables from the publisher")?;
+    let res = exec_or_fail(
+        conn,
+        &cmd,
+        "receive list of replicated tables from the publisher",
+    )?;
     if !res.rows.is_empty() {
-        let list =
-            res.rows.iter().map(|r| format!("\"{}\"", row_text(r, 0))).collect::<Vec<_>>().join(", ");
+        let list = res
+            .rows
+            .iter()
+            .map(|r| format!("\"{}\"", row_text(r, 0)))
+            .collect::<Vec<_>>()
+            .join(", ");
         elog::ereport(WARNING)
             .errmsg(format!(
                 "subscription \"{subname}\" requested copy_data with origin = NONE but might copy \
@@ -128,8 +148,16 @@ pub(crate) fn fetch_table_list(
          ON gpt.relid = c.oid\n",
         publications_str(publications)
     );
-    let res = exec_or_fail(conn, &cmd, "receive list of replicated tables from the publisher")?;
-    Ok(res.rows.iter().map(|r| (row_text(r, 0), row_text(r, 1))).collect())
+    let res = exec_or_fail(
+        conn,
+        &cmd,
+        "receive list of replicated tables from the publisher",
+    )?;
+    Ok(res
+        .rows
+        .iter()
+        .map(|r| (row_text(r, 0), row_text(r, 1)))
+        .collect())
 }
 
 // libpqrcv_create_slot (libpqwalreceiver.c), logical arm with CRS_NOEXPORT_SNAPSHOT.
@@ -171,7 +199,10 @@ pub(crate) fn drop_slot_at_pub_node(
     slotname: &str,
     missing_ok: bool,
 ) -> PgResult<()> {
-    let cmd = format!("DROP_REPLICATION_SLOT \"{}\" WAIT", slotname.replace('"', "\"\""));
+    let cmd = format!(
+        "DROP_REPLICATION_SLOT \"{}\" WAIT",
+        slotname.replace('"', "\"\"")
+    );
     let res = conn.exec(&cmd)?;
     if res.status == ExecStatus::CommandOk || res.status == ExecStatus::TuplesOk {
         let _ = elog::elog(
@@ -183,7 +214,9 @@ pub(crate) fn drop_slot_at_pub_node(
     let msg = res.err.clone();
     if missing_ok && msg.contains("does not exist") {
         elog::ereport(WARNING)
-            .errmsg(format!("could not drop replication slot \"{slotname}\" on publisher: {msg}"))
+            .errmsg(format!(
+                "could not drop replication slot \"{slotname}\" on publisher: {msg}"
+            ))
             .finish(types_error::ErrorLocation::new(
                 "src/backend/commands/subscriptioncmds.c",
                 0,
@@ -265,7 +298,8 @@ pub(crate) fn AlterSubscription_refresh<'mcx>(
                 relpersistence: b'p',
                 location: -1,
             };
-            let relid = catalog_namespace::RangeVarGetRelid(&rv, types_rel::AccessShareLock, false)?;
+            let relid =
+                catalog_namespace::RangeVarGetRelid(&rv, types_rel::AccessShareLock, false)?;
             crate::CheckSubscriptionRelkind(
                 lsyscache::get_rel_relkind(relid)? as u8,
                 nspname,

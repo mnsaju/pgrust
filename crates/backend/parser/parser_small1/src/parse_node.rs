@@ -4,14 +4,13 @@ use mcx::{vec_with_capacity_in, Mcx, PgVec};
 use numutils::pg_strtoint64_safe;
 use queryenvironment::QueryEnvironment;
 use types_core::catalog::{
-    BOOLOID, INT2ARRAYOID, INT2VECTOROID, INT4OID, INT8OID, NUMERICOID, OIDARRAYOID, OIDVECTOROID,
-    UNKNOWNOID, BITOID,};
+    BITOID, BOOLOID, INT2ARRAYOID, INT2VECTOROID, INT4OID, INT8OID, NUMERICOID, OIDARRAYOID,
+    OIDVECTOROID, UNKNOWNOID,
+};
 use types_core::fmgr::FLOAT8PASSBYVAL;
 use types_core::{AttrNumber, Index, InvalidOid, Oid, ParseLoc};
 use types_error::{ErrorLocation, PgResult, SoftErrorContext, ERRCODE_TOO_MANY_COLUMNS, ERROR};
-use types_nodes::{
-    A_Const, Alias, Const, Node, RangeTblEntry, ValUnion, VarReturningType,
-};
+use types_nodes::{A_Const, Alias, Const, Node, RangeTblEntry, ValUnion, VarReturningType};
 use types_rel::{NoLock, Relation};
 use types_tuple::htup::MaxTupleAttributeNumber;
 use wchar::pg_enc;
@@ -117,7 +116,9 @@ pub struct ParseNamespaceItem<'mcx> {
 impl<'mcx> ParseNamespaceItem<'mcx> {
     #[inline]
     pub fn rte(&self) -> &'mcx RangeTblEntry<'mcx> {
-        self.p_rte.as_range_tbl_entry().expect("p_rte is RangeTblEntry")
+        self.p_rte
+            .as_range_tbl_entry()
+            .expect("p_rte is RangeTblEntry")
     }
 }
 
@@ -288,7 +289,15 @@ pub fn make_const<'mcx>(
     aconst: &A_Const<'_>,
 ) -> PgResult<Node<'mcx>> {
     let Some(val) = aconst.val else {
-        return mk_const_node(mcx, UNKNOWNOID, -2, Datum::null(), true, false, aconst.location);
+        return mk_const_node(
+            mcx,
+            UNKNOWNOID,
+            -2,
+            Datum::null(),
+            true,
+            false,
+            aconst.location,
+        );
     };
     let (val, typeid, typelen, typebyval) = match val {
         ValUnion::Integer(i) => (Datum::from_i32(i.ival), INT4OID, 4, true),
@@ -309,7 +318,12 @@ pub fn make_const<'mcx>(
                     let bytes = img.as_bytes();
                     let mut buf: PgVec<'mcx, u8> = vec_with_capacity_in(mcx, bytes.len())?;
                     mcx::vec_append_bytes(&mut buf, bytes)?;
-                    (Datum::from_usize(buf.leak().as_ptr() as usize), NUMERICOID, -1, false)
+                    (
+                        Datum::from_usize(buf.leak().as_ptr() as usize),
+                        NUMERICOID,
+                        -1,
+                        false,
+                    )
                 }
             }
         }
@@ -319,18 +333,20 @@ pub fn make_const<'mcx>(
             // C rides setup_parser_errposition_callback around bit_in.
             let img = adt_varbit::bit_in_cstr(mcx, bs.bsval.as_bytes()).map_err(|mut e| {
                 if e.cursor_position().is_none() {
-                    let pos = parser_errposition(
-                        pstate,
-                        aconst.location,
-                        mbutils::GetDatabaseEncoding(),
-                    );
+                    let pos =
+                        parser_errposition(pstate, aconst.location, mbutils::GetDatabaseEncoding());
                     if pos > 0 {
                         e.cursor_position = Some(pos);
                     }
                 }
                 e
             })?;
-            (Datum::from_usize(img.leak().as_ptr() as usize), BITOID, -1, false)
+            (
+                Datum::from_usize(img.leak().as_ptr() as usize),
+                BITOID,
+                -1,
+                false,
+            )
         }
     };
     mk_const_node(mcx, typeid, typelen, val, false, typebyval, aconst.location)

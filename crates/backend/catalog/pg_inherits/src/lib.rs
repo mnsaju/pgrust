@@ -83,9 +83,12 @@ pub fn find_inheritance_children_extended<'mcx>(
         return Ok(result);
     }
     let rel = table::table_open(mcx, InheritsRelationId, AccessShareLock)?;
-    let keys = [eq_key(Anum_pg_inherits_inhparent, F_OIDEQ, Datum::from_oid(parent_rel_id))];
-    let mut scan =
-        genam::systable_beginscan(mcx, &rel, InheritsParentIndexId, true, None, &keys)?;
+    let keys = [eq_key(
+        Anum_pg_inherits_inhparent,
+        F_OIDEQ,
+        Datum::from_oid(parent_rel_id),
+    )];
+    let mut scan = genam::systable_beginscan(mcx, &rel, InheritsParentIndexId, true, None, &keys)?;
     let desc = rel.descr();
     while let Some(tup) = genam::systable_getnext(mcx, &mut scan)? {
         let mut isnull = false;
@@ -197,7 +200,11 @@ pub fn has_subclass(relation_id: Oid) -> PgResult<bool> {
 
 pub fn has_superclass(mcx: Mcx<'_>, relation_id: Oid) -> PgResult<bool> {
     let rel = table::table_open(mcx, InheritsRelationId, AccessShareLock)?;
-    let keys = [eq_key(Anum_pg_inherits_inhrelid, F_OIDEQ, Datum::from_oid(relation_id))];
+    let keys = [eq_key(
+        Anum_pg_inherits_inhrelid,
+        F_OIDEQ,
+        Datum::from_oid(relation_id),
+    )];
     let mut scan =
         genam::systable_beginscan(mcx, &rel, InheritsRelidSeqnoIndexId, true, None, &keys)?;
     let found = genam::systable_getnext(mcx, &mut scan)?.is_some();
@@ -209,8 +216,7 @@ pub fn has_superclass(mcx: Mcx<'_>, relation_id: Oid) -> PgResult<bool> {
 // BFS up the inheritance graph; subclass side may be a domain over a complex
 // type, superclass may not. Cold path: scans run in a local scratch context.
 pub fn typeInheritsFrom(subclass_type_id: Oid, superclass_type_id: Oid) -> PgResult<bool> {
-    let subclass_relid =
-        lsyscache::get_typ_typrelid(lsyscache::getBaseType(subclass_type_id)?)?;
+    let subclass_relid = lsyscache::get_typ_typrelid(lsyscache::getBaseType(subclass_type_id)?)?;
     if subclass_relid == InvalidOid {
         return Ok(false);
     }
@@ -235,23 +241,22 @@ pub fn typeInheritsFrom(subclass_type_id: Oid, superclass_type_id: Oid) -> PgRes
     'search: while i < queue.len() {
         let this_relid = queue[i];
         i += 1;
-        if visited.iter().any(|&r| r == this_relid) {
+        if visited.contains(&this_relid) {
             continue;
         }
         visited.push(this_relid);
-        let keys = [eq_key(Anum_pg_inherits_inhrelid, F_OIDEQ, Datum::from_oid(this_relid))];
+        let keys = [eq_key(
+            Anum_pg_inherits_inhrelid,
+            F_OIDEQ,
+            Datum::from_oid(this_relid),
+        )];
         let mut scan =
             genam::systable_beginscan(mcx, &rel, InheritsRelidSeqnoIndexId, true, None, &keys)?;
         while let Some(tup) = genam::systable_getnext(mcx, &mut scan)? {
             let mut isnull = false;
             // SAFETY: fixed NOT NULL pg_inherits columns under its descriptor.
             let inhparent = unsafe {
-                types_tuple::heap_getattr(
-                    tup,
-                    Anum_pg_inherits_inhparent as i32,
-                    desc,
-                    &mut isnull,
-                )
+                types_tuple::heap_getattr(tup, Anum_pg_inherits_inhparent as i32, desc, &mut isnull)
             }
             .as_oid();
             if inhparent == superclass_relid {
@@ -276,7 +281,11 @@ pub fn DeleteInheritsTuple<'mcx>(
 ) -> PgResult<bool> {
     let mut found = false;
     let rel = table::table_open(mcx, InheritsRelationId, RowExclusiveLock)?;
-    let keys = [eq_key(Anum_pg_inherits_inhrelid, F_OIDEQ, Datum::from_oid(inhrelid))];
+    let keys = [eq_key(
+        Anum_pg_inherits_inhrelid,
+        F_OIDEQ,
+        Datum::from_oid(inhrelid),
+    )];
     let mut scan =
         genam::systable_beginscan(mcx, &rel, InheritsRelidSeqnoIndexId, true, None, &keys)?;
     let desc = rel.descr();
@@ -364,7 +373,11 @@ pub fn get_partition_ancestors<'mcx>(mcx: Mcx<'mcx>, relid: Oid) -> PgResult<PgV
 
 pub fn PartitionHasPendingDetach(mcx: Mcx<'_>, partoid: Oid) -> PgResult<bool> {
     let rel = table::table_open(mcx, InheritsRelationId, RowExclusiveLock)?;
-    let keys = [eq_key(Anum_pg_inherits_inhrelid, F_OIDEQ, Datum::from_oid(partoid))];
+    let keys = [eq_key(
+        Anum_pg_inherits_inhrelid,
+        F_OIDEQ,
+        Datum::from_oid(partoid),
+    )];
     let mut scan =
         genam::systable_beginscan(mcx, &rel, InheritsRelidSeqnoIndexId, true, None, &keys)?;
     let desc = rel.descr();

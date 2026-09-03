@@ -1,6 +1,6 @@
 use super::*;
-use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::cell::RefCell;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 
 thread_local! {
     static LOG: RefCell<Vec<&'static str>> = const { RefCell::new(Vec::new()) };
@@ -43,7 +43,11 @@ fn proc_exit_runs_stages_in_c_order_lifo() {
     on_shmem_exit(|_, _| log("shmem2"), 0);
     before_shmem_exit(
         |code, _| {
-            log(if code == 7 { "before1(code7)" } else { "before1" });
+            log(if code == 7 {
+                "before1(code7)"
+            } else {
+                "before1"
+            });
             Ok(())
         },
         Datum::from_i32(0),
@@ -62,7 +66,14 @@ fn proc_exit_runs_stages_in_c_order_lifo() {
     assert_eq!(code, 7);
     assert_eq!(
         take_log(),
-        vec!["before2", "before1(code7)", "shmem2", "shmem1", "proc2", "proc1"]
+        vec![
+            "before2",
+            "before1(code7)",
+            "shmem2",
+            "shmem1",
+            "proc2",
+            "proc1"
+        ]
     );
     assert!(proc_exit_inprogress());
     assert!(!shmem_exit_inprogress());
@@ -87,7 +98,10 @@ fn failing_before_callback_reenters_and_finishes_with_code_1() {
     init_small::globals::SetMyProcPid(5151);
     let _ = take_log();
 
-    on_shmem_exit(|code, _| log(if code == 1 { "shmem(code1)" } else { "shmem" }), 0);
+    on_shmem_exit(
+        |code, _| log(if code == 1 { "shmem(code1)" } else { "shmem" }),
+        0,
+    );
     before_shmem_exit(
         |_, _| {
             log("before-ok");
@@ -124,7 +138,11 @@ fn cancel_before_shmem_exit_is_strict_lifo() {
     before_shmem_exit(cb_b, Datum::from_i32(2)).unwrap();
 
     let err = cancel_before_shmem_exit(cb_a, Datum::from_i32(1)).unwrap_err();
-    assert!(err.message.contains("is not the latest entry"), "{}", err.message);
+    assert!(
+        err.message.contains("is not the latest entry"),
+        "{}",
+        err.message
+    );
 
     cancel_before_shmem_exit(cb_b, Datum::from_i32(2)).unwrap();
     cancel_before_shmem_exit(cb_a, Datum::from_i32(1)).unwrap();
@@ -154,7 +172,11 @@ fn shmem_exit_alone_clears_inprogress_and_keeps_proc_lists() {
     on_shmem_exit(|_, _| log("shmem"), 0);
     before_shmem_exit(
         |_, _| {
-            log(if shmem_exit_inprogress() { "before(inprogress)" } else { "before" });
+            log(if shmem_exit_inprogress() {
+                "before(inprogress)"
+            } else {
+                "before"
+            });
             Ok(())
         },
         Datum::from_i32(0),
@@ -225,7 +247,10 @@ fn deferred_drain_reentrant_proc_exit_continues_with_last_code() {
     init_small::globals::SetIsUnderPostmaster(true);
     let _ = take_log();
 
-    on_shmem_exit(|code, _| log(if code == 9 { "shmem(code9)" } else { "shmem" }), 0);
+    on_shmem_exit(
+        |code, _| log(if code == 9 { "shmem(code9)" } else { "shmem" }),
+        0,
+    );
     before_shmem_exit(
         |_, _| {
             log("b-first");

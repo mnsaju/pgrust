@@ -1,4 +1,6 @@
-use crate::common::{copy_special_str, log10_pow2, log10_pow5, pow5bits, DIGIT_TABLE, STRICTLY_SHORTEST};
+use crate::common::{
+    copy_special_str, log10_pow2, log10_pow5, pow5bits, DIGIT_TABLE, STRICTLY_SHORTEST,
+};
 
 const FLOAT_MANTISSA_BITS: u32 = 23;
 const FLOAT_EXPONENT_BITS: u32 = 8;
@@ -193,7 +195,11 @@ fn f2d(ieee_mantissa: u32, ieee_exponent: u32) -> FloatingDecimal32 {
         m2 = (1u32 << FLOAT_MANTISSA_BITS) | ieee_mantissa;
     }
 
-    let accept_bounds = if STRICTLY_SHORTEST { (m2 & 1) == 0 } else { false };
+    let accept_bounds = if STRICTLY_SHORTEST {
+        (m2 & 1) == 0
+    } else {
+        false
+    };
 
     let mv = 4 * m2;
     let mp = 4 * m2 + 2;
@@ -225,7 +231,7 @@ fn f2d(ieee_mantissa: u32, ieee_exponent: u32) -> FloatingDecimal32 {
         }
         if q <= 9 {
             // At most one of mp, mv, mm can be a multiple of 5.
-            if mv % 5 == 0 {
+            if mv.is_multiple_of(5) {
                 vr_is_trailing_zeros = multiple_of_power_of5(mv, q);
             } else if accept_bounds {
                 vm_is_trailing_zeros = multiple_of_power_of5(mm, q);
@@ -276,7 +282,7 @@ fn f2d(ieee_mantissa: u32, ieee_exponent: u32) -> FloatingDecimal32 {
             removed += 1;
         }
         if vm_is_trailing_zeros {
-            while vm % 10 == 0 {
+            while vm.is_multiple_of(10) {
                 vr_is_trailing_zeros &= last_removed_digit == 0;
                 last_removed_digit = (vr % 10) as u8;
                 vr /= 10;
@@ -285,7 +291,7 @@ fn f2d(ieee_mantissa: u32, ieee_exponent: u32) -> FloatingDecimal32 {
                 removed += 1;
             }
         }
-        if vr_is_trailing_zeros && last_removed_digit == 5 && vr % 2 == 0 {
+        if vr_is_trailing_zeros && last_removed_digit == 5 && vr.is_multiple_of(2) {
             // Round even if the exact number is .....50..0.
             last_removed_digit = 4;
         }
@@ -392,7 +398,7 @@ fn to_chars(v: FloatingDecimal32, sign: bool, result: &mut [u8]) -> i32 {
     }
 
     // Fixed-point thresholds chosen to match printf defaults.
-    if exp >= -4 && exp < 6 {
+    if (-4..6).contains(&exp) {
         return to_chars_f(v, olength, &mut result[index as usize..]) + sign as i32;
     }
 

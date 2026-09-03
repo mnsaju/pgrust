@@ -23,7 +23,11 @@ struct UnitConversion {
 }
 
 const fn uc(unit: &'static str, base_unit: i32, multiplier: f64) -> UnitConversion {
-    UnitConversion { unit, base_unit, multiplier }
+    UnitConversion {
+        unit,
+        base_unit,
+        multiplier,
+    }
 }
 
 const BLK_KB: f64 = (BLCKSZ / 1024) as f64;
@@ -130,7 +134,10 @@ pub fn convert_int_from_base_unit(base_value: i64, base_unit: i32) -> (i64, &'st
         if base_unit == entry.base_unit
             && (entry.multiplier <= 1.0 || base_value % (entry.multiplier as i64) == 0)
         {
-            return (rint(base_value as f64 / entry.multiplier) as i64, entry.unit);
+            return (
+                rint(base_value as f64 / entry.multiplier) as i64,
+                entry.unit,
+            );
         }
     }
     (base_value, "")
@@ -214,13 +221,19 @@ pub fn parse_int(value: &str, flags: i32) -> ParseNum<i32> {
         }
         match convert_to_base_unit(val, &bytes[endptr..], flags & GUC_UNIT) {
             Some(cv) => val = cv,
-            None => return ParseNum::Err { hint: Some(units_hint(flags)) },
+            None => {
+                return ParseNum::Err {
+                    hint: Some(units_hint(flags)),
+                }
+            }
         }
     }
 
     val = rint(val);
     if val > i32::MAX as f64 || val < i32::MIN as f64 {
-        return ParseNum::Err { hint: Some("Value exceeds integer range.") };
+        return ParseNum::Err {
+            hint: Some("Value exceeds integer range."),
+        };
     }
 
     ParseNum::Ok(val as i32)
@@ -250,7 +263,11 @@ pub fn parse_real(value: &str, flags: i32) -> ParseNum<f64> {
         }
         match convert_to_base_unit(val, &bytes[endptr..], flags & GUC_UNIT) {
             Some(cv) => val = cv,
-            None => return ParseNum::Err { hint: Some(units_hint(flags)) },
+            None => {
+                return ParseNum::Err {
+                    hint: Some(units_hint(flags)),
+                }
+            }
         }
     }
 
@@ -276,16 +293,28 @@ pub fn fmt_g_prec(v: f64, precision: usize) -> String {
         return "nan".to_string();
     }
     if v.is_infinite() {
-        return if v < 0.0 { "-inf".to_string() } else { "inf".to_string() };
+        return if v < 0.0 {
+            "-inf".to_string()
+        } else {
+            "inf".to_string()
+        };
     }
 
     let p = precision.max(1);
     if v == 0.0 {
-        return if v.is_sign_negative() { "-0".to_string() } else { "0".to_string() };
+        return if v.is_sign_negative() {
+            "-0".to_string()
+        } else {
+            "0".to_string()
+        };
     }
 
     let e_str = format!("{:.*e}", p - 1, v);
-    let x: i32 = e_str.rsplit('e').next().and_then(|s| s.parse().ok()).unwrap_or(0);
+    let x: i32 = e_str
+        .rsplit('e')
+        .next()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
 
     if x < -4 || x >= p as i32 {
         format_e_style(v, p - 1)
@@ -300,7 +329,11 @@ pub fn fmt_e(v: f64, precision: usize) -> String {
         return "nan".to_string();
     }
     if v.is_infinite() {
-        return if v < 0.0 { "-inf".to_string() } else { "inf".to_string() };
+        return if v < 0.0 {
+            "-inf".to_string()
+        } else {
+            "inf".to_string()
+        };
     }
     normalize_e(&format!("{:.*e}", precision, v))
 }

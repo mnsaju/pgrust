@@ -49,7 +49,10 @@ fn psql(sql: &str) -> Option<Vec<String>> {
         std::process::id(),
         SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     ));
-    std::fs::File::create(&path).ok()?.write_all(sql.as_bytes()).ok()?;
+    std::fs::File::create(&path)
+        .ok()?
+        .write_all(sql.as_bytes())
+        .ok()?;
     let out = Command::new("psql")
         .env("PGHOST", "/tmp")
         .env("PGCLIENTENCODING", "UTF8")
@@ -98,7 +101,21 @@ const STRINGS: &[&str] = &[
 #[test]
 fn substr_differential() {
     set_utf8();
-    let starts: &[i32] = &[i32::MIN, -2147483647, -100, -2, -1, 0, 1, 2, 3, 5, 100, 2147483646, i32::MAX];
+    let starts: &[i32] = &[
+        i32::MIN,
+        -2147483647,
+        -100,
+        -2,
+        -1,
+        0,
+        1,
+        2,
+        3,
+        5,
+        100,
+        2147483646,
+        i32::MAX,
+    ];
     let lens: &[i32] = &[i32::MIN, -100, -1, 0, 1, 2, 3, 100, 2147483646, i32::MAX];
     let mut corpus: Vec<(&str, i32, Option<i32>)> = Vec::new();
     for &s in STRINGS {
@@ -150,10 +167,16 @@ fn substr_differential() {
         );
         checked += 1;
         if got != pg[i] {
-            mismatches.push(format!("  substr({s:?},{st},{l:?})  pg={}  pgrust={got}", pg[i]));
+            mismatches.push(format!(
+                "  substr({s:?},{st},{l:?})  pg={}  pgrust={got}",
+                pg[i]
+            ));
         }
     }
-    eprintln!("substr differential: {checked} cases, {} mismatches", mismatches.len());
+    eprintln!(
+        "substr differential: {checked} cases, {} mismatches",
+        mismatches.len()
+    );
     assert!(mismatches.is_empty(), "\n{}", mismatches.join("\n"));
 }
 
@@ -161,9 +184,28 @@ fn substr_differential() {
 fn position_differential() {
     set_utf8();
     let needles: &[&str] = &[
-        "", "a", "b", "z", "ab", "bc", "abc", "abcabc", "hello", "world", "xx", "xxx",
-        "é", "本", "語", "日本語", "😀", "😀c", "quick brown", "notpresent",
-        "longer-than-any-haystack-string-here-really", "ascii語",
+        "",
+        "a",
+        "b",
+        "z",
+        "ab",
+        "bc",
+        "abc",
+        "abcabc",
+        "hello",
+        "world",
+        "xx",
+        "xxx",
+        "é",
+        "本",
+        "語",
+        "日本語",
+        "😀",
+        "😀c",
+        "quick brown",
+        "notpresent",
+        "longer-than-any-haystack-string-here-really",
+        "ascii語",
     ];
     let mut corpus: Vec<(&str, &str)> = Vec::new();
     for &h in STRINGS {
@@ -190,10 +232,17 @@ fn position_differential() {
     for (i, (h, n)) in corpus.iter().enumerate() {
         let got = render(text_position(h.as_bytes(), n.as_bytes(), C_COLLATION_OID));
         if got != pg[i] {
-            mismatches.push(format!("  position({n:?} in {h:?})  pg={}  pgrust={got}", pg[i]));
+            mismatches.push(format!(
+                "  position({n:?} in {h:?})  pg={}  pgrust={got}",
+                pg[i]
+            ));
         }
     }
-    eprintln!("position differential: {} cases, {} mismatches", corpus.len(), mismatches.len());
+    eprintln!(
+        "position differential: {} cases, {} mismatches",
+        corpus.len(),
+        mismatches.len()
+    );
     assert!(mismatches.is_empty(), "\n{}", mismatches.join("\n"));
 }
 
@@ -263,7 +312,11 @@ fn split_part_differential() {
             ));
         }
     }
-    eprintln!("split_part differential: {} cases, {} mismatches", corpus.len(), mismatches.len());
+    eprintln!(
+        "split_part differential: {} cases, {} mismatches",
+        corpus.len(),
+        mismatches.len()
+    );
     assert!(mismatches.is_empty(), "\n{}", mismatches.join("\n"));
 }
 
@@ -309,8 +362,9 @@ fn rust_string_agg(rows: &[Option<&str>], delim: Option<&str>) -> Option<String>
         return None;
     }
     // SAFETY: the finalfn result is a live 4B-header varlena in result_ctx.
-    let bytes =
-        unsafe { datum::VarlenaRef::from_ptr(d.as_usize() as *const u8) }.data().to_vec();
+    let bytes = unsafe { datum::VarlenaRef::from_ptr(d.as_usize() as *const u8) }
+        .data()
+        .to_vec();
     Some(String::from_utf8(bytes).unwrap())
 }
 
@@ -330,14 +384,19 @@ fn string_agg_differential() {
         (vec![Some("a'b"), Some("c''d")], Some("'")),
     ];
 
-    let mut sql = String::from("SELECT v.id, CASE WHEN r IS NULL THEN '<null>' ELSE 'OK:' || r END FROM (\n");
+    let mut sql =
+        String::from("SELECT v.id, CASE WHEN r IS NULL THEN '<null>' ELSE 'OK:' || r END FROM (\n");
     let mut parts = Vec::new();
     for (i, (rows, delim)) in corpus.iter().enumerate() {
         let elems: Vec<String> = rows
             .iter()
             .map(|r| r.map_or("NULL::text".to_string(), sql_quote))
             .collect();
-        let arr = if elems.is_empty() { "ARRAY[]::text[]".to_string() } else { format!("ARRAY[{}]", elems.join(",")) };
+        let arr = if elems.is_empty() {
+            "ARRAY[]::text[]".to_string()
+        } else {
+            format!("ARRAY[{}]", elems.join(","))
+        };
         let d = delim.map_or("NULL::text".to_string(), sql_quote);
         parts.push(format!(
             "SELECT {i} AS id, (SELECT string_agg(x, {d} ORDER BY ord) FROM unnest({arr}) WITH ORDINALITY AS t(x, ord)) AS r"
@@ -361,6 +420,10 @@ fn string_agg_differential() {
             mismatches.push(format!("  string_agg case {i}  pg={}  pgrust={got}", pg[i]));
         }
     }
-    eprintln!("string_agg differential: {} cases, {} mismatches", corpus.len(), mismatches.len());
+    eprintln!(
+        "string_agg differential: {} cases, {} mismatches",
+        corpus.len(),
+        mismatches.len()
+    );
     assert!(mismatches.is_empty(), "\n{}", mismatches.join("\n"));
 }

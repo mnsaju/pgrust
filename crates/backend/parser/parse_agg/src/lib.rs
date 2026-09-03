@@ -145,9 +145,17 @@ where
             ereport(ERROR)
                 .errcode(ERRCODE_TOO_MANY_ARGUMENTS)
                 .errmsg("GROUPING must have fewer than 32 arguments")
-                .errposition(parser_errposition(pstate, p.location, mbutils::GetDatabaseEncoding()))
+                .errposition(parser_errposition(
+                    pstate,
+                    p.location,
+                    mbutils::GetDatabaseEncoding(),
+                ))
                 .into_error()
-                .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformGroupingFunc")),
+                .with_error_location(ErrorLocation::new(
+                    file!(),
+                    line!() as i32,
+                    "transformGroupingFunc",
+                )),
         ));
     }
 
@@ -201,7 +209,11 @@ fn check_agglevels_and_constraints<'mcx>(
     // C keeps two full string tables ("aggregate functions ..." vs "grouping
     // operations ...") for translation; the rendered text is identical to
     // composing noun + context here.
-    let noun = if is_agg { "aggregate functions" } else { "grouping operations" };
+    let noun = if is_agg {
+        "aggregate functions"
+    } else {
+        "grouping operations"
+    };
     let err: Option<&'static str> = match pstate.p_expr_kind {
         ParseExprKind::EXPR_KIND_NONE => {
             panic!("check_agglevels_and_constraints (parse_agg.c): EXPR_KIND_NONE cannot happen")
@@ -216,9 +228,7 @@ fn check_agglevels_and_constraints<'mcx>(
         ParseExprKind::EXPR_KIND_JOIN_ON | ParseExprKind::EXPR_KIND_JOIN_USING => {
             Some("JOIN conditions")
         }
-        ParseExprKind::EXPR_KIND_FROM_SUBSELECT => {
-            Some("FROM clause of their own query level")
-        }
+        ParseExprKind::EXPR_KIND_FROM_SUBSELECT => Some("FROM clause of their own query level"),
         ParseExprKind::EXPR_KIND_FROM_FUNCTION => Some("functions in FROM"),
         ParseExprKind::EXPR_KIND_POLICY => Some("policy expressions"),
         ParseExprKind::EXPR_KIND_WINDOW_FRAME_RANGE => Some("window RANGE"),
@@ -332,14 +342,20 @@ fn check_agg_arguments<'mcx>(
             ereport(ERROR)
                 .errcode(ERRCODE_FEATURE_NOT_SUPPORTED)
                 .errmsg("outer-level aggregate cannot use a nested CTE")
-                .errdetail(format!("CTE \"{name}\" is below the aggregate's semantic level."))
+                .errdetail(format!(
+                    "CTE \"{name}\" is below the aggregate's semantic level."
+                ))
                 .errposition(parser_errposition(
                     pstate,
                     agglocation,
                     mbutils::GetDatabaseEncoding(),
                 ))
                 .into_error()
-                .with_error_location(ErrorLocation::new(file!(), line!() as i32, "check_agg_arguments")),
+                .with_error_location(ErrorLocation::new(
+                    file!(),
+                    line!() as i32,
+                    "check_agg_arguments",
+                )),
         )
     };
     if ctx.min_ctelevel >= 0 && ctx.min_ctelevel < agglevel {
@@ -404,7 +420,10 @@ fn caa_query<'mcx>(
     ctx.sublevels_up += 1;
     let r = nodes_core::query_tree_walker(
         q,
-        &mut CaaWalker { pstate, ctx: &mut *ctx },
+        &mut CaaWalker {
+            pstate,
+            ctx: &mut *ctx,
+        },
         nodes_core::QTW_EXAMINE_RTES_BEFORE,
     );
     ctx.sublevels_up -= 1;
@@ -472,18 +491,14 @@ fn check_agg_arguments_walker<'mcx>(
             let rte = node.as_range_tbl_entry().unwrap();
             if rte.rtekind == RTEKind::RTE_CTE {
                 let ctelevelsup = rte.ctelevelsup as i32 - ctx.sublevels_up;
-                if ctelevelsup >= 0
-                    && (ctx.min_ctelevel < 0 || ctx.min_ctelevel > ctelevelsup)
-                {
+                if ctelevelsup >= 0 && (ctx.min_ctelevel < 0 || ctx.min_ctelevel > ctelevelsup) {
                     ctx.min_ctelevel = ctelevelsup;
                     ctx.min_cte_name = rte.eref.and_then(|e| e.aliasname);
                 }
             }
             Ok(())
         }
-        NodeTag::T_Query => {
-            caa_query(pstate, node.as_query().expect("tag checked"), ctx)
-        }
+        NodeTag::T_Query => caa_query(pstate, node.as_query().expect("tag checked"), ctx),
         _ => caa_descend(pstate, node, ctx),
     }
 }
@@ -503,7 +518,9 @@ pub fn transformWindowFuncCall<'mcx>(
     wfunc: &mut WindowFunc<'mcx>,
     windef_node: Node<'mcx>,
 ) -> PgResult<()> {
-    let windef = windef_node.as_window_def().expect("OVER clause holds a WindowDef");
+    let windef = windef_node
+        .as_window_def()
+        .expect("OVER clause holds a WindowDef");
 
     if pstate.p_hasWindowFuncs {
         if let Some(loc) = locate_windowfunc_in_list(&wfunc.args) {
@@ -609,7 +626,12 @@ pub fn transformWindowFuncCall<'mcx>(
         }
     };
     if let Some(msg) = err {
-        return Err(windowing_error(pstate, msg.into(), wfunc.location, "transformWindowFuncCall"));
+        return Err(windowing_error(
+            pstate,
+            msg.into(),
+            wfunc.location,
+            "transformWindowFuncCall",
+        ));
     }
 
     if let Some(name) = windef.name {
@@ -830,9 +852,7 @@ pub fn parseCheckAggregates<'mcx>(
         }
         if expr.as_var().is_none() {
             hnvg = true;
-        } else if qry.groupingSets.is_nil()
-            || gset_common.contains(&(tle.ressortgroupref as i32))
-        {
+        } else if qry.groupingSets.is_nil() || gset_common.contains(&(tle.ressortgroupref as i32)) {
             common_vars.push(expr);
         }
         group_tles.lappend(
@@ -941,7 +961,10 @@ pub fn parseCheckAggregates<'mcx>(
 // the given query level, or -1. The entry Query arrives as a plain reborrow,
 // so its fields are walked directly (query_tree_walker wants an arena &'mcx).
 fn locate_agg_of_level<'mcx>(qry: &Query<'mcx>, levelsup: Index) -> PgResult<ParseLoc> {
-    let mut w = LocateAggOfLevel { agg_location: -1, sublevels_up: levelsup };
+    let mut w = LocateAggOfLevel {
+        agg_location: -1,
+        sublevels_up: levelsup,
+    };
     locate_agg_walk_query_fields(qry, &mut w)?;
     Ok(w.agg_location)
 }
@@ -984,10 +1007,7 @@ impl<'mcx> nodes_core::NodeWalker<'mcx> for LocateAggOfLevel {
 }
 
 // query_tree_walker's field walk at flags == 0, over a non-arena borrow.
-fn locate_agg_walk_query_fields<'mcx>(
-    q: &Query<'mcx>,
-    w: &mut LocateAggOfLevel,
-) -> PgResult<bool> {
+fn locate_agg_walk_query_fields<'mcx>(q: &Query<'mcx>, w: &mut LocateAggOfLevel) -> PgResult<bool> {
     if nodes_core::walk_list(&q.targetList, w)?
         || nodes_core::walk_list(&q.withCheckOptions, w)?
         || nodes_core::walk_opt(q.onConflict, w)?
@@ -1029,9 +1049,17 @@ fn agg_in_recursive_term(pstate: &ParseState<'_, '_>, location: ParseLoc) -> Box
         ereport(ERROR)
             .errcode(ERRCODE_INVALID_RECURSION)
             .errmsg("aggregate functions are not allowed in a recursive query's recursive term")
-            .errposition(parser_errposition(pstate, location, mbutils::GetDatabaseEncoding()))
+            .errposition(parser_errposition(
+                pstate,
+                location,
+                mbutils::GetDatabaseEncoding(),
+            ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "parseCheckAggregates")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "parseCheckAggregates",
+            )),
     )
 }
 
@@ -1054,9 +1082,17 @@ fn grouping_sets_limit_error(pstate: &ParseState<'_, '_>, location: ParseLoc) ->
         ereport(ERROR)
             .errcode(ERRCODE_STATEMENT_TOO_COMPLEX)
             .errmsg("too many grouping sets present (maximum 4096)")
-            .errposition(parser_errposition(pstate, location, mbutils::GetDatabaseEncoding()))
+            .errposition(parser_errposition(
+                pstate,
+                location,
+                mbutils::GetDatabaseEncoding(),
+            ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "parseCheckAggregates")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "parseCheckAggregates",
+            )),
     )
 }
 
@@ -1085,7 +1121,16 @@ impl<'mcx> nodes_core::NodeWalker<'mcx> for FgeWalker<'_, '_, '_, '_, 'mcx> {
         Ok(false)
     }
     fn visit_query_ref(&mut self, q: &'mcx Query<'mcx>) -> PgResult<bool> {
-        fge_query(self.mcx, self.pstate, self.qry, self.grp, self.has_join_rtes, self.hnvg, self.sublevels_up, q)?;
+        fge_query(
+            self.mcx,
+            self.pstate,
+            self.qry,
+            self.grp,
+            self.has_join_rtes,
+            self.hnvg,
+            self.sublevels_up,
+            q,
+        )?;
         Ok(false)
     }
 }
@@ -1104,8 +1149,15 @@ fn fge_query<'mcx>(
     sublevels_up: i32,
     q: &'mcx Query<'mcx>,
 ) -> PgResult<()> {
-    let mut w =
-        FgeWalker { mcx, pstate, qry, grp, has_join_rtes, hnvg, sublevels_up: sublevels_up + 1 };
+    let mut w = FgeWalker {
+        mcx,
+        pstate,
+        qry,
+        grp,
+        has_join_rtes,
+        hnvg,
+        sublevels_up: sublevels_up + 1,
+    };
     nodes_core::query_tree_walker(q, &mut w, 0)?;
     Ok(())
 }
@@ -1131,14 +1183,32 @@ fn finalize_grouping_exprs<'mcx>(
                 // arguments, ORDER BY, or filter; only direct arguments are
                 // checked as though outside the aggregate.
                 for arg in &agg.aggdirectargs {
-                    finalize_grouping_exprs(mcx, pstate, qry, grp, has_join_rtes, hnvg, sublevels_up, arg)?;
+                    finalize_grouping_exprs(
+                        mcx,
+                        pstate,
+                        qry,
+                        grp,
+                        has_join_rtes,
+                        hnvg,
+                        sublevels_up,
+                        arg,
+                    )?;
                 }
                 return Ok(());
             }
             if agglevelsup > sublevels_up {
                 return Ok(());
             }
-            fge_descend(mcx, pstate, qry, grp, has_join_rtes, hnvg, sublevels_up, node)
+            fge_descend(
+                mcx,
+                pstate,
+                qry,
+                grp,
+                has_join_rtes,
+                hnvg,
+                sublevels_up,
+                node,
+            )
         }
         NodeTag::T_GroupingFunc => {
             let gfn = node.as_grouping_func().unwrap();
@@ -1181,13 +1251,23 @@ fn finalize_grouping_exprs<'mcx>(
                 // is finalizing; the `gfn` borrow above is dead before this
                 // write.
                 unsafe {
-                    node.with_mut::<GroupingFunc, _>(|g| g.refs = ref_list).unwrap();
+                    node.with_mut::<GroupingFunc, _>(|g| g.refs = ref_list)
+                        .unwrap();
                 }
             }
             if agglevelsup > sublevels_up {
                 return Ok(());
             }
-            fge_descend(mcx, pstate, qry, grp, has_join_rtes, hnvg, sublevels_up, node)
+            fge_descend(
+                mcx,
+                pstate,
+                qry,
+                grp,
+                has_join_rtes,
+                hnvg,
+                sublevels_up,
+                node,
+            )
         }
         NodeTag::T_Query => fge_query(
             mcx,
@@ -1199,7 +1279,16 @@ fn finalize_grouping_exprs<'mcx>(
             sublevels_up,
             node.as_query().expect("tag checked"),
         ),
-        _ => fge_descend(mcx, pstate, qry, grp, has_join_rtes, hnvg, sublevels_up, node),
+        _ => fge_descend(
+            mcx,
+            pstate,
+            qry,
+            grp,
+            has_join_rtes,
+            hnvg,
+            sublevels_up,
+            node,
+        ),
     }
 }
 
@@ -1214,7 +1303,15 @@ fn fge_descend<'mcx>(
     sublevels_up: i32,
     node: Node<'mcx>,
 ) -> PgResult<()> {
-    let mut w = FgeWalker { mcx, pstate, qry, grp, has_join_rtes, hnvg, sublevels_up };
+    let mut w = FgeWalker {
+        mcx,
+        pstate,
+        qry,
+        grp,
+        has_join_rtes,
+        hnvg,
+        sublevels_up,
+    };
     nodes_core::expression_tree_walker(node, &mut w)?;
     Ok(())
 }
@@ -1230,13 +1327,13 @@ fn grouping_expr_ref(grp: &[(Node<'_>, Index)], expr: Node<'_>) -> Option<Index>
 }
 
 // The Var leg of the GROUPING()-argument match against group-clause TLEs.
-fn grouping_var_ref(grp: &[(Node<'_>, Index)], var: &types_nodes::primnodes::Var<'_>) -> Option<Index> {
+fn grouping_var_ref(
+    grp: &[(Node<'_>, Index)],
+    var: &types_nodes::primnodes::Var<'_>,
+) -> Option<Index> {
     for (gexpr, sortgroupref) in grp {
         if let Some(gvar) = gexpr.as_var() {
-            if gvar.varno == var.varno
-                && gvar.varattno == var.varattno
-                && gvar.varlevelsup == 0
-            {
+            if gvar.varno == var.varno && gvar.varattno == var.varattno && gvar.varlevelsup == 0 {
                 return Some(*sortgroupref);
             }
         }
@@ -1292,13 +1389,12 @@ fn build_grouped_var<'mcx>(
     let nscol = &nsitem.p_nscolumns[attnum - 1];
     debug_assert!(nscol.p_varno == nsitem.p_rtindex as Index);
     debug_assert!(nscol.p_varattno as usize == attnum);
-    let varnullingrels = if ctx.has_grouping_sets
-        && !ctx.gset_common.contains(&(sortgroupref as i32))
-    {
-        types_nodes::Bitmapset::make_singleton(ctx.mcx, nsitem.p_rtindex)?
-    } else {
-        types_nodes::Bitmapset::empty()
-    };
+    let varnullingrels =
+        if ctx.has_grouping_sets && !ctx.gset_common.contains(&(sortgroupref as i32)) {
+            types_nodes::Bitmapset::make_singleton(ctx.mcx, nsitem.p_rtindex)?
+        } else {
+            types_nodes::Bitmapset::empty()
+        };
     Node::mk(
         ctx.mcx,
         types_nodes::primnodes::Var {
@@ -1374,8 +1470,7 @@ fn sgc_mutate<'mcx>(
                 ctx.in_agg_direct_args = false;
                 if let Some(l) = new_direct {
                     // SAFETY: exclusive parse tree; no derived refs live.
-                    unsafe { node.with_mut::<Aggref, _>(|a| a.aggdirectargs = l) }
-                        .expect("Aggref");
+                    unsafe { node.with_mut::<Aggref, _>(|a| a.aggdirectargs = l) }.expect("Aggref");
                 }
                 return Ok(None);
             }
@@ -1385,11 +1480,10 @@ fn sgc_mutate<'mcx>(
         }
         // A current-or-higher-level GroupingFunc's arguments are not
         // evaluated; not recursed into.
-        NodeTag::T_GroupingFunc => {
-            if node.as_grouping_func().unwrap().agglevelsup as i32 >= ctx.sublevels_up {
+        NodeTag::T_GroupingFunc
+            if node.as_grouping_func().unwrap().agglevelsup as i32 >= ctx.sublevels_up => {
                 return Ok(None);
             }
-        }
         _ => {}
     }
     if ctx.hnvg && ctx.sublevels_up == 0 {
@@ -1413,11 +1507,7 @@ fn sgc_mutate<'mcx>(
                             && gvar.varattno == var.varattno
                             && gvar.varlevelsup == 0
                         {
-                            return Ok(Some(build_grouped_var(
-                                ctx,
-                                attnum0 + 1,
-                                *sortgroupref,
-                            )?));
+                            return Ok(Some(build_grouped_var(ctx, attnum0 + 1, *sortgroupref)?));
                         }
                     }
                 }
@@ -1531,10 +1621,7 @@ impl<'mcx> QueryNews<'mcx> {
 // The sub-Query arm of substitute_grouped_columns_mutator: C's
 // query_tree_mutator (nodeFuncs.c, flags 0) applied through the Query node
 // handle; nested structures rewrite in place through their own nodes.
-fn sgc_query_inplace<'mcx>(
-    ctx: &mut SgcCtx<'_, '_, '_, 'mcx>,
-    qnode: Node<'mcx>,
-) -> PgResult<()> {
+fn sgc_query_inplace<'mcx>(ctx: &mut SgcCtx<'_, '_, '_, 'mcx>, qnode: Node<'mcx>) -> PgResult<()> {
     let q = qnode.as_query().expect("Query");
     let news = sgc_query_news(ctx, q)?;
     if news.any() {
@@ -1557,7 +1644,9 @@ fn sgc_query_news<'mcx>(
     let new_setops = sgc_mutate_opt(ctx, q.setOperations)?;
     let new_merge_join_cond = sgc_mutate_opt(ctx, q.mergeJoinCondition)?;
     for wco_node in &q.withCheckOptions {
-        let wco = wco_node.as_with_check_option().expect("withCheckOptions cell");
+        let wco = wco_node
+            .as_with_check_option()
+            .expect("withCheckOptions cell");
         if let Some(new_qual) = sgc_mutate_opt(ctx, wco.qual)? {
             // SAFETY: exclusive parse tree; no derived refs live.
             unsafe {
@@ -1696,9 +1785,9 @@ fn sgc_query_news<'mcx>(
                         let nref: &'mcx Query<'mcx> = mcx::leak_in(mcx::alloc_in(mcx, nq)?);
                         // SAFETY: exclusive parse tree; no derived refs live.
                         unsafe {
-                            rte_node.with_mut::<types_nodes::parsenodes::RangeTblEntry, _>(
-                                |r| r.subquery = Some(nref),
-                            )
+                            rte_node.with_mut::<types_nodes::parsenodes::RangeTblEntry, _>(|r| {
+                                r.subquery = Some(nref)
+                            })
                         }
                         .expect("RangeTblEntry");
                     }
@@ -1764,9 +1853,8 @@ fn sgc_query_news<'mcx>(
         if let Some(l) = sgc_list(ctx, &rte.securityQuals)? {
             // SAFETY: as above.
             unsafe {
-                rte_node.with_mut::<types_nodes::parsenodes::RangeTblEntry, _>(|r| {
-                    r.securityQuals = l
-                })
+                rte_node
+                    .with_mut::<types_nodes::parsenodes::RangeTblEntry, _>(|r| r.securityQuals = l)
             }
             .expect("RangeTblEntry");
         }
@@ -1782,7 +1870,6 @@ fn sgc_query_news<'mcx>(
         jointree: new_jointree,
     })
 }
-
 
 /// C `expand_groupingset_node`: one GroupingSet into its list of integer
 /// grouping sets (EMPTY -> [()], SIMPLE -> [content], ROLLUP/CUBE -> the
@@ -1853,7 +1940,11 @@ fn expand_groupingset_node<'mcx>(
 // SIMPLE content is a list of Integer ressortgroupref cells (transformGroupingSet).
 fn collect_simple_content<'mcx>(content: &NodeList<'_>, out: &mut PgVec<'mcx, i32>) {
     for n in content {
-        out.push(n.as_integer().expect("SIMPLE grouping-set content cell").ival);
+        out.push(
+            n.as_integer()
+                .expect("SIMPLE grouping-set content cell")
+                .ival,
+        );
     }
 }
 
@@ -1916,7 +2007,11 @@ pub fn expand_grouping_sets<'mcx>(
     // Cartesian product across the sublists, dropping duplicate members from
     // individual sets (without changing the number of sets).
     let mut result: PgVec<'_, PgVec<'_, i32>> = PgVec::new_in(mcx);
-    for set in expanded_groups.first().expect("groupingSets is non-nil").iter() {
+    for set in expanded_groups
+        .first()
+        .expect("groupingSets is non-nil")
+        .iter()
+    {
         result.push(list_union_int(mcx, &[], set));
     }
     for p in expanded_groups.iter().skip(1) {
@@ -1938,7 +2033,10 @@ pub fn expand_grouping_sets<'mcx>(
         result.sort_by(|a, b| cmp_list_len_contents_asc(a, b));
         let mut dedup: PgVec<'_, PgVec<'_, i32>> = PgVec::new_in(mcx);
         for set in result {
-            if dedup.last().is_none_or(|prev| prev.as_slice() != set.as_slice()) {
+            if dedup
+                .last()
+                .is_none_or(|prev| prev.as_slice() != set.as_slice())
+            {
                 dedup.push(set);
             }
         }
@@ -1957,9 +2055,7 @@ fn parse_expr_kind_name(kind: ParseExprKind) -> &'static str {
         ParseExprKind::EXPR_KIND_WHERE | ParseExprKind::EXPR_KIND_COPY_WHERE => "WHERE",
         ParseExprKind::EXPR_KIND_FILTER => "FILTER",
         ParseExprKind::EXPR_KIND_INSERT_TARGET => "INSERT",
-        ParseExprKind::EXPR_KIND_UPDATE_SOURCE | ParseExprKind::EXPR_KIND_UPDATE_TARGET => {
-            "UPDATE"
-        }
+        ParseExprKind::EXPR_KIND_UPDATE_SOURCE | ParseExprKind::EXPR_KIND_UPDATE_TARGET => "UPDATE",
         ParseExprKind::EXPR_KIND_GROUP_BY => "GROUP BY",
         ParseExprKind::EXPR_KIND_LIMIT => "LIMIT",
         ParseExprKind::EXPR_KIND_OFFSET => "OFFSET",
@@ -2047,11 +2143,21 @@ fn ungrouped_var_error(
     in_agg_direct_args: bool,
     sublevels_up: i32,
 ) -> Box<PgError> {
-    let rte = qry.rtable.nth(var.varno as usize - 1).as_range_tbl_entry().unwrap_or_else(|| {
-        panic!("check_ungrouped_columns (parse_agg.c): varno {} has no RTE", var.varno)
-    });
+    let rte = qry
+        .rtable
+        .nth(var.varno as usize - 1)
+        .as_range_tbl_entry()
+        .unwrap_or_else(|| {
+            panic!(
+                "check_ungrouped_columns (parse_agg.c): varno {} has no RTE",
+                var.varno
+            )
+        });
     let eref = rte.eref.unwrap_or_else(|| {
-        panic!("check_ungrouped_columns (parse_agg.c): RTE without eref for varno {}", var.varno)
+        panic!(
+            "check_ungrouped_columns (parse_agg.c): RTE without eref for varno {}",
+            var.varno
+        )
     });
     let relname = eref
         .aliasname
@@ -2087,6 +2193,10 @@ fn ungrouped_var_error(
     Box::new(
         b.errposition(parser_errposition(pstate, var.location, encoding))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "check_ungrouped_columns")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "check_ungrouped_columns",
+            )),
     )
 }

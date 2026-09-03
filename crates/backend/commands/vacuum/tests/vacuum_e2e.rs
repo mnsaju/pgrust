@@ -19,14 +19,13 @@ use transam_xlog::control_file::{
 };
 use transam_xlog::{XLogRecPtrToBytePos, DB_IN_PRODUCTION, RECOVERY_STATE_DONE};
 use types_core::{
-    BackendType, BlockNumber, Buffer, ForkNumber, InvalidBlockNumber, Oid, TimeLineID,
-    XLogRecPtr, XLogSegNo, BLCKSZ, INVALID_PROC_NUMBER, RELPERSISTENCE_PERMANENT,
+    BackendType, BlockNumber, Buffer, ForkNumber, InvalidBlockNumber, Oid, TimeLineID, XLogRecPtr,
+    XLogSegNo, BLCKSZ, INVALID_PROC_NUMBER, RELPERSISTENCE_PERMANENT,
 };
 use types_error::PgResult;
 use types_nodes::nodes_enums::CmdType;
 use types_rel::{
-    FormData_pg_class, LockInfoData, LockRelId, Relation, RelationData, LOCKMODE,
-    RELKIND_RELATION,
+    FormData_pg_class, LockInfoData, LockRelId, Relation, RelationData, LOCKMODE, RELKIND_RELATION,
 };
 use types_storage::bufpage::PageRef;
 use types_storage::RelFileLocator;
@@ -308,9 +307,7 @@ fn install_xact_periphery_seams() {
     be_fsstubs_seams::at_eoxact_large_object::set(|_| Ok(()));
     namespace_seams::at_eoxact_namespace::set(|_, _| {});
     catalog_index_seams::reset_reindex_state::set(|_| {});
-    catalog_storage_seams::smgr_get_pending_deletes::set(|mcx, _for_commit| {
-        Ok(PgVec::new_in(mcx))
-    });
+    catalog_storage_seams::smgr_get_pending_deletes::set(|mcx, _for_commit| Ok(PgVec::new_in(mcx)));
     catalog_storage_seams::smgr_do_pending_deletes::set(|_| Ok(()));
     catalog_storage_seams::smgr_do_pending_syncs::set(|_, _| Ok(()));
     combocid_seams::at_eoxact_combocid::set(|| {});
@@ -476,7 +473,10 @@ fn test_relation<'mcx>(mcx: Mcx<'mcx>) -> RelationData<'mcx> {
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
         rd_lockInfo: LockInfoData {
-            lockRelId: LockRelId { relId: REL_OID, dbId: 5 },
+            lockRelId: LockRelId {
+                relId: REL_OID,
+                dbId: 5,
+            },
         },
         rd_rel,
         rd_att: int4_x2_tupdesc(mcx),
@@ -489,13 +489,16 @@ fn test_relation<'mcx>(mcx: Mcx<'mcx>) -> RelationData<'mcx> {
         pgstat_enabled: Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: PgVec::new_in(mcx),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     }
 }
 
@@ -518,7 +521,11 @@ fn install_relation_seams() {
     bufmgr_seams::extend_buffered_rel_to_rel::set(|rel, fork, strategy, flags, extend_to, mode| {
         bufmgr_seams::extend_buffered_rel_to::call(
             bufmgr_seams::relation_smgr_locator::call(rel),
-            fork, strategy, flags, extend_to, mode,
+            fork,
+            strategy,
+            flags,
+            extend_to,
+            mode,
         )
     });
 }
@@ -528,12 +535,8 @@ fn install_parser_fixture_seams() {
     syscache_seams::lookup_pg_statistic_bundle::set(|_, _, _, _| Ok(None));
     syscache_seams::pg_statistic_stawidth::set(|_, _, _| Ok(None));
     indexcmds_seams::get_default_opclass::set(|_typid, _am| Ok(0));
-    syscache_seams::syscache_hash_value_typeoid::set(|typid| {
-        Ok(typid.wrapping_mul(0x9e37_79b1))
-    });
-    syscache_seams::syscache_hash_value_procoid::set(|funcid| {
-        Ok(funcid.wrapping_mul(0x9e37_79b1))
-    });
+    syscache_seams::syscache_hash_value_typeoid::set(|typid| Ok(typid.wrapping_mul(0x9e37_79b1)));
+    syscache_seams::syscache_hash_value_procoid::set(|funcid| Ok(funcid.wrapping_mul(0x9e37_79b1)));
     syscache_seams::lookup_pg_type_typcache_shape::set(|_typid| {
         Ok(Some(syscache_seams::PgTypeTypcacheShape {
             typname: types_tuple::NameData::default(),
@@ -582,7 +585,8 @@ fn install_parser_fixture_seams() {
     syscache_seams::pg_operator_name_candidates_exist::set(|_, _| Ok(false));
     syscache_seams::lookup_pg_operator_shape::set(|opno| {
         Ok(match opno {
-            INT4LE_OP => Some(syscache_seams::PgOperatorShape { oprnamespace: 11,
+            INT4LE_OP => Some(syscache_seams::PgOperatorShape {
+                oprnamespace: 11,
                 oprleft: 23,
                 oprright: 23,
                 oprresult: 16,
@@ -620,7 +624,11 @@ fn install_parser_fixture_seams() {
     });
     syscache_seams::pg_proc_cost_shape::set(|funcid| {
         Ok(match funcid {
-            INT4LE_PROC => Some(syscache_seams::PgProcCostShape { procost: 1.0, prorows: 0.0, prosupport: 0 }),
+            INT4LE_PROC => Some(syscache_seams::PgProcCostShape {
+                procost: 1.0,
+                prorows: 0.0,
+                prosupport: 0,
+            }),
             _ => None,
         })
     });
@@ -699,13 +707,18 @@ fn run_stmt(sql: &str) -> (CmdType, u64) {
     assert_eq!(list.len(), 1);
     let raw = list.nth(0).as_raw_stmt().unwrap();
     let query =
-        parser_analyze::parse_analyze_fixedparams(mcx, raw, sql, &[], Default::default())
-            .unwrap();
+        parser_analyze::parse_analyze_fixedparams(mcx, raw, sql, &[], Default::default()).unwrap();
     let mut rewritten = rewrite_handler::QueryRewrite(mcx, query).unwrap();
     assert_eq!(rewritten.len(), 1);
     let query = rewritten.pop().unwrap();
-    let pstmt = planner::planner(mcx, mcx::leak_in(mcx::alloc_in(mcx, query).unwrap()), sql, 0, types_portal::ParamListHandle::NULL)
-        .unwrap();
+    let pstmt = planner::planner(
+        mcx,
+        mcx::leak_in(mcx::alloc_in(mcx, query).unwrap()),
+        sql,
+        0,
+        types_portal::ParamListHandle::NULL,
+    )
+    .unwrap();
     let pstmt: &'static types_nodes::plannodes::PlannedStmt<'static> =
         mcx::leak_in(mcx::alloc_in(mcx, pstmt).unwrap());
 
@@ -724,13 +737,8 @@ fn run_stmt(sql: &str) -> (CmdType, u64) {
     execmain_seams::executor_start::call(qd, 0).unwrap();
     let operation = execmain_seams::query_desc_operation::call(qd);
     let mut dest = tcop_dest::DestReceiver::DoNothing;
-    execmain_seams::executor_run::call(
-        qd,
-        types_scan::sdir::ForwardScanDirection,
-        0,
-        &mut dest,
-    )
-    .unwrap();
+    execmain_seams::executor_run::call(qd, types_scan::sdir::ForwardScanDirection, 0, &mut dest)
+        .unwrap();
     let processed = execmain_seams::query_desc_es_processed::call(qd);
     execmain_seams::executor_finish::call(qd).unwrap();
     execmain_seams::executor_end::call(qd).unwrap();
@@ -754,12 +762,18 @@ fn select_rows() -> Vec<(i32, i32)> {
     for (attno, name) in [(1i16, "a"), (2i16, "b")] {
         let var = Node::mk_var(mcx, 1, attno, INT4OID, -1, 0, 0).unwrap();
         tlist
-            .lappend(mcx, Node::mk_target_entry(mcx, var, attno, Some(name), false).unwrap())
+            .lappend(
+                mcx,
+                Node::mk_target_entry(mcx, var, attno, Some(name), false).unwrap(),
+            )
             .unwrap();
     }
     let mut scan = Node::build::<SeqScan>(mcx).unwrap();
     scan.scan = Scan {
-        plan: Plan { targetlist: tlist, ..Default::default() },
+        plan: Plan {
+            targetlist: tlist,
+            ..Default::default()
+        },
         scanrelid: 1,
     };
     let scan = scan.seal();
@@ -780,7 +794,11 @@ fn select_rows() -> Vec<(i32, i32)> {
     let mut estate = EStateData::new_in(exec_ctx.mcx());
     estate.es_snapshot = snapshot;
     let rtable = mcx::leak_in(
-        mcx::alloc_in(exec_ctx.mcx(), NodeList::make1(exec_ctx.mcx(), rte).unwrap()).unwrap(),
+        mcx::alloc_in(
+            exec_ctx.mcx(),
+            NodeList::make1(exec_ctx.mcx(), rte).unwrap(),
+        )
+        .unwrap(),
     );
     estate
         .exec_init_range_table(
@@ -939,8 +957,12 @@ fn vacuum_reclaims_dead_rows_e2e() {
     let ctl = transam_xlog::ctl::XLogCtl();
     ctl.InsertTimeLineID.store(1, Relaxed);
     ctl.PrevTimeLineID.store(1, Relaxed);
-    ctl.Insert.CurrBytePos.store(XLogRecPtrToBytePos(end_of_log), Relaxed);
-    ctl.Insert.PrevBytePos.store(XLogRecPtrToBytePos(prev_rec), Relaxed);
+    ctl.Insert
+        .CurrBytePos
+        .store(XLogRecPtrToBytePos(end_of_log), Relaxed);
+    ctl.Insert
+        .PrevBytePos
+        .store(XLogRecPtrToBytePos(prev_rec), Relaxed);
     ctl.Insert.fullPageWrites.store(true, Relaxed);
     ctl.Insert.RedoRecPtr.store(prev_rec, Relaxed);
     ctl.RedoRecPtr.store(prev_rec, Relaxed);
@@ -1019,7 +1041,10 @@ fn vacuum_reclaims_dead_rows_e2e() {
     let blk = freespace::GetPageWithFreeSpace(&rel, 4000).unwrap();
     assert_ne!(blk, InvalidBlockNumber, "FSM search finds freed space");
     let free0 = freespace::GetRecordedFreeSpace(&rel, 0).unwrap();
-    assert!(free0 > (BLCKSZ * 3) / 4, "page 0 emptied: {free0} bytes free");
+    assert!(
+        free0 > (BLCKSZ * 3) / 4,
+        "page 0 emptied: {free0} bytes free"
+    );
 
     // (d) VM read side: every heap page is all-visible.
     let mut vmb = visibilitymap::VmBuffer::new();
@@ -1033,18 +1058,29 @@ fn vacuum_reclaims_dead_rows_e2e() {
     }
     vmb.release();
     let (nvisible, _nfrozen) = visibilitymap::visibilitymap_count(&rel).unwrap();
-    assert_eq!(nvisible, rel_pages_before, "visibilitymap_count sees every page");
+    assert_eq!(
+        nvisible, rel_pages_before,
+        "visibilitymap_count sees every page"
+    );
 
     // (e) The next insert reuses reclaimed space instead of extending.
     xact::StartTransactionCommand().unwrap();
     let (op, n) = run_stmt("INSERT INTO t VALUES (2001, 0)");
     assert_eq!((op, n), (CmdType::CMD_INSERT, 1));
     xact::CommitTransactionCommand().unwrap();
-    assert_eq!(fork_nblocks(0), rel_pages_before, "insert reused a vacuumed page");
+    assert_eq!(
+        fork_nblocks(0),
+        rel_pages_before,
+        "insert reused a vacuumed page"
+    );
 
     with_fake(|f| {
         assert!(f.pins.iter().all(|p| *p == 0), "leaked pins: {:?}", f.pins);
-        assert!(f.locks.iter().all(|l| *l == 0), "leaked locks: {:?}", f.locks);
+        assert!(
+            f.locks.iter().all(|l| *l == 0),
+            "leaked locks: {:?}",
+            f.locks
+        );
     });
 
     // (f) WAL: every record decodes; prune + visible records present.
@@ -1052,7 +1088,9 @@ fn vacuum_reclaims_dead_rows_e2e() {
     let reader_ctx: &'static MemoryContext = Box::leak(Box::new(MemoryContext::new("reader")));
     let mut reader = xlogreader::XLogReaderState::allocate(reader_ctx.mcx(), SEG).unwrap();
     reader.system_identifier = SYS_ID;
-    let mut routine = SegFileRead { wal_dir: dir.join("pg_wal") };
+    let mut routine = SegFileRead {
+        wal_dir: dir.join("pg_wal"),
+    };
     reader.XLogBeginRead(end_of_log + 40);
 
     let mut prune_scans = 0u32;
@@ -1080,7 +1118,13 @@ fn vacuum_reclaims_dead_rows_e2e() {
             heap_records += 1;
         }
     }
-    assert!(heap_records >= 1601, "insert+delete records decoded: {heap_records}");
-    assert!(prune_scans >= 1, "xl_heap_prune VACUUM_SCAN records: {prune_scans}");
+    assert!(
+        heap_records >= 1601,
+        "insert+delete records decoded: {heap_records}"
+    );
+    assert!(
+        prune_scans >= 1,
+        "xl_heap_prune VACUUM_SCAN records: {prune_scans}"
+    );
     assert!(visibles >= 1, "xl_heap_visible records: {visibles}");
 }

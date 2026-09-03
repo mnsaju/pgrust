@@ -31,7 +31,10 @@ const READV_COUNT_MASK: u32 = (1 << READV_COUNT_BITS) - 1;
 /// Pin handover: the AIO subsystem takes its own pin and arms a TAGGED
 /// io_wref (WaitIO routes tagged wrefs to pgaio, untagged to the uring lane).
 fn buffer_readv_stage(ioh: u32, _cb_data: u8, is_temp: bool) {
-    assert!(!is_temp, "local-buffer AIO stage: temp relations keep the pre-AIO path");
+    assert!(
+        !is_temp,
+        "local-buffer AIO stage: temp relations keep the pre-AIO path"
+    );
 
     let (io_data, len) = aio_core::pgaio_io_get_handle_data(ioh);
     let wref = aio_core::pgaio_io_get_wref(ioh);
@@ -41,8 +44,8 @@ fn buffer_readv_stage(ioh: u32, _cb_data: u8, is_temp: bool) {
         generation_lower: wref.generation_lower,
     };
 
-    for i in 0..len {
-        let buffer = io_data[i] as Buffer;
+    for &d in io_data.iter().take(len) {
+        let buffer = d as Buffer;
         let desc = GetBufferDescriptor(buffer - 1);
 
         let mut buf_state = LockBufHdr(desc);
@@ -63,9 +66,7 @@ fn buffer_readv_stage(ioh: u32, _cb_data: u8, is_temp: bool) {
     }
 }
 
-fn buffer_readv_decode_error(
-    result: PgAioResult,
-) -> (bool, bool, u8, u8, u8) {
+fn buffer_readv_decode_error(result: PgAioResult) -> (bool, bool, u8, u8, u8) {
     let mut rem = result.error_data;
     let zeroed_any = rem & 1 != 0;
     rem >>= 1;
@@ -76,7 +77,13 @@ fn buffer_readv_decode_error(
     let checkfail_count = (rem & READV_COUNT_MASK) as u8;
     rem >>= READV_COUNT_BITS;
     let first_off = (rem & READV_COUNT_MASK) as u8;
-    (zeroed_any, ignored_any, zeroed_or_error_count, checkfail_count, first_off)
+    (
+        zeroed_any,
+        ignored_any,
+        zeroed_or_error_count,
+        checkfail_count,
+        first_off,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -97,7 +104,11 @@ fn buffer_readv_encode_error(
     }
     debug_assert!(!is_temp);
 
-    let zeroed_or_error_count = if error_count > 0 { error_count } else { zeroed_count };
+    let zeroed_or_error_count = if error_count > 0 {
+        error_count
+    } else {
+        zeroed_count
+    };
     let first_off = if error_count > 0 {
         first_error_off
     } else if zeroed_count > 0 {
@@ -165,7 +176,8 @@ fn buffer_readv_complete_one(
 
     if !failed {
         let blk = BufferGetBlockPtr(buffer);
-        if !page_is_verified(blk, tag_blocknum, piv_flags, Some(&mut failed_checksum)) {
+        // SAFETY: BM_IO_IN_PROGRESS + the AIO pin: we own the image.
+        if !unsafe { page_is_verified(blk, tag_blocknum, piv_flags, Some(&mut failed_checksum)) } {
             if cb_data as u32 & READ_BUFFERS_ZERO_ON_ERROR != 0 {
                 // SAFETY: BM_IO_IN_PROGRESS + the AIO pin: we own the image.
                 unsafe { core::ptr::write_bytes(blk, 0, BLCKSZ) };
@@ -200,7 +212,12 @@ fn buffer_readv_complete_one(
     let set_flag_bits = if failed { BM_IO_ERROR } else { BM_VALID };
     TerminateBufferIO(desc, false, set_flag_bits, false, true);
 
-    (buffer_invalid, failed_checksum, ignored_checksum, zeroed_buffer)
+    (
+        buffer_invalid,
+        failed_checksum,
+        ignored_checksum,
+        zeroed_buffer,
+    )
 }
 
 fn shared_buffer_readv_complete(ioh: u32, prior_result: PgAioResult, cb_data: u8) -> PgAioResult {
@@ -217,8 +234,8 @@ fn shared_buffer_readv_complete(ioh: u32, prior_result: PgAioResult, cb_data: u8
     let mut checkfail_count: u8 = 0;
 
     let (io_data, len) = aio_core::pgaio_io_get_handle_data(ioh);
-    for buf_off in 0..len {
-        let buf = io_data[buf_off] as Buffer;
+    for (buf_off, &d) in io_data.iter().enumerate().take(len) {
+        let buf = d as Buffer;
 
         let failed = prior_result.status == PgAioResultStatus::Error
             || prior_result.result <= buf_off as i32;
@@ -359,7 +376,10 @@ fn buffer_readv_report(
                     "{} invalid pages among blocks {}..{} of relation \"{}\"",
                     affected_count, first, last, rpath
                 ),
-                Some(format!("Block {} held the first invalid page.", first + first_off as u32)),
+                Some(format!(
+                    "Block {} held the first invalid page.",
+                    first + first_off as u32
+                )),
                 Some(format!(
                     "See server log for the other {} invalid block(s).",
                     affected_count - 1
@@ -384,7 +404,10 @@ fn buffer_readv_report(
                     "zeroing out {} invalid pages among blocks {}..{} of relation \"{}\"",
                     affected_count, first, last, rpath
                 ),
-                Some(format!("Block {} held the first zeroed page.", first + first_off as u32)),
+                Some(format!(
+                    "Block {} held the first zeroed page.",
+                    first + first_off as u32
+                )),
                 Some(format!(
                     "See server log for the other {} zeroed block(s).",
                     affected_count - 1
@@ -410,7 +433,10 @@ fn buffer_readv_report(
                     "ignoring {} checksum failures among blocks {}..{} of relation \"{}\"",
                     affected_count, first, last, rpath
                 ),
-                Some(format!("Block {} held the first ignored page.", first + first_off as u32)),
+                Some(format!(
+                    "Block {} held the first ignored page.",
+                    first + first_off as u32
+                )),
                 Some(format!(
                     "See server log for the other {} ignored block(s).",
                     affected_count - 1

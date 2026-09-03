@@ -68,7 +68,10 @@ const AM_PROPNAMES: &[(&str, Prop)] = &[
 
 fn lookup_prop_name(name: &[u8]) -> Prop {
     for &(n, p) in AM_PROPNAMES {
-        if n.len() == name.len() && n.bytes().zip(name).all(|(a, &b)| a == b.to_ascii_lowercase())
+        if n.len() == name.len()
+            && n.bytes()
+                .zip(name)
+                .all(|(a, &b)| a == b.to_ascii_lowercase())
         {
             return p;
         }
@@ -90,6 +93,9 @@ struct AmFlags {
     has_amgettuple: bool,
     has_amcanreturn: bool,
     has_amproperty: bool,
+    // Populated for completeness (mirrors IndexAmRoutine); no current query
+    // consumes it.
+    #[allow(dead_code)]
     has_ambuildphasename: bool,
 }
 
@@ -355,10 +361,12 @@ struct IndexRow {
 }
 
 fn index_row(index_oid: Oid) -> PgResult<Option<IndexRow>> {
-    Ok(syscache_seams::lookup_pg_index_ls_shape::call(index_oid)?.map(|s| IndexRow {
-        indnatts: s.indnatts,
-        indnkeyatts: s.indnkeyatts,
-    }))
+    Ok(
+        syscache_seams::lookup_pg_index_ls_shape::call(index_oid)?.map(|s| IndexRow {
+            indnatts: s.indnatts,
+            indnkeyatts: s.indnkeyatts,
+        }),
+    )
 }
 
 fn test_indoption(
@@ -449,9 +457,13 @@ fn indexam_property(
                 INDOPTION_NULLS_FIRST,
                 INDOPTION_NULLS_FIRST,
             )?,
-            Prop::NullsLast if iskey => {
-                test_indoption(index_oid, attno, routine.amcanorder, INDOPTION_NULLS_FIRST, 0)?
-            }
+            Prop::NullsLast if iskey => test_indoption(
+                index_oid,
+                attno,
+                routine.amcanorder,
+                INDOPTION_NULLS_FIRST,
+                0,
+            )?,
             Prop::Orderable => Some(if iskey { routine.amcanorder } else { false }),
             Prop::DistanceOrderable => {
                 if !iskey || !routine.amcanorderbyop {
@@ -602,14 +614,36 @@ fn gin_phasename(phasenum: i64) -> Option<&'static str> {
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 pub const AMUTILS_BUILTINS: &[FmgrBuiltin] = &[
-    b(636, "pg_indexam_has_property", 2, fc_pg_indexam_has_property),
+    b(
+        636,
+        "pg_indexam_has_property",
+        2,
+        fc_pg_indexam_has_property,
+    ),
     b(637, "pg_index_has_property", 2, fc_pg_index_has_property),
-    b(638, "pg_index_column_has_property", 3, fc_pg_index_column_has_property),
-    b(676, "pg_indexam_progress_phasename", 2, fc_pg_indexam_progress_phasename),
+    b(
+        638,
+        "pg_index_column_has_property",
+        3,
+        fc_pg_index_column_has_property,
+    ),
+    b(
+        676,
+        "pg_indexam_progress_phasename",
+        2,
+        fc_pg_indexam_progress_phasename,
+    ),
 ];
 
 #[cfg(test)]

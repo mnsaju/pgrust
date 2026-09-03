@@ -10,7 +10,9 @@ use super::recombination::init_tour;
 use super::{Chromosome, GeqoState, Pool};
 
 fn state(seed: f64) -> GeqoState {
-    let mut s = GeqoState { rng: pg_prng::PgPrng::default() };
+    let mut s = GeqoState {
+        rng: pg_prng::PgPrng::default(),
+    };
     geqo_set_seed(&mut s, seed);
     s
 }
@@ -35,7 +37,7 @@ fn gimme_pool_size_matches_c_formula() {
     assert_eq!(super::gimme_pool_size(3), 50); // 2^4=16 < 50 -> minsize
     assert_eq!(super::gimme_pool_size(7), 250); // 2^8=256 > 250 -> maxsize
     assert_eq!(super::gimme_pool_size(6), 128); // 2^7=128 in range
-    // A configured pool size >= 2 overrides the default.
+                                                // A configured pool size >= 2 overrides the default.
     super::set_geqo_pool_size(37);
     assert_eq!(super::gimme_pool_size(6), 37);
     // A configured size of 1 is illegal and ignored (falls back to default).
@@ -105,7 +107,10 @@ fn same_seed_reproduces_the_rng_stream() {
 #[test]
 fn spread_chromo_keeps_pool_sorted() {
     let string_length = 4;
-    let mk = |worth: f64| Chromosome { string: vec![0; string_length as usize + 1], worth };
+    let mk = |worth: f64| Chromosome {
+        string: vec![0; string_length as usize + 1],
+        worth,
+    };
     let mut pool = Pool {
         data: vec![mk(1.0), mk(3.0), mk(5.0), mk(7.0), mk(9.0)],
         size: 5,

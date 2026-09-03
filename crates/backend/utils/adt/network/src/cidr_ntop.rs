@@ -180,7 +180,11 @@ fn inet_cidr_ntop_ipv6(src: &[u8], bits: i32, dst: &mut [u8]) -> Option<usize> {
                     outbuf[o] = b':';
                     o += 1;
                 }
-                o += write_x(&mut outbuf, o, inbuf[si] as u32 * 256 + inbuf[si + 1] as u32);
+                o += write_x(
+                    &mut outbuf,
+                    o,
+                    inbuf[si] as u32 * 256 + inbuf[si + 1] as u32,
+                );
                 si += 2;
             }
             p += 1;

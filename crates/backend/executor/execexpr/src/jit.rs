@@ -29,7 +29,7 @@ use ::types_fmgr::FmgrInfo;
 use ::types_slot::SlotData;
 
 use crate::interp::{EvalOutcome, EvalSlots, Resume, RetSlots, Suspension};
-use crate::steps::{ExprState, FuncCall, OutRef, Step};
+use crate::steps::{ExprState, FuncCall, Step};
 
 pub const PGJIT_PERFORM: i32 = 1 << 0;
 pub const PGJIT_EXPR: i32 = 1 << 3;
@@ -136,9 +136,15 @@ pub fn session_begin(flags: i32) {
 pub fn session_end() -> JitCollector {
     OPEN_SESSIONS.fetch_sub(1, core::sync::atomic::Ordering::Relaxed);
     SESSION.with(|s| {
-        let cur = s.borrow_mut().take().expect("jit session_end without begin");
+        let cur = s
+            .borrow_mut()
+            .take()
+            .expect("jit session_end without begin");
         *s.borrow_mut() = cur.prev.map(|b| *b);
-        JitCollector { blocks: cur.blocks, instr: cur.instr }
+        JitCollector {
+            blocks: cur.blocks,
+            instr: cur.instr,
+        }
     })
 }
 
@@ -152,7 +158,10 @@ pub fn available() -> bool {
     {
         static OFF: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
         !*OFF.get_or_init(|| {
-            matches!(std::env::var("PGRUST_JIT_QUAL").as_deref(), Ok("0") | Ok("off"))
+            matches!(
+                std::env::var("PGRUST_JIT_QUAL").as_deref(),
+                Ok("0") | Ok("off")
+            )
         })
     }
     #[cfg(not(target_arch = "aarch64"))]
@@ -175,12 +184,20 @@ pub(crate) fn try_compile(state: &mut ExprState<'_>) {
         return;
     };
     let Some(block) = ::jit_deform::install_code(&words) else {
-        stats().arena_full.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+        stats()
+            .arena_full
+            .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
         return;
     };
-    stats().compiled.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+    stats()
+        .compiled
+        .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
     if log_enabled() {
-        eprintln!("jitq compile: {} steps, {} bytes", state.steps().len(), words.len() * 4);
+        eprintln!(
+            "jitq compile: {} steps, {} bytes",
+            state.steps().len(),
+            words.len() * 4
+        );
     }
     // SAFETY: block holds a complete kernel starting at base, RX-mapped.
     let entry: KernelFn = unsafe { core::mem::transmute(block.base()) };
@@ -219,13 +236,18 @@ fn log_enabled() -> bool {
 }
 
 fn note_refusal(state: &ExprState<'_>) {
-    stats().refused.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+    stats()
+        .refused
+        .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
     if log_enabled() {
         for s in state.steps() {
             if !emit::step_supported(s) {
                 let d = format!("{s:?}");
                 let name = d.split([' ', '{']).next().unwrap_or(&d);
-                eprintln!("jitq refuse: {name} (program {} steps)", state.steps().len());
+                eprintln!(
+                    "jitq refuse: {name} (program {} steps)",
+                    state.steps().len()
+                );
                 break;
             }
         }
@@ -253,7 +275,10 @@ pub(crate) fn run_jit<'mcx>(
 ) -> PgResult<EvalOutcome> {
     let handle = state.jit.expect("run_jit without a kernel");
     if log_enabled() {
-        let n = stats().runs.fetch_add(1, core::sync::atomic::Ordering::Relaxed) + 1;
+        let n = stats()
+            .runs
+            .fetch_add(1, core::sync::atomic::Ordering::Relaxed)
+            + 1;
         if n.is_power_of_two() {
             eprintln!("jitq runs: {n}");
         }
@@ -279,13 +304,19 @@ pub(crate) fn run_jit<'mcx>(
     }
     if handle.fetch[1] > 0 {
         exectuples::slot_getsomeattrs(
-            slots.inner.as_deref_mut().expect("inner fetch without slot"),
+            slots
+                .inner
+                .as_deref_mut()
+                .expect("inner fetch without slot"),
             handle.fetch[1] as i32,
         );
     }
     if handle.fetch[2] > 0 {
         exectuples::slot_getsomeattrs(
-            slots.outer.as_deref_mut().expect("outer fetch without slot"),
+            slots
+                .outer
+                .as_deref_mut()
+                .expect("outer fetch without slot"),
             handle.fetch[2] as i32,
         );
     }
@@ -326,12 +357,19 @@ pub(crate) fn run_jit<'mcx>(
             if let Some(p) = env.panic.take() {
                 std::panic::resume_unwind(p);
             }
-            Err(env.err.take().expect("jit kernel error without a stashed PgError"))
+            Err(env
+                .err
+                .take()
+                .expect("jit kernel error without a stashed PgError"))
         }
         RET_SUSPEND => {
             let (sstate, step) = env.suspend.take().expect("jit suspend without state");
             // SAFETY: res is the state's live result cell.
-            Ok(EvalOutcome::Suspended(Suspension::new(sstate, step, unsafe { res.read() })))
+            Ok(EvalOutcome::Suspended(Suspension::new(
+                sstate,
+                step,
+                unsafe { res.read() },
+            )))
         }
         other => panic!("jit kernel returned unknown code {other}"),
     }
@@ -784,8 +822,8 @@ mod emit {
             OidGe => (false, Cond::Hs),
             Float4Eq | Float4Ne | Float4Lt | Float4Le | Float4Gt | Float4Ge | Float8Eq
             | Float8Ne | Float8Lt | Float8Le | Float8Gt | Float8Ge | Float48Eq | Float48Ne
-            | Float48Lt | Float48Le | Float48Gt | Float48Ge | Float84Eq | Float84Ne
-            | Float84Lt | Float84Le | Float84Gt | Float84Ge => return None,
+            | Float48Lt | Float48Le | Float48Gt | Float48Ge | Float84Eq | Float84Ne | Float84Lt
+            | Float84Le | Float84Gt | Float84Ge => return None,
         })
     }
 
@@ -829,11 +867,17 @@ mod emit {
 
     impl RegCache {
         fn new() -> RegCache {
-            RegCache { entries: Vec::with_capacity(3), next: 0 }
+            RegCache {
+                entries: Vec::with_capacity(3),
+                next: 0,
+            }
         }
 
         fn lookup(&self, addr: u64) -> Option<(u32, u32)> {
-            self.entries.iter().find(|(a, _, _)| *a == addr).map(|(_, v, n)| (*v, *n))
+            self.entries
+                .iter()
+                .find(|(a, _, _)| *a == addr)
+                .map(|(_, v, n)| (*v, *n))
         }
 
         fn alloc(&mut self, addr: u64) -> (u32, u32) {
@@ -878,7 +922,9 @@ mod emit {
                 Step::AggStrictInputCheck { jumpnull, .. }
                 | Step::AggStrictInputCheck1 { jumpnull, .. }
                 | Step::AggStrictDeserialize { jumpnull, .. } => t[*jumpnull as usize] = true,
-                Step::RowCompareStep { jumpnull, jumpdone, .. } => {
+                Step::RowCompareStep {
+                    jumpnull, jumpdone, ..
+                } => {
                     t[*jumpnull as usize] = true;
                     t[*jumpdone as usize] = true;
                 }
@@ -1158,7 +1204,10 @@ mod emit {
         // JsonExprPath jumps to RUNTIME targets (jsestate jump fields) the
         // static prepass cannot enumerate: the register cache must be empty
         // at every step of such programs.
-        if steps.iter().any(|st| matches!(st, Step::JsonExprPath { .. })) {
+        if steps
+            .iter()
+            .any(|st| matches!(st, Step::JsonExprPath { .. }))
+        {
             targets.iter_mut().for_each(|t| *t = true);
         }
         // Head FETCHSOME runs hoist into the driver (one direct call per
@@ -1220,7 +1269,7 @@ mod emit {
         // Dispatch: w0 = target step index.
         shared.push((Target::Dispatch, e.code.len() as u32));
         e.adr(9, Target::Local(LOCAL_TABLE)); // table base
-        // ldr w10, [x9, w0, uxtw #2]
+                                              // ldr w10, [x9, w0, uxtw #2]
         e.raw(0xB860_5800 | (0 << 16) | (9 << 5) | 10);
         // add x11, x20, w10, uxtw
         e.raw(0x8B20_4000 | (10 << 16) | (BASE << 5) | 11);
@@ -1385,8 +1434,16 @@ mod emit {
                 let (_, n) = read_cell_cached(e, cache, out_addr(out), 8, 10, 11);
                 e.cbnz_w(n, Target::Step(*jumpdone));
             }
-            Step::BoolAndStepFirst { anynull, jumpdone, out }
-            | Step::BoolAndStep { anynull, jumpdone, out } => {
+            Step::BoolAndStepFirst {
+                anynull,
+                jumpdone,
+                out,
+            }
+            | Step::BoolAndStep {
+                anynull,
+                jumpdone,
+                out,
+            } => {
                 let an = anynull.as_ptr() as u64;
                 if matches!(step, Step::BoolAndStepFirst { .. }) {
                     e.ldr_lit(9, an);
@@ -1419,8 +1476,16 @@ mod emit {
                 e.strb(12, 8, ND_ISNULL);
                 bind_local(e, next);
             }
-            Step::BoolOrStepFirst { anynull, jumpdone, out }
-            | Step::BoolOrStep { anynull, jumpdone, out } => {
+            Step::BoolOrStepFirst {
+                anynull,
+                jumpdone,
+                out,
+            }
+            | Step::BoolOrStep {
+                anynull,
+                jumpdone,
+                out,
+            } => {
                 let an = anynull.as_ptr() as u64;
                 if matches!(step, Step::BoolOrStepFirst { .. }) {
                     e.ldr_lit(9, an);

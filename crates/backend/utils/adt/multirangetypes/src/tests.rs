@@ -19,7 +19,12 @@ fn int4_rng() -> RangeInfo {
         rngtypid: INT4RANGE,
         collation: 0,
         elem_typid: 23,
-        elem: ElemInfo { typlen: 4, typbyval: true, typalign: b'i', typstorage: b'p' },
+        elem: ElemInfo {
+            typlen: 4,
+            typbyval: true,
+            typalign: b'i',
+            typstorage: b'p',
+        },
         cmp: FmgrInfo::new(fc_i32_cmp, 351, 2, true, false),
         canonical_oid: F_INT4RANGE_CANONICAL,
         elem_hash: None,
@@ -43,7 +48,9 @@ fn mk<'m>(mcx: ::mcx::Mcx<'m>, rng: &mut RangeInfo, lo: i32, hi: i32) -> PgVec<'
         inclusive: false,
         lower: false,
     };
-    make_range(mcx, rng, &mut lower, &mut upper, false, None).unwrap().unwrap()
+    make_range(mcx, rng, &mut lower, &mut upper, false, None)
+        .unwrap()
+        .unwrap()
 }
 
 #[test]
@@ -103,7 +110,14 @@ fn contains_and_overlaps_bsearch() {
     let mr = make_multirange(mcx, INT4MULTIRANGE, &mut rng, &mut ranges).unwrap();
     assert_eq!(multirange_count(&mr), 3);
 
-    for (v, want) in [(0, false), (1, true), (3, false), (6, true), (15, true), (20, false)] {
+    for (v, want) in [
+        (0, false),
+        (1, true),
+        (3, false),
+        (6, true),
+        (15, true),
+        (20, false),
+    ] {
         assert_eq!(
             multirange_contains_elem_internal(mcx, &mut rng, &mr, Datum::from_i32(v)).unwrap(),
             want,

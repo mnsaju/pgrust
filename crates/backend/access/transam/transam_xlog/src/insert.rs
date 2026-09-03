@@ -115,10 +115,10 @@ pub(crate) fn WALInsertLockAcquire() {
 
 pub(crate) fn WALInsertLockAcquireExclusive() {
     let locks = &XLogCtl().Insert.WALInsertLocks;
-    for i in 0..NUM_XLOGINSERT_LOCKS - 1 {
-        LWLockAcquire(&locks[i].lock, LW_EXCLUSIVE, my_proc_number())
+    for lock in locks.iter().take(NUM_XLOGINSERT_LOCKS - 1) {
+        LWLockAcquire(&lock.lock, LW_EXCLUSIVE, my_proc_number())
             .expect("WALInsertLockAcquireExclusive");
-        LWLockUpdateVar(&locks[i].lock, &locks[i].insertingAt, u64::MAX);
+        LWLockUpdateVar(&lock.lock, &lock.insertingAt, u64::MAX);
     }
     LWLockAcquire(
         &locks[NUM_XLOGINSERT_LOCKS - 1].lock,
@@ -144,7 +144,11 @@ pub(crate) fn WALInsertLockRelease() {
 
 fn WALInsertLockUpdateInsertingAt(inserting_at: XLogRecPtr) {
     let locks = &XLogCtl().Insert.WALInsertLocks;
-    let idx = if HOLDING_ALL_LOCKS.get() { NUM_XLOGINSERT_LOCKS - 1 } else { MY_LOCK_NO.get() };
+    let idx = if HOLDING_ALL_LOCKS.get() {
+        NUM_XLOGINSERT_LOCKS - 1
+    } else {
+        MY_LOCK_NO.get()
+    };
     LWLockUpdateVar(&locks[idx].lock, &locks[idx].insertingAt, inserting_at);
 }
 
@@ -217,12 +221,16 @@ pub(crate) fn WaitXLogInsertionsToFinish(upto: XLogRecPtr) -> XLogRecPtr {
     let ctl = XLogCtl();
     let insert = &ctl.Insert;
 
-    let inserted = ctl.logInsertResult.load(std::sync::atomic::Ordering::SeqCst);
+    let inserted = ctl
+        .logInsertResult
+        .load(std::sync::atomic::Ordering::SeqCst);
     if upto <= inserted {
         return inserted;
     }
 
-    let bytepos = insert.insertpos_lck.with(|| insert.CurrBytePos.load(Relaxed));
+    let bytepos = insert
+        .insertpos_lck
+        .with(|| insert.CurrBytePos.load(Relaxed));
     let reserved_upto = XLogBytePosToEndRecPtr(bytepos);
 
     let mut upto = upto;
@@ -438,7 +446,9 @@ fn CopyXLogRecordToWAL(
         let mut data = rdata.as_ptr();
         let mut len = rdata.len();
         while len > freespace {
-            debug_assert!(curr_pos % XLOG_BLCKSZ as u64 >= SizeOfXLogShortPHD as u64 || freespace == 0);
+            debug_assert!(
+                curr_pos % XLOG_BLCKSZ as u64 >= SizeOfXLogShortPHD as u64 || freespace == 0
+            );
             // SAFETY: freespace bytes remain on this buffer page at currpos.
             unsafe { std::ptr::copy_nonoverlapping(data, currpos, freespace) };
             data = unsafe { data.add(freespace) };
@@ -508,7 +518,8 @@ pub fn XLogInsertRecord(
     let ctl = XLogCtl();
     let insert = &ctl.Insert;
 
-    let xl_tot_len = u32::from_ne_bytes(rechdr[XL_TOT_LEN..XL_TOT_LEN + 4].try_into().unwrap()) as usize;
+    let xl_tot_len =
+        u32::from_ne_bytes(rechdr[XL_TOT_LEN..XL_TOT_LEN + 4].try_into().unwrap()) as usize;
     let info = rechdr[XL_INFO] & !XLR_INFO_MASK;
     let rmid = rechdr[XL_RMID];
 
@@ -531,7 +542,9 @@ pub fn XLogInsertRecord(
     };
 
     if !XLogInsertAllowed() {
-        return Err(elog_helpers::error_result("cannot make new WAL entries during recovery"));
+        return Err(elog_helpers::error_result(
+            "cannot make new WAL entries during recovery",
+        ));
     }
 
     let insert_tli = ctl.InsertTimeLineID.load(Relaxed);
@@ -602,8 +615,14 @@ pub fn XLogInsertRecord(
         )?;
 
         if flags & XLOG_MARK_UNIMPORTANT == 0 {
-            let lockno = if HOLDING_ALL_LOCKS.get() { 0 } else { MY_LOCK_NO.get() };
-            insert.WALInsertLocks[lockno].lastImportantAt.store(start_pos, Relaxed);
+            let lockno = if HOLDING_ALL_LOCKS.get() {
+                0
+            } else {
+                MY_LOCK_NO.get()
+            };
+            insert.WALInsertLocks[lockno]
+                .lastImportantAt
+                .store(start_pos, Relaxed);
         }
     }
 
@@ -683,7 +702,9 @@ pub fn GetInsertRecPtr() -> XLogRecPtr {
 
 pub fn GetXLogInsertRecPtr() -> XLogRecPtr {
     let insert = &XLogCtl().Insert;
-    let current_bytepos = insert.insertpos_lck.with(|| insert.CurrBytePos.load(Relaxed));
+    let current_bytepos = insert
+        .insertpos_lck
+        .with(|| insert.CurrBytePos.load(Relaxed));
     XLogBytePosToRecPtr(current_bytepos)
 }
 

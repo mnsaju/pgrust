@@ -15,8 +15,8 @@ mod srf;
 
 pub use cache_evtcache::EVENT_TRIGGER_RELATION_ID;
 pub use ddl::{
-    get_event_trigger_oid, AlterEventTrigger, AlterEventTriggerOwner,
-    AlterEventTriggerOwner_oid, CreateEventTrigger,
+    get_event_trigger_oid, AlterEventTrigger, AlterEventTriggerOwner, AlterEventTriggerOwner_oid,
+    CreateEventTrigger,
 };
 pub use sqldrop::EventTriggerSQLDropAddObject;
 
@@ -52,12 +52,20 @@ pub(crate) struct SQLDropObject {
 
 pub(crate) enum CollectedCommandData {
     Simple,
-    AlterTable { class_id: Oid, object_id: Oid, nsubcmds: usize },
+    AlterTable {
+        class_id: Oid,
+        object_id: Oid,
+        nsubcmds: usize,
+    },
     // C copies the whole InternalGrant; the ported SRF surface reads only
     // is_grant (via tag) and objtype.
-    Grant { objtype: types_nodes::parsenodes::ObjectType },
+    Grant {
+        objtype: types_nodes::parsenodes::ObjectType,
+    },
     // C copies the AlterDefaultPrivilegesStmt; only objtype is SRF-visible.
-    DefPrivs { objtype: types_nodes::parsenodes::ObjectType },
+    DefPrivs {
+        objtype: types_nodes::parsenodes::ObjectType,
+    },
 }
 
 // C stores copyObject(parsetree) and derives the tag lazily in the SRF; node
@@ -95,9 +103,11 @@ pub(crate) fn state_is_set() -> bool {
 }
 
 pub fn trackDroppedObjectsNeeded(mcx: Mcx<'_>) -> PgResult<bool> {
-    Ok(!EventCacheLookup(mcx, EventTriggerEvent::SqlDrop)?.is_empty()
-        || !EventCacheLookup(mcx, EventTriggerEvent::TableRewrite)?.is_empty()
-        || !EventCacheLookup(mcx, EventTriggerEvent::DdlCommandEnd)?.is_empty())
+    Ok(
+        !EventCacheLookup(mcx, EventTriggerEvent::SqlDrop)?.is_empty()
+            || !EventCacheLookup(mcx, EventTriggerEvent::TableRewrite)?.is_empty()
+            || !EventCacheLookup(mcx, EventTriggerEvent::DdlCommandEnd)?.is_empty(),
+    )
 }
 
 pub fn EventTriggerBeginCompleteQuery(mcx: Mcx<'_>) -> PgResult<bool> {
@@ -106,8 +116,10 @@ pub fn EventTriggerBeginCompleteQuery(mcx: Mcx<'_>) -> PgResult<bool> {
     }
     CURRENT_STATE.with(|s| {
         let mut stack = s.borrow_mut();
-        let inhibited =
-            stack.last().map(|st| st.command_collection_inhibited).unwrap_or(false);
+        let inhibited = stack
+            .last()
+            .map(|st| st.command_collection_inhibited)
+            .unwrap_or(false);
         stack.push(EventTriggerQueryState {
             sql_drop_list: Vec::new(),
             in_sql_drop: false,
@@ -148,8 +160,7 @@ fn event_triggers_active() -> bool {
 }
 
 fn filter_event_trigger(tag: CommandTag, item: &cache_evtcache::EventTriggerCacheItem) -> bool {
-    let replica =
-        SESSION_REPLICATION_ROLE.with(|c| c.get()) == SESSION_REPLICATION_ROLE_REPLICA;
+    let replica = SESSION_REPLICATION_ROLE.with(|c| c.get()) == SESSION_REPLICATION_ROLE_REPLICA;
     if replica {
         if item.enabled == TRIGGER_FIRES_ON_ORIGIN {
             return false;
@@ -197,7 +208,9 @@ fn EventTriggerInvoke(fn_oid_list: &[Oid], event: &'static str, tag: CommandTag)
             xact::CommandCounterIncrement()?;
         }
         let mut trigdata = EventTriggerData {
-            node: fmgr::FmNode { tag: T_EVENT_TRIGGER_DATA },
+            node: fmgr::FmNode {
+                tag: T_EVENT_TRIGGER_DATA,
+            },
             event,
             tag,
         };
@@ -255,8 +268,12 @@ pub fn EventTriggerSQLDrop(mcx: Mcx<'_>, tag: CommandTag) -> PgResult<()> {
     if !event_triggers_active() {
         return Ok(());
     }
-    let have_drops = CURRENT_STATE
-        .with(|s| s.borrow().last().map(|st| !st.sql_drop_list.is_empty()).unwrap_or(false));
+    let have_drops = CURRENT_STATE.with(|s| {
+        s.borrow()
+            .last()
+            .map(|st| !st.sql_drop_list.is_empty())
+            .unwrap_or(false)
+    });
     if !have_drops {
         return Ok(());
     }
@@ -317,8 +334,11 @@ pub fn EventTriggerOnLogin(mcx: Mcx<'_>) -> PgResult<()> {
 // C: inplace update rather than a regular one — no row-lock wait, no TOAST.
 fn reset_database_has_login_event_triggers(mcx: Mcx<'_>) -> PgResult<()> {
     let dbid = init_small::globals::MyDatabaseId();
-    let pg_db =
-        table::table_open(mcx, types_core::catalog::DATABASE_RELATION_ID, types_rel::RowExclusiveLock)?;
+    let pg_db = table::table_open(
+        mcx,
+        types_core::catalog::DATABASE_RELATION_ID,
+        types_rel::RowExclusiveLock,
+    )?;
     let mut key = types_scan::ScanKeyData::empty();
     key.sk_attno = pg_database::Anum_pg_database_oid as types_core::AttrNumber;
     key.sk_strategy = types_scan::BTEqualStrategyNumber;
@@ -353,7 +373,7 @@ fn reset_database_has_login_event_triggers(mcx: Mcx<'_>) -> PgResult<()> {
     if hasloginevt {
         let natts = descr.natts as usize;
         let mut values = vec![datum::Datum::null(); natts];
-        let mut nulls = vec![false; natts];
+        let nulls = vec![false; natts];
         let mut replace = vec![false; natts];
         values[pg_database::Anum_pg_database_dathasloginevt as usize - 1] =
             datum::Datum::from_bool(false);
@@ -406,7 +426,10 @@ pub fn EventTriggerSupportsObjectType(obtype: types_nodes::parsenodes::ObjectTyp
     use types_nodes::parsenodes::ObjectType::*;
     !matches!(
         obtype,
-        OBJECT_DATABASE | OBJECT_TABLESPACE | OBJECT_ROLE | OBJECT_PARAMETER_ACL
+        OBJECT_DATABASE
+            | OBJECT_TABLESPACE
+            | OBJECT_ROLE
+            | OBJECT_PARAMETER_ACL
             | OBJECT_EVENT_TRIGGER
     )
 }
@@ -434,8 +457,12 @@ pub fn EventTriggerCollectionActive() -> bool {
 }
 
 pub(crate) fn collecting() -> bool {
-    CURRENT_STATE
-        .with(|s| s.borrow().last().map(|st| !st.command_collection_inhibited).unwrap_or(false))
+    CURRENT_STATE.with(|s| {
+        s.borrow()
+            .last()
+            .map(|st| !st.command_collection_inhibited)
+            .unwrap_or(false)
+    })
 }
 
 // creating_extension (extension.c) — extensions unported; never in-extension.
@@ -558,7 +585,11 @@ pub fn EventTriggerCollectAlterTableSubcmd(_address: ObjectAddress) {
                 .last_mut()
                 .expect("EventTriggerCollectAlterTableSubcmd without AlterTableStart");
             match &mut cur.data {
-                CollectedCommandData::AlterTable { nsubcmds, object_id, .. } => {
+                CollectedCommandData::AlterTable {
+                    nsubcmds,
+                    object_id,
+                    ..
+                } => {
                     debug_assert!(OidIsValid(*object_id));
                     *nsubcmds += 1;
                 }

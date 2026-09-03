@@ -19,14 +19,14 @@ use types_rel::{
 use types_trigger::TRIGGER_FIRES_ON_ORIGIN;
 
 use crate::catalog::{
-    name_arg, relkind_not_supported_detail, scan_key, CreateTriggerFiringOn,
-    TRIGGER_OID_INDEX_ID, TRIGGER_RELATION_ID, TRIGGER_RELID_NAME_INDEX_ID,
+    name_arg, relkind_not_supported_detail, scan_key, CreateTriggerFiringOn, TRIGGER_OID_INDEX_ID,
+    TRIGGER_RELATION_ID, TRIGGER_RELID_NAME_INDEX_ID,
 };
 
-const Anum_pg_trigger_oid: i32 = 1;
-const Anum_pg_trigger_tgrelid: i32 = 2;
-const Anum_pg_trigger_tgparentid: i32 = 3;
-const Anum_pg_trigger_tgname: i32 = 4;
+const ANUM_PG_TRIGGER_OID: i32 = 1;
+const ANUM_PG_TRIGGER_TGRELID: i32 = 2;
+const ANUM_PG_TRIGGER_TGPARENTID: i32 = 3;
+const ANUM_PG_TRIGGER_TGNAME: i32 = 4;
 
 #[track_caller]
 #[cold]
@@ -75,8 +75,10 @@ pub fn get_trigger_oid<'mcx>(
         Some(tup) => {
             let mut isnull = false;
             // SAFETY: NOT NULL pg_trigger oid column under its descriptor.
-            unsafe { types_tuple::heap_getattr(tup, Anum_pg_trigger_oid, tgrel.descr(), &mut isnull) }
-                .as_oid()
+            unsafe {
+                types_tuple::heap_getattr(tup, ANUM_PG_TRIGGER_OID, tgrel.descr(), &mut isnull)
+            }
+            .as_oid()
         }
         None => {
             if !missing_ok {
@@ -114,7 +116,7 @@ pub fn RemoveTriggerById<'mcx>(mcx: Mcx<'mcx>, trig_oid: Oid) -> PgResult<()> {
     let mut isnull = false;
     // SAFETY: NOT NULL pg_trigger tgrelid column under its descriptor.
     let relid = unsafe {
-        types_tuple::heap_getattr(tup, Anum_pg_trigger_tgrelid, tgrel.descr(), &mut isnull)
+        types_tuple::heap_getattr(tup, ANUM_PG_TRIGGER_TGRELID, tgrel.descr(), &mut isnull)
     }
     .as_oid();
 
@@ -127,7 +129,7 @@ pub fn RemoveTriggerById<'mcx>(mcx: Mcx<'mcx>, trig_oid: Oid) -> PgResult<()> {
                     format!("relation \"{}\" cannot have triggers", rel.name()),
                     ERRCODE_WRONG_OBJECT_TYPE,
                 ))
-                .with_detail(relkind_not_supported_detail(other as u8).to_string()),
+                .with_detail(relkind_not_supported_detail(other).to_string()),
             ));
         }
     }
@@ -187,7 +189,7 @@ pub fn renametrig<'mcx>(mcx: Mcx<'mcx>, stmt: &RenameStmt<'mcx>) -> PgResult<()>
                     format!("relation \"{}\" cannot have triggers", rv.relname),
                     ERRCODE_WRONG_OBJECT_TYPE,
                 ))
-                .with_detail(relkind_not_supported_detail(other as u8).to_string()),
+                .with_detail(relkind_not_supported_detail(other).to_string()),
             ));
         }
     }
@@ -218,8 +220,8 @@ pub fn renametrig<'mcx>(mcx: Mcx<'mcx>, stmt: &RenameStmt<'mcx>) -> PgResult<()>
     // SAFETY (each): NOT NULL pg_trigger columns under its own descriptor.
     let (tgoid, tgparentid) = unsafe {
         (
-            types_tuple::heap_getattr(tup, Anum_pg_trigger_oid, td, &mut isnull).as_oid(),
-            types_tuple::heap_getattr(tup, Anum_pg_trigger_tgparentid, td, &mut isnull).as_oid(),
+            types_tuple::heap_getattr(tup, ANUM_PG_TRIGGER_OID, td, &mut isnull).as_oid(),
+            types_tuple::heap_getattr(tup, ANUM_PG_TRIGGER_TGPARENTID, td, &mut isnull).as_oid(),
         )
     };
     genam::systable_endscan(mcx, scan)?;
@@ -273,8 +275,14 @@ fn renametrig_internal<'mcx>(
         scan_key(2, F_OIDEQ, Datum::from_oid(targetrel.rd_id)),
         scan_key(4, F_NAMEEQ, Datum::from_usize(newcname.as_ptr() as usize)),
     ];
-    let mut dupscan =
-        genam::systable_beginscan(mcx, tgrel, TRIGGER_RELID_NAME_INDEX_ID, true, None, &dupkeys)?;
+    let mut dupscan = genam::systable_beginscan(
+        mcx,
+        tgrel,
+        TRIGGER_RELID_NAME_INDEX_ID,
+        true,
+        None,
+        &dupkeys,
+    )?;
     if genam::systable_getnext(mcx, &mut dupscan)?.is_some() {
         return Err(err(
             format!(
@@ -348,10 +356,15 @@ fn renametrig_partition<'mcx>(
         // SAFETY (each): NOT NULL pg_trigger columns under its own descriptor.
         let (tgparentid, tgoid, tgname) = unsafe {
             (
-                types_tuple::heap_getattr(tup, Anum_pg_trigger_tgparentid, td, &mut isnull)
+                types_tuple::heap_getattr(tup, ANUM_PG_TRIGGER_TGPARENTID, td, &mut isnull)
                     .as_oid(),
-                types_tuple::heap_getattr(tup, Anum_pg_trigger_oid, td, &mut isnull).as_oid(),
-                name_datum_str(types_tuple::heap_getattr(tup, Anum_pg_trigger_tgname, td, &mut isnull)),
+                types_tuple::heap_getattr(tup, ANUM_PG_TRIGGER_OID, td, &mut isnull).as_oid(),
+                name_datum_str(types_tuple::heap_getattr(
+                    tup,
+                    ANUM_PG_TRIGGER_TGNAME,
+                    td,
+                    &mut isnull,
+                )),
             )
         };
         if tgparentid != parent_trigger_oid {
@@ -366,7 +379,14 @@ fn renametrig_partition<'mcx>(
     };
 
     let partition_rel = table::table_open(mcx, partition_id, NoLock)?;
-    renametrig_internal(mcx, tgrel, &partition_rel, child_name.as_str(), newname, expected_name)?;
+    renametrig_internal(
+        mcx,
+        tgrel,
+        &partition_rel,
+        child_name.as_str(),
+        newname,
+        expected_name,
+    )?;
     if partition_rel.rd_rel.relkind == RELKIND_PARTITIONED_TABLE {
         let partdesc = partdesc::RelationGetPartitionDesc(&partition_rel, true)?;
         for i in 0..partdesc.nparts {
@@ -384,9 +404,9 @@ fn renametrig_partition<'mcx>(
     Ok(())
 }
 
-const Anum_pg_trigger_tgtype: i32 = 6;
-const Anum_pg_trigger_tgenabled: i32 = 7;
-const Anum_pg_trigger_tgisinternal: i32 = 8;
+const ANUM_PG_TRIGGER_TGTYPE: i32 = 6;
+const ANUM_PG_TRIGGER_TGENABLED: i32 = 7;
+const ANUM_PG_TRIGGER_TGISINTERNAL: i32 = 8;
 
 // EnableDisableTrigger (trigger.c): tgname None = all triggers; tgparent
 // filters partition clones; recursion follows FOR EACH ROW triggers into
@@ -407,7 +427,11 @@ pub fn EnableDisableTrigger<'mcx>(
     let cname;
     if let Some(name) = tgname {
         cname = name_arg(mcx, name)?;
-        keys.push(scan_key(4, F_NAMEEQ, Datum::from_usize(cname.as_ptr() as usize)));
+        keys.push(scan_key(
+            4,
+            F_NAMEEQ,
+            Datum::from_usize(cname.as_ptr() as usize),
+        ));
     }
     let mut scan =
         genam::systable_beginscan(mcx, &tgrel, TRIGGER_RELID_NAME_INDEX_ID, true, None, &keys)?;
@@ -425,17 +449,16 @@ pub fn EnableDisableTrigger<'mcx>(
         // SAFETY (each): NOT NULL pg_trigger columns under its own descriptor.
         let (tgparentid, oid, tgtype, enabled, isinternal, name) = unsafe {
             (
-                types_tuple::heap_getattr(tup, Anum_pg_trigger_tgparentid, td, &mut isnull)
+                types_tuple::heap_getattr(tup, ANUM_PG_TRIGGER_TGPARENTID, td, &mut isnull)
                     .as_oid(),
-                types_tuple::heap_getattr(tup, Anum_pg_trigger_oid, td, &mut isnull).as_oid(),
-                types_tuple::heap_getattr(tup, Anum_pg_trigger_tgtype, td, &mut isnull).as_i16(),
-                types_tuple::heap_getattr(tup, Anum_pg_trigger_tgenabled, td, &mut isnull)
-                    .as_i8(),
-                types_tuple::heap_getattr(tup, Anum_pg_trigger_tgisinternal, td, &mut isnull)
+                types_tuple::heap_getattr(tup, ANUM_PG_TRIGGER_OID, td, &mut isnull).as_oid(),
+                types_tuple::heap_getattr(tup, ANUM_PG_TRIGGER_TGTYPE, td, &mut isnull).as_i16(),
+                types_tuple::heap_getattr(tup, ANUM_PG_TRIGGER_TGENABLED, td, &mut isnull).as_i8(),
+                types_tuple::heap_getattr(tup, ANUM_PG_TRIGGER_TGISINTERNAL, td, &mut isnull)
                     .as_bool(),
                 name_datum_str(types_tuple::heap_getattr(
                     tup,
-                    Anum_pg_trigger_tgname,
+                    ANUM_PG_TRIGGER_TGNAME,
                     td,
                     &mut isnull,
                 )),
@@ -456,7 +479,11 @@ pub fn EnableDisableTrigger<'mcx>(
             }
         }
         found = true;
-        hits.push(Hit { oid, tgtype, enabled });
+        hits.push(Hit {
+            oid,
+            tgtype,
+            enabled,
+        });
     }
     genam::systable_endscan(mcx, scan)?;
 
@@ -480,9 +507,8 @@ pub fn EnableDisableTrigger<'mcx>(
             repl_values.resize(natts, Datum::null());
             repl_isnull.resize(natts, false);
             repl.resize(natts, false);
-            repl_values[(Anum_pg_trigger_tgenabled - 1) as usize] =
-                Datum::from_i8(fires_when);
-            repl[(Anum_pg_trigger_tgenabled - 1) as usize] = true;
+            repl_values[(ANUM_PG_TRIGGER_TGENABLED - 1) as usize] = Datum::from_i8(fires_when);
+            repl[(ANUM_PG_TRIGGER_TGENABLED - 1) as usize] = true;
             let mut newtup =
                 heaptuple::heap_modify_tuple(mcx, tup, td, &repl_values, &repl_isnull, &repl)?;
             let tid = tup.t_self;

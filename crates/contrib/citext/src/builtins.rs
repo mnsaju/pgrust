@@ -21,7 +21,10 @@ fn fc_citext_cmp(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResul
 fn fc_citext_pattern_cmp(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: catalog args are non-null citext/text varlenas (strict fn).
     let (a, b) = unsafe { (fcinfo.arg_varlena_packed(0)?, fcinfo.arg_varlena_packed(1)?) };
-    Ok(Datum::from_i32(crate::citext_pattern_cmp(a.data(), b.data())?))
+    Ok(Datum::from_i32(crate::citext_pattern_cmp(
+        a.data(),
+        b.data(),
+    )?))
 }
 
 fn fc_citext_hash(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {

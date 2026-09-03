@@ -3,7 +3,7 @@ use ::mcx::Mcx;
 use ::types_error::PgResult;
 use ::types_tuple::tupmacs::{att_nominal_alignby, store_att_byval};
 use ::types_tuple::{
-    MinimalTupleData, TupleDescData, MAXALIGN, MINIMAL_TUPLE_OFFSET, SizeofMinimalTupleHeader,
+    MinimalTupleData, SizeofMinimalTupleHeader, TupleDescData, MAXALIGN, MINIMAL_TUPLE_OFFSET,
 };
 
 use crate::tuple::MinimalTuple;
@@ -44,7 +44,10 @@ impl MinimalFormPlan {
                 return None;
             }
             off = att_nominal_alignby(off, att.attalignby);
-            *col = FormCol { off: off as u16, len: att.attlen as u8 };
+            *col = FormCol {
+                off: off as u16,
+                len: att.attlen as u8,
+            };
             off += att.attlen as usize;
         }
         let hoff = MAXALIGN(SizeofMinimalTupleHeader);

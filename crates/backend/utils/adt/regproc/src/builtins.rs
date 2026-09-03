@@ -130,7 +130,11 @@ pub fn fc_to_regtypemod(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> 
         let s = String::from_utf8_lossy(payload);
         let mut soft = SoftErrorContext::new(false);
         let r = crate::to_regtypemod(fcinfo.result_mcx(), &s, Some(&mut soft))?;
-        if soft.error_occurred() { None } else { r }
+        if soft.error_occurred() {
+            None
+        } else {
+            r
+        }
     };
     Ok(match result {
         Some(typmod) => Datum::from_i32(typmod),
@@ -151,7 +155,7 @@ pub fn fc_text_regclass(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> 
 
 pub fn fc_reg_recv(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: recv arg0 is the live StringInfo pointer per the recv ABI.
-    let buf = unsafe { fcinfo.arg_stringinfo(0) };
+    let buf = unsafe { &mut *fcinfo.arg_stringinfo(0) };
     Ok(Datum::from_oid(pqformat::pq_getmsgint(buf, 4)?))
 }
 
@@ -159,11 +163,18 @@ pub fn fc_reg_send(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRes
     let oid = fcinfo.arg(0).as_oid();
     let mut b = pqformat::pq_begintypsend(fcinfo.result_mcx())?;
     pqformat::pq_sendint32(&mut b, oid)?;
-    Ok(varlena_result(pqformat::pq_endtypsend(b).into()))
+    Ok(varlena_result(pqformat::pq_endtypsend(b)))
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 pub const REGPROC_BUILTINS: &[FmgrBuiltin] = &[

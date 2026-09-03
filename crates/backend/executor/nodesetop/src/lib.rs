@@ -10,18 +10,15 @@ use ::execgrouping::TupleHashTable;
 use ::executils::{EStateData, EcxtId, ExecSlotId};
 use ::mcx::{vec_with_capacity_in, PgVec};
 use ::tuplesort::{
-    apply_sort_comparator_in, prepare_sort_support_from_ordering_op, SortSupport,
-    SortSupportInit,
+    apply_sort_comparator_in, prepare_sort_support_from_ordering_op, SortSupport, SortSupportInit,
 };
 use ::types_error::PgResult;
 use ::types_nodes::plannodes::SetOp;
 use ::types_pathnodes::{
-    SETOPCMD_EXCEPT, SETOPCMD_EXCEPT_ALL, SETOPCMD_INTERSECT, SETOPCMD_INTERSECT_ALL,
-    SETOP_HASHED, SETOP_SORTED,
+    SETOPCMD_EXCEPT, SETOPCMD_EXCEPT_ALL, SETOPCMD_INTERSECT, SETOPCMD_INTERSECT_ALL, SETOP_HASHED,
+    SETOP_SORTED,
 };
-use ::types_slot::{
-    SlotData, TupleSlotKind, EXEC_FLAG_BACKWARD, EXEC_FLAG_MARK, EXEC_FLAG_REWIND,
-};
+use ::types_slot::{SlotData, TupleSlotKind, EXEC_FLAG_BACKWARD, EXEC_FLAG_MARK, EXEC_FLAG_REWIND};
 use ::types_tuple::TupleDescData;
 
 pub fn init_seams() {}
@@ -133,9 +130,7 @@ pub fn exec_init_set_op<'mcx>(
             // query-lifetime memory.
             // SAFETY: the ExprContext is arena-boxed in the same estate and
             // outlives the table.
-            unsafe {
-                hashtable.set_temp_ctx_raw(estate.ecxt(ps_ExprContext).per_tuple_mcx())
-            };
+            unsafe { hashtable.set_temp_ctx_raw(estate.ecxt(ps_ExprContext).per_tuple_mcx()) };
             StrategyState::Hashed(HashedState {
                 hashtable,
                 table_ctx,
@@ -151,7 +146,10 @@ pub fn exec_init_set_op<'mcx>(
                     ssup_nulls_first: node.cmpNullsFirst[i],
                     ssup_attno: node.cmpColIdx[i],
                 };
-                sort_keys.push(prepare_sort_support_from_ordering_op(node.cmpOperators[i], &init)?);
+                sort_keys.push(prepare_sort_support_from_ordering_op(
+                    node.cmpOperators[i],
+                    &init,
+                )?);
             }
             StrategyState::Sorted(SortedState {
                 sort_keys,
@@ -177,7 +175,12 @@ pub fn exec_init_set_op<'mcx>(
 fn new_input<'mcx>(mcx: ::mcx::Mcx<'mcx>, desc: &Rc<TupleDescData<'static>>) -> PerInput<'mcx> {
     let first_slot =
         exectuples::make_tuple_table_slot(mcx, TupleSlotKind::MinimalTuple, Some(desc.clone()));
-    PerInput { first_slot, next: None, need_group: false, num_tuples: 0 }
+    PerInput {
+        first_slot,
+        next: None,
+        need_group: false,
+        num_tuples: 0,
+    }
 }
 
 // set_output_count (nodeSetOp.c): SQL92 emit counts.
@@ -244,7 +247,9 @@ where
 {
     let mcx = estate.es_query_cxt;
     {
-        let StrategyState::Sorted(st) = &mut node.strategy else { unreachable!() };
+        let StrategyState::Sorted(st) = &mut node.strategy else {
+            unreachable!()
+        };
         if st.need_init {
             st.need_init = false;
             st.left.next = fetch_outer(estate)?;
@@ -260,8 +265,15 @@ where
 
     while !node.setop_done {
         let step = {
-            let StrategyState::Sorted(st) = &mut node.strategy else { unreachable!() };
-            let SortedState { sort_keys, left, right, .. } = st;
+            let StrategyState::Sorted(st) = &mut node.strategy else {
+                unreachable!()
+            };
+            let SortedState {
+                sort_keys,
+                left,
+                right,
+                ..
+            } = st;
             if left.need_group {
                 setop_load_group(left, sort_keys, estate, fetch_outer)?;
             }
@@ -300,7 +312,9 @@ where
                 if node.num_output > 0 {
                     node.num_output -= 1;
                     let result_id = node.ps_ResultTupleSlot;
-                    let StrategyState::Sorted(st) = &mut node.strategy else { unreachable!() };
+                    let StrategyState::Sorted(st) = &mut node.strategy else {
+                        unreachable!()
+                    };
                     emit_group_tuple(&mut st.left.first_slot, result_id, estate)?;
                     return Ok(Some(result_id));
                 }
@@ -433,22 +447,31 @@ where
     let ecxt = node.ps_ExprContext;
     let mut have_tuples = false;
     loop {
-        let Some(outer_id) = fetch_outer(estate)? else { break };
+        let Some(outer_id) = fetch_outer(estate)? else {
+            break;
+        };
         have_tuples = true;
         {
-            let StrategyState::Hashed(hs) = &mut node.strategy else { unreachable!() };
+            let StrategyState::Hashed(hs) = &mut node.strategy else {
+                unreachable!()
+            };
             let outer_slot = estate.slot_mut(outer_id);
             let hash = hs.hashtable.hash_slot(outer_slot)?;
             // SAFETY: table_ctx lives until the query context resets.
             let table_mcx = unsafe { hs.table_ctx.as_ref() }.mcx();
-            let (ix, isnew) = hs.hashtable.lookup(outer_slot, hash, Some(table_mcx), mcx)?;
+            let (ix, isnew) = hs
+                .hashtable
+                .lookup(outer_slot, hash, Some(table_mcx), mcx)?;
             let ix = ix.expect("creating lookup always yields an entry");
             let pg = pergroup(&hs.hashtable, ix);
             // SAFETY: the additional block is maxaligned and sized for
             // SetOpPerGroup (execgrouping contract).
             unsafe {
                 if isnew {
-                    pg.write(SetOpPerGroup { num_left: 0, num_right: 0 });
+                    pg.write(SetOpPerGroup {
+                        num_left: 0,
+                        num_right: 0,
+                    });
                 }
                 (*pg.as_ptr()).num_left += 1;
             }
@@ -458,9 +481,13 @@ where
 
     if have_tuples {
         loop {
-            let Some(inner_id) = fetch_inner(estate)? else { break };
+            let Some(inner_id) = fetch_inner(estate)? else {
+                break;
+            };
             {
-                let StrategyState::Hashed(hs) = &mut node.strategy else { unreachable!() };
+                let StrategyState::Hashed(hs) = &mut node.strategy else {
+                    unreachable!()
+                };
                 let inner_slot = estate.slot_mut(inner_id);
                 let hash = hs.hashtable.hash_slot(inner_slot)?;
                 let (ix, _) = hs.hashtable.lookup(inner_slot, hash, None, mcx)?;
@@ -474,7 +501,9 @@ where
         }
     }
 
-    let StrategyState::Hashed(hs) = &mut node.strategy else { unreachable!() };
+    let StrategyState::Hashed(hs) = &mut node.strategy else {
+        unreachable!()
+    };
     hs.table_filled = true;
     hs.hashiter = 0;
     Ok(())
@@ -491,7 +520,9 @@ fn setop_retrieve_hash_table<'mcx>(
             postgres_seams::check_for_interrupts::call()?;
         }
         let (counts, tup) = {
-            let StrategyState::Hashed(hs) = &mut node.strategy else { unreachable!() };
+            let StrategyState::Hashed(hs) = &mut node.strategy else {
+                unreachable!()
+            };
             let Some(ix) = hs.hashtable.iterate(&mut hs.hashiter) else {
                 node.setop_done = true;
                 return Ok(None);

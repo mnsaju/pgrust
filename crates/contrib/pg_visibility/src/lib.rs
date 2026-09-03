@@ -56,13 +56,14 @@ fn check_relation_relkind(rel: &types_rel::RelationData<'_>) -> PgResult<()> {
     Ok(())
 }
 
-
 fn composite_tupdesc<'m>(mcx: Mcx<'m>, flinfo: &FmgrInfo) -> PgResult<TupleDescData<'m>> {
     let resolved = funcapi::get_call_result_type(mcx, flinfo, None)?;
     if resolved.class != funcapi::TypeFuncClass::Composite {
         return Err(Box::new(PgError::error("return type must be a row type")));
     }
-    Ok(resolved.result_tuple_desc.expect("composite result has tupdesc"))
+    Ok(resolved
+        .result_tuple_desc
+        .expect("composite result has tupdesc"))
 }
 
 fn composite_result(
@@ -126,7 +127,6 @@ fn tid_image(blkno: BlockNumber, offnum: u16) -> Vec<u8> {
     out
 }
 
-
 fn r_u16(b: &[u8], off: usize) -> u16 {
     u16::from_ne_bytes(b[off..off + 2].try_into().unwrap())
 }
@@ -167,7 +167,6 @@ fn page_item_id(b: &[u8], offnum: usize) -> ItemIdView {
     }
 }
 
-
 struct VBits {
     bits: Vec<u8>,
 }
@@ -183,7 +182,9 @@ fn collect_visibility_data(
     check_relation_relkind(&rel)?;
 
     let nblocks = bufmgr::RelationGetNumberOfBlocksInFork(&rel, ForkNumber::MAIN_FORKNUM)?;
-    let mut info = VBits { bits: vec![0u8; nblocks as usize] };
+    let mut info = VBits {
+        bits: vec![0u8; nblocks as usize],
+    };
     let mut vmbuffer = VmBuffer::new();
 
     for blkno in 0..nblocks {
@@ -391,7 +392,6 @@ fn collect_corrupt_items(
     debug_assert!(TransactionIdIsValid(oldest_xmin) || !all_visible);
     Ok(items)
 }
-
 
 fn fc_pg_visibility_map(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let flinfo = flinfo.expect("pg_visibility_map: resolved FmgrInfo required");
@@ -602,7 +602,11 @@ fn fc_pg_truncate_visibility_map(
     let rlocator = bufmgr_seams::relation_smgr_locator::call(&rel);
     smgr::smgropen(rlocator.locator, rlocator.backend)?;
 
-    smgr::smgr_set_cached_nblocks(rlocator, ForkNumber::VISIBILITYMAP_FORKNUM, InvalidBlockNumber)?;
+    smgr::smgr_set_cached_nblocks(
+        rlocator,
+        ForkNumber::VISIBILITYMAP_FORKNUM,
+        InvalidBlockNumber,
+    )?;
 
     let block = visibilitymap_prepare_truncate(&rel, 0)?;
     let old_block = if block != InvalidBlockNumber {
@@ -616,7 +620,8 @@ fn fc_pg_truncate_visibility_map(
     let my_procno = lmgr_proc::MyProc().expect("pg_truncate_visibility_map: backend PGPROC");
     let my_proc = lmgr_proc::GetPGProcByNumber(my_procno);
     debug_assert_eq!(
-        my_proc.delayChkptFlags.load(Ordering::Relaxed) & (DELAY_CHKPT_START | DELAY_CHKPT_COMPLETE),
+        my_proc.delayChkptFlags.load(Ordering::Relaxed)
+            & (DELAY_CHKPT_START | DELAY_CHKPT_COMPLETE),
         0
     );
     my_proc
@@ -656,9 +661,10 @@ fn fc_pg_truncate_visibility_map(
     })();
 
     init_small::globals::EndCriticalSection();
-    my_proc
-        .delayChkptFlags
-        .fetch_and(!(DELAY_CHKPT_START | DELAY_CHKPT_COMPLETE), Ordering::SeqCst);
+    my_proc.delayChkptFlags.fetch_and(
+        !(DELAY_CHKPT_START | DELAY_CHKPT_COMPLETE),
+        Ordering::SeqCst,
+    );
     crit?;
 
     // Release the lock right away, not at commit (only a non-transactional
@@ -667,7 +673,6 @@ fn fc_pg_truncate_visibility_map(
 
     Ok(Datum::from_i32(0)) // PG_RETURN_VOID
 }
-
 
 fn lookup(function: &str) -> Option<PGFunction> {
     Some(match function {

@@ -12,8 +12,8 @@
 
 pub mod config;
 
-use std::sync::atomic::Ordering::Relaxed;
 use pgsync::RwLock;
+use std::sync::atomic::Ordering::Relaxed;
 
 use elog::ereport;
 use types_core::{InvalidXLogRecPtr, ProcNumber, XLogRecPtr};
@@ -57,7 +57,10 @@ pgsync::process_global! {
 }
 
 pub fn sync_rep_config() -> Option<SyncRepConfigData> {
-    SYNC_REP_CONFIG.read().expect("SYNC_REP_CONFIG poisoned").clone()
+    SYNC_REP_CONFIG
+        .read()
+        .expect("SYNC_REP_CONFIG poisoned")
+        .clone()
 }
 
 // SyncStandbysDefined() (syncrep.h): GUC set and non-empty.
@@ -361,13 +364,17 @@ fn SyncRepCancelWait(procno: ProcNumber) -> PgResult<()> {
     if !links_of(procno).get().is_detached() {
         q_delete_any(procno);
     }
-    lmgr_proc::GetPGProcByNumber(procno).syncRepState.set(SYNC_REP_NOT_WAITING);
+    lmgr_proc::GetPGProcByNumber(procno)
+        .syncRepState
+        .set(SYNC_REP_NOT_WAITING);
     unlock_sync_rep()
 }
 
 /// SyncRepCleanupAtProcExit (syncrep.c:416).
 pub fn SyncRepCleanupAtProcExit() {
-    let Some(procno) = lmgr_proc::MyProc() else { return };
+    let Some(procno) = lmgr_proc::MyProc() else {
+        return;
+    };
     if !links_of(procno).get().is_detached() {
         let _ = lock_sync_rep();
         if !links_of(procno).get().is_detached() {
@@ -387,7 +394,9 @@ thread_local! {
 }
 
 fn application_name() -> String {
-    guc_tables::vars::application_name.read().unwrap_or_default()
+    guc_tables::vars::application_name
+        .read()
+        .unwrap_or_default()
 }
 
 /// SyncRepInitConfig (syncrep.c:445).
@@ -434,15 +443,20 @@ pub fn SyncRepGetCandidateStandbys() -> Vec<SyncRepStandbyData> {
 
     for (i, slot) in ctl.walsnds.iter().enumerate() {
         let w = slot.lock().expect("walsnd mutex");
-        let (pid, state, write, flush, apply, priority) =
-            (w.pid, w.state, w.write, w.flush, w.apply, w.sync_standby_priority);
+        let (pid, state, write, flush, apply, priority) = (
+            w.pid,
+            w.state,
+            w.write,
+            w.flush,
+            w.apply,
+            w.sync_standby_priority,
+        );
         drop(w);
 
         if pid == 0 {
             continue;
         }
-        if state != walsender::WalSndState::Streaming && state != walsender::WalSndState::Stopping
-        {
+        if state != walsender::WalSndState::Streaming && state != walsender::WalSndState::Stopping {
             continue;
         }
         if priority == 0 {
@@ -480,13 +494,19 @@ fn SyncRepGetStandbyPriority() -> i32 {
     if !sync_standbys_defined() {
         return 0;
     }
-    let Some(cfg) = sync_rep_config() else { return 0 };
+    let Some(cfg) = sync_rep_config() else {
+        return 0;
+    };
 
     let appname = application_name();
     for (idx, member) in cfg.members.iter().enumerate() {
         if member.eq_ignore_ascii_case(&appname) || member == "*" {
             // Quorum mode: all listed standbys have priority one.
-            return if cfg.syncrep_method == SYNC_REP_PRIORITY { idx as i32 + 1 } else { 1 };
+            return if cfg.syncrep_method == SYNC_REP_PRIORITY {
+                idx as i32 + 1
+            } else {
+                1
+            };
         }
     }
     0
@@ -531,7 +551,10 @@ fn SyncRepGetSyncRecPtr() -> (Option<(XLogRecPtr, XLogRecPtr, XLogRecPtr)>, bool
         writes.sort_unstable_by(|a, b| b.cmp(a));
         flushes.sort_unstable_by(|a, b| b.cmp(a));
         applies.sort_unstable_by(|a, b| b.cmp(a));
-        (Some((writes[nth - 1], flushes[nth - 1], applies[nth - 1])), true)
+        (
+            Some((writes[nth - 1], flushes[nth - 1], applies[nth - 1])),
+            true,
+        )
     }
 }
 
@@ -548,8 +571,7 @@ pub fn SyncRepReleaseWaiters() -> PgResult<()> {
     // Nothing to do unless we are a potential sync standby that is streaming
     // or stopping with a valid flush position.
     if priority == 0
-        || (state != walsender::WalSndState::Streaming
-            && state != walsender::WalSndState::Stopping)
+        || (state != walsender::WalSndState::Streaming && state != walsender::WalSndState::Stopping)
         || flush == InvalidXLogRecPtr
     {
         ANNOUNCE_NEXT_TAKEOVER.set(true);
@@ -655,7 +677,8 @@ pub fn SyncRepUpdateSyncStandbysDefined() {
     } else if status & SYNC_STANDBY_INIT == 0 {
         let _ = lock_sync_rep();
         debug_assert!(!sync_standbys_defined());
-        ctl.sync_standbys_status.fetch_or(SYNC_STANDBY_INIT, Relaxed);
+        ctl.sync_standbys_status
+            .fetch_or(SYNC_STANDBY_INIT, Relaxed);
         let _ = unlock_sync_rep();
     }
 }
@@ -701,7 +724,9 @@ fn assign_synchronous_standby_names(
     _newval: Option<&str>,
     extra: Option<&guc_tables::GucHookExtra>,
 ) {
-    let parsed = extra.and_then(|e| e.downcast_ref::<SyncRepConfigData>()).cloned();
+    let parsed = extra
+        .and_then(|e| e.downcast_ref::<SyncRepConfigData>())
+        .cloned();
     *SYNC_REP_CONFIG.write().expect("SYNC_REP_CONFIG poisoned") = parsed;
 }
 
@@ -713,7 +738,10 @@ pgsync::process_global! {
 }
 
 fn standby_names_get() -> Option<String> {
-    STANDBY_NAMES.read().expect("STANDBY_NAMES poisoned").clone()
+    STANDBY_NAMES
+        .read()
+        .expect("STANDBY_NAMES poisoned")
+        .clone()
 }
 
 fn standby_names_set(v: Option<String>) {

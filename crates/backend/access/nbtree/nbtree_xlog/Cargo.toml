@@ -15,6 +15,9 @@ bufmgr_seams = { path = "../../../storage/buffer/bufmgr_seams" }
 
 standby = { path = "../../../storage/ipc/standby" }
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(pgrust_sim)"] }
+
 [dev-dependencies]
 mcx = { path = "../../../../_support/mcx" }
 datum = { path = "../../../../_support/types/datum" }

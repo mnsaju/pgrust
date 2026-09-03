@@ -19,9 +19,12 @@ pub fn expr_type(node: Node<'_>) -> Oid {
         NodeTag::T_ScalarArrayOpExpr => types_core::catalog::BOOLOID,
         NodeTag::T_ArrayExpr => node.as_array_expr().unwrap().array_typeid,
         NodeTag::T_FuncExpr => node.as_func_expr().unwrap().funcresulttype,
-        NodeTag::T_NamedArgExpr => {
-            expr_type(node.as_named_arg_expr().unwrap().arg.expect("NamedArgExpr has an arg"))
-        }
+        NodeTag::T_NamedArgExpr => expr_type(
+            node.as_named_arg_expr()
+                .unwrap()
+                .arg
+                .expect("NamedArgExpr has an arg"),
+        ),
         NodeTag::T_Aggref => node.as_aggref().unwrap().aggtype,
         NodeTag::T_WindowFunc => node.as_window_func().unwrap().wintype,
         NodeTag::T_GroupingFunc => types_core::catalog::INT4OID,
@@ -44,7 +47,6 @@ pub fn expr_type(node: Node<'_>) -> Oid {
         NodeTag::T_CoerceToDomain => node.as_coerce_to_domain().unwrap().resulttype,
         NodeTag::T_CoerceToDomainValue => node.as_coerce_to_domain_value().unwrap().typeId,
         NodeTag::T_SetToDefault => node.as_set_to_default().unwrap().typeId,
-        NodeTag::T_CollateExpr => expr_type(node.as_collate_expr().unwrap().arg),
         NodeTag::T_SQLValueFunction => node.as_sql_value_function().unwrap().r#type,
         NodeTag::T_SubscriptingRef => node.as_subscripting_ref().unwrap().refrestype,
         NodeTag::T_CaseTestExpr => node.as_case_test_expr().unwrap().typeId,
@@ -57,7 +59,9 @@ pub fn expr_type(node: Node<'_>) -> Oid {
             _ => types_core::catalog::XMLOID,
         },
         NodeTag::T_NextValueExpr => {
-            node.as_variant::<types_nodes::primnodes::NextValueExpr>().unwrap().typeId
+            node.as_variant::<types_nodes::primnodes::NextValueExpr>()
+                .unwrap()
+                .typeId
         }
         NodeTag::T_SubLink => {
             let (sl, tent) = sublink_first_col(node);
@@ -72,34 +76,48 @@ pub fn expr_type(node: Node<'_>) -> Oid {
         NodeTag::T_SubPlan => {
             let sp = node.as_sub_plan().unwrap();
             match sp.subLinkType {
-                types_nodes::SubLinkType::EXPR_SUBLINK
-                => sp.firstColType,
+                types_nodes::SubLinkType::EXPR_SUBLINK => sp.firstColType,
                 // C: MULTIEXPR SubPlans return a dummy NULL::record.
                 types_nodes::SubLinkType::MULTIEXPR_SUBLINK => types_core::RECORDOID,
-                types_nodes::SubLinkType::ARRAY_SUBLINK => {
-                    promoted_array_type(sp.firstColType)
-                }
+                types_nodes::SubLinkType::ARRAY_SUBLINK => promoted_array_type(sp.firstColType),
                 _ => types_core::catalog::BOOLOID,
             }
         }
-        NodeTag::T_PlaceHolderVar => {
-            expr_type(node.as_place_holder_var().unwrap().phexpr)
-        }
+        NodeTag::T_PlaceHolderVar => expr_type(node.as_place_holder_var().unwrap().phexpr),
         NodeTag::T_ReturningExpr => expr_type(node.as_returning_expr().unwrap().retexpr),
-        NodeTag::T_JsonValueExpr => {
-            expr_type(node.as_json_value_expr().unwrap().formatted_expr.expect("formatted_expr"))
-        }
+        NodeTag::T_JsonValueExpr => expr_type(
+            node.as_json_value_expr()
+                .unwrap()
+                .formatted_expr
+                .expect("formatted_expr"),
+        ),
         NodeTag::T_JsonConstructorExpr => {
-            node.as_json_constructor_expr().unwrap().returning.expect("returning").typid
+            node.as_json_constructor_expr()
+                .unwrap()
+                .returning
+                .expect("returning")
+                .typid
         }
         NodeTag::T_JsonIsPredicate => types_core::catalog::BOOLOID,
-        NodeTag::T_JsonExpr => node.as_json_expr().unwrap().returning.expect("returning").typid,
-        // C exprType(NULL) == InvalidOid; ERROR-btype behaviors carry no expr.
-        NodeTag::T_JsonBehavior => {
-            node.as_json_behavior().unwrap().expr.map_or(types_core::InvalidOid, expr_type)
+        NodeTag::T_JsonExpr => {
+            node.as_json_expr()
+                .unwrap()
+                .returning
+                .expect("returning")
+                .typid
         }
+        // C exprType(NULL) == InvalidOid; ERROR-btype behaviors carry no expr.
+        NodeTag::T_JsonBehavior => node
+            .as_json_behavior()
+            .unwrap()
+            .expr
+            .map_or(types_core::InvalidOid, expr_type),
         NodeTag::T_AlternativeSubPlan => expr_type(
-            node.as_alternative_sub_plan().unwrap().subplans.first().expect("subplans non-empty"),
+            node.as_alternative_sub_plan()
+                .unwrap()
+                .subplans
+                .first()
+                .expect("subplans non-empty"),
         ),
         other => deferred("exprType", other),
     }
@@ -122,7 +140,10 @@ pub fn promoted_array_type(elemtype: Oid) -> Oid {
 // rewrites subselect to a Query before any exprType consumer runs).
 fn sublink_first_col<'mcx>(
     node: Node<'mcx>,
-) -> (&'mcx types_nodes::SubLink<'mcx>, Option<&'mcx types_nodes::TargetEntry<'mcx>>) {
+) -> (
+    &'mcx types_nodes::SubLink<'mcx>,
+    Option<&'mcx types_nodes::TargetEntry<'mcx>>,
+) {
     let sl = node.as_sub_link().unwrap();
     let tent = sl
         .subselect
@@ -164,9 +185,12 @@ pub fn expr_typmod(node: Node<'_>) -> i32 {
         NodeTag::T_SetToDefault => node.as_set_to_default().unwrap().typeMod,
         NodeTag::T_CaseTestExpr => node.as_case_test_expr().unwrap().typeMod,
         NodeTag::T_FuncExpr => length_coercion_typmod(node.as_func_expr().unwrap()),
-        NodeTag::T_NamedArgExpr => {
-            expr_typmod(node.as_named_arg_expr().unwrap().arg.expect("NamedArgExpr has an arg"))
-        }
+        NodeTag::T_NamedArgExpr => expr_typmod(
+            node.as_named_arg_expr()
+                .unwrap()
+                .arg
+                .expect("NamedArgExpr has an arg"),
+        ),
         NodeTag::T_ArrayCoerceExpr => node.as_array_coerce_expr().unwrap().resulttypmod,
         // Result is either the first argument or NULL: report its typmod.
         NodeTag::T_NullIfExpr => expr_typmod(node.as_null_if_expr().unwrap().args.nth(0)),
@@ -191,11 +215,12 @@ pub fn expr_typmod(node: Node<'_>) -> i32 {
         | NodeTag::T_FieldStore
         | NodeTag::T_RowCompareExpr
         | NodeTag::T_RowExpr => -1,
-        NodeTag::T_CollateExpr => expr_typmod(node.as_collate_expr().unwrap().arg),
         NodeTag::T_SQLValueFunction => node.as_sql_value_function().unwrap().typmod,
         NodeTag::T_CaseExpr => {
             let c = node.as_case_expr().unwrap();
-            let Some(defresult) = c.defresult else { return -1 };
+            let Some(defresult) = c.defresult else {
+                return -1;
+            };
             if expr_type(defresult) != c.casetype {
                 return -1;
             }
@@ -237,23 +262,40 @@ pub fn expr_typmod(node: Node<'_>) -> i32 {
                 _ => -1,
             }
         }
-        NodeTag::T_PlaceHolderVar => {
-            expr_typmod(node.as_place_holder_var().unwrap().phexpr)
-        }
+        NodeTag::T_PlaceHolderVar => expr_typmod(node.as_place_holder_var().unwrap().phexpr),
         NodeTag::T_ReturningExpr => expr_typmod(node.as_returning_expr().unwrap().retexpr),
-        NodeTag::T_JsonValueExpr => {
-            expr_typmod(node.as_json_value_expr().unwrap().formatted_expr.expect("formatted_expr"))
-        }
+        NodeTag::T_JsonValueExpr => expr_typmod(
+            node.as_json_value_expr()
+                .unwrap()
+                .formatted_expr
+                .expect("formatted_expr"),
+        ),
         NodeTag::T_JsonConstructorExpr => {
-            node.as_json_constructor_expr().unwrap().returning.expect("returning").typmod
+            node.as_json_constructor_expr()
+                .unwrap()
+                .returning
+                .expect("returning")
+                .typmod
         }
         NodeTag::T_JsonIsPredicate => -1,
-        NodeTag::T_JsonExpr => node.as_json_expr().unwrap().returning.expect("returning").typmod,
-        NodeTag::T_JsonBehavior => {
-            node.as_json_behavior().unwrap().expr.map_or(-1, expr_typmod)
+        NodeTag::T_JsonExpr => {
+            node.as_json_expr()
+                .unwrap()
+                .returning
+                .expect("returning")
+                .typmod
         }
+        NodeTag::T_JsonBehavior => node
+            .as_json_behavior()
+            .unwrap()
+            .expr
+            .map_or(-1, expr_typmod),
         NodeTag::T_AlternativeSubPlan => expr_typmod(
-            node.as_alternative_sub_plan().unwrap().subplans.first().expect("subplans non-empty"),
+            node.as_alternative_sub_plan()
+                .unwrap()
+                .subplans
+                .first()
+                .expect("subplans non-empty"),
         ),
         other => deferred("exprTypmod", other),
     }
@@ -268,9 +310,12 @@ pub fn expr_collation(node: Node<'_>) -> Oid {
         NodeTag::T_ScalarArrayOpExpr => types_core::InvalidOid,
         NodeTag::T_ArrayExpr => node.as_array_expr().unwrap().array_collid,
         NodeTag::T_FuncExpr => node.as_func_expr().unwrap().funccollid,
-        NodeTag::T_NamedArgExpr => {
-            expr_collation(node.as_named_arg_expr().unwrap().arg.expect("NamedArgExpr has an arg"))
-        }
+        NodeTag::T_NamedArgExpr => expr_collation(
+            node.as_named_arg_expr()
+                .unwrap()
+                .arg
+                .expect("NamedArgExpr has an arg"),
+        ),
         NodeTag::T_Aggref => node.as_aggref().unwrap().aggcollid,
         NodeTag::T_WindowFunc => node.as_window_func().unwrap().wincollid,
         NodeTag::T_MergeSupportFunc => node.as_merge_support_func().unwrap().msfcollid,
@@ -293,7 +338,6 @@ pub fn expr_collation(node: Node<'_>) -> Oid {
         NodeTag::T_CoerceToDomain => node.as_coerce_to_domain().unwrap().resultcollid,
         NodeTag::T_CoerceToDomainValue => node.as_coerce_to_domain_value().unwrap().collation,
         NodeTag::T_SetToDefault => node.as_set_to_default().unwrap().collation,
-        NodeTag::T_CollateExpr => node.as_collate_expr().unwrap().collOid,
         NodeTag::T_SubscriptingRef => node.as_subscripting_ref().unwrap().refcollid,
         NodeTag::T_CaseTestExpr => node.as_case_test_expr().unwrap().collation,
         NodeTag::T_SQLValueFunction => {
@@ -329,28 +373,24 @@ pub fn expr_collation(node: Node<'_>) -> Oid {
             let sp = node.as_sub_plan().unwrap();
             match sp.subLinkType {
                 types_nodes::SubLinkType::EXPR_SUBLINK
-                | types_nodes::SubLinkType::ARRAY_SUBLINK
-                => sp.firstColCollation,
+                | types_nodes::SubLinkType::ARRAY_SUBLINK => sp.firstColCollation,
                 // C: the MULTIEXPR dummy RECORD result is uncollatable.
                 types_nodes::SubLinkType::MULTIEXPR_SUBLINK => types_core::InvalidOid,
                 _ => 0,
             }
         }
-        NodeTag::T_PlaceHolderVar => {
-            expr_collation(node.as_place_holder_var().unwrap().phexpr)
-        }
+        NodeTag::T_PlaceHolderVar => expr_collation(node.as_place_holder_var().unwrap().phexpr),
         NodeTag::T_ReturningExpr => expr_collation(node.as_returning_expr().unwrap().retexpr),
-        NodeTag::T_JsonValueExpr => {
-            expr_collation(
-                node.as_json_value_expr().unwrap().formatted_expr.expect("formatted_expr"),
-            )
-        }
-        NodeTag::T_JsonConstructorExpr => {
-            match node.as_json_constructor_expr().unwrap().coercion {
-                Some(c) => expr_collation(c),
-                None => types_core::InvalidOid,
-            }
-        }
+        NodeTag::T_JsonValueExpr => expr_collation(
+            node.as_json_value_expr()
+                .unwrap()
+                .formatted_expr
+                .expect("formatted_expr"),
+        ),
+        NodeTag::T_JsonConstructorExpr => match node.as_json_constructor_expr().unwrap().coercion {
+            Some(c) => expr_collation(c),
+            None => types_core::InvalidOid,
+        },
         NodeTag::T_JsonIsPredicate => types_core::InvalidOid,
         NodeTag::T_JsonExpr => node.as_json_expr().unwrap().collation,
         NodeTag::T_JsonBehavior => match node.as_json_behavior().unwrap().expr {
@@ -358,7 +398,11 @@ pub fn expr_collation(node: Node<'_>) -> Oid {
             None => types_core::InvalidOid,
         },
         NodeTag::T_AlternativeSubPlan => expr_collation(
-            node.as_alternative_sub_plan().unwrap().subplans.first().expect("subplans non-empty"),
+            node.as_alternative_sub_plan()
+                .unwrap()
+                .subplans
+                .first()
+                .expect("subplans non-empty"),
         ),
         other => deferred("exprCollation", other),
     }
@@ -438,17 +482,23 @@ pub fn expr_location(node: Node<'_>) -> ParseLoc {
             leftmost_loc(f.location, expr_location_list(&f.args))
         }
         // C: SubscriptingRef has no location; report the container's.
-        NodeTag::T_SubscriptingRef => {
-            node.as_subscripting_ref().unwrap().refexpr.map_or(-1, expr_location)
-        }
+        NodeTag::T_SubscriptingRef => node
+            .as_subscripting_ref()
+            .unwrap()
+            .refexpr
+            .map_or(-1, expr_location),
         NodeTag::T_A_ArrayExpr => node.as_a_array_expr().unwrap().location,
-        NodeTag::T_A_Indirection => {
-            node.as_a_indirection().unwrap().arg.map_or(-1, expr_location)
-        }
+        NodeTag::T_A_Indirection => node
+            .as_a_indirection()
+            .unwrap()
+            .arg
+            .map_or(-1, expr_location),
         NodeTag::T_ParamRef => node.as_param_ref().unwrap().location,
         NodeTag::T_ResTarget => node.as_res_target().unwrap().location,
         NodeTag::T_ColumnDef => {
-            node.as_variant::<types_nodes::rawnodes::ColumnDef>().unwrap().location
+            node.as_variant::<types_nodes::rawnodes::ColumnDef>()
+                .unwrap()
+                .location
         }
         NodeTag::T_SubLink => {
             let s = node.as_sub_link().unwrap();
@@ -473,7 +523,6 @@ pub fn expr_location(node: Node<'_>) -> ParseLoc {
             leftmost_loc(c.location, expr_location(c.arg))
         }
         NodeTag::T_CoerceToDomainValue => node.as_coerce_to_domain_value().unwrap().location,
-        NodeTag::T_CollateExpr => expr_location(node.as_collate_expr().unwrap().arg),
         NodeTag::T_SQLValueFunction => node.as_sql_value_function().unwrap().location,
         NodeTag::T_CaseTestExpr => -1,
         // C: the CASE/WHEN/COALESCE/GREATEST/LEAST keyword is always leftmost.
@@ -511,9 +560,7 @@ pub fn expr_location(node: Node<'_>) -> ParseLoc {
         // C: XMLSERIALIZE keyword should always be the first thing.
         NodeTag::T_XmlSerialize => node.as_xml_serialize().unwrap().location,
         NodeTag::T_FieldStore => expr_location(node.as_field_store().unwrap().arg),
-        NodeTag::T_RowCompareExpr => {
-            expr_location_list(&node.as_row_compare_expr().unwrap().largs)
-        }
+        NodeTag::T_RowCompareExpr => expr_location_list(&node.as_row_compare_expr().unwrap().largs),
         NodeTag::T_CollateClause => {
             let c = node.as_collate_clause().unwrap();
             leftmost_loc(c.arg.map_or(-1, expr_location), c.location)
@@ -528,33 +575,43 @@ pub fn expr_location(node: Node<'_>) -> ParseLoc {
             leftmost_loc(loc, tc.location)
         }
         NodeTag::T_JsonFormat => node.as_json_format().unwrap().location,
-        NodeTag::T_JsonValueExpr => {
-            node.as_json_value_expr().unwrap().raw_expr.map_or(-1, expr_location)
-        }
+        NodeTag::T_JsonValueExpr => node
+            .as_json_value_expr()
+            .unwrap()
+            .raw_expr
+            .map_or(-1, expr_location),
         NodeTag::T_JsonConstructorExpr => node.as_json_constructor_expr().unwrap().location,
         NodeTag::T_JsonIsPredicate => node.as_json_is_predicate().unwrap().location,
         NodeTag::T_JsonExpr => {
             let j = node.as_json_expr().unwrap();
             leftmost_loc(j.location, j.formatted_expr.map_or(-1, expr_location))
         }
-        NodeTag::T_JsonBehavior => {
-            node.as_json_behavior().unwrap().expr.map_or(-1, expr_location)
-        }
-        NodeTag::T_JsonKeyValue => {
-            node.as_json_key_value().unwrap().key.map_or(-1, expr_location)
-        }
+        NodeTag::T_JsonBehavior => node
+            .as_json_behavior()
+            .unwrap()
+            .expr
+            .map_or(-1, expr_location),
+        NodeTag::T_JsonKeyValue => node
+            .as_json_key_value()
+            .unwrap()
+            .key
+            .map_or(-1, expr_location),
         NodeTag::T_JsonObjectConstructor => node.as_json_object_constructor().unwrap().location,
         NodeTag::T_JsonArrayConstructor => node.as_json_array_constructor().unwrap().location,
         NodeTag::T_JsonArrayQueryConstructor => {
             node.as_json_array_query_constructor().unwrap().location
         }
         NodeTag::T_JsonAggConstructor => node.as_json_agg_constructor().unwrap().location,
-        NodeTag::T_JsonObjectAgg => {
-            node.as_json_object_agg().unwrap().constructor.map_or(-1, expr_location)
-        }
-        NodeTag::T_JsonArrayAgg => {
-            node.as_json_array_agg().unwrap().constructor.map_or(-1, expr_location)
-        }
+        NodeTag::T_JsonObjectAgg => node
+            .as_json_object_agg()
+            .unwrap()
+            .constructor
+            .map_or(-1, expr_location),
+        NodeTag::T_JsonArrayAgg => node
+            .as_json_array_agg()
+            .unwrap()
+            .constructor
+            .map_or(-1, expr_location),
         NodeTag::T_RangeVar => node.as_range_var().unwrap().location,
         NodeTag::T_RangeTableSample => node.as_range_table_sample().unwrap().location,
         other => deferred("exprLocation", other),

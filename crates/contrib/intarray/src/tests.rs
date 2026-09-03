@@ -228,7 +228,8 @@ fn checkarrvalid_accepts_bitmap_without_nulls() {
 #[test]
 fn unique_is_adjacent_dedup() {
     let mut a = IntArray::new(5);
-    a.elems_mut().copy_from_slice(&[1234234, -30, -30, 234234, -30]);
+    a.elems_mut()
+        .copy_from_slice(&[1234234, -30, -30, 234234, -30]);
     a.unique();
     assert_eq!(a.elems(), &[1234234, -30, 234234, -30]);
 }

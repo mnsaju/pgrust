@@ -54,11 +54,18 @@ pub fn defGetString<'mcx>(mcx: Mcx<'mcx>, def: &DefElem<'mcx>) -> PgResult<&'mcx
 
 pub fn defGetNumeric(def: &DefElem<'_>) -> PgResult<f64> {
     let err = || syntax_err(format!("{} requires a numeric value", defname(def)));
-    let Some(arg) = def.arg else { return Err(err()) };
+    let Some(arg) = def.arg else {
+        return Err(err());
+    };
     match arg.node_tag() {
         NodeTag::T_Integer => Ok(arg.as_integer().unwrap().ival as f64),
         // floatVal: strtod semantics; grammar-produced Floats always parse.
-        NodeTag::T_Float => arg.as_float().unwrap().fval.parse::<f64>().map_err(|_| err()),
+        NodeTag::T_Float => arg
+            .as_float()
+            .unwrap()
+            .fval
+            .parse::<f64>()
+            .map_err(|_| err()),
         _ => Err(err()),
     }
 }
@@ -83,7 +90,10 @@ pub fn defGetBoolean(def: &DefElem<'_>) -> PgResult<bool> {
             return Ok(false);
         }
     }
-    Err(syntax_err(format!("{} requires a Boolean value", defname(def))))
+    Err(syntax_err(format!(
+        "{} requires a Boolean value",
+        defname(def)
+    )))
 }
 
 pub fn defGetInt32(def: &DefElem<'_>) -> PgResult<i32> {
@@ -92,12 +102,17 @@ pub fn defGetInt32(def: &DefElem<'_>) -> PgResult<i32> {
             return Ok(i.ival);
         }
     }
-    Err(syntax_err(format!("{} requires an integer value", defname(def))))
+    Err(syntax_err(format!(
+        "{} requires an integer value",
+        defname(def)
+    )))
 }
 
 pub fn defGetInt64(def: &DefElem<'_>) -> PgResult<i64> {
     let err = || syntax_err(format!("{} requires a numeric value", defname(def)));
-    let Some(arg) = def.arg else { return Err(err()) };
+    let Some(arg) = def.arg else {
+        return Err(err());
+    };
     match arg.node_tag() {
         NodeTag::T_Integer => Ok(arg.as_integer().unwrap().ival as i64),
         NodeTag::T_Float => adt_int8::int8in(arg.as_float().unwrap().fval, None),
@@ -120,7 +135,10 @@ pub fn defGetQualifiedName<'mcx>(
             let list = NodeList::make1(mcx, arg)?;
             Ok(Node::mk_list(mcx, list)?.as_list().unwrap())
         }
-        _ => Err(syntax_err(format!("argument of {} must be a name", defname(def)))),
+        _ => Err(syntax_err(format!(
+            "argument of {} must be a name",
+            defname(def)
+        ))),
     }
 }
 
@@ -138,7 +156,10 @@ pub fn defGetTypeName<'mcx>(mcx: Mcx<'mcx>, def: &DefElem<'mcx>) -> PgResult<&'m
             tn.location = -1;
             Ok(tn.seal_ref())
         }
-        _ => Err(syntax_err(format!("argument of {} must be a type name", defname(def)))),
+        _ => Err(syntax_err(format!(
+            "argument of {} must be a type name",
+            defname(def)
+        ))),
     }
 }
 
@@ -151,10 +172,18 @@ pub fn defGetTypeLength(def: &DefElem<'_>) -> PgResult<i32> {
     match arg.node_tag() {
         NodeTag::T_Integer => return Ok(arg.as_integer().unwrap().ival),
         NodeTag::T_Float => {
-            return Err(syntax_err(format!("{} requires an integer value", defname(def))))
+            return Err(syntax_err(format!(
+                "{} requires an integer value",
+                defname(def)
+            )))
         }
         NodeTag::T_String => {
-            if arg.as_string().unwrap().sval.eq_ignore_ascii_case("variable") {
+            if arg
+                .as_string()
+                .unwrap()
+                .sval
+                .eq_ignore_ascii_case("variable")
+            {
                 return Ok(-1);
             }
         }
@@ -207,7 +236,10 @@ pub fn NameListToString<'a>(mcx: Mcx<'a>, names: &NodeList<'_>) -> PgResult<PgSt
 // TypeNameToString (parse_type.c) for grammar-produced TypeNames (names
 // always present); the format_type_be(typeOid) arm is unreachable here.
 pub fn TypeNameToString<'a>(mcx: Mcx<'a>, tn: &TypeName<'_>) -> PgResult<PgString<'a>> {
-    assert!(!tn.names.is_nil(), "TypeNameToString: empty names (format_type_be arm unported)");
+    assert!(
+        !tn.names.is_nil(),
+        "TypeNameToString: empty names (format_type_be arm unported)"
+    );
     let mut out = NameListToString(mcx, &tn.names)?;
     for _ in tn.arrayBounds.iter() {
         out.try_push_str("[]")?;

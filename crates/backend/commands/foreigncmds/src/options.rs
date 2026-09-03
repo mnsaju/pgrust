@@ -79,8 +79,14 @@ pub fn untransform_options<'mcx>(
         // C (reloptions.c untransformRelOptions): text without '=' becomes a
         // DefElem with the whole string as name and a NULL value.
         match s.split_once('=') {
-            Some((name, value)) => result.push(OptionPair { name, value: Some(value) }),
-            None => result.push(OptionPair { name: s, value: None }),
+            Some((name, value)) => result.push(OptionPair {
+                name,
+                value: Some(value),
+            }),
+            None => result.push(OptionPair {
+                name: s,
+                value: None,
+            }),
         }
     }
     Ok(result)
@@ -287,7 +293,10 @@ pub fn postgresql_fdw_validator<'mcx>(
 ) -> PgResult<bool> {
     let options = untransform_options(mcx, Some(options_datum))?;
     for opt in options.iter() {
-        if LIBPQ_CONNINFO_OPTIONS.iter().any(|&(n, ctx)| ctx == catalog && n == opt.name) {
+        if LIBPQ_CONNINFO_OPTIONS
+            .iter()
+            .any(|&(n, ctx)| ctx == catalog && n == opt.name)
+        {
             continue;
         }
         // ClosestMatchState with max_d = 4 (varlena.c).

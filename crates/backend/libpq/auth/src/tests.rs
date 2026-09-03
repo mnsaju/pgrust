@@ -372,7 +372,6 @@ fn password_failed_is_28P01() {
     .unwrap();
 }
 
-
 #[test]
 fn eof_status_exits_quietly() {
     let result = std::thread::spawn(|| {
@@ -441,7 +440,10 @@ fn scram_client(stream: &mut UnixStream, password: &str, correct: bool) -> (u8, 
     assert_eq!((t, code), (b'R', AUTH_REQ_SASL));
     let mechs = String::from_utf8(payload).unwrap();
     assert!(mechs.contains("SCRAM-SHA-256\0"));
-    assert!(!mechs.contains("SCRAM-SHA-256-PLUS"), "PLUS without SSL: {mechs}");
+    assert!(
+        !mechs.contains("SCRAM-SHA-256-PLUS"),
+        "PLUS without SSL: {mechs}"
+    );
 
     let client_first_bare = "n=,r=clientnonce0123456789";
     let mut body = b"SCRAM-SHA-256\0".to_vec();
@@ -454,10 +456,21 @@ fn scram_client(stream: &mut UnixStream, password: &str, correct: bool) -> (u8, 
     assert_eq!((t, code), (b'R', AUTH_REQ_SASL_CONT));
     let server_first = String::from_utf8(payload).unwrap();
     let mut parts = server_first.split(',');
-    let full_nonce = parts.next().unwrap().strip_prefix("r=").unwrap().to_string();
+    let full_nonce = parts
+        .next()
+        .unwrap()
+        .strip_prefix("r=")
+        .unwrap()
+        .to_string();
     assert!(full_nonce.starts_with("clientnonce0123456789"));
     let salt = b64d(parts.next().unwrap().strip_prefix("s=").unwrap());
-    let iterations: i32 = parts.next().unwrap().strip_prefix("i=").unwrap().parse().unwrap();
+    let iterations: i32 = parts
+        .next()
+        .unwrap()
+        .strip_prefix("i=")
+        .unwrap()
+        .parse()
+        .unwrap();
 
     let salted = scram_salted_password(password.as_bytes(), &salt, iterations).unwrap();
     let client_key = scram_client_key(&salted);
@@ -474,7 +487,10 @@ fn scram_client(stream: &mut UnixStream, password: &str, correct: bool) -> (u8, 
     if !correct {
         proof[0] ^= 0xff;
     }
-    send_password_msg(stream, format!("{without_proof},p={}", b64e(&proof)).as_bytes());
+    send_password_msg(
+        stream,
+        format!("{without_proof},p={}", b64e(&proof)).as_bytes(),
+    );
 
     let (t, code, payload) = read_server_msg(stream);
     if t == b'R' && code == AUTH_REQ_SASL_FIN {
@@ -512,7 +528,13 @@ impl SocketAuth {
         )
         .unwrap();
         assert_eq!(status, 0);
-        (Self { listen_sockets, dir }, sock_path)
+        (
+            Self {
+                listen_sockets,
+                dir,
+            },
+            sock_path,
+        )
     }
 
     fn accept_port(&self, user: &str) -> Port {
@@ -542,7 +564,10 @@ fn expect_client_auth_fatal(port: &mut Port) -> PgError {
     }));
     elog::config::set_where_to_send_output(types_dest::CommandDest::Debug);
     elog::set_emit_log_hook(prev);
-    assert_eq!(payload_str(&result.expect_err("expected FATAL")), "proc_exit(1)");
+    assert_eq!(
+        payload_str(&result.expect_err("expected FATAL")),
+        "proc_exit(1)"
+    );
     let err = CAPTURED
         .with(|c| c.borrow().last().cloned())
         .expect("FATAL report was emitted");
@@ -753,7 +778,7 @@ fn interpret_ident_response_cases() {
     );
     // User name is capped at IDENT_USERNAME_MAX bytes.
     let mut long = b"1,2:USERID:UNIX:".to_vec();
-    long.extend(std::iter::repeat(b'a').take(IDENT_USERNAME_MAX + 50));
+    long.extend(std::iter::repeat_n(b'a', IDENT_USERNAME_MAX + 50));
     long.extend(b"\r\n");
     let got = interpret_ident_response(&long).unwrap();
     assert_eq!(got.len(), IDENT_USERNAME_MAX);

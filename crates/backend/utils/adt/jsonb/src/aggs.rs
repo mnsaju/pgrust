@@ -73,10 +73,10 @@ fn new_state<'a>(
     Ok(p)
 }
 
-fn cats<'f>(
-    flinfo: &'f mut FmgrInfo,
+fn cats(
+    flinfo: &mut FmgrInfo,
     build: impl FnOnce() -> PgResult<AggCats>,
-) -> PgResult<&'f mut AggCats> {
+) -> PgResult<&mut AggCats> {
     if flinfo.fn_extra_ref::<AggCats>().is_none() {
         let c = build()?;
         flinfo.set_fn_extra(c);
@@ -205,16 +205,15 @@ fn jsonb_agg_transfn_worker(
     }
 
     let mcx = fcinfo.result_mcx();
-    let c = flinfo.fn_extra_mut::<AggCats>().expect("cats built on first call");
+    let c = flinfo
+        .fn_extra_mut::<AggCats>()
+        .expect("cats built on first call");
     let image = elem_image(mcx, b.value, b.isnull, &mut c.val, false)?;
     accumulate_value(aggmcx, mcx, state, &image, false)?;
     Ok(Datum::from_usize(state as *mut JsonbAggState as usize))
 }
 
-pub fn fc_jsonb_agg_transfn(
-    flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_jsonb_agg_transfn(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     jsonb_agg_transfn_worker(flinfo, fcinfo, false)
 }
 
@@ -274,7 +273,9 @@ fn jsonb_object_agg_transfn_worker(
                 key: Some(json_categorize_type(key_type)?),
             })
         })?;
-        new_state(aggmcx, |ps| ps.push_object_start(unique_keys, absent_on_null))?
+        new_state(aggmcx, |ps| {
+            ps.push_object_start(unique_keys, absent_on_null)
+        })?
     } else {
         a.value.as_usize() as *mut JsonbAggState
     };
@@ -291,7 +292,9 @@ fn jsonb_object_agg_transfn_worker(
     }
 
     let mcx = fcinfo.result_mcx();
-    let c = flinfo.fn_extra_mut::<AggCats>().expect("cats built on first call");
+    let c = flinfo
+        .fn_extra_mut::<AggCats>()
+        .expect("cats built on first call");
     let key_image = elem_image(mcx, k.value, false, c.key.as_mut().unwrap(), true)?;
     let val_image = elem_image(mcx, v.value, v.isnull, &mut c.val, false)?;
 

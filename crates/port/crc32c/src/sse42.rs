@@ -1,5 +1,8 @@
 use core::arch::x86_64::{_mm_crc32_u32, _mm_crc32_u64, _mm_crc32_u8};
 
+/// # Safety
+/// Caller must only invoke this on a CPU with the `sse4.2` feature
+/// (checked by the caller's runtime dispatch, not by this function).
 #[target_feature(enable = "sse4.2")]
 pub fn pg_comp_crc32c_sse42(mut crc: u32, data: &[u8]) -> u32 {
     let mut p = data.as_ptr();

@@ -46,7 +46,12 @@ fn wrong_family_hint_fails() {
 #[test]
 fn unix_getnameinfo_local_node_and_path_service() {
     let mut out = Vec::new();
-    pg_getaddrinfo_all(None, Some("/tmp/.s.PGSQL.5432"), &unix_hint(libc::SOCK_STREAM), &mut out);
+    pg_getaddrinfo_all(
+        None,
+        Some("/tmp/.s.PGSQL.5432"),
+        &unix_hint(libc::SOCK_STREAM),
+        &mut out,
+    );
     let mut node = String::new();
     let mut service = String::new();
     let rc = pg_getnameinfo_all(&out[0].addr, Some(&mut node), Some(&mut service), 0);
@@ -58,7 +63,12 @@ fn unix_getnameinfo_local_node_and_path_service() {
 #[test]
 fn abstract_unix_path_round_trips_with_at_prefix() {
     let mut out = Vec::new();
-    pg_getaddrinfo_all(None, Some("@postgres.sock"), &unix_hint(libc::SOCK_STREAM), &mut out);
+    pg_getaddrinfo_all(
+        None,
+        Some("@postgres.sock"),
+        &unix_hint(libc::SOCK_STREAM),
+        &mut out,
+    );
     // Abstract sockets: addrlen excludes the trailing zero bytes.
     assert!((out[0].addr.salen as usize) < size_of::<libc::sockaddr_un>());
     let mut service = String::new();
@@ -79,15 +89,28 @@ fn unix_path_too_long_fails() {
 #[test]
 fn unix_path_with_embedded_nul_fails() {
     let mut out = Vec::new();
-    let rc = pg_getaddrinfo_all(None, Some("/tmp/a\0b"), &unix_hint(libc::SOCK_STREAM), &mut out);
+    let rc = pg_getaddrinfo_all(
+        None,
+        Some("/tmp/a\0b"),
+        &unix_hint(libc::SOCK_STREAM),
+        &mut out,
+    );
     assert_eq!(rc, libc::EAI_FAIL);
 }
 
 #[test]
 fn unix_nameinfo_requires_output_target() {
     let mut out = Vec::new();
-    pg_getaddrinfo_all(None, Some("/tmp/socket"), &unix_hint(libc::SOCK_STREAM), &mut out);
-    assert_eq!(pg_getnameinfo_all(&out[0].addr, None, None, 0), libc::EAI_FAIL);
+    pg_getaddrinfo_all(
+        None,
+        Some("/tmp/socket"),
+        &unix_hint(libc::SOCK_STREAM),
+        &mut out,
+    );
+    assert_eq!(
+        pg_getnameinfo_all(&out[0].addr, None, None, 0),
+        libc::EAI_FAIL
+    );
 }
 
 #[test]

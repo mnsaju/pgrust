@@ -186,7 +186,12 @@ pub struct SortedSinkEmitState {
 /// Adopt the stitched ordered segments; subsequent
 /// [`agg_sorted_sink_emit_next`] calls drain them in order.
 pub fn agg_sorted_sink_adopt(node: &mut AggStateData<'_>, segs: Vec<SortedEmitSeg>, natts: usize) {
-    node.sorted_sink_emit = Some(Box::new(SortedSinkEmitState { segs, seg: 0, pos: 0, natts }));
+    node.sorted_sink_emit = Some(Box::new(SortedSinkEmitState {
+        segs,
+        seg: 0,
+        pos: 0,
+        natts,
+    }));
 }
 
 /// Mid-emit marker for the lane dispatch.
@@ -205,7 +210,10 @@ pub fn agg_sorted_sink_emit_next<'mcx>(
 ) -> PgResult<Option<ExecSlotId>> {
     let mcx = estate.es_query_cxt;
     let next = {
-        let st = node.sorted_sink_emit.as_mut().expect("sorted sink emit state adopted");
+        let st = node
+            .sorted_sink_emit
+            .as_mut()
+            .expect("sorted sink emit state adopted");
         loop {
             if st.seg >= st.segs.len() {
                 break None;
@@ -224,7 +232,10 @@ pub fn agg_sorted_sink_emit_next<'mcx>(
         node.agg_done = true;
         return Ok(None);
     };
-    let st = node.sorted_sink_emit.as_ref().expect("sorted sink emit state adopted");
+    let st = node
+        .sorted_sink_emit
+        .as_ref()
+        .expect("sorted sink emit state adopted");
     let natts = st.natts;
     let s = &st.segs[seg];
     debug_assert_eq!(natts, s.natts);

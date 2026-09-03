@@ -8,25 +8,26 @@
 //! sortsupport abbreviation, regex tails, misc encoding. External/compressed
 //! images and non-C collations go through detoast_seams / pg_locale_seams.
 
-pub mod builtins;
 pub mod abbrev;
+pub mod builtins;
 pub mod bytea;
 pub mod concat_format;
 pub mod levenshtein;
-pub mod split_text;
 pub mod replace_regexp;
+pub mod split_text;
 pub mod string_agg;
-pub mod unicode;
 #[cfg(test)]
 mod tests;
+pub mod unicode;
 
-use core::cmp::Ordering;
 
 use datum::{Bytea, Varlena};
 use mcx::{Mcx, PgVec};
 use stringinfo::StringInfo;
-use types_core::{C_COLLATION_OID, Oid, OidIsValid, POSIX_COLLATION_OID};
-use types_error::{PgError, PgResult, ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_INDETERMINATE_COLLATION};
+use types_core::{Oid, OidIsValid, C_COLLATION_OID, POSIX_COLLATION_OID};
+use types_error::{
+    PgError, PgResult, ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_INDETERMINATE_COLLATION,
+};
 use types_tuple::varatt;
 
 pub const VARHDRSZ: usize = datum::varlena::VARHDRSZ;
@@ -240,21 +241,27 @@ pub fn bttextcmp(t1: &[u8], t2: &[u8], collid: Oid) -> PgResult<i32> {
 
 // C returns one of the argument pointers; the winner is the borrowed input.
 pub fn text_larger<'a>(t1: &'a [u8], t2: &'a [u8], collid: Oid) -> PgResult<&'a [u8]> {
-    Ok(if text_cmp(t1, t2, collid)? > 0 { t1 } else { t2 })
+    Ok(if text_cmp(t1, t2, collid)? > 0 {
+        t1
+    } else {
+        t2
+    })
 }
 
 pub fn text_smaller<'a>(t1: &'a [u8], t2: &'a [u8], collid: Oid) -> PgResult<&'a [u8]> {
-    Ok(if text_cmp(t1, t2, collid)? < 0 { t1 } else { t2 })
+    Ok(if text_cmp(t1, t2, collid)? < 0 {
+        t1
+    } else {
+        t2
+    })
 }
 
 pub fn text_starts_with(t1: &[u8], t2: &[u8], collid: Oid) -> PgResult<bool> {
     check_collation_set(collid)?;
     if !collation_is_deterministic(collid)? {
         return Err(Box::new(
-            PgError::error(
-                "nondeterministic collations are not supported for substring searches",
-            )
-            .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED),
+            PgError::error("nondeterministic collations are not supported for substring searches")
+                .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED),
         ));
     }
     Ok(t2.len() <= t1.len() && &t1[..t2.len()] == t2)
@@ -607,8 +614,8 @@ pub fn text_position_setup<'a>(
             state.skiptable[i] = core::mem::MaybeUninit::new(len2 as i32);
         }
         let last = len2 - 1;
-        for i in 0..last {
-            state.skiptable[t2[i] as usize & skiptablemask] =
+        for (i, &b) in t2.iter().enumerate().take(last) {
+            state.skiptable[b as usize & skiptablemask] =
                 core::mem::MaybeUninit::new((last - i) as i32);
         }
     }
@@ -653,8 +660,7 @@ fn text_position_next_internal(
         }
         // SAFETY: the masked index is <= skiptablemask; setup initialized
         // 0..=skiptablemask whenever this arm runs (len1 >= len2 && len2 > 1).
-        hptr +=
-            unsafe { state.skiptable[haystack[hptr] as usize & mask].assume_init() } as usize;
+        hptr += unsafe { state.skiptable[haystack[hptr] as usize & mask].assume_init() } as usize;
     }
     Ok(None)
 }
@@ -675,7 +681,10 @@ fn text_position_next_nondeterministic(
     };
     let mut hptr = start;
     while hptr < haystack.len() {
-        if !state.greedy && haystack.len() - hptr >= needle_len && eq(&haystack[hptr..hptr + needle_len])? {
+        if !state.greedy
+            && haystack.len() - hptr >= needle_len
+            && eq(&haystack[hptr..hptr + needle_len])?
+        {
             return Ok(Some((hptr, needle_len)));
         }
         let mut result: Option<(usize, usize)> = None;
@@ -991,8 +1000,7 @@ pub fn textToQualifiedNameList(mcx: Mcx<'_>, rawname: &str) -> PgResult<Vec<Stri
     match split_identifier_string(mcx, rawname, b'.', mbutils::GetDatabaseEncoding())? {
         Some(names) if !names.is_empty() => Ok(names),
         _ => Err(Box::new(
-            PgError::error("invalid name syntax")
-                .with_sqlstate(types_error::ERRCODE_INVALID_NAME),
+            PgError::error("invalid name syntax").with_sqlstate(types_error::ERRCODE_INVALID_NAME),
         )),
     }
 }

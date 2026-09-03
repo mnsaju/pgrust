@@ -100,8 +100,16 @@ mod tests {
                 );
             }
         }
-        let i64s: Vec<i64> =
-            vec![i64::MIN, i64::MIN + 1, -2461439046089301801, -1, 0, 1, i64::MAX - 1, i64::MAX];
+        let i64s: Vec<i64> = vec![
+            i64::MIN,
+            i64::MIN + 1,
+            -2461439046089301801,
+            -1,
+            0,
+            1,
+            i64::MAX - 1,
+            i64::MAX,
+        ];
         for a in &i64s {
             for b in &i64s {
                 assert_eq!(
@@ -129,7 +137,9 @@ mod tests {
         // Deterministic pseudo-random tuples incl. sign boundaries.
         let mut x: u64 = 0x9e3779b97f4a7c15;
         let mut step = || {
-            x = x.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            x = x
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             x
         };
         let mut tuples: Vec<(i32, i32, i64, i64, i64)> = (0..512)

@@ -6,13 +6,13 @@ use ::datum::Datum;
 use ::mcx::{Mcx, PgVec};
 use ::nbtree::itup::{index_form_tuple, index_getattr, maxalign, ItupBuf};
 use ::types_core::{
-    AttrNumber, BlockNumber, Buffer, ForkNumber, InvalidBlockNumber, OffsetNumber, Oid,
-    XLogRecPtr, BLCKSZ, RELPERSISTENCE_TEMP,
+    AttrNumber, BlockNumber, ForkNumber, InvalidBlockNumber, OffsetNumber, Oid, XLogRecPtr,
+    BLCKSZ, RELPERSISTENCE_TEMP,
 };
 use ::types_error::{PgError, PgResult, ERRCODE_INDEX_CORRUPTED};
 use ::types_gist::{
-    page_opaque, page_opaque_update, GISTPageOpaqueData, GistEntryVector, GistPageIsDeleted,
-    GISTENTRY, GIST_PAGE_ID, GiSTPageSize, TUPLE_IS_INVALID, TUPLE_IS_VALID,
+    GISTPageOpaqueData, GiSTPageSize, GistEntryVector,
+    GistPageIsDeleted, GISTENTRY, GIST_PAGE_ID, TUPLE_IS_INVALID, TUPLE_IS_VALID,
 };
 use ::types_rel::Relation;
 use ::types_storage::bufpage::{PageMut, PageRef};
@@ -145,9 +145,7 @@ pub fn gistfillbuffer(
     off: OffsetNumber,
 ) -> PgResult<()> {
     let mut off = if off == InvalidOffsetNumber {
-        if page.as_ref().pd_lower() as usize
-            <= ::types_storage::bufpage::SizeOfPageHeaderData
-        {
+        if page.as_ref().pd_lower() as usize <= ::types_storage::bufpage::SizeOfPageHeaderData {
             FirstOffsetNumber
         } else {
             page.as_ref().max_offset_number() + 1
@@ -195,10 +193,7 @@ pub fn gistfitpage(itvec: &[&[u8]]) -> bool {
 }
 
 /// gistextractpage: copy every tuple off the page.
-pub fn gistextractpage<'mcx>(
-    mcx: Mcx<'mcx>,
-    page: &PageRef<'_>,
-) -> PgResult<Vec<ItupBuf<'mcx>>> {
+pub fn gistextractpage<'mcx>(mcx: Mcx<'mcx>, page: &PageRef<'_>) -> PgResult<Vec<ItupBuf<'mcx>>> {
     let maxoff = page.max_offset_number();
     let mut itvec = Vec::with_capacity(maxoff as usize);
     for i in FirstOffsetNumber..=maxoff {
@@ -281,7 +276,15 @@ pub fn gistFormTuple<'mcx>(
 ) -> PgResult<ItupBuf<'mcx>> {
     let natts = r.rd_att.natts as usize;
     let mut compatt = [Datum::null(); ::types_core::fmgr::INDEX_MAX_KEYS as usize];
-    gistCompressValues(mcx, giststate, r, attdata, isnull, isleaf, &mut compatt[..natts])?;
+    gistCompressValues(
+        mcx,
+        giststate,
+        r,
+        attdata,
+        isnull,
+        isleaf,
+        &mut compatt[..natts],
+    )?;
 
     // Non-leaf tuples form over the truncated descriptor: INCLUDE attrs are
     // dropped (gistutil.c:583-585).
@@ -449,8 +452,24 @@ pub fn gistgetadjusted<'mcx>(
     let mut oldisnull = [false; K];
     let mut addentries = [GISTENTRY::default(); K];
     let mut addisnull = [false; K];
-    gistDeCompressAtt(mcx, giststate, r, oldtup, 0, &mut oldentries, &mut oldisnull)?;
-    gistDeCompressAtt(mcx, giststate, r, addtup, 0, &mut addentries, &mut addisnull)?;
+    gistDeCompressAtt(
+        mcx,
+        giststate,
+        r,
+        oldtup,
+        0,
+        &mut oldentries,
+        &mut oldisnull,
+    )?;
+    gistDeCompressAtt(
+        mcx,
+        giststate,
+        r,
+        addtup,
+        0,
+        &mut addentries,
+        &mut addisnull,
+    )?;
 
     let mut attr = [Datum::null(); K];
     let mut isnull = [false; K];
@@ -642,10 +661,7 @@ pub fn gistFetchTupleValues(
 }
 
 /// gistNewBuffer: pinned + exclusively locked; caller initializes the page.
-pub fn gistNewBuffer<'mcx>(
-    r: &Relation<'mcx>,
-    heaprel: &Relation<'mcx>,
-) -> PgResult<BufferPin> {
+pub fn gistNewBuffer<'mcx>(r: &Relation<'mcx>, heaprel: &Relation<'mcx>) -> PgResult<BufferPin> {
     loop {
         let blkno = freespace::GetFreeIndexPage(r)?;
         if blkno == InvalidBlockNumber {
@@ -696,10 +712,7 @@ pub fn gistPageRecyclable(
     }
     if GistPageIsDeleted(page) {
         let deletexid_full = ::types_gist::GistPageGetDeleteXid(page);
-        return procarray_seams::global_vis_check_removable_full_xid::call(
-            heaprel,
-            deletexid_full,
-        );
+        return procarray_seams::global_vis_check_removable_full_xid::call(heaprel, deletexid_full);
     }
     Ok(false)
 }

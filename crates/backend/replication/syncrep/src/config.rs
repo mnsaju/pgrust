@@ -142,7 +142,11 @@ pub fn parse_synchronous_standby_names(input: &str) -> Result<SyncRepConfigData,
 
     let (num_sync_str, method, parenthesized) = match toks.first() {
         Some(Token::Any) | Some(Token::First) => {
-            let method = if toks[0] == Token::Any { SYNC_REP_QUORUM } else { SYNC_REP_PRIORITY };
+            let method = if toks[0] == Token::Any {
+                SYNC_REP_QUORUM
+            } else {
+                SYNC_REP_PRIORITY
+            };
             pos = 1;
             let Some(Token::Num(n)) = toks.get(pos) else {
                 return Err(syntax_error(&toks, pos));
@@ -193,5 +197,9 @@ pub fn parse_synchronous_standby_names(input: &str) -> Result<SyncRepConfigData,
     // C: atoi() of the NUM token.
     let num_sync = num_sync_str.parse::<i32>().unwrap_or(i32::MAX);
 
-    Ok(SyncRepConfigData { num_sync, syncrep_method: method, members })
+    Ok(SyncRepConfigData {
+        num_sync,
+        syncrep_method: method,
+        members,
+    })
 }

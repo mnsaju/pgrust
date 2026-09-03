@@ -7,8 +7,8 @@ use types_guc::{GucContext, GucSource};
 
 use crate::statemachine::{ExitPostmaster, StartChildProcess, StartSysLogger, UpdatePMState};
 use crate::{
-    loc, report, try_with_pm, with_pm, PMState, LOCK_FILE_LINE_LISTEN_ADDR, LOCK_FILE_LINE_PM_STATUS,
-    LOCK_FILE_LINE_SOCKET_DIR, MAXLISTEN, PM_STATUS_STARTING,
+    loc, report, try_with_pm, with_pm, PMState, LOCK_FILE_LINE_LISTEN_ADDR,
+    LOCK_FILE_LINE_PM_STATUS, LOCK_FILE_LINE_SOCKET_DIR, MAXLISTEN, PM_STATUS_STARTING,
 };
 
 const PROGNAME: &str = "postgres";
@@ -32,7 +32,11 @@ fn getInstallationPaths(argv0: &str) {
     let exe = match pg_path::find_my_exec(argv0, |m| {
         let _ = elog::ereport(LOG)
             .errmsg(m)
-            .finish(types_error::ErrorLocation::new(file!(), line!() as i32, "find_my_exec"));
+            .finish(types_error::ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "find_my_exec",
+            ));
     }) {
         Ok(exe) => exe,
         Err(_) => {
@@ -131,7 +135,12 @@ fn parse_long_option(optarg: &str) -> (String, Option<String>) {
 }
 
 fn set_config_argv(name: &str, value: &str) -> PgResult<()> {
-    guc::SetConfigOption(name, Some(value), GucContext::PGC_POSTMASTER, GucSource::PGC_S_ARGV)
+    guc::SetConfigOption(
+        name,
+        Some(value),
+        GucContext::PGC_POSTMASTER,
+        GucSource::PGC_S_ARGV,
+    )
 }
 
 // SplitGUCList reduced to the unquoted comma form; quoted list items arrive
@@ -216,12 +225,18 @@ pub fn PostmasterMain(argv: &[String]) -> PgResult<()> {
             let tail: String = cs.collect();
             (o, if tail.is_empty() { None } else { Some(tail) })
         };
-        let mut take_val = |args: &mut std::iter::Peekable<std::iter::Skip<std::slice::Iter<String>>>| {
-            inline_val.take().or_else(|| args.next().cloned()).unwrap_or_else(|| {
-                write_stderr(format!("{PROGNAME}: option requires an argument -- {opt}\n"));
-                ExitPostmaster(1);
-            })
-        };
+        let mut take_val =
+            |args: &mut std::iter::Peekable<std::iter::Skip<std::slice::Iter<String>>>| {
+                inline_val
+                    .take()
+                    .or_else(|| args.next().cloned())
+                    .unwrap_or_else(|| {
+                        write_stderr(format!(
+                            "{PROGNAME}: option requires an argument -- {opt}\n"
+                        ));
+                        ExitPostmaster(1);
+                    })
+            };
         match opt {
             'B' => set_config_argv("shared_buffers", &take_val(&mut args))?,
             'b' => init_small::globals::SetIsBinaryUpgrade(true),
@@ -244,7 +259,10 @@ pub fn PostmasterMain(argv: &[String]) -> PgResult<()> {
             'D' => user_d_option = Some(take_val(&mut args)),
             'd' => {
                 let v: i32 = take_val(&mut args).parse().unwrap_or(0);
-                postgres_seams::set_debug_options::call(v, GucContext::PGC_POSTMASTER as i32 as u8)?;
+                postgres_seams::set_debug_options::call(
+                    v,
+                    GucContext::PGC_POSTMASTER as i32 as u8,
+                )?;
             }
             'E' => set_config_argv("log_statement", "all")?,
             'e' => set_config_argv("datestyle", "euro")?,
@@ -255,7 +273,9 @@ pub fn PostmasterMain(argv: &[String]) -> PgResult<()> {
                     &v,
                     GucContext::PGC_POSTMASTER as i32 as u8,
                 )? {
-                    write_stderr(format!("{PROGNAME}: invalid argument for option -f: \"{v}\"\n"));
+                    write_stderr(format!(
+                        "{PROGNAME}: invalid argument for option -f: \"{v}\"\n"
+                    ));
                     ExitPostmaster(1);
                 }
             }
@@ -279,7 +299,9 @@ pub fn PostmasterMain(argv: &[String]) -> PgResult<()> {
                 match postgres_seams::get_stats_option_name::call(&v) {
                     Some(name) => set_config_argv(name, "true")?,
                     None => {
-                        write_stderr(format!("{PROGNAME}: invalid argument for option -t: \"{v}\"\n"));
+                        write_stderr(format!(
+                            "{PROGNAME}: invalid argument for option -t: \"{v}\"\n"
+                        ));
                         ExitPostmaster(1);
                     }
                 }
@@ -448,7 +470,9 @@ pub fn PostmasterMain(argv: &[String]) -> PgResult<()> {
         Err(e) => {
             let _ = elog::ereport(LOG)
                 .errcode_for_file_access()
-                .errmsg(format!("could not remove file \"{LOG_METAINFO_DATAFILE}\": {e}"))
+                .errmsg(format!(
+                    "could not remove file \"{LOG_METAINFO_DATAFILE}\": {e}"
+                ))
                 .finish(loc(1068, "PostmasterMain"));
         }
     }
@@ -459,7 +483,12 @@ pub fn PostmasterMain(argv: &[String]) -> PgResult<()> {
 
     elog::config::set_where_to_send_output(types_dest_none());
 
-    report(LOG, format!("starting {PG_VERSION_STR}"), 1105, "PostmasterMain");
+    report(
+        LOG,
+        format!("starting {PG_VERSION_STR}"),
+        1105,
+        "PostmasterMain",
+    );
 
     // pgrust extension (GL-STRDEFECTS-1 witness): the regexp engine tiers
     // are a build property (RE2 links only where libre2 existed at build) —
@@ -492,7 +521,11 @@ pub fn PostmasterMain(argv: &[String]) -> PgResult<()> {
         let mut success = 0;
         let elems = split_list(&listen_addresses);
         for curhost in &elems {
-            let host = if curhost == "*" { None } else { Some(curhost.as_str()) };
+            let host = if curhost == "*" {
+                None
+            } else {
+                Some(curhost.as_str())
+            };
             let port = guc_tables::vars::PostPortNumber.read() as u16;
             let status = with_pm(|pm| {
                 pqcomm_seams::listen_server_port::call(
@@ -577,7 +610,10 @@ pub fn PostmasterMain(argv: &[String]) -> PgResult<()> {
         ExitPostmaster(1);
     }
 
-    if let Some(pidfile) = guc_tables::vars::external_pid_file.read().filter(|s| !s.is_empty()) {
+    if let Some(pidfile) = guc_tables::vars::external_pid_file
+        .read()
+        .filter(|s| !s.is_empty())
+    {
         match std::fs::write(&pidfile, format!("{}\n", init_small::globals::MyProcPid())) {
             Ok(()) => {
                 // wasm32: no unix mode bits on WASI; the chmod is a no-op
@@ -660,7 +696,11 @@ pub fn PostmasterMain(argv: &[String]) -> PgResult<()> {
 
     let status = crate::serverloop::ServerLoop()?;
 
-    ExitPostmaster(if status == types_core::STATUS_OK { 0 } else { 1 });
+    ExitPostmaster(if status == types_core::STATUS_OK {
+        0
+    } else {
+        1
+    });
 }
 
 fn types_dest_none() -> types_dest::CommandDest {
@@ -706,7 +746,7 @@ fn unlink_external_pid_file_cb(_code: i32, _arg: usize) {
 }
 
 fn CreateOptsFile(argv: &[String]) -> bool {
-    use std::io::Write;
+    
     let fullprogname = String::from_utf8_lossy(
         &init_small::globals::my_exec_path()
             .iter()
@@ -715,7 +755,7 @@ fn CreateOptsFile(argv: &[String]) -> bool {
             .collect::<Vec<u8>>(),
     )
     .into_owned();
-    let mut line = format!("{fullprogname}");
+    let mut line = fullprogname.to_string();
     for arg in argv.iter().skip(1) {
         line.push_str(" \"");
         line.push_str(arg);

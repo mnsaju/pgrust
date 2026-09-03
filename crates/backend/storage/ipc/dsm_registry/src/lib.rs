@@ -50,7 +50,9 @@ pub fn DSMRegistryShmemInit() {
 }
 
 pub fn DSMRegistryShmemResetAfterCrash() {
-    let reg = REGISTRY.get().expect("DSM registry accessed before DSMRegistryShmemInit");
+    let reg = REGISTRY
+        .get()
+        .expect("DSM registry accessed before DSMRegistryShmemInit");
     // SAFETY: crash-cycle single-writer window (see Sync argument above).
     unsafe { (*reg.0.get()).clear() };
 }
@@ -64,7 +66,10 @@ impl RegistryLockGuard {
     fn acquire() -> PgResult<Self> {
         let lock = main_lock(DSM_REGISTRY_LOCK);
         LWLockAcquire(lock, LW_EXCLUSIVE, globals::MyProcNumber())?;
-        Ok(RegistryLockGuard { lock, released: false })
+        Ok(RegistryLockGuard {
+            lock,
+            released: false,
+        })
     }
 
     fn release(mut self) -> PgResult<()> {
@@ -106,7 +111,9 @@ pub fn GetNamedDSMSegment(
     let mut key = [0u8; DSM_REGISTRY_NAME_LEN];
     key[..name.len()].copy_from_slice(name.as_bytes());
 
-    let reg = REGISTRY.get().expect("DSM registry accessed before DSMRegistryShmemInit");
+    let reg = REGISTRY
+        .get()
+        .expect("DSM registry accessed before DSMRegistryShmemInit");
     let guard = RegistryLockGuard::acquire()?;
     // SAFETY: DSMRegistryLock held exclusive for the rest of this function.
     let entries = unsafe { &mut *reg.0.get() };
@@ -116,7 +123,11 @@ pub fn GetNamedDSMSegment(
         Some(i) => i,
         None => {
             found = false;
-            entries.push(DsmRegistryEntry { name: key, handle: DSM_HANDLE_INVALID, size });
+            entries.push(DsmRegistryEntry {
+                name: key,
+                handle: DSM_HANDLE_INVALID,
+                size,
+            });
             entries.len() - 1
         }
     };

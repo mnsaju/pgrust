@@ -1,3 +1,4 @@
+#![allow(clippy::too_many_arguments)]
 // pgstat_relation.c — relation counting keyed by (dboid, relid); the relcache
 // carries only `pgstat_enabled` (checked by callers, C's macro branch), and
 // C's rel->pgstat_info/trans/parent pointer chases become by-key map access.
@@ -94,11 +95,11 @@ pub fn pgstat_unlink_relation(_relid: Oid, _relisshared: bool) {}
 // through an intermediate reference), so relcache-cached count links derived
 // from the same root stay aliasing-clean. Sound: the allocation outlives the
 // returned borrow (freed only via removal paths, which need &mut PgStatState).
-fn pgstat_prep_relation_pending<'a>(
-    st: &'a mut PgStatState,
+fn pgstat_prep_relation_pending(
+    st: &mut PgStatState,
     relid: Oid,
     relisshared: bool,
-) -> &'a mut PgStat_TableStatus {
+) -> &mut PgStat_TableStatus {
     let key = relation_key(relid, relisshared);
     match st.prep_pending_entry(key) {
         PendingData::Relation(rp) => {
@@ -111,7 +112,7 @@ fn pgstat_prep_relation_pending<'a>(
     }
 }
 
-fn table_mut<'a>(st: &'a mut PgStatState, key: PgStat_HashKey) -> &'a mut PgStat_TableStatus {
+fn table_mut(st: &mut PgStatState, key: PgStat_HashKey) -> &mut PgStat_TableStatus {
     match st.pending.get_mut(&key) {
         Some(PendingData::Relation(rp)) => unsafe { &mut *rp.as_ptr() },
         _ => unreachable!("relation pending entry vanished"),
@@ -288,9 +289,7 @@ pub fn pgstat_relation_link_counts(relid: Oid, relisshared: bool) -> *mut () {
     pending::with_state(|st| {
         pgstat_prep_relation_pending(st, relid, relisshared);
         match st.pending.get_mut(&key) {
-            Some(PendingData::Relation(rp)) => {
-                unsafe { &raw mut (*rp.as_ptr()).counts }.cast()
-            }
+            Some(PendingData::Relation(rp)) => unsafe { &raw mut (*rp.as_ptr()).counts }.cast(),
             _ => unreachable!("relation pending entry vanished"),
         }
     })

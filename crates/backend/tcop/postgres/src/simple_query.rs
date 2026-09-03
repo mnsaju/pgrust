@@ -36,8 +36,11 @@ pub fn pg_parse_query<'mcx>(
         ResetUsage();
     }
 
-    let raw_parsetree_list =
-        parser_seams::raw_parser::call(mcx, query_string, parser_seams::RawParseMode::RAW_PARSE_DEFAULT)?;
+    let raw_parsetree_list = parser_seams::raw_parser::call(
+        mcx,
+        query_string,
+        parser_seams::RawParseMode::RAW_PARSE_DEFAULT,
+    )?;
 
     if log_parser_stats() {
         ShowUsage("PARSER STATISTICS")?;
@@ -72,7 +75,10 @@ pub fn pg_analyze_and_rewrite_fixedparams<'a, 'mcx>(
     pg_rewrite_query(mcx, query)
 }
 
-pub fn pg_rewrite_query<'mcx>(mcx: Mcx<'mcx>, query: Query<'mcx>) -> PgResult<PgVec<'mcx, Query<'mcx>>> {
+pub fn pg_rewrite_query<'mcx>(
+    mcx: Mcx<'mcx>,
+    query: Query<'mcx>,
+) -> PgResult<PgVec<'mcx, Query<'mcx>>> {
     if log_parser_stats() {
         ResetUsage();
     }
@@ -148,9 +154,8 @@ pub fn pg_plan_queries<'mcx>(
                 ..PlannedStmt::default()
             });
         } else {
-            let stmt =
-                pg_plan_query(mcx, query, query_string, cursor_options, bound_params)?
-                    .expect("pg_plan_query returned None for a non-utility query");
+            let stmt = pg_plan_query(mcx, query, query_string, cursor_options, bound_params)?
+                .expect("pg_plan_query returned None for a non-utility query");
             stmt_list.push(stmt);
         }
     }
@@ -173,14 +178,11 @@ fn crash_backend_injection(args: &str) -> PgResult<()> {
     }
 
     let mut parts = args.split_whitespace();
-    let pid: i32 = parts
-        .next()
-        .and_then(|s| s.parse().ok())
-        .ok_or_else(|| {
-            ereport(ERROR)
-                .errmsg("crash backend: expected 'pgrust: crash backend <vpid> quit|kill'")
-                .into_error()
-        })?;
+    let pid: i32 = parts.next().and_then(|s| s.parse().ok()).ok_or_else(|| {
+        ereport(ERROR)
+            .errmsg("crash backend: expected 'pgrust: crash backend <vpid> quit|kill'")
+            .into_error()
+    })?;
     let mode = parts.next().unwrap_or("quit");
 
     let rc = match mode {
@@ -188,7 +190,9 @@ fn crash_backend_injection(args: &str) -> PgResult<()> {
         "kill" => procsignal::SendThreadKill(pid),
         other => {
             return Err(ereport(ERROR)
-                .errmsg(format!("crash backend: unknown mode {other:?} (want quit|kill)"))
+                .errmsg(format!(
+                    "crash backend: unknown mode {other:?} (want quit|kill)"
+                ))
                 .into_error()
                 .into());
         }
@@ -233,9 +237,7 @@ fn watchdog_test_hog(mb: usize) {
 pub fn exec_simple_query<'mcx>(mcx: Mcx<'mcx>, query_string: &'mcx str) -> PgResult<()> {
     // Crash-restart test injection: PANIC-class fault on demand, env-gated so
     // the surface is inert in production (notes/crash-restart-design.md).
-    if query_string == "pgrust: inject panic"
-        && std::env::var_os("PGRUST_CRASH_TEST").is_some()
-    {
+    if query_string == "pgrust: inject panic" && std::env::var_os("PGRUST_CRASH_TEST").is_some() {
         ereport(types_error::PANIC)
             .errmsg("crash-restart test injection")
             .finish(loc(0, "exec_simple_query"))?;
@@ -280,7 +282,6 @@ pub fn exec_simple_query<'mcx>(mcx: Mcx<'mcx>, query_string: &'mcx str) -> PgRes
     crate::stmt_trace::probe("q.xact");
 
     drop_unnamed_stmt();
-
 
     let parsetree_list = pg_parse_query(mcx, query_string)?;
     crate::stmt_trace::probe("q.parse");
@@ -467,7 +468,9 @@ pub fn exec_simple_query<'mcx>(mcx: Mcx<'mcx>, query_string: &'mcx str) -> PgRes
         }
         (2, msec_str) => {
             ereport(LOG)
-                .errmsg(format!("duration: {msec_str} ms  statement: {query_string}"))
+                .errmsg(format!(
+                    "duration: {msec_str} ms  statement: {query_string}"
+                ))
                 .errhidestmt(true)
                 .finish(loc(1367, "exec_simple_query"))?;
         }
@@ -477,7 +480,6 @@ pub fn exec_simple_query<'mcx>(mcx: Mcx<'mcx>, query_string: &'mcx str) -> PgRes
     if save_log_statement_stats {
         ShowUsage("QUERY STATISTICS")?;
     }
-
 
     Ok(())
 }
@@ -532,7 +534,6 @@ pub(crate) fn IsTransactionExitStmt(parsetree: Option<Node<'_>>) -> bool {
     }
 }
 
-
 use crate::extended_query::drop_unnamed_stmt;
 
 fn check_log_statement(stmt_list: &PgVec<'_, RawStmt<'_>>) -> bool {
@@ -570,8 +571,7 @@ pub(crate) fn check_log_duration(was_logged: bool) -> (i32, String) {
         sample_rate: guc_tables::backing::log_statement_sample_rate(),
         xact_is_sampled: xact::xact_is_sampled(),
     };
-    let diff_us =
-        crate::get_current_timestamp() - xact::GetCurrentStatementStartTimestamp();
+    let diff_us = crate::get_current_timestamp() - xact::GetCurrentStatementStartTimestamp();
     check_log_duration_impl(was_logged, diff_us, &gucs, || {
         pg_prng::global_prng(pg_prng::PgPrng::next_f64)
     })
@@ -597,12 +597,12 @@ pub(crate) fn check_log_duration_impl(
     }
 
     let secs = diff_us / 1_000_000;
-    let usecs = (diff_us % 1_000_000) as i64;
+    let usecs = diff_us % 1_000_000;
     let msecs = usecs / 1000;
 
     let exceeded_duration = g.log_min == 0
-        || (g.log_min > 0 && (secs > i64::from(g.log_min) / 1000
-            || secs * 1000 + msecs >= i64::from(g.log_min)));
+        || (g.log_min > 0
+            && (secs > i64::from(g.log_min) / 1000 || secs * 1000 + msecs >= i64::from(g.log_min)));
 
     let exceeded_sample_duration = g.log_min_sample == 0
         || (g.log_min_sample > 0

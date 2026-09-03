@@ -3,32 +3,32 @@
 
 mod alter;
 mod attach;
-mod setrelopts;
-mod inheritance;
-mod partition;
 mod constraints;
-mod fk;
 mod drop;
-mod owner;
-mod oncommit;
+mod fk;
+mod inheritance;
 mod namespace;
+mod oncommit;
+mod owner;
+mod partition;
 mod rename;
+mod setrelopts;
 mod truncate;
 pub use alter::{
     find_composite_type_dependencies, AlterTable, AlterTableGetLockLevel, AlterTableInternal,
     AlterTableLookupRelation, AlterTableMoveAll,
 };
 pub use constraints::cook_default;
+pub use drop::RemoveRelations;
 pub use namespace::{
     AlterRelationNamespaceInternal, AlterTableNamespace, AlterTableNamespaceInternal,
 };
-pub use rename::{renameatt, RenameConstraint, RenameRelation, RenameRelationInternal};
-pub use drop::RemoveRelations;
-pub use partition::SetRelationHasSubclass;
 pub use oncommit::{
     register_on_commit_action, remove_on_commit_action, AtEOSubXact_on_commit_actions,
     AtEOXact_on_commit_actions, PreCommit_on_commit_actions,
 };
+pub use partition::SetRelationHasSubclass;
+pub use rename::{renameatt, RenameConstraint, RenameRelation, RenameRelationInternal};
 pub use truncate::{ExecuteTruncate, ExecuteTruncateGuts};
 
 pub fn init_seams() {
@@ -47,7 +47,7 @@ use mcx::Mcx;
 use types_core::{AttrNumber, InvalidOid, Oid, NAMEDATALEN};
 use types_error::{PgError, PgResult, ERRCODE_FEATURE_NOT_SUPPORTED, ERROR};
 
-use commands_tablespace::{GLOBALTABLESPACE_OID, TableSpaceRelationId};
+use commands_tablespace::{TableSpaceRelationId, GLOBALTABLESPACE_OID};
 use types_nodes::rawnodes::{ColumnDef, CreateStmt, OnCommitAction, TypeName};
 use types_rel::{RELKIND_RELATION, RELKIND_SEQUENCE};
 use types_tuple::TupleDescData;
@@ -84,8 +84,7 @@ pub fn RangeVarCallbackMaintainsTable(
             .with_sqlstate(types_error::ERRCODE_WRONG_OBJECT_TYPE),
         ));
     }
-    let aclresult =
-        aclchk::pg_class_aclcheck(relId, miscinit::GetUserId(), adt_acl::ACL_MAINTAIN)?;
+    let aclresult = aclchk::pg_class_aclcheck(relId, miscinit::GetUserId(), adt_acl::ACL_MAINTAIN)?;
     if aclresult != aclchk::ACLCHECK_OK {
         // get_relkind_objtype (objectaddress.c): matview vs table noun.
         let objtype = if relkind == types_rel::RELKIND_MATVIEW {
@@ -132,7 +131,11 @@ pub fn get_relkind_objtype(relkind: u8) -> types_nodes::parsenodes::ObjectType {
 // aclcheck_error_type (aclchk.c): arrays report their element type.
 fn aclcheck_error_type(aclerr: i32, type_oid: Oid) -> PgResult<()> {
     let element_type = lsyscache::get_element_type(type_oid)?;
-    let type_oid = if element_type != InvalidOid { element_type } else { type_oid };
+    let type_oid = if element_type != InvalidOid {
+        element_type
+    } else {
+        type_oid
+    };
     aclchk::aclcheck_error(
         aclerr,
         types_nodes::parsenodes::ObjectType::OBJECT_TYPE,
@@ -187,10 +190,7 @@ fn GetColumnDefCollationPos(
 // compression is always available here -- see detoast/heaptoast's
 // lz4_flex-backed implementation -- so "lz4" is accepted like "pglz"
 // rather than taking C's not-supported/DETAIL error.
-pub(crate) fn GetAttributeCompression(
-    atttypid: Oid,
-    compression: Option<&str>,
-) -> PgResult<i8> {
+pub(crate) fn GetAttributeCompression(atttypid: Oid, compression: Option<&str>) -> PgResult<i8> {
     let Some(compression) = compression else {
         return Ok(types_tuple::InvalidCompressionMethod);
     };
@@ -218,8 +218,11 @@ pub(crate) fn GetAttributeCompression(
         Ok(b'l' as i8)
     } else {
         Err(Box::new(
-            PgError::new(ERROR, format!("invalid compression method \"{compression}\""))
-                .with_sqlstate(types_error::ERRCODE_INVALID_PARAMETER_VALUE),
+            PgError::new(
+                ERROR,
+                format!("invalid compression method \"{compression}\""),
+            )
+            .with_sqlstate(types_error::ERRCODE_INVALID_PARAMETER_VALUE),
         ))
     }
 }
@@ -289,7 +292,11 @@ pub fn DefineRelation<'mcx>(
             || relkind == types_rel::RELKIND_FOREIGN_TABLE
     );
     let partitioned = stmt.partspec.is_some();
-    let relkind = if partitioned { types_rel::RELKIND_PARTITIONED_TABLE } else { relkind };
+    let relkind = if partitioned {
+        types_rel::RELKIND_PARTITIONED_TABLE
+    } else {
+        relkind
+    };
     let rv = stmt.relation.expect("CreateStmt.relation");
     let relname = truncate_name(mcx, rv.relname.expect("RangeVar.relname"))?;
     // Pre-adjustment persistence, like C (tablecmds.c:816-820).
@@ -343,10 +350,8 @@ pub fn DefineRelation<'mcx>(
             amoid = lsyscache::get_rel_relam(inherit_oids[0])?;
         }
         if types_rel::RELKIND_HAS_TABLE_AM(relkind) && amoid == InvalidOid {
-            amoid = commands_amcmds::get_table_am_oid(
-                &tableam::default_table_access_method(),
-                false,
-            )?;
+            amoid =
+                commands_amcmds::get_table_am_oid(&tableam::default_table_access_method(), false)?;
         }
         amoid
     } else {
@@ -378,14 +383,22 @@ pub fn DefineRelation<'mcx>(
         location: rv.location,
     };
     let (namespace_id, _existing_relid, relpersistence) =
-        catalog_namespace::RangeVarGetAndCheckCreationNamespace(mcx, &creation_rv, types_rel::NoLock, false)?;
+        catalog_namespace::RangeVarGetAndCheckCreationNamespace(
+            mcx,
+            &creation_rv,
+            types_rel::NoLock,
+            false,
+        )?;
 
     if stmt.oncommit != OnCommitAction::ONCOMMIT_NOOP
         && relpersistence != types_core::RELPERSISTENCE_TEMP
     {
         return Err(Box::new(
-            PgError::new(ERROR, "ON COMMIT can only be used on temporary tables".to_string())
-                .with_sqlstate(types_error::ERRCODE_INVALID_TABLE_DEFINITION),
+            PgError::new(
+                ERROR,
+                "ON COMMIT can only be used on temporary tables".to_string(),
+            )
+            .with_sqlstate(types_error::ERRCODE_INVALID_TABLE_DEFINITION),
         ));
     }
 
@@ -408,10 +421,9 @@ pub fn DefineRelation<'mcx>(
     };
     if tablespace_id == InvalidOid {
         tablespace_id =
-            commands_tablespace::GetDefaultTablespace(mcx, relpersistence as u8, partitioned)?;
+            commands_tablespace::GetDefaultTablespace(mcx, relpersistence, partitioned)?;
     }
-    if tablespace_id != InvalidOid && tablespace_id != init_small::globals::MyDatabaseTableSpace()
-    {
+    if tablespace_id != InvalidOid && tablespace_id != init_small::globals::MyDatabaseTableSpace() {
         let aclresult = aclchk::object_aclcheck(
             TableSpaceRelationId,
             tablespace_id,
@@ -424,7 +436,9 @@ pub fn DefineRelation<'mcx>(
             aclchk::aclcheck_error(
                 aclresult,
                 types_nodes::parsenodes::ObjectType::OBJECT_TABLESPACE,
-                name.as_ref().map(|n| std::str::from_utf8(n.name_str()).unwrap_or("")).unwrap_or(""),
+                name.as_ref()
+                    .map(|n| std::str::from_utf8(n.name_str()).unwrap_or(""))
+                    .unwrap_or(""),
             )?;
         }
     }
@@ -438,7 +452,11 @@ pub fn DefineRelation<'mcx>(
         ));
     }
 
-    let owner_id = if owner_id != InvalidOid { owner_id } else { miscinit::GetUserId() };
+    let owner_id = if owner_id != InvalidOid {
+        owner_id
+    } else {
+        miscinit::GetUserId()
+    };
 
     let of_type_id = match stmt.ofTypename {
         Some(tn_node) => {
@@ -480,7 +498,7 @@ pub fn DefineRelation<'mcx>(
             mcx,
             &stmt.tableElts,
             &inherit_oids,
-            relpersistence as u8,
+            relpersistence,
         )?)
     } else {
         None
@@ -625,8 +643,7 @@ pub fn DefineRelation<'mcx>(
             }
             // The parent's catalogued not-null constraints ride to the
             // partition with their attnos mapped through newattmap.
-            for cnode in pg_constraint::RelationGetNotNullConstraints(mcx, &parent, false)?.iter()
-            {
+            for cnode in pg_constraint::RelationGetNotNullConstraints(mcx, &parent, false)?.iter() {
                 let c = cnode
                     .as_variant::<types_nodes::rawnodes::Constraint>()
                     .expect("Constraint");
@@ -740,8 +757,9 @@ pub fn DefineRelation<'mcx>(
             if elt.node_tag() != types_nodes::NodeTag::T_ColumnDef {
                 continue;
             }
-            let restdef =
-                elt.as_variant::<types_nodes::rawnodes::ColumnDef>().expect("ColumnDef");
+            let restdef = elt
+                .as_variant::<types_nodes::rawnodes::ColumnDef>()
+                .expect("ColumnDef");
             let colname = restdef.colname.expect("ColumnDef.colname");
             let attno = (0..descriptor.natts as usize).find(|&i| {
                 let a = descriptor.attr(i);
@@ -790,7 +808,9 @@ pub fn DefineRelation<'mcx>(
                     ),
                 ));
             }
-            if coldef_generated != 0 && restdef.generated != 0 && coldef_generated != restdef.generated
+            if coldef_generated != 0
+                && restdef.generated != 0
+                && coldef_generated != restdef.generated
             {
                 let kind = |g: u8| if g == b's' { "STORED" } else { "VIRTUAL" };
                 return Err(Box::new(
@@ -882,12 +902,7 @@ pub fn DefineRelation<'mcx>(
         let rel = table::table_open(mcx, relation_id, types_rel::AccessExclusiveLock)?;
         let mut pstate = parser_small1::make_parsestate(mcx, None);
         pstate.p_sourcetext = Some(query_string.as_bytes());
-        let bound = partition::transformPartitionBound(
-            mcx,
-            &mut pstate,
-            &parent,
-            bound_spec_node,
-        )?;
+        let bound = partition::transformPartitionBound(mcx, &mut pstate, &parent, bound_spec_node)?;
         {
             let key = partcache::RelationGetPartitionKey(&parent)?;
             let spec = bound
@@ -1074,7 +1089,10 @@ pub fn DefineRelation<'mcx>(
                     mcx,
                     rel.rd_id,
                     attnum,
-                    &[(alter::Anum_pg_attribute_attnotnull, ::datum::Datum::from_bool(true))],
+                    &[(
+                        alter::Anum_pg_attribute_attnotnull,
+                        ::datum::Datum::from_bool(true),
+                    )],
                 )?;
                 updated = true;
             }
@@ -1087,4 +1105,3 @@ pub fn DefineRelation<'mcx>(
     }
     Ok(relation_id)
 }
-

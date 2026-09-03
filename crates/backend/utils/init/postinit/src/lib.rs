@@ -105,7 +105,9 @@ fn PerformAuthentication() -> PgResult<()> {
     if backend_startup::log_connections::get() & backend_startup::LOG_CONNECTION_AUTHORIZATION != 0
     {
         let logmsg = build_auth_logmsg();
-        ereport(LOG).errmsg_internal(logmsg).finish(loc(309, "PerformAuthentication"))?;
+        ereport(LOG)
+            .errmsg_internal(logmsg)
+            .finish(loc(309, "PerformAuthentication"))?;
     }
 
     ps_status_seams::set_ps_display::call("startup");
@@ -162,7 +164,9 @@ fn CheckMyDatabase(
     if name != dbform.datname.as_str() {
         return ereport(FATAL)
             .errcode(ERRCODE_UNDEFINED_DATABASE)
-            .errmsg(format!("database \"{name}\" has disappeared from pg_database"))
+            .errmsg(format!(
+                "database \"{name}\" has disappeared from pg_database"
+            ))
             .errdetail(format!(
                 "Database OID {} now seems to belong to \"{}\".",
                 my_database_id,
@@ -407,8 +411,7 @@ pub fn InitializeMaxBackends() -> PgResult<()> {
 /// not ambient-global seams).
 pub fn InitializeFastPathLocks() -> i32 {
     let max_locks_per_xact = guc_tables::vars::max_locks_per_xact.read();
-    let groups = ((max_locks_per_xact as u32).next_power_of_two() as i32
-        / FP_LOCK_SLOTS_PER_GROUP)
+    let groups = ((max_locks_per_xact as u32).next_power_of_two() as i32 / FP_LOCK_SLOTS_PER_GROUP)
         .clamp(1, FP_LOCK_GROUPS_PER_BACKEND_MAX);
     debug_assert_eq!(groups, (groups as u32).next_power_of_two() as i32);
     groups
@@ -483,7 +486,9 @@ pub fn InitPostgres(
     let am_superuser: bool;
     let mut dbname = String::new();
 
-    ereport(DEBUG3).errmsg_internal("InitPostgres").finish(loc(723, "InitPostgres"))?;
+    ereport(DEBUG3)
+        .errmsg_internal("InitPostgres")
+        .finish(loc(723, "InitPostgres"))?;
 
     // Session-memory teardown (FPBUDGET-1): the fundamentals — transaction
     // contexts, resource-owner arena, Port copy — freed at clean task end.
@@ -721,7 +726,9 @@ pub fn InitPostgres(
             return ereport(FATAL)
                 .errcode(ERRCODE_INSUFFICIENT_PRIVILEGE)
                 .errmsg("permission denied to start WAL sender")
-                .errdetail("Only roles with the REPLICATION attribute may start a WAL sender process.")
+                .errdetail(
+                    "Only roles with the REPLICATION attribute may start a WAL sender process.",
+                )
                 .finish(loc(960, "InitPostgres"));
         }
     }
@@ -882,7 +889,12 @@ pub fn InitPostgres(
     acl_seams::initialize_acl::call()?;
 
     if !bootstrap {
-        CheckMyDatabase(mcx, &dbname, am_superuser, (flags & INIT_PG_OVERRIDE_ALLOW_CONNS) != 0)?;
+        CheckMyDatabase(
+            mcx,
+            &dbname,
+            am_superuser,
+            (flags & INIT_PG_OVERRIDE_ALLOW_CONNS) != 0,
+        )?;
     }
 
     gtrace("p.checkdb");
@@ -899,7 +911,11 @@ pub fn InitPostgres(
         && parallel_seams::initializing_parallel_worker::is_installed()
         && parallel_seams::initializing_parallel_worker::call();
     if !takes_session_bind {
-        process_settings(mcx, init_small::globals::MyDatabaseId(), miscinit::GetSessionUserId())?;
+        process_settings(
+            mcx,
+            init_small::globals::MyDatabaseId(),
+            miscinit::GetSessionUserId(),
+        )?;
     }
     gtrace("p.settings");
 
@@ -982,7 +998,7 @@ fn process_startup_options(am_superuser: bool) -> PgResult<()> {
     });
 
     if let Some(cmdline_options) = cmdline_options {
-        let maxac = 2 + (cmdline_options.len() + 1) / 2;
+        let maxac = 2 + cmdline_options.len().div_ceil(2);
         let mut av: Vec<String> = Vec::with_capacity(maxac);
         av.push("postgres".to_string());
         pg_split_opts(&mut av, &cmdline_options);
@@ -1132,8 +1148,11 @@ pub fn ClientCheckTimeoutHandler() {
 /// keyless no-index systable scan (identical shape: forced heap scan, catalog
 /// snapshot, allow_sync=false).
 fn ThereIsAtLeastOneRole(mcx: Mcx<'_>) -> PgResult<bool> {
-    let pg_authid_rel =
-        table::table_open(mcx, types_core::catalog::AUTH_ID_RELATION_ID, AccessShareLock)?;
+    let pg_authid_rel = table::table_open(
+        mcx,
+        types_core::catalog::AUTH_ID_RELATION_ID,
+        AccessShareLock,
+    )?;
 
     let mut scan = genam::systable_beginscan(mcx, &pg_authid_rel, InvalidOid, false, None, &[])?;
     let result = genam::systable_getnext(mcx, &mut scan)?.is_some();
@@ -1144,7 +1163,7 @@ fn ThereIsAtLeastOneRole(mcx: Mcx<'_>) -> PgResult<bool> {
 }
 
 fn strlcpy_name(src: &str) -> String {
-    if src.len() <= NAMEDATALEN - 1 {
+    if src.len() < NAMEDATALEN {
         src.to_string()
     } else {
         String::from_utf8_lossy(&src.as_bytes()[..NAMEDATALEN - 1]).into_owned()

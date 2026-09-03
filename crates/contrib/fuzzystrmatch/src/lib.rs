@@ -313,7 +313,7 @@ fn param_err(msg: String, sqlstate: types_error::SqlState) -> PgError {
     PgError::error(msg).with_sqlstate(sqlstate)
 }
 
-fn levenshtein_args<'a>(fcinfo: &'a Fcinfo) -> PgResult<(&'a [u8], &'a [u8])> {
+fn levenshtein_args(fcinfo: &Fcinfo) -> PgResult<(&[u8], &[u8])> {
     // SAFETY: catalog args are non-null text varlenas (strict fns).
     let (s, t) = unsafe { (fcinfo.arg_varlena_packed(0)?, fcinfo.arg_varlena_packed(1)?) };
     Ok((s.data(), t.data()))
@@ -325,14 +325,20 @@ fn fc_levenshtein(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResu
     Ok(Datum::from_i32(d))
 }
 
-fn fc_levenshtein_with_costs(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+fn fc_levenshtein_with_costs(
+    _flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     let (s, t) = levenshtein_args(fcinfo)?;
     let (ins_c, del_c, sub_c) = (fcinfo.arg_i32(2), fcinfo.arg_i32(3), fcinfo.arg_i32(4));
     let d = varstr_levenshtein(fcinfo.result_mcx(), s, t, ins_c, del_c, sub_c, false)?;
     Ok(Datum::from_i32(d))
 }
 
-fn fc_levenshtein_less_equal(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+fn fc_levenshtein_less_equal(
+    _flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     let (s, t) = levenshtein_args(fcinfo)?;
     let max_d = fcinfo.arg_i32(2);
     let d = varstr_levenshtein_less_equal(fcinfo.result_mcx(), s, t, 1, 1, 1, max_d, false)?;
@@ -346,8 +352,16 @@ fn fc_levenshtein_less_equal_with_costs(
     let (s, t) = levenshtein_args(fcinfo)?;
     let (ins_c, del_c, sub_c) = (fcinfo.arg_i32(2), fcinfo.arg_i32(3), fcinfo.arg_i32(4));
     let max_d = fcinfo.arg_i32(5);
-    let d =
-        varstr_levenshtein_less_equal(fcinfo.result_mcx(), s, t, ins_c, del_c, sub_c, max_d, false)?;
+    let d = varstr_levenshtein_less_equal(
+        fcinfo.result_mcx(),
+        s,
+        t,
+        ins_c,
+        del_c,
+        sub_c,
+        max_d,
+        false,
+    )?;
     Ok(Datum::from_i32(d))
 }
 

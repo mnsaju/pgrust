@@ -86,7 +86,14 @@ pub fn fc_unique_key_recheck(
 
     let mut values = [Datum::null(); INDEX_MAX_KEYS as usize];
     let mut isnull = [false; INDEX_MAX_KEYS as usize];
-    execindexing::FormIndexDatum(mcx, mcx, &mut index_info, &mut slot, &mut values, &mut isnull)?;
+    execindexing::FormIndexDatum(
+        mcx,
+        mcx,
+        &mut index_info,
+        &mut slot,
+        &mut values,
+        &mut isnull,
+    )?;
 
     if index_info.ii_HasExclusion {
         execindexing::check_exclusion_constraint(
@@ -126,7 +133,15 @@ pub fn fc_unique_key_recheck(
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
-pub const CONSTRAINT_BUILTINS: &[FmgrBuiltin] = &[b(1250, "unique_key_recheck", 1, fc_unique_key_recheck)];
+pub const CONSTRAINT_BUILTINS: &[FmgrBuiltin] =
+    &[b(1250, "unique_key_recheck", 1, fc_unique_key_recheck)];

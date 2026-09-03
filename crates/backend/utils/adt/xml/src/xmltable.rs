@@ -10,7 +10,7 @@ use ::types_error::{
 };
 
 use crate::errhandler::{
-    pg_xml_init, xml_error_handler, xml_ereport, xml_err_occurred, PG_XML_STRICTNESS_ALL,
+    pg_xml_init, xml_ereport, xml_err_occurred, xml_error_handler, PG_XML_STRICTNESS_ALL,
 };
 use crate::libxml::{
     self, cstr, xml2, xmlDoc, xmlNodeSetHdr, xmlParserCtxt, xmlXPathCompExpr, xmlXPathContext,
@@ -44,10 +44,11 @@ impl XmlTableContext {
                 if !ctxt.is_null() {
                     (x.xmlFreeParserCtxt)(ctxt);
                 }
-                return Err(
-                    xml_ereport("could not allocate parser context", ERRCODE_OUT_OF_MEMORY)
-                        .into(),
-                );
+                return Err(xml_ereport(
+                    "could not allocate parser context",
+                    ERRCODE_OUT_OF_MEMORY,
+                )
+                .into());
             }
             Ok(XmlTableContext {
                 ctxt,
@@ -80,10 +81,11 @@ impl XmlTableContext {
                 if !doc.is_null() {
                     (x.xmlFreeDoc)(doc);
                 }
-                return Err(
-                    xml_ereport("could not parse XML document", ERRCODE_INVALID_XML_DOCUMENT)
-                        .into(),
-                );
+                return Err(xml_ereport(
+                    "could not parse XML document",
+                    ERRCODE_INVALID_XML_DOCUMENT,
+                )
+                .into());
             }
             let xpathcxt = (x.xmlXPathNewContext)(doc);
             if xpathcxt.is_null() || xml_err_occurred() {
@@ -92,8 +94,7 @@ impl XmlTableContext {
                 }
                 (x.xmlFreeDoc)(doc);
                 return Err(
-                    xml_ereport("could not allocate XPath context", ERRCODE_OUT_OF_MEMORY)
-                        .into(),
+                    xml_ereport("could not allocate XPath context", ERRCODE_OUT_OF_MEMORY).into(),
                 );
             }
             (*(xpathcxt as *mut xmlXPathContextHdr)).node = doc as *mut libxml::xmlNode;
@@ -139,10 +140,11 @@ impl XmlTableContext {
         unsafe {
             let comp = (x.xmlXPathCtxtCompile)(self.xpathcxt, xstr.as_ptr());
             if comp.is_null() || xml_err_occurred() {
-                return Err(
-                    xml_ereport("invalid XPath expression", ERRCODE_INVALID_ARGUMENT_FOR_XQUERY)
-                        .into(),
-                );
+                return Err(xml_ereport(
+                    "invalid XPath expression",
+                    ERRCODE_INVALID_ARGUMENT_FOR_XQUERY,
+                )
+                .into());
             }
             self.xpathcomp = comp;
         }
@@ -152,9 +154,11 @@ impl XmlTableContext {
     /// C `XmlTableSetColumnFilter` (xml.c:4846).
     pub fn set_column_filter(&mut self, path: &[u8], colnum: i32) -> PgResult<()> {
         if path.is_empty() {
-            return Err(PgError::error("column path filter must not be empty string")
-                .with_sqlstate(ERRCODE_INVALID_ARGUMENT_FOR_XQUERY)
-                .into());
+            return Err(
+                PgError::error("column path filter must not be empty string")
+                    .with_sqlstate(ERRCODE_INVALID_ARGUMENT_FOR_XQUERY)
+                    .into(),
+            );
         }
         let x = xml2();
         let xstr = cstr(path);
@@ -162,10 +166,11 @@ impl XmlTableContext {
         unsafe {
             let comp = (x.xmlXPathCtxtCompile)(self.xpathcxt, xstr.as_ptr());
             if comp.is_null() || xml_err_occurred() {
-                return Err(
-                    xml_ereport("invalid XPath expression", ERRCODE_INVALID_ARGUMENT_FOR_XQUERY)
-                        .into(),
-                );
+                return Err(xml_ereport(
+                    "invalid XPath expression",
+                    ERRCODE_INVALID_ARGUMENT_FOR_XQUERY,
+                )
+                .into());
             }
             self.xpathscomp[colnum as usize] = comp;
         }
@@ -207,7 +212,11 @@ impl XmlTableContext {
     /// C `XmlTableGetValue` (xml.c:4926) minus the trailing
     /// `InputFunctionCall` (the executor owns in_functions/typioparams).
     /// `None` = SQL NULL.
-    pub fn get_value(&mut self, colnum: i32, typid: ::types_core::Oid) -> PgResult<Option<Vec<u8>>> {
+    pub fn get_value(
+        &mut self,
+        colnum: i32,
+        typid: ::types_core::Oid,
+    ) -> PgResult<Option<Vec<u8>>> {
         let is_xml = typid == XMLOID;
         let (typcategory, _preferred) = ::lsyscache::get_type_category_preferred(typid)?;
         let is_numeric_category = typcategory == TYPCATEGORY_NUMERIC;
@@ -226,7 +235,8 @@ impl XmlTableContext {
             let cur = *ns.node_tab.add((self.row_count - 1) as usize);
             (*(self.xpathcxt as *mut xmlXPathContextHdr)).node = cur;
 
-            let xpathobj = (x.xmlXPathCompiledEval)(self.xpathscomp[colnum as usize], self.xpathcxt);
+            let xpathobj =
+                (x.xmlXPathCompiledEval)(self.xpathscomp[colnum as usize], self.xpathcxt);
             if xpathobj.is_null() || xml_err_occurred() {
                 if !xpathobj.is_null() {
                     (x.xmlXPathFreeObject)(xpathobj);
@@ -284,15 +294,13 @@ unsafe fn value_from_xpathobj(
     // SAFETY (fn body): xpathobj is the live eval result.
     unsafe {
         let hdr = &*(xpathobj as *const xmlXPathObjectHdr);
+        // SAFETY: p is a fresh NUL-terminated libxml string (or null).
         let take_xmlchar = |p: *mut u8| -> Vec<u8> {
-            // SAFETY: p is a fresh NUL-terminated libxml string (or null).
-            unsafe {
-                let v = libxml::xmlchar_to_vec(p);
-                if !p.is_null() {
-                    x.xmlFree(p as *mut core::ffi::c_void);
-                }
-                v
+            let v = libxml::xmlchar_to_vec(p);
+            if !p.is_null() {
+                x.xmlFree(p as *mut core::ffi::c_void);
             }
+            v
         };
         match hdr.type_ {
             XPATH_NODESET => {
@@ -312,11 +320,11 @@ unsafe fn value_from_xpathobj(
                     }
                     Ok(Some(buf))
                 } else if count > 1 {
-                    Err(PgError::error(
-                        "more than one value returned by column XPath expression",
+                    Err(
+                        PgError::error("more than one value returned by column XPath expression")
+                            .with_sqlstate(ERRCODE_CARDINALITY_VIOLATION)
+                            .into(),
                     )
-                    .with_sqlstate(ERRCODE_CARDINALITY_VIOLATION)
-                    .into())
                 } else {
                     Ok(Some(take_xmlchar((x.xmlXPathCastNodeSetToString)(
                         hdr.nodesetval,
@@ -338,9 +346,11 @@ unsafe fn value_from_xpathobj(
             XPATH_NUMBER => Ok(Some(take_xmlchar((x.xmlXPathCastNumberToString)(
                 hdr.floatval,
             )))),
-            other => Err(PgError::error(format!("unexpected XPath object type {other}"))
-                .with_sqlstate(::types_error::ERRCODE_INTERNAL_ERROR)
-                .into()),
+            other => Err(
+                PgError::error(format!("unexpected XPath object type {other}"))
+                    .with_sqlstate(::types_error::ERRCODE_INTERNAL_ERROR)
+                    .into(),
+            ),
         }
     }
 }

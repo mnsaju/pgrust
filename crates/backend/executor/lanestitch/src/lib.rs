@@ -93,7 +93,10 @@ pub fn available() -> bool {
     {
         static OFF: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
         !*OFF.get_or_init(|| {
-            matches!(std::env::var("PGRUST_LANESTITCH").as_deref(), Ok("0") | Ok("off"))
+            matches!(
+                std::env::var("PGRUST_LANESTITCH").as_deref(),
+                Ok("0") | Ok("off")
+            )
         })
     }
     #[cfg(not(target_arch = "aarch64"))]
@@ -241,12 +244,7 @@ impl StitchedProgram {
     /// the replay/fallback source; consts are baked, so a divergent program
     /// would silently diverge — debug builds cannot check identity cheaply,
     /// callers keep them paired the way JitPipeline callers did).
-    pub fn run(
-        &self,
-        prog: &Program,
-        batch: &Batch<'_>,
-        sel: &mut SelVec,
-    ) -> PgResult<RunOutcome> {
+    pub fn run(&self, prog: &Program, batch: &Batch<'_>, sel: &mut SelVec) -> PgResult<RunOutcome> {
         self.run_lanes(prog, batch.nrows, &batch.lanes, sel)
     }
 
@@ -284,7 +282,10 @@ impl StitchedProgram {
         // Interpreter tiers (cold: sticky refuse / per-batch drift /
         // refuse-and-replay): materialize the Batch + SelVec currency.
         let interp_into = |sel_words: &mut [u64]| -> PgResult<()> {
-            let batch = Batch { nrows, lanes: lane_views.to_vec() };
+            let batch = Batch {
+                nrows,
+                lanes: lane_views.to_vec(),
+            };
             let mut sv = SelVec::all(nrows);
             interp::eval_qual(prog, &batch, &mut sv)?;
             sel_words.copy_from_slice(&sv.words[..nwords]);
@@ -313,11 +314,16 @@ impl StitchedProgram {
         });
         for &col in &self.used_cols {
             let lane = &lane_views[col as usize];
-            lanes[col as usize] =
-                LaneParam { p0: lane.values.as_ptr().cast(), isnull: lane.isnull.as_ptr().cast() };
+            lanes[col as usize] = LaneParam {
+                p0: lane.values.as_ptr().cast(),
+                isnull: lane.isnull.as_ptr().cast(),
+            };
         }
-        let mut params =
-            JitParams { lanes, sel: sel_words.as_mut_ptr(), nrows: nrows as u64 };
+        let mut params = JitParams {
+            lanes,
+            sel: sel_words.as_mut_ptr(),
+            nrows: nrows as u64,
+        };
         // SAFETY: body compiled for ncols-lane batches; every used lane
         // pointer covers nrows rows (checked above); sel spans
         // ceil(nrows/64) words and the body indexes sel words by row/64
@@ -446,10 +452,7 @@ impl StitchedProjection {
             return ProjOutcome::Refused;
         }
         // Per-batch fail-open: drifted staging falls back per-row.
-        if nrows as usize > MAX_ROWS
-            || lane_views.len() < self.ncols
-            || outs.len() < self.nouts
-        {
+        if nrows as usize > MAX_ROWS || lane_views.len() < self.ncols || outs.len() < self.nouts {
             return ProjOutcome::Drift;
         }
         let n = nrows as usize;
@@ -470,8 +473,10 @@ impl StitchedProjection {
         });
         for &col in &self.used_cols {
             let lane = &lane_views[col as usize];
-            lanes[col as usize] =
-                LaneParam { p0: lane.values.as_ptr().cast(), isnull: lane.isnull.as_ptr().cast() };
+            lanes[col as usize] = LaneParam {
+                p0: lane.values.as_ptr().cast(),
+                isnull: lane.isnull.as_ptr().cast(),
+            };
         }
         let mut outps: [LaneParam; MAX_OUTS] = core::array::from_fn(|_| LaneParam {
             p0: core::ptr::null(),

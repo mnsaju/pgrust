@@ -20,7 +20,9 @@ fn install_seams() {
 fn rel_with_ns(mcx: Mcx<'_>, relid: Oid, relnamespace: Oid) -> RelationData<'_> {
     let mut relname = NameData::default();
     relname.namestrcpy("t");
-    RelationData { rd_locator: Default::default(), rd_smgr: Default::default(),
+    RelationData {
+        rd_locator: Default::default(),
+        rd_smgr: Default::default(),
         rd_id: relid,
         rd_backend: INVALID_PROC_NUMBER,
         rd_islocaltemp: false,
@@ -30,7 +32,10 @@ fn rel_with_ns(mcx: Mcx<'_>, relid: Oid, relnamespace: Oid) -> RelationData<'_> 
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
         rd_lockInfo: LockInfoData {
-            lockRelId: LockRelId { relId: relid, dbId: 5 },
+            lockRelId: LockRelId {
+                relId: relid,
+                dbId: 5,
+            },
         },
         rd_rel: FormData_pg_class {
             relname,
@@ -74,13 +79,16 @@ fn rel_with_ns(mcx: Mcx<'_>, relid: Oid, relnamespace: Oid) -> RelationData<'_> 
         pgstat_enabled: Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: PgVec::new_in(mcx),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     }
 }
 

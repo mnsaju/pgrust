@@ -74,8 +74,14 @@ mod tests {
     fn known_distances_match_c() {
         // London (lon -0.1257, lat 51.508) to Paris (lon 2.3522, lat 48.8566):
         // roughly 213 miles.
-        let london = Point { x: -0.1257, y: 51.508 };
-        let paris = Point { x: 2.3522, y: 48.8566 };
+        let london = Point {
+            x: -0.1257,
+            y: 51.508,
+        };
+        let paris = Point {
+            x: 2.3522,
+            y: 48.8566,
+        };
         let d = geo_distance_internal(&london, &paris);
         assert!((d - 213.0).abs() < 2.0, "got {d}");
         // Same point -> zero.

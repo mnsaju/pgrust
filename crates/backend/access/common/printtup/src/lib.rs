@@ -72,8 +72,7 @@ fn scratch_mcx() -> Mcx<'static> {
     CTX.with(|c| match c.get() {
         Some(m) => m.mcx(),
         None => {
-            let m: &'static MemoryContext =
-                ::mcx::session_root("PrinttupScratch");
+            let m: &'static MemoryContext = ::mcx::session_root("PrinttupScratch");
             // LIFO: drop the pooled wire buffer before its context is freed
             // (Cell<Option<StringInfo>> is a droppy TLS payload).
             ::mcx::register_session_cleanup(Box::new(|| {
@@ -238,12 +237,15 @@ impl<'mcx> DrPrinttup<'mcx> {
             Some(v) => &mut v[..],
             None => &mut [],
         };
-        let mut send_ctx = self.send_ctx.as_mut();
+        let send_ctx = self.send_ctx.as_mut();
         let natts = self.nattrs as usize;
 
         pq_beginmessage_reuse(buf, PQMSG_DATA_ROW);
         pq_sendint16(buf, natts as u16)?;
 
+        // i indexes three parallel arrays (tts_isnull, tts_values, myinfo);
+        // an iterator rewrite would need zip() over all three for no real gain.
+        #[allow(clippy::needless_range_loop)]
         for i in 0..natts {
             if base.tts_isnull[i] {
                 pq_sendint32(buf, (-1i32) as u32)?;
@@ -261,9 +263,8 @@ impl<'mcx> DrPrinttup<'mcx> {
                 };
                 // SAFETY: text output fns return a NUL-terminated cstring
                 // datum (the contract C's DatumGetCString trusts).
-                let s =
-                    unsafe { CStr::from_ptr(out.as_usize() as *const core::ffi::c_char) }
-                        .to_bytes();
+                let s = unsafe { CStr::from_ptr(out.as_usize() as *const core::ffi::c_char) }
+                    .to_bytes();
                 if self.conv_needed {
                     pq_sendcountedtext(buf, s)?;
                 } else {
@@ -287,7 +288,7 @@ impl<'mcx> DrPrinttup<'mcx> {
 
         pq_endmessage_reuse(buf)?;
         // C resets the per-row tmpcontext here; the byteas were copied above.
-        if let Some(ctx) = send_ctx.as_deref_mut() {
+        if let Some(ctx) = send_ctx {
             ctx.reset();
         }
         Ok(true)

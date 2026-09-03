@@ -4,11 +4,10 @@ use types_core::{TimestampTz, INVALID_PROC_NUMBER};
 use types_error::PgResult;
 use types_hash::hsearch::HASH_SEQ_STATUS;
 use types_storage::lock::{
-    ExclusiveLock, LockInstanceData, LOCKBIT_ON, LOCKMASK, LOCKTAG, NoLock, PROCLOCK,
+    ExclusiveLock, LockInstanceData, NoLock, LOCKBIT_ON, LOCKMASK, LOCKTAG, PROCLOCK,
 };
 use types_storage::storage::{
-    VirtualTransactionId, NUM_LOCK_PARTITIONS, PGPROC, PROC_ARRAY_LOCK,
-    FP_LOCK_SLOTS_PER_GROUP,
+    VirtualTransactionId, FP_LOCK_SLOTS_PER_GROUP, NUM_LOCK_PARTITIONS, PGPROC, PROC_ARRAY_LOCK,
 };
 
 use crate::fastpath::{fp_groups_per_backend, fp_info_lock, fp_view, FAST_PATH_LOCKNUMBER_OFFSET};
@@ -96,11 +95,14 @@ pub fn GetLockStatusData() -> PgResult<Vec<LockInstanceData>> {
         lwlock::LWLockAcquire(LockHashPartitionLockByIndex(i), lwlock::LW_SHARED, procno)?;
     }
 
-    let nelements = locks.len() + dynahash::hash_get_num_entries(shared().proclock_hash) as usize;
+    // SAFETY: proclock_hash is a live table for the process lifetime; the
+    // partition LWLocks acquired above hold it stable for this scan.
+    let nelements =
+        locks.len() + unsafe { dynahash::hash_get_num_entries(shared().proclock_hash) } as usize;
     locks.reserve(nelements.saturating_sub(locks.len()));
 
     let mut seqstat = HASH_SEQ_STATUS::new();
-    dynahash::hash_seq_init(&mut seqstat, shared().proclock_hash)?;
+    unsafe { dynahash::hash_seq_init(&mut seqstat, shared().proclock_hash)? };
     loop {
         let proclock = dynahash::hash_seq_search(&mut seqstat)? as *mut PROCLOCK;
         if proclock.is_null() {

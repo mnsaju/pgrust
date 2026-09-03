@@ -122,7 +122,8 @@ fn wire_roundtrip_and_short_form() {
     assert_eq!(macaddr8_recv(&mut buf).unwrap(), CANON8);
 
     let mut buf = stringinfo::StringInfo::new_in(mcx).unwrap();
-    buf.append_bytes(&[0x08, 0x00, 0x2b, 0x01, 0x02, 0x03]).unwrap();
+    buf.append_bytes(&[0x08, 0x00, 0x2b, 0x01, 0x02, 0x03])
+        .unwrap();
     assert_eq!(macaddr8_recv(&mut buf).unwrap(), CANON6AS8);
 }
 
@@ -144,7 +145,10 @@ fn cmp_ordering_and_hash() {
     let b = MacAddr8::from_bytes([1, 2, 3, 4, 0, 0, 0, 2]);
     assert_eq!(macaddr8_cmp(&a, &b), -1);
 
-    assert_eq!(hashmacaddr8(&CANON8), hashfn::hash_bytes(&CANON8.to_bytes()));
+    assert_eq!(
+        hashmacaddr8(&CANON8),
+        hashfn::hash_bytes(&CANON8.to_bytes())
+    );
     assert_eq!(
         hashmacaddr8extended(&CANON8, 42),
         hashfn::hash_bytes_extended(&CANON8.to_bytes(), 42)
@@ -180,7 +184,10 @@ fn conversions() {
         err.message(),
         "macaddr8 data out of range to convert to macaddr"
     );
-    assert!(err.hint().unwrap().starts_with("Only addresses that have FF and FE"));
+    assert!(err
+        .hint()
+        .unwrap()
+        .starts_with("Only addresses that have FF and FE"));
 }
 
 fn mac8_datum(addr: &MacAddr8) -> Datum {

@@ -112,7 +112,10 @@ const _: () = {
     assert!(offset_of!(CSnapBuild, last_serialized_snapshot) == OFF_LAST_SERIALIZED_SNAPSHOT);
     assert!(offset_of!(CSnapBuild, reorder) == OFF_REORDER);
     assert!(offset_of!(CSnapBuild, next_phase_at) == OFF_NEXT_PHASE_AT);
-    assert!(offset_of!(CSnapBuild, committed) + offset_of!(CSnapBuildCommitted, xcnt) == OFF_COMMITTED_XCNT);
+    assert!(
+        offset_of!(CSnapBuild, committed) + offset_of!(CSnapBuildCommitted, xcnt)
+            == OFF_COMMITTED_XCNT
+    );
     assert!(
         offset_of!(CSnapBuild, committed) + offset_of!(CSnapBuildCommitted, xcnt_space)
             == OFF_COMMITTED_XCNT_SPACE
@@ -122,9 +125,18 @@ const _: () = {
             + offset_of!(CSnapBuildCommitted, includes_all_transactions)
             == OFF_COMMITTED_INCLUDES_ALL
     );
-    assert!(offset_of!(CSnapBuild, committed) + offset_of!(CSnapBuildCommitted, xip) == OFF_COMMITTED_XIP);
-    assert!(offset_of!(CSnapBuild, catchange) + offset_of!(CSnapBuildCatchange, xcnt) == OFF_CATCHANGE_XCNT);
-    assert!(offset_of!(CSnapBuild, catchange) + offset_of!(CSnapBuildCatchange, xip) == OFF_CATCHANGE_XIP);
+    assert!(
+        offset_of!(CSnapBuild, committed) + offset_of!(CSnapBuildCommitted, xip)
+            == OFF_COMMITTED_XIP
+    );
+    assert!(
+        offset_of!(CSnapBuild, catchange) + offset_of!(CSnapBuildCatchange, xcnt)
+            == OFF_CATCHANGE_XCNT
+    );
+    assert!(
+        offset_of!(CSnapBuild, catchange) + offset_of!(CSnapBuildCatchange, xip)
+            == OFF_CATCHANGE_XIP
+    );
 };
 
 fn cstring(s: &str) -> std::ffi::CString {
@@ -158,10 +170,7 @@ pub(crate) fn parse_snap_name(name: &str) -> Option<(u32, u32)> {
         return None;
     }
     let hi = u32::from_str_radix(hi_s, 16).ok()?;
-    let lo_len = rest
-        .bytes()
-        .take_while(|b| b.is_ascii_hexdigit())
-        .count();
+    let lo_len = rest.bytes().take_while(|b| b.is_ascii_hexdigit()).count();
     if lo_len == 0 {
         return None;
     }
@@ -210,19 +219,26 @@ pub struct SnapBuildOnDisk {
 
 pub(crate) fn build_image(builder: &SnapBuild, catchange_xip: &[TransactionId]) -> Vec<u8> {
     let committed: &[TransactionId] = &builder.committed_xip;
-    let needed_length =
-        SNAP_BUILD_HEADER_SIZE + 4 * (committed.len() + catchange_xip.len());
+    let needed_length = SNAP_BUILD_HEADER_SIZE + 4 * (committed.len() + catchange_xip.len());
     let mut image = vec![0u8; needed_length];
 
     put(&mut image, OFF_MAGIC, &SNAPBUILD_MAGIC.to_ne_bytes());
     put(&mut image, OFF_VERSION, &SNAPBUILD_VERSION.to_ne_bytes());
-    put(&mut image, OFF_LENGTH, &(needed_length as u32).to_ne_bytes());
+    put(
+        &mut image,
+        OFF_LENGTH,
+        &(needed_length as u32).to_ne_bytes(),
+    );
 
     let b = &mut image[OFF_BUILDER..OFF_BUILDER + SIZEOF_SNAP_BUILD];
     put(b, OFF_STATE, &(builder.state as i32).to_ne_bytes());
     put(b, OFF_XMIN, &builder.xmin.to_ne_bytes());
     put(b, OFF_XMAX, &builder.xmax.to_ne_bytes());
-    put(b, OFF_START_DECODING_AT, &builder.start_decoding_at.to_ne_bytes());
+    put(
+        b,
+        OFF_START_DECODING_AT,
+        &builder.start_decoding_at.to_ne_bytes(),
+    );
     put(b, OFF_TWO_PHASE_AT, &builder.two_phase_at.to_ne_bytes());
     put(
         b,
@@ -237,14 +253,22 @@ pub(crate) fn build_image(builder: &SnapBuild, catchange_xip: &[TransactionId]) 
         &builder.last_serialized_snapshot.to_ne_bytes(),
     );
     put(b, OFF_NEXT_PHASE_AT, &builder.next_phase_at.to_ne_bytes());
-    put(b, OFF_COMMITTED_XCNT, &(committed.len() as u64).to_ne_bytes());
+    put(
+        b,
+        OFF_COMMITTED_XCNT,
+        &(committed.len() as u64).to_ne_bytes(),
+    );
     put(
         b,
         OFF_COMMITTED_XCNT_SPACE,
         &(builder.committed_xcnt_space as u64).to_ne_bytes(),
     );
     b[OFF_COMMITTED_INCLUDES_ALL] = builder.committed_includes_all_transactions as u8;
-    put(b, OFF_CATCHANGE_XCNT, &(catchange_xip.len() as u64).to_ne_bytes());
+    put(
+        b,
+        OFF_CATCHANGE_XCNT,
+        &(catchange_xip.len() as u64).to_ne_bytes(),
+    );
 
     let mut off = SNAP_BUILD_HEADER_SIZE;
     for &xid in committed {

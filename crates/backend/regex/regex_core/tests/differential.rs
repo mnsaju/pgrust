@@ -69,44 +69,175 @@ fn corpus() -> Vec<(String, String, bool)> {
     // Patterns spanning the claimed feature set.
     let patterns: &[&str] = &[
         // literals / dot / concatenation
-        "a", "abc", "a.c", "...", "", "a\\.c",
+        "a",
+        "abc",
+        "a.c",
+        "...",
+        "",
+        "a\\.c",
         // anchors
-        "^abc", "abc$", "^abc$", "^$", "^a", "c$", "\\Aabc", "abc\\Z",
+        "^abc",
+        "abc$",
+        "^abc$",
+        "^$",
+        "^a",
+        "c$",
+        "\\Aabc",
+        "abc\\Z",
         // char classes
-        "[abc]", "[^abc]", "[a-z]", "[A-Z]", "[0-9]", "[a-zA-Z0-9]", "[]a]", "[a-]", "[-a]",
-        "[^0-9]", "[[:alpha:]]", "[[:digit:]]", "[[:alnum:]]", "[[:space:]]", "[[:upper:]]",
-        "[[:lower:]]", "[[:punct:]]", "[[:xdigit:]]", "[[:alpha:][:digit:]]",
+        "[abc]",
+        "[^abc]",
+        "[a-z]",
+        "[A-Z]",
+        "[0-9]",
+        "[a-zA-Z0-9]",
+        "[]a]",
+        "[a-]",
+        "[-a]",
+        "[^0-9]",
+        "[[:alpha:]]",
+        "[[:digit:]]",
+        "[[:alnum:]]",
+        "[[:space:]]",
+        "[[:upper:]]",
+        "[[:lower:]]",
+        "[[:punct:]]",
+        "[[:xdigit:]]",
+        "[[:alpha:][:digit:]]",
         // escapes / shorthand classes
-        "\\d", "\\D", "\\w", "\\W", "\\s", "\\S", "\\d+", "\\w+", "\\s*", "[\\d]", "[\\w.]",
+        "\\d",
+        "\\D",
+        "\\w",
+        "\\W",
+        "\\s",
+        "\\S",
+        "\\d+",
+        "\\w+",
+        "\\s*",
+        "[\\d]",
+        "[\\w.]",
         // quantifiers greedy
-        "a*", "a+", "a?", "a{2}", "a{2,}", "a{2,4}", "ab*c", "a.*b", ".*", ".+",
-        "colou?r", "(ab)+", "(ab)*", "a{0}", "[0-9]{3}",
+        "a*",
+        "a+",
+        "a?",
+        "a{2}",
+        "a{2,}",
+        "a{2,4}",
+        "ab*c",
+        "a.*b",
+        ".*",
+        ".+",
+        "colou?r",
+        "(ab)+",
+        "(ab)*",
+        "a{0}",
+        "[0-9]{3}",
         // quantifiers non-greedy
-        "a*?", "a+?", "a??", "a{2,4}?", ".*?b", "<.*?>", "<.+?>",
+        "a*?",
+        "a+?",
+        "a??",
+        "a{2,4}?",
+        ".*?b",
+        "<.*?>",
+        "<.+?>",
         // alternation / groups
-        "a|b", "abc|def", "(a|b)c", "(foo|bar|baz)", "^(yes|no)$", "gr(a|e)y",
-        "(a|b|c)+", "cat|dog|bird",
+        "a|b",
+        "abc|def",
+        "(a|b)c",
+        "(foo|bar|baz)",
+        "^(yes|no)$",
+        "gr(a|e)y",
+        "(a|b|c)+",
+        "cat|dog|bird",
         // backreferences
-        "(a)\\1", "(ab)\\1", "(.)\\1", "(\\w)\\1", "(a)(b)\\2\\1", "^(.)(.)\\2\\1$",
+        "(a)\\1",
+        "(ab)\\1",
+        "(.)\\1",
+        "(\\w)\\1",
+        "(a)(b)\\2\\1",
+        "^(.)(.)\\2\\1$",
         // word boundaries (Spencer AREs)
-        "\\yword\\y", "\\mstart", "end\\M", "\\ba", // \b is backspace in ARE bracket only; bare \b = word bdy? actually \b is backspace
+        "\\yword\\y",
+        "\\mstart",
+        "end\\M",
+        "\\ba", // \b is backspace in ARE bracket only; bare \b = word bdy? actually \b is backspace
         // nested / complex
-        "(a(b(c)))", "((x))", "a(b|c)*d", "([a-z]+)@([a-z]+)", "\\d{4}-\\d{2}-\\d{2}",
-        "[A-Za-z_][A-Za-z0-9_]*", "(\\d+)\\.(\\d+)", "^\\s*$", "\\s+$",
+        "(a(b(c)))",
+        "((x))",
+        "a(b|c)*d",
+        "([a-z]+)@([a-z]+)",
+        "\\d{4}-\\d{2}-\\d{2}",
+        "[A-Za-z_][A-Za-z0-9_]*",
+        "(\\d+)\\.(\\d+)",
+        "^\\s*$",
+        "\\s+$",
         // case-relevant
-        "ABC", "[a-c]", "hello", "WORLD",
+        "ABC",
+        "[a-c]",
+        "hello",
+        "WORLD",
         // error / edge patterns (should error on both sides)
-        "[", "(", ")", "a{", "*", "+abc", "[z-a]", "\\", "a{2,1}", "[[:bogus:]]",
-        "(?P<n>a)", "**", "(unclosed", "a\\", "[a-\\d]",
+        "[",
+        "(",
+        ")",
+        "a{",
+        "*",
+        "+abc",
+        "[z-a]",
+        "\\",
+        "a{2,1}",
+        "[[:bogus:]]",
+        "(?P<n>a)",
+        "**",
+        "(unclosed",
+        "a\\",
+        "[a-\\d]",
     ];
     // Strings to test each pattern against.
     let strings: &[&str] = &[
-        "", "a", "abc", "ABC", "aXc", "a.c", "hello world", "Hello World",
-        "12345", "2024-01-15", "  ", "\t \n", "foobar", "foo", "bar", "baz",
-        "aa", "aaa", "abab", "grey", "gray", "color", "colour", "user@host",
-        "The quick brown fox", "!@#$%", "x", "xx", "aXbXc", "<a><b>",
-        "word here", "start of line", "the end", "3.14", "007", "_id42",
-        "yes", "no", "maybe", "CamelCase", "snake_case", "UPPER", "lower",
+        "",
+        "a",
+        "abc",
+        "ABC",
+        "aXc",
+        "a.c",
+        "hello world",
+        "Hello World",
+        "12345",
+        "2024-01-15",
+        "  ",
+        "\t \n",
+        "foobar",
+        "foo",
+        "bar",
+        "baz",
+        "aa",
+        "aaa",
+        "abab",
+        "grey",
+        "gray",
+        "color",
+        "colour",
+        "user@host",
+        "The quick brown fox",
+        "!@#$%",
+        "x",
+        "xx",
+        "aXbXc",
+        "<a><b>",
+        "word here",
+        "start of line",
+        "the end",
+        "3.14",
+        "007",
+        "_id42",
+        "yes",
+        "no",
+        "maybe",
+        "CamelCase",
+        "snake_case",
+        "UPPER",
+        "lower",
     ];
     let mut out = Vec::new();
     for &p in patterns {
@@ -116,12 +247,38 @@ fn corpus() -> Vec<(String, String, bool)> {
     }
     // A case-insensitive sweep on the ASCII-relevant subset.
     let ic_pats: &[&str] = &[
-        "abc", "ABC", "[a-z]", "[A-Z]", "hello", "WORLD", "a|B", "(foo|BAR)",
-        "^camelcase$", "upper", "[[:alpha:]]+", "xx?", "gr(a|e)y",
+        "abc",
+        "ABC",
+        "[a-z]",
+        "[A-Z]",
+        "hello",
+        "WORLD",
+        "a|B",
+        "(foo|BAR)",
+        "^camelcase$",
+        "upper",
+        "[[:alpha:]]+",
+        "xx?",
+        "gr(a|e)y",
     ];
     let ic_strs: &[&str] = &[
-        "abc", "ABC", "AbC", "hello", "HELLO", "Hello", "world", "WORLD",
-        "foo", "BAR", "CamelCase", "UPPER", "lower", "grey", "GRAY", "xx", "",
+        "abc",
+        "ABC",
+        "AbC",
+        "hello",
+        "HELLO",
+        "Hello",
+        "world",
+        "WORLD",
+        "foo",
+        "BAR",
+        "CamelCase",
+        "UPPER",
+        "lower",
+        "grey",
+        "GRAY",
+        "xx",
+        "",
     ];
     for &p in ic_pats {
         for &s in ic_strs {
@@ -165,7 +322,10 @@ fn pg_batch(corpus: &[(String, String, bool)]) -> Option<Vec<String>> {
 
     let dir = std::env::temp_dir();
     let path = dir.join("pgrust_regex_diff.sql");
-    std::fs::File::create(&path).ok()?.write_all(sql.as_bytes()).ok()?;
+    std::fs::File::create(&path)
+        .ok()?
+        .write_all(sql.as_bytes())
+        .ok()?;
 
     let out = Command::new("psql")
         .args(["-tAF", "\t", "-v", "ON_ERROR_STOP=0", "-f"])
@@ -262,7 +422,10 @@ fn capture_corpus() -> Vec<(String, String)> {
         ("a1b2c3", "([a-z])(\\d)"),
         ("", "(a)?"),
     ];
-    cases.iter().map(|(s, p)| (s.to_string(), p.to_string())).collect()
+    cases
+        .iter()
+        .map(|(s, p)| (s.to_string(), p.to_string()))
+        .collect()
 }
 
 #[test]
@@ -271,9 +434,11 @@ fn differential_captures_vs_live_pg() {
     // Build one query returning each capture array as a text via array_to_string
     // with a sentinel for NULL elements; NULL whole result => no match.
     let mut sql = String::from("SET standard_conforming_strings = on;\n");
-    sql.push_str("SELECT v.id, CASE WHEN m IS NULL THEN '<none>' ELSE \
+    sql.push_str(
+        "SELECT v.id, CASE WHEN m IS NULL THEN '<none>' ELSE \
         array_to_string(array(SELECT COALESCE(x, '<null>') FROM unnest(m) x), chr(31)) END \
-        FROM (SELECT v.id, regexp_match(v.s COLLATE \"C\", v.p) AS m FROM (VALUES\n");
+        FROM (SELECT v.id, regexp_match(v.s COLLATE \"C\", v.p) AS m FROM (VALUES\n",
+    );
     for (i, (s, p)) in corpus.iter().enumerate() {
         if i > 0 {
             sql.push_str(",\n");

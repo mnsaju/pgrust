@@ -53,7 +53,10 @@ fn io_time_index(op: IOOp) -> Option<usize> {
 }
 
 fn numeric_i64_datum(fcinfo: &Fcinfo, v: i64) -> PgResult<Datum> {
-    byref_result(fcinfo.result_mcx(), adt_numeric::int64_to_numeric(v).as_bytes())
+    byref_result(
+        fcinfo.result_mcx(),
+        adt_numeric::int64_to_numeric(v).as_bytes(),
+    )
 }
 
 fn numeric_u64_datum(fcinfo: &Fcinfo, v: u64) -> PgResult<Datum> {
@@ -178,13 +181,22 @@ pub fn fc_pg_stat_get_io(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> 
     for (i, bktype) in BackendType::ALL.into_iter().enumerate() {
         let bktype_stats = &io.stats[i];
 
-        debug_assert!(pgstat::io::pgstat_bktype_io_stats_valid(bktype_stats, bktype));
+        debug_assert!(pgstat::io::pgstat_bktype_io_stats_valid(
+            bktype_stats,
+            bktype
+        ));
 
         if !pgstat_tracks_io_bktype(bktype) {
             continue;
         }
 
-        io_build_tuples(fcinfo, &mut srf, bktype_stats, bktype, io.stat_reset_timestamp)?;
+        io_build_tuples(
+            fcinfo,
+            &mut srf,
+            bktype_stats,
+            bktype,
+            io.stat_reset_timestamp,
+        )?;
     }
 
     Ok(srf.finish(fcinfo))
@@ -204,7 +216,10 @@ pub fn fc_pg_stat_get_backend_io(
         return Ok(srf.finish(fcinfo));
     };
 
-    debug_assert!(pgstat::io::pgstat_bktype_io_stats_valid(&backend_stats.io_stats, bktype));
+    debug_assert!(pgstat::io::pgstat_bktype_io_stats_valid(
+        &backend_stats.io_stats,
+        bktype
+    ));
 
     io_build_tuples(
         fcinfo,
@@ -225,7 +240,9 @@ fn record_datum(
     let mcx = fcinfo.result_mcx();
     let resolved = funcapi::get_call_result_type(mcx, flinfo, None)?;
     debug_assert_eq!(resolved.class, funcapi::TypeFuncClass::Composite);
-    let tupdesc = resolved.result_tuple_desc.expect("composite result carries a tupdesc");
+    let tupdesc = resolved
+        .result_tuple_desc
+        .expect("composite result carries a tupdesc");
     let tup = heaptuple::heap_form_tuple(mcx, &tupdesc, values, nulls)?;
     let d = Datum::from_usize(tup.header_ptr() as usize);
     core::mem::forget(tup); // leak into the arming context (C palloc ownership)
@@ -257,7 +274,12 @@ fn wal_build_tuple(
 pub fn fc_pg_stat_get_wal(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let flinfo = flinfo.expect("pg_stat_get_wal: resolved FmgrInfo required");
     let wal_stats = pgstat::wal::pgstat_fetch_stat_wal();
-    wal_build_tuple(flinfo, fcinfo, wal_stats.wal_counters, wal_stats.stat_reset_timestamp)
+    wal_build_tuple(
+        flinfo,
+        fcinfo,
+        wal_stats.wal_counters,
+        wal_stats.stat_reset_timestamp,
+    )
 }
 
 pub fn fc_pg_stat_get_backend_wal(
@@ -570,7 +592,11 @@ pub fn fc_pg_stat_get_wal_senders(
                 if priority == 0 {
                     "async"
                 } else if row.is_sync_standby {
-                    if row.syncrep_method_is_priority { "sync" } else { "quorum" }
+                    if row.syncrep_method_is_priority {
+                        "sync"
+                    } else {
+                        "quorum"
+                    }
                 } else {
                     "potential"
                 },

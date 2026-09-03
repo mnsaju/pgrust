@@ -91,15 +91,17 @@ pub fn checkDataDir() -> PgResult<()> {
             .finish(loc(385, "checkDataDir"))?;
     }
 
-    if st.st_mode as u32 & PG_MODE_MASK_GROUP != 0 {
+    if st.st_mode & PG_MODE_MASK_GROUP != 0 {
         ereport(FATAL)
             .errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE)
-            .errmsg(format!("data directory \"{data_dir}\" has invalid permissions"))
+            .errmsg(format!(
+                "data directory \"{data_dir}\" has invalid permissions"
+            ))
             .errdetail("Permissions should be u=rwx (0700) or u=rwx,g=rx (0750).")
             .finish(loc(405, "checkDataDir"))?;
     }
 
-    let mask = set_data_directory_create_perm(st.st_mode as u32);
+    let mask = set_data_directory_create_perm(st.st_mode);
     // SAFETY: umask is async-signal-safe and process-global by design here.
     // wasm32: no umask on WASI (files carry no mode bits); the create-mode
     // globals above still record the owner/group decision for lock files.

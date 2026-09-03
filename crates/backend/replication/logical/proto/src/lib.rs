@@ -13,6 +13,8 @@
 // type constants exist, the write/read functions refuse loudly (phase-2).
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
+// logicalrep_write_update etc. mirror C's call-frames argument-for-argument.
+#![allow(clippy::too_many_arguments)]
 
 use datum::Datum;
 use mcx::Mcx;
@@ -21,7 +23,9 @@ use types_core::{
     XLogRecPtr,
 };
 use types_error::{PgResult, ERROR};
-use types_rel::pg_class::{REPLICA_IDENTITY_DEFAULT, REPLICA_IDENTITY_FULL, REPLICA_IDENTITY_INDEX};
+use types_rel::pg_class::{
+    REPLICA_IDENTITY_DEFAULT, REPLICA_IDENTITY_FULL, REPLICA_IDENTITY_INDEX,
+};
 use types_rel::RelationData;
 use types_tuple::{varatt, FormData_pg_attribute, HeapTupleData};
 
@@ -266,7 +270,10 @@ pub fn logicalrep_write_commit(
 pub fn logicalrep_read_commit(r: &mut Reader<'_>) -> PgResult<LogicalRepCommitData> {
     let flags = r.get_byte()?;
     if flags != 0 {
-        elog(ERROR, format!("unrecognized flags {flags} in commit message"))?;
+        elog(
+            ERROR,
+            format!("unrecognized flags {flags} in commit message"),
+        )?;
     }
     Ok(LogicalRepCommitData {
         commit_lsn: r.get_int64()?,
@@ -381,7 +388,10 @@ pub fn logicalrep_read_update(r: &mut Reader<'_>) -> PgResult<ReadUpdateResult> 
     }
 
     if action != b'N' {
-        elog(ERROR, format!("expected action 'N', got {}", action as char))?;
+        elog(
+            ERROR,
+            format!("expected action 'N', got {}", action as char),
+        )?;
     }
 
     Ok(ReadUpdateResult {
@@ -589,8 +599,7 @@ fn oid_output_function_call(mcx: Mcx<'_>, typoutput: Oid, val: Datum) -> PgResul
     let mut flinfo = fmgr_seams::fmgr_info::call(typoutput)?;
     let d = types_fmgr::function_call1_coll_in(&mut flinfo, InvalidOid, mcx, val)?;
     // SAFETY: output functions return a NUL-terminated cstring datum.
-    let bytes =
-        unsafe { core::ffi::CStr::from_ptr((d.as_usize() as *const u8).cast()) }.to_bytes();
+    let bytes = unsafe { core::ffi::CStr::from_ptr((d.as_usize() as *const u8).cast()) }.to_bytes();
     Ok(bytes.to_vec())
 }
 
@@ -646,9 +655,8 @@ fn logicalrep_write_tuple(
 
         let mut isnull = false;
         // SAFETY: i+1 <= natts; desc is the tuple's own descriptor.
-        let origval = unsafe {
-            types_tuple::getattr::heap_getattr(tuple, i as i32 + 1, desc, &mut isnull)
-        };
+        let origval =
+            unsafe { types_tuple::getattr::heap_getattr(tuple, i as i32 + 1, desc, &mut isnull) };
 
         if isnull {
             send_byte(out, LOGICALREP_COLUMN_NULL);
@@ -745,7 +753,9 @@ fn logicalrep_write_attrs(
     // the relcache's identity-key attnum list serves the same role.
     let replidentfull = rel.rd_rel.relreplident == REPLICA_IDENTITY_FULL;
     let idattrs = if !replidentfull {
-        Some(relcache_seams::relation_get_index_attr_bitmap::call(rel.rd_id)?)
+        Some(relcache_seams::relation_get_index_attr_bitmap::call(
+            rel.rd_id,
+        )?)
     } else {
         None
     };
@@ -870,7 +880,10 @@ pub fn logicalrep_read_stream_commit(
     let xid = r.get_int32()?;
     let flags = r.get_byte()?;
     if flags != 0 {
-        elog(ERROR, format!("unrecognized flags {flags} in commit message"))?;
+        elog(
+            ERROR,
+            format!("unrecognized flags {flags} in commit message"),
+        )?;
     }
     Ok((
         xid,
@@ -923,7 +936,12 @@ pub fn logicalrep_read_stream_abort(
     } else {
         (InvalidXLogRecPtr, 0)
     };
-    Ok(LogicalRepStreamAbortData { xid, subxid, abort_lsn, abort_time })
+    Ok(LogicalRepStreamAbortData {
+        xid,
+        subxid,
+        abort_lsn,
+        abort_time,
+    })
 }
 // --- two-phase (prepare family) messages ---
 
@@ -995,16 +1013,20 @@ pub fn logicalrep_write_begin_prepare(
     send_string(out, gid);
 }
 
-pub fn logicalrep_read_begin_prepare(
-    r: &mut Reader<'_>,
-) -> PgResult<LogicalRepPreparedTxnData> {
+pub fn logicalrep_read_begin_prepare(r: &mut Reader<'_>) -> PgResult<LogicalRepPreparedTxnData> {
     let prepare_lsn = r.get_int64()?;
     if prepare_lsn == InvalidXLogRecPtr {
-        elog(ERROR, "prepare_lsn not set in begin prepare message".to_string())?;
+        elog(
+            ERROR,
+            "prepare_lsn not set in begin prepare message".to_string(),
+        )?;
     }
     let end_lsn = r.get_int64()?;
     if end_lsn == InvalidXLogRecPtr {
-        elog(ERROR, "end_lsn not set in begin prepare message".to_string())?;
+        elog(
+            ERROR,
+            "end_lsn not set in begin prepare message".to_string(),
+        )?;
     }
     Ok(LogicalRepPreparedTxnData {
         prepare_lsn,
@@ -1062,11 +1084,17 @@ fn logicalrep_read_prepare_common(
 ) -> PgResult<LogicalRepPreparedTxnData> {
     let flags = r.get_byte()?;
     if flags != 0 {
-        elog(ERROR, format!("unrecognized flags {flags} in {msgtype} message"))?;
+        elog(
+            ERROR,
+            format!("unrecognized flags {flags} in {msgtype} message"),
+        )?;
     }
     let prepare_lsn = r.get_int64()?;
     if prepare_lsn == InvalidXLogRecPtr {
-        elog(ERROR, format!("prepare_lsn is not set in {msgtype} message"))?;
+        elog(
+            ERROR,
+            format!("prepare_lsn is not set in {msgtype} message"),
+        )?;
     }
     let end_lsn = r.get_int64()?;
     if end_lsn == InvalidXLogRecPtr {
@@ -1124,11 +1152,17 @@ pub fn logicalrep_read_commit_prepared(
     }
     let commit_lsn = r.get_int64()?;
     if commit_lsn == InvalidXLogRecPtr {
-        elog(ERROR, "commit_lsn is not set in commit prepared message".to_string())?;
+        elog(
+            ERROR,
+            "commit_lsn is not set in commit prepared message".to_string(),
+        )?;
     }
     let end_lsn = r.get_int64()?;
     if end_lsn == InvalidXLogRecPtr {
-        elog(ERROR, "end_lsn is not set in commit prepared message".to_string())?;
+        elog(
+            ERROR,
+            "end_lsn is not set in commit prepared message".to_string(),
+        )?;
     }
     Ok(LogicalRepCommitPreparedTxnData {
         commit_lsn,

@@ -144,7 +144,11 @@ pub fn pglz_decompress(
 }
 
 /// [`pglz_decompress`] into an already-initialized buffer.
-pub fn pglz_decompress_slice(source: &[u8], dest: &mut [u8], check_complete: bool) -> Option<usize> {
+pub fn pglz_decompress_slice(
+    source: &[u8],
+    dest: &mut [u8],
+    check_complete: bool,
+) -> Option<usize> {
     // SAFETY: [u8] viewed as [MaybeUninit<u8>]; the kernel never writes uninit.
     let dest = unsafe {
         core::slice::from_raw_parts_mut(dest.as_mut_ptr().cast::<MaybeUninit<u8>>(), dest.len())
@@ -228,7 +232,7 @@ impl Hist {
         self.entries[head as usize].prev = hn;
         self.start[hindex] = hn as i16;
         *hist_next += 1;
-        if *hist_next as usize >= PGLZ_HISTORY_SIZE + 1 {
+        if *hist_next as usize > PGLZ_HISTORY_SIZE {
             *hist_next = 1;
             *recycle = true;
         }

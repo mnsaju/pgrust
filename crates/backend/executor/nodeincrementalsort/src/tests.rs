@@ -51,10 +51,12 @@ fn install_seams() {
             Ok(v)
         });
         syscache_seams::lookup_pg_opfamily_shape::set(|opfid| {
-            Ok((opfid == INTEGER_BTREE_FAM).then(|| syscache_seams::PgOpfamilyShape {
-                opfmethod: BTREE_AM,
-                opfname: ::types_tuple::NameData::default(),
-            }))
+            Ok(
+                (opfid == INTEGER_BTREE_FAM).then(|| syscache_seams::PgOpfamilyShape {
+                    opfmethod: BTREE_AM,
+                    opfname: ::types_tuple::NameData::default(),
+                }),
+            )
         });
         syscache_seams::lookup_pg_amop_by_strategy::set(|opfamily, left, right, strategy| {
             assert_eq!(
@@ -64,21 +66,27 @@ fn install_seams() {
             Ok(INT4_EQ)
         });
         syscache_seams::lookup_pg_operator_shape::set(|opno| {
-            Ok((opno == INT4_EQ).then_some(syscache_seams::PgOperatorShape { oprnamespace: 11,
-                oprleft: INT4OID,
-                oprright: INT4OID,
-                oprresult: 16,
-                oprcom: INT4_EQ,
-                oprnegate: 518,
-                oprcode: F_INT4EQ,
-                oprrest: 101,
-                oprjoin: 105,
-                oprcanmerge: true,
-                oprcanhash: true,
-            }))
+            Ok(
+                (opno == INT4_EQ).then_some(syscache_seams::PgOperatorShape {
+                    oprnamespace: 11,
+                    oprleft: INT4OID,
+                    oprright: INT4OID,
+                    oprresult: 16,
+                    oprcom: INT4_EQ,
+                    oprnegate: 518,
+                    oprcode: F_INT4EQ,
+                    oprrest: 101,
+                    oprjoin: 105,
+                    oprcanmerge: true,
+                    oprcanhash: true,
+                }),
+            )
         });
         syscache_seams::lookup_pg_amproc::set(|opfamily, left, right, procnum| {
-            assert_eq!((opfamily, left, right, procnum), (INTEGER_BTREE_FAM, INT4OID, INT4OID, 2));
+            assert_eq!(
+                (opfamily, left, right, procnum),
+                (INTEGER_BTREE_FAM, INT4OID, INT4OID, 2)
+            );
             Ok(F_BTINT4SORTSUPPORT)
         });
     });
@@ -167,7 +175,11 @@ fn setup(
     let in_slot = estate.exec_init_extra_tuple_slot(Some(desc.clone()), TupleSlotKind::Virtual);
     let plan = mk_plan(mcx, 1);
     let node = exec_init_incremental_sort(plan, &mut estate, 0, &desc, desc.clone());
-    let feed = Feed { slot: in_slot, rows, next: 0 };
+    let feed = Feed {
+        slot: in_slot,
+        rows,
+        next: 0,
+    };
     (node, estate, feed)
 }
 

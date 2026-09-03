@@ -53,7 +53,9 @@ fn main() {
 }
 
 fn section<'a>(src: &'a str, marker: &str) -> &'a str {
-    let start = src.find(marker).unwrap_or_else(|| panic!("marker {marker}"));
+    let start = src
+        .find(marker)
+        .unwrap_or_else(|| panic!("marker {marker}"));
     let rest = &src[start..];
     let end = rest.find("\n};").expect("section end");
     &rest[..end]

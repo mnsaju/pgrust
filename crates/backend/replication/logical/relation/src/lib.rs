@@ -127,7 +127,12 @@ fn mark_updatable(entry: &mut LogicalRepRelMapEntry) -> PgResult<()> {
         let off = (attnum - 1) as usize;
         let remote = entry.attrmap.get(off).copied().unwrap_or(-1);
         if remote < 0
-            || !entry.remoterel.attkeys.get(remote as usize).copied().unwrap_or(false)
+            || !entry
+                .remoterel
+                .attkeys
+                .get(remote as usize)
+                .copied()
+                .unwrap_or(false)
         {
             entry.updatable = false;
             break;
@@ -229,7 +234,11 @@ pub fn logicalrep_rel_open<'mcx>(
         let rel = table::table_open(mcx, relid, types_rel::NoLock)?;
         entry.localreloid = relid;
 
-        check_relkind(rel.rd_rel.relkind as u8, &remoterel.nspname, &remoterel.relname)?;
+        check_relkind(
+            rel.rd_rel.relkind as u8,
+            &remoterel.nspname,
+            &remoterel.relname,
+        )?;
 
         // Local-offset -> remote-column attrmap by column name; track remote
         // columns with no local counterpart and local generated columns
@@ -266,7 +275,10 @@ pub fn logicalrep_rel_open<'mcx>(
         if !missing_names.is_empty() || !generated_hit.is_empty() {
             let mut parts = Vec::new();
             if !missing_names.is_empty() {
-                parts.push(format!("missing replicated columns: ({})", missing_names.join(", ")));
+                parts.push(format!(
+                    "missing replicated columns: ({})",
+                    missing_names.join(", ")
+                ));
             }
             if !generated_hit.is_empty() {
                 parts.push(format!("generated columns: ({})", generated_hit.join(", ")));
@@ -290,8 +302,7 @@ pub fn logicalrep_rel_open<'mcx>(
     }
 
     if entry.state != SUBREL_STATE_READY {
-        let (state, lsn) =
-            pg_subscription::GetSubscriptionRelState(mcx, subid, entry.localreloid)?;
+        let (state, lsn) = pg_subscription::GetSubscriptionRelState(mcx, subid, entry.localreloid)?;
         entry.state = state;
         entry.statelsn = lsn;
     }
@@ -300,7 +311,10 @@ pub fn logicalrep_rel_open<'mcx>(
         m.borrow_mut().insert(remoteid, entry.clone());
     });
 
-    Ok((entry, localrel.expect("logicalrep_rel_open produced a relation")))
+    Ok((
+        entry,
+        localrel.expect("logicalrep_rel_open produced a relation"),
+    ))
 }
 
 // logicalrep_rel_close (relation.c:504).

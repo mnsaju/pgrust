@@ -59,13 +59,13 @@ pub(crate) mod sync {
 pub mod clock;
 pub mod io;
 
-use sync::MutexGuard;
-#[cfg(not(loom))]
-use sync::atomic::{AtomicU64, Ordering};
 #[cfg(not(loom))]
 use pgsync::OnceLock;
 #[cfg(not(loom))]
 use std::time::Duration;
+#[cfg(not(loom))]
+use sync::atomic::{AtomicU64, Ordering};
+use sync::MutexGuard;
 
 /// Waiter slot capacity: bounds peak concurrent threads-with-waiters, not
 /// threads served over the process lifetime (slots are recycled on thread
@@ -199,7 +199,10 @@ impl Slot {
     /// Condvar wait hook for loom-model clocks (loom's condvar cannot be
     /// reached through the pub(crate) accessor from an integration test).
     #[cfg(loom)]
-    pub fn wait_for_model<'a>(&self, guard: MutexGuard<'a, SlotInner>) -> MutexGuard<'a, SlotInner> {
+    pub fn wait_for_model<'a>(
+        &self,
+        guard: MutexGuard<'a, SlotInner>,
+    ) -> MutexGuard<'a, SlotInner> {
         self.cv.wait(guard).unwrap_or_else(|e| e.into_inner())
     }
 
@@ -396,10 +399,7 @@ mod global {
     }
 
     fn allocate_slot() -> usize {
-        let recycled = SLOT_FREE
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .pop();
+        let recycled = SLOT_FREE.lock().unwrap_or_else(|e| e.into_inner()).pop();
         let idx = recycled.unwrap_or_else(|| {
             let mut next = SLOT_NEXT.lock().unwrap_or_else(|e| e.into_inner());
             let idx = *next;
@@ -590,13 +590,13 @@ mod global {
             return Err(std::io::Error::last_os_error().raw_os_error().unwrap_or(0));
         }
         for fd in pipefd {
-            for (cmd, arg) in
-                [(libc::F_SETFL, libc::O_NONBLOCK), (libc::F_SETFD, libc::FD_CLOEXEC)]
-            {
+            for (cmd, arg) in [
+                (libc::F_SETFL, libc::O_NONBLOCK),
+                (libc::F_SETFD, libc::FD_CLOEXEC),
+            ] {
                 // SAFETY: fcntl on fds just created.
                 if unsafe { libc::fcntl(fd, cmd, arg) } == -1 {
-                    let errno =
-                        std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
+                    let errno = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
                     for fd in pipefd {
                         // SAFETY: closing the fds we just created.
                         unsafe { libc::close(fd) };

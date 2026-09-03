@@ -5,7 +5,11 @@ use types_error::PgResult;
 use types_fmgr::{FmgrInfo, FunctionCallInfoBaseData as Fcinfo};
 use wchar::{pg_encoding_verifymbchar, PG_EUC_JIS_2004, PG_SHIFT_JIS_2004};
 
-unsafe fn euc_jis_2004_2_shift_jis_2004(src: &[u8], dest: *mut u8, no_error: bool) -> PgResult<i32> {
+unsafe fn euc_jis_2004_2_shift_jis_2004(
+    src: &[u8],
+    dest: *mut u8,
+    no_error: bool,
+) -> PgResult<i32> {
     let mut out = Dst(dest);
     let mut pos = 0usize;
     'outer: while pos < src.len() {
@@ -113,7 +117,11 @@ fn get_ten(b: i32) -> (i32, i32) {
     }
 }
 
-unsafe fn shift_jis_2004_2_euc_jis_2004(src: &[u8], dest: *mut u8, no_error: bool) -> PgResult<i32> {
+unsafe fn shift_jis_2004_2_euc_jis_2004(
+    src: &[u8],
+    dest: *mut u8,
+    no_error: bool,
+) -> PgResult<i32> {
     let mut out = Dst(dest);
     let mut pos = 0usize;
     while pos < src.len() {

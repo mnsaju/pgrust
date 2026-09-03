@@ -2,8 +2,7 @@
 //! sits above indexam in the crate graph (pgvector_hnsw_build split).
 
 use crate::state::{
-    bloom_form_tuple, bloom_new_buffer, buf_page_bytes, init_bloom_state,
-    GENERIC_XLOG_FULL_IMAGE,
+    bloom_form_tuple, bloom_new_buffer, buf_page_bytes, init_bloom_state, GENERIC_XLOG_FULL_IMAGE,
 };
 use bufmgr::{
     BufferGetBlockNumber, LockBuffer, ReleaseBuffer, UnlockReleaseBuffer, BUFFER_LOCK_EXCLUSIVE,
@@ -41,7 +40,11 @@ pub fn blinsert<'mcx>(
         let meta_page = buf_page_bytes(meta_buffer);
         let ns = meta_nstart(meta_page);
         let ne = meta_nend(meta_page);
-        let fb = if ne > ns { meta_notfull(meta_page, ns as usize) } else { InvalidBlockNumber };
+        let fb = if ne > ns {
+            meta_notfull(meta_page, ns as usize)
+        } else {
+            InvalidBlockNumber
+        };
         (ns, ne, fb)
     };
 
@@ -81,9 +84,7 @@ pub fn blinsert<'mcx>(
 
     {
         let meta_page = buf_page_bytes(meta_buffer);
-        if n_start < meta_nend(meta_page)
-            && blkno == meta_notfull(meta_page, n_start as usize)
-        {
+        if n_start < meta_nend(meta_page) && blkno == meta_notfull(meta_page, n_start as usize) {
             n_start += 1;
         }
     }
@@ -102,10 +103,7 @@ pub fn blinsert<'mcx>(
             let page = state.register_buffer(buffer, GENERIC_XLOG_FULL_IMAGE)?;
             bloom_init_page(page, 0);
             if !page_add_item(page, size, &itup) {
-                return Err(PgError::error(
-                    "could not add new bloom tuple to empty page",
-                )
-                .into());
+                return Err(PgError::error("could not add new bloom tuple to empty page").into());
             }
 
             let meta_page = state.page_image_mut(0);

@@ -70,7 +70,9 @@ fn to_server(mcx: Mcx<'_>, src: Vec<u8>, encoding: i32) -> PgResult<Vec<u8>> {
 
 pub fn cache_locale_time(mcx: Mcx<'_>) -> PgResult<Rc<LocalizedTimeNames>> {
     if CURRENT_LC_TIME_VALID.with(|v| v.get()) {
-        return Ok(LC_TIME_CACHE.with(|c| c.borrow().clone()).expect("valid implies cached"));
+        return Ok(LC_TIME_CACHE
+            .with(|c| c.borrow().clone())
+            .expect("valid implies cached"));
     }
 
     let locale_time = crate::setup::locale_time_value();
@@ -120,7 +122,7 @@ pub fn cache_locale_time(mcx: Mcx<'_>) -> PgResult<Rc<LocalizedTimeNames>> {
     // encoding to the database encoding.
     let mut encoding = crate::chklocale::pg_get_encoding_from_locale(Some(&locale_time), true)?;
     if encoding < 0 {
-        encoding = PG_SQL_ASCII as i32;
+        encoding = PG_SQL_ASCII;
     }
 
     let conv = |v: Vec<Vec<u8>>| -> PgResult<Vec<Vec<u8>>> {

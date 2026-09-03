@@ -45,7 +45,7 @@ struct DsmControlHeader {
 
 const ITEM_OFFSET: usize = {
     let a = std::mem::align_of::<DsmControlItem>();
-    (std::mem::size_of::<DsmControlHeader>() + a - 1) / a * a
+    std::mem::size_of::<DsmControlHeader>().div_ceil(a) * a
 };
 
 unsafe fn control_item(control: *mut DsmControlHeader, i: u32) -> *mut DsmControlItem {
@@ -194,7 +194,11 @@ impl Drop for DsmSegment {
 
 impl std::fmt::Debug for DsmSegment {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "dynamic shared memory segment {}", dsm_segment_handle(self.id))
+        write!(
+            f,
+            "dynamic shared memory segment {}",
+            dsm_segment_handle(self.id)
+        )
     }
 }
 
@@ -282,7 +286,10 @@ fn dsm_control_segment_sane(control: *mut DsmControlHeader, mapped_size: usize) 
 
 /// The C mmap-arm leftover scan (dsm_cleanup_for_mmap) has no counterpart
 /// here: the in-process backing writes no files.
-pub fn dsm_postmaster_startup(shim: *mut PGShmemHeader) -> PgResult<()> {
+/// # Safety
+/// `shim` must be a live, exclusively-owned `PGShmemHeader` (postmaster boot,
+/// before any other backend can observe it).
+pub unsafe fn dsm_postmaster_startup(shim: *mut PGShmemHeader) -> PgResult<()> {
     let maxitems =
         (PG_DYNSHMEM_FIXED_SLOTS + PG_DYNSHMEM_SLOTS_PER_BACKEND * globals::MaxBackends()) as u32;
     elog(
@@ -345,7 +352,10 @@ pub fn dsm_postmaster_startup_after_crash() -> PgResult<()> {
         control().is_null(),
         "dsm control segment still mapped; shmem_exit(1) must run first"
     );
-    dsm_postmaster_startup(shim)
+    // SAFETY: shim is the retained postmaster-startup shim; the asserts
+    // above establish the same preconditions dsm_postmaster_startup had at
+    // the original boot call.
+    unsafe { dsm_postmaster_startup(shim) }
 }
 
 pub fn dsm_cleanup_using_control_segment(old_control_handle: dsm_handle) -> PgResult<()> {

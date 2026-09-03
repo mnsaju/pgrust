@@ -188,10 +188,7 @@ impl ServerOps {
 
     fn open_exclusive(&mut self, filename: &str, func: &'static str) -> PgResult<()> {
         debug_assert!(self.file.is_none());
-        let file = fd::PathNameOpenFile(
-            filename,
-            libc::O_CREAT | libc::O_EXCL | libc::O_WRONLY,
-        )?;
+        let file = fd::PathNameOpenFile(filename, libc::O_CREAT | libc::O_EXCL | libc::O_WRONLY)?;
         if file.0 <= 0 {
             let e = std::io::Error::last_os_error();
             return ereport(ERROR)

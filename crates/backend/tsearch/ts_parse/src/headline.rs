@@ -77,7 +77,9 @@ fn hlfinditem<'mcx>(
     let widx = prs.words.len() - 1;
     prs.words[widx].pos = limitpos(pos.max(0) as u32);
     for i in 0..query.size() {
-        let Item::Val(op) = query.item(i) else { continue };
+        let Item::Val(op) = query.item(i) else {
+            continue;
+        };
         if ts_compare_string(query.operand_str(&op), buf, op.prefix) == 0 {
             if prs.words[widx].item.is_some() {
                 let w = &prs.words[widx];
@@ -202,18 +204,27 @@ pub fn generate_headline<'mcx>(
                 infrag = true;
                 numfragments += 1;
                 if numfragments > 1 {
-                    ::mcx::vec_append_bytes(&mut out, prs.fragdelim.as_deref().expect("fragdelim filled"))?;
+                    ::mcx::vec_append_bytes(
+                        &mut out,
+                        prs.fragdelim.as_deref().expect("fragdelim filled"),
+                    )?;
                 }
             }
             if wrd.replace {
                 out.push(b' ');
             } else if !wrd.skip {
                 if wrd.selected {
-                    ::mcx::vec_append_bytes(&mut out, prs.startsel.as_deref().expect("startsel filled"))?;
+                    ::mcx::vec_append_bytes(
+                        &mut out,
+                        prs.startsel.as_deref().expect("startsel filled"),
+                    )?;
                 }
                 ::mcx::vec_append_bytes(&mut out, &wrd.word)?;
                 if wrd.selected {
-                    ::mcx::vec_append_bytes(&mut out, prs.stopsel.as_deref().expect("stopsel filled"))?;
+                    ::mcx::vec_append_bytes(
+                        &mut out,
+                        prs.stopsel.as_deref().expect("stopsel filled"),
+                    )?;
                 }
             }
         } else if !wrd.repeated {

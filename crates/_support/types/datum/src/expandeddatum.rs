@@ -7,8 +7,7 @@ use mcx::MemoryContext;
 pub const VARTAG_EXPANDED_RO: u8 = 2;
 pub const VARTAG_EXPANDED_RW: u8 = 3;
 pub const VARHDRSZ_EXTERNAL: usize = 2;
-pub const EXPANDED_POINTER_SIZE: usize =
-    VARHDRSZ_EXTERNAL + size_of::<*mut ExpandedObjectHeader>();
+pub const EXPANDED_POINTER_SIZE: usize = VARHDRSZ_EXTERNAL + size_of::<*mut ExpandedObjectHeader>();
 pub const EOH_HEADER_MAGIC: i32 = -1;
 
 #[cfg(target_endian = "little")]
@@ -18,7 +17,8 @@ const HEADER_1B_E: u8 = 0x80;
 
 pub struct ExpandedObjectMethods {
     pub get_flat_size: unsafe fn(eohptr: *mut ExpandedObjectHeader) -> usize,
-    pub flatten_into: unsafe fn(eohptr: *mut ExpandedObjectHeader, result: *mut u8, allocated_size: usize),
+    pub flatten_into:
+        unsafe fn(eohptr: *mut ExpandedObjectHeader, result: *mut u8, allocated_size: usize),
 }
 
 // Self-referential: both images embed this struct's own address, so a header
@@ -64,29 +64,38 @@ pub const fn vartag_is_expanded(tag: u8) -> bool {
     (tag & !1) == VARTAG_EXPANDED_RO
 }
 
+/// # Safety
+/// `d` must be a Datum whose pointer value addresses a live, readable
+/// varlena header (at least a 1B_E-sized prefix).
 #[inline]
 pub unsafe fn datum_is_external_expanded(d: Datum) -> bool {
     let p = d.as_usize() as *const u8;
     *p == HEADER_1B_E && vartag_is_expanded(*p.add(1))
 }
 
+/// # Safety
+/// As [`datum_is_external_expanded`].
 #[inline]
 pub unsafe fn datum_is_external_expanded_rw(d: Datum) -> bool {
     let p = d.as_usize() as *const u8;
     *p == HEADER_1B_E && *p.add(1) == VARTAG_EXPANDED_RW
 }
 
+/// # Safety
+/// `d` must satisfy [`datum_is_external_expanded`] (debug-checked).
 pub unsafe fn datum_get_eohp(d: Datum) -> *mut ExpandedObjectHeader {
     debug_assert!(datum_is_external_expanded(d));
     let p = d.as_usize() as *const u8;
     // read_unaligned of pointer bytes keeps provenance (C memcpy's the same).
-    let eohptr = core::ptr::read_unaligned(p.add(VARHDRSZ_EXTERNAL) as *const *mut ExpandedObjectHeader);
+    let eohptr =
+        core::ptr::read_unaligned(p.add(VARHDRSZ_EXTERNAL) as *const *mut ExpandedObjectHeader);
     debug_assert!((*eohptr).vl_len_ == EOH_HEADER_MAGIC);
     eohptr
 }
 
-/// SAFETY contract: `eohptr` is writable storage at the header's FINAL
-/// address — both TOAST images embed it.
+/// # Safety
+/// `eohptr` is writable storage at the header's FINAL address — both TOAST
+/// images embed it.
 pub unsafe fn eoh_init_header(
     eohptr: *mut ExpandedObjectHeader,
     methods: &'static ExpandedObjectMethods,
@@ -100,20 +109,31 @@ pub unsafe fn eoh_init_header(
     for (image, tag) in [(rw, VARTAG_EXPANDED_RW), (ro, VARTAG_EXPANDED_RO)] {
         *image = HEADER_1B_E;
         *image.add(1) = tag;
-        core::ptr::write_unaligned(image.add(VARHDRSZ_EXTERNAL) as *mut *mut ExpandedObjectHeader, eohptr);
+        core::ptr::write_unaligned(
+            image.add(VARHDRSZ_EXTERNAL) as *mut *mut ExpandedObjectHeader,
+            eohptr,
+        );
     }
 }
 
+/// # Safety
+/// `eohptr` must be a live, initialized `ExpandedObjectHeader` (via
+/// [`eoh_init_header`]).
 #[inline]
 pub unsafe fn eohp_get_rw_datum(eohptr: *const ExpandedObjectHeader) -> Datum {
     Datum::from_usize(core::ptr::addr_of!((*eohptr).eoh_rw_ptr) as usize)
 }
 
+/// # Safety
+/// As [`eohp_get_rw_datum`].
 #[inline]
 pub unsafe fn eohp_get_ro_datum(eohptr: *const ExpandedObjectHeader) -> Datum {
     Datum::from_usize(core::ptr::addr_of!((*eohptr).eoh_ro_ptr) as usize)
 }
 
+/// # Safety
+/// `d` must be a valid Datum for the given `isnull`/`typlen` (the varlena
+/// contract [`datum_is_external_expanded_rw`] checks when reachable).
 #[inline]
 pub unsafe fn datum_is_read_write_expanded_object(d: Datum, isnull: bool, typlen: i16) -> bool {
     if isnull || typlen != -1 {
@@ -122,6 +142,9 @@ pub unsafe fn datum_is_read_write_expanded_object(d: Datum, isnull: bool, typlen
     datum_is_external_expanded_rw(d)
 }
 
+/// # Safety
+/// `d` must be a Datum whose pointer value addresses a live, readable
+/// varlena header.
 pub unsafe fn make_expanded_object_read_only_internal(d: Datum) -> Datum {
     if !datum_is_external_expanded_rw(d) {
         return d;
@@ -129,6 +152,9 @@ pub unsafe fn make_expanded_object_read_only_internal(d: Datum) -> Datum {
     eohp_get_ro_datum(datum_get_eohp(d))
 }
 
+/// # Safety
+/// As [`make_expanded_object_read_only_internal`] when `isnull`/`typlen`
+/// select the varlena path.
 #[inline]
 pub unsafe fn make_expanded_object_read_only(d: Datum, isnull: bool, typlen: i16) -> Datum {
     if isnull || typlen != -1 {
@@ -137,13 +163,18 @@ pub unsafe fn make_expanded_object_read_only(d: Datum, isnull: bool, typlen: i16
     make_expanded_object_read_only_internal(d)
 }
 
+/// # Safety
+/// `eohptr` must be a live, initialized `ExpandedObjectHeader`.
 pub unsafe fn eoh_get_flat_size(eohptr: *mut ExpandedObjectHeader) -> usize {
     let methods = eoh_methods(eohptr);
     (methods.get_flat_size)(eohptr)
 }
 
-/// Flatteners write exactly `allocated_size` (a preceding [`eoh_get_flat_size`])
-/// bytes of a plain 4B-header varlena into `result`.
+/// # Safety
+/// `eohptr` must be a live, initialized `ExpandedObjectHeader`; `result`
+/// must be writable for `allocated_size` bytes (a preceding
+/// [`eoh_get_flat_size`]). Flatteners write exactly that many bytes of a
+/// plain 4B-header varlena into `result`.
 pub unsafe fn eoh_flatten_into(
     eohptr: *mut ExpandedObjectHeader,
     result: *mut u8,

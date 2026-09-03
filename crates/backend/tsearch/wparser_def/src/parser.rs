@@ -193,6 +193,8 @@ enum CharTest {
     IsURLPath,
 }
 
+// FURL mirrors C's SPECIAL_FURL (wparser_def.c) verbatim.
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Special {
     None_,
@@ -317,16 +319,16 @@ fn char2wchar_default(head: &[u8]) -> PgResult<Vec<u32>> {
     };
     if n == usize::MAX {
         ::mbutils::pg_verifymbstr(head, false)?;
-        return Err(::types_error::PgError::error(
-            "invalid multibyte character for locale",
-        )
-        .into());
+        return Err(::types_error::PgError::error("invalid multibyte character for locale").into());
     }
     out.truncate(n);
     Ok(out.into_iter().map(|w| w as u32).collect())
 }
 
-pub fn tparser_init(mcx: Mcx<'_>, str_ptr: *const u8, len: usize) -> PgResult<TParser> {
+/// # Safety
+/// `str_ptr` must be valid for reads of `len` bytes for the lifetime of the
+/// returned `TParser` (C TParserInit's caller contract).
+pub unsafe fn tparser_init(mcx: Mcx<'_>, str_ptr: *const u8, len: usize) -> PgResult<TParser> {
     let charmaxlen = ::mbutils::pg_database_encoding_max_length();
     let mut prs = TParser {
         str_ptr,
@@ -350,7 +352,7 @@ pub fn tparser_init(mcx: Mcx<'_>, str_ptr: *const u8, len: usize) -> PgResult<TP
         let head = unsafe { core::slice::from_raw_parts(str_ptr, len) };
         if ::pg_locale::database_ctype_is_c() {
             let w = ::mbutils::pg_mb2wchar_with_len(mcx, head)?;
-            prs.pgwstr = Some(w.iter().map(|&c| c as u32).collect());
+            prs.pgwstr = Some(w.iter().copied().collect());
         } else {
             prs.wstr = Some(char2wchar_default(head)?);
         }

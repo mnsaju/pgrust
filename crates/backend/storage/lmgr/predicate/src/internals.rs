@@ -275,6 +275,8 @@ pub fn TargetTagIsCoveredBy(
 
 macro_rules! sxact_flag_accessor {
     ($name:ident, $flag:ident) => {
+        /// # Safety
+        /// `sxact` must be a live, valid `SERIALIZABLEXACT` pointer.
         #[inline]
         pub unsafe fn $name(sxact: *const SERIALIZABLEXACT) -> bool {
             ((*sxact).flags & $flag) != 0
@@ -295,6 +297,8 @@ sxact_flag_accessor!(SxactIsROSafe, SXACT_FLAG_RO_SAFE);
 sxact_flag_accessor!(SxactIsROUnsafe, SXACT_FLAG_RO_UNSAFE);
 sxact_flag_accessor!(SxactIsPartiallyReleased, SXACT_FLAG_PARTIALLY_RELEASED);
 
+/// # Safety
+/// `sxact` must be a live, valid `SERIALIZABLEXACT` pointer.
 #[inline]
 pub unsafe fn SxactIsOnFinishedList(sxact: *const SERIALIZABLEXACT) -> bool {
     !crate::ilist::dlist_node_is_detached(&(*sxact).finishedLink)

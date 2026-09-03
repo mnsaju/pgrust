@@ -3,11 +3,11 @@
 //! fields; single address space, so atomics stand in for the spinlocked
 //! shmem struct).
 
+use pgsync::Mutex;
 use std::cell::Cell;
 use std::sync::atomic::{
     AtomicBool, AtomicI32, AtomicI64, AtomicU32, AtomicU64, Ordering::Relaxed,
 };
-use pgsync::Mutex;
 
 use condition_variable::{
     ConditionVariable, ConditionVariableBroadcast, ConditionVariableCancelSleep,
@@ -290,7 +290,10 @@ pub(crate) fn getRecordTimestamp(reader: &xlogreader::XLogReaderState<'_>) -> Op
     None
 }
 
-fn record_end_xid(reader: &xlogreader::XLogReaderState<'_>, xact_info: u8) -> PgResult<TransactionId> {
+fn record_end_xid(
+    reader: &xlogreader::XLogReaderState<'_>,
+    xact_info: u8,
+) -> PgResult<TransactionId> {
     let info = reader.XLogRecGetInfo();
     let data = reader.XLogRecGetData();
     Ok(match xact_info {
@@ -315,7 +318,10 @@ pub(crate) fn recoveryStopsBefore(reader: &xlogreader::XLogReaderState<'_>) -> P
     let target = recovery_target();
 
     if target == RecoveryTargetType::Immediate && crate::reached_consistency() {
-        let _ = elog(LOG, "recovery stopping after reaching consistency".to_string());
+        let _ = elog(
+            LOG,
+            "recovery stopping after reaching consistency".to_string(),
+        );
         clear_stop(false);
         return Ok(true);
     }
@@ -365,14 +371,14 @@ pub(crate) fn recoveryStopsBefore(reader: &xlogreader::XLogReaderState<'_>) -> P
 
     if stops_here {
         clear_stop(false);
-        STOP_XID.store(record_xid.into(), Relaxed);
+        STOP_XID.store(record_xid, Relaxed);
         STOP_TIME.store(record_xtime.unwrap_or(0), Relaxed);
         let _ = elog(
             LOG,
             format!(
                 "recovery stopping before {} of transaction {}, time {}",
                 if is_commit { "commit" } else { "abort" },
-                u32::from(record_xid),
+                record_xid,
                 ts_str(record_xtime.unwrap_or(0))
             ),
         );
@@ -445,7 +451,7 @@ pub(crate) fn recoveryStopsAfter(reader: &xlogreader::XLogReaderState<'_>) -> Pg
                 && record_xid == recovery_target_xid()
             {
                 clear_stop(true);
-                STOP_XID.store(record_xid.into(), Relaxed);
+                STOP_XID.store(record_xid, Relaxed);
                 STOP_TIME.store(record_xtime.unwrap_or(0), Relaxed);
                 let is_commit = matches!(
                     xact_info,
@@ -456,7 +462,7 @@ pub(crate) fn recoveryStopsAfter(reader: &xlogreader::XLogReaderState<'_>) -> Pg
                     format!(
                         "recovery stopping after {} of transaction {}, time {}",
                         if is_commit { "commit" } else { "abort" },
-                        u32::from(record_xid),
+                        record_xid,
                         ts_str(record_xtime.unwrap_or(0))
                     ),
                 );
@@ -466,7 +472,10 @@ pub(crate) fn recoveryStopsAfter(reader: &xlogreader::XLogReaderState<'_>) -> Pg
     }
 
     if target == RecoveryTargetType::Immediate && crate::reached_consistency() {
-        let _ = elog(LOG, "recovery stopping after reaching consistency".to_string());
+        let _ = elog(
+            LOG,
+            "recovery stopping after reaching consistency".to_string(),
+        );
         clear_stop(true);
         return Ok(true);
     }
@@ -515,11 +524,8 @@ pub(crate) fn recoveryPausesHere(end_of_recovery: bool) -> PgResult<()> {
             return Ok(());
         }
         ConfirmRecoveryPaused();
-        let _ = ConditionVariableTimedSleep(
-            &RECOVERY_NOT_PAUSED_CV,
-            1000,
-            WAIT_EVENT_RECOVERY_PAUSE,
-        );
+        let _ =
+            ConditionVariableTimedSleep(&RECOVERY_NOT_PAUSED_CV, 1000, WAIT_EVENT_RECOVERY_PAUSE);
     }
     ConditionVariableCancelSleep();
     Ok(())
@@ -578,7 +584,11 @@ pub(crate) fn recoveryApplyDelay(reader: &xlogreader::XLogReaderState<'_>) -> Pg
     Ok(true)
 }
 
-pub fn RecoveryRequiresIntParameter(param_name: &str, curr_value: i32, min_value: i32) -> PgResult<()> {
+pub fn RecoveryRequiresIntParameter(
+    param_name: &str,
+    curr_value: i32,
+    min_value: i32,
+) -> PgResult<()> {
     if curr_value >= min_value {
         return Ok(());
     }
@@ -627,7 +637,6 @@ pub fn RecoveryRequiresIntParameter(param_name: &str, curr_value: i32, min_value
         .finish(loc("RecoveryRequiresIntParameter"))
 }
 
-
 // C guards every assign, but its per-process init makes the empty-value
 // guard unreachable; our per-thread snapshot replay is unordered across
 // variables, so an empty assign skips the guard and unsets only its own kind.
@@ -658,7 +667,7 @@ pub(crate) fn install_guc_hooks() {
         Ok(true)
     });
     hooks::assign_recovery_target.install(|newval, _extra| {
-        if newval.map_or(false, |v| !v.is_empty()) {
+        if newval.is_some_and(|v| !v.is_empty()) {
             guard_target(RecoveryTargetType::Immediate);
             set_recovery_target(RecoveryTargetType::Immediate);
         } else {
@@ -678,7 +687,7 @@ pub(crate) fn install_guc_hooks() {
         Ok(true)
     });
     hooks::assign_recovery_target_lsn.install(|newval, extra| {
-        if newval.map_or(false, |v| !v.is_empty()) {
+        if newval.is_some_and(|v| !v.is_empty()) {
             guard_target(RecoveryTargetType::Lsn);
             set_recovery_target(RecoveryTargetType::Lsn);
             let lsn = *extra
@@ -702,15 +711,13 @@ pub(crate) fn install_guc_hooks() {
         }
         Ok(true)
     });
-    hooks::assign_recovery_target_name.install(|newval, _extra| {
-        match newval {
-            Some(v) if !v.is_empty() => {
-                guard_target(RecoveryTargetType::Name);
-                set_recovery_target(RecoveryTargetType::Name);
-                RECOVERY_TARGET_NAME.with(|c| *c.borrow_mut() = v.to_string());
-            }
-            _ => unset_target(RecoveryTargetType::Name),
+    hooks::assign_recovery_target_name.install(|newval, _extra| match newval {
+        Some(v) if !v.is_empty() => {
+            guard_target(RecoveryTargetType::Name);
+            set_recovery_target(RecoveryTargetType::Name);
+            RECOVERY_TARGET_NAME.with(|c| *c.borrow_mut() = v.to_string());
         }
+        _ => unset_target(RecoveryTargetType::Name),
     });
 
     hooks::check_recovery_target_time.install(|newval, _extra, _source| {
@@ -727,7 +734,7 @@ pub(crate) fn install_guc_hooks() {
         Ok(true)
     });
     hooks::assign_recovery_target_time.install(|newval, _extra| {
-        if newval.map_or(false, |v| !v.is_empty()) {
+        if newval.is_some_and(|v| !v.is_empty()) {
             guard_target(RecoveryTargetType::Time);
             set_recovery_target(RecoveryTargetType::Time);
         } else {
@@ -741,7 +748,9 @@ pub(crate) fn install_guc_hooks() {
             "current" => RecoveryTargetTimeLineGoal::ControlFile,
             "latest" => RecoveryTargetTimeLineGoal::Latest,
             _ => {
-                if v.is_empty() || !v.bytes().all(|b| b.is_ascii_digit()) || v.parse::<u64>().is_err()
+                if v.is_empty()
+                    || !v.bytes().all(|b| b.is_ascii_digit())
+                    || v.parse::<u64>().is_err()
                 {
                     return Err(Box::new(types_error::PgError::new(
                         types_error::ERROR,
@@ -761,8 +770,7 @@ pub(crate) fn install_guc_hooks() {
             .expect("check hook stored the goal");
         TIMELINE_GOAL.with(|c| c.set(goal as i32));
         if goal == RecoveryTargetTimeLineGoal::Numeric {
-            TLI_REQUESTED
-                .with(|c| c.set(newval.and_then(|v| v.parse::<u32>().ok()).unwrap_or(0)));
+            TLI_REQUESTED.with(|c| c.set(newval.and_then(|v| v.parse::<u32>().ok()).unwrap_or(0)));
         } else {
             TLI_REQUESTED.with(|c| c.set(0));
         }
@@ -780,7 +788,7 @@ pub(crate) fn install_guc_hooks() {
         Ok(true)
     });
     hooks::assign_recovery_target_xid.install(|newval, extra| {
-        if newval.map_or(false, |v| !v.is_empty()) {
+        if newval.is_some_and(|v| !v.is_empty()) {
             guard_target(RecoveryTargetType::Xid);
             set_recovery_target(RecoveryTargetType::Xid);
             let xid = *extra

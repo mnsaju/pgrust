@@ -192,7 +192,12 @@ mod tree_sim {
                 33 + (i % 96)
             )
         } else {
-            format!("fe80::{:x}:{:x}/{}", (i / 13) % 65536, i % 65536, 64 + (i % 65))
+            format!(
+                "fe80::{:x}:{:x}/{}",
+                (i / 13) % 65536,
+                i % 65536,
+                64 + (i % 65)
+            )
         };
         network_in(&s, false, None).unwrap().unwrap()
     }
@@ -317,41 +322,39 @@ mod tree_sim {
                 prefix,
                 all_the_same,
                 children,
-            } => {
-                match choose(*has_prefix, prefix.as_ref(), *all_the_same, &val) {
-                    ChooseResult::Match(mut n) => {
-                        if *all_the_same {
-                            n = (pk as usize) % children.len();
-                        }
-                        insert(
-                            children[n].get_or_insert_with(|| Box::new(Node::Leaf(Vec::new()))),
-                            pk,
-                            val,
-                            depth + 1,
-                        );
+            } => match choose(*has_prefix, prefix.as_ref(), *all_the_same, &val) {
+                ChooseResult::Match(mut n) => {
+                    if *all_the_same {
+                        n = (pk as usize) % children.len();
                     }
-                    ChooseResult::Split {
-                        new_prefix,
-                        new_has_prefix,
-                        n_nodes,
-                        child_node,
-                    } => {
-                        let old = std::mem::replace(
-                            node,
-                            Node::Inner {
-                                has_prefix: new_has_prefix,
-                                prefix: new_prefix,
-                                all_the_same: false,
-                                children: (0..n_nodes).map(|_| None).collect(),
-                            },
-                        );
-                        if let Node::Inner { children, .. } = node {
-                            children[child_node] = Some(Box::new(old));
-                        }
-                        insert(node, pk, val, depth + 1);
-                    }
+                    insert(
+                        children[n].get_or_insert_with(|| Box::new(Node::Leaf(Vec::new()))),
+                        pk,
+                        val,
+                        depth + 1,
+                    );
                 }
-            }
+                ChooseResult::Split {
+                    new_prefix,
+                    new_has_prefix,
+                    n_nodes,
+                    child_node,
+                } => {
+                    let old = std::mem::replace(
+                        node,
+                        Node::Inner {
+                            has_prefix: new_has_prefix,
+                            prefix: new_prefix,
+                            all_the_same: false,
+                            children: (0..n_nodes).map(|_| None).collect(),
+                        },
+                    );
+                    if let Node::Inner { children, .. } = node {
+                        children[child_node] = Some(Box::new(old));
+                    }
+                    insert(node, pk, val, depth + 1);
+                }
+            },
         }
     }
 
@@ -432,7 +435,11 @@ mod tree_sim {
         }
         let quirk_missing: &[(&str, u16, &[i32])] = &[
             ("13.9.21.0/11", 3, &[3, 18, 33, 48, 63, 78, 93]),
-            ("13.9.21.0/11", RTSubEqualStrategyNumber, &[3, 18, 33, 48, 63, 78, 93]),
+            (
+                "13.9.21.0/11",
+                RTSubEqualStrategyNumber,
+                &[3, 18, 33, 48, 63, 78, 93],
+            ),
         ];
         let mut store = Vec::new();
         for qs in [
@@ -453,11 +460,12 @@ mod tree_sim {
                     .map(|(pk, _)| *pk)
                     .collect();
                 want.sort_unstable();
-                let missing: Vec<i32> =
-                    want.iter().copied().filter(|p| !got.contains(p)).collect();
-                let extra: Vec<i32> =
-                    got.iter().copied().filter(|p| !want.contains(p)).collect();
-                assert!(extra.is_empty(), "false positives q={qs} strat={strat}: {extra:?}");
+                let missing: Vec<i32> = want.iter().copied().filter(|p| !got.contains(p)).collect();
+                let extra: Vec<i32> = got.iter().copied().filter(|p| !want.contains(p)).collect();
+                assert!(
+                    extra.is_empty(),
+                    "false positives q={qs} strat={strat}: {extra:?}"
+                );
                 if let Some((_, _, pinned)) = quirk_missing
                     .iter()
                     .find(|(g, st, _)| *g == qs && *st == strat)

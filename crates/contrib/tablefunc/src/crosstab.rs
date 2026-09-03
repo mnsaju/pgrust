@@ -27,14 +27,13 @@ fn arg_sql(fcinfo: &Fcinfo, i: usize) -> PgResult<String> {
     // SAFETY: catalog args are non-null text varlenas (STRICT fns). Copied to
     // owned so the immutable arg borrow doesn't block the &mut fcinfo below.
     let v = unsafe { fcinfo.arg_varlena_packed(i)? };
-    Ok(core::str::from_utf8(v.data()).expect("SQL text arg is valid UTF-8").to_string())
+    Ok(core::str::from_utf8(v.data())
+        .expect("SQL text arg is valid UTF-8")
+        .to_string())
 }
 
 // compatCrosstabTupleDescs: ret[0] must match sql[0]; ret[1..] must match sql[2].
-fn compat_crosstab_tupdescs(
-    ret: &TupleDescData<'_>,
-    sql: &TupleDescData<'_>,
-) -> PgResult<()> {
+fn compat_crosstab_tupdescs(ret: &TupleDescData<'_>, sql: &TupleDescData<'_>) -> PgResult<()> {
     if ret.natts < 2 {
         return Err(err(
             "invalid crosstab return type",
@@ -143,8 +142,8 @@ pub(crate) fn fc_crosstab(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) ->
                 }
 
                 if xstreq(values[0].as_deref(), rowid) {
-                    values[1 + i] = spi::SPI_getvalue(mcx, spi_tuple, &t.tupdesc, 3)?
-                        .map(|s| s.to_vec());
+                    values[1 + i] =
+                        spi::SPI_getvalue(mcx, spi_tuple, &t.tupdesc, 3)?.map(|s| s.to_vec());
                     if i < num_categories - 1 {
                         call_cntr += 1;
                     }
@@ -156,8 +155,7 @@ pub(crate) fn fc_crosstab(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) ->
             }
 
             if !skip_tuple {
-                let val_refs: Vec<Option<&[u8]>> =
-                    values.iter().map(|v| v.as_deref()).collect();
+                let val_refs: Vec<Option<&[u8]>> = values.iter().map(|v| v.as_deref()).collect();
                 let (d, n) = attinmeta.build(mcx, &val_refs)?;
                 srf.putvalues(&d, &n)?;
             }
@@ -228,7 +226,11 @@ fn load_categories_hash(
                 };
                 let key = cat_key(catname);
                 if hash.insert(key, i).is_some() {
-                    return Err(err("duplicate category name", "", types_error::ERRCODE_DUPLICATE_OBJECT));
+                    return Err(err(
+                        "duplicate category name",
+                        "",
+                        types_error::ERRCODE_DUPLICATE_OBJECT,
+                    ));
                 }
             }
             Ok(())
@@ -305,9 +307,7 @@ fn get_crosstab_tuplestore(
             if tupdesc_natts != result_ncols {
                 return Err(err(
                     "invalid crosstab return type",
-                    &format!(
-                        "Return row must have {result_ncols} columns, not {tupdesc_natts}."
-                    ),
+                    &format!("Return row must have {result_ncols} columns, not {tupdesc_natts}."),
                     ERRCODE_DATATYPE_MISMATCH,
                 ));
             }
@@ -318,8 +318,7 @@ fn get_crosstab_tuplestore(
 
             for i in 0..proc as usize {
                 let spi_tuple = &t.vals[i];
-                let rowid = spi::SPI_getvalue(mcx, spi_tuple, &t.tupdesc, 1)?
-                    .map(|s| s.to_vec());
+                let rowid = spi::SPI_getvalue(mcx, spi_tuple, &t.tupdesc, 1)?.map(|s| s.to_vec());
 
                 if firstpass || !xstreq(lastrowid.as_deref(), rowid.as_deref()) {
                     if !firstpass {

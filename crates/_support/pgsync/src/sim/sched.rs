@@ -516,11 +516,7 @@ impl Scheduler {
 
     /// The trait-`spawn` path (`pgsync::thread` wrappers register
     /// CHILD-side): register with spawn-fence credit, then bind + gate.
-    fn spawn_child_and_enter(
-        self: &Arc<Self>,
-        vpid: Vpid,
-        site: &'static Location<'static>,
-    ) {
+    fn spawn_child_and_enter(self: &Arc<Self>, vpid: Vpid, site: &'static Location<'static>) {
         let name = format!("pgsync:thread:{vpid:#x}");
         let slot = self.register_at(site, vpid, &name, true);
         self.enter_at(site, slot);
@@ -789,7 +785,10 @@ impl Scheduler {
                     Some(vpid),
                     "Wake",
                     Some(site),
-                    &[("target", jv.to_string()), ("prev", "blocked(join)".to_string())],
+                    &[
+                        ("target", jv.to_string()),
+                        ("prev", "blocked(join)".to_string()),
+                    ],
                 );
             }
         }
@@ -823,12 +822,9 @@ impl Scheduler {
         let was_granted = inner.slots[slot.0].granted;
         inner.slots[slot.0].state = SlotState::Exited;
         inner.slots[slot.0].granted = false;
-        inner.log.emit(
-            actor,
-            "Cancel",
-            Some(site),
-            &[("child", vpid.to_string())],
-        );
+        inner
+            .log
+            .emit(actor, "Cancel", Some(site), &[("child", vpid.to_string())]);
         if was_granted {
             self.handoff_locked(&mut inner, actor);
         }

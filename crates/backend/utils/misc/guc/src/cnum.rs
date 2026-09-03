@@ -40,7 +40,11 @@ pub fn c_strtol_base0(s: &[u8]) -> ScanInt {
                 i += 2;
             } else {
                 // "0" alone; the 'x' is left for endptr.
-                return ScanInt { value: 0, consumed: i + 1, erange: false };
+                return ScanInt {
+                    value: 0,
+                    consumed: i + 1,
+                    erange: false,
+                };
             }
         } else {
             base = 8;
@@ -78,9 +82,17 @@ pub fn c_strtol_base0(s: &[u8]) -> ScanInt {
 
     if !any && digits_start == i {
         if base == 8 && digits_start > 0 && s.get(digits_start - 1) == Some(&b'0') {
-            return ScanInt { value: 0, consumed: digits_start, erange: false };
+            return ScanInt {
+                value: 0,
+                consumed: digits_start,
+                erange: false,
+            };
         }
-        return ScanInt { value: 0, consumed: 0, erange: false };
+        return ScanInt {
+            value: 0,
+            consumed: 0,
+            erange: false,
+        };
     }
 
     if overflow {
@@ -91,7 +103,11 @@ pub fn c_strtol_base0(s: &[u8]) -> ScanInt {
         };
     }
 
-    ScanInt { value: if negative { -acc } else { acc }, consumed: i, erange: false }
+    ScanInt {
+        value: if negative { -acc } else { acc },
+        consumed: i,
+        erange: false,
+    }
 }
 
 pub fn c_strtod(s: &[u8]) -> ScanReal {
@@ -118,7 +134,11 @@ pub fn c_strtod(s: &[u8]) -> ScanReal {
         }
     }
     if !saw_digit {
-        return ScanReal { value: 0.0, consumed: 0, erange: false };
+        return ScanReal {
+            value: 0.0,
+            consumed: 0,
+            erange: false,
+        };
     }
 
     if i < s.len() && (s[i] == b'e' || s[i] == b'E') {
@@ -136,5 +156,9 @@ pub fn c_strtod(s: &[u8]) -> ScanReal {
 
     let text = core::str::from_utf8(&s[num_start..i]).unwrap_or("");
     let value: f64 = text.parse().unwrap_or(0.0);
-    ScanReal { value, consumed: i, erange: value.is_infinite() }
+    ScanReal {
+        value,
+        consumed: i,
+        erange: value.is_infinite(),
+    }
 }

@@ -77,16 +77,28 @@ fn vectored_io_roundtrip() {
     let a = *b"abcd";
     let b = *b"efgh";
     let iov = [
-        libc::iovec { iov_base: a.as_ptr() as *mut _, iov_len: 4 },
-        libc::iovec { iov_base: b.as_ptr() as *mut _, iov_len: 4 },
+        libc::iovec {
+            iov_base: a.as_ptr() as *mut _,
+            iov_len: 4,
+        },
+        libc::iovec {
+            iov_base: b.as_ptr() as *mut _,
+            iov_len: 4,
+        },
     ];
     assert_eq!(crate::pwritev(fd, &iov, 0), 8);
 
     let mut r1 = [0u8; 3];
     let mut r2 = [0u8; 5];
     let riov = [
-        libc::iovec { iov_base: r1.as_mut_ptr() as *mut _, iov_len: 3 },
-        libc::iovec { iov_base: r2.as_mut_ptr() as *mut _, iov_len: 5 },
+        libc::iovec {
+            iov_base: r1.as_mut_ptr() as *mut _,
+            iov_len: 3,
+        },
+        libc::iovec {
+            iov_base: r2.as_mut_ptr() as *mut _,
+            iov_len: 5,
+        },
     ];
     assert_eq!(crate::preadv(fd, &riov, 0), 8);
     assert_eq!(&r1, b"abc");
@@ -225,7 +237,10 @@ fn budget_probe_returns_and_releases() {
         }
         prev = again;
     }
-    assert!(stable, "consecutive probes never agreed: the probe is leaking fds");
+    assert!(
+        stable,
+        "consecutive probes never agreed: the probe is leaking fds"
+    );
     assert_eq!(crate::fd_budget_probe(16), prev.used as usize);
 }
 

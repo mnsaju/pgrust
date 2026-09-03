@@ -14,7 +14,6 @@
 #![allow(non_upper_case_globals)]
 #![allow(clippy::result_large_err)]
 
-use std::cell::Cell;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicPtr, Ordering::Relaxed};
 use std::sync::Mutex;
 
@@ -43,7 +42,11 @@ mod tests;
 
 // wasm32: no pipes on WASI; POSIX floor (512), elog's wasm arm convention.
 #[cfg(not(target_family = "wasm"))]
-pub const PIPE_CHUNK_SIZE: usize = if libc::PIPE_BUF > 65536 { 65536 } else { libc::PIPE_BUF };
+pub const PIPE_CHUNK_SIZE: usize = if libc::PIPE_BUF > 65536 {
+    65536
+} else {
+    libc::PIPE_BUF
+};
 #[cfg(target_family = "wasm")]
 pub const PIPE_CHUNK_SIZE: usize = 512;
 pub const PIPE_HEADER_SIZE: usize = 9;
@@ -123,7 +126,11 @@ fn Log_RotationSize() -> i32 {
 }
 
 fn Log_directory() -> String {
-    LOG_DIRECTORY.lock().unwrap().clone().unwrap_or_else(|| "log".to_string())
+    LOG_DIRECTORY
+        .lock()
+        .unwrap()
+        .clone()
+        .unwrap_or_else(|| "log".to_string())
 }
 
 fn Log_filename() -> String {
@@ -278,13 +285,11 @@ pub fn SysLoggerMain(startup_data: &StartupData) -> ! {
                     ROTATION_REQUESTED.store(true, Relaxed);
                 }
 
-                if ((elog::config::log_destination() & LOG_DESTINATION_CSVLOG) != 0)
-                    != !CSVLOG_FILE.load(Relaxed).is_null()
+                if ((elog::config::log_destination() & LOG_DESTINATION_CSVLOG) != 0) == CSVLOG_FILE.load(Relaxed).is_null()
                 {
                     ROTATION_REQUESTED.store(true, Relaxed);
                 }
-                if ((elog::config::log_destination() & LOG_DESTINATION_JSONLOG) != 0)
-                    != !JSONLOG_FILE.load(Relaxed).is_null()
+                if ((elog::config::log_destination() & LOG_DESTINATION_JSONLOG) != 0) == JSONLOG_FILE.load(Relaxed).is_null()
                 {
                     ROTATION_REQUESTED.store(true, Relaxed);
                 }
@@ -331,9 +336,8 @@ pub fn SysLoggerMain(startup_data: &StartupData) -> ! {
 
             if ROTATION_REQUESTED.load(Relaxed) {
                 if !time_based_rotation && size_rotation_for == 0 {
-                    size_rotation_for = LOG_DESTINATION_STDERR
-                        | LOG_DESTINATION_CSVLOG
-                        | LOG_DESTINATION_JSONLOG;
+                    size_rotation_for =
+                        LOG_DESTINATION_STDERR | LOG_DESTINATION_CSVLOG | LOG_DESTINATION_JSONLOG;
                 }
                 logfile_rotate(time_based_rotation, size_rotation_for, &mut st)?;
             }
@@ -353,8 +357,12 @@ pub fn SysLoggerMain(startup_data: &StartupData) -> ! {
             };
 
             let mut occurred = [WaitEvent::default(); 1];
-            let rc =
-                waiteventset::WaitEventSetWait(wes, cur_timeout, &mut occurred, WAIT_EVENT_SYSLOGGER_MAIN)?;
+            let rc = waiteventset::WaitEventSetWait(
+                wes,
+                cur_timeout,
+                &mut occurred,
+                WAIT_EVENT_SYSLOGGER_MAIN,
+            )?;
 
             if rc == 1 && occurred[0].events == WL_SOCKET_READABLE {
                 let bytes_read = unsafe {
@@ -480,8 +488,12 @@ pub fn SysLogger_Start(child_slot: i32) -> PgResult<i32> {
         JSONLOG_FILE.store(logfile_open(&filename, "a", false)?, Relaxed);
     }
 
-    let syslogger_pid =
-        launch_backend::postmaster_child_launch(BackendType::Logger, child_slot, StartupData::None, None);
+    let syslogger_pid = launch_backend::postmaster_child_launch(
+        BackendType::Logger,
+        child_slot,
+        StartupData::None,
+        None,
+    );
 
     if syslogger_pid == -1 {
         ereport(LOG)
@@ -535,12 +547,16 @@ pub fn SysLogger_Start(child_slot: i32) -> PgResult<i32> {
     Ok(syslogger_pid)
 }
 
-fn process_pipe_input(st: &mut SysLoggerState, logbuffer: &mut [u8], bytes_in_logbuffer: &mut usize) {
+fn process_pipe_input(
+    st: &mut SysLoggerState,
+    logbuffer: &mut [u8],
+    bytes_in_logbuffer: &mut usize,
+) {
     let mut cursor: usize = 0;
     let mut count: usize = *bytes_in_logbuffer;
     let mut dest: i32 = LOG_DESTINATION_STDERR;
 
-    while count >= PIPE_HEADER_SIZE + 1 {
+    while count > PIPE_HEADER_SIZE {
         let buf = &logbuffer[cursor..];
         let len = u16::from_ne_bytes([buf[2], buf[3]]) as usize;
         let pid = i32::from_ne_bytes([buf[4], buf[5], buf[6], buf[7]]);
@@ -578,7 +594,10 @@ fn process_pipe_input(st: &mut SysLoggerState, logbuffer: &mut [u8], bytes_in_lo
                     free.pid = pid;
                     free.data.extend_from_slice(payload);
                 } else {
-                    list.push(SaveBuffer { pid, data: payload.to_vec() });
+                    list.push(SaveBuffer {
+                        pid,
+                        data: payload.to_vec(),
+                    });
                 }
             } else if let Some(existing) = list.iter_mut().find(|b| b.pid == pid) {
                 existing.data.extend_from_slice(payload);
@@ -661,7 +680,11 @@ fn logfile_open(filename: &str, mode: &str, allow_errors: bool) -> PgResult<*mut
     let file_mode = ((LOG_FILE_MODE.load(Relaxed) as u32 | 0o200) & 0o777) as libc::mode_t;
     let oflags = libc::O_WRONLY
         | libc::O_CREAT
-        | if mode == "w" { libc::O_TRUNC } else { libc::O_APPEND };
+        | if mode == "w" {
+            libc::O_TRUNC
+        } else {
+            libc::O_APPEND
+        };
     let c_filename = std::ffi::CString::new(filename).expect("log path contains NUL");
 
     let fh = unsafe {
@@ -670,8 +693,7 @@ fn logfile_open(filename: &str, mode: &str, allow_errors: bool) -> PgResult<*mut
             std::ptr::null_mut()
         } else {
             libc::fchmod(fd, file_mode);
-            let c_mode =
-                std::ffi::CString::new(if mode == "w" { "w" } else { "a" }).unwrap();
+            let c_mode = std::ffi::CString::new(if mode == "w" { "w" } else { "a" }).unwrap();
             let fh = libc::fdopen(fd, c_mode.as_ptr());
             if fh.is_null() {
                 libc::close(fd);
@@ -777,18 +799,47 @@ fn logfile_rotate_dest(
     Ok(true)
 }
 
-fn logfile_rotate(time_based_rotation: bool, size_rotation_for: i32, st: &mut SysLoggerState) -> PgResult<()> {
+fn logfile_rotate(
+    time_based_rotation: bool,
+    size_rotation_for: i32,
+    st: &mut SysLoggerState,
+) -> PgResult<()> {
     ROTATION_REQUESTED.store(false, Relaxed);
 
-    let fntime = if time_based_rotation { st.next_rotation_time } else { time_now() };
+    let fntime = if time_based_rotation {
+        st.next_rotation_time
+    } else {
+        time_now()
+    };
 
-    if !logfile_rotate_dest(st, time_based_rotation, size_rotation_for, fntime, LOG_DESTINATION_STDERR, Slot::Stderr)? {
+    if !logfile_rotate_dest(
+        st,
+        time_based_rotation,
+        size_rotation_for,
+        fntime,
+        LOG_DESTINATION_STDERR,
+        Slot::Stderr,
+    )? {
         return Ok(());
     }
-    if !logfile_rotate_dest(st, time_based_rotation, size_rotation_for, fntime, LOG_DESTINATION_CSVLOG, Slot::Csvlog)? {
+    if !logfile_rotate_dest(
+        st,
+        time_based_rotation,
+        size_rotation_for,
+        fntime,
+        LOG_DESTINATION_CSVLOG,
+        Slot::Csvlog,
+    )? {
         return Ok(());
     }
-    if !logfile_rotate_dest(st, time_based_rotation, size_rotation_for, fntime, LOG_DESTINATION_JSONLOG, Slot::Jsonlog)? {
+    if !logfile_rotate_dest(
+        st,
+        time_based_rotation,
+        size_rotation_for,
+        fntime,
+        LOG_DESTINATION_JSONLOG,
+        Slot::Jsonlog,
+    )? {
         return Ok(());
     }
 
@@ -859,7 +910,9 @@ fn update_metainfo_datafile(st: &SysLoggerState) -> PgResult<()> {
                 ereport(LOG)
                     .with_saved_errno(e.raw_os_error().unwrap_or(0))
                     .errcode_for_file_access()
-                    .errmsg(format!("could not remove file \"{LOG_METAINFO_DATAFILE}\": %m"))
+                    .errmsg(format!(
+                        "could not remove file \"{LOG_METAINFO_DATAFILE}\": %m"
+                    ))
                     .finish(loc("update_metainfo_datafile"))?;
             }
         }
@@ -891,7 +944,9 @@ fn update_metainfo_datafile(st: &SysLoggerState) -> PgResult<()> {
         ereport(LOG)
             .with_saved_errno(last_errno())
             .errcode_for_file_access()
-            .errmsg(format!("could not open file \"{LOG_METAINFO_DATAFILE_TMP}\": %m"))
+            .errmsg(format!(
+                "could not open file \"{LOG_METAINFO_DATAFILE_TMP}\": %m"
+            ))
             .finish(loc("update_metainfo_datafile"))?;
         return Ok(());
     }
@@ -915,7 +970,9 @@ fn update_metainfo_datafile(st: &SysLoggerState) -> PgResult<()> {
             ereport(LOG)
                 .with_saved_errno(e)
                 .errcode_for_file_access()
-                .errmsg(format!("could not write file \"{LOG_METAINFO_DATAFILE_TMP}\": %m"))
+                .errmsg(format!(
+                    "could not write file \"{LOG_METAINFO_DATAFILE_TMP}\": %m"
+                ))
                 .finish(loc("update_metainfo_datafile"))?;
             return Ok(());
         }

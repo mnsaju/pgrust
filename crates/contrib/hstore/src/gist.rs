@@ -173,7 +173,10 @@ pub(crate) fn detoasted_image<'m>(mcx: Mcx<'m>, d: Datum) -> PgResult<&'m [u8]> 
             );
             let total = 4 + src.len();
             let mut buf: mcx::PgVec<'m, u8> = mcx::vec_with_capacity_in(mcx, total)?;
-            mcx::vec_append_bytes(&mut buf, &varatt::set_varsize_4b_word(total as u32).to_ne_bytes())?;
+            mcx::vec_append_bytes(
+                &mut buf,
+                &varatt::set_varsize_4b_word(total as u32).to_ne_bytes(),
+            )?;
             mcx::vec_append_bytes(&mut buf, src)?;
             let out = core::slice::from_raw_parts(buf.as_ptr(), buf.len());
             core::mem::forget(buf);
@@ -385,7 +388,7 @@ pub fn fc_ghstore_picksplit(f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> Pg
         let size_beta = hemdist_working(datum_r_allistrue, &union_r, kj, siglen);
         costvector.push((j, (size_alpha - size_beta).abs()));
     }
-    costvector.sort_by(|a, b| a.1.cmp(&b.1));
+    costvector.sort_by_key(|a| a.1);
 
     let mut spl_left: Vec<u16> = Vec::new();
     let mut spl_right: Vec<u16> = Vec::new();
@@ -468,9 +471,7 @@ pub fn fc_ghstore_consistent(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> 
                         || getbit(sign, hashval(crc32_sz(query.val(i)), siglen)))
             })
         }
-        HSTORE_EXISTS_STRATEGY => {
-            getbit(sign, hashval(crc32_sz(&query_image[4..]), siglen))
-        }
+        HSTORE_EXISTS_STRATEGY => getbit(sign, hashval(crc32_sz(&query_image[4..]), siglen)),
         HSTORE_EXISTS_ALL_STRATEGY => {
             let scratch = mcx::MemoryContext::new("ghstore consistent text[]");
             let keys = crate::deconstruct_text_array(scratch.mcx(), query_image)?;

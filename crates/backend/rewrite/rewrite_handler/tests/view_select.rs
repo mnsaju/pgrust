@@ -23,8 +23,8 @@ use types_core::{
 use types_nodes::nodes_enums::CmdType;
 use types_nodes::plannodes::PlannedStmt;
 use types_rel::{
-    FormData_pg_class, LockInfoData, LockRelId, Relation, RelationData, LOCKMODE,
-    RELKIND_RELATION, RELKIND_VIEW,
+    FormData_pg_class, LockInfoData, LockRelId, Relation, RelationData, LOCKMODE, RELKIND_RELATION,
+    RELKIND_VIEW,
 };
 use types_storage::RelFileLocator;
 use types_tuple::{CompactAttribute, FormData_pg_attribute, NameData, TupleDescData};
@@ -226,9 +226,7 @@ fn install_xact_periphery_seams() {
     be_fsstubs_seams::at_eoxact_large_object::set(|_| Ok(()));
     namespace_seams::at_eoxact_namespace::set(|_, _| {});
     catalog_index_seams::reset_reindex_state::set(|_| {});
-    catalog_storage_seams::smgr_get_pending_deletes::set(|mcx, _for_commit| {
-        Ok(PgVec::new_in(mcx))
-    });
+    catalog_storage_seams::smgr_get_pending_deletes::set(|mcx, _for_commit| Ok(PgVec::new_in(mcx)));
     catalog_storage_seams::smgr_do_pending_deletes::set(|_| Ok(()));
     catalog_storage_seams::smgr_do_pending_syncs::set(|_, _| Ok(()));
     combocid_seams::at_eoxact_combocid::set(|| {});
@@ -318,7 +316,11 @@ fn test_relation<'mcx>(mcx: Mcx<'mcx>, relid: Oid) -> RelationData<'mcx> {
         relnamespace: 2200,
         reltype: 0,
         relowner: 10,
-        relam: if is_view { 0 } else { tableam_vocab::HEAP_TABLE_AM_OID },
+        relam: if is_view {
+            0
+        } else {
+            tableam_vocab::HEAP_TABLE_AM_OID
+        },
         relfilenode: if is_view { 0 } else { relid },
         reltablespace: 0,
         relpages: 0,
@@ -328,7 +330,11 @@ fn test_relation<'mcx>(mcx: Mcx<'mcx>, relid: Oid) -> RelationData<'mcx> {
         relhasindex: false,
         relisshared: false,
         relpersistence: RELPERSISTENCE_PERMANENT,
-        relkind: if is_view { RELKIND_VIEW } else { RELKIND_RELATION },
+        relkind: if is_view {
+            RELKIND_VIEW
+        } else {
+            RELKIND_RELATION
+        },
         relhassubclass: false,
         relrowsecurity: false,
         relispopulated: true,
@@ -348,7 +354,12 @@ fn test_relation<'mcx>(mcx: Mcx<'mcx>, relid: Oid) -> RelationData<'mcx> {
         rd_newRelfilelocatorSubid: Cell::new(0),
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
-        rd_lockInfo: LockInfoData { lockRelId: LockRelId { relId: relid, dbId: 5 } },
+        rd_lockInfo: LockInfoData {
+            lockRelId: LockRelId {
+                relId: relid,
+                dbId: 5,
+            },
+        },
         rd_rel,
         rd_att: int4_x2_tupdesc(mcx, relid),
         rd_index: None,
@@ -360,30 +371,33 @@ fn test_relation<'mcx>(mcx: Mcx<'mcx>, relid: Oid) -> RelationData<'mcx> {
         pgstat_enabled: Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: PgVec::new_in(mcx),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false,
-            rd_hasrules: is_view,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: is_view,
     }
 }
 
 fn install_relation_seams() {
     relation_seams::relation_open::set(|mcx, relid, _lockmode| {
-        assert!(relid == T_OID || relid == V_OID, "unknown relation oid {relid}");
+        assert!(
+            relid == T_OID || relid == V_OID,
+            "unknown relation oid {relid}"
+        );
         Ok(Relation::open(test_relation(mcx, relid), None))
     });
     relation_seams::relation_openrv_extended::set(
-        |mcx, rv: &rel_vocab::RangeVar, _lockmode: LOCKMODE, missing_ok: bool| {
-            match rv.relname {
-                "t" => Ok(Some(Relation::open(test_relation(mcx, T_OID), None))),
-                "v" => Ok(Some(Relation::open(test_relation(mcx, V_OID), None))),
-                _ if missing_ok => Ok(None),
-                _ => Err(types_error::PgError::error("no such relation").into()),
-            }
+        |mcx, rv: &rel_vocab::RangeVar, _lockmode: LOCKMODE, missing_ok: bool| match rv.relname {
+            "t" => Ok(Some(Relation::open(test_relation(mcx, T_OID), None))),
+            "v" => Ok(Some(Relation::open(test_relation(mcx, V_OID), None))),
+            _ if missing_ok => Ok(None),
+            _ => Err(types_error::PgError::error("no such relation").into()),
         },
     );
     relcache_seams::relation_get_stat_ext_list::set(|mcx, _relid| Ok(mcx::PgVec::new_in(mcx)));
@@ -415,7 +429,11 @@ fn install_parser_fixture_seams() {
             syscache_seams::PgClassLsShape {
                 relnamespace: 2200,
                 reltype: 0,
-                relam: if is_view { 0 } else { tableam_vocab::HEAP_TABLE_AM_OID },
+                relam: if is_view {
+                    0
+                } else {
+                    tableam_vocab::HEAP_TABLE_AM_OID
+                },
                 reltablespace: 0,
                 relnatts: 2,
                 relkind: if is_view { b'v' as i8 } else { b'r' as i8 },
@@ -443,12 +461,8 @@ fn install_parser_fixture_seams() {
             attgenerated: 0,
         }))
     });
-    syscache_seams::syscache_hash_value_typeoid::set(|typid| {
-        Ok(typid.wrapping_mul(0x9e37_79b1))
-    });
-    syscache_seams::syscache_hash_value_procoid::set(|funcid| {
-        Ok(funcid.wrapping_mul(0x9e37_79b1))
-    });
+    syscache_seams::syscache_hash_value_typeoid::set(|typid| Ok(typid.wrapping_mul(0x9e37_79b1)));
+    syscache_seams::syscache_hash_value_procoid::set(|funcid| Ok(funcid.wrapping_mul(0x9e37_79b1)));
     syscache_seams::lookup_pg_type_typcache_shape::set(|_typid| {
         Ok(Some(syscache_seams::PgTypeTypcacheShape {
             typname: types_tuple::NameData::default(),
@@ -495,7 +509,8 @@ fn install_parser_fixture_seams() {
     syscache_seams::pg_operator_name_candidates_exist::set(|_, _| Ok(false));
     syscache_seams::lookup_pg_operator_shape::set(|opno| {
         Ok(match opno {
-            INT4GT_OP => Some(syscache_seams::PgOperatorShape { oprnamespace: 11,
+            INT4GT_OP => Some(syscache_seams::PgOperatorShape {
+                oprnamespace: 11,
                 oprleft: 23,
                 oprright: 23,
                 oprresult: 16,
@@ -533,7 +548,11 @@ fn install_parser_fixture_seams() {
     });
     syscache_seams::pg_proc_cost_shape::set(|funcid| {
         Ok(match funcid {
-            INT4GT_PROC => Some(syscache_seams::PgProcCostShape { procost: 1.0, prorows: 0.0, prosupport: 0 }),
+            INT4GT_PROC => Some(syscache_seams::PgProcCostShape {
+                procost: 1.0,
+                prorows: 0.0,
+                prosupport: 0,
+            }),
             _ => None,
         })
     });
@@ -594,8 +613,14 @@ fn run_stmt(sql: &'static str) -> (CmdType, u64, &'static PlannedStmt<'static>) 
     let mut rewritten = rewrite_handler::QueryRewrite(mcx, query).unwrap();
     assert_eq!(rewritten.len(), 1);
     let query = rewritten.pop().unwrap();
-    let pstmt =
-        planner::planner(mcx, mcx::leak_in(mcx::alloc_in(mcx, query).unwrap()), sql, 0, types_portal::ParamListHandle::NULL).unwrap();
+    let pstmt = planner::planner(
+        mcx,
+        mcx::leak_in(mcx::alloc_in(mcx, query).unwrap()),
+        sql,
+        0,
+        types_portal::ParamListHandle::NULL,
+    )
+    .unwrap();
     let pstmt: &'static PlannedStmt<'static> = mcx::leak_in(mcx::alloc_in(mcx, pstmt).unwrap());
 
     let snapshot = snapmgr::GetTransactionSnapshot().unwrap();
@@ -634,7 +659,14 @@ fn explain_stmt(sql: &'static str) -> String {
         parser_analyze::parse_analyze_fixedparams(mcx, raw, sql, &[], Default::default()).unwrap();
     let mut rewritten = rewrite_handler::QueryRewrite(mcx, query).unwrap();
     let query = rewritten.pop().unwrap();
-    let pstmt = planner::planner(mcx, mcx::leak_in(mcx::alloc_in(mcx, query).unwrap()), sql, 0, types_portal::ParamListHandle::NULL).unwrap();
+    let pstmt = planner::planner(
+        mcx,
+        mcx::leak_in(mcx::alloc_in(mcx, query).unwrap()),
+        sql,
+        0,
+        types_portal::ParamListHandle::NULL,
+    )
+    .unwrap();
 
     let snapshot = snapmgr::GetTransactionSnapshot().unwrap();
     snapmgr::PushActiveSnapshot(&snapshot).unwrap();
@@ -731,8 +763,12 @@ fn select_from_view_matches_direct_query() {
     let ctl = transam_xlog::ctl::XLogCtl();
     ctl.InsertTimeLineID.store(1, Relaxed);
     ctl.PrevTimeLineID.store(1, Relaxed);
-    ctl.Insert.CurrBytePos.store(XLogRecPtrToBytePos(end_of_log), Relaxed);
-    ctl.Insert.PrevBytePos.store(XLogRecPtrToBytePos(prev_rec), Relaxed);
+    ctl.Insert
+        .CurrBytePos
+        .store(XLogRecPtrToBytePos(end_of_log), Relaxed);
+    ctl.Insert
+        .PrevBytePos
+        .store(XLogRecPtrToBytePos(prev_rec), Relaxed);
     ctl.Insert.fullPageWrites.store(true, Relaxed);
     ctl.Insert.RedoRecPtr.store(prev_rec, Relaxed);
     ctl.RedoRecPtr.store(prev_rec, Relaxed);
@@ -780,9 +816,18 @@ fn select_from_view_matches_direct_query() {
         direct_scan.scan.plan.targetlist.len(),
         view_scan.scan.plan.targetlist.len()
     );
-    assert_eq!(direct_scan.scan.plan.qual.len(), view_scan.scan.plan.qual.len());
-    assert_eq!(direct_scan.scan.plan.total_cost, view_scan.scan.plan.total_cost);
-    assert_eq!(direct_scan.scan.plan.plan_rows, view_scan.scan.plan.plan_rows);
+    assert_eq!(
+        direct_scan.scan.plan.qual.len(),
+        view_scan.scan.plan.qual.len()
+    );
+    assert_eq!(
+        direct_scan.scan.plan.total_cost,
+        view_scan.scan.plan.total_cost
+    );
+    assert_eq!(
+        direct_scan.scan.plan.plan_rows,
+        view_scan.scan.plan.plan_rows
+    );
 
     // The view plan additionally carries v's RTE (lock + ACL surface) and
     // its perminfo checked as the view owner path.
@@ -814,6 +859,10 @@ fn select_from_view_matches_direct_query() {
 
     with_fake(|f| {
         assert!(f.pins.iter().all(|p| *p == 0), "leaked pins: {:?}", f.pins);
-        assert!(f.locks.iter().all(|l| *l == 0), "leaked locks: {:?}", f.locks);
+        assert!(
+            f.locks.iter().all(|l| *l == 0),
+            "leaked locks: {:?}",
+            f.locks
+        );
     });
 }

@@ -434,7 +434,6 @@ pub struct RangeFunction<'mcx> {
     pub coldeflist: NodeList<'mcx>,
 }
 
-
 #[derive(Default)]
 pub struct RangeTableFunc<'mcx> {
     pub lateral: bool,
@@ -1164,7 +1163,14 @@ impl<'mcx> Node<'mcx> {
         stmt_location: ParseLoc,
         stmt_len: ParseLoc,
     ) -> PgResult<Node<'mcx>> {
-        Self::mk(mcx, RawStmt { stmt, stmt_location, stmt_len })
+        Self::mk(
+            mcx,
+            RawStmt {
+                stmt,
+                stmt_location,
+                stmt_len,
+            },
+        )
     }
 
     pub fn mk_res_target(
@@ -1174,7 +1180,15 @@ impl<'mcx> Node<'mcx> {
         val: Option<Node<'mcx>>,
         location: ParseLoc,
     ) -> PgResult<Node<'mcx>> {
-        Self::mk(mcx, ResTarget { name, indirection, val, location })
+        Self::mk(
+            mcx,
+            ResTarget {
+                name,
+                indirection,
+                val,
+                location,
+            },
+        )
     }
 
     /// C `makeA_Expr` (rexpr list bounds start unset).
@@ -1188,7 +1202,15 @@ impl<'mcx> Node<'mcx> {
     ) -> PgResult<Node<'mcx>> {
         Self::mk(
             mcx,
-            A_Expr { kind, name, lexpr, rexpr, rexpr_list_start: -1, rexpr_list_end: -1, location },
+            A_Expr {
+                kind,
+                name,
+                lexpr,
+                rexpr,
+                rexpr_list_start: -1,
+                rexpr_list_end: -1,
+                location,
+            },
         )
     }
 
@@ -1366,7 +1388,6 @@ impl<'mcx> Node<'mcx> {
         self.as_variant()
     }
 
-
     #[inline]
     pub fn as_locking_clause(self) -> Option<&'mcx LockingClause<'mcx>> {
         self.as_variant()
@@ -1536,7 +1557,12 @@ pub struct JsonTablePathSpec<'mcx> {
 
 impl Default for JsonTablePathSpec<'_> {
     fn default() -> Self {
-        JsonTablePathSpec { string: None, name: None, name_location: -1, location: -1 }
+        JsonTablePathSpec {
+            string: None,
+            name: None,
+            name_location: -1,
+            location: -1,
+        }
     }
 }
 
@@ -1624,7 +1650,12 @@ pub struct JsonParseExpr<'mcx> {
 
 impl Default for JsonParseExpr<'_> {
     fn default() -> Self {
-        JsonParseExpr { expr: None, output: None, unique_keys: false, location: -1 }
+        JsonParseExpr {
+            expr: None,
+            output: None,
+            unique_keys: false,
+            location: -1,
+        }
     }
 }
 
@@ -1636,7 +1667,11 @@ pub struct JsonScalarExpr<'mcx> {
 
 impl Default for JsonScalarExpr<'_> {
     fn default() -> Self {
-        JsonScalarExpr { expr: None, output: None, location: -1 }
+        JsonScalarExpr {
+            expr: None,
+            output: None,
+            location: -1,
+        }
     }
 }
 
@@ -1648,7 +1683,11 @@ pub struct JsonSerializeExpr<'mcx> {
 
 impl Default for JsonSerializeExpr<'_> {
     fn default() -> Self {
-        JsonSerializeExpr { expr: None, output: None, location: -1 }
+        JsonSerializeExpr {
+            expr: None,
+            output: None,
+            location: -1,
+        }
     }
 }
 
@@ -1983,4 +2022,3 @@ unsafe impl<'mcx> NodeVariant<'mcx> for DropUserMappingStmt<'mcx> {
 unsafe impl<'mcx> NodeVariant<'mcx> for ImportForeignSchemaStmt<'mcx> {
     const TAG: NodeTag = NodeTag::T_ImportForeignSchemaStmt;
 }
-

@@ -41,9 +41,12 @@ struct PgSemaphore {
 static SEMAS: RwLock<Vec<&'static PgSemaphore>> = RwLock::new(Vec::new());
 
 fn sema(procno: ProcNumber) -> &'static PgSemaphore {
-    SEMAS.read().unwrap().get(procno as usize).copied().unwrap_or_else(|| {
-        panic!("pg_sema: semaphore for proc {procno} was never created")
-    })
+    SEMAS
+        .read()
+        .unwrap()
+        .get(procno as usize)
+        .copied()
+        .unwrap_or_else(|| panic!("pg_sema: semaphore for proc {procno} was never created"))
 }
 
 pub fn PGSemaphoreCreate(procno: ProcNumber) {

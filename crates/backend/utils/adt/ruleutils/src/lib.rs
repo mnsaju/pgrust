@@ -10,10 +10,10 @@ mod functiondef;
 mod plan;
 mod query;
 mod ruledef;
-mod triggerdef;
-mod viewdef;
 #[cfg(test)]
 mod tests;
+mod triggerdef;
+mod viewdef;
 
 pub use builtins::RULEUTILS_BUILTINS;
 
@@ -32,19 +32,19 @@ fn deparse_partbound_const_for_seam<'mcx>(
     deparse::deparse_partbound_const(mcx, expr)
 }
 pub use deparse::deparse_expression_pretty;
-pub use plan::{
-    deparse_context_for_plan_tree, deparse_expression, select_rtable_names_for_explain,
-    set_deparse_context_plan, AncestorEntry, PlanDeparse,
-};
+pub use format_type::quote_identifier;
 pub use functiondef::{
     pg_get_function_arg_default_worker, pg_get_function_arguments_worker,
     pg_get_function_identity_arguments_worker, pg_get_function_result_worker,
     pg_get_function_sqlbody_worker, pg_get_functiondef_worker,
 };
+pub use plan::{
+    deparse_context_for_plan_tree, deparse_expression, select_rtable_names_for_explain,
+    set_deparse_context_plan, AncestorEntry, PlanDeparse,
+};
 pub use ruledef::pg_get_ruledef_worker;
 pub use triggerdef::pg_get_triggerdef_worker;
 pub use viewdef::pg_get_viewdef_worker;
-pub use format_type::quote_identifier;
 
 use cache_syscache::{
     ReleaseSysCache, SearchSysCache1, SysCacheKey, AMOID, AUTHOID, CONSTROID, INDEXRELID, OPEROID,
@@ -99,15 +99,15 @@ pub(crate) fn getattr(tuple: &HeapTupleData<'_>, cache_id: i32, attnum: i32) -> 
     unsafe { types_tuple::fastgetattr_fixed(tuple, attnum, tupdesc_for(cache_id)) }
 }
 
-pub(crate) fn getattr_null(
-    tuple: &HeapTupleData<'_>,
-    cache_id: i32,
-    attnum: i32,
-) -> Option<Datum> {
+pub(crate) fn getattr_null(tuple: &HeapTupleData<'_>, cache_id: i32, attnum: i32) -> Option<Datum> {
     let mut isnull = false;
     // SAFETY: callers pass a tuple of this catalog's row type.
     let d = unsafe { types_tuple::heap_getattr(tuple, attnum, tupdesc_for(cache_id), &mut isnull) };
-    if isnull { None } else { Some(d) }
+    if isnull {
+        None
+    } else {
+        Some(d)
+    }
 }
 
 pub(crate) fn name_at(d: Datum) -> String {
@@ -131,8 +131,7 @@ pub(crate) fn varlena_body_at(d: Datum) -> Vec<u8> {
             };
             let raw = core::slice::from_raw_parts(p, len);
             let scratch = mcx::MemoryContext::new("ruleutils detoast");
-            let image =
-                detoast::detoast_attr(scratch.mcx(), raw).expect("detoast catalog varlena");
+            let image = detoast::detoast_attr(scratch.mcx(), raw).expect("detoast catalog varlena");
             image[datum::varlena::VARHDRSZ..].to_vec()
         } else {
             types_fmgr::PackedVarlena::from_ptr(p).data().to_vec()
@@ -146,11 +145,17 @@ pub(crate) fn text_at(d: Datum) -> String {
 
 // One-dimensional no-null int16 array body (int2vector or int2[]).
 pub(crate) fn i16_array_at(d: Datum) -> Vec<i16> {
-    array_body(d, 2).chunks_exact(2).map(|c| i16::from_ne_bytes([c[0], c[1]])).collect()
+    array_body(d, 2)
+        .chunks_exact(2)
+        .map(|c| i16::from_ne_bytes([c[0], c[1]]))
+        .collect()
 }
 
 pub(crate) fn oid_array_at(d: Datum) -> Vec<Oid> {
-    array_body(d, 4).chunks_exact(4).map(|c| u32::from_ne_bytes([c[0], c[1], c[2], c[3]])).collect()
+    array_body(d, 4)
+        .chunks_exact(4)
+        .map(|c| u32::from_ne_bytes([c[0], c[1], c[2], c[3]]))
+        .collect()
 }
 
 // One-dimensional no-null text array (TYPALIGN_INT elements).
@@ -161,7 +166,10 @@ pub(crate) fn text_array_at(d: Datum) -> Vec<String> {
         return Vec::new();
     }
     let dataoffset = i32::from_ne_bytes(b[4..8].try_into().unwrap());
-    assert!(ndim == 1 && dataoffset == 0, "ruleutils: unexpected catalog text[] shape");
+    assert!(
+        ndim == 1 && dataoffset == 0,
+        "ruleutils: unexpected catalog text[] shape"
+    );
     let dim1 = i32::from_ne_bytes(b[12..16].try_into().unwrap()) as usize;
     let mut out = Vec::with_capacity(dim1);
     let mut off = 20usize;
@@ -177,8 +185,10 @@ pub(crate) fn text_array_at(d: Datum) -> Vec<String> {
             let raw = u32::from_ne_bytes(b[off..off + 4].try_into().unwrap());
             (4usize, (raw >> 2) as usize - 4)
         };
-        out.push(String::from_utf8(b[off + hdr..off + hdr + len].to_vec())
-            .expect("non-UTF-8 text[] element"));
+        out.push(
+            String::from_utf8(b[off + hdr..off + hdr + len].to_vec())
+                .expect("non-UTF-8 text[] element"),
+        );
         off += hdr + len;
     }
     out
@@ -193,7 +203,10 @@ pub(crate) fn array_body(d: Datum, elem_width: usize) -> Vec<u8> {
         return Vec::new();
     }
     let dataoffset = i32::from_ne_bytes(b[4..8].try_into().unwrap());
-    assert!(ndim == 1 && dataoffset == 0, "ruleutils: unexpected catalog array shape");
+    assert!(
+        ndim == 1 && dataoffset == 0,
+        "ruleutils: unexpected catalog array shape"
+    );
     let dim1 = i32::from_ne_bytes(b[12..16].try_into().unwrap()) as usize;
     b[20..20 + elem_width * dim1].to_vec()
 }
@@ -249,8 +262,13 @@ fn add_cast_to(mcx: Mcx<'_>, buf: &mut String, typid: Oid) -> PgResult<()> {
     let typname = String::from_utf8_lossy(typname.name_str()).into_owned();
     let nspname = namespace_name_or_temp(mcx, typnamespace)?
         .ok_or_else(|| cache_lookup_failed("namespace", typnamespace))?;
-    write!(buf, "::{}.{}", quote_identifier(&nspname), quote_identifier(&typname))
-        .expect("String write");
+    write!(
+        buf,
+        "::{}.{}",
+        quote_identifier(&nspname),
+        quote_identifier(&typname)
+    )
+    .expect("String write");
     Ok(())
 }
 
@@ -371,7 +389,10 @@ pub(crate) fn generate_operator_name(
     }
     let nspname = namespace_name_or_temp(mcx, oprnamespace)?
         .ok_or_else(|| cache_lookup_failed("namespace", oprnamespace))?;
-    Ok(format!("OPERATOR({}.{oprname})", quote_identifier(&nspname)))
+    Ok(format!(
+        "OPERATOR({}.{oprname})",
+        quote_identifier(&nspname)
+    ))
 }
 
 // CollationIsVisibleExt reduced to the lookup_collation probe pair
@@ -413,7 +434,11 @@ pub fn generate_collation_name(mcx: Mcx<'_>, collid: Oid) -> PgResult<String> {
         return Err(cache_lookup_failed("collation", collid));
     };
     let t = ht.tuple();
-    let collname = name_at(getattr(&t, cache_syscache::COLLOID, ANUM_PG_COLLATION_COLLNAME));
+    let collname = name_at(getattr(
+        &t,
+        cache_syscache::COLLOID,
+        ANUM_PG_COLLATION_COLLNAME,
+    ));
     let collnamespace =
         getattr(&t, cache_syscache::COLLOID, ANUM_PG_COLLATION_COLLNAMESPACE).as_oid();
     drop(t);
@@ -449,7 +474,10 @@ pub(crate) fn generate_function_name(
         false,
         false,
     )?;
-    let mut best = cands.iter().find(|c| c.args.as_slice() == argtypes).map(|c| c.oid);
+    let mut best = cands
+        .iter()
+        .find(|c| c.args.as_slice() == argtypes)
+        .map(|c| c.oid);
     if best.is_none() && !cands.is_empty() {
         let matched = parse_func::func_match_argtypes(mcx, argtypes, cands.as_slice())?;
         best = match matched.len() {
@@ -528,8 +556,7 @@ fn pg_index_row(indexrelid: Oid) -> PgResult<Option<PgIndexRow>> {
         return Ok(None);
     };
     let t = ht.tuple();
-    let notnull =
-        |anum: i32| getattr_null(&t, INDEXRELID, anum).expect("NOT NULL pg_index column");
+    let notnull = |anum: i32| getattr_null(&t, INDEXRELID, anum).expect("NOT NULL pg_index column");
     let row = PgIndexRow {
         indrelid: getattr(&t, INDEXRELID, ANUM_PG_INDEX_INDRELID).as_oid(),
         indnatts: getattr(&t, INDEXRELID, ANUM_PG_INDEX_INDNATTS).as_i16(),
@@ -627,8 +654,10 @@ const ANUM_PG_OPCLASS_OPCNAME: i32 = 3;
 const ANUM_PG_OPCLASS_OPCNAMESPACE: i32 = 4;
 
 fn pg_opclass_row(opclass: Oid) -> PgResult<Option<(String, Oid, Oid)>> {
-    let Some(ht) =
-        SearchSysCache1(cache_syscache::CLAOID, SysCacheKey::Value(Datum::from_oid(opclass)))?
+    let Some(ht) = SearchSysCache1(
+        cache_syscache::CLAOID,
+        SysCacheKey::Value(Datum::from_oid(opclass)),
+    )?
     else {
         return Ok(None);
     };
@@ -765,7 +794,11 @@ fn pg_get_indexdef_worker_extended(
                 "CREATE {}INDEX {} ON {}{} USING {} (",
                 if idx.indisunique { "UNIQUE " } else { "" },
                 quote_identifier(&idxrel.relname),
-                if idxrel.relkind == RELKIND_PARTITIONED_INDEX && !inherits { "ONLY " } else { "" },
+                if idxrel.relkind == RELKIND_PARTITIONED_INDEX && !inherits {
+                    "ONLY "
+                } else {
+                    ""
+                },
                 relname,
                 quote_identifier(&amname),
             ));
@@ -775,7 +808,11 @@ fn pg_get_indexdef_worker_extended(
     }
 
     let mut sep = "";
-    let natts = if keys_only { idx.indnkeyatts as usize } else { idx.indnatts as usize };
+    let natts = if keys_only {
+        idx.indnkeyatts as usize
+    } else {
+        idx.indnatts as usize
+    };
     for keyno in 0..natts {
         let attnum = idx.indkey[keyno];
         if keys_only && keyno >= idx.indnkeyatts as usize {
@@ -808,7 +845,11 @@ fn pg_get_indexdef_worker_extended(
             keycolcollation = parse_expr::expr_collation(indexkey);
             if colno == 0 || colno == keyno as i32 + 1 {
                 let str = deparse::deparse_expression_pretty(
-                    mcx, indexkey, idx.indrelid, false, pretty_flags,
+                    mcx,
+                    indexkey,
+                    idx.indrelid,
+                    false,
+                    pretty_flags,
                 )?;
                 if looks_like_function(indexkey) {
                     buf.push_str(&str);
@@ -923,8 +964,10 @@ fn looks_like_function(node: types_nodes::Node<'_>) -> bool {
 }
 
 pub fn pg_get_indexdef_string(mcx: Mcx<'_>, indexrelid: Oid) -> PgResult<String> {
-    Ok(pg_get_indexdef_worker(mcx, indexrelid, 0, None, false, false, true, true, 0, false)?
-        .expect("missing_ok=false returns Some"))
+    Ok(
+        pg_get_indexdef_worker(mcx, indexrelid, 0, None, false, false, true, true, 0, false)?
+            .expect("missing_ok=false returns Some"),
+    )
 }
 
 const ANUM_PG_TABLESPACE_SPCNAME: i32 = 2;
@@ -936,7 +979,11 @@ fn get_tablespace_name(spc_oid: Oid) -> PgResult<Option<String>> {
     else {
         return Ok(None);
     };
-    let name = name_at(getattr(&ht.tuple(), TABLESPACEOID, ANUM_PG_TABLESPACE_SPCNAME));
+    let name = name_at(getattr(
+        &ht.tuple(),
+        TABLESPACEOID,
+        ANUM_PG_TABLESPACE_SPCNAME,
+    ));
     ReleaseSysCache(ht);
     Ok(Some(name))
 }
@@ -1002,7 +1049,10 @@ fn decompile_column_index_array(
 const ANUM_PG_CONSTRAINT_CONNAME: i32 = 2;
 
 pub fn pg_get_constraintdef_command(mcx: Mcx<'_>, constraint_id: Oid) -> PgResult<String> {
-    let Some(ht) = SearchSysCache1(CONSTROID, SysCacheKey::Value(Datum::from_oid(constraint_id)))?
+    let Some(ht) = SearchSysCache1(
+        CONSTROID,
+        SysCacheKey::Value(Datum::from_oid(constraint_id)),
+    )?
     else {
         return Err(PgError::error(format!(
             "could not find tuple for constraint {constraint_id}"
@@ -1054,7 +1104,10 @@ fn pg_get_constraintdef_worker_full(
     pretty_flags: i32,
     missing_ok: bool,
 ) -> PgResult<Option<String>> {
-    let Some(ht) = SearchSysCache1(CONSTROID, SysCacheKey::Value(Datum::from_oid(constraint_id)))?
+    let Some(ht) = SearchSysCache1(
+        CONSTROID,
+        SysCacheKey::Value(Datum::from_oid(constraint_id)),
+    )?
     else {
         if missing_ok {
             return Ok(None);
@@ -1094,7 +1147,10 @@ fn pg_get_constraintdef_worker_full(
             buf.push_str("FOREIGN KEY (");
             let conkey = conkey.expect("FK constraint has conkey");
             decompile_column_index_array(mcx, &conkey, conrelid, conperiod, &mut buf)?;
-            buf.push_str(&format!(") REFERENCES {}(", generate_relation_name(mcx, confrelid)?));
+            buf.push_str(&format!(
+                ") REFERENCES {}(",
+                generate_relation_name(mcx, confrelid)?
+            ));
             let confkey = confkey.expect("FK constraint has confkey");
             decompile_column_index_array(mcx, &confkey, confrelid, conperiod, &mut buf)?;
             buf.push(')');
@@ -1125,7 +1181,11 @@ fn pg_get_constraintdef_worker_full(
             }
         }
         CONSTRAINT_PRIMARY | CONSTRAINT_UNIQUE => {
-            buf.push_str(if contype == CONSTRAINT_PRIMARY { "PRIMARY KEY " } else { "UNIQUE " });
+            buf.push_str(if contype == CONSTRAINT_PRIMARY {
+                "PRIMARY KEY "
+            } else {
+                "UNIQUE "
+            });
             let idx =
                 pg_index_row(conindid)?.ok_or_else(|| cache_lookup_failed("index", conindid))?;
             if contype == CONSTRAINT_UNIQUE && idx.indnullsnotdistinct {
@@ -1245,12 +1305,18 @@ pub fn pg_get_expr_worker(
             break;
         }
         let list = n.as_list().expect("List tag");
-        tst = if list.is_nil() { None } else { Some(list.nth(0)) };
+        tst = if list.is_nil() {
+            None
+        } else {
+            Some(list.nth(0))
+        };
     }
     if tst.is_some_and(|n| n.node_tag() == NodeTag::T_Query) {
-        return Err(PgError::error("input is a query, not an expression".to_string())
-            .with_sqlstate(ERRCODE_INVALID_PARAMETER_VALUE)
-            .into());
+        return Err(
+            PgError::error("input is a query, not an expression".to_string())
+                .with_sqlstate(ERRCODE_INVALID_PARAMETER_VALUE)
+                .into(),
+        );
     }
 
     // C: bms_is_subset(pull_varnos(NULL, node), {1}) / bms_is_empty.
@@ -1282,7 +1348,13 @@ pub fn pg_get_expr_worker(
         }
     }
     match node {
-        Some(n) => Ok(Some(deparse_expression_pretty(mcx, n, relid, false, pretty_flags)?)),
+        Some(n) => Ok(Some(deparse_expression_pretty(
+            mcx,
+            n,
+            relid,
+            false,
+            pretty_flags,
+        )?)),
         // get_rule_expr (ruleutils.c): "if (node == NULL) return;" — the
         // deparse of the NULL node is the EMPTY STRING, not SQL NULL
         // (verified against live C 18.3: is_null=f, is_empty=t).
@@ -1322,7 +1394,11 @@ pub fn pg_get_partconstrdef_string<'mcx>(
     let mut ctx = deparse::DeparseContext::new(mcx, 0);
     ctx.varprefix = true;
     ctx.namespaces
-        .push(std::rc::Rc::new(query::deparse_context_for(mcx, aliasname, partition_id)?));
+        .push(std::rc::Rc::new(query::deparse_context_for(
+            mcx,
+            aliasname,
+            partition_id,
+        )?));
     deparse::get_rule_expr(constr_expr, &mut ctx, false)?;
     Ok(Some(ctx.buf))
 }
@@ -1338,14 +1414,14 @@ pub fn pg_get_partkeydef_worker(
         if missing_ok {
             return Ok(None);
         }
-        return Err(PgError::error(format!(
-            "cache lookup failed for partition key of {relid}"
-        ))
-        .into());
+        return Err(
+            PgError::error(format!("cache lookup failed for partition key of {relid}")).into(),
+        );
     };
     let t = ht.tuple();
-    let notnull =
-        |anum: i32| getattr_null(&t, PARTRELID, anum).expect("NOT NULL pg_partitioned_table column");
+    let notnull = |anum: i32| {
+        getattr_null(&t, PARTRELID, anum).expect("NOT NULL pg_partitioned_table column")
+    };
     let partstrat = getattr(&t, PARTRELID, ANUM_PG_PARTITIONED_TABLE_PARTSTRAT).as_i8();
     let partnatts = getattr(&t, PARTRELID, ANUM_PG_PARTITIONED_TABLE_PARTNATTS).as_i16();
     let partattrs = i16_array_at(notnull(ANUM_PG_PARTITIONED_TABLE_PARTATTRS));
@@ -1359,7 +1435,9 @@ pub fn pg_get_partkeydef_worker(
     let mut partexprs: Vec<Node<'_>> = Vec::new();
     if let Some(s) = &partexprs_text {
         let node = readfuncs::stringToNode(mcx, s)?;
-        let list = node.as_list().expect("unexpected node type found in partexprs");
+        let list = node
+            .as_list()
+            .expect("unexpected node type found in partexprs");
         partexprs = list.iter().collect();
     }
     let mut partexpr_item = 0usize;
@@ -1389,7 +1467,10 @@ pub fn pg_get_partkeydef_worker(
             keycoltype = ty;
             keycolcollation = coll;
         } else {
-            assert!(partexpr_item < partexprs.len(), "too few entries in partexprs list");
+            assert!(
+                partexpr_item < partexprs.len(),
+                "too few entries in partexprs list"
+            );
             let partkey = partexprs[partexpr_item];
             partexpr_item += 1;
             let s = deparse_expression_pretty(mcx, partkey, relid, false, pretty_flags)?;
@@ -1403,7 +1484,10 @@ pub fn pg_get_partkeydef_worker(
         }
         let partcoll = partcollation[keyno];
         if !attrs_only && partcoll != InvalidOid && partcoll != keycolcollation {
-            buf.push_str(&format!(" COLLATE {}", generate_collation_name(mcx, partcoll)?));
+            buf.push_str(&format!(
+                " COLLATE {}",
+                generate_collation_name(mcx, partcoll)?
+            ));
         }
         if !attrs_only {
             get_opclass_name(mcx, partclass[keyno], keycoltype, &mut buf)?;
@@ -1479,7 +1563,11 @@ pub fn pg_get_statisticsobj_worker(
                 gotone = true;
             }
             if dependencies_enabled {
-                buf.push_str(if gotone { ", dependencies" } else { "dependencies" });
+                buf.push_str(if gotone {
+                    ", dependencies"
+                } else {
+                    "dependencies"
+                });
                 gotone = true;
             }
             if mcv_enabled {
@@ -1540,7 +1628,13 @@ pub fn pg_get_statisticsobjdef_expressions_worker(
     let node = readfuncs::stringToNode(mcx, &src)?;
     let mut out = Vec::new();
     for expr in node.as_list().expect("stxexprs is a List").iter() {
-        out.push(deparse_expression_pretty(mcx, expr, stxrelid, false, PRETTYFLAG_INDENT)?);
+        out.push(deparse_expression_pretty(
+            mcx,
+            expr,
+            stxrelid,
+            false,
+            PRETTYFLAG_INDENT,
+        )?);
     }
     Ok(Some(out))
 }
@@ -1606,7 +1700,13 @@ pub fn pg_get_partition_constraintdef_worker(
             )?
         }
     };
-    Ok(Some(deparse_expression_pretty(mcx, expr, relation_id, false, PRETTYFLAG_INDENT)?))
+    Ok(Some(deparse_expression_pretty(
+        mcx,
+        expr,
+        relation_id,
+        false,
+        PRETTYFLAG_INDENT,
+    )?))
 }
 
 // pg_get_querydef (ruleutils.c:1588) — extension-facing entry point.

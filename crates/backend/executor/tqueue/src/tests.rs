@@ -57,7 +57,9 @@ fn become_backend(procno: ProcNumber, pid: i32) {
 
 fn tuple_image(i: usize) -> Vec<u8> {
     let len = 16 + (i * 53) % 512;
-    (0..len).map(|j| (i.wrapping_mul(7).wrapping_add(j)) as u8).collect()
+    (0..len)
+        .map(|j| (i.wrapping_mul(7).wrapping_add(j)) as u8)
+        .collect()
 }
 
 #[test]
@@ -126,7 +128,9 @@ fn batch_tuple_image(i: usize) -> Vec<u8> {
         0 => CHUNK_CAPACITY + 1 + i % 300,
         m => 16 + (m * 211) % 2048,
     };
-    (0..len).map(|j| (i.wrapping_mul(31).wrapping_add(j)) as u8).collect()
+    (0..len)
+        .map(|j| (i.wrapping_mul(31).wrapping_add(j)) as u8)
+        .collect()
 }
 
 #[test]
@@ -199,7 +203,10 @@ fn batched_blocking_receive_drains_then_done() {
         let mut reader = batched_reader(&lmq, &lledger);
         let mut done = false;
         for i in 0..N {
-            let tuple = reader.next(false, &mut done).unwrap().expect("stream has N tuples");
+            let tuple = reader
+                .next(false, &mut done)
+                .unwrap()
+                .expect("stream has N tuples");
             assert_eq!(tuple, batch_tuple_image(i), "tuple {i}");
         }
         assert!(reader.next(false, &mut done).unwrap().is_none());
@@ -234,9 +241,10 @@ fn batched_worker_death_mid_batch() {
     let mut reader = batched_reader(&mq, &ledger);
     let mut done = false;
     for i in 0..2 {
-        let tuple = reader.next(true, &mut done).unwrap().unwrap_or_else(|| {
-            panic!("flushed chunk {i} is drained after sender death")
-        });
+        let tuple = reader
+            .next(true, &mut done)
+            .unwrap()
+            .unwrap_or_else(|| panic!("flushed chunk {i} is drained after sender death"));
         assert_eq!(tuple, big.as_slice());
     }
     assert!(reader.next(true, &mut done).unwrap().is_none());

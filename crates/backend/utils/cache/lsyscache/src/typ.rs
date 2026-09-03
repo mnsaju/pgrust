@@ -87,7 +87,8 @@ pub fn get_type_io_data(typid: Oid, which_func: IOFuncSelector) -> PgResult<Type
     if miscinit_seams::is_bootstrap_processing_mode::call() {
         panic!("get_type_io_data({typid}) in bootstrap mode: boot_get_type_io_data unported (bootstrap.c)");
     }
-    let ts = syscache_seams::pg_type_io_shape::call(typid)?.ok_or_else(|| type_lookup_failed(typid))?;
+    let ts =
+        syscache_seams::pg_type_io_shape::call(typid)?.ok_or_else(|| type_lookup_failed(typid))?;
     Ok(TypeIoData {
         typlen: ts.typlen,
         typbyval: ts.typbyval,
@@ -130,8 +131,8 @@ pub fn get_typdefault<'mcx>(
     let Some(str_default) = defaults.typdefault else {
         return Ok(None);
     };
-    let io = syscache_seams::pg_type_io_shape::call(typid)?
-        .ok_or_else(|| type_lookup_failed(typid))?;
+    let io =
+        syscache_seams::pg_type_io_shape::call(typid)?.ok_or_else(|| type_lookup_failed(typid))?;
     let mut cstr: mcx::PgVec<'mcx, u8> = mcx::vec_with_capacity_in(mcx, str_default.len() + 1)?;
     mcx::vec_append_bytes(&mut cstr, str_default.as_bytes())?;
     mcx::vec_append_bytes(&mut cstr, &[0u8])?;
@@ -298,7 +299,8 @@ fn no_io_function_error(kind: &str, typid: Oid) -> Box<PgError> {
 }
 
 pub fn getTypeInputInfo(typid: Oid) -> PgResult<(Oid, Oid)> {
-    let pt = syscache_seams::pg_type_io_shape::call(typid)?.ok_or_else(|| type_lookup_failed(typid))?;
+    let pt =
+        syscache_seams::pg_type_io_shape::call(typid)?.ok_or_else(|| type_lookup_failed(typid))?;
     if !pt.typisdefined {
         return Err(shell_type_error(typid));
     }
@@ -309,7 +311,8 @@ pub fn getTypeInputInfo(typid: Oid) -> PgResult<(Oid, Oid)> {
 }
 
 pub fn getTypeOutputInfo(typid: Oid) -> PgResult<(Oid, bool)> {
-    let pt = syscache_seams::pg_type_io_shape::call(typid)?.ok_or_else(|| type_lookup_failed(typid))?;
+    let pt =
+        syscache_seams::pg_type_io_shape::call(typid)?.ok_or_else(|| type_lookup_failed(typid))?;
     if !pt.typisdefined {
         return Err(shell_type_error(typid));
     }
@@ -320,7 +323,8 @@ pub fn getTypeOutputInfo(typid: Oid) -> PgResult<(Oid, bool)> {
 }
 
 pub fn getTypeBinaryInputInfo(typid: Oid) -> PgResult<(Oid, Oid)> {
-    let pt = syscache_seams::pg_type_io_shape::call(typid)?.ok_or_else(|| type_lookup_failed(typid))?;
+    let pt =
+        syscache_seams::pg_type_io_shape::call(typid)?.ok_or_else(|| type_lookup_failed(typid))?;
     if !pt.typisdefined {
         return Err(shell_type_error(typid));
     }
@@ -331,7 +335,8 @@ pub fn getTypeBinaryInputInfo(typid: Oid) -> PgResult<(Oid, Oid)> {
 }
 
 pub fn getTypeBinaryOutputInfo(typid: Oid) -> PgResult<(Oid, bool)> {
-    let pt = syscache_seams::pg_type_io_shape::call(typid)?.ok_or_else(|| type_lookup_failed(typid))?;
+    let pt =
+        syscache_seams::pg_type_io_shape::call(typid)?.ok_or_else(|| type_lookup_failed(typid))?;
     if !pt.typisdefined {
         return Err(shell_type_error(typid));
     }

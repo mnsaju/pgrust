@@ -699,11 +699,15 @@ pub fn deconstruct_jointree<'mcx>(
         pending_for_sjinfo.extend(pending.iter().copied());
         if !pending.is_empty() && !matches!(&items[idx], JtItem::Sj { .. }) {
             let (qualscope, jdomain) = match &items[idx] {
-                JtItem::Plain { qualscope, jdomain, .. }
-                | JtItem::SecQuals { qualscope, jdomain, .. }
-                | JtItem::Sj { qualscope, jdomain, .. } => {
-                    (relids_copy(mcx, qualscope), *jdomain)
+                JtItem::Plain {
+                    qualscope, jdomain, ..
                 }
+                | JtItem::SecQuals {
+                    qualscope, jdomain, ..
+                }
+                | JtItem::Sj {
+                    qualscope, jdomain, ..
+                } => (relids_copy(mcx, qualscope), *jdomain),
             };
             for clause in pending {
                 distribute_qual_to_rels(
@@ -747,7 +751,11 @@ pub fn deconstruct_jointree<'mcx>(
             // process_security_barrier_quals (initsplan.c): each securityQuals
             // sublist gets an ascending level; ojscope = qualscope forces
             // Var-free quals to the rel instead of the top of the tree.
-            JtItem::SecQuals { varno, qualscope, jdomain } => {
+            JtItem::SecQuals {
+                varno,
+                qualscope,
+                jdomain,
+            } => {
                 let rte = run.rte(*varno as usize);
                 let mut level: u32 = 0;
                 for qualset in &rte.securityQuals {
@@ -955,11 +963,8 @@ fn deconstruct_distribute_oj_quals<'mcx>(
             quals = map_quals(mcx, quals, &mut |n| {
                 add_var_nulling(mcx, n, &sjinfo.syn_lefthand, othersj.ojrelid)
             })?;
-            incompatible_joins = crate::relnode::relids_del_member(
-                mcx,
-                &incompatible_joins,
-                othersj.ojrelid as i32,
-            );
+            incompatible_joins =
+                crate::relnode::relids_del_member(mcx, &incompatible_joins, othersj.ojrelid as i32);
         }
 
         let mut this_qualscope = relids_union(mcx, &qualscope, &joins_so_far);
@@ -967,11 +972,8 @@ fn deconstruct_distribute_oj_quals<'mcx>(
         if above_sjinfo {
             this_qualscope = relids_add_member(mcx, &this_qualscope, othersj.ojrelid);
             this_ojscope = relids_add_member(mcx, &this_ojscope, othersj.ojrelid);
-            this_ojscope = crate::relnode::relids_del_member(
-                mcx,
-                &this_ojscope,
-                sjinfo.ojrelid as i32,
-            );
+            this_ojscope =
+                crate::relnode::relids_del_member(mcx, &this_ojscope, sjinfo.ojrelid as i32);
         }
 
         // ECs come only from the fewest-nullingrels form; that form is the
@@ -1008,11 +1010,8 @@ fn deconstruct_distribute_oj_quals<'mcx>(
             quals = map_quals(mcx, quals, &mut |n| {
                 add_var_nulling(mcx, n, &othersj.syn_righthand, othersj.ojrelid)
             })?;
-            incompatible_joins = crate::relnode::relids_del_member(
-                mcx,
-                &incompatible_joins,
-                othersj.ojrelid as i32,
-            );
+            incompatible_joins =
+                crate::relnode::relids_del_member(mcx, &incompatible_joins, othersj.ojrelid as i32);
         }
         joins_so_far = relids_add_member(mcx, &joins_so_far, othersj.ojrelid);
     }
@@ -1048,7 +1047,10 @@ fn strip_var_nulling<'mcx>(
             for m in crate::relnode::relids_members(removable) {
                 nulling.del_member(m);
             }
-            let newvar = types_nodes::primnodes::Var { varnullingrels: nulling, ..*v };
+            let newvar = types_nodes::primnodes::Var {
+                varnullingrels: nulling,
+                ..*v
+            };
             Ok(Some(Node::mk(mcx, newvar)?))
         }
         NodeTag::T_PlaceHolderVar => {
@@ -1058,15 +1060,15 @@ fn strip_var_nulling<'mcx>(
             }
             let new_expr = strip_var_nulling(mcx, phv.phexpr, removable)?;
             let hit = crate::relnode::relids_members(removable)
-                .any(|m| phv.phnullingrels.is_member(m as i32) || phv.phrels.is_member(m as i32));
+                .any(|m| phv.phnullingrels.is_member(m) || phv.phrels.is_member(m));
             if new_expr.is_none() && !hit {
                 return Ok(None);
             }
             let mut nulling = phv.phnullingrels.clone_in(mcx)?;
             let mut rels = phv.phrels.clone_in(mcx)?;
             for m in crate::relnode::relids_members(removable) {
-                nulling.del_member(m as i32);
-                rels.del_member(m as i32);
+                nulling.del_member(m);
+                rels.del_member(m);
             }
             debug_assert!(!rels.is_empty());
             Ok(Some(Node::mk(
@@ -1104,13 +1106,19 @@ fn add_var_nulling<'mcx>(
             }
             let mut nulling = v.varnullingrels.clone_in(mcx)?;
             nulling.add_member(mcx, added_ojrelid as i32)?;
-            let newvar = types_nodes::primnodes::Var { varnullingrels: nulling, ..*v };
+            let newvar = types_nodes::primnodes::Var {
+                varnullingrels: nulling,
+                ..*v
+            };
             Ok(Some(Node::mk(mcx, newvar)?))
         }
         NodeTag::T_PlaceHolderVar => {
             let phv = node.as_place_holder_var().expect("PlaceHolderVar");
             if phv.phlevelsup != 0
-                || !phv.phrels.iter().any(|m| relids_is_member(m, target_relids))
+                || !phv
+                    .phrels
+                    .iter()
+                    .any(|m| relids_is_member(m, target_relids))
             {
                 return Ok(None);
             }
@@ -1187,7 +1195,12 @@ struct CloneCtl<'a, 'mcx> {
 
 impl<'a, 'mcx> CloneCtl<'a, 'mcx> {
     fn not_clone(incompatible_relids: &'a types_pathnodes::Relids<'mcx>) -> Self {
-        CloneCtl { incompatible_relids, allow_equivalence: true, has_clone: false, is_clone: false }
+        CloneCtl {
+            incompatible_relids,
+            allow_equivalence: true,
+            has_clone: false,
+            is_clone: false,
+        }
     }
 }
 
@@ -1214,7 +1227,11 @@ fn combine_joinlists<'mcx>(
 }
 
 fn joinlist_part<'mcx>(mut list: PgVec<'mcx, JoinlistNode<'mcx>>) -> JoinlistNode<'mcx> {
-    if list.len() == 1 { list.pop().unwrap() } else { JoinlistNode::Sub(list) }
+    if list.len() == 1 {
+        list.pop().unwrap()
+    } else {
+        JoinlistNode::Sub(list)
+    }
 }
 
 fn deconstruct_recurse<'mcx>(
@@ -1232,11 +1249,8 @@ fn deconstruct_recurse<'mcx>(
         NodeTag::T_RangeTblRef => {
             let varno = item.as_range_tbl_ref().unwrap().rtindex;
             let scope = relids_singleton(mcx, varno as u32);
-            run.root.join_domains[parent_domain].jd_relids = relids_union(
-                mcx,
-                &run.root.join_domains[parent_domain].jd_relids,
-                &scope,
-            );
+            run.root.join_domains[parent_domain].jd_relids =
+                relids_union(mcx, &run.root.join_domains[parent_domain].jd_relids, &scope);
             if run.root.qual_security_level > 0 {
                 items.push(JtItem::SecQuals {
                     varno,
@@ -1299,13 +1313,17 @@ fn deconstruct_recurse<'mcx>(
                         qualscope: relids_copy(mcx, &scope),
                         jdomain: parent_domain,
                     });
-                    Ok((relids_copy(mcx, &scope), scope, combine_joinlists(mcx, l_list, r_list)))
+                    Ok((
+                        relids_copy(mcx, &scope),
+                        scope,
+                        combine_joinlists(mcx, l_list, r_list),
+                    ))
                 }
                 types_nodes::JoinType::JOIN_LEFT | types_nodes::JoinType::JOIN_ANTI => {
                     let child_domain = run.root.join_domains.len();
-                    run.root
-                        .join_domains
-                        .push(types_pathnodes::JoinDomain { jd_relids: crate::relnode::relids_empty() });
+                    run.root.join_domains.push(types_pathnodes::JoinDomain {
+                        jd_relids: crate::relnode::relids_empty(),
+                    });
                     let (l_relids, l_inner, l_list) =
                         deconstruct_recurse(run, j.larg, parent_domain, items)?;
                     let (r_relids, r_inner, r_list) =
@@ -1353,7 +1371,11 @@ fn deconstruct_recurse<'mcx>(
                         inner_join_rels: relids_copy(mcx, &inner_join_rels),
                         rtindex: j.rtindex,
                     });
-                    Ok((qualscope, inner_join_rels, combine_joinlists(mcx, l_list, r_list)))
+                    Ok((
+                        qualscope,
+                        inner_join_rels,
+                        combine_joinlists(mcx, l_list, r_list),
+                    ))
                 }
                 types_nodes::JoinType::JOIN_SEMI => {
                     let (l_relids, l_inner, l_list) =
@@ -1373,27 +1395,31 @@ fn deconstruct_recurse<'mcx>(
                         inner_join_rels: relids_copy(mcx, &inner_join_rels),
                         rtindex: 0,
                     });
-                    Ok((qualscope, inner_join_rels, combine_joinlists(mcx, l_list, r_list)))
+                    Ok((
+                        qualscope,
+                        inner_join_rels,
+                        combine_joinlists(mcx, l_list, r_list),
+                    ))
                 }
                 types_nodes::JoinType::JOIN_FULL => {
                     // The FULL join's quals get their very own domain; each
                     // side gets its own child domain.
                     let fj_domain = run.root.join_domains.len();
-                    run.root
-                        .join_domains
-                        .push(types_pathnodes::JoinDomain { jd_relids: crate::relnode::relids_empty() });
+                    run.root.join_domains.push(types_pathnodes::JoinDomain {
+                        jd_relids: crate::relnode::relids_empty(),
+                    });
                     let l_domain = run.root.join_domains.len();
-                    run.root
-                        .join_domains
-                        .push(types_pathnodes::JoinDomain { jd_relids: crate::relnode::relids_empty() });
+                    run.root.join_domains.push(types_pathnodes::JoinDomain {
+                        jd_relids: crate::relnode::relids_empty(),
+                    });
                     let (l_relids, l_inner, l_list) =
                         deconstruct_recurse(run, j.larg, l_domain, items)?;
                     run.root.join_domains[fj_domain].jd_relids =
                         relids_copy(mcx, &run.root.join_domains[l_domain].jd_relids);
                     let r_domain = run.root.join_domains.len();
-                    run.root
-                        .join_domains
-                        .push(types_pathnodes::JoinDomain { jd_relids: crate::relnode::relids_empty() });
+                    run.root.join_domains.push(types_pathnodes::JoinDomain {
+                        jd_relids: crate::relnode::relids_empty(),
+                    });
                     let (r_relids, r_inner, r_list) =
                         deconstruct_recurse(run, j.rarg, r_domain, items)?;
                     let r_dom_relids = relids_copy(mcx, &run.root.join_domains[r_domain].jd_relids);
@@ -1617,11 +1643,8 @@ fn make_outerjoininfo<'mcx>(
                 && relids_overlap(&strict_relids, &other.min_righthand)
                 && !relids_overlap(&clause_relids, &other.syn_lefthand)
             {
-                min_lefthand = crate::relnode::relids_del_member(
-                    mcx,
-                    &min_lefthand,
-                    other.ojrelid as i32,
-                );
+                min_lefthand =
+                    crate::relnode::relids_del_member(mcx, &min_lefthand, other.ojrelid as i32);
                 commute_below_l = relids_add_member(mcx, &commute_below_l, other.ojrelid);
             }
         }
@@ -1640,15 +1663,9 @@ fn make_outerjoininfo<'mcx>(
                 if other.ojrelid != 0 {
                     min_righthand = relids_add_member(mcx, &min_righthand, other.ojrelid);
                 }
-            } else if jointype == JOIN_LEFT
-                && other.jointype == JOIN_LEFT
-                && other.lhs_strict
-            {
-                min_righthand = crate::relnode::relids_del_member(
-                    mcx,
-                    &min_righthand,
-                    other.ojrelid as i32,
-                );
+            } else if jointype == JOIN_LEFT && other.jointype == JOIN_LEFT && other.lhs_strict {
+                min_righthand =
+                    crate::relnode::relids_del_member(mcx, &min_righthand, other.ojrelid as i32);
                 commute_below_r = relids_add_member(mcx, &commute_below_r, other.ojrelid);
             }
         }
@@ -1684,11 +1701,13 @@ fn make_outerjoininfo<'mcx>(
         for i in 0..run.root.join_info_list.len() {
             let other_ojrelid = run.root.join_info_list[i].ojrelid;
             if relids_is_member(other_ojrelid as i32, &commute_below_l) {
-                let cur = crate::relnode::relids_take(&mut run.root.join_info_list[i].commute_above_l);
+                let cur =
+                    crate::relnode::relids_take(&mut run.root.join_info_list[i].commute_above_l);
                 run.root.join_info_list[i].commute_above_l =
                     relids_add_member(mcx, &cur, ojrelid as u32);
             } else if relids_is_member(other_ojrelid as i32, &commute_below_r) {
-                let cur = crate::relnode::relids_take(&mut run.root.join_info_list[i].commute_above_r);
+                let cur =
+                    crate::relnode::relids_take(&mut run.root.join_info_list[i].commute_above_r);
                 run.root.join_info_list[i].commute_above_r =
                     relids_add_member(mcx, &cur, ojrelid as u32);
             }
@@ -2237,8 +2256,11 @@ fn check_memoizable(run: &mut PlannerRun<'_>, rinfo: RinfoId) -> PgResult<()> {
     if entry.hash_proc() != 0 && entry.eq_opr() != 0 {
         run.root.rinfo_mut(rinfo).left_hasheqoperator = entry.eq_opr();
     }
-    let entry =
-        if lefttype == righttype { entry } else { typcache::lookup_type_cache(righttype, flags)? };
+    let entry = if lefttype == righttype {
+        entry
+    } else {
+        typcache::lookup_type_cache(righttype, flags)?
+    };
     if entry.hash_proc() != 0 && entry.eq_opr() != 0 {
         run.root.rinfo_mut(rinfo).right_hasheqoperator = entry.eq_opr();
     }
@@ -2280,8 +2302,14 @@ pub fn distribute_restrictinfo_to_rels(run: &mut PlannerRun<'_>, rinfo: RinfoId)
     }
     let rinfo = substitute_false_if_always_false(run, rinfo)?;
     debug_assert!(relids_num_members(&relids) > 1);
-    assert!(!crate::relnode::relids_is_unset(&relids), "multi-member relids");
-    for (i, w) in crate::relnode::relids_word_slice(&relids).iter().enumerate() {
+    assert!(
+        !crate::relnode::relids_is_unset(&relids),
+        "multi-member relids"
+    );
+    for (i, w) in crate::relnode::relids_word_slice(&relids)
+        .iter()
+        .enumerate()
+    {
         let mut w = *w;
         while w != 0 {
             let relid = (i * 64) as i32 + w.trailing_zeros() as i32;
@@ -2587,7 +2615,9 @@ pub fn remove_useless_groupby_columns<'mcx>(run: &mut PlannerRun<'mcx>) -> PgRes
             (sgc.tleSortGroupRef, sgc.eqop)
         };
         let tle = get_sortgroupclause_tle(sgref, &parse.targetList);
-        let Some(var) = tle.expr.as_var() else { continue };
+        let Some(var) = tle.expr.as_var() else {
+            continue;
+        };
         if var.varlevelsup > 0 {
             continue;
         }
@@ -2766,8 +2796,12 @@ pub fn match_foreign_keys_to_quals(run: &mut PlannerRun<'_>) -> PgResult<()> {
         {
             continue;
         }
-        let Some(con_rel) = run.root.simple_rel_array[con_relid as usize] else { continue };
-        let Some(ref_rel) = run.root.simple_rel_array[ref_relid as usize] else { continue };
+        let Some(con_rel) = run.root.simple_rel_array[con_relid as usize] else {
+            continue;
+        };
+        let Some(ref_rel) = run.root.simple_rel_array[ref_relid as usize] else {
+            continue;
+        };
         // FKs linking to inheritance child rels (otherrels) are useless here.
         if run.root.rel(con_rel).reloptkind != types_pathnodes::RELOPT_BASEREL
             || run.root.rel(ref_rel).reloptkind != types_pathnodes::RELOPT_BASEREL
@@ -2778,7 +2812,9 @@ pub fn match_foreign_keys_to_quals(run: &mut PlannerRun<'_>) -> PgResult<()> {
             // For simple inner joins any match is in an eclass; "loose"
             // syntactic matches were rejected for EC status (outer-join
             // quals or similar) but still count as matching the FK.
-            if let Some(ec) = crate::equivclass::match_eclasses_to_foreign_key_col(run, fkid, colno)? {
+            if let Some(ec) =
+                crate::equivclass::match_eclasses_to_foreign_key_col(run, fkid, colno)?
+            {
                 let has_const = run.root.ec(ec).ec_has_const;
                 let fk = run.root.foreign_key_mut(fkid);
                 fk.nmatched_ec += 1;
@@ -2799,7 +2835,9 @@ pub fn match_foreign_keys_to_quals(run: &mut PlannerRun<'_>) -> PgResult<()> {
             };
             for &rid in joininfo.iter() {
                 let clause = *run.root.expr_node(run.root.rinfo(rid).clause);
-                let Some(op) = clause.as_op_expr() else { continue };
+                let Some(op) = clause.as_op_expr() else {
+                    continue;
+                };
                 if op.args.len() != 2 {
                     continue;
                 }
@@ -2809,8 +2847,12 @@ pub fn match_foreign_keys_to_quals(run: &mut PlannerRun<'_>) -> PgResult<()> {
                     }
                     n
                 }
-                let Some(leftvar) = strip(op.args.nth(0)).as_var() else { continue };
-                let Some(rightvar) = strip(op.args.nth(1)).as_var() else { continue };
+                let Some(leftvar) = strip(op.args.nth(0)).as_var() else {
+                    continue;
+                };
+                let Some(rightvar) = strip(op.args.nth(1)).as_var() else {
+                    continue;
+                };
                 let conpfeqop = run.root.foreign_key(fkid).conpfeqop[colno];
                 if ref_relid as i32 == leftvar.varno
                     && ref_attno == leftvar.varattno

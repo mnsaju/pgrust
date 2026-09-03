@@ -58,12 +58,13 @@ fn ts_accum_weight_filter_drops_posless_and_unweighted() {
 #[test]
 fn output_order_is_descending_tscompare() {
     // The C StatEntry tree walks greater-first (greater keys go left).
-    let mut rows = vec![
-        (b"a".to_vec(), 1, 1),
+    let mut rows = [(b"a".to_vec(), 1, 1),
         (b"ab".to_vec(), 1, 1),
-        (b"b".to_vec(), 1, 1),
-    ];
+        (b"b".to_vec(), 1, 1)];
     rows.sort_unstable_by(|a, b| ts_compare_string(&b.0, &a.0, false).cmp(&0));
     let words: Vec<&[u8]> = rows.iter().map(|r| r.0.as_slice()).collect();
-    assert_eq!(words, vec![b"b".as_slice(), b"ab".as_slice(), b"a".as_slice()]);
+    assert_eq!(
+        words,
+        vec![b"b".as_slice(), b"ab".as_slice(), b"a".as_slice()]
+    );
 }

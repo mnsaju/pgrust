@@ -12,13 +12,18 @@ fn protocol_violation(fname: &str, ctx: &str) -> Box<types_error::PgError> {
     Box::new(
         elog::ereport(ERROR)
             .errcode(ERRCODE_E_R_I_E_EVENT_TRIGGER_PROTOCOL_VIOLATED)
-            .errmsg(format!("{fname}() can only be called in {ctx} event trigger function"))
+            .errmsg(format!(
+                "{fname}() can only be called in {ctx} event trigger function"
+            ))
             .into_error(),
     )
 }
 
 fn text_datum(mcx: Mcx<'_>, s: &str) -> PgResult<Datum> {
-    Ok(fmgr::varlena_result(varlena::cstring_to_text(mcx, s.as_bytes())?))
+    Ok(fmgr::varlena_result(varlena::cstring_to_text(
+        mcx,
+        s.as_bytes(),
+    )?))
 }
 
 fn text_array_datum(mcx: Mcx<'_>, items: &[String]) -> PgResult<Datum> {
@@ -54,7 +59,7 @@ fn fc_pg_event_trigger_dropped_objects(
     let in_drop =
         CURRENT_STATE.with(|s| s.borrow().last().map(|st| st.in_sql_drop).unwrap_or(false));
     if !in_drop {
-        return Err(protocol_violation("pg_event_trigger_dropped_objects", "a sql_drop").into());
+        return Err(protocol_violation("pg_event_trigger_dropped_objects", "a sql_drop"));
     }
 
     // SAFETY: executor arms es_query_cxt pre-call; it outlives this frame.
@@ -90,9 +95,7 @@ fn fc_pg_event_trigger_dropped_objects(
                 Some(names) => {
                     values[10] = text_array_datum(mcx, names)?;
                     match &obj.addrargs {
-                        Some(args) if !args.is_empty() => {
-                            values[11] = text_array_datum(mcx, args)?
-                        }
+                        Some(args) if !args.is_empty() => values[11] = text_array_datum(mcx, args)?,
                         _ => values[11] = empty_text_array_datum(mcx)?,
                     }
                 }
@@ -143,9 +146,11 @@ fn fc_pg_event_trigger_ddl_commands(
                     }
                     cmd.address
                 }
-                CollectedCommandData::AlterTable { class_id, object_id, .. } => {
-                    pg_depend::ObjectAddress::set(*class_id, *object_id)
-                }
+                CollectedCommandData::AlterTable {
+                    class_id,
+                    object_id,
+                    ..
+                } => pg_depend::ObjectAddress::set(*class_id, *object_id),
                 CollectedCommandData::Grant { objtype } => {
                     nulls[0] = true;
                     nulls[1] = true;
@@ -174,15 +179,13 @@ fn fc_pg_event_trigger_ddl_commands(
                 }
             };
 
-            let Some(identity) =
-                catalog_objectaddress::getObjectIdentityParts(mcx, &addr, true)?
+            let Some(identity) = catalog_objectaddress::getObjectIdentityParts(mcx, &addr, true)?
             else {
                 // Object dropped by the same command; skip rather than fail.
                 continue;
             };
-            let typedesc =
-                catalog_objectaddress::getObjectTypeDescription(mcx, &addr, true)?
-                    .expect("object type description is never NULL");
+            let typedesc = catalog_objectaddress::getObjectTypeDescription(mcx, &addr, true)?
+                .expect("object type description is never NULL");
             let schema = object_schema_name(mcx, &addr)?;
 
             values[0] = Datum::from_oid(addr.classId);
@@ -265,12 +268,16 @@ fn stringify_grant_objtype(objtype: types_nodes::parsenodes::ObjectType) -> PgRe
 
 fn object_schema_name(mcx: Mcx<'_>, addr: &pg_depend::ObjectAddress) -> PgResult<Option<String>> {
     let nsp = match addr.classId {
-        types_core::RELATION_RELATION_ID => Some(lsyscache::relation::get_rel_namespace(addr.objectId)?),
+        types_core::RELATION_RELATION_ID => {
+            Some(lsyscache::relation::get_rel_namespace(addr.objectId)?)
+        }
         _ => crate::sqldrop::object_namespace(addr)?,
     };
     match nsp {
-        Some(nsp) if OidIsValid(nsp) => Ok(lsyscache::misc::get_namespace_name_or_temp(mcx, nsp)?
-            .map(|s| s.as_str().to_string())),
+        Some(nsp) if OidIsValid(nsp) => {
+            Ok(lsyscache::misc::get_namespace_name_or_temp(mcx, nsp)?
+                .map(|s| s.as_str().to_string()))
+        }
         _ => Ok(None),
     }
 }
@@ -282,8 +289,9 @@ fn fc_pg_event_trigger_table_rewrite_oid(
     let oid = CURRENT_STATE.with(|s| s.borrow().last().map(|st| st.table_rewrite_oid));
     match oid {
         Some(o) if OidIsValid(o) => Ok(Datum::from_oid(o)),
-        _ => Err(protocol_violation("pg_event_trigger_table_rewrite_oid", "a table_rewrite")
-            .into()),
+        _ => {
+            Err(protocol_violation("pg_event_trigger_table_rewrite_oid", "a table_rewrite"))
+        }
     }
 }
 
@@ -294,11 +302,9 @@ fn fc_pg_event_trigger_table_rewrite_reason(
     let reason = CURRENT_STATE.with(|s| s.borrow().last().map(|st| st.table_rewrite_reason));
     match reason {
         Some(r) if r != 0 => Ok(Datum::from_i32(r)),
-        _ => Err(protocol_violation(
-            "pg_event_trigger_table_rewrite_reason",
-            "a table_rewrite",
-        )
-        .into()),
+        _ => Err(
+            protocol_violation("pg_event_trigger_table_rewrite_reason", "a table_rewrite"),
+        ),
     }
 }
 

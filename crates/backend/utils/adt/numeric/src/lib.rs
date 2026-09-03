@@ -38,9 +38,9 @@ pub use io::{get_str_from_var, numeric_in, numeric_out_into, numeric_recv, numer
 pub use keypack::{numeric_key_pack, numeric_key_unpack, NumericKeyForm, NUMERIC_KEY_EXP_MAX};
 pub use math::{
     div_mod_var, exp_var, gcd_var, ln_var, log_var, mod_var, numeric_exp, numeric_exp_into,
-    numeric_fac, numeric_gcd_common, numeric_lcm_common, numeric_ln, numeric_ln_into,
-    numeric_log, numeric_mod_common, numeric_out_sci, numeric_power, numeric_power_into,
-    numeric_sqrt, numeric_sqrt_into, power_var, sqrt_var, width_bucket_numeric,
+    numeric_fac, numeric_gcd_common, numeric_lcm_common, numeric_ln, numeric_ln_into, numeric_log,
+    numeric_mod_common, numeric_out_sci, numeric_power, numeric_power_into, numeric_sqrt,
+    numeric_sqrt_into, power_var, sqrt_var, width_bucket_numeric,
 };
 pub use ops::*;
 pub use var::{
@@ -98,8 +98,7 @@ pub const NUMERIC_MIN_SIG_DIGITS: i32 = 16;
 #[inline]
 pub fn numeric_can_be_short(dscale: i32, weight: i32) -> bool {
     dscale <= NUMERIC_SHORT_DSCALE_MAX
-        && weight <= NUMERIC_SHORT_WEIGHT_MAX
-        && weight >= NUMERIC_SHORT_WEIGHT_MIN
+        && (NUMERIC_SHORT_WEIGHT_MIN..=NUMERIC_SHORT_WEIGHT_MAX).contains(&weight)
 }
 
 /// Borrowed view of a packed numeric: the varlena payload (no varlena
@@ -228,7 +227,7 @@ impl<'a> Num<'a> {
         // SAFETY: from_payload's length check + header_size <= 4 keep the
         // range in bounds; alignment guarded below.
         let p = unsafe { self.ptr.add(off) };
-        if p as usize % 2 != 0 {
+        if !(p as usize).is_multiple_of(2) {
             unaligned_digits_panic();
         }
         // SAFETY: alignment checked above; n i16s lie within the payload.
@@ -276,6 +275,8 @@ pub fn division_by_zero_error() -> PgError {
 #[cold]
 #[inline(never)]
 pub fn invalid_numeric_syntax(input: &str) -> PgError {
-    PgError::error(format!("invalid input syntax for type numeric: \"{input}\""))
-        .with_sqlstate(ERRCODE_INVALID_TEXT_REPRESENTATION)
+    PgError::error(format!(
+        "invalid input syntax for type numeric: \"{input}\""
+    ))
+    .with_sqlstate(ERRCODE_INVALID_TEXT_REPRESENTATION)
 }

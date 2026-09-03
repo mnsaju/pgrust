@@ -142,9 +142,7 @@ fn kind_admits(kind: LaneKind) -> bool {
 /// (AGG_PLAIN), scan shape, and session/binder policy.
 pub fn agg_runtime_partial_admissible(node: &AggStateData<'_>) -> bool {
     match crate::agg_lanefold_plan(node) {
-        Some(plan) => {
-            plan.resid.is_empty() && plan.trans.iter().all(|t| kind_admits(t.kind))
-        }
+        Some(plan) => plan.resid.is_empty() && plan.trans.iter().all(|t| kind_admits(t.kind)),
         None => false,
     }
 }
@@ -339,7 +337,11 @@ fn export_kind(
             RuntimePartialTrans::Count(pg.trans_value.as_i64())
         }
         LaneKind::Sum => RuntimePartialTrans::Sum {
-            v: if pg.trans_value_is_null { 0 } else { pg.trans_value.as_i64() },
+            v: if pg.trans_value_is_null {
+                0
+            } else {
+                pg.trans_value.as_i64()
+            },
             present: !pg.trans_value_is_null,
         },
         LaneKind::Min
@@ -348,7 +350,11 @@ fn export_kind(
         | LaneKind::BitOr
         | LaneKind::BoolAnd
         | LaneKind::BoolOr => RuntimePartialTrans::Fold {
-            v: if pg.trans_value_is_null { 0 } else { fold_word(res_width, pg.trans_value) },
+            v: if pg.trans_value_is_null {
+                0
+            } else {
+                fold_word(res_width, pg.trans_value)
+            },
             present: !pg.trans_value_is_null,
         },
         LaneKind::AvgAccum => {
@@ -368,7 +374,11 @@ fn export_kind(
         }
         LaneKind::Int128AvgAccum => {
             if pg.trans_value_is_null {
-                RuntimePartialTrans::Int128 { n: 0, sum: 0, present: false }
+                RuntimePartialTrans::Int128 {
+                    n: 0,
+                    sum: 0,
+                    present: false,
+                }
             } else {
                 use ::adt_numeric::aggregates::Int128AggState;
                 // SAFETY: non-null Int128AvgAccum transvalues point at
@@ -379,7 +389,11 @@ fn export_kind(
                         "runtime partial: unexpected sum_x2 state".to_string(),
                     )));
                 }
-                RuntimePartialTrans::Int128 { n: st.n, sum: st.sum_x, present: true }
+                RuntimePartialTrans::Int128 {
+                    n: st.n,
+                    sum: st.sum_x,
+                    present: true,
+                }
             }
         }
         _ => {
@@ -422,7 +436,18 @@ fn combine_into(kind: LaneKind, dst: &mut RuntimePartialTrans, src: &RuntimePart
             *nx = nx.wrapping_add(*ny);
             *sx = sx.wrapping_add(*sy);
         }
-        (P::Int128 { n: nx, sum: sx, present: px }, P::Int128 { n: ny, sum: sy, present: py }) => {
+        (
+            P::Int128 {
+                n: nx,
+                sum: sx,
+                present: px,
+            },
+            P::Int128 {
+                n: ny,
+                sum: sy,
+                present: py,
+            },
+        ) => {
             *nx += *ny;
             *sx += *sy;
             *px = *px || *py;
@@ -556,10 +581,7 @@ pub fn agg_sorted_absorb_partial(
 /// dispatched — plan-admissible nodes (the sorted arm always; the plain arm
 /// unless the poly admission engaged) take the pre-existing path
 /// byte-identically.
-fn absorb_partial_states(
-    node: &mut AggStateData<'_>,
-    combined: &RuntimePartial,
-) -> PgResult<()> {
+fn absorb_partial_states(node: &mut AggStateData<'_>, combined: &RuntimePartial) -> PgResult<()> {
     let schema = trans_schema(node)?;
     let base = node.pergroup_base;
     absorb_partial_states_with(node, &schema, base, combined)
@@ -591,8 +613,9 @@ pub(crate) fn absorb_partial_states_at(
     combined: &RuntimePartial,
 ) -> PgResult<()> {
     {
-        let plan = crate::agg_lanefold_plan(node)
-            .ok_or_else(|| PgError::error("runtime partial absorb without a fold plan".to_string()))?;
+        let plan = crate::agg_lanefold_plan(node).ok_or_else(|| {
+            PgError::error("runtime partial absorb without a fold plan".to_string())
+        })?;
         if combined.trans.len() != plan.trans.len() {
             return Err(Box::new(PgError::error(
                 "runtime partial: combined layout mismatch".to_string(),
@@ -685,12 +708,17 @@ fn install_int128_fixups(
         use ::adt_numeric::aggregates::Int128AggState;
         let aggcx = crate::agg_aggcontext(node);
         let layout = core::alloc::Layout::new::<Int128AggState>();
-        let raw = ::mcx::Allocator::allocate(&aggcx, layout)
-            .map_err(|_| aggcx.oom(layout.size()))?;
+        let raw =
+            ::mcx::Allocator::allocate(&aggcx, layout).map_err(|_| aggcx.oom(layout.size()))?;
         let ptr = raw.cast::<Int128AggState>().as_ptr();
         // SAFETY: fresh allocation of the exact layout.
         unsafe {
-            ptr.write(Int128AggState { calc_sum_x2: false, n, sum_x: sum, sum_x2: 0 });
+            ptr.write(Int128AggState {
+                calc_sum_x2: false,
+                n,
+                sum_x: sum,
+                sum_x2: 0,
+            });
         }
         // SAFETY: transno bound as in the caller's absorb loop.
         let pg = unsafe { &mut *base.as_ptr().add(transno as usize) };
@@ -864,9 +892,7 @@ fn intcase_perrow_kind(ar: &::types_nodes::primnodes::Aggref<'_>) -> Option<(Lan
     let (kind, res_width, transtype) = match ar.aggfnoid {
         AGG_COUNT_ANY => (LaneKind::CountAny, LaneWidth::I64, POLY_INT8OID),
         AGG_SUM_INT2 | AGG_SUM_INT4 => (LaneKind::Sum, LaneWidth::I64, POLY_INT8OID),
-        AGG_SUM_INT8 | AGG_AVG_INT8 => {
-            (LaneKind::Int128AvgAccum, LaneWidth::I64, POLY_INTERNALOID)
-        }
+        AGG_SUM_INT8 | AGG_AVG_INT8 => (LaneKind::Int128AvgAccum, LaneWidth::I64, POLY_INTERNALOID),
         AGG_AVG_INT2 | AGG_AVG_INT4 => (LaneKind::AvgAccum, LaneWidth::I64, POLY_INT8ARRAYOID),
         AGG_MAX_INT2 => (LaneKind::Max, LaneWidth::I16, POLY_INT2OID),
         AGG_MIN_INT2 => (LaneKind::Min, LaneWidth::I16, POLY_INT2OID),
@@ -891,7 +917,10 @@ pub enum PolyTransKind {
     /// not classify (conditional / expression args) but whose STATE is an
     /// exportable kind — per-row driven, exported/combined/absorbed by the
     /// identical per-kind bodies as `Lane`.
-    PerRow { kind: LaneKind, res_width: LaneWidth },
+    PerRow {
+        kind: LaneKind,
+        res_width: LaneWidth,
+    },
 }
 
 /// One transno's manifest row. Entries are in TRANSNO order (canonical:
@@ -990,7 +1019,10 @@ pub fn agg_poly_manifest(node: &AggStateData<'_>) -> Option<Vec<PolyTrans>> {
     for (i, k) in kinds.into_iter().enumerate() {
         // A transno no peragg names would be a planner numbering gap —
         // refuse (the sink derivation's discipline).
-        out.push(PolyTrans { transno: i as u16, kind: k? });
+        out.push(PolyTrans {
+            transno: i as u16,
+            kind: k?,
+        });
     }
     Some(out)
 }
@@ -1187,8 +1219,8 @@ fn absorb_poly_at(
         use ::adt_numeric::aggregates::NumericAggState;
         let aggcx = crate::agg_aggcontext(node);
         let layout = core::alloc::Layout::new::<NumericAggState>();
-        let raw = ::mcx::Allocator::allocate(&aggcx, layout)
-            .map_err(|_| aggcx.oom(layout.size()))?;
+        let raw =
+            ::mcx::Allocator::allocate(&aggcx, layout).map_err(|_| aggcx.oom(layout.size()))?;
         let ptr = raw.cast::<NumericAggState>().as_ptr();
         // SAFETY: fresh allocation of the exact layout.
         unsafe { ptr.write(NumericAggState::new(false)) };
@@ -1340,9 +1372,7 @@ fn mjfold_kind(
         MJF_INT8INC_ANY if !init_null && has_args && aggtranstype == MJF_INT8OID => {
             Some(MjFoldKind::CountAny)
         }
-        MJF_INT2_SUM | MJF_INT4_SUM
-            if init_null && has_args && aggtranstype == MJF_INT8OID =>
-        {
+        MJF_INT2_SUM | MJF_INT4_SUM if init_null && has_args && aggtranstype == MJF_INT8OID => {
             Some(MjFoldKind::Sum)
         }
         MJF_INT8_AVG_ACCUM if init_null && has_args && aggtranstype == MJF_INTERNALOID => {
@@ -1410,8 +1440,7 @@ pub fn agg_mjfold_recognize<'mcx>(
             // (find_compatible_trans keys sharing on the transition state).
             continue;
         }
-        let Some(shape) = ::syscache_seams::lookup_pg_aggregate_shape::call(ar.aggfnoid)?
-        else {
+        let Some(shape) = ::syscache_seams::lookup_pg_aggregate_shape::call(ar.aggfnoid)? else {
             return Ok(None);
         };
         let nargs = ar.args.len();
@@ -1466,36 +1495,73 @@ mod mjfold_tests {
     fn mjfold_kind_table() {
         use MjFoldKind::*;
         // count(*): non-null init, NO args, int8 state.
-        assert_eq!(mjfold_kind(MJF_INT8INC, false, false, MJF_INT8OID), Some(CountStar));
+        assert_eq!(
+            mjfold_kind(MJF_INT8INC, false, false, MJF_INT8OID),
+            Some(CountStar)
+        );
         assert_eq!(mjfold_kind(MJF_INT8INC, true, false, MJF_INT8OID), None);
         assert_eq!(mjfold_kind(MJF_INT8INC, false, true, MJF_INT8OID), None);
         // count(x): non-null init, one arg.
-        assert_eq!(mjfold_kind(MJF_INT8INC_ANY, false, true, MJF_INT8OID), Some(CountAny));
+        assert_eq!(
+            mjfold_kind(MJF_INT8INC_ANY, false, true, MJF_INT8OID),
+            Some(CountAny)
+        );
         assert_eq!(mjfold_kind(MJF_INT8INC_ANY, true, true, MJF_INT8OID), None);
         // sum(int2/int4): NULL init, int8 state.
-        assert_eq!(mjfold_kind(MJF_INT2_SUM, true, true, MJF_INT8OID), Some(Sum));
-        assert_eq!(mjfold_kind(MJF_INT4_SUM, true, true, MJF_INT8OID), Some(Sum));
+        assert_eq!(
+            mjfold_kind(MJF_INT2_SUM, true, true, MJF_INT8OID),
+            Some(Sum)
+        );
+        assert_eq!(
+            mjfold_kind(MJF_INT4_SUM, true, true, MJF_INT8OID),
+            Some(Sum)
+        );
         assert_eq!(mjfold_kind(MJF_INT4_SUM, false, true, MJF_INT8OID), None);
         // sum(int8)/avg(int8): the shared Int128AggState transition.
         assert_eq!(
             mjfold_kind(MJF_INT8_AVG_ACCUM, true, true, MJF_INTERNALOID),
             Some(Int128)
         );
-        assert_eq!(mjfold_kind(MJF_INT8_AVG_ACCUM, true, true, MJF_INT8OID), None);
+        assert_eq!(
+            mjfold_kind(MJF_INT8_AVG_ACCUM, true, true, MJF_INT8OID),
+            None
+        );
         // min/max at each width; the state type pins the width.
-        assert_eq!(mjfold_kind(MJF_INT2SMALLER, true, true, MJF_INT2OID), Some(Min));
-        assert_eq!(mjfold_kind(MJF_INT4SMALLER, true, true, MJF_INT4OID), Some(Min));
-        assert_eq!(mjfold_kind(MJF_INT8SMALLER, true, true, MJF_INT8OID), Some(Min));
-        assert_eq!(mjfold_kind(MJF_INT2LARGER, true, true, MJF_INT2OID), Some(Max));
-        assert_eq!(mjfold_kind(MJF_INT4LARGER, true, true, MJF_INT4OID), Some(Max));
-        assert_eq!(mjfold_kind(MJF_INT8LARGER, true, true, MJF_INT8OID), Some(Max));
+        assert_eq!(
+            mjfold_kind(MJF_INT2SMALLER, true, true, MJF_INT2OID),
+            Some(Min)
+        );
+        assert_eq!(
+            mjfold_kind(MJF_INT4SMALLER, true, true, MJF_INT4OID),
+            Some(Min)
+        );
+        assert_eq!(
+            mjfold_kind(MJF_INT8SMALLER, true, true, MJF_INT8OID),
+            Some(Min)
+        );
+        assert_eq!(
+            mjfold_kind(MJF_INT2LARGER, true, true, MJF_INT2OID),
+            Some(Max)
+        );
+        assert_eq!(
+            mjfold_kind(MJF_INT4LARGER, true, true, MJF_INT4OID),
+            Some(Max)
+        );
+        assert_eq!(
+            mjfold_kind(MJF_INT8LARGER, true, true, MJF_INT8OID),
+            Some(Max)
+        );
         // Width/state mismatches refuse (the layout pin).
         assert_eq!(mjfold_kind(MJF_INT4LARGER, true, true, MJF_INT8OID), None);
         assert_eq!(mjfold_kind(MJF_INT8SMALLER, true, true, MJF_INT4OID), None);
         // Outside the vocabulary: float/numeric/text transfns never admit.
         for oid in [208u32, 222, 2858, 458, 1963, 2805] {
             assert_eq!(mjfold_kind(oid, true, true, MJF_INT8OID), None, "oid {oid}");
-            assert_eq!(mjfold_kind(oid, false, true, MJF_INT8OID), None, "oid {oid}");
+            assert_eq!(
+                mjfold_kind(oid, false, true, MJF_INT8OID),
+                None,
+                "oid {oid}"
+            );
         }
     }
 
@@ -1544,10 +1610,21 @@ mod poly_tests {
     }
 
     fn snap(digits: Vec<::adt_numeric::NumericDigit>, weight: i32, dscale: i32) -> NumericSnapshot {
-        NumericSnapshot { ndigits: digits.len() as i32, weight, sign: 0, dscale, digits }
+        NumericSnapshot {
+            ndigits: digits.len() as i32,
+            weight,
+            sign: 0,
+            dscale,
+            digits,
+        }
     }
 
-    fn np(n: i64, max_scale: i32, max_scale_count: i64, sums: Vec<NumericSnapshot>) -> RuntimePartialTrans {
+    fn np(
+        n: i64,
+        max_scale: i32,
+        max_scale_count: i64,
+        sums: Vec<NumericSnapshot>,
+    ) -> RuntimePartialTrans {
         RuntimePartialTrans::NumericAgg(Box::new(NumericAggPartial {
             present: true,
             n,
@@ -1574,7 +1651,11 @@ mod poly_tests {
     fn numeric_combine_field_law() {
         let mut dst = np(3, 2, 1, vec![snap(vec![1, 2], 0, 2)]);
         // Greater src scale: adopt scale + its count; sums concat.
-        combine_into(LaneKind::CountStar, &mut dst, &np(2, 5, 7, vec![snap(vec![9], 1, 5)]));
+        combine_into(
+            LaneKind::CountStar,
+            &mut dst,
+            &np(2, 5, 7, vec![snap(vec![9], 1, 5)]),
+        );
         let d = unbox(&dst);
         assert_eq!((d.n, d.max_scale, d.max_scale_count), (5, 5, 7));
         assert_eq!(d.sums.len(), 2);

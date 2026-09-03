@@ -1,9 +1,9 @@
 // InvalidateBuffer / FindAndDropRelationBuffers / DropRelationsAllBuffers
 // (bufmgr.c); temp-relation arms divert to localbuf.
+use crate::pin::buffer_refcount;
 use types_core::{BlockNumber, ForkNumber, InvalidBlockNumber, MAX_FORKNUM};
 use types_error::PgResult;
 use types_storage::buf::{BM_TAG_VALID, BUF_FLAG_MASK, BUF_USAGECOUNT_MASK};
-use crate::pin::buffer_refcount;
 use types_storage::{RelFileLocator, RelFileLocatorBackend};
 
 use crate::buf_hdr::{
@@ -101,7 +101,11 @@ fn InvalidateBuffer(desc: &BufferDesc, buf_state_in: u32) -> PgResult<()> {
     let old_partition_lock = BufMappingPartitionLock(old_hash);
 
     loop {
-        LWLockAcquire(old_partition_lock, LW_EXCLUSIVE, init_small::globals::MyProcNumber())?;
+        LWLockAcquire(
+            old_partition_lock,
+            LW_EXCLUSIVE,
+            init_small::globals::MyProcNumber(),
+        )?;
         let mut buf_state = LockBufHdr(desc);
 
         if desc.tag() != old_tag {
@@ -181,7 +185,11 @@ fn FindAndDropRelationBuffers(
         };
         let hash = BufTableHashCode(&tag);
         let partition_lock = BufMappingPartitionLock(hash);
-        LWLockAcquire(partition_lock, LW_SHARED, init_small::globals::MyProcNumber())?;
+        LWLockAcquire(
+            partition_lock,
+            LW_SHARED,
+            init_small::globals::MyProcNumber(),
+        )?;
         let buf_id = BufTableLookup(&tag, hash)?;
         LWLockRelease(partition_lock)?;
         if buf_id < 0 {
@@ -246,10 +254,10 @@ pub fn DropRelationsAllBuffers(smgr_reln: &[RelFileLocatorBackend]) -> PgResult<
     let mut n_blocks_to_invalidate: u64 = 0;
     let mut cached = true;
     'outer: for (i, r) in rels.iter().enumerate() {
-        for j in 0..nforks {
+        for (j, slot) in block[i].iter_mut().enumerate().take(nforks) {
             let fork = ForkNumber::from_i32(j as i32).expect("fork number");
             let nblocks = smgr_seams::smgr_nblocks_cached::call(*r, fork);
-            block[i][j] = nblocks;
+            *slot = nblocks;
             if nblocks == InvalidBlockNumber {
                 if !smgr_seams::smgr_exists::call(*r, fork)? {
                     continue;
@@ -263,12 +271,12 @@ pub fn DropRelationsAllBuffers(smgr_reln: &[RelFileLocatorBackend]) -> PgResult<
 
     if cached && n_blocks_to_invalidate < buf_drop_full_scan_threshold() {
         for (i, r) in rels.iter().enumerate() {
-            for j in 0..nforks {
-                if block[i][j] == InvalidBlockNumber {
+            for (j, &nblocks) in block[i].iter().enumerate().take(nforks) {
+                if nblocks == InvalidBlockNumber {
                     continue;
                 }
                 let fork = ForkNumber::from_i32(j as i32).expect("fork number");
-                FindAndDropRelationBuffers(r.locator, fork, block[i][j], 0)?;
+                FindAndDropRelationBuffers(r.locator, fork, nblocks, 0)?;
             }
         }
         return Ok(());

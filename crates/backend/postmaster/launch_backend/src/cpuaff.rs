@@ -112,8 +112,7 @@ pub(crate) fn install_from_env(workers: usize, standbys: usize, gang: usize) {
                 // Requested cores outside the boot mask would EINVAL at set
                 // time; intersect loudly instead (fail-open to the boot mask
                 // when nothing survives).
-                let inter: Vec<usize> =
-                    req.iter().copied().filter(|c| boot.contains(c)).collect();
+                let inter: Vec<usize> = req.iter().copied().filter(|c| boot.contains(c)).collect();
                 if inter.is_empty() {
                     eprintln!(
                         "pgrust: cpu affinity: PGRUST_CPU_AFFINITY_SET ({raw:?}) has no \
@@ -135,7 +134,11 @@ pub(crate) fn install_from_env(workers: usize, standbys: usize, gang: usize) {
     };
     let witness = format_cpu_list(&cpus);
     let _ = POLICY.set(AffinityPolicy { cpus, workers });
-    let _ = RTWORKER_BOARD.set((0..workers + standbys).map(|_| AtomicI32::new(-1)).collect());
+    let _ = RTWORKER_BOARD.set(
+        (0..workers + standbys)
+            .map(|_| AtomicI32::new(-1))
+            .collect(),
+    );
     let _ = RTGANG_BOARD.set((0..gang).map(|_| AtomicI32::new(-1)).collect());
     // The boot witness (the e2e greps this exact shape).
     eprintln!(
@@ -194,12 +197,16 @@ fn degrade_loud_once(reason: &str) {
 /// Observed rtworker board (ordinal -> observed core; None = unobserved,
 /// i.e. OFF / standby full-mask / non-Linux). Diagnostics + tests.
 pub fn rtworker_board() -> Option<Vec<Option<u32>>> {
-    RTWORKER_BOARD.get().map(|b| b.iter().map(slot_to_cpu).collect())
+    RTWORKER_BOARD
+        .get()
+        .map(|b| b.iter().map(slot_to_cpu).collect())
 }
 
 /// Observed rtgang board (same shape as [`rtworker_board`]).
 pub fn rtgang_board() -> Option<Vec<Option<u32>>> {
-    RTGANG_BOARD.get().map(|b| b.iter().map(slot_to_cpu).collect())
+    RTGANG_BOARD
+        .get()
+        .map(|b| b.iter().map(slot_to_cpu).collect())
 }
 
 fn slot_to_cpu(slot: &AtomicI32) -> Option<u32> {
@@ -216,7 +223,10 @@ fn parse_cpu_list(s: &str) -> Option<Vec<usize>> {
     for item in s.split(',') {
         let item = item.trim();
         if let Some((lo, hi)) = item.split_once('-') {
-            let (lo, hi) = (lo.trim().parse::<usize>().ok()?, hi.trim().parse::<usize>().ok()?);
+            let (lo, hi) = (
+                lo.trim().parse::<usize>().ok()?,
+                hi.trim().parse::<usize>().ok()?,
+            );
             if lo > hi {
                 return None;
             }
@@ -294,7 +304,9 @@ fn current_thread_cpus() -> Vec<usize> {
         if libc::sched_getaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &mut set) != 0 {
             return Vec::new();
         }
-        (0..CPU_SET_WIDTH).filter(|&c| libc::CPU_ISSET(c, &set)).collect()
+        (0..CPU_SET_WIDTH)
+            .filter(|&c| libc::CPU_ISSET(c, &set))
+            .collect()
     }
 }
 
@@ -322,7 +334,10 @@ mod tests {
 
     #[test]
     fn parse_mixed_and_whitespace() {
-        assert_eq!(parse_cpu_list(" 0-3, 8 - 11 ,15"), Some(vec![0, 1, 2, 3, 8, 9, 10, 11, 15]));
+        assert_eq!(
+            parse_cpu_list(" 0-3, 8 - 11 ,15"),
+            Some(vec![0, 1, 2, 3, 8, 9, 10, 11, 15])
+        );
     }
 
     #[test]
@@ -332,14 +347,28 @@ mod tests {
 
     #[test]
     fn parse_garbage_is_none() {
-        for bad in ["", " ", "a", "1,,2", "1-", "-3", "3-1", "1;2", "0-1023,1024", "1024"] {
+        for bad in [
+            "",
+            " ",
+            "a",
+            "1,,2",
+            "1-",
+            "-3",
+            "3-1",
+            "1;2",
+            "0-1023,1024",
+            "1024",
+        ] {
             assert_eq!(parse_cpu_list(bad), None, "input {bad:?}");
         }
     }
 
     #[test]
     fn identity_map_and_standby_mask() {
-        let p = AffinityPolicy { cpus: (0..8).collect(), workers: 8 };
+        let p = AffinityPolicy {
+            cpus: (0..8).collect(),
+            workers: 8,
+        };
         assert_eq!(p.rtworker_set(0), &[0]);
         assert_eq!(p.rtworker_set(3), &[3]);
         assert_eq!(p.rtworker_set(7), &[7]);
@@ -353,7 +382,10 @@ mod tests {
     #[test]
     fn ordinal_beyond_set_wraps_modulo() {
         // Set smaller than the pool: ordinals wrap (documented policy).
-        let p = AffinityPolicy { cpus: vec![1, 2, 3], workers: 5 };
+        let p = AffinityPolicy {
+            cpus: vec![1, 2, 3],
+            workers: 5,
+        };
         assert_eq!(p.rtworker_set(3), &[1]);
         assert_eq!(p.rtworker_set(4), &[2]);
         assert_eq!(p.rtgang_set(4), &[2]);

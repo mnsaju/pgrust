@@ -181,7 +181,10 @@ struct CompletionInner {
 impl Completion {
     fn new() -> Self {
         Completion {
-            state: Mutex::new(CompletionInner { outcome: None, wakers: Vec::new() }),
+            state: Mutex::new(CompletionInner {
+                outcome: None,
+                wakers: Vec::new(),
+            }),
         }
     }
 
@@ -196,7 +199,10 @@ impl Completion {
             let _ = waiter::unpark_word(w);
         }
         #[cfg(loom)]
-        debug_assert!(wakers.is_empty(), "loom models must poll try_wait, not park");
+        debug_assert!(
+            wakers.is_empty(),
+            "loom models must poll try_wait, not park"
+        );
     }
 
     #[cfg(not(loom))]
@@ -373,7 +379,10 @@ impl ResourceGroup {
         let n = spec.tasksets.len();
         for (i, ts) in spec.tasksets.iter().enumerate() {
             for &d in &ts.deps {
-                assert!(d < i, "task-set deps must be DAG-ordered (dep {d} >= index {i})");
+                assert!(
+                    d < i,
+                    "task-set deps must be DAG-ordered (dep {d} >= index {i})"
+                );
             }
         }
         // Dependency depth (§3.6): longest chain of dependents above each
@@ -439,15 +448,10 @@ impl ResourceGroup {
     /// and are re-found by the next call (a later finalize with freed
     /// capacity). Returns `(taken, deferred)` where `deferred` counts ready
     /// task sets left behind for lack of capacity. M5+1 DAG dispatch only.
-    pub(crate) fn ready_all(
-        &self,
-        progress: &mut RgProgress,
-        max: usize,
-    ) -> (Vec<usize>, usize) {
+    pub(crate) fn ready_all(&self, progress: &mut RgProgress, max: usize) -> (Vec<usize>, usize) {
         let mut ready: Vec<usize> = (0..self.tasksets.len())
             .filter(|&i| {
-                !progress.started[i]
-                    && self.tasksets[i].deps.iter().all(|&d| progress.done[d])
+                !progress.started[i] && self.tasksets[i].deps.iter().all(|&d| progress.done[d])
             })
             .collect();
         ready.sort_by_key(|&i| std::cmp::Reverse(self.depth[i]));
@@ -549,7 +553,9 @@ impl WeakRgHandle {
 
 impl RgHandle {
     pub fn downgrade(&self) -> WeakRgHandle {
-        WeakRgHandle { rg: Arc::downgrade(&self.rg) }
+        WeakRgHandle {
+            rg: Arc::downgrade(&self.rg),
+        }
     }
 
     /// Non-blocking completion probe (the external pinned driver's loop

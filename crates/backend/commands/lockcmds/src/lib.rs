@@ -1,8 +1,6 @@
 #![allow(non_snake_case)]
 use mcx::Mcx;
-use types_core::{
-    InvalidOid, Oid, RELPERSISTENCE_TEMP, XACT_FLAGS_ACCESSEDTEMPNAMESPACE,
-};
+use types_core::{InvalidOid, Oid, RELPERSISTENCE_TEMP, XACT_FLAGS_ACCESSEDTEMPNAMESPACE};
 use types_error::{
     PgError, PgResult, ERRCODE_LOCK_NOT_AVAILABLE, ERRCODE_WRONG_OBJECT_TYPE, ERROR,
 };
@@ -28,7 +26,11 @@ pub fn LockTableCommand<'mcx>(mcx: Mcx<'mcx>, lockstmt: &LockStmt<'mcx>) -> PgRe
         let mut callback = |rv: &rel_vocab::RangeVar<'_>, relid: Oid, _old: Oid| {
             RangeVarCallbackForLockTable(rv, relid, mode)
         };
-        let flags = if lockstmt.nowait { catalog_namespace::RVR_NOWAIT } else { 0 };
+        let flags = if lockstmt.nowait {
+            catalog_namespace::RVR_NOWAIT
+        } else {
+            0
+        };
         let reloid =
             catalog_namespace::RangeVarGetRelidExtended(&rv, mode, flags, Some(&mut callback))?;
 
@@ -103,7 +105,7 @@ impl<'a, 'mcx> LockViewRecurseCtx<'a, 'mcx> {
             {
                 continue;
             }
-            if self.ancestor_views.iter().any(|&v| v == relid) {
+            if self.ancestor_views.contains(&relid) {
                 continue;
             }
             let relname = lsyscache::get_rel_name(self.mcx, relid)?
@@ -130,7 +132,13 @@ impl<'a, 'mcx> LockViewRecurseCtx<'a, 'mcx> {
                 ));
             }
             if relkind == RELKIND_VIEW {
-                LockViewRecurse(self.mcx, relid, self.lockmode, self.nowait, self.ancestor_views)?;
+                LockViewRecurse(
+                    self.mcx,
+                    relid,
+                    self.lockmode,
+                    self.nowait,
+                    self.ancestor_views,
+                )?;
             } else if rte.inh {
                 LockTableRecurse(self.mcx, relid, self.lockmode, self.nowait)?;
             }
@@ -174,7 +182,13 @@ pub fn LockViewRecurse<'mcx>(
     };
     ancestor_views.push(reloid);
     {
-        let mut ctx = LockViewRecurseCtx { mcx, lockmode, nowait, check_as_user, ancestor_views };
+        let mut ctx = LockViewRecurseCtx {
+            mcx,
+            lockmode,
+            nowait,
+            check_as_user,
+            ancestor_views,
+        };
         ctx.query(viewquery)?;
     }
     ancestor_views.pop();

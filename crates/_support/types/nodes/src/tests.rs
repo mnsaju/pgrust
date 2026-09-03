@@ -144,8 +144,12 @@ fn node_lists_and_bitmapsets() {
     let mcx = ctx.mcx();
 
     let mut inner = NodeList::nil();
-    inner.lappend(mcx, Node::mk_integer(mcx, 1).unwrap()).unwrap();
-    inner.lappend(mcx, Node::mk_string(mcx, "two").unwrap()).unwrap();
+    inner
+        .lappend(mcx, Node::mk_integer(mcx, 1).unwrap())
+        .unwrap();
+    inner
+        .lappend(mcx, Node::mk_string(mcx, "two").unwrap())
+        .unwrap();
     let ln = Node::mk_list(mcx, inner).unwrap();
     assert_eq!(ln.node_tag(), NodeTag::T_List);
     let got = ln.as_list().unwrap();
@@ -320,32 +324,50 @@ fn bms_property_vs_reference() {
         let u = a.union(&b, mcx).unwrap();
         check_invariants(&u);
         let ru: BTreeSet<i32> = ra.union(&rb).copied().collect();
-        assert_eq!(u.iter().collect::<Vec<_>>(), ru.iter().copied().collect::<Vec<_>>());
+        assert_eq!(
+            u.iter().collect::<Vec<_>>(),
+            ru.iter().copied().collect::<Vec<_>>()
+        );
 
         let i = a.intersect(&b, mcx).unwrap();
         check_invariants(&i);
         let ri: BTreeSet<i32> = ra.intersection(&rb).copied().collect();
-        assert_eq!(i.iter().collect::<Vec<_>>(), ri.iter().copied().collect::<Vec<_>>());
+        assert_eq!(
+            i.iter().collect::<Vec<_>>(),
+            ri.iter().copied().collect::<Vec<_>>()
+        );
 
         let d = a.difference(&b, mcx).unwrap();
         check_invariants(&d);
         let rd: BTreeSet<i32> = ra.difference(&rb).copied().collect();
-        assert_eq!(d.iter().collect::<Vec<_>>(), rd.iter().copied().collect::<Vec<_>>());
+        assert_eq!(
+            d.iter().collect::<Vec<_>>(),
+            rd.iter().copied().collect::<Vec<_>>()
+        );
 
         let mut am = a.clone_in(mcx).unwrap();
         am.add_members(mcx, &b).unwrap();
         check_invariants(&am);
-        assert_eq!(am.iter().collect::<Vec<_>>(), ru.iter().copied().collect::<Vec<_>>());
+        assert_eq!(
+            am.iter().collect::<Vec<_>>(),
+            ru.iter().copied().collect::<Vec<_>>()
+        );
 
         let mut im = a.clone_in(mcx).unwrap();
         im.int_members(&b);
         check_invariants(&im);
-        assert_eq!(im.iter().collect::<Vec<_>>(), ri.iter().copied().collect::<Vec<_>>());
+        assert_eq!(
+            im.iter().collect::<Vec<_>>(),
+            ri.iter().copied().collect::<Vec<_>>()
+        );
 
         let mut dm = a.clone_in(mcx).unwrap();
         dm.del_members(&b);
         check_invariants(&dm);
-        assert_eq!(dm.iter().collect::<Vec<_>>(), rd.iter().copied().collect::<Vec<_>>());
+        assert_eq!(
+            dm.iter().collect::<Vec<_>>(),
+            rd.iter().copied().collect::<Vec<_>>()
+        );
 
         // next_member / prev_member walk from every start point.
         let mut fwd = Vec::new();
@@ -376,7 +398,10 @@ fn bms_property_vs_reference() {
             del.del_member(x);
             check_invariants(&del);
         }
-        assert_eq!(del.iter().collect::<Vec<_>>(), rd.iter().copied().collect::<Vec<_>>());
+        assert_eq!(
+            del.iter().collect::<Vec<_>>(),
+            rd.iter().copied().collect::<Vec<_>>()
+        );
 
         assert_eq!(a.compare(&b), ra.iter().rev().cmp(rb.iter().rev()));
 
@@ -387,7 +412,11 @@ fn bms_property_vs_reference() {
         }
         assert_eq!(
             a.get_singleton_member(),
-            if ra.len() == 1 { ra.first().copied() } else { None }
+            if ra.len() == 1 {
+                ra.first().copied()
+            } else {
+                None
+            }
         );
     }
 }
@@ -479,7 +508,10 @@ fn c_enum_values(header: &str, name: &str) -> Vec<(StdString, u32)> {
             continue;
         }
         let (name, val) = match entry.split_once('=') {
-            Some((n, v)) => (n.trim(), v.trim().parse::<u32>().expect("numeric enum value")),
+            Some((n, v)) => (
+                n.trim(),
+                v.trim().parse::<u32>().expect("numeric enum value"),
+            ),
             None => (entry, next),
         };
         next = val + 1;
@@ -508,113 +540,343 @@ fn enum_values_match_c_headers() {
     use crate::parsenodes::{QuerySource, RTEKind, SetOperation};
     use crate::primnodes::{CoercionForm, OverridingKind, ParamKind, VarReturningType};
     use crate::rawnodes::{A_Expr_Kind, JsonTableColumnType};
-    check_enum!(nodes_h, "CmdType", CmdType, [
-        CMD_UNKNOWN, CMD_SELECT, CMD_UPDATE, CMD_INSERT, CMD_DELETE, CMD_MERGE, CMD_UTILITY,
-        CMD_NOTHING,
-    ]);
-    check_enum!(nodes_h, "LimitOption", LimitOption, [
-        LIMIT_OPTION_COUNT, LIMIT_OPTION_WITH_TIES,
-    ]);
-    check_enum!(nodes_h, "JoinType", JoinType, [
-        JOIN_INNER, JOIN_LEFT, JOIN_FULL, JOIN_RIGHT, JOIN_SEMI, JOIN_ANTI, JOIN_RIGHT_SEMI,
-        JOIN_RIGHT_ANTI, JOIN_UNIQUE_OUTER, JOIN_UNIQUE_INNER,
-    ]);
-    check_enum!(parse_h, "QuerySource", QuerySource, [
-        QSRC_ORIGINAL, QSRC_PARSER, QSRC_INSTEAD_RULE, QSRC_QUAL_INSTEAD_RULE,
-        QSRC_NON_INSTEAD_RULE,
-    ]);
-    check_enum!(parse_h, "SetOperation", SetOperation, [
-        SETOP_NONE, SETOP_UNION, SETOP_INTERSECT, SETOP_EXCEPT,
-    ]);
-    check_enum!(parse_h, "RTEKind", RTEKind, [
-        RTE_RELATION, RTE_SUBQUERY, RTE_JOIN, RTE_FUNCTION, RTE_TABLEFUNC, RTE_VALUES, RTE_CTE,
-        RTE_NAMEDTUPLESTORE, RTE_RESULT, RTE_GROUP,
-    ]);
-    check_enum!(parse_h, "A_Expr_Kind", A_Expr_Kind, [
-        AEXPR_OP, AEXPR_OP_ANY, AEXPR_OP_ALL, AEXPR_DISTINCT, AEXPR_NOT_DISTINCT, AEXPR_NULLIF,
-        AEXPR_IN, AEXPR_LIKE, AEXPR_ILIKE, AEXPR_SIMILAR, AEXPR_BETWEEN, AEXPR_NOT_BETWEEN,
-        AEXPR_BETWEEN_SYM, AEXPR_NOT_BETWEEN_SYM,
-    ]);
-    check_enum!(prim_h, "OverridingKind", OverridingKind, [
-        OVERRIDING_NOT_SET, OVERRIDING_USER_VALUE, OVERRIDING_SYSTEM_VALUE,
-    ]);
-    check_enum!(prim_h, "CoercionForm", CoercionForm, [
-        COERCE_EXPLICIT_CALL, COERCE_EXPLICIT_CAST, COERCE_IMPLICIT_CAST, COERCE_SQL_SYNTAX,
-    ]);
+    check_enum!(
+        nodes_h,
+        "CmdType",
+        CmdType,
+        [
+            CMD_UNKNOWN,
+            CMD_SELECT,
+            CMD_UPDATE,
+            CMD_INSERT,
+            CMD_DELETE,
+            CMD_MERGE,
+            CMD_UTILITY,
+            CMD_NOTHING,
+        ]
+    );
+    check_enum!(
+        nodes_h,
+        "LimitOption",
+        LimitOption,
+        [LIMIT_OPTION_COUNT, LIMIT_OPTION_WITH_TIES,]
+    );
+    check_enum!(
+        nodes_h,
+        "JoinType",
+        JoinType,
+        [
+            JOIN_INNER,
+            JOIN_LEFT,
+            JOIN_FULL,
+            JOIN_RIGHT,
+            JOIN_SEMI,
+            JOIN_ANTI,
+            JOIN_RIGHT_SEMI,
+            JOIN_RIGHT_ANTI,
+            JOIN_UNIQUE_OUTER,
+            JOIN_UNIQUE_INNER,
+        ]
+    );
+    check_enum!(
+        parse_h,
+        "QuerySource",
+        QuerySource,
+        [
+            QSRC_ORIGINAL,
+            QSRC_PARSER,
+            QSRC_INSTEAD_RULE,
+            QSRC_QUAL_INSTEAD_RULE,
+            QSRC_NON_INSTEAD_RULE,
+        ]
+    );
+    check_enum!(
+        parse_h,
+        "SetOperation",
+        SetOperation,
+        [SETOP_NONE, SETOP_UNION, SETOP_INTERSECT, SETOP_EXCEPT,]
+    );
+    check_enum!(
+        parse_h,
+        "RTEKind",
+        RTEKind,
+        [
+            RTE_RELATION,
+            RTE_SUBQUERY,
+            RTE_JOIN,
+            RTE_FUNCTION,
+            RTE_TABLEFUNC,
+            RTE_VALUES,
+            RTE_CTE,
+            RTE_NAMEDTUPLESTORE,
+            RTE_RESULT,
+            RTE_GROUP,
+        ]
+    );
+    check_enum!(
+        parse_h,
+        "A_Expr_Kind",
+        A_Expr_Kind,
+        [
+            AEXPR_OP,
+            AEXPR_OP_ANY,
+            AEXPR_OP_ALL,
+            AEXPR_DISTINCT,
+            AEXPR_NOT_DISTINCT,
+            AEXPR_NULLIF,
+            AEXPR_IN,
+            AEXPR_LIKE,
+            AEXPR_ILIKE,
+            AEXPR_SIMILAR,
+            AEXPR_BETWEEN,
+            AEXPR_NOT_BETWEEN,
+            AEXPR_BETWEEN_SYM,
+            AEXPR_NOT_BETWEEN_SYM,
+        ]
+    );
+    check_enum!(
+        prim_h,
+        "OverridingKind",
+        OverridingKind,
+        [
+            OVERRIDING_NOT_SET,
+            OVERRIDING_USER_VALUE,
+            OVERRIDING_SYSTEM_VALUE,
+        ]
+    );
+    check_enum!(
+        prim_h,
+        "CoercionForm",
+        CoercionForm,
+        [
+            COERCE_EXPLICIT_CALL,
+            COERCE_EXPLICIT_CAST,
+            COERCE_IMPLICIT_CAST,
+            COERCE_SQL_SYNTAX,
+        ]
+    );
     use crate::primnodes::CoercionContext;
-    check_enum!(prim_h, "CoercionContext", CoercionContext, [
-        COERCION_IMPLICIT, COERCION_ASSIGNMENT, COERCION_PLPGSQL, COERCION_EXPLICIT,
-    ]);
-    check_enum!(prim_h, "ParamKind", ParamKind, [
-        PARAM_EXTERN, PARAM_EXEC, PARAM_SUBLINK, PARAM_MULTIEXPR,
-    ]);
-    check_enum!(prim_h, "VarReturningType", VarReturningType, [
-        VAR_RETURNING_DEFAULT, VAR_RETURNING_OLD, VAR_RETURNING_NEW,
-    ]);
+    check_enum!(
+        prim_h,
+        "CoercionContext",
+        CoercionContext,
+        [
+            COERCION_IMPLICIT,
+            COERCION_ASSIGNMENT,
+            COERCION_PLPGSQL,
+            COERCION_EXPLICIT,
+        ]
+    );
+    check_enum!(
+        prim_h,
+        "ParamKind",
+        ParamKind,
+        [PARAM_EXTERN, PARAM_EXEC, PARAM_SUBLINK, PARAM_MULTIEXPR,]
+    );
+    check_enum!(
+        prim_h,
+        "VarReturningType",
+        VarReturningType,
+        [VAR_RETURNING_DEFAULT, VAR_RETURNING_OLD, VAR_RETURNING_NEW,]
+    );
     use crate::primnodes::SubLinkType;
-    check_enum!(prim_h, "SubLinkType", SubLinkType, [
-        EXISTS_SUBLINK, ALL_SUBLINK, ANY_SUBLINK, ROWCOMPARE_SUBLINK, EXPR_SUBLINK,
-        MULTIEXPR_SUBLINK, ARRAY_SUBLINK, CTE_SUBLINK,
-    ]);
+    check_enum!(
+        prim_h,
+        "SubLinkType",
+        SubLinkType,
+        [
+            EXISTS_SUBLINK,
+            ALL_SUBLINK,
+            ANY_SUBLINK,
+            ROWCOMPARE_SUBLINK,
+            EXPR_SUBLINK,
+            MULTIEXPR_SUBLINK,
+            ARRAY_SUBLINK,
+            CTE_SUBLINK,
+        ]
+    );
     use crate::parsenodes::{DefElemAction, VariableSetKind};
-    check_enum!(parse_h, "VariableSetKind", VariableSetKind, [
-        VAR_SET_VALUE, VAR_SET_DEFAULT, VAR_SET_CURRENT, VAR_SET_MULTI, VAR_RESET, VAR_RESET_ALL,
-    ]);
-    check_enum!(parse_h, "DefElemAction", DefElemAction, [
-        DEFELEM_UNSPEC, DEFELEM_SET, DEFELEM_ADD, DEFELEM_DROP,
-    ]);
+    check_enum!(
+        parse_h,
+        "VariableSetKind",
+        VariableSetKind,
+        [
+            VAR_SET_VALUE,
+            VAR_SET_DEFAULT,
+            VAR_SET_CURRENT,
+            VAR_SET_MULTI,
+            VAR_RESET,
+            VAR_RESET_ALL,
+        ]
+    );
+    check_enum!(
+        parse_h,
+        "DefElemAction",
+        DefElemAction,
+        [DEFELEM_UNSPEC, DEFELEM_SET, DEFELEM_ADD, DEFELEM_DROP,]
+    );
     use crate::primnodes::{BoolExprType, NullTestType};
     use crate::rawnodes::{SortByDir, SortByNulls};
-    check_enum!(parse_h, "SortByDir", SortByDir, [
-        SORTBY_DEFAULT, SORTBY_ASC, SORTBY_DESC, SORTBY_USING,
-    ]);
-    check_enum!(parse_h, "SortByNulls", SortByNulls, [
-        SORTBY_NULLS_DEFAULT, SORTBY_NULLS_FIRST, SORTBY_NULLS_LAST,
-    ]);
-    check_enum!(prim_h, "BoolExprType", BoolExprType, [AND_EXPR, OR_EXPR, NOT_EXPR]);
+    check_enum!(
+        parse_h,
+        "SortByDir",
+        SortByDir,
+        [SORTBY_DEFAULT, SORTBY_ASC, SORTBY_DESC, SORTBY_USING,]
+    );
+    check_enum!(
+        parse_h,
+        "SortByNulls",
+        SortByNulls,
+        [SORTBY_NULLS_DEFAULT, SORTBY_NULLS_FIRST, SORTBY_NULLS_LAST,]
+    );
+    check_enum!(
+        prim_h,
+        "BoolExprType",
+        BoolExprType,
+        [AND_EXPR, OR_EXPR, NOT_EXPR]
+    );
     check_enum!(prim_h, "NullTestType", NullTestType, [IS_NULL, IS_NOT_NULL]);
     use crate::parsenodes::{DropBehavior, ObjectType};
-    check_enum!(parse_h, "ObjectType", ObjectType, [
-        OBJECT_ACCESS_METHOD, OBJECT_AGGREGATE, OBJECT_AMOP, OBJECT_AMPROC, OBJECT_ATTRIBUTE,
-        OBJECT_CAST, OBJECT_COLUMN, OBJECT_COLLATION, OBJECT_CONVERSION, OBJECT_DATABASE,
-        OBJECT_DEFAULT, OBJECT_DEFACL, OBJECT_DOMAIN, OBJECT_DOMCONSTRAINT, OBJECT_EVENT_TRIGGER,
-        OBJECT_EXTENSION, OBJECT_FDW, OBJECT_FOREIGN_SERVER, OBJECT_FOREIGN_TABLE,
-        OBJECT_FUNCTION, OBJECT_INDEX, OBJECT_LANGUAGE, OBJECT_LARGEOBJECT, OBJECT_MATVIEW,
-        OBJECT_OPCLASS, OBJECT_OPERATOR, OBJECT_OPFAMILY, OBJECT_PARAMETER_ACL, OBJECT_POLICY,
-        OBJECT_PROCEDURE, OBJECT_PUBLICATION, OBJECT_PUBLICATION_NAMESPACE,
-        OBJECT_PUBLICATION_REL, OBJECT_ROLE, OBJECT_ROUTINE, OBJECT_RULE, OBJECT_SCHEMA,
-        OBJECT_SEQUENCE, OBJECT_SUBSCRIPTION, OBJECT_STATISTIC_EXT, OBJECT_TABCONSTRAINT,
-        OBJECT_TABLE, OBJECT_TABLESPACE, OBJECT_TRANSFORM, OBJECT_TRIGGER,
-        OBJECT_TSCONFIGURATION, OBJECT_TSDICTIONARY, OBJECT_TSPARSER, OBJECT_TSTEMPLATE,
-        OBJECT_TYPE, OBJECT_USER_MAPPING, OBJECT_VIEW,
-    ]);
-    check_enum!(parse_h, "DropBehavior", DropBehavior, [DROP_RESTRICT, DROP_CASCADE]);
+    check_enum!(
+        parse_h,
+        "ObjectType",
+        ObjectType,
+        [
+            OBJECT_ACCESS_METHOD,
+            OBJECT_AGGREGATE,
+            OBJECT_AMOP,
+            OBJECT_AMPROC,
+            OBJECT_ATTRIBUTE,
+            OBJECT_CAST,
+            OBJECT_COLUMN,
+            OBJECT_COLLATION,
+            OBJECT_CONVERSION,
+            OBJECT_DATABASE,
+            OBJECT_DEFAULT,
+            OBJECT_DEFACL,
+            OBJECT_DOMAIN,
+            OBJECT_DOMCONSTRAINT,
+            OBJECT_EVENT_TRIGGER,
+            OBJECT_EXTENSION,
+            OBJECT_FDW,
+            OBJECT_FOREIGN_SERVER,
+            OBJECT_FOREIGN_TABLE,
+            OBJECT_FUNCTION,
+            OBJECT_INDEX,
+            OBJECT_LANGUAGE,
+            OBJECT_LARGEOBJECT,
+            OBJECT_MATVIEW,
+            OBJECT_OPCLASS,
+            OBJECT_OPERATOR,
+            OBJECT_OPFAMILY,
+            OBJECT_PARAMETER_ACL,
+            OBJECT_POLICY,
+            OBJECT_PROCEDURE,
+            OBJECT_PUBLICATION,
+            OBJECT_PUBLICATION_NAMESPACE,
+            OBJECT_PUBLICATION_REL,
+            OBJECT_ROLE,
+            OBJECT_ROUTINE,
+            OBJECT_RULE,
+            OBJECT_SCHEMA,
+            OBJECT_SEQUENCE,
+            OBJECT_SUBSCRIPTION,
+            OBJECT_STATISTIC_EXT,
+            OBJECT_TABCONSTRAINT,
+            OBJECT_TABLE,
+            OBJECT_TABLESPACE,
+            OBJECT_TRANSFORM,
+            OBJECT_TRIGGER,
+            OBJECT_TSCONFIGURATION,
+            OBJECT_TSDICTIONARY,
+            OBJECT_TSPARSER,
+            OBJECT_TSTEMPLATE,
+            OBJECT_TYPE,
+            OBJECT_USER_MAPPING,
+            OBJECT_VIEW,
+        ]
+    );
+    check_enum!(
+        parse_h,
+        "DropBehavior",
+        DropBehavior,
+        [DROP_RESTRICT, DROP_CASCADE]
+    );
     let lockopt_h = include_str!("../vendor/lockoptions.h");
     use crate::nodes_enums::{LockClauseStrength, LockWaitPolicy};
-    check_enum!(lockopt_h, "LockClauseStrength", LockClauseStrength, [
-        LCS_NONE, LCS_FORKEYSHARE, LCS_FORSHARE, LCS_FORNOKEYUPDATE, LCS_FORUPDATE,
-    ]);
-    check_enum!(lockopt_h, "LockWaitPolicy", LockWaitPolicy, [
-        LockWaitBlock, LockWaitSkip, LockWaitError,
-    ]);
+    check_enum!(
+        lockopt_h,
+        "LockClauseStrength",
+        LockClauseStrength,
+        [
+            LCS_NONE,
+            LCS_FORKEYSHARE,
+            LCS_FORSHARE,
+            LCS_FORNOKEYUPDATE,
+            LCS_FORUPDATE,
+        ]
+    );
+    check_enum!(
+        lockopt_h,
+        "LockWaitPolicy",
+        LockWaitPolicy,
+        [LockWaitBlock, LockWaitSkip, LockWaitError,]
+    );
     let plan_h = include_str!("../vendor/plannodes.h");
     use crate::plannodes::RowMarkType;
-    check_enum!(plan_h, "RowMarkType", RowMarkType, [
-        ROW_MARK_EXCLUSIVE, ROW_MARK_NOKEYEXCLUSIVE, ROW_MARK_SHARE, ROW_MARK_KEYSHARE,
-        ROW_MARK_REFERENCE, ROW_MARK_COPY,
-    ]);
+    check_enum!(
+        plan_h,
+        "RowMarkType",
+        RowMarkType,
+        [
+            ROW_MARK_EXCLUSIVE,
+            ROW_MARK_NOKEYEXCLUSIVE,
+            ROW_MARK_SHARE,
+            ROW_MARK_KEYSHARE,
+            ROW_MARK_REFERENCE,
+            ROW_MARK_COPY,
+        ]
+    );
     use crate::primnodes::{TableFuncType, XmlExprOp, XmlOptionType};
-    check_enum!(prim_h, "XmlExprOp", XmlExprOp, [
-        IS_XMLCONCAT, IS_XMLELEMENT, IS_XMLFOREST, IS_XMLPARSE, IS_XMLPI, IS_XMLROOT,
-        IS_XMLSERIALIZE, IS_DOCUMENT,
-    ]);
-    check_enum!(prim_h, "XmlOptionType", XmlOptionType, [
-        XMLOPTION_DOCUMENT, XMLOPTION_CONTENT,
-    ]);
-    check_enum!(prim_h, "TableFuncType", TableFuncType, [TFT_XMLTABLE, TFT_JSON_TABLE]);
-    check_enum!(parse_h, "JsonTableColumnType", JsonTableColumnType, [
-        JTC_FOR_ORDINALITY, JTC_REGULAR, JTC_EXISTS, JTC_FORMATTED, JTC_NESTED,
-    ]);
+    check_enum!(
+        prim_h,
+        "XmlExprOp",
+        XmlExprOp,
+        [
+            IS_XMLCONCAT,
+            IS_XMLELEMENT,
+            IS_XMLFOREST,
+            IS_XMLPARSE,
+            IS_XMLPI,
+            IS_XMLROOT,
+            IS_XMLSERIALIZE,
+            IS_DOCUMENT,
+        ]
+    );
+    check_enum!(
+        prim_h,
+        "XmlOptionType",
+        XmlOptionType,
+        [XMLOPTION_DOCUMENT, XMLOPTION_CONTENT,]
+    );
+    check_enum!(
+        prim_h,
+        "TableFuncType",
+        TableFuncType,
+        [TFT_XMLTABLE, TFT_JSON_TABLE]
+    );
+    check_enum!(
+        parse_h,
+        "JsonTableColumnType",
+        JsonTableColumnType,
+        [
+            JTC_FOR_ORDINALITY,
+            JTC_REGULAR,
+            JTC_EXISTS,
+            JTC_FORMATTED,
+            JTC_NESTED,
+        ]
+    );
 }
 
 #[test]
@@ -624,19 +886,45 @@ fn xml_node_field_order_matches_c() {
 
     assert_eq!(
         c_struct_fields(parse_h, "RangeTableFunc"),
-        ["lateral", "docexpr", "rowexpr", "namespaces", "columns", "alias", "location"]
+        [
+            "lateral",
+            "docexpr",
+            "rowexpr",
+            "namespaces",
+            "columns",
+            "alias",
+            "location"
+        ]
     );
     let crate::rawnodes::RangeTableFunc {
-        lateral: _, docexpr: _, rowexpr: _, namespaces: _, columns: _, alias: _, location: _,
+        lateral: _,
+        docexpr: _,
+        rowexpr: _,
+        namespaces: _,
+        columns: _,
+        alias: _,
+        location: _,
     } = crate::rawnodes::RangeTableFunc::default();
 
     assert_eq!(
         c_struct_fields(parse_h, "RangeTableFuncCol"),
-        ["colname", "typeName", "for_ordinality", "is_not_null", "colexpr", "coldefexpr",
-         "location"]
+        [
+            "colname",
+            "typeName",
+            "for_ordinality",
+            "is_not_null",
+            "colexpr",
+            "coldefexpr",
+            "location"
+        ]
     );
     let crate::rawnodes::RangeTableFuncCol {
-        colname: _, typeName: _, for_ordinality: _, is_not_null: _, colexpr: _, coldefexpr: _,
+        colname: _,
+        typeName: _,
+        for_ordinality: _,
+        is_not_null: _,
+        colexpr: _,
+        coldefexpr: _,
         location: _,
     } = crate::rawnodes::RangeTableFuncCol::default();
 
@@ -645,7 +933,11 @@ fn xml_node_field_order_matches_c() {
         ["xmloption", "expr", "typeName", "indent", "location"]
     );
     let crate::rawnodes::XmlSerialize {
-        xmloption: _, expr: _, typeName: _, indent: _, location: _,
+        xmloption: _,
+        expr: _,
+        typeName: _,
+        indent: _,
+        location: _,
     } = crate::rawnodes::XmlSerialize::default();
 
     // The harness drops C fields literally named "type" (the NodeTag skip), so
@@ -654,24 +946,71 @@ fn xml_node_field_order_matches_c() {
     assert_eq!(xe.remove(0), "xpr");
     assert_eq!(
         xe,
-        ["op", "name", "named_args", "arg_names", "args", "xmloption", "indent", "typmod",
-         "location"]
+        [
+            "op",
+            "name",
+            "named_args",
+            "arg_names",
+            "args",
+            "xmloption",
+            "indent",
+            "typmod",
+            "location"
+        ]
     );
     let crate::primnodes::XmlExpr {
-        op: _, name: _, named_args: _, arg_names: _, args: _, xmloption: _, indent: _,
-        r#type: _, typmod: _, location: _,
+        op: _,
+        name: _,
+        named_args: _,
+        arg_names: _,
+        args: _,
+        xmloption: _,
+        indent: _,
+        r#type: _,
+        typmod: _,
+        location: _,
     } = crate::primnodes::XmlExpr::default();
 
     assert_eq!(
         c_struct_fields(prim_h, "TableFunc"),
-        ["functype", "ns_uris", "ns_names", "docexpr", "rowexpr", "colnames", "coltypes",
-         "coltypmods", "colcollations", "colexprs", "coldefexprs", "colvalexprs",
-         "passingvalexprs", "notnulls", "plan", "ordinalitycol", "location"]
+        [
+            "functype",
+            "ns_uris",
+            "ns_names",
+            "docexpr",
+            "rowexpr",
+            "colnames",
+            "coltypes",
+            "coltypmods",
+            "colcollations",
+            "colexprs",
+            "coldefexprs",
+            "colvalexprs",
+            "passingvalexprs",
+            "notnulls",
+            "plan",
+            "ordinalitycol",
+            "location"
+        ]
     );
     let crate::primnodes::TableFunc {
-        functype: _, ns_uris: _, ns_names: _, docexpr: _, rowexpr: _, colnames: _, coltypes: _,
-        coltypmods: _, colcollations: _, colexprs: _, coldefexprs: _, colvalexprs: _,
-        passingvalexprs: _, notnulls: _, plan: _, ordinalitycol: _, location: _,
+        functype: _,
+        ns_uris: _,
+        ns_names: _,
+        docexpr: _,
+        rowexpr: _,
+        colnames: _,
+        coltypes: _,
+        coltypmods: _,
+        colcollations: _,
+        colexprs: _,
+        coldefexprs: _,
+        colvalexprs: _,
+        passingvalexprs: _,
+        notnulls: _,
+        plan: _,
+        ordinalitycol: _,
+        location: _,
     } = crate::primnodes::TableFunc::default();
 }
 
@@ -684,31 +1023,56 @@ fn rowmark_node_field_order_matches_c() {
         c_struct_fields(parse_h, "LockingClause"),
         ["lockedRels", "strength", "waitPolicy"]
     );
-    let crate::rawnodes::LockingClause { lockedRels: _, strength: _, waitPolicy: _ } =
-        crate::rawnodes::LockingClause::default();
+    let crate::rawnodes::LockingClause {
+        lockedRels: _,
+        strength: _,
+        waitPolicy: _,
+    } = crate::rawnodes::LockingClause::default();
 
     assert_eq!(
         c_struct_fields(parse_h, "RowMarkClause"),
         ["rti", "strength", "waitPolicy", "pushedDown"]
     );
-    let crate::parsenodes::RowMarkClause { rti: _, strength: _, waitPolicy: _, pushedDown: _ } =
-        crate::parsenodes::RowMarkClause::default();
+    let crate::parsenodes::RowMarkClause {
+        rti: _,
+        strength: _,
+        waitPolicy: _,
+        pushedDown: _,
+    } = crate::parsenodes::RowMarkClause::default();
 
     assert_eq!(
         c_struct_fields(plan_h, "PlanRowMark"),
         [
-            "rti", "prti", "rowmarkId", "markType", "allMarkTypes", "strength", "waitPolicy",
+            "rti",
+            "prti",
+            "rowmarkId",
+            "markType",
+            "allMarkTypes",
+            "strength",
+            "waitPolicy",
             "isParent",
         ]
     );
     let crate::plannodes::PlanRowMark {
-        rti: _, prti: _, rowmarkId: _, markType: _, allMarkTypes: _, strength: _, waitPolicy: _,
+        rti: _,
+        prti: _,
+        rowmarkId: _,
+        markType: _,
+        allMarkTypes: _,
+        strength: _,
+        waitPolicy: _,
         isParent: _,
     } = crate::plannodes::PlanRowMark::default();
 
-    assert_eq!(c_struct_fields(plan_h, "LockRows"), ["plan", "rowMarks", "epqParam"]);
-    let crate::plannodes::LockRows { plan: _, rowMarks: _, epqParam: _ } =
-        crate::plannodes::LockRows::default();
+    assert_eq!(
+        c_struct_fields(plan_h, "LockRows"),
+        ["plan", "rowMarks", "epqParam"]
+    );
+    let crate::plannodes::LockRows {
+        plan: _,
+        rowMarks: _,
+        epqParam: _,
+    } = crate::plannodes::LockRows::default();
 }
 
 #[test]
@@ -720,69 +1084,148 @@ fn raw_expr_node_field_order_matches_c() {
         c_struct_fields(parse_h, "SortBy"),
         ["node", "sortby_dir", "sortby_nulls", "useOp", "location"]
     );
-    let crate::rawnodes::SortBy { node: _, sortby_dir: _, sortby_nulls: _, useOp: _, location: _ } =
-        crate::rawnodes::SortBy::default();
+    let crate::rawnodes::SortBy {
+        node: _,
+        sortby_dir: _,
+        sortby_nulls: _,
+        useOp: _,
+        location: _,
+    } = crate::rawnodes::SortBy::default();
 
     assert_eq!(
         c_struct_fields(parse_h, "FuncCall"),
         [
-            "funcname", "args", "agg_order", "agg_filter", "over", "agg_within_group",
-            "agg_star", "agg_distinct", "func_variadic", "funcformat", "location",
+            "funcname",
+            "args",
+            "agg_order",
+            "agg_filter",
+            "over",
+            "agg_within_group",
+            "agg_star",
+            "agg_distinct",
+            "func_variadic",
+            "funcformat",
+            "location",
         ]
     );
     let crate::rawnodes::FuncCall {
-        funcname: _, args: _, agg_order: _, agg_filter: _, over: _, agg_within_group: _,
-        agg_star: _, agg_distinct: _, func_variadic: _, funcformat: _, location: _,
+        funcname: _,
+        args: _,
+        agg_order: _,
+        agg_filter: _,
+        over: _,
+        agg_within_group: _,
+        agg_star: _,
+        agg_distinct: _,
+        func_variadic: _,
+        funcformat: _,
+        location: _,
     } = crate::rawnodes::FuncCall::default();
 
     assert_eq!(
         c_struct_fields(parse_h, "TypeName"),
         [
-            "names", "typeOid", "setof", "pct_type", "typmods", "typemod", "arrayBounds",
+            "names",
+            "typeOid",
+            "setof",
+            "pct_type",
+            "typmods",
+            "typemod",
+            "arrayBounds",
             "location",
         ]
     );
     let crate::rawnodes::TypeName {
-        names: _, typeOid: _, setof: _, pct_type: _, typmods: _, typemod: _, arrayBounds: _,
+        names: _,
+        typeOid: _,
+        setof: _,
+        pct_type: _,
+        typmods: _,
+        typemod: _,
+        arrayBounds: _,
         location: _,
     } = crate::rawnodes::TypeName::default();
 
-    assert_eq!(c_struct_fields(parse_h, "TypeCast"), ["arg", "typeName", "location"]);
-    let crate::rawnodes::TypeCast { arg: _, typeName: _, location: _ } =
-        crate::rawnodes::TypeCast::default();
+    assert_eq!(
+        c_struct_fields(parse_h, "TypeCast"),
+        ["arg", "typeName", "location"]
+    );
+    let crate::rawnodes::TypeCast {
+        arg: _,
+        typeName: _,
+        location: _,
+    } = crate::rawnodes::TypeCast::default();
 
     assert_eq!(
         c_struct_fields(parse_h, "DeleteStmt"),
-        ["relation", "usingClause", "whereClause", "returningClause", "withClause"]
+        [
+            "relation",
+            "usingClause",
+            "whereClause",
+            "returningClause",
+            "withClause"
+        ]
     );
     let crate::rawnodes::DeleteStmt {
-        relation: _, usingClause: _, whereClause: _, returningClause: _, withClause: _,
+        relation: _,
+        usingClause: _,
+        whereClause: _,
+        returningClause: _,
+        withClause: _,
     } = crate::rawnodes::DeleteStmt::default();
 
     assert_eq!(
         c_struct_fields(parse_h, "UpdateStmt"),
-        ["relation", "targetList", "whereClause", "fromClause", "returningClause", "withClause"]
+        [
+            "relation",
+            "targetList",
+            "whereClause",
+            "fromClause",
+            "returningClause",
+            "withClause"
+        ]
     );
     let crate::rawnodes::UpdateStmt {
-        relation: _, targetList: _, whereClause: _, fromClause: _, returningClause: _,
+        relation: _,
+        targetList: _,
+        whereClause: _,
+        fromClause: _,
+        returningClause: _,
         withClause: _,
     } = crate::rawnodes::UpdateStmt::default();
 
     let mut be = c_struct_fields(prim_h, "BoolExpr");
     assert_eq!(be.remove(0), "xpr");
     assert_eq!(be, ["boolop", "args", "location"]);
-    let crate::primnodes::BoolExpr { boolop: _, args: _, location: _ } =
-        crate::primnodes::BoolExpr::default();
+    let crate::primnodes::BoolExpr {
+        boolop: _,
+        args: _,
+        location: _,
+    } = crate::primnodes::BoolExpr::default();
 
     let mut nt = c_struct_fields(prim_h, "NullTest");
     assert_eq!(nt.remove(0), "xpr");
     assert_eq!(nt, ["arg", "nulltesttype", "argisrow", "location"]);
-    let crate::primnodes::NullTest { arg: _, nulltesttype: _, argisrow: _, location: _ } =
-        crate::primnodes::NullTest::default();
+    let crate::primnodes::NullTest {
+        arg: _,
+        nulltesttype: _,
+        argisrow: _,
+        location: _,
+    } = crate::primnodes::NullTest::default();
 
     let mut ce = c_struct_fields(prim_h, "CaseExpr");
     assert_eq!(ce.remove(0), "xpr");
-    assert_eq!(ce, ["casetype", "casecollid", "arg", "args", "defresult", "location"]);
+    assert_eq!(
+        ce,
+        [
+            "casetype",
+            "casecollid",
+            "arg",
+            "args",
+            "defresult",
+            "location"
+        ]
+    );
     let crate::primnodes::CaseExpr {
         casetype: _,
         casecollid: _,
@@ -795,14 +1238,20 @@ fn raw_expr_node_field_order_matches_c() {
     let mut ct = c_struct_fields(prim_h, "CaseTestExpr");
     assert_eq!(ct.remove(0), "xpr");
     assert_eq!(ct, ["typeId", "typeMod", "collation"]);
-    let crate::primnodes::CaseTestExpr { typeId: _, typeMod: _, collation: _ } =
-        crate::primnodes::CaseTestExpr::default();
+    let crate::primnodes::CaseTestExpr {
+        typeId: _,
+        typeMod: _,
+        collation: _,
+    } = crate::primnodes::CaseTestExpr::default();
 
     let mut cw = c_struct_fields(prim_h, "CaseWhen");
     assert_eq!(cw.remove(0), "xpr");
     assert_eq!(cw, ["expr", "result", "location"]);
-    let crate::primnodes::CaseWhen { expr: _, result: _, location: _ } =
-        crate::primnodes::CaseWhen::default();
+    let crate::primnodes::CaseWhen {
+        expr: _,
+        result: _,
+        location: _,
+    } = crate::primnodes::CaseWhen::default();
 
     let mut co = c_struct_fields(prim_h, "CoalesceExpr");
     assert_eq!(co.remove(0), "xpr");
@@ -816,7 +1265,17 @@ fn raw_expr_node_field_order_matches_c() {
 
     let mut mm = c_struct_fields(prim_h, "MinMaxExpr");
     assert_eq!(mm.remove(0), "xpr");
-    assert_eq!(mm, ["minmaxtype", "minmaxcollid", "inputcollid", "op", "args", "location"]);
+    assert_eq!(
+        mm,
+        [
+            "minmaxtype",
+            "minmaxcollid",
+            "inputcollid",
+            "op",
+            "args",
+            "location"
+        ]
+    );
     let crate::primnodes::MinMaxExpr {
         minmaxtype: _,
         minmaxcollid: _,
@@ -832,17 +1291,29 @@ fn raw_expr_node_field_order_matches_c() {
     assert_eq!(na.remove(0), "xpr");
     assert_eq!(na, ["arg", "name", "argnumber", "location"]);
 
-    assert_eq!(c_struct_fields(parse_h, "RangeSubselect"), ["lateral", "subquery", "alias"]);
-    let crate::rawnodes::RangeSubselect { lateral: _, subquery: _, alias: _ } =
-        crate::rawnodes::RangeSubselect::default();
+    assert_eq!(
+        c_struct_fields(parse_h, "RangeSubselect"),
+        ["lateral", "subquery", "alias"]
+    );
+    let crate::rawnodes::RangeSubselect {
+        lateral: _,
+        subquery: _,
+        alias: _,
+    } = crate::rawnodes::RangeSubselect::default();
 }
 
 #[test]
 fn call_stmt_field_order_matches_c() {
     let parse_h = include_str!("../vendor/parsenodes.h");
-    assert_eq!(c_struct_fields(parse_h, "CallStmt"), ["funccall", "funcexpr", "outargs"]);
-    let crate::rawnodes::CallStmt { funccall: _, funcexpr: _, outargs: _ } =
-        crate::rawnodes::CallStmt::default();
+    assert_eq!(
+        c_struct_fields(parse_h, "CallStmt"),
+        ["funccall", "funcexpr", "outargs"]
+    );
+    let crate::rawnodes::CallStmt {
+        funccall: _,
+        funcexpr: _,
+        outargs: _,
+    } = crate::rawnodes::CallStmt::default();
 
     assert_eq!(c_struct_fields(parse_h, "CallContext"), ["atomic"]);
 }
@@ -852,10 +1323,22 @@ fn variable_set_stmt_field_order_matches_c() {
     let parse_h = include_str!("../vendor/parsenodes.h");
     assert_eq!(
         c_struct_fields(parse_h, "VariableSetStmt"),
-        ["kind", "name", "args", "jumble_args", "is_local", "location"]
+        [
+            "kind",
+            "name",
+            "args",
+            "jumble_args",
+            "is_local",
+            "location"
+        ]
     );
     let crate::parsenodes::VariableSetStmt {
-        kind: _, name: _, args: _, jumble_args: _, is_local: _, location: _,
+        kind: _,
+        name: _,
+        args: _,
+        jumble_args: _,
+        is_local: _,
+        location: _,
     } = crate::parsenodes::VariableSetStmt::default();
 
     assert_eq!(c_struct_fields(parse_h, "VariableShowStmt"), ["name"]);
@@ -870,49 +1353,96 @@ fn variable_set_stmt_field_order_matches_c() {
         ["defnamespace", "defname", "arg", "defaction", "location"]
     );
     let crate::parsenodes::DefElem {
-        defnamespace: _, defname: _, arg: _, defaction: _, location: _,
+        defnamespace: _,
+        defname: _,
+        arg: _,
+        defaction: _,
+        location: _,
     } = crate::parsenodes::DefElem::default();
 
     assert_eq!(
         c_struct_fields(parse_h, "CopyStmt"),
         [
-            "relation", "query", "attlist", "is_from", "is_program", "filename", "options",
+            "relation",
+            "query",
+            "attlist",
+            "is_from",
+            "is_program",
+            "filename",
+            "options",
             "whereClause",
         ]
     );
     let crate::parsenodes::CopyStmt {
-        relation: _, query: _, attlist: _, is_from: _, is_program: _, filename: _, options: _,
+        relation: _,
+        query: _,
+        attlist: _,
+        is_from: _,
+        is_program: _,
+        filename: _,
+        options: _,
         whereClause: _,
     } = crate::parsenodes::CopyStmt::default();
 
-    assert_eq!(c_struct_fields(parse_h, "ExplainStmt"), ["query", "options"]);
-    let crate::parsenodes::ExplainStmt { query: _, options: _ } =
-        crate::parsenodes::ExplainStmt::default();
+    assert_eq!(
+        c_struct_fields(parse_h, "ExplainStmt"),
+        ["query", "options"]
+    );
+    let crate::parsenodes::ExplainStmt {
+        query: _,
+        options: _,
+    } = crate::parsenodes::ExplainStmt::default();
 
-    assert_eq!(c_struct_fields(parse_h, "VacuumStmt"), ["options", "rels", "is_vacuumcmd"]);
-    let crate::parsenodes::VacuumStmt { options: _, rels: _, is_vacuumcmd: _ } =
-        crate::parsenodes::VacuumStmt::default();
+    assert_eq!(
+        c_struct_fields(parse_h, "VacuumStmt"),
+        ["options", "rels", "is_vacuumcmd"]
+    );
+    let crate::parsenodes::VacuumStmt {
+        options: _,
+        rels: _,
+        is_vacuumcmd: _,
+    } = crate::parsenodes::VacuumStmt::default();
 
-    assert_eq!(c_struct_fields(parse_h, "VacuumRelation"), ["relation", "oid", "va_cols"]);
-    let crate::parsenodes::VacuumRelation { relation: _, oid: _, va_cols: _ } =
-        crate::parsenodes::VacuumRelation::default();
+    assert_eq!(
+        c_struct_fields(parse_h, "VacuumRelation"),
+        ["relation", "oid", "va_cols"]
+    );
+    let crate::parsenodes::VacuumRelation {
+        relation: _,
+        oid: _,
+        va_cols: _,
+    } = crate::parsenodes::VacuumRelation::default();
 
     assert_eq!(
         c_struct_fields(parse_h, "FetchStmt"),
         ["direction", "howMany", "portalname", "ismove"]
     );
-    let crate::parsenodes::FetchStmt { direction, howMany, portalname: _, ismove: _ } =
-        crate::parsenodes::FetchStmt::default();
+    let crate::parsenodes::FetchStmt {
+        direction,
+        howMany,
+        portalname: _,
+        ismove: _,
+    } = crate::parsenodes::FetchStmt::default();
     assert_eq!(direction, crate::parsenodes::FetchDirection::FETCH_FORWARD);
     assert_eq!(howMany, 0);
     assert_eq!(crate::parsenodes::FETCH_ALL, i64::MAX);
 
     assert_eq!(
         c_struct_fields(parse_h, "DropStmt"),
-        ["objects", "removeType", "behavior", "missing_ok", "concurrent"]
+        [
+            "objects",
+            "removeType",
+            "behavior",
+            "missing_ok",
+            "concurrent"
+        ]
     );
     let crate::parsenodes::DropStmt {
-        objects: _, removeType: _, behavior: _, missing_ok: _, concurrent: _,
+        objects: _,
+        removeType: _,
+        behavior: _,
+        missing_ok: _,
+        concurrent: _,
     } = crate::parsenodes::DropStmt::default();
 }
 
@@ -921,29 +1451,102 @@ fn query_field_order_matches_c() {
     let parse_h = include_str!("../vendor/parsenodes.h");
     // Declaration order of crate::parsenodes::Query, C spellings.
     let rust_order = [
-        "commandType", "querySource", "queryId", "canSetTag", "utilityStmt", "resultRelation",
-        "hasAggs", "hasWindowFuncs", "hasTargetSRFs", "hasSubLinks", "hasDistinctOn",
-        "hasRecursive", "hasModifyingCTE", "hasForUpdate", "hasRowSecurity", "hasGroupRTE",
-        "isReturn", "cteList", "rtable", "rteperminfos", "jointree", "mergeActionList",
-        "mergeTargetRelation", "mergeJoinCondition", "targetList", "override", "onConflict",
-        "returningOldAlias", "returningNewAlias", "returningList", "groupClause", "groupDistinct",
-        "groupingSets", "havingQual", "windowClause", "distinctClause", "sortClause",
-        "limitOffset", "limitCount", "limitOption", "rowMarks", "setOperations",
-        "constraintDeps", "withCheckOptions", "stmt_location", "stmt_len",
+        "commandType",
+        "querySource",
+        "queryId",
+        "canSetTag",
+        "utilityStmt",
+        "resultRelation",
+        "hasAggs",
+        "hasWindowFuncs",
+        "hasTargetSRFs",
+        "hasSubLinks",
+        "hasDistinctOn",
+        "hasRecursive",
+        "hasModifyingCTE",
+        "hasForUpdate",
+        "hasRowSecurity",
+        "hasGroupRTE",
+        "isReturn",
+        "cteList",
+        "rtable",
+        "rteperminfos",
+        "jointree",
+        "mergeActionList",
+        "mergeTargetRelation",
+        "mergeJoinCondition",
+        "targetList",
+        "override",
+        "onConflict",
+        "returningOldAlias",
+        "returningNewAlias",
+        "returningList",
+        "groupClause",
+        "groupDistinct",
+        "groupingSets",
+        "havingQual",
+        "windowClause",
+        "distinctClause",
+        "sortClause",
+        "limitOffset",
+        "limitCount",
+        "limitOption",
+        "rowMarks",
+        "setOperations",
+        "constraintDeps",
+        "withCheckOptions",
+        "stmt_location",
+        "stmt_len",
     ];
     assert_eq!(c_struct_fields(parse_h, "Query"), rust_order);
     // Compile-time completeness: every C field exists on the Rust struct.
     let crate::parsenodes::Query {
-        commandType: _, querySource: _, queryId: _, canSetTag: _, utilityStmt: _,
-        resultRelation: _, hasAggs: _, hasWindowFuncs: _, hasTargetSRFs: _, hasSubLinks: _,
-        hasDistinctOn: _, hasRecursive: _, hasModifyingCTE: _, hasForUpdate: _,
-        hasRowSecurity: _, hasGroupRTE: _, isReturn: _, cteList: _, rtable: _, rteperminfos: _,
-        jointree: _, mergeActionList: _, mergeTargetRelation: _, mergeJoinCondition: _,
-        targetList: _, r#override: _, onConflict: _, returningOldAlias: _, returningNewAlias: _,
-        returningList: _, groupClause: _, groupDistinct: _, groupingSets: _, havingQual: _,
-        windowClause: _, distinctClause: _, sortClause: _, limitOffset: _, limitCount: _,
-        limitOption: _, rowMarks: _, setOperations: _, constraintDeps: _, withCheckOptions: _,
-        stmt_location: _, stmt_len: _,
+        commandType: _,
+        querySource: _,
+        queryId: _,
+        canSetTag: _,
+        utilityStmt: _,
+        resultRelation: _,
+        hasAggs: _,
+        hasWindowFuncs: _,
+        hasTargetSRFs: _,
+        hasSubLinks: _,
+        hasDistinctOn: _,
+        hasRecursive: _,
+        hasModifyingCTE: _,
+        hasForUpdate: _,
+        hasRowSecurity: _,
+        hasGroupRTE: _,
+        isReturn: _,
+        cteList: _,
+        rtable: _,
+        rteperminfos: _,
+        jointree: _,
+        mergeActionList: _,
+        mergeTargetRelation: _,
+        mergeJoinCondition: _,
+        targetList: _,
+        r#override: _,
+        onConflict: _,
+        returningOldAlias: _,
+        returningNewAlias: _,
+        returningList: _,
+        groupClause: _,
+        groupDistinct: _,
+        groupingSets: _,
+        havingQual: _,
+        windowClause: _,
+        distinctClause: _,
+        sortClause: _,
+        limitOffset: _,
+        limitCount: _,
+        limitOption: _,
+        rowMarks: _,
+        setOperations: _,
+        constraintDeps: _,
+        withCheckOptions: _,
+        stmt_location: _,
+        stmt_len: _,
     } = crate::parsenodes::Query::default();
 }
 
@@ -951,8 +1554,14 @@ fn query_field_order_matches_c() {
 fn const_field_order_and_size_match_c() {
     let prim_h = include_str!("../vendor/primnodes.h");
     let rust_order = [
-        "consttype", "consttypmod", "constcollid", "constlen", "constvalue", "constisnull",
-        "constbyval", "location",
+        "consttype",
+        "consttypmod",
+        "constcollid",
+        "constlen",
+        "constvalue",
+        "constisnull",
+        "constbyval",
+        "location",
     ];
     let mut c_fields = c_struct_fields(prim_h, "Const");
     assert_eq!(c_fields.remove(0), "xpr");
@@ -966,19 +1575,62 @@ fn const_field_order_and_size_match_c() {
 fn rte_and_selectstmt_field_order_match_c() {
     let parse_h = include_str!("../vendor/parsenodes.h");
     let rte_order = [
-        "alias", "eref", "rtekind", "relid", "inh", "relkind", "rellockmode", "perminfoindex",
-        "tablesample", "subquery", "security_barrier", "jointype", "joinmergedcols",
-        "joinaliasvars", "joinleftcols", "joinrightcols", "join_using_alias", "functions",
-        "funcordinality", "tablefunc", "values_lists", "ctename", "ctelevelsup",
-        "self_reference", "coltypes", "coltypmods", "colcollations", "enrname", "enrtuples",
-        "groupexprs", "lateral", "inFromCl", "securityQuals",
+        "alias",
+        "eref",
+        "rtekind",
+        "relid",
+        "inh",
+        "relkind",
+        "rellockmode",
+        "perminfoindex",
+        "tablesample",
+        "subquery",
+        "security_barrier",
+        "jointype",
+        "joinmergedcols",
+        "joinaliasvars",
+        "joinleftcols",
+        "joinrightcols",
+        "join_using_alias",
+        "functions",
+        "funcordinality",
+        "tablefunc",
+        "values_lists",
+        "ctename",
+        "ctelevelsup",
+        "self_reference",
+        "coltypes",
+        "coltypmods",
+        "colcollations",
+        "enrname",
+        "enrtuples",
+        "groupexprs",
+        "lateral",
+        "inFromCl",
+        "securityQuals",
     ];
     assert_eq!(c_struct_fields(parse_h, "RangeTblEntry"), rte_order);
     let select_order = [
-        "distinctClause", "intoClause", "targetList", "fromClause", "whereClause",
-        "groupClause", "groupDistinct", "havingClause", "windowClause", "valuesLists",
-        "sortClause", "limitOffset", "limitCount", "limitOption", "lockingClause",
-        "withClause", "op", "all", "larg", "rarg",
+        "distinctClause",
+        "intoClause",
+        "targetList",
+        "fromClause",
+        "whereClause",
+        "groupClause",
+        "groupDistinct",
+        "havingClause",
+        "windowClause",
+        "valuesLists",
+        "sortClause",
+        "limitOffset",
+        "limitCount",
+        "limitOption",
+        "lockingClause",
+        "withClause",
+        "op",
+        "all",
+        "larg",
+        "rarg",
     ];
     assert_eq!(c_struct_fields(parse_h, "SelectStmt"), select_order);
 }
@@ -987,38 +1639,108 @@ fn rte_and_selectstmt_field_order_match_c() {
 fn plannedstmt_plan_result_field_order_match_c() {
     let plan_h = include_str!("../vendor/plannodes.h");
     let stmt_order = [
-        "commandType", "queryId", "planId", "hasReturning", "hasModifyingCTE", "canSetTag",
-        "transientPlan", "dependsOnRole", "parallelModeNeeded", "jitFlags", "planTree",
-        "partPruneInfos", "rtable", "unprunableRelids", "permInfos", "resultRelations",
-        "appendRelations", "subplans", "rewindPlanIDs", "rowMarks", "relationOids", "invalItems",
-        "paramExecTypes", "utilityStmt", "stmt_location", "stmt_len",
+        "commandType",
+        "queryId",
+        "planId",
+        "hasReturning",
+        "hasModifyingCTE",
+        "canSetTag",
+        "transientPlan",
+        "dependsOnRole",
+        "parallelModeNeeded",
+        "jitFlags",
+        "planTree",
+        "partPruneInfos",
+        "rtable",
+        "unprunableRelids",
+        "permInfos",
+        "resultRelations",
+        "appendRelations",
+        "subplans",
+        "rewindPlanIDs",
+        "rowMarks",
+        "relationOids",
+        "invalItems",
+        "paramExecTypes",
+        "utilityStmt",
+        "stmt_location",
+        "stmt_len",
     ];
     assert_eq!(c_struct_fields(plan_h, "PlannedStmt"), stmt_order);
     let crate::plannodes::PlannedStmt {
-        commandType: _, queryId: _, planId: _, hasReturning: _, hasModifyingCTE: _, canSetTag: _,
-        transientPlan: _, dependsOnRole: _, parallelModeNeeded: _, jitFlags: _, planTree: _,
-        partPruneInfos: _, rtable: _, unprunableRelids: _, permInfos: _, resultRelations: _,
-        appendRelations: _, subplans: _, rewindPlanIDs: _, rowMarks: _, relationOids: _,
-        invalItems: _, paramExecTypes: _, utilityStmt: _, stmt_location: _, stmt_len: _,
+        commandType: _,
+        queryId: _,
+        planId: _,
+        hasReturning: _,
+        hasModifyingCTE: _,
+        canSetTag: _,
+        transientPlan: _,
+        dependsOnRole: _,
+        parallelModeNeeded: _,
+        jitFlags: _,
+        planTree: _,
+        partPruneInfos: _,
+        rtable: _,
+        unprunableRelids: _,
+        permInfos: _,
+        resultRelations: _,
+        appendRelations: _,
+        subplans: _,
+        rewindPlanIDs: _,
+        rowMarks: _,
+        relationOids: _,
+        invalItems: _,
+        paramExecTypes: _,
+        utilityStmt: _,
+        stmt_location: _,
+        stmt_len: _,
     } = crate::plannodes::PlannedStmt::default();
 
     let plan_order = [
-        "disabled_nodes", "startup_cost", "total_cost", "plan_rows", "plan_width",
-        "parallel_aware", "parallel_safe", "async_capable", "plan_node_id", "targetlist", "qual",
-        "lefttree", "righttree", "initPlan", "extParam", "allParam",
+        "disabled_nodes",
+        "startup_cost",
+        "total_cost",
+        "plan_rows",
+        "plan_width",
+        "parallel_aware",
+        "parallel_safe",
+        "async_capable",
+        "plan_node_id",
+        "targetlist",
+        "qual",
+        "lefttree",
+        "righttree",
+        "initPlan",
+        "extParam",
+        "allParam",
     ];
     assert_eq!(c_struct_fields(plan_h, "Plan"), plan_order);
     let crate::plannodes::Plan {
-        disabled_nodes: _, startup_cost: _, total_cost: _, plan_rows: _, plan_width: _,
-        parallel_aware: _, parallel_safe: _, async_capable: _, plan_node_id: _, targetlist: _,
-        qual: _, lefttree: _, righttree: _, initPlan: _, extParam: _, allParam: _,
+        disabled_nodes: _,
+        startup_cost: _,
+        total_cost: _,
+        plan_rows: _,
+        plan_width: _,
+        parallel_aware: _,
+        parallel_safe: _,
+        async_capable: _,
+        plan_node_id: _,
+        targetlist: _,
+        qual: _,
+        lefttree: _,
+        righttree: _,
+        initPlan: _,
+        extParam: _,
+        allParam: _,
     } = crate::plannodes::Plan::default();
 
     let mut result_fields = c_struct_fields(plan_h, "Result");
     assert_eq!(result_fields.remove(0), "plan");
     assert_eq!(result_fields, ["resconstantqual"]);
-    let crate::plannodes::Result { plan: _, resconstantqual: _ } =
-        crate::plannodes::Result::default();
+    let crate::plannodes::Result {
+        plan: _,
+        resconstantqual: _,
+    } = crate::plannodes::Result::default();
 }
 
 #[test]
@@ -1108,34 +1830,60 @@ fn select1_plan_shape_and_setrefs_mutation() {
 #[test]
 fn parse_node_tag_round_trips() {
     use crate::parsenodes::{Query, RTEPermissionInfo, RangeTblEntry};
-    use crate::primnodes::{
-        Alias, FromExpr, FuncExpr, OpExpr, Param, RangeVar, Var,
-    };
+    use crate::primnodes::{Alias, FromExpr, FuncExpr, OpExpr, Param, RangeVar, Var};
     use crate::rawnodes::{SelectStmt, ValUnion};
     let ctx = MemoryContext::new_bump("t");
     let mcx = ctx.mcx();
 
     let cases: Vec<(Node, NodeTag)> = std::vec![
-        (Node::mk_raw_stmt(mcx, None, 0, 0).unwrap(), NodeTag::T_RawStmt),
-        (Node::build::<SelectStmt>(mcx).unwrap().seal(), NodeTag::T_SelectStmt),
-        (Node::mk_res_target(mcx, None, NodeList::nil(), None, -1).unwrap(), NodeTag::T_ResTarget),
         (
-            Node::mk_a_expr(mcx, crate::rawnodes::A_Expr_Kind::AEXPR_OP, NodeList::nil(), None, None, -1)
-                .unwrap(),
+            Node::mk_raw_stmt(mcx, None, 0, 0).unwrap(),
+            NodeTag::T_RawStmt
+        ),
+        (
+            Node::build::<SelectStmt>(mcx).unwrap().seal(),
+            NodeTag::T_SelectStmt
+        ),
+        (
+            Node::mk_res_target(mcx, None, NodeList::nil(), None, -1).unwrap(),
+            NodeTag::T_ResTarget
+        ),
+        (
+            Node::mk_a_expr(
+                mcx,
+                crate::rawnodes::A_Expr_Kind::AEXPR_OP,
+                NodeList::nil(),
+                None,
+                None,
+                -1
+            )
+            .unwrap(),
             NodeTag::T_A_Expr,
         ),
         (
             Node::mk_a_const(mcx, Some(ValUnion::Integer(crate::Integer { ival: 1 })), 7).unwrap(),
             NodeTag::T_A_Const,
         ),
-        (Node::mk_column_ref(mcx, NodeList::nil(), -1).unwrap(), NodeTag::T_ColumnRef),
+        (
+            Node::mk_column_ref(mcx, NodeList::nil(), -1).unwrap(),
+            NodeTag::T_ColumnRef
+        ),
         (Node::mk_param_ref(mcx, 1, -1).unwrap(), NodeTag::T_ParamRef),
         (Node::mk_a_star(mcx).unwrap(), NodeTag::T_A_Star),
         (Node::build::<Query>(mcx).unwrap().seal(), NodeTag::T_Query),
-        (Node::build::<RangeTblEntry>(mcx).unwrap().seal(), NodeTag::T_RangeTblEntry),
-        (Node::build::<RTEPermissionInfo>(mcx).unwrap().seal(), NodeTag::T_RTEPermissionInfo),
+        (
+            Node::build::<RangeTblEntry>(mcx).unwrap().seal(),
+            NodeTag::T_RangeTblEntry
+        ),
+        (
+            Node::build::<RTEPermissionInfo>(mcx).unwrap().seal(),
+            NodeTag::T_RTEPermissionInfo
+        ),
         (Node::build::<Alias>(mcx).unwrap().seal(), NodeTag::T_Alias),
-        (Node::build::<RangeVar>(mcx).unwrap().seal(), NodeTag::T_RangeVar),
+        (
+            Node::build::<RangeVar>(mcx).unwrap().seal(),
+            NodeTag::T_RangeVar
+        ),
         (Node::build::<Var>(mcx).unwrap().seal(), NodeTag::T_Var),
         (
             Node::mk_const(mcx, 23, -1, 0, 4, datum::Datum::from_i32(1), false, true).unwrap(),
@@ -1146,10 +1894,22 @@ fn parse_node_tag_round_trips() {
             Node::mk_target_entry(mcx, Node::mk_a_star(mcx).unwrap(), 1, None, false).unwrap(),
             NodeTag::T_TargetEntry,
         ),
-        (Node::mk_from_expr(mcx, NodeList::nil(), None).unwrap(), NodeTag::T_FromExpr),
-        (Node::mk_range_tbl_ref(mcx, 1).unwrap(), NodeTag::T_RangeTblRef),
-        (Node::build::<OpExpr>(mcx).unwrap().seal(), NodeTag::T_OpExpr),
-        (Node::build::<FuncExpr>(mcx).unwrap().seal(), NodeTag::T_FuncExpr),
+        (
+            Node::mk_from_expr(mcx, NodeList::nil(), None).unwrap(),
+            NodeTag::T_FromExpr
+        ),
+        (
+            Node::mk_range_tbl_ref(mcx, 1).unwrap(),
+            NodeTag::T_RangeTblRef
+        ),
+        (
+            Node::build::<OpExpr>(mcx).unwrap().seal(),
+            NodeTag::T_OpExpr
+        ),
+        (
+            Node::build::<FuncExpr>(mcx).unwrap().seal(),
+            NodeTag::T_FuncExpr
+        ),
     ];
     for (node, tag) in &cases {
         assert_eq!(node.node_tag(), *tag);
@@ -1180,7 +1940,13 @@ fn select1_parse_and_analyze_shape() {
     select.targetList = NodeList::make1(mcx, res_target).unwrap();
     let raw = Node::mk_raw_stmt(mcx, Some(select.seal()), 0, 0).unwrap();
 
-    let stmt = raw.as_raw_stmt().unwrap().stmt.unwrap().as_select_stmt().unwrap();
+    let stmt = raw
+        .as_raw_stmt()
+        .unwrap()
+        .stmt
+        .unwrap()
+        .as_select_stmt()
+        .unwrap();
     assert_eq!(stmt.targetList.len(), 1);
     assert!(stmt.whereClause.is_none());
     assert!(stmt.fromClause.is_nil());
@@ -1188,7 +1954,10 @@ fn select1_parse_and_analyze_shape() {
     assert!(rt.name.is_none());
     let val = rt.val.unwrap().as_a_const().unwrap();
     assert!(!val.isnull());
-    assert!(matches!(val.val, Some(ValUnion::Integer(crate::Integer { ival: 1 }))));
+    assert!(matches!(
+        val.val,
+        Some(ValUnion::Integer(crate::Integer { ival: 1 }))
+    ));
     assert_eq!(val.location, 7);
 
     // analyze.c output: Query { CMD_SELECT, tlist [TargetEntry(Const 1)],
@@ -1200,7 +1969,10 @@ fn select1_parse_and_analyze_shape() {
     query.canSetTag = true;
     query.targetList = NodeList::make1(mcx, tle).unwrap();
     query.jointree = Some(
-        Node::mk_from_expr(mcx, NodeList::nil(), None).unwrap().as_from_expr().unwrap(),
+        Node::mk_from_expr(mcx, NodeList::nil(), None)
+            .unwrap()
+            .as_from_expr()
+            .unwrap(),
     );
     // In-place mutation before seal (C: parse analysis fixups).
     query.stmt_location = 0;
@@ -1219,7 +1991,10 @@ fn select1_parse_and_analyze_shape() {
     assert_eq!(tle.resname, Some("?column?"));
     assert!(!tle.resjunk);
     let c = tle.expr.as_const().unwrap();
-    assert_eq!((c.consttype, c.constlen, c.constbyval, c.constisnull), (23, 4, true, false));
+    assert_eq!(
+        (c.consttype, c.constlen, c.constbyval, c.constisnull),
+        (23, 4, true, false)
+    );
     assert_eq!(c.constvalue.as_i32(), 1);
     assert_eq!(c.location, -1);
     assert_eq!(q.stmt_len, 8);
@@ -1231,8 +2006,15 @@ fn join_expr_field_order_matches_c() {
     assert_eq!(
         c_struct_fields(prim_h, "JoinExpr"),
         [
-            "jointype", "isNatural", "larg", "rarg", "usingClause", "join_using_alias",
-            "quals", "alias", "rtindex",
+            "jointype",
+            "isNatural",
+            "larg",
+            "rarg",
+            "usingClause",
+            "join_using_alias",
+            "quals",
+            "alias",
+            "rtindex",
         ]
     );
 }
@@ -1244,8 +2026,16 @@ fn scalar_array_op_expr_field_order_matches_c() {
     assert_eq!(c_fields.remove(0), "xpr");
     assert_eq!(
         c_fields,
-        ["opno", "opfuncid", "hashfuncid", "negfuncid", "useOr", "inputcollid", "args",
-         "location"]
+        [
+            "opno",
+            "opfuncid",
+            "hashfuncid",
+            "negfuncid",
+            "useOr",
+            "inputcollid",
+            "args",
+            "location"
+        ]
     );
 }
 
@@ -1256,16 +2046,30 @@ fn array_expr_field_order_matches_c() {
     assert_eq!(c_fields.remove(0), "xpr");
     assert_eq!(
         c_fields,
-        ["array_typeid", "array_collid", "element_typeid", "elements", "multidims",
-         "list_start", "list_end", "location"]
+        [
+            "array_typeid",
+            "array_collid",
+            "element_typeid",
+            "elements",
+            "multidims",
+            "list_start",
+            "list_end",
+            "location"
+        ]
     );
 }
 
 #[test]
 fn sublink_field_order_matches_c() {
     let prim_h = include_str!("../vendor/primnodes.h");
-    let rust_order =
-        ["subLinkType", "subLinkId", "testexpr", "operName", "subselect", "location"];
+    let rust_order = [
+        "subLinkType",
+        "subLinkId",
+        "testexpr",
+        "operName",
+        "subselect",
+        "location",
+    ];
     let mut c_fields = c_struct_fields(prim_h, "SubLink");
     assert_eq!(c_fields.remove(0), "xpr");
     assert_eq!(c_fields, rust_order);
@@ -1275,17 +2079,43 @@ fn sublink_field_order_matches_c() {
 fn subplan_field_order_matches_c() {
     let prim_h = include_str!("../vendor/primnodes.h");
     let rust_order = [
-        "subLinkType", "testexpr", "paramIds", "plan_id", "plan_name", "firstColType",
-        "firstColTypmod", "firstColCollation", "useHashTable", "unknownEqFalse",
-        "parallel_safe", "setParam", "parParam", "args", "startup_cost", "per_call_cost",
+        "subLinkType",
+        "testexpr",
+        "paramIds",
+        "plan_id",
+        "plan_name",
+        "firstColType",
+        "firstColTypmod",
+        "firstColCollation",
+        "useHashTable",
+        "unknownEqFalse",
+        "parallel_safe",
+        "setParam",
+        "parParam",
+        "args",
+        "startup_cost",
+        "per_call_cost",
     ];
     let mut c_fields = c_struct_fields(prim_h, "SubPlan");
     assert_eq!(c_fields.remove(0), "xpr");
     assert_eq!(c_fields, rust_order);
     let crate::primnodes::SubPlan {
-        subLinkType: _, testexpr: _, paramIds: _, plan_id: _, plan_name: _, firstColType: _,
-        firstColTypmod: _, firstColCollation: _, useHashTable: _, unknownEqFalse: _,
-        parallel_safe: _, setParam: _, parParam: _, args: _, startup_cost: _, per_call_cost: _,
+        subLinkType: _,
+        testexpr: _,
+        paramIds: _,
+        plan_id: _,
+        plan_name: _,
+        firstColType: _,
+        firstColTypmod: _,
+        firstColCollation: _,
+        useHashTable: _,
+        unknownEqFalse: _,
+        parallel_safe: _,
+        setParam: _,
+        parParam: _,
+        args: _,
+        startup_cost: _,
+        per_call_cost: _,
     } = crate::primnodes::SubPlan::default();
 }
 
@@ -1293,19 +2123,51 @@ fn subplan_field_order_matches_c() {
 fn aggref_field_order_matches_c() {
     let prim_h = include_str!("../vendor/primnodes.h");
     let rust_order = [
-        "aggfnoid", "aggtype", "aggcollid", "inputcollid", "aggtranstype", "aggargtypes",
-        "aggdirectargs", "args", "aggorder", "aggdistinct", "aggfilter", "aggstar",
-        "aggvariadic", "aggkind", "aggpresorted", "agglevelsup", "aggsplit", "aggno",
-        "aggtransno", "location",
+        "aggfnoid",
+        "aggtype",
+        "aggcollid",
+        "inputcollid",
+        "aggtranstype",
+        "aggargtypes",
+        "aggdirectargs",
+        "args",
+        "aggorder",
+        "aggdistinct",
+        "aggfilter",
+        "aggstar",
+        "aggvariadic",
+        "aggkind",
+        "aggpresorted",
+        "agglevelsup",
+        "aggsplit",
+        "aggno",
+        "aggtransno",
+        "location",
     ];
     let mut c_fields = c_struct_fields(prim_h, "Aggref");
     assert_eq!(c_fields.remove(0), "xpr");
     assert_eq!(c_fields, rust_order);
     let crate::primnodes::Aggref {
-        aggfnoid: _, aggtype: _, aggcollid: _, inputcollid: _, aggtranstype: _, aggargtypes: _,
-        aggdirectargs: _, args: _, aggorder: _, aggdistinct: _, aggfilter: _, aggstar: _,
-        aggvariadic: _, aggkind: _, aggpresorted: _, agglevelsup: _, aggsplit: _, aggno: _,
-        aggtransno: _, location: _,
+        aggfnoid: _,
+        aggtype: _,
+        aggcollid: _,
+        inputcollid: _,
+        aggtranstype: _,
+        aggargtypes: _,
+        aggdirectargs: _,
+        args: _,
+        aggorder: _,
+        aggdistinct: _,
+        aggfilter: _,
+        aggstar: _,
+        aggvariadic: _,
+        aggkind: _,
+        aggpresorted: _,
+        agglevelsup: _,
+        aggsplit: _,
+        aggno: _,
+        aggtransno: _,
+        location: _,
     } = crate::primnodes::Aggref::default();
 }
 
@@ -1313,15 +2175,33 @@ fn aggref_field_order_matches_c() {
 fn agg_plan_field_order_matches_c() {
     let plan_h = include_str!("../vendor/plannodes.h");
     let rust_order = [
-        "aggstrategy", "aggsplit", "numCols", "grpColIdx", "grpOperators", "grpCollations",
-        "numGroups", "transitionSpace", "aggParams", "groupingSets", "chain",
+        "aggstrategy",
+        "aggsplit",
+        "numCols",
+        "grpColIdx",
+        "grpOperators",
+        "grpCollations",
+        "numGroups",
+        "transitionSpace",
+        "aggParams",
+        "groupingSets",
+        "chain",
     ];
     let mut c_fields = c_struct_fields(plan_h, "Agg");
     assert_eq!(c_fields.remove(0), "plan");
     assert_eq!(c_fields, rust_order);
     let crate::plannodes::Agg {
-        plan: _, aggstrategy: _, aggsplit: _, numCols: _, grpColIdx: _, grpOperators: _,
-        grpCollations: _, numGroups: _, transitionSpace: _, aggParams: _, groupingSets: _,
+        plan: _,
+        aggstrategy: _,
+        aggsplit: _,
+        numCols: _,
+        grpColIdx: _,
+        grpOperators: _,
+        grpCollations: _,
+        numGroups: _,
+        transitionSpace: _,
+        aggParams: _,
+        groupingSets: _,
         chain: _,
     } = crate::plannodes::Agg::default();
 }
@@ -1331,10 +2211,22 @@ fn sort_group_clause_field_order_matches_c() {
     let parse_h = include_str!("../vendor/parsenodes.h");
     assert_eq!(
         c_struct_fields(parse_h, "SortGroupClause"),
-        ["tleSortGroupRef", "eqop", "sortop", "reverse_sort", "nulls_first", "hashable"]
+        [
+            "tleSortGroupRef",
+            "eqop",
+            "sortop",
+            "reverse_sort",
+            "nulls_first",
+            "hashable"
+        ]
     );
     let crate::parsenodes::SortGroupClause {
-        tleSortGroupRef: _, eqop: _, sortop: _, reverse_sort: _, nulls_first: _, hashable: _,
+        tleSortGroupRef: _,
+        eqop: _,
+        sortop: _,
+        reverse_sort: _,
+        nulls_first: _,
+        hashable: _,
     } = crate::parsenodes::SortGroupClause::default();
 }
 
@@ -1358,13 +2250,29 @@ fn equal_ignores_location_and_jumble_fields() {
     let ctx = MemoryContext::new_bump("t");
     let mcx = ctx.mcx();
     // Var: location + varnosyn/varattnosyn are equal_ignore in C.
-    assert!(crate::equal(mk_var_at(mcx, 1, 2, 10), mk_var_at(mcx, 1, 2, 99)));
-    assert!(!crate::equal(mk_var_at(mcx, 1, 2, 10), mk_var_at(mcx, 1, 3, 10)));
+    assert!(crate::equal(
+        mk_var_at(mcx, 1, 2, 10),
+        mk_var_at(mcx, 1, 2, 99)
+    ));
+    assert!(!crate::equal(
+        mk_var_at(mcx, 1, 2, 10),
+        mk_var_at(mcx, 1, 3, 10)
+    ));
     let p1 = Node::mk_param_ref(mcx, 4, 5).unwrap();
     let p2 = Node::mk_param_ref(mcx, 4, 50).unwrap();
     assert!(crate::equal(p1, p2));
-    let c1 = Node::mk_a_const(mcx, Some(crate::ValUnion::Integer(crate::Integer { ival: 3 })), 1).unwrap();
-    let c2 = Node::mk_a_const(mcx, Some(crate::ValUnion::Integer(crate::Integer { ival: 3 })), 2).unwrap();
+    let c1 = Node::mk_a_const(
+        mcx,
+        Some(crate::ValUnion::Integer(crate::Integer { ival: 3 })),
+        1,
+    )
+    .unwrap();
+    let c2 = Node::mk_a_const(
+        mcx,
+        Some(crate::ValUnion::Integer(crate::Integer { ival: 3 })),
+        2,
+    )
+    .unwrap();
     assert!(crate::equal(c1, c2));
     let f = Node::mk_a_const(
         mcx,
@@ -1380,9 +2288,8 @@ fn equal_ignores_location_and_jumble_fields() {
 fn equal_const_datum_semantics() {
     let ctx = MemoryContext::new_bump("t");
     let mcx = ctx.mcx();
-    let int4 = |v: i32| {
-        Node::mk_const(mcx, 23, -1, 0, 4, datum::Datum::from_i32(v), false, true).unwrap()
-    };
+    let int4 =
+        |v: i32| Node::mk_const(mcx, 23, -1, 0, 4, datum::Datum::from_i32(v), false, true).unwrap();
     assert!(crate::equal(int4(7), int4(7)));
     assert!(!crate::equal(int4(7), int4(8)));
     // All NULLs of the same type are equal regardless of the value word.
@@ -1420,7 +2327,14 @@ fn equal_opexpr_zero_opfuncid_matches_any() {
         let args = NodeList::make2(mcx, mk_var_at(mcx, 1, 1, 0), mk_var_at(mcx, 1, 2, 0)).unwrap();
         Node::mk(
             mcx,
-            crate::OpExpr { opno: 96, opfuncid, opresulttype: 16, args, location, ..Default::default() },
+            crate::OpExpr {
+                opno: 96,
+                opfuncid,
+                opresulttype: 16,
+                args,
+                location,
+                ..Default::default()
+            },
         )
         .unwrap()
     };
@@ -1438,7 +2352,13 @@ fn equal_recurses_lists_and_ignores_coercionform() {
         let args = NodeList::make1(mcx, mk_var_at(mcx, 1, arg_attno, 0)).unwrap();
         Node::mk(
             mcx,
-            crate::FuncExpr { funcid: 481, funcresulttype: 20, funcformat: fmt, args, ..Default::default() },
+            crate::FuncExpr {
+                funcid: 481,
+                funcresulttype: 20,
+                funcformat: fmt,
+                args,
+                ..Default::default()
+            },
         )
         .unwrap()
     };
@@ -1460,7 +2380,10 @@ fn equal_recurses_lists_and_ignores_coercionform() {
     assert!(crate::equal(l1, l2));
     assert!(!crate::equal(l1, l3));
     assert!(!crate::equal(l1, l4));
-    assert!(!crate::equal(l1, mk_var_at(mcx, 1, 1, 0)), "tag mismatch is unequal");
+    assert!(
+        !crate::equal(l1, mk_var_at(mcx, 1, 1, 0)),
+        "tag mismatch is unequal"
+    );
     let il1 = Node::mk_int_list(mcx, IntList::make2(mcx, 1, 2).unwrap()).unwrap();
     let il2 = Node::mk_int_list(mcx, IntList::make2(mcx, 1, 2).unwrap()).unwrap();
     let il3 = Node::mk_int_list(mcx, IntList::make2(mcx, 1, 3).unwrap()).unwrap();
@@ -1548,7 +2471,10 @@ fn bms_add_range() {
             rset.insert(x);
         }
         check_invariants(&b);
-        assert_eq!(b.iter().collect::<Vec<_>>(), rset.iter().copied().collect::<Vec<_>>());
+        assert_eq!(
+            b.iter().collect::<Vec<_>>(),
+            rset.iter().copied().collect::<Vec<_>>()
+        );
     }
 }
 
@@ -1656,51 +2582,106 @@ fn tsearch_lane_stmt_field_order_matches_c() {
     let parse_h = include_str!("../vendor/parsenodes.h");
     assert_eq!(
         c_struct_fields(parse_h, "DefineStmt"),
-        ["kind", "oldstyle", "defnames", "args", "definition", "if_not_exists", "replace"]
+        [
+            "kind",
+            "oldstyle",
+            "defnames",
+            "args",
+            "definition",
+            "if_not_exists",
+            "replace"
+        ]
     );
     let crate::parsenodes::DefineStmt {
-        kind: _, oldstyle: _, defnames: _, args: _, definition: _, if_not_exists: _, replace: _,
+        kind: _,
+        oldstyle: _,
+        defnames: _,
+        args: _,
+        definition: _,
+        if_not_exists: _,
+        replace: _,
     } = crate::parsenodes::DefineStmt::default();
 
-    assert_eq!(c_struct_fields(parse_h, "CompositeTypeStmt"), ["typevar", "coldeflist"]);
-    let crate::rawnodes::CompositeTypeStmt { typevar: _, coldeflist: _ } =
-        crate::rawnodes::CompositeTypeStmt::default();
+    assert_eq!(
+        c_struct_fields(parse_h, "CompositeTypeStmt"),
+        ["typevar", "coldeflist"]
+    );
+    let crate::rawnodes::CompositeTypeStmt {
+        typevar: _,
+        coldeflist: _,
+    } = crate::rawnodes::CompositeTypeStmt::default();
 
-    assert_eq!(c_struct_fields(parse_h, "AlterTSDictionaryStmt"), ["dictname", "options"]);
-    let crate::rawnodes::AlterTSDictionaryStmt { dictname: _, options: _ } =
-        crate::rawnodes::AlterTSDictionaryStmt::default();
+    assert_eq!(
+        c_struct_fields(parse_h, "AlterTSDictionaryStmt"),
+        ["dictname", "options"]
+    );
+    let crate::rawnodes::AlterTSDictionaryStmt {
+        dictname: _,
+        options: _,
+    } = crate::rawnodes::AlterTSDictionaryStmt::default();
 
     assert_eq!(
         c_struct_fields(parse_h, "AlterTSConfigurationStmt"),
-        ["kind", "cfgname", "tokentype", "dicts", "override", "replace", "missing_ok"]
+        [
+            "kind",
+            "cfgname",
+            "tokentype",
+            "dicts",
+            "override",
+            "replace",
+            "missing_ok"
+        ]
     );
     let crate::rawnodes::AlterTSConfigurationStmt {
-        kind: _, cfgname: _, tokentype: _, dicts: _, r#override: _, replace: _, missing_ok: _,
+        kind: _,
+        cfgname: _,
+        tokentype: _,
+        dicts: _,
+        r#override: _,
+        replace: _,
+        missing_ok: _,
     } = crate::rawnodes::AlterTSConfigurationStmt::default();
 
     assert_eq!(
         c_struct_fields(parse_h, "A_ArrayExpr"),
         ["elements", "list_start", "list_end", "location"]
     );
-    let crate::rawnodes::A_ArrayExpr { elements: _, list_start: _, list_end: _, location: _ } =
-        crate::rawnodes::A_ArrayExpr::default();
+    let crate::rawnodes::A_ArrayExpr {
+        elements: _,
+        list_start: _,
+        list_end: _,
+        location: _,
+    } = crate::rawnodes::A_ArrayExpr::default();
 
-    assert_eq!(crate::rawnodes::AlterTSConfigType::ALTER_TSCONFIG_DROP_MAPPING as u32, 4);
+    assert_eq!(
+        crate::rawnodes::AlterTSConfigType::ALTER_TSCONFIG_DROP_MAPPING as u32,
+        4
+    );
 }
 
 #[test]
 fn definestmt_tail_field_order_matches_c() {
     let parse_h = include_str!("../vendor/parsenodes.h");
-    assert_eq!(c_struct_fields(parse_h, "CreateAmStmt"), ["amname", "handler_name", "amtype"]);
-    let crate::parsenodes::CreateAmStmt { amname: _, handler_name: _, amtype: _ } =
-        crate::parsenodes::CreateAmStmt::default();
+    assert_eq!(
+        c_struct_fields(parse_h, "CreateAmStmt"),
+        ["amname", "handler_name", "amtype"]
+    );
+    let crate::parsenodes::CreateAmStmt {
+        amname: _,
+        handler_name: _,
+        amtype: _,
+    } = crate::parsenodes::CreateAmStmt::default();
 
     assert_eq!(
         c_struct_fields(parse_h, "CreateCastStmt"),
         ["sourcetype", "targettype", "func", "context", "inout"]
     );
     let crate::parsenodes::CreateCastStmt {
-        sourcetype: _, targettype: _, func: _, context: _, inout: _,
+        sourcetype: _,
+        targettype: _,
+        func: _,
+        context: _,
+        inout: _,
     } = crate::parsenodes::CreateCastStmt::default();
 
     assert_eq!(
@@ -1708,7 +2689,11 @@ fn definestmt_tail_field_order_matches_c() {
         ["replace", "type_name", "lang", "fromsql", "tosql"]
     );
     let crate::parsenodes::CreateTransformStmt {
-        replace: _, type_name: _, lang: _, fromsql: _, tosql: _,
+        replace: _,
+        type_name: _,
+        lang: _,
+        fromsql: _,
+        tosql: _,
     } = crate::parsenodes::CreateTransformStmt::default();
 }
 

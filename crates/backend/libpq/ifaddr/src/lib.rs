@@ -159,7 +159,11 @@ where
     F: FnMut(IpAddr, IpAddr),
 {
     let mask = pg_sockaddr_cidr_mask(Some("8"), AddressFamily::Inet).unwrap();
-    run_ifaddr_callback(&mut callback, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), Some(mask));
+    run_ifaddr_callback(
+        &mut callback,
+        IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+        Some(mask),
+    );
     let mask6 = pg_sockaddr_cidr_mask(Some("128"), AddressFamily::Inet6).unwrap();
     run_ifaddr_callback(&mut callback, IpAddr::V6(Ipv6Addr::LOCALHOST), Some(mask6));
     Ok(())
@@ -291,7 +295,9 @@ mod tests {
     fn foreach_ifaddr_reports_loopback_and_sane_masks() {
         let mut seen: Vec<(IpAddr, IpAddr)> = Vec::new();
         pg_foreach_ifaddr(|addr, mask| seen.push((addr, mask))).unwrap();
-        assert!(seen.iter().any(|(a, _)| *a == IpAddr::V4(Ipv4Addr::LOCALHOST)));
+        assert!(seen
+            .iter()
+            .any(|(a, _)| *a == IpAddr::V4(Ipv4Addr::LOCALHOST)));
         for (addr, mask) in &seen {
             assert_eq!(addr.is_ipv4(), mask.is_ipv4());
             match mask {

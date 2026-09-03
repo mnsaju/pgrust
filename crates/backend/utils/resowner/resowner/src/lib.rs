@@ -254,7 +254,7 @@ fn with_arena<R>(f: impl FnOnce(&mut Arena) -> R) -> R {
         };
         // SAFETY: one backend = one thread (TLS), and the single-entry
         // invariant above excludes aliasing &mut.
-        f(unsafe { &mut **cell.get() })
+        f(unsafe { &mut *cell.get() })
     })
 }
 
@@ -317,8 +317,11 @@ fn err_not_owned(kind: &'static ResourceOwnerDesc, value: Datum, owner: &str) ->
     )))
 }
 
+// Trap for not-yet-ported resowner release callbacks; kept ready for the
+// next resource-kind wiring even though nothing currently calls it.
 #[cold]
 #[inline(never)]
+#[allow(dead_code)]
 fn unported(what: &str) -> ! {
     panic!("unported callee reached from resowner.c: {what}")
 }
@@ -431,7 +434,11 @@ fn resource_owner_release_all(
             debug_assert!(d.releasing);
             debug_assert!(d.sorted);
             let in_hash = d.nhash != 0;
-            let mut nitems = if in_hash { d.nhash as usize } else { d.narr as usize };
+            let mut nitems = if in_hash {
+                d.nhash as usize
+            } else {
+                d.narr as usize
+            };
             let mut n = 0;
             while nitems > 0 && n < CHUNK {
                 let elem = if in_hash {
@@ -609,7 +616,7 @@ pub fn ResourceOwnerRelease(
 fn reassign_or_release_owner_locks(owner: ResourceOwner, is_commit: bool) -> PgResult<()> {
     let cached = with_arena(|a| {
         let d = a.data(owner);
-        (d.nlocks <= MAX_RESOWNER_LOCKS).then(|| (d.locks, d.nlocks as usize))
+        (d.nlocks <= MAX_RESOWNER_LOCKS).then_some((d.locks, d.nlocks as usize))
     });
     let locallocks = cached.as_ref().map(|(locks, n)| &locks[..*n]);
     if is_commit {
@@ -663,11 +670,7 @@ fn resource_owner_release_internal(
             return None;
         }
         let d = a.data_mut(owner);
-        if d.firstchild.is_null()
-            && d.narr == 0
-            && d.nhash == 0
-            && d.aio_handles.is_empty()
-        {
+        if d.firstchild.is_null() && d.narr == 0 && d.nhash == 0 && d.aio_handles.is_empty() {
             // The phase bookkeeping the slow path would have done (sorting
             // zero items is a flag store).
             d.releasing = true;

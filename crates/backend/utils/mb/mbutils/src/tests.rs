@@ -25,7 +25,9 @@ fn sql_ascii_client_is_identity() {
     InitializeClientEncoding().unwrap();
     SetClientEncoding(PG_SQL_ASCII).unwrap();
     assert!(!server_to_client_conversion_needed());
-    assert!(pg_server_to_client(ctx.mcx(), b"\xff\xfe raw").unwrap().is_none());
+    assert!(pg_server_to_client(ctx.mcx(), b"\xff\xfe raw")
+        .unwrap()
+        .is_none());
     assert_eq!(ctx.used(), 0);
 }
 
@@ -257,7 +259,9 @@ fn any_to_server_validates_even_without_conversion() {
     SetDatabaseEncoding(PG_UTF8).unwrap();
     InitializeClientEncoding().unwrap();
     let ctx = MemoryContext::new("test");
-    assert!(pg_any_to_server(ctx.mcx(), b"ok", PG_UTF8).unwrap().is_none());
+    assert!(pg_any_to_server(ctx.mcx(), b"ok", PG_UTF8)
+        .unwrap()
+        .is_none());
     assert!(pg_any_to_server(ctx.mcx(), b"\xff", PG_UTF8).is_err());
     assert!(pg_any_to_server(ctx.mcx(), b"\xff", PG_SQL_ASCII).is_err());
 }
@@ -267,14 +271,18 @@ fn ascii_server_rejects_highbit_from_client_only_encoding() {
     // db SQL_ASCII + ASCII-unsafe client encoding: NUL/high-bit bytes rejected.
     InitializeClientEncoding().unwrap();
     let ctx = MemoryContext::new("test");
-    assert!(pg_any_to_server(ctx.mcx(), b"plain", PG_SJIS).unwrap().is_none());
+    assert!(pg_any_to_server(ctx.mcx(), b"plain", PG_SJIS)
+        .unwrap()
+        .is_none());
     let err = pg_any_to_server(ctx.mcx(), b"a\x93z", PG_SJIS).unwrap_err();
     assert_eq!(
         err.message(),
         "invalid byte value for encoding \"SQL_ASCII\": 0x93"
     );
     // Server-legal client encoding: validated under that encoding, identity.
-    assert!(pg_any_to_server(ctx.mcx(), b"a\xb1z", PG_KOI8R).unwrap().is_none());
+    assert!(pg_any_to_server(ctx.mcx(), b"a\xb1z", PG_KOI8R)
+        .unwrap()
+        .is_none());
 }
 
 #[test]
@@ -282,30 +290,40 @@ fn server_to_any_identity_cases() {
     SetDatabaseEncoding(PG_UTF8).unwrap();
     InitializeClientEncoding().unwrap();
     let ctx = MemoryContext::new("test");
-    assert!(pg_server_to_any(ctx.mcx(), b"x", PG_UTF8).unwrap().is_none());
-    assert!(pg_server_to_any(ctx.mcx(), b"x", PG_SQL_ASCII).unwrap().is_none());
-    assert!(pg_server_to_any(ctx.mcx(), b"", PG_LATIN1).unwrap().is_none());
+    assert!(pg_server_to_any(ctx.mcx(), b"x", PG_UTF8)
+        .unwrap()
+        .is_none());
+    assert!(pg_server_to_any(ctx.mcx(), b"x", PG_SQL_ASCII)
+        .unwrap()
+        .is_none());
+    assert!(pg_server_to_any(ctx.mcx(), b"", PG_LATIN1)
+        .unwrap()
+        .is_none());
     assert_eq!(ctx.used(), 0);
 }
 
 #[test]
 fn do_encoding_conversion_identity_and_validation() {
     let ctx = MemoryContext::new("test");
-    assert!(pg_do_encoding_conversion(ctx.mcx(), b"", PG_LATIN1, PG_UTF8)
-        .unwrap()
-        .is_none());
+    assert!(
+        pg_do_encoding_conversion(ctx.mcx(), b"", PG_LATIN1, PG_UTF8)
+            .unwrap()
+            .is_none()
+    );
     assert!(pg_do_encoding_conversion(ctx.mcx(), b"x", PG_UTF8, PG_UTF8)
         .unwrap()
         .is_none());
-    assert!(pg_do_encoding_conversion(ctx.mcx(), b"\xff", PG_UTF8, PG_SQL_ASCII)
-        .unwrap()
-        .is_none());
     assert!(
-        pg_do_encoding_conversion(ctx.mcx(), b"\xff", PG_SQL_ASCII, PG_UTF8).is_err()
+        pg_do_encoding_conversion(ctx.mcx(), b"\xff", PG_UTF8, PG_SQL_ASCII)
+            .unwrap()
+            .is_none()
     );
-    assert!(pg_do_encoding_conversion(ctx.mcx(), b"ok", PG_SQL_ASCII, PG_UTF8)
-        .unwrap()
-        .is_none());
+    assert!(pg_do_encoding_conversion(ctx.mcx(), b"\xff", PG_SQL_ASCII, PG_UTF8).is_err());
+    assert!(
+        pg_do_encoding_conversion(ctx.mcx(), b"ok", PG_SQL_ASCII, PG_UTF8)
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[test]
@@ -326,7 +344,9 @@ fn unicode_to_server_utf8_paths() {
         .unwrap()
         .is_none());
     assert_eq!(
-        &*pg_unicode_to_server_noerror(ctx.mcx(), 0xE9).unwrap().unwrap(),
+        &*pg_unicode_to_server_noerror(ctx.mcx(), 0xE9)
+            .unwrap()
+            .unwrap(),
         "\u{00e9}".as_bytes()
     );
 }
@@ -340,7 +360,9 @@ fn unicode_to_server_without_proc_fails() {
         err.message(),
         "conversion between UTF8 and LATIN1 is not supported"
     );
-    assert!(pg_unicode_to_server_noerror(ctx.mcx(), 0xE9).unwrap().is_none());
+    assert!(pg_unicode_to_server_noerror(ctx.mcx(), 0xE9)
+        .unwrap()
+        .is_none());
     // ASCII range needs no conversion proc.
     assert_eq!(&*pg_unicode_to_server(ctx.mcx(), 0x7A).unwrap(), b"z");
 }
@@ -475,7 +497,12 @@ fn seams_installed() {
 #[test]
 fn encname_lookup_matches_encnames_c() {
     for w in crate::PG_ENCNAME.windows(2) {
-        assert!(w[0].0 < w[1].0, "pg_encname_tbl order: {} < {}", w[0].0, w[1].0);
+        assert!(
+            w[0].0 < w[1].0,
+            "pg_encname_tbl order: {} < {}",
+            w[0].0,
+            w[1].0
+        );
     }
     assert_eq!(pg_char_to_encoding("UTF8"), PG_UTF8);
     assert_eq!(pg_char_to_encoding("utf-8"), PG_UTF8);
@@ -485,7 +512,10 @@ fn encname_lookup_matches_encnames_c() {
     assert_eq!(pg_char_to_encoding("nonsense"), -1);
     assert_eq!(pg_char_to_encoding(""), -1);
     assert_eq!(pg_valid_client_encoding("UTF8"), PG_UTF8);
-    assert_eq!(pg_valid_client_encoding("MULE_INTERNAL"), wchar::PG_MULE_INTERNAL);
+    assert_eq!(
+        pg_valid_client_encoding("MULE_INTERNAL"),
+        wchar::PG_MULE_INTERNAL
+    );
     assert_eq!(pg_valid_server_encoding("SJIS"), -1);
     assert_eq!(pg_encoding_to_char(PG_UTF8), "UTF8");
     assert_eq!(pg_encoding_to_char(-1), "");

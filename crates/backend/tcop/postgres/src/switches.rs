@@ -10,8 +10,7 @@ use elog::ereport;
 use types_guc::{GucContext, GucSource};
 
 use crate::{
-    get_stats_option_name, guc_context_from_u8, loc, set_debug_options,
-    set_plan_disabling_options,
+    get_stats_option_name, guc_context_from_u8, loc, set_debug_options, set_plan_disabling_options,
 };
 
 const ARG_TAKING_FLAGS: &[u8] = b"BCcDdfhkNprStvW-";
@@ -44,7 +43,10 @@ fn is_dispatch_option(name: &str) -> bool {
     // DispatchOptionNames (main.c) minus forkchild (EXEC_BACKEND only).
     let bare = name.split('=').next().unwrap_or(name);
     // + the pgrust-extension stdio-wire / sim-net modes (main_main dispatch).
-    matches!(bare, "check" | "boot" | "describe-config" | "single" | "stdio-wire" | "sim-net")
+    matches!(
+        bare,
+        "check" | "boot" | "describe-config" | "single" | "stdio-wire" | "sim-net"
+    )
 }
 
 pub fn process_postgres_switches(argv: &[String], gucctx: u8) -> PgResult<()> {
@@ -68,7 +70,11 @@ fn process_postgres_switches_inner(
 ) -> PgResult<()> {
     let ctx = guc_context_from_u8(gucctx);
     let secure = ctx == GucContext::PGC_POSTMASTER;
-    let source = if secure { GucSource::PGC_S_ARGV } else { GucSource::PGC_S_CLIENT };
+    let source = if secure {
+        GucSource::PGC_S_ARGV
+    } else {
+        GucSource::PGC_S_CLIENT
+    };
     let fname = "process_postgres_switches";
 
     let set = |name: &str, value: &str| guc::SetConfigOption(name, Some(value), ctx, source);
@@ -285,7 +291,9 @@ mod tests {
         let outcome = std::panic::catch_unwind(body);
         let payload = outcome.expect_err("expected a proc_exit panic");
         assert_eq!(
-            payload.downcast_ref::<::ipc::ProcExitThread>().map(|e| e.code),
+            payload
+                .downcast_ref::<::ipc::ProcExitThread>()
+                .map(|e| e.code),
             Some(code)
         );
     }
@@ -308,8 +316,9 @@ mod tests {
 
     #[test]
     fn c_without_value_errors() {
-        let err = process_postgres_switches(&av(&["-c", "work_mem"]), GucContext::PGC_BACKEND as u8)
-            .unwrap_err();
+        let err =
+            process_postgres_switches(&av(&["-c", "work_mem"]), GucContext::PGC_BACKEND as u8)
+                .unwrap_err();
         assert!(format!("{err:?}").contains("-c work_mem requires a value"));
     }
 

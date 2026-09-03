@@ -159,7 +159,11 @@ impl BlockRunAllocator {
 
     /// Snapshot of the recorded run map (empty unless tracing was armed).
     pub fn run_map(&self) -> Vec<BlockRun> {
-        self.inner.lock().unwrap_or_else(|p| p.into_inner()).run_map.clone()
+        self.inner
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .run_map
+            .clone()
     }
 
     /// Test-only: seed the reservation so `claim` never reaches the extend

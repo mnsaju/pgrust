@@ -20,14 +20,12 @@ fn setup() {
     ONCE.call_once(|| {
         mbutils::init_seams();
         // The golden database is C collation: memcmp semantics.
-        pg_locale_seams::varstr_cmp_locale::set(|_collid, a, b| {
-            Ok(varlena::varstrfastcmp_c(a, b))
-        });
+        pg_locale_seams::varstr_cmp_locale::set(|_collid, a, b| Ok(varlena::varstrfastcmp_c(a, b)));
     });
 }
 
 fn unhex(s: &str) -> Vec<u8> {
-    assert!(s.len() % 2 == 0, "odd hex: {s}");
+    assert!(s.len().is_multiple_of(2), "odd hex: {s}");
     (0..s.len() / 2)
         .map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap())
         .collect()
@@ -131,7 +129,11 @@ fn hash_matches_c() {
     for (i, row) in golden_docs().iter().enumerate() {
         let img = jsonb_image(mcx, &row.input);
         let p = &img[4..];
-        assert_eq!(ops::jsonb_hash(mcx, p).unwrap() as i32, row.hash, "doc {i} hash");
+        assert_eq!(
+            ops::jsonb_hash(mcx, p).unwrap() as i32,
+            row.hash,
+            "doc {i} hash"
+        );
         assert_eq!(
             ops::jsonb_hash_extended(mcx, p, 0).unwrap() as i64,
             row.hash_ext0,
@@ -223,8 +225,9 @@ fn fixed_cmp_core_matches_allocating_path() {
         jsonb_image(mcx, doc.as_bytes())
     };
     let (d1, d2) = (deep("1"), deep("2"));
-    assert!(ops::compare_containers_fixed::<{ ops::CMP_FIXED_DEPTH }>(&d1[4..], &d2[4..])
-        .is_none());
+    assert!(
+        ops::compare_containers_fixed::<{ ops::CMP_FIXED_DEPTH }>(&d1[4..], &d2[4..]).is_none()
+    );
     assert_eq!(ops::compare_containers(mcx, &d1[4..], &d1[4..]).unwrap(), 0);
     assert!(ops::compare_containers(mcx, &d1[4..], &d2[4..]).unwrap() < 0);
     assert!(ops::compare_containers(mcx, &d2[4..], &d1[4..]).unwrap() > 0);
@@ -291,7 +294,10 @@ fn parse_path(spec: &[u8]) -> Vec<Vec<u8>> {
     if inner.is_empty() {
         return Vec::new();
     }
-    inner.split(',').map(|e| e.trim().as_bytes().to_vec()).collect()
+    inner
+        .split(',')
+        .map(|e| e.trim().as_bytes().to_vec())
+        .collect()
 }
 
 #[test]
@@ -374,7 +380,10 @@ fn unicode_zero_rejected_22p05() {
     let ctx = MemoryContext::new("t");
     let err = io::jsonb_in(ctx.mcx(), b"\"a\\u0000b\"", None).expect_err("must fail");
     assert_eq!(err.message(), "unsupported Unicode escape sequence");
-    assert_eq!(err.detail().unwrap(), "\\u0000 cannot be converted to text.");
+    assert_eq!(
+        err.detail().unwrap(),
+        "\\u0000 cannot be converted to text."
+    );
 }
 
 #[test]
@@ -433,7 +442,10 @@ fn recv_bad_version_is_clean_error() {
     let mut buf = stringinfo::StringInfo::new_in(mcx).unwrap();
     buf.append_bytes(&[0x02]).unwrap();
     let err = io::jsonb_recv(mcx, &mut buf).unwrap_err();
-    assert!(err.message().contains("unsupported jsonb version number 2"), "{err:?}");
+    assert!(
+        err.message().contains("unsupported jsonb version number 2"),
+        "{err:?}"
+    );
 }
 
 // On-disk byte identity of the mutation family: golden_mutations.tsv carries
@@ -448,7 +460,10 @@ fn mutations_match_c_on_disk() {
         "/fixtures/golden_mutations.tsv"
     ))
     .unwrap();
-    for line in data.lines().filter(|l| !l.starts_with('#') && !l.is_empty()) {
+    for line in data
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.is_empty())
+    {
         let cols: Vec<&str> = line.split('\t').collect();
         let (op, target, a1, a2, a3, expected) = (
             cols[0],
@@ -460,8 +475,7 @@ fn mutations_match_c_on_disk() {
         );
         let image = jsonb_image(mcx, &target);
         let payload: &[u8] = mcx::slice_in(mcx, &image[4..]).unwrap().leak();
-        let path: Vec<Option<&[u8]>> = if matches!(op, "del_keys" | "del_path" | "set" | "insert")
-        {
+        let path: Vec<Option<&[u8]>> = if matches!(op, "del_keys" | "del_path" | "set" | "insert") {
             a1.split(|b| *b == b',')
                 .map(|e| Some(mcx::slice_in(mcx, e).unwrap().leak() as &[u8]))
                 .collect()
@@ -575,8 +589,13 @@ fn gin_jsonpath_extraction_shapes() {
 
     // lax '$.tag == "x"': AND(key tag, OR(x-as-key, x-as-value)).
     let image = jp(b"$.tag == \"x\"");
-    let (entries, ops) =
-        extract_jsp_query(mcx, &image[4..], JsonbJsonpathPredicateStrategyNumber, false).unwrap();
+    let (entries, ops) = extract_jsp_query(
+        mcx,
+        &image[4..],
+        JsonbJsonpathPredicateStrategyNumber,
+        false,
+    )
+    .unwrap();
     assert_eq!(entries.len(), 3);
     assert_eq!(
         ops.iter().map(|o| (o.kind, o.val)).collect::<Vec<_>>(),
@@ -594,16 +613,26 @@ fn gin_jsonpath_extraction_shapes() {
 
     // strict '$.tag == "x"': AND(key tag, x-as-value).
     let image = jp(b"strict $.tag == \"x\"");
-    let (entries, ops) =
-        extract_jsp_query(mcx, &image[4..], JsonbJsonpathPredicateStrategyNumber, false).unwrap();
+    let (entries, ops) = extract_jsp_query(
+        mcx,
+        &image[4..],
+        JsonbJsonpathPredicateStrategyNumber,
+        false,
+    )
+    .unwrap();
     assert_eq!(entries.len(), 2);
     assert_eq!(ops[0].kind, JSP_GIN_AND);
     assert_eq!(key_of(entries[1]), b"\x05x");
 
     // '$.a != 1' is not extractable: full-scan signal.
     let image = jp(b"$.a != 1");
-    let (entries, ops) =
-        extract_jsp_query(mcx, &image[4..], JsonbJsonpathPredicateStrategyNumber, false).unwrap();
+    let (entries, ops) = extract_jsp_query(
+        mcx,
+        &image[4..],
+        JsonbJsonpathPredicateStrategyNumber,
+        false,
+    )
+    .unwrap();
     assert!(entries.is_empty() && ops.is_empty());
 
     // path_ops '$.a.b == 5': one hash-chain entry.
@@ -690,10 +719,12 @@ mod populate {
         ONCE.call_once(|| {
             syscache_seams::pg_type_typtype::set(|_typid| Ok(Some(b'b' as i8)));
             syscache_seams::pg_type_element_shape::set(|typid| {
-                Ok((typid == INT4ARRAYOID).then_some(syscache_seams::PgTypeElementShape {
-                    typelem: INT4OID,
-                    typsubscript: lsyscache::F_ARRAY_SUBSCRIPT_HANDLER,
-                }))
+                Ok(
+                    (typid == INT4ARRAYOID).then_some(syscache_seams::PgTypeElementShape {
+                        typelem: INT4OID,
+                        typsubscript: lsyscache::F_ARRAY_SUBSCRIPT_HANDLER,
+                    }),
+                )
             });
             syscache_seams::pg_type_io_shape::set(|typid| {
                 let shape = |typinput, typelem, typlen, typbyval| syscache_seams::PgTypeIoShape {
@@ -733,12 +764,8 @@ mod populate {
                 Ok(match oid {
                     F_INT4IN => FmgrInfo::new(adt_int::builtins::fc_int4in, oid, 1, true, false),
                     F_TEXTIN => FmgrInfo::new(varlena::builtins::fc_textin, oid, 1, true, false),
-                    F_JSON_IN => {
-                        FmgrInfo::new(adt_json::builtins::fc_json_in, oid, 1, true, false)
-                    }
-                    F_JSONB_IN => {
-                        FmgrInfo::new(crate::builtins::fc_jsonb_in, oid, 1, true, false)
-                    }
+                    F_JSON_IN => FmgrInfo::new(adt_json::builtins::fc_json_in, oid, 1, true, false),
+                    F_JSONB_IN => FmgrInfo::new(crate::builtins::fc_jsonb_in, oid, 1, true, false),
                     F_ARRAY_IN => {
                         FmgrInfo::new(arrayfuncs::builtins::fc_array_in, oid, 3, true, false)
                     }
@@ -762,7 +789,16 @@ mod populate {
         // SAFETY: `img` is a live 4B-header jsonb varlena for the whole call.
         let res = unsafe {
             json_populate_type(
-                d, JSONBOID, typid, -1, cache, mcx, mcx, &mut isnull, omit_quotes, escontext,
+                d,
+                JSONBOID,
+                typid,
+                -1,
+                cache,
+                mcx,
+                mcx,
+                &mut isnull,
+                omit_quotes,
+                escontext,
             )?
         };
         Ok((res, isnull))
@@ -780,13 +816,11 @@ mod populate {
         let ctx = MemoryContext::new("t");
         let mcx = ctx.mcx();
         let mut cache = None;
-        let (d, isnull) =
-            populate(mcx, &mut cache, br#""hello""#, TEXTOID, true, None).unwrap();
+        let (d, isnull) = populate(mcx, &mut cache, br#""hello""#, TEXTOID, true, None).unwrap();
         assert!(!isnull);
         assert_eq!(varlena_data(d), b"hello");
         // Same cache, quotes kept: text carries the serialized json literal.
-        let (d, isnull) =
-            populate(mcx, &mut cache, br#""hello""#, TEXTOID, false, None).unwrap();
+        let (d, isnull) = populate(mcx, &mut cache, br#""hello""#, TEXTOID, false, None).unwrap();
         assert!(!isnull);
         assert_eq!(varlena_data(d), br#""hello""#);
     }
@@ -850,16 +884,20 @@ mod populate {
         let p = d.as_usize() as *const u8;
         // SAFETY: live array varlena image of arr_size bytes.
         let img = unsafe {
-            core::slice::from_raw_parts(p, arrayfuncs::foundation::arr_size(
-                core::slice::from_raw_parts(p, 8),
-            ))
+            core::slice::from_raw_parts(
+                p,
+                arrayfuncs::foundation::arr_size(core::slice::from_raw_parts(p, 8)),
+            )
         };
         assert_eq!(arrayfuncs::foundation::arr_ndim(img), 1);
         assert_eq!(arrayfuncs::foundation::arr_dim(img, 0), 2);
         let (elems, nulls) =
             arrayfuncs::deconstruct_array_builtin(mcx, img, INT4OID, true).unwrap();
         assert_eq!(nulls.as_slice(), &[false, false]);
-        assert_eq!(elems.iter().map(|e| e.as_i32()).collect::<Vec<_>>(), vec![3, 4]);
+        assert_eq!(
+            elems.iter().map(|e| e.as_i32()).collect::<Vec<_>>(),
+            vec![3, 4]
+        );
     }
 
     #[test]
@@ -868,15 +906,23 @@ mod populate {
         let ctx = MemoryContext::new("t");
         let mcx = ctx.mcx();
         let mut cache = None;
-        let (d, isnull) =
-            populate(mcx, &mut cache, b"[[1, 2], [3, 4]]", INT4ARRAYOID, false, None).unwrap();
+        let (d, isnull) = populate(
+            mcx,
+            &mut cache,
+            b"[[1, 2], [3, 4]]",
+            INT4ARRAYOID,
+            false,
+            None,
+        )
+        .unwrap();
         assert!(!isnull);
         let p = d.as_usize() as *const u8;
         // SAFETY: live array varlena image of arr_size bytes.
         let img = unsafe {
-            core::slice::from_raw_parts(p, arrayfuncs::foundation::arr_size(
-                core::slice::from_raw_parts(p, 8),
-            ))
+            core::slice::from_raw_parts(
+                p,
+                arrayfuncs::foundation::arr_size(core::slice::from_raw_parts(p, 8)),
+            )
         };
         assert_eq!(arrayfuncs::foundation::arr_ndim(img), 2);
         assert_eq!(arrayfuncs::foundation::arr_dim(img, 0), 2);
@@ -896,8 +942,7 @@ mod populate {
         let mcx = ctx.mcx();
         // Hard: no escontext.
         let mut cache = None;
-        let err = populate(mcx, &mut cache, br#"{"a": 1}"#, INT4ARRAYOID, false, None)
-            .unwrap_err();
+        let err = populate(mcx, &mut cache, br#"{"a": 1}"#, INT4ARRAYOID, false, None).unwrap_err();
         assert_eq!(err.message(), "expected JSON array");
         // Soft: escontext armed.
         let mut cache = None;
@@ -918,8 +963,8 @@ mod populate {
         let ctx = MemoryContext::new("t");
         let mcx = ctx.mcx();
         let mut cache = None;
-        let err = populate(mcx, &mut cache, b"[[1], [2, 3]]", INT4ARRAYOID, false, None)
-            .unwrap_err();
+        let err =
+            populate(mcx, &mut cache, b"[[1], [2, 3]]", INT4ARRAYOID, false, None).unwrap_err();
         assert_eq!(err.message(), "malformed JSON array");
     }
 }

@@ -5,7 +5,10 @@ fn table_shape_invariants() {
     assert_eq!(CACHEINFO.len(), SYS_CACHE_SIZE);
     for (id, d) in CACHEINFO.iter().enumerate() {
         assert!(d.reloid != 0 && d.indoid != 0, "row {id}");
-        assert!(d.nbuckets > 0 && (d.nbuckets & (d.nbuckets - 1)) == 0, "row {id}");
+        assert!(
+            d.nbuckets > 0 && (d.nbuckets & (d.nbuckets - 1)) == 0,
+            "row {id}"
+        );
         assert!((1..=4).contains(&d.nkeys), "row {id}");
         for k in 0..4 {
             assert_eq!(d.key[k] != 0, k < d.nkeys as usize, "row {id} key {k}");
@@ -18,23 +21,47 @@ fn table_shape_invariants() {
 fn landmark_rows_match_syscache_info_h() {
     let reloid_57 = CACHEINFO[RELOID as usize];
     assert_eq!(
-        (reloid_57.reloid, reloid_57.indoid, reloid_57.nkeys, reloid_57.key, reloid_57.nbuckets),
+        (
+            reloid_57.reloid,
+            reloid_57.indoid,
+            reloid_57.nkeys,
+            reloid_57.key,
+            reloid_57.nbuckets
+        ),
         (1259, 2662, 1, [1, 0, 0, 0], 128)
     );
     let attnum = CACHEINFO[ATTNUM as usize];
     assert_eq!(
-        (attnum.reloid, attnum.indoid, attnum.nkeys, attnum.key, attnum.nbuckets),
+        (
+            attnum.reloid,
+            attnum.indoid,
+            attnum.nkeys,
+            attnum.key,
+            attnum.nbuckets
+        ),
         (1249, 2659, 2, [1, 5, 0, 0], 128)
     );
     let pnans = CACHEINFO[PROCNAMEARGSNSP as usize];
     assert_eq!(
-        (pnans.reloid, pnans.indoid, pnans.nkeys, pnans.key, pnans.nbuckets),
+        (
+            pnans.reloid,
+            pnans.indoid,
+            pnans.nkeys,
+            pnans.key,
+            pnans.nbuckets
+        ),
         (1255, 2691, 3, [2, 20, 3, 0], 128)
     );
     let umus = CACHEINFO[USERMAPPINGUSERSERVER as usize];
     assert_eq!(USERMAPPINGUSERSERVER, 84);
     assert_eq!(
-        (umus.reloid, umus.indoid, umus.nkeys, umus.key, umus.nbuckets),
+        (
+            umus.reloid,
+            umus.indoid,
+            umus.nkeys,
+            umus.key,
+            umus.nbuckets
+        ),
         (1418, 175, 2, [2, 3, 0, 0], 2)
     );
     assert_eq!(TYPEOID, 82);

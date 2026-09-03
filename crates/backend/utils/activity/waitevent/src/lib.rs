@@ -1,5 +1,6 @@
 //! wait_event.c + wait_event_funcs.c (my_wait_event_info indirection; C's
 //! never-read local fallback is dropped).
+#![allow(non_snake_case)]
 
 use core::cell::Cell;
 use core::sync::atomic::{AtomicU32, Ordering::Relaxed};
@@ -284,9 +285,9 @@ pub fn pgstat_get_wait_event(wait_event_info: u32) -> Option<&'static str> {
     let event_id = (wait_event_info & WAIT_EVENT_ID_MASK) as usize;
 
     let named = |names: &'static [&'static str]| {
-        *names.get(event_id).unwrap_or_else(|| {
-            panic!("unknown wait event {event_id} in class {class_id:#010x}")
-        })
+        *names
+            .get(event_id)
+            .unwrap_or_else(|| panic!("unknown wait event {event_id} in class {class_id:#010x}"))
     };
     Some(match class_id {
         PG_WAIT_LWLOCK => lwlock::GetLWLockIdentifier(class_id, event_id as u16),

@@ -10,6 +10,8 @@ use ::types_error::{PgResult, ERRCODE_INVALID_PARAMETER_VALUE, ERROR};
 
 use crate::{parse_opt_value, text_array_image, OptData, OptVal};
 
+type Validator = fn(&mut [u8]) -> Result<(), String>;
+
 pub struct LocalOptDef {
     // In-tree options procs register compile-time names (C accepts runtime
     // strings only for extension opclasses, which don't exist here).
@@ -25,7 +27,7 @@ pub struct LocalRelopts {
     struct_size: usize,
     // std Vec: DDL-cold carrier, dies with the call.
     opts: Vec<LocalOptDef>,
-    validators: Vec<fn(&mut [u8]) -> Result<(), String>>,
+    validators: Vec<Validator>,
 }
 
 impl LocalRelopts {
@@ -42,24 +44,58 @@ impl LocalRelopts {
 
     /// register_reloptions_validator: runs over the built struct image when
     /// validate (CREATE INDEX ... WITH), C's relopts->validators loop.
-    pub fn register_validator(&mut self, v: fn(&mut [u8]) -> Result<(), String>) {
+    pub fn register_validator(&mut self, v: Validator) {
         self.validators.push(v);
     }
 
     /// add_local_int_reloption (desc dropped: only surfaced via extension
     /// catalogs C never reads on this path).
-    pub fn add_int(&mut self, name: &'static str, default_val: i32, min: i32, max: i32, offset: usize) {
-        self.opts.push(LocalOptDef { name, data: OptData::Int { default_val, min, max }, offset });
+    pub fn add_int(
+        &mut self,
+        name: &'static str,
+        default_val: i32,
+        min: i32,
+        max: i32,
+        offset: usize,
+    ) {
+        self.opts.push(LocalOptDef {
+            name,
+            data: OptData::Int {
+                default_val,
+                min,
+                max,
+            },
+            offset,
+        });
     }
 
     /// add_local_real_reloption.
-    pub fn add_real(&mut self, name: &'static str, default_val: f64, min: f64, max: f64, offset: usize) {
-        self.opts.push(LocalOptDef { name, data: OptData::Real { default_val, min, max }, offset });
+    pub fn add_real(
+        &mut self,
+        name: &'static str,
+        default_val: f64,
+        min: f64,
+        max: f64,
+        offset: usize,
+    ) {
+        self.opts.push(LocalOptDef {
+            name,
+            data: OptData::Real {
+                default_val,
+                min,
+                max,
+            },
+            offset,
+        });
     }
 
     /// add_local_bool_reloption.
     pub fn add_bool(&mut self, name: &'static str, default_val: bool, offset: usize) {
-        self.opts.push(LocalOptDef { name, data: OptData::Bool { default_val }, offset });
+        self.opts.push(LocalOptDef {
+            name,
+            data: OptData::Bool { default_val },
+            offset,
+        });
     }
 }
 
@@ -75,12 +111,15 @@ pub fn build_local_reloptions(
         .opts
         .iter()
         .map(|d| {
-            (false, match d.data {
-                OptData::Bool { .. } => OptVal::Bool(false),
-                OptData::Int { .. } => OptVal::Int(0),
-                OptData::Real { .. } => OptVal::Real(0.0),
-                OptData::Enum { .. } => OptVal::Enum(0),
-            })
+            (
+                false,
+                match d.data {
+                    OptData::Bool { .. } => OptVal::Bool(false),
+                    OptData::Int { .. } => OptVal::Int(0),
+                    OptData::Real { .. } => OptVal::Real(0.0),
+                    OptData::Enum { .. } => OptVal::Enum(0),
+                },
+            )
         })
         .collect();
 
@@ -97,9 +136,7 @@ pub fn build_local_reloptions(
                     if *isset && validate {
                         return Err(ereport(ERROR)
                             .errcode(ERRCODE_INVALID_PARAMETER_VALUE)
-                            .errmsg(format!(
-                                "parameter \"{kw}\" specified more than once"
-                            ))
+                            .errmsg(format!("parameter \"{kw}\" specified more than once"))
                             .into_error()
                             .into());
                     }

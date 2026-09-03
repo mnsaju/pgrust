@@ -234,7 +234,10 @@ pub mod stmt_task_arm {
             assert!(!posture(Some("0")));
             assert!(!posture(Some("off")));
             assert!(!posture(Some("true")), "non-registry spelling stays OFF");
-            assert!(!posture(Some("ON")), "case-sensitive: only the exact spellings arm");
+            assert!(
+                !posture(Some("ON")),
+                "case-sensitive: only the exact spellings arm"
+            );
             assert!(!posture(Some("")));
         }
 

@@ -462,7 +462,10 @@ fn checkpointer_buffers_written_counter() {
     checkpointer::pgstat_count_checkpointer_buffers_written();
     checkpointer::pgstat_count_checkpointer_buffers_written();
     checkpointer::pgstat_count_checkpointer_buffers_written();
-    assert_eq!(checkpointer::pending_checkpointer_stats().buffers_written, 3);
+    assert_eq!(
+        checkpointer::pending_checkpointer_stats().buffers_written,
+        3
+    );
 }
 
 #[test]
@@ -646,7 +649,11 @@ fn function_usage_accumulates_and_flushes() {
     assert!(crate::find_funcstat_entry(7001).is_none());
     let shared = crate::pgstat_fetch_stat_funcentry(7001).unwrap();
     assert_eq!(shared.numcalls, 2);
-    assert!(crate::pgstat_have_entry(pending::PGSTAT_KIND_FUNCTION.0, 5, 7001));
+    assert!(crate::pgstat_have_entry(
+        pending::PGSTAT_KIND_FUNCTION.0,
+        5,
+        7001
+    ));
 }
 
 #[test]
@@ -700,7 +707,9 @@ fn statsfile_roundtrip_restores_entries() {
     crate::pgstat_reset(pending::PGSTAT_KIND_RELATION, 5, 8001);
     crate::pgstat_clear_snapshot();
     assert_eq!(
-        relation::pgstat_fetch_stat_tabentry_ext(false, 8001).unwrap().tuples_inserted,
+        relation::pgstat_fetch_stat_tabentry_ext(false, 8001)
+            .unwrap()
+            .tuples_inserted,
         0
     );
 
@@ -733,33 +742,97 @@ fn setup_io() -> MutexGuard<'static, ()> {
 fn io_tracks_predicates_match_c_rules() {
     use crate::io::{self, IOContext, IOObject, IOOp};
     use types_core::BackendType as B;
-    assert!(io::pgstat_tracks_io_op(B::Backend, IOObject::Relation, IOContext::IOCONTEXT_NORMAL, IOOp::Hit));
+    assert!(io::pgstat_tracks_io_op(
+        B::Backend,
+        IOObject::Relation,
+        IOContext::IOCONTEXT_NORMAL,
+        IOOp::Hit
+    ));
     assert!(!io::pgstat_tracks_io_bktype(B::Archiver));
-    assert!(!io::pgstat_tracks_io_object(B::Checkpointer, IOObject::Relation, IOContext::IOCONTEXT_VACUUM));
-    assert!(!io::pgstat_tracks_io_op(B::BgWriter, IOObject::Relation, IOContext::IOCONTEXT_NORMAL, IOOp::Read));
-    assert!(!io::pgstat_tracks_io_op(B::Backend, IOObject::TempRelation, IOContext::IOCONTEXT_NORMAL, IOOp::Fsync));
-    assert!(!io::pgstat_tracks_io_op(B::Backend, IOObject::Relation, IOContext::IOCONTEXT_NORMAL, IOOp::Reuse));
-    assert!(io::pgstat_tracks_io_op(B::Backend, IOObject::Relation, IOContext::IOCONTEXT_VACUUM, IOOp::Reuse));
-    assert!(io::pgstat_tracks_io_op(B::Backend, IOObject::Wal, IOContext::IOCONTEXT_INIT, IOOp::Fsync));
-    assert!(!io::pgstat_tracks_io_op(B::Backend, IOObject::Wal, IOContext::IOCONTEXT_INIT, IOOp::Read));
-    assert!(!io::pgstat_tracks_io_op(B::Backend, IOObject::Relation, IOContext::IOCONTEXT_VACUUM, IOOp::Fsync));
+    assert!(!io::pgstat_tracks_io_object(
+        B::Checkpointer,
+        IOObject::Relation,
+        IOContext::IOCONTEXT_VACUUM
+    ));
+    assert!(!io::pgstat_tracks_io_op(
+        B::BgWriter,
+        IOObject::Relation,
+        IOContext::IOCONTEXT_NORMAL,
+        IOOp::Read
+    ));
+    assert!(!io::pgstat_tracks_io_op(
+        B::Backend,
+        IOObject::TempRelation,
+        IOContext::IOCONTEXT_NORMAL,
+        IOOp::Fsync
+    ));
+    assert!(!io::pgstat_tracks_io_op(
+        B::Backend,
+        IOObject::Relation,
+        IOContext::IOCONTEXT_NORMAL,
+        IOOp::Reuse
+    ));
+    assert!(io::pgstat_tracks_io_op(
+        B::Backend,
+        IOObject::Relation,
+        IOContext::IOCONTEXT_VACUUM,
+        IOOp::Reuse
+    ));
+    assert!(io::pgstat_tracks_io_op(
+        B::Backend,
+        IOObject::Wal,
+        IOContext::IOCONTEXT_INIT,
+        IOOp::Fsync
+    ));
+    assert!(!io::pgstat_tracks_io_op(
+        B::Backend,
+        IOObject::Wal,
+        IOContext::IOCONTEXT_INIT,
+        IOOp::Read
+    ));
+    assert!(!io::pgstat_tracks_io_op(
+        B::Backend,
+        IOObject::Relation,
+        IOContext::IOCONTEXT_VACUUM,
+        IOOp::Fsync
+    ));
 }
 
 #[test]
 fn io_count_flush_and_fetch() {
     use crate::io::{self, IOContext, IOObject, IOOp};
     let _lock = setup_io();
-    let base = io::export_io_stats().stats[types_core::BackendType::Backend as usize]
-        .counts[IOObject::Relation as usize][IOContext::IOCONTEXT_NORMAL as usize][IOOp::Hit as usize];
-    io::pgstat_count_io_op(IOObject::Relation, IOContext::IOCONTEXT_NORMAL, IOOp::Hit, 3, 0);
-    io::pgstat_count_io_op(IOObject::Relation, IOContext::IOCONTEXT_NORMAL, IOOp::Read, 1, 8192);
+    let base = io::export_io_stats().stats[types_core::BackendType::Backend as usize].counts
+        [IOObject::Relation as usize][IOContext::IOCONTEXT_NORMAL as usize][IOOp::Hit as usize];
+    io::pgstat_count_io_op(
+        IOObject::Relation,
+        IOContext::IOCONTEXT_NORMAL,
+        IOOp::Hit,
+        3,
+        0,
+    );
+    io::pgstat_count_io_op(
+        IOObject::Relation,
+        IOContext::IOCONTEXT_NORMAL,
+        IOOp::Read,
+        1,
+        8192,
+    );
     assert!(io::pgstat_have_pending_io());
     assert!(pending::pgstat_report_fixed());
     io::pgstat_flush_io(false);
     assert!(!io::pgstat_have_pending_io());
     let shared = io::export_io_stats().stats[types_core::BackendType::Backend as usize];
-    assert!(shared.counts[IOObject::Relation as usize][IOContext::IOCONTEXT_NORMAL as usize][IOOp::Hit as usize] >= base + 3);
-    assert!(shared.bytes[IOObject::Relation as usize][IOContext::IOCONTEXT_NORMAL as usize][IOOp::Read as usize] >= 8192);
+    assert!(
+        shared.counts[IOObject::Relation as usize][IOContext::IOCONTEXT_NORMAL as usize]
+            [IOOp::Hit as usize]
+            >= base + 3
+    );
+    assert!(
+        shared.bytes[IOObject::Relation as usize][IOContext::IOCONTEXT_NORMAL as usize]
+            [IOOp::Read as usize]
+            >= 8192
+    );
 }
 
 #[test]
@@ -768,9 +841,20 @@ fn io_timed_count_records_time_and_dbstats() {
     let _lock = setup_io();
     let start = io::pgstat_prepare_io_time(true);
     assert!(start > 0);
-    io::pgstat_count_io_op_time(IOObject::Relation, IOContext::IOCONTEXT_NORMAL, IOOp::Write, start, 1, 8192);
+    io::pgstat_count_io_op_time(
+        IOObject::Relation,
+        IOContext::IOCONTEXT_NORMAL,
+        IOOp::Write,
+        start,
+        1,
+        8192,
+    );
     let pend = io::pgstat_pending_io();
-    assert!(pend.pending_times_ns[IOObject::Relation as usize][IOCONTEXT_NORMAL_IDX][IOOp::Write as usize] >= 0);
+    assert!(
+        pend.pending_times_ns[IOObject::Relation as usize][IOCONTEXT_NORMAL_IDX]
+            [IOOp::Write as usize]
+            >= 0
+    );
     assert_eq!(io::pgstat_prepare_io_time(false), 0);
     io::pgstat_flush_io(false);
 }
@@ -801,15 +885,29 @@ fn backend_kind_flush_fetch_reset_drop() {
     let _lock = setup_io();
     init_small::globals::SetMyProcNumber(41);
     crate::backend::pgstat_create_backend(41);
-    crate::io::pgstat_count_io_op(IOObject::Relation, IOContext::IOCONTEXT_NORMAL, IOOp::Hit, 2, 0);
+    crate::io::pgstat_count_io_op(
+        IOObject::Relation,
+        IOContext::IOCONTEXT_NORMAL,
+        IOOp::Hit,
+        2,
+        0,
+    );
     crate::backend::pgstat_flush_backend(false, crate::backend::PGSTAT_BACKEND_FLUSH_ALL);
     crate::pgstat_clear_snapshot();
     let entry = crate::backend::pgstat_fetch_stat_backend(41).unwrap();
-    assert_eq!(entry.io_stats.counts[IOObject::Relation as usize][IOCONTEXT_NORMAL_IDX][IOOp::Hit as usize], 2);
+    assert_eq!(
+        entry.io_stats.counts[IOObject::Relation as usize][IOCONTEXT_NORMAL_IDX]
+            [IOOp::Hit as usize],
+        2
+    );
     crate::backend::pgstat_reset_backend(41);
     crate::pgstat_clear_snapshot();
     let entry = crate::backend::pgstat_fetch_stat_backend(41).unwrap();
-    assert_eq!(entry.io_stats.counts[IOObject::Relation as usize][IOCONTEXT_NORMAL_IDX][IOOp::Hit as usize], 0);
+    assert_eq!(
+        entry.io_stats.counts[IOObject::Relation as usize][IOCONTEXT_NORMAL_IDX]
+            [IOOp::Hit as usize],
+        0
+    );
     assert!(entry.stat_reset_timestamp > 0);
     crate::io::pgstat_flush_io(false);
 }

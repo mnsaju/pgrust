@@ -53,7 +53,10 @@ fn compressed_inline_tcinfo() {
     toast_compress_set_size_and_compress_method(&mut datum, 4096, TOAST_LZ4_COMPRESSION_ID)
         .unwrap();
     assert_eq!(toast_compress_extsize(&datum).unwrap(), 4096);
-    assert_eq!(toast_compress_method(&datum).unwrap(), TOAST_LZ4_COMPRESSION_ID);
+    assert_eq!(
+        toast_compress_method(&datum).unwrap(),
+        TOAST_LZ4_COMPRESSION_ID
+    );
 
     let err = toast_compress_extsize(&datum[..6]).unwrap_err();
     assert_eq!(err.message(), "truncated compressed datum header");
@@ -76,7 +79,13 @@ fn toast_snapshot_gate() {
     let cx = mcx::MemoryContext::new("t");
     let m = cx.mcx();
     let snap = get_toast_snapshot(m, true).unwrap();
-    assert_eq!(snap.snapshot_type as i32, SnapshotType::SNAPSHOT_TOAST as i32);
+    assert_eq!(
+        snap.snapshot_type as i32,
+        SnapshotType::SNAPSHOT_TOAST as i32
+    );
     let err = get_toast_snapshot(m, false).unwrap_err();
-    assert_eq!(err.message(), "cannot fetch toast data without an active snapshot");
+    assert_eq!(
+        err.message(),
+        "cannot fetch toast data without an active snapshot"
+    );
 }

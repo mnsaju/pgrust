@@ -12,12 +12,15 @@ use types_nodes::plannodes::{Plan, PlannedStmt, Result as ResultPlan};
 use types_nodes::primnodes::{Const, TargetEntry};
 use types_nodes::rawnodes::SelectStmt;
 use types_nodes::NodeTag;
+use types_portal::CMDTAG_SELECT;
 use types_snapshot::{SnapshotData, SnapshotType};
 use types_storage::lock::LOCKACQUIRE_OK;
-use types_portal::CMDTAG_SELECT;
 
 use prepare::*;
-use types_error::{PgResult, ERRCODE_DUPLICATE_PSTATEMENT, ERRCODE_INVALID_PSTATEMENT_DEFINITION, ERRCODE_UNDEFINED_PSTATEMENT};
+use types_error::{
+    PgResult, ERRCODE_DUPLICATE_PSTATEMENT, ERRCODE_INVALID_PSTATEMENT_DEFINITION,
+    ERRCODE_UNDEFINED_PSTATEMENT,
+};
 use types_nodes::parsenodes::{DeallocateStmt, ExecuteStmt, PrepareStmt};
 use types_nodes::rawnodes::RawStmt;
 use types_portal::{ParamListHandle, QueryCompletion, QueryEnvHandle, CURSOR_OPT_PARALLEL_OK};
@@ -86,17 +89,23 @@ fn select_query(mcx: mcx::Mcx<'_>) -> Query<'_> {
     }
 }
 
-fn stub_planner<'a, 'mcx>(
+fn stub_planner<'mcx>(
     mcx: mcx::Mcx<'mcx>,
     parse: &'mcx mut Query<'mcx>,
-    _query_string: &'a str,
+    _query_string: &str,
     _cursor_options: i32,
     _bound_params: ParamListHandle,
 ) -> PgResult<PlannedStmt<'mcx>> {
     PLANNER_CALLS.with(|c| c.set(c.get() + 1));
     let tree = Node::mk(
         mcx,
-        ResultPlan { plan: Plan { total_cost: 0.01, ..Plan::default() }, resconstantqual: None },
+        ResultPlan {
+            plan: Plan {
+                total_cost: 0.01,
+                ..Plan::default()
+            },
+            resconstantqual: None,
+        },
     )?;
     let mut relation_oids = types_nodes::list::OidList::nil();
     relation_oids.lappend(mcx, TEST_RELID)?;
@@ -126,10 +135,18 @@ fn install() {
             let select = Node::mk(mcx, SelectStmt::default())?;
             let prep = Node::mk(
                 mcx,
-                PrepareStmt { name: Some("p1"), argtypes: NodeList::nil(), query: Some(select) },
+                PrepareStmt {
+                    name: Some("p1"),
+                    argtypes: NodeList::nil(),
+                    query: Some(select),
+                },
             )?;
             let mut v = mcx::PgVec::new_in(mcx);
-            v.push(RawStmt { stmt: Some(prep), stmt_location: 0, stmt_len: 0 });
+            v.push(RawStmt {
+                stmt: Some(prep),
+                stmt_location: 0,
+                stmt_len: 0,
+            });
             Ok(v)
         });
         analyze_seams::parse_analyze_fixedparams::set(|mcx, parse_tree, _src, _types, _env| {
@@ -291,7 +308,11 @@ fn prepare_execute_deallocate_round_trip() {
     let select = node_mk(&ctx, SelectStmt::default());
     let prep = node_mk(
         &ctx,
-        PrepareStmt { name: Some("p1"), argtypes: NodeList::nil(), query: Some(select) },
+        PrepareStmt {
+            name: Some("p1"),
+            argtypes: NodeList::nil(),
+            query: Some(select),
+        },
     );
     run_utility(prep, SOURCE).unwrap();
     let entry = FetchPreparedStatement("p1", true).unwrap().unwrap();
@@ -304,13 +325,23 @@ fn prepare_execute_deallocate_round_trip() {
     let select2 = node_mk(&ctx, SelectStmt::default());
     let prep2 = node_mk(
         &ctx,
-        PrepareStmt { name: Some("p1"), argtypes: NodeList::nil(), query: Some(select2) },
+        PrepareStmt {
+            name: Some("p1"),
+            argtypes: NodeList::nil(),
+            query: Some(select2),
+        },
     );
     let err = run_utility(prep2, SOURCE).unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_DUPLICATE_PSTATEMENT);
 
     // First EXECUTE builds the generic plan and runs it.
-    let exec = node_mk(&ctx, ExecuteStmt { name: Some("p1"), params: NodeList::nil() });
+    let exec = node_mk(
+        &ctx,
+        ExecuteStmt {
+            name: Some("p1"),
+            params: NodeList::nil(),
+        },
+    );
     let qc = run_utility(exec, "EXECUTE p1").unwrap();
     assert_eq!(qc.commandTag, CMDTAG_SELECT);
     assert_eq!(qc.nprocessed, 1);
@@ -318,26 +349,48 @@ fn prepare_execute_deallocate_round_trip() {
     assert_eq!(QD_RUNS.with(Cell::get), 1);
 
     // Second EXECUTE is the warm hit: no replan, same cached stmt list.
-    let exec2 = node_mk(&ctx, ExecuteStmt { name: Some("p1"), params: NodeList::nil() });
+    let exec2 = node_mk(
+        &ctx,
+        ExecuteStmt {
+            name: Some("p1"),
+            params: NodeList::nil(),
+        },
+    );
     let qc = run_utility(exec2, "EXECUTE p1").unwrap();
     assert_eq!(qc.nprocessed, 1);
     assert_eq!(PLANNER_CALLS.with(Cell::get), 1);
     assert_eq!(QD_RUNS.with(Cell::get), 2);
 
     // UtilityReturnsTuples/UtilityTupleDescriptor see the prepared entry.
-    let exec3 = node_mk(&ctx, ExecuteStmt { name: Some("p1"), params: NodeList::nil() });
+    let exec3 = node_mk(
+        &ctx,
+        ExecuteStmt {
+            name: Some("p1"),
+            params: NodeList::nil(),
+        },
+    );
     assert!(utility::UtilityReturnsTuples(exec3));
     assert!(utility::UtilityTupleDescriptor(exec3).unwrap().is_some());
 
     // DEALLOCATE drops the entry and the plancache source.
     let dealloc = node_mk(
         &ctx,
-        DeallocateStmt { name: Some("p1"), isall: false, location: -1 },
+        DeallocateStmt {
+            name: Some("p1"),
+            isall: false,
+            location: -1,
+        },
     );
     run_utility(dealloc, "DEALLOCATE p1").unwrap();
     assert!(FetchPreparedStatement("p1", false).unwrap().is_none());
 
-    let exec4 = node_mk(&ctx, ExecuteStmt { name: Some("p1"), params: NodeList::nil() });
+    let exec4 = node_mk(
+        &ctx,
+        ExecuteStmt {
+            name: Some("p1"),
+            params: NodeList::nil(),
+        },
+    );
     let err = run_utility(exec4, "EXECUTE p1").unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_UNDEFINED_PSTATEMENT);
 }
@@ -349,12 +402,20 @@ fn inval_callback_flushes_the_saved_plan() {
     let select = node_mk(&ctx, SelectStmt::default());
     let prep = node_mk(
         &ctx,
-        PrepareStmt { name: Some("p_inval"), argtypes: NodeList::nil(), query: Some(select) },
+        PrepareStmt {
+            name: Some("p_inval"),
+            argtypes: NodeList::nil(),
+            query: Some(select),
+        },
     );
     // The stub parser always names p1; store under p_inval via direct calls.
     let _ = prep;
     let tag = CommandTag::SELECT;
-    let raw = RawStmt { stmt: Some(select), stmt_location: 0, stmt_len: 0 };
+    let raw = RawStmt {
+        stmt: Some(select),
+        stmt_location: 0,
+        stmt_len: 0,
+    };
     let plansource = plancache::CreateCachedPlan(Some(&raw), SOURCE, tag).unwrap();
     let qmcx = plancache::SourceQueryMcx(plansource);
     let mut qlist = mcx::PgVec::new_in(qmcx);
@@ -362,7 +423,13 @@ fn inval_callback_flushes_the_saved_plan() {
     plancache::CompleteCachedPlan(plansource, qlist, &[], CURSOR_OPT_PARALLEL_OK, true).unwrap();
     StorePreparedStatement("p_inval", plansource, true).unwrap();
 
-    let exec = node_mk(&ctx, ExecuteStmt { name: Some("p_inval"), params: NodeList::nil() });
+    let exec = node_mk(
+        &ctx,
+        ExecuteStmt {
+            name: Some("p_inval"),
+            params: NodeList::nil(),
+        },
+    );
     run_utility(exec, "EXECUTE p_inval").unwrap();
     assert!(plancache::CachedPlanIsValid(plansource));
 
@@ -380,7 +447,11 @@ fn deallocate_all_drops_everything() {
         Node::mk(mcx, SelectStmt::default()).unwrap()
     };
     for name in ["da1", "da2"] {
-        let raw = RawStmt { stmt: Some(select), stmt_location: 0, stmt_len: 0 };
+        let raw = RawStmt {
+            stmt: Some(select),
+            stmt_location: 0,
+            stmt_len: 0,
+        };
         let plansource =
             plancache::CreateCachedPlan(Some(&raw), SOURCE, CommandTag::SELECT).unwrap();
         let qmcx = plancache::SourceQueryMcx(plansource);
@@ -391,7 +462,14 @@ fn deallocate_all_drops_everything() {
         StorePreparedStatement(name, plansource, true).unwrap();
     }
     let ctx = MemoryContext::new("t");
-    let dealloc = node_mk(&ctx, DeallocateStmt { name: None, isall: true, location: -1 });
+    let dealloc = node_mk(
+        &ctx,
+        DeallocateStmt {
+            name: None,
+            isall: true,
+            location: -1,
+        },
+    );
     run_utility(dealloc, "DEALLOCATE ALL").unwrap();
     assert!(FetchPreparedStatement("da1", false).unwrap().is_none());
     assert!(FetchPreparedStatement("da2", false).unwrap().is_none());
@@ -402,7 +480,11 @@ fn empty_statement_name_is_rejected() {
     install();
     let ctx = MemoryContext::new("t");
     let select = node_mk(&ctx, SelectStmt::default());
-    let stmt = PrepareStmt { name: Some(""), argtypes: NodeList::nil(), query: Some(select) };
+    let stmt = PrepareStmt {
+        name: Some(""),
+        argtypes: NodeList::nil(),
+        query: Some(select),
+    };
     let err = PrepareQuery(SOURCE, &stmt, 0, 0).unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_INVALID_PSTATEMENT_DEFINITION);
 }
@@ -414,10 +496,17 @@ fn execute_with_wrong_parameter_count_is_42601() {
     let ctx = MemoryContext::new("t");
 
     let select = node_mk(&ctx, SelectStmt::default());
-    let rawstmt = RawStmt { stmt: Some(select), stmt_location: 0, stmt_len: 0 };
-    let plansource =
-        plancache::CreateCachedPlan(Some(&rawstmt), "PREPARE pn(int) AS SELECT $1", CMDTAG_SELECT)
-            .unwrap();
+    let rawstmt = RawStmt {
+        stmt: Some(select),
+        stmt_location: 0,
+        stmt_len: 0,
+    };
+    let plansource = plancache::CreateCachedPlan(
+        Some(&rawstmt),
+        "PREPARE pn(int) AS SELECT $1",
+        CMDTAG_SELECT,
+    )
+    .unwrap();
     let qmcx = plancache::SourceQueryMcx(plansource);
     let mut qlist = mcx::PgVec::new_in(qmcx);
     qlist.push(select_query(qmcx));
@@ -425,7 +514,10 @@ fn execute_with_wrong_parameter_count_is_42601() {
         .unwrap();
     StorePreparedStatement("pn", plansource, true).unwrap();
 
-    let exec = ExecuteStmt { name: Some("pn"), params: NodeList::nil() };
+    let exec = ExecuteStmt {
+        name: Some("pn"),
+        params: NodeList::nil(),
+    };
     let mut dest = tcop_dest::CreateDestReceiver(CommandDest::None);
     let err = ExecuteQuery(
         ctx.mcx(),
@@ -445,8 +537,28 @@ fn execute_with_wrong_parameter_count_is_42601() {
 fn deallocate_command_tags() {
     install();
     let ctx = MemoryContext::new("t");
-    let one = node_mk(&ctx, DeallocateStmt { name: Some("x"), isall: false, location: -1 });
-    let all = node_mk(&ctx, DeallocateStmt { name: None, isall: true, location: -1 });
-    assert_eq!(cmdtag::GetCommandTagName(utility::CreateCommandTag(one)), "DEALLOCATE");
-    assert_eq!(cmdtag::GetCommandTagName(utility::CreateCommandTag(all)), "DEALLOCATE ALL");
+    let one = node_mk(
+        &ctx,
+        DeallocateStmt {
+            name: Some("x"),
+            isall: false,
+            location: -1,
+        },
+    );
+    let all = node_mk(
+        &ctx,
+        DeallocateStmt {
+            name: None,
+            isall: true,
+            location: -1,
+        },
+    );
+    assert_eq!(
+        cmdtag::GetCommandTagName(utility::CreateCommandTag(one)),
+        "DEALLOCATE"
+    );
+    assert_eq!(
+        cmdtag::GetCommandTagName(utility::CreateCommandTag(all)),
+        "DEALLOCATE ALL"
+    );
 }

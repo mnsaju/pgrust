@@ -67,14 +67,18 @@ impl StringAggState {
 #[cold]
 #[inline(never)]
 fn non_aggregate_context() -> Box<PgError> {
-    Box::new(PgError::error("string_agg_transfn called in non-aggregate context"))
+    Box::new(PgError::error(
+        "string_agg_transfn called in non-aggregate context",
+    ))
 }
 
 #[track_caller]
 #[cold]
 #[inline(never)]
 fn non_aggregate_call_context() -> Box<PgError> {
-    Box::new(PgError::error("aggregate function called in non-aggregate context"))
+    Box::new(PgError::error(
+        "aggregate function called in non-aggregate context",
+    ))
 }
 
 fn make_string_agg_state(agg_mcx: Mcx<'_>) -> PgResult<*mut StringAggState> {
@@ -87,14 +91,24 @@ fn make_string_agg_state(agg_mcx: Mcx<'_>) -> PgResult<*mut StringAggState> {
     let raw = Allocator::allocate(&agg_mcx, layout).map_err(|_| agg_mcx.oom(layout.size()))?;
     let p = raw.cast::<StringAggState>().as_ptr();
     // SAFETY: fresh allocation of the exact layout.
-    unsafe { p.write(StringAggState { data, len: 0, maxlen: INITIAL_SIZE as u32, cursor: 0 }) };
+    unsafe {
+        p.write(StringAggState {
+            data,
+            len: 0,
+            maxlen: INITIAL_SIZE as u32,
+            cursor: 0,
+        })
+    };
     Ok(p)
 }
 
 pub fn string_agg_transfn(fcinfo: &mut Fcinfo) -> PgResult<*mut StringAggState> {
     let [a, b, c] = *fcinfo.args_n::<3>();
-    let mut state: *mut StringAggState =
-        if a.isnull { core::ptr::null_mut() } else { a.value.as_usize() as *mut StringAggState };
+    let mut state: *mut StringAggState = if a.isnull {
+        core::ptr::null_mut()
+    } else {
+        a.value.as_usize() as *mut StringAggState
+    };
 
     if !b.isnull {
         // SAFETY: context, if set, is the evaltrans build's AggStateNode,
@@ -133,10 +147,16 @@ pub fn string_agg_combine(fcinfo: &mut Fcinfo) -> PgResult<*mut StringAggState> 
     let Some(agg_mcx) = (unsafe { fcinfo.agg_context() }) else {
         return Err(non_aggregate_call_context());
     };
-    let state1: *mut StringAggState =
-        if a.isnull { core::ptr::null_mut() } else { a.value.as_usize() as *mut StringAggState };
-    let state2: *const StringAggState =
-        if b.isnull { core::ptr::null() } else { b.value.as_usize() as *const StringAggState };
+    let state1: *mut StringAggState = if a.isnull {
+        core::ptr::null_mut()
+    } else {
+        a.value.as_usize() as *mut StringAggState
+    };
+    let state2: *const StringAggState = if b.isnull {
+        core::ptr::null()
+    } else {
+        b.value.as_usize() as *const StringAggState
+    };
 
     if state2.is_null() {
         return Ok(state1);

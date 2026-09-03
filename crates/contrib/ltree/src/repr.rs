@@ -44,7 +44,6 @@ pub const CLOSE: i32 = 5;
 pub const VALTRUE: i32 = 6;
 pub const VALFALSE: i32 = 7;
 
-
 #[inline]
 pub fn read_u16(buf: &[u8], off: usize) -> u16 {
     u16::from_ne_bytes([buf[off], buf[off + 1]])
@@ -93,7 +92,6 @@ pub fn varsize(buf: &[u8]) -> usize {
     let len = (word >> 2) & 0x3FFF_FFFF;
     len as usize
 }
-
 
 pub const LTREE_HDRSIZE: usize = 8;
 /// `LEVEL_HDRSIZE = offsetof(ltree_level, name)` = 2 (uint16 len).
@@ -161,7 +159,6 @@ pub fn build_ltree(levels: &[&[u8]]) -> Vec<u8> {
     }
     buf
 }
-
 
 pub const LQUERY_HDRSIZE: usize = 16;
 pub const LQL_HDRSIZE: usize = 16;

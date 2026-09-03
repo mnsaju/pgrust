@@ -34,11 +34,11 @@ fn no_binary_io(recv: bool, rngtypid: Oid) -> Box<PgError> {
     )
 }
 
-pub fn cached_multirange_io_data<'f>(
-    flinfo: &'f mut FmgrInfo,
+pub fn cached_multirange_io_data(
+    flinfo: &mut FmgrInfo,
     mltrngtypid: Oid,
     func: IOFuncSelector,
-) -> PgResult<&'f mut MultirangeIOData> {
+) -> PgResult<&mut MultirangeIOData> {
     let need = match flinfo.fn_extra_ref::<MultirangeIOData>() {
         Some(c) => c.mi.mltrngtypid != mltrngtypid,
         None => true,
@@ -47,10 +47,17 @@ pub fn cached_multirange_io_data<'f>(
         let mi = MultirangeInfo::lookup(mltrngtypid)?;
         let io = get_type_io_data(mi.rng.rngtypid, func)?;
         if io.func == 0 {
-            return Err(no_binary_io(matches!(func, IOFuncSelector::IOFunc_receive), mi.rng.rngtypid));
+            return Err(no_binary_io(
+                matches!(func, IOFuncSelector::IOFunc_receive),
+                mi.rng.rngtypid,
+            ));
         }
         let typioproc = ::fmgr_seams::fmgr_info::call(io.func)?;
-        flinfo.set_fn_extra(MultirangeIOData { mi, typioproc, typioparam: io.typioparam });
+        flinfo.set_fn_extra(MultirangeIOData {
+            mi,
+            typioproc,
+            typioparam: io.typioparam,
+        });
     }
     Ok(flinfo.fn_extra_mut::<MultirangeIOData>().unwrap())
 }
@@ -198,19 +205,30 @@ pub fn multirange_in<'m>(
         pos += 1;
     }
     if pos != input.len() {
-        let ctx = esc.as_deref_mut().map(|n| &mut n.ctx);
-        return ereturn(ctx, None, malformed(input, "Junk after closing right brace."));
+        let ctx = esc.map(|n| &mut n.ctx);
+        return ereturn(
+            ctx,
+            None,
+            malformed(input, "Junk after closing right brace."),
+        );
     }
 
-    Ok(Some(make_multirange(mcx, mltrngtypid, &mut cache.mi.rng, &mut ranges)?))
+    Ok(Some(make_multirange(
+        mcx,
+        mltrngtypid,
+        &mut cache.mi.rng,
+        &mut ranges,
+    )?))
 }
 
 // A range input/receive result datum is a fresh 4-byte-header image in mcx.
 fn range_datum_bytes<'m>(d: Datum) -> &'m [u8] {
     let p = d.as_usize() as *const u8;
-    let total = ::adt_rangetypes::varsize_4b(p);
-    // SAFETY: live range image of `total` bytes, mcx-owned (leaked to arena).
-    unsafe { core::slice::from_raw_parts(p, total) }
+    // SAFETY: live range image, mcx-owned (leaked to arena).
+    unsafe {
+        let total = ::adt_rangetypes::varsize_4b(p);
+        core::slice::from_raw_parts(p, total)
+    }
 }
 
 /// multirange_out body: NUL-terminated cstring image.
@@ -292,9 +310,11 @@ pub fn multirange_send<'m>(
             mcx,
         )?;
         let p = d.as_usize() as *const u8;
-        let total = ::adt_rangetypes::varsize_4b(p);
         // SAFETY: a send function's result is a live 4-byte-header bytea.
-        let payload = unsafe { core::slice::from_raw_parts(p.add(4), total - 4) };
+        let payload = unsafe {
+            let total = ::adt_rangetypes::varsize_4b(p);
+            core::slice::from_raw_parts(p.add(4), total - 4)
+        };
         ::pqformat::pq_sendint32(&mut buf, payload.len() as u32)?;
         ::pqformat::pq_sendbytes(&mut buf, payload)?;
     }

@@ -20,8 +20,14 @@ fn inline_set_returning_sql_body<'mcx>(
     rte_node: Node<'mcx>,
     prokind: i8,
 ) -> PgResult<Option<&'mcx Query<'mcx>>> {
-    let rte = rte_node.as_range_tbl_entry().expect("RTE_FUNCTION RangeTblEntry");
-    let rtfunc = rte.functions.nth(0).as_range_tbl_function().expect("functions cell");
+    let rte = rte_node
+        .as_range_tbl_entry()
+        .expect("RTE_FUNCTION RangeTblEntry");
+    let rtfunc = rte
+        .functions
+        .nth(0)
+        .as_range_tbl_function()
+        .expect("functions cell");
     let fexpr_node = rtfunc.funcexpr.expect("gate-checked FuncExpr");
     let fexpr = fexpr_node.as_func_expr().expect("gate-checked FuncExpr");
 
@@ -68,8 +74,7 @@ fn inline_srf_body<'a, 'mcx>(
         }
         let argtypes =
             crate::inline_fn::resolve_polymorphic_argtypes(mcx, &row.argtypes, &fexpr.args)?;
-        let mut name_refs: PgVec<'mcx, &str> =
-            mcx::vec_with_capacity_in(mcx, row.argnames.len())?;
+        let mut name_refs: PgVec<'mcx, &str> = mcx::vec_with_capacity_in(mcx, row.argnames.len())?;
         for n in row.argnames.iter() {
             name_refs.push(n.as_str());
         }
@@ -163,13 +168,18 @@ fn inline_srf_body<'a, 'mcx>(
 // substitute_actual_srf_parameters (clauses.c:5360): PARAM_EXTERN Params
 // become copies of the actual arguments, var levels bumped by the query
 // nesting depth (the body starts one level down, as the new subquery RTE).
-fn substitute_actual_srf_parameters<'a, 'mcx>(
+fn substitute_actual_srf_parameters<'mcx>(
     mcx: Mcx<'mcx>,
     q: &mut Query<'mcx>,
     nargs: usize,
-    args: &'a NodeList<'mcx>,
+    args: &NodeList<'mcx>,
 ) -> PgResult<()> {
-    let mut ctx = SrfSubst { mcx, args, nargs, sublevels_up: 1 };
+    let mut ctx = SrfSubst {
+        mcx,
+        args,
+        nargs,
+        sublevels_up: 1,
+    };
     ctx.query_fields(q)
 }
 
@@ -200,8 +210,10 @@ impl<'a, 'mcx> SrfSubst<'a, 'mcx> {
                             PgError::error(format!("invalid paramid: {}", p.paramid)).into()
                         );
                     }
-                    let copied =
-                        rewrite_manip::copy_node(self.mcx, self.args.nth((p.paramid - 1) as usize))?;
+                    let copied = rewrite_manip::copy_node(
+                        self.mcx,
+                        self.args.nth((p.paramid - 1) as usize),
+                    )?;
                     rewrite_manip::IncrementVarSublevelsUp(copied, self.sublevels_up, 0)?;
                     return Ok(Some(copied));
                 }

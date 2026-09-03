@@ -6,7 +6,11 @@ use crate::*;
 fn arr_image<'m>(mcx: Mcx<'m>, crcs: &[i32]) -> GtsRef<'m> {
     let size = 8 + crcs.len() * 4;
     let mut img: ::mcx::PgVec<'m, u8> = mcx::vec_with_capacity_in(mcx, size).unwrap();
-    mcx::vec_append_bytes(&mut img, &::types_tuple::varatt::set_varsize_4b_word(size as u32).to_ne_bytes()).unwrap();
+    mcx::vec_append_bytes(
+        &mut img,
+        &::types_tuple::varatt::set_varsize_4b_word(size as u32).to_ne_bytes(),
+    )
+    .unwrap();
     mcx::vec_append_bytes(&mut img, &ARRKEY.to_ne_bytes()).unwrap();
     for c in crcs {
         mcx::vec_append_bytes(&mut img, &c.to_ne_bytes()).unwrap();
@@ -17,7 +21,11 @@ fn arr_image<'m>(mcx: Mcx<'m>, crcs: &[i32]) -> GtsRef<'m> {
 fn sign_image<'m>(mcx: Mcx<'m>, crcs: &[i32], siglen: usize) -> GtsRef<'m> {
     let size = 8 + siglen;
     let mut img: ::mcx::PgVec<'m, u8> = mcx::vec_with_capacity_in(mcx, size).unwrap();
-    mcx::vec_append_bytes(&mut img, &::types_tuple::varatt::set_varsize_4b_word(size as u32).to_ne_bytes()).unwrap();
+    mcx::vec_append_bytes(
+        &mut img,
+        &::types_tuple::varatt::set_varsize_4b_word(size as u32).to_ne_bytes(),
+    )
+    .unwrap();
     mcx::vec_append_bytes(&mut img, &SIGNKEY.to_ne_bytes()).unwrap();
     img.resize(size, 0);
     for &c in crcs {
@@ -96,7 +104,11 @@ fn hemdist_alltrue() {
     let mcx = ctx.mcx();
     let size = 8usize;
     let mut img: ::mcx::PgVec<'_, u8> = mcx::vec_with_capacity_in(mcx, size).unwrap();
-    mcx::vec_append_bytes(&mut img, &::types_tuple::varatt::set_varsize_4b_word(size as u32).to_ne_bytes()).unwrap();
+    mcx::vec_append_bytes(
+        &mut img,
+        &::types_tuple::varatt::set_varsize_4b_word(size as u32).to_ne_bytes(),
+    )
+    .unwrap();
     mcx::vec_append_bytes(&mut img, &(SIGNKEY | ALLISTRUE).to_ne_bytes()).unwrap();
     let alltrue = GtsRef { image: img.leak() };
     assert!(alltrue.is_alltrue());
@@ -121,44 +133,58 @@ fn gtsquery_consistent_contains_and_containedby() {
         q
     };
     let key_q = tsq_img("foo & bar");
-    let key = make_tsquery_sign(TsQueryRef { payload: &key_q[4..] });
+    let key = make_tsquery_sign(TsQueryRef {
+        payload: &key_q[4..],
+    });
     let sub_q = tsq_img("foo");
-    let sub = make_tsquery_sign(TsQueryRef { payload: &sub_q[4..] });
+    let sub = make_tsquery_sign(TsQueryRef {
+        payload: &sub_q[4..],
+    });
     assert_eq!(key & sub, sub);
     assert_eq!(sub.count_ones(), 1);
 
     let run = |page_is_leaf: bool, strategy: u16, query: &[u8]| -> (bool, bool) {
-        let entry = ::types_gist::GISTENTRY::init(
-            ::datum::Datum::from_u64(key),
-            0,
-            false,
-            page_is_leaf,
-        );
+        let entry =
+            ::types_gist::GISTENTRY::init(::datum::Datum::from_u64(key), 0, false, page_is_leaf);
         let mut recheck = false;
         let mut fci = ::types_fmgr::LocalFcinfo::<5>::new(0);
         // SAFETY: ctx outlives the call.
         unsafe { fci.set_result_mcx(mcx) };
-        fci.set_arg(0, ::datum::Datum::from_usize(core::ptr::from_ref(&entry) as usize));
+        fci.set_arg(
+            0,
+            ::datum::Datum::from_usize(core::ptr::from_ref(&entry) as usize),
+        );
         fci.set_arg(1, ::datum::Datum::from_usize(query.as_ptr() as usize));
         fci.set_arg(2, ::datum::Datum::from_u32(strategy as u32));
         fci.set_arg(3, ::datum::Datum::from_u32(0));
-        fci.set_arg(4, ::datum::Datum::from_usize(core::ptr::from_mut(&mut recheck) as usize));
+        fci.set_arg(
+            4,
+            ::datum::Datum::from_usize(core::ptr::from_mut(&mut recheck) as usize),
+        );
         let d = fc_gtsquery_consistent(None, &mut fci).unwrap();
         (d.as_bool(), recheck)
     };
 
     // leaf: contains needs all of the query's bits; containedby needs all of the key's.
     assert_eq!(run(true, RTContainsStrategyNumber, &sub_q), (true, true));
-    assert_eq!(run(true, RTContainedByStrategyNumber, &sub_q), (false, true));
+    assert_eq!(
+        run(true, RTContainedByStrategyNumber, &sub_q),
+        (false, true)
+    );
     assert_eq!(run(true, RTContainedByStrategyNumber, &key_q), (true, true));
     // internal page: any overlap passes either strategy.
     assert_eq!(run(false, RTContainsStrategyNumber, &sub_q), (true, true));
-    assert_eq!(run(false, RTContainedByStrategyNumber, &sub_q), (true, true));
+    assert_eq!(
+        run(false, RTContainedByStrategyNumber, &sub_q),
+        (true, true)
+    );
     // unknown strategy is false.
     assert_eq!(run(true, 1, &sub_q), (false, true));
 
     let miss_q = tsq_img("zzzzqq");
-    let miss = make_tsquery_sign(TsQueryRef { payload: &miss_q[4..] });
+    let miss = make_tsquery_sign(TsQueryRef {
+        payload: &miss_q[4..],
+    });
     if key & miss == 0 {
         assert_eq!(run(true, RTContainsStrategyNumber, &miss_q), (false, true));
         assert_eq!(run(false, RTContainsStrategyNumber, &miss_q), (false, true));

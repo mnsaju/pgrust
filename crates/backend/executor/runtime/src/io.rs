@@ -72,7 +72,10 @@ pub(crate) fn worker_exit() {
         aio_seams::uring_worker_ring_teardown::call();
     }
     WORKER_RT.with(|c| *c.borrow_mut() = None);
-    debug_assert!(!IN_IO_SECTION.get(), "worker exited inside a blocking section");
+    debug_assert!(
+        !IN_IO_SECTION.get(),
+        "worker exited inside a blocking section"
+    );
     PERMIT_HELD.set(false);
 }
 

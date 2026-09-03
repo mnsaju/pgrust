@@ -38,14 +38,38 @@ macro_rules! hmac_hash {
     };
 }
 
-hmac_hash!(Sha224, PgSha256Ctx, init_sha224, final_sha224,
-    pg_sha2::PG_SHA224_BLOCK_LENGTH, pg_sha2::PG_SHA224_DIGEST_LENGTH);
-hmac_hash!(Sha256, PgSha256Ctx, init_sha256, final_sha256,
-    pg_sha2::PG_SHA256_BLOCK_LENGTH, pg_sha2::PG_SHA256_DIGEST_LENGTH);
-hmac_hash!(Sha384, PgSha512Ctx, init_sha384, final_sha384,
-    pg_sha2::PG_SHA384_BLOCK_LENGTH, pg_sha2::PG_SHA384_DIGEST_LENGTH);
-hmac_hash!(Sha512, PgSha512Ctx, init_sha512, final_sha512,
-    pg_sha2::PG_SHA512_BLOCK_LENGTH, pg_sha2::PG_SHA512_DIGEST_LENGTH);
+hmac_hash!(
+    Sha224,
+    PgSha256Ctx,
+    init_sha224,
+    final_sha224,
+    pg_sha2::PG_SHA224_BLOCK_LENGTH,
+    pg_sha2::PG_SHA224_DIGEST_LENGTH
+);
+hmac_hash!(
+    Sha256,
+    PgSha256Ctx,
+    init_sha256,
+    final_sha256,
+    pg_sha2::PG_SHA256_BLOCK_LENGTH,
+    pg_sha2::PG_SHA256_DIGEST_LENGTH
+);
+hmac_hash!(
+    Sha384,
+    PgSha512Ctx,
+    init_sha384,
+    final_sha384,
+    pg_sha2::PG_SHA384_BLOCK_LENGTH,
+    pg_sha2::PG_SHA384_DIGEST_LENGTH
+);
+hmac_hash!(
+    Sha512,
+    PgSha512Ctx,
+    init_sha512,
+    final_sha512,
+    pg_sha2::PG_SHA512_BLOCK_LENGTH,
+    pg_sha2::PG_SHA512_DIGEST_LENGTH
+);
 
 pub struct PgHmacCtx<H: HmacHash> {
     hash: H,
@@ -147,7 +171,10 @@ mod tests {
 
         let mut c = PgHmacCtx::<Sha224>::init(key);
         c.update(msg);
-        assert_eq!(hex(&c.finalize()), "a30e01098bc6dbbf45690f3a7e9e6d0f8bbea2a39e6148008fd05e44");
+        assert_eq!(
+            hex(&c.finalize()),
+            "a30e01098bc6dbbf45690f3a7e9e6d0f8bbea2a39e6148008fd05e44"
+        );
 
         let mut c = PgHmacCtx::<Sha384>::init(key);
         c.update(msg);
@@ -172,7 +199,10 @@ mod tests {
         let mut c = PgHmacCtx::<Sha224>::init(&key);
         c.update(msg);
         assert_eq!(hex(&c.finalize()[..16]), "0e2aea68a90c8d37c988bcdb9fca6fa8");
-        assert_eq!(hex(&hmac_sha256(&key, msg)[..16]), "a3b6167473100ee06e0c796c2955552b");
+        assert_eq!(
+            hex(&hmac_sha256(&key, msg)[..16]),
+            "a3b6167473100ee06e0c796c2955552b"
+        );
         let mut c = PgHmacCtx::<Sha384>::init(&key);
         c.update(msg);
         assert_eq!(hex(&c.finalize()[..16]), "3abf34c3503b2a23a46efc619baef897");

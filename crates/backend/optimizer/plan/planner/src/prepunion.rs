@@ -16,8 +16,12 @@ use crate::run::PlannerRun;
 
 pub fn plan_set_operations<'mcx>(run: &mut PlannerRun<'mcx>) -> PgResult<RelId> {
     let parse = run.parse();
-    let top_node = parse.setOperations.expect("plan_set_operations without setOperations");
-    let topop = top_node.as_set_operation_stmt().expect("setOperations is a SetOperationStmt");
+    let top_node = parse
+        .setOperations
+        .expect("plan_set_operations without setOperations");
+    let topop = top_node
+        .as_set_operation_stmt()
+        .expect("setOperations is a SetOperationStmt");
 
     let jt = parse.jointree.expect("jointree is a FromExpr");
     debug_assert!(jt.fromlist.is_nil() && jt.quals.is_none());
@@ -33,9 +37,14 @@ pub fn plan_set_operations<'mcx>(run: &mut PlannerRun<'mcx>) -> PgResult<RelId> 
     while let Some(op) = node.as_set_operation_stmt() {
         node = op.larg.expect("setop larg");
     }
-    let leftmost_rti = node.as_range_tbl_ref().expect("setop leaf is a RangeTblRef").rtindex;
-    let leftmost_query =
-        run.rte(leftmost_rti as usize).subquery.expect("setop leaf RTE has a subquery");
+    let leftmost_rti = node
+        .as_range_tbl_ref()
+        .expect("setop leaf is a RangeTblRef")
+        .rtindex;
+    let leftmost_query = run
+        .rte(leftmost_rti as usize)
+        .subquery
+        .expect("setop leaf RTE has a subquery");
     let refnames_tlist = &leftmost_query.targetList;
 
     if run.root.hasRecursion {
@@ -73,8 +82,10 @@ fn recurse_set_operations<'mcx>(
         debug_assert!(run.root.plan_params.is_empty());
 
         let tuple_fraction = run.root.tuple_fraction;
-        let sub_parse =
-            mcx::leak_in(mcx::alloc_in(run.mcx, crate::subselect::query_cells_copy(run.mcx, subquery)?)?);
+        let sub_parse = mcx::leak_in(mcx::alloc_in(
+            run.mcx,
+            crate::subselect::query_cells_copy(run.mcx, subquery)?,
+        )?);
         run.push_root()?;
         crate::subquery::subquery_planner(run, sub_parse, false, tuple_fraction, parent_op)?;
         let child_tlist = run.processed_tlist();
@@ -104,7 +115,8 @@ fn recurse_set_operations<'mcx>(
             generate_nonunion_paths(run, op, refnames_tlist)?
         };
         let mut trivial = true;
-        if !tlist_same_datatypes(&tlist, col_types) || !tlist_same_collations(&tlist, col_collations)
+        if !tlist_same_datatypes(&tlist, col_types)
+            || !tlist_same_collations(&tlist, col_collations)
         {
             // Vars use varno 0 so setrefs can match them against the setop
             // subplan tlist (recurse_set_operations, prepunion.c).
@@ -118,11 +130,9 @@ fn recurse_set_operations<'mcx>(
                 refnames_tlist,
             )?;
             let target_id = create_pathtarget(run, &tlist)?;
-            let paths =
-                crate::relnode::pgvec_clone_shallow(run.mcx, &run.root.rel(rel).pathlist);
+            let paths = crate::relnode::pgvec_clone_shallow(run.mcx, &run.root.rel(rel).pathlist);
             for (i, &subpath) in paths.iter().enumerate() {
-                let path =
-                    crate::pathnode::apply_projection_to_path(run, rel, subpath, target_id)?;
+                let path = crate::pathnode::apply_projection_to_path(run, rel, subpath, target_id)?;
                 if path != subpath {
                     run.root.rel_mut(rel).pathlist[i] = path;
                 }
@@ -143,7 +153,10 @@ fn recurse_set_operations<'mcx>(
         postprocess_setop_rel(run, rel)?;
         Ok((rel, tlist, trivial))
     } else {
-        panic!("recurse_set_operations (prepunion.c): unrecognized node {:?}", set_op.node_tag());
+        panic!(
+            "recurse_set_operations (prepunion.c): unrecognized node {:?}",
+            set_op.node_tag()
+        );
     }
 }
 
@@ -178,7 +191,11 @@ fn build_setop_child_paths<'mcx>(
 
     crate::costsize::set_subquery_size_estimates(run, rel)?;
 
-    let idx = run.root.rel(rel).subroot_idx.expect("subquery rel has a subroot");
+    let idx = run
+        .root
+        .rel(rel)
+        .subroot_idx
+        .expect("subquery rel has a subroot");
     run.swap_with_rel_subroot(idx);
     let mut candidates: PgVec<'mcx, ChildCandidate> = PgVec::new_in(run.mcx);
     let mut partial_candidate: Option<ChildCandidate> = None;
@@ -186,9 +203,7 @@ fn build_setop_child_paths<'mcx>(
     let subroot_result = (|| -> PgResult<bool> {
         let final_rel = crate::planmain::fetch_final_rel(run);
         let consider_parallel = run.root.rel(final_rel).consider_parallel;
-        debug_assert!(
-            consider_parallel || run.root.rel(final_rel).partial_pathlist.is_empty()
-        );
+        debug_assert!(consider_parallel || run.root.rel(final_rel).partial_pathlist.is_empty());
         // prepunion.c: only the cheapest partial subpath is worth a partial
         // SubqueryScan.
         if let Some(&psp) = run.root.rel(final_rel).partial_pathlist.first() {
@@ -204,11 +219,9 @@ fn build_setop_child_paths<'mcx>(
             .rel(final_rel)
             .cheapest_total_path
             .expect("subquery final rel has a cheapest path");
-        let setop_pathkeys =
-            crate::relnode::pgvec_clone_shallow(run.mcx, &run.root.setop_pathkeys);
+        let setop_pathkeys = crate::relnode::pgvec_clone_shallow(run.mcx, &run.root.setop_pathkeys);
         let limittuples = run.root.limit_tuples;
-        let paths =
-            crate::relnode::pgvec_clone_shallow(run.mcx, &run.root.rel(final_rel).pathlist);
+        let paths = crate::relnode::pgvec_clone_shallow(run.mcx, &run.root.rel(final_rel).pathlist);
         for &subpath in paths.iter() {
             if subpath == cheapest {
                 candidates.push(ChildCandidate {
@@ -262,12 +275,8 @@ fn build_setop_child_paths<'mcx>(
 
     run.root.rel_mut(rel).consider_parallel = consider_parallel;
     for c in candidates.iter() {
-        let pathkeys = crate::pathkeys::convert_subquery_pathkeys(
-            run,
-            rel,
-            &c.pathkey_descs,
-            &c.sub_tlist,
-        )?;
+        let pathkeys =
+            crate::pathkeys::convert_subquery_pathkeys(run, rel, &c.pathkey_descs, &c.sub_tlist)?;
         let id = crate::pathnode::create_subqueryscan_path(
             run,
             rel,
@@ -303,7 +312,11 @@ fn build_setop_child_paths<'mcx>(
         return Ok(None);
     }
     let input_rows = {
-        let cheapest = run.root.rel(rel).cheapest_total_path.expect("set_cheapest ran");
+        let cheapest = run
+            .root
+            .rel(rel)
+            .cheapest_total_path
+            .expect("set_cheapest ran");
         run.root.path(cheapest).base().rows
     };
     run.swap_with_rel_subroot(idx);
@@ -363,7 +376,13 @@ fn generate_union_paths<'mcx>(
         }
         v
     };
-    let tlist = generate_append_tlist(run, &op.colTypes, &op.colCollations, &input_tlists, refnames_tlist)?;
+    let tlist = generate_append_tlist(
+        run,
+        &op.colTypes,
+        &op.colCollations,
+        &input_tlists,
+        refnames_tlist,
+    )?;
 
     let mut group_list = NodeList::nil();
     let mut try_sorted = false;
@@ -374,8 +393,7 @@ fn generate_union_paths<'mcx>(
             try_sorted = true;
             union_pathkeys =
                 crate::pathkeys::make_pathkeys_for_sortclauses(run, &group_list, &tlist)?;
-            run.root.query_pathkeys =
-                crate::relnode::pgvec_clone_shallow(mcx, &union_pathkeys);
+            run.root.query_pathkeys = crate::relnode::pgvec_clone_shallow(mcx, &union_pathkeys);
         }
     }
 
@@ -392,11 +410,14 @@ fn generate_union_paths<'mcx>(
     let mut consider_parallel = true;
     let mut relids: Relids<'mcx> = crate::relnode::relids_empty();
     for &(rel, _, _) in rellist.iter() {
-        cheapest_pathlist
-            .push(run.root.rel(rel).cheapest_total_path.expect("union child has cheapest path"));
+        cheapest_pathlist.push(
+            run.root
+                .rel(rel)
+                .cheapest_total_path
+                .expect("union child has cheapest path"),
+        );
         if try_sorted {
-            let paths =
-                crate::relnode::pgvec_clone_shallow(mcx, &run.root.rel(rel).pathlist);
+            let paths = crate::relnode::pgvec_clone_shallow(mcx, &run.root.rel(rel).pathlist);
             match crate::pathkeys::get_cheapest_path_for_pathkeys(
                 run,
                 &paths,
@@ -458,8 +479,7 @@ fn generate_union_paths<'mcx>(
         if crate::gucs::enable_parallel_append() {
             parallel_workers =
                 parallel_workers.max((partial_pathlist.len() as u32).ilog2() as i32 + 1);
-            parallel_workers =
-                parallel_workers.min(crate::gucs::max_parallel_workers_per_gather());
+            parallel_workers = parallel_workers.min(crate::gucs::max_parallel_workers_per_gather());
         }
         let papath = crate::pathnode::create_append_path(
             run,
@@ -472,7 +492,13 @@ fn generate_union_paths<'mcx>(
             crate::gucs::enable_parallel_append(),
             -1.0,
         )?;
-        Some(crate::pathnode::create_gather_path(run, result_rel, papath, Some(target_id), None))
+        Some(crate::pathnode::create_gather_path(
+            run,
+            result_rel,
+            papath,
+            Some(target_id),
+            None,
+        ))
     } else {
         None
     };
@@ -557,7 +583,10 @@ fn generate_recursion_path<'mcx>(
     refnames_tlist: &NodeList<'mcx>,
 ) -> PgResult<(RelId, NodeList<'mcx>)> {
     let mcx = run.mcx;
-    assert!(op.op == SetOperation::SETOP_UNION, "only UNION queries can be recursive");
+    assert!(
+        op.op == SetOperation::SETOP_UNION,
+        "only UNION queries can be recursive"
+    );
     debug_assert!(run.root.wt_param_id >= 0);
 
     let (lrel, lpath_tlist, ltrivial) = recurse_set_operations(
@@ -571,7 +600,11 @@ fn generate_recursion_path<'mcx>(
     if run.root.rel(lrel).rtekind == RTEKind::RTE_SUBQUERY as u32 {
         build_setop_child_paths(run, lrel, ltrivial, &lpath_tlist, &[], false)?;
     }
-    let lpath = run.root.rel(lrel).cheapest_total_path.expect("non-recursive term has a path");
+    let lpath = run
+        .root
+        .rel(lrel)
+        .cheapest_total_path
+        .expect("non-recursive term has a path");
     // The recursive term's worktable scans read this (set_worktable_pathlist).
     run.root.non_recursive_path = Some(lpath);
     let (rrel, rpath_tlist, rtrivial) = recurse_set_operations(
@@ -585,7 +618,11 @@ fn generate_recursion_path<'mcx>(
     if run.root.rel(rrel).rtekind == RTEKind::RTE_SUBQUERY as u32 {
         build_setop_child_paths(run, rrel, rtrivial, &rpath_tlist, &[], false)?;
     }
-    let rpath = run.root.rel(rrel).cheapest_total_path.expect("recursive term has a path");
+    let rpath = run
+        .root
+        .rel(rrel)
+        .cheapest_total_path
+        .expect("recursive term has a path");
     run.root.non_recursive_path = None;
 
     let input_tlists: PgVec<'mcx, &NodeList<'mcx>> = {
@@ -594,14 +631,16 @@ fn generate_recursion_path<'mcx>(
         v.push(&rpath_tlist);
         v
     };
-    let tlist =
-        generate_append_tlist(run, &op.colTypes, &op.colCollations, &input_tlists, refnames_tlist)?;
+    let tlist = generate_append_tlist(
+        run,
+        &op.colTypes,
+        &op.colCollations,
+        &input_tlists,
+        refnames_tlist,
+    )?;
 
-    let relids = crate::relnode::relids_union(
-        mcx,
-        &run.root.rel(lrel).relids,
-        &run.root.rel(rrel).relids,
-    );
+    let relids =
+        crate::relnode::relids_union(mcx, &run.root.rel(lrel).relids, &run.root.rel(rrel).relids);
     let result_rel =
         crate::relnode::fetch_upper_rel_with_relids(&mut run.root, UPPERREL_SETOP, relids);
     let target_id = create_pathtarget(run, &tlist)?;
@@ -618,8 +657,10 @@ fn generate_recursion_path<'mcx>(
                     .with_detail("All column datatypes must be hashable."),
             ));
         }
-        let (lrows, rrows) =
-            (run.root.path(lpath).base().rows, run.root.path(rpath).base().rows);
+        let (lrows, rrows) = (
+            run.root.path(lpath).base().rows,
+            run.root.path(rpath).base().rows,
+        );
         (intern_clause_list(run, &group_list), lrows + rrows * 10.0)
     };
 
@@ -681,7 +722,11 @@ fn generate_nonunion_paths<'mcx>(
     let can_hash = grouping_is_hashable_nodes(&group_list);
     if !can_sort && !can_hash {
         return Err(crate::grouping::could_not_implement(
-            if op.op == SetOperation::SETOP_INTERSECT { "INTERSECT" } else { "EXCEPT" },
+            if op.op == SetOperation::SETOP_INTERSECT {
+                "INTERSECT"
+            } else {
+                "EXCEPT"
+            },
         ));
     }
 
@@ -689,22 +734,23 @@ fn generate_nonunion_paths<'mcx>(
     if can_sort {
         nonunion_pathkeys =
             crate::pathkeys::make_pathkeys_for_sortclauses(run, &group_list, &tlist)?;
-        run.root.query_pathkeys =
-            crate::relnode::pgvec_clone_shallow(mcx, &nonunion_pathkeys);
+        run.root.query_pathkeys = crate::relnode::pgvec_clone_shallow(mcx, &nonunion_pathkeys);
     }
 
-    let mut d_left_groups =
-        match run.root.rel(lrel).rtekind == RTEKind::RTE_SUBQUERY as u32 {
-            true => build_setop_child_paths(run, lrel, ltrivial, &lpath_tlist, &nonunion_pathkeys, true)?
-                .expect("num groups requested"),
-            false => run.root.rel(lrel).rows,
-        };
-    let mut d_right_groups =
-        match run.root.rel(rrel).rtekind == RTEKind::RTE_SUBQUERY as u32 {
-            true => build_setop_child_paths(run, rrel, rtrivial, &rpath_tlist, &nonunion_pathkeys, true)?
-                .expect("num groups requested"),
-            false => run.root.rel(rrel).rows,
-        };
+    let mut d_left_groups = match run.root.rel(lrel).rtekind == RTEKind::RTE_SUBQUERY as u32 {
+        true => {
+            build_setop_child_paths(run, lrel, ltrivial, &lpath_tlist, &nonunion_pathkeys, true)?
+                .expect("num groups requested")
+        }
+        false => run.root.rel(lrel).rows,
+    };
+    let mut d_right_groups = match run.root.rel(rrel).rtekind == RTEKind::RTE_SUBQUERY as u32 {
+        true => {
+            build_setop_child_paths(run, rrel, rtrivial, &rpath_tlist, &nonunion_pathkeys, true)?
+                .expect("num groups requested")
+        }
+        false => run.root.rel(rrel).rows,
+    };
 
     run.root.tuple_fraction = save_fraction;
 
@@ -714,24 +760,35 @@ fn generate_nonunion_paths<'mcx>(
         core::mem::swap(&mut d_left_groups, &mut d_right_groups);
     }
 
-    let lpath = run.root.rel(lrel).cheapest_total_path.expect("left child has cheapest path");
-    let rpath = run.root.rel(rrel).cheapest_total_path.expect("right child has cheapest path");
+    let lpath = run
+        .root
+        .rel(lrel)
+        .cheapest_total_path
+        .expect("left child has cheapest path");
+    let rpath = run
+        .root
+        .rel(rrel)
+        .cheapest_total_path
+        .expect("right child has cheapest path");
 
-    let relids = crate::relnode::relids_union(
-        mcx,
-        &run.root.rel(lrel).relids,
-        &run.root.rel(rrel).relids,
-    );
+    let relids =
+        crate::relnode::relids_union(mcx, &run.root.rel(lrel).relids, &run.root.rel(rrel).relids);
     let result_rel =
         crate::relnode::fetch_upper_rel_with_relids(&mut run.root, UPPERREL_SETOP, relids);
     let target_id = create_pathtarget(run, &tlist)?;
     run.root.rel_mut(result_rel).pathtarget_id = Some(target_id);
 
-    let (lrows, rrows) =
-        (run.root.path(lpath).base().rows, run.root.path(rpath).base().rows);
+    let (lrows, rrows) = (
+        run.root.path(lpath).base().rows,
+        run.root.path(rpath).base().rows,
+    );
     let d_num_groups = d_left_groups;
     let d_num_output_rows = if op.op == SetOperation::SETOP_EXCEPT {
-        if op.all { lrows } else { d_num_groups }
+        if op.all {
+            lrows
+        } else {
+            d_num_groups
+        }
     } else if op.all {
         lrows.min(rrows)
     } else {
@@ -807,10 +864,7 @@ fn sorted_nonunion_input<'mcx>(
     nonunion_pathkeys: &[PathKey],
 ) -> PgResult<PathId> {
     let pathkeys = crate::pathkeys::make_pathkeys_for_sortclauses(run, group_list, input_tlist)?;
-    if crate::pathkeys::pathkeys_contained_in(
-        &pathkeys,
-        &run.root.path(cheapest).base().pathkeys,
-    ) {
+    if crate::pathkeys::pathkeys_contained_in(&pathkeys, &run.root.path(cheapest).base().pathkeys) {
         return Ok(cheapest);
     }
     let paths = crate::relnode::pgvec_clone_shallow(run.mcx, &run.root.rel(rel).pathlist);
@@ -825,7 +879,9 @@ fn sorted_nonunion_input<'mcx>(
         return Ok(p);
     }
     let parent = run.root.path(cheapest).base().parent;
-    Ok(crate::pathnode::create_sort_path(run, parent, cheapest, pathkeys, -1.0))
+    Ok(crate::pathnode::create_sort_path(
+        run, parent, cheapest, pathkeys, -1.0,
+    ))
 }
 
 type UnionChild<'mcx> = (RelId, NodeList<'mcx>, bool);
@@ -892,8 +948,16 @@ fn generate_setop_tlist<'mcx>(
     let mut rt = refnames_tlist.iter();
     for (i, col_type) in col_types.iter().enumerate() {
         let col_coll = col_collations.nth(i);
-        let input_tle = it.next().expect("input tlist matches colTypes").as_target_entry().expect("tlist cell");
-        let ref_tle = rt.next().expect("refnames tlist matches colTypes").as_target_entry().expect("tlist cell");
+        let input_tle = it
+            .next()
+            .expect("input tlist matches colTypes")
+            .as_target_entry()
+            .expect("tlist cell");
+        let ref_tle = rt
+            .next()
+            .expect("refnames tlist matches colTypes")
+            .as_target_entry()
+            .expect("tlist cell");
         debug_assert!(input_tle.resno == resno && ref_tle.resno == resno);
         debug_assert!(!input_tle.resjunk && !ref_tle.resjunk);
 
@@ -970,7 +1034,7 @@ fn generate_append_tlist<'mcx>(
     let mcx = run.mcx;
     let ncols = col_types.len();
     let mut col_typmods: PgVec<'mcx, i32> = PgVec::new_in(mcx);
-    col_typmods.extend(core::iter::repeat(-1).take(ncols));
+    col_typmods.extend(std::iter::repeat_n(-1, ncols));
 
     for (tlist_no, subtlist) in input_tlists.iter().enumerate() {
         for (colindex, subtle_node) in subtlist.iter().enumerate() {
@@ -993,7 +1057,11 @@ fn generate_append_tlist<'mcx>(
     let mut rt = refnames_tlist.iter();
     for i in 0..ncols {
         let resno = (i + 1) as i16;
-        let ref_tle = rt.next().expect("refnames tlist matches colTypes").as_target_entry().expect("tlist cell");
+        let ref_tle = rt
+            .next()
+            .expect("refnames tlist matches colTypes")
+            .as_target_entry()
+            .expect("tlist cell");
         debug_assert!(ref_tle.resno == resno && !ref_tle.resjunk);
         let expr = Node::mk_var(
             mcx,
@@ -1114,9 +1182,8 @@ pub(crate) fn assign_sort_group_ref<'mcx>(tle_node: Node<'mcx>, tlist: &NodeList
     // SAFETY: C assigns the ref in place on the shared processed_tlist entry;
     // no borrow of this TargetEntry is read across the write.
     unsafe {
-        tle_node.with_mut::<types_nodes::primnodes::TargetEntry, _>(|t| {
-            t.ressortgroupref = max_ref + 1
-        })
+        tle_node
+            .with_mut::<types_nodes::primnodes::TargetEntry, _>(|t| t.ressortgroupref = max_ref + 1)
     }
     .expect("tlist cell");
     max_ref + 1
@@ -1140,9 +1207,11 @@ fn grouping_is_sortable_nodes(clauses: &NodeList<'_>) -> bool {
 }
 
 fn grouping_is_hashable_nodes(clauses: &NodeList<'_>) -> bool {
-    clauses
-        .iter()
-        .all(|n| n.as_sort_group_clause().expect("group clause cell").hashable)
+    clauses.iter().all(|n| {
+        n.as_sort_group_clause()
+            .expect("group clause cell")
+            .hashable
+    })
 }
 
 fn oid_list_equal(a: &OidList<'_>, b: &OidList<'_>) -> bool {

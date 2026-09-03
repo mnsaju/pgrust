@@ -1,4 +1,3 @@
-
 extern crate alloc;
 
 use alloc::format;
@@ -6,20 +5,19 @@ use alloc::rc::Rc;
 use alloc::string::{String, ToString};
 
 use ::mcx::{slice_in, Mcx, MemoryContext};
-use ::types_core::PgWChar;
-use ::types_error::PgResult;
 use ::regex::{
     RegMatch, RegcompResult, RegexCompiled, RegexFailure, RegexecResult, RegprefixResult,
 };
+use ::types_core::PgWChar;
+use ::types_error::PgResult;
 
 use crate::regex_consts::{
-    REG_ATOI, REG_BADBR, REG_BADOPT, REG_BADPAT, REG_BADRPT, REG_ASSERT, REG_ECOLLATE,
-    REG_ECOLORS, REG_ECTYPE, REG_EBRACE, REG_EBRACK, REG_EESCAPE, REG_EPAREN, REG_ERANGE,
-    REG_ESPACE, REG_ESUBREG, REG_ETOOBIG, REG_EXACT, REG_INVARG, REG_ITOA, REG_MIXED,
-    REG_NOMATCH, REG_OKAY, REG_PREFIX, REMAGIC,
+    REG_ASSERT, REG_ATOI, REG_BADBR, REG_BADOPT, REG_BADPAT, REG_BADRPT, REG_EBRACE, REG_EBRACK,
+    REG_ECOLLATE, REG_ECOLORS, REG_ECTYPE, REG_EESCAPE, REG_EPAREN, REG_ERANGE, REG_ESPACE,
+    REG_ESUBREG, REG_ETOOBIG, REG_EXACT, REG_INVARG, REG_ITOA, REG_MIXED, REG_NOMATCH, REG_OKAY,
+    REG_PREFIX, REMAGIC,
 };
-use crate::regguts::{chr, RegexT, COLORLESS, CHR_MIN, MAX_SIMPLE_CHR, PSEUDO};
-
+use crate::regguts::{chr, RegexT, CHR_MIN, COLORLESS, MAX_SIMPLE_CHR, PSEUDO};
 
 fn regex_of(re: &RegexCompiled) -> &RegexT {
     re.engine
@@ -106,11 +104,9 @@ pub fn seam_pg_regfree(re: RegexCompiled) {
     pg_regfree(re);
 }
 
-
 pub fn pg_regfree(re: RegexCompiled) {
     drop(re);
 }
-
 
 struct Rerr {
     code: i32,
@@ -119,39 +115,115 @@ struct Rerr {
 }
 
 static RERRS: &[Rerr] = &[
-    Rerr { code: REG_OKAY, name: "REG_OKAY", explain: "no errors detected" },
-    Rerr { code: REG_NOMATCH, name: "REG_NOMATCH", explain: "failed to match" },
-    Rerr { code: REG_BADPAT, name: "REG_BADPAT", explain: "invalid regexp (reg version 0.8)" },
-    Rerr { code: REG_ECOLLATE, name: "REG_ECOLLATE", explain: "invalid collating element" },
-    Rerr { code: REG_ECTYPE, name: "REG_ECTYPE", explain: "invalid character class" },
-    Rerr { code: REG_EESCAPE, name: "REG_EESCAPE", explain: "invalid escape \\ sequence" },
-    Rerr { code: REG_ESUBREG, name: "REG_ESUBREG", explain: "invalid backreference number" },
-    Rerr { code: REG_EBRACK, name: "REG_EBRACK", explain: "brackets [] not balanced" },
-    Rerr { code: REG_EPAREN, name: "REG_EPAREN", explain: "parentheses () not balanced" },
-    Rerr { code: REG_EBRACE, name: "REG_EBRACE", explain: "braces {} not balanced" },
-    Rerr { code: REG_BADBR, name: "REG_BADBR", explain: "invalid repetition count(s)" },
-    Rerr { code: REG_ERANGE, name: "REG_ERANGE", explain: "invalid character range" },
-    Rerr { code: REG_ESPACE, name: "REG_ESPACE", explain: "out of memory" },
-    Rerr { code: REG_BADRPT, name: "REG_BADRPT", explain: "quantifier operand invalid" },
-    Rerr { code: REG_ASSERT, name: "REG_ASSERT", explain: "\"cannot happen\" -- you found a bug" },
-    Rerr { code: REG_INVARG, name: "REG_INVARG", explain: "invalid argument to regex function" },
-    Rerr { code: REG_MIXED, name: "REG_MIXED", explain: "character widths of regex and string differ" },
-    Rerr { code: REG_BADOPT, name: "REG_BADOPT", explain: "invalid embedded option" },
-    Rerr { code: REG_ETOOBIG, name: "REG_ETOOBIG", explain: "regular expression is too complex" },
-    Rerr { code: REG_ECOLORS, name: "REG_ECOLORS", explain: "too many colors" },
+    Rerr {
+        code: REG_OKAY,
+        name: "REG_OKAY",
+        explain: "no errors detected",
+    },
+    Rerr {
+        code: REG_NOMATCH,
+        name: "REG_NOMATCH",
+        explain: "failed to match",
+    },
+    Rerr {
+        code: REG_BADPAT,
+        name: "REG_BADPAT",
+        explain: "invalid regexp (reg version 0.8)",
+    },
+    Rerr {
+        code: REG_ECOLLATE,
+        name: "REG_ECOLLATE",
+        explain: "invalid collating element",
+    },
+    Rerr {
+        code: REG_ECTYPE,
+        name: "REG_ECTYPE",
+        explain: "invalid character class",
+    },
+    Rerr {
+        code: REG_EESCAPE,
+        name: "REG_EESCAPE",
+        explain: "invalid escape \\ sequence",
+    },
+    Rerr {
+        code: REG_ESUBREG,
+        name: "REG_ESUBREG",
+        explain: "invalid backreference number",
+    },
+    Rerr {
+        code: REG_EBRACK,
+        name: "REG_EBRACK",
+        explain: "brackets [] not balanced",
+    },
+    Rerr {
+        code: REG_EPAREN,
+        name: "REG_EPAREN",
+        explain: "parentheses () not balanced",
+    },
+    Rerr {
+        code: REG_EBRACE,
+        name: "REG_EBRACE",
+        explain: "braces {} not balanced",
+    },
+    Rerr {
+        code: REG_BADBR,
+        name: "REG_BADBR",
+        explain: "invalid repetition count(s)",
+    },
+    Rerr {
+        code: REG_ERANGE,
+        name: "REG_ERANGE",
+        explain: "invalid character range",
+    },
+    Rerr {
+        code: REG_ESPACE,
+        name: "REG_ESPACE",
+        explain: "out of memory",
+    },
+    Rerr {
+        code: REG_BADRPT,
+        name: "REG_BADRPT",
+        explain: "quantifier operand invalid",
+    },
+    Rerr {
+        code: REG_ASSERT,
+        name: "REG_ASSERT",
+        explain: "\"cannot happen\" -- you found a bug",
+    },
+    Rerr {
+        code: REG_INVARG,
+        name: "REG_INVARG",
+        explain: "invalid argument to regex function",
+    },
+    Rerr {
+        code: REG_MIXED,
+        name: "REG_MIXED",
+        explain: "character widths of regex and string differ",
+    },
+    Rerr {
+        code: REG_BADOPT,
+        name: "REG_BADOPT",
+        explain: "invalid embedded option",
+    },
+    Rerr {
+        code: REG_ETOOBIG,
+        name: "REG_ETOOBIG",
+        explain: "regular expression is too complex",
+    },
+    Rerr {
+        code: REG_ECOLORS,
+        name: "REG_ECOLORS",
+        explain: "too many colors",
+    },
 ];
 
 pub fn pg_regerror(errcode: i32) -> String {
     let msg: String = match errcode {
-        REG_ATOI => {
-            "-1".to_string()
-        }
-        REG_ITOA => {
-            match RERRS.iter().find(|r| r.code == 0) {
-                Some(r) => r.name.to_string(),
-                None => "REG_0".to_string(),
-            }
-        }
+        REG_ATOI => "-1".to_string(),
+        REG_ITOA => match RERRS.iter().find(|r| r.code == 0) {
+            Some(r) => r.name.to_string(),
+            None => "REG_0".to_string(),
+        },
         _ => match RERRS.iter().find(|r| r.code == errcode) {
             Some(r) => r.explain.to_string(),
             None => format!("*** unknown regex error code 0x{:x} ***", errcode),
@@ -159,7 +231,6 @@ pub fn pg_regerror(errcode: i32) -> String {
     };
     msg
 }
-
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct RegexArc {
@@ -196,8 +267,7 @@ fn traverse_lacons(
     arcs_count: &mut i32,
     arcs: &mut [RegexArc],
 ) {
-    stack_depth::check_stack_depth()
-        .expect("traverse_lacons: stack too deep");
+    stack_depth::check_stack_depth().expect("traverse_lacons: stack too deep");
 
     let range = cnfa.states[st as usize].clone();
     for idx in range {

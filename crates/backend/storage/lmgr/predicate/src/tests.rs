@@ -222,9 +222,7 @@ fn write_skew_pair_one_aborts_with_40001() {
             "unexpected error: {msg}"
         );
         assert!(
-            msg.contains(
-                "Canceled on identification as a pivot, during commit attempt."
-            ),
+            msg.contains("Canceled on identification as a pivot, during commit attempt."),
             "unexpected detail: {msg}"
         );
         crate::engine::ReleasePredicateLocks(false, false).unwrap();
@@ -266,8 +264,7 @@ fn tuple_locks_promote_to_page() {
         // Locks 3 tuples on one page (> max_predicate_locks_per_page = 2):
         // promotes to a page-granularity lock.
         for off in 1..=3u16 {
-            crate::engine::PredicateLockTID(TESTDB, 30011, false, false, 7, off, &snap, 5)
-                .unwrap();
+            crate::engine::PredicateLockTID(TESTDB, 30011, false, false, 7, off, &snap, 5).unwrap();
         }
         to_t1.send(()).unwrap();
         from_t1.recv().unwrap();
@@ -362,13 +359,21 @@ fn at_prepare_registers_records_post_prepare_hands_off_finish_releases() {
     // Record 0: XACT (type 0), payload xmin + flags.
     assert_eq!(rec_word(&regs[0].2, 0), 0, "record 0 is XACT");
     assert_eq!(rec_word(&regs[0].2, 4), xmin, "xact record xmin");
-    assert_ne!(rec_word(&regs[0].2, 8) & SXACT_FLAG_PREPARED, 0, "flags carry PREPARED");
+    assert_ne!(
+        rec_word(&regs[0].2, 8) & SXACT_FLAG_PREPARED,
+        0,
+        "flags carry PREPARED"
+    );
     // Record 1: LOCK (type 1), target = (db, REL_A, page 7, offset 0).
     assert_eq!(rec_word(&regs[1].2, 0), 1, "record 1 is LOCK");
     assert_eq!(rec_word(&regs[1].2, 4), TESTDB, "lock target db");
     assert_eq!(rec_word(&regs[1].2, 8), REL_A, "lock target rel");
     assert_eq!(rec_word(&regs[1].2, 12), 7, "lock target page");
-    assert_eq!(rec_word(&regs[1].2, 16), 0, "lock target offset (page lock)");
+    assert_eq!(
+        rec_word(&regs[1].2, 16),
+        0,
+        "lock target offset (page lock)"
+    );
 
     // PostPrepare hands off: the owning thread no longer references the sxact.
     crate::engine::PostPrepare_PredicateLocks(topxid).unwrap();
@@ -411,7 +416,10 @@ fn twophase_recover_rebuilds_sxact_and_lock_then_finish_releases() {
             && e.tag.locktag_field3 == 5
             && e.pid == 0
     });
-    assert!(found, "recovered predicate lock on REL_A page 5 (pid 0) not found");
+    assert!(
+        found,
+        "recovered predicate lock on REL_A page 5 (pid 0) not found"
+    );
 
     // Rollback-prepared releases the recovered sxact and its lock.
     crate::engine::PredicateLockTwoPhaseFinish(recxid, false).unwrap();
@@ -419,5 +427,8 @@ fn twophase_recover_rebuilds_sxact_and_lock_then_finish_releases() {
     let still = status.iter().any(|e| {
         e.tag.locktag_field1 == TESTDB && e.tag.locktag_field2 == REL_A && e.tag.locktag_field3 == 5
     });
-    assert!(!still, "recovered lock should be gone after ROLLBACK PREPARED finish");
+    assert!(
+        !still,
+        "recovered lock should be gone after ROLLBACK PREPARED finish"
+    );
 }

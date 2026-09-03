@@ -217,15 +217,14 @@ pub fn rmtree(path: &str, rmtopdir: bool) -> PgResult<bool> {
             }
         }
     }
-    if rmtopdir {
-        if vfs::rmdir(&cpath(path)) != 0 {
+    if rmtopdir
+        && vfs::rmdir(&cpath(path)) != 0 {
             ereport(WARNING)
                 .with_saved_errno(get_errno())
                 .errmsg(format!("could not remove directory \"{path}\": %m"))
                 .finish(loc("rmtree"))?;
             result = false;
         }
-    }
     Ok(result)
 }
 

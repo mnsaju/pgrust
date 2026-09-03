@@ -207,7 +207,6 @@ unsafe fn eq_bytes(a: *const u8, b: *const u8, len: usize) -> bool {
     i == len || load8(a.add(len - 8)) == load8(b.add(len - 8))
 }
 
-
 /// Advise transparent hugepages for large allocations (>= 2 MiB). The
 /// lane-v2-hugepages change applies the same advice to the executor's
 /// existing arenas; the table stays comparable. Alignment is not guaranteed
@@ -246,7 +245,10 @@ struct RawCells<C> {
 
 impl<C> RawCells<C> {
     fn new() -> Self {
-        RawCells { ptr: std::ptr::NonNull::dangling(), cap: 0 }
+        RawCells {
+            ptr: std::ptr::NonNull::dangling(),
+            cap: 0,
+        }
     }
 
     #[cold]
@@ -278,8 +280,8 @@ impl<C> RawCells<C> {
         unsafe {
             let old_layout = std::alloc::Layout::array::<C>(self.cap).unwrap();
             let new_bytes = std::alloc::Layout::array::<C>(new_cap).unwrap().size();
-            let p = std::alloc::realloc(self.ptr.as_ptr() as *mut u8, old_layout, new_bytes)
-                as *mut C;
+            let p =
+                std::alloc::realloc(self.ptr.as_ptr() as *mut u8, old_layout, new_bytes) as *mut C;
             let ptr = std::ptr::NonNull::new(p).expect("stringhash: realloc failed");
             std::ptr::write_bytes(ptr.as_ptr().add(self.cap), 0, new_cap - self.cap);
             self.ptr = ptr;
@@ -553,7 +555,10 @@ const ARENA_MAX_CHUNK: usize = 32 * 1024 * 1024;
 
 impl KeyArena {
     fn new() -> Self {
-        KeyArena { chunks: Vec::new(), used: 0 }
+        KeyArena {
+            chunks: Vec::new(),
+            used: 0,
+        }
     }
 
     #[cold]
@@ -610,7 +615,12 @@ struct TabS {
 
 impl TabS {
     fn new() -> Self {
-        TabS { cells: RawCells::new(), mask: 0, len: 0, arena: KeyArena::new() }
+        TabS {
+            cells: RawCells::new(),
+            mask: 0,
+            len: 0,
+            arena: KeyArena::new(),
+        }
     }
 
     #[inline(always)]
@@ -628,8 +638,12 @@ impl TabS {
                 let id = *next_id;
                 *next_id += 1;
                 unsafe {
-                    *self.cells.get_mut(pos) =
-                        CellS { hash, ptr, len: key.len() as u32, v: id };
+                    *self.cells.get_mut(pos) = CellS {
+                        hash,
+                        ptr,
+                        len: key.len() as u32,
+                        v: id,
+                    };
                 }
                 self.len += 1;
                 if self.len * 2 > self.cells.cap {
@@ -758,7 +772,8 @@ impl StringHashMap {
             }
             2 => {
                 let (a, b, c) = pack24(key);
-                self.t24.insert([a, b, c], hash24(a, b, c), &mut self.next_id)
+                self.t24
+                    .insert([a, b, c], hash24(a, b, c), &mut self.next_id)
             }
             _ => self.ts.insert(key, hash_long(key), &mut self.next_id),
         }
@@ -778,7 +793,6 @@ impl StringHashMap {
         self.t8.mem_bytes() + self.t16.mem_bytes() + self.t24.mem_bytes() + self.ts.mem_bytes()
     }
 }
-
 
 // ---------------------------------------------------------------------------
 // External-arena variant (executor wiring)
@@ -809,7 +823,11 @@ struct TabX {
 
 impl TabX {
     fn new() -> Self {
-        TabX { cells: RawCells::new(), mask: 0, len: 0 }
+        TabX {
+            cells: RawCells::new(),
+            mask: 0,
+            len: 0,
+        }
     }
 
     #[inline(always)]
@@ -838,8 +856,12 @@ impl TabX {
                 let id = *next_id;
                 *next_id += 1;
                 unsafe {
-                    *self.cells.get_mut(pos) =
-                        CellX { hash, off: off as u32, len: key.len() as u32, v: id };
+                    *self.cells.get_mut(pos) = CellX {
+                        hash,
+                        off: off as u32,
+                        len: key.len() as u32,
+                        v: id,
+                    };
                 }
                 self.len += 1;
                 if self.len * 2 > self.cells.cap {
@@ -847,9 +869,10 @@ impl TabX {
                 }
                 return (id, true, off as u32);
             }
-            if c.hash == hash && c.len as usize == key.len() && unsafe {
-                eq_bytes(arena.as_ptr().add(c.off as usize), key.as_ptr(), key.len())
-            } {
+            if c.hash == hash
+                && c.len as usize == key.len()
+                && unsafe { eq_bytes(arena.as_ptr().add(c.off as usize), key.as_ptr(), key.len()) }
+            {
                 return (c.v, false, c.off);
             }
             pos = (pos + 1) & self.mask;
@@ -867,9 +890,10 @@ impl TabX {
             if c.len == 0 {
                 return None;
             }
-            if c.hash == hash && c.len as usize == key.len() && unsafe {
-                eq_bytes(arena.as_ptr().add(c.off as usize), key.as_ptr(), key.len())
-            } {
+            if c.hash == hash
+                && c.len as usize == key.len()
+                && unsafe { eq_bytes(arena.as_ptr().add(c.off as usize), key.as_ptr(), key.len()) }
+            {
                 return Some(c.v);
             }
             pos = (pos + 1) & self.mask;
@@ -969,7 +993,9 @@ impl ExtIdMap {
             return (self.empty, false, self.empty_off);
         }
         if key[sz - 1] == 0 {
-            return self.tx.insert(key, hash_long(key), arena, &mut self.next_id);
+            return self
+                .tx
+                .insert(key, hash_long(key), arena, &mut self.next_id);
         }
         match (sz - 1) >> 3 {
             0 => {
@@ -984,10 +1010,14 @@ impl ExtIdMap {
             }
             2 => {
                 let (a, b, c) = pack24(key);
-                let (id, ins) = self.t24.insert([a, b, c], hash24(a, b, c), &mut self.next_id);
+                let (id, ins) = self
+                    .t24
+                    .insert([a, b, c], hash24(a, b, c), &mut self.next_id);
                 (id, ins, Self::append_if(ins, key, arena))
             }
-            _ => self.tx.insert(key, hash_long(key), arena, &mut self.next_id),
+            _ => self
+                .tx
+                .insert(key, hash_long(key), arena, &mut self.next_id),
         }
     }
 
@@ -1055,7 +1085,6 @@ impl ExtIdMap {
     }
 }
 
-
 // ---------------------------------------------------------------------------
 // Set variants (DISTINCT dedup): one-miss inline-key probe tables
 // ---------------------------------------------------------------------------
@@ -1094,7 +1123,13 @@ impl Default for IntSet {
 
 impl IntSet {
     pub fn new() -> Self {
-        IntSet { cells: RawCells::new(), mask: 0, len: 0, has_zero: false, scratch: Vec::new() }
+        IntSet {
+            cells: RawCells::new(),
+            mask: 0,
+            len: 0,
+            has_zero: false,
+            scratch: Vec::new(),
+        }
     }
 
     /// Returns true if `k` was newly inserted.
@@ -1148,9 +1183,7 @@ impl IntSet {
                 options(nostack, preserves_flags)
             );
             #[cfg(target_arch = "x86_64")]
-            core::arch::x86_64::_mm_prefetch::<{ core::arch::x86_64::_MM_HINT_T0 }>(
-                p as *const i8,
-            );
+            core::arch::x86_64::_mm_prefetch::<{ core::arch::x86_64::_MM_HINT_T0 }>(p as *const i8);
             #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
             let _ = p;
         }
@@ -1319,7 +1352,12 @@ impl Default for BytesDedup {
 
 impl BytesDedup {
     pub fn new() -> Self {
-        BytesDedup { cells: RawCells::new(), mask: 0, len: 0, scratch: Vec::new() }
+        BytesDedup {
+            cells: RawCells::new(),
+            mask: 0,
+            len: 0,
+            scratch: Vec::new(),
+        }
     }
 
     /// Probe for `content` (placement + prefilter on the caller's `hash`,
@@ -1340,8 +1378,11 @@ impl BytesDedup {
             let c = unsafe { *self.cells.get(pos) };
             if c.off == 0 {
                 unsafe {
-                    *self.cells.get_mut(pos) =
-                        CellD { hash, off: content_off, len: content.len() as u32 };
+                    *self.cells.get_mut(pos) = CellD {
+                        hash,
+                        off: content_off,
+                        len: content.len() as u32,
+                    };
                 }
                 self.len += 1;
                 if self.len * 2 > self.cells.cap {
@@ -1349,9 +1390,16 @@ impl BytesDedup {
                 }
                 return true;
             }
-            if c.hash == hash && c.len as usize == content.len() && unsafe {
-                eq_bytes(blob.as_ptr().add(c.off as usize), content.as_ptr(), content.len())
-            } {
+            if c.hash == hash
+                && c.len as usize == content.len()
+                && unsafe {
+                    eq_bytes(
+                        blob.as_ptr().add(c.off as usize),
+                        content.as_ptr(),
+                        content.len(),
+                    )
+                }
+            {
                 return false;
             }
             pos = (pos + 1) & self.mask;
@@ -1403,7 +1451,11 @@ impl BytesDedup {
     pub fn clear(&mut self) {
         if self.cells.cap != 0 {
             unsafe {
-                std::ptr::write_bytes(self.cells.ptr.as_ptr() as *mut u8, 0, self.cells.cap * std::mem::size_of::<CellD>())
+                std::ptr::write_bytes(
+                    self.cells.ptr.as_ptr() as *mut u8,
+                    0,
+                    self.cells.cap * std::mem::size_of::<CellD>(),
+                )
             };
         }
         self.len = 0;
@@ -1542,7 +1594,9 @@ mod tests {
             // plain
             keys.push((0..len).map(|i| b'a' + (i % 26) as u8).collect());
             // trailing NUL
-            let mut k: Vec<u8> = (0..len.saturating_sub(1)).map(|i| b'x' + (i % 3) as u8).collect();
+            let mut k: Vec<u8> = (0..len.saturating_sub(1))
+                .map(|i| b'x' + (i % 3) as u8)
+                .collect();
             k.push(0);
             keys.push(k);
             // embedded NUL, nonzero tail
@@ -1565,7 +1619,9 @@ mod tests {
         // Enough distinct keys to force several growths in every bucket.
         let mut s = 0x243F_6A88_85A3_08D3u64;
         let mut lcg = move || {
-            s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            s = s
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             s
         };
         let mut keys = Vec::new();
@@ -1590,7 +1646,9 @@ mod tests {
         use std::collections::HashMap;
         let mut s = 0x0123_4567_89AB_CDEFu64;
         let mut lcg = move || {
-            s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            s = s
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             s
         };
         let mut keys: Vec<Vec<u8>> = vec![vec![]];
@@ -1632,7 +1690,10 @@ mod tests {
         }
         assert_eq!(ours.len(), reference.len());
         // find() misses
-        assert_eq!(ours.find(b"definitely-not-present-key-xyzzy-0123456789", &arena), None);
+        assert_eq!(
+            ours.find(b"definitely-not-present-key-xyzzy-0123456789", &arena),
+            None
+        );
     }
 
     #[test]
@@ -1640,7 +1701,9 @@ mod tests {
         use std::collections::HashSet;
         let mut s = 0xDEAD_BEEF_1234_5678u64;
         let mut lcg = move || {
-            s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            s = s
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             s
         };
         let mut ours = IntSet::new();
@@ -1661,7 +1724,9 @@ mod tests {
         use std::collections::HashSet;
         let mut s = 0x0F0F_1234_5678_9ABCu64;
         let mut lcg = move || {
-            s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            s = s
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             s
         };
         let mut dd = BytesDedup::new();
@@ -1693,7 +1758,9 @@ mod tests {
         // fills each clear by contents. Every element must be truly gone
         // after each clear (re-insert returns true), including 0/has_zero.
         let mut s = IntSet::new();
-        let mut big: Vec<i64> = (0..10_000).map(|i| i * 2654435761 % 1_000_003 - 500_000).collect();
+        let mut big: Vec<i64> = (0..10_000)
+            .map(|i| i * 2654435761 % 1_000_003 - 500_000)
+            .collect();
         big.sort_unstable();
         big.dedup();
         for &k in &big {
@@ -1746,7 +1813,11 @@ mod tests {
         for round in 0..1_000u32 {
             blob.truncate(4);
             let mut held: Vec<(u32, u32)> = Vec::new();
-            for k in [format!("k-{round}"), format!("k2-{round}"), format!("k-{round}")] {
+            for k in [
+                format!("k-{round}"),
+                format!("k2-{round}"),
+                format!("k-{round}"),
+            ] {
                 let h = hash(k.as_bytes());
                 let off = blob.len() as u32;
                 if dd.insert(h, k.as_bytes(), &blob, off) {
@@ -1763,7 +1834,10 @@ mod tests {
             let k = format!("bigkey-{i}");
             let h = hash(k.as_bytes());
             let off = blob.len() as u32;
-            assert!(dd.insert(h, k.as_bytes(), &blob, off), "key {k} survived a sparse clear");
+            assert!(
+                dd.insert(h, k.as_bytes(), &blob, off),
+                "key {k} survived a sparse clear"
+            );
             blob.extend_from_slice(k.as_bytes());
         }
     }

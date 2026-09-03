@@ -32,7 +32,10 @@ impl SyntheticWork {
 
     fn assert_all_executed_once(&self) {
         let ex = self.executed.lock().unwrap();
-        assert!(ex.iter().all(|&b| b), "every granule must execute exactly once");
+        assert!(
+            ex.iter().all(|&b| b),
+            "every granule must execute exactly once"
+        );
     }
 }
 
@@ -108,7 +111,10 @@ fn sizing_ramp_default_shutdown_trace() {
     // remainder. Total must be preserved regardless.
     assert_eq!(sizes.iter().sum::<u64>(), total);
     let last = *sizes.last().unwrap();
-    assert!(last < 2000, "photo-finish must shrink the final morsel, got {last}");
+    assert!(
+        last < 2000,
+        "photo-finish must shrink the final morsel, got {last}"
+    );
 
     let stats = rt.stats();
     assert!(stats.sizing_ramp >= 6);
@@ -123,7 +129,10 @@ fn sizing_ramp_default_shutdown_trace() {
 /// geometrically (residual ×0.2 per observation).
 #[test]
 fn sizing_ewma_tracks_throughput_change() {
-    let params = SizingParams { t_max_ns: 2_000_000, t_min_ns: 500_000 };
+    let params = SizingParams {
+        t_max_ns: 2_000_000,
+        t_min_ns: 500_000,
+    };
     let shared = crate::sizing::SizerShared::new();
     // Seed default state via a ramp task whose only morsel eats the whole
     // budget: T seeds SLOW (16 granules / 1.9 ms).
@@ -135,7 +144,10 @@ fn sizing_ewma_tracks_throughput_change() {
     assert_eq!(shared.phase(), Phase::Default);
     let t0 = shared.throughput();
     let exact_seed = 16.0 / 1_900_000.0;
-    assert!((t0 - exact_seed).abs() < 1e-12, "seed must be the last ramp morsel's throughput");
+    assert!(
+        (t0 - exact_seed).abs() < 1e-12,
+        "seed must be the last ramp morsel's throughput"
+    );
 
     // Follow-up tasks measure FASTER (4 µs per granule beats the seed's
     // ~119 µs per granule): EWMA pulls T up toward measured, 0.8 per step.
@@ -151,17 +163,26 @@ fn sizing_ewma_tracks_throughput_change() {
         let cur = shared.throughput();
         assert!(cur > prev, "EWMA must move toward faster measurements");
         let expect = 0.8 * measured + 0.2 * prev;
-        assert!((cur - expect).abs() < 1e-12, "EWMA arithmetic must be exact");
+        assert!(
+            (cur - expect).abs() < 1e-12,
+            "EWMA arithmetic must be exact"
+        );
         prev = cur;
     }
-    assert!((prev - measured).abs() / measured < 0.05, "EWMA must converge (T={prev})");
+    assert!(
+        (prev - measured).abs() / measured < 0.05,
+        "EWMA must converge (T={prev})"
+    );
 }
 
 /// Photo finish with W workers: once predicted remaining < W·t_max, sizes
 /// become remaining/W (floored by t_min·T).
 #[test]
 fn sizing_photo_finish_divides_remainder() {
-    let params = SizingParams { t_max_ns: 2_000_000, t_min_ns: 500_000 };
+    let params = SizingParams {
+        t_max_ns: 2_000_000,
+        t_min_ns: 500_000,
+    };
     let shared = crate::sizing::SizerShared::new();
     let mut t = crate::sizing::TaskSizer::new(params, 16);
     let _ = t.next_size(&shared, 1 << 40, 4);
@@ -188,11 +209,18 @@ fn sizing_photo_finish_divides_remainder() {
 /// posture preserved).
 #[test]
 fn sizing_dopscale_width_ramp() {
-    let params = SizingParams { t_max_ns: 2_000_000, t_min_ns: 500_000 };
+    let params = SizingParams {
+        t_max_ns: 2_000_000,
+        t_min_ns: 500_000,
+    };
     // Identity band (includes the whole 16-core fleet + mt16 vectors).
     for w in [1u64, 4, 15, 16, 32] {
         let p = crate::sizing::dopscale_ramp(params, w);
-        assert_eq!((p.t_max_ns, p.t_min_ns), (2_000_000, 500_000), "w={w} must be identity");
+        assert_eq!(
+            (p.t_max_ns, p.t_min_ns),
+            (2_000_000, 500_000),
+            "w={w} must be identity"
+        );
     }
     // Ramp: monotone in W, capped at ×2.5 from 191.
     let p96 = crate::sizing::dopscale_ramp(params, 96);
@@ -222,8 +250,10 @@ fn claims_never_cross_boundaries() {
     let total = 3_000u64;
     let every = 100u64;
     let work = SyntheticWork::new(total, Some(Arc::clone(&clock)), 1_000);
-    let (_h, waiter) =
-        rt.submit(spec_one(&work, Arc::new(SyntheticMorselSource::with_boundaries(total, every))));
+    let (_h, waiter) = rt.submit(spec_one(
+        &work,
+        Arc::new(SyntheticMorselSource::with_boundaries(total, every)),
+    ));
 
     let mut local = rt.worker_local(0);
     while waiter.try_wait().is_none() {
@@ -267,7 +297,9 @@ fn whole_boundary_claims_are_boundary_aligned() {
     let work = SyntheticWork::new(total, Some(Arc::clone(&clock)), 1_000);
     let (_h, waiter) = rt.submit(spec_one(
         &work,
-        Arc::new(WholeSource(SyntheticMorselSource::with_boundaries(total, every))),
+        Arc::new(WholeSource(SyntheticMorselSource::with_boundaries(
+            total, every,
+        ))),
     ));
 
     let mut local = rt.worker_local(0);
@@ -321,7 +353,9 @@ fn coalesced_claims_are_boundary_aligned_and_multi_epoch() {
     let work = SyntheticWork::new(total, Some(Arc::clone(&clock)), 1_000);
     let (_h, waiter) = rt.submit(spec_one(
         &work,
-        Arc::new(CoalescingSource(SyntheticMorselSource::with_boundaries(total, every))),
+        Arc::new(CoalescingSource(SyntheticMorselSource::with_boundaries(
+            total, every,
+        ))),
     ));
 
     let mut local = rt.worker_local(0);
@@ -350,10 +384,17 @@ fn coalesced_claims_are_boundary_aligned_and_multi_epoch() {
     // Startup-ramp claims precede any coalescing: the first claim is
     // exactly one epoch (the width signal is not yet trustworthy there).
     let first = &claims[0];
-    assert_eq!((first.start, first.end), (0, every), "ramp claims must stay single-epoch");
+    assert_eq!(
+        (first.start, first.end),
+        (0, every),
+        "ramp claims must stay single-epoch"
+    );
     // Default-phase claims at one worker DID coalesce (the fix's point:
     // ~total/(8·every) Default claims instead of total/every).
-    assert!(multi > 0, "no multi-epoch claim at DOP1 — coalescing never engaged");
+    assert!(
+        multi > 0,
+        "no multi-epoch claim at DOP1 — coalescing never engaged"
+    );
     assert!(
         claims.len() < (total / every) as usize / 2,
         "coalescing must cut the claim count (got {})",
@@ -402,7 +443,9 @@ fn coalesced_claims_with_pool_stay_exact() {
     let work = SyntheticWork::new(total, None, 0);
     let (_h, waiter) = rt.submit(spec_one(
         &work,
-        Arc::new(CoalescingSource(SyntheticMorselSource::with_boundaries(total, every))),
+        Arc::new(CoalescingSource(SyntheticMorselSource::with_boundaries(
+            total, every,
+        ))),
     ));
     assert_eq!(waiter.wait(), RgOutcome::Completed);
     work.assert_all_executed_once();
@@ -471,7 +514,10 @@ fn pool_runs_dag_ordered_tasksets() {
             });
         }
         works.push(rg_works);
-        let (_h, waiter) = rt.submit(QuerySpec { query_id: rg, tasksets });
+        let (_h, waiter) = rt.submit(QuerySpec {
+            query_id: rg,
+            tasksets,
+        });
         waiters.push(waiter);
     }
 
@@ -483,13 +529,21 @@ fn pool_runs_dag_ordered_tasksets() {
     for rg_works in &works {
         for w in rg_works {
             w.assert_all_executed_once();
-            assert_eq!(w.finalizes.load(Ordering::SeqCst), 1, "finalize exactly once");
+            assert_eq!(
+                w.finalizes.load(Ordering::SeqCst),
+                1,
+                "finalize exactly once"
+            );
         }
     }
     // Dependency order within each RG.
     let order = order.lock().unwrap();
     for rg in 0..6u64 {
-        let seq: Vec<usize> = order.iter().filter(|(g, _)| *g == rg).map(|&(_, i)| i).collect();
+        let seq: Vec<usize> = order
+            .iter()
+            .filter(|(g, _)| *g == rg)
+            .map(|&(_, i)| i)
+            .collect();
         assert_eq!(seq, vec![0, 1, 2], "task sets must finalize in dep order");
     }
     let stats = rt.stats();
@@ -563,7 +617,10 @@ fn abort_completes_rg_as_aborted() {
     }
     handle.abort();
     assert_eq!(waiter.wait(), RgOutcome::Aborted);
-    assert!(!second_ts_ran.load(Ordering::SeqCst), "dependent task set ran after abort");
+    assert!(
+        !second_ts_ran.load(Ordering::SeqCst),
+        "dependent task set ran after abort"
+    );
     pool.shutdown();
 
     let stats = rt.stats();
@@ -605,14 +662,19 @@ fn abort_while_queued_never_runs() {
         query_id: 1,
         tasksets: vec![TaskSetSpec {
             source: Arc::new(SyntheticMorselSource::new(4)),
-            work: Arc::new(Busy { release: Arc::clone(&release) }),
+            work: Arc::new(Busy {
+                release: Arc::clone(&release),
+            }),
             deps: vec![],
         }],
     });
 
     let never = SyntheticWork::new(8, None, 0);
     let (h2, wait2) = rt.submit(spec_one(&never, Arc::new(SyntheticMorselSource::new(8))));
-    assert!(wait2.try_wait().is_none(), "second RG must be queued (1 slot)");
+    assert!(
+        wait2.try_wait().is_none(),
+        "second RG must be queued (1 slot)"
+    );
     h2.abort();
     release.store(true, Ordering::SeqCst);
 
@@ -651,7 +713,9 @@ fn lifecycle_semantics() {
 
     // Normal join + operation.
     let participant = handle.join().expect("open generation admits");
-    participant.run(|| Ok(())).expect("open generation runs operations");
+    participant
+        .run(|| Ok(()))
+        .expect("open generation runs operations");
 
     // Abort (cancel): new joins refuse immediately; the existing
     // participant's next operation refuses (its morsel-boundary signal) and
@@ -659,8 +723,13 @@ fn lifecycle_semantics() {
     task.cancel(types_error::PgError::new(types_error::ERROR, "test abort").into());
     task.cancel(types_error::PgError::new(types_error::ERROR, "second abort dropped").into());
     assert!(handle.join().is_err(), "aborted generation admits nobody");
-    assert!(participant.run(|| Ok(())).is_err(), "operations refuse after close");
-    participant.complete().expect("drained participant completes");
+    assert!(
+        participant.run(|| Ok(())).is_err(),
+        "operations refuse after close"
+    );
+    participant
+        .complete()
+        .expect("drained participant completes");
 
     // Drain retires the generation and surfaces the FIRST recorded error.
     let err = task.close_and_wait().expect_err("abort error must surface");
@@ -671,9 +740,14 @@ fn lifecycle_semantics() {
     // (single-publication rule) — reinitialize opens the next generation.
     assert!(handle.join().is_err());
     assert!(task.publish().is_err());
-    let fresh = task.reinitialize().expect("reinitialize opens a new generation");
+    let fresh = task
+        .reinitialize()
+        .expect("reinitialize opens a new generation");
     assert_ne!(g0, fresh.generation());
-    assert!(handle.join().is_err(), "stale handle cannot join the new generation");
+    assert!(
+        handle.join().is_err(),
+        "stale handle cannot join the new generation"
+    );
     let participant = fresh.join().expect("new generation admits");
     participant.complete().unwrap();
     task.close_and_wait().unwrap();
@@ -877,7 +951,10 @@ fn empty_rg_completes_immediately() {
         sizing: SizingParams::default(),
         trace: false,
     });
-    let (_h, waiter) = rt.submit(QuerySpec { query_id: 0, tasksets: vec![] });
+    let (_h, waiter) = rt.submit(QuerySpec {
+        query_id: 0,
+        tasksets: vec![],
+    });
     assert_eq!(waiter.wait(), RgOutcome::Completed);
 }
 
@@ -943,7 +1020,11 @@ fn pinned_rg_runs_on_external_drivers_only() {
     assert_eq!(work.finalizes.load(Ordering::SeqCst), 1);
     // Boundary contract: no claim crosses a multiple of 8.
     for r in work.claims.lock().unwrap().iter() {
-        assert_eq!(r.start / 8, (r.end - 1) / 8, "claim {r:?} crossed a boundary");
+        assert_eq!(
+            r.start / 8,
+            (r.end - 1) / 8,
+            "claim {r:?} crossed a boundary"
+        );
     }
     pool.shutdown();
     let stats = rt.stats();
@@ -967,10 +1048,8 @@ fn pinned_rg_abort_reaped_by_driver() {
     });
     let total = 1_000u64;
     let work = SyntheticWork::new(total, None, 0);
-    let (handle, waiter) = rt.submit_pinned(spec_one(
-        &work,
-        Arc::new(SyntheticMorselSource::new(total)),
-    ));
+    let (handle, waiter) =
+        rt.submit_pinned(spec_one(&work, Arc::new(SyntheticMorselSource::new(total))));
     handle.abort();
     assert_eq!(waiter.try_wait(), None, "nobody drove the pinned RG yet");
     let mut local = rt.external_local(0);
@@ -978,7 +1057,11 @@ fn pinned_rg_abort_reaped_by_driver() {
     assert_eq!(waiter.try_wait(), Some(RgOutcome::Aborted));
     // The closed generation refused every join: no morsel ran.
     assert!(work.claims.lock().unwrap().is_empty());
-    assert_eq!(work.finalizes.load(Ordering::SeqCst), 0, "finalize work must not run");
+    assert_eq!(
+        work.finalizes.load(Ordering::SeqCst),
+        0,
+        "finalize work must not run"
+    );
 }
 
 /// External-lane leases are process-exclusive: 64 concurrent leases exhaust
@@ -1014,7 +1097,10 @@ fn external_lane_leases_are_exclusive() {
 #[test]
 fn pinned_rg_192_external_drivers_exactly_once() {
     const DRIVERS: usize = 192;
-    assert!(DRIVERS <= MAX_EXTERNAL_LANES, "test premise: lanes cover dop-192");
+    assert!(
+        DRIVERS <= MAX_EXTERNAL_LANES,
+        "test premise: lanes cover dop-192"
+    );
     let rt = Runtime::new(RuntimeConfig {
         workers: 4,
         standbys: 1,
@@ -1033,7 +1119,9 @@ fn pinned_rg_192_external_drivers_exactly_once() {
         let rt2 = Arc::clone(&rt);
         let h = handle.clone();
         joins.push(std::thread::spawn(move || {
-            let lane = rt2.acquire_external_lane().expect("192 lanes must be available");
+            let lane = rt2
+                .acquire_external_lane()
+                .expect("192 lanes must be available");
             let mut local = lane.local();
             rt2.drive_pinned(&mut local, &h)
         }));
@@ -1061,8 +1149,7 @@ fn pool_192_workers_exactly_once() {
     let pool = WorkerPool::spawn_std(Arc::clone(&rt)).unwrap();
     let total = 50_000u64;
     let work = SyntheticWork::new(total, None, 0);
-    let (_h, waiter) =
-        rt.submit(spec_one(&work, Arc::new(SyntheticMorselSource::new(total))));
+    let (_h, waiter) = rt.submit(spec_one(&work, Arc::new(SyntheticMorselSource::new(total))));
     assert_eq!(waiter.wait(), RgOutcome::Completed);
     work.assert_all_executed_once();
     assert_eq!(work.finalizes.load(Ordering::SeqCst), 1);
@@ -1085,8 +1172,7 @@ fn pool_k64_standbys_exactly_once() {
     let pool = WorkerPool::spawn_std(Arc::clone(&rt)).unwrap();
     let total = 50_000u64;
     let work = SyntheticWork::new(total, None, 0);
-    let (_h, waiter) =
-        rt.submit(spec_one(&work, Arc::new(SyntheticMorselSource::new(total))));
+    let (_h, waiter) = rt.submit(spec_one(&work, Arc::new(SyntheticMorselSource::new(total))));
     assert_eq!(waiter.wait(), RgOutcome::Completed);
     work.assert_all_executed_once();
     assert_eq!(work.finalizes.load(Ordering::SeqCst), 1);
@@ -1146,7 +1232,10 @@ fn worker_loop_ring_lifecycle_and_boundary_reap() {
     // ring id at loop entry.
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     while (0..rt.nthreads()).any(|w| rt.worker_ring(w).is_none()) {
-        assert!(std::time::Instant::now() < deadline, "ring registration timed out");
+        assert!(
+            std::time::Instant::now() < deadline,
+            "ring registration timed out"
+        );
         std::thread::yield_now();
     }
     for w in 0..rt.nthreads() {
@@ -1171,7 +1260,11 @@ fn worker_loop_ring_lifecycle_and_boundary_reap() {
     pool.shutdown();
     assert!(uring_stub::RING_TEARDOWNS.load(Ordering::SeqCst) >= teardowns0 + 3);
     for w in 0..rt.nthreads() {
-        assert_eq!(rt.worker_ring(w), None, "exit must clear the ring registration");
+        assert_eq!(
+            rt.worker_ring(w),
+            None,
+            "exit must clear the ring registration"
+        );
     }
 }
 
@@ -1277,17 +1370,28 @@ fn maintenance_preferred_over_foreground_fifo() {
     let mut local = rt.worker_local(0);
     // One foreground task runs (slot 0 is the only active slot).
     assert_eq!(rt.worker_step(&mut local), Step::Ran);
-    assert!(fg_waiter.try_wait().is_none(), "foreground must not be complete yet");
+    assert!(
+        fg_waiter.try_wait().is_none(),
+        "foreground must not be complete yet"
+    );
 
     // A job cycle arrives: single-granule task set, higher slot index.
     let mt = SyntheticWork::new(1, Some(Arc::clone(&clock)), 1_000);
-    let (_mh, mt_waiter) = rt.submit_maintenance(spec_one(&mt, Arc::new(SyntheticMorselSource::new(1))));
+    let (_mh, mt_waiter) =
+        rt.submit_maintenance(spec_one(&mt, Arc::new(SyntheticMorselSource::new(1))));
 
     // The very next step must pick the maintenance slot (preference beats
     // the lower-index foreground slot) and drive it to completion.
     assert_eq!(rt.worker_step(&mut local), Step::Ran);
-    assert_eq!(mt_waiter.try_wait(), Some(RgOutcome::Completed), "maintenance cycle must complete at the first boundary");
-    assert!(fg_waiter.try_wait().is_none(), "foreground still has granules");
+    assert_eq!(
+        mt_waiter.try_wait(),
+        Some(RgOutcome::Completed),
+        "maintenance cycle must complete at the first boundary"
+    );
+    assert!(
+        fg_waiter.try_wait().is_none(),
+        "foreground still has granules"
+    );
     mt.assert_all_executed_once();
 
     // Drain the foreground RG; nothing is lost.
@@ -1322,11 +1426,17 @@ fn maintenance_overtakes_wait_queue() {
         rt.worker_step(&mut local);
     }
     while mw.try_wait().is_none() {
-        assert!(w2.try_wait().is_none(), "fg2 must not complete before the overtaking maintenance RG");
+        assert!(
+            w2.try_wait().is_none(),
+            "fg2 must not complete before the overtaking maintenance RG"
+        );
         rt.worker_step(&mut local);
     }
     assert_eq!(mw.try_wait(), Some(RgOutcome::Completed));
-    assert!(w2.try_wait().is_none(), "fg2 admitted after the maintenance RG");
+    assert!(
+        w2.try_wait().is_none(),
+        "fg2 admitted after the maintenance RG"
+    );
     while w2.try_wait().is_none() {
         rt.worker_step(&mut local);
     }
@@ -1349,8 +1459,7 @@ fn stride_single_rg_claim_sequence_identical() {
         rt.set_stride(stride);
         let total = 16_000u64;
         let work = SyntheticWork::new(total, Some(Arc::clone(&clock)), 1_000);
-        let (_h, waiter) =
-            rt.submit(spec_one(&work, Arc::new(SyntheticMorselSource::new(total))));
+        let (_h, waiter) = rt.submit(spec_one(&work, Arc::new(SyntheticMorselSource::new(total))));
         let mut local = rt.worker_local(0);
         while waiter.try_wait().is_none() {
             rt.worker_step(&mut local);
@@ -1362,7 +1471,10 @@ fn stride_single_rg_claim_sequence_identical() {
     };
     let on = run(true);
     let off = run(false);
-    assert_eq!(on, off, "single-RG claim sequence must be identical under stride");
+    assert_eq!(
+        on, off,
+        "single-RG claim sequence must be identical under stride"
+    );
 }
 
 /// Kill switch: PGRUST_RUNTIME_STRIDE=0 (here per-instance set_stride(false))
@@ -1432,7 +1544,10 @@ fn stride_equal_share_k_sweep() {
             assert_eq!(rt.worker_step(&mut local), Step::Ran);
         }
         for w in &waiters {
-            assert!(w.try_wait().is_none(), "K-sweep RGs must all still be active");
+            assert!(
+                w.try_wait().is_none(),
+                "K-sweep RGs must all still be active"
+            );
         }
         let cpus: Vec<u64> = handles.iter().map(|h| h.cpu_consumed_ns()).collect();
         let sum: u64 = cpus.iter().sum();
@@ -1493,8 +1608,16 @@ fn decay_priority_trajectory_and_floor() {
             reached_floor_at_q = Some(q);
         }
     }
-    assert_eq!(reached_floor_at_q, Some(4), "λ=1/2 floors p0/16 at exactly 4 quanta");
-    assert_eq!(h.priority(), 625, "floor holds: later quanta never lower it further");
+    assert_eq!(
+        reached_floor_at_q,
+        Some(4),
+        "λ=1/2 floors p0/16 at exactly 4 quanta"
+    );
+    assert_eq!(
+        h.priority(),
+        625,
+        "floor holds: later quanta never lower it further"
+    );
     h.abort();
     while waiter.try_wait().is_none() {
         rt.worker_step(&mut local);
@@ -1518,7 +1641,10 @@ fn decay_off_keeps_p0() {
         rt.worker_step(&mut local);
         assert_eq!(h.priority(), 10_000, "decay off: priority never moves");
     }
-    assert!(h.cpu_consumed_ns() >= 50_000_000, "consumed far past many quanta");
+    assert!(
+        h.cpu_consumed_ns() >= 50_000_000,
+        "consumed far past many quanta"
+    );
 }
 
 /// M5-5 single-RG bit-identity (re-proof at this increment): with one RG
@@ -1534,8 +1660,7 @@ fn decay_single_rg_claim_sequence_identical() {
         rt.set_decay_quantum_ns(1_000_000); // aggressive: many boundaries
         let total = 16_000u64;
         let work = SyntheticWork::new(total, Some(Arc::clone(&clock)), 1_000);
-        let (_h, waiter) =
-            rt.submit(spec_one(&work, Arc::new(SyntheticMorselSource::new(total))));
+        let (_h, waiter) = rt.submit(spec_one(&work, Arc::new(SyntheticMorselSource::new(total))));
         let mut local = rt.worker_local(0);
         while waiter.try_wait().is_none() {
             rt.worker_step(&mut local);
@@ -1586,7 +1711,10 @@ fn decay_equal_consumption_keeps_equal_shares() {
             assert_eq!(rt.worker_step(&mut local), Step::Ran);
         }
         for h in &handles {
-            assert!(h.priority() < 10_000, "decay must have engaged (boundaries crossed)");
+            assert!(
+                h.priority() < 10_000,
+                "decay must have engaged (boundaries crossed)"
+            );
         }
         let cpus: Vec<u64> = handles.iter().map(|h| h.cpu_consumed_ns()).collect();
         let mean = cpus.iter().sum::<u64>() as f64 / k as f64;
@@ -1623,7 +1751,7 @@ fn decay_starvation_floor_share_skew() {
     rt.set_decay(true);
     rt.set_decay_quantum_ns(2_000_000);
     let total = 40_000_000u64; // 40 s virtual CPU: nobody finishes
-    // Phase 1: batch B runs alone and decays to the floor.
+                               // Phase 1: batch B runs alone and decays to the floor.
     let b = SyntheticWork::new(total, Some(Arc::clone(&clock)), 1_000);
     let (hb, wb) = rt.submit(spec_one(&b, Arc::new(SyntheticMorselSource::new(total))));
     let mut local = rt.worker_local(0);
@@ -1766,15 +1894,11 @@ fn stride_session_affinity_tiebreak() {
     let rt = virtual_runtime(1, &clock);
     rt.set_stride(true);
     let a = SyntheticWork::new(8_000, Some(Arc::clone(&clock)), 1_000);
-    let (_ha, _wa) = rt.submit_with_affinity(
-        spec_one(&a, Arc::new(SyntheticMorselSource::new(8_000))),
-        7,
-    );
+    let (_ha, _wa) =
+        rt.submit_with_affinity(spec_one(&a, Arc::new(SyntheticMorselSource::new(8_000))), 7);
     let b = SyntheticWork::new(8_000, Some(Arc::clone(&clock)), 1_000);
-    let (_hb, _wb) = rt.submit_with_affinity(
-        spec_one(&b, Arc::new(SyntheticMorselSource::new(8_000))),
-        9,
-    );
+    let (_hb, _wb) =
+        rt.submit_with_affinity(spec_one(&b, Arc::new(SyntheticMorselSource::new(8_000))), 9);
     let mut local = rt.worker_local(0);
     local.set_session_token(9);
     // Both slots joined at watermark 0: equal pass ⇒ affinity must win the
@@ -1819,9 +1943,15 @@ fn queued_abort_reaped_promptly() {
         "aborted queued RG must complete at abort time (slot-reclamation fix)"
     );
     let (submit_ns, first_ns, done_ns) = hb.service_times();
-    assert!(submit_ns > 0 && done_ns >= submit_ns, "service timestamps must be recorded");
+    assert!(
+        submit_ns > 0 && done_ns >= submit_ns,
+        "service timestamps must be recorded"
+    );
     assert_eq!(first_ns, 0, "a reaped queued RG was never serviced");
-    assert!(b.claims.lock().unwrap().is_empty(), "reaped RG must never execute a morsel");
+    assert!(
+        b.claims.lock().unwrap().is_empty(),
+        "reaped RG must never execute a morsel"
+    );
 
     let stats = rt.stats();
     assert_eq!(stats.queued_aborts_reaped, 1);
@@ -1870,8 +2000,7 @@ fn maintenance_bound_survives_stride() {
         assert_eq!(rt.worker_step(&mut local), Step::Ran);
     }
     let mt = SyntheticWork::new(1, Some(Arc::clone(&clock)), 1_000);
-    let (_mh, mw) =
-        rt.submit_maintenance(spec_one(&mt, Arc::new(SyntheticMorselSource::new(1))));
+    let (_mh, mw) = rt.submit_maintenance(spec_one(&mt, Arc::new(SyntheticMorselSource::new(1))));
     // ≤ 1 task boundary to cycle start AND completion (single-morsel body).
     assert_eq!(rt.worker_step(&mut local), Step::Ran);
     assert_eq!(
@@ -1911,7 +2040,11 @@ fn service_times_and_cpu_readback() {
     assert!(submit_ns > 0, "submit timestamp recorded");
     assert!(first_ns >= submit_ns, "first service after submit");
     assert!(done_ns >= first_ns, "done after first service");
-    assert_eq!(h.cpu_consumed_ns(), total * cost, "exact CPU readback (virtual clock)");
+    assert_eq!(
+        h.cpu_consumed_ns(),
+        total * cost,
+        "exact CPU readback (virtual clock)"
+    );
 }
 
 /// Threaded fair-share smoke (the MULTI-arm shape, in-crate): K equal-share
@@ -1952,7 +2085,9 @@ fn stride_threaded_pool_mid_flight_shares() {
             query_id: q as u64 + 1,
             tasksets: vec![TaskSetSpec {
                 source: Arc::new(SyntheticMorselSource::new(4_000)),
-                work: Arc::new(Spin { ns_per_granule: 20_000 }),
+                work: Arc::new(Spin {
+                    ns_per_granule: 20_000,
+                }),
                 deps: vec![],
             }],
         });
@@ -2017,8 +2152,10 @@ fn lock_wait_fairness_pmin_bounds_holder() {
         // to the floor (worst-case: it consumed heavily while holding).
         let holder_total = 40_000u64; // 40 ms virtual CPU
         let h_work = SyntheticWork::new(holder_total, Some(Arc::clone(&clock)), 1_000);
-        let (hh, hw) =
-            rt.submit(spec_one(&h_work, Arc::new(SyntheticMorselSource::new(holder_total))));
+        let (hh, hw) = rt.submit(spec_one(
+            &h_work,
+            Arc::new(SyntheticMorselSource::new(holder_total)),
+        ));
         let mut local = rt.worker_local(0);
         while hh.priority() > rt.p_min() {
             assert_eq!(rt.worker_step(&mut local), Step::Ran);
@@ -2118,7 +2255,9 @@ fn multi_fairness_panel_short_latency_under_batch() {
             query_id: qid,
             tasksets: vec![TaskSetSpec {
                 source: Arc::new(SyntheticMorselSource::new(200)),
-                work: Arc::new(Spin { ns_per_granule: 20_000 }),
+                work: Arc::new(Spin {
+                    ns_per_granule: 20_000,
+                }),
                 deps: vec![],
             }],
         })
@@ -2158,7 +2297,9 @@ fn multi_fairness_panel_short_latency_under_batch() {
                 query_id: q + 1,
                 tasksets: vec![TaskSetSpec {
                     source: Arc::new(SyntheticMorselSource::new(10_000)),
-                    work: Arc::new(Spin { ns_per_granule: 20_000 }),
+                    work: Arc::new(Spin {
+                        ns_per_granule: 20_000,
+                    }),
                     deps: vec![],
                 }],
             });
@@ -2194,7 +2335,11 @@ fn multi_fairness_panel_short_latency_under_batch() {
     let r50 = on_p50 as f64 / on_iso_p50.max(1) as f64;
     let r95 = on_p95 as f64 / on_iso_p95.max(1) as f64;
     let r50_off = off_p50 as f64 / off_iso_p50.max(1) as f64;
-    let verdict = if r95 <= 8.0 && r50 <= 6.0 { "PASS" } else { "FAIL" };
+    let verdict = if r95 <= 8.0 && r50 <= 6.0 {
+        "PASS"
+    } else {
+        "FAIL"
+    };
     eprintln!(
         "M0ACCEPT|FAIR|arm=multi-unit|decay=on|short_p50_us={}|short_p95_us={}|iso_p50_us={}|\
          iso_p95_us={}|p50_ratio={r50:.2}|p95_ratio={r95:.2}|off_p50_ratio={r50_off:.2}|\
@@ -2262,11 +2407,21 @@ fn dag_spec(
         works.push(Arc::clone(&inner));
         tasksets.push(TaskSetSpec {
             source: Arc::new(SyntheticMorselSource::new(*total)),
-            work: Arc::new(DagWork { inner, log: Arc::clone(log), index: i }),
+            work: Arc::new(DagWork {
+                inner,
+                log: Arc::clone(log),
+                index: i,
+            }),
             deps: deps.to_vec(),
         });
     }
-    (QuerySpec { query_id: qid, tasksets }, works)
+    (
+        QuerySpec {
+            query_id: qid,
+            tasksets,
+        },
+        works,
+    )
 }
 
 fn first_pos(log: &[DagEv], ev: DagEv) -> Option<usize> {
@@ -2296,8 +2451,14 @@ fn dag_admission_fans_out_and_gates() {
     // Both independent builds are published at admission; the gated probe
     // is not (submission gating: unmet deps ⇒ not submitted anywhere).
     let s = rt.stats();
-    assert_eq!(s.tasksets_published, 2, "both ready pipelines publish at admission");
-    assert_eq!(s.dag_fanout_publishes, 1, "second build fans out into its own slot");
+    assert_eq!(
+        s.tasksets_published, 2,
+        "both ready pipelines publish at admission"
+    );
+    assert_eq!(
+        s.dag_fanout_publishes, 1,
+        "second build fans out into its own slot"
+    );
 
     let mut local = rt.worker_local(0);
     while waiter.try_wait().is_none() {
@@ -2316,9 +2477,15 @@ fn dag_admission_fans_out_and_gates() {
     let c2 = first_pos(&log, DagEv::Claim(2)).unwrap();
     // Overlap: each build claims before the other finalizes (stride
     // alternation over the query's equal-pass slots).
-    assert!(c0 < fin1 && c1 < fin0, "independent builds must interleave, got {log:?}");
+    assert!(
+        c0 < fin1 && c1 < fin0,
+        "independent builds must interleave, got {log:?}"
+    );
     // Barrier: the probe's first claim strictly follows BOTH finalizes.
-    assert!(c2 > fin0 && c2 > fin1, "probe ran before its build barriers, got {log:?}");
+    assert!(
+        c2 > fin0 && c2 > fin1,
+        "probe ran before its build barriers, got {log:?}"
+    );
 }
 
 /// DAG ON with a dependency CHAIN (single live pipeline throughout — the
@@ -2332,17 +2499,28 @@ fn dag_chain_claim_sequence_identical_to_off() {
         rt.set_stride(true);
         rt.set_dag(dag);
         let log = Arc::new(Mutex::new(Vec::new()));
-        let (spec, works) =
-            dag_spec(1, &clock, &log, &[(6_000, &[]), (4_000, &[0]), (2_000, &[1])]);
+        let (spec, works) = dag_spec(
+            1,
+            &clock,
+            &log,
+            &[(6_000, &[]), (4_000, &[0]), (2_000, &[1])],
+        );
         let (_h, waiter) = rt.submit(spec);
         let mut local = rt.worker_local(0);
         while waiter.try_wait().is_none() {
             rt.worker_step(&mut local);
         }
         assert_eq!(waiter.wait(), RgOutcome::Completed);
-        works.iter().map(|w| w.claims.lock().unwrap().clone()).collect()
+        works
+            .iter()
+            .map(|w| w.claims.lock().unwrap().clone())
+            .collect()
     };
-    assert_eq!(run(true), run(false), "chain claims must be identical under DAG dispatch");
+    assert_eq!(
+        run(true),
+        run(false),
+        "chain claims must be identical under DAG dispatch"
+    );
 }
 
 /// Slot-capacity deferral: 3 independent pipelines, 2 scheduler slots — the
@@ -2363,11 +2541,23 @@ fn dag_capacity_defers_and_freed_slot_admits_queued() {
         1,
         &clock,
         &log,
-        &[(4_000, &[]), (4_000, &[]), (2_000, &[]), (1_000, &[0, 1, 2])],
+        &[
+            (4_000, &[]),
+            (4_000, &[]),
+            (2_000, &[]),
+            (1_000, &[0, 1, 2]),
+        ],
     );
     let (_h, wa) = rt.submit(spec);
-    assert_eq!(rt.stats().tasksets_published, 2, "capacity caps admission fan-out");
-    assert!(rt.stats().dag_ready_deferred >= 1, "third pipeline defers on slot capacity");
+    assert_eq!(
+        rt.stats().tasksets_published,
+        2,
+        "capacity caps admission fan-out"
+    );
+    assert!(
+        rt.stats().dag_ready_deferred >= 1,
+        "third pipeline defers on slot capacity"
+    );
 
     // A second, single-pipeline query queues behind the full slot array and
     // completes once a slot frees (FIFO admission is not starved by the
@@ -2407,16 +2597,14 @@ fn dag_query_level_share_k_sweep() {
         let mut waiters = Vec::new();
         // Query 1: two independent pipelines (never finishes in-window).
         let log = Arc::new(Mutex::new(Vec::new()));
-        let (spec, _works) =
-            dag_spec(1, &clock, &log, &[(total, &[]), (total, &[]), (1, &[0, 1])]);
+        let (spec, _works) = dag_spec(1, &clock, &log, &[(total, &[]), (total, &[]), (1, &[0, 1])]);
         let (h, w) = rt.submit(spec);
         handles.push(h);
         waiters.push(w);
         // Queries 2..=k: single pipeline.
         for q in 1..k {
             let w = SyntheticWork::new(total, Some(Arc::clone(&clock)), 1_000);
-            let (h, waiter) =
-                rt.submit(spec_one(&w, Arc::new(SyntheticMorselSource::new(total))));
+            let (h, waiter) = rt.submit(spec_one(&w, Arc::new(SyntheticMorselSource::new(total))));
             let _ = q;
             handles.push(h);
             waiters.push(waiter);
@@ -2427,7 +2615,10 @@ fn dag_query_level_share_k_sweep() {
             assert_eq!(rt.worker_step(&mut local), Step::Ran);
         }
         for w in &waiters {
-            assert!(w.try_wait().is_none(), "K-sweep RGs must all still be active");
+            assert!(
+                w.try_wait().is_none(),
+                "K-sweep RGs must all still be active"
+            );
         }
         let cpus: Vec<u64> = handles.iter().map(|h| h.cpu_consumed_ns()).collect();
         let mean = cpus.iter().sum::<u64>() as f64 / k as f64;
@@ -2475,11 +2666,11 @@ fn dag_depth_priority_pick() {
         &clock,
         &log,
         &[
-            (1_000, &[]),      // 0 = R (root)
-            (2_000, &[0]),     // 1 = S (shallow: only the sink above)
-            (2_000, &[0]),     // 2 = D (deep: Z then the sink)
-            (1_000, &[2]),     // 3 = Z
-            (500, &[1, 3]),    // 4 = sink
+            (1_000, &[]),   // 0 = R (root)
+            (2_000, &[0]),  // 1 = S (shallow: only the sink above)
+            (2_000, &[0]),  // 2 = D (deep: Z then the sink)
+            (1_000, &[2]),  // 3 = Z
+            (500, &[1, 3]), // 4 = sink
         ],
     );
     let (_hb, wb) = rt.submit(spec);
@@ -2506,7 +2697,10 @@ fn dag_depth_priority_pick() {
             "deeper pipeline must be picked first at equal pass, got {log:?}"
         );
     }
-    assert!(rt.stats().dag_depth_picks >= 1, "depth refinement must have decided the pick");
+    assert!(
+        rt.stats().dag_depth_picks >= 1,
+        "depth refinement must have decided the pick"
+    );
     while wb.try_wait().is_none() {
         rt.worker_step(&mut local);
     }
@@ -2547,7 +2741,11 @@ fn dag_abort_with_live_siblings() {
     assert_eq!(rt.stats().rgs_aborted, 1);
     assert_eq!(rt.stats().rgs_completed, 1);
     for w in &works {
-        assert_eq!(w.finalizes.load(Ordering::SeqCst), 0, "aborted RGs never run finalize work");
+        assert_eq!(
+            w.finalizes.load(Ordering::SeqCst),
+            0,
+            "aborted RGs never run finalize work"
+        );
     }
     let log = log.lock().unwrap();
     assert!(
@@ -2578,7 +2776,11 @@ fn dag_pinned_drive_prefers_deeper_pipeline() {
         ],
     );
     let (h, waiter) = rt.submit_pinned(spec);
-    assert_eq!(rt.stats().tasksets_published, 2, "pinned admission fans out too");
+    assert_eq!(
+        rt.stats().tasksets_published,
+        2,
+        "pinned admission fans out too"
+    );
     let lane = rt.acquire_external_lane().expect("lane");
     let mut local = lane.local();
     assert_eq!(rt.drive_pinned(&mut local, &h), RgOutcome::Completed);
@@ -2590,7 +2792,10 @@ fn dag_pinned_drive_prefers_deeper_pipeline() {
     let log = log.lock().unwrap();
     let cs = first_pos(&log, DagEv::Claim(0)).unwrap();
     let cd = first_pos(&log, DagEv::Claim(1)).unwrap();
-    assert!(cd < cs, "pinned driver must start on the deeper pipeline, got {log:?}");
+    assert!(
+        cd < cs,
+        "pinned driver must start on the deeper pipeline, got {log:?}"
+    );
 }
 
 /// Threaded pool end-to-end over the three §3.6 win shapes (multi-build
@@ -2600,11 +2805,28 @@ fn dag_pinned_drive_prefers_deeper_pipeline() {
 fn dag_pool_win_shapes_complete() {
     let shapes: [&[(u64, &[usize])]; 3] = [
         // multi-build: 3 independent builds + probe gated on all three
-        &[(8_192, &[]), (8_192, &[]), (8_192, &[]), (8_192, &[0, 1, 2])],
+        &[
+            (8_192, &[]),
+            (8_192, &[]),
+            (8_192, &[]),
+            (8_192, &[0, 1, 2]),
+        ],
         // UNION ALL: 4 independent branches + a concat sink
-        &[(8_192, &[]), (8_192, &[]), (8_192, &[]), (8_192, &[]), (1_024, &[0, 1, 2, 3])],
+        &[
+            (8_192, &[]),
+            (8_192, &[]),
+            (8_192, &[]),
+            (8_192, &[]),
+            (1_024, &[0, 1, 2, 3]),
+        ],
         // independent subqueries: two 2-deep chains joining a final
-        &[(8_192, &[]), (4_096, &[0]), (8_192, &[]), (4_096, &[2]), (2_048, &[1, 3])],
+        &[
+            (8_192, &[]),
+            (4_096, &[0]),
+            (8_192, &[]),
+            (4_096, &[2]),
+            (2_048, &[1, 3]),
+        ],
     ];
     for (si, shape) in shapes.iter().enumerate() {
         let rt = Runtime::new(RuntimeConfig {
@@ -2624,11 +2846,18 @@ fn dag_pool_win_shapes_complete() {
             works.push(Arc::clone(&inner));
             tasksets.push(TaskSetSpec {
                 source: Arc::new(SyntheticMorselSource::new(*total)),
-                work: Arc::new(DagWork { inner, log: Arc::clone(&log), index: i }),
+                work: Arc::new(DagWork {
+                    inner,
+                    log: Arc::clone(&log),
+                    index: i,
+                }),
                 deps: deps.to_vec(),
             });
         }
-        let (_h, waiter) = rt.submit(QuerySpec { query_id: si as u64 + 1, tasksets });
+        let (_h, waiter) = rt.submit(QuerySpec {
+            query_id: si as u64 + 1,
+            tasksets,
+        });
         assert_eq!(waiter.wait(), RgOutcome::Completed);
         pool.shutdown();
         for w in &works {
@@ -2642,10 +2871,16 @@ fn dag_pool_win_shapes_complete() {
             let ci = first_pos(&log, DagEv::Claim(i)).unwrap();
             for &d in deps.iter() {
                 let fd = first_pos(&log, DagEv::Finalize(d)).unwrap();
-                assert!(ci > fd, "shape {si}: pipeline {i} claimed before dep {d} finalized");
+                assert!(
+                    ci > fd,
+                    "shape {si}: pipeline {i} claimed before dep {d} finalized"
+                );
             }
         }
-        assert!(rt.stats().dag_fanout_publishes >= 1, "shape {si} must fan out");
+        assert!(
+            rt.stats().dag_fanout_publishes >= 1,
+            "shape {si} must fan out"
+        );
     }
 }
 
@@ -2688,17 +2923,23 @@ fn dag_threaded_pool_query_shares() {
         tasksets: vec![
             TaskSetSpec {
                 source: Arc::new(SyntheticMorselSource::new(2_000)),
-                work: Arc::new(Spin { ns_per_granule: 20_000 }),
+                work: Arc::new(Spin {
+                    ns_per_granule: 20_000,
+                }),
                 deps: vec![],
             },
             TaskSetSpec {
                 source: Arc::new(SyntheticMorselSource::new(2_000)),
-                work: Arc::new(Spin { ns_per_granule: 20_000 }),
+                work: Arc::new(Spin {
+                    ns_per_granule: 20_000,
+                }),
                 deps: vec![],
             },
             TaskSetSpec {
                 source: Arc::new(SyntheticMorselSource::new(64)),
-                work: Arc::new(Spin { ns_per_granule: 1_000 }),
+                work: Arc::new(Spin {
+                    ns_per_granule: 1_000,
+                }),
                 deps: vec![0, 1],
             },
         ],
@@ -2710,7 +2951,9 @@ fn dag_threaded_pool_query_shares() {
             query_id: q as u64 + 1,
             tasksets: vec![TaskSetSpec {
                 source: Arc::new(SyntheticMorselSource::new(4_000)),
-                work: Arc::new(Spin { ns_per_granule: 20_000 }),
+                work: Arc::new(Spin {
+                    ns_per_granule: 20_000,
+                }),
                 deps: vec![],
             }],
         });
@@ -2757,7 +3000,10 @@ fn stream_source_pool_exact() {
     let total = 96u64;
     let work = SyntheticWork::new(total, None, 0);
     let source = Arc::new(StreamSource::new());
-    let (_h, waiter) = rt.submit(spec_one(&work, Arc::clone(&source) as Arc<dyn MorselSource>));
+    let (_h, waiter) = rt.submit(spec_one(
+        &work,
+        Arc::clone(&source) as Arc<dyn MorselSource>,
+    ));
 
     // Producer: bursts of 8 with pauses (parked-worker wake coverage).
     let psrc = Arc::clone(&source);
@@ -2779,7 +3025,11 @@ fn stream_source_pool_exact() {
     work.assert_all_executed_once();
     assert_eq!(work.finalizes.load(Ordering::SeqCst), 1);
     for r in work.claims.lock().unwrap().iter() {
-        assert_eq!(r.end - r.start, 1, "stream claims must be single-chunk, got {r:?}");
+        assert_eq!(
+            r.end - r.start,
+            1,
+            "stream claims must be single-chunk, got {r:?}"
+        );
     }
     pool.shutdown();
 }
@@ -2797,7 +3047,10 @@ fn stream_source_empty_completes() {
     let pool = WorkerPool::spawn_std(Arc::clone(&rt)).unwrap();
     let work = SyntheticWork::new(0, None, 0);
     let source = Arc::new(StreamSource::new());
-    let (_h, waiter) = rt.submit(spec_one(&work, Arc::clone(&source) as Arc<dyn MorselSource>));
+    let (_h, waiter) = rt.submit(spec_one(
+        &work,
+        Arc::clone(&source) as Arc<dyn MorselSource>,
+    ));
     source.close();
     rt.notify_source_progress();
     assert_eq!(waiter.wait(), RgOutcome::Completed);
@@ -2822,11 +3075,22 @@ fn stream_source_abort_wakes_starved_workers() {
     let pool = WorkerPool::spawn_std(Arc::clone(&rt)).unwrap();
     let work = SyntheticWork::new(16, None, 0);
     let source = Arc::new(StreamSource::new());
-    let (h, waiter) = rt.submit(spec_one(&work, Arc::clone(&source) as Arc<dyn MorselSource>));
+    let (h, waiter) = rt.submit(spec_one(
+        &work,
+        Arc::clone(&source) as Arc<dyn MorselSource>,
+    ));
     source.publish(16);
     rt.notify_source_progress();
     // Wait until the published prefix drains and workers starve-park.
-    while work.claims.lock().unwrap().iter().map(|r| r.end - r.start).sum::<u64>() < 16 {
+    while work
+        .claims
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|r| r.end - r.start)
+        .sum::<u64>()
+        < 16
+    {
         std::thread::yield_now();
     }
     // Producer error path: abort, then close + wake (the documented order).
@@ -2834,7 +3098,11 @@ fn stream_source_abort_wakes_starved_workers() {
     source.close();
     rt.notify_source_progress();
     assert_eq!(waiter.wait(), RgOutcome::Aborted);
-    assert_eq!(work.finalizes.load(Ordering::SeqCst), 0, "aborted RGs skip finalize");
+    assert_eq!(
+        work.finalizes.load(Ordering::SeqCst),
+        0,
+        "aborted RGs skip finalize"
+    );
     work.assert_all_executed_once();
     pool.shutdown();
 }
@@ -2917,7 +3185,11 @@ mod granule_map_tests {
         let starts: &[u64] = &[0, 4, 4, 9];
         let map = map_over(starts);
         for s in 0..9 {
-            assert_eq!(map.boundary_after(s), legacy_boundary_after(starts, s), "s={s}");
+            assert_eq!(
+                map.boundary_after(s),
+                legacy_boundary_after(starts, s),
+                "s={s}"
+            );
         }
     }
 
@@ -3028,7 +3300,9 @@ mod granule_map_tests {
                 assert_eq!(src.next_boundary_after(s), map.boundary_after(s));
             }
         }
-        assert!(GranuleMapSource::new(map, false, false).stream_state().is_none());
+        assert!(GranuleMapSource::new(map, false, false)
+            .stream_state()
+            .is_none());
     }
 
     #[test]
@@ -3042,7 +3316,11 @@ mod granule_map_tests {
         assert_eq!(src.total_granules(), synth.total_granules());
         assert_eq!(src.startup_c0(), synth.startup_c0());
         for s in 0..24 {
-            assert_eq!(src.next_boundary_after(s), synth.next_boundary_after(s), "s={s}");
+            assert_eq!(
+                src.next_boundary_after(s),
+                synth.next_boundary_after(s),
+                "s={s}"
+            );
         }
     }
 }
@@ -3075,16 +3353,33 @@ mod ledger_tests {
     fn target_math_fair_share_and_clamps() {
         let l = AdmissionLedger::new(8, budgets(8));
         let n = l.admit(0, req(16), LedgerClass::Standard);
-        assert_eq!(n, ArrivalNudge { wake: 8, advertises: true });
-        assert_eq!(l.debug_words(0), (0, 8), "alone: fair share is the whole core budget");
+        assert_eq!(
+            n,
+            ArrivalNudge {
+                wake: 8,
+                advertises: true
+            }
+        );
+        assert_eq!(
+            l.debug_words(0),
+            (0, 8),
+            "alone: fair share is the whole core budget"
+        );
 
         l.admit(1, req(2), LedgerClass::Standard);
-        assert_eq!(l.debug_words(0).1, 4, "incumbent narrowed to the equal share");
+        assert_eq!(
+            l.debug_words(0).1,
+            4,
+            "incumbent narrowed to the equal share"
+        );
         assert_eq!(l.debug_words(1).1, 2, "ceiling clamps below the fair share");
 
         l.admit(
             2,
-            WidthRequest { predicted: 1, ..req(8) },
+            WidthRequest {
+                predicted: 1,
+                ..req(8)
+            },
             LedgerClass::Standard,
         );
         // base = 8/3 = 2, remainder 2 in slot order => fair 3,3,2.
@@ -3103,7 +3398,10 @@ mod ledger_tests {
         }
         let snap = l.snapshot();
         assert_eq!(snap.admitted, 3);
-        assert!(snap.target_total <= 3, "sum bounded by max(cores, admitted)");
+        assert!(
+            snap.target_total <= 3,
+            "sum bounded by max(cores, admitted)"
+        );
     }
 
     /// SHED-WITHIN-ONE-CLAIM: an arrival narrows the incumbent; the verdict
@@ -3120,7 +3418,11 @@ mod ledger_tests {
         assert_eq!(l.should_continue(0), ClaimVerdict::Continue);
 
         l.admit(1, req(4), LedgerClass::Standard); // fresh arrival: targets 1,1 — incumbent over-granted
-        assert_eq!(l.should_continue(0), ClaimVerdict::Yield, "shed at the next boundary");
+        assert_eq!(
+            l.should_continue(0),
+            ClaimVerdict::Yield,
+            "shed at the next boundary"
+        );
         assert_eq!(l.leave(0), 0, "still at/above target: no wake needed");
         assert_eq!(
             l.should_continue(0),
@@ -3143,7 +3445,10 @@ mod ledger_tests {
         assert!(l.try_join(0));
         l.admit(1, req(4), LedgerClass::Standard);
         assert!(!l.wants_workers(0), "saturated incumbent is filtered out");
-        assert!(l.wants_workers(1), "fresh under-target entry passes the filter");
+        assert!(
+            l.wants_workers(1),
+            "fresh under-target entry passes the filter"
+        );
         assert!(!l.try_join(0), "stale pick of the incumbent is refused");
         assert!(l.try_join(1), "the freed worker lands on the fresh query");
     }
@@ -3170,7 +3475,11 @@ mod ledger_tests {
             est_work_ns: u64::MAX,
         };
         let nudge = l.admit(0, wide, LedgerClass::Standard);
-        assert_eq!(l.debug_words(0).1, 2, "cache headroom denies widening past 2");
+        assert_eq!(
+            l.debug_words(0).1,
+            2,
+            "cache headroom denies widening past 2"
+        );
         assert_eq!(nudge.wake, 2);
         assert!(l.try_join(0));
         assert!(l.try_join(0));
@@ -3181,7 +3490,11 @@ mod ledger_tests {
         // wins (target 1), charging past the budget by design.
         l.admit(1, wide, LedgerClass::Standard);
         assert_eq!(l.debug_words(0).1, 2);
-        assert_eq!(l.debug_words(1).1, 1, "liveness floor beats the cache clamp");
+        assert_eq!(
+            l.debug_words(1).1,
+            1,
+            "liveness floor beats the cache clamp"
+        );
         assert_eq!(l.snapshot().cache_charged_bytes, 1200);
     }
 
@@ -3223,15 +3536,41 @@ mod ledger_tests {
                 renudge_max: 4,
             },
         );
-        let n = l.admit(0, WidthRequest { est_work_ns: 999, ..req(4) }, LedgerClass::Standard);
-        assert_eq!(n, ArrivalNudge { wake: 0, advertises: false });
-        assert!(!l.wants_workers(0), "sub-threshold entries are invisible to the pick");
+        let n = l.admit(
+            0,
+            WidthRequest {
+                est_work_ns: 999,
+                ..req(4)
+            },
+            LedgerClass::Standard,
+        );
+        assert_eq!(
+            n,
+            ArrivalNudge {
+                wake: 0,
+                advertises: false
+            }
+        );
+        assert!(
+            !l.wants_workers(0),
+            "sub-threshold entries are invisible to the pick"
+        );
         assert!(!l.advertises(0));
         assert!(l.try_join(0), "the caller itself may still join");
         assert_eq!(l.snapshot().sub_threshold_admits, 1);
 
-        let n = l.admit(1, WidthRequest { est_work_ns: 1000, ..req(4) }, LedgerClass::Standard);
-        assert!(n.advertises, "at-threshold work advertises (strictly-below rule)");
+        let n = l.admit(
+            1,
+            WidthRequest {
+                est_work_ns: 1000,
+                ..req(4)
+            },
+            LedgerClass::Standard,
+        );
+        assert!(
+            n.advertises,
+            "at-threshold work advertises (strictly-below rule)"
+        );
     }
 
     /// Bounded re-nudge: fires only under target, budgeted per recompute
@@ -3284,7 +3623,10 @@ mod ledger_tests {
         l.retire(0);
         assert!(l.wants_workers(0), "retired slot must not stay filtered");
         assert!(l.advertises(0));
-        assert!(l.try_join(0), "fan-out occupant of a retired slot must be joinable");
+        assert!(
+            l.try_join(0),
+            "fan-out occupant of a retired slot must be joinable"
+        );
         assert_eq!(l.should_continue(0), ClaimVerdict::Continue);
         assert_eq!(l.leave(0), 0);
     }
@@ -3299,7 +3641,9 @@ mod ledger_tests {
         let l = AdmissionLedger::new(NSLOTS, budgets(CORES));
         let mut seed: u64 = 0x9E37_79B9_7F4A_7C15;
         let mut rng = || {
-            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             (seed >> 33) as u32
         };
         let mut admitted = [false; NSLOTS];
@@ -3374,8 +3718,7 @@ mod ledger_tests {
         assert!(!rt.ledger_enabled());
         let pool = WorkerPool::spawn_std(Arc::clone(&rt)).unwrap();
         let work = SyntheticWork::new(256, None, 0);
-        let (_h, waiter) =
-            rt.submit(spec_one(&work, Arc::new(SyntheticMorselSource::new(256))));
+        let (_h, waiter) = rt.submit(spec_one(&work, Arc::new(SyntheticMorselSource::new(256))));
         assert_eq!(waiter.wait(), RgOutcome::Completed);
         work.assert_all_executed_once();
         assert_eq!(rt.ledger_snapshot(), LedgerSnapshot::default());
@@ -3397,8 +3740,7 @@ mod ledger_tests {
         rt.set_ledger(true);
         let pool = WorkerPool::spawn_std(Arc::clone(&rt)).unwrap();
         let work = SyntheticWork::new(256, None, 0);
-        let (_h, waiter) =
-            rt.submit(spec_one(&work, Arc::new(SyntheticMorselSource::new(256))));
+        let (_h, waiter) = rt.submit(spec_one(&work, Arc::new(SyntheticMorselSource::new(256))));
         assert_eq!(waiter.wait(), RgOutcome::Completed);
         work.assert_all_executed_once();
         let snap = rt.ledger_snapshot();
@@ -3542,9 +3884,16 @@ mod ledger_tests {
         let epoch_before = rt.park_epoch();
         let (_h, waiter) = rt.submit_with_width(
             spec_one(&work, Arc::new(SyntheticMorselSource::new(32))),
-            WidthRequest { est_work_ns: 1, ..WidthRequest::unbounded(1) },
+            WidthRequest {
+                est_work_ns: 1,
+                ..WidthRequest::unbounded(1)
+            },
         );
-        assert_eq!(rt.park_epoch(), epoch_before, "sub-threshold publish never wakes");
+        assert_eq!(
+            rt.park_epoch(),
+            epoch_before,
+            "sub-threshold publish never wakes"
+        );
         assert_eq!(rt.ledger_snapshot().sub_threshold_admits, 1);
         let mut pool_local = rt.worker_local(0);
         assert_eq!(
@@ -3585,7 +3934,8 @@ mod ledger_tests {
         });
         rt.set_ledger(true);
         let work = SyntheticWork::new(32, None, 0);
-        let (h, waiter) = rt.submit_pinned(spec_one(&work, Arc::new(SyntheticMorselSource::new(32))));
+        let (h, waiter) =
+            rt.submit_pinned(spec_one(&work, Arc::new(SyntheticMorselSource::new(32))));
         let mut caller = CallerWorker::enter(&rt).expect("lane available");
         let err = caller
             .drive_with_duty(&rt, &h, &mut || {
@@ -3593,8 +3943,16 @@ mod ledger_tests {
             })
             .expect_err("failing duty must surface");
         assert_eq!(err.message(), "duty interrupt");
-        assert_eq!(waiter.try_wait(), Some(RgOutcome::Aborted), "drained before returning");
-        assert_eq!(work.finalizes.load(Ordering::SeqCst), 0, "aborted RGs skip finalize");
+        assert_eq!(
+            waiter.try_wait(),
+            Some(RgOutcome::Aborted),
+            "drained before returning"
+        );
+        assert_eq!(
+            work.finalizes.load(Ordering::SeqCst),
+            0,
+            "aborted RGs skip finalize"
+        );
         let snap = rt.ledger_snapshot();
         assert_eq!(snap.admitted, 0);
         assert_eq!(snap.granted_total, 0);
@@ -3673,8 +4031,10 @@ mod caller_c2_tests {
         let rt = rt4();
         let work = SyntheticWork::new(8, None, 0);
         let source = Arc::new(StreamSource::new());
-        let (h, waiter) =
-            rt.submit_pinned(spec_one(&work, Arc::clone(&source) as Arc<dyn MorselSource>));
+        let (h, waiter) = rt.submit_pinned(spec_one(
+            &work,
+            Arc::clone(&source) as Arc<dyn MorselSource>,
+        ));
         let mut caller = CallerWorker::enter(&rt).expect("lane available");
         let mut duty_calls = 0u64;
         let mut parks = 0u64;
@@ -3701,7 +4061,10 @@ mod caller_c2_tests {
             .expect("duty and park never fail");
         assert_eq!(outcome, RgOutcome::Completed);
         assert_eq!(waiter.try_wait(), Some(RgOutcome::Completed));
-        assert!(parks >= 1, "starved stream must reach the bounded idle park");
+        assert!(
+            parks >= 1,
+            "starved stream must reach the bounded idle park"
+        );
         assert!(duty_calls > parks, "duties pump around the parked window");
         work.assert_all_executed_once();
         assert_eq!(work.finalizes.load(Ordering::SeqCst), 1);
@@ -3715,21 +4078,27 @@ mod caller_c2_tests {
         let rt = rt4();
         let work = SyntheticWork::new(8, None, 0);
         let source = Arc::new(StreamSource::new());
-        let (h, waiter) =
-            rt.submit_pinned(spec_one(&work, Arc::clone(&source) as Arc<dyn MorselSource>));
+        let (h, waiter) = rt.submit_pinned(spec_one(
+            &work,
+            Arc::clone(&source) as Arc<dyn MorselSource>,
+        ));
         let mut caller = CallerWorker::enter(&rt).expect("lane available");
         let err = caller
-            .drive_with_duties_parked(
-                &rt,
-                &h,
-                &mut || Ok(()),
-                &mut || true,
-                &mut || Err(PgError::new(ERROR, "latch cancel").into()),
-            )
+            .drive_with_duties_parked(&rt, &h, &mut || Ok(()), &mut || true, &mut || {
+                Err(PgError::new(ERROR, "latch cancel").into())
+            })
             .expect_err("failing park must surface");
         assert_eq!(err.message(), "latch cancel");
-        assert_eq!(waiter.try_wait(), Some(RgOutcome::Aborted), "drained before returning");
-        assert_eq!(work.finalizes.load(Ordering::SeqCst), 0, "aborted RGs skip finalize");
+        assert_eq!(
+            waiter.try_wait(),
+            Some(RgOutcome::Aborted),
+            "drained before returning"
+        );
+        assert_eq!(
+            work.finalizes.load(Ordering::SeqCst),
+            0,
+            "aborted RGs skip finalize"
+        );
         let snap = rt.ledger_snapshot();
         assert_eq!(snap.admitted, 0);
         assert_eq!(snap.granted_total, 0);
@@ -3750,16 +4119,10 @@ mod caller_c2_tests {
             let outcome = if c2 {
                 let mut parks = 0u64;
                 let o = caller
-                    .drive_with_duties_parked(
-                        &rt,
-                        &h,
-                        &mut || Ok(()),
-                        &mut || true,
-                        &mut || {
-                            parks += 1;
-                            Ok(())
-                        },
-                    )
+                    .drive_with_duties_parked(&rt, &h, &mut || Ok(()), &mut || true, &mut || {
+                        parks += 1;
+                        Ok(())
+                    })
                     .expect("no failures");
                 assert_eq!(parks, 0, "ready work never reaches the idle park");
                 o
@@ -3790,8 +4153,15 @@ mod caller_c2_tests {
             .expect("no failures");
         let local = caller.worker_local();
         assert!(local.drive.tasks > 0, "the caller executed tasks");
-        assert!(local.drive.granules >= 16, "all granules ran through the caller");
-        assert_eq!(caller.lane_ordinal(), ordinal, "lane identity stable across the drive");
+        assert!(
+            local.drive.granules >= 16,
+            "all granules ran through the caller"
+        );
+        assert_eq!(
+            caller.lane_ordinal(),
+            ordinal,
+            "lane identity stable across the drive"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -3820,24 +4190,20 @@ mod caller_c2_tests {
         rt.set_ledger(true);
         let work = SyntheticWork::new(8, None, 0);
         let source = Arc::new(StreamSource::new());
-        let (h, waiter) =
-            rt.submit_pinned(spec_one(&work, Arc::clone(&source) as Arc<dyn MorselSource>));
+        let (h, waiter) = rt.submit_pinned(spec_one(
+            &work,
+            Arc::clone(&source) as Arc<dyn MorselSource>,
+        ));
         let mut caller = CallerWorker::enter(&rt).expect("lane available");
         let mut parks = 0u64;
         let outcome = caller
-            .drive_with_duties_parked(
-                &rt,
-                &h,
-                &mut || Ok(()),
-                &mut || true,
-                &mut || {
-                    parks += 1;
-                    source.publish(8);
-                    source.close();
-                    rt.notify_source_progress();
-                    Ok(())
-                },
-            )
+            .drive_with_duties_parked(&rt, &h, &mut || Ok(()), &mut || true, &mut || {
+                parks += 1;
+                source.publish(8);
+                source.close();
+                rt.notify_source_progress();
+                Ok(())
+            })
             .expect("duty and park never fail");
         assert_eq!(outcome, RgOutcome::Completed);
         assert_eq!(waiter.try_wait(), Some(RgOutcome::Completed));
@@ -3859,21 +4225,27 @@ mod caller_c2_tests {
         rt.set_ledger(true);
         let work = SyntheticWork::new(8, None, 0);
         let source = Arc::new(StreamSource::new());
-        let (h, waiter) =
-            rt.submit_pinned(spec_one(&work, Arc::clone(&source) as Arc<dyn MorselSource>));
+        let (h, waiter) = rt.submit_pinned(spec_one(
+            &work,
+            Arc::clone(&source) as Arc<dyn MorselSource>,
+        ));
         let mut caller = CallerWorker::enter(&rt).expect("lane available");
         let err = caller
-            .drive_with_duties_parked(
-                &rt,
-                &h,
-                &mut || Ok(()),
-                &mut || true,
-                &mut || Err(PgError::new(ERROR, "latch cancel").into()),
-            )
+            .drive_with_duties_parked(&rt, &h, &mut || Ok(()), &mut || true, &mut || {
+                Err(PgError::new(ERROR, "latch cancel").into())
+            })
             .expect_err("failing park must surface");
         assert_eq!(err.message(), "latch cancel");
-        assert_eq!(waiter.try_wait(), Some(RgOutcome::Aborted), "drained before returning");
-        assert_eq!(work.finalizes.load(Ordering::SeqCst), 0, "aborted RGs skip finalize");
+        assert_eq!(
+            waiter.try_wait(),
+            Some(RgOutcome::Aborted),
+            "drained before returning"
+        );
+        assert_eq!(
+            work.finalizes.load(Ordering::SeqCst),
+            0,
+            "aborted RGs skip finalize"
+        );
         let snap = rt.ledger_snapshot();
         assert_eq!(snap.admitted, 0);
         assert_eq!(snap.granted_total, 0);
@@ -3961,7 +4333,11 @@ mod ledger_gang_tests {
         let (_, g) = l.admit_gang(2).unwrap();
         assert_eq!(g, 2);
         l.admit(0, req(4), LedgerClass::Standard);
-        assert_eq!(l.debug_words(0).1, 1, "liveness floor beats the gang charge");
+        assert_eq!(
+            l.debug_words(0).1,
+            1,
+            "liveness floor beats the gang charge"
+        );
     }
 
     /// Invariant 2 (FROZEN after admit): pool arrivals and departures
@@ -3994,8 +4370,9 @@ mod ledger_gang_tests {
     #[test]
     fn gang_cap_fails_open_distinguishably() {
         let l = AdmissionLedger::new(4, budgets(1024));
-        let ids: Vec<usize> =
-            (0..MAX_GANG_ENTRIES).map(|_| l.admit_gang(1).unwrap().0).collect();
+        let ids: Vec<usize> = (0..MAX_GANG_ENTRIES)
+            .map(|_| l.admit_gang(1).unwrap().0)
+            .collect();
         assert!(l.admit_gang(1).is_none(), "past the capacity: fail-open");
         assert_eq!(l.snapshot().gang_cap_refusals, 1);
         l.retire_gang(ids[7]);
@@ -4020,29 +4397,44 @@ mod ledger_gang_tests {
         let l = AdmissionLedger::new(4, budgets(8));
         let (_, granted) = l.admit_gang(4).unwrap();
         assert_eq!(granted, 4);
-        assert_eq!(l.snapshot().cache_charged_bytes, 0, "gangs charge no cache bytes");
+        assert_eq!(
+            l.snapshot().cache_charged_bytes,
+            0,
+            "gangs charge no cache bytes"
+        );
         // A cache-bounded ledger: pool footprints clamp against cache room
         // exactly as without the gang (the gang narrowed the CORE budget
         // to 4; the cache room term is unchanged by the gang's existence).
-        let l = AdmissionLedger::new(4, LedgerBudgets {
-            cores: 8,
-            util_cores: 1,
-            cache_bytes: 4096,
-            join_threshold_ns: 0,
-            renudge_max: 4,
-        });
+        let l = AdmissionLedger::new(
+            4,
+            LedgerBudgets {
+                cores: 8,
+                util_cores: 1,
+                cache_bytes: 4096,
+                join_threshold_ns: 0,
+                renudge_max: 4,
+            },
+        );
         let (_, g) = l.admit_gang(4).unwrap();
         assert_eq!(g, 4);
-        l.admit(0, WidthRequest {
-            ceiling: 16,
-            predicted: u32::MAX,
-            cache_bytes_per_worker: 1024,
-            est_work_ns: u64::MAX,
-        }, LedgerClass::Standard);
+        l.admit(
+            0,
+            WidthRequest {
+                ceiling: 16,
+                predicted: u32::MAX,
+                cache_bytes_per_worker: 1024,
+                est_work_ns: u64::MAX,
+            },
+            LedgerClass::Standard,
+        );
         // core budget after gang charge = 4; cache room = 4096/1024 = 4:
         // target 4 — the two clamps compose, neither re-derives the other.
         assert_eq!(l.debug_words(0).1, 4);
-        assert_eq!(l.snapshot().cache_charged_bytes, 4096, "pool footprint only");
+        assert_eq!(
+            l.snapshot().cache_charged_bytes,
+            4096,
+            "pool footprint only"
+        );
     }
 
     /// Multi-gang composition (the coexistence pin's successor): every
@@ -4058,7 +4450,11 @@ mod ledger_gang_tests {
         let (_, g3) = l.admit_gang(4).unwrap();
         assert_eq!(g3, 2, "third gang sees both charges (8-3-3)");
         l.admit(0, req(16), LedgerClass::Standard);
-        assert_eq!(l.debug_words(0).1, 1, "pool floor under the gang charges (8-3-3-2=0 -> floor)");
+        assert_eq!(
+            l.debug_words(0).1,
+            1,
+            "pool floor under the gang charges (8-3-3-2=0 -> floor)"
+        );
     }
 
     /// The retargeted Runtime RAII lease: ledger OFF -> None
@@ -4077,11 +4473,16 @@ mod ledger_gang_tests {
             trace: false,
         });
         rt.set_ledger(false);
-        assert!(rt.lease_parallel_width(2).is_none(), "ledger OFF: fail-open, no lease");
+        assert!(
+            rt.lease_parallel_width(2).is_none(),
+            "ledger OFF: fail-open, no lease"
+        );
 
         rt.set_ledger(true);
         {
-            let mut lease = rt.lease_parallel_width(8).expect("ledger ON grants a lease");
+            let mut lease = rt
+                .lease_parallel_width(8)
+                .expect("ledger ON grants a lease");
             assert_eq!(lease.granted(), 2, "headroom = the whole 2-core budget");
             assert_eq!(lease.engine(), "unified");
             assert_eq!(rt.ledger_snapshot().gang_active, 2, "lease is a GANG entry");
@@ -4091,8 +4492,7 @@ mod ledger_gang_tests {
             // A pool RG under the gang's charge: narrowed but live.
             let pool = WorkerPool::spawn_std(Arc::clone(&rt)).unwrap();
             let work = SyntheticWork::new(64, None, 0);
-            let (_h, waiter) =
-                rt.submit(spec_one(&work, Arc::new(SyntheticMorselSource::new(64))));
+            let (_h, waiter) = rt.submit(spec_one(&work, Arc::new(SyntheticMorselSource::new(64))));
             assert_eq!(waiter.wait(), RgOutcome::Completed);
             work.assert_all_executed_once();
             pool.shutdown();
@@ -4116,17 +4516,24 @@ mod ledger_gang_tests {
         });
         rt.set_ledger(true);
         let work = SyntheticWork::new(4, None, 0);
-        let (_h, _waiter) =
-            rt.submit(spec_one(&work, Arc::new(SyntheticMorselSource::new(4))));
+        let (_h, _waiter) = rt.submit(spec_one(&work, Arc::new(SyntheticMorselSource::new(4))));
         // The admitted pool entry targets both cores: zero headroom.
-        let lease = rt.lease_parallel_width(4).expect("capacity not reached: Some");
-        assert_eq!(lease.granted(), 0, "saturated box: grant 0 (serial path law)");
+        let lease = rt
+            .lease_parallel_width(4)
+            .expect("capacity not reached: Some");
+        assert_eq!(
+            lease.granted(),
+            0,
+            "saturated box: grant 0 (serial path law)"
+        );
         drop(lease);
         let snap = rt.ledger_snapshot();
         assert_eq!(snap.gang_admitted, 0);
-        assert_eq!(snap.gang_zero_grants, 1, "FM-3 visibility through the Runtime face");
+        assert_eq!(
+            snap.gang_zero_grants, 1,
+            "FM-3 visibility through the Runtime face"
+        );
     }
-
 }
 
 // ---- M2 inc-2: bound-engagement descriptor (PGPROC-leasing pool workers) ---
@@ -4169,12 +4576,13 @@ mod bound_gate {
         // rg-set-BEFORE-publish (inc-3 rung 3): on_rg stored the handle
         // before the publication could make this RG pick-visible — no
         // submit → handle-store window exists to tolerate.
-        let rg = p
-            .rg
-            .get()
-            .expect("on_rg stored the handle before publication")
-            .clone();
-        let lane = p.rt.acquire_external_lane().expect("external lane for the serve");
+        let rg =
+            p.rg.get()
+                .expect("on_rg stored the handle before publication")
+                .clone();
+        let lane =
+            p.rt.acquire_external_lane()
+                .expect("external lane for the serve");
         let mut local = lane.local();
         let _outcome = p.rt.drive_pinned(&mut local, &rg);
         p.serves.fetch_add(1, Ordering::SeqCst);
@@ -4186,7 +4594,12 @@ mod bound_gate {
         total: u64,
         cap: u64,
         refuse_all: bool,
-    ) -> (Arc<SyntheticWork>, Arc<BoundPayload>, RgHandle, CompletionWaiter) {
+    ) -> (
+        Arc<SyntheticWork>,
+        Arc<BoundPayload>,
+        RgHandle,
+        CompletionWaiter,
+    ) {
         let work = SyntheticWork::new(total, None, 0);
         let payload = Arc::new(BoundPayload {
             rt: Arc::clone(rt),
@@ -4234,8 +4647,14 @@ mod bound_gate {
         // caught the pre-join read at 0).
         pool.shutdown();
         let serves = payload.serves.load(Ordering::SeqCst);
-        assert!(serves >= 1 && serves <= 2, "cap-bounded serves, got {serves}");
-        assert!(rt.stats().bound_serves >= 1, "serve dispatched through the gate");
+        assert!(
+            serves >= 1 && serves <= 2,
+            "cap-bounded serves, got {serves}"
+        );
+        assert!(
+            rt.stats().bound_serves >= 1,
+            "serve dispatched through the gate"
+        );
         assert_eq!(
             rt.execution_permits().available(),
             2,
@@ -4287,7 +4706,10 @@ mod bound_gate {
         assert_eq!(waiter.wait(), RgOutcome::Completed);
         work.assert_all_executed_once();
         pool.shutdown();
-        assert!(rt.stats().bound_serves >= 1, "served through the bound gate");
+        assert!(
+            rt.stats().bound_serves >= 1,
+            "served through the bound gate"
+        );
         assert_eq!(
             rt.execution_permits().available(),
             2,
@@ -4318,7 +4740,11 @@ mod bound_gate {
             None,
             descriptor2,
         );
-        payload2.rg.set(h2.clone()).ok().expect("handle stored once");
+        payload2
+            .rg
+            .set(h2.clone())
+            .ok()
+            .expect("handle stored once");
         assert_eq!(
             h2.priority(),
             crate::rg::INITIAL_PRIORITY,
@@ -4395,7 +4821,10 @@ mod bound_gate {
                 // down. (Pool-spawned threads never noted residue — their
                 // hint is false and the evictor must not have fired for
                 // them; EVICTIONS counts every firing process-wide.)
-                assert!(!crate::session_residue(), "unbound work ran over session residue");
+                assert!(
+                    !crate::session_residue(),
+                    "unbound work ran over session residue"
+                );
                 self.inner.run_morsel(worker, range);
             }
             fn finalize(&self) {
@@ -4414,8 +4843,9 @@ mod bound_gate {
         // drive_bound_pool shape) so the noting thread IS the unbound
         // executor — the exact edge under test.
         let inner = SyntheticWork::new(8, None, 0);
-        let work: Arc<dyn TaskSetWork> =
-            Arc::new(ResidueProbe { inner: Arc::clone(&inner) });
+        let work: Arc<dyn TaskSetWork> = Arc::new(ResidueProbe {
+            inner: Arc::clone(&inner),
+        });
         crate::note_session_residue(true);
         assert!(crate::session_residue());
         let (_h, waiter) = rt.submit(QuerySpec {
@@ -4476,12 +4906,18 @@ mod bound_gate {
         // refuse_all serve + no pool threads: nothing ever consumes the
         // demand — the completion flush must return it all.
         let (work, _payload, h, _waiter) = bound_setup(&rt, 8, 2, true);
-        assert!(rt.qos_demand_live(), "fresh bound publish charged its width");
+        assert!(
+            rt.qos_demand_live(),
+            "fresh bound publish charged its width"
+        );
         let lane = rt.acquire_external_lane().expect("external lane");
         let mut local = lane.local();
         assert_eq!(rt.drive_pinned(&mut local, &h), RgOutcome::Completed);
         work.assert_all_executed_once();
-        assert!(!rt.qos_demand_live(), "slot release flushed the unmet width");
+        assert!(
+            !rt.qos_demand_live(),
+            "slot release flushed the unmet width"
+        );
     }
 
     /// POOL-QOS: the semaphore's priority lane — a parked priority waiter
@@ -4522,7 +4958,11 @@ mod bound_gate {
         prio.join().unwrap();
         norm.join().unwrap();
         let order = order.lock().unwrap();
-        assert_eq!(order.as_slice(), ["prio", "norm"], "priority lane served first");
+        assert_eq!(
+            order.as_slice(),
+            ["prio", "norm"],
+            "priority lane served first"
+        );
         assert_eq!(s.available(), 1, "permit balance");
     }
 
@@ -4542,7 +4982,11 @@ mod bound_gate {
         h.abort();
         assert_eq!(waiter.wait(), RgOutcome::Aborted);
         pool.shutdown();
-        assert_eq!(rt.execution_permits().available(), 2, "permits balanced after abort");
+        assert_eq!(
+            rt.execution_permits().available(),
+            2,
+            "permits balanced after abort"
+        );
     }
 }
 
@@ -4571,7 +5015,11 @@ mod utility_qos_tests {
         WidthRequest::unbounded(ceiling)
     }
 
-    fn long_spec(qid: u64, total: u64, clock: &Arc<VirtualClock>) -> (Arc<SyntheticWork>, QuerySpec) {
+    fn long_spec(
+        qid: u64,
+        total: u64,
+        clock: &Arc<VirtualClock>,
+    ) -> (Arc<SyntheticWork>, QuerySpec) {
         let w = SyntheticWork::new(total, Some(Arc::clone(clock)), 1_000);
         let spec = QuerySpec {
             query_id: qid,
@@ -4601,7 +5049,11 @@ mod utility_qos_tests {
         // Unbounded standard arrival: takes the whole budget; utility
         // drops to the liveness floor (min(2, 8-8) = 0 → floor 1).
         l.admit(1, req(16), LedgerClass::Standard);
-        assert_eq!(l.debug_words(1).1, 8, "standard tier splits the full budget");
+        assert_eq!(
+            l.debug_words(1).1,
+            8,
+            "standard tier splits the full budget"
+        );
         assert_eq!(l.debug_words(0).1, 1, "utility floored, never zero");
         let snap = l.snapshot();
         assert_eq!(snap.util_admitted, 1);
@@ -5046,7 +5498,10 @@ mod q2_bounded_drive_tests {
         };
         assert_eq!(outcome, RgOutcome::Completed);
         assert_eq!(waiter.try_wait(), Some(RgOutcome::Completed));
-        assert!(bursts > 1, "a nontrivial RG must need several ≤1-task bursts");
+        assert!(
+            bursts > 1,
+            "a nontrivial RG must need several ≤1-task bursts"
+        );
         assert!(bounded_bursts >= 1);
         work.assert_all_executed_once();
         assert_eq!(work.finalizes.load(Ordering::SeqCst), 1);
@@ -5061,8 +5516,10 @@ mod q2_bounded_drive_tests {
         let rt = rt2();
         let work = SyntheticWork::new(6, None, 0);
         let source = Arc::new(StreamSource::new());
-        let (h, waiter) =
-            rt.submit_pinned(spec_one(&work, Arc::clone(&source) as Arc<dyn MorselSource>));
+        let (h, waiter) = rt.submit_pinned(spec_one(
+            &work,
+            Arc::clone(&source) as Arc<dyn MorselSource>,
+        ));
         let mut local = rt.external_local(0);
         // Starved: no ticket published yet.
         let (o, ran) = rt.drive_pinned_tasks(&mut local, &h, 4);
@@ -5105,8 +5562,10 @@ mod q2_bounded_drive_tests {
         let source = Arc::new(StreamSource::new());
         // OPEN stream, nothing published: an aborted RG must still drain
         // (abort-before-starved ordering in the claim path).
-        let (h, waiter) =
-            rt.submit_pinned(spec_one(&work, Arc::clone(&source) as Arc<dyn MorselSource>));
+        let (h, waiter) = rt.submit_pinned(spec_one(
+            &work,
+            Arc::clone(&source) as Arc<dyn MorselSource>,
+        ));
         h.abort();
         let mut local = rt.external_local(0);
         let outcome = loop {

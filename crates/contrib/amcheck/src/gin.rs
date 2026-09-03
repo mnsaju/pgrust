@@ -4,19 +4,21 @@ use ::bufmgr::{
 };
 use ::gin::amcheck as ginam;
 use ::gin_vocab::{
-    GinPageOpaqueData, GinState, PostingItem, PostingItemGetBlockNumber, GIN_CAT_NORM_KEY,
-    GIN_DATA, GIN_DELETED, GIN_LEAF, GIN_ROOT_BLKNO, MAXALIGN, SizeOfPageHeaderData,
+    GinPageOpaqueData, GinState, PostingItem, PostingItemGetBlockNumber, SizeOfPageHeaderData,
+    GIN_CAT_NORM_KEY, GIN_DATA, GIN_DELETED, GIN_LEAF, GIN_ROOT_BLKNO, MAXALIGN,
 };
 use ::mcx::{Mcx, MemoryContext, PgVec};
 use ::nbtree::itup::{copy_index_tuple, index_tuple_size, ITup};
-use ::types_core::{catalog::GIN_AM_OID, BlockNumber, InvalidBlockNumber, OffsetNumber, Oid, BLCKSZ};
+use ::types_core::ForkNumber;
+use ::types_core::{
+    catalog::GIN_AM_OID, BlockNumber, InvalidBlockNumber, OffsetNumber, Oid, BLCKSZ,
+};
 use ::types_error::{PgError, PgResult, ERRCODE_INDEX_CORRUPTED};
 use ::types_rel::Relation;
 use ::types_storage::buf::BufferAccessStrategyType;
 use ::types_storage::bufpage::{ItemIdData, MaxIndexTuplesPerPage, PageRef};
 use ::types_storage::lock::AccessShareLock;
 use ::types_storage::{buf::BufferAccessStrategy, ReadBufferMode};
-use ::types_core::ForkNumber;
 use ::types_tuple::itemptr::{
     FirstOffsetNumber, InvalidOffsetNumber, ItemPointerCompare, ItemPointerData, ItemPointerEquals,
     ItemPointerGetBlockNumberNoCheck, ItemPointerGetOffsetNumberNoCheck, ItemPointerIsValid,
@@ -96,9 +98,14 @@ unsafe fn gin_read_tuple_without_state<'a>(
             }
         }
     } else {
-        out.try_reserve(nipd).map_err(|_| amcx.oom(nipd * core::mem::size_of::<ItemPointerData>()))?;
+        out.try_reserve(nipd)
+            .map_err(|_| amcx.oom(nipd * core::mem::size_of::<ItemPointerData>()))?;
         for i in 0..nipd {
-            out.push(ptr.add(i * core::mem::size_of::<ItemPointerData>()).cast::<ItemPointerData>().read_unaligned());
+            out.push(
+                ptr.add(i * core::mem::size_of::<ItemPointerData>())
+                    .cast::<ItemPointerData>()
+                    .read_unaligned(),
+            );
         }
     }
     Ok(())
@@ -412,8 +419,9 @@ fn check_entry_page<'a>(
 
         let mut current_key_category = GIN_CAT_NORM_KEY;
         // SAFETY: as above.
-        let current_key =
-            unsafe { ginam::gintuple_get_key(amcx, rel, state, idxtuple, &mut current_key_category)? };
+        let current_key = unsafe {
+            ginam::gintuple_get_key(amcx, rel, state, idxtuple, &mut current_key_category)?
+        };
 
         if i != FirstOffsetNumber && !(i == maxoff && rightlink == InvalidBlockNumber && !is_leaf) {
             let prev = prev_tuple.expect("prev_tuple set for i > First");
@@ -477,8 +485,7 @@ fn check_entry_page<'a>(
                     }
                     Some(parenttup) => {
                         // SAFETY: owned copy of a live entry tuple.
-                        let new_attnum =
-                            unsafe { ginam::gintuple_get_attrnum(state, parenttup) };
+                        let new_attnum = unsafe { ginam::gintuple_get_attrnum(state, parenttup) };
                         let mut cat = GIN_CAT_NORM_KEY;
                         // SAFETY: as above.
                         let new_key = unsafe {

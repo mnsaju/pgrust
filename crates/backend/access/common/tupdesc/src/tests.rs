@@ -36,7 +36,11 @@ fn typcache_shape(name: &str) -> syscache_seams::PgTypeTypcacheShape {
 fn scalar_typcache_shape(name: &str) -> syscache_seams::PgTypeTypcacheShape {
     let mut s = typcache_shape(name);
     s.typtype = b'b' as i8;
-    s.typstorage = if name == "text" { TYPSTORAGE_EXTENDED } else { TYPSTORAGE_MAIN };
+    s.typstorage = if name == "text" {
+        TYPSTORAGE_EXTENDED
+    } else {
+        TYPSTORAGE_MAIN
+    };
     s
 }
 
@@ -87,7 +91,14 @@ fn install_seams() {
     });
 }
 
-fn attr(name: &str, typid: Oid, attnum: i16, attlen: i16, byval: bool, align: i8) -> FormData_pg_attribute {
+fn attr(
+    name: &str,
+    typid: Oid,
+    attnum: i16,
+    attlen: i16,
+    byval: bool,
+    align: i8,
+) -> FormData_pg_attribute {
     let mut a = FormData_pg_attribute::default();
     a.attname.namestrcpy(name);
     a.atttypid = typid;
@@ -96,7 +107,11 @@ fn attr(name: &str, typid: Oid, attnum: i16, attlen: i16, byval: bool, align: i8
     a.atttypmod = -1;
     a.attbyval = byval;
     a.attalign = align;
-    a.attstorage = if attlen < 0 { TYPSTORAGE_EXTENDED } else { TYPSTORAGE_PLAIN };
+    a.attstorage = if attlen < 0 {
+        TYPSTORAGE_EXTENDED
+    } else {
+        TYPSTORAGE_PLAIN
+    };
     a.attislocal = true;
     a
 }
@@ -241,7 +256,10 @@ fn with_constraints<'m>(mcx: Mcx<'m>) -> TupleDescData<'m> {
         ccnoinherit: false,
     });
     let mut missing: PgVec<AttrMissing> = vec_with_capacity_in(mcx, 2).unwrap();
-    missing.push(AttrMissing { am_present: true, am_value: Datum::from_i32(7) });
+    missing.push(AttrMissing {
+        am_present: true,
+        am_value: Datum::from_i32(7),
+    });
     let varlena: &'static [u8] = &[0x1D, b'h', b'e', b'y'];
     missing.push(AttrMissing {
         am_present: true,
@@ -280,7 +298,10 @@ fn flat_copy_clears_constraint_fields() {
     assert!(!copy.attr(0).attnotnull);
     assert!(!copy.attr(1).atthasdef);
     assert!(!copy.attr(1).atthasmissing);
-    assert_eq!(copy.compact_attr(0).attnullability, ATTNULLABLE_UNRESTRICTED);
+    assert_eq!(
+        copy.compact_attr(0).attnullability,
+        ATTNULLABLE_UNRESTRICTED
+    );
     assert_eq!(copy.attr(0).attname.name_str(), b"a");
 
     let trunc = CreateTupleDescTruncatedCopy(ctx.mcx(), &src, 1).unwrap();
@@ -296,17 +317,26 @@ fn copy_constr_deep_copies() {
     let copy = CreateTupleDescCopyConstr(ctx.mcx(), &src).unwrap();
 
     assert!(copy.attr(0).attnotnull);
-    assert_eq!(copy.compact_attr(0).attnullability, src.compact_attr(0).attnullability);
+    assert_eq!(
+        copy.compact_attr(0).attnullability,
+        src.compact_attr(0).attnullability
+    );
     let c = copy.constr.as_deref().unwrap();
     let s = src.constr.as_deref().unwrap();
     assert_eq!(c.num_defval, 1);
-    assert_eq!(c.defval[0].adbin.as_ref().unwrap().as_str(), "{CONST :val 42}");
+    assert_eq!(
+        c.defval[0].adbin.as_ref().unwrap().as_str(),
+        "{CONST :val 42}"
+    );
     assert!(!std::ptr::eq(
         c.defval[0].adbin.as_ref().unwrap().as_bytes().as_ptr(),
         s.defval[0].adbin.as_ref().unwrap().as_bytes().as_ptr(),
     ));
     assert_eq!(c.missing[0].am_value, s.missing[0].am_value);
-    let (cp, sp) = (c.missing[1].am_value.as_usize(), s.missing[1].am_value.as_usize());
+    let (cp, sp) = (
+        c.missing[1].am_value.as_usize(),
+        s.missing[1].am_value.as_usize(),
+    );
     assert_ne!(cp, sp);
     // SAFETY: both point at 4-byte short-varlena images built above/copied.
     unsafe {
@@ -421,7 +451,10 @@ fn build_desc_from_lists_and_default_bin() {
 
     assert!(TupleDescGetDefaultBin(&desc, 1).is_none());
     let with_c = with_constraints(ctx.mcx());
-    assert_eq!(TupleDescGetDefaultBin(&with_c, 2).unwrap().as_str(), "{CONST :val 42}");
+    assert_eq!(
+        TupleDescGetDefaultBin(&with_c, 2).unwrap().as_str(),
+        "{CONST :val 42}"
+    );
     assert!(TupleDescGetDefaultBin(&with_c, 1).is_none());
 }
 
@@ -454,7 +487,11 @@ fn dropped_attr(attnum: i16, attlen: i16, align: i8) -> FormData_pg_attribute {
     a
 }
 
-fn desc_from<'m>(mcx: Mcx<'m>, attrs: &[FormData_pg_attribute], tdtypeid: Oid) -> TupleDescData<'m> {
+fn desc_from<'m>(
+    mcx: Mcx<'m>,
+    attrs: &[FormData_pg_attribute],
+    tdtypeid: Oid,
+) -> TupleDescData<'m> {
     let mut desc = CreateTupleDesc(mcx, attrs).unwrap();
     desc.tdtypeid = tdtypeid;
     desc
@@ -529,7 +566,8 @@ fn build_attrmap_by_position_column_count_ereport_text() {
         ],
     )
     .unwrap();
-    let outdesc = CreateTupleDesc(ctx.mcx(), &[attr("a", INT4OID, 1, 4, true, TYPALIGN_INT)]).unwrap();
+    let outdesc =
+        CreateTupleDesc(ctx.mcx(), &[attr("a", INT4OID, 1, 4, true, TYPALIGN_INT)]).unwrap();
 
     let err = build_attrmap_by_position(ctx.mcx(), &indesc, &outdesc, "test msg").unwrap_err();
     assert_eq!(err.sqlstate(), types_error::ERRCODE_DATATYPE_MISMATCH);
@@ -640,9 +678,11 @@ fn convert_tuples_by_position_matches_build_attrmap() {
     let ctx = MemoryContext::new("t");
     let indesc = two_col_desc(ctx.mcx());
     let outdesc = two_col_desc(ctx.mcx());
-    assert!(convert_tuples_by_position(ctx.mcx(), &indesc, &outdesc, "test msg")
-        .unwrap()
-        .is_none());
+    assert!(
+        convert_tuples_by_position(ctx.mcx(), &indesc, &outdesc, "test msg")
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[test]
@@ -657,11 +697,8 @@ fn convert_tuples_by_name_attrmap_is_identity() {
         ],
     )
     .unwrap();
-    let outdesc = CreateTupleDesc(
-        ctx.mcx(),
-        &[attr("b", TEXTOID, 1, -1, false, TYPALIGN_INT)],
-    )
-    .unwrap();
+    let outdesc =
+        CreateTupleDesc(ctx.mcx(), &[attr("b", TEXTOID, 1, -1, false, TYPALIGN_INT)]).unwrap();
     let attmap = build_attrmap_by_name(ctx.mcx(), &indesc, &outdesc).unwrap();
     let expected: PgVec<'_, i16> = {
         let mut v = vec_with_capacity_in(ctx.mcx(), attmap.len()).unwrap();

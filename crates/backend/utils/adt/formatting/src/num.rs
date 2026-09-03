@@ -271,10 +271,7 @@ impl NumToChar<'_> {
             } else {
                 if self.number_at(self.number_p) == b'.' {
                     let lr_is_dot = self.last_relevant_is_dot();
-                    if self.last_relevant.is_none() || !lr_is_dot {
-                        let dec = self.loc.decimal;
-                        self.write(dec);
-                    } else if self.num.is_fillmode() && lr_is_dot {
+                    if self.last_relevant.is_none() || !lr_is_dot || self.num.is_fillmode() {
                         let dec = self.loc.decimal;
                         self.write(dec);
                     }
@@ -379,7 +376,7 @@ pub fn num_processor_to_char(
     };
 
     if np.num.is_plus() || np.num.is_minus() {
-        np.sign_wrote = !(np.num.is_plus() && !np.num.is_minus());
+        np.sign_wrote = !np.num.is_plus() || np.num.is_minus();
     } else {
         if np.sign != b'-' as i32 && np.num.is_fillmode() {
             np.num.flag &= !NUM_F_BRACKET;
@@ -714,9 +711,7 @@ impl NumFromChar<'_> {
                 if self.number_at(0) == b' ' {
                     self.inout_p = tmp;
                 }
-            } else if !isread
-                && !self.num.is_lsign()
-                && (self.num.is_plus() || self.num.is_minus())
+            } else if !isread && !self.num.is_lsign() && (self.num.is_plus() || self.num.is_minus())
             {
                 let c = self.inout_at(self.inout_p);
                 if c == b'-' || c == b'+' {
@@ -840,9 +835,11 @@ pub fn num_processor_from_char(
     }
 
     if num.is_eeee() {
-        return Err(PgError::error("\"EEEE\" not supported for input".to_string())
-            .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED)
-            .into());
+        return Err(
+            PgError::error("\"EEEE\" not supported for input".to_string())
+                .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED)
+                .into(),
+        );
     }
 
     if number.len() < 2 {
@@ -939,10 +936,7 @@ pub fn num_processor_from_char(
                     continue;
                 }
                 NUM_TH_LOWER_ID | NUM_TH => {
-                    if np.num.is_roman()
-                        || np.number_at(0) == b'#'
-                        || np.num.is_decimal()
-                    {
+                    if np.num.is_roman() || np.number_at(0) == b'#' || np.num.is_decimal() {
                         idx += 1;
                         continue;
                     }

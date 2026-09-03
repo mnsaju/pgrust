@@ -1,7 +1,6 @@
 use crate::layout::*;
 use bufmgr::{
-    LockBuffer, MarkBufferDirty, UnlockReleaseBuffer, BUFFER_LOCK_EXCLUSIVE,
-    BUFFER_LOCK_SHARE,
+    LockBuffer, MarkBufferDirty, UnlockReleaseBuffer, BUFFER_LOCK_EXCLUSIVE, BUFFER_LOCK_SHARE,
 };
 use datum::Datum;
 use mcx::{Mcx, PgFxHashMap, PgVec};
@@ -133,8 +132,7 @@ pub fn init_page(buffer: Buffer) {
 
 pub fn init_page_bytes(page: &mut [u8; types_core::BLCKSZ]) {
     // SAFETY: exclusive access to the registered image.
-    let mut pm =
-        unsafe { PageMut::from_raw(core::ptr::NonNull::new(page.as_mut_ptr()).unwrap()) };
+    let mut pm = unsafe { PageMut::from_raw(core::ptr::NonNull::new(page.as_mut_ptr()).unwrap()) };
     pm.init(HNSW_PAGE_OPAQUE_SIZE);
     page_opaque_init(page);
 }
@@ -274,7 +272,10 @@ pub struct ElementPool<'t> {
 
 impl<'t> ElementPool<'t> {
     pub fn new(mcx: Mcx<'t>) -> Self {
-        ElementPool { mcx, elems: droppy_vec(mcx, 16) }
+        ElementPool {
+            mcx,
+            elems: droppy_vec(mcx, 16),
+        }
     }
 
     pub fn from_block(&mut self, blkno: BlockNumber, offno: u16) -> u32 {
@@ -315,10 +316,7 @@ impl<'t> ElementPool<'t> {
 
 // HnswGetDistance.
 pub fn get_distance(support: &mut HnswSupport, a: Datum, b: Datum) -> PgResult<f64> {
-    Ok(
-        types_fmgr::function_call2_coll(&mut support.procinfo, support.collation, a, b)?
-            .as_f64(),
-    )
+    Ok(types_fmgr::function_call2_coll(&mut support.procinfo, support.collation, a, b)?.as_f64())
 }
 
 // HnswLoadElementFromTuple over a pool element.
@@ -383,7 +381,9 @@ pub fn load_element(
     let page = unsafe {
         PageRef::from_raw(core::ptr::NonNull::new(page_bytes.as_ptr() as *mut u8).unwrap())
     };
-    let etup = ElementTupleView { bytes: item_bytes(&page, offno) };
+    let etup = ElementTupleView {
+        bytes: item_bytes(&page, offno),
+    };
     debug_assert!(etup.tuple_type() == HNSW_ELEMENT_TUPLE_TYPE);
     if etup.deleted() != 0 {
         UnlockReleaseBuffer(buf)?;
@@ -439,7 +439,9 @@ pub fn load_neighbor_tids(
     let page = unsafe {
         PageRef::from_raw(core::ptr::NonNull::new(page_bytes.as_ptr() as *mut u8).unwrap())
     };
-    let ntup = NeighborTupleView { bytes: item_bytes(&page, e.neighbor_offno) };
+    let ntup = NeighborTupleView {
+        bytes: item_bytes(&page, e.neighbor_offno),
+    };
 
     if ntup.version() != e.version || ntup.count() as i32 != (e.level as i32 + 2) * m {
         UnlockReleaseBuffer(buf)?;
@@ -447,8 +449,7 @@ pub fn load_neighbor_tids(
     }
     let start = (e.level as i32 - lc) * m;
     for i in 0..lm as usize {
-        indextids[i]
-            .copy_from_slice(ntup.indextid_bytes(start as usize + i));
+        indextids[i].copy_from_slice(ntup.indextid_bytes(start as usize + i));
     }
     UnlockReleaseBuffer(buf)?;
     Ok(true)
@@ -467,7 +468,9 @@ pub struct DiscardedHeap<'t> {
 
 impl<'t> DiscardedHeap<'t> {
     pub fn new(mcx: Mcx<'t>) -> Self {
-        DiscardedHeap { items: mcx::vec_with_capacity_in_infallible(mcx, 0) }
+        DiscardedHeap {
+            items: mcx::vec_with_capacity_in_infallible(mcx, 0),
+        }
     }
     pub fn is_empty(&self) -> bool {
         self.items.is_empty()
@@ -722,7 +725,10 @@ pub fn search_layer_disk<'t>(
 
             if !(e_distance < f_dist || always_add) {
                 if let Some(dh) = discarded.as_deref_mut() {
-                    dh.push(SearchCandidate { element: id, distance: e_distance });
+                    dh.push(SearchCandidate {
+                        element: id,
+                        distance: e_distance,
+                    });
                 }
                 continue;
             }
@@ -740,7 +746,10 @@ pub fn search_layer_disk<'t>(
                 if wlen > ef {
                     let (d_dist, d_elem) = w_heap.pop().expect("W nonempty");
                     if let Some(dh) = discarded.as_deref_mut() {
-                        dh.push(SearchCandidate { element: d_elem, distance: d_dist });
+                        dh.push(SearchCandidate {
+                            element: d_elem,
+                            distance: d_dist,
+                        });
                     }
                 }
             }
@@ -750,7 +759,10 @@ pub fn search_layer_disk<'t>(
     let mut w: PgVec<'t, SearchCandidate> =
         mcx::vec_with_capacity_in_infallible(pool.mcx, w_heap.v.len());
     while let Some((d, x)) = w_heap.pop() {
-        w.push(SearchCandidate { element: x, distance: d });
+        w.push(SearchCandidate {
+            element: x,
+            distance: d,
+        });
     }
     Ok(w)
 }
@@ -858,7 +870,7 @@ pub fn select_neighbors(
         wdoff += 1;
     }
 
-    if let Some(p) = pruned.as_deref_mut() {
+    if let Some(p) = pruned {
         if wdoff < wd.len() {
             *p = Some(wd[wdoff]);
         } else {
@@ -880,7 +892,11 @@ pub fn update_connection(
     update_idx: Option<&mut i32>,
     support: &mut HnswSupport,
 ) -> PgResult<()> {
-    let new_hc = Candidate { element: new_element, distance, closer: false };
+    let new_hc = Candidate {
+        element: new_element,
+        distance,
+        closer: false,
+    };
     if (neighbors.len() as i32) < lm {
         neighbors.push(new_hc);
         if let Some(u) = update_idx {
@@ -1006,25 +1022,49 @@ pub fn find_element_neighbors<'t>(
         pool.get_mut(element).neighbors = Some(arrays);
     }
 
-    let Some(entry_point) = entry_point else { return Ok(()) };
+    let Some(entry_point) = entry_point else {
+        return Ok(());
+    };
 
     // HnswEntryCandidate (loadVec = true).
     let mut ep_dist = 0.0f64;
-    load_element(pool, entry_point, Some(&mut ep_dist), q, index, support, true, None)?;
+    load_element(
+        pool,
+        entry_point,
+        Some(&mut ep_dist),
+        q,
+        index,
+        support,
+        true,
+        None,
+    )?;
     let entry_level = pool.get(entry_point).level as i32;
 
     let mut ep: PgVec<'_, SearchCandidate> = mcx::vec_with_capacity_in_infallible(pool.mcx, 1);
-    ep.push(SearchCandidate { element: entry_point, distance: ep_dist });
+    ep.push(SearchCandidate {
+        element: entry_point,
+        distance: ep_dist,
+    });
 
     let mut lc = entry_level;
-    while lc >= level + 1 {
-        let mut visited: Visited<'_> = PgFxHashMap::with_capacity_and_hasher_in(
-            64,
-            Default::default(),
-            pool.mcx,
-        );
+    while lc > level {
+        let mut visited: Visited<'_> =
+            PgFxHashMap::with_capacity_and_hasher_in(64, Default::default(), pool.mcx);
         ep = search_layer_disk(
-            pool, q, ep, 1, lc, index, support, m, true, skip, &mut visited, None, true, None,
+            pool,
+            q,
+            ep,
+            1,
+            lc,
+            index,
+            support,
+            m,
+            true,
+            skip,
+            &mut visited,
+            None,
+            true,
+            None,
         )?;
         lc -= 1;
     }
@@ -1122,8 +1162,7 @@ pub fn relation_needs_wal(rel: &Relation<'_>) -> bool {
     rel.is_permanent()
         && (transam_xlog_seams::xlog_standby_info_active::call()
             || (rel.rd_createSubid.get() == types_core::InvalidSubTransactionId
-                && rel.rd_firstRelfilelocatorSubid.get()
-                    == types_core::InvalidSubTransactionId))
+                && rel.rd_firstRelfilelocatorSubid.get() == types_core::InvalidSubTransactionId))
 }
 
 pub fn heaptid_valid(t: &ItemPointerData) -> bool {

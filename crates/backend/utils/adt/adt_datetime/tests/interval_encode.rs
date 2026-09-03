@@ -9,11 +9,26 @@ fn enc(itm: &pg_itm, style: i32) -> String {
 }
 
 fn itm(year: i32, mon: i32, mday: i32, hour: i64, min: i32, sec: i32, usec: i32) -> pg_itm {
-    pg_itm { tm_usec: usec, tm_sec: sec, tm_min: min, tm_hour: hour, tm_mday: mday, tm_mon: mon, tm_year: year }
+    pg_itm {
+        tm_usec: usec,
+        tm_sec: sec,
+        tm_min: min,
+        tm_hour: hour,
+        tm_mday: mday,
+        tm_mon: mon,
+        tm_year: year,
+    }
 }
 
-const FULL: pg_itm =
-    pg_itm { tm_usec: 789000, tm_sec: 6, tm_min: 5, tm_hour: 4, tm_mday: 3, tm_mon: 2, tm_year: 1 };
+const FULL: pg_itm = pg_itm {
+    tm_usec: 789000,
+    tm_sec: 6,
+    tm_min: 5,
+    tm_hour: 4,
+    tm_mday: 3,
+    tm_mon: 2,
+    tm_year: 1,
+};
 
 #[test]
 fn postgres_style() {
@@ -25,7 +40,10 @@ fn postgres_style() {
     assert_eq!(enc(&itm(0, -1, 0, 2, 0, 0, 0), p), "-1 mons +02:00:00");
     assert_eq!(enc(&itm(0, -1, 2, 0, 0, 0, 0), p), "-1 mons +2 days");
     assert_eq!(enc(&itm(0, 0, 1, 0, 0, 0, 0), p), "1 day");
-    assert_eq!(enc(&itm(-1, -2, -3, -4, -5, -6, -789000), p), "-1 years -2 mons -3 days -04:05:06.789");
+    assert_eq!(
+        enc(&itm(-1, -2, -3, -4, -5, -6, -789000), p),
+        "-1 years -2 mons -3 days -04:05:06.789"
+    );
     assert_eq!(enc(&itm(0, 0, 0, 0, 0, 0, 100), p), "00:00:00.0001");
 }
 
@@ -56,7 +74,10 @@ fn iso_8601_style() {
 #[test]
 fn postgres_verbose_style() {
     let v = INTSTYLE_POSTGRES_VERBOSE;
-    assert_eq!(enc(&FULL, v), "@ 1 year 2 mons 3 days 4 hours 5 mins 6.789 secs");
+    assert_eq!(
+        enc(&FULL, v),
+        "@ 1 year 2 mons 3 days 4 hours 5 mins 6.789 secs"
+    );
     assert_eq!(enc(&itm(0, 0, 0, 0, 0, 0, 0), v), "@ 0");
     assert_eq!(enc(&itm(0, 0, 0, 0, 0, 1, 0), v), "@ 1 sec");
     assert_eq!(enc(&itm(0, 0, 0, 0, 0, 1, 500000), v), "@ 1.5 secs");

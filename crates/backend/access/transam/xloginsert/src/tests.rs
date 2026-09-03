@@ -313,8 +313,12 @@ fn assemble_insert_decode_roundtrip() {
     let ctl = transam_xlog::ctl::XLogCtl();
     ctl.InsertTimeLineID.store(1, Relaxed);
     ctl.PrevTimeLineID.store(1, Relaxed);
-    ctl.Insert.CurrBytePos.store(XLogRecPtrToBytePos(end_of_log), Relaxed);
-    ctl.Insert.PrevBytePos.store(XLogRecPtrToBytePos(prev_rec), Relaxed);
+    ctl.Insert
+        .CurrBytePos
+        .store(XLogRecPtrToBytePos(end_of_log), Relaxed);
+    ctl.Insert
+        .PrevBytePos
+        .store(XLogRecPtrToBytePos(prev_rec), Relaxed);
     ctl.Insert.fullPageWrites.store(true, Relaxed);
     ctl.Insert.RedoRecPtr.store(prev_rec, Relaxed);
     ctl.RedoRecPtr.store(prev_rec, Relaxed);
@@ -332,9 +336,12 @@ fn assemble_insert_decode_roundtrip() {
     // Record 1: main-data-only through the xlog_insert seam.
     let frag_a = [0xA1u8; 3];
     let frag_b: Vec<u8> = (0..100u8).collect();
-    let lsn1 =
-        xloginsert_seams::xlog_insert::call(RM_XLOG_ID, 0x20 /* XLOG_NOOP */, &[&frag_a, &frag_b])
-            .unwrap();
+    let lsn1 = xloginsert_seams::xlog_insert::call(
+        RM_XLOG_ID,
+        0x20, /* XLOG_NOOP */
+        &[&frag_a, &frag_b],
+    )
+    .unwrap();
 
     // Record 2: forced full-page image of a standard page with a hole.
     let (lower, upper) = (64u16, 8000u16);
@@ -454,7 +461,10 @@ fn assemble_insert_decode_roundtrip() {
     assert!(reader.XLogRecHasBlockImage(0));
     assert!(reader.XLogRecBlockImageApply(0));
     let (got_loc, got_fork, got_blk, _) = reader.XLogRecGetBlockTagExtended(0).unwrap();
-    assert_eq!((got_loc, got_fork, got_blk), (rloc, ForkNumber::MAIN_FORKNUM, 7));
+    assert_eq!(
+        (got_loc, got_fork, got_blk),
+        (rloc, ForkNumber::MAIN_FORKNUM, 7)
+    );
     let mut restored = vec![0u8; BLCKSZ];
     assert!(reader.RestoreBlockImage(0, &mut restored));
     assert_eq!(restored, expected_restored(&page2, lower, upper));

@@ -2,14 +2,11 @@
 //! operators/functions over `ltree` / `lquery` / `ltxtquery` (everything that
 //! works on a sequential scan). Each function operates on the borrowed varlena
 
-use ::types_error::{
-    ERRCODE_INVALID_PARAMETER_VALUE, ERRCODE_PROGRAM_LIMIT_EXCEEDED,
-};
 use ::types_error::PgError;
+use ::types_error::{ERRCODE_INVALID_PARAMETER_VALUE, ERRCODE_PROGRAM_LIMIT_EXCEEDED};
 
 use crate::crc::fold;
 use crate::repr::*;
-
 
 pub fn ltree_compare(a: &[u8], b: &[u8]) -> i32 {
     let ta = Ltree::new(a);
@@ -83,12 +80,13 @@ pub fn inner_isparent(c: &[u8], p: &[u8]) -> bool {
     true
 }
 
-
 pub fn inner_subltree(t: &[u8], startpos: i32, endpos_in: i32) -> Result<Vec<u8>, PgError> {
     let tt = Ltree::new(t);
     let numlevel = tt.numlevel() as i32;
     if startpos < 0 || endpos_in < 0 || startpos >= numlevel || startpos > endpos_in {
-        return Err(PgError::error("invalid positions").with_sqlstate(ERRCODE_INVALID_PARAMETER_VALUE));
+        return Err(
+            PgError::error("invalid positions").with_sqlstate(ERRCODE_INVALID_PARAMETER_VALUE)
+        );
     }
     let endpos = endpos_in.min(numlevel);
 
@@ -110,11 +108,11 @@ pub fn subpath(t: &[u8], start_in: i32, len_opt: Option<i32>) -> Result<Vec<u8>,
     let mut end = start + len;
 
     if start < 0 {
-        start = numlevel + start;
+        start += numlevel;
         end = start + len;
     }
     if start < 0 {
-        start = numlevel + start;
+        start += numlevel;
         end = start + len;
     }
     if len < 0 {
@@ -157,7 +155,7 @@ pub fn ltree_index(a: &[u8], b: &[u8], start_in: Option<i32>) -> i32 {
         if -start >= an {
             start = 0;
         } else {
-            start = an + start;
+            start += an;
         }
     }
 
@@ -231,7 +229,6 @@ pub fn lca_inner(a: &[&[u8]]) -> Option<Vec<u8>> {
     let labels: Vec<&[u8]> = first_levels[..num].to_vec();
     Some(build_ltree(&labels))
 }
-
 
 fn prefix_eq(a: &[u8], b: &[u8]) -> bool {
     a.len() <= b.len() && b[..a.len()] == *a
@@ -307,8 +304,7 @@ fn check_level(curq: &LqlView, t_name: &[u8]) -> bool {
             if compare_subnode(t_name, v.name, incase, anyend) {
                 return success;
             }
-        } else if (v.name.len() == t_name.len()
-            || (t_name.len() > v.name.len() && anyend))
+        } else if (v.name.len() == t_name.len() || (t_name.len() > v.name.len() && anyend))
             && prefix_eq_dispatch(incase, v.name, t_name)
         {
             return success;
@@ -376,17 +372,8 @@ pub fn ltq_regex(tree: &[u8], query: &[u8]) -> Result<bool, PgError> {
     let q = Lquery::new(query);
     let t_names: Vec<&[u8]> = t.levels().map(|l| l.name).collect();
     let levels: Vec<LqlView> = q.levels().collect();
-    check_cond(
-        &levels,
-        0,
-        q.numlevel(),
-        &t_names,
-        0,
-        t.numlevel(),
-        0,
-    )
+    check_cond(&levels, 0, q.numlevel(), &t_names, 0, t.numlevel(), 0)
 }
-
 
 fn checkcondition_str(t_names: &[&[u8]], operand: &[u8], it: &Item) -> bool {
     let start = it.distance as usize;
@@ -431,14 +418,28 @@ fn ltree_execute(
             true
         }
     } else if it.val == b'&' as i32 {
-        if ltree_execute(items, cur + it.left as usize, t_names, operand, calcnot, depth + 1) {
+        if ltree_execute(
+            items,
+            cur + it.left as usize,
+            t_names,
+            operand,
+            calcnot,
+            depth + 1,
+        ) {
             ltree_execute(items, cur + 1, t_names, operand, calcnot, depth + 1)
         } else {
             false
         }
     } else {
         // |-operator
-        if ltree_execute(items, cur + it.left as usize, t_names, operand, calcnot, depth + 1) {
+        if ltree_execute(
+            items,
+            cur + it.left as usize,
+            t_names,
+            operand,
+            calcnot,
+            depth + 1,
+        ) {
             true
         } else {
             ltree_execute(items, cur + 1, t_names, operand, calcnot, depth + 1)
@@ -488,14 +489,26 @@ fn ltree_execute_sign(
         // calcnot == false → a NOT node optimistically matches.
         true
     } else if it.val == b'&' as i32 {
-        if ltree_execute_sign(items, cur + it.left as usize, canlooksign, bit_set, depth + 1) {
+        if ltree_execute_sign(
+            items,
+            cur + it.left as usize,
+            canlooksign,
+            bit_set,
+            depth + 1,
+        ) {
             ltree_execute_sign(items, cur + 1, canlooksign, bit_set, depth + 1)
         } else {
             false
         }
     } else {
         // |-operator
-        if ltree_execute_sign(items, cur + it.left as usize, canlooksign, bit_set, depth + 1) {
+        if ltree_execute_sign(
+            items,
+            cur + it.left as usize,
+            canlooksign,
+            bit_set,
+            depth + 1,
+        ) {
             true
         } else {
             ltree_execute_sign(items, cur + 1, canlooksign, bit_set, depth + 1)

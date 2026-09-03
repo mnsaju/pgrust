@@ -24,9 +24,9 @@ mod meta;
 mod page;
 mod plain;
 mod rle;
-mod thrift;
 #[cfg(test)]
 mod tests;
+mod thrift;
 
 use std::fs::File;
 
@@ -70,7 +70,8 @@ fn read_exact_at(file: &File, path: &str, buf: &mut [u8], off: u64) -> PgResult<
     #[cfg(unix)]
     {
         use std::os::unix::fs::FileExt;
-        file.read_exact_at(buf, off).map_err(|e| io_error(path, "read", e))
+        file.read_exact_at(buf, off)
+            .map_err(|e| io_error(path, "read", e))
     }
     #[cfg(not(unix))]
     {
@@ -138,10 +139,7 @@ impl FileReader {
                 }
                 let start = ch.start_offset();
                 let size = ch.total_compressed_size;
-                if start < 4
-                    || size < 0
-                    || (start as u64).saturating_add(size as u64) > file_len
-                {
+                if start < 4 || size < 0 || (start as u64).saturating_add(size as u64) > file_len {
                     return Err(not_parquet(path, "column chunk offsets out of range"));
                 }
             }
@@ -169,7 +167,9 @@ impl FileReader {
     /// Duplicate the underlying file handle (positioned reads only) for a
     /// parallel driver's worker threads.
     pub fn try_clone_file(&self) -> PgResult<File> {
-        self.file.try_clone().map_err(|e| io_error(&self.path, "dup", e))
+        self.file
+            .try_clone()
+            .map_err(|e| io_error(&self.path, "dup", e))
     }
 
     /// Open one row group, building cursors for the requested columns.
@@ -180,14 +180,23 @@ impl FileReader {
         columns: &[usize],
         validate_utf8: &[bool],
     ) -> PgResult<RowGroupReader> {
-        RowGroupReader::open(&self.file, &self.path, &self.meta, rg_idx, columns, validate_utf8)
+        RowGroupReader::open(
+            &self.file,
+            &self.path,
+            &self.meta,
+            rg_idx,
+            columns,
+            validate_utf8,
+        )
     }
 }
 
 /// Compressed bytes this row group's requested chunks occupy (the
 /// parallel driver's memory-budget input).
 pub fn rg_compressed_bytes(meta: &FileMeta, rg_idx: usize, columns: &[usize]) -> u64 {
-    let Some(rg) = meta.row_groups.get(rg_idx) else { return 0 };
+    let Some(rg) = meta.row_groups.get(rg_idx) else {
+        return 0;
+    };
     columns
         .iter()
         .filter_map(|&col| rg.chunks.iter().find(|c| c.column == col))
@@ -281,9 +290,8 @@ impl RowGroupReader {
                 let start = ch.start_offset() as u64;
                 let size = ch.total_compressed_size as usize;
                 let mut buf = Vec::new();
-                buf.try_reserve(size + codec::PAD).map_err(|_| {
-                    Box::new(PgError::error("out of memory reading column chunk"))
-                })?;
+                buf.try_reserve(size + codec::PAD)
+                    .map_err(|_| Box::new(PgError::error("out of memory reading column chunk")))?;
                 buf.resize(size, 0);
                 read_exact_at(file, path, &mut buf, start)?;
                 compressed_bytes += size as u64;

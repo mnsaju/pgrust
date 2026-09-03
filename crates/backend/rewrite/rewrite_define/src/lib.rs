@@ -96,7 +96,11 @@ fn InsertRule<'mcx>(
 
     let rname = name_image(mcx, rulname)?;
     let keys = [
-        eq_key(Anum_pg_rewrite_ev_class, F_OIDEQ, Datum::from_oid(eventrel_oid)),
+        eq_key(
+            Anum_pg_rewrite_ev_class,
+            F_OIDEQ,
+            Datum::from_oid(eventrel_oid),
+        ),
         eq_key(
             Anum_pg_rewrite_rulename,
             F_NAMEEQ,
@@ -299,7 +303,9 @@ pub fn DefineQueryRewrite<'mcx>(
     }
     let query = action.nth(0).as_query().expect("rule action is a Query");
     if !is_instead || query.commandType != CmdType::CMD_SELECT {
-        return Err(feature_not_supported("rules on SELECT must have action INSTEAD SELECT"));
+        return Err(feature_not_supported(
+            "rules on SELECT must have action INSTEAD SELECT",
+        ));
     }
     if query.hasModifyingCTE {
         return Err(feature_not_supported(
@@ -311,10 +317,19 @@ pub fn DefineQueryRewrite<'mcx>(
             "event qualifications are not implemented for rules on SELECT",
         ));
     }
-    checkRuleResultList(&query.targetList, &event_relation, true, relkind != RELKIND_MATVIEW)?;
+    checkRuleResultList(
+        &query.targetList,
+        &event_relation,
+        true,
+        relkind != RELKIND_MATVIEW,
+    )?;
     if !replace {
         if let Some(rules) = relcache::rules::RelationGetRules(mcx, event_relid)? {
-            if rules.rules.iter().any(|r| r.event == CmdType::CMD_SELECT as i32) {
+            if rules
+                .rules
+                .iter()
+                .any(|r| r.event == CmdType::CMD_SELECT as i32)
+            {
                 return Err(Box::new(
                     PgError::error(format!("\"{}\" is already a view", event_relation.name()))
                         .with_sqlstate(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -500,19 +515,20 @@ fn checkRuleResultList<'mcx>(
                     "SELECT rule's target entry {i} has different type from column \"{attname}\""
                 )
             } else {
-                format!(
-                    "RETURNING list's entry {i} has different type from column \"{attname}\""
-                )
+                format!("RETURNING list's entry {i} has different type from column \"{attname}\"")
             };
-            let entry = if isSelect { "SELECT target entry" } else { "RETURNING list entry" };
+            let entry = if isSelect {
+                "SELECT target entry"
+            } else {
+                "RETURNING list entry"
+            };
             return Err(Box::new(
                 PgError::error(msg)
                     .with_sqlstate(ERRCODE_INVALID_OBJECT_DEFINITION)
                     .with_detail(format!(
                         "{entry} has type {}, but column has type {}.",
                         format_type::format_type_be(tletypid).unwrap_or_else(|_| "???".into()),
-                        format_type::format_type_be(attr.atttypid)
-                            .unwrap_or_else(|_| "???".into()),
+                        format_type::format_type_be(attr.atttypid).unwrap_or_else(|_| "???".into()),
                     )),
             ));
         }
@@ -523,11 +539,13 @@ fn checkRuleResultList<'mcx>(
                     "SELECT rule's target entry {i} has different size from column \"{attname}\""
                 )
             } else {
-                format!(
-                    "RETURNING list's entry {i} has different size from column \"{attname}\""
-                )
+                format!("RETURNING list's entry {i} has different size from column \"{attname}\"")
             };
-            let entry = if isSelect { "SELECT target entry" } else { "RETURNING list entry" };
+            let entry = if isSelect {
+                "SELECT target entry"
+            } else {
+                "RETURNING list entry"
+            };
             return Err(Box::new(
                 PgError::error(msg)
                     .with_sqlstate(ERRCODE_INVALID_OBJECT_DEFINITION)
@@ -559,7 +577,11 @@ pub fn SetRelationRuleStatus<'mcx>(
     relHasRules: bool,
 ) -> PgResult<()> {
     let rel = table::table_open(mcx, RELATION_RELATION_ID, RowExclusiveLock)?;
-    let keys = [eq_key(Anum_pg_class_oid, F_OIDEQ, Datum::from_oid(relationId))];
+    let keys = [eq_key(
+        Anum_pg_class_oid,
+        F_OIDEQ,
+        Datum::from_oid(relationId),
+    )];
     let mut scan = genam::systable_beginscan(mcx, &rel, CLASS_OID_INDEX_ID, true, None, &keys)?;
     let tup = match genam::systable_getnext(mcx, &mut scan)? {
         Some(t) => t,
@@ -573,7 +595,12 @@ pub fn SetRelationRuleStatus<'mcx>(
     // SAFETY: pg_class row read under pg_class's descriptor; relhasrules is
     // a declared column.
     let cur = unsafe {
-        types_tuple::heap_getattr(tup, Anum_pg_class_relhasrules as i32, rel.descr(), &mut isnull)
+        types_tuple::heap_getattr(
+            tup,
+            Anum_pg_class_relhasrules as i32,
+            rel.descr(),
+            &mut isnull,
+        )
     };
     if !isnull && cur.as_bool() == relHasRules {
         // No change: still broadcast the SI notice so every backend reloads
@@ -646,7 +673,11 @@ pub fn EnableDisableRule<'mcx>(
     let pg_rewrite = table::table_open(mcx, REWRITE_RELATION_ID, RowExclusiveLock)?;
     let rname = name_image(mcx, rulename)?;
     let keys = [
-        eq_key(Anum_pg_rewrite_ev_class, F_OIDEQ, Datum::from_oid(owning_rel)),
+        eq_key(
+            Anum_pg_rewrite_ev_class,
+            F_OIDEQ,
+            Datum::from_oid(owning_rel),
+        ),
         eq_key(
             Anum_pg_rewrite_rulename,
             F_NAMEEQ,
@@ -678,9 +709,10 @@ pub fn EnableDisableRule<'mcx>(
     let td = pg_rewrite.descr();
     let mut isnull = false;
     // SAFETY: pg_rewrite row under its own descriptor; declared columns.
-    let cur_enabled =
-        unsafe { types_tuple::heap_getattr(tup, Anum_pg_rewrite_ev_enabled as i32, td, &mut isnull) }
-            .as_u8();
+    let cur_enabled = unsafe {
+        types_tuple::heap_getattr(tup, Anum_pg_rewrite_ev_enabled as i32, td, &mut isnull)
+    }
+    .as_u8();
     debug_assert!(!isnull);
     let mut changed = false;
     if cur_enabled != fires_when {
@@ -691,10 +723,10 @@ pub fn EnableDisableRule<'mcx>(
         repl_values.resize(natts, Datum::null());
         repl_isnull.resize(natts, false);
         repl.resize(natts, false);
-        repl_values[Anum_pg_rewrite_ev_enabled as usize - 1] =
-            Datum::from_i8(fires_when as i8);
+        repl_values[Anum_pg_rewrite_ev_enabled as usize - 1] = Datum::from_i8(fires_when as i8);
         repl[Anum_pg_rewrite_ev_enabled as usize - 1] = true;
-        let mut newtup = heaptuple::heap_modify_tuple(mcx, tup, td, &repl_values, &repl_isnull, &repl)?;
+        let mut newtup =
+            heaptuple::heap_modify_tuple(mcx, tup, td, &repl_values, &repl_isnull, &repl)?;
         let otid = tup.t_self;
         genam::systable_endscan(mcx, scan)?;
         catalog_indexing::CatalogTupleUpdate(mcx, &pg_rewrite, &otid, &mut newtup)?;
@@ -712,7 +744,11 @@ pub fn EnableDisableRule<'mcx>(
 // RemoveRewriteRuleById (rewriteRemove.c).
 pub fn RemoveRewriteRuleById<'mcx>(mcx: Mcx<'mcx>, rule_oid: Oid) -> PgResult<()> {
     let pg_rewrite = table::table_open(mcx, REWRITE_RELATION_ID, RowExclusiveLock)?;
-    let keys = [eq_key(Anum_pg_rewrite_oid, F_OIDEQ, Datum::from_oid(rule_oid))];
+    let keys = [eq_key(
+        Anum_pg_rewrite_oid,
+        F_OIDEQ,
+        Datum::from_oid(rule_oid),
+    )];
     let mut scan =
         genam::systable_beginscan(mcx, &pg_rewrite, REWRITE_OID_INDEX_ID, true, None, &keys)?;
     let tup = match genam::systable_getnext(mcx, &mut scan)? {
@@ -726,13 +762,11 @@ pub fn RemoveRewriteRuleById<'mcx>(mcx: Mcx<'mcx>, rule_oid: Oid) -> PgResult<()
     let td = pg_rewrite.descr();
     let mut isnull = false;
     // SAFETY: pg_rewrite row under its own descriptor; ev_class declared.
-    let event_relation_oid = unsafe {
-        types_tuple::heap_getattr(tup, Anum_pg_rewrite_ev_class as i32, td, &mut isnull)
-    }
-    .as_oid();
+    let event_relation_oid =
+        unsafe { types_tuple::heap_getattr(tup, Anum_pg_rewrite_ev_class as i32, td, &mut isnull) }
+            .as_oid();
     let event_relation = table::table_open(mcx, event_relation_oid, AccessExclusiveLock)?;
-    if !init_small::globals::allowSystemTableMods() && catalog::IsSystemRelation(&event_relation)
-    {
+    if !init_small::globals::allowSystemTableMods() && catalog::IsSystemRelation(&event_relation) {
         return Err(Box::new(
             PgError::error(format!(
                 "permission denied: \"{}\" is a system catalog",
@@ -761,12 +795,17 @@ pub fn RenameRewriteRule<'mcx>(
 ) -> PgResult<ObjectAddress> {
     let targetrel = table::table_openrv(mcx, relation, AccessExclusiveLock)?;
     let relkind = targetrel.rd_rel.relkind;
-    if relkind != RELKIND_RELATION && relkind != RELKIND_VIEW && relkind != RELKIND_PARTITIONED_TABLE
+    if relkind != RELKIND_RELATION
+        && relkind != RELKIND_VIEW
+        && relkind != RELKIND_PARTITIONED_TABLE
     {
         return Err(Box::new(
-            PgError::error(format!("relation \"{}\" cannot have rules", targetrel.name()))
-                .with_sqlstate(ERRCODE_WRONG_OBJECT_TYPE)
-                .with_detail(relkind_not_supported_detail(relkind)),
+            PgError::error(format!(
+                "relation \"{}\" cannot have rules",
+                targetrel.name()
+            ))
+            .with_sqlstate(ERRCODE_WRONG_OBJECT_TYPE)
+            .with_detail(relkind_not_supported_detail(relkind)),
         ));
     }
     if !init_small::globals::allowSystemTableMods() && catalog::IsSystemRelation(&targetrel) {
@@ -779,13 +818,21 @@ pub fn RenameRewriteRule<'mcx>(
         ));
     }
     if !aclchk::object_ownercheck(RELATION_RELATION_ID, targetrel.rd_id, miscinit::GetUserId())? {
-        aclchk::aclcheck_error(aclchk::ACLCHECK_NOT_OWNER, get_relkind_objtype(relkind), targetrel.name())?;
+        aclchk::aclcheck_error(
+            aclchk::ACLCHECK_NOT_OWNER,
+            get_relkind_objtype(relkind),
+            targetrel.name(),
+        )?;
     }
 
     let pg_rewrite = table::table_open(mcx, REWRITE_RELATION_ID, RowExclusiveLock)?;
     let oldrname = name_image(mcx, old_name)?;
     let keys = [
-        eq_key(Anum_pg_rewrite_ev_class, F_OIDEQ, Datum::from_oid(targetrel.rd_id)),
+        eq_key(
+            Anum_pg_rewrite_ev_class,
+            F_OIDEQ,
+            Datum::from_oid(targetrel.rd_id),
+        ),
         eq_key(
             Anum_pg_rewrite_rulename,
             F_NAMEEQ,
@@ -815,9 +862,10 @@ pub fn RenameRewriteRule<'mcx>(
     let rule_oid =
         unsafe { types_tuple::heap_getattr(ruletup, Anum_pg_rewrite_oid as i32, td, &mut isnull) }
             .as_oid();
-    let ev_type =
-        unsafe { types_tuple::heap_getattr(ruletup, Anum_pg_rewrite_ev_type as i32, td, &mut isnull) }
-            .as_u8();
+    let ev_type = unsafe {
+        types_tuple::heap_getattr(ruletup, Anum_pg_rewrite_ev_type as i32, td, &mut isnull)
+    }
+    .as_u8();
 
     if get_rewrite_oid(mcx, targetrel.rd_id, new_name, true)? != types_core::InvalidOid {
         return Err(Box::new(
@@ -889,16 +937,16 @@ pub fn get_rewrite_oid<'mcx>(
         let td = pg_rewrite.descr();
         let mut isnull = false;
         // SAFETY: pg_rewrite row under its own descriptor; oid declared.
-        ruleoid = unsafe {
-            types_tuple::heap_getattr(tup, Anum_pg_rewrite_oid as i32, td, &mut isnull)
-        }
-        .as_oid();
+        ruleoid =
+            unsafe { types_tuple::heap_getattr(tup, Anum_pg_rewrite_oid as i32, td, &mut isnull) }
+                .as_oid();
     }
     genam::systable_endscan(mcx, scan)?;
     pg_rewrite.close(types_rel::AccessShareLock)?;
     if ruleoid == types_core::InvalidOid && !missing_ok {
-        let relname =
-            lsyscache::get_rel_name(mcx, relid)?.map(|s| s.to_string()).unwrap_or_default();
+        let relname = lsyscache::get_rel_name(mcx, relid)?
+            .map(|s| s.to_string())
+            .unwrap_or_default();
         return Err(Box::new(
             PgError::error(format!(
                 "rule \"{rulename}\" for relation \"{relname}\" does not exist"

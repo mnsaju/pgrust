@@ -1,7 +1,6 @@
 //! misc.c + version.c slices; obj_description/col_description are C
 //! SQL-language pg_proc rows (system_functions.sql) implemented natively.
 
-
 use datum::{Datum, Varlena};
 use mcx::Mcx;
 use types_core::{AttrNumber, Oid};
@@ -67,8 +66,7 @@ fn description_scan<'mcx>(
         // panics loudly on external/compressed images.
         let payload =
             unsafe { types_fmgr::PackedVarlena::from_ptr(d.as_usize() as *const u8) }.data();
-        let mut image =
-            mcx::vec_with_capacity_in(mcx, datum::varlena::VARHDRSZ + payload.len())?;
+        let mut image = mcx::vec_with_capacity_in(mcx, datum::varlena::VARHDRSZ + payload.len())?;
         image.resize(datum::varlena::VARHDRSZ, 0);
         mcx::vec_append_bytes(&mut image, payload)?;
         result = Some(Varlena::from_image(image));

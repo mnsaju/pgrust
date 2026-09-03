@@ -92,8 +92,13 @@ fn load_enum_cache_data(tcache: &TypeCacheEntry) -> PgResult<()> {
 
     let mcx = with_state(|st| st.mcx);
     let mut items: PgVec<'static, EnumItem> = PgVec::new_in(mcx);
-    for (enum_oid, sort_order) in pg_enum_seams::scan_enum_members::call(mcx, tcache.type_id)?.iter() {
-        items.push(EnumItem { enum_oid: *enum_oid, sort_order: *sort_order });
+    for (enum_oid, sort_order) in
+        pg_enum_seams::scan_enum_members::call(mcx, tcache.type_id)?.iter()
+    {
+        items.push(EnumItem {
+            enum_oid: *enum_oid,
+            sort_order: *sort_order,
+        });
     }
     items.sort_unstable_by_key(|it| it.enum_oid);
     let numitems = items.len();
@@ -136,8 +141,11 @@ fn load_enum_cache_data(tcache: &TypeCacheEntry) -> PgResult<()> {
         start_pos += 1;
     }
 
-    *tcache.enum_data.borrow_mut() =
-        Some(EnumData { bitmap_base, sorted_words: bitmap, items });
+    *tcache.enum_data.borrow_mut() = Some(EnumData {
+        bitmap_base,
+        sorted_words: bitmap,
+        items,
+    });
     Ok(())
 }
 

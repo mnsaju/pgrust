@@ -146,9 +146,7 @@ fn install_stub_seams() {
     be_fsstubs_seams::at_eoxact_large_object::set(|_| Ok(()));
     namespace_seams::at_eoxact_namespace::set(|_, _| {});
     catalog_index_seams::reset_reindex_state::set(|_| {});
-    catalog_storage_seams::smgr_get_pending_deletes::set(|mcx, _for_commit| {
-        Ok(PgVec::new_in(mcx))
-    });
+    catalog_storage_seams::smgr_get_pending_deletes::set(|mcx, _for_commit| Ok(PgVec::new_in(mcx)));
     catalog_storage_seams::smgr_do_pending_deletes::set(|_| Ok(()));
     catalog_storage_seams::smgr_do_pending_syncs::set(|_, _| Ok(()));
     combocid_seams::at_eoxact_combocid::set(|| {});
@@ -357,7 +355,10 @@ fn test_relation<'mcx>(mcx: Mcx<'mcx>, oid: Oid) -> RelationData<'mcx> {
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
         rd_lockInfo: LockInfoData {
-            lockRelId: LockRelId { relId: oid, dbId: 5 },
+            lockRelId: LockRelId {
+                relId: oid,
+                dbId: 5,
+            },
         },
         rd_rel,
         rd_att: int4_tupdesc(mcx),
@@ -370,13 +371,16 @@ fn test_relation<'mcx>(mcx: Mcx<'mcx>, oid: Oid) -> RelationData<'mcx> {
         pgstat_enabled: Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: PgVec::new_in(mcx),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     }
 }
 
@@ -417,7 +421,10 @@ fn index_rel<'mcx>(mcx: Mcx<'mcx>) -> Relation<'mcx> {
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
         rd_lockInfo: LockInfoData {
-            lockRelId: LockRelId { relId: IDX_OID, dbId: 5 },
+            lockRelId: LockRelId {
+                relId: IDX_OID,
+                dbId: 5,
+            },
         },
         rd_rel: FormData_pg_class {
             relname,
@@ -458,8 +465,8 @@ fn index_rel<'mcx>(mcx: Mcx<'mcx>) -> Relation<'mcx> {
             indisready: true,
             indkey,
             has_indpred: false,
-        indexprs_src: None,
-        indpred_src: None,
+            indexprs_src: None,
+            indpred_src: None,
         }),
         rd_opcintype: one(23),
         rd_opfamily: one(1976),
@@ -469,13 +476,16 @@ fn index_rel<'mcx>(mcx: Mcx<'mcx>) -> Relation<'mcx> {
         pgstat_enabled: Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: PgVec::new_in(mcx),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     };
     let rel = Relation::open(data, Some(noop_close));
     rel.rd_supportinfo
@@ -634,7 +644,9 @@ fn fpi_source_page() -> [u8; BLCKSZ] {
 #[test]
 #[ignore]
 fn crash_recovery_child() {
-    let Ok(dd) = std::env::var(CHILD_ENV) else { return };
+    let Ok(dd) = std::env::var(CHILD_ENV) else {
+        return;
+    };
     let dd = std::path::PathBuf::from(dd);
     std::env::set_current_dir(&dd).unwrap();
     init_small::globals::SetDataDir(dd.to_str().unwrap());
@@ -653,7 +665,10 @@ fn crash_recovery_child() {
 
     let cf = *transam_xlog::control_file::control_file();
     assert_eq!(cf.state, DB_IN_PRODUCTION);
-    assert!(cf.checkPoint > CKPT_LOC, "end-of-recovery checkpoint advanced");
+    assert!(
+        cf.checkPoint > CKPT_LOC,
+        "end-of-recovery checkpoint advanced"
+    );
 
     // xact_redo committed xid 3 into the real clog; xid 4 never committed.
     assert!(transam::TransactionIdDidCommit(3).unwrap());
@@ -698,7 +713,9 @@ fn crash_recovery_child() {
     .unwrap();
     // SAFETY: pinned page image.
     let vm_byte = unsafe {
-        *bufmgr::BufferGetPagePtr(vmbuf).as_ptr().add(VM_FIRST_MAP_BYTE)
+        *bufmgr::BufferGetPagePtr(vmbuf)
+            .as_ptr()
+            .add(VM_FIRST_MAP_BYTE)
     };
     bufmgr::ReleaseBuffer(vmbuf).unwrap();
     assert_eq!(vm_byte, 0, "replay cleared the VM all-visible bit");
@@ -713,8 +730,15 @@ fn crash_recovery_child() {
     {
         // SAFETY: pinned page image.
         let page = unsafe { PageRef::from_raw(bufmgr::BufferGetPagePtr(buf6)) };
-        assert!(page.is_all_visible(), "replay kept PD_ALL_VISIBLE on the frozen page");
-        assert_eq!(page.max_offset_number(), 3, "replay re-added the frozen rows");
+        assert!(
+            page.is_all_visible(),
+            "replay kept PD_ALL_VISIBLE on the frozen page"
+        );
+        assert_eq!(
+            page.max_offset_number(),
+            3,
+            "replay re-added the frozen rows"
+        );
         for off in 1..=3u16 {
             let id = page.item_id(off);
             let (ptr, len) = page.item_raw(id);
@@ -722,7 +746,10 @@ fn crash_recovery_child() {
             let t = unsafe {
                 HeapTupleData::from_raw_parts(ptr, len, ItemPointerData::new(0, off), REL6_OID)
             };
-            assert!(t.t_data().xmin_frozen(), "replayed row {off} keeps its frozen xmin");
+            assert!(
+                t.t_data().xmin_frozen(),
+                "replayed row {off} keeps its frozen xmin"
+            );
         }
     }
     bufmgr::ReleaseBuffer(buf6).unwrap();
@@ -736,10 +763,15 @@ fn crash_recovery_child() {
     .unwrap();
     // SAFETY: pinned page image.
     let vm_byte6 = unsafe {
-        *bufmgr::BufferGetPagePtr(vmbuf6).as_ptr().add(VM_FIRST_MAP_BYTE)
+        *bufmgr::BufferGetPagePtr(vmbuf6)
+            .as_ptr()
+            .add(VM_FIRST_MAP_BYTE)
     };
     bufmgr::ReleaseBuffer(vmbuf6).unwrap();
-    assert_eq!(vm_byte6, 0x03, "replay set the VM all-visible|all-frozen bits");
+    assert_eq!(
+        vm_byte6, 0x03,
+        "replay set the VM all-visible|all-frozen bits"
+    );
 
     // btree_redo replay: chain-walk the rebuilt leaf level through the live
     // buffer manager and assert the full ordered key set survives.
@@ -783,7 +815,11 @@ fn crash_recovery_child() {
         }
         blk = next;
     }
-    assert_eq!(keys.len(), NIDX_KEYS as usize, "replayed index holds every key");
+    assert_eq!(
+        keys.len(),
+        NIDX_KEYS as usize,
+        "replayed index holds every key"
+    );
     assert!(
         keys.iter().copied().eq(1..=NIDX_KEYS),
         "replayed index scan order is 1..={NIDX_KEYS}"
@@ -834,8 +870,12 @@ fn crash_recovery_replays_dml_to_precrash_state() {
     let ctl = transam_xlog::ctl::XLogCtl();
     ctl.InsertTimeLineID.store(1, Relaxed);
     ctl.PrevTimeLineID.store(1, Relaxed);
-    ctl.Insert.CurrBytePos.store(XLogRecPtrToBytePos(end_of_log), Relaxed);
-    ctl.Insert.PrevBytePos.store(XLogRecPtrToBytePos(CKPT_LOC), Relaxed);
+    ctl.Insert
+        .CurrBytePos
+        .store(XLogRecPtrToBytePos(end_of_log), Relaxed);
+    ctl.Insert
+        .PrevBytePos
+        .store(XLogRecPtrToBytePos(CKPT_LOC), Relaxed);
     ctl.Insert.fullPageWrites.store(true, Relaxed);
     ctl.Insert.RedoRecPtr.store(CKPT_LOC, Relaxed);
     ctl.RedoRecPtr.store(CKPT_LOC, Relaxed);
@@ -852,9 +892,11 @@ fn crash_recovery_replays_dml_to_precrash_state() {
     {
         let page_begin = end_of_log - end_of_log % 8192;
         let idx = transam_xlog::ctl::XLogRecPtrToBufIdx(end_of_log) as usize;
-        let seg_bytes = std::fs::read(
-            dd1.join("pg_wal").join(transam_xlog::XLogFileName(1, CKPT_LOC / SEG as u64, SEG)),
-        )
+        let seg_bytes = std::fs::read(dd1.join("pg_wal").join(transam_xlog::XLogFileName(
+            1,
+            CKPT_LOC / SEG as u64,
+            SEG,
+        )))
         .unwrap();
         let off = (page_begin % SEG as u64) as usize;
         let len = (end_of_log - page_begin) as usize;
@@ -868,9 +910,10 @@ fn crash_recovery_replays_dml_to_precrash_state() {
         ctl.InitializedUpTo.store(page_begin + 8192, Relaxed);
     }
     xlogutils::set_in_recovery(false);
-    procarray::TransamVariables()
-        .nextXid
-        .store(types_core::FullTransactionId::from_epoch_and_xid(0, 3).value, Relaxed);
+    procarray::TransamVariables().nextXid.store(
+        types_core::FullTransactionId::from_epoch_and_xid(0, 3).value,
+        Relaxed,
+    );
     subtrans::StartupSUBTRANS(3).unwrap();
     assert!(transam_xlog::XLogInsertAllowed());
 
@@ -884,7 +927,10 @@ fn crash_recovery_replays_dml_to_precrash_state() {
     for rloc in [RLOC, RLOC3, RLOC5, RLOC6] {
         smgr::smgropen(rloc, INVALID_PROC_NUMBER).unwrap();
         smgr::smgrcreate(
-            types_storage::RelFileLocatorBackend { locator: rloc, backend: INVALID_PROC_NUMBER },
+            types_storage::RelFileLocatorBackend {
+                locator: rloc,
+                backend: INVALID_PROC_NUMBER,
+            },
             ForkNumber::MAIN_FORKNUM,
             false,
         )
@@ -1007,13 +1053,9 @@ fn crash_recovery_replays_dml_to_precrash_state() {
                 types_slot::TupleSlotKind::HeapTuple,
                 Some(tupdesc.clone()),
             );
-            let tup = heaptuple::heap_form_tuple(
-                mcx,
-                &tupdesc,
-                &[datum::Datum::from_i32(val)],
-                &[false],
-            )
-            .unwrap();
+            let tup =
+                heaptuple::heap_form_tuple(mcx, &tupdesc, &[datum::Datum::from_i32(val)], &[false])
+                    .unwrap();
             exectuples::exec_store_heap_tuple_owned(&mut slot, mcx, tup);
             slot
         };
@@ -1035,7 +1077,10 @@ fn crash_recovery_replays_dml_to_precrash_state() {
         {
             // SAFETY: pinned page image.
             let page = unsafe { PageRef::from_raw(bufmgr::BufferGetPagePtr(buf6)) };
-            assert!(page.is_all_visible(), "COPY FREEZE marked the buffered page all-visible");
+            assert!(
+                page.is_all_visible(),
+                "COPY FREEZE marked the buffered page all-visible"
+            );
             assert_eq!(page.max_offset_number(), 3);
         }
         bufmgr::ReleaseBuffer(buf6).unwrap();
@@ -1049,10 +1094,15 @@ fn crash_recovery_replays_dml_to_precrash_state() {
         .unwrap();
         // SAFETY: pinned page image.
         let byte = unsafe {
-            *bufmgr::BufferGetPagePtr(vmbuf).as_ptr().add(VM_FIRST_MAP_BYTE)
+            *bufmgr::BufferGetPagePtr(vmbuf)
+                .as_ptr()
+                .add(VM_FIRST_MAP_BYTE)
         };
         bufmgr::ReleaseBuffer(vmbuf).unwrap();
-        assert_eq!(byte, 0x03, "COPY FREEZE set the buffered VM all-visible|all-frozen bits");
+        assert_eq!(
+            byte, 0x03,
+            "COPY FREEZE set the buffered VM all-visible|all-frozen bits"
+        );
     }
 
     xact::CommitTransactionCommand().unwrap();
@@ -1068,9 +1118,7 @@ fn crash_recovery_replays_dml_to_precrash_state() {
         let buf = bufmgr::ReadBuffer(&rel3, 0).unwrap();
         bufmgr::LockBuffer(buf, bufmgr::BUFFER_LOCK_EXCLUSIVE).unwrap();
         // SAFETY: pinned + exclusively locked page.
-        let mut pm = unsafe {
-            PageMut::from_raw(bufmgr::BufferGetPagePtr(buf))
-        };
+        let mut pm = unsafe { PageMut::from_raw(bufmgr::BufferGetPagePtr(buf)) };
         pm.set_all_visible();
         bufmgr::MarkBufferDirty(buf).unwrap();
         bufmgr::FlushOneBuffer(buf).unwrap();
@@ -1081,9 +1129,8 @@ fn crash_recovery_replays_dml_to_precrash_state() {
         struct P([u8; BLCKSZ]);
         let mut p = P([0u8; BLCKSZ]);
         // SAFETY: aligned, exclusively owned stack page.
-        let mut vm = unsafe {
-            PageMut::from_raw(core::ptr::NonNull::new(p.0.as_mut_ptr()).unwrap())
-        };
+        let mut vm =
+            unsafe { PageMut::from_raw(core::ptr::NonNull::new(p.0.as_mut_ptr()).unwrap()) };
         vm.init(0);
         p.0[VM_FIRST_MAP_BYTE] = 0x01;
         std::fs::write(dd1.join("base/5").join(format!("{REL3_OID}_vm")), p.0).unwrap();
@@ -1141,7 +1188,10 @@ fn crash_recovery_replays_dml_to_precrash_state() {
     }
     smgr::smgropen(RLOC4, INVALID_PROC_NUMBER).unwrap();
     let idx_nblocks = smgr::smgrnblocks(idx_key, ForkNumber::MAIN_FORKNUM).unwrap();
-    assert!(idx_nblocks >= 5, "splits + root split happened (nblocks={idx_nblocks})");
+    assert!(
+        idx_nblocks >= 5,
+        "splits + root split happened (nblocks={idx_nblocks})"
+    );
     let mut idx_expected: Vec<u8> = Vec::new();
     {
         // Read-only xact: buffer pins need a live resource owner.
@@ -1164,8 +1214,7 @@ fn crash_recovery_replays_dml_to_precrash_state() {
     // An XLOG_FPI for a second relation (xlog_redo's restore arm).
     let mut fpi_page = fpi_source_page();
     let fpi_lsn =
-        xloginsert::log_newpage(&RLOC2, ForkNumber::MAIN_FORKNUM, 0, &mut fpi_page, true)
-            .unwrap();
+        xloginsert::log_newpage(&RLOC2, ForkNumber::MAIN_FORKNUM, 0, &mut fpi_page, true).unwrap();
 
     let flush_to = fpi_lsn.max(transam_xlog_seams::xact_last_rec_end::call());
     transam_xlog::XLogFlush(flush_to).unwrap();
@@ -1191,7 +1240,9 @@ fn crash_recovery_replays_dml_to_precrash_state() {
         .unwrap();
         // SAFETY: pinned page image.
         let byte = unsafe {
-            *bufmgr::BufferGetPagePtr(vmbuf).as_ptr().add(VM_FIRST_MAP_BYTE)
+            *bufmgr::BufferGetPagePtr(vmbuf)
+                .as_ptr()
+                .add(VM_FIRST_MAP_BYTE)
         };
         bufmgr::ReleaseBuffer(vmbuf).unwrap();
         assert_eq!(byte, 0, "heap_insert cleared the buffered VM bit");
@@ -1203,7 +1254,10 @@ fn crash_recovery_replays_dml_to_precrash_state() {
     let heap_file = dd2.join("base/5").join(REL_OID.to_string());
     assert_eq!(std::fs::metadata(&heap_file).unwrap().len(), BLCKSZ as u64);
     let zeros = std::fs::read(&heap_file).unwrap();
-    assert!(zeros.iter().all(|b| *b == 0), "heap page must not be flushed pre-crash");
+    assert!(
+        zeros.iter().all(|b| *b == 0),
+        "heap page must not be flushed pre-crash"
+    );
     std::fs::File::options()
         .write(true)
         .open(&heap_file)
@@ -1218,10 +1272,11 @@ fn crash_recovery_replays_dml_to_precrash_state() {
     {
         let mut disk = std::fs::read(dd2.join("base/5").join(REL3_OID.to_string())).unwrap();
         assert_eq!(disk.len(), BLCKSZ);
-        let r = unsafe {
-            PageRef::from_raw(core::ptr::NonNull::new(disk.as_mut_ptr()).unwrap())
-        };
-        assert!(r.is_all_visible(), "pre-crash disk page keeps PD_ALL_VISIBLE");
+        let r = unsafe { PageRef::from_raw(core::ptr::NonNull::new(disk.as_mut_ptr()).unwrap()) };
+        assert!(
+            r.is_all_visible(),
+            "pre-crash disk page keeps PD_ALL_VISIBLE"
+        );
         assert_eq!(r.max_offset_number(), 1, "second insert never flushed");
         let vm = std::fs::read(dd2.join("base/5").join(format!("{REL3_OID}_vm"))).unwrap();
         assert_eq!(vm[VM_FIRST_MAP_BYTE], 0x01, "pre-crash disk VM bit set");
@@ -1276,7 +1331,11 @@ fn crash_recovery_replays_dml_to_precrash_state() {
     normalize_page(&mut replayed);
     normalize_page(&mut expected);
     if replayed != expected {
-        let first = replayed.iter().zip(&expected).position(|(a, b)| a != b).unwrap();
+        let first = replayed
+            .iter()
+            .zip(&expected)
+            .position(|(a, b)| a != b)
+            .unwrap();
         panic!(
             "replayed page differs from pre-crash page at byte {first}: got {:02x?} want {:02x?}",
             &replayed[first..(first + 16).min(BLCKSZ)],
@@ -1292,7 +1351,11 @@ fn crash_recovery_replays_dml_to_precrash_state() {
     // The VM-clear replay: heap page byte-equal to pre-crash truth (tuple 52
     // re-added, PD_ALL_VISIBLE cleared), VM bit cleared on disk.
     let replayed3 = std::fs::read(dd2.join("base/5").join(REL3_OID.to_string())).unwrap();
-    assert_eq!(replayed3, expected_page3.to_vec(), "VM-cleared heap page is byte-exact");
+    assert_eq!(
+        replayed3,
+        expected_page3.to_vec(),
+        "VM-cleared heap page is byte-exact"
+    );
 
     // The update lane: HOT + cross-page (lock, INIT_PAGE) replay byte-exact.
     // cmin/cmax (t_field3) of the update-touched tuples and the PD_PAGE_FULL
@@ -1330,7 +1393,11 @@ fn crash_recovery_replays_dml_to_precrash_state() {
     // pre-crash buffered truth (PD_ALL_VISIBLE included), and the VM bits
     // reached disk via the end-of-recovery checkpoint.
     let replayed6 = std::fs::read(dd2.join("base/5").join(REL6_OID.to_string())).unwrap();
-    assert_eq!(replayed6, expected_page6.to_vec(), "COPY FREEZE heap page is byte-exact");
+    assert_eq!(
+        replayed6,
+        expected_page6.to_vec(),
+        "COPY FREEZE heap page is byte-exact"
+    );
     let vm6 = std::fs::read(dd2.join("base/5").join(format!("{REL6_OID}_vm"))).unwrap();
     assert_eq!(
         vm6[VM_FIRST_MAP_BYTE], 0x03,

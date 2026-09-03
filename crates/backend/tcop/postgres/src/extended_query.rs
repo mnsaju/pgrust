@@ -5,8 +5,8 @@
 use core::cell::Cell;
 use std::ffi::CStr;
 
-use ::elog::ereport;
 use ::datum::Datum;
+use ::elog::ereport;
 use ::mcx::{Mcx, MemoryContext, PgString, PgVec};
 use ::plancache::CachedPlanSourceHandle;
 use ::stringinfo::StringInfo;
@@ -29,8 +29,8 @@ use ::types_portal::{
 };
 
 use crate::simple_query::{
-    check_log_duration, finish_xact_command, pg_parse_query,
-    pg_rewrite_query, start_xact_command, IsTransactionExitStmt,
+    check_log_duration, finish_xact_command, pg_parse_query, pg_rewrite_query, start_xact_command,
+    IsTransactionExitStmt,
 };
 use crate::{check_for_interrupts, loc, ResetUsage, ShowUsage};
 
@@ -74,7 +74,9 @@ fn lookup_plansource(stmt_name: &str) -> PgResult<CachedPlanSourceHandle> {
             .expect("throwError returned entry");
         Ok(plansource)
     } else {
-        UNNAMED_STMT_PSRC.with(Cell::get).ok_or_else(unnamed_stmt_missing)
+        UNNAMED_STMT_PSRC
+            .with(Cell::get)
+            .ok_or_else(unnamed_stmt_missing)
     }
 }
 
@@ -110,7 +112,10 @@ pub fn pg_analyze_and_rewrite_varparams<'mcx>(
         if !OidIsValid(ptype) || ptype == UNKNOWNOID {
             return Err(ereport(ERROR)
                 .errcode(ERRCODE_INDETERMINATE_DATATYPE)
-                .errmsg(format!("could not determine data type of parameter ${}", i + 1))
+                .errmsg(format!(
+                    "could not determine data type of parameter ${}",
+                    i + 1
+                ))
                 .into_error()
                 .into());
         }
@@ -233,7 +238,9 @@ pub fn exec_parse_message<'mcx>(
         (2, msec_str) => {
             let name = if is_named { stmt_name } else { "<unnamed>" };
             ereport(LOG)
-                .errmsg(format!("duration: {msec_str} ms  parse {name}: {query_string}"))
+                .errmsg(format!(
+                    "duration: {msec_str} ms  parse {name}: {query_string}"
+                ))
                 .errhidestmt(true)
                 .finish(loc(1601, "exec_parse_message"))?;
         }
@@ -266,8 +273,8 @@ fn fill_parse_plansource(
         // retained copy is copied once more into the query arena (no re-lex:
         // a second lex re-emits scanner warnings C doesn't).
         let qmcx = plancache::SourceQueryMcx(psrc);
-        let reparsed = plancache::CachedPlanRawParseTreeCopy(qmcx, psrc)?
-            .expect("created with a raw tree");
+        let reparsed =
+            plancache::CachedPlanRawParseTreeCopy(qmcx, psrc)?.expect("created with a raw tree");
 
         let (query_list, resolved) = pg_analyze_and_rewrite_varparams(
             qmcx,
@@ -277,13 +284,7 @@ fn fill_parse_plansource(
             QueryEnvHandle::NULL,
         )?;
 
-        plancache::CompleteCachedPlan(
-            psrc,
-            query_list,
-            &resolved,
-            CURSOR_OPT_PARALLEL_OK,
-            true,
-        )
+        plancache::CompleteCachedPlan(psrc, query_list, &resolved, CURSOR_OPT_PARALLEL_OK, true)
     })();
 
     if snapshot_set {
@@ -357,7 +358,6 @@ fn datum_copy_in<'mcx>(mcx: Mcx<'mcx>, value: Datum, typlen: i16) -> PgResult<Da
     Ok(Datum::from_usize(out.leak().as_ptr() as usize))
 }
 
-
 // bind_param_error_callback (postgres.c): CONTEXT for an error thrown while
 // processing one bind parameter; the value is quoted and clipped to
 // log_parameter_max_length_on_error bytes (<0 = unclipped), C's
@@ -398,7 +398,12 @@ fn bind_param_error_context(
             if portal_name.is_empty() {
                 format!("unnamed portal parameter ${} = {}", paramno + 1, quoted)
             } else {
-                format!("portal \"{}\" parameter ${} = {}", portal_name, paramno + 1, quoted)
+                format!(
+                    "portal \"{}\" parameter ${} = {}",
+                    portal_name,
+                    paramno + 1,
+                    quoted
+                )
             }
         }
         None if portal_name.is_empty() => {
@@ -417,8 +422,7 @@ fn portal_mcx(portal: &Portal<'static>) -> Mcx<'static> {
     // before use (pquery precedent).
     let ctx: &'static MemoryContext = unsafe {
         let p = portal.borrow();
-        &*(&**p.portalContext.as_ref().expect("portal has portalContext")
-            as *const MemoryContext)
+        &*(&**p.portalContext.as_ref().expect("portal has portalContext") as *const MemoryContext)
     };
     ctx.mcx()
 }
@@ -458,7 +462,9 @@ pub fn exec_bind_message<'mcx>(
 
     let num_pformats = pqformat::pq_getmsgint(input_message, 2)? as usize;
     let mut pformats: PgVec<'mcx, i16> = PgVec::new_in(mcx);
-    pformats.try_reserve_exact(num_pformats).map_err(|_| mcx.oom(num_pformats))?;
+    pformats
+        .try_reserve_exact(num_pformats)
+        .map_err(|_| mcx.oom(num_pformats))?;
     for _ in 0..num_pformats {
         pformats.push(pqformat::pq_getmsgint(input_message, 2)? as i16);
     }
@@ -526,7 +532,9 @@ pub fn exec_bind_message<'mcx>(
     let params = if num_params > 0 {
         let param_types = plancache::CachedPlanParamTypes(psrc);
         let mut params: PgVec<'static, ParamExternData> = PgVec::new_in(pmcx);
-        params.try_reserve_exact(num_params).map_err(|_| pmcx.oom(num_params))?;
+        params
+            .try_reserve_exact(num_params)
+            .map_err(|_| pmcx.oom(num_params))?;
 
         for paramno in 0..num_params {
             // bind_param_error_callback (postgres.c): every error thrown while
@@ -538,8 +546,7 @@ pub fn exec_bind_message<'mcx>(
                 bind_param_error_context(e, portal_name.as_str(), paramno, None)
             };
             let ptype = param_types[paramno];
-            let plength =
-                pqformat::pq_getmsgint(input_message, 4).map_err(pctx)? as i32;
+            let plength = pqformat::pq_getmsgint(input_message, 4).map_err(pctx)? as i32;
             let is_null = plength == -1;
 
             let pformat: i16 = if num_pformats > 1 {
@@ -575,7 +582,8 @@ pub fn exec_bind_message<'mcx>(
                     let mut finfo = fmgr_seams::fmgr_info::call(typinput).map_err(pctx)?;
                     let v = types_fmgr::input_function_call(&mut finfo, cstr, typioparam, -1, pmcx)
                         .map_err(|e| {
-                            let val = cstr.map(|c| String::from_utf8_lossy(c.to_bytes()).into_owned());
+                            let val =
+                                cstr.map(|c| String::from_utf8_lossy(c.to_bytes()).into_owned());
                             bind_param_error_context(
                                 e,
                                 portal_name.as_str(),
@@ -622,8 +630,7 @@ pub fn exec_bind_message<'mcx>(
                                         paramno + 1
                                     ))
                                     .into_error(),
-                            ))
-                            .into());
+                            )));
                         }
                         copy_param_datum(pmcx, pval, is_null, ptype).map_err(pctx)?
                     }
@@ -634,8 +641,7 @@ pub fn exec_bind_message<'mcx>(
                             .errcode(ERRCODE_INVALID_PARAMETER_VALUE)
                             .errmsg(format!("unsupported format code: {other}"))
                             .into_error(),
-                    ))
-                    .into());
+                    )));
                 }
             };
 
@@ -661,7 +667,9 @@ pub fn exec_bind_message<'mcx>(
 
     let num_rformats = pqformat::pq_getmsgint(input_message, 2)? as usize;
     let mut rformats: PgVec<'mcx, i16> = PgVec::new_in(mcx);
-    rformats.try_reserve_exact(num_rformats).map_err(|_| mcx.oom(num_rformats))?;
+    rformats
+        .try_reserve_exact(num_rformats)
+        .map_err(|_| mcx.oom(num_rformats))?;
     for _ in 0..num_rformats {
         rformats.push(pqformat::pq_getmsgint(input_message, 2)? as i16);
     }
@@ -738,7 +746,11 @@ pub fn exec_bind_message<'mcx>(
                 .finish(loc(2065, "exec_bind_message"))?;
         }
         (2, msec_str) => {
-            let name = if stmt_name.is_empty() { "<unnamed>" } else { stmt_name.as_str() };
+            let name = if stmt_name.is_empty() {
+                "<unnamed>"
+            } else {
+                stmt_name.as_str()
+            };
             let sep = if portal_name.is_empty() { "" } else { "/" };
             ereport(LOG)
                 .errmsg(format!(
@@ -766,21 +778,17 @@ pub(crate) fn owned_msg_string<'mcx>(
     // Non-UTF8 here means the string is in a non-UTF8 database encoding the
     // UTF-8 engine cannot honor (see non_utf8_query_error); C would carry
     // these bytes, so the honest report is 0A000, not a protocol violation.
-    let text =
-        core::str::from_utf8(s.as_bytes()).map_err(|_| crate::non_utf8_query_error())?;
-    PgString::from_str_in(text, mcx).map_err(Into::into)
-}
+    let text = core::str::from_utf8(s.as_bytes()).map_err(|_| crate::non_utf8_query_error())?;
+    PgString::from_str_in(text, mcx)}
 
 // pg_client_to_server + the trailing NUL C scribbles onto the message buffer.
-fn client_to_server_cstring<'mcx>(
-    mcx: Mcx<'mcx>,
-    raw: &[u8],
-) -> PgResult<PgVec<'mcx, u8>> {
+fn client_to_server_cstring<'mcx>(mcx: Mcx<'mcx>, raw: &[u8]) -> PgResult<PgVec<'mcx, u8>> {
     let mut v = match mbutils::pg_client_to_server(mcx, raw)? {
         Some(converted) => converted,
         None => {
             let mut v: PgVec<'mcx, u8> = PgVec::new_in(mcx);
-            v.try_reserve_exact(raw.len() + 1).map_err(|_| mcx.oom(raw.len() + 1))?;
+            v.try_reserve_exact(raw.len() + 1)
+                .map_err(|_| mcx.oom(raw.len() + 1))?;
             mcx::vec_append_bytes(&mut v, raw)?;
             v
         }
@@ -818,14 +826,14 @@ pub fn exec_execute_message<'mcx>(
     let (is_xact_command, source_text, prep_stmt_name) = {
         let p = portal.borrow();
         let stmts = p.stmts;
-        let is_xact = !stmts.is_null()
-            && pquery::stmt_list::with(stmts, IsTransactionStmtList);
-        let src = PgString::from_str_in(
-            p.sourceText.as_ref().map(|s| s.as_str()).unwrap_or(""),
-            mcx,
-        )?;
+        let is_xact = !stmts.is_null() && pquery::stmt_list::with(stmts, IsTransactionStmtList);
+        let src =
+            PgString::from_str_in(p.sourceText.as_ref().map(|s| s.as_str()).unwrap_or(""), mcx)?;
         let prep = PgString::from_str_in(
-            p.prepStmtName.as_ref().map(|s| s.as_str()).unwrap_or("<unnamed>"),
+            p.prepStmtName
+                .as_ref()
+                .map(|s| s.as_str())
+                .unwrap_or("<unnamed>"),
             mcx,
         )?;
         (is_xact, src, prep)
@@ -878,10 +886,16 @@ pub fn exec_execute_message<'mcx>(
 
     let mut was_logged = false;
     if check_log_statement_planned(&portal) {
-        let verb = if execute_is_fetch { "execute fetch from" } else { "execute" };
+        let verb = if execute_is_fetch {
+            "execute fetch from"
+        } else {
+            "execute"
+        };
         let sep = if portal_name.is_empty() { "" } else { "/" };
         ereport(LOG)
-            .errmsg(format!("{verb} {prep_stmt_name}{sep}{portal_name}: {source_text}"))
+            .errmsg(format!(
+                "{verb} {prep_stmt_name}{sep}{portal_name}: {source_text}"
+            ))
             .errhidestmt(true)
             .finish(loc(2231, "exec_execute_message"))?;
         was_logged = true;
@@ -889,8 +903,7 @@ pub fn exec_execute_message<'mcx>(
 
     if xact::IsAbortedTransactionBlockState() {
         let stmts = portal.borrow().stmts;
-        let exit_ok = !stmts.is_null()
-            && pquery::stmt_list::with(stmts, IsTransactionExitStmtList);
+        let exit_ok = !stmts.is_null() && pquery::stmt_list::with(stmts, IsTransactionExitStmtList);
         if !exit_ok {
             return Err(aborted_xact_error());
         }
@@ -943,7 +956,11 @@ pub fn exec_execute_message<'mcx>(
                 .finish(loc(2343, "exec_execute_message"))?;
         }
         (2, msec_str) => {
-            let verb = if execute_is_fetch { "execute fetch from" } else { "execute" };
+            let verb = if execute_is_fetch {
+                "execute fetch from"
+            } else {
+                "execute"
+            };
             let sep = if portal_name.is_empty() { "" } else { "/" };
             ereport(LOG)
                 .errmsg(format!(
@@ -981,7 +998,9 @@ fn check_log_statement_planned(portal: &Portal<'static>) -> bool {
         return false;
     }
     pquery::stmt_list::with(stmts, |stmts| {
-        stmts.iter().any(|stmt| planned_stmt_log_level(stmt) <= log_statement)
+        stmts
+            .iter()
+            .any(|stmt| planned_stmt_log_level(stmt) <= log_statement)
     })
 }
 

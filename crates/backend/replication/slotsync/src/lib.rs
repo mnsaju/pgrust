@@ -14,12 +14,12 @@ use pgsync::Mutex;
 
 use elog::{elog, ereport};
 use types_core::{Oid, TransactionId, XLogRecPtr};
-use types_tuple::NameData;
 use types_error::{
     ErrorLocation, PgResult, DEBUG1, ERRCODE_CONNECTION_FAILURE, ERRCODE_FEATURE_NOT_SUPPORTED,
     ERRCODE_INVALID_PARAMETER_VALUE, ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE, ERROR, LOG,
 };
 use types_storage::waiteventset::{WL_EXIT_ON_PM_DEATH, WL_LATCH_SET, WL_TIMEOUT};
+use types_tuple::NameData;
 
 use slot::{
     GetSlotInvalidationCause, MyReplicationSlot, ReplicationSlot, ReplicationSlotAcquire,
@@ -38,13 +38,13 @@ fn loc(func: &'static str) -> ErrorLocation {
     ErrorLocation::new(site.file(), site.line() as i32, func)
 }
 
-const InvalidXLogRecPtr: XLogRecPtr = 0;
-const InvalidTransactionId: TransactionId = 0;
-const InvalidOid: Oid = types_core::InvalidOid;
-const InvalidPid: i32 = 0;
+const INVALID_XLOG_REC_PTR: XLogRecPtr = 0;
+const INVALID_TRANSACTION_ID: TransactionId = 0;
+const INVALID_OID: Oid = types_core::InvalidOid;
+const INVALID_PID: i32 = 0;
 
-const DatabaseRelationId: Oid = 1262;
-const AccessShareLock: i32 = 1;
+const DATABASE_RELATION_ID: Oid = 1262;
+const ACCESS_SHARE_LOCK: i32 = 1;
 
 // RS_INVAL_NONE (slot.h); the slot crate models invalidation as i32/u8 codes.
 const RS_INVAL_NONE: i32 = 0; // slot::ondisk::RS_INVAL_NONE.0
@@ -67,7 +67,7 @@ struct SlotSyncCtx {
 
 pgsync::process_global! {
     static SLOT_SYNC_CTX: Mutex<SlotSyncCtx> = Mutex::new(SlotSyncCtx {
-        pid: InvalidPid,
+        pid: INVALID_PID,
         stop_signaled: false,
         syncing: false,
         last_start_time: 0,
@@ -205,7 +205,7 @@ fn update_local_synced_slot(
             ))
             .finish(loc("update_local_synced_slot"));
 
-        if let Some(f) = remote_slot_precedes.as_deref_mut() {
+        if let Some(f) = remote_slot_precedes {
             *f = true;
         }
         return Ok(false);
@@ -230,7 +230,7 @@ fn update_local_synced_slot(
         } else {
             let (_retlsn, consistent) =
                 logical_slot_advance_and_check_snap_state::call(remote_slot.confirmed_lsn)?;
-            if let Some(f) = found_consistent_snapshot.as_deref_mut() {
+            if let Some(f) = found_consistent_snapshot {
                 *f = consistent;
             }
 
@@ -299,7 +299,7 @@ fn transaction_id_precedes(a: TransactionId, b: TransactionId) -> bool {
         return false;
     }
     // TransactionIdPrecedes: modulo-2^31 comparison for normal xids.
-    if !(a >= 3) || !(b >= 3) {
+    if (a < 3) || (b < 3) {
         return a < b;
     }
     ((a.wrapping_sub(b)) as i32) < 0
@@ -309,7 +309,7 @@ fn transaction_id_follows(a: TransactionId, b: TransactionId) -> bool {
     if a == b {
         return false;
     }
-    if !(a >= 3) || !(b >= 3) {
+    if (a < 3) || (b < 3) {
         return a > b;
     }
     ((a.wrapping_sub(b)) as i32) > 0
@@ -361,7 +361,7 @@ fn drop_local_obsolete_slots(remote_slot_list: &[RemoteSlot]) -> PgResult<()> {
 
         // Shared lock prevents a conflict with ReplicationSlotsDropDBSlots
         // during a concurrent drop-database.
-        lmgr::LockSharedObject(DatabaseRelationId, dboid, 0, AccessShareLock)?;
+        lmgr::LockSharedObject(DATABASE_RELATION_ID, dboid, 0, ACCESS_SHARE_LOCK)?;
 
         let synced_slot =
             local_slot.with_mutex(|| local_slot.in_use.get() && local_slot.data.get().synced != 0);
@@ -372,7 +372,7 @@ fn drop_local_obsolete_slots(remote_slot_list: &[RemoteSlot]) -> PgResult<()> {
             ReplicationSlotDropAcquired()?;
         }
 
-        lmgr::UnlockSharedObject(DatabaseRelationId, dboid, 0, AccessShareLock)?;
+        lmgr::UnlockSharedObject(DATABASE_RELATION_ID, dboid, 0, ACCESS_SHARE_LOCK)?;
 
         let _ = elog(
             LOG,
@@ -391,18 +391,19 @@ fn drop_local_obsolete_slots(remote_slot_list: &[RemoteSlot]) -> PgResult<()> {
 // ---------------------------------------------------------------------------
 fn reserve_wal_for_local_slot(restart_lsn: XLogRecPtr) -> PgResult<()> {
     let slot = MyReplicationSlot().expect("reserve_wal_for_local_slot without slot");
-    debug_assert!(slot.data.get().restart_lsn == InvalidXLogRecPtr);
+    debug_assert!(slot.data.get().restart_lsn == INVALID_XLOG_REC_PTR);
 
     // C acquires ReplicationSlotAllocationLock exclusively to fence against
     // the checkpointer's minimum-LSN calculation.
     slot::with_allocation_lock_exclusive(|| -> PgResult<()> {
         let mut min_safe_lsn = transam_xlog::GetRedoRecPtr();
         let ctl = transam_xlog::ctl::XLogCtl();
-        let slot_min_lsn = ctl
-            .info_lck
-            .with(|| ctl.replicationSlotMinLSN.load(std::sync::atomic::Ordering::Relaxed));
+        let slot_min_lsn = ctl.info_lck.with(|| {
+            ctl.replicationSlotMinLSN
+                .load(std::sync::atomic::Ordering::Relaxed)
+        });
 
-        if slot_min_lsn != InvalidXLogRecPtr && min_safe_lsn > slot_min_lsn {
+        if slot_min_lsn != INVALID_XLOG_REC_PTR && min_safe_lsn > slot_min_lsn {
             min_safe_lsn = slot_min_lsn;
         }
 
@@ -415,9 +416,10 @@ fn reserve_wal_for_local_slot(restart_lsn: XLogRecPtr) -> PgResult<()> {
         ReplicationSlotsComputeRequiredLSN()?;
 
         let segno = slot.data.get().restart_lsn / transam_xlog::wal_segment_size() as u64;
-        let last_removed = ctl
-            .info_lck
-            .with(|| ctl.lastRemovedSegNo.load(std::sync::atomic::Ordering::Relaxed));
+        let last_removed = ctl.info_lck.with(|| {
+            ctl.lastRemovedSegNo
+                .load(std::sync::atomic::Ordering::Relaxed)
+        });
         if last_removed >= segno {
             elog(
                 ERROR,
@@ -665,13 +667,13 @@ fn synchronize_slots(conn: &mut PgConn) -> PgResult<bool> {
         let name = text(0).expect("slot_name is never null");
         let plugin = text(1).expect("plugin is never null");
         // LSN and xmin may be null if the slot is invalidated on the primary.
-        let confirmed_lsn = text(2).map(|s| parse_lsn(&s)).unwrap_or(InvalidXLogRecPtr);
-        let restart_lsn = text(3).map(|s| parse_lsn(&s)).unwrap_or(InvalidXLogRecPtr);
+        let confirmed_lsn = text(2).map(|s| parse_lsn(&s)).unwrap_or(INVALID_XLOG_REC_PTR);
+        let restart_lsn = text(3).map(|s| parse_lsn(&s)).unwrap_or(INVALID_XLOG_REC_PTR);
         let catalog_xmin = text(4)
             .and_then(|s| s.trim().parse::<u32>().ok())
-            .unwrap_or(InvalidTransactionId);
+            .unwrap_or(INVALID_TRANSACTION_ID);
         let two_phase = text(5).as_deref() == Some("t");
-        let two_phase_at = text(6).map(|s| parse_lsn(&s)).unwrap_or(InvalidXLogRecPtr);
+        let two_phase_at = text(6).map(|s| parse_lsn(&s)).unwrap_or(INVALID_XLOG_REC_PTR);
         let failover = text(7).as_deref() == Some("t");
         let database = text(8).expect("database is never null");
         let invalidated = match text(9) {
@@ -681,9 +683,9 @@ fn synchronize_slots(conn: &mut PgConn) -> PgResult<bool> {
 
         // An RS_EPHEMERAL remote slot has invalid LSNs/xmin while still
         // valid: skip it this cycle.
-        if (restart_lsn == InvalidXLogRecPtr
-            || confirmed_lsn == InvalidXLogRecPtr
-            || catalog_xmin == InvalidTransactionId)
+        if (restart_lsn == INVALID_XLOG_REC_PTR
+            || confirmed_lsn == INVALID_XLOG_REC_PTR
+            || catalog_xmin == INVALID_TRANSACTION_ID)
             && invalidated == RS_INVAL_NONE
         {
             continue;
@@ -713,9 +715,9 @@ fn synchronize_slots(conn: &mut PgConn) -> PgResult<bool> {
         let remote_dbid =
             dbcommands_seams::get_database_oid::call(cx.mcx(), &remote_slot.database, false)?;
 
-        lmgr::LockSharedObject(DatabaseRelationId, remote_dbid, 0, AccessShareLock)?;
+        lmgr::LockSharedObject(DATABASE_RELATION_ID, remote_dbid, 0, ACCESS_SHARE_LOCK)?;
         some_slot_updated |= synchronize_one_slot(remote_slot, remote_dbid)?;
-        lmgr::UnlockSharedObject(DatabaseRelationId, remote_dbid, 0, AccessShareLock)?;
+        lmgr::UnlockSharedObject(DATABASE_RELATION_ID, remote_dbid, 0, ACCESS_SHARE_LOCK)?;
     }
 
     if started_tx {
@@ -860,8 +862,7 @@ pub fn ValidateSlotSyncParams(elevel_error: bool) -> PgResult<bool> {
     let primary_slot_name = guc_tables::vars::PrimarySlotName.read().unwrap_or_default();
     if primary_slot_name.is_empty() {
         return fail(
-            "replication slot synchronization requires \"primary_slot_name\" to be set"
-                .to_string(),
+            "replication slot synchronization requires \"primary_slot_name\" to be set".to_string(),
         );
     }
 
@@ -977,7 +978,7 @@ fn slotsync_worker_onexit() {
     let _ = ReplicationSlotCleanup(false);
 
     with_ctx(|ctx| {
-        ctx.pid = InvalidPid;
+        ctx.pid = INVALID_PID;
         if slot::syncing_replication_slots() {
             ctx.syncing = false;
             slot::set_syncing_replication_slots(false);
@@ -1019,7 +1020,7 @@ fn check_and_set_sync_info(worker_pid: i32) -> PgResult<()> {
         Concurrent,
     }
     let bad = with_ctx(|ctx| {
-        debug_assert!(worker_pid == InvalidPid || ctx.pid == InvalidPid);
+        debug_assert!(worker_pid == INVALID_PID || ctx.pid == INVALID_PID);
         if ctx.stop_signaled {
             return Some(Bad::Stop);
         }
@@ -1128,7 +1129,15 @@ fn repl_slot_sync_worker_inner() -> PgResult<()> {
 
     // Database connection: walrcv_exec-equivalent queries need syscache.
     let top = mcx::MemoryContext::new("SlotSyncWorkerInit");
-    postinit::InitPostgres(top.mcx(), Some(&dbname), InvalidOid, None, InvalidOid, 0, None)?;
+    postinit::InitPostgres(
+        top.mcx(),
+        Some(&dbname),
+        INVALID_OID,
+        None,
+        INVALID_OID,
+        0,
+        None,
+    )?;
     miscinit::SetProcessingMode(types_core::ProcessingMode::NormalProcessing);
 
     let cluster_name = guc_tables::vars::cluster_name.read().unwrap_or_default();
@@ -1209,7 +1218,7 @@ pub fn ShutDownSlotSync() -> PgResult<()> {
         return Ok(());
     }
 
-    if worker_pid != InvalidPid {
+    if worker_pid != INVALID_PID {
         procsignal::SendThreadSignal(worker_pid, procsignal::signums::SIGUSR1);
     }
 
@@ -1265,7 +1274,7 @@ pub fn IsSyncingReplicationSlots() -> bool {
 /// connection with C's ensure-error-cleanup shape.
 pub fn SyncReplicationSlots(conn: &mut PgConn) -> PgResult<()> {
     let body = |conn: &mut PgConn| -> PgResult<()> {
-        check_and_set_sync_info(InvalidPid)?;
+        check_and_set_sync_info(INVALID_PID)?;
         validate_remote_info(conn)?;
         synchronize_slots(conn)?;
 

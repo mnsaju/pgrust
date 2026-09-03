@@ -34,7 +34,7 @@
 use std::sync::OnceLock;
 
 use elog::ereport;
-use init_small::globals::{MyProcPid, MyProcNumber};
+use init_small::globals::{MyProcNumber, MyProcPid};
 use latch::{ResetLatch, WaitLatch};
 use types_error::{ErrorLocation, PgResult, LOG};
 use types_storage::latch::LatchHandle;
@@ -96,7 +96,12 @@ impl StallDetector {
     }
 
     pub fn with_thresholds(threshold_ms: i64, recheck_ms: i64) -> Self {
-        StallDetector { threshold_ms, recheck_ms, start_ms: None, reported: false }
+        StallDetector {
+            threshold_ms,
+            recheck_ms,
+            start_ms: None,
+            reported: false,
+        }
     }
 
     /// `new()` with the recheck cadence additionally capped at `cap_ms`
@@ -236,21 +241,23 @@ pub fn wait_on_my_latch_reporting(
 // "registry=MISSING"/"registry=STALE(...)" on a live blocked endpoint is
 // the deaf-worker signature.
 fn describe_endpoint(procno: Option<types_core::ProcNumber>) -> String {
-    let Some(procno) = procno else { return "procno=none".into() };
+    let Some(procno) = procno else {
+        return "procno=none".into();
+    };
     if !lmgr_proc_seams::proc_latch::is_installed() {
         return format!("procno={procno} (latch state unavailable)");
     }
     let latch = latch::latch_ref(LatchHandle::proc(procno));
     let pid = latch.owner_pid.load(std::sync::atomic::Ordering::Relaxed);
     let is_set = latch.is_set.load(std::sync::atomic::Ordering::Relaxed);
-    let sleeping = latch.maybe_sleeping.load(std::sync::atomic::Ordering::Relaxed);
+    let sleeping = latch
+        .maybe_sleeping
+        .load(std::sync::atomic::Ordering::Relaxed);
     let registry = format!(
         "registry={}",
         waiter::describe_word(latch.waker.load(std::sync::atomic::Ordering::Acquire))
     );
-    format!(
-        "procno={procno} pid={pid} latch_set={is_set} latch_sleeping={sleeping} {registry}"
-    )
+    format!("procno={procno} pid={pid} latch_set={is_set} latch_sleeping={sleeping} {registry}")
 }
 
 /// Queue + both endpoints, one line's worth.
@@ -277,17 +284,21 @@ pub fn report_queue_stall(mq: &ShmMq, role: &str, pending: usize, waited_ms: i64
         describe_queue(mq),
     );
     // LOG never unwinds; the wait continues untouched either way.
-    let _ = ereport(LOG)
-        .errmsg(msg)
-        .finish(ErrorLocation::new(file!(), line!() as i32, "shm_mq_stall_report"));
+    let _ = ereport(LOG).errmsg(msg).finish(ErrorLocation::new(
+        file!(),
+        line!() as i32,
+        "shm_mq_stall_report",
+    ));
 }
 
 /// LOG channel for layered wait sites' stall reports (the Gather leader wait
 /// lives in execmain, which has no elog dependency).
 pub fn log_stall_report(msg: String) {
-    let _ = ereport(LOG)
-        .errmsg(msg)
-        .finish(ErrorLocation::new(file!(), line!() as i32, "mq_stall_report"));
+    let _ = ereport(LOG).errmsg(msg).finish(ErrorLocation::new(
+        file!(),
+        line!() as i32,
+        "mq_stall_report",
+    ));
 }
 
 /// Default "the caller left the park loop" gap: four recheck periods.
@@ -323,7 +334,11 @@ impl ParkStallClock {
     }
 
     pub fn with_params(detector: StallDetector, gap_ms: i64) -> Self {
-        ParkStallClock { detector, last_entry_ms: None, gap_ms }
+        ParkStallClock {
+            detector,
+            last_entry_ms: None,
+            gap_ms,
+        }
     }
 
     /// Call at the top of every park quantum. Re-arms the episode when the
@@ -377,7 +392,10 @@ mod stall_tests {
                 reports += 1;
             }
         }
-        assert_eq!(reports, 0, "the defect: a per-quantum detector is structurally silent");
+        assert_eq!(
+            reports, 0,
+            "the defect: a per-quantum detector is structurally silent"
+        );
         assert_eq!(now, 900_000);
     }
 
@@ -391,8 +409,14 @@ mod stall_tests {
         let mut now = 0i64;
         for _ in 0..900 {
             clock.enter(now);
-            let timeout = clock.detector().next_timeout_ms(now).expect("a bounded sleep");
-            assert!(timeout <= 1_000, "the recheck cadence must still cap every sleep");
+            let timeout = clock
+                .detector()
+                .next_timeout_ms(now)
+                .expect("a bounded sleep");
+            assert!(
+                timeout <= 1_000,
+                "the recheck cadence must still cap every sleep"
+            );
             now += timeout;
             if let Some(waited) = clock.note_timeout(now) {
                 reports.push(waited);

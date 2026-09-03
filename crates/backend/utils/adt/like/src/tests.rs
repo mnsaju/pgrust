@@ -80,7 +80,11 @@ fn like_escapes() {
     assert!(!textlike(b"abc", b"abc\\", C).unwrap());
     for p in ["\\", "%\\", "ab%\\"] {
         let err = textlike(b"abc", p.as_bytes(), C).unwrap_err();
-        assert_eq!(err.sqlstate(), ERRCODE_INVALID_ESCAPE_SEQUENCE, "pattern {p:?}");
+        assert_eq!(
+            err.sqlstate(),
+            ERRCODE_INVALID_ESCAPE_SEQUENCE,
+            "pattern {p:?}"
+        );
         assert!(err.message().contains("must not end with escape character"));
     }
 }
@@ -226,7 +230,11 @@ fn mb_encoding_arm_is_clean_feature_error() {
     utf8();
     let err = r.unwrap_err();
     assert_eq!(err.sqlstate(), ::types_error::ERRCODE_FEATURE_NOT_SUPPORTED);
-    assert!(err.message().contains("not yet implemented"), "{}", err.message());
+    assert!(
+        err.message().contains("not yet implemented"),
+        "{}",
+        err.message()
+    );
 }
 
 #[test]
@@ -247,9 +255,7 @@ fn fc_wrappers_and_oids() {
     unsafe { fcinfo.set_result_mcx(ctx.mcx()) };
     fcinfo.set_arg(0, datum::Datum::from_usize(s.as_ptr() as usize));
     fcinfo.set_arg(1, datum::Datum::from_usize(p.as_ptr() as usize));
-    assert!(!builtins::fc_textlike(None, &mut fcinfo)
-        .unwrap()
-        .as_bool());
+    assert!(!builtins::fc_textlike(None, &mut fcinfo).unwrap().as_bool());
 
     let mut flinfo = types_fmgr::FmgrInfo::new(builtins::fc_texticlike, 1633, 2, true, false);
     assert!(builtins::fc_texticlike(Some(&mut flinfo), &mut fcinfo)
@@ -322,7 +328,9 @@ fn install_collation_stub() {
                     Some("en_US.ISO8859-1"),
                     None,
                 ),
-                COLL_BUILTIN_CUTF8 => (pg_locale::COLLPROVIDER_BUILTIN, None, None, Some("C.UTF-8")),
+                COLL_BUILTIN_CUTF8 => {
+                    (pg_locale::COLLPROVIDER_BUILTIN, None, None, Some("C.UTF-8"))
+                }
                 _ => return Ok(None),
             };
             Ok(Some(syscache_seams::PgCollationLocaleRow {
@@ -357,7 +365,14 @@ fn ilike_non_c_ctype_folds() {
         ("Wörld", "w_rld", true),
     ] {
         assert_eq!(
-            texticlike(mcx, s.as_bytes(), p.as_bytes(), COLL_BUILTIN_CUTF8, &mut scratch).unwrap(),
+            texticlike(
+                mcx,
+                s.as_bytes(),
+                p.as_bytes(),
+                COLL_BUILTIN_CUTF8,
+                &mut scratch
+            )
+            .unwrap(),
             want,
             "{s:?} ILIKE {p:?}"
         );

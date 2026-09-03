@@ -23,16 +23,14 @@ fn install() {
                             defnamespace: None,
                             defname: Some("n_distinct"),
                             arg: Some(arg),
-                            defaction:
-                                ::types_nodes::parsenodes::DefElemAction::DEFELEM_UNSPEC,
+                            defaction: ::types_nodes::parsenodes::DefElemAction::DEFELEM_UNSPEC,
                             location: -1,
                         },
                     )?;
                     let list = NodeList::make1(mcx, def)?;
-                    let img = reloptions::transformRelOptions(
-                        mcx, None, &list, None, &[], false, false,
-                    )?
-                    .expect("options image");
+                    let img =
+                        reloptions::transformRelOptions(mcx, None, &list, None, &[], false, false)?
+                            .expect("options image");
                     Some(Some(Datum::from_usize(img.leak().as_ptr() as usize)))
                 }
                 2 => Some(None),

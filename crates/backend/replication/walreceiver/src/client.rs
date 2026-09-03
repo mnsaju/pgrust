@@ -8,8 +8,8 @@ use types_error::{
     ERRCODE_SYNTAX_ERROR, ERROR,
 };
 
-pub use pgclient::{parse_conninfo, CopyData, ExecStatus, PgConn, QueryResult};
 use pgclient::{opt, os_user_name, WaitEvents};
+pub use pgclient::{parse_conninfo, CopyData, ExecStatus, PgConn, QueryResult};
 
 const WAIT_EVENT_LIBPQWALRECEIVER_CONNECT: u32 = 0x0600_0000 | 3;
 const WAIT_EVENT_LIBPQWALRECEIVER_RECEIVE: u32 = 0x0600_0000 | 4;
@@ -81,7 +81,7 @@ pub fn connect_extended(
     debug_assert!(replication || !logical);
     let opts = check_conninfo(conninfo)?;
 
-    if must_use_password && opt(&opts, "password").map_or(true, |p| p.is_empty()) {
+    if must_use_password && opt(&opts, "password").is_none_or(|p| p.is_empty()) {
         return throw(
             ereport(ERROR)
                 .errcode(types_error::ERRCODE_S_R_E_PROHIBITED_SQL_STATEMENT_ATTEMPTED)
@@ -91,18 +91,25 @@ pub fn connect_extended(
         );
     }
 
-    let user = opt(&opts, "user").map(|s| s.to_string()).unwrap_or_else(os_user_name);
-    let appname = opt(&opts, "application_name").unwrap_or(appname).to_string();
+    let user = opt(&opts, "user")
+        .map(|s| s.to_string())
+        .unwrap_or_else(os_user_name);
+    let appname = opt(&opts, "application_name")
+        .unwrap_or(appname)
+        .to_string();
     let options = opt(&opts, "options").unwrap_or("").to_string();
     let dbname = opt(&opts, "dbname").unwrap_or("").to_string();
 
-    let database: &str = if replication && !logical { "replication" } else { dbname.as_str() };
+    let database: &str = if replication && !logical {
+        "replication"
+    } else {
+        dbname.as_str()
+    };
     let forced_options;
     let options_val: &str = if logical {
         // Force unambiguous output formats on the publisher (matches pg_dump).
-        forced_options = format!(
-            "{options} -c datestyle=ISO -c intervalstyle=postgres -c extra_float_digits=3"
-        );
+        forced_options =
+            format!("{options} -c datestyle=ISO -c intervalstyle=postgres -c extra_float_digits=3");
         forced_options.as_str()
     } else {
         options.as_str()
@@ -204,23 +211,30 @@ pub fn start_streaming(
     match res.status {
         ExecStatus::CommandOk => Ok(false),
         ExecStatus::CopyBoth => Ok(true),
-        _ => throw(ereport(ERROR)
-            .errcode(ERRCODE_PROTOCOL_VIOLATION)
-            .errmsg(format!("could not start WAL streaming: {}", pchomp(&res.err)))
-            .finish(loc("libpqrcv_startstreaming"))),
+        _ => throw(
+            ereport(ERROR)
+                .errcode(ERRCODE_PROTOCOL_VIOLATION)
+                .errmsg(format!(
+                    "could not start WAL streaming: {}",
+                    pchomp(&res.err)
+                ))
+                .finish(loc("libpqrcv_startstreaming")),
+        ),
     }
 }
 
 /// libpqrcv_endstreaming. Returns the next timeline ID (0 if not reported).
 pub fn end_streaming(conn: &mut PgConn) -> PgResult<TimeLineID> {
     if conn.put_copy_end().is_err() {
-        return throw(ereport(ERROR)
-            .errcode(ERRCODE_CONNECTION_FAILURE)
-            .errmsg(format!(
-                "could not send end-of-streaming message to primary: {}",
-                pchomp(&conn.error_message())
-            ))
-            .finish(loc("libpqrcv_endstreaming")));
+        return throw(
+            ereport(ERROR)
+                .errcode(ERRCODE_CONNECTION_FAILURE)
+                .errmsg(format!(
+                    "could not send end-of-streaming message to primary: {}",
+                    pchomp(&conn.error_message())
+                ))
+                .finish(loc("libpqrcv_endstreaming")),
+        );
     }
 
     let mut next_tli: TimeLineID = 0;
@@ -228,10 +242,12 @@ pub fn end_streaming(conn: &mut PgConn) -> PgResult<TimeLineID> {
     if let Some(r) = &res {
         if r.status == ExecStatus::TuplesOk {
             if r.nfields < 2 || r.rows.len() != 1 {
-                return throw(ereport(ERROR)
-                    .errcode(ERRCODE_PROTOCOL_VIOLATION)
-                    .errmsg("unexpected result set after end-of-streaming")
-                    .finish(loc("libpqrcv_endstreaming")));
+                return throw(
+                    ereport(ERROR)
+                        .errcode(ERRCODE_PROTOCOL_VIOLATION)
+                        .errmsg("unexpected result set after end-of-streaming")
+                        .finish(loc("libpqrcv_endstreaming")),
+                );
             }
             next_tli = text_col(r, 0, 0).trim().parse().unwrap_or(0);
             res = conn.get_result()?;
@@ -240,23 +256,27 @@ pub fn end_streaming(conn: &mut PgConn) -> PgResult<TimeLineID> {
     match &res {
         Some(r) if r.status == ExecStatus::CommandOk => {}
         _ => {
-            return throw(ereport(ERROR)
-                .errcode(ERRCODE_PROTOCOL_VIOLATION)
-                .errmsg(format!(
-                    "error reading result of streaming command: {}",
-                    pchomp(&conn.error_message())
-                ))
-                .finish(loc("libpqrcv_endstreaming")));
+            return throw(
+                ereport(ERROR)
+                    .errcode(ERRCODE_PROTOCOL_VIOLATION)
+                    .errmsg(format!(
+                        "error reading result of streaming command: {}",
+                        pchomp(&conn.error_message())
+                    ))
+                    .finish(loc("libpqrcv_endstreaming")),
+            );
         }
     }
     if conn.get_result()?.is_some() {
-        return throw(ereport(ERROR)
-            .errcode(ERRCODE_PROTOCOL_VIOLATION)
-            .errmsg(format!(
-                "unexpected result after CommandComplete: {}",
-                pchomp(&conn.error_message())
-            ))
-            .finish(loc("libpqrcv_endstreaming")));
+        return throw(
+            ereport(ERROR)
+                .errcode(ERRCODE_PROTOCOL_VIOLATION)
+                .errmsg(format!(
+                    "unexpected result after CommandComplete: {}",
+                    pchomp(&conn.error_message())
+                ))
+                .finish(loc("libpqrcv_endstreaming")),
+        );
     }
     Ok(next_tli)
 }
@@ -268,24 +288,28 @@ pub fn read_timeline_history_file(
 ) -> PgResult<(String, Vec<u8>)> {
     let res = conn.exec(&format!("TIMELINE_HISTORY {tli}"))?;
     if res.status != ExecStatus::TuplesOk {
-        return throw(ereport(ERROR)
-            .errcode(ERRCODE_PROTOCOL_VIOLATION)
-            .errmsg(format!(
-                "could not receive timeline history file from the primary server: {}",
-                pchomp(&res.err)
-            ))
-            .finish(loc("libpqrcv_readtimelinehistoryfile")));
+        return throw(
+            ereport(ERROR)
+                .errcode(ERRCODE_PROTOCOL_VIOLATION)
+                .errmsg(format!(
+                    "could not receive timeline history file from the primary server: {}",
+                    pchomp(&res.err)
+                ))
+                .finish(loc("libpqrcv_readtimelinehistoryfile")),
+        );
     }
     if res.nfields != 2 || res.rows.len() != 1 {
-        return throw(ereport(ERROR)
-            .errcode(ERRCODE_PROTOCOL_VIOLATION)
-            .errmsg("invalid response from primary server")
-            .errdetail(format!(
-                "Expected 1 tuple with 2 fields, got {} tuples with {} fields.",
-                res.rows.len(),
-                res.nfields
-            ))
-            .finish(loc("libpqrcv_readtimelinehistoryfile")));
+        return throw(
+            ereport(ERROR)
+                .errcode(ERRCODE_PROTOCOL_VIOLATION)
+                .errmsg("invalid response from primary server")
+                .errdetail(format!(
+                    "Expected 1 tuple with 2 fields, got {} tuples with {} fields.",
+                    res.rows.len(),
+                    res.nfields
+                ))
+                .finish(loc("libpqrcv_readtimelinehistoryfile")),
+        );
     }
     let fname = text_col(&res, 0, 0);
     let content = res.rows[0][1].clone().unwrap_or_default();
@@ -322,13 +346,15 @@ pub fn receive(conn: &mut PgConn) -> PgResult<(i32, Vec<u8>, pgsocket)> {
                         if conn.connection_bad() {
                             return Ok((-1, Vec::new(), PGINVALID_SOCKET));
                         }
-                        return throw(ereport(ERROR)
-                            .errcode(ERRCODE_PROTOCOL_VIOLATION)
-                            .errmsg(format!(
-                                "unexpected result after CommandComplete: {}",
-                                conn.error_message()
-                            ))
-                            .finish(loc("libpqrcv_receive")));
+                        return throw(
+                            ereport(ERROR)
+                                .errcode(ERRCODE_PROTOCOL_VIOLATION)
+                                .errmsg(format!(
+                                    "unexpected result after CommandComplete: {}",
+                                    conn.error_message()
+                                ))
+                                .finish(loc("libpqrcv_receive")),
+                        );
                     }
                     Ok((-1, Vec::new(), PGINVALID_SOCKET))
                 }
@@ -344,7 +370,10 @@ fn receive_stream_error(err: &str) -> PgResult<(i32, Vec<u8>, pgsocket)> {
     throw(
         ereport(ERROR)
             .errcode(ERRCODE_CONNECTION_FAILURE)
-            .errmsg(format!("could not receive data from WAL stream: {}", pchomp(err)))
+            .errmsg(format!(
+                "could not receive data from WAL stream: {}",
+                pchomp(err)
+            ))
             .finish(loc("libpqrcv_receive")),
     )
 }

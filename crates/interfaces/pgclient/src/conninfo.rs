@@ -180,7 +180,9 @@ pub fn resolve_conninfo(conninfo: &str) -> Result<Vec<(String, String)>, String>
     }
     // connectOptions2: dbname defaults to the user name.
     if opt(&opts, "dbname").is_none() {
-        let user = opt(&opts, "user").map(|s| s.to_string()).unwrap_or_else(super::os_user_name);
+        let user = opt(&opts, "user")
+            .map(|s| s.to_string())
+            .unwrap_or_else(super::os_user_name);
         opts.push(("dbname".to_string(), user));
     }
     Ok(opts)

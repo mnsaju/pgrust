@@ -14,7 +14,7 @@ use ::types_fmgr::{
 
 pub fn fc_boolrecv(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: recv arg0 is the live StringInfo pointer per the recv ABI.
-    let buf = unsafe { fcinfo.arg_stringinfo(0) };
+    let buf = unsafe { &mut *fcinfo.arg_stringinfo(0) };
     Ok(Datum::from_bool(crate::boolrecv(buf)?))
 }
 
@@ -135,14 +135,18 @@ fn bool_agg_common(fcinfo: &mut Fcinfo, inverse: bool) -> PgResult<Datum> {
     let Some(agg_mcx) = (unsafe { fcinfo.agg_context() }) else {
         return Err(bool_non_agg_context());
     };
-    let val = if b.isnull { None } else { Some(b.value.as_bool()) };
+    let val = if b.isnull {
+        None
+    } else {
+        Some(b.value.as_bool())
+    };
     let stp: *mut BoolAggState = if a.isnull {
         if inverse {
             return crate::bool_accum_inv(None, val).map(|_| unreachable!());
         }
         let layout = core::alloc::Layout::new::<BoolAggState>();
-        let raw = ::mcx::Allocator::allocate(&agg_mcx, layout)
-            .map_err(|_| agg_mcx.oom(layout.size()))?;
+        let raw =
+            ::mcx::Allocator::allocate(&agg_mcx, layout).map_err(|_| agg_mcx.oom(layout.size()))?;
         let p: *mut BoolAggState = raw.cast().as_ptr();
         // SAFETY: fresh aggcontext allocation of the exact layout.
         unsafe { p.write(BoolAggState::default()) };
@@ -180,7 +184,11 @@ fn bool_agg_final(fcinfo: &mut Fcinfo, any: bool) -> PgResult<Datum> {
         // SAFETY: a non-null arg0 is the aggcontext-lived state; read-only.
         Some(unsafe { &*(a.value.as_usize() as *const BoolAggState) })
     };
-    let r = if any { crate::bool_anytrue(state) } else { crate::bool_alltrue(state) };
+    let r = if any {
+        crate::bool_anytrue(state)
+    } else {
+        crate::bool_alltrue(state)
+    };
     match r {
         Some(v) => Ok(Datum::from_bool(v)),
         None => {

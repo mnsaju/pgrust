@@ -34,7 +34,7 @@ impl Datum {
     }
 
     pub const fn as_usize(self) -> usize {
-        self.0 as usize
+        self.0
     }
 
     pub const fn from_bool(value: bool) -> Self {

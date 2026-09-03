@@ -49,8 +49,7 @@ pub(crate) fn int_matchsel<'mcx>(
     varrelid: i32,
     estimator_procid: Oid,
 ) -> PgResult<f64> {
-    let Some((vardata, other, _varonleft)) = get_restriction_variable(run, args, varrelid)?
-    else {
+    let Some((vardata, other, _varonleft)) = get_restriction_variable(run, args, varrelid)? else {
         return Ok(DEFAULT_EQ_SEL);
     };
     // Variable must be int[]; query_int-side variables are unsupported.
@@ -139,9 +138,7 @@ fn int_query_opr_selec(
                 let s2 = int_query_opr_selec(items, pos + item.left as i32, lookup)?;
                 s1 + s2 - s1 * s2
             }
-            other => {
-                return Err(PgError::error(format!("unrecognized operator: {other}")).into())
-            }
+            other => return Err(PgError::error(format!("unrecognized operator: {other}")).into()),
         }
     } else {
         return Err(PgError::error(format!(

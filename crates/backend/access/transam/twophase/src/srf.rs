@@ -1,7 +1,9 @@
 use datum::Datum;
 use types_core::{OIDOID, RECORDOID, TEXTOID, TIMESTAMPTZOID, XIDOID};
 use types_error::PgResult;
-use types_fmgr::{byref_result, varlena_result, FmgrBuiltin, FmgrInfo, FunctionCallInfoBaseData as Fcinfo};
+use types_fmgr::{
+    byref_result, varlena_result, FmgrBuiltin, FmgrInfo, FunctionCallInfoBaseData as Fcinfo,
+};
 
 use crate::finish::prepared_xact_rows;
 

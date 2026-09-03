@@ -1,7 +1,7 @@
 use mcx::Mcx;
 use types_core::{BlockNumber, Oid};
 use types_error::PgResult;
-use types_rel::{Relation, LOCKMODE};
+use types_rel::{RdOpcoptions, Relation, LOCKMODE};
 
 seam_core::seam!(
     pub fn index_open<'mcx>(
@@ -44,7 +44,7 @@ seam_core::seam!(
     // fmgr, both above the AM layer).
     pub fn relation_get_index_att_options(
         rel: &Relation<'_>,
-    ) -> PgResult<std::rc::Rc<[Option<std::boxed::Box<[u8]>>]>>
+    ) -> PgResult<std::rc::Rc<RdOpcoptions>>
 );
 
 seam_core::seam!(

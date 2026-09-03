@@ -18,9 +18,7 @@
 //! LL(1), so this recursive-descent parser errors on the same token as
 //! bison's automaton, with the scanner's `yytext` in the detail.
 
-use types_error::{
-    PgError, PgResult, ERRCODE_INVALID_PARAMETER_VALUE, ERRCODE_SYNTAX_ERROR,
-};
+use types_error::{PgError, PgResult, ERRCODE_INVALID_PARAMETER_VALUE, ERRCODE_SYNTAX_ERROR};
 
 use crate::out::{c_format_g, sig_digits};
 use crate::repr::Seg;
@@ -101,7 +99,8 @@ impl<'a> Lexer<'a> {
 
     fn next(&mut self) -> Tok<'a> {
         let s = self.input;
-        while self.pos < s.len() && matches!(s[self.pos], b' ' | b'\t' | b'\n' | b'\r' | 0x0c | 0x0b)
+        while self.pos < s.len()
+            && matches!(s[self.pos], b' ' | b'\t' | b'\n' | b'\r' | 0x0c | 0x0b)
         {
             self.pos += 1;
         }
@@ -116,7 +115,11 @@ impl<'a> Lexer<'a> {
 
         // {range} = (\.\.)(\.)?
         if s[p] == b'.' && p + 1 < s.len() && s[p + 1] == b'.' {
-            let len = if p + 2 < s.len() && s[p + 2] == b'.' { 3 } else { 2 };
+            let len = if p + 2 < s.len() && s[p + 2] == b'.' {
+                3
+            } else {
+                2
+            };
             self.pos = p + len;
             return Tok {
                 kind: Kind::Range,
@@ -264,10 +267,8 @@ pub fn parse_seg(input: &[u8]) -> PgResult<Seg> {
             p.expect(Kind::Eof)?;
             let lower = b1.val - dev.val;
             let upper = b1.val + dev.val;
-            let l_sigd = sig_digits(c_format_g(lower as f64).as_bytes())
-                .max(b1.sigd.max(dev.sigd));
-            let u_sigd = sig_digits(c_format_g(upper as f64).as_bytes())
-                .max(b1.sigd.max(dev.sigd));
+            let l_sigd = sig_digits(c_format_g(lower as f64).as_bytes()).max(b1.sigd.max(dev.sigd));
+            let u_sigd = sig_digits(c_format_g(upper as f64).as_bytes()).max(b1.sigd.max(dev.sigd));
             Ok(Seg {
                 lower,
                 upper,
@@ -392,10 +393,7 @@ mod tests {
             err(""),
             "bad seg representation|syntax error at end of input"
         );
-        assert_eq!(
-            err("3 .. 2"),
-            "swapped boundaries: 3 is greater than 2|"
-        );
+        assert_eq!(err("3 .. 2"), "swapped boundaries: 3 is greater than 2|");
         // range error from float4in_internal
         let e = parse_seg(b"1e39").unwrap_err();
         assert_eq!(e.message(), "\"1e39\" is out of range for type real");

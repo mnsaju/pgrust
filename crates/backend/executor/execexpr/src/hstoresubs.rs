@@ -1,7 +1,7 @@
 //! hstore_subs.c exec half: single text subscript, fetch/assign bodies
 //! reached through hstore_subs_seams (contrib crate installs them).
 
-use datum::{Datum, NullableDatum};
+use datum::NullableDatum;
 use types_error::{PgError, PgResult, ERRCODE_NULL_VALUE_NOT_ALLOWED};
 
 use crate::arrayops::{res_mcx, ResMcx};
@@ -37,5 +37,8 @@ pub fn assign(st: &mut HstoreSbsState, cur: NullableDatum) -> PgResult<NullableD
     }
     let mcx = res_mcx(&st.resmcx);
     let d = hstore_subs_seams::hstore_subs_assign::call(mcx, cur, st.subscript.value, st.replace)?;
-    Ok(NullableDatum { value: d, isnull: false })
+    Ok(NullableDatum {
+        value: d,
+        isnull: false,
+    })
 }

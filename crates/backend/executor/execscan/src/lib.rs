@@ -10,7 +10,7 @@ extern crate alloc;
 
 use alloc::rc::Rc;
 
-use ::execexpr::{exec_build_projection_info, exec_project, exec_qual, EvalSlots, ExprState};
+use ::execexpr::{exec_qual, EvalSlots, ExprState};
 use ::executils::{EStateData, EcxtId, ExecSlotId};
 use ::mcx::{Mcx, PgBox};
 use ::tableam::TableScanDesc;
@@ -53,11 +53,7 @@ pub trait ScanNode<'mcx> {
     /// Access method; stores into `ss_ScanTupleSlot`, false = end of scan.
     fn scan_next(&mut self, estate: &mut EStateData<'mcx>) -> PgResult<bool>;
     /// C `ExecScanRecheckMtd` over an EPQ test tuple already in `slot`.
-    fn epq_recheck(
-        &mut self,
-        _estate: &mut EStateData<'mcx>,
-        _slot: ExecSlotId,
-    ) -> PgResult<bool> {
+    fn epq_recheck(&mut self, _estate: &mut EStateData<'mcx>, _slot: ExecSlotId) -> PgResult<bool> {
         panic!(
             "ExecScanFetch (execScan.h): EPQ recheck for {} not ported",
             core::any::type_name::<Self>()
@@ -98,7 +94,10 @@ fn epq_fetch<'mcx, N: ScanNode<'mcx>>(
     );
     let idx = (scanrelid - 1) as usize;
     let mcx = estate.es_query_cxt;
-    let subs = estate.es_epq.as_mut().expect("EPQ scan variant under an installed EPQ state");
+    let subs = estate
+        .es_epq
+        .as_mut()
+        .expect("EPQ scan variant under an installed EPQ state");
     if subs.relsubs_done[idx] {
         let ss_slot = node.ss_mut().ss_ScanTupleSlot;
         exectuples::exec_clear_tuple(estate.slot_mut(ss_slot), mcx);
@@ -117,7 +116,9 @@ fn epq_fetch<'mcx, N: ScanNode<'mcx>>(
     }
     if let Some(rm) = subs.relsubs_rowmark[idx] {
         subs.relsubs_done[idx] = true;
-        let orig = subs.origslot.expect("EPQ rowmark fetch requires EvalPlanQualSetSlot");
+        let orig = subs
+            .origslot
+            .expect("EPQ rowmark fetch requires EvalPlanQualSetSlot");
         return epq_fetch_row_mark(node, estate, rm, orig);
     }
     // No test tuple and no rowmark: a plain rescannable rel falls through.
@@ -139,11 +140,8 @@ fn epq_fetch_row_mark<'mcx, N: ScanNode<'mcx>>(
     let mut isnull = false;
     match rm {
         ::executils::EpqRowMarkFetch::Reference { ctid_attno } => {
-            let datum = exectuples::slot_getattr(
-                estate.slot_mut(orig),
-                ctid_attno as i32,
-                &mut isnull,
-            );
+            let datum =
+                exectuples::slot_getattr(estate.slot_mut(orig), ctid_attno as i32, &mut isnull);
             if isnull {
                 exectuples::exec_clear_tuple(estate.slot_mut(ss_slot), mcx);
                 return Ok(EpqFetch::Empty);
@@ -156,7 +154,11 @@ fn epq_fetch_row_mark<'mcx, N: ScanNode<'mcx>>(
                 types_snapshot::SNAPSHOT_ANY,
             )));
             let found = {
-                let EStateData { es_relations, es_tupleTable, .. } = estate;
+                let EStateData {
+                    es_relations,
+                    es_tupleTable,
+                    ..
+                } = estate;
                 let rel = es_relations[(scanrelid - 1) as usize]
                     .as_ref()
                     .expect("rowmark relation opened at InitPlan");
@@ -175,11 +177,8 @@ fn epq_fetch_row_mark<'mcx, N: ScanNode<'mcx>>(
             }
         }
         ::executils::EpqRowMarkFetch::Copy { whole_attno } => {
-            let datum = exectuples::slot_getattr(
-                estate.slot_mut(orig),
-                whole_attno as i32,
-                &mut isnull,
-            );
+            let datum =
+                exectuples::slot_getattr(estate.slot_mut(orig), whole_attno as i32, &mut isnull);
             if isnull {
                 exectuples::exec_clear_tuple(estate.slot_mut(ss_slot), mcx);
                 return Ok(EpqFetch::Empty);
@@ -193,10 +192,8 @@ fn epq_fetch_row_mark<'mcx, N: ScanNode<'mcx>>(
             // valid in the origslot for this row.
             let hdr = unsafe {
                 if !types_tuple::varatt::varatt_is_4b_u(src) {
-                    let image = core::slice::from_raw_parts(
-                        src,
-                        types_tuple::varatt::varsize_any(src),
-                    );
+                    let image =
+                        core::slice::from_raw_parts(src, types_tuple::varatt::varsize_any(src));
                     let flat = ::detoast_seams::detoast_attr::call(mcx, image)?;
                     let p = flat.as_ptr();
                     core::mem::forget(flat);
@@ -207,9 +204,8 @@ fn epq_fetch_row_mark<'mcx, N: ScanNode<'mcx>>(
             };
             // SAFETY: hdr is a plain 4B composite image readable for its
             // datum length.
-            let t_len = unsafe {
-                (*(hdr as *const types_tuple::htup::HeapTupleHeaderData)).datum_length()
-            };
+            let t_len =
+                unsafe { (*(hdr as *const types_tuple::htup::HeapTupleHeaderData)).datum_length() };
             let mut tid = types_tuple::ItemPointerData::default();
             types_tuple::itemptr::ItemPointerSetInvalid(&mut tid);
             // SAFETY: image bounds established above.
@@ -314,7 +310,10 @@ fn exec_scan_impl<'mcx, N: ScanNode<'mcx>, const QUAL: bool, const PROJ: bool, c
                 let per_tuple = estate.ecxt(ss.ps_ExprContext).per_tuple_mcx();
                 // SAFETY: reset-only context, outlives the plan.
                 unsafe {
-                    ss.qual.as_deref_mut().unwrap().arm_result_mcx_raw(per_tuple);
+                    ss.qual
+                        .as_deref_mut()
+                        .unwrap()
+                        .arm_result_mcx_raw(per_tuple);
                 }
                 let mut slots = EvalSlots {
                     scan: Some(estate.slot_mut(scan_id)),
@@ -362,8 +361,17 @@ fn exec_scan_impl<'mcx, N: ScanNode<'mcx>, const QUAL: bool, const PROJ: bool, c
                 }
                 let mcx = estate.es_query_cxt;
                 let (scan_slot, result_slot) = slot_pair(estate, scan_id, result_id);
-                let mut slots = EvalSlots { scan: Some(scan_slot), inner: None, outer: None };
-                ::execexpr::exec_project_prearmed(&mut proj.pi_state, &mut slots, result_slot, mcx)?;
+                let mut slots = EvalSlots {
+                    scan: Some(scan_slot),
+                    inner: None,
+                    outer: None,
+                };
+                ::execexpr::exec_project_prearmed(
+                    &mut proj.pi_state,
+                    &mut slots,
+                    result_slot,
+                    mcx,
+                )?;
                 return Ok(Some(result_id));
             }
             return Ok(Some(scan_id));
@@ -436,7 +444,10 @@ pub fn lane_scan_accept<'mcx>(
             let per_tuple = estate.ecxt(ss.ps_ExprContext).per_tuple_mcx();
             // SAFETY: reset-only context, outlives the plan.
             unsafe {
-                ss.qual.as_deref_mut().unwrap().arm_result_mcx_raw(per_tuple);
+                ss.qual
+                    .as_deref_mut()
+                    .unwrap()
+                    .arm_result_mcx_raw(per_tuple);
             }
             let mut slots = EvalSlots {
                 scan: Some(estate.slot_mut(scan_id)),
@@ -479,7 +490,11 @@ pub fn lane_scan_accept<'mcx>(
     }
     let mcx = estate.es_query_cxt;
     let (scan_slot, result_slot) = slot_pair(estate, scan_id, result_id);
-    let mut slots = EvalSlots { scan: Some(scan_slot), inner: None, outer: None };
+    let mut slots = EvalSlots {
+        scan: Some(scan_slot),
+        inner: None,
+        outer: None,
+    };
     ::execexpr::exec_project_prearmed(&mut proj.pi_state, &mut slots, result_slot, mcx)?;
     Ok(Some(result_id))
 }
@@ -506,9 +521,15 @@ pub fn exec_scan_rescan<'mcx>(ss: &mut ScanState<'mcx>, estate: &mut EStateData<
     let mcx = estate.es_query_cxt;
     exectuples::exec_clear_tuple(estate.slot_mut(ss.ss_ScanTupleSlot), mcx);
     if estate.es_epq_active {
-        assert!(ss.scanrelid > 0, "ExecScanReScan (execScan.c): scanrelid == 0 EPQ reset not ported");
+        assert!(
+            ss.scanrelid > 0,
+            "ExecScanReScan (execScan.c): scanrelid == 0 EPQ reset not ported"
+        );
         let idx = (ss.scanrelid - 1) as usize;
-        let subs = estate.es_epq.as_mut().expect("EPQ rescan under an installed EPQ state");
+        let subs = estate
+            .es_epq
+            .as_mut()
+            .expect("EPQ rescan under an installed EPQ state");
         subs.relsubs_done[idx] = subs.relsubs_blocked[idx];
     }
 }
@@ -578,7 +599,10 @@ pub fn exec_conditional_assign_projection_info_parent<'mcx>(
         executils::with_subplan_compile_env_parent(estate, parent_subplan_tlist, |env| {
             execexpr::exec_build_projection_info_subplans(mcx, tlist, Some(input_desc), params, env)
         })?;
-    Ok(Some(ProjectionInfo { pi_state, pi_result_slot: result_slot }))
+    Ok(Some(ProjectionInfo {
+        pi_state,
+        pi_result_slot: result_slot,
+    }))
 }
 
 fn tlist_matches_tupdesc(tlist: &NodeList<'_>, varno: Index, tupdesc: &TupleDescData<'_>) -> bool {
@@ -587,7 +611,9 @@ fn tlist_matches_tupdesc(tlist: &NodeList<'_>, varno: Index, tupdesc: &TupleDesc
         let Some(item) = items.next() else {
             return false;
         };
-        let tle = item.as_target_entry().expect("targetlist member must be a TargetEntry");
+        let tle = item
+            .as_target_entry()
+            .expect("targetlist member must be a TargetEntry");
         let Some(var) = tle.expr.as_var() else {
             return false;
         };
@@ -600,9 +626,7 @@ fn tlist_matches_tupdesc(tlist: &NodeList<'_>, varno: Index, tupdesc: &TupleDesc
         if att.attisdropped || att.atthasmissing {
             return false;
         }
-        if var.vartype != att.atttypid
-            || (var.vartypmod != att.atttypmod && var.vartypmod != -1)
-        {
+        if var.vartype != att.atttypid || (var.vartypmod != att.atttypmod && var.vartypmod != -1) {
             return false;
         }
     }
@@ -667,7 +691,10 @@ fn exec_type_from_tl_internal<'mcx>(
     tlist: &NodeList<'_>,
     skipjunk: bool,
 ) -> PgResult<Rc<TupleDescData<'mcx>>> {
-    let len = tlist.iter().filter(|&n| !(skipjunk && tle(n).resjunk)).count();
+    let len = tlist
+        .iter()
+        .filter(|&n| !(skipjunk && tle(n).resjunk))
+        .count();
     let mut desc = tupdesc::CreateTemplateTupleDesc(mcx, len as i32)?;
     let mut cur_resno: i16 = 1;
     for node in tlist.iter() {
@@ -720,7 +747,9 @@ pub fn expr_typmod(node: Node<'_>) -> i32 {
         // C exprTypmod CaseExpr: typmod only when every result agrees.
         NodeTag::T_CaseExpr => {
             let c = node.as_case_expr().unwrap();
-            let Some(defresult) = c.defresult else { return -1 };
+            let Some(defresult) = c.defresult else {
+                return -1;
+            };
             if execexpr::expr_type(defresult) != c.casetype {
                 return -1;
             }
@@ -729,8 +758,11 @@ pub fn expr_typmod(node: Node<'_>) -> i32 {
                 return -1;
             }
             for w in &c.args {
-                let result =
-                    w.as_case_when().expect("CaseWhen").result.expect("CaseWhen.result");
+                let result = w
+                    .as_case_when()
+                    .expect("CaseWhen")
+                    .result
+                    .expect("CaseWhen.result");
                 if execexpr::expr_type(result) != c.casetype || expr_typmod(result) != typmod {
                     return -1;
                 }

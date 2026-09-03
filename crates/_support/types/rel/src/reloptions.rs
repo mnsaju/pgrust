@@ -196,6 +196,11 @@ impl PgrcolumnarOptions {
     }
 }
 
+// Pgrcolumnar's options dwarf the other variants (2576 vs <=132 bytes), but
+// RdOptions is deliberately Copy (cheap for every other variant, read rarely
+// enough that the columnar case's size doesn't matter) — boxing the large
+// variant would require giving that up everywhere this enum flows.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum RdOptions {
     Std(StdRdOptions),
@@ -246,8 +251,12 @@ impl RdOptions {
             RdOptions::Hash(o) => Some(o.fillfactor),
             RdOptions::Gist(o) => Some(o.fillfactor),
             RdOptions::SpGist(o) => Some(o.fillfactor),
-            RdOptions::View(_) | RdOptions::Gin(_) | RdOptions::Brin(_)
-            | RdOptions::Pgrcolumnar(_) | RdOptions::Hnsw(_) | RdOptions::Bloom(_) => None,
+            RdOptions::View(_)
+            | RdOptions::Gin(_)
+            | RdOptions::Brin(_)
+            | RdOptions::Pgrcolumnar(_)
+            | RdOptions::Hnsw(_)
+            | RdOptions::Bloom(_) => None,
         }
     }
 

@@ -82,11 +82,7 @@ fn leaked_desc(atts: &[CompactAttribute]) -> Rc<TupleDescData<'static>> {
 
 // heap_fill_tuple layout: fixed attrs aligned; short varlenas + toast
 // pointers packed; 4B varlenas aligned over ZEROED padding; cstrings packed.
-fn build_row(
-    r: &mut Rng,
-    atts: &[CompactAttribute],
-    buf: &mut Vec<u8>,
-) -> (u32, Vec<bool>, bool) {
+fn build_row(r: &mut Rng, atts: &[CompactAttribute], buf: &mut Vec<u8>) -> (u32, Vec<bool>, bool) {
     let natts = atts.len();
     let row_nullable = r.below(3) == 0;
     let nulls: Vec<bool> = (0..natts)
@@ -220,7 +216,11 @@ fn fuzz_parity_vs_interpreter() {
                 let mut sv = vec![Datum::null(); ncols * STRIDE_CELLS];
                 unsafe { k.soa(tup.getstruct(), sv.as_mut_ptr(), STRIDE_CELLS * 8) };
                 for c in 0..ncols {
-                    assert_eq!(sv[c * STRIDE_CELLS].as_usize(), iv[c].as_usize(), "soa col {c}");
+                    assert_eq!(
+                        sv[c * STRIDE_CELLS].as_usize(),
+                        iv[c].as_usize(),
+                        "soa col {c}"
+                    );
                 }
                 assert_eq!(k.end_off() as usize, prefix_end(&atts, ncols));
             }
@@ -249,8 +249,16 @@ fn bytemuck_copy(dst: &mut [u64], src: &[u8]) {
 // Install/drop far past the 512KiB cap: only whole-chunk reuse can pass.
 #[test]
 fn arena_reuses_chunks() {
-    let atts: Vec<CompactAttribute> =
-        (0..8).map(|i| attr(if i % 2 == 0 { 4 } else { 8 }, true, if i % 2 == 0 { 4 } else { 8 }, false)).collect();
+    let atts: Vec<CompactAttribute> = (0..8)
+        .map(|i| {
+            attr(
+                if i % 2 == 0 { 4 } else { 8 },
+                true,
+                if i % 2 == 0 { 4 } else { 8 },
+                false,
+            )
+        })
+        .collect();
     let desc = leaked_desc(&atts);
     for _ in 0..20_000 {
         let k = install(&desc, 8).expect("arena must reuse retired chunks");

@@ -131,12 +131,9 @@ fn slot_reuse_cannot_hijack_new_owner() {
     });
     let fresh = rx2.recv().unwrap();
     assert_eq!(unpark(stale), Unparked::Stale);
-    // Only the fresh handle wakes B.
-    while unpark(fresh) == Unparked::Pending {
-        // B may not have parked yet; Pending is already sufficient to
-        // satisfy its next park.
-        break;
-    }
+    // Only the fresh handle wakes B. B may not have parked yet; Pending is
+    // already sufficient to satisfy its next park, so a single call suffices.
+    let _ = unpark(fresh);
     t2.join().unwrap();
 }
 
@@ -356,7 +353,10 @@ fn io_wait_with_cross_thread_completion() {
         },
     );
     assert!(
-        matches!(outcome, io::IoWaitOutcome::Completed | io::IoWaitOutcome::Reaped),
+        matches!(
+            outcome,
+            io::IoWaitOutcome::Completed | io::IoWaitOutcome::Reaped
+        ),
         "unexpected outcome {outcome:?}"
     );
     completer.join().unwrap();
@@ -386,7 +386,10 @@ fn io_wait_with_spurious_notify_retests_and_reparks() {
         || panic!("reap unreachable"),
     );
     assert_eq!(outcome, io::IoWaitOutcome::Completed);
-    assert!(parks.load(Ordering::Relaxed) >= 2, "spurious notify must re-park");
+    assert!(
+        parks.load(Ordering::Relaxed) >= 2,
+        "spurious notify must re-park"
+    );
 }
 
 #[test]

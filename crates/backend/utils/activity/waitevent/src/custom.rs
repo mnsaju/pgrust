@@ -90,11 +90,13 @@ fn key_buf(name: &str) -> [u8; NAMEDATALEN] {
 }
 
 pub fn WaitEventCustomShmemSize() -> usize {
-    dynahash::hash_estimate_size(WAIT_EVENT_CUSTOM_HASH_MAX_SIZE as i64, size_of::<EntryByInfo>())
-        + dynahash::hash_estimate_size(
-            WAIT_EVENT_CUSTOM_HASH_MAX_SIZE as i64,
-            size_of::<EntryByName>(),
-        )
+    dynahash::hash_estimate_size(
+        WAIT_EVENT_CUSTOM_HASH_MAX_SIZE as i64,
+        size_of::<EntryByInfo>(),
+    ) + dynahash::hash_estimate_size(
+        WAIT_EVENT_CUSTOM_HASH_MAX_SIZE as i64,
+        size_of::<EntryByName>(),
+    )
 }
 
 pub fn WaitEventCustomShmemInit() -> PgResult<()> {
@@ -102,9 +104,11 @@ pub fn WaitEventCustomShmemInit() -> PgResult<()> {
         return Ok(());
     }
 
-    let mut by_info_ctl = HASHCTL::default();
-    by_info_ctl.keysize = size_of::<u32>();
-    by_info_ctl.entrysize = size_of::<EntryByInfo>();
+    let by_info_ctl = HASHCTL {
+        keysize: size_of::<u32>(),
+        entrysize: size_of::<EntryByInfo>(),
+        ..Default::default()
+    };
     // HASH_FIXED_SIZE forbids growth: preallocate at max (C grows 16->128).
     let by_info = hash_create(
         "WaitEventCustom hash by wait event information",
@@ -113,9 +117,11 @@ pub fn WaitEventCustomShmemInit() -> PgResult<()> {
         HASH_ELEM | HASH_BLOBS | HASH_SHARED_MEM | HASH_FIXED_SIZE,
     )?;
 
-    let mut by_name_ctl = HASHCTL::default();
-    by_name_ctl.keysize = NAMEDATALEN;
-    by_name_ctl.entrysize = size_of::<EntryByName>();
+    let by_name_ctl = HASHCTL {
+        keysize: NAMEDATALEN,
+        entrysize: size_of::<EntryByName>(),
+        ..Default::default()
+    };
     let by_name = hash_create(
         "WaitEventCustom hash by name",
         WAIT_EVENT_CUSTOM_HASH_MAX_SIZE as i64,
@@ -185,8 +191,12 @@ pub fn WaitEventCustomNew(class_id: u32, wait_event_name: &str) -> PgResult<u32>
     let tables = shared();
     let key = key_buf(wait_event_name);
 
-    LWLockAcquire(main_lock(WAIT_EVENT_CUSTOM_LOCK), LW_SHARED, g::MyProcNumber())?;
-    let found = hash_search(tables.by_name, key.as_ptr(), HASH_FIND, None)?;
+    LWLockAcquire(
+        main_lock(WAIT_EVENT_CUSTOM_LOCK),
+        LW_SHARED,
+        g::MyProcNumber(),
+    )?;
+    let found = unsafe { hash_search(tables.by_name, key.as_ptr(), HASH_FIND, None)? };
     LWLockRelease(main_lock(WAIT_EVENT_CUSTOM_LOCK))?;
     if !found.is_null() {
         // SAFETY: HASH_FIND returns a live, never-removed EntryByName.
@@ -194,8 +204,12 @@ pub fn WaitEventCustomNew(class_id: u32, wait_event_name: &str) -> PgResult<u32>
         return check_same_class(info, class_id, wait_event_name);
     }
 
-    LWLockAcquire(main_lock(WAIT_EVENT_CUSTOM_LOCK), LW_EXCLUSIVE, g::MyProcNumber())?;
-    let found = hash_search(tables.by_name, key.as_ptr(), HASH_FIND, None)?;
+    LWLockAcquire(
+        main_lock(WAIT_EVENT_CUSTOM_LOCK),
+        LW_EXCLUSIVE,
+        g::MyProcNumber(),
+    )?;
+    let found = unsafe { hash_search(tables.by_name, key.as_ptr(), HASH_FIND, None)? };
     if !found.is_null() {
         // SAFETY: as above.
         let info = unsafe { (*(found as *const EntryByName)).wait_event_info };
@@ -222,18 +236,27 @@ pub fn WaitEventCustomNew(class_id: u32, wait_event_name: &str) -> PgResult<u32>
     let wait_event_info = class_id | (next_id as u32);
     let mut found_flag = false;
 
-    let entry_by_info = hash_search(
-        tables.by_info,
-        &wait_event_info as *const u32 as *const u8,
-        HASH_ENTER,
-        Some(&mut found_flag),
-    )?;
+    let entry_by_info = unsafe {
+        hash_search(
+            tables.by_info,
+            &wait_event_info as *const u32 as *const u8,
+            HASH_ENTER,
+            Some(&mut found_flag),
+        )?
+    };
     debug_assert!(!found_flag);
     // SAFETY: freshly HASH_ENTER'd EntryByInfo; the key (wait_event_info) is
     // already written by dynahash's keycopy.
     unsafe { (*(entry_by_info as *mut EntryByInfo)).wait_event_name = key };
 
-    let entry_by_name = hash_search(tables.by_name, key.as_ptr(), HASH_ENTER, Some(&mut found_flag))?;
+    let entry_by_name = unsafe {
+        hash_search(
+            tables.by_name,
+            key.as_ptr(),
+            HASH_ENTER,
+            Some(&mut found_flag),
+        )?
+    };
     debug_assert!(!found_flag);
     // SAFETY: freshly HASH_ENTER'd EntryByName; the key (name) is already
     // written by dynahash's keycopy.
@@ -249,14 +272,20 @@ pub fn GetWaitEventCustomIdentifier(wait_event_info: u32) -> &'static str {
     }
 
     let tables = shared();
-    LWLockAcquire(main_lock(WAIT_EVENT_CUSTOM_LOCK), LW_SHARED, g::MyProcNumber())
-        .expect("GetWaitEventCustomIdentifier: lock");
-    let entry = hash_search(
-        tables.by_info,
-        &wait_event_info as *const u32 as *const u8,
-        HASH_FIND,
-        None,
+    LWLockAcquire(
+        main_lock(WAIT_EVENT_CUSTOM_LOCK),
+        LW_SHARED,
+        g::MyProcNumber(),
     )
+    .expect("GetWaitEventCustomIdentifier: lock");
+    let entry = unsafe {
+        hash_search(
+            tables.by_info,
+            &wait_event_info as *const u32 as *const u8,
+            HASH_FIND,
+            None,
+        )
+    }
     .expect("GetWaitEventCustomIdentifier: hash_search");
     LWLockRelease(main_lock(WAIT_EVENT_CUSTOM_LOCK)).expect("GetWaitEventCustomIdentifier: unlock");
 
@@ -277,11 +306,16 @@ fn trim_name(name: &'static [u8; NAMEDATALEN]) -> &'static str {
 // C returns a palloc'd char**; a Vec is the cold-path equivalent.
 pub fn GetWaitEventCustomNames(class_id: u32) -> Vec<String> {
     let tables = shared();
-    LWLockAcquire(main_lock(WAIT_EVENT_CUSTOM_LOCK), LW_SHARED, g::MyProcNumber())
-        .expect("GetWaitEventCustomNames: lock");
+    LWLockAcquire(
+        main_lock(WAIT_EVENT_CUSTOM_LOCK),
+        LW_SHARED,
+        g::MyProcNumber(),
+    )
+    .expect("GetWaitEventCustomNames: lock");
 
     let mut status = HASH_SEQ_STATUS::new();
-    hash_seq_init(&mut status, tables.by_name).expect("GetWaitEventCustomNames: hash_seq_init");
+    unsafe { hash_seq_init(&mut status, tables.by_name) }
+        .expect("GetWaitEventCustomNames: hash_seq_init");
     let mut names = Vec::new();
     loop {
         let entry = hash_seq_search(&mut status).expect("GetWaitEventCustomNames: hash_seq_search");

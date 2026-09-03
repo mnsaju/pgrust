@@ -1,18 +1,20 @@
 use std::sync::atomic::Ordering::Relaxed;
 
 use types_core::{
-    LocalTransactionId, Oid, ProcNumber, TransactionId, VirtualTransactionId, InvalidOid,
-    InvalidLocalTransactionId, InvalidTransactionId, INVALID_PROC_NUMBER,
+    InvalidLocalTransactionId, InvalidOid, InvalidTransactionId, LocalTransactionId, Oid,
+    ProcNumber, TransactionId, VirtualTransactionId, INVALID_PROC_NUMBER,
 };
 use types_error::PgResult;
 use types_storage::lock::{
     ExclusiveLock, LockMethod, ShareLock, ShareUpdateExclusiveLock, DEFAULT_LOCKMETHOD, LOCKMODE,
     LOCKTAG, LOCKTAG_RELATION,
 };
-use types_storage::storage::{Spinlock, SyncCell, PGPROC, FP_LOCK_SLOTS_PER_GROUP};
+use types_storage::storage::{Spinlock, SyncCell, FP_LOCK_SLOTS_PER_GROUP, PGPROC};
 
 use crate::locallock::with_local;
-use crate::shared::{find_lock, find_proclock, LockHashPartitionLock, LockTagHashCode, SetupLockInTable};
+use crate::shared::{
+    find_lock, find_proclock, LockHashPartitionLock, LockTagHashCode, SetupLockInTable,
+};
 
 pub(crate) const FAST_PATH_BITS_PER_SLOT: u32 = 3;
 pub(crate) const FAST_PATH_LOCKNUMBER_OFFSET: LOCKMODE = 1;
@@ -31,6 +33,10 @@ struct FastPathStrongRelationLockData {
     count: [SyncCell<u32>; FAST_PATH_STRONG_LOCK_HASH_PARTITIONS],
 }
 
+// Used only as an array-repeat template ([ZERO_COUNT; N] below), never as a
+// shared value in its own right, so the usual "each use is a fresh instance"
+// interior-mutability pitfall does not apply here.
+#[allow(clippy::declare_interior_mutable_const)]
 const ZERO_COUNT: SyncCell<u32> = SyncCell::new(0);
 
 static FAST_PATH_STRONG_RELATION_LOCKS: FastPathStrongRelationLockData =
@@ -163,8 +169,7 @@ pub(crate) unsafe fn fp_group_conflicts(
 
 pub(crate) fn fast_path_local_can_try(locktag: &LOCKTAG, mode: LOCKMODE) -> bool {
     eligible_for_relation_fast_path(locktag, mode)
-        && local_use_count(fast_path_rel_group(locktag.locktag_field2))
-            < FP_LOCK_SLOTS_PER_GROUP
+        && local_use_count(fast_path_rel_group(locktag.locktag_field2)) < FP_LOCK_SLOTS_PER_GROUP
 }
 
 // The two nominal LWLock types share one C layout; converge them when the
@@ -186,7 +191,9 @@ pub(crate) fn fp_info_lock(proc: &PGPROC) -> &lwlock::LWLock {
     };
     // SAFETY: identical repr(C) layouts, asserted above; both types carry the
     // same atomics/UnsafeCell synchronization contract.
-    unsafe { &*(&proc.fpInfoLock as *const types_storage::storage::LWLock as *const lwlock::LWLock) }
+    unsafe {
+        &*(&proc.fpInfoLock as *const types_storage::storage::LWLock as *const lwlock::LWLock)
+    }
 }
 
 pub(crate) struct FpView<'a> {
@@ -405,9 +412,8 @@ pub(crate) fn FastPathGetRelationLockEntry(
         }
         lwlock::LWLockAcquire(partition_lock, lwlock::LW_EXCLUSIVE, my_procno)?;
         // SAFETY: partition lock held exclusive.
-        proclock = unsafe {
-            SetupLockInTable(lockMethodTable, my_procno, &locktag, hashcode, lockmode)?
-        };
+        proclock =
+            unsafe { SetupLockInTable(lockMethodTable, my_procno, &locktag, hashcode, lockmode)? };
         if proclock.is_null() {
             lwlock::LWLockRelease(partition_lock)?;
             lwlock::LWLockRelease(fp_info_lock(proc))?;
@@ -430,7 +436,10 @@ pub(crate) fn FastPathGetRelationLockEntry(
             let lock = find_lock(&locktag, hashcode)?;
             assert!(!lock.is_null(), "failed to re-find shared lock object");
             proclock = find_proclock(lock, my_procno, hashcode)?;
-            assert!(!proclock.is_null(), "failed to re-find shared proclock object");
+            assert!(
+                !proclock.is_null(),
+                "failed to re-find shared proclock object"
+            );
         }
         lwlock::LWLockRelease(partition_lock)?;
     }
@@ -511,8 +520,8 @@ fn XactLockForVirtualXact(
         }
 
         // If we have no xid, try to find one.
-        if xid == InvalidTransactionId {
-            if twophase_seams::two_phase_get_xid_by_virtual_xid::is_installed() {
+        if xid == InvalidTransactionId
+            && twophase_seams::two_phase_get_xid_by_virtual_xid::is_installed() {
                 let (found, have_more) = twophase_seams::two_phase_get_xid_by_virtual_xid::call(
                     vxid.procNumber,
                     vxid.localTransactionId,
@@ -520,7 +529,6 @@ fn XactLockForVirtualXact(
                 xid = found;
                 more = have_more;
             }
-        }
         if xid == InvalidTransactionId {
             debug_assert!(!more);
             return Ok(true);

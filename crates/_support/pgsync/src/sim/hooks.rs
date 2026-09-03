@@ -179,7 +179,10 @@ pub struct PanicHooks;
 
 impl SchedulerHooks for PanicHooks {
     fn block_on(&self, site: &'static Location<'static>, kind: OpClass) {
-        panic!("pgsync sim hooks stub: block_on({}) at {site}", kind.as_str());
+        panic!(
+            "pgsync sim hooks stub: block_on({}) at {site}",
+            kind.as_str()
+        );
     }
     fn touch(&self, site: &'static Location<'static>, kind: OpClass) {
         panic!("pgsync sim hooks stub: touch({}) at {site}", kind.as_str());

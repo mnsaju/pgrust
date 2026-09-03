@@ -49,7 +49,7 @@ fn pg_case<'mcx>(
         dstsize = needed + 1;
         dst.resize(dstsize, 0);
         needed = worker(mcx, &mut dst, buff, locale)?;
-        debug_assert!(needed + 1 <= dstsize);
+        debug_assert!(needed < dstsize);
     }
     dst.truncate(nul_pos(&dst[..needed]));
     Ok(dst)

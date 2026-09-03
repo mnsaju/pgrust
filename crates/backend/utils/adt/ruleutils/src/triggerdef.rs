@@ -7,7 +7,7 @@ use mcx::{Mcx, MemoryContext};
 use types_core::{AttrNumber, Oid};
 use types_error::PgResult;
 use types_nodes::primnodes::Alias;
-use types_nodes::{Node, RangeTblEntry, RTEKind};
+use types_nodes::{Node, RTEKind, RangeTblEntry};
 use types_rel::AccessShareLock;
 use types_scan::scankey::{BTEqualStrategyNumber, ScanKeyData};
 use types_trigger::{
@@ -80,9 +80,15 @@ fn bytea_strings(d: Datum, n: usize) -> Vec<String> {
     let mut out = Vec::with_capacity(n);
     let mut p = 0usize;
     for _ in 0..n {
-        let end = bytes[p..].iter().position(|&b| b == 0).map(|e| p + e).unwrap_or(bytes.len());
+        let end = bytes[p..]
+            .iter()
+            .position(|&b| b == 0)
+            .map(|e| p + e)
+            .unwrap_or(bytes.len());
         out.push(
-            core::str::from_utf8(&bytes[p..end]).expect("non-UTF-8 tgargs").to_owned(),
+            core::str::from_utf8(&bytes[p..end])
+                .expect("non-UTF-8 tgargs")
+                .to_owned(),
         );
         p = end + 1;
     }
@@ -153,7 +159,7 @@ fn make_old_new_rte<'mcx>(
     rte.rtekind = RTEKind::RTE_RELATION;
     rte.relid = relid;
     rte.relkind = relkind;
-    rte.rellockmode = AccessShareLock as i32;
+    rte.rellockmode = AccessShareLock;
     rte.alias = Some(alias);
     rte.eref = Some(alias);
     rte.inFromCl = true;
@@ -172,7 +178,11 @@ pub fn pg_get_triggerdef_worker(
     let mut buf = String::new();
     buf.push_str(&format!(
         "CREATE {}TRIGGER {} ",
-        if trig.tgconstraint != 0 { "CONSTRAINT " } else { "" },
+        if trig.tgconstraint != 0 {
+            "CONSTRAINT "
+        } else {
+            ""
+        },
         quote_identifier(&trig.tgname)
     ));
 
@@ -208,7 +218,11 @@ pub fn pg_get_triggerdef_worker(
         }
     }
     if trig.tgtype & TRIGGER_TYPE_TRUNCATE != 0 {
-        buf.push_str(if findx > 0 { " OR TRUNCATE" } else { " TRUNCATE" });
+        buf.push_str(if findx > 0 {
+            " OR TRUNCATE"
+        } else {
+            " TRUNCATE"
+        });
     }
 
     let relname = if pretty {
@@ -220,13 +234,20 @@ pub fn pg_get_triggerdef_worker(
 
     if trig.tgconstraint != 0 {
         if trig.tgconstrrelid != 0 {
-            buf.push_str(&format!("FROM {} ", generate_relation_name(mcx, trig.tgconstrrelid)?));
+            buf.push_str(&format!(
+                "FROM {} ",
+                generate_relation_name(mcx, trig.tgconstrrelid)?
+            ));
         }
         if !trig.tgdeferrable {
             buf.push_str("NOT ");
         }
         buf.push_str("DEFERRABLE INITIALLY ");
-        buf.push_str(if trig.tginitdeferred { "DEFERRED " } else { "IMMEDIATE " });
+        buf.push_str(if trig.tginitdeferred {
+            "DEFERRED "
+        } else {
+            "IMMEDIATE "
+        });
     }
 
     if trig.tgoldtable.is_some() || trig.tgnewtable.is_some() {

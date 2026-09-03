@@ -1,5 +1,8 @@
 use super::*;
-use ::adt_network::{network_cmp_internal, network_in, network_overlap, network_sub, network_subeq, network_sup, network_supeq};
+use ::adt_network::{
+    network_cmp_internal, network_in, network_overlap, network_sub, network_subeq, network_sup,
+    network_supeq,
+};
 
 fn v(s: &str) -> InetValue {
     network_in(s, false, None).unwrap().unwrap()
@@ -168,7 +171,9 @@ fn union_params_multi_family_zeroes() {
 fn common_bits_capped_equals_bitncommon() {
     let mut s = 0x1234_5678_9abc_def0u64;
     let mut lcg = || {
-        s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        s = s
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         s
     };
     for _ in 0..5000 {
@@ -176,7 +181,11 @@ fn common_bits_capped_equals_bitncommon() {
         let mut b = [0u8; 16];
         for i in 0..16 {
             a[i] = (lcg() >> 56) as u8;
-            b[i] = if lcg() & 3 == 0 { (lcg() >> 56) as u8 } else { a[i] };
+            b[i] = if lcg() & 3 == 0 {
+                (lcg() >> 56) as u8
+            } else {
+                a[i]
+            };
         }
         for &sz in &[4usize, 16] {
             let n = (lcg() % (sz as u64 * 8 + 1)) as i32;

@@ -49,7 +49,9 @@ fn collect_tree_rows(flinfo: &FmgrInfo, fcinfo: &Fcinfo, rootrelid: Oid) -> PgRe
     if resolved.class != TypeFuncClass::Composite {
         return Err(Box::new(PgError::error("return type must be a row type")));
     }
-    let desc = resolved.result_tuple_desc.expect("composite result carries a tupdesc");
+    let desc = resolved
+        .result_tuple_desc
+        .expect("composite result carries a tupdesc");
 
     let partitions = pg_inherits::find_all_inheritors(mcx, rootrelid, AccessShareLock)?;
     let mut tuples = Vec::with_capacity(partitions.len());
@@ -89,10 +91,7 @@ fn lookup_relkind(relid: Oid) -> PgResult<u8> {
         .map_or(0, |reltup| reltup.relkind as u8))
 }
 
-pub fn fc_pg_partition_tree(
-    flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_pg_partition_tree(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let flinfo = flinfo.expect("pg_partition_tree: NULL flinfo");
     if !flinfo.has_fn_extra() {
         let rootrelid = fcinfo.arg_oid(0);
@@ -168,7 +167,11 @@ pub fn fc_pg_partition_ancestors(
         .downcast_ref::<AncestorRows>()
         .expect("pg_partition_ancestors: user_fctx is AncestorRows");
     match rows.oids.get(idx) {
-        Some(&oid) => Ok(funcapi::srf_return_next(flinfo, fcinfo, Datum::from_oid(oid))),
+        Some(&oid) => Ok(funcapi::srf_return_next(
+            flinfo,
+            fcinfo,
+            Datum::from_oid(oid),
+        )),
         None => Ok(funcapi::srf_return_done(flinfo, fcinfo)),
     }
 }

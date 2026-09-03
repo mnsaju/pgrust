@@ -76,9 +76,7 @@ pub fn transformExprRecurse<'mcx>(
                 A_Expr_Kind::AEXPR_BETWEEN
                 | A_Expr_Kind::AEXPR_NOT_BETWEEN
                 | A_Expr_Kind::AEXPR_BETWEEN_SYM
-                | A_Expr_Kind::AEXPR_NOT_BETWEEN_SYM => {
-                    transformAExprBetween(mcx, pstate, a)
-                }
+                | A_Expr_Kind::AEXPR_NOT_BETWEEN_SYM => transformAExprBetween(mcx, pstate, a),
                 A_Expr_Kind::AEXPR_DISTINCT | A_Expr_Kind::AEXPR_NOT_DISTINCT => {
                     transformAExprDistinct(mcx, pstate, a)
                 }
@@ -90,7 +88,11 @@ pub fn transformExprRecurse<'mcx>(
         }
         NodeTag::T_BooleanTest => transformBooleanTest(mcx, pstate, expr),
         NodeTag::T_NamedArgExpr => {
-            let raw = expr.as_named_arg_expr().unwrap().arg.expect("NamedArgExpr has an arg");
+            let raw = expr
+                .as_named_arg_expr()
+                .unwrap()
+                .arg
+                .expect("NamedArgExpr has an arg");
             let arg = transformExprRecurse(mcx, pstate, raw)?;
             // SAFETY: parse analysis exclusively owns the just-built raw tree.
             unsafe {
@@ -180,7 +182,10 @@ fn transformCurrentOfExpr<'mcx>(
         .p_target_nsitem
         .expect("CURRENT OF only at top level of UPDATE/DELETE")
         .p_rtindex;
-    let cursor_name = expr.as_current_of_expr().expect("T_CurrentOfExpr node").cursor_name;
+    let cursor_name = expr
+        .as_current_of_expr()
+        .expect("T_CurrentOfExpr node")
+        .cursor_name;
     let mut cursor_param = 0;
     if let Some(name) = cursor_name {
         if let Some(st) = pstate.p_ref_hook_state.as_plpgsql_params().copied() {
@@ -229,12 +234,19 @@ fn transformAExprOp<'mcx>(
         |n: Option<Node<'mcx>>| n.is_some_and(|n| n.node_tag() == NodeTag::T_CaseTestExpr);
     if transform_null_equals()
         && a.name.len() == 1
-        && a.name.first().and_then(|n| n.as_string()).is_some_and(|s| s.sval == "=")
+        && a.name
+            .first()
+            .and_then(|n| n.as_string())
+            .is_some_and(|s| s.sval == "=")
         && (lexpr.is_some_and(expr_is_null_constant) || rexpr.is_some_and(expr_is_null_constant))
         && !is_case_test(lexpr)
         && !is_case_test(rexpr)
     {
-        let arg = if lexpr.is_some_and(expr_is_null_constant) { rexpr } else { lexpr };
+        let arg = if lexpr.is_some_and(expr_is_null_constant) {
+            rexpr
+        } else {
+            lexpr
+        };
         let n = Node::mk(
             mcx,
             types_nodes::primnodes::NullTest {
@@ -253,7 +265,10 @@ fn transformAExprOp<'mcx>(
                 .is_some_and(|s| s.subLinkType == types_nodes::SubLinkType::EXPR_SUBLINK)
         })
     {
-        let s = rexpr.expect("checked above").as_sub_link().expect("checked above");
+        let s = rexpr
+            .expect("checked above")
+            .as_sub_link()
+            .expect("checked above");
         let converted = Node::mk(
             mcx,
             types_nodes::SubLink {
@@ -289,7 +304,9 @@ fn transformAExprOp<'mcx>(
 
     let ltypeId = lexpr.map_or(types_core::InvalidOid, expr_type);
     let rtypeId = rexpr.map_or(types_core::InvalidOid, expr_type);
-    parse_oper::make_op(mcx, pstate, &a.name, lexpr, rexpr, ltypeId, rtypeId, last_srf, a.location)
+    parse_oper::make_op(
+        mcx, pstate, &a.name, lexpr, rexpr, ltypeId, rtypeId, last_srf, a.location,
+    )
 }
 
 fn transformAExprOpAny<'mcx>(
@@ -392,7 +409,11 @@ fn construct_requires_boolean_eq(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformAExprNullIf")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformAExprNullIf",
+            )),
     )
 }
 
@@ -454,7 +475,11 @@ fn construct_must_not_return_set(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformAExprNullIf")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformAExprNullIf",
+            )),
     )
 }
 
@@ -468,7 +493,11 @@ fn transformAExprIn<'mcx>(
     let useOr = a.name.first().and_then(|n| n.as_string()).map(|s| s.sval) != Some("<>");
 
     let lexpr = transformExprRecurse(mcx, pstate, a.lexpr.expect("IN lexpr"))?;
-    let in_list = a.rexpr.expect("IN rexpr").as_list().expect("IN rexpr is a List");
+    let in_list = a
+        .rexpr
+        .expect("IN rexpr")
+        .as_list()
+        .expect("IN rexpr is a List");
     let mut rexprs = types_nodes::NodeList::nil();
     let mut rvars = types_nodes::NodeList::nil();
     let mut rnonvars = types_nodes::NodeList::nil();
@@ -682,7 +711,11 @@ fn row_expansion_error(pstate: &ParseState<'_, '_>, location: i32) -> Box<types_
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformIndirection")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformIndirection",
+            )),
     )
 }
 
@@ -693,12 +726,12 @@ fn unknown_attribute(
     attname: &str,
     location: i32,
 ) -> Box<types_error::PgError> {
-    use types_error::{
-        ErrorLocation, ERRCODE_UNDEFINED_COLUMN, ERRCODE_WRONG_OBJECT_TYPE, ERROR,
-    };
+    use types_error::{ErrorLocation, ERRCODE_UNDEFINED_COLUMN, ERRCODE_WRONG_OBJECT_TYPE, ERROR};
     let errpos =
         parser_small1::parser_errposition(pstate, location, mbutils::GetDatabaseEncoding());
-    let builder = if let Some(v) = relref.as_var().filter(|v| v.varattno == types_core::InvalidAttrNumber)
+    let builder = if let Some(v) = relref
+        .as_var()
+        .filter(|v| v.varattno == types_core::InvalidAttrNumber)
     {
         let rte = parse_relation::GetRTEByRangeTablePosn(pstate, v.varno, v.varlevelsup as i32);
         let alias = rte.eref.and_then(|a| a.aliasname).unwrap_or("");
@@ -718,7 +751,9 @@ fn unknown_attribute(
         if is_complex {
             elog::ereport(ERROR)
                 .errcode(ERRCODE_UNDEFINED_COLUMN)
-                .errmsg(format!("column \"{attname}\" not found in data type {tyname}"))
+                .errmsg(format!(
+                    "column \"{attname}\" not found in data type {tyname}"
+                ))
         } else if rel_type_id == types_core::catalog::RECORDOID {
             elog::ereport(ERROR)
                 .errcode(ERRCODE_UNDEFINED_COLUMN)
@@ -726,7 +761,9 @@ fn unknown_attribute(
                     "could not identify column \"{attname}\" in record data type"
                 ))
         } else {
-            elog::ereport(ERROR).errcode(ERRCODE_WRONG_OBJECT_TYPE).errmsg(format!(
+            elog::ereport(ERROR)
+                .errcode(ERRCODE_WRONG_OBJECT_TYPE)
+                .errmsg(format!(
                 "column notation .{attname} applied to type {tyname}, which is not a composite type"
             ))
         }
@@ -735,7 +772,11 @@ fn unknown_attribute(
         builder
             .errposition(errpos)
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "unknown_attribute")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "unknown_attribute",
+            )),
     )
 }
 
@@ -795,7 +836,7 @@ fn transformArrayExpr<'mcx>(
     mut element_type: types_core::Oid,
     typmod: i32,
 ) -> PgResult<Node<'mcx>> {
-    use types_core::{InvalidOid, OidIsValid, INT2VECTOROID, OIDVECTOROID};
+    use types_core::{OidIsValid, INT2VECTOROID, OIDVECTOROID};
 
     let mut newelems: types_nodes::NodeList<'mcx> = types_nodes::NodeList::nil();
     let mut multidims = false;
@@ -852,7 +893,12 @@ fn transformArrayExpr<'mcx>(
             element_type = coerce_type_id;
             array_type = lsyscache::typ::get_array_type(element_type)?;
             if !OidIsValid(array_type) {
-                return Err(array_elem_type_error(pstate, element_type, a.location, true));
+                return Err(array_elem_type_error(
+                    pstate,
+                    element_type,
+                    a.location,
+                    true,
+                ));
             }
         }
         coerce_hard = false;
@@ -911,8 +957,7 @@ fn empty_array_error(pstate: &ParseState<'_, '_>, location: i32) -> Box<types_er
             .errcode(ERRCODE_INDETERMINATE_DATATYPE)
             .errmsg("cannot determine type of empty array".to_string())
             .errhint(
-                "Explicitly cast to the desired type, for example ARRAY[]::integer[]."
-                    .to_string(),
+                "Explicitly cast to the desired type, for example ARRAY[]::integer[].".to_string(),
             )
             .errposition(parser_small1::parser_errposition(
                 pstate,
@@ -920,7 +965,11 @@ fn empty_array_error(pstate: &ParseState<'_, '_>, location: i32) -> Box<types_er
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformArrayExpr")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformArrayExpr",
+            )),
     )
 }
 
@@ -948,7 +997,11 @@ fn array_elem_type_error(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformArrayExpr")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformArrayExpr",
+            )),
     )
 }
 
@@ -1031,7 +1084,13 @@ fn transformTypeCast<'mcx>(
         location,
     )? {
         Some(result) => Ok(result),
-        None => Err(cannot_cast_error(pstate, input_type, target_type, location, arg)),
+        None => Err(cannot_cast_error(
+            pstate,
+            input_type,
+            target_type,
+            location,
+            arg,
+        )),
     }
 }
 
@@ -1057,7 +1116,14 @@ fn transformCollateClause<'mcx>(
     let coll_oid = catalog_namespace::get_collation_oid_list(&c.collname, false)
         .map_err(|e| collation_lookup_position(pstate, e, c.location))?;
 
-    Node::mk(mcx, CollateExpr { arg, collOid: coll_oid, location: c.location })
+    Node::mk(
+        mcx,
+        CollateExpr {
+            arg,
+            collOid: coll_oid,
+            location: c.location,
+        },
+    )
 }
 
 // C: setup_parser_errposition_callback around get_collation_oid.
@@ -1087,7 +1153,11 @@ fn cannot_cast_error(
 ) -> Box<types_error::PgError> {
     use types_error::{ErrorLocation, ERRCODE_CANNOT_COERCE, ERROR};
     // C parser_coercion_errposition: coerce location, else the arg's.
-    let pos_loc = if location >= 0 { location } else { expr_location(arg) };
+    let pos_loc = if location >= 0 {
+        location
+    } else {
+        expr_location(arg)
+    };
     let src = format_type::format_type_be(input_type).unwrap_or_else(|_| input_type.to_string());
     let dst = format_type::format_type_be(target_type).unwrap_or_else(|_| target_type.to_string());
     Box::new(
@@ -1100,7 +1170,11 @@ fn cannot_cast_error(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformTypeCast")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformTypeCast",
+            )),
     )
 }
 
@@ -1275,8 +1349,9 @@ fn make_distinct_op<'mcx>(
     let last_srf = pstate.p_last_srf;
     let ltype = ltree.map_or(types_core::InvalidOid, expr_type);
     let rtype = rtree.map_or(types_core::InvalidOid, expr_type);
-    let result =
-        parse_oper::make_op(mcx, pstate, opname, ltree, rtree, ltype, rtype, last_srf, location)?;
+    let result = parse_oper::make_op(
+        mcx, pstate, opname, ltree, rtree, ltype, rtype, last_srf, location,
+    )?;
     let op = result.as_op_expr().expect("make_op returns an OpExpr");
     if op.opresulttype != types_core::catalog::BOOLOID {
         return Err(distinct_requires_boolean_eq(pstate, location));
@@ -1379,7 +1454,8 @@ fn xml_name_in<'mcx>(
     fully_escaped: bool,
     escape_period: bool,
 ) -> PgResult<&'mcx str> {
-    let v = adt_xml::map_sql_identifier_to_xml_name(ident.as_bytes(), fully_escaped, escape_period)?;
+    let v =
+        adt_xml::map_sql_identifier_to_xml_name(ident.as_bytes(), fully_escaped, escape_period)?;
     let b = mcx::slice_borrow_in(mcx, &v)?;
     Ok(core::str::from_utf8(b).expect("xml name stays server-encoded UTF-8"))
 }
@@ -1515,7 +1591,11 @@ fn transformXmlSerialize<'mcx>(
     let xs = expr
         .as_variant::<types_nodes::rawnodes::XmlSerialize>()
         .expect("T_XmlSerialize is XmlSerialize");
-    let inner = transformExprRecurse(mcx, pstate, xs.expr.expect("grammar sets XmlSerialize.expr"))?;
+    let inner = transformExprRecurse(
+        mcx,
+        pstate,
+        xs.expr.expect("grammar sets XmlSerialize.expr"),
+    )?;
     let arg = coerce::coerce_to_specific_type(
         mcx,
         pstate,
@@ -1526,7 +1606,10 @@ fn transformXmlSerialize<'mcx>(
         "XMLSERIALIZE",
     )?;
 
-    let tn = xs.typeName.and_then(|n| n.as_type_name()).expect("grammar sets XmlSerialize.typeName");
+    let tn = xs
+        .typeName
+        .and_then(|n| n.as_type_name())
+        .expect("grammar sets XmlSerialize.typeName");
     let (target_type, target_typmod) = parse_utilcmd::typenameTypeIdAndMod(mcx, Some(pstate), tn)?;
 
     let xexpr = Node::mk(
@@ -1578,7 +1661,11 @@ fn xml_syntax_error(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformXmlExpr")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformXmlExpr",
+            )),
     )
 }
 
@@ -1602,7 +1689,11 @@ fn cannot_cast_xmlserialize(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformXmlSerialize")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformXmlSerialize",
+            )),
     ))
 }
 
@@ -1622,8 +1713,14 @@ fn transformBooleanTest<'mcx>(
         BoolTestType::IS_NOT_UNKNOWN => "IS NOT UNKNOWN",
     };
     let arg = transformExprRecurse(mcx, pstate, b.arg.expect("BooleanTest.arg"))?;
-    let arg =
-        coerce::coerce_to_boolean(mcx, pstate, arg, expr_type(arg), expr_location(arg), clausename)?;
+    let arg = coerce::coerce_to_boolean(
+        mcx,
+        pstate,
+        arg,
+        expr_type(arg),
+        expr_location(arg),
+        clausename,
+    )?;
     Node::mk(
         mcx,
         types_nodes::BooleanTest {
@@ -1646,13 +1743,8 @@ fn transformRowExpr<'mcx>(
     // allowDefault keeps SetToDefault items untransformed (multiassign
     // UPDATE SET (a, b) = ROW(...)).
     let kind = pstate.p_expr_kind;
-    let args = parse_func_seams::transformExpressionList::call(
-        mcx,
-        pstate,
-        &r.args,
-        kind,
-        allow_default,
-    )?;
+    let args =
+        parse_func_seams::transformExpressionList::call(mcx, pstate, &r.args, kind, allow_default)?;
     if args.len() > types_tuple::htup::MaxTupleAttributeNumber as usize {
         return Err(too_many_row_entries(pstate, r.location));
     }
@@ -1705,8 +1797,13 @@ fn transformMultiAssignRef<'mcx>(
                 },
             )?;
             let transformed = transformExprRecurse(mcx, pstate, relabeled)?;
-            let sl = transformed.as_sub_link().expect("transformSubLink yields a SubLink");
-            let qtree = sl.subselect.as_query().expect("SubLink.subselect is a Query");
+            let sl = transformed
+                .as_sub_link()
+                .expect("transformSubLink yields a SubLink");
+            let qtree = sl
+                .subselect
+                .as_query()
+                .expect("SubLink.subselect is a Query");
             let nonjunk = qtree
                 .targetList
                 .iter()
@@ -1735,7 +1832,10 @@ fn transformMultiAssignRef<'mcx>(
             }
             rexpr
         } else {
-            return Err(multiassign_source_not_supported(pstate, expr_location(source)));
+            return Err(multiassign_source_not_supported(
+                pstate,
+                expr_location(source),
+            ));
         };
         let tle = Node::mk(
             mcx,
@@ -1761,7 +1861,10 @@ fn transformMultiAssignRef<'mcx>(
 
     if let Some(sl) = tle.expr.as_sub_link() {
         debug_assert!(sl.subLinkType == SubLinkType::MULTIEXPR_SUBLINK);
-        let qtree = sl.subselect.as_query().expect("SubLink.subselect is a Query");
+        let qtree = sl
+            .subselect
+            .as_query()
+            .expect("SubLink.subselect is a Query");
         let coltle = qtree
             .targetList
             .nth(maref.colno as usize - 1)
@@ -1780,7 +1883,10 @@ fn transformMultiAssignRef<'mcx>(
             },
         );
     }
-    let r = tle.expr.as_row_expr().expect("unexpected expr type in multiassign list");
+    let r = tle
+        .expr
+        .as_row_expr()
+        .expect("unexpected expr type in multiassign list");
     let result = r.args.nth(maref.colno as usize - 1);
     if maref.colno == maref.ncolumns {
         let n = pstate.p_multiassign_exprs.len();
@@ -1805,7 +1911,11 @@ fn column_value_count_mismatch(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformMultiAssignRef")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformMultiAssignRef",
+            )),
     )
 }
 
@@ -1829,7 +1939,11 @@ fn multiassign_source_not_supported(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformMultiAssignRef")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformMultiAssignRef",
+            )),
     )
 }
 
@@ -1849,7 +1963,11 @@ fn distinct_requires_boolean_eq(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "make_distinct_op")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "make_distinct_op",
+            )),
     )
 }
 
@@ -1871,7 +1989,11 @@ fn collations_not_supported(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformCollateClause")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformCollateClause",
+            )),
     )
 }
 
@@ -1894,7 +2016,11 @@ fn too_many_row_entries(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformRowExpr")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformRowExpr",
+            )),
     )
 }
 
@@ -1927,7 +2053,11 @@ fn transformBoolExpr<'mcx>(
 
     Node::mk(
         mcx,
-        types_nodes::BoolExpr { boolop: b.boolop, args, location: b.location },
+        types_nodes::BoolExpr {
+            boolop: b.boolop,
+            args,
+            location: b.location,
+        },
     )
 }
 
@@ -2076,8 +2206,7 @@ fn transformCoalesceExpr<'mcx>(
     let c = expr.as_coalesce_expr().unwrap();
     let last_srf = pstate.p_last_srf;
 
-    let mut newargs: mcx::PgVec<'mcx, Node<'mcx>> =
-        mcx::vec_with_capacity_in(mcx, c.args.len())?;
+    let mut newargs: mcx::PgVec<'mcx, Node<'mcx>> = mcx::vec_with_capacity_in(mcx, c.args.len())?;
     let mut typelocs: mcx::PgVec<'mcx, (types_core::Oid, types_core::ParseLoc)> =
         mcx::vec_with_capacity_in(mcx, c.args.len())?;
     for e in &c.args {
@@ -2116,10 +2245,13 @@ fn transformMinMaxExpr<'mcx>(
 ) -> PgResult<Node<'mcx>> {
     use types_nodes::primnodes::MinMaxOp;
     let m = expr.as_min_max_expr().unwrap();
-    let funcname = if m.op == MinMaxOp::IS_GREATEST { "GREATEST" } else { "LEAST" };
+    let funcname = if m.op == MinMaxOp::IS_GREATEST {
+        "GREATEST"
+    } else {
+        "LEAST"
+    };
 
-    let mut newargs: mcx::PgVec<'mcx, Node<'mcx>> =
-        mcx::vec_with_capacity_in(mcx, m.args.len())?;
+    let mut newargs: mcx::PgVec<'mcx, Node<'mcx>> = mcx::vec_with_capacity_in(mcx, m.args.len())?;
     let mut typelocs: mcx::PgVec<'mcx, (types_core::Oid, types_core::ParseLoc)> =
         mcx::vec_with_capacity_in(mcx, m.args.len())?;
     for e in &m.args {
@@ -2167,9 +2299,7 @@ fn transformSQLValueFunction<'mcx>(mcx: Mcx<'mcx>, expr: Node<'mcx>) -> PgResult
         Op::SVFOP_LOCALTIME => (TIMEOID, svf.typmod),
         Op::SVFOP_LOCALTIME_N => (TIMEOID, anytime_typmod_check(false, svf.typmod)?),
         Op::SVFOP_LOCALTIMESTAMP => (TIMESTAMPOID, svf.typmod),
-        Op::SVFOP_LOCALTIMESTAMP_N => {
-            (TIMESTAMPOID, anytimestamp_typmod_check(false, svf.typmod)?)
-        }
+        Op::SVFOP_LOCALTIMESTAMP_N => (TIMESTAMPOID, anytimestamp_typmod_check(false, svf.typmod)?),
         Op::SVFOP_CURRENT_ROLE
         | Op::SVFOP_CURRENT_USER
         | Op::SVFOP_USER
@@ -2179,7 +2309,12 @@ fn transformSQLValueFunction<'mcx>(mcx: Mcx<'mcx>, expr: Node<'mcx>) -> PgResult
     };
     Node::mk(
         mcx,
-        SQLValueFunction { op: svf.op, r#type: typ, typmod, location: svf.location },
+        SQLValueFunction {
+            op: svf.op,
+            r#type: typ,
+            typmod,
+            location: svf.location,
+        },
     )
 }
 
@@ -2202,7 +2337,9 @@ fn typmod_check(what: &str, istz: bool, typmod: i32) -> PgResult<i32> {
         return Err(Box::new(
             elog::ereport(ERROR)
                 .errcode(ERRCODE_INVALID_PARAMETER_VALUE)
-                .errmsg(format!("{what}({typmod}){tz} precision must not be negative"))
+                .errmsg(format!(
+                    "{what}({typmod}){tz} precision must not be negative"
+                ))
                 .into_error()
                 .with_error_location(ErrorLocation::new(file!(), line!() as i32, "typmod_check")),
         ));
@@ -2236,16 +2373,15 @@ fn check_srf_in_construct(
 }
 
 #[cold]
-fn srf_not_allowed_in(
-    pstate: &ParseState<'_, '_>,
-    construct: &str,
-) -> Box<types_error::PgError> {
+fn srf_not_allowed_in(pstate: &ParseState<'_, '_>, construct: &str) -> Box<types_error::PgError> {
     use types_error::{ErrorLocation, ERRCODE_FEATURE_NOT_SUPPORTED, ERROR};
     let loc = pstate.p_last_srf.map_or(-1, expr_location);
     Box::new(
         elog::ereport(ERROR)
             .errcode(ERRCODE_FEATURE_NOT_SUPPORTED)
-            .errmsg(format!("set-returning functions are not allowed in {construct}"))
+            .errmsg(format!(
+                "set-returning functions are not allowed in {construct}"
+            ))
             .errhint(
                 "You might be able to move the set-returning function into a LATERAL FROM item.",
             )
@@ -2255,7 +2391,11 @@ fn srf_not_allowed_in(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformCaseExpr")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformCaseExpr",
+            )),
     )
 }
 
@@ -2328,7 +2468,10 @@ fn transformColumnRef<'mcx>(
     let cref = expr.as_column_ref().unwrap();
 
     debug_assert!(pstate.p_expr_kind != EXPR_KIND_NONE);
-    if matches!(pstate.p_expr_kind, EXPR_KIND_COLUMN_DEFAULT | EXPR_KIND_PARTITION_BOUND) {
+    if matches!(
+        pstate.p_expr_kind,
+        EXPR_KIND_COLUMN_DEFAULT | EXPR_KIND_PARTITION_BOUND
+    ) {
         return Err(column_ref_not_allowed(pstate, cref));
     }
 
@@ -2365,118 +2508,119 @@ fn transformColumnRef<'mcx>(
 
     let node: Option<Node<'mcx>> = 'resolve: {
         match fields {
-        [field1] => {
-            let name = field_str(*field1).expect("single-field ColumnRef holds a String");
-            colname = Some(name);
-            match parse_relation::colNameToVar(mcx, pstate, name, false, cref.location)? {
-                Some(node) => Some(node),
-                None => {
-                    let nsitem = parse_relation::refnameNamespaceItem(
-                        pstate,
-                        None,
-                        name,
-                        cref.location,
-                        Some(&mut levels_up),
-                    )?;
-                    match nsitem {
-                        Some(nsitem) => Some(transformWholeRowRef(
-                            mcx,
+            [field1] => {
+                let name = field_str(*field1).expect("single-field ColumnRef holds a String");
+                colname = Some(name);
+                match parse_relation::colNameToVar(mcx, pstate, name, false, cref.location)? {
+                    Some(node) => Some(node),
+                    None => {
+                        let nsitem = parse_relation::refnameNamespaceItem(
                             pstate,
-                            nsitem,
-                            levels_up,
+                            None,
+                            name,
                             cref.location,
-                        )?),
-                        None => None,
-                    }
-                }
-            }
-        }
-        [field1, field2] | [_, field1, field2] | [_, _, field1, field2] => {
-            if fields.len() == 3 {
-                nspname = Some(field_str(fields[0]).expect("qualifier is a String"));
-            } else if fields.len() == 4 {
-                // C checks the catalog name against the current database and
-                // then ignores it.
-                let catname = field_str(fields[0]).expect("catalog qualifier is a String");
-                let dbname =
-                    dbcommands_seams::get_database_name::call(init_small::globals::MyDatabaseId())?;
-                if dbname.as_deref() != Some(catname) {
-                    crerr = ColumnRefErr::WrongDb;
-                    break 'resolve None;
-                }
-                nspname = Some(field_str(fields[1]).expect("qualifier is a String"));
-            }
-            let rel = field_str(*field1).expect("relation qualifier is a String");
-            relname = Some(rel);
-            let nsitem = parse_relation::refnameNamespaceItem(
-                pstate,
-                nspname,
-                rel,
-                cref.location,
-                Some(&mut levels_up),
-            )?;
-            match nsitem {
-                None => None,
-                Some(nsitem) => {
-                    if field2.node_tag() == NodeTag::T_A_Star {
-                        return transformWholeRowRef(mcx, pstate, nsitem, levels_up, cref.location);
-                    }
-                    let name = field_str(*field2).expect("column field is a String");
-                    colname = Some(name);
-                    match parse_relation::scanNSItemForColumn(
-                        mcx,
-                        pstate,
-                        nsitem,
-                        levels_up,
-                        name,
-                        cref.location,
-                    )? {
-                        Some(node) => Some(node),
-                        None => {
-                            // Not a column; C tries a function call on the
-                            // whole row (attribute notation).
-                            let wholerow = transformWholeRowRef(
+                            Some(&mut levels_up),
+                        )?;
+                        match nsitem {
+                            Some(nsitem) => Some(transformWholeRowRef(
                                 mcx,
                                 pstate,
                                 nsitem,
                                 levels_up,
                                 cref.location,
-                            )?;
-                            attribute_notation_func_call(
-                                mcx,
-                                pstate,
-                                name,
-                                wholerow,
-                                last_srf,
-                                cref.location,
-                            )?
+                            )?),
+                            None => None,
                         }
                     }
                 }
             }
+            [field1, field2] | [_, field1, field2] | [_, _, field1, field2] => {
+                if fields.len() == 3 {
+                    nspname = Some(field_str(fields[0]).expect("qualifier is a String"));
+                } else if fields.len() == 4 {
+                    // C checks the catalog name against the current database and
+                    // then ignores it.
+                    let catname = field_str(fields[0]).expect("catalog qualifier is a String");
+                    let dbname = dbcommands_seams::get_database_name::call(
+                        init_small::globals::MyDatabaseId(),
+                    )?;
+                    if dbname.as_deref() != Some(catname) {
+                        crerr = ColumnRefErr::WrongDb;
+                        break 'resolve None;
+                    }
+                    nspname = Some(field_str(fields[1]).expect("qualifier is a String"));
+                }
+                let rel = field_str(*field1).expect("relation qualifier is a String");
+                relname = Some(rel);
+                let nsitem = parse_relation::refnameNamespaceItem(
+                    pstate,
+                    nspname,
+                    rel,
+                    cref.location,
+                    Some(&mut levels_up),
+                )?;
+                match nsitem {
+                    None => None,
+                    Some(nsitem) => {
+                        if field2.node_tag() == NodeTag::T_A_Star {
+                            return transformWholeRowRef(
+                                mcx,
+                                pstate,
+                                nsitem,
+                                levels_up,
+                                cref.location,
+                            );
+                        }
+                        let name = field_str(*field2).expect("column field is a String");
+                        colname = Some(name);
+                        match parse_relation::scanNSItemForColumn(
+                            mcx,
+                            pstate,
+                            nsitem,
+                            levels_up,
+                            name,
+                            cref.location,
+                        )? {
+                            Some(node) => Some(node),
+                            None => {
+                                // Not a column; C tries a function call on the
+                                // whole row (attribute notation).
+                                let wholerow = transformWholeRowRef(
+                                    mcx,
+                                    pstate,
+                                    nsitem,
+                                    levels_up,
+                                    cref.location,
+                                )?;
+                                attribute_notation_func_call(
+                                    mcx,
+                                    pstate,
+                                    name,
+                                    wholerow,
+                                    last_srf,
+                                    cref.location,
+                                )?
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {
+                crerr = ColumnRefErr::TooMany;
+                None
+            }
         }
-        _ => {
-            crerr = ColumnRefErr::TooMany;
-            None
-        }
-    }
     };
 
     // plpgsql_post_column_ref (pl_exec.c): runs whether or not the core
     // resolved, to raise the variable-vs-column ambiguity error.
     if let Some(st) = &plpgsql_hooks {
         let skip = st.resolve_option == parser_small1::PlpgsqlResolveOption::Variable
-            || (node.is_some()
-                && st.resolve_option == parser_small1::PlpgsqlResolveOption::Column);
+            || (node.is_some() && st.resolve_option == parser_small1::PlpgsqlResolveOption::Column);
         if !skip {
-            if let Some(p) = plpgsql_column_ref(
-                mcx,
-                pstate,
-                st,
-                fields,
-                cref.location,
-                node.is_none(),
-            )? {
+            if let Some(p) =
+                plpgsql_column_ref(mcx, pstate, st, fields, cref.location, node.is_none())?
+            {
                 if node.is_some() {
                     let mut name = String::new();
                     for (i, f) in fields.iter().enumerate() {
@@ -2561,7 +2705,6 @@ fn transformColumnRef<'mcx>(
     }
 }
 
-
 // C crerr (transformColumnRef): which flavor of not-found to report if no
 // hook resolves the reference.
 enum ColumnRefErr {
@@ -2596,7 +2739,11 @@ fn improper_qualified_name(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformColumnRef")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformColumnRef",
+            )),
     )
 }
 
@@ -2697,9 +2844,8 @@ pub fn sql_fn_post_column_ref<'mcx>(
         }
     }
     let name = |i: usize| fields[i].as_string().map(|s| s.sval);
-    let resolve = |i: usize| {
-        name(i).and_then(|n| parser_small1::sql_fn_resolve_param_name(&state, n))
-    };
+    let resolve =
+        |i: usize| name(i).and_then(|n| parser_small1::sql_fn_resolve_param_name(&state, n));
     let (param, subfield) = match nnames {
         1 => (resolve(0), None),
         2 => {
@@ -2719,9 +2865,13 @@ pub fn sql_fn_post_column_ref<'mcx>(
             (resolve(1), name(2))
         }
     };
-    let Some((paramno, ptype)) = param else { return Ok(None) };
+    let Some((paramno, ptype)) = param else {
+        return Ok(None);
+    };
     let param = parser_small1::sql_fn_make_param(mcx, &state, paramno, ptype, location)?;
-    let Some(subfield) = subfield else { return Ok(Some(param)) };
+    let Some(subfield) = subfield else {
+        return Ok(Some(param));
+    };
     // C routes through ParseFuncOrColumn(fn = NULL): composite projection,
     // else attribute-notation function call (p.upper => upper(p)), else
     // NULL — a None falls back to the caller's column-not-found report.
@@ -2762,7 +2912,11 @@ fn column_ref_not_allowed(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformColumnRef")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformColumnRef",
+            )),
     )
 }
 
@@ -2801,9 +2955,17 @@ fn no_parameter_error(
         elog::ereport(ERROR)
             .errcode(ERRCODE_UNDEFINED_PARAMETER)
             .errmsg(format!("there is no parameter ${}", pref.number))
-            .errposition(parser_small1::parser_errposition(pstate, pref.location, encoding))
+            .errposition(parser_small1::parser_errposition(
+                pstate,
+                pref.location,
+                encoding,
+            ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformParamRef")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformParamRef",
+            )),
     )
 }
 
@@ -2905,14 +3067,10 @@ fn transformSubLink<'mcx>(
         EXPR_KIND_EXECUTE_PARAMETER => Some("cannot use subquery in EXECUTE parameter"),
         EXPR_KIND_TRIGGER_WHEN => Some("cannot use subquery in trigger WHEN condition"),
         EXPR_KIND_PARTITION_BOUND => Some("cannot use subquery in partition bound"),
-        EXPR_KIND_PARTITION_EXPRESSION => {
-            Some("cannot use subquery in partition key expression")
-        }
+        EXPR_KIND_PARTITION_EXPRESSION => Some("cannot use subquery in partition key expression"),
         EXPR_KIND_CALL_ARGUMENT => Some("cannot use subquery in CALL argument"),
         EXPR_KIND_COPY_WHERE => Some("cannot use subquery in COPY FROM WHERE condition"),
-        EXPR_KIND_GENERATED_COLUMN => {
-            Some("cannot use subquery in column generation expression")
-        }
+        EXPR_KIND_GENERATED_COLUMN => Some("cannot use subquery in column generation expression"),
     };
     if let Some(msg) = err {
         return Err(sublink_not_allowed(pstate, msg, sublink.location));
@@ -2920,14 +3078,8 @@ fn transformSubLink<'mcx>(
 
     pstate.p_hasSubLinks = true;
 
-    let qtree = analyze_seams::parse_sub_analyze::call(
-        mcx,
-        sublink.subselect,
-        pstate,
-        None,
-        false,
-        true,
-    )?;
+    let qtree =
+        analyze_seams::parse_sub_analyze::call(mcx, sublink.subselect, pstate, None, false, true)?;
 
     if qtree.commandType != types_nodes::CmdType::CMD_SELECT {
         return Err(Box::new(types_error::PgError::error(
@@ -2959,7 +3111,9 @@ fn transformSubLink<'mcx>(
             let lefthand = transformExprRecurse(
                 mcx,
                 pstate,
-                sublink.testexpr.expect("ANY/ALL/ROWCOMPARE sublink carries a testexpr"),
+                sublink
+                    .testexpr
+                    .expect("ANY/ALL/ROWCOMPARE sublink carries a testexpr"),
             )?;
             let left_list = match lefthand.as_row_expr() {
                 Some(r) => r.args.clone_in(mcx)?,
@@ -3054,7 +3208,11 @@ fn make_row_comparison_op<'mcx>(
     )?;
     let op = cmp.as_op_expr().expect("make_op returns an OpExpr");
     if op.opresulttype != types_core::catalog::BOOLOID {
-        return Err(row_comparison_not_boolean(pstate, op.opresulttype, location));
+        return Err(row_comparison_not_boolean(
+            pstate,
+            op.opresulttype,
+            location,
+        ));
     }
     if coerce::expression_returns_set(cmp) {
         return Err(row_comparison_returns_set(pstate, location));
@@ -3184,7 +3342,11 @@ fn row_comparison_ambiguous(
     location: types_core::ParseLoc,
 ) -> Box<types_error::PgError> {
     use types_error::{ErrorLocation, ERRCODE_FEATURE_NOT_SUPPORTED, ERROR};
-    let op = opname.last().and_then(|n| n.as_string()).map(|s| s.sval).unwrap_or("");
+    let op = opname
+        .last()
+        .and_then(|n| n.as_string())
+        .map(|s| s.sval)
+        .unwrap_or("");
     Box::new(
         elog::ereport(ERROR)
             .errcode(ERRCODE_FEATURE_NOT_SUPPORTED)
@@ -3198,7 +3360,11 @@ fn row_comparison_ambiguous(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "make_row_comparison_op")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "make_row_comparison_op",
+            )),
     )
 }
 
@@ -3220,7 +3386,11 @@ fn row_length_error(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "make_row_comparison_op")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "make_row_comparison_op",
+            )),
     )
 }
 
@@ -3231,7 +3401,11 @@ fn row_comparison_no_interpretation(
     location: types_core::ParseLoc,
 ) -> Box<types_error::PgError> {
     use types_error::{ErrorLocation, ERRCODE_FEATURE_NOT_SUPPORTED, ERROR};
-    let op = opname.last().and_then(|n| n.as_string()).map(|s| s.sval).unwrap_or("");
+    let op = opname
+        .last()
+        .and_then(|n| n.as_string())
+        .map(|s| s.sval)
+        .unwrap_or("");
     Box::new(
         elog::ereport(ERROR)
             .errcode(ERRCODE_FEATURE_NOT_SUPPORTED)
@@ -3245,7 +3419,11 @@ fn row_comparison_no_interpretation(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "make_row_comparison_op")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "make_row_comparison_op",
+            )),
     )
 }
 
@@ -3265,7 +3443,11 @@ fn default_not_allowed(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformExprRecurse")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformExprRecurse",
+            )),
     )
 }
 
@@ -3286,7 +3468,11 @@ fn column_count_mismatch(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformSubLink")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformSubLink",
+            )),
     )
 }
 
@@ -3310,7 +3496,11 @@ fn row_comparison_not_boolean(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "make_row_comparison_op")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "make_row_comparison_op",
+            )),
     )
 }
 
@@ -3330,7 +3520,11 @@ fn row_comparison_returns_set(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "make_row_comparison_op")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "make_row_comparison_op",
+            )),
     )
 }
 
@@ -3351,7 +3545,11 @@ fn sublink_not_allowed(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformSubLink")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformSubLink",
+            )),
     )
 }
 
@@ -3371,7 +3569,11 @@ fn one_column_required(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformSubLink")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformSubLink",
+            )),
     )
 }
 

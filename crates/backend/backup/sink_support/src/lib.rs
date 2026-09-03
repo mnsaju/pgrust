@@ -11,8 +11,8 @@ extern crate alloc;
 use alloc::boxed::Box;
 
 use ::backend_progress::{
-    pgstat_progress_end_command, pgstat_progress_start_command,
-    pgstat_progress_update_multi_param, pgstat_progress_update_param, PROGRESS_COMMAND_BASEBACKUP,
+    pgstat_progress_end_command, pgstat_progress_start_command, pgstat_progress_update_multi_param,
+    pgstat_progress_update_param, PROGRESS_COMMAND_BASEBACKUP,
 };
 use ::mcx::Mcx;
 use ::sink::{

@@ -31,11 +31,7 @@ pub fn cnt_length(t: TsVec<'_>) -> i32 {
 }
 
 // find_wordentry: (first_index, nitem) of entries matching `item`.
-pub fn find_wordentry(
-    t: TsVec<'_>,
-    q: TsQueryRef<'_>,
-    item: &Operand,
-) -> Option<(usize, usize)> {
+pub fn find_wordentry(t: TsVec<'_>, q: TsQueryRef<'_>, item: &Operand) -> Option<(usize, usize)> {
     let operand = q.operand_str(item);
     let mut lo = 0usize;
     let mut hi = t.size();
@@ -81,10 +77,7 @@ fn wpos(w: &[f32; NUM_WEIGHTS], p: WordEntryPos) -> f32 {
 }
 
 // SortAndUniqItems: sorted, de-duplicated QueryOperands.
-fn sort_and_uniq_items<'mcx>(
-    mcx: Mcx<'mcx>,
-    q: TsQueryRef<'_>,
-) -> PgResult<PgVec<'mcx, Operand>> {
+fn sort_and_uniq_items<'mcx>(mcx: Mcx<'mcx>, q: TsQueryRef<'_>) -> PgResult<PgVec<'mcx, Operand>> {
     let mut res: PgVec<Operand> = vec_with_capacity_in(mcx, q.size())?;
     for i in 0..q.size() {
         if let Item::Val(op) = q.item(i) {
@@ -146,15 +139,15 @@ fn calc_rank_and(
             let this_is_null = !e.haspos();
             pos[i] = Some((this, this_is_null));
             for k in 0..i {
-                let Some((ct, ct_is_null)) = pos[k] else { continue };
+                let Some((ct, ct_is_null)) = pos[k] else {
+                    continue;
+                };
                 for &lp in this {
                     for &cp in ct {
-                        let dist =
-                            (wep_getpos(lp) as i32 - wep_getpos(cp) as i32).abs();
-                        if dist != 0 || (dist == 0 && (this_is_null || ct_is_null)) {
+                        let dist = (wep_getpos(lp) as i32 - wep_getpos(cp) as i32).abs();
+                        if dist != 0 || this_is_null || ct_is_null {
                             let d = if dist == 0 { MAXENTRYPOS as i32 } else { dist };
-                            let curw = ((wpos(w, lp) * wpos(w, cp) * word_distance(d))
-                                as f64)
+                            let curw = ((wpos(w, lp) * wpos(w, cp) * word_distance(d)) as f64)
                                 .sqrt() as f32;
                             res = if res < 0.0 {
                                 curw

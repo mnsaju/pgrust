@@ -24,7 +24,9 @@ impl SplitVar {
         SplitVar { stem: Vec::new() }
     }
     fn copy_from(other: &SplitVar) -> Self {
-        SplitVar { stem: other.stem.clone() }
+        SplitVar {
+            stem: other.stem.clone(),
+        }
     }
     fn add_stem(&mut self, word: Vec<u8>) {
         self.stem.push(word);
@@ -286,15 +288,12 @@ impl<'mcx> IspellDict<'mcx> {
                             baselen = new_bl;
                             if pok {
                                 let aff_j_flagflags = self.affixes[aff_j].flagflags;
-                                let ff: Vec<u8> = if (aff_j_flagflags
-                                    & aff_i_flagflags
-                                    & FF_CROSSPRODUCT)
-                                    != 0
-                                {
-                                    Vec::new()
-                                } else {
-                                    self.affixes[aff_j].flag.as_slice().to_vec()
-                                };
+                                let ff: Vec<u8> =
+                                    if (aff_j_flagflags & aff_i_flagflags & FF_CROSSPRODUCT) != 0 {
+                                        Vec::new()
+                                    } else {
+                                        self.affixes[aff_j].flag.as_slice().to_vec()
+                                    };
                                 if self.find_word(&pnewword, &ff, flag)? != 0 {
                                     Self::add_to_result(&mut forms, &pnewword);
                                 }
@@ -359,7 +358,11 @@ impl<'mcx> IspellDict<'mcx> {
     ) -> PgResult<Vec<SplitVar>> {
         check_stack_depth()?;
 
-        let mut node = if snode.is_some() { snode } else { self.dictionary };
+        let mut node = if snode.is_some() {
+            snode
+        } else {
+            self.dictionary
+        };
         let mut level = if snode.is_some() { minpos } else { startpos };
 
         let mut notprobed = vec![1u8; wordlen as usize];
@@ -468,15 +471,19 @@ impl<'mcx> IspellDict<'mcx> {
                 if d_isword
                     && (d_compoundflag & compoundflag as u32) != 0
                     && notprobed[level as usize] != 0
-                {
-                    if level > minpos {
+                    && level > minpos {
                         if wordlen == level + 1 {
                             var.add_stem(word[startpos as usize..wordlen as usize].to_vec());
                             result.insert(0, var);
                             return Ok(result);
                         } else {
                             let mut more = self.split_to_variants(
-                                node, Some(&var), word, wordlen, startpos, level,
+                                node,
+                                Some(&var),
+                                word,
+                                wordlen,
+                                startpos,
+                                level,
                             )?;
                             level += 1;
                             var.add_stem(word[startpos as usize..level as usize].to_vec());
@@ -486,7 +493,6 @@ impl<'mcx> IspellDict<'mcx> {
                             continue;
                         }
                     }
-                }
                 node = d_node;
             } else {
                 node = None;
@@ -553,7 +559,11 @@ fn add_norm<'out>(
         let lexeme = new_bytes(out, word)?;
         lres.try_reserve(1)
             .map_err(|_| out.oom(core::mem::size_of::<TsLexeme>()))?;
-        lres.push(TsLexeme { nvariant, flags: flags as u16, lexeme });
+        lres.push(TsLexeme {
+            nvariant,
+            flags: flags as u16,
+            lexeme,
+        });
     }
     Ok(())
 }

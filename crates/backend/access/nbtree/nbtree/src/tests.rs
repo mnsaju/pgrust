@@ -5,7 +5,7 @@ use std::sync::Once;
 use ::datum::Datum;
 use ::mcx::{Mcx, MemoryContext, PgVec};
 use ::types_core::{
-    BlockNumber, Buffer, InvalidBuffer, Oid, OffsetNumber, BLCKSZ, INVALID_PROC_NUMBER,
+    BlockNumber, Buffer, InvalidBuffer, OffsetNumber, Oid, BLCKSZ, INVALID_PROC_NUMBER,
     RELPERSISTENCE_PERMANENT,
 };
 use ::types_error::PgResult;
@@ -19,7 +19,7 @@ use ::types_rel::{
     LOCKMODE, RELKIND_INDEX, REPLICA_IDENTITY_DEFAULT,
 };
 use ::types_relscan::{IndexScanDescData, IndexScanOpaque};
-use ::types_scan::scankey::{ScanKeyData, BTEqualStrategyNumber, BTGreaterStrategyNumber};
+use ::types_scan::scankey::{BTEqualStrategyNumber, BTGreaterStrategyNumber, ScanKeyData};
 use ::types_scan::sdir::ForwardScanDirection;
 use ::types_storage::bufpage::SizeOfPageHeaderData;
 use ::types_tuple::itemptr::{ItemPointerData, ItemPointerGetBlockNumber};
@@ -166,12 +166,7 @@ fn put_u16(p: &mut FakePage, off: usize, v: u16) {
     p.0[off..off + 2].copy_from_slice(&v.to_ne_bytes());
 }
 
-fn new_page(
-    special_flags: u16,
-    level: u32,
-    prev: BlockNumber,
-    next: BlockNumber,
-) -> Box<FakePage> {
+fn new_page(special_flags: u16, level: u32, prev: BlockNumber, next: BlockNumber) -> Box<FakePage> {
     let mut p = Box::new(FakePage([0u8; BLCKSZ]));
     let special = BLCKSZ - core::mem::size_of::<BTPageOpaqueData>();
     put_u16(&mut p, 12, SizeOfPageHeaderData as u16); // pd_lower
@@ -326,7 +321,10 @@ fn index_rel_opts(mcx: Mcx<'_>, unique: bool) -> Relation<'_> {
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
         rd_lockInfo: LockInfoData {
-            lockRelId: LockRelId { relId: 5000, dbId: 5 },
+            lockRelId: LockRelId {
+                relId: 5000,
+                dbId: 5,
+            },
         },
         rd_rel: FormData_pg_class {
             relname,
@@ -367,8 +365,8 @@ fn index_rel_opts(mcx: Mcx<'_>, unique: bool) -> Relation<'_> {
             indisready: true,
             indkey,
             has_indpred: false,
-        indexprs_src: None,
-        indpred_src: None,
+            indexprs_src: None,
+            indpred_src: None,
         }),
         rd_opcintype: one(23),
         rd_opfamily: one(1976),
@@ -378,13 +376,16 @@ fn index_rel_opts(mcx: Mcx<'_>, unique: bool) -> Relation<'_> {
         pgstat_enabled: Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: PgVec::new_in(mcx),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     };
     Relation::open(data, Some(noop_close))
 }
@@ -499,14 +500,19 @@ fn want_itup_publishes_page_copied_tuples() {
     crate::btrescan(&mut scan, Some(&keys)).unwrap();
     assert!(scan.xs_itupdesc.is_some());
     {
-        let IndexScanOpaque::Btree(so) = &scan.opaque else { unreachable!() };
+        let IndexScanOpaque::Btree(so) = &scan.opaque else {
+            unreachable!()
+        };
         assert!(so.currTuples.is_some() && so.markTuples.is_some());
         assert!(!so.dropPin);
     }
 
     let mut vals = Vec::new();
     while crate::btgettuple(&mut scan, ForwardScanDirection).unwrap() {
-        let itup = scan.xs_itup.expect("xs_want_itup publishes xs_itup").as_ptr();
+        let itup = scan
+            .xs_itup
+            .expect("xs_want_itup publishes xs_itup")
+            .as_ptr();
         let desc = scan.xs_itupdesc.as_deref().unwrap();
         let mut isnull = false;
         // SAFETY: xs_itup points at a MAXALIGNed copy in so.currTuples.
@@ -514,7 +520,9 @@ fn want_itup_publishes_page_copied_tuples() {
         assert!(!isnull);
         // xs_itup is a currTuples copy, not a page pointer.
         {
-            let IndexScanOpaque::Btree(so) = &scan.opaque else { unreachable!() };
+            let IndexScanOpaque::Btree(so) = &scan.opaque else {
+                unreachable!()
+            };
             let buf = so.currTuples.as_ref().unwrap();
             let off = itup as usize - buf.as_ptr() as usize;
             assert!(off < ::types_core::BLCKSZ as usize);
@@ -638,7 +646,7 @@ fn kill_prior_tuple_marks_lp_dead() {
         // SAFETY: leaked page, stable tag.
         let leaf = &unsafe { pages[1].as_ref() }.0;
         let iid_off = SizeOfPageHeaderData + 4; // second line pointer
-        // SAFETY: reading the owned page image.
+                                                // SAFETY: reading the owned page image.
         let iid = unsafe {
             leaf.as_ptr()
                 .add(iid_off)
@@ -695,7 +703,10 @@ fn heap_relation(mcx: Mcx<'_>) -> Relation<'_> {
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
         rd_lockInfo: LockInfoData {
-            lockRelId: LockRelId { relId: HEAP_OID, dbId: 5 },
+            lockRelId: LockRelId {
+                relId: HEAP_OID,
+                dbId: 5,
+            },
         },
         rd_rel: FormData_pg_class {
             relname,
@@ -731,13 +742,16 @@ fn heap_relation(mcx: Mcx<'_>) -> Relation<'_> {
         pgstat_enabled: Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: PgVec::new_in(mcx),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     };
     Relation::open(data, Some(noop_close))
 }
@@ -968,7 +982,8 @@ fn unique_index_rejects_live_duplicate() {
     install();
     build_empty_index(false);
     HEAP_PAGES.with(|p| {
-        p.borrow_mut().push(leak_page(build_heap_page(&[10, 20, 30])));
+        p.borrow_mut()
+            .push(leak_page(build_heap_page(&[10, 20, 30])));
     });
     let cx = MemoryContext::new("t");
     let rel = index_rel_opts(cx.mcx(), true);
@@ -1009,7 +1024,8 @@ fn unique_check_partial_reports_conflict_and_inserts_anyway() {
     install();
     build_empty_index(false);
     HEAP_PAGES.with(|p| {
-        p.borrow_mut().push(leak_page(build_heap_page(&[10, 20, 30])));
+        p.borrow_mut()
+            .push(leak_page(build_heap_page(&[10, 20, 30])));
     });
     let cx = MemoryContext::new("t");
     let rel = index_rel_opts(cx.mcx(), true);
@@ -1047,7 +1063,8 @@ fn unique_check_existing_rechecks_without_inserting() {
     install();
     build_empty_index(false);
     HEAP_PAGES.with(|p| {
-        p.borrow_mut().push(leak_page(build_heap_page(&[10, 20, 30])));
+        p.borrow_mut()
+            .push(leak_page(build_heap_page(&[10, 20, 30])));
     });
     let cx = MemoryContext::new("t");
     let rel = index_rel_opts(cx.mcx(), true);
@@ -1075,7 +1092,11 @@ fn unique_check_existing_rechecks_without_inserting() {
 
     // Recheck of a non-conflicting entry: re-finds itself, inserts nothing.
     assert!(insert(20, tid(0, 2), UNIQUE_CHECK_EXISTING).unwrap());
-    assert_eq!(drain_forward(cx.mcx(), &rel).len(), 3, "recheck never inserts");
+    assert_eq!(
+        drain_forward(cx.mcx(), &rel).len(),
+        3,
+        "recheck never inserts"
+    );
 
     // Recheck that finds another live row under its key: 23505.
     let err = insert(20, tid(0, 3), UNIQUE_CHECK_EXISTING).unwrap_err();
@@ -1262,7 +1283,10 @@ fn dedup_pass_merges_duplicates_onto_one_leaf() {
     }
 
     let infos = wal_infos();
-    let dedups = infos.iter().filter(|i| **i == ::types_nbtree::XLOG_BTREE_DEDUP).count();
+    let dedups = infos
+        .iter()
+        .filter(|i| **i == ::types_nbtree::XLOG_BTREE_DEDUP)
+        .count();
     assert!(dedups >= 1, "expected dedup passes, saw none");
     assert!(
         !infos.contains(&::types_nbtree::XLOG_BTREE_SPLIT_R)
@@ -1273,7 +1297,11 @@ fn dedup_pass_merges_duplicates_onto_one_leaf() {
     let seen = drain_forward(cx.mcx(), &rel);
     assert_eq!(seen.len(), n as usize);
     for (i, t) in seen.iter().enumerate() {
-        assert_eq!(ItemPointerGetBlockNumber(t), i as u32 + 1, "TID order preserved");
+        assert_eq!(
+            ItemPointerGetBlockNumber(t),
+            i as u32 + 1,
+            "TID order preserved"
+        );
     }
     assert_eq!(PINS.with(Cell::get), 0, "no pins leaked");
 }
@@ -1296,7 +1324,8 @@ fn single_value_strategy_splits_after_six_capped_postings() {
     assert!(infos.iter().any(|i| *i == ::types_nbtree::XLOG_BTREE_DEDUP));
     assert!(infos
         .iter()
-        .any(|i| *i == ::types_nbtree::XLOG_BTREE_SPLIT_R || *i == ::types_nbtree::XLOG_BTREE_SPLIT_L));
+        .any(|i| *i == ::types_nbtree::XLOG_BTREE_SPLIT_R
+            || *i == ::types_nbtree::XLOG_BTREE_SPLIT_L));
 
     let seen = drain_forward(cx.mcx(), &rel);
     assert_eq!(seen.len(), n as usize);
@@ -1452,7 +1481,10 @@ fn mkscankey_builds_insertion_key() {
     assert_eq!(key.scantid, None);
     let keys = key.keys_mut();
     assert_eq!(keys.len(), 1);
-    assert_eq!(keys[0].sk_flags & types_scan::scankey::SK_ISNULL, types_scan::scankey::SK_ISNULL);
+    assert_eq!(
+        keys[0].sk_flags & types_scan::scankey::SK_ISNULL,
+        types_scan::scankey::SK_ISNULL
+    );
     assert_eq!(keys[0].sk_func.fn_oid, 351);
 }
 
@@ -1556,6 +1588,10 @@ fn lp_dead_page_fill_runs_simple_deletion_instead_of_split() {
     );
 
     let seen = drain_forward(cx.mcx(), &rel);
-    assert!(seen.len() <= 60, "deleted tuples stay deleted: {}", seen.len());
+    assert!(
+        seen.len() <= 60,
+        "deleted tuples stay deleted: {}",
+        seen.len()
+    );
     assert_eq!(PINS.with(Cell::get), 0, "no pins leaked");
 }

@@ -1,12 +1,16 @@
+use crate::{
+    MinMaxAggInfo, NodeId, Path, PathTarget, PlanRowMarkId, PlannerInfo, PtId, QueryId,
+    RangeTblEntryId, RelId,
+};
 use mcx::{Mcx, PgVec};
 use types_error::PgResult;
 use types_nodes::bitmapset::Bitmapset;
 use types_nodes::list::{IntList, NodeList, OidList};
 use types_nodes::parsenodes::{Query, RangeTblEntry};
 use types_nodes::plannodes::PlanRowMark;
-use crate::{
-    MinMaxAggInfo, NodeId, Path, PathTarget, PlanRowMarkId, PlannerInfo, PtId, QueryId, RangeTblEntryId, RelId,
-};
+
+// att_stats_memo key/value: (attribute identity) -> opaque planner-owned stats pointer.
+type AttStatsMemoEntry = ((u32, i16, bool), Option<core::ptr::NonNull<()>>);
 
 // PlannerGlobal, types_nodes-payload form. C shares one glob by pointer across
 // an invocation's sub-Query levels; PlannerRun is that invocation, so
@@ -35,6 +39,12 @@ pub struct Glob<'mcx> {
     pub all_relids: Bitmapset<'mcx>,
     pub has_alternative_subplans: bool,
     pub prunable_relids: Bitmapset<'mcx>,
+}
+
+impl Default for Glob<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Glob<'_> {
@@ -73,7 +83,6 @@ pub struct SubrootState<'mcx> {
     pub root: PlannerInfo<'mcx>,
     pub processed_tlist: Option<&'mcx NodeList<'mcx>>,
 }
-
 
 // Materialized subquery-pathkey inputs (planner pathkeys.rs extracts these
 // from a subroot before it is parked; convert_subquery_pathkeys replays them
@@ -173,8 +182,7 @@ pub struct PlannerRun<'mcx> {
     /// borrows (planning is single-threaded). COST ONLY: same lookups, same
     /// values, freed with the run's arena — bounded per cycle, never
     /// cross-query state.
-    pub att_stats_memo:
-        core::cell::RefCell<PgVec<'mcx, ((u32, i16, bool), Option<core::ptr::NonNull<()>>)>>,
+    pub att_stats_memo: core::cell::RefCell<PgVec<'mcx, AttStatsMemoEntry>>,
     /// Per-planning-cycle syscache memos (syscache-memo lane; the replanfix2
     /// close-out's residual bucket: operator-shape 16x, ACL mask 8x, amop
     /// probes 14x per replan). Same discipline as att_stats_memo: COST ONLY —
@@ -266,7 +274,10 @@ impl<'mcx> PlannerRun<'mcx> {
         new_root.outer_params = outer;
         let old = core::mem::replace(&mut self.root, new_root);
         let processed_tlist = self.processed_tlist.take();
-        self.suspended_roots.push(SubrootState { root: old, processed_tlist });
+        self.suspended_roots.push(SubrootState {
+            root: old,
+            processed_tlist,
+        });
         let aw = core::mem::replace(&mut self.active_windows, PgVec::new_in(self.mcx));
         self.suspended_active_windows.push(aw);
         Ok(())
@@ -281,7 +292,10 @@ impl<'mcx> PlannerRun<'mcx> {
         new_root.outer_params = outer;
         let old = core::mem::replace(&mut self.root, new_root);
         let processed_tlist = self.processed_tlist.take();
-        self.suspended_roots.push(SubrootState { root: old, processed_tlist });
+        self.suspended_roots.push(SubrootState {
+            root: old,
+            processed_tlist,
+        });
         let aw = core::mem::replace(&mut self.active_windows, PgVec::new_in(self.mcx));
         self.suspended_active_windows.push(aw);
         Ok(())
@@ -290,12 +304,20 @@ impl<'mcx> PlannerRun<'mcx> {
     /// Restore the parent level, parking the finished minmax subroot; returns
     /// its index (MinMaxAggInfo.subroot_idx).
     pub fn pop_root_to_minmax_subroot(&mut self) -> usize {
-        let parent = self.suspended_roots.pop().expect("pop_root_to_minmax_subroot without push");
+        let parent = self
+            .suspended_roots
+            .pop()
+            .expect("pop_root_to_minmax_subroot without push");
         let sub = core::mem::replace(&mut self.root, parent.root);
         let sub_tlist = core::mem::replace(&mut self.processed_tlist, parent.processed_tlist);
-        self.active_windows =
-            self.suspended_active_windows.pop().expect("pop without active-windows push");
-        self.minmax_subroots.push(Some(SubrootState { root: sub, processed_tlist: sub_tlist }));
+        self.active_windows = self
+            .suspended_active_windows
+            .pop()
+            .expect("pop without active-windows push");
+        self.minmax_subroots.push(Some(SubrootState {
+            root: sub,
+            processed_tlist: sub_tlist,
+        }));
         self.minmax_subroots.len() - 1
     }
 
@@ -316,15 +338,23 @@ impl<'mcx> PlannerRun<'mcx> {
             }
             outer
         };
-        let parent = self.suspended_roots.pop().expect("pop_root_to_subroot without push");
+        let parent = self
+            .suspended_roots
+            .pop()
+            .expect("pop_root_to_subroot without push");
         let mut sub = core::mem::replace(&mut self.root, parent.root);
         if !self.glob.param_exec_types.is_nil() {
             sub.outer_params = outer;
         }
         let sub_tlist = core::mem::replace(&mut self.processed_tlist, parent.processed_tlist);
-        self.active_windows =
-            self.suspended_active_windows.pop().expect("pop without active-windows push");
-        self.subroots.push(SubrootState { root: sub, processed_tlist: sub_tlist });
+        self.active_windows = self
+            .suspended_active_windows
+            .pop()
+            .expect("pop without active-windows push");
+        self.subroots.push(SubrootState {
+            root: sub,
+            processed_tlist: sub_tlist,
+        });
         self.subroots.len() - 1
     }
 
@@ -344,15 +374,23 @@ impl<'mcx> PlannerRun<'mcx> {
             }
             outer
         };
-        let parent = self.suspended_roots.pop().expect("pop_root_to_rel_subroot without push");
+        let parent = self
+            .suspended_roots
+            .pop()
+            .expect("pop_root_to_rel_subroot without push");
         let mut sub = core::mem::replace(&mut self.root, parent.root);
         if !self.glob.param_exec_types.is_nil() {
             sub.outer_params = outer;
         }
         let sub_tlist = core::mem::replace(&mut self.processed_tlist, parent.processed_tlist);
-        self.active_windows =
-            self.suspended_active_windows.pop().expect("pop without active-windows push");
-        self.rel_subroots.push(SubrootState { root: sub, processed_tlist: sub_tlist });
+        self.active_windows = self
+            .suspended_active_windows
+            .pop()
+            .expect("pop without active-windows push");
+        self.rel_subroots.push(SubrootState {
+            root: sub,
+            processed_tlist: sub_tlist,
+        });
         self.rel_subroots.len() - 1
     }
 
@@ -368,7 +406,10 @@ impl<'mcx> PlannerRun<'mcx> {
     /// convert_EXISTS_to_ANY twin whose path failed the hashability check:
     /// the subroot is dropped, never appended to glob->subroots).
     pub fn pop_root_discard(&mut self) {
-        let parent = self.suspended_roots.pop().expect("pop_root_discard without push");
+        let parent = self
+            .suspended_roots
+            .pop()
+            .expect("pop_root_discard without push");
         self.root = parent.root;
         self.processed_tlist = parent.processed_tlist;
     }
@@ -378,7 +419,7 @@ impl<'mcx> PlannerRun<'mcx> {
         outer: &mut crate::Relids<'mcx>,
         root: &PlannerInfo<'mcx>,
     ) {
-        let mut add = |outer: &mut crate::Relids<'mcx>, id: i32| {
+        let add = |outer: &mut crate::Relids<'mcx>, id: i32| {
             *outer = crate::relids::relids_union(
                 mcx,
                 outer,
@@ -411,7 +452,7 @@ impl<'mcx> PlannerRun<'mcx> {
         let mcx = self.mcx;
         let mut outer: crate::Relids<'mcx> = crate::relids::relids_empty();
         let scan = |outer: &mut crate::Relids<'mcx>, root: &PlannerInfo<'mcx>| {
-            let mut add = |outer: &mut crate::Relids<'mcx>, id: i32| {
+            let add = |outer: &mut crate::Relids<'mcx>, id: i32| {
                 *outer = crate::relids::relids_union(
                     mcx,
                     outer,
@@ -508,7 +549,6 @@ mcx::forget_safe_struct!(GroupingSetsData<'_> {
     rollups, any_hashable, unsortable_refs, unhashable_refs, unsortable_sets,
     hash_sets_idx, tleref_to_colnum_map, dNumHashGroups,
 });
-
 
 pub fn subroot_path_base<'a, 'mcx>(
     run: &'a PlannerRun<'mcx>,

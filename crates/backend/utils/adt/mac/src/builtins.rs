@@ -87,7 +87,7 @@ pub fn fc_macaddr_in(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgR
 
 pub fn fc_macaddr_recv(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: recv arg0 is the live StringInfo pointer per the recv ABI.
-    let buf = unsafe { fcinfo.arg_stringinfo(0) };
+    let buf = unsafe { &mut *fcinfo.arg_stringinfo(0) };
     let addr = crate::macaddr_recv(buf)?;
     mac_result(fcinfo, &addr)
 }

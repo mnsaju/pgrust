@@ -1,3 +1,6 @@
+// Seam signature mirrors DefineIndex's C call-frame argument-for-argument.
+#![allow(clippy::too_many_arguments)]
+
 use types_core::Oid;
 use types_error::PgResult;
 

@@ -198,13 +198,11 @@ pub fn HeapTupleHeaderAdvanceConflictHorizon(
 
     // Ignore tuples inserted by an aborted transaction or updated/deleted by
     // the inserting transaction itself.
-    if tuple.xmin_committed()
-        || (!tuple.xmin_invalid() && transam_seams::transaction_id_did_commit::call(xmin)?)
-    {
-        if xmax != xmin && TransactionIdFollows(xmax, *snapshot_conflict_horizon) {
+    if (tuple.xmin_committed()
+        || (!tuple.xmin_invalid() && transam_seams::transaction_id_did_commit::call(xmin)?))
+        && xmax != xmin && TransactionIdFollows(xmax, *snapshot_conflict_horizon) {
             *snapshot_conflict_horizon = xmax;
         }
-    }
     Ok(())
 }
 

@@ -129,9 +129,7 @@ fn find_in_paths(basename: &str, paths: &[String]) -> PgResult<Option<String>> {
         if !pg_path::is_absolute_path(&path) {
             return Err(ereport(ERROR)
                 .errcode(ERRCODE_INVALID_NAME)
-                .errmsg(
-                    "component in parameter \"extension_control_path\" is not an absolute path",
-                )
+                .errmsg("component in parameter \"extension_control_path\" is not an absolute path")
                 .into_error()
                 .into());
         }
@@ -156,17 +154,27 @@ fn find_extension_control_filename(control: &mut ExtensionControlFile) -> PgResu
 
 pub(crate) fn get_extension_script_directory(control: &ExtensionControlFile) -> String {
     let Some(directory) = &control.directory else {
-        return control.control_dir.clone().expect("control_dir set by control-file read");
+        return control
+            .control_dir
+            .clone()
+            .expect("control_dir set by control-file read");
     };
     if pg_path::is_absolute_path(directory) {
         return directory.clone();
     }
-    let basedir = control.basedir.as_ref().expect("basedir set by control-file read");
+    let basedir = control
+        .basedir
+        .as_ref()
+        .expect("basedir set by control-file read");
     format!("{basedir}/{directory}")
 }
 
 fn get_extension_aux_control_filename(control: &ExtensionControlFile, version: &str) -> String {
-    format!("{}/{}--{version}.control", get_extension_script_directory(control), control.name)
+    format!(
+        "{}/{}--{version}.control",
+        get_extension_script_directory(control),
+        control.name
+    )
 }
 
 pub(crate) fn get_extension_script_filename(
@@ -219,7 +227,9 @@ fn parse_extension_control_file(
                 b = b.with_saved_errno(errno).errcode_for_file_access();
             }
             return Err(b
-                .errmsg(format!("could not open extension control file \"{filename}\": %m"))
+                .errmsg(format!(
+                    "could not open extension control file \"{filename}\": %m"
+                ))
                 .into_error()
                 .into());
         }
@@ -267,7 +277,9 @@ fn parse_extension_control_file(
             _ => {
                 return Err(ereport(ERROR)
                     .errcode(ERRCODE_SYNTAX_ERROR)
-                    .errmsg(format!("unrecognized parameter \"{name}\" in file \"{filename}\""))
+                    .errmsg(format!(
+                        "unrecognized parameter \"{name}\" in file \"{filename}\""
+                    ))
                     .into_error()
                     .into());
             }
@@ -319,7 +331,9 @@ fn split_names_param(name: &str, value: &str) -> PgResult<Vec<String>> {
         Some(names) => Ok(names),
         None => Err(ereport(ERROR)
             .errcode(ERRCODE_INVALID_PARAMETER_VALUE)
-            .errmsg(format!("parameter \"{name}\" must be a list of extension names"))
+            .errmsg(format!(
+                "parameter \"{name}\" must be a list of extension names"
+            ))
             .into_error()
             .into()),
     }
@@ -348,7 +362,8 @@ pub(crate) fn read_whole_file(filename: &str) -> PgResult<Vec<u8>> {
         if let Some(errno) = e.raw_os_error() {
             b = b.with_saved_errno(errno).errcode_for_file_access();
         }
-        b.errmsg(format!("could not stat file \"{filename}\": %m")).into_error()
+        b.errmsg(format!("could not stat file \"{filename}\": %m"))
+            .into_error()
     })?;
     if meta.len() > MAX_ALLOC_SIZE - 1 {
         return Err(ereport(ERROR)
@@ -362,9 +377,11 @@ pub(crate) fn read_whole_file(filename: &str) -> PgResult<Vec<u8>> {
         if let Some(errno) = e.raw_os_error() {
             b = b.with_saved_errno(errno).errcode_for_file_access();
         }
-        b.errmsg(format!("could not open file \"{filename}\" for reading: %m"))
-            .into_error()
-            .into()
+        b.errmsg(format!(
+            "could not open file \"{filename}\" for reading: %m"
+        ))
+        .into_error()
+        .into()
     })
 }
 
@@ -397,10 +414,13 @@ pub(crate) fn for_each_primary_control_name(
                 if let Some(errno) = e.raw_os_error() {
                     b = b.with_saved_errno(errno).errcode_for_file_access();
                 }
-                b.errmsg(format!("could not read directory \"{location}\": %m")).into_error()
+                b.errmsg(format!("could not read directory \"{location}\": %m"))
+                    .into_error()
             })?;
             let fname = de.file_name();
-            let Some(fname) = fname.to_str() else { continue };
+            let Some(fname) = fname.to_str() else {
+                continue;
+            };
             if !is_extension_control_filename(fname) {
                 continue;
             }

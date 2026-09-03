@@ -8,7 +8,9 @@ use pg_depend::ObjectAddress;
 use types_core::{
     Oid, BOOLOID, CSTRINGOID, INT4OID, INTERNALOID, NAMESPACE_RELATION_ID, PROCEDURE_RELATION_ID,
 };
-use types_error::{PgError, PgResult, SqlState, ERRCODE_INVALID_OBJECT_DEFINITION, ERRCODE_UNDEFINED_OBJECT};
+use types_error::{
+    PgError, PgResult, SqlState, ERRCODE_INVALID_OBJECT_DEFINITION, ERRCODE_UNDEFINED_OBJECT,
+};
 use types_fmgr::direct_function_call6_coll;
 use types_nodes::parsenodes::{CreateConversionStmt, ObjectType};
 use types_nodes::NodeList;
@@ -21,7 +23,11 @@ fn name_list_to_string(names: &NodeList<'_>) -> String {
         if i > 0 {
             out.push('.');
         }
-        out.push_str(n.as_string().expect("qualified name component is a String node").sval);
+        out.push_str(
+            n.as_string()
+                .expect("qualified name component is a String node")
+                .sval,
+        );
     }
     out
 }
@@ -41,7 +47,11 @@ pub fn CreateConversionCommand<'mcx>(
     let names: Vec<&str> = stmt
         .conversion_name
         .iter()
-        .map(|n| n.as_string().expect("qualified name component is a String node").sval)
+        .map(|n| {
+            n.as_string()
+                .expect("qualified name component is a String node")
+                .sval
+        })
         .collect();
     let (namespace_id, conversion_name) =
         catalog_namespace::QualifiedNameGetCreationNamespace(mcx, &names)?;
@@ -86,7 +96,8 @@ pub fn CreateConversionCommand<'mcx>(
     }
 
     const FUNCARGS: [Oid; 6] = [INT4OID, INT4OID, CSTRINGOID, INTERNALOID, INT4OID, BOOLOID];
-    let funcoid = parse_func::LookupFuncName(&stmt.func_name, FUNCARGS.len() as i16, &FUNCARGS, false)?;
+    let funcoid =
+        parse_func::LookupFuncName(&stmt.func_name, FUNCARGS.len() as i16, &FUNCARGS, false)?;
 
     if lsyscache::get_func_rettype(funcoid)? != INT4OID {
         return Err(invalid(

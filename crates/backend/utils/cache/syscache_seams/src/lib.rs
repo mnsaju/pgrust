@@ -1,3 +1,6 @@
+// Seam signatures mirror the C syscache lookup functions they replace.
+#![allow(clippy::too_many_arguments)]
+
 use types_core::Oid;
 use types_error::PgResult;
 use types_storage::PgClassShape;
@@ -151,7 +154,6 @@ use datum::Datum;
 use mcx::{Mcx, PgString, PgVec};
 use types_core::AttrNumber;
 use types_tuple::NameData;
-
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PgAmopShape {
@@ -541,7 +543,6 @@ seam_core::seam!(
     pub fn lookup_pg_ts_dict_row(dictid: Oid) -> PgResult<Option<PgTsObjectRow>>
 );
 
-
 seam_core::seam!(
     pub fn lookup_pg_constraint_shape(conoid: Oid) -> PgResult<Option<PgConstraintShape>>
 );
@@ -617,13 +618,15 @@ seam_core::seam!(
     ) -> PgResult<(PgVec<'mcx, PgAmprocRow>, bool)>
 );
 
+// SearchSysCacheList1(CLAAMNAMENSP, amoid) row shape: (oid, opcfamily,
+// opcintype, opcdefault, opcname).
+type PgOpclassRow = (Oid, Oid, Oid, bool, NameData);
+
 seam_core::seam!(
-    // SearchSysCacheList1(CLAAMNAMENSP, amoid): (oid, opcfamily, opcintype,
-    // opcdefault, opcname) per opclass of the AM, catcache list order.
     pub fn lookup_pg_opclass_rows_by_am<'mcx>(
         mcx: Mcx<'mcx>,
         amoid: Oid,
-    ) -> PgResult<PgVec<'mcx, (Oid, Oid, Oid, bool, NameData)>>
+    ) -> PgResult<PgVec<'mcx, PgOpclassRow>>
 );
 
 seam_core::seam!(

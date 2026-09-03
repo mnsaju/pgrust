@@ -181,7 +181,12 @@ struct SimRead<'w> {
 }
 
 impl XLogSegmentRoutine for SimRead<'_> {
-    fn segment_open(&mut self, _: &mut ReaderView, _: XLogSegNo, _: &mut TimeLineID) -> PgResult<()> {
+    fn segment_open(
+        &mut self,
+        _: &mut ReaderView,
+        _: XLogSegNo,
+        _: &mut TimeLineID,
+    ) -> PgResult<()> {
         unreachable!("in-memory reader")
     }
     fn segment_close(&mut self, _: &mut ReaderView) {}
@@ -218,7 +223,10 @@ fn reads_record_sequence() {
     let l1 = w.append(0, 0x10, 100, &main_data_body(b"first"));
     let l2 = w.append(0, 0x20, 101, &main_data_body(b"second record"));
     let l3 = w.append(0, 0x30, 102, &main_data_body(b"third"));
-    let mut src = SimRead { wal: &w, end: w.insert };
+    let mut src = SimRead {
+        wal: &w,
+        end: w.insert,
+    };
 
     let cx = MemoryContext::new("t");
     let mut r = reader(&cx);
@@ -252,7 +260,10 @@ fn crc_failure_reports_checksum_error() {
     let l2 = w.append(0, 0x10, 2, &main_data_body(b"corrupt me"));
     let o = w.off(l2) + SIZE_OF_XLOG_RECORD + 2;
     w.buf[o] ^= 0xFF;
-    let mut src = SimRead { wal: &w, end: w.insert };
+    let mut src = SimRead {
+        wal: &w,
+        end: w.insert,
+    };
 
     let cx = MemoryContext::new("t");
     let mut r = reader(&cx);
@@ -271,13 +282,18 @@ fn crc_failure_reports_checksum_error() {
 fn decode_corrupt_body(body: &[u8]) -> String {
     let mut w = WalSim::new();
     let l1 = w.append(0, 0, 0, body);
-    let mut src = SimRead { wal: &w, end: w.insert };
+    let mut src = SimRead {
+        wal: &w,
+        end: w.insert,
+    };
     let cx = MemoryContext::new("t");
     let mut r = reader(&cx);
     r.XLogBeginRead(l1);
     let res = r.XLogReadRecord(&mut src).unwrap();
     assert_eq!(res, None, "corrupt record must fail to decode");
-    r.errormsg().expect("decode failure reports an error").to_owned()
+    r.errormsg()
+        .expect("decode failure reports an error")
+        .to_owned()
 }
 
 // Cargo-fuzz decoder crashes (2026-07-08): wire-controlled u32/u16 arithmetic
@@ -335,14 +351,20 @@ fn bad_prev_link_detected() {
     let o = w.off(l2) + 8;
     w.buf[o..o + 8].copy_from_slice(&(l1 + 8).to_ne_bytes());
     w.recompute_crc(l2);
-    let mut src = SimRead { wal: &w, end: w.insert };
+    let mut src = SimRead {
+        wal: &w,
+        end: w.insert,
+    };
 
     let cx = MemoryContext::new("t");
     let mut r = reader(&cx);
     r.XLogBeginRead(l1);
     assert_eq!(r.XLogReadRecord(&mut src).unwrap(), Some(l1));
     assert_eq!(r.XLogReadRecord(&mut src).unwrap(), None);
-    assert!(r.errormsg().unwrap().contains("record with incorrect prev-link"));
+    assert!(r
+        .errormsg()
+        .unwrap()
+        .contains("record with incorrect prev-link"));
 }
 
 #[test]
@@ -352,7 +374,10 @@ fn record_spanning_pages_reassembles() {
     let l1 = w.append(0, 0x10, 7, &main_data_body(&big));
     let l2 = w.append(0, 0x10, 8, &main_data_body(b"after"));
     assert!(l2 - l1 > PG, "record must span pages");
-    let mut src = SimRead { wal: &w, end: w.insert };
+    let mut src = SimRead {
+        wal: &w,
+        end: w.insert,
+    };
 
     let cx = MemoryContext::new("t");
     let mut r = reader(&cx);
@@ -387,7 +412,10 @@ fn block_references_decode_and_marshal() {
         b"maindata",
     );
     let l1 = w.append(10, 0x00, 9, &body);
-    let mut src = SimRead { wal: &w, end: w.insert };
+    let mut src = SimRead {
+        wal: &w,
+        end: w.insert,
+    };
 
     let cx = MemoryContext::new("t");
     let mut r = reader(&cx);
@@ -441,7 +469,10 @@ fn find_next_record_skips_into_valid_boundary() {
     let mut w = WalSim::new();
     let l1 = w.append(0, 0x10, 1, &main_data_body(b"one"));
     let l2 = w.append(0, 0x10, 2, &main_data_body(b"two"));
-    let mut src = SimRead { wal: &w, end: w.insert };
+    let mut src = SimRead {
+        wal: &w,
+        end: w.insert,
+    };
 
     let cx = MemoryContext::new("t");
     let mut r = reader(&cx);
@@ -455,7 +486,10 @@ fn oversized_and_ring_full_accounting() {
     let mut w = WalSim::new();
     let l1 = w.append(0, 0x10, 1, &main_data_body(b"first"));
     let _l2 = w.append(0, 0x10, 2, &main_data_body(b"second"));
-    let mut src = SimRead { wal: &w, end: w.insert };
+    let mut src = SimRead {
+        wal: &w,
+        end: w.insert,
+    };
 
     let cx = MemoryContext::new("t");
     let mut r = reader(&cx);
@@ -480,7 +514,10 @@ fn page_header_validation_failures() {
     let page2 = w.base + PG;
     let o = w.off(page2);
     w.buf[o] = 0x77;
-    let mut src = SimRead { wal: &w, end: w.insert };
+    let mut src = SimRead {
+        wal: &w,
+        end: w.insert,
+    };
 
     let cx = MemoryContext::new("t");
     let mut r = reader(&cx);
@@ -501,7 +538,10 @@ fn xlog_switch_skips_to_segment_boundary() {
     // then continue at the next segment boundary.
     w.insert = 2 * SEGSZ as u64;
     let l2 = w.append(0, 0x10, 3, &main_data_body(b"next seg"));
-    let mut src = SimRead { wal: &w, end: w.insert };
+    let mut src = SimRead {
+        wal: &w,
+        end: w.insert,
+    };
 
     let cx = MemoryContext::new("t");
     let mut r = reader(&cx);
@@ -557,8 +597,15 @@ fn wal_read_preads_across_segments() {
     };
     let mut out = vec![0u8; 4096];
     let startptr = w.base + 100;
-    let res = WALRead(&mut v, &mut FileSegs { path: seg_path }, &mut out, startptr, 4096, 1)
-        .unwrap();
+    let res = WALRead(
+        &mut v,
+        &mut FileSegs { path: seg_path },
+        &mut out,
+        startptr,
+        4096,
+        1,
+    )
+    .unwrap();
     assert!(res.is_ok());
     assert_eq!(&out[..], &w.buf[100..100 + 4096]);
     assert_eq!(v.seg.ws_segno, 1);
@@ -577,11 +624,9 @@ fn restore_image_pglz_roundtrips() {
 
     // No hole: compress the whole page.
     let mut comp = [core::mem::MaybeUninit::<u8>::uninit(); pglz::pglz_max_output(BLCKSZ)];
-    let n =
-        pglz::pglz_compress_into(&page_orig, &mut comp, &pglz::PGLZ_STRATEGY_DEFAULT).unwrap();
+    let n = pglz::pglz_compress_into(&page_orig, &mut comp, &pglz::PGLZ_STRATEGY_DEFAULT).unwrap();
     // SAFETY: first n bytes written by the compressor.
-    let image =
-        unsafe { core::slice::from_raw_parts(comp.as_ptr().cast::<u8>(), n) };
+    let image = unsafe { core::slice::from_raw_parts(comp.as_ptr().cast::<u8>(), n) };
     let mut page = [0xAAu8; BLCKSZ];
     restore_image_core(image, BKPIMAGE_COMPRESS_PGLZ, 0, 0, &mut page).unwrap();
     assert_eq!(page, page_orig);
@@ -593,8 +638,7 @@ fn restore_image_pglz_roundtrips() {
     holed.extend_from_slice(&page_orig[hole_offset + hole_length..]);
     let n = pglz::pglz_compress_into(&holed, &mut comp, &pglz::PGLZ_STRATEGY_DEFAULT).unwrap();
     // SAFETY: first n bytes written by the compressor.
-    let image =
-        unsafe { core::slice::from_raw_parts(comp.as_ptr().cast::<u8>(), n) };
+    let image = unsafe { core::slice::from_raw_parts(comp.as_ptr().cast::<u8>(), n) };
     let mut page = [0xAAu8; BLCKSZ];
     restore_image_core(
         image,
@@ -605,13 +649,18 @@ fn restore_image_pglz_roundtrips() {
     )
     .unwrap();
     assert_eq!(&page[..hole_offset], &page_orig[..hole_offset]);
-    assert!(page[hole_offset..hole_offset + hole_length].iter().all(|&b| b == 0));
-    assert_eq!(&page[hole_offset + hole_length..], &page_orig[hole_offset + hole_length..]);
+    assert!(page[hole_offset..hole_offset + hole_length]
+        .iter()
+        .all(|&b| b == 0));
+    assert_eq!(
+        &page[hole_offset + hole_length..],
+        &page_orig[hole_offset + hole_length..]
+    );
 
     // Corrupt stream fails with the C decompress message, not a panic.
     let mut page = [0u8; BLCKSZ];
-    let err = restore_image_core(&image[..n / 2], BKPIMAGE_COMPRESS_PGLZ, 0, 0, &mut page)
-        .unwrap_err();
+    let err =
+        restore_image_core(&image[..n / 2], BKPIMAGE_COMPRESS_PGLZ, 0, 0, &mut page).unwrap_err();
     assert!(matches!(err, RestoreErr::DecompressFailure));
     assert!(restore_err_msg(err, 0x1_0000_0000, 3).contains("could not decompress image"));
 }

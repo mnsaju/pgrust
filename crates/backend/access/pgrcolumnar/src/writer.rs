@@ -4,16 +4,16 @@
 use std::collections::HashMap;
 
 use ::datum::Datum;
+use ::tuplesort_seams::{CbIngestSort, CbSortKeyKind};
 use ::types_core::primitive::{Oid, TransactionId};
 use ::types_error::{PgError, PgResult};
-use ::tuplesort_seams::{CbIngestSort, CbSortKeyKind};
 
 use crate::format::*;
 use crate::hll::Hll;
 use crate::reader::read_header_opt;
 use crate::segfile::SegFile;
-use ::types_error::ERRCODE_FEATURE_NOT_SUPPORTED;
 use crate::varlena_bytes;
+use ::types_error::ERRCODE_FEATURE_NOT_SUPPORTED;
 
 // ---- per-table writer options (CREATE TABLE ... USING cbstore WITH (...)) --
 
@@ -63,10 +63,7 @@ pub(crate) fn intcodec_env_default() -> bool {
     }
 }
 
-fn apply_intcodec_cols_env(
-    rel: &::types_rel::Relation<'_>,
-    delta: &mut [bool],
-) -> PgResult<()> {
+fn apply_intcodec_cols_env(rel: &::types_rel::Relation<'_>, delta: &mut [bool]) -> PgResult<()> {
     let Ok(cols) = std::env::var("PGRUST_CBSTORE_INTCODEC_COLS") else {
         return Ok(());
     };
@@ -145,18 +142,31 @@ pub fn writer_opts_of(
         ::types_rel::PgrcolumnarCodec::Plain => CodecChoice::Plain,
     };
     out.codec = vec![table_choice; coltypes.len()];
-    for part in o.cluster_key().split(',').map(str::trim).filter(|s| !s.is_empty()) {
+    for part in o
+        .cluster_key()
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         let idx = col_index_of(rel, part)?;
-        out.cluster_key.push((idx, sort_kind_of(coltypes[idx as usize])));
+        out.cluster_key
+            .push((idx, sort_kind_of(coltypes[idx as usize])));
     }
     if out.cluster_key.len() > CB_CLUSTER_KEY_MAX_COLS {
         return Err(Box::new(PgError::error(format!(
             "cbstore: cluster_key supports at most {CB_CLUSTER_KEY_MAX_COLS} columns"
         ))));
     }
-    for pair in o.codec_cols().split(',').map(str::trim).filter(|s| !s.is_empty()) {
+    for pair in o
+        .codec_cols()
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         let (name, codec) = pair.split_once('=').ok_or_else(|| {
-            Box::new(PgError::error(format!("cbstore: bad codec_cols entry \"{pair}\"")))
+            Box::new(PgError::error(format!(
+                "cbstore: bad codec_cols entry \"{pair}\""
+            )))
         })?;
         let idx = col_index_of(rel, name.trim())? as usize;
         out.codec[idx] = match codec.trim() {
@@ -193,7 +203,8 @@ fn apply_presort_env(
     };
     for name in cols.split(',').map(str::trim).filter(|s| !s.is_empty()) {
         let idx = col_index_of(rel, name)?;
-        out.presort_key.push((idx, sort_kind_of(coltypes[idx as usize])));
+        out.presort_key
+            .push((idx, sort_kind_of(coltypes[idx as usize])));
     }
     if out.presort_key.len() > CB_CLUSTER_KEY_MAX_COLS {
         return Err(Box::new(PgError::error(format!(
@@ -227,7 +238,10 @@ pub(crate) struct CodecCtx {
 pub(crate) fn dict_frames_env() -> bool {
     static ON: pgsync::OnceLock<bool> = pgsync::OnceLock::new();
     *ON.get_or_init(|| {
-        matches!(std::env::var("PGRUST_CBSTORE_DICT_FRAMES").as_deref(), Ok("1") | Ok("on"))
+        matches!(
+            std::env::var("PGRUST_CBSTORE_DICT_FRAMES").as_deref(),
+            Ok("1") | Ok("on")
+        )
     })
 }
 
@@ -257,8 +271,9 @@ impl CodecCtx {
         match codec {
             Codec::Lz4 => lz4_flex::compress(data),
             #[cfg(not(target_family = "wasm"))]
-            Codec::Zstd => zstd::bulk::compress(data, self.zstd_level)
-                .expect("cbstore: zstd compress failed"),
+            Codec::Zstd => {
+                zstd::bulk::compress(data, self.zstd_level).expect("cbstore: zstd compress failed")
+            }
             // wasm32: zstd-sys links C and has no wasm build; the codec
             // picker never selects Zstd on this target (see pick()).
             #[cfg(target_family = "wasm")]
@@ -277,9 +292,7 @@ impl CodecCtx {
         let wins = |comp: usize| comp * 10 <= sample.len() * 9;
         match self.choice {
             CodecChoice::Plain => None,
-            CodecChoice::Lz4 => {
-                wins(lz4_flex::compress(sample).len()).then_some(Codec::Lz4)
-            }
+            CodecChoice::Lz4 => wins(lz4_flex::compress(sample).len()).then_some(Codec::Lz4),
             #[cfg(not(target_family = "wasm"))]
             CodecChoice::Zstd => {
                 wins(self.compress(Codec::Zstd, sample).len()).then_some(Codec::Zstd)
@@ -319,7 +332,7 @@ pub(crate) fn push_frame(body: &mut Vec<u8>, raw_len: usize, comp: &[u8]) {
     put_u32(body, raw_len as u32);
     put_u32(body, comp.len() as u32);
     body.extend_from_slice(comp);
-    while body.len() % 4 != 0 {
+    while !body.len().is_multiple_of(4) {
         body.push(0);
     }
 }
@@ -345,7 +358,10 @@ pub(crate) static INTCODEC_KEPT_PLAIN: std::sync::atomic::AtomicU64 =
 /// only chunks where the delta arm was evaluated and lost.
 pub fn intcodec_stats() -> (u64, u64) {
     use std::sync::atomic::Ordering::Relaxed;
-    (INTCODEC_DELTA_CHOSEN.load(Relaxed), INTCODEC_KEPT_PLAIN.load(Relaxed))
+    (
+        INTCODEC_DELTA_CHOSEN.load(Relaxed),
+        INTCODEC_KEPT_PLAIN.load(Relaxed),
+    )
 }
 
 struct IntBuilder {
@@ -434,8 +450,14 @@ impl StitchCol {
 // inline path. Engaged only via CbWriter::install_stitch_pool (parallel COPY
 // driver, env opt-in); absent = inline code verbatim.
 enum StitchMsg {
-    Rg { col: usize, entries: Option<Vec<Box<[u8]>>> },
+    Rg {
+        col: usize,
+        entries: Option<Vec<Box<[u8]>>>,
+    },
 }
+
+// Per-thread stitch result: (col, dict_size, per-RG blobs).
+type StitchThreadResult = Vec<(usize, u64, Vec<Vec<u8>>)>;
 
 struct StitchPool {
     // permit-s4 row 10: per-thread unbounded pgsync::mailbox (send never
@@ -449,7 +471,7 @@ struct StitchPool {
     // spawn-fenced) and BOTH close-then-join sites (drop path + finalize
     // path, the census D1 pair) become hooked Join parks woken by the
     // target's exit. Native arm = the std re-export, byte-identical.
-    handles: Vec<pgsync::thread::JoinHandle<Vec<(usize, u64, Vec<Vec<u8>>)>>>,
+    handles: Vec<pgsync::thread::JoinHandle<StitchThreadResult>>,
     /// col -> owning thread index (None = int column / no stitch).
     assign: Vec<Option<usize>>,
 }
@@ -471,7 +493,9 @@ fn stitch_pool_thread(
 ) -> Vec<(usize, u64, Vec<Vec<u8>>)> {
     let mut cols: HashMap<usize, StitchCol> = owned.into_iter().collect();
     while let Some(StitchMsg::Rg { col, entries }) = rx.recv() {
-        let Some(st) = cols.get_mut(&col) else { continue };
+        let Some(st) = cols.get_mut(&col) else {
+            continue;
+        };
         if st.poisoned {
             continue;
         }
@@ -507,7 +531,10 @@ fn stitch_pool_thread(
 fn fasthash_enabled() -> bool {
     static ON: pgsync::OnceLock<bool> = pgsync::OnceLock::new();
     *ON.get_or_init(|| {
-        matches!(std::env::var("PGRUST_CBSTORE_FASTHASH").as_deref(), Ok("1") | Ok("on"))
+        matches!(
+            std::env::var("PGRUST_CBSTORE_FASTHASH").as_deref(),
+            Ok("1") | Ok("on")
+        )
     })
 }
 
@@ -564,7 +591,10 @@ struct DictBuild {
 
 impl DictBuild {
     fn new() -> DictBuild {
-        DictBuild { fast: fasthash_enabled(), sip: std::collections::hash_map::RandomState::new() }
+        DictBuild {
+            fast: fasthash_enabled(),
+            sip: std::collections::hash_map::RandomState::new(),
+        }
     }
 }
 
@@ -585,7 +615,10 @@ impl std::hash::BuildHasher for DictBuild {
 fn stitch_write_enabled() -> bool {
     static ON: pgsync::OnceLock<bool> = pgsync::OnceLock::new();
     *ON.get_or_init(|| {
-        !matches!(std::env::var("PGRUST_CBSTORE_STITCH").as_deref(), Ok("0") | Ok("off"))
+        !matches!(
+            std::env::var("PGRUST_CBSTORE_STITCH").as_deref(),
+            Ok("0") | Ok("off")
+        )
     })
 }
 
@@ -597,7 +630,10 @@ fn stitch_write_enabled() -> bool {
 fn ndv_regs_enabled() -> bool {
     static ON: pgsync::OnceLock<bool> = pgsync::OnceLock::new();
     *ON.get_or_init(|| {
-        !matches!(std::env::var("PGRUST_CBSTORE_NDV_REGS").as_deref(), Ok("0") | Ok("off"))
+        !matches!(
+            std::env::var("PGRUST_CBSTORE_NDV_REGS").as_deref(),
+            Ok("0") | Ok("off")
+        )
     })
 }
 
@@ -760,15 +796,22 @@ fn open_writer(rel: &::types_rel::Relation<'_>) -> PgResult<CbWriter> {
         && (rel.rd_createSubid.get() == cur_subid
             || rel.rd_newRelfilelocatorSubid.get() == cur_subid);
     let fingerprint = schema_fingerprint(
-        &rel.rd_att.attrs.iter().map(|a| (a.atttypid, a.attlen)).collect::<Vec<_>>(),
+        &rel.rd_att
+            .attrs
+            .iter()
+            .map(|a| (a.atttypid, a.attlen))
+            .collect::<Vec<_>>(),
     );
     let cid = xact_seams::get_current_command_id::call(false)?;
     let mut w = open_writer_inner(file, xid, cid, frozen_ok, coltypes, fingerprint, opts)?;
     if !w.opts.cluster_key.is_empty() || !w.opts.presort_key.is_empty() {
         // presort_key is only resolved when no cluster_key is declared
         // (apply_presort_env), so exactly one of the two is non-empty here.
-        let key_src =
-            if w.opts.cluster_key.is_empty() { &w.opts.presort_key } else { &w.opts.cluster_key };
+        let key_src = if w.opts.cluster_key.is_empty() {
+            &w.opts.presort_key
+        } else {
+            &w.opts.cluster_key
+        };
         let keys: Vec<(i16, CbSortKeyKind)> =
             key_src.iter().map(|&(c, k)| (c as i16 + 1, k)).collect();
         // SAFETY: lifetime erasure on the relcache tupdesc; the COPY/INSERT
@@ -844,7 +887,13 @@ fn open_writer_inner(
         w.stitch = Some(
             w.coltypes
                 .iter()
-                .map(|t| if t.is_text() { Some(StitchCol::new()) } else { None })
+                .map(|t| {
+                    if t.is_text() {
+                        Some(StitchCol::new())
+                    } else {
+                        None
+                    }
+                })
                 .collect(),
         );
     }
@@ -867,12 +916,12 @@ fn open_writer_inner(
                 if footer_off != 0 {
                     let (rgs, footer_end, _ndv, _sorted, _ckey, _lenflags, _stitch, ndvregs) =
                         crate::reader::read_footer_rgs(
-                        &mut w.file,
-                        footer_off,
-                        w.ncols,
-                        version,
-                        true,
-                    )?;
+                            &mut w.file,
+                            footer_off,
+                            w.ncols,
+                            version,
+                            true,
+                        )?;
                     if !rgs.is_empty() {
                         // v8: continue the persisted register sketch across
                         // the reopen instead of invalidating (registers are
@@ -923,7 +972,10 @@ impl CbWriter {
             .iter()
             .map(|t| {
                 if t.is_text() {
-                    ColBuilder::Text(TextBuilder { offs: Vec::new(), blob: Vec::new() })
+                    ColBuilder::Text(TextBuilder {
+                        offs: Vec::new(),
+                        blob: Vec::new(),
+                    })
                 } else {
                     ColBuilder::Int(IntBuilder { vals: Vec::new() })
                 }
@@ -979,7 +1031,11 @@ impl CbWriter {
             | RG_FLAG_SUMS
             | RG_FLAG_LENSTATS
             | RG_FLAG_ZEROCNT
-            | (if self.draining_clustered { RG_FLAG_CLUSTERED } else { 0 });
+            | (if self.draining_clustered {
+                RG_FLAG_CLUSTERED
+            } else {
+                0
+            });
         // Capture dict entries only where the column's stitch is live (a
         // poisoned or absent stitch skips the boxed-key allocations, exactly
         // as the inline interning did).
@@ -991,8 +1047,15 @@ impl CbWriter {
             })
             .collect();
         let builders = std::mem::take(&mut self.builders);
-        let mut sealed =
-            seal_rg_body(&self.coltypes, &self.opts, &builders, self.nbuf, self.xid, flags, &capture);
+        let mut sealed = seal_rg_body(
+            &self.coltypes,
+            &self.opts,
+            &builders,
+            self.nbuf,
+            self.xid,
+            flags,
+            &capture,
+        );
         self.register_stitch(&mut sealed);
         let file_off = align64(self.write_off);
         self.file.write_all_at(&sealed.body, file_off)?;
@@ -1015,13 +1078,18 @@ impl CbWriter {
     /// ordered commit share it): intern captured dict entries in local-code
     /// order; a dict-less text RG poisons the column.
     fn register_stitch(&mut self, sealed: &mut SealedRg) {
-        let Some(cols) = self.stitch.as_mut() else { return };
-        for c in 0..self.ncols {
-            let Some(st) = cols[c].as_mut() else { continue };
+        let Some(cols) = self.stitch.as_mut() else {
+            return;
+        };
+        for (col_slot, dict_slot) in cols.iter_mut().zip(sealed.dicts.iter_mut()).take(self.ncols)
+        {
+            let Some(st) = col_slot.as_mut() else {
+                continue;
+            };
             if st.poisoned {
                 continue;
             }
-            match sealed.dicts[c].take() {
+            match dict_slot.take() {
                 Some(entries) => {
                     let mut rg_map: Vec<u32> = Vec::with_capacity(entries.len());
                     for e in entries {
@@ -1068,38 +1136,37 @@ impl CbWriter {
         let mut stitch_gndv = vec![0u64; self.ncols];
         let mut stitch_dir = vec![(0u64, 0u32); nrgs * self.ncols];
         let ft0 = std::time::Instant::now();
-        let finalized: Vec<(usize, u64, Vec<Vec<u8>>)> = if let Some(mut pool) =
-            self.stitch_pool.take()
-        {
-            // load-r3 M2: close the feed channels; the threads finalize
-            // their columns (byte-rank + blob images) in parallel.
-            pool.txs.clear();
-            let handles: Vec<_> = pool.handles.drain(..).collect();
-            drop(pool);
-            let mut results: Vec<(usize, u64, Vec<Vec<u8>>)> = Vec::new();
-            for h in handles {
-                let r = h.join().map_err(|_| {
-                    Box::new(PgError::error("stitch pool thread panicked".to_string()))
-                })?;
-                results.extend(r);
-            }
-            // Column-ascending = the inline stanza's write order exactly.
-            results.sort_by_key(|x| x.0);
-            results
-        } else if let Some(cols) = self.stitch.take() {
-            cols.into_iter()
-                .enumerate()
-                .filter_map(|(c, st)| {
-                    let st = st?;
-                    if st.rg_maps.len() != nrgs {
-                        return None;
-                    }
-                    st.finalize().map(|(gndv, blobs)| (c, gndv, blobs))
-                })
-                .collect()
-        } else {
-            Vec::new()
-        };
+        let finalized: Vec<(usize, u64, Vec<Vec<u8>>)> =
+            if let Some(mut pool) = self.stitch_pool.take() {
+                // load-r3 M2: close the feed channels; the threads finalize
+                // their columns (byte-rank + blob images) in parallel.
+                pool.txs.clear();
+                let handles: Vec<_> = pool.handles.drain(..).collect();
+                drop(pool);
+                let mut results: Vec<(usize, u64, Vec<Vec<u8>>)> = Vec::new();
+                for h in handles {
+                    let r = h.join().map_err(|_| {
+                        Box::new(PgError::error("stitch pool thread panicked".to_string()))
+                    })?;
+                    results.extend(r);
+                }
+                // Column-ascending = the inline stanza's write order exactly.
+                results.sort_by_key(|x| x.0);
+                results
+            } else if let Some(cols) = self.stitch.take() {
+                cols.into_iter()
+                    .enumerate()
+                    .filter_map(|(c, st)| {
+                        let st = st?;
+                        if st.rg_maps.len() != nrgs {
+                            return None;
+                        }
+                        st.finalize().map(|(gndv, blobs)| (c, gndv, blobs))
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
         for (c, gndv, blobs) in finalized {
             if blobs.len() != nrgs {
                 continue;
@@ -1194,7 +1261,12 @@ impl CbWriter {
         debug_assert!(self.opts.cluster_key.len() <= CB_CLUSTER_KEY_MAX_COLS);
         f.extend_from_slice(&(self.opts.cluster_key.len() as u16).to_le_bytes());
         for slot in 0..CB_CLUSTER_KEY_MAX_COLS {
-            let c = self.opts.cluster_key.get(slot).map(|&(c, _)| c).unwrap_or(0);
+            let c = self
+                .opts
+                .cluster_key
+                .get(slot)
+                .map(|&(c, _)| c)
+                .unwrap_or(0);
             f.extend_from_slice(&c.to_le_bytes());
         }
         // v7 length-stats section (format.rs doc): rg-major, GRANULES_PER_RG
@@ -1213,8 +1285,8 @@ impl CbWriter {
         // v7 stitch section (after length stats): per-column global NDV
         // (0 = no stitch), then the per-(RG, column) stitch-blob directory
         // (all-zero where absent).
-        for c in 0..self.ncols {
-            put_u64(&mut f, stitch_gndv[c]);
+        for &g in stitch_gndv.iter().take(self.ncols) {
+            put_u64(&mut f, g);
         }
         for rg in 0..nrgs {
             for c in 0..self.ncols {
@@ -1228,7 +1300,10 @@ impl CbWriter {
         for rg in &self.rgs {
             for g in 0..GRANULES_PER_RG {
                 for c in 0..self.ncols {
-                    put_u32(&mut f, rg.zerocnt.get(g * self.ncols + c).copied().unwrap_or(0));
+                    put_u32(
+                        &mut f,
+                        rg.zerocnt.get(g * self.ncols + c).copied().unwrap_or(0),
+                    );
                 }
             }
         }
@@ -1389,7 +1464,7 @@ fn seal_rg_body(
     let mut sums: Vec<i128> = Vec::with_capacity(ncols);
     let mut dicts: Vec<Option<Vec<Box<[u8]>>>> = (0..ncols).map(|_| None).collect();
     for (c, b) in builders.iter().enumerate() {
-        while body.len() % 64 != 0 {
+        while !body.len().is_multiple_of(64) {
             body.push(0);
         }
         let chunk_off = body.len() as u64;
@@ -1397,8 +1472,7 @@ fn seal_rg_body(
         let (min, max) = match b {
             ColBuilder::Int(ib) => encode_int_chunk(&mut body, &ib.vals, ngranules, &cc),
             ColBuilder::Text(tb) => {
-                let (min, max, cap) =
-                    encode_text_chunk(&mut body, tb, ngranules, &cc, capture[c]);
+                let (min, max, cap) = encode_text_chunk(&mut body, tb, ngranules, &cc, capture[c]);
                 dicts[c] = cap;
                 (min, max)
             }
@@ -1547,7 +1621,10 @@ impl RgChunkEncoder {
             .iter()
             .map(|t| {
                 if t.is_text() {
-                    ColBuilder::Text(TextBuilder { offs: Vec::new(), blob: Vec::new() })
+                    ColBuilder::Text(TextBuilder {
+                        offs: Vec::new(),
+                        blob: Vec::new(),
+                    })
                 } else {
                     ColBuilder::Int(IntBuilder { vals: Vec::new() })
                 }
@@ -1556,7 +1633,9 @@ impl RgChunkEncoder {
         RgChunkEncoder {
             builders,
             nbuf: 0,
-            hll: plan.want_ndv.then(|| (0..ncols).map(|_| Hll::default()).collect()),
+            hll: plan
+                .want_ndv
+                .then(|| (0..ncols).map(|_| Hll::default()).collect()),
             sorted: plan.want_sorted.then(|| vec![true; ncols]),
             prev_int: vec![0; ncols],
             prev_text: vec![Vec::new(); ncols],
@@ -1618,7 +1697,11 @@ impl RgChunkEncoder {
                 })
                 .collect()
         });
-        EncodedRg { sealed, hll: self.hll, probe }
+        EncodedRg {
+            sealed,
+            hll: self.hll,
+            probe,
+        }
     }
 }
 
@@ -1704,13 +1787,15 @@ impl CbWriter {
             let h = pgsync::thread::Builder::new()
                 .name("cb-stitch".into())
                 .spawn(move || stitch_pool_thread(owned, rx))
-                .map_err(|e| {
-                    Box::new(PgError::error(format!("stitch pool spawn failed: {e}")))
-                })?;
+                .map_err(|e| Box::new(PgError::error(format!("stitch pool spawn failed: {e}"))))?;
             txs.push(tx);
             handles.push(h);
         }
-        self.stitch_pool = Some(StitchPool { txs, handles, assign });
+        self.stitch_pool = Some(StitchPool {
+            txs,
+            handles,
+            assign,
+        });
         Ok(())
     }
 
@@ -1720,8 +1805,14 @@ impl CbWriter {
     /// sketch union (register-identical to serial adds), sorted-tracker
     /// stitching across the chunk seam.
     pub fn commit_encoded_rg(&mut self, enc: EncodedRg) -> PgResult<()> {
-        debug_assert!(self.nbuf == 0, "ordered commit into a writer with buffered rows");
-        debug_assert!(self.sorter.is_none(), "ordered commit into a sorting writer");
+        debug_assert!(
+            self.nbuf == 0,
+            "ordered commit into a writer with buffered rows"
+        );
+        debug_assert!(
+            self.sorter.is_none(),
+            "ordered commit into a sorting writer"
+        );
         let mut sealed = enc.sealed;
         let t0 = std::time::Instant::now();
         if let Some(pool) = &self.stitch_pool {
@@ -1855,7 +1946,14 @@ fn bloom_armed(vals: &[i64], min: i64, max: i64, gmm: &[(i64, i64)]) -> bool {
 }
 
 // Serialize granule g's plain FOR/Raw payload image into `out`.
-fn enc_int_granule(out: &mut Vec<u8>, vals: &[i64], g: usize, encoding: Encoding, width: u8, base: i64) {
+fn enc_int_granule(
+    out: &mut Vec<u8>,
+    vals: &[i64],
+    g: usize,
+    encoding: Encoding,
+    width: u8,
+    base: i64,
+) {
     let lo = g * GRANULE_ROWS;
     let hi = (lo + GRANULE_ROWS).min(vals.len());
     match encoding {
@@ -1969,7 +2067,11 @@ pub(crate) fn encode_int_chunk(
         } else {
             8
         };
-        if w == 8 { (Encoding::Raw, 8) } else { (Encoding::For, w) }
+        if w == 8 {
+            (Encoding::Raw, 8)
+        } else {
+            (Encoding::For, w)
+        }
     };
     let ng = ngranules as usize;
     let mut gmm = Vec::with_capacity(ng);
@@ -2017,9 +2119,7 @@ pub(crate) fn encode_int_chunk(
     }
     let mut payload_len = match encoding {
         Encoding::Const => 0u64,
-        _ if codec != Codec::None => {
-            frames.iter().map(|(f, _)| frame_len(f.len()) as u64).sum()
-        }
+        _ if codec != Codec::None => frames.iter().map(|(f, _)| frame_len(f.len()) as u64).sum(),
         _ => (n * width as usize) as u64,
     };
     // intcodec delta arm: encode every granule's DeltaFor image, sample
@@ -2047,7 +2147,11 @@ pub(crate) fn encode_int_chunk(
                     let comp = cc.compress(c, &img);
                     // Per-granule incompressible guard: a frame must never
                     // expand past its raw image (keeps worst case bounded).
-                    if comp.len() >= img.len() { img.clone() } else { comp }
+                    if comp.len() >= img.len() {
+                        img.clone()
+                    } else {
+                        comp
+                    }
                 }
             };
             // comp_len == raw_len marks an in-place (uncompressed) frame.
@@ -2123,7 +2227,7 @@ pub(crate) fn encode_int_chunk(
             }
         }
     }
-    while body.len() % 64 != 0 {
+    while !body.len().is_multiple_of(64) {
         body.push(0);
     }
     match encoding {
@@ -2194,8 +2298,11 @@ fn encode_text_chunk(
     } else {
         4
     };
-    let raw_blob_len: usize =
-        tb.offs.iter().map(|&(_, l)| align4(VARLENA_IMG_HDR + l as usize)).sum();
+    let raw_blob_len: usize = tb
+        .offs
+        .iter()
+        .map(|&(_, l)| align4(VARLENA_IMG_HDR + l as usize))
+        .sum();
     let dict_size = n * code_w + ndv * 4 + dict_blob_len;
     let raw_size = n * 4 + raw_blob_len;
     let use_dict = ndv <= 65_536 && dict_size < raw_size;
@@ -2250,49 +2357,52 @@ fn encode_text_chunk(
         // cuts every ~dict_frame_target RAW bytes, byte-sorted order
         // untouched. None = single-frame legacy layout (arm off, no codec
         // win, or the blob fits one target).
-        let frames: Option<Vec<(u32, Vec<u8>)>> = (cc.dict_frames
-            && picked.is_some()
-            && dict_blob_len > cc.dict_frame_target)
-            .then(|| {
-                let codec = picked.unwrap();
-                let mut frames: Vec<(u32, Vec<u8>)> = Vec::new(); // (raw_len, stored)
-                let mut lo = 0usize;
-                let mut acc = 0usize;
-                let push = |lo: usize, hi: usize, frames: &mut Vec<(u32, Vec<u8>)>| {
-                    let raw = &dict_blob[lo..hi];
-                    let comp = cc.compress(codec, raw);
-                    // Incompressible guard: comp_len == raw_len marks a
-                    // stored-raw frame (a compressed frame is strictly
-                    // shorter by this arm).
-                    let stored = if comp.len() < raw.len() { comp } else { raw.to_vec() };
-                    frames.push(((hi - lo) as u32, stored));
-                };
-                for &(_, len) in &order {
-                    acc += align4(VARLENA_IMG_HDR + len as usize);
-                    if acc - lo >= cc.dict_frame_target {
-                        push(lo, acc, &mut frames);
-                        lo = acc;
+        let frames: Option<Vec<(u32, Vec<u8>)>> =
+            (cc.dict_frames && picked.is_some() && dict_blob_len > cc.dict_frame_target)
+                .then(|| {
+                    let codec = picked.unwrap();
+                    let mut frames: Vec<(u32, Vec<u8>)> = Vec::new(); // (raw_len, stored)
+                    let mut lo = 0usize;
+                    let mut acc = 0usize;
+                    let push = |lo: usize, hi: usize, frames: &mut Vec<(u32, Vec<u8>)>| {
+                        let raw = &dict_blob[lo..hi];
+                        let comp = cc.compress(codec, raw);
+                        // Incompressible guard: comp_len == raw_len marks a
+                        // stored-raw frame (a compressed frame is strictly
+                        // shorter by this arm).
+                        let stored = if comp.len() < raw.len() {
+                            comp
+                        } else {
+                            raw.to_vec()
+                        };
+                        frames.push(((hi - lo) as u32, stored));
+                    };
+                    for &(_, len) in &order {
+                        acc += align4(VARLENA_IMG_HDR + len as usize);
+                        if acc - lo >= cc.dict_frame_target {
+                            push(lo, acc, &mut frames);
+                            lo = acc;
+                        }
                     }
-                }
-                if lo < dict_blob_len {
-                    push(lo, dict_blob_len, &mut frames);
-                }
-                frames
-            })
-            .filter(|f| f.len() > 1);
+                    if lo < dict_blob_len {
+                        push(lo, dict_blob_len, &mut frames);
+                    }
+                    frames
+                })
+                .filter(|f| f.len() > 1);
         let comp = if frames.is_none() {
-            picked.map(|c| cc.compress(c, &dict_blob)).unwrap_or_default()
+            picked
+                .map(|c| cc.compress(c, &dict_blob))
+                .unwrap_or_default()
         } else {
             Vec::new()
         };
         let comp_blob_len = match &frames {
-            Some(f) => {
-                align4(4 + 8 * f.len() + f.iter().map(|(_, s)| s.len()).sum::<usize>())
-            }
+            Some(f) => align4(4 + 8 * f.len() + f.iter().map(|(_, s)| s.len()).sum::<usize>()),
             None => frame_len(comp.len()),
         };
-        let use_comp = picked.is_some()
-            && (head_len + comp_blob_len) * 10 <= (head_len + dict_blob_len) * 9;
+        let use_comp =
+            picked.is_some() && (head_len + comp_blob_len) * 10 <= (head_len + dict_blob_len) * 9;
         let (encoding, codec, stored_blob_len) = if use_comp {
             (Encoding::Lz4Dict, picked.unwrap(), comp_blob_len)
         } else {
@@ -2303,7 +2413,11 @@ fn encode_text_chunk(
             encoding,
             width: code_w as u8,
             flags: CHUNK_FLAG_DICT_SORTED
-                | if use_comp && frames.is_some() { CHUNK_FLAG_DICT_FRAMED } else { 0 },
+                | if use_comp && frames.is_some() {
+                    CHUNK_FLAG_DICT_FRAMED
+                } else {
+                    0
+                },
             ngranules,
             aux: ndv as i64,
             payload_len,
@@ -2315,7 +2429,7 @@ fn encode_text_chunk(
             put_i64(body, gmin);
             put_i64(body, gmax);
         }
-        while body.len() % 64 != 0 {
+        while !body.len().is_multiple_of(64) {
             body.push(0);
         }
         match code_w {
@@ -2331,7 +2445,7 @@ fn encode_text_chunk(
                 }
             }
         }
-        while body.len() % 4 != 0 {
+        while !body.len().is_multiple_of(4) {
             body.push(0);
         }
         // dict_off table (offsets into the DECOMPRESSED blob) then the blob.
@@ -2401,7 +2515,7 @@ fn encode_text_chunk(
             frames.push((comp, gblob.len() as u32));
         }
         let comp_size = n * 4 + comp_frames_len;
-        if picked.is_some() && comp_size * 10 <= (n * 4 + raw_blob_len) * 9 {
+        if let Some(codec) = picked.filter(|_| comp_size * 10 <= (n * 4 + raw_blob_len) * 9) {
             let payload_len = (n * 4) as u64 + comp_frames_len as u64;
             ChunkHeader {
                 encoding: Encoding::Lz4Text,
@@ -2410,7 +2524,7 @@ fn encode_text_chunk(
                 ngranules,
                 aux: max_raw as i64,
                 payload_len,
-                codec: picked.unwrap(),
+                codec,
             }
             .encode(body);
             let mut frame_off = (n * 4) as u64;
@@ -2420,7 +2534,7 @@ fn encode_text_chunk(
                 put_i64(body, gmax);
                 frame_off += align4(8 + frames[g].0.len()) as u64;
             }
-            while body.len() % 64 != 0 {
+            while !body.len().is_multiple_of(64) {
                 body.push(0);
             }
             for &o in &offs_rel {
@@ -2452,7 +2566,7 @@ fn encode_text_chunk(
                 put_i64(body, gmin);
                 put_i64(body, gmax);
             }
-            while body.len() % 64 != 0 {
+            while !body.len().is_multiple_of(64) {
                 body.push(0);
             }
             let mut blob_off = 0u32;
@@ -2473,7 +2587,7 @@ const VARLENA_IMG_HDR: usize = 4;
 fn push_varlena_image(body: &mut Vec<u8>, s: &[u8]) {
     body.extend_from_slice(&::datum::set_varsize_4b(VARLENA_IMG_HDR + s.len()));
     body.extend_from_slice(s);
-    while body.len() % 4 != 0 {
+    while !body.len().is_multiple_of(4) {
         body.push(0);
     }
 }
@@ -2493,12 +2607,14 @@ pub fn multi_insert<'mcx>(
         // ingest is per-statement (the statement-end flush publishes it), so
         // a writer abandoned by an errored statement must not leak its rows
         // into a later statement of the same transaction.
-        let stale = map.get(&oid).is_some_and(|cw| cw.xid != xid || cw.cid != cid);
+        let stale = map
+            .get(&oid)
+            .is_some_and(|cw| cw.xid != xid || cw.cid != cid);
         if stale {
             map.remove(&oid);
         }
-        if !map.contains_key(&oid) {
-            map.insert(oid, open_writer(rel)?);
+        if let std::collections::hash_map::Entry::Vacant(e) = map.entry(oid) {
+            e.insert(open_writer(rel)?);
         }
         let cw = map.get_mut(&oid).unwrap();
         for slot in slots.iter_mut() {
@@ -2573,8 +2689,8 @@ mod abortsafe_tests {
     use crate::reader::{part_footer_rows, Part};
 
     fn tmp(name: &str) -> String {
-        let p = std::env::temp_dir()
-            .join(format!("cbstore-abortsafe-{}-{}", std::process::id(), name));
+        let p =
+            std::env::temp_dir().join(format!("cbstore-abortsafe-{}-{}", std::process::id(), name));
         let _ = std::fs::remove_file(&p);
         std::fs::write(&p, []).unwrap();
         p.to_str().unwrap().to_string()
@@ -2582,7 +2698,8 @@ mod abortsafe_tests {
 
     fn put_ints(w: &mut CbWriter, n: usize) {
         for i in 0..n {
-            w.append_row(&[Datum::from_i64(i as i64)], &[false]).unwrap();
+            w.append_row(&[Datum::from_i64(i as i64)], &[false])
+                .unwrap();
         }
     }
 
@@ -2666,8 +2783,8 @@ mod lenstats_tests {
     use super::*;
 
     fn tmp(name: &str) -> String {
-        let p = std::env::temp_dir()
-            .join(format!("cbstore-lenstats-{}-{}", std::process::id(), name));
+        let p =
+            std::env::temp_dir().join(format!("cbstore-lenstats-{}-{}", std::process::id(), name));
         let _ = std::fs::remove_file(&p);
         std::fs::write(&p, []).unwrap();
         p.to_str().unwrap().to_string()
@@ -2675,8 +2792,16 @@ mod lenstats_tests {
 
     fn writer_at(path: &str, coltypes: Vec<ColType>) -> CbWriter {
         let opts = CbWriterOpts::plain(coltypes.len());
-        open_writer_inner(SegFile::open_rw(path).unwrap(), 1, 0, true, coltypes, 0x5aa5, opts)
-            .unwrap()
+        open_writer_inner(
+            SegFile::open_rw(path).unwrap(),
+            1,
+            0,
+            true,
+            coltypes,
+            0x5aa5,
+            opts,
+        )
+        .unwrap()
     }
 
     fn text_datum(s: &[u8], keep: &mut Vec<Vec<u8>>) -> Datum {
@@ -2753,7 +2878,8 @@ mod lenstats_tests {
         // new RG gets its own.
         let mut w2 = writer_at(&path, vec![ColType::I32, ColType::Text]);
         let d = text_datum(b"tail-row", &mut keep);
-        w2.append_row(&[Datum::from_i64(7), d], &[false, false]).unwrap();
+        w2.append_row(&[Datum::from_i64(7), d], &[false, false])
+            .unwrap();
         w2.finish().unwrap();
         let part = crate::reader::Part::open(&path, 2).unwrap().unwrap();
         assert_eq!(part.rgs.len(), 2);
@@ -2772,7 +2898,8 @@ mod lenstats_tests {
     fn lenstats_absent_without_text_columns() {
         let path = tmp("notext");
         let mut w = writer_at(&path, vec![ColType::I64, ColType::I32]);
-        w.append_row(&[Datum::from_i64(1), Datum::from_i64(2)], &[false, false]).unwrap();
+        w.append_row(&[Datum::from_i64(1), Datum::from_i64(2)], &[false, false])
+            .unwrap();
         w.finish().unwrap();
         let part = crate::reader::Part::open(&path, 2).unwrap().unwrap();
         assert!(!part.has_len_stats(0) && !part.has_len_stats(1));
@@ -2786,8 +2913,8 @@ mod sorted_flag_tests {
     use super::*;
 
     fn tmp(name: &str) -> String {
-        let p = std::env::temp_dir()
-            .join(format!("cbstore-sorted-{}-{}", std::process::id(), name));
+        let p =
+            std::env::temp_dir().join(format!("cbstore-sorted-{}-{}", std::process::id(), name));
         let _ = std::fs::remove_file(&p);
         std::fs::write(&p, []).unwrap();
         p.to_str().unwrap().to_string()
@@ -2795,7 +2922,16 @@ mod sorted_flag_tests {
 
     fn writer_at(path: &str, coltypes: Vec<ColType>) -> CbWriter {
         let opts = CbWriterOpts::plain(coltypes.len());
-        open_writer_inner(SegFile::open_rw(path).unwrap(), 1, 0, true, coltypes, 0x5aa5, opts).unwrap()
+        open_writer_inner(
+            SegFile::open_rw(path).unwrap(),
+            1,
+            0,
+            true,
+            coltypes,
+            0x5aa5,
+            opts,
+        )
+        .unwrap()
     }
 
     // 4B-U inline varlena image; returns the backing buffer + datum.
@@ -2822,14 +2958,23 @@ mod sorted_flag_tests {
         // Partial second granule; int zeros every 4th row, empty text every
         // 3rd — exact per-granule expectations below.
         let n = GRANULE_ROWS + 100;
-        let ints: Vec<i64> = (0..n as i64).map(|i| if i % 4 == 0 { 0 } else { i }).collect();
+        let ints: Vec<i64> = (0..n as i64)
+            .map(|i| if i % 4 == 0 { 0 } else { i })
+            .collect();
         let texts: Vec<Vec<u8>> = (0..n)
-            .map(|i| if i % 3 == 0 { Vec::new() } else { format!("t{i}").into_bytes() })
+            .map(|i| {
+                if i % 3 == 0 {
+                    Vec::new()
+                } else {
+                    format!("t{i}").into_bytes()
+                }
+            })
             .collect();
         let trefs: Vec<&[u8]> = texts.iter().map(|t| t.as_slice()).collect();
         put_rows(&mut w, &ints, &trefs);
         w.finish().unwrap();
-        let expect = |lo: usize, hi: usize, m: usize| ((lo..hi).filter(|i| i % m == 0).count()) as u32;
+        let expect =
+            |lo: usize, hi: usize, m: usize| ((lo..hi).filter(|i| i % m == 0).count()) as u32;
         let part = crate::reader::Part::open(&path, 2).unwrap().unwrap();
         assert!(part.rg_has_zerocnt(0));
         assert_eq!(part.granule_zerocnt(0, 0, 0), expect(0, GRANULE_ROWS, 4));
@@ -2862,7 +3007,9 @@ mod sorted_flag_tests {
         // Int non-decreasing across an RG seal; text dips at the last row.
         let n = RG_ROWS + 10;
         let ints: Vec<i64> = (0..n as i64).map(|i| i / 3).collect();
-        let mut texts: Vec<Vec<u8>> = (0..n).map(|i| format!("k{:08}", i / 5).into_bytes()).collect();
+        let mut texts: Vec<Vec<u8>> = (0..n)
+            .map(|i| format!("k{:08}", i / 5).into_bytes())
+            .collect();
         texts[n - 1] = b"a-dip".to_vec();
         let trefs: Vec<&[u8]> = texts.iter().map(|t| t.as_slice()).collect();
         put_rows(&mut w, &ints, &trefs);
@@ -2915,7 +3062,10 @@ mod dict_sort_tests {
     use super::*;
 
     fn tb_of(rows: &[&[u8]]) -> TextBuilder {
-        let mut tb = TextBuilder { offs: Vec::new(), blob: Vec::new() };
+        let mut tb = TextBuilder {
+            offs: Vec::new(),
+            blob: Vec::new(),
+        };
         for r in rows {
             tb.offs.push((tb.blob.len() as u32, r.len() as u32));
             tb.blob.extend_from_slice(r);
@@ -2964,17 +3114,38 @@ mod dict_sort_tests {
         // Appearance order deliberately != byte order; duplicates force the
         // dict encoding; includes "", 0xFF-saturated, and prefix-nested keys.
         let rows: Vec<&[u8]> = vec![
-            b"zebra", b"apple", b"zebra", b"", b"ab\xff\xff", b"ab", b"apple", b"aa", b"zebra",
-            b"\xff", b"ab", b"abz", b"", b"apple", b"a", b"ab\xff\xff",
+            b"zebra",
+            b"apple",
+            b"zebra",
+            b"",
+            b"ab\xff\xff",
+            b"ab",
+            b"apple",
+            b"aa",
+            b"zebra",
+            b"\xff",
+            b"ab",
+            b"abz",
+            b"",
+            b"apple",
+            b"a",
+            b"ab\xff\xff",
         ];
         let mut body = Vec::new();
         encode_text_chunk(&mut body, &tb_of(&rows), 1, &test_codec_ctx(), false);
         let (hdr, codes, entries) = parse_dict_chunk(&body, rows.len());
         assert!(matches!(hdr.encoding, Encoding::Dict | Encoding::Lz4Dict));
         assert_ne!(hdr.flags & CHUNK_FLAG_DICT_SORTED, 0);
-        assert!(entries.windows(2).all(|w| w[0] < w[1]), "dict must be strictly byte-sorted");
+        assert!(
+            entries.windows(2).all(|w| w[0] < w[1]),
+            "dict must be strictly byte-sorted"
+        );
         for (i, r) in rows.iter().enumerate() {
-            assert_eq!(&entries[codes[i] as usize][..], *r, "row {i} decode identity");
+            assert_eq!(
+                &entries[codes[i] as usize][..],
+                *r,
+                "row {i} decode identity"
+            );
         }
     }
 
@@ -2993,7 +3164,10 @@ mod dict_sort_tests {
         let mut body = Vec::new();
         encode_text_chunk(&mut body, &tb_of(&refs), 1, &test_codec_ctx(), false);
         let hdr = ChunkHeader::decode(&body[..CB_CHUNK_HEADER_LEN]);
-        assert!(matches!(hdr.encoding, Encoding::RawText | Encoding::Lz4Text));
+        assert!(matches!(
+            hdr.encoding,
+            Encoding::RawText | Encoding::Lz4Text
+        ));
         assert_eq!(hdr.flags & CHUNK_FLAG_DICT_SORTED, 0);
     }
 }
@@ -3027,7 +3201,11 @@ mod codec_tests {
                 encode_int_chunk(&mut body, &vals, n.div_ceil(GRANULE_ROWS) as u32, &cc);
             assert_eq!((min, max), (1_000_000, 1_000_000 + 96 * 3));
             let cv = ChunkView::at(&body, 0, n as u32);
-            let want = if choice == CodecChoice::Lz4 { Codec::Lz4 } else { Codec::Zstd };
+            let want = if choice == CodecChoice::Lz4 {
+                Codec::Lz4
+            } else {
+                Codec::Zstd
+            };
             assert_eq!(cv.hdr.codec, want, "{choice:?}");
             assert_eq!(decode_ints(&body, n), vals, "{choice:?}");
         }
@@ -3080,7 +3258,10 @@ mod codec_tests {
             .map(|i| format!("value-{:02}-{}", i % 7, "x".repeat(2000)).into_bytes())
             .collect();
         let refs: Vec<&[u8]> = rows.iter().map(|v| &v[..]).collect();
-        let mut tb = TextBuilder { offs: Vec::new(), blob: Vec::new() };
+        let mut tb = TextBuilder {
+            offs: Vec::new(),
+            blob: Vec::new(),
+        };
         for r in &refs {
             tb.offs.push((tb.blob.len() as u32, r.len() as u32));
             tb.blob.extend_from_slice(r);
@@ -3103,8 +3284,9 @@ mod codec_tests {
     #[test]
     fn legacy_lz4text_codec0_decodes() {
         let n = 512usize;
-        let rows: Vec<Vec<u8>> =
-            (0..n).map(|i| format!("legacy-{}-{}", i % 5, "pad".repeat(16)).into_bytes()).collect();
+        let rows: Vec<Vec<u8>> = (0..n)
+            .map(|i| format!("legacy-{}-{}", i % 5, "pad".repeat(16)).into_bytes())
+            .collect();
         // Old-writer layout: header (codec byte 0) | granule dir | offsets |
         // one LZ4 frame per granule.
         let mut gblob = Vec::new();
@@ -3209,8 +3391,9 @@ mod intcodec_tests {
     #[test]
     fn deltafor_i64_bounds_wrapping_plain_frames() {
         let n = GRANULE_ROWS + 3; // partial tail granule of 3 rows
-        let vals: Vec<i64> =
-            (0..n).map(|i| if i % 2 == 0 { i64::MAX } else { i64::MIN }).collect();
+        let vals: Vec<i64> = (0..n)
+            .map(|i| if i % 2 == 0 { i64::MAX } else { i64::MIN })
+            .collect();
         let (body, min, max) = encode(&vals, &delta_ctx(CodecChoice::Plain));
         assert_eq!((min, max), (i64::MIN, i64::MAX));
         let cv = ChunkView::at(&body, 0, n as u32);
@@ -3240,7 +3423,13 @@ mod intcodec_tests {
     fn deltafor_epoch_sentinels() {
         let n = GRANULE_ROWS * 2;
         let vals: Vec<i64> = (0..n)
-            .map(|i| if i % 53 == 0 { 1_700_000_000_000_000 + i as i64 } else { 0 })
+            .map(|i| {
+                if i % 53 == 0 {
+                    1_700_000_000_000_000 + i as i64
+                } else {
+                    0
+                }
+            })
             .collect();
         let (body, ..) = encode(&vals, &delta_ctx(CodecChoice::Auto));
         let (body2, ..) = encode(&vals, &delta_ctx(CodecChoice::Auto));
@@ -3304,8 +3493,7 @@ mod cluster_key_tests {
     }
 
     fn tmp(name: &str) -> String {
-        let p = std::env::temp_dir()
-            .join(format!("cbstore-ckey-{}-{}", std::process::id(), name));
+        let p = std::env::temp_dir().join(format!("cbstore-ckey-{}-{}", std::process::id(), name));
         let _ = std::fs::remove_file(&p);
         std::fs::write(&p, []).unwrap();
         p.to_str().unwrap().to_string()
@@ -3319,10 +3507,12 @@ mod cluster_key_tests {
         let mcx = m.mcx();
         let mut attrs = ::mcx::PgVec::new_in(mcx);
         let mut compact = ::mcx::PgVec::new_in(mcx);
-        for (i, (typid, len, byval, align)) in
-            [(20u32, 8i16, true, TYPALIGN_DOUBLE), (25, -1, false, TYPALIGN_INT)]
-                .iter()
-                .enumerate()
+        for (i, (typid, len, byval, align)) in [
+            (20u32, 8i16, true, TYPALIGN_DOUBLE),
+            (25, -1, false, TYPALIGN_INT),
+        ]
+        .iter()
+        .enumerate()
         {
             let att = FormData_pg_attribute {
                 attnum: (i + 1) as i16,
@@ -3367,13 +3557,24 @@ mod cluster_key_tests {
         // Key: (text col 1, int col 0) — cross-column and cross-class.
         opts.cluster_key = vec![(1, CbSortKeyKind::TextC), (0, CbSortKeyKind::Int64)];
         let mut w = open_writer_inner(
-            SegFile::open_rw(&path).unwrap(), 1, 0, true, coltypes, 0x5aa5, opts,
+            SegFile::open_rw(&path).unwrap(),
+            1,
+            0,
+            true,
+            coltypes,
+            0x5aa5,
+            opts,
         )
         .unwrap();
-        let keys: Vec<(i16, CbSortKeyKind)> =
-            w.opts.cluster_key.iter().map(|&(c, k)| (c as i16 + 1, k)).collect();
-        w.sorter =
-            Some(::tuplesort_seams::pgrcolumnar_ingest_sort::call(tup_desc(), &keys, 65536).unwrap());
+        let keys: Vec<(i16, CbSortKeyKind)> = w
+            .opts
+            .cluster_key
+            .iter()
+            .map(|&(c, k)| (c as i16 + 1, k))
+            .collect();
+        w.sorter = Some(
+            ::tuplesort_seams::pgrcolumnar_ingest_sort::call(tup_desc(), &keys, 65536).unwrap(),
+        );
 
         // > 1 RG of rows, adversarial order (descending + interleaved).
         let n = RG_ROWS + 1234;
@@ -3459,7 +3660,12 @@ mod cluster_key_tests {
         let path_a = tmp("presort-ref");
         {
             let mut w = open_writer_inner(
-                SegFile::open_rw(&path_a).unwrap(), 1, 0, true, coltypes.clone(), 0x5aa5,
+                SegFile::open_rw(&path_a).unwrap(),
+                1,
+                0,
+                true,
+                coltypes.clone(),
+                0x5aa5,
                 CbWriterOpts::plain(2),
             )
             .unwrap();
@@ -3477,11 +3683,21 @@ mod cluster_key_tests {
             let mut opts = CbWriterOpts::plain(2);
             opts.presort_key = vec![(1, CbSortKeyKind::TextC), (0, CbSortKeyKind::Int64)];
             let mut w = open_writer_inner(
-                SegFile::open_rw(&path_b).unwrap(), 1, 0, true, coltypes, 0x5aa5, opts,
+                SegFile::open_rw(&path_b).unwrap(),
+                1,
+                0,
+                true,
+                coltypes,
+                0x5aa5,
+                opts,
             )
             .unwrap();
-            let keys: Vec<(i16, CbSortKeyKind)> =
-                w.opts.presort_key.iter().map(|&(c, k)| (c as i16 + 1, k)).collect();
+            let keys: Vec<(i16, CbSortKeyKind)> = w
+                .opts
+                .presort_key
+                .iter()
+                .map(|&(c, k)| (c as i16 + 1, k))
+                .collect();
             w.sorter = Some(
                 ::tuplesort_seams::pgrcolumnar_ingest_sort::call(tup_desc(), &keys, 65536).unwrap(),
             );
@@ -3504,7 +3720,11 @@ mod cluster_key_tests {
         let part = crate::reader::Part::open(&path_b, 2).unwrap().unwrap();
         assert_eq!(part.cluster_key, Vec::<u16>::new());
         for rg in &part.rgs {
-            assert_eq!(rg.flags & RG_FLAG_CLUSTERED, 0, "presort must not stamp CLUSTERED");
+            assert_eq!(
+                rg.flags & RG_FLAG_CLUSTERED,
+                0,
+                "presort must not stamp CLUSTERED"
+            );
         }
         std::fs::remove_file(&path_a).unwrap();
         std::fs::remove_file(&path_b).unwrap();
@@ -3516,8 +3736,13 @@ mod cluster_key_tests {
         seams_once();
         let path = tmp("nokey");
         let mut w = open_writer_inner(
-            SegFile::open_rw(&path).unwrap(), 1, 0, true,
-            vec![ColType::I64, ColType::Text], 0x5aa5, CbWriterOpts::plain(2),
+            SegFile::open_rw(&path).unwrap(),
+            1,
+            0,
+            true,
+            vec![ColType::I64, ColType::Text],
+            0x5aa5,
+            CbWriterOpts::plain(2),
         )
         .unwrap();
         assert!(w.sorter.is_none());
@@ -3542,7 +3767,10 @@ mod lz4_decode_seat_tests {
     use crate::reader::ChunkView;
 
     fn tb_of_owned(rows: &[Vec<u8>]) -> TextBuilder {
-        let mut tb = TextBuilder { offs: Vec::new(), blob: Vec::new() };
+        let mut tb = TextBuilder {
+            offs: Vec::new(),
+            blob: Vec::new(),
+        };
         for r in rows {
             tb.offs.push((tb.blob.len() as u32, r.len() as u32));
             tb.blob.extend_from_slice(r);
@@ -3571,12 +3799,25 @@ mod lz4_decode_seat_tests {
         // frames decode through lz4dec.
         let n = GRANULE_ROWS + 37;
         let rows: Vec<Vec<u8>> = (0..n)
-            .map(|i| format!("http://example.com/some/long/path/{i}?pad=aaaaaaaaaaaaaaaaaaaaaaaaaaaa").into_bytes())
+            .map(|i| {
+                format!("http://example.com/some/long/path/{i}?pad=aaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+                    .into_bytes()
+            })
             .collect();
         let mut body = Vec::new();
-        encode_text_chunk(&mut body, &tb_of_owned(&rows), n.div_ceil(GRANULE_ROWS) as u32, &CodecCtx::new(CodecChoice::Lz4, ZSTD_LEVEL_DEFAULT, false), false);
+        encode_text_chunk(
+            &mut body,
+            &tb_of_owned(&rows),
+            n.div_ceil(GRANULE_ROWS) as u32,
+            &CodecCtx::new(CodecChoice::Lz4, ZSTD_LEVEL_DEFAULT, false),
+            false,
+        );
         let hdr = ChunkHeader::decode(&body[..CB_CHUNK_HEADER_LEN]);
-        assert_eq!(hdr.encoding, Encoding::Lz4Text, "test premise: Lz4Text admitted");
+        assert_eq!(
+            hdr.encoding,
+            Encoding::Lz4Text,
+            "test premise: Lz4Text admitted"
+        );
         assert_eq!(decode_all(&body, n), rows);
     }
 
@@ -3589,9 +3830,19 @@ mod lz4_decode_seat_tests {
             .map(|i| format!("searchterm-{:04}-cccccccccccccccccccccccccccc", i % 300).into_bytes())
             .collect();
         let mut body = Vec::new();
-        encode_text_chunk(&mut body, &tb_of_owned(&rows), n.div_ceil(GRANULE_ROWS) as u32, &CodecCtx::new(CodecChoice::Lz4, ZSTD_LEVEL_DEFAULT, false), false);
+        encode_text_chunk(
+            &mut body,
+            &tb_of_owned(&rows),
+            n.div_ceil(GRANULE_ROWS) as u32,
+            &CodecCtx::new(CodecChoice::Lz4, ZSTD_LEVEL_DEFAULT, false),
+            false,
+        );
         let hdr = ChunkHeader::decode(&body[..CB_CHUNK_HEADER_LEN]);
-        assert_eq!(hdr.encoding, Encoding::Lz4Dict, "test premise: Lz4Dict admitted");
+        assert_eq!(
+            hdr.encoding,
+            Encoding::Lz4Dict,
+            "test premise: Lz4Dict admitted"
+        );
         assert_eq!(decode_all(&body, n), rows);
     }
 }
@@ -3613,7 +3864,10 @@ mod dict_frames_tests {
     }
 
     fn tb(rows: &[Vec<u8>]) -> TextBuilder {
-        let mut tb = TextBuilder { offs: Vec::new(), blob: Vec::new() };
+        let mut tb = TextBuilder {
+            offs: Vec::new(),
+            blob: Vec::new(),
+        };
         for r in rows {
             tb.offs.push((tb.blob.len() as u32, r.len() as u32));
             tb.blob.extend_from_slice(r);
@@ -3625,14 +3879,16 @@ mod dict_frames_tests {
     // exactly (entries align4 to the same stored size).
     fn dict_rows(n: usize, ndv: usize) -> Vec<Vec<u8>> {
         (0..n)
-            .map(|i| {
-                format!("searchterm-{:05}-cccccccccccccccccccccccccccc", i % ndv).into_bytes()
-            })
+            .map(|i| format!("searchterm-{:05}-cccccccccccccccccccccccccccc", i % ndv).into_bytes())
             .collect()
     }
 
     fn sorted_entries(rows: &[Vec<u8>]) -> Vec<Vec<u8>> {
-        rows.iter().cloned().collect::<BTreeSet<_>>().into_iter().collect()
+        rows.iter()
+            .cloned()
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect()
     }
 
     fn encode(rows: &[Vec<u8>], cc: &CodecCtx) -> Vec<u8> {
@@ -3664,8 +3920,10 @@ mod dict_frames_tests {
         let n = GRANULE_ROWS + 11;
         let rows = dict_rows(n, 600);
         let framed = encode(&rows, &frames_cc(4096));
-        let control =
-            encode(&rows, &CodecCtx::new(CodecChoice::Lz4, ZSTD_LEVEL_DEFAULT, false));
+        let control = encode(
+            &rows,
+            &CodecCtx::new(CodecChoice::Lz4, ZSTD_LEVEL_DEFAULT, false),
+        );
         let fh = ChunkHeader::decode(&framed[..CB_CHUNK_HEADER_LEN]);
         let ch = ChunkHeader::decode(&control[..CB_CHUNK_HEADER_LEN]);
         assert_eq!(fh.encoding, Encoding::Lz4Dict, "premise: dict + codec win");
@@ -3681,8 +3939,10 @@ mod dict_frames_tests {
     fn frames_off_by_default() {
         let n = GRANULE_ROWS;
         let rows = dict_rows(n, 600);
-        let body =
-            encode(&rows, &CodecCtx::new(CodecChoice::Lz4, ZSTD_LEVEL_DEFAULT, false));
+        let body = encode(
+            &rows,
+            &CodecCtx::new(CodecChoice::Lz4, ZSTD_LEVEL_DEFAULT, false),
+        );
         let hdr = ChunkHeader::decode(&body[..CB_CHUNK_HEADER_LEN]);
         assert_eq!(hdr.encoding, Encoding::Lz4Dict);
         assert_eq!(hdr.flags & CHUNK_FLAG_DICT_FRAMED, 0);
@@ -3734,7 +3994,10 @@ mod dict_frames_tests {
             assert_eq!(crate::varlena_bytes(dict[code]).unwrap(), &e[..]);
         }
         for (i, &c) in codes.iter().enumerate() {
-            assert_eq!(crate::varlena_bytes(dict[c as usize]).unwrap(), &rows[i][..]);
+            assert_eq!(
+                crate::varlena_bytes(dict[c as usize]).unwrap(),
+                &rows[i][..]
+            );
         }
     }
 
@@ -3767,7 +4030,11 @@ mod dict_frames_tests {
             );
         }
         for (code, e) in entries.iter().enumerate() {
-            assert_eq!(crate::varlena_bytes(dict[code]).unwrap(), &e[..], "recheck {code}");
+            assert_eq!(
+                crate::varlena_bytes(dict[code]).unwrap(),
+                &e[..],
+                "recheck {code}"
+            );
         }
     }
 
@@ -3781,7 +4048,9 @@ mod dict_frames_tests {
             let mut e = b"zz-".to_vec();
             let mut x = (i % 97) as u64 ^ 0x9e37_79b9_7f4a_7c15;
             for _ in 0..48 {
-                x = x.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                x = x
+                    .wrapping_mul(6364136223846793005)
+                    .wrapping_add(1442695040888963407);
                 e.push((x >> 33) as u8);
             }
             vals.push(e);
@@ -3800,7 +4069,10 @@ mod dict_frames_tests {
         for k in 0..entries.len() {
             let code = (k * 397) % entries.len();
             lazy.ensure_code(code as u32);
-            assert_eq!(crate::varlena_bytes(dict[code]).unwrap(), &entries[code][..]);
+            assert_eq!(
+                crate::varlena_bytes(dict[code]).unwrap(),
+                &entries[code][..]
+            );
         }
     }
 }
@@ -3812,8 +4084,8 @@ mod stitch_tests {
     use std::collections::BTreeSet;
 
     fn tmp(name: &str) -> String {
-        let p = std::env::temp_dir()
-            .join(format!("cbstore-stitch-{}-{}", std::process::id(), name));
+        let p =
+            std::env::temp_dir().join(format!("cbstore-stitch-{}-{}", std::process::id(), name));
         let _ = std::fs::remove_file(&p);
         std::fs::write(&p, []).unwrap();
         p.to_str().unwrap().to_string()
@@ -3821,8 +4093,16 @@ mod stitch_tests {
 
     fn writer_at(path: &str, coltypes: Vec<ColType>) -> CbWriter {
         let opts = CbWriterOpts::plain(coltypes.len());
-        open_writer_inner(SegFile::open_rw(path).unwrap(), 1, 0, true, coltypes, 0x5aa5, opts)
-            .unwrap()
+        open_writer_inner(
+            SegFile::open_rw(path).unwrap(),
+            1,
+            0,
+            true,
+            coltypes,
+            0x5aa5,
+            opts,
+        )
+        .unwrap()
     }
 
     fn text_datum(s: &[u8], keep: &mut Vec<Vec<u8>>) -> Datum {
@@ -3850,8 +4130,9 @@ mod stitch_tests {
         let path = tmp("rt2");
         let mut w = writer_at(&path, vec![ColType::I64, ColType::Text]);
         // RG0: k000..k006 (cycled); RG1: e000..e004 plus k002/k005 overlap.
-        let rg0: Vec<Vec<u8>> =
-            (0..RG_ROWS).map(|i| format!("k{:03}", i % 7).into_bytes()).collect();
+        let rg0: Vec<Vec<u8>> = (0..RG_ROWS)
+            .map(|i| format!("k{:03}", i % 7).into_bytes())
+            .collect();
         let rg1: Vec<Vec<u8>> = (0..100)
             .map(|i| {
                 if i % 3 == 0 {
@@ -3876,9 +4157,18 @@ mod stitch_tests {
         let rank = |s: &[u8]| union.iter().position(|&u| u == s).unwrap() as u32;
         for (rg, set) in [(0usize, &set0), (1usize, &set1)] {
             let expected: Vec<u32> = set.iter().map(|s| rank(s)).collect();
-            let got = part.stitch(rg, 1).expect("stitch present for all-dict text column");
-            assert_eq!(got, expected.as_slice(), "rg {rg}: local byte order -> global rank");
-            assert!(got.windows(2).all(|w| w[0] < w[1]), "stitch strictly increasing");
+            let got = part
+                .stitch(rg, 1)
+                .expect("stitch present for all-dict text column");
+            assert_eq!(
+                got,
+                expected.as_slice(),
+                "rg {rg}: local byte order -> global rank"
+            );
+            assert!(
+                got.windows(2).all(|w| w[0] < w[1]),
+                "stitch strictly increasing"
+            );
         }
         std::fs::remove_file(&path).unwrap();
     }
@@ -3890,8 +4180,9 @@ mod stitch_tests {
     fn stitch_poisoned_by_rawtext_rg() {
         let path = tmp("poison");
         let mut w = writer_at(&path, vec![ColType::I64, ColType::Text]);
-        let rg0: Vec<Vec<u8>> =
-            (0..RG_ROWS).map(|i| format!("k{:03}", i % 7).into_bytes()).collect();
+        let rg0: Vec<Vec<u8>> = (0..RG_ROWS)
+            .map(|i| format!("k{:03}", i % 7).into_bytes())
+            .collect();
         // Incompressible all-distinct tail RG (the rawtext test recipe).
         let rg1: Vec<Vec<u8>> = (0..200u64)
             .map(|i| {
@@ -3915,7 +4206,11 @@ mod stitch_tests {
             matches!(hdr, Encoding::RawText | Encoding::Lz4Text),
             "test premise: tail RG not dict-encoded (got {hdr:?})"
         );
-        assert_eq!(part.stitch_gndv(1), 0, "poisoned column publishes no stitch");
+        assert_eq!(
+            part.stitch_gndv(1),
+            0,
+            "poisoned column publishes no stitch"
+        );
         assert!(part.stitch(0, 1).is_none());
         std::fs::remove_file(&path).unwrap();
     }
@@ -3926,7 +4221,9 @@ mod stitch_tests {
     fn stitch_append_invalidates() {
         let path = tmp("append");
         let mut w = writer_at(&path, vec![ColType::I64, ColType::Text]);
-        let rows: Vec<Vec<u8>> = (0..64).map(|i| format!("k{:03}", i % 7).into_bytes()).collect();
+        let rows: Vec<Vec<u8>> = (0..64)
+            .map(|i| format!("k{:03}", i % 7).into_bytes())
+            .collect();
         put_text_rows(&mut w, &rows);
         w.finish().unwrap();
         assert_eq!(Part::open(&path, 2).unwrap().unwrap().stitch_gndv(1), 7);
@@ -3947,8 +4244,8 @@ mod parallel_ingest_tests {
     use super::*;
 
     fn tmp(name: &str) -> String {
-        let p = std::env::temp_dir()
-            .join(format!("cbstore-paringest-{}-{}", std::process::id(), name));
+        let p =
+            std::env::temp_dir().join(format!("cbstore-paringest-{}-{}", std::process::id(), name));
         let _ = std::fs::remove_file(&p);
         std::fs::write(&p, []).unwrap();
         p.to_str().unwrap().to_string()
@@ -3959,7 +4256,11 @@ mod parallel_ingest_tests {
     // committer's cross-chunk seam stitch), low-NDV text (dict + stitch),
     // high-NDV unique text (non-dict -> stitch poison path).
     fn row(i: usize) -> (i64, i64, String, String) {
-        let seam_breaker = if i < RG_ROWS { i as i64 } else { (i as i64) - RG_ROWS as i64 - 1 };
+        let seam_breaker = if i < RG_ROWS {
+            i as i64
+        } else {
+            (i as i64) - RG_ROWS as i64 - 1
+        };
         (
             i as i64,
             seam_breaker,
@@ -4034,7 +4335,10 @@ mod parallel_ingest_tests {
         let a = std::fs::read(&path_a).unwrap();
         let b = std::fs::read(&path_b).unwrap();
         assert_eq!(a.len(), b.len(), "part sizes differ");
-        assert!(a == b, "parallel-committed part is not byte-identical to serial");
+        assert!(
+            a == b,
+            "parallel-committed part is not byte-identical to serial"
+        );
         std::fs::remove_file(&path_a).unwrap();
         std::fs::remove_file(&path_b).unwrap();
 
@@ -4087,7 +4391,9 @@ mod parallel_ingest_tests {
             i = hi;
         }
         w.finish_parallel_ingest().unwrap();
-        let part = crate::reader::Part::open(&path, COLS.len()).unwrap().unwrap();
+        let part = crate::reader::Part::open(&path, COLS.len())
+            .unwrap()
+            .unwrap();
         // col0 ascending; col1 breaks exactly at the RG seam; col2 hashes
         // unsorted; col3's zero-padded uniques are lexicographically ascending.
         assert_eq!(part.sorted, vec![1, 0, 0, 1]);
@@ -4121,7 +4427,8 @@ mod ndv_regs_tests {
 
     fn put_int_rows(w: &mut CbWriter, range: std::ops::Range<usize>, ndistinct: usize) {
         for i in range {
-            w.append_row(&[Datum::from_i64((i % ndistinct) as i64)], &[false]).unwrap();
+            w.append_row(&[Datum::from_i64((i % ndistinct) as i64)], &[false])
+                .unwrap();
         }
     }
 
@@ -4153,9 +4460,15 @@ mod ndv_regs_tests {
         let est_two = part_footer_ndv(&two, 1).unwrap().unwrap()[0];
 
         assert_ne!(est_two, 0, "H1: append invalidated the sketch to unknown");
-        assert_eq!(est_two, est_one, "reopen continuation must equal the single pass");
+        assert_eq!(
+            est_two, est_one,
+            "reopen continuation must equal the single pass"
+        );
         let err = (est_one as f64 / D as f64 - 1.0).abs();
-        assert!(err < 0.03, "estimate {est_one} vs actual {D} (err {err:.4})");
+        assert!(
+            err < 0.03,
+            "estimate {est_one} vs actual {D} (err {err:.4})"
+        );
 
         // The persisted registers round-trip through the reader-side blob
         // path (the inherited-ANALYZE union source) with the same estimate.
@@ -4199,9 +4512,14 @@ mod ndv_regs_tests {
 
         let sk_one = part_footer_ndv_hll(&one, 1).unwrap().unwrap();
         let sk_two = part_footer_ndv_hll(&two, 1).unwrap().unwrap();
-        let (e1, e2) =
-            (sk_one[0].as_ref().unwrap().estimate(), sk_two[0].as_ref().unwrap().estimate());
-        assert_eq!(e1, e2, "identical value stream must yield identical registers");
+        let (e1, e2) = (
+            sk_one[0].as_ref().unwrap().estimate(),
+            sk_two[0].as_ref().unwrap().estimate(),
+        );
+        assert_eq!(
+            e1, e2,
+            "identical value stream must yield identical registers"
+        );
         let err = (e1 as f64 / D as f64 - 1.0).abs();
         assert!(err < 0.03, "estimate {e1} vs actual {D} (err {err:.4})");
         // Both scalars must be present (nonzero) and near the truth.
@@ -4260,7 +4578,7 @@ mod ndv_regs_tests {
         assert!(load_ndv_regs(&mut f, &[(0, 0)], 1).unwrap().is_none());
         assert!(load_ndv_regs(&mut f, &[], 1).unwrap().is_none()); // pre-v8: empty dir
         assert!(load_ndv_regs(&mut f, &[(1 << 40, 8)], 1).unwrap().is_none()); // oob
-        // In-bounds bytes that are not a known blob shape.
+                                                                               // In-bounds bytes that are not a known blob shape.
         assert!(load_ndv_regs(&mut f, &[(64, 8)], 1).unwrap().is_none());
         // A part is all-or-nothing: one good + one absent column = None.
         let mut w = open_writer_at(&tmp("fb2"), vec![ColType::I64]).unwrap();

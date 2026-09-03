@@ -26,8 +26,7 @@ const CFG: lmgr_proc::ProcGlobalConfig = lmgr_proc::ProcGlobalConfig {
 static NEXT_PID: AtomicI32 = AtomicI32::new(9100);
 
 fn semas() -> &'static (Mutex<HashMap<types_core::ProcNumber, i32>>, Condvar) {
-    static SEMS: OnceLock<(Mutex<HashMap<types_core::ProcNumber, i32>>, Condvar)> =
-        OnceLock::new();
+    static SEMS: OnceLock<(Mutex<HashMap<types_core::ProcNumber, i32>>, Condvar)> = OnceLock::new();
     SEMS.get_or_init(|| (Mutex::new(HashMap::new()), Condvar::new()))
 }
 

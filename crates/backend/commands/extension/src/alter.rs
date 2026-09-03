@@ -15,15 +15,16 @@ use types_rel::{AccessShareLock, RowExclusiveLock};
 use datum::Datum;
 use pg_depend::ObjectAddress;
 
-use crate::control::{read_extension_aux_control_file, read_extension_control_file, ExtensionControlFile};
+use crate::control::{
+    read_extension_aux_control_file, read_extension_control_file, ExtensionControlFile,
+};
 use crate::create::{conflicting_def_elem, get_required_extension};
 use crate::graph::identify_update_path;
 use crate::script::execute_extension_script;
 use crate::{
     check_valid_version_name, get_extension_schema, Anum_pg_extension_extname,
-    Anum_pg_extension_extnamespace, Anum_pg_extension_extrelocatable,
-    Anum_pg_extension_extversion, Anum_pg_extension_oid, ExtensionNameIndexId,
-    ExtensionOidIndexId, Natts_pg_extension,
+    Anum_pg_extension_extnamespace, Anum_pg_extension_extrelocatable, Anum_pg_extension_extversion,
+    Anum_pg_extension_oid, ExtensionNameIndexId, ExtensionOidIndexId, Natts_pg_extension,
 };
 
 fn oid_key(attno: i32, oid: Oid) -> types_scan::scankey::ScanKeyData {
@@ -181,7 +182,10 @@ fn text_datum_str(mcx: Mcx<'_>, d: Datum) -> PgResult<String> {
     let (skip, total) = if img[0] & 0x01 != 0 {
         (1usize, (img[0] as usize >> 1) & 0x7F)
     } else {
-        (4usize, (u32::from_ne_bytes([img[0], img[1], img[2], img[3]]) >> 2) as usize)
+        (
+            4usize,
+            (u32::from_ne_bytes([img[0], img[1], img[2], img[3]]) >> 2) as usize,
+        )
     };
     Ok(core::str::from_utf8(&img[skip..total])
         .expect("extversion is server-encoding text")
@@ -236,14 +240,8 @@ pub(crate) fn ApplyExtensionUpdates(
         repl[Anum_pg_extension_extversion as usize - 1] = true;
 
         let tid = ext_tup.t_self;
-        let mut new_tup = heaptuple::heap_modify_tuple(
-            mcx,
-            ext_tup,
-            desc,
-            &repl_values,
-            &repl_nulls,
-            &repl,
-        )?;
+        let mut new_tup =
+            heaptuple::heap_modify_tuple(mcx, ext_tup, desc, &repl_values, &repl_nulls, &repl)?;
         catalog_indexing::CatalogTupleUpdate(mcx, &ext_rel, &tid, &mut new_tup)?;
 
         genam::systable_endscan(mcx, scan)?;
@@ -392,7 +390,9 @@ pub fn AlterExtensionNamespace<'mcx>(
     if !relocatable {
         return Err(ereport(ERROR)
             .errcode(ERRCODE_FEATURE_NOT_SUPPORTED)
-            .errmsg(format!("extension \"{extension_name}\" does not support SET SCHEMA"))
+            .errmsg(format!(
+                "extension \"{extension_name}\" does not support SET SCHEMA"
+            ))
             .into_error()
             .into());
     }
@@ -490,7 +490,9 @@ pub fn AlterExtensionNamespace<'mcx>(
                 .unwrap_or_default();
             return Err(ereport(ERROR)
                 .errcode(ERRCODE_FEATURE_NOT_SUPPORTED)
-                .errmsg(format!("extension \"{extension_name}\" does not support SET SCHEMA"))
+                .errmsg(format!(
+                    "extension \"{extension_name}\" does not support SET SCHEMA"
+                ))
                 .errdetail(format!(
                     "{descr} is not in the extension's schema \"{old_nsp_name}\""
                 ))

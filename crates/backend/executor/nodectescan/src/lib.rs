@@ -6,16 +6,15 @@ extern crate alloc;
 
 use alloc::rc::Rc;
 
-use ::execexpr::exec_init_qual;
 use ::execscan::{exec_scan_epq, exec_scan_extended, ScanNode, ScanState};
 use ::executils::{CteShared, EStateData, ExecSlotId};
 use ::mcx::Mcx;
+use ::tuplestore::Tuplestore;
 use ::types_error::PgResult;
 use ::types_nodes::list::NodeList;
 use ::types_nodes::plannodes::CteScan;
 use ::types_slot::{TupleSlotKind, EXEC_FLAG_MARK, EXEC_FLAG_REWIND};
 use ::types_tuple::TupleDescData;
-use ::tuplestore::Tuplestore;
 
 pub fn init_seams() {}
 
@@ -34,11 +33,7 @@ impl<'mcx> ScanNode<'mcx> for CteScanState<'mcx> {
     }
 
     /// `CteScanRecheck`: nothing to check.
-    fn epq_recheck(
-        &mut self,
-        _estate: &mut EStateData<'mcx>,
-        _slot: ExecSlotId,
-    ) -> PgResult<bool> {
+    fn epq_recheck(&mut self, _estate: &mut EStateData<'mcx>, _slot: ExecSlotId) -> PgResult<bool> {
         Ok(true)
     }
 
@@ -104,12 +99,8 @@ impl<'mcx> CteScanState<'mcx> {
             shared.fills += 1;
 
             // ExecCopySlot: output must survive other CteScans advancing.
-            let mtup = exectuples::exec_copy_slot_minimal_tuple(
-                estate.slot_mut(sub_slot),
-                mcx,
-                mcx,
-                0,
-            )?;
+            let mtup =
+                exectuples::exec_copy_slot_minimal_tuple(estate.slot_mut(sub_slot), mcx, mcx, 0)?;
             let scan = estate.slot_mut(self.ss.ss_ScanTupleSlot);
             exectuples::exec_store_minimal_tuple_owned(scan, mcx, mtup);
             return Ok(true);
@@ -169,7 +160,11 @@ pub fn exec_init_cte_scan<'mcx>(
         slot @ None => {
             let mut ts = Tuplestore::begin_heap(true, false, init_small::globals::work_mem());
             ts.set_eflags(eflags);
-            *slot = Some(CteShared { tuplestore: ts, eof_cte: false, fills: 0 });
+            *slot = Some(CteShared {
+                tuplestore: ts,
+                eof_cte: false,
+                fills: 0,
+            });
             (0, true)
         }
         Some(shared) => {

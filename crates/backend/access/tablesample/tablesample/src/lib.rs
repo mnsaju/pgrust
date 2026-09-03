@@ -7,7 +7,7 @@
 use datum::Datum;
 use mcx::Mcx;
 use types_core::catalog::{FLOAT4OID, FLOAT8OID, INT8OID};
-use types_core::{BlockNumber, Oid, OffsetNumber};
+use types_core::{BlockNumber, OffsetNumber, Oid};
 use types_error::{PgError, PgResult, ERRCODE_INVALID_TABLESAMPLE_ARGUMENT};
 use types_nodes::{Node, NodeList};
 use types_tuple::itemptr::{FirstOffsetNumber, InvalidOffsetNumber};
@@ -261,8 +261,11 @@ impl TsmState {
     ) -> OffsetNumber {
         match self {
             TsmState::Bernoulli(s) => {
-                let mut tupoffset =
-                    if s.lt == InvalidOffsetNumber { FirstOffsetNumber } else { s.lt + 1 };
+                let mut tupoffset = if s.lt == InvalidOffsetNumber {
+                    FirstOffsetNumber
+                } else {
+                    s.lt + 1
+                };
                 while tupoffset <= maxoffset {
                     let hash = hash_u32s(&[blockno, tupoffset as u32, s.seed]);
                     if (hash as u64) < s.cutoff {
@@ -277,8 +280,11 @@ impl TsmState {
                 tupoffset
             }
             TsmState::System(s) => {
-                let mut tupoffset =
-                    if s.lt == InvalidOffsetNumber { FirstOffsetNumber } else { s.lt + 1 };
+                let mut tupoffset = if s.lt == InvalidOffsetNumber {
+                    FirstOffsetNumber
+                } else {
+                    s.lt + 1
+                };
                 if tupoffset > maxoffset {
                     tupoffset = InvalidOffsetNumber;
                 }
@@ -351,7 +357,12 @@ fn not_a_tsm_routine(tsmhandler: Oid) -> Box<PgError> {
 mcx::forget_safe_nodrop!(Tsm);
 mcx::forget_safe_struct!(
     BernoulliSampler { cutoff, seed, lt },
-    SystemSampler { cutoff, seed, nextblock, lt },
+    SystemSampler {
+        cutoff,
+        seed,
+        nextblock,
+        lt
+    },
 );
 mcx::forget_safe_nodrop!(TsmState);
 

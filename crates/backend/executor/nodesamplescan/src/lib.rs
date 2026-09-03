@@ -8,8 +8,8 @@ use ::execscan::{exec_scan_epq, exec_scan_extended, ScanNode, ScanState};
 use ::executils::{EStateData, ExecSlotId};
 use ::mcx::{Mcx, PgBox, PgVec};
 use ::tableam::{
-    table_beginscan_sampling, table_endscan, table_rescan_set_params,
-    table_scan_sample_next_block, table_scan_sample_next_tuple, table_slot_callbacks,
+    table_beginscan_sampling, table_endscan, table_rescan_set_params, table_scan_sample_next_block,
+    table_scan_sample_next_tuple, table_slot_callbacks,
 };
 use ::tablesample::{Tsm, TsmState};
 use ::types_error::{
@@ -45,11 +45,7 @@ impl<'mcx> ScanNode<'mcx> for SampleScanState<'mcx> {
 
     /// `SampleRecheck`: like SeqScan, no AM conditions to re-verify.
     #[inline(always)]
-    fn epq_recheck(
-        &mut self,
-        _estate: &mut EStateData<'mcx>,
-        _slot: ExecSlotId,
-    ) -> PgResult<bool> {
+    fn epq_recheck(&mut self, _estate: &mut EStateData<'mcx>, _slot: ExecSlotId) -> PgResult<bool> {
         Ok(true)
     }
 
@@ -93,10 +89,9 @@ pub fn exec_init_sample_scan<'mcx>(
         .expect("SampleScan tablesample is a TableSampleClause");
 
     let rel = estate.exec_get_range_table_relation(node.scan.scanrelid, false)?;
-    if eflags & (EXEC_FLAG_EXPLAIN_ONLY | EXEC_FLAG_WITH_NO_DATA) == 0
-        && !rel.rd_rel.relispopulated
+    if eflags & (EXEC_FLAG_EXPLAIN_ONLY | EXEC_FLAG_WITH_NO_DATA) == 0 && !rel.rd_rel.relispopulated
     {
-        return Err(unpopulated_matview(&rel));
+        return Err(unpopulated_matview(rel));
     }
     let rel = rel.alias();
 
@@ -194,7 +189,11 @@ impl<'mcx> SampleScanState<'mcx> {
         let mut params: PgVec<'mcx, Datum> = PgVec::new_in(mcx);
         for arg in self.args.iter_mut() {
             estate.reset_expr_context(ecxt);
-            let mut slots = EvalSlots { scan: None, inner: None, outer: None };
+            let mut slots = EvalSlots {
+                scan: None,
+                inner: None,
+                outer: None,
+            };
             let v = exec_eval_expr(arg, &mut slots)?;
             if v.isnull {
                 return Err(null_param());
@@ -205,7 +204,11 @@ impl<'mcx> SampleScanState<'mcx> {
         let seed = match self.repeatable.as_deref_mut() {
             Some(expr) => {
                 estate.reset_expr_context(ecxt);
-                let mut slots = EvalSlots { scan: None, inner: None, outer: None };
+                let mut slots = EvalSlots {
+                    scan: None,
+                    inner: None,
+                    outer: None,
+                };
                 let v = exec_eval_expr(expr, &mut slots)?;
                 if v.isnull {
                     return Err(null_repeatable());
@@ -228,7 +231,10 @@ impl<'mcx> SampleScanState<'mcx> {
                 let snapshot = estate.es_snapshot.clone();
                 self.ss.ss_currentScanDesc = Some(table_beginscan_sampling(
                     mcx,
-                    self.ss.ss_currentRelation.as_ref().expect("samplescan has a relation"),
+                    self.ss
+                        .ss_currentRelation
+                        .as_ref()
+                        .expect("samplescan has a relation"),
                     snapshot,
                     0,
                     PgVec::new_in(mcx),
@@ -259,7 +265,14 @@ impl<'mcx> SampleScanState<'mcx> {
         if self.done {
             return Ok(false);
         }
-        let SampleScanState { ss, tsm_state, haveblock, done, donetuples, .. } = self;
+        let SampleScanState {
+            ss,
+            tsm_state,
+            haveblock,
+            done,
+            donetuples,
+            ..
+        } = self;
         loop {
             let scan = ss.ss_currentScanDesc.as_mut().expect("sample scan begun");
             if !*haveblock {

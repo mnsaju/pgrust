@@ -12,8 +12,7 @@
 use std::num::Wrapping as W;
 use std::sync::OnceLock;
 
-const CRYPT_A64: &[u8; 64] =
-    b"./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+const CRYPT_A64: &[u8; 64] = b"./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
 const IP: [u8; 64] = [
     58, 50, 42, 34, 26, 18, 10, 2, 60, 52, 44, 36, 28, 20, 12, 4, 62, 54, 46, 38, 30, 22, 14, 6,
@@ -113,9 +112,9 @@ fn des_init() -> Box<DesTables> {
     // Invert the S-boxes, reordering the input bits.
     let mut u_sbox = [[0u8; 64]; 8];
     for i in 0..8 {
-        for j in 0..64usize {
+        for (j, dst) in u_sbox[i].iter_mut().enumerate() {
             let b = (j & 0x20) | ((j & 1) << 4) | ((j >> 1) & 0xf);
-            u_sbox[i][j] = SBOX[i][b];
+            *dst = SBOX[i][b];
         }
     }
 
@@ -166,9 +165,9 @@ fn des_init() -> Box<DesTables> {
             let mut ir = 0u32;
             let mut fl = 0u32;
             let mut fr = 0u32;
-            for j in 0..8usize {
+            for (j, &bit8) in CRYPT_BITS8.iter().enumerate() {
                 let inbit = 8 * k + j;
-                if (i as u8 & CRYPT_BITS8[j]) != 0 {
+                if (i as u8 & bit8) != 0 {
                     let obit = init_perm[inbit] as usize;
                     if obit < 32 {
                         il |= CRYPT_BITS32[obit];
@@ -239,14 +238,14 @@ fn des_init() -> Box<DesTables> {
 
     let mut psbox = [[0u32; 256]; 4];
     for b in 0..4usize {
-        for i in 0..256usize {
+        for (i, dst) in psbox[b].iter_mut().enumerate() {
             let mut p = 0u32;
             for j in 0..8usize {
                 if (i as u8 & CRYPT_BITS8[j]) != 0 {
                     p |= CRYPT_BITS32[un_pbox[8 * b + j] as usize];
                 }
             }
-            psbox[b][i] = p;
+            *dst = p;
         }
     }
 
@@ -336,8 +335,8 @@ impl DesState {
         let cml = &t.comp_maskl;
         let cmr = &t.comp_maskr;
         let mut shifts = 0u32;
-        for round in 0..16usize {
-            shifts += KEY_SHIFTS[round] as u32;
+        for (round, &shift) in KEY_SHIFTS.iter().enumerate() {
+            shifts += shift as u32;
 
             let t0 = (W(k0) << shifts as usize).0 | (k0 >> (28 - shifts) as usize);
             let t1 = (W(k1) << shifts as usize).0 | (k1 >> (28 - shifts) as usize);
@@ -537,12 +536,12 @@ pub fn px_crypt_des(key: &[u8], setting: &[u8]) -> Option<Vec<u8>> {
     if setting.first() == Some(&b'_') {
         // "new"-style (xdes). Caller guarantees setting.len() >= 9.
         let mut c: u32 = 0;
-        for i in 1..5usize {
-            c |= ascii_to_bin(setting[i]) << ((i - 1) * 6);
+        for (i, &ch) in setting.iter().enumerate().take(5).skip(1) {
+            c |= ascii_to_bin(ch) << ((i - 1) * 6);
         }
         let mut s: u32 = 0;
-        for i in 5..9usize {
-            s |= ascii_to_bin(setting[i]) << ((i - 5) * 6);
+        for (i, &ch) in setting.iter().enumerate().take(9).skip(5) {
+            s |= ascii_to_bin(ch) << ((i - 5) * 6);
         }
         count = c as i32;
         salt = s as i64;
@@ -644,7 +643,10 @@ mod tests {
 
     #[test]
     fn cryptdes_xdes_adversarial_bang_salt() {
-        assert_eq!(xdes(b"password", b"_/!!!!!!!").unwrap(), "_/!!!!!!!zqM49hRzxko");
+        assert_eq!(
+            xdes(b"password", b"_/!!!!!!!").unwrap(),
+            "_/!!!!!!!zqM49hRzxko"
+        );
     }
 
     #[test]

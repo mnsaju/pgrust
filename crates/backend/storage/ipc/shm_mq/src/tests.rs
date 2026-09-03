@@ -60,7 +60,9 @@ fn recv_success(handle: &mut ShmMqHandle, nowait: bool) -> Vec<u8> {
 }
 
 fn msg_body(i: usize, len: usize) -> Vec<u8> {
-    (0..len).map(|j| (i.wrapping_mul(31).wrapping_add(j)) as u8).collect()
+    (0..len)
+        .map(|j| (i.wrapping_mul(31).wrapping_add(j)) as u8)
+        .collect()
 }
 
 #[test]
@@ -221,7 +223,13 @@ fn oversize_message_errors() {
     );
 }
 
-fn two_thread_stress(ring_size: usize, n: usize, max_len: usize, procs: (ProcNumber, ProcNumber), pids: (i32, i32)) {
+fn two_thread_stress(
+    ring_size: usize,
+    n: usize,
+    max_len: usize,
+    procs: (ProcNumber, ProcNumber),
+    pids: (i32, i32),
+) {
     let mq = shm_mq_create(ring_size);
     mq.set_receiver(procs.0);
     mq.set_sender(procs.1);

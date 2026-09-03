@@ -1,7 +1,7 @@
 pub mod builtins;
-pub mod io;
 #[cfg(test)]
 mod corpus_tests;
+pub mod io;
 #[cfg(test)]
 mod tests;
 
@@ -9,9 +9,8 @@ use core::cell::RefCell;
 use std::rc::Rc;
 
 use ::adt_rangetypes::{
-    att_align_nominal, fetch_att, make_range, range_cmp_bounds, range_deserialize,
-    range_get_flags, range_has_lbound, range_has_ubound, range_is_empty, ops as range_ops,
-    ElemInfo, RangeBound, RangeInfo, RANGE_EMPTY, RANGE_LB_INC, RANGE_LB_INF, RANGE_UB_INC,
+    att_align_nominal, fetch_att, make_range, ops as range_ops, range_cmp_bounds,
+    range_deserialize, range_get_flags, range_has_lbound, range_has_ubound, range_is_empty, RangeBound, RangeInfo, RANGE_EMPTY, RANGE_LB_INC, RANGE_LB_INF, RANGE_UB_INC,
     RANGE_UB_INF,
 };
 use ::datum::Datum;
@@ -46,7 +45,9 @@ pub struct MultirangeInfo {
 #[track_caller]
 #[cold]
 fn not_a_multirange_type(oid: Oid) -> Box<PgError> {
-    Box::new(PgError::error(format!("type {oid} is not a multirange type")))
+    Box::new(PgError::error(format!(
+        "type {oid} is not a multirange type"
+    )))
 }
 
 impl MultirangeInfo {
@@ -56,15 +57,19 @@ impl MultirangeInfo {
             return Err(not_a_multirange_type(mltrngtypid));
         };
         let rng = RangeInfo::from_entry(rt)?;
-        Ok(MultirangeInfo { pin: Some(e), mltrngtypid, rng })
+        Ok(MultirangeInfo {
+            pin: Some(e),
+            mltrngtypid,
+            rng,
+        })
     }
 }
 
 // multirange_get_typcache (multirangetypes.c): fn_extra memo.
-pub fn cached_multirange_info<'f>(
-    flinfo: &'f mut FmgrInfo,
+pub fn cached_multirange_info(
+    flinfo: &mut FmgrInfo,
     mltrngtypid: Oid,
-) -> PgResult<&'f mut MultirangeInfo> {
+) -> PgResult<&mut MultirangeInfo> {
     let need = match flinfo.fn_extra_ref::<MultirangeInfo>() {
         Some(mi) => mi.mltrngtypid != mltrngtypid,
         None => true,
@@ -131,11 +136,7 @@ fn bounds_offset(mr: &[u8], mut i: usize) -> usize {
 }
 
 /// multirange_get_bounds (multirangetypes.c).
-pub fn multirange_get_bounds(
-    rng: &RangeInfo,
-    mr: &[u8],
-    i: usize,
-) -> (RangeBound, RangeBound) {
+pub fn multirange_get_bounds(rng: &RangeInfo, mr: &[u8], i: usize) -> (RangeBound, RangeBound) {
     debug_assert!(i < multirange_count(mr) as usize);
     let elem = &rng.elem;
     let typlen = elem.typlen as i32;
@@ -146,8 +147,8 @@ pub fn multirange_get_bounds(
 
     let lbound = if range_has_lbound(flags) {
         // SAFETY: offsets stay within the serialized multirange image.
-        let d = fetch_att(unsafe { base.add(off) }, elem.typbyval, typlen);
-        off = arrayfuncs::foundation::att_addlength_pointer(off, typlen, unsafe { base.add(off) });
+        let d = unsafe { fetch_att(base.add(off), elem.typbyval, typlen) };
+        off = unsafe { arrayfuncs::foundation::att_addlength_pointer(off, typlen, base.add(off)) };
         d
     } else {
         Datum::from_usize(0)
@@ -157,7 +158,7 @@ pub fn multirange_get_bounds(
             off = att_align_nominal(off, elem.typalign);
         }
         // SAFETY: as above.
-        fetch_att(unsafe { base.add(off) }, elem.typbyval, typlen)
+        unsafe { fetch_att(base.add(off), elem.typbyval, typlen) }
     } else {
         Datum::from_usize(0)
     };
@@ -194,13 +195,13 @@ pub fn multirange_get_range<'m>(
     let mut off = begin;
     if range_has_lbound(flags) {
         // SAFETY: offsets stay within the image.
-        off = arrayfuncs::foundation::att_addlength_pointer(off, typlen, unsafe { base.add(off) });
+        off = unsafe { arrayfuncs::foundation::att_addlength_pointer(off, typlen, base.add(off)) };
     }
     if range_has_ubound(flags) {
         if !(typlen == -1 && unsafe { *base.add(off) } != 0) {
             off = att_align_nominal(off, elem.typalign);
         }
-        off = arrayfuncs::foundation::att_addlength_pointer(off, typlen, unsafe { base.add(off) });
+        off = unsafe { arrayfuncs::foundation::att_addlength_pointer(off, typlen, base.add(off)) };
     }
     let boundary_len = off - begin;
     let len = boundary_len + ::adt_rangetypes::RANGE_HDRSZ + 1;
@@ -355,8 +356,9 @@ where
         }
         img[flags_off + i] = range_get_flags(r);
         let len = r.len() - ::adt_rangetypes::RANGE_HDRSZ - 1;
-        img[ptr..ptr + len]
-            .copy_from_slice(&r[::adt_rangetypes::RANGE_HDRSZ..::adt_rangetypes::RANGE_HDRSZ + len]);
+        img[ptr..ptr + len].copy_from_slice(
+            &r[::adt_rangetypes::RANGE_HDRSZ..::adt_rangetypes::RANGE_HDRSZ + len],
+        );
         ptr += att_align_nominal(len, elemalign);
     }
     Ok(img)
@@ -408,10 +410,14 @@ fn range_bounds_overlaps(
     lower2: &RangeBound,
     upper2: &RangeBound,
 ) -> PgResult<bool> {
-    if range_cmp_bounds(mcx, rng, lower1, lower2)? >= 0 && range_cmp_bounds(mcx, rng, lower1, upper2)? <= 0 {
+    if range_cmp_bounds(mcx, rng, lower1, lower2)? >= 0
+        && range_cmp_bounds(mcx, rng, lower1, upper2)? <= 0
+    {
         return Ok(true);
     }
-    if range_cmp_bounds(mcx, rng, lower2, lower1)? >= 0 && range_cmp_bounds(mcx, rng, lower2, upper1)? <= 0 {
+    if range_cmp_bounds(mcx, rng, lower2, lower1)? >= 0
+        && range_cmp_bounds(mcx, rng, lower2, upper1)? <= 0
+    {
         return Ok(true);
     }
     Ok(false)
@@ -425,7 +431,8 @@ fn range_bounds_contains(
     lower2: &RangeBound,
     upper2: &RangeBound,
 ) -> PgResult<bool> {
-    Ok(range_cmp_bounds(mcx, rng, lower1, lower2)? <= 0 && range_cmp_bounds(mcx, rng, upper1, upper2)? >= 0)
+    Ok(range_cmp_bounds(mcx, rng, lower1, lower2)? <= 0
+        && range_cmp_bounds(mcx, rng, upper1, upper2)? >= 0)
 }
 
 // multirange_bsearch_match (multirangetypes.c).
@@ -461,7 +468,12 @@ pub fn multirange_types_do_not_match() -> Box<PgError> {
     Box::new(PgError::error("multirange types do not match"))
 }
 
-pub fn multirange_eq_internal(mcx: Mcx<'_>, rng: &mut RangeInfo, mr1: &[u8], mr2: &[u8]) -> PgResult<bool> {
+pub fn multirange_eq_internal(
+    mcx: Mcx<'_>,
+    rng: &mut RangeInfo,
+    mr1: &[u8],
+    mr2: &[u8],
+) -> PgResult<bool> {
     if multirange_type_oid(mr1) != multirange_type_oid(mr2) {
         return Err(multirange_types_do_not_match());
     }
@@ -731,7 +743,12 @@ pub fn range_adjacent_multirange_internal(
 }
 
 /// multirange_cmp core.
-pub fn multirange_cmp_internal(mcx: Mcx<'_>, rng: &mut RangeInfo, mr1: &[u8], mr2: &[u8]) -> PgResult<i32> {
+pub fn multirange_cmp_internal(
+    mcx: Mcx<'_>,
+    rng: &mut RangeInfo,
+    mr1: &[u8],
+    mr2: &[u8],
+) -> PgResult<i32> {
     if multirange_type_oid(mr1) != multirange_type_oid(mr2) {
         return Err(multirange_types_do_not_match());
     }
@@ -848,7 +865,9 @@ where
 
         while let Some(rr2) = r2 {
             if range_ops::range_overlaps_internal(mcx, rng, r1, rr2)? {
-                ranges3.push(leak_image(range_ops::range_intersect_internal(mcx, rng, r1, rr2)?));
+                ranges3.push(leak_image(range_ops::range_intersect_internal(
+                    mcx, rng, r1, rr2,
+                )?));
                 if range_ops::range_overleft_internal(mcx, rng, rr2, r1)? {
                     i2 += 1;
                     r2 = ranges2.get(i2).copied();

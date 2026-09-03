@@ -155,7 +155,11 @@ fn fmt(format: &[u8], t: &PgTm<'_>, out: &mut OutBuf<'_>, warnp: &mut Warn) {
                         out,
                     ),
                     b'u' => conv(
-                        if t.tm_wday == 0 { DAYSPERWEEK } else { t.tm_wday },
+                        if t.tm_wday == 0 {
+                            DAYSPERWEEK
+                        } else {
+                            t.tm_wday
+                        },
                         IntFmt::Plain,
                         out,
                     ),

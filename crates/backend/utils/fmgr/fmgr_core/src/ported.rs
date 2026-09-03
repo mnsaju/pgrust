@@ -113,7 +113,7 @@ const fn oid_sorted() -> [(Oid, PGFunction); N] {
     t
 }
 
-const SORTED: [(Oid, PGFunction); N] = oid_sorted();
+static SORTED: [(Oid, PGFunction); N] = oid_sorted();
 
 // Strictly OID-ascending; every OID must exist in CANONICAL (compile-asserted).
 // An OID absent here resolves to a loud not-ported panic.

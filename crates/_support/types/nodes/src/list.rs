@@ -115,6 +115,13 @@ impl<'mcx, F: ListFlavor> List<'mcx, F> {
         self.length == 0
     }
 
+    /// Alias for [`Self::is_nil`] (the PostgreSQL-idiomatic name), satisfying
+    /// Rust's len/is_empty convention.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.is_nil()
+    }
+
     #[inline]
     pub fn capacity(&self) -> usize {
         self.max_length as usize
@@ -142,7 +149,8 @@ impl<'mcx, F: ListFlavor> List<'mcx, F> {
         self.as_slice()[n]
     }
 
-    /// # Safety: `n < self.len()` (C list_nth checks only under Assert).
+    /// # Safety
+    /// `n < self.len()` (C list_nth checks only under Assert).
     #[inline]
     pub unsafe fn nth_unchecked(&self, n: usize) -> F::Cell<'mcx> {
         debug_assert!(n < self.len());
@@ -359,8 +367,9 @@ impl<'mcx, F: ListFlavor> List<'mcx, F> {
         }
     }
 
-    /// # Safety: `(p, len)` must come from `into_raw_parts` of a live list
-    /// whose buffer has not been reused since.
+    /// # Safety
+    /// `(p, len)` must come from `into_raw_parts` of a live list whose
+    /// buffer has not been reused since.
     #[inline]
     pub unsafe fn from_raw_parts(p: *mut F::Cell<'mcx>, len: u32) -> Self {
         match NonNull::new(p) {

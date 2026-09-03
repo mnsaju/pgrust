@@ -3,9 +3,7 @@
 use ::datum::{Datum, Varlena};
 use ::mcx::Mcx;
 use ::types_core::Oid;
-use ::types_error::{
-    PgError, PgResult, ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_UNDEFINED_OBJECT,
-};
+use ::types_error::{PgError, PgResult, ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_UNDEFINED_OBJECT};
 use ::types_fmgr::{
     varlena_result, FmgrBuiltin, FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFunction,
 };
@@ -138,7 +136,14 @@ fn invalid_encoding_code(enc: i32) -> Box<PgError> {
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 pub const ASCII_BUILTINS: &[FmgrBuiltin] = &[

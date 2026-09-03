@@ -87,10 +87,7 @@ fn text_str<'mcx>(mcx: Mcx<'mcx>, d: Datum) -> PgResult<&'mcx str> {
 
 // fetch_statentries_for_relation's expression decode (extended_stats.c):
 // stringToNode + eval_const_expressions + fix_opfuncids.
-pub(crate) fn decode_stxexprs<'mcx>(
-    mcx: Mcx<'mcx>,
-    d: Datum,
-) -> PgResult<PgVec<'mcx, Node<'mcx>>> {
+pub(crate) fn decode_stxexprs<'mcx>(mcx: Mcx<'mcx>, d: Datum) -> PgResult<PgVec<'mcx, Node<'mcx>>> {
     let s = text_str(mcx, d)?;
     let node = readfuncs::stringToNode(mcx, s)?;
     let node = clauses_seams::eval_const_expressions::call(mcx, node)?;
@@ -128,8 +125,7 @@ pub(crate) fn eval_exprs<'mcx, 'b>(
     values: &mut PgVec<'b, PgVec<'b, Datum>>,
     nulls: &mut PgVec<'b, PgVec<'b, bool>>,
 ) -> PgResult<()> {
-    let mut states: PgVec<'mcx, mcx::PgBox<'mcx, execexpr::ExprState<'mcx>>> =
-        PgVec::new_in(mcx);
+    let mut states: PgVec<'mcx, mcx::PgBox<'mcx, execexpr::ExprState<'mcx>>> = PgVec::new_in(mcx);
     for &e in exprs {
         let mut st = execexpr::exec_init_expr(mcx, Some(e), execexpr::ParamBind::NONE)?
             .expect("statistics expression");
@@ -162,9 +158,12 @@ pub(crate) fn eval_exprs<'mcx, 'b>(
         exectuples::exec_store_heap_tuple(&mut slot, mcx, tuple);
         for (j, st) in states.iter_mut().enumerate() {
             let nd = {
-                let mut slots =
-                    execexpr::EvalSlots { scan: Some(&mut slot), inner: None, outer: None };
-                execexpr::exec_eval_expr(&mut **st, &mut slots)?
+                let mut slots = execexpr::EvalSlots {
+                    scan: Some(&mut slot),
+                    inner: None,
+                    outer: None,
+                };
+                execexpr::exec_eval_expr(st, &mut slots)?
             };
             values[base + j].push(if nd.isnull { Datum::null() } else { nd.value });
             nulls[base + j].push(nd.isnull);
@@ -227,7 +226,11 @@ pub(crate) fn serialize_expr_stats<'b>(
             }
         }
         let stup = heaptuple::heap_form_tuple(mcx, sd.descr(), &values, &nulls)?;
-        elems.push(heaptuple::heap_copy_tuple_as_datum(mcx, stup.as_tuple(), sd.descr())?);
+        elems.push(heaptuple::heap_copy_tuple_as_datum(
+            mcx,
+            stup.as_tuple(),
+            sd.descr(),
+        )?);
         elem_nulls.push(false);
     }
 

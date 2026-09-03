@@ -3,7 +3,7 @@ use types_core::AttrNumber;
 use types_error::{PgError, PgResult};
 
 use crate::sortitem::SortItem;
-use crate::{build_mss, build_sorted_items, StatsBuildData};
+use crate::{build_mss, StatsBuildData};
 
 pub const STATS_NDISTINCT_MAGIC: u32 = 0xA352BFA4;
 pub const STATS_NDISTINCT_TYPE_BASIC: u32 = 1;
@@ -46,7 +46,11 @@ impl<'mcx> CombinationGenerator<'mcx> {
         let mut current: PgVec<'mcx, u32> = mcx::vec_with_capacity_in(mcx, k)?;
         current.resize(k, 0);
         recurse(&mut combinations, &mut current, 0, 0, k, n);
-        Ok(CombinationGenerator { k, combinations, current: 0 })
+        Ok(CombinationGenerator {
+            k,
+            combinations,
+            current: 0,
+        })
     }
 
     fn next(&mut self) -> Option<&[u32]> {
@@ -59,7 +63,14 @@ impl<'mcx> CombinationGenerator<'mcx> {
     }
 }
 
-fn recurse(out: &mut PgVec<'_, u32>, current: &mut [u32], index: usize, start: usize, k: usize, n: usize) {
+fn recurse(
+    out: &mut PgVec<'_, u32>,
+    current: &mut [u32],
+    index: usize,
+    start: usize,
+    k: usize,
+    n: usize,
+) {
     if index < k {
         for i in start..n {
             current[index] = i as u32;
@@ -87,7 +98,10 @@ pub fn statext_ndistinct_build<'mcx>(
                 attributes.push(data.attnums[c as usize]);
             }
             let ndistinct = ndistinct_for_combination(mcx, totalrows, data, combination)?;
-            items.push(MVNDistinctItem { ndistinct, attributes });
+            items.push(MVNDistinctItem {
+                ndistinct,
+                attributes,
+            });
         }
     }
     debug_assert_eq!(items.len(), numcombs);
@@ -121,10 +135,17 @@ fn ndistinct_for_combination<'mcx>(
             isnull.push(data.nulls[j][i]);
         }
     }
-    let store = crate::sortitem::ItemStore { values, isnull, width: k };
+    let store = crate::sortitem::ItemStore {
+        values,
+        isnull,
+        width: k,
+    };
     let mut items: PgVec<'_, SortItem> = mcx::vec_with_capacity_in(mcx, numrows)?;
     for off in 0..numrows {
-        items.push(SortItem { off: off as u32, count: 0 });
+        items.push(SortItem {
+            off: off as u32,
+            count: 0,
+        });
     }
     crate::sortitem::pg_qsort(&mut items, |a, b| store.compare(&mut mss, *a, *b));
 
@@ -170,7 +191,7 @@ pub fn statext_ndistinct_serialize<'mcx>(
         len += 8 + 4 + item.attributes.len() * 2;
     }
     let mut out: PgVec<'mcx, u8> = mcx::vec_with_capacity_in(mcx, len)?;
-    out.extend_from_slice(&(((len as u32) << 2)).to_ne_bytes());
+    out.extend_from_slice(&((len as u32) << 2).to_ne_bytes());
     out.extend_from_slice(&STATS_NDISTINCT_MAGIC.to_ne_bytes());
     out.extend_from_slice(&STATS_NDISTINCT_TYPE_BASIC.to_ne_bytes());
     out.extend_from_slice(&(nd.items.len() as u32).to_ne_bytes());
@@ -210,7 +231,8 @@ pub fn statext_ndistinct_deserialize<'mcx>(
     }
     if typ != STATS_NDISTINCT_TYPE_BASIC {
         return Err(PgError::error(format!(
-            "invalid ndistinct type {} (expected {STATS_NDISTINCT_TYPE_BASIC})", typ as i32
+            "invalid ndistinct type {} (expected {STATS_NDISTINCT_TYPE_BASIC})",
+            typ as i32
         ))
         .into());
     }
@@ -260,7 +282,10 @@ pub fn statext_ndistinct_deserialize<'mcx>(
             attributes.push(i16::from_ne_bytes(data[off..off + 2].try_into().unwrap()));
             off += 2;
         }
-        items.push(MVNDistinctItem { ndistinct, attributes });
+        items.push(MVNDistinctItem {
+            ndistinct,
+            attributes,
+        });
     }
     debug_assert_eq!(off, data.len());
     Ok(MVNDistinct { items })

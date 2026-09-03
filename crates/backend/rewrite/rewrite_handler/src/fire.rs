@@ -157,7 +157,12 @@ fn rewriteRuleAction<'mcx>(
     event: CmdType,
     returning_flag: &mut bool,
 ) -> PgResult<Node<'mcx>> {
-    crate::AcquireRewriteLocks(mcx, rule_action_node.as_query().expect("Query"), true, false)?;
+    crate::AcquireRewriteLocks(
+        mcx,
+        rule_action_node.as_query().expect("Query"),
+        true,
+        false,
+    )?;
     acquire_locks_on_sublinks(mcx, rule_qual)?;
 
     let current_varno = rt_index;
@@ -171,7 +176,13 @@ fn rewriteRuleAction<'mcx>(
     if let Some(q) = rule_qual {
         rewrite_manip::OffsetVarNodes(mcx, q, rt_length, 0)?;
     }
-    rewrite_manip::ChangeVarNodes(mcx, sub_action_node, PRS2_OLD_VARNO + rt_length, rt_index, 0)?;
+    rewrite_manip::ChangeVarNodes(
+        mcx,
+        sub_action_node,
+        PRS2_OLD_VARNO + rt_length,
+        rt_index,
+        0,
+    )?;
     if let Some(q) = rule_qual {
         rewrite_manip::ChangeVarNodes(mcx, q, PRS2_OLD_VARNO + rt_length, rt_index, 0)?;
     }
@@ -218,18 +229,10 @@ fn rewriteRuleAction<'mcx>(
         'outer: for rte_node in parsetree.rtable.iter() {
             let rte = rte_node.as_range_tbl_entry().expect("rtable cell");
             let mut has = match rte.rtekind {
-                RTEKind::RTE_RELATION => {
-                    rewrite_manip::checkExprHasSubLink_opt(rte.tablesample)?
-                }
-                RTEKind::RTE_FUNCTION => {
-                    rewrite_manip::checkExprHasSubLink_list(&rte.functions)?
-                }
-                RTEKind::RTE_TABLEFUNC => {
-                    rewrite_manip::checkExprHasSubLink_opt(rte.tablefunc)?
-                }
-                RTEKind::RTE_VALUES => {
-                    rewrite_manip::checkExprHasSubLink_list(&rte.values_lists)?
-                }
+                RTEKind::RTE_RELATION => rewrite_manip::checkExprHasSubLink_opt(rte.tablesample)?,
+                RTEKind::RTE_FUNCTION => rewrite_manip::checkExprHasSubLink_list(&rte.functions)?,
+                RTEKind::RTE_TABLEFUNC => rewrite_manip::checkExprHasSubLink_opt(rte.tablefunc)?,
+                RTEKind::RTE_VALUES => rewrite_manip::checkExprHasSubLink_list(&rte.values_lists)?,
                 _ => false,
             };
             has |= rewrite_manip::checkExprHasSubLink_list(&rte.securityQuals)?;
@@ -280,7 +283,10 @@ fn rewriteRuleAction<'mcx>(
             merged.concat(mcx, &sub_jt.fromlist)?;
             let new_jt = mcx::alloc_leak_in(
                 mcx,
-                types_nodes::primnodes::FromExpr { fromlist: merged, quals: sub_jt.quals },
+                types_nodes::primnodes::FromExpr {
+                    fromlist: merged,
+                    quals: sub_jt.quals,
+                },
             )?;
             // SAFETY: as above.
             unsafe {
@@ -315,7 +321,10 @@ fn rewriteRuleAction<'mcx>(
             }
         }
         let mut merged = sub_action.cteList.clone_in(mcx)?;
-        merged.concat(mcx, &rewrite_manip::copy_node_list(mcx, &parsetree.cteList)?)?;
+        merged.concat(
+            mcx,
+            &rewrite_manip::copy_node_list(mcx, &parsetree.cteList)?,
+        )?;
         let has_recursive = parsetree.hasRecursive;
         let has_modifying = parsetree.hasModifyingCTE;
         // SAFETY: as above.
@@ -335,7 +344,11 @@ fn rewriteRuleAction<'mcx>(
     }
 
     rewrite_manip::AddQual(mcx, sub_action_node, rule_qual)?;
-    rewrite_manip::AddQual(mcx, sub_action_node, parsetree.jointree.and_then(|jt| jt.quals))?;
+    rewrite_manip::AddQual(
+        mcx,
+        sub_action_node,
+        parsetree.jointree.and_then(|jt| jt.quals),
+    )?;
 
     if (event == CmdType::CMD_INSERT || event == CmdType::CMD_UPDATE)
         && sub_action_node.as_query().expect("Query").commandType != CmdType::CMD_UTILITY
@@ -368,10 +381,8 @@ fn rewriteRuleAction<'mcx>(
     let rule_action = rule_action_node.as_query().expect("Query");
     if parsetree.returningList.is_nil() {
         // SAFETY: as above.
-        unsafe {
-            rule_action_node.with_mut::<Query, _>(|q| q.returningList = NodeList::nil())
-        }
-        .expect("Query");
+        unsafe { rule_action_node.with_mut::<Query, _>(|q| q.returningList = NodeList::nil()) }
+            .expect("Query");
     } else if !rule_action.returningList.is_nil() {
         if *returning_flag {
             return Err(feature_not_supported(
@@ -385,8 +396,7 @@ fn rewriteRuleAction<'mcx>(
             .as_range_tbl_entry()
             .expect("rtable cell");
         let mut inserted_sublink = false;
-        let returning_copy =
-            rewrite_manip::copy_node_list(mcx, &parsetree.returningList)?;
+        let returning_copy = rewrite_manip::copy_node_list(mcx, &parsetree.returningList)?;
         let new_returning = rewrite_manip::ReplaceVarsFromTargetList_list(
             mcx,
             &returning_copy,
@@ -507,7 +517,10 @@ fn acquire_locks_on_sublinks<'mcx>(mcx: Mcx<'mcx>, node: Option<Node<'mcx>>) -> 
     impl<'mcx> nodes_core::NodeWalker<'mcx> for W<'mcx> {
         fn visit(&mut self, node: Node<'mcx>) -> PgResult<bool> {
             if let Some(sl) = node.as_sub_link() {
-                let sub = sl.subselect.as_query().expect("analyzed sublink sub-select");
+                let sub = sl
+                    .subselect
+                    .as_query()
+                    .expect("analyzed sublink sub-select");
                 crate::AcquireRewriteLocks(self.mcx, sub, true, false)?;
             }
             nodes_core::expression_tree_walker(node, self)
@@ -528,20 +541,15 @@ fn contain_vars_of_level_query<'mcx>(q: &'mcx Query<'mcx>, levelsup: u32) -> PgR
     impl<'mcx> nodes_core::NodeWalker<'mcx> for W {
         fn visit(&mut self, node: Node<'mcx>) -> PgResult<bool> {
             match node.node_tag() {
-                NodeTag::T_Var => {
-                    Ok(node.as_var().expect("Var").varlevelsup == self.sublevels_up)
-                }
+                NodeTag::T_Var => Ok(node.as_var().expect("Var").varlevelsup == self.sublevels_up),
                 NodeTag::T_CurrentOfExpr => Ok(self.sublevels_up == 0),
-                NodeTag::T_PlaceHolderVar => panic!(
-                    "contain_vars_of_level (var.c): PlaceHolderVar in parse tree"
-                ),
+                NodeTag::T_PlaceHolderVar => {
+                    panic!("contain_vars_of_level (var.c): PlaceHolderVar in parse tree")
+                }
                 NodeTag::T_Query => {
                     self.sublevels_up += 1;
-                    let r = nodes_core::query_tree_walker(
-                        node.as_query().expect("Query"),
-                        self,
-                        0,
-                    )?;
+                    let r =
+                        nodes_core::query_tree_walker(node.as_query().expect("Query"), self, 0)?;
                     self.sublevels_up -= 1;
                     Ok(r)
                 }
@@ -555,7 +563,9 @@ fn contain_vars_of_level_query<'mcx>(q: &'mcx Query<'mcx>, levelsup: u32) -> PgR
             Ok(r)
         }
     }
-    let mut w = W { sublevels_up: levelsup };
+    let mut w = W {
+        sublevels_up: levelsup,
+    };
     nodes_core::query_tree_walker(q, &mut w, 0)
 }
 

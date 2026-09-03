@@ -2,9 +2,7 @@
 
 extern crate alloc;
 
-use types_error::{
-    ereturn, PgError, PgResult, SoftErrorContext, ERRCODE_PROGRAM_LIMIT_EXCEEDED,
-};
+use types_error::{ereturn, PgError, PgResult, SoftErrorContext, ERRCODE_PROGRAM_LIMIT_EXCEEDED};
 
 pub const MAXDIM: i32 = 6;
 pub const MAX_ALLOC_SIZE: usize = 0x3FFF_FFFF;
@@ -57,12 +55,12 @@ pub fn array_get_n_items_safe(
         return Ok(0);
     }
     let mut ret: i32 = 1;
-    for i in 0..ndim as usize {
+    for &d in dims.iter().take(ndim as usize) {
         // A negative dimension implies that UB-LB overflowed.
-        if dims[i] < 0 {
+        if d < 0 {
             return ereturn(escontext.take(), -1, array_size_exceeded());
         }
-        let prod: i64 = ret as i64 * dims[i] as i64;
+        let prod: i64 = ret as i64 * d as i64;
         ret = prod as i32;
         if ret as i64 != prod {
             return ereturn(escontext.take(), -1, array_size_exceeded());

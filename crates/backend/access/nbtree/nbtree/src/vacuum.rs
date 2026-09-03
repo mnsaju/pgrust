@@ -205,9 +205,17 @@ fn btvacuumscan<'mcx>(
     // the serial path IS the chunked path with an infinite quantum.
     let mut current: BlockNumber = BTREE_METAPAGE + 1;
     let mut num_pages: BlockNumber = 0;
-    let done =
-        btvacuumscan_blocks(&mut vstate, &mut scratch, &mut current, &mut num_pages, u32::MAX)?;
-    debug_assert!(done, "unbounded btvacuumscan_blocks step must complete the sweep");
+    let done = btvacuumscan_blocks(
+        &mut vstate,
+        &mut scratch,
+        &mut current,
+        &mut num_pages,
+        u32::MAX,
+    )?;
+    debug_assert!(
+        done,
+        "unbounded btvacuumscan_blocks step must complete the sweep"
+    );
 
     vstate.stats.num_pages = num_pages;
 
@@ -236,10 +244,8 @@ fn btvacuumscan_blocks(
     let mut scanned: u32 = 0;
     loop {
         if *current >= *num_pages {
-            *num_pages = bufmgr::relation_get_number_of_blocks_in_fork::call(
-                rel,
-                ForkNumber::MAIN_FORKNUM,
-            )?;
+            *num_pages =
+                bufmgr::relation_get_number_of_blocks_in_fork::call(rel, ForkNumber::MAIN_FORKNUM)?;
             if *current >= *num_pages {
                 return Ok(true);
             }
@@ -367,7 +373,9 @@ pub fn bt_chunked_cleanup_begin<'mcx>(
         return Ok(BtChunkedCleanup::Done(istat));
     }
     match istat {
-        Some(stats) => Ok(BtChunkedCleanup::Done(Some(btvacuumcleanup_tail(info, stats)?))),
+        Some(stats) => Ok(BtChunkedCleanup::Done(Some(btvacuumcleanup_tail(
+            info, stats,
+        )?))),
         None => {
             if !crate::pagedel::bt_vacuum_needs_cleanup(info.index)? {
                 return Ok(BtChunkedCleanup::Done(None));
@@ -445,7 +453,10 @@ fn chunk_scan_finalize<'mcx>(
     info: &IndexVacuumInfo<'_, 'mcx>,
     scan: &mut BtVacChunkedScan,
 ) -> PgResult<()> {
-    debug_assert!(scan.current >= scan.num_pages, "finish before the sweep completed");
+    debug_assert!(
+        scan.current >= scan.num_pages,
+        "finish before the sweep completed"
+    );
     scan.stats.num_pages = scan.num_pages;
     with_chunk_vstate(scan, info, None, bt_pendingfsm_finalize)?;
     if scan.stats.pages_free > 0 {
@@ -472,7 +483,11 @@ fn with_chunk_vstate<'mcx, R>(
         maxbufsize: scan.maxbufsize,
     };
     let r = f(&mut vstate);
-    let BTVacState { pendingpages, maxbufsize, .. } = vstate;
+    let BTVacState {
+        pendingpages,
+        maxbufsize,
+        ..
+    } = vstate;
     scan.pendingpages = pendingpages;
     scan.maxbufsize = maxbufsize;
     r
@@ -778,4 +793,3 @@ pub(crate) fn bt_update_posting<'s>(scx: Mcx<'s>, vacposting: &mut VacPosting<'s
     vacposting.itup = itup;
     Ok(())
 }
-

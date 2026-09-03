@@ -125,8 +125,11 @@ pub fn NewExplainState(mcx: Mcx<'_>) -> PgResult<ExplainState<'_>> {
 
 // explain_state.c extension surface. C keeps these in per-backend statics;
 // one backend = one thread here.
-pub type ExplainOptionHandler =
-    for<'a> fn(&mut ExplainState<'a>, &types_nodes::parsenodes::DefElem<'a>, Mcx<'a>) -> PgResult<()>;
+pub type ExplainOptionHandler = for<'a> fn(
+    &mut ExplainState<'a>,
+    &types_nodes::parsenodes::DefElem<'a>,
+    Mcx<'a>,
+) -> PgResult<()>;
 pub type ExplainPerNodeHook = for<'a> fn(
     types_nodes::Node<'a>,
     Option<&str>,
@@ -259,7 +262,9 @@ pub fn ParseExplainOptionList<'mcx>(
     let mut summary_set = false;
 
     for opt_node in options.iter() {
-        let opt = opt_node.as_def_elem().expect("EXPLAIN options are DefElems");
+        let opt = opt_node
+            .as_def_elem()
+            .expect("EXPLAIN options are DefElems");
         let defname = opt.defname.unwrap_or("");
         match defname {
             "analyze" => es.analyze = defGetBoolean(opt)?,

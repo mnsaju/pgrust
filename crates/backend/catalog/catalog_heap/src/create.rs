@@ -114,8 +114,7 @@ pub fn CheckAttributeType<'mcx>(
     if att_typtype == lsyscache::typ::TYPTYPE_PSEUDO {
         if !((atttypid == types_core::catalog::ANYARRAYOID && flags & CHKATYPE_ANYARRAY != 0)
             || (atttypid == types_core::catalog::RECORDOID && flags & CHKATYPE_ANYRECORD != 0)
-            || (atttypid == types_core::catalog::RECORDARRAYOID
-                && flags & CHKATYPE_ANYRECORD != 0))
+            || (atttypid == types_core::catalog::RECORDARRAYOID && flags & CHKATYPE_ANYRECORD != 0))
         {
             let tname = format_type::format_type_be(atttypid)?;
             let msg = if flags & CHKATYPE_IS_PARTKEY != 0 {
@@ -444,7 +443,11 @@ fn form_pg_attribute_tuple<'mcx>(
 ) -> PgResult<heaptuple::HeapTuple<'mcx>> {
     let mut values = [Datum::null(); Natts_pg_attribute];
     let mut nulls = [false; Natts_pg_attribute];
-    values[0] = Datum::from_oid(if new_rel_oid != InvalidOid { new_rel_oid } else { attrs.attrelid });
+    values[0] = Datum::from_oid(if new_rel_oid != InvalidOid {
+        new_rel_oid
+    } else {
+        attrs.attrelid
+    });
     values[1] = name_datum(&attrs.attname);
     values[2] = Datum::from_oid(attrs.atttypid);
     values[3] = Datum::from_i16(attrs.attlen);
@@ -505,7 +508,13 @@ pub fn InsertPgAttributeTuples<'mcx>(
         let mut tuples = std::vec::Vec::with_capacity(chunk.len());
         for (j, att) in chunk.iter().enumerate() {
             let extra = attrs_extra.map(|e| &e[chunk_i * nslots + j]);
-            tuples.push(form_pg_attribute_tuple(mcx, pg_attribute_rel, att, new_rel_oid, extra)?);
+            tuples.push(form_pg_attribute_tuple(
+                mcx,
+                pg_attribute_rel,
+                att,
+                new_rel_oid,
+                extra,
+            )?);
         }
         catalog_indexing::CatalogTuplesMultiInsertWithInfo(
             mcx,
@@ -601,15 +610,19 @@ pub fn heap_create_with_catalog<'mcx>(
     );
     // C: no rowtype/array pg_type entry where the relation is an
     // implementation detail (toast, sequences, indexes).
-    let make_rowtype = p.relkind != types_rel::RELKIND_TOASTVALUE
-        && p.relkind != types_rel::RELKIND_SEQUENCE;
+    let make_rowtype =
+        p.relkind != types_rel::RELKIND_TOASTVALUE && p.relkind != types_rel::RELKIND_SEQUENCE;
     let pg_class_desc = table::table_open(mcx, RELATION_RELATION_ID, RowExclusiveLock)?;
 
     CheckAttributeNamesTypes(
         mcx,
         tupdesc,
         p.relkind,
-        if p.allow_system_table_mods { CHKATYPE_ANYARRAY } else { 0 },
+        if p.allow_system_table_mods {
+            CHKATYPE_ANYARRAY
+        } else {
+            0
+        },
     )?;
 
     if lsyscache::get_relname_relid(p.relname, p.relnamespace)? != InvalidOid {
@@ -619,9 +632,10 @@ pub fn heap_create_with_catalog<'mcx>(
         ));
     }
 
-    let old_type_oid =
-        syscache_seams::lookup_pg_type_oid_by_name::call(p.relname, p.relnamespace)?;
-    if old_type_oid != InvalidOid && !pg_type::moveArrayTypeName(mcx, old_type_oid, p.relname, p.relnamespace)? {
+    let old_type_oid = syscache_seams::lookup_pg_type_oid_by_name::call(p.relname, p.relnamespace)?;
+    if old_type_oid != InvalidOid
+        && !pg_type::moveArrayTypeName(mcx, old_type_oid, p.relname, p.relnamespace)?
+    {
         return Err(err(
             format!("type \"{}\" already exists", p.relname),
             types_error::ERRCODE_DUPLICATE_OBJECT,
@@ -633,12 +647,8 @@ pub fn heap_create_with_catalog<'mcx>(
         .into());
     }
 
-    let relid = catalog::GetNewRelFileNumber(
-        mcx,
-        p.reltablespace,
-        Some(&pg_class_desc),
-        p.relpersistence,
-    )?;
+    let relid =
+        catalog::GetNewRelFileNumber(mcx, p.reltablespace, Some(&pg_class_desc), p.relpersistence)?;
     lmgr::LockRelationOid(relid, AccessExclusiveLock)?;
 
     // C allocates the array-type oid after heap_create and the composite oid
@@ -666,18 +676,12 @@ pub fn heap_create_with_catalog<'mcx>(
         RELKIND_RELATION
         | RELKIND_VIEW
         | types_rel::RELKIND_MATVIEW
-        | types_rel::RELKIND_PARTITIONED_TABLE => aclchk_seams::get_user_default_acl::call(
-            mcx,
-            b'r',
-            p.ownerid,
-            p.relnamespace,
-        )?,
-        types_rel::RELKIND_SEQUENCE => aclchk_seams::get_user_default_acl::call(
-            mcx,
-            b'S',
-            p.ownerid,
-            p.relnamespace,
-        )?,
+        | types_rel::RELKIND_PARTITIONED_TABLE => {
+            aclchk_seams::get_user_default_acl::call(mcx, b'r', p.ownerid, p.relnamespace)?
+        }
+        types_rel::RELKIND_SEQUENCE => {
+            aclchk_seams::get_user_default_acl::call(mcx, b'S', p.ownerid, p.relnamespace)?
+        }
         _ => None,
     };
 
@@ -698,55 +702,56 @@ pub fn heap_create_with_catalog<'mcx>(
     )?;
 
     if make_rowtype {
-    AddNewRelationType(
-        mcx,
-        p.relname,
-        p.relnamespace,
-        relid,
-        p.relkind,
-        p.ownerid,
-        new_type_oid,
-        new_array_oid,
-    )?;
+        AddNewRelationType(
+            mcx,
+            p.relname,
+            p.relnamespace,
+            relid,
+            p.relkind,
+            p.ownerid,
+            new_type_oid,
+            new_array_oid,
+        )?;
 
-    let relarrayname = pg_type::makeArrayTypeName(p.relname, p.relnamespace)?;
-    pg_type::TypeCreate(
-        mcx,
-        &pg_type::TypeCreateParams {
-            newTypeOid: new_array_oid,
-            typeName: core::str::from_utf8(relarrayname.name_str()).expect("non-UTF-8 array type name"),
-            typeNamespace: p.relnamespace,
-            relationOid: InvalidOid,
-            relationKind: 0,
-            ownerId: p.ownerid,
-            internalSize: -1,
-            typeType: pg_type::TYPTYPE_BASE,
-            typeCategory: pg_type::TYPCATEGORY_ARRAY,
-            typePreferred: false,
-            typDelim: pg_type::DEFAULT_TYPDELIM,
-            inputProcedure: pg_type::F_ARRAY_IN,
-            outputProcedure: pg_type::F_ARRAY_OUT,
-            receiveProcedure: pg_type::F_ARRAY_RECV,
-            sendProcedure: pg_type::F_ARRAY_SEND,
-            typmodinProcedure: InvalidOid,
-            typmodoutProcedure: InvalidOid,
-            analyzeProcedure: pg_type::F_ARRAY_TYPANALYZE,
-            subscriptProcedure: pg_type::F_ARRAY_SUBSCRIPT_HANDLER,
-            elementType: new_type_oid,
-            isImplicitArray: true,
-            arrayType: InvalidOid,
-            baseType: InvalidOid,
-            passedByValue: false,
-            alignment: TYPALIGN_DOUBLE,
-            storage: TYPSTORAGE_EXTENDED,
-            typeMod: -1,
-            typNDims: 0,
-            typeNotNull: false,
-            typeCollation: InvalidOid,
-            defaultValue: None,
-            defaultTypeBin: None,
-        },
-    )?;
+        let relarrayname = pg_type::makeArrayTypeName(p.relname, p.relnamespace)?;
+        pg_type::TypeCreate(
+            mcx,
+            &pg_type::TypeCreateParams {
+                newTypeOid: new_array_oid,
+                typeName: core::str::from_utf8(relarrayname.name_str())
+                    .expect("non-UTF-8 array type name"),
+                typeNamespace: p.relnamespace,
+                relationOid: InvalidOid,
+                relationKind: 0,
+                ownerId: p.ownerid,
+                internalSize: -1,
+                typeType: pg_type::TYPTYPE_BASE,
+                typeCategory: pg_type::TYPCATEGORY_ARRAY,
+                typePreferred: false,
+                typDelim: pg_type::DEFAULT_TYPDELIM,
+                inputProcedure: pg_type::F_ARRAY_IN,
+                outputProcedure: pg_type::F_ARRAY_OUT,
+                receiveProcedure: pg_type::F_ARRAY_RECV,
+                sendProcedure: pg_type::F_ARRAY_SEND,
+                typmodinProcedure: InvalidOid,
+                typmodoutProcedure: InvalidOid,
+                analyzeProcedure: pg_type::F_ARRAY_TYPANALYZE,
+                subscriptProcedure: pg_type::F_ARRAY_SUBSCRIPT_HANDLER,
+                elementType: new_type_oid,
+                isImplicitArray: true,
+                arrayType: InvalidOid,
+                baseType: InvalidOid,
+                passedByValue: false,
+                alignment: TYPALIGN_DOUBLE,
+                storage: TYPSTORAGE_EXTENDED,
+                typeMod: -1,
+                typNDims: 0,
+                typeNotNull: false,
+                typeCollation: InvalidOid,
+                defaultValue: None,
+                defaultTypeBin: None,
+            },
+        )?;
     }
 
     AddNewRelationTuple(
@@ -876,8 +881,7 @@ pub fn RelationClearMissing<'mcx>(mcx: Mcx<'mcx>, relid: Oid) -> PgResult<()> {
             crate::drop::oid_scankey(1, relid),
             crate::drop::int2_scankey(5, attnum as AttrNumber),
         ];
-        let mut scan =
-            genam::systable_beginscan(mcx, &attrrel, 2659, true, None, &keys)?;
+        let mut scan = genam::systable_beginscan(mcx, &attrrel, 2659, true, None, &keys)?;
         let tup = genam::systable_getnext(mcx, &mut scan)?.unwrap_or_else(|| {
             panic!("cache lookup failed for attribute {attnum} of relation {relid}")
         });
@@ -917,15 +921,14 @@ pub fn StoreAttrMissingVal<'mcx>(
         crate::drop::int2_scankey(5, attnum),
     ];
     let mut scan = genam::systable_beginscan(
-        mcx,
-        &attrrel,
-        2659, // AttributeRelidNumIndexId
-        true,
-        None,
-        &keys,
+        mcx, &attrrel, 2659, // AttributeRelidNumIndexId
+        true, None, &keys,
     )?;
     let tup = genam::systable_getnext(mcx, &mut scan)?.unwrap_or_else(|| {
-        panic!("cache lookup failed for attribute {attnum} of relation {}", rel.rd_id)
+        panic!(
+            "cache lookup failed for attribute {attnum} of relation {}",
+            rel.rd_id
+        )
     });
     let desc = attrrel.descr();
     let get = |anum: i32| {
@@ -991,12 +994,8 @@ pub fn SetAttrMissing<'mcx>(
         crate::drop::int2_scankey(5, attnum),
     ];
     let mut scan = genam::systable_beginscan(
-        mcx,
-        &attrrel,
-        2659, // AttributeRelidNumIndexId
-        true,
-        None,
-        &keys,
+        mcx, &attrrel, 2659, // AttributeRelidNumIndexId
+        true, None, &keys,
     )?;
     let tup = genam::systable_getnext(mcx, &mut scan)?.unwrap_or_else(|| {
         panic!("cache lookup failed for attribute {attname} of relation {relid}")

@@ -26,7 +26,15 @@ pub fn fc_current_database(
 }
 
 const fn b(foid: types_core::Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
-pub const DBCOMMANDS_BUILTINS: &[FmgrBuiltin] = &[b(861, "current_database", 0, fc_current_database)];
+pub const DBCOMMANDS_BUILTINS: &[FmgrBuiltin] =
+    &[b(861, "current_database", 0, fc_current_database)];

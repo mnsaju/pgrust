@@ -1,11 +1,13 @@
-use crate::{appendf, array_desc, block_data, has_block_data, rec_data, rec_info, Rec, XLR_INFO_MASK};
+use crate::{
+    appendf, array_desc, block_data, has_block_data, rec_data, rec_info, Rec, XLR_INFO_MASK,
+};
 use heapam_xlog::{
-    XLOG_HEAP2_LOCK_UPDATED, XLOG_HEAP2_MULTI_INSERT, XLOG_HEAP2_NEW_CID,
+    XLHL_KEYS_UPDATED, XLHL_XMAX_EXCL_LOCK, XLHL_XMAX_IS_MULTI, XLHL_XMAX_KEYSHR_LOCK,
+    XLHL_XMAX_LOCK_ONLY, XLOG_HEAP2_LOCK_UPDATED, XLOG_HEAP2_MULTI_INSERT, XLOG_HEAP2_NEW_CID,
     XLOG_HEAP2_PRUNE_ON_ACCESS, XLOG_HEAP2_PRUNE_VACUUM_CLEANUP, XLOG_HEAP2_PRUNE_VACUUM_SCAN,
     XLOG_HEAP2_REWRITE, XLOG_HEAP2_VISIBLE, XLOG_HEAP_CONFIRM, XLOG_HEAP_DELETE,
-    XLOG_HEAP_HOT_UPDATE, XLOG_HEAP_INIT_PAGE, XLOG_HEAP_INPLACE, XLOG_HEAP_INSERT,
-    XLOG_HEAP_LOCK, XLOG_HEAP_OPMASK, XLOG_HEAP_TRUNCATE, XLOG_HEAP_UPDATE, XLHL_KEYS_UPDATED,
-    XLHL_XMAX_EXCL_LOCK, XLHL_XMAX_IS_MULTI, XLHL_XMAX_KEYSHR_LOCK, XLHL_XMAX_LOCK_ONLY,
+    XLOG_HEAP_HOT_UPDATE, XLOG_HEAP_INIT_PAGE, XLOG_HEAP_INPLACE, XLOG_HEAP_INSERT, XLOG_HEAP_LOCK,
+    XLOG_HEAP_OPMASK, XLOG_HEAP_TRUNCATE, XLOG_HEAP_UPDATE,
 };
 use stringinfo::StringInfo;
 use types_error::PgResult;
@@ -138,15 +140,30 @@ pub fn heap_desc(buf: &mut StringInfo<'_>, record: &XLogReaderState) -> PgResult
 
     if info == XLOG_HEAP_INSERT {
         // xl_heap_insert: offnum 0, flags 2.
-        appendf!(buf, "off: {}, flags: 0x{:02X}", rec.u16(0, "xl_heap_insert")?, rec.u8(2, "xl_heap_insert")?)?;
+        appendf!(
+            buf,
+            "off: {}, flags: 0x{:02X}",
+            rec.u16(0, "xl_heap_insert")?,
+            rec.u8(2, "xl_heap_insert")?
+        )?;
     } else if info == XLOG_HEAP_DELETE {
         // xl_heap_delete: xmax 0, offnum 4, infobits_set 6, flags 7.
-        appendf!(buf, "xmax: {}, off: {}, ", rec.u32(0, "xl_heap_delete")?, rec.u16(4, "xl_heap_delete")?)?;
+        appendf!(
+            buf,
+            "xmax: {}, off: {}, ",
+            rec.u32(0, "xl_heap_delete")?,
+            rec.u16(4, "xl_heap_delete")?
+        )?;
         infobits_desc(buf, rec.u8(6, "xl_heap_delete")?, "infobits")?;
         appendf!(buf, ", flags: 0x{:02X}", rec.u8(7, "xl_heap_delete")?)?;
     } else if info == XLOG_HEAP_UPDATE || info == XLOG_HEAP_HOT_UPDATE {
         // old_xmax 0, old_offnum 4, old_infobits_set 6, flags 7, new_xmax 8, new_offnum 12.
-        appendf!(buf, "old_xmax: {}, old_off: {}, ", rec.u32(0, "xl_heap_update")?, rec.u16(4, "xl_heap_update")?)?;
+        appendf!(
+            buf,
+            "old_xmax: {}, old_off: {}, ",
+            rec.u32(0, "xl_heap_update")?,
+            rec.u16(4, "xl_heap_update")?
+        )?;
         infobits_desc(buf, rec.u8(6, "xl_heap_update")?, "old_infobits")?;
         appendf!(
             buf,
@@ -168,14 +185,22 @@ pub fn heap_desc(buf: &mut StringInfo<'_>, record: &XLogReaderState) -> PgResult
         appendf!(buf, "off: {}", rec.u16(0, "xl_heap_confirm")?)?;
     } else if info == XLOG_HEAP_LOCK {
         // xl_heap_lock: xmax 0, offnum 4, infobits_set 6, flags 7.
-        appendf!(buf, "xmax: {}, off: {}, ", rec.u32(0, "xl_heap_lock")?, rec.u16(4, "xl_heap_lock")?)?;
+        appendf!(
+            buf,
+            "xmax: {}, off: {}, ",
+            rec.u32(0, "xl_heap_lock")?,
+            rec.u16(4, "xl_heap_lock")?
+        )?;
         infobits_desc(buf, rec.u8(6, "xl_heap_lock")?, "infobits")?;
         appendf!(buf, ", flags: 0x{:02X}", rec.u8(7, "xl_heap_lock")?)?;
     } else if info == XLOG_HEAP_INPLACE {
         // offnum 0, dbId 4, tsId 8, relcacheInitFileInval 12, nmsgs 16, msgs[] 20.
         appendf!(buf, "off: {}", rec.u16(0, "xl_heap_inplace")?)?;
         let nmsgs = rec.i32(16, "xl_heap_inplace")?.max(0) as usize;
-        let raw = rec.0.get(20..20 + nmsgs * 16).ok_or_else(|| crate::record_truncated("xl_heap_inplace"))?;
+        let raw = rec
+            .0
+            .get(20..20 + nmsgs * 16)
+            .ok_or_else(|| crate::record_truncated("xl_heap_inplace"))?;
         crate::standbydesc::standby_desc_invalidations_raw(
             buf,
             nmsgs,
@@ -204,7 +229,15 @@ pub fn heap2_desc(buf: &mut StringInfo<'_>, record: &XLogReaderState) -> PgResul
             appendf!(buf, "snapshotConflictHorizon: {conflict_xid}")?;
         }
 
-        appendf!(buf, ", isCatalogRel: {}", if flags & XLHP_IS_CATALOG_REL != 0 { 'T' } else { 'F' })?;
+        appendf!(
+            buf,
+            ", isCatalogRel: {}",
+            if flags & XLHP_IS_CATALOG_REL != 0 {
+                'T'
+            } else {
+                'F'
+            }
+        )?;
 
         if has_block_data(record, 0) {
             let a = deserialize_prune_and_freeze(block_data(record, 0), flags)?;
@@ -212,7 +245,10 @@ pub fn heap2_desc(buf: &mut StringInfo<'_>, record: &XLogReaderState) -> PgResul
             appendf!(
                 buf,
                 ", nplans: {}, nredirected: {}, ndead: {}, nunused: {}",
-                a.nplans, a.nredirected, a.ndead, a.nunused
+                a.nplans,
+                a.nredirected,
+                a.ndead,
+                a.nunused
             )?;
 
             if a.nplans > 0 {
@@ -244,7 +280,12 @@ pub fn heap2_desc(buf: &mut StringInfo<'_>, record: &XLogReaderState) -> PgResul
                 buf.append_str(", redirected:")?;
                 array_desc(buf, a.nredirected, |buf, i| {
                     let what = "redirect array";
-                    appendf!(buf, "{}->{}", a.redirected.u16(4 * i, what)?, a.redirected.u16(4 * i + 2, what)?)
+                    appendf!(
+                        buf,
+                        "{}->{}",
+                        a.redirected.u16(4 * i, what)?,
+                        a.redirected.u16(4 * i + 2, what)?
+                    )
                 })?;
             }
             if a.ndead > 0 {
@@ -268,7 +309,11 @@ pub fn heap2_desc(buf: &mut StringInfo<'_>, record: &XLogReaderState) -> PgResul
         // xl_heap_multi_insert: flags 0, ntuples 2, offsets[] 4.
         let ntuples = rec.u16(2, "xl_heap_multi_insert")? as i32;
         let isinit = full_info & XLOG_HEAP_INIT_PAGE != 0;
-        appendf!(buf, "ntuples: {ntuples}, flags: 0x{:02X}", rec.u8(0, "xl_heap_multi_insert")?)?;
+        appendf!(
+            buf,
+            "ntuples: {ntuples}, flags: 0x{:02X}",
+            rec.u8(0, "xl_heap_multi_insert")?
+        )?;
         if has_block_data(record, 0) && !isinit {
             buf.append_str(", offsets:")?;
             let offs = Rec(rec.0.get(4..).unwrap_or(&[]));
@@ -276,7 +321,12 @@ pub fn heap2_desc(buf: &mut StringInfo<'_>, record: &XLogReaderState) -> PgResul
         }
     } else if info == XLOG_HEAP2_LOCK_UPDATED {
         // xl_heap_lock_updated: xmax 0, offnum 4, infobits_set 6, flags 7.
-        appendf!(buf, "xmax: {}, off: {}, ", rec.u32(0, "xl_heap_lock_updated")?, rec.u16(4, "xl_heap_lock_updated")?)?;
+        appendf!(
+            buf,
+            "xmax: {}, off: {}, ",
+            rec.u32(0, "xl_heap_lock_updated")?,
+            rec.u16(4, "xl_heap_lock_updated")?
+        )?;
         infobits_desc(buf, rec.u8(6, "xl_heap_lock_updated")?, "infobits")?;
         appendf!(buf, ", flags: 0x{:02X}", rec.u8(7, "xl_heap_lock_updated")?)?;
     } else if info == XLOG_HEAP2_NEW_CID {

@@ -125,7 +125,11 @@ impl<'mcx> HashJoinState<'mcx> {
     pub fn probe_outer_prefix(&self) -> Option<i32> {
         use ::execexpr::{Kernel, SlotSrc};
         let mut p = match self.outer_hash_expr.kernel() {
-            Kernel::Hash32Var { src: SlotSrc::Inner, attnum, .. } => attnum as i32 + 1,
+            Kernel::Hash32Var {
+                src: SlotSrc::Inner,
+                attnum,
+                ..
+            } => attnum as i32 + 1,
             _ => self.outer_hash_expr.max_fetch(SlotSrc::Inner)?,
         };
         for q in [
@@ -144,7 +148,8 @@ impl<'mcx> HashJoinState<'mcx> {
 
     /// 0-based outer key column when the probe hash is columnar-precomputable.
     pub fn probe_hash_col(&self) -> Option<u16> {
-        self.outer_hash_expr.hash32var_low32(::execexpr::SlotSrc::Inner)
+        self.outer_hash_expr
+            .hash32var_low32(::execexpr::SlotSrc::Inner)
     }
 
     // Static gate half: a single Int4Eq var=var hashclause over exactly the
@@ -154,8 +159,13 @@ impl<'mcx> HashJoinState<'mcx> {
         outer_hash_expr: &ExprState<'_>,
     ) -> Option<DenseCols> {
         use ::execexpr::{CmpOp, Kernel, SlotSrc};
-        let Kernel::QualVarCmpVar { a_src, a_attnum, b_src, b_attnum, cmp: CmpOp::Int4Eq } =
-            hashclauses?.kernel()
+        let Kernel::QualVarCmpVar {
+            a_src,
+            a_attnum,
+            b_src,
+            b_attnum,
+            cmp: CmpOp::Int4Eq,
+        } = hashclauses?.kernel()
         else {
             return None;
         };
@@ -164,8 +174,7 @@ impl<'mcx> HashJoinState<'mcx> {
             (SlotSrc::Inner, SlotSrc::Outer) => (b_attnum, a_attnum),
             _ => return None,
         };
-        (outer_hash_expr.hash32var_low32(SlotSrc::Inner) == Some(o))
-            .then_some(DenseCols { o, i })
+        (outer_hash_expr.hash32var_low32(SlotSrc::Inner) == Some(o)).then_some(DenseCols { o, i })
     }
 }
 
@@ -230,8 +239,9 @@ pub fn exec_init_hash_join<'mcx>(
     let mut collations: ::mcx::PgVec<'mcx, ::types_core::Oid> = ::mcx::PgVec::new_in(mcx);
     for i in 0..n {
         let hashop = node.hashoperators.nth(i);
-        let (left, right) = lsyscache::get_op_hash_functions(hashop)?
-            .unwrap_or_else(|| panic!("ExecInitHashJoin: hash operator {hashop} lacks hash functions"));
+        let (left, right) = lsyscache::get_op_hash_functions(hashop)?.unwrap_or_else(|| {
+            panic!("ExecInitHashJoin: hash operator {hashop} lacks hash functions")
+        });
         outer_hashfns.push(left);
         inner_hashfns.push(right);
         collations.push(node.hashcollations.nth(i));
@@ -283,17 +293,18 @@ pub fn exec_init_hash_join<'mcx>(
     // The Hash sub-node has no Instrumented wrapper; MultiExecHash provides
     // its own instrumentation over this slot.
     let hash_instr = if estate.es_instrument != 0 {
-        let idx = usize::try_from(hash_node.plan.plan_node_id)
-            .expect("plan_node_id is non-negative");
+        let idx =
+            usize::try_from(hash_node.plan.plan_node_id).expect("plan_node_id is non-negative");
         if estate.es_instrumentation.len() <= idx {
             let grow = idx + 1 - estate.es_instrumentation.len();
             estate
                 .es_instrumentation
                 .try_reserve(grow)
                 .map_err(|_| estate.es_query_cxt.oom(grow))?;
-            estate
-                .es_instrumentation
-                .resize(idx + 1, ::types_core::instrument::Instrumentation::default());
+            estate.es_instrumentation.resize(
+                idx + 1,
+                ::types_core::instrument::Instrumentation::default(),
+            );
         }
         ::instrument::instr_init(&mut estate.es_instrumentation[idx], estate.es_instrument);
         Some(idx as u32)
@@ -307,7 +318,7 @@ pub fn exec_init_hash_join<'mcx>(
         None
     };
 
-    let dense_cols = HashJoinState::dense_cols_of(hashclauses.as_deref(), &*outer_hash_expr);
+    let dense_cols = HashJoinState::dense_cols_of(hashclauses.as_deref(), &outer_hash_expr);
     let hjstate = HashJoinState {
         plan: node,
         ps_ExprContext,
@@ -318,8 +329,7 @@ pub fn exec_init_hash_join<'mcx>(
         joinqual,
         otherqual,
         outer_hash_expr,
-        js_single_match: node.join.inner_unique
-            || node.join.jointype == JoinType::JOIN_SEMI,
+        js_single_match: node.join.inner_unique || node.join.jointype == JoinType::JOIN_SEMI,
         hj_fill_outer,
         hj_fill_inner,
         hj_NullInnerTupleSlot,
@@ -363,9 +373,15 @@ where
             HJ_BUILD_HASHTABLE => {
                 debug_assert!(hash_state.table.is_none());
                 let want_filter = !node.hj_fill_outer
-                    && node.outer_hash_expr.hash32var_low32(::execexpr::SlotSrc::Inner).is_some();
-                hash_state.table =
-                    Some(::nodehash::exec_hash_table_create(hash_state, estate, want_filter)?);
+                    && node
+                        .outer_hash_expr
+                        .hash32var_low32(::execexpr::SlotSrc::Inner)
+                        .is_some();
+                hash_state.table = Some(::nodehash::exec_hash_table_create(
+                    hash_state,
+                    estate,
+                    want_filter,
+                )?);
                 // Instrumented plans never engage dense (fusion precedent).
                 if estate.es_instrument == 0 {
                     if let Some(dc) = node.dense_cols {
@@ -386,8 +402,11 @@ where
                 }
                 hash_child.multi_exec(hash_state, estate)?;
                 if let Some(ix) = instr {
-                    let ntuples =
-                        hash_state.table.as_ref().expect("hash table built").total_tuples();
+                    let ntuples = hash_state
+                        .table
+                        .as_ref()
+                        .expect("hash table built")
+                        .total_tuples();
                     ::instrument::instr_stop_node(&mut estate.es_instrumentation[ix], ntuples);
                 }
                 let table = hash_state.table.as_mut().expect("hash table built");
@@ -436,7 +455,11 @@ where
                     .expect("hash table built")
                     .dense()
                     .expect("dense seated");
-                node.hj_CurDense = if isnull { ::nodehash::DENSE_END } else { dense.head_for(key) };
+                node.hj_CurDense = if isnull {
+                    ::nodehash::DENSE_END
+                } else {
+                    dense.head_for(key)
+                };
                 node.hj_JoinState = HJ_SCAN_BUCKET;
             }
             HJ_NEED_NEW_OUTER => {
@@ -511,7 +534,8 @@ where
                 }
                 let ecxt = node.ps_ExprContext;
                 let inner_id = hash_state.hash_tuple_slot;
-                let matched = eval_probe_qual(node.joinqual.as_deref_mut(), ecxt, inner_id, estate)?;
+                let matched =
+                    eval_probe_qual(node.joinqual.as_deref_mut(), ecxt, inner_id, estate)?;
                 if matched {
                     node.hj_MatchedOuter = true;
                     // SAFETY: hj_CurTuple set by scan_hash_bucket this pass.
@@ -566,8 +590,7 @@ where
                 estate.ecxt_mut(node.ps_ExprContext).ecxt_outertuple = Some(null_outer);
                 let ecxt = node.ps_ExprContext;
                 let inner_id = hash_state.hash_tuple_slot;
-                let pass =
-                    eval_probe_qual(node.otherqual.as_deref_mut(), ecxt, inner_id, estate)?;
+                let pass = eval_probe_qual(node.otherqual.as_deref_mut(), ecxt, inner_id, estate)?;
                 if pass {
                     return Ok(Some(project_result(node, inner_id, estate)?));
                 }
@@ -613,14 +636,10 @@ fn new_batch<'mcx>(
         if table.inner_batch_file[curbatch as usize].is_some() && node.hj_fill_inner {
             break;
         }
-        if table.inner_batch_file[curbatch as usize].is_some()
-            && nbatch != table.nbatch_original
-        {
+        if table.inner_batch_file[curbatch as usize].is_some() && nbatch != table.nbatch_original {
             break;
         }
-        if table.outer_batch_file[curbatch as usize].is_some()
-            && nbatch != table.nbatch_outstart
-        {
+        if table.outer_batch_file[curbatch as usize].is_some() && nbatch != table.nbatch_outstart {
             break;
         }
         if let Some(f) = table.inner_batch_file[curbatch as usize].take() {
@@ -746,7 +765,11 @@ fn get_outer_tuple<'mcx, O: HashJoinOuter<'mcx>>(
     hash_state: &mut HashState<'mcx>,
     estate: &mut EStateData<'mcx>,
 ) -> PgResult<Option<u32>> {
-    let curbatch = hash_state.table.as_ref().expect("hash table built").curbatch;
+    let curbatch = hash_state
+        .table
+        .as_ref()
+        .expect("hash table built")
+        .curbatch;
     let ecxt = node.ps_ExprContext;
     if curbatch == 0 {
         let Some(slot_id) = outer.exec_proc(estate)? else {
@@ -913,7 +936,11 @@ fn scan_hash_bucket<'mcx>(
     let [inner, outer] = tbl
         .get_disjoint_mut([hslot.0 as usize, outer_id.0 as usize])
         .expect("distinct in-range hashjoin slot ids");
-    let mut slots = EvalSlots { scan: None, inner: Some(inner), outer: Some(outer) };
+    let mut slots = EvalSlots {
+        scan: None,
+        inner: Some(inner),
+        outer: Some(outer),
+    };
 
     while !cur.is_null() {
         // hashvalue-compare before tuple deref: 2 loads per non-matching link.
@@ -960,7 +987,8 @@ fn scan_hash_bucket_subplans<'mcx>(
                     tuple,
                 )
             };
-            if ::executils::exec_qual_with_subplans(node.hashclauses.as_deref_mut(), estate, ecxt)? {
+            if ::executils::exec_qual_with_subplans(node.hashclauses.as_deref_mut(), estate, ecxt)?
+            {
                 node.hj_CurTuple = cur;
                 return Ok(true);
             }
@@ -1020,7 +1048,9 @@ fn accum_instrumentation<'mcx>(
         accum_hash_instr(node, t.instrumentation(), estate);
         return;
     }
-    let Some(table) = hash_state.table.as_ref() else { return };
+    let Some(table) = hash_state.table.as_ref() else {
+        return;
+    };
     accum_hash_instr(node, table.instrumentation(), estate);
 }
 
@@ -1123,11 +1153,7 @@ pub fn exec_rescan_hash_join<'mcx>(
             node.hj_JoinState = HJ_NEED_NEW_OUTER;
         } else {
             accum_instrumentation(node, hash_state, estate);
-            hash_state
-                .table
-                .as_mut()
-                .expect("just checked")
-                .destroy()?;
+            hash_state.table.as_mut().expect("just checked").destroy()?;
             hash_state.table = None;
             node.hj_JoinState = HJ_BUILD_HASHTABLE;
             node.dense_on = false;
@@ -1210,8 +1236,7 @@ pub fn lane_join_admissible(node: &HashJoinState<'_>) -> bool {
             | JoinType::JOIN_FULL
             | JoinType::JOIN_RIGHT_SEMI
             | JoinType::JOIN_RIGHT_ANTI
-    )
-        && node.js_instr.is_none()
+    ) && node.js_instr.is_none()
         && node.hash_instr.is_none()
         && !node.outer_hash_expr.has_subplan()
         && node.outer_hash_expr.param_exec_deps().is_empty()
@@ -1256,12 +1281,18 @@ pub fn lane_build_begin<'mcx>(
     // set_hash_filter push after HJ_BUILD_HASHTABLE).
     node.lane_filter = None;
     let want_filter = !node.hj_fill_outer
-        && node.outer_hash_expr.hash32var_low32(::execexpr::SlotSrc::Inner).is_some();
+        && node
+            .outer_hash_expr
+            .hash32var_low32(::execexpr::SlotSrc::Inner)
+            .is_some();
     hs.table = Some(::nodehash::exec_hash_table_create(hs, estate, want_filter)?);
     if estate.es_instrument == 0 {
         if let Some(dc) = node.dense_cols {
             if hs.build_hash_col() == Some(dc.i) {
-                hs.table.as_mut().expect("hash table created").arm_key_track(dc.i);
+                hs.table
+                    .as_mut()
+                    .expect("hash table created")
+                    .arm_key_track(dc.i);
             }
         }
     }
@@ -1294,13 +1325,19 @@ pub fn lane_build_finish<'mcx>(
         // Mirror C: hj_JoinState stays HJ_BUILD_HASHTABLE (rescan handles it:
         // nbatch==1 + table kept -> HJ_NEED_NEW_OUTER, probing the empty
         // table over the rescanned outer, exactly as the row path would).
-        return Ok(LaneBuildDone { empty: true, nbatch: table.nbatch });
+        return Ok(LaneBuildDone {
+            empty: true,
+            nbatch: table.nbatch,
+        });
     }
     table.nbatch_outstart = table.nbatch;
     node.dense_on = table.dense().is_some();
     node.hj_OuterNotEmpty = false;
     node.hj_JoinState = HJ_NEED_NEW_OUTER;
-    Ok(LaneBuildDone { empty: false, nbatch: table.nbatch })
+    Ok(LaneBuildDone {
+        empty: false,
+        nbatch: table.nbatch,
+    })
 }
 
 /// Arm the lane probe's bloom prefilter — the row path's post-build
@@ -1319,14 +1356,23 @@ pub fn lane_build_finish<'mcx>(
 /// The lane driver calls this once per completed build, only where the row
 /// path's own push seat would also arm (SeqScan outer drives).
 pub fn lane_probe_filter_arm<'mcx>(node: &mut HashJoinState<'mcx>, hs: &mut HashState<'mcx>) {
-    debug_assert!(node.lane_filter.is_none(), "rebuild disarm ran in lane_build_begin");
+    debug_assert!(
+        node.lane_filter.is_none(),
+        "rebuild disarm ran in lane_build_begin"
+    );
     if node.hj_fill_outer || node.dense_on {
         return;
     }
-    if node.outer_hash_expr.hash32var_low32(::execexpr::SlotSrc::Inner).is_none() {
+    if node
+        .outer_hash_expr
+        .hash32var_low32(::execexpr::SlotSrc::Inner)
+        .is_none()
+    {
         return;
     }
-    let Some(table) = hs.table.as_mut() else { return };
+    let Some(table) = hs.table.as_mut() else {
+        return;
+    };
     node.lane_filter = table.take_probe_filter();
     node.lane_flt_seen = 0;
     node.lane_flt_drop = 0;
@@ -1403,9 +1449,17 @@ pub fn lane_probe_accept<'mcx>(
             dc.o as i32 + 1,
             &mut isnull,
         );
-        let dense = hs.table.as_ref().expect("hash table built").dense().expect("dense seated");
-        node.hj_CurDense =
-            if isnull { ::nodehash::DENSE_END } else { dense.head_for(v.as_i32()) };
+        let dense = hs
+            .table
+            .as_ref()
+            .expect("hash table built")
+            .dense()
+            .expect("dense seated");
+        node.hj_CurDense = if isnull {
+            ::nodehash::DENSE_END
+        } else {
+            dense.head_for(v.as_i32())
+        };
     } else {
         let ecxt = node.ps_ExprContext;
         let h = ::executils::exec_eval_expr_with_subplans_inner_slot(
@@ -1568,8 +1622,7 @@ pub fn lane_probe_next<'mcx>(
                 estate.ecxt_mut(node.ps_ExprContext).ecxt_outertuple = Some(null_outer);
                 let ecxt = node.ps_ExprContext;
                 let inner_id = hs.hash_tuple_slot;
-                let pass =
-                    eval_probe_qual(node.otherqual.as_deref_mut(), ecxt, inner_id, estate)?;
+                let pass = eval_probe_qual(node.otherqual.as_deref_mut(), ecxt, inner_id, estate)?;
                 if pass {
                     return Ok(Some(project_result(node, inner_id, estate)?));
                 }
@@ -1626,7 +1679,11 @@ fn with_probe_slots<'mcx, R>(
     let [inner, outer] = table
         .get_disjoint_mut([inner_id.0 as usize, outer_id.0 as usize])
         .expect("distinct in-range hashjoin slot ids");
-    let mut slots = EvalSlots { scan: None, inner: Some(inner), outer: Some(outer) };
+    let mut slots = EvalSlots {
+        scan: None,
+        inner: Some(inner),
+        outer: Some(outer),
+    };
     f(&mut slots)
 }
 
@@ -1655,9 +1712,17 @@ fn project_result<'mcx>(
     let result_id = node.ps_ResultTupleSlot;
     let table = &mut estate.es_tupleTable[..];
     let [inner, outer, result] = table
-        .get_disjoint_mut([inner_id.0 as usize, outer_id.0 as usize, result_id.0 as usize])
+        .get_disjoint_mut([
+            inner_id.0 as usize,
+            outer_id.0 as usize,
+            result_id.0 as usize,
+        ])
         .expect("distinct in-range hashjoin slot ids");
-    let mut slots = EvalSlots { scan: None, inner: Some(inner), outer: Some(outer) };
+    let mut slots = EvalSlots {
+        scan: None,
+        inner: Some(inner),
+        outer: Some(outer),
+    };
     exec_project(&mut node.proj, &mut slots, result, mcx)?;
     Ok(result_id)
 }

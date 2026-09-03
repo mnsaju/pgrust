@@ -245,8 +245,14 @@ mod tests {
         })
         .to_wire_bytes();
         assert_eq!(raw[0], 41);
-        assert_eq!(u32::from_ne_bytes(raw[4..8].try_into().unwrap()), 0x0102_0304);
-        assert_eq!(u32::from_ne_bytes(raw[8..12].try_into().unwrap()), 0x0506_0708);
+        assert_eq!(
+            u32::from_ne_bytes(raw[4..8].try_into().unwrap()),
+            0x0102_0304
+        );
+        assert_eq!(
+            u32::from_ne_bytes(raw[8..12].try_into().unwrap()),
+            0x0506_0708
+        );
         assert_eq!(&raw[12..16], &[0; 4]);
 
         let raw = SharedInvalidationMessage::Smgr(SharedInvalSmgrMsg {

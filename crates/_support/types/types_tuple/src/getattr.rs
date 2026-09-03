@@ -1,9 +1,12 @@
+// Mirrors C heap_getattr's call-frame family argument-for-argument.
+#![allow(clippy::too_many_arguments)]
+
 use ::datum::Datum;
 
 use crate::htup::{
     HeapTupleData, MaxCommandIdAttributeNumber, MaxTransactionIdAttributeNumber,
-    MinCommandIdAttributeNumber, MinTransactionIdAttributeNumber,
-    SelfItemPointerAttributeNumber, TableOidAttributeNumber,
+    MinCommandIdAttributeNumber, MinTransactionIdAttributeNumber, SelfItemPointerAttributeNumber,
+    TableOidAttributeNumber,
 };
 use crate::tupdesc::TupleDescData;
 use crate::tupmacs::{
@@ -15,7 +18,10 @@ pub fn getmissingattr(tupleDesc: &TupleDescData<'_>, attnum: i32, isnull: &mut b
     debug_assert!(attnum <= tupleDesc.natts && attnum > 0);
     let att = &tupleDesc.compact_attrs[(attnum - 1) as usize];
     if att.atthasmissing {
-        let constr = tupleDesc.constr.as_ref().expect("atthasmissing without constr");
+        let constr = tupleDesc
+            .constr
+            .as_ref()
+            .expect("atthasmissing without constr");
         let attrmiss = &constr.missing[(attnum - 1) as usize];
         if attrmiss.am_present {
             // C's TopMemoryContext missing_cache (lifetime extension) dissolves:
@@ -105,8 +111,8 @@ pub unsafe fn nocachegetattr(
         }
 
         if tup.has_var_width() {
-            for j in 0..=attnum {
-                if atts[j].attlen <= 0 {
+            for a in &atts[0..=attnum] {
+                if a.attlen <= 0 {
                     slow = true;
                     break;
                 }
@@ -314,7 +320,9 @@ pub fn heap_deform_tuple(
     let atts_n = &atts[..natts];
     let (values_n, isnull_n) = (&mut values[..natts], &mut isnull[..natts]);
     // SAFETY: descriptor matches the image; natts <= tuple natts.
-    if let Some((attnum, off)) = unsafe { deform_walk(atts_n, values_n, isnull_n, tp, bp, hasnulls) } {
+    if let Some((attnum, off)) =
+        unsafe { deform_walk(atts_n, values_n, isnull_n, tp, bp, hasnulls) }
+    {
         // SAFETY: same walk contract; resumes at the cstring attribute's
         // length step with its datum already stored.
         unsafe {

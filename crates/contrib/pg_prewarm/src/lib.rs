@@ -73,7 +73,10 @@ fn arg_text_string(fcinfo: &Fcinfo, i: usize) -> PgResult<String> {
 fn rel_smgr_key(rel: &types_rel::Relation<'_>) -> PgResult<RelFileLocatorBackend> {
     let locator = rel.rd_locator.get();
     smgr::smgropen(locator, rel.rd_backend)?;
-    Ok(RelFileLocatorBackend { locator, backend: rel.rd_backend })
+    Ok(RelFileLocatorBackend {
+        locator,
+        backend: rel.rd_backend,
+    })
 }
 
 fn fc_pg_prewarm(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -96,9 +99,7 @@ fn fc_pg_prewarm(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResul
             return Err(Box::new(
                 PgError::error("invalid prewarm type")
                     .with_sqlstate(ERRCODE_INVALID_PARAMETER_VALUE)
-                    .with_hint(
-                        "Valid prewarm types are \"prefetch\", \"read\", and \"buffer\".",
-                    ),
+                    .with_hint("Valid prewarm types are \"prefetch\", \"read\", and \"buffer\"."),
             ))
         }
     };
@@ -205,7 +206,12 @@ fn fc_pg_prewarm(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResul
             let mut blockbuffer = BlockBuffer([0u8; BLCKSZ]);
             for block in first_block..=last_block {
                 postgres_seams::check_for_interrupts::call()?;
-                smgr::smgrread(smgr_key, fork_number, block as BlockNumber, &mut blockbuffer.0)?;
+                smgr::smgrread(
+                    smgr_key,
+                    fork_number,
+                    block as BlockNumber,
+                    &mut blockbuffer.0,
+                )?;
                 blocks_done += 1;
             }
         }
@@ -236,14 +242,20 @@ fn fc_pg_prewarm(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResul
     Ok(Datum::from_i64(blocks_done))
 }
 
-fn fc_autoprewarm_start_worker(_flinfo: Option<&mut FmgrInfo>, _fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+fn fc_autoprewarm_start_worker(
+    _flinfo: Option<&mut FmgrInfo>,
+    _fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     panic!(
         "pg_prewarm: autoprewarm_start_worker (contrib/pg_prewarm/autoprewarm.c) is unported \
          (autoprewarm bgworker/shmem machinery)"
     );
 }
 
-fn fc_autoprewarm_dump_now(_flinfo: Option<&mut FmgrInfo>, _fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+fn fc_autoprewarm_dump_now(
+    _flinfo: Option<&mut FmgrInfo>,
+    _fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     panic!(
         "pg_prewarm: autoprewarm_dump_now (contrib/pg_prewarm/autoprewarm.c) is unported \
          (autoprewarm bgworker/shmem machinery)"
@@ -274,8 +286,14 @@ mod tests {
 
     #[test]
     fn forknames() {
-        assert_eq!(forkname_to_number("main").unwrap(), ForkNumber::MAIN_FORKNUM);
-        assert_eq!(forkname_to_number("vm").unwrap(), ForkNumber::VISIBILITYMAP_FORKNUM);
+        assert_eq!(
+            forkname_to_number("main").unwrap(),
+            ForkNumber::MAIN_FORKNUM
+        );
+        assert_eq!(
+            forkname_to_number("vm").unwrap(),
+            ForkNumber::VISIBILITYMAP_FORKNUM
+        );
         let err = forkname_to_number("bogus").unwrap_err();
         assert!(err.message().contains("invalid fork name"));
     }

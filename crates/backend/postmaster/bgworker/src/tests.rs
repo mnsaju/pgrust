@@ -88,7 +88,10 @@ fn parallel_class_capped_by_max_parallel_workers() {
 fn handle_status_transitions() {
     let _g = bringup();
     let h = register("t0", BGWORKER_SHMEM_ACCESS).expect("slot");
-    assert_eq!(GetBackgroundWorkerPid(&h), (BgwHandleStatus::BGWH_NOT_YET_STARTED, 0));
+    assert_eq!(
+        GetBackgroundWorkerPid(&h),
+        (BgwHandleStatus::BGWH_NOT_YET_STARTED, 0)
+    );
 
     BackgroundWorkerStateChange(true);
     let idx = registered_idx_for(&h);
@@ -96,19 +99,31 @@ fn handle_status_transitions() {
 
     set_rw_pid(idx, 1234);
     ReportBackgroundWorkerPID(idx);
-    assert_eq!(GetBackgroundWorkerPid(&h), (BgwHandleStatus::BGWH_STARTED, 1234));
+    assert_eq!(
+        GetBackgroundWorkerPid(&h),
+        (BgwHandleStatus::BGWH_STARTED, 1234)
+    );
     assert_eq!(GetBackgroundWorkerTypeByPid(1234).as_deref(), Some("t0"));
 
     set_rw_pid(idx, 0);
     ReportBackgroundWorkerExit(idx);
-    assert_eq!(GetBackgroundWorkerPid(&h), (BgwHandleStatus::BGWH_STOPPED, 0));
+    assert_eq!(
+        GetBackgroundWorkerPid(&h),
+        (BgwHandleStatus::BGWH_STOPPED, 0)
+    );
     with_registry(|reg| {
         assert!(!reg.slots[h.slot as usize].in_use);
         assert!(reg.registered.iter().all(|rw| rw.is_none()));
     });
 
-    let stale = BackgroundWorkerHandle { slot: h.slot, generation: h.generation + 7 };
-    assert_eq!(GetBackgroundWorkerPid(&stale), (BgwHandleStatus::BGWH_STOPPED, 0));
+    let stale = BackgroundWorkerHandle {
+        slot: h.slot,
+        generation: h.generation + 7,
+    };
+    assert_eq!(
+        GetBackgroundWorkerPid(&stale),
+        (BgwHandleStatus::BGWH_STOPPED, 0)
+    );
 }
 
 #[test]
@@ -125,7 +140,10 @@ fn terminate_before_start_frees_slot_and_counts_parallel() {
         assert_eq!(reg.parallel_terminate_count, 1);
         assert!(reg.registered.iter().all(|rw| rw.is_none()));
     });
-    assert_eq!(GetBackgroundWorkerPid(&h), (BgwHandleStatus::BGWH_STOPPED, 0));
+    assert_eq!(
+        GetBackgroundWorkerPid(&h),
+        (BgwHandleStatus::BGWH_STOPPED, 0)
+    );
 }
 
 #[test]
@@ -134,7 +152,10 @@ fn state_change_disallowing_new_workers_terminates_pending() {
     let h = register("dn", BGWORKER_SHMEM_ACCESS).expect("slot");
     BackgroundWorkerStateChange(false);
     with_registry(|reg| assert!(!reg.slots[h.slot as usize].in_use));
-    assert_eq!(GetBackgroundWorkerPid(&h), (BgwHandleStatus::BGWH_STOPPED, 0));
+    assert_eq!(
+        GetBackgroundWorkerPid(&h),
+        (BgwHandleStatus::BGWH_STOPPED, 0)
+    );
 }
 
 #[test]
@@ -152,7 +173,10 @@ fn running_terminated_worker_marks_rw_terminate() {
 
     set_rw_pid(idx, 0);
     ReportBackgroundWorkerExit(idx);
-    assert_eq!(GetBackgroundWorkerPid(&h), (BgwHandleStatus::BGWH_STOPPED, 0));
+    assert_eq!(
+        GetBackgroundWorkerPid(&h),
+        (BgwHandleStatus::BGWH_STOPPED, 0)
+    );
 }
 
 #[test]
@@ -160,21 +184,33 @@ fn forget_unstarted_only_zaps_waited_on_workers() {
     let _g = bringup();
     let mut w = mk_worker("fu", BGWORKER_SHMEM_ACCESS);
     w.bgw_notify_pid = 7777;
-    let h = RegisterDynamicBackgroundWorker(w).expect("register").expect("slot");
+    let h = RegisterDynamicBackgroundWorker(w)
+        .expect("register")
+        .expect("slot");
     let h2 = register("fu2", BGWORKER_SHMEM_ACCESS).expect("slot");
 
     // notify-pid validation needs the pmchild seam; simulate the postmaster
     // knowing pid 7777 by patching after registration instead.
     with_registry(|reg| {
-        reg.slots[h.slot as usize].worker.as_mut().unwrap().bgw_notify_pid = 0;
+        reg.slots[h.slot as usize]
+            .worker
+            .as_mut()
+            .unwrap()
+            .bgw_notify_pid = 0;
     });
     BackgroundWorkerStateChange(true);
     let idx = registered_idx_for(&h);
     with_registry(|reg| rw_mut(reg, idx).worker.bgw_notify_pid = 7777);
 
     ForgetUnstartedBackgroundWorkers();
-    assert_eq!(GetBackgroundWorkerPid(&h), (BgwHandleStatus::BGWH_STOPPED, 0));
-    assert_eq!(GetBackgroundWorkerPid(&h2), (BgwHandleStatus::BGWH_NOT_YET_STARTED, 0));
+    assert_eq!(
+        GetBackgroundWorkerPid(&h),
+        (BgwHandleStatus::BGWH_STOPPED, 0)
+    );
+    assert_eq!(
+        GetBackgroundWorkerPid(&h2),
+        (BgwHandleStatus::BGWH_NOT_YET_STARTED, 0)
+    );
 }
 
 #[test]
@@ -208,12 +244,17 @@ fn get_background_worker_type_by_pid() {
     let _g = bringup();
     let mut w = mk_worker("typed", BGWORKER_SHMEM_ACCESS);
     w.bgw_type = "test worker".to_string();
-    let h = RegisterDynamicBackgroundWorker(w).expect("register").expect("slot");
+    let h = RegisterDynamicBackgroundWorker(w)
+        .expect("register")
+        .expect("slot");
     BackgroundWorkerStateChange(true);
     let idx = registered_idx_for(&h);
     with_registry(|reg| rw_mut(reg, idx).pid = 4242);
     ReportBackgroundWorkerPID(idx);
-    assert_eq!(GetBackgroundWorkerTypeByPid(4242).as_deref(), Some("test worker"));
+    assert_eq!(
+        GetBackgroundWorkerTypeByPid(4242).as_deref(),
+        Some("test worker")
+    );
     assert_eq!(GetBackgroundWorkerTypeByPid(4243), None);
 }
 
@@ -222,7 +263,10 @@ fn static_registration_takes_slot_at_shmem_init() {
     let _g = bringup();
     // Static registration happens in the postmaster, before shmem init.
     *REGISTRY.lock().unwrap_or_else(|e| e.into_inner()) = None;
-    STATIC_PENDING.lock().unwrap_or_else(|e| e.into_inner()).clear();
+    STATIC_PENDING
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clear();
     g::SetIsUnderPostmaster(false);
     let mut w = mk_worker("static launcher", BGWORKER_SHMEM_ACCESS);
     w.bgw_restart_time = 5;

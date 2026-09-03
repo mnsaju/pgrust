@@ -12,9 +12,7 @@ use ::mcx::Mcx;
 use ::stringinfo::StringInfo;
 use ::types_core::{XLogRecPtr, TEXTOID};
 use ::types_error::{PgError, PgResult, ERRCODE_INVALID_PARAMETER_VALUE};
-use ::types_fmgr::{
-    varlena_result, FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFunction,
-};
+use ::types_fmgr::{varlena_result, FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFunction};
 use datum::Datum;
 use xlogreader::{LocalPageRead, XLogReaderState};
 use xlogreader_seams::XLOG_BLCKSZ;
@@ -75,11 +73,16 @@ fn InitXLogReaderState<'m>(
     lsn: XLogRecPtr,
 ) -> PgResult<(XLogReaderState<'m>, LocalPageRead)> {
     if lsn < XLOG_BLCKSZ as u64 {
-        return Err(param_err(format!("could not read WAL at LSN {}", lsn_fmt(lsn))));
+        return Err(param_err(format!(
+            "could not read WAL at LSN {}",
+            lsn_fmt(lsn)
+        )));
     }
 
     let mut reader = XLogReaderState::allocate(mcx, transam_xlog::wal_segment_size())?;
-    let mut routine = LocalPageRead { wait_for_wal: false };
+    let mut routine = LocalPageRead {
+        wait_for_wal: false,
+    };
 
     let first_valid_record = reader.XLogFindNextRecord(&mut routine, lsn)?;
     if first_valid_record == 0 {
@@ -164,7 +167,7 @@ fn GetWALRecordInfo(
     values[6] = Datum::from_u32(reader.XLogRecGetTotalLen());
     values[7] = Datum::from_u32(reader.XLogRecGetDataLen());
     values[8] = Datum::from_u32(fpi_len);
-    if rec_desc.len() > 0 {
+    if !rec_desc.is_empty() {
         values[9] = text_datum(mcx, rec_desc.as_bytes())?;
     } else {
         nulls[9] = true;
@@ -203,7 +206,9 @@ fn fc_pg_get_wal_record_info(
     if resolved.class != funcapi::TypeFuncClass::Composite {
         return Err(Box::new(PgError::error("return type must be a row type")));
     }
-    let tupdesc = resolved.result_tuple_desc.expect("composite result has tupdesc");
+    let tupdesc = resolved
+        .result_tuple_desc
+        .expect("composite result has tupdesc");
 
     let (mut reader, mut routine) = InitXLogReaderState(mcx, lsn)?;
 
@@ -466,8 +471,7 @@ fn GetWALBlockInfo(
             continue;
         }
 
-        let Some((rnode, forknum, blkno, _)) = reader.XLogRecGetBlockTagExtended(block_id)
-        else {
+        let Some((rnode, forknum, blkno, _)) = reader.XLogRecGetBlockTagExtended(block_id) else {
             continue;
         };
         let blk = *reader.v.block(block_id);
@@ -550,7 +554,7 @@ fn GetWALBlockInfo(
         }
         i += 1;
 
-        if rec_desc.len() > 0 {
+        if !rec_desc.is_empty() {
             values[i] = text_datum(mcx, rec_desc.as_bytes())?;
         } else {
             nulls[i] = true;
@@ -590,10 +594,7 @@ fn GetWALBlockInfo(
     Ok(())
 }
 
-fn fc_pg_get_wal_block_info(
-    flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+fn fc_pg_get_wal_block_info(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let flinfo = flinfo.expect("pg_get_wal_block_info: resolved FmgrInfo required");
     let start_lsn: XLogRecPtr = fcinfo.arg(0).as_u64();
     let mut end_lsn: XLogRecPtr = fcinfo.arg(1).as_u64();

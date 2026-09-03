@@ -10,25 +10,40 @@ fn ser(items: &[DefItem<'_>]) -> String {
 fn serialize_matches_c_tsdicts_outputs() {
     let ctx = mcx::MemoryContext::new("tsearchcmds-test");
     let mcx = ctx.mcx();
-    let one = |name, value| DefItem { name, value: Some(value) };
+    let one = |name, value| DefItem {
+        name,
+        value: Some(value),
+    };
     assert_eq!(
         ser(&[one("synonyms", DefValue::Str("synonym_sample"))]),
         "synonyms = 'synonym_sample'"
     );
     assert_eq!(
-        ser(&[one("synonyms", DefValue::Str("synonym_sample")), one("casesensitive", DefValue::Int(1))]),
+        ser(&[
+            one("synonyms", DefValue::Str("synonym_sample")),
+            one("casesensitive", DefValue::Int(1))
+        ]),
         "synonyms = 'synonym_sample', casesensitive = 1"
     );
     assert_eq!(
-        ser(&[one("synonyms", DefValue::Str("synonym_sample")), one("casesensitive", DefValue::Str("off"))]),
+        ser(&[
+            one("synonyms", DefValue::Str("synonym_sample")),
+            one("casesensitive", DefValue::Str("off"))
+        ]),
         "synonyms = 'synonym_sample', casesensitive = 'off'"
     );
     assert_eq!(
-        ser(&[one("dictfile", DefValue::Str("ispell_sample")), one("afffile", DefValue::Str("ispell_sample"))]),
+        ser(&[
+            one("dictfile", DefValue::Str("ispell_sample")),
+            one("afffile", DefValue::Str("ispell_sample"))
+        ]),
         "dictfile = 'ispell_sample', afffile = 'ispell_sample'"
     );
     // quote_identifier: mixed case forces double quotes.
-    assert_eq!(ser(&[one("DictFile", DefValue::Str("x"))]), "\"DictFile\" = 'x'");
+    assert_eq!(
+        ser(&[one("DictFile", DefValue::Str("x"))]),
+        "\"DictFile\" = 'x'"
+    );
     // quote doubling and E'' for backslashes.
     assert_eq!(ser(&[one("a", DefValue::Str("it's"))]), "a = 'it''s'");
     assert_eq!(ser(&[one("a", DefValue::Str("a\\b"))]), "a = E'a\\\\b'");
@@ -41,7 +56,8 @@ fn serialize_matches_c_tsdicts_outputs() {
 fn deserialize_round_trips() {
     let ctx = mcx::MemoryContext::new("tsearchcmds-test");
     let mcx = ctx.mcx();
-    let items = deserialize_deflist(mcx, b"synonyms = 'synonym_sample', casesensitive = 1").unwrap();
+    let items =
+        deserialize_deflist(mcx, b"synonyms = 'synonym_sample', casesensitive = 1").unwrap();
     assert_eq!(items.len(), 2);
     assert_eq!(items[0].name, "synonyms");
     assert_eq!(items[0].value, Some(DefValue::Str("synonym_sample")));
@@ -61,7 +77,8 @@ fn deserialize_round_trips() {
     assert_eq!(items[1].value, Some(DefValue::Str("a\\b")));
 
     // Backward-compat forms C accepts but never emits.
-    let items = deserialize_deflist(mcx, b"  k1 = v1 , \"K 2\" = \"v\"\"2\"  k3=true k4=1.25").unwrap();
+    let items =
+        deserialize_deflist(mcx, b"  k1 = v1 , \"K 2\" = \"v\"\"2\"  k3=true k4=1.25").unwrap();
     assert_eq!(items[0].name, "k1");
     assert_eq!(items[0].value, Some(DefValue::Str("v1")));
     assert_eq!(items[1].name, "K 2");

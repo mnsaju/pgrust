@@ -8,18 +8,18 @@ use std::time::Instant;
 
 use mcx::Mcx;
 use tcop_dest::DestReceiver;
+use tupdesc::{CreateTemplateTupleDesc, TupleDescInitEntry};
 use types_core::instrument::{BufferUsage, INSTRUMENT_BUFFERS, INSTRUMENT_ROWS, INSTRUMENT_TIMER};
 use types_core::{Oid, TEXTOID};
 use types_error::PgResult;
 use types_nodes::nodes_enums::CmdType;
 use types_nodes::parsenodes::{ExplainStmt, ObjectType, Query};
-use types_nodes::rawnodes::{CreateTableAsStmt, IntoClause};
 use types_nodes::plannodes::PlannedStmt;
+use types_nodes::rawnodes::{CreateTableAsStmt, IntoClause};
 use types_nodes::{Node, NodeTag};
 use types_portal::{ParamListHandle, QueryEnvHandle, CURSOR_OPT_PARALLEL_OK};
 use types_slot::{EXEC_FLAG_EXPLAIN_GENERIC, EXEC_FLAG_EXPLAIN_ONLY};
 use types_tuple::TupleDescData;
-use tupdesc::{CreateTemplateTupleDesc, TupleDescInitEntry};
 
 mod format;
 mod node;
@@ -27,9 +27,9 @@ mod state;
 #[cfg(test)]
 mod tests;
 
+pub use define::{defGetBoolean, defGetString};
 pub use format::*;
 pub use node::{ExplainNode, ExplainPrintPlan};
-pub use define::{defGetBoolean, defGetString};
 pub use state::*;
 
 // pg_type.dat pins.
@@ -80,8 +80,7 @@ pub fn ExplainQuery<'mcx>(
     // SAFETY: fresh copy; this call holds its only live access.
     let mut query: Query<'mcx> = unsafe { query_node.with_mut::<Query, _>(core::mem::take) }
         .expect("ExplainQuery: statement is not an analyzed Query");
-    if parser_analyze::tap_post_parse_analyze::is_installed() && queryjumble::IsQueryIdEnabled()
-    {
+    if parser_analyze::tap_post_parse_analyze::is_installed() && queryjumble::IsQueryIdEnabled() {
         let js = queryjumble::JumbleQuery(mcx, &mut query)?;
         parser_analyze::tap_post_parse_analyze::call_if(|f| f(&mut query, &js, query_string));
     } else if queryjumble::IsQueryIdEnabled() {
@@ -97,7 +96,16 @@ pub fn ExplainQuery<'mcx>(
     } else {
         let last = rewritten.len() - 1;
         for (i, q) in rewritten.into_iter().enumerate() {
-            ExplainOneQuery(mcx, q, CURSOR_OPT_PARALLEL_OK, None, &mut es, query_string, params, query_env)?;
+            ExplainOneQuery(
+                mcx,
+                q,
+                CURSOR_OPT_PARALLEL_OK,
+                None,
+                &mut es,
+                query_string,
+                params,
+                query_env,
+            )?;
             if i != last {
                 ExplainSeparatePlans(&mut es)?;
             }
@@ -125,7 +133,9 @@ pub fn ExplainResultDesc<'mcx>(
 ) -> PgResult<TupleDescData<'mcx>> {
     let mut result_type = TEXTOID;
     for opt_node in stmt.options.iter() {
-        let opt = opt_node.as_def_elem().expect("EXPLAIN options are DefElems");
+        let opt = opt_node
+            .as_def_elem()
+            .expect("EXPLAIN options are DefElems");
         if opt.defname == Some("format") {
             result_type = match defGetString(mcx, opt)? {
                 "xml" => XMLOID,
@@ -154,10 +164,27 @@ fn ExplainOneQuery<'mcx>(
     query_env: QueryEnvHandle,
 ) -> PgResult<()> {
     if query.commandType == CmdType::CMD_UTILITY {
-        return ExplainOneUtility(mcx, query.utilityStmt, into, es, query_string, params, query_env);
+        return ExplainOneUtility(
+            mcx,
+            query.utilityStmt,
+            into,
+            es,
+            query_string,
+            params,
+            query_env,
+        );
     }
     // ExplainOneQuery_hook: no plugin surface exists.
-    standard_ExplainOneQuery(mcx, query, cursor_options, into, es, query_string, params, query_env)
+    standard_ExplainOneQuery(
+        mcx,
+        query,
+        cursor_options,
+        into,
+        es,
+        query_string,
+        params,
+        query_env,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -175,11 +202,25 @@ pub fn standard_ExplainOneQuery<'mcx>(
     // and reads MemoryContextMemConsumed; the arena analogue is a stats delta
     // over the statement context across planning (values diverge from C's
     // palloc numbers — regress masks them via explain_filter).
-    let mem_before = if es.memory { Some(mem_snapshot(mcx)) } else { None };
-    let bufusage_start = if es.buffers { Some(instrument::pg_buffer_usage()) } else { None };
+    let mem_before = if es.memory {
+        Some(mem_snapshot(mcx))
+    } else {
+        None
+    };
+    let bufusage_start = if es.buffers {
+        Some(instrument::pg_buffer_usage())
+    } else {
+        None
+    };
     let planstart = Instant::now();
-    let plan = postgres::simple_query::pg_plan_query(mcx, mcx::leak_in(mcx::alloc_in(mcx, query)?), query_string, cursor_options, params)?
-        .expect("planner will not cope with utility statements");
+    let plan = postgres::simple_query::pg_plan_query(
+        mcx,
+        mcx::leak_in(mcx::alloc_in(mcx, query)?),
+        query_string,
+        cursor_options,
+        params,
+    )?
+    .expect("planner will not cope with utility statements");
     let planduration = planstart.elapsed();
     // Step-2 cost-shadow EXPLAIN sample (runtime-cost-model design §5 step
     // 2): take the sample this planning recorded (the planner cleared the
@@ -225,7 +266,10 @@ fn mem_counters_since(mcx: Mcx<'_>, before: (usize, usize)) -> MemCounters {
     let (used1, foot1) = mem_snapshot(mcx);
     let used = used1.saturating_sub(used0) as u64;
     let totalspace = (foot1.saturating_sub(foot0) as u64).max(used);
-    MemCounters { totalspace, freespace: totalspace - used }
+    MemCounters {
+        totalspace,
+        freespace: totalspace - used,
+    }
 }
 
 // explain.c show_memory_counters.
@@ -234,7 +278,10 @@ fn show_memory_counters(es: &mut ExplainState<'_>, mem_counters: &MemCounters) {
     let mem_allocated_kb = bytes_to_kilobytes(mem_counters.totalspace);
     if es.format == EXPLAIN_FORMAT_TEXT {
         ExplainIndentText(es);
-        append!(es, "Memory: used={mem_used_kb}kB  allocated={mem_allocated_kb}kB\n");
+        append!(
+            es,
+            "Memory: used={mem_used_kb}kB  allocated={mem_allocated_kb}kB\n"
+        );
     } else {
         ExplainPropertyUInteger("Memory Used", Some("kB"), mem_used_kb, es);
         ExplainPropertyUInteger("Memory Allocated", Some("kB"), mem_allocated_kb, es);
@@ -275,7 +322,8 @@ fn ExplainOneUtility<'mcx>(
             // in this port, and intorel_startup still reads it under ANALYZE.
             let query_node = copyfuncs::copy_object(
                 mcx,
-                ctas.query.expect("EXPLAIN CREATE TABLE AS without analyzed query"),
+                ctas.query
+                    .expect("EXPLAIN CREATE TABLE AS without analyzed query"),
             )?;
             // SAFETY: fresh copy; this call holds its only live access.
             let mut query: Query<'mcx> =
@@ -285,12 +333,18 @@ fn ExplainOneUtility<'mcx>(
                 && queryjumble::IsQueryIdEnabled()
             {
                 let js = queryjumble::JumbleQuery(mcx, &mut query)?;
-                parser_analyze::tap_post_parse_analyze::call_if(|f| f(&mut query, &js, query_string));
+                parser_analyze::tap_post_parse_analyze::call_if(|f| {
+                    f(&mut query, &js, query_string)
+                });
             } else if queryjumble::IsQueryIdEnabled() {
                 queryjumble::JumbleQueryDiscard(mcx, &mut query)?;
             }
             let rewritten = rewrite_handler_seams::query_rewrite::call(mcx, query)?;
-            assert!(rewritten.len() == 1, "CTAS rewrite yielded {} queries", rewritten.len());
+            assert!(
+                rewritten.len() == 1,
+                "CTAS rewrite yielded {} queries",
+                rewritten.len()
+            );
             let query = rewritten.into_iter().next().expect("len == 1");
             return ExplainOneQuery(
                 mcx,
@@ -323,22 +377,44 @@ fn ExplainOneUtility<'mcx>(
                 && queryjumble::IsQueryIdEnabled()
             {
                 let js = queryjumble::JumbleQuery(mcx, &mut query)?;
-                parser_analyze::tap_post_parse_analyze::call_if(|f| f(&mut query, &js, query_string));
+                parser_analyze::tap_post_parse_analyze::call_if(|f| {
+                    f(&mut query, &js, query_string)
+                });
             } else if queryjumble::IsQueryIdEnabled() {
                 queryjumble::JumbleQueryDiscard(mcx, &mut query)?;
             }
             let rewritten = rewrite_handler_seams::query_rewrite::call(mcx, query)?;
-            assert!(rewritten.len() == 1, "DECLARE rewrite yielded {} queries", rewritten.len());
+            assert!(
+                rewritten.len() == 1,
+                "DECLARE rewrite yielded {} queries",
+                rewritten.len()
+            );
             let query = rewritten.into_iter().next().expect("len == 1");
-            return ExplainOneQuery(mcx, query, options, None, es, query_string, params, query_env);
+            return ExplainOneQuery(
+                mcx,
+                query,
+                options,
+                None,
+                es,
+                query_string,
+                params,
+                query_env,
+            );
         }
         NodeTag::T_ExecuteStmt => {
             let exec_stmt = stmt.as_execute_stmt().expect("tag checked");
             // C meters GetCachedPlan inside ExplainExecuteQuery; the delta
             // here also spans parameter evaluation (value divergence only).
-            let mem_before = if es.memory { Some(mem_snapshot(mcx)) } else { None };
-            let bufusage_start =
-                if es.buffers { Some(instrument::pg_buffer_usage()) } else { None };
+            let mem_before = if es.memory {
+                Some(mem_snapshot(mcx))
+            } else {
+                None
+            };
+            let bufusage_start = if es.buffers {
+                Some(instrument::pg_buffer_usage())
+            } else {
+                None
+            };
             let mut bufusage: Option<BufferUsage> = None;
             let mut mem_counters: Option<MemCounters> = None;
             return prepare::ExplainExecuteQuery(
@@ -353,10 +429,7 @@ fn ExplainOneUtility<'mcx>(
                     // pins the registry-'static plan tree past 'mcx; nothing
                     // derived from it escapes the render.
                     let pstmt: &'mcx PlannedStmt<'mcx> = unsafe {
-                        core::mem::transmute::<
-                            &PlannedStmt<'_>,
-                            &'mcx PlannedStmt<'mcx>,
-                        >(pstmt)
+                        core::mem::transmute::<&PlannedStmt<'_>, &'mcx PlannedStmt<'mcx>>(pstmt)
                     };
                     if bufusage.is_none() {
                         bufusage = bufusage_start.map(|start| {
@@ -400,7 +473,8 @@ fn ExplainOneUtility<'mcx>(
         }
         _ => {
             if es.format == EXPLAIN_FORMAT_TEXT {
-                es.str.append_str("Utility statements have no plan structure\n")?;
+                es.str
+                    .append_str("Utility statements have no plan structure\n")?;
             } else {
                 ExplainDummyGroup("Utility Statement", None, es);
             }
@@ -518,7 +592,11 @@ fn ExplainOnePlanRef<'mcx>(
         instrument_option,
     )?;
     let mut qd_owner = QueryDescOwner(qd);
-    let mut eflags = if es.analyze { 0 } else { EXEC_FLAG_EXPLAIN_ONLY };
+    let mut eflags = if es.analyze {
+        0
+    } else {
+        EXEC_FLAG_EXPLAIN_ONLY
+    };
     if es.generic {
         eflags |= EXEC_FLAG_EXPLAIN_GENERIC;
     }
@@ -600,8 +678,16 @@ fn ExplainOnePlanRef<'mcx>(
                 "class={} r_pred={:.3} model={} whitelist={} decided_by={} rows={:.0} dop={}",
                 s.class,
                 s.ratio,
-                if s.model_suppress { "suppress" } else { "gather" },
-                if s.whitelist_suppress { "suppress" } else { "gather" },
+                if s.model_suppress {
+                    "suppress"
+                } else {
+                    "gather"
+                },
+                if s.whitelist_suppress {
+                    "suppress"
+                } else {
+                    "gather"
+                },
                 s.decided_by,
                 s.rows,
                 s.dop,
@@ -611,7 +697,13 @@ fn ExplainOnePlanRef<'mcx>(
     }
 
     if es.summary {
-        ExplainPropertyFloat("Planning Time", Some("ms"), 1000.0 * planduration.as_secs_f64(), 3, es);
+        ExplainPropertyFloat(
+            "Planning Time",
+            Some("ms"),
+            1000.0 * planduration.as_secs_f64(),
+            3,
+            es,
+        );
     }
 
     // ExplainPrintTriggers: no CREATE TRIGGER path exists, so every result
@@ -669,7 +761,7 @@ fn elapsed_time(starttime: &types_core::instrument::instr_time) -> f64 {
 
 // explain.c BYTES_TO_KILOBYTES.
 fn bytes_to_kilobytes(b: u64) -> u64 {
-    (b + 1023) / 1024
+    b.div_ceil(1024)
 }
 
 // jit.h pins; the planner lane keeps its own private copies.
@@ -800,9 +892,20 @@ fn ExplainPrintSerialize(es: &mut ExplainState<'_>, metrics: &explain_dr::Serial
         }
     } else {
         if es.timing {
-            ExplainPropertyFloat("Time", Some("ms"), 1000.0 * metrics.timeSpent.get_double(), 3, es);
+            ExplainPropertyFloat(
+                "Time",
+                Some("ms"),
+                1000.0 * metrics.timeSpent.get_double(),
+                3,
+                es,
+            );
         }
-        ExplainPropertyUInteger("Output Volume", Some("kB"), bytes_to_kilobytes(metrics.bytesSent), es);
+        ExplainPropertyUInteger(
+            "Output Volume",
+            Some("kB"),
+            bytes_to_kilobytes(metrics.bytesSent),
+            es,
+        );
         ExplainPropertyText("Format", format, es);
         if es.buffers {
             show_buffer_usage(es, &metrics.bufferUsage);
@@ -957,7 +1060,11 @@ pub(crate) fn show_buffer_usage(es: &mut ExplainState<'_>, usage: &BufferUsage) 
                 append!(es, " read={:.3}", usage.shared_blk_read_time.get_millisec());
             }
             if !usage.shared_blk_write_time.is_zero() {
-                append!(es, " write={:.3}", usage.shared_blk_write_time.get_millisec());
+                append!(
+                    es,
+                    " write={:.3}",
+                    usage.shared_blk_write_time.get_millisec()
+                );
             }
             if has_local_timing || has_temp_timing {
                 append!(es, ",");
@@ -969,7 +1076,11 @@ pub(crate) fn show_buffer_usage(es: &mut ExplainState<'_>, usage: &BufferUsage) 
                 append!(es, " read={:.3}", usage.local_blk_read_time.get_millisec());
             }
             if !usage.local_blk_write_time.is_zero() {
-                append!(es, " write={:.3}", usage.local_blk_write_time.get_millisec());
+                append!(
+                    es,
+                    " write={:.3}",
+                    usage.local_blk_write_time.get_millisec()
+                );
             }
             if has_temp_timing {
                 append!(es, ",");

@@ -5,14 +5,12 @@
 const BASE64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 const B64LOOKUP: [i8; 128] = [
-    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 62, -1, -1, -1, 63,
-    52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1, -1, -1, -1,
-    -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
-    15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, -1, -1, -1, -1, -1,
-    -1, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
-    41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 62, -1, -1, -1, 63,
+    52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1, -1, -1, -1, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8,
+    9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, -1, -1, -1, -1, -1, -1, 26,
+    27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50,
+    51, -1, -1, -1, -1, -1,
 ];
 
 #[cold]
@@ -51,7 +49,11 @@ pub fn pg_b64_encode(src: &[u8], len: i32, dst: &mut [u8], dstlen: i32) -> i32 {
         }
         dst[p] = BASE64[((buf >> 18) & 0x3f) as usize];
         dst[p + 1] = BASE64[((buf >> 12) & 0x3f) as usize];
-        dst[p + 2] = if pos == 0 { BASE64[((buf >> 6) & 0x3f) as usize] } else { b'=' };
+        dst[p + 2] = if pos == 0 {
+            BASE64[((buf >> 6) & 0x3f) as usize]
+        } else {
+            b'='
+        };
         dst[p + 3] = b'=';
         p += 4;
     }
@@ -88,7 +90,11 @@ pub fn pg_b64_decode(src: &[u8], len: i32, dst: &mut [u8], dstlen: i32) -> i32 {
         } else {
             // C `char` may be signed: bytes >= 0x80 fail the c > 0 test.
             let c = c as i8 as i32;
-            let lu = if c > 0 && c < 127 { B64LOOKUP[c as usize] as i32 } else { -1 };
+            let lu = if c > 0 && c < 127 {
+                B64LOOKUP[c as usize] as i32
+            } else {
+                -1
+            };
             if lu < 0 {
                 return error(dst, dstlen);
             }
@@ -188,7 +194,13 @@ mod tests {
     #[test]
     fn rejects_whitespace_padding_and_high_bytes() {
         for invalid in [
-            b"Z g==".as_slice(), b"Zg=\n", b"=", b"Z=", b"Zg", b"Zg==A", b"Zm9\xc3",
+            b"Z g==".as_slice(),
+            b"Zg=\n",
+            b"=",
+            b"Z=",
+            b"Zg",
+            b"Zg==A",
+            b"Zm9\xc3",
         ] {
             assert_eq!(dec(invalid), None);
         }

@@ -66,7 +66,9 @@ pub fn hashbuild<'mcx>(
                 return Ok(());
             };
             match spool.as_mut() {
-                Some(sp) => sp.sortstate.putindextuplevalues(*tid, &[hash_datum], &[false])?,
+                Some(sp) => sp
+                    .sortstate
+                    .putindextuplevalues(*tid, &[hash_datum], &[false])?,
                 None => {
                     let mut itup = nbtree::itup::index_form_tuple(
                         mcx,
@@ -76,11 +78,12 @@ pub fn hashbuild<'mcx>(
                     )?;
                     // SAFETY: t_tid = first 6 bytes of the owned image.
                     unsafe {
-                        itup.as_mut_ptr().cast::<ItemPointerData>().write_unaligned(*tid);
+                        itup.as_mut_ptr()
+                            .cast::<ItemPointerData>()
+                            .write_unaligned(*tid);
                     }
                     // SAFETY: itup.size() bytes of the live owned image.
-                    let image =
-                        unsafe { core::slice::from_raw_parts(itup.as_ptr(), itup.size()) };
+                    let image = unsafe { core::slice::from_raw_parts(itup.as_ptr(), itup.size()) };
                     hash::_hash_doinsert(index_rel, image, heap, false)?;
                 }
             }
@@ -93,7 +96,10 @@ pub fn hashbuild<'mcx>(
         _h_indexbuild(&mut sp, heap, index)?;
     }
 
-    Ok(IndexBuildResult { heap_tuples: reltuples, index_tuples: indtuples })
+    Ok(IndexBuildResult {
+        heap_tuples: reltuples,
+        index_tuples: indtuples,
+    })
 }
 
 /// hashbuildempty (INIT_FORKNUM arm for unlogged indexes).
@@ -141,15 +147,13 @@ fn _h_indexbuild(
 
     while let Some(itup) = hspool.sortstate.getindextuple(true)? {
         // SAFETY: sorted-run image stays live until the next getindextuple.
-        let image = unsafe {
-            core::slice::from_raw_parts(itup, nbtree::itup::index_tuple_size(itup))
-        };
+        let image =
+            unsafe { core::slice::from_raw_parts(itup, nbtree::itup::index_tuple_size(itup)) };
         #[cfg(debug_assertions)]
         {
             // SAFETY: as above; single non-null uint32 key at the data offset.
             let hashkey = unsafe {
-                let off =
-                    nbtree::itup::index_info_find_data_offset(nbtree::itup::t_info(itup));
+                let off = nbtree::itup::index_info_find_data_offset(nbtree::itup::t_info(itup));
                 itup.add(off).cast::<u32>().read_unaligned()
             };
             let bucket = ::types_hash::_hash_hashkey2bucket(

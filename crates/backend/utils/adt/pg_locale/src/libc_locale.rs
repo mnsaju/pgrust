@@ -158,20 +158,30 @@ pub(crate) fn make_libc_collator(collate: &str, ctype: &str) -> PgResult<LibcLoc
         if is_c_or_posix(ctype) {
             return Ok(LibcLocale::NONE);
         }
-        let loc = newlocale(crate::lc::LC_COLLATE_MASK | crate::lc::LC_CTYPE_MASK, collate, core::ptr::null_mut())
-            .ok_or_else(|| report_newlocale_failure(collate))?;
+        let loc = newlocale(
+            crate::lc::LC_COLLATE_MASK | crate::lc::LC_CTYPE_MASK,
+            collate,
+            core::ptr::null_mut(),
+        )
+        .ok_or_else(|| report_newlocale_failure(collate))?;
         return Ok(LibcLocale(loc as usize));
     }
 
     let loc1 = if !is_c_or_posix(collate) {
-        Some(newlocale(crate::lc::LC_COLLATE_MASK, collate, core::ptr::null_mut())
-            .ok_or_else(|| report_newlocale_failure(collate))?)
+        Some(
+            newlocale(crate::lc::LC_COLLATE_MASK, collate, core::ptr::null_mut())
+                .ok_or_else(|| report_newlocale_failure(collate))?,
+        )
     } else {
         None
     };
 
     if !is_c_or_posix(ctype) {
-        match newlocale(crate::lc::LC_CTYPE_MASK, ctype, loc1.unwrap_or(core::ptr::null_mut())) {
+        match newlocale(
+            crate::lc::LC_CTYPE_MASK,
+            ctype,
+            loc1.unwrap_or(core::ptr::null_mut()),
+        ) {
             Some(loc) => Ok(LibcLocale(loc as usize)),
             None => {
                 let err = report_newlocale_failure(ctype);
@@ -334,7 +344,7 @@ pub(crate) fn wc_tolower_1byte(c: u8, lt: LibcLocale) -> u32 {
 fn write_prefix(dest: &mut [u8], src: &[u8]) {
     // C's SB arms: no-op unless srclen+1 fits (caller retries with a bigger
     // buffer using the returned length).
-    if src.len() + 1 <= dest.len() {
+    if src.len() < dest.len() {
         dest[..src.len()].copy_from_slice(src);
         dest[src.len()] = 0;
     }
@@ -342,7 +352,7 @@ fn write_prefix(dest: &mut [u8], src: &[u8]) {
 
 pub(crate) fn strlower_libc_sb(dest: &mut [u8], src: &[u8], locale: &PgLocale) -> usize {
     write_prefix(dest, src);
-    if src.len() + 1 <= dest.len() {
+    if src.len() < dest.len() {
         for p in &mut dest[..src.len()] {
             if *p == 0 {
                 break;
@@ -359,7 +369,7 @@ pub(crate) fn strlower_libc_sb(dest: &mut [u8], src: &[u8], locale: &PgLocale) -
 
 pub(crate) fn strupper_libc_sb(dest: &mut [u8], src: &[u8], locale: &PgLocale) -> usize {
     write_prefix(dest, src);
-    if src.len() + 1 <= dest.len() {
+    if src.len() < dest.len() {
         for p in &mut dest[..src.len()] {
             if *p == 0 {
                 break;
@@ -377,7 +387,7 @@ pub(crate) fn strupper_libc_sb(dest: &mut [u8], src: &[u8], locale: &PgLocale) -
 
 pub(crate) fn strtitle_libc_sb(dest: &mut [u8], src: &[u8], locale: &PgLocale) -> usize {
     write_prefix(dest, src);
-    if src.len() + 1 <= dest.len() {
+    if src.len() < dest.len() {
         let mut wasalnum = false;
         for p in &mut dest[..src.len()] {
             if *p == 0 {
@@ -509,8 +519,7 @@ fn case_libc_mb(
         } as wchar_t;
         if matches!(kind, MbCase::Title) {
             // SAFETY: pure wctype call.
-            wasalnum =
-                unsafe { iswalnum_l(workspace[curr_char] as wint_t, lt.get()) } != 0;
+            wasalnum = unsafe { iswalnum_l(workspace[curr_char] as wint_t, lt.get()) } != 0;
         }
         curr_char += 1;
     }
@@ -522,7 +531,7 @@ fn case_libc_mb(
     // wcstombs failure would mean the towlower output can't re-encode.
     debug_assert!(result_size != usize::MAX);
 
-    if dest.len() >= result_size + 1 {
+    if dest.len() > result_size {
         dest[..result_size].copy_from_slice(&result[..result_size]);
         dest[result_size] = 0;
     }

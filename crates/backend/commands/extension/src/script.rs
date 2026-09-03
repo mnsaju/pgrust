@@ -54,7 +54,11 @@ fn clean_querytext(query: &str, location: &mut i32, len: &mut i32) -> (usize, us
     while begin < end && matches!(bytes[begin], b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c) {
         begin += 1;
     }
-    while end > begin && matches!(bytes[end - 1], b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c | b';')
+    while end > begin
+        && matches!(
+            bytes[end - 1],
+            b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c | b';'
+        )
     {
         end -= 1;
     }
@@ -189,7 +193,9 @@ pub(crate) fn execute_sql_string(sql: &str, filename: &str) -> PgResult<()> {
             };
 
             let mut stmt_list = mcx::PgVec::new_in(mcx);
-            stmt_list.try_reserve_exact(query_list.len()).map_err(|_| mcx.oom(query_list.len()))?;
+            stmt_list
+                .try_reserve_exact(query_list.len())
+                .map_err(|_| mcx.oom(query_list.len()))?;
             for query in query_list {
                 if query.commandType == types_nodes::nodes_enums::CmdType::CMD_UTILITY {
                     stmt_list.push(types_nodes::plannodes::PlannedStmt {
@@ -320,7 +326,10 @@ pub(crate) fn execute_extension_script(
         } else if from_version.is_none() {
             return Err(ereport(ERROR)
                 .errcode(ERRCODE_INSUFFICIENT_PRIVILEGE)
-                .errmsg(format!("permission denied to create extension \"{}\"", control.name))
+                .errmsg(format!(
+                    "permission denied to create extension \"{}\"",
+                    control.name
+                ))
                 .errhint(if control.trusted {
                     "Must have CREATE privilege on current database to create this extension."
                 } else {
@@ -331,7 +340,10 @@ pub(crate) fn execute_extension_script(
         } else {
             return Err(ereport(ERROR)
                 .errcode(ERRCODE_INSUFFICIENT_PRIVILEGE)
-                .errmsg(format!("permission denied to update extension \"{}\"", control.name))
+                .errmsg(format!(
+                    "permission denied to update extension \"{}\"",
+                    control.name
+                ))
                 .errhint(if control.trusted {
                     "Must have CREATE privilege on current database to update this extension."
                 } else {
@@ -479,7 +491,11 @@ fn run_script_body(
     let mut t_sql = strip_echo_lines(&c_sql);
 
     if c_sql.contains("@extowner@") {
-        let uid = if switch_to_superuser { save_userid } else { miscinit::GetUserId() };
+        let uid = if switch_to_superuser {
+            save_userid
+        } else {
+            miscinit::GetUserId()
+        };
         let user_name = miscinit::GetUserNameFromId(mcx, uid, false)?
             .expect("noerr=false returns a name")
             .as_str()

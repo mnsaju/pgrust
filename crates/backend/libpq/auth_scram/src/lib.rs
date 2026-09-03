@@ -12,8 +12,7 @@ use mcx::{Mcx, PgString};
 use pg_b64::{pg_b64_dec_len, pg_b64_decode, pg_b64_enc_len, pg_b64_encode};
 use scram_common::{
     scram_build_secret, scram_salted_password, scram_server_key, SCRAM_DEFAULT_SALT_LEN,
-    SCRAM_MAX_KEY_LEN, SCRAM_SHA_256_DEFAULT_ITERATIONS, SCRAM_SHA_256_KEY_LEN,
-    SCRAM_SHA_256_NAME,
+    SCRAM_MAX_KEY_LEN, SCRAM_SHA_256_DEFAULT_ITERATIONS, SCRAM_SHA_256_KEY_LEN, SCRAM_SHA_256_NAME,
 };
 use types_error::{ErrorLocation, PgResult, ERRCODE_INTERNAL_ERROR, ERROR, LOG};
 
@@ -179,7 +178,12 @@ pub fn mock_scram_secret(username: &str) -> PgResult<MockScramSecret> {
 
     let cap = pg_b64_enc_len(SCRAM_DEFAULT_SALT_LEN as i32);
     let mut encoded = vec![0u8; cap as usize];
-    let n = pg_b64_encode(&raw_salt[..SCRAM_DEFAULT_SALT_LEN], SCRAM_DEFAULT_SALT_LEN as i32, &mut encoded, cap);
+    let n = pg_b64_encode(
+        &raw_salt[..SCRAM_DEFAULT_SALT_LEN],
+        SCRAM_DEFAULT_SALT_LEN as i32,
+        &mut encoded,
+        cap,
+    );
     if n < 0 {
         elog::ereport(ERROR)
             .errcode(ERRCODE_INTERNAL_ERROR)

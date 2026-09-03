@@ -64,7 +64,11 @@ pub fn qtnode_compare(a: &QtNode<'_>, b: &QtNode<'_>) -> i32 {
                 return if ao.oper > bo.oper { -1 } else { 1 };
             }
             if a.children.len() != b.children.len() {
-                return if a.children.len() > b.children.len() { -1 } else { 1 };
+                return if a.children.len() > b.children.len() {
+                    -1
+                } else {
+                    1
+                };
             }
             for (ca, cb) in a.children.iter().zip(b.children.iter()) {
                 let res = qtnode_compare(ca, cb);
@@ -140,10 +144,8 @@ pub fn qtn_ternary(n: &mut QtNode<'_>) {
         if same {
             let cc = n.children.remove(i);
             let ncc = cc.children.len();
-            let mut k = i;
-            for gc in cc.children {
+            for (k, gc) in (i..).zip(cc.children) {
                 n.children.insert(k, gc);
-                k += 1;
             }
             i += ncc;
         } else {
@@ -171,11 +173,17 @@ pub fn qtn_binary<'mcx>(mcx: Mcx<'mcx>, n: &mut QtNode<'mcx>) {
         let c1 = core::mem::replace(&mut n.children[1], dummy());
         let sign = c0.sign | c1.sign;
         let mut sub: PgVec<QtNode> = PgVec::new_in(mcx);
-        sub.try_reserve_exact(2).map_err(|_| mcx.oom(2)).expect("qtn_binary alloc");
+        sub.try_reserve_exact(2)
+            .map_err(|_| mcx.oom(2))
+            .expect("qtn_binary alloc");
         sub.push(c0);
         sub.push(c1);
         let nn = QtNode {
-            item: Item::Opr(Operator { oper: opr.oper, distance: 0, left: 0 }),
+            item: Item::Opr(Operator {
+                oper: opr.oper,
+                distance: 0,
+                left: 0,
+            }),
             word: PgVec::new_in(mcx),
             sign,
             flags: 0,
@@ -192,11 +200,19 @@ pub fn qtn_copy<'mcx>(mcx: Mcx<'mcx>, n: &QtNode<'_>) -> PgResult<QtNode<'mcx>> 
     let mut word = vec_with_capacity_in(mcx, n.word.len())?;
     word.extend_from_slice(&n.word);
     let mut children: PgVec<'mcx, QtNode<'mcx>> = PgVec::new_in(mcx);
-    children.try_reserve_exact(n.children.len()).map_err(|_| mcx.oom(n.children.len()))?;
+    children
+        .try_reserve_exact(n.children.len())
+        .map_err(|_| mcx.oom(n.children.len()))?;
     for c in n.children.iter() {
         children.push(qtn_copy(mcx, c)?);
     }
-    Ok(QtNode { item: n.item, word, sign: n.sign, flags: n.flags, children })
+    Ok(QtNode {
+        item: n.item,
+        word,
+        sign: n.sign,
+        flags: n.flags,
+        children,
+    })
 }
 
 // QTNClearFlags.

@@ -100,16 +100,18 @@ fn install() {
             SENT.with(|s| s.borrow_mut().push(msgs.to_vec()));
             Ok(())
         });
-        sinval_seams::receive_shared_invalid_messages::set(|inval_fn, _reset_fn| {
-            loop {
-                let msg = PENDING.with(|p| {
-                    let mut p = p.borrow_mut();
-                    if p.is_empty() { None } else { Some(p.remove(0)) }
-                });
-                match msg {
-                    Some(m) => inval_fn(&m)?,
-                    None => return Ok(()),
+        sinval_seams::receive_shared_invalid_messages::set(|inval_fn, _reset_fn| loop {
+            let msg = PENDING.with(|p| {
+                let mut p = p.borrow_mut();
+                if p.is_empty() {
+                    None
+                } else {
+                    Some(p.remove(0))
                 }
+            });
+            match msg {
+                Some(m) => inval_fn(&m)?,
+                None => return Ok(()),
             }
         });
     });
@@ -128,7 +130,10 @@ fn commit_sends_catalog_message_after_local_processing() {
 
     clear_events();
     CommandEndInvalidationMessages().unwrap();
-    assert_eq!(events(), vec!["snapshot".to_string(), "flush_catalog(1259)".to_string()]);
+    assert_eq!(
+        events(),
+        vec!["snapshot".to_string(), "flush_catalog(1259)".to_string()]
+    );
 
     AtEOXact_Inval(true).unwrap();
     let flat = sent_flat();
@@ -150,9 +155,14 @@ fn abort_locally_processes_prior_and_sends_nothing() {
 
     clear_events();
     AtEOXact_Inval(false).unwrap();
-    assert_eq!(events(), vec!["snapshot".to_string(), "flush_catalog(1259)".to_string()]);
+    assert_eq!(
+        events(),
+        vec!["snapshot".to_string(), "flush_catalog(1259)".to_string()]
+    );
     assert!(sent().is_empty());
-    assert!(with_state(|s| s.trans_stack.is_empty() && s.msg_arrays[0].is_empty()));
+    assert!(with_state(
+        |s| s.trans_stack.is_empty() && s.msg_arrays[0].is_empty()
+    ));
 }
 
 #[test]
@@ -308,7 +318,10 @@ fn xact_get_committed_messages_keeps_ateoxact_order() {
         })
         .collect();
     // Prior:Cat, Current:Cat, Prior:Rel, Current:Rel.
-    assert_eq!(kinds, vec![(true, 1259), (true, 1247), (false, 100), (false, 200)]);
+    assert_eq!(
+        kinds,
+        vec![(true, 1259), (true, 1247), (false, 100), (false, 200)]
+    );
     AtEOXact_Inval(false).unwrap();
 }
 
@@ -330,11 +343,16 @@ fn syscache_callback_chain_runs_in_registration_order() {
 
     clear_events();
     CallSyscacheCallbacks(11, 42).unwrap();
-    assert_eq!(events(), vec!["A(7,11,42)".to_string(), "B(11,42)".to_string()]);
+    assert_eq!(
+        events(),
+        vec!["A(7,11,42)".to_string(), "B(11,42)".to_string()]
+    );
 
     assert!(CallSyscacheCallbacks(99, 0).is_err());
     assert_eq!(
-        CacheRegisterSyscacheCallback(-1, cb_a, Datum::null()).unwrap_err().level(),
+        CacheRegisterSyscacheCallback(-1, cb_a, Datum::null())
+            .unwrap_err()
+            .level(),
         types_error::FATAL
     );
 }
@@ -360,7 +378,10 @@ fn callback_may_reenter_registration_mid_dispatch() {
     // C re-reads ccitem->link after each invocation, so the callback
     // registered mid-dispatch runs in the same walk.
     CallSyscacheCallbacks(20, 1).unwrap();
-    assert_eq!(events(), vec!["registering".to_string(), "late".to_string()]);
+    assert_eq!(
+        events(),
+        vec!["registering".to_string(), "late".to_string()]
+    );
 }
 
 #[test]
@@ -394,7 +415,11 @@ fn invalidate_system_caches_extended_fires_everything() {
 fn smgr_message_roundtrips_the_packed_proc_number() {
     install();
     let rlocator = types_storage::RelFileLocatorBackend {
-        locator: types_storage::RelFileLocator { spcOid: 1663, dbOid: 5, relNumber: 16384 },
+        locator: types_storage::RelFileLocator {
+            spcOid: 1663,
+            dbOid: 5,
+            relNumber: 16384,
+        },
         backend: 0x12345,
     };
     CacheInvalidateSmgr(rlocator).unwrap();
@@ -427,7 +452,10 @@ fn accept_drains_queue_filtering_foreign_databases() {
     AcceptInvalidationMessages().unwrap();
     assert_eq!(
         events(),
-        vec!["snapshot".to_string(), "syscache_invalidate(4,99)".to_string()]
+        vec![
+            "snapshot".to_string(),
+            "syscache_invalidate(4,99)".to_string()
+        ]
     );
 }
 

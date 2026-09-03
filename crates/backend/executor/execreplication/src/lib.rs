@@ -5,7 +5,7 @@ use core::mem::ManuallyDrop;
 
 use commands_publicationcmds::{pub_contains_invalid_column, pub_rf_contains_invalid_column};
 use datum::Datum;
-use mcx::{Mcx, MemoryContext, PgHashMap, PgVec};
+use mcx::{Mcx, PgHashMap, PgVec};
 use pg_publication::{
     is_publishable_relation, GetAllTablesPublications, GetPublication, GetRelationPublications,
     GetSchemaPublications, PublicationActions,
@@ -275,7 +275,11 @@ pub fn CheckCmdReplicaIdentity<'mcx>(
         return Err(err_invalid_column_reference(rel.name(), update, RF_DETAIL));
     }
     if !cols_valid {
-        return Err(err_invalid_column_reference(rel.name(), update, COLS_DETAIL));
+        return Err(err_invalid_column_reference(
+            rel.name(),
+            update,
+            COLS_DETAIL,
+        ));
     }
     if !gencols_valid {
         return Err(err_invalid_column_reference(

@@ -5,8 +5,8 @@
 #![allow(non_snake_case)]
 #![allow(clippy::result_large_err)]
 
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::SeqCst};
 use pgsync::{Mutex, MutexGuard, OnceLock};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::SeqCst};
 
 use condition_variable::{
     ConditionVariable, ConditionVariableBroadcast, ConditionVariableCancelSleep,
@@ -91,7 +91,9 @@ struct WalRcvShared {
 static WAL_RCV: OnceLock<WalRcvShared> = OnceLock::new();
 
 fn shmem() -> &'static WalRcvShared {
-    WAL_RCV.get().expect("WalRcv accessed before WalRcvShmemInit")
+    WAL_RCV
+        .get()
+        .expect("WalRcv accessed before WalRcvShmemInit")
 }
 
 pub fn WalRcvShmemInit() {
@@ -246,7 +248,10 @@ pub fn RequestXLogStreaming(
     }
 
     let walrcv_proc = with_walrcv(|d| {
-        debug_assert!(matches!(d.walRcvState, WalRcvState::Stopped | WalRcvState::Waiting));
+        debug_assert!(matches!(
+            d.walRcvState,
+            WalRcvState::Stopped | WalRcvState::Waiting
+        ));
 
         d.conninfo = strlcpy_trunc(conninfo, MAXCONNINFO);
         if !slotname.is_empty() {

@@ -12,12 +12,8 @@ pub fn prepare_skip_support_from_opclass(
     opcintype: Oid,
     reverse: bool,
 ) -> PgResult<Option<SkipSupportData>> {
-    let proc = lsyscache::get_opfamily_proc(
-        opfamily,
-        opcintype,
-        opcintype,
-        BTSKIPSUPPORT_PROC as i16,
-    )?;
+    let proc =
+        lsyscache::get_opfamily_proc(opfamily, opcintype, opcintype, BTSKIPSUPPORT_PROC as i16)?;
     if proc == 0 {
         return Ok(None);
     }
@@ -86,7 +82,10 @@ mod tests {
     #[test]
     fn int4_incdec_edges() {
         let mut flow = false;
-        assert_eq!(nbt_compare::int4_increment(Datum::from_i32(41), &mut flow).as_i32(), 42);
+        assert_eq!(
+            nbt_compare::int4_increment(Datum::from_i32(41), &mut flow).as_i32(),
+            42
+        );
         assert!(!flow);
         nbt_compare::int4_increment(Datum::from_i32(i32::MAX), &mut flow);
         assert!(flow);

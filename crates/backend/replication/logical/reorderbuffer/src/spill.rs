@@ -25,10 +25,9 @@ use types_storage::{RelFileLocator, SharedInvalidationMessage};
 use types_tuple::{BlockIdData, ItemPointerData, SizeofHeapTupleHeader};
 
 use crate::{
-    dl_delete, dl_iter, rb_error, ChangeId, ListHead, ReorderBuffer,
-    ReorderBufferChange, ReorderBufferChangeData, ReorderBufferChangeType,
-    ReorderBufferChangeType::*, TxnId, INVALID_ID, RBTXN_IS_ABORTED, RBTXN_IS_SERIALIZED,
-    RBTXN_IS_SERIALIZED_CLEAR,
+    dl_delete, dl_iter, rb_error, ChangeId, ListHead, ReorderBuffer, ReorderBufferChange,
+    ReorderBufferChangeData, ReorderBufferChangeType, ReorderBufferChangeType::*, TxnId,
+    INVALID_ID, RBTXN_IS_ABORTED, RBTXN_IS_SERIALIZED, RBTXN_IS_SERIALIZED_CLEAR,
 };
 
 // max_changes_in_memory (reorderbuffer.c:245): restore batch size.
@@ -91,16 +90,24 @@ impl<'a> Cur<'a> {
         Ok(self.take(1)?[0])
     }
     fn u16(&mut self) -> PgResult<u16> {
-        Ok(u16::from_ne_bytes(self.take(2)?.try_into().expect("2 bytes")))
+        Ok(u16::from_ne_bytes(
+            self.take(2)?.try_into().expect("2 bytes"),
+        ))
     }
     fn u32(&mut self) -> PgResult<u32> {
-        Ok(u32::from_ne_bytes(self.take(4)?.try_into().expect("4 bytes")))
+        Ok(u32::from_ne_bytes(
+            self.take(4)?.try_into().expect("4 bytes"),
+        ))
     }
     fn i32(&mut self) -> PgResult<i32> {
-        Ok(i32::from_ne_bytes(self.take(4)?.try_into().expect("4 bytes")))
+        Ok(i32::from_ne_bytes(
+            self.take(4)?.try_into().expect("4 bytes"),
+        ))
     }
     fn u64(&mut self) -> PgResult<u64> {
-        Ok(u64::from_ne_bytes(self.take(8)?.try_into().expect("8 bytes")))
+        Ok(u64::from_ne_bytes(
+            self.take(8)?.try_into().expect("8 bytes"),
+        ))
     }
 }
 
@@ -165,7 +172,10 @@ fn put_tid(buf: &mut Vec<u8>, tid: &ItemPointerData) {
 
 fn get_tid(cur: &mut Cur) -> PgResult<ItemPointerData> {
     Ok(ItemPointerData {
-        ip_blkid: BlockIdData { bi_hi: cur.u16()?, bi_lo: cur.u16()? },
+        ip_blkid: BlockIdData {
+            bi_hi: cur.u16()?,
+            bi_lo: cur.u16()?,
+        },
         ip_posid: cur.u16()?,
     })
 }
@@ -299,7 +309,9 @@ impl ReorderBuffer {
             } else {
                 // Pick the largest transaction (or subtransaction) and evict
                 // it from memory by serializing it to disk.
-                let txn = self.largest_txn().expect("nonzero rb size implies a sized txn");
+                let txn = self
+                    .largest_txn()
+                    .expect("nonzero rb size implies a sized txn");
                 debug_assert!(self.txn(txn).size > 0);
                 debug_assert!(self.size >= self.txn(txn).size);
 
@@ -386,8 +398,8 @@ impl ReorderBuffer {
             self.spillCount += 1;
             self.spillBytes += size as i64;
             // Don't count already-serialized transactions again.
-            let counted = self.txn(txn).txn_flags & (RBTXN_IS_SERIALIZED | RBTXN_IS_SERIALIZED_CLEAR)
-                != 0;
+            let counted =
+                self.txn(txn).txn_flags & (RBTXN_IS_SERIALIZED | RBTXN_IS_SERIALIZED_CLEAR) != 0;
             self.spillTxns += if counted { 0 } else { 1 };
             // C flushes to pgstat through rb->private_data's decoding context
             // (reorderbuffer.c:4042); the owning context installs this hook.
@@ -425,8 +437,12 @@ impl ReorderBuffer {
             // C memcpy's the base struct for every action, so the locator and
             // clear-toast flag survive for the spec-confirm/abort forms too;
             // tuples ride only when present.
-            ReorderBufferChangeData::Tp { rlocator, clear_toast_afterwards, oldtuple, newtuple } =>
-            {
+            ReorderBufferChangeData::Tp {
+                rlocator,
+                clear_toast_afterwards,
+                oldtuple,
+                newtuple,
+            } => {
                 put_locator(buf, rlocator);
                 put_u8(buf, *clear_toast_afterwards as u8);
                 put_u8(buf, oldtuple.is_some() as u8);
@@ -470,7 +486,11 @@ impl ReorderBuffer {
                 put_u64(buf, snap.vistest.id);
                 put_u64(buf, snap.snapXactCompletionCount);
             }
-            ReorderBufferChangeData::Truncate { cascade, restart_seqs, relids } => {
+            ReorderBufferChangeData::Truncate {
+                cascade,
+                restart_seqs,
+                relids,
+            } => {
                 put_u8(buf, *cascade as u8);
                 put_u8(buf, *restart_seqs as u8);
                 put_u64(buf, relids.len() as u64);
@@ -481,7 +501,13 @@ impl ReorderBuffer {
             ReorderBufferChangeData::CommandId(cmd) => {
                 put_u32(buf, *cmd);
             }
-            ReorderBufferChangeData::TupleCid { locator, tid, cmin, cmax, combocid } => {
+            ReorderBufferChangeData::TupleCid {
+                locator,
+                tid,
+                cmin,
+                cmax,
+                combocid,
+            } => {
                 put_locator(buf, locator);
                 put_tid(buf, tid);
                 put_u32(buf, *cmin);
@@ -614,9 +640,22 @@ impl ReorderBuffer {
                 let clear_toast_afterwards = cur.u8()? != 0;
                 let has_old = cur.u8()? != 0;
                 let has_new = cur.u8()? != 0;
-                let oldtuple = if has_old { Some(self.get_tuple(&mut cur)?) } else { None };
-                let newtuple = if has_new { Some(self.get_tuple(&mut cur)?) } else { None };
-                ReorderBufferChangeData::Tp { rlocator, clear_toast_afterwards, oldtuple, newtuple }
+                let oldtuple = if has_old {
+                    Some(self.get_tuple(&mut cur)?)
+                } else {
+                    None
+                };
+                let newtuple = if has_new {
+                    Some(self.get_tuple(&mut cur)?)
+                } else {
+                    None
+                };
+                ReorderBufferChangeData::Tp {
+                    rlocator,
+                    clear_toast_afterwards,
+                    oldtuple,
+                    newtuple,
+                }
             }
             Message => {
                 let prefix_len = cur.u64()? as usize;
@@ -690,7 +729,11 @@ impl ReorderBuffer {
                 for _ in 0..n {
                     relids.push(cur.u32()?);
                 }
-                ReorderBufferChangeData::Truncate { cascade, restart_seqs, relids }
+                ReorderBufferChangeData::Truncate {
+                    cascade,
+                    restart_seqs,
+                    relids,
+                }
             }
             InternalCommandId => ReorderBufferChangeData::CommandId(cur.u32()?),
             InternalTupleCid => {

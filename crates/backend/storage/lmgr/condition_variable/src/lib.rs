@@ -125,9 +125,12 @@ fn proclist_pop_head(list: &mut proclist_head) -> ProcNumber {
     procno
 }
 
-fn wakeup_mut(cv: &ConditionVariable) -> &mut proclist_head {
-    // SAFETY: caller holds cv.mutex; the borrow ends before unlock.
-    unsafe { &mut *cv.wakeup.ptr() }
+// Raw pointer, not `&mut`: a `&mut` returned with the input's lifetime would
+// let a caller hold two live `&mut` to the same cell (clippy::mut_from_ref).
+// SAFETY contract: caller holds cv.mutex; the borrow taken by dereferencing
+// this must end before unlock.
+fn wakeup_mut(cv: &ConditionVariable) -> *mut proclist_head {
+    cv.wakeup.ptr()
 }
 
 /// PGRUST_MQ_RECHECK_MS (same knob as shm_mq::stall::recheck_ms; read here
@@ -154,7 +157,7 @@ pub fn ConditionVariablePrepareToSleep(cv: &'static ConditionVariable) {
     CV_SLEEP_TARGET.with(|t| t.set(Some(cv)));
 
     spin_acquire(&cv.mutex);
-    proclist_push_tail(wakeup_mut(cv), pgprocno);
+    proclist_push_tail(unsafe { &mut *wakeup_mut(cv) }, pgprocno);
     cv.mutex.unlock();
 }
 
@@ -170,7 +173,9 @@ pub fn ConditionVariableTimedSleep(
     timeout: i64,
     wait_event_info: u32,
 ) -> PgResult<bool> {
-    let target_is_cv = CV_SLEEP_TARGET.with(|t| t.get()).is_some_and(|t| core::ptr::eq(t, cv));
+    let target_is_cv = CV_SLEEP_TARGET
+        .with(|t| t.get())
+        .is_some_and(|t| core::ptr::eq(t, cv));
     if !target_is_cv {
         ConditionVariablePrepareToSleep(cv);
         return Ok(false);
@@ -207,7 +212,7 @@ pub fn ConditionVariableTimedSleep(
         let my_procno = MyProcNumber();
         spin_acquire(&cv.mutex);
         {
-            let wakeup = wakeup_mut(cv);
+            let wakeup = unsafe { &mut *wakeup_mut(cv) };
             if !proclist_contains(wakeup, my_procno) {
                 done = true;
                 proclist_push_tail(wakeup, my_procno);
@@ -216,7 +221,10 @@ pub fn ConditionVariableTimedSleep(
         cv.mutex.unlock();
 
         postgres_seams::check_for_interrupts::call()?;
-        if !CV_SLEEP_TARGET.with(|t| t.get()).is_some_and(|t| core::ptr::eq(t, cv)) {
+        if !CV_SLEEP_TARGET
+            .with(|t| t.get())
+            .is_some_and(|t| core::ptr::eq(t, cv))
+        {
             done = true;
         }
 
@@ -241,7 +249,7 @@ pub fn ConditionVariableCancelSleep() -> bool {
 
     spin_acquire(&cv.mutex);
     {
-        let wakeup = wakeup_mut(cv);
+        let wakeup = unsafe { &mut *wakeup_mut(cv) };
         let my_procno = MyProcNumber();
         if proclist_contains(wakeup, my_procno) {
             proclist_delete(wakeup, my_procno);
@@ -260,7 +268,7 @@ pub fn ConditionVariableSignal(cv: &ConditionVariable) {
 
     spin_acquire(&cv.mutex);
     {
-        let wakeup = wakeup_mut(cv);
+        let wakeup = unsafe { &mut *wakeup_mut(cv) };
         if wakeup.head != INVALID_PROC_NUMBER {
             proc = proclist_pop_head(wakeup);
         }
@@ -285,7 +293,7 @@ pub fn ConditionVariableBroadcast(cv: &'static ConditionVariable) {
 
     spin_acquire(&cv.mutex);
     {
-        let wakeup = wakeup_mut(cv);
+        let wakeup = unsafe { &mut *wakeup_mut(cv) };
         debug_assert!(!proclist_contains(wakeup, pgprocno));
         if wakeup.head != INVALID_PROC_NUMBER {
             proc = proclist_pop_head(wakeup);
@@ -305,7 +313,7 @@ pub fn ConditionVariableBroadcast(cv: &'static ConditionVariable) {
         proc = INVALID_PROC_NUMBER;
         spin_acquire(&cv.mutex);
         {
-            let wakeup = wakeup_mut(cv);
+            let wakeup = unsafe { &mut *wakeup_mut(cv) };
             if wakeup.head != INVALID_PROC_NUMBER {
                 proc = proclist_pop_head(wakeup);
             }

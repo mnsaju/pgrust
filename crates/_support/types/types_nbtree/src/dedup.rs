@@ -6,7 +6,7 @@ use crate::vacuum::BTDedupInterval;
 use crate::{BT_IS_POSTING, BT_OFFSET_MASK, INDEX_ALT_TID_MASK};
 use types_core::{OffsetNumber, Size, BLCKSZ};
 use types_storage::bufpage::{ItemIdData, PageMut, SizeOfPageHeaderData};
-use types_tuple::itemptr::{ItemPointerData, InvalidOffsetNumber};
+use types_tuple::itemptr::{InvalidOffsetNumber, ItemPointerData};
 
 pub const INDEX_SIZE_MASK: u16 = 0x1FFF;
 pub const MaxIndexTuplesPerPage: usize = (BLCKSZ - SizeOfPageHeaderData) / (16 + 4);
@@ -32,27 +32,38 @@ unsafe fn t_tid_posid(itup: *const u8) -> u16 {
     itup.add(4).cast::<u16>().read_unaligned()
 }
 
+/// # Safety
+/// `itup` must address a live index tuple, readable through its t_info field.
 #[inline]
 pub unsafe fn itup_size(itup: *const u8) -> usize {
     (t_info(itup) & INDEX_SIZE_MASK) as usize
 }
 
+/// # Safety
+/// As [`itup_size`].
 #[inline]
 pub unsafe fn itup_is_posting(itup: *const u8) -> bool {
     (t_info(itup) & INDEX_ALT_TID_MASK) != 0 && (t_tid_posid(itup) & BT_IS_POSTING) != 0
 }
 
+/// # Safety
+/// As [`itup_size`].
 #[inline]
 pub unsafe fn itup_is_pivot(itup: *const u8) -> bool {
     (t_info(itup) & INDEX_ALT_TID_MASK) != 0 && (t_tid_posid(itup) & BT_IS_POSTING) == 0
 }
 
+/// # Safety
+/// As [`itup_size`].
 #[inline]
 pub unsafe fn itup_nposting(itup: *const u8) -> usize {
     (t_tid_posid(itup) & BT_OFFSET_MASK) as usize
 }
 
 // posting offset = ip_blkid of the alt TID (bi_hi << 16 | bi_lo).
+/// # Safety
+/// `itup` must address a live index tuple, readable through its alt-TID
+/// prefix (first 4 bytes).
 #[inline]
 pub unsafe fn itup_posting_offset(itup: *const u8) -> usize {
     let hi = itup.cast::<u16>().read_unaligned() as u32;
@@ -132,8 +143,7 @@ impl BTDedupState {
         };
 
         // must match the size formed in finish_pending
-        let mergedtupsz =
-            maxalign(self.basetupsize + (self.nhtids + nhtids) * IPD_SIZE);
+        let mergedtupsz = maxalign(self.basetupsize + (self.nhtids + nhtids) * IPD_SIZE);
 
         if mergedtupsz > self.maxpostingsize {
             // counts for single value strategy only past 50 TIDs
@@ -156,9 +166,12 @@ impl BTDedupState {
         true
     }
 
-    /// _bt_dedup_finish_pending; `Err` = C's failed-to-add-tuple elog(ERROR).
+    /// _bt_dedup_finish_pending; `Err(())` = C's failed-to-add-tuple
+    /// elog(ERROR) — a pure signal by design: every caller immediately
+    /// discards it and raises its own contextual error.
     /// # Safety
     /// `self.base` still live; `newpage` is the temp page.
+    #[allow(clippy::result_unit_err)]
     pub unsafe fn finish_pending(&mut self, newpage: &mut PageMut<'_>) -> Result<Size, ()> {
         debug_assert!(self.nitems > 0);
         debug_assert!(self.nitems <= self.nhtids);
@@ -179,7 +192,10 @@ impl BTDedupState {
 
             self.intervals[self.nintervals].nitems = self.nitems as u16;
 
-            if newpage.add_item(&self.scratch[..newsize], tupoff, 0).is_none() {
+            if newpage
+                .add_item(&self.scratch[..newsize], tupoff, 0)
+                .is_none()
+            {
                 return Err(());
             }
 
@@ -211,8 +227,7 @@ impl BTDedupState {
         // BTreeTupleSetPosting: alt TID = (postingoffset blkid, nhtids|BT_IS_POSTING)
         self.scratch[0..2].copy_from_slice(&((keysize >> 16) as u16).to_ne_bytes());
         self.scratch[2..4].copy_from_slice(&((keysize & 0xffff) as u16).to_ne_bytes());
-        self.scratch[4..6]
-            .copy_from_slice(&(self.nhtids as u16 | BT_IS_POSTING).to_ne_bytes());
+        self.scratch[4..6].copy_from_slice(&(self.nhtids as u16 | BT_IS_POSTING).to_ne_bytes());
         core::ptr::copy_nonoverlapping(
             self.htids.as_ptr().cast::<u8>(),
             self.scratch.as_mut_ptr().add(keysize),

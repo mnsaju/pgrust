@@ -114,7 +114,10 @@ pub fn puttupleslot(h: TuplestoreHandle, slot: &mut SlotData<'_>) -> PgResult<()
     with_store(h, |store| store.puttupleslot(slot, mcx))
 }
 
-pub fn put_heap_tuple(h: TuplestoreHandle, htup: &::types_tuple::HeapTupleData<'_>) -> PgResult<()> {
+pub fn put_heap_tuple(
+    h: TuplestoreHandle,
+    htup: &::types_tuple::HeapTupleData<'_>,
+) -> PgResult<()> {
     with_store(h, |store| store.put_heap_tuple(htup))
 }
 
@@ -129,7 +132,11 @@ pub fn putvalues(
 
 fn begin_heap_hold(random_access: bool) -> PgResult<TuplestoreHandle> {
     let work_mem = init_small::globals::work_mem();
-    Ok(register(Tuplestore::begin_heap(random_access, true, work_mem)))
+    Ok(register(Tuplestore::begin_heap(
+        random_access,
+        true,
+        work_mem,
+    )))
 }
 
 fn gettupleslot_hold(
@@ -159,7 +166,11 @@ fn skiptuples_hold(h: TuplestoreHandle, ntuples: i64, forward: bool) -> PgResult
 
 fn begin_heap_cursor(random_access: bool, inter_xact: bool) -> PgResult<TuplestoreHandle> {
     let work_mem = init_small::globals::work_mem();
-    Ok(register(Tuplestore::begin_heap(random_access, inter_xact, work_mem)))
+    Ok(register(Tuplestore::begin_heap(
+        random_access,
+        inter_xact,
+        work_mem,
+    )))
 }
 
 fn tuple_count_hold(h: TuplestoreHandle) -> i64 {

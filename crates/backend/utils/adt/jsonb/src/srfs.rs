@@ -59,14 +59,9 @@ fn srf_drive(
         .expect("user_fctx is SrfRows");
     let mcx = fcinfo.result_mcx();
     let out: Option<Option<Datum>> = match rows {
-        SrfRows::Texts(v) => v.get(idx).map(|r| match r {
-            None => None,
-            Some(bytes) => Some(
-                varlena::cstring_to_text(mcx, bytes)
+        SrfRows::Texts(v) => v.get(idx).map(|r| r.as_ref().map(|bytes| varlena::cstring_to_text(mcx, bytes)
                     .map(varlena_result)
-                    .expect("text result"),
-            ),
-        }),
+                    .expect("text result"))),
         SrfRows::Images(v) => v
             .get(idx)
             .map(|img| Some(byref_result(mcx, img).expect("image result"))),
@@ -90,10 +85,7 @@ fn require_object(payload: &[u8], name: &str) -> PgResult<()> {
     )))
 }
 
-pub fn fc_jsonb_object_keys(
-    flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_jsonb_object_keys(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     srf_drive(flinfo, fcinfo, "jsonb_object_keys", |fcinfo| {
         let image = detoast_owned(fcinfo)?;
         let payload = &image[..];
@@ -130,7 +122,9 @@ pub fn fc_jsonb_object_keys(
 fn elements_check(payload: &[u8]) -> PgResult<()> {
     // C: the scalar check runs only per the array check order.
     if container_is_scalar(payload) {
-        return Err(invalid_param("cannot extract elements from a scalar".into()));
+        return Err(invalid_param(
+            "cannot extract elements from a scalar".into(),
+        ));
     }
     if !container_is_array(payload) {
         return Err(invalid_param(

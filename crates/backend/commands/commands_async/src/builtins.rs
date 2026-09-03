@@ -2,7 +2,7 @@ use datum::Datum;
 use types_error::PgResult;
 use types_fmgr::{FmgrBuiltin, FmgrInfo, FunctionCallInfoBaseData as Fcinfo};
 
-fn text_arg_or_empty<'a>(fcinfo: &'a Fcinfo, i: usize) -> PgResult<&'a [u8]> {
+fn text_arg_or_empty(fcinfo: &Fcinfo, i: usize) -> PgResult<&[u8]> {
     if fcinfo.argisnull(i) {
         Ok(b"")
     } else {
@@ -41,7 +41,11 @@ pub fn fc_pg_listening_channels(
     match crate::listening_channel_at(cntr as usize) {
         Some(channel) => {
             let t = varlena::cstring_to_text(fcinfo.result_mcx(), &channel)?;
-            Ok(funcapi::srf_return_next(flinfo, fcinfo, types_fmgr::varlena_result(t)))
+            Ok(funcapi::srf_return_next(
+                flinfo,
+                fcinfo,
+                types_fmgr::varlena_result(t),
+            ))
         }
         None => Ok(funcapi::srf_return_done(flinfo, fcinfo)),
     }

@@ -117,20 +117,29 @@ impl MkShape {
     /// ([`crate::sink`]'s `canon_row_bytes` doc).
     #[inline]
     pub fn intern_comp(&self) -> Option<(usize, &MkComp)> {
-        self.comps.iter().enumerate().find(|(_, c)| c.kind == MkCompKind::Intern)
+        self.comps
+            .iter()
+            .enumerate()
+            .find(|(_, c)| c.kind == MkCompKind::Intern)
     }
 
     /// All Intern (text) components, in component (key) order — the
     /// canonical image's tail order.
     #[inline]
     pub fn intern_comps(&self) -> impl Iterator<Item = (usize, &MkComp)> {
-        self.comps.iter().enumerate().filter(|(_, c)| c.kind == MkCompKind::Intern)
+        self.comps
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| c.kind == MkCompKind::Intern)
     }
 
     /// Intern (text) component count.
     #[inline]
     pub fn n_intern(&self) -> usize {
-        self.comps.iter().filter(|c| c.kind == MkCompKind::Intern).count()
+        self.comps
+            .iter()
+            .filter(|c| c.kind == MkCompKind::Intern)
+            .count()
     }
 }
 
@@ -163,7 +172,11 @@ impl RedDerived {
     /// domain of every derived expression before any group was created.
     #[inline]
     pub fn eval(&self, rep: i64) -> i64 {
-        let (a, b) = if self.var_is_arg0 { (rep, self.konst) } else { (self.konst, rep) };
+        let (a, b) = if self.var_is_arg0 {
+            (rep, self.konst)
+        } else {
+            (self.konst, rep)
+        };
         match self.op {
             RedOp::Add => a.wrapping_add(b),
             RedOp::Sub => a.wrapping_sub(b),
@@ -371,7 +384,10 @@ pub fn compact_batch_install_enabled() -> bool {
 pub fn text_direct_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
-        !matches!(std::env::var("PGRUST_LANE_V2_TEXT_DIRECT").as_deref(), Ok("0") | Ok("off"))
+        !matches!(
+            std::env::var("PGRUST_LANE_V2_TEXT_DIRECT").as_deref(),
+            Ok("0") | Ok("off")
+        )
     })
 }
 
@@ -622,7 +638,11 @@ pub fn agg_hash_compact_try_arm(node: &mut AggStateData<'_>) -> CompactArm {
     }
     // avgpack: packed inline AvgInt8 states, SINK builds only (decided at
     // table creation — before any group seeds).
-    let avgpack_mask = if ph.sink_cap.is_some() { node.avgpack_shape_mask } else { 0 };
+    let avgpack_mask = if ph.sink_cap.is_some() {
+        node.avgpack_shape_mask
+    } else {
+        0
+    };
     // Entry layout by planner group estimate. Inline16 resolves hits from
     // the entry line alone (key inline; the probe never touches the payload
     // row) — ONE serialized miss per hit instead of Salt8's entry→row
@@ -756,7 +776,11 @@ fn try_arm_mk_n(
     let additionalsize = ph.hashtable.additionalsize();
     // avgpack: packed inline AvgInt8 states, SINK builds only (decided at
     // table creation — before any group seeds).
-    let avgpack_mask = if ph.sink_cap.is_some() { node.avgpack_shape_mask } else { 0 };
+    let avgpack_mask = if ph.sink_cap.is_some() {
+        node.avgpack_shape_mask
+    } else {
+        0
+    };
     // arena-strings inc-3: the DIRECT single-text arm — SINK worker builds
     // of the exact mk1 1-Intern non-nullable shape key the local table on
     // the canonical image bytes themselves (no intern table, no packed-id
@@ -800,9 +824,15 @@ fn try_arm_mk_n(
     }
     let (repr, layout) = if two_words {
         // Int128 is Salt8-only (2 key words cannot inline into a 16-B slot).
-        (::lanetable::KeyRepr::Int128, ::lanetable::EntryLayout::Salt8)
+        (
+            ::lanetable::KeyRepr::Int128,
+            ::lanetable::EntryLayout::Salt8,
+        )
     } else if numgroups <= (1 << 22) {
-        (::lanetable::KeyRepr::Int, ::lanetable::EntryLayout::Inline16)
+        (
+            ::lanetable::KeyRepr::Int,
+            ::lanetable::EntryLayout::Inline16,
+        )
     } else {
         (::lanetable::KeyRepr::Int, ::lanetable::EntryLayout::Salt8)
     };
@@ -821,9 +851,8 @@ fn try_arm_mk_n(
             layout,
         ),
         key: CompactKeySpec::Multi(shape),
-        intern: has_intern.then(|| {
-            ::lanetable::LaneAggTable::new(::lanetable::KeyRepr::Bytes, 8, 1 << 10)
-        }),
+        intern: has_intern
+            .then(|| ::lanetable::LaneAggTable::new(::lanetable::KeyRepr::Bytes, 8, 1 << 10)),
         canon_hashes: Vec::new(),
         canon_store: Vec::new(),
         canon_offs: Vec::new(),
@@ -955,10 +984,16 @@ fn mk_admit_n(
         let mut off = 0usize;
         for &(att, kind) in kinds {
             let kind = match kind {
-                MkCompKind::Numeric { .. } => MkCompKind::Numeric { width: numeric_width },
+                MkCompKind::Numeric { .. } => MkCompKind::Numeric {
+                    width: numeric_width,
+                },
                 k => k,
             };
-            let comp = MkComp { att, off: off as u8, kind };
+            let comp = MkComp {
+                att,
+                off: off as u8,
+                kind,
+            };
             off += comp.width() as usize;
             comps.push(comp);
         }
@@ -1000,7 +1035,15 @@ fn mk_admit_n(
         return Err(CompactArm::SpillRisk);
     }
     let two_words = packed_bytes > 8;
-    Ok((MkShape { comps, packed_bytes: packed_bytes as u8, nullable, two_words }, numgroups))
+    Ok((
+        MkShape {
+            comps,
+            packed_bytes: packed_bytes as u8,
+            nullable,
+            two_words,
+        },
+        numgroups,
+    ))
 }
 
 /// Shared compact v1 gates for the single-word-key modes (Single/Reduced):
@@ -1078,7 +1121,11 @@ pub fn agg_hash_compact_try_arm_reduced(
     let additionalsize = ph.hashtable.additionalsize();
     // avgpack: packed inline AvgInt8 states, SINK builds only (decided at
     // table creation — before any group seeds).
-    let avgpack_mask = if ph.sink_cap.is_some() { node.avgpack_shape_mask } else { 0 };
+    let avgpack_mask = if ph.sink_cap.is_some() {
+        node.avgpack_shape_mask
+    } else {
+        0
+    };
     // Same layout policy as compact v1 (single-word key).
     let layout = if numgroups <= (1 << 22) {
         ::lanetable::EntryLayout::Inline16
@@ -1135,7 +1182,10 @@ pub fn agg_hash_compact_mk_shape(node: &AggStateData<'_>) -> Option<MkShape> {
 pub fn agg_hash_compact_intern(node: &mut AggStateData<'_>, bytes: &[u8]) -> u32 {
     let ph = node.perhash.as_mut().expect("hashed Agg has perhash");
     let ch = ph.compact.as_mut().expect("intern requires an armed table");
-    let t = ch.intern.as_mut().expect("intern requires an intern-armed shape");
+    let t = ch
+        .intern
+        .as_mut()
+        .expect("intern requires an intern-armed shape");
     let hash = t.hash_key_bytes(bytes);
     let pr = t.probe_bytes(bytes, hash);
     // spankey copy-tax counters (measurement only; cached-bool gated).
@@ -1192,19 +1242,30 @@ pub fn agg_hash_compact_probe_text_direct<'mcx>(
 ) -> PgResult<NonNull<AggPerGroup>> {
     // SAFETY: read of the once-allocated node; no &mut to it is live.
     let aggctx = unsafe { node.agg_node.as_ref() }.aggcontext();
-    let AggStateData { perhash, trans_init, trans_typ, .. } = node;
+    let AggStateData {
+        perhash,
+        trans_init,
+        trans_typ,
+        ..
+    } = node;
     let ph = perhash.as_mut().expect("hashed Agg has perhash");
-    let ch = ph.compact.as_mut().expect("direct probe requires an armed table");
+    let ch = ph
+        .compact
+        .as_mut()
+        .expect("direct probe requires an armed table");
     debug_assert!(ch.text_direct, "direct probe requires the direct arm");
     let avgpack_mask = ch.avgpack_mask;
-    let CompactHash { table, key, direct_img: img, .. } = &mut *ch;
+    let CompactHash {
+        table,
+        key,
+        direct_img: img,
+        ..
+    } = &mut *ch;
     let CompactKeySpec::Multi(shape) = key else {
         unreachable!("direct tables carry the mk1 shape")
     };
     debug_assert!(
-        shape.comps.len() == 1
-            && shape.comps[0].kind == MkCompKind::Intern
-            && !shape.nullable,
+        shape.comps.len() == 1 && shape.comps[0].kind == MkCompKind::Intern && !shape.nullable,
         "direct tables are the 1-Intern non-nullable shape"
     );
     // The canonical image: the packed prefix with the Intern component's id
@@ -1216,7 +1277,14 @@ pub fn agg_hash_compact_probe_text_direct<'mcx>(
     let hash = crate::sink::sink_hash_bytes(img);
     let pr = table.probe_bytes(img, hash);
     if pr.is_new {
-        seed_new_groups(aggctx, trans_init, trans_typ, &[pr.states], &[0], avgpack_mask)?;
+        seed_new_groups(
+            aggctx,
+            trans_init,
+            trans_typ,
+            &[pr.states],
+            &[0],
+            avgpack_mask,
+        )?;
     }
     // SAFETY: probe never returns null state pointers.
     Ok(unsafe { NonNull::new_unchecked(pr.states.cast::<AggPerGroup>()) })
@@ -1235,11 +1303,20 @@ pub fn agg_hash_compact_probe_text_direct<'mcx>(
 pub fn agg_hash_compact_over_limits(node: &AggStateData<'_>) -> bool {
     // SAFETY: read of the once-allocated node; no &mut to it is live.
     let aggctx = unsafe { node.agg_node.as_ref() }.aggcontext();
-    let Some(ph) = node.perhash.as_ref() else { return false };
-    let Some(ch) = ph.compact.as_ref() else { return false };
-    debug_assert!(ph.sink_cap.is_none(), "coded-group builds are never sink builds");
+    let Some(ph) = node.perhash.as_ref() else {
+        return false;
+    };
+    let Some(ch) = ph.compact.as_ref() else {
+        return false;
+    };
+    debug_assert!(
+        ph.sink_cap.is_none(),
+        "coded-group builds are never sink builds"
+    );
     let mem = ch.table.mem_used()
-        + ch.intern.as_ref().map_or(0, ::lanetable::LaneAggTable::mem_used)
+        + ch.intern
+            .as_ref()
+            .map_or(0, ::lanetable::LaneAggTable::mem_used)
         + ch.canon_store.len()
         + ch.canon_offs.len() * 4
         + aggctx.context().subtree_used();
@@ -1265,21 +1342,39 @@ pub fn agg_hash_compact_probe_coded<'mcx>(
     let id = agg_hash_compact_intern(node, bytes);
     // SAFETY: read of the once-allocated node; no &mut to it is live.
     let aggctx = unsafe { node.agg_node.as_ref() }.aggcontext();
-    let AggStateData { perhash, trans_init, trans_typ, .. } = node;
+    let AggStateData {
+        perhash,
+        trans_init,
+        trans_typ,
+        ..
+    } = node;
     let ph = perhash.as_mut().expect("hashed Agg has perhash");
-    let ch = ph.compact.as_mut().expect("coded probe requires an armed table");
+    let ch = ph
+        .compact
+        .as_mut()
+        .expect("coded probe requires an armed table");
     debug_assert!(
         matches!(&ch.key, CompactKeySpec::Multi(s) if !s.two_words
             && s.comps.len() == 1
             && s.comps[0].kind == MkCompKind::Intern),
         "coded probe requires the mk1 single-Intern shape"
     );
-    debug_assert!(!ch.text_direct, "DIRECT tables probe agg_hash_compact_probe_text_direct");
+    debug_assert!(
+        !ch.text_direct,
+        "DIRECT tables probe agg_hash_compact_probe_text_direct"
+    );
     let avgpack_mask = ch.avgpack_mask;
     let k = id as u64 as i64;
     let pr = ch.table.probe_int(k, ch.table.hash_key_int(k as u64));
     if pr.is_new {
-        seed_new_groups(aggctx, trans_init, trans_typ, &[pr.states], &[0], avgpack_mask)?;
+        seed_new_groups(
+            aggctx,
+            trans_init,
+            trans_typ,
+            &[pr.states],
+            &[0],
+            avgpack_mask,
+        )?;
     }
     // SAFETY: probe never returns null state pointers.
     Ok(unsafe { NonNull::new_unchecked(pr.states.cast::<AggPerGroup>()) })
@@ -1288,7 +1383,11 @@ pub fn agg_hash_compact_probe_coded<'mcx>(
 /// Live group count of the armed compact table (`None` = not armed). The
 /// freeze install election reads this after each batch.
 pub fn agg_hash_compact_ngroups(node: &AggStateData<'_>) -> Option<usize> {
-    node.perhash.as_ref()?.compact.as_ref().map(|ch| ch.table.nrows())
+    node.perhash
+        .as_ref()?
+        .compact
+        .as_ref()
+        .map(|ch| ch.table.nrows())
 }
 
 /// One staged batch through the compact table: canonicalize the key lane to
@@ -1317,11 +1416,27 @@ pub fn agg_hash_compact_batch<'mcx>(
     }
     // SAFETY: read of the once-allocated node; no &mut to it is live.
     let aggctx = unsafe { node.agg_node.as_ref() }.aggcontext();
-    let AggStateData { perhash, trans_init, trans_typ, .. } = node;
+    let AggStateData {
+        perhash,
+        trans_init,
+        trans_typ,
+        ..
+    } = node;
     let ph = perhash.as_mut().expect("hashed Agg has perhash");
-    let ch = ph.compact.as_mut().expect("compact batch requires an armed table");
+    let ch = ph
+        .compact
+        .as_mut()
+        .expect("compact batch requires an armed table");
     let avgpack_mask = ch.avgpack_mask;
-    let CompactHash { table, key, keys: ckeys, states, hashes, new_rows, .. } = ch;
+    let CompactHash {
+        table,
+        key,
+        keys: ckeys,
+        states,
+        hashes,
+        new_rows,
+        ..
+    } = ch;
     // Single-word datum-lane probes: compact v1 and the reduced (redundant-
     // key) mode — the latter's key lane is the representative key.
     let width = match key {
@@ -1381,9 +1496,23 @@ pub fn agg_hash_compact_batch<'mcx>(
         // per-transno avgpack/byval decisions hoist out of the row loop;
         // state slots are disjoint, so write order across transnos is
         // unobservable).
-        seed_new_groups_inverted(aggctx, trans_init, trans_typ, states, new_rows, avgpack_mask)?;
+        seed_new_groups_inverted(
+            aggctx,
+            trans_init,
+            trans_typ,
+            states,
+            new_rows,
+            avgpack_mask,
+        )?;
     } else {
-        seed_new_groups(aggctx, trans_init, trans_typ, states, new_rows, avgpack_mask)?;
+        seed_new_groups(
+            aggctx,
+            trans_init,
+            trans_typ,
+            states,
+            new_rows,
+            avgpack_mask,
+        )?;
     }
     groups.extend(states.iter().map(|&s| {
         // SAFETY: probe never returns null state pointers.
@@ -1411,7 +1540,9 @@ pub fn agg_hash_compact_backstop<'mcx>(
     let aggctx = unsafe { node.agg_node.as_ref() }.aggcontext();
     {
         let ph = node.perhash.as_ref().expect("hashed Agg has perhash");
-        let Some(ch) = ph.compact.as_ref() else { return Ok(false) };
+        let Some(ch) = ph.compact.as_ref() else {
+            return Ok(false);
+        };
         // Spill-armed sink builds count the table's LIVE rows, not retained
         // capacity — the flush keeps capacity, and the pressure→spill law
         // (runtime_agg drain) drains live pressure BEFORE this belt would
@@ -1446,7 +1577,9 @@ pub fn agg_hash_compact_backstop<'mcx>(
         // fail the parallel attempt (RG abort → serial rerun), never a
         // silent migration.
         if ph.sink_cap.is_some() {
-            return Err(crate::sink::sink_shape_error(crate::sink::SINK_CAP_BREACH_MSG));
+            return Err(crate::sink::sink_shape_error(
+                crate::sink::SINK_CAP_BREACH_MSG,
+            ));
         }
     }
     compact_migrate(node, estate)?;
@@ -1572,28 +1705,73 @@ pub fn agg_hash_compact_batch_mk1<'mcx>(
     let spk_t0 = crate::spankey::spankey_t0();
     // SAFETY: read of the once-allocated node; no &mut to it is live.
     let aggctx = unsafe { node.agg_node.as_ref() }.aggcontext();
-    let AggStateData { perhash, trans_init, trans_typ, .. } = node;
+    let AggStateData {
+        perhash,
+        trans_init,
+        trans_typ,
+        ..
+    } = node;
     let ph = perhash.as_mut().expect("hashed Agg has perhash");
-    let ch = ph.compact.as_mut().expect("compact batch requires an armed table");
+    let ch = ph
+        .compact
+        .as_mut()
+        .expect("compact batch requires an armed table");
     debug_assert!(matches!(&ch.key, CompactKeySpec::Multi(s) if !s.two_words));
     let avgpack_mask = ch.avgpack_mask;
     if mkaccept_fused() {
         // Fused state lane (mkaccept inc-1): probe directly into the
         // caller's groups vec — same pointers, minus the states-scratch
         // pass. Restore precedes the fallible seed (no leak on error).
-        let CompactHash { table, hashes, new_rows, .. } = &mut *ch;
+        let CompactHash {
+            table,
+            hashes,
+            new_rows,
+            ..
+        } = &mut *ch;
         new_rows.clear();
         let mut raw = groups_take_raw(groups);
-        table.probe_int_batch(keys, ::lanetable::PrefetchMode::Adaptive, hashes, &mut raw, new_rows);
+        table.probe_int_batch(
+            keys,
+            ::lanetable::PrefetchMode::Adaptive,
+            hashes,
+            &mut raw,
+            new_rows,
+        );
         groups_restore(groups, raw);
-        seed_new_groups(aggctx, trans_init, trans_typ, groups_ptr_slice(groups), new_rows, avgpack_mask)?;
+        seed_new_groups(
+            aggctx,
+            trans_init,
+            trans_typ,
+            groups_ptr_slice(groups),
+            new_rows,
+            avgpack_mask,
+        )?;
     } else {
-        let CompactHash { table, states, hashes, new_rows, .. } = &mut *ch;
+        let CompactHash {
+            table,
+            states,
+            hashes,
+            new_rows,
+            ..
+        } = &mut *ch;
         states.clear();
         new_rows.clear();
         groups.clear();
-        table.probe_int_batch(keys, ::lanetable::PrefetchMode::Adaptive, hashes, states, new_rows);
-        seed_new_groups(aggctx, trans_init, trans_typ, states, new_rows, avgpack_mask)?;
+        table.probe_int_batch(
+            keys,
+            ::lanetable::PrefetchMode::Adaptive,
+            hashes,
+            states,
+            new_rows,
+        );
+        seed_new_groups(
+            aggctx,
+            trans_init,
+            trans_typ,
+            states,
+            new_rows,
+            avgpack_mask,
+        )?;
         groups.extend(states.iter().map(|&s| {
             // SAFETY: probe never returns null state pointers.
             unsafe { NonNull::new_unchecked(s.cast::<AggPerGroup>()) }
@@ -1621,26 +1799,71 @@ pub fn agg_hash_compact_batch_mk2<'mcx>(
     let spk_t0 = crate::spankey::spankey_t0();
     // SAFETY: read of the once-allocated node; no &mut to it is live.
     let aggctx = unsafe { node.agg_node.as_ref() }.aggcontext();
-    let AggStateData { perhash, trans_init, trans_typ, .. } = node;
+    let AggStateData {
+        perhash,
+        trans_init,
+        trans_typ,
+        ..
+    } = node;
     let ph = perhash.as_mut().expect("hashed Agg has perhash");
-    let ch = ph.compact.as_mut().expect("compact batch requires an armed table");
+    let ch = ph
+        .compact
+        .as_mut()
+        .expect("compact batch requires an armed table");
     debug_assert!(matches!(&ch.key, CompactKeySpec::Multi(s) if s.two_words));
     let avgpack_mask = ch.avgpack_mask;
     if mkaccept_fused() {
         // Fused state lane — see the mk1 twin.
-        let CompactHash { table, hashes, new_rows, .. } = &mut *ch;
+        let CompactHash {
+            table,
+            hashes,
+            new_rows,
+            ..
+        } = &mut *ch;
         new_rows.clear();
         let mut raw = groups_take_raw(groups);
-        table.probe_i128_batch(keys, ::lanetable::PrefetchMode::Adaptive, hashes, &mut raw, new_rows);
+        table.probe_i128_batch(
+            keys,
+            ::lanetable::PrefetchMode::Adaptive,
+            hashes,
+            &mut raw,
+            new_rows,
+        );
         groups_restore(groups, raw);
-        seed_new_groups(aggctx, trans_init, trans_typ, groups_ptr_slice(groups), new_rows, avgpack_mask)?;
+        seed_new_groups(
+            aggctx,
+            trans_init,
+            trans_typ,
+            groups_ptr_slice(groups),
+            new_rows,
+            avgpack_mask,
+        )?;
     } else {
-        let CompactHash { table, states, hashes, new_rows, .. } = &mut *ch;
+        let CompactHash {
+            table,
+            states,
+            hashes,
+            new_rows,
+            ..
+        } = &mut *ch;
         states.clear();
         new_rows.clear();
         groups.clear();
-        table.probe_i128_batch(keys, ::lanetable::PrefetchMode::Adaptive, hashes, states, new_rows);
-        seed_new_groups(aggctx, trans_init, trans_typ, states, new_rows, avgpack_mask)?;
+        table.probe_i128_batch(
+            keys,
+            ::lanetable::PrefetchMode::Adaptive,
+            hashes,
+            states,
+            new_rows,
+        );
+        seed_new_groups(
+            aggctx,
+            trans_init,
+            trans_typ,
+            states,
+            new_rows,
+            avgpack_mask,
+        )?;
         groups.extend(states.iter().map(|&s| {
             // SAFETY: probe never returns null state pointers.
             unsafe { NonNull::new_unchecked(s.cast::<AggPerGroup>()) }
@@ -1704,7 +1927,10 @@ fn compact_key_datums_red(
 ) {
     out.clear();
     match ch.table.row_key_int(row) {
-        None => out.extend(core::iter::repeat_n((Datum::null(), true), shape.keys.len())),
+        None => out.extend(core::iter::repeat_n(
+            (Datum::null(), true),
+            shape.keys.len(),
+        )),
         Some(rep) => out.extend(shape.keys.iter().map(|d| {
             let v = d.map_or(rep, |d| d.eval(rep));
             debug_assert!(
@@ -1738,9 +1964,14 @@ pub(crate) fn mk_unpack(words: [u64; 2], comp: &MkComp) -> u64 {
 #[inline]
 pub(crate) fn mk_row_words(ch: &CompactHash, shape: &MkShape, row: usize) -> [u64; 2] {
     if shape.two_words {
-        ch.table.row_key_i128(row).expect("multi-key tables have no NULL row")
+        ch.table
+            .row_key_i128(row)
+            .expect("multi-key tables have no NULL row")
     } else {
-        let k = ch.table.row_key_int(row).expect("multi-key tables have no NULL row");
+        let k = ch
+            .table
+            .row_key_int(row)
+            .expect("multi-key tables have no NULL row");
         [k as u64, 0]
     }
 }
@@ -1749,10 +1980,14 @@ pub(crate) fn mk_row_words(ch: &CompactHash, shape: &MkShape, row: usize) -> [u6
 /// reverse map is the intern table's key arena). The image is forgotten into
 /// the context (bulk-freed at its reset — docs/no-drop.md).
 fn mk_intern_datum(ch: &CompactHash, id: u32, mcx: ::mcx::Mcx<'_>) -> PgResult<Datum> {
-    let t = ch.intern.as_ref().expect("intern component requires the intern table");
+    let t = ch
+        .intern
+        .as_ref()
+        .expect("intern component requires the intern table");
     let mut scratch = [0u8; 8];
-    let bytes =
-        t.row_key_bytes(id as usize, &mut scratch).expect("intern ids never map to a NULL row");
+    let bytes = t
+        .row_key_bytes(id as usize, &mut scratch)
+        .expect("intern ids never map to a NULL row");
     let v = ::varlena::cstring_to_text(mcx, bytes)?;
     let d = Datum::from_usize(v.as_bytes().as_ptr() as usize);
     core::mem::forget(v.into_image());
@@ -1815,7 +2050,10 @@ pub fn mk_numeric_i64_bits(v: i64, width: u8) -> Option<u64> {
         return None;
     }
     Some(mk_numeric_key_bits(
-        ::adt_numeric::NumericKeyForm::Finite { mantissa: m, exp10: e },
+        ::adt_numeric::NumericKeyForm::Finite {
+            mantissa: m,
+            exp10: e,
+        },
         width,
     ))
 }
@@ -1836,7 +2074,10 @@ pub(crate) fn mk_numeric_key_decode(bits: u64, width: u8) -> ::adt_numeric::Nume
     }
     // Sign-extend the mantissa from its `shift`-bit field.
     let m = ((mant_bits << (64 - shift)) as i64) >> (64 - shift);
-    K::Finite { mantissa: m, exp10: e as i32 }
+    K::Finite {
+        mantissa: m,
+        exp10: e as i32,
+    }
 }
 
 /// Pack a live numeric varlena datum into its `width`-byte component bits.
@@ -1873,7 +2114,10 @@ fn mk_numeric_datum_key(
             return None;
         }
         // SAFETY: 1B-header varlena of `total` bytes including the header.
-        (unsafe { core::slice::from_raw_parts(p.add(1), total - 1) }, true)
+        (
+            unsafe { core::slice::from_raw_parts(p.add(1), total - 1) },
+            true,
+        )
     } else {
         if b0 & 0x03 != 0 {
             // Compressed inline: unpackable (never staged today; belt).
@@ -1886,7 +2130,7 @@ fn mk_numeric_datum_key(
     if src.len() < 2 {
         return None;
     }
-    let payload: &[u8] = if must_copy || src.as_ptr() as usize % 2 != 0 {
+    let payload: &[u8] = if must_copy || !(src.as_ptr() as usize).is_multiple_of(2) {
         // Realign into the stack scratch: `Num::digits` requires 2-byte
         // alignment and short-header payloads are misaligned by
         // construction. Anything larger than the scratch has ndigits far
@@ -1895,9 +2139,8 @@ fn mk_numeric_datum_key(
             return None;
         }
         // SAFETY: buf is 128 bytes, 2-aligned; src.len() <= 128.
-        let dst = unsafe {
-            core::slice::from_raw_parts_mut(buf.as_mut_ptr().cast::<u8>(), src.len())
-        };
+        let dst =
+            unsafe { core::slice::from_raw_parts_mut(buf.as_mut_ptr().cast::<u8>(), src.len()) };
         dst.copy_from_slice(src);
         dst
     } else {
@@ -1945,7 +2188,11 @@ fn compact_key_datums_mk(
         let d = match comp.kind {
             MkCompKind::Int { width } => {
                 let sh = 64 - width as u32 * 8;
-                let v = if sh == 0 { bits as i64 } else { ((bits << sh) as i64) >> sh };
+                let v = if sh == 0 {
+                    bits as i64
+                } else {
+                    ((bits << sh) as i64) >> sh
+                };
                 match width {
                     2 => Datum::from_i16(v as i16),
                     4 => Datum::from_i32(v as i32),
@@ -2052,7 +2299,11 @@ fn compact_migrate<'mcx>(
     // costs nothing and removes a use-after-free shape. Per the debug-assert
     // masking law an invariant this load-bearing cannot be enforced by a check
     // that compiles out.
-    if node.perhash.as_ref().is_some_and(|ph| ph.sink_cap.is_some()) {
+    if node
+        .perhash
+        .as_ref()
+        .is_some_and(|ph| ph.sink_cap.is_some())
+    {
         return Err(crate::sink::sink_shape_error(
             "compact table migration on a sink build (state blocks are not self-contained)",
         ));
@@ -2060,16 +2311,28 @@ fn compact_migrate<'mcx>(
     // SAFETY: read of the once-allocated node; no &mut to it is live.
     let aggctx = unsafe { node.agg_node.as_ref() }.aggcontext();
     let ph = node.perhash.as_mut().expect("hashed Agg has perhash");
-    let ch = ph.compact.take().expect("migration requires an armed table");
+    let ch = ph
+        .compact
+        .take()
+        .expect("migration requires an armed table");
     // Now guaranteed by the release refusal above (kept as a tripwire in case
     // the two ever drift): packed inline states exist only on sink builds.
-    debug_assert_eq!(ch.avgpack_mask, 0, "packed avgpack states in a compact migration");
-    debug_assert!(ch.str_arena.is_none(), "table-owned str store in a compact migration");
+    debug_assert_eq!(
+        ch.avgpack_mask, 0,
+        "packed avgpack states in a compact migration"
+    );
+    debug_assert!(
+        ch.str_arena.is_none(),
+        "table-owned str store in a compact migration"
+    );
     {
         // Same switch as lanev2's trace helpers (observability only).
         static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
         if *ON.get_or_init(|| {
-            matches!(std::env::var("PGRUST_LANE_V2_TRACE").as_deref(), Ok("1") | Ok("on"))
+            matches!(
+                std::env::var("PGRUST_LANE_V2_TRACE").as_deref(),
+                Ok("1") | Ok("on")
+            )
         }) {
             eprintln!(
                 "[lanev2] compact table migrating to C tuplehash ({} groups, {} bytes)",
@@ -2095,7 +2358,9 @@ fn compact_migrate<'mcx>(
         )?;
         let hash = ph.hashtable.hash_slot(&mut ph.hashslot)?;
         let table_mcx = ph.table_ctx.mcx();
-        let (ix, isnew) = ph.hashtable.lookup(&mut ph.hashslot, hash, Some(table_mcx), mcx)?;
+        let (ix, isnew) = ph
+            .hashtable
+            .lookup(&mut ph.hashslot, hash, Some(table_mcx), mcx)?;
         let ix = ix.expect("non-spill-mode lookup always yields an entry");
         debug_assert!(isnew, "compact rows are distinct groups");
         ph.hash_ngroups_current += 1;
@@ -2128,7 +2393,9 @@ mod numeric_key_tests {
     use super::*;
 
     fn image(s: &str) -> ::adt_numeric::NumericImage {
-        ::adt_numeric::numeric_in(s, -1, None).expect("parse").expect("non-soft parse")
+        ::adt_numeric::numeric_in(s, -1, None)
+            .expect("parse")
+            .expect("non-soft parse")
     }
 
     fn datum_of(bytes: &[u8]) -> Datum {
@@ -2140,8 +2407,19 @@ mod numeric_key_tests {
         let owner = ::mcx::MemoryContext::new_bump("numeric-key-test");
         let mcx = owner.mcx();
         for w in [4u8, 8] {
-            for s in ["0", "1", "-1", "59", "1.5", "-0.07", "8388607", "-8388607", "NaN",
-                      "Infinity", "-Infinity"] {
+            for s in [
+                "0",
+                "1",
+                "-1",
+                "59",
+                "1.5",
+                "-0.07",
+                "8388607",
+                "-8388607",
+                "NaN",
+                "Infinity",
+                "-Infinity",
+            ] {
                 let img = image(s);
                 let bits = mk_numeric_datum_bits(datum_of(img.as_bytes()), w)
                     .unwrap_or_else(|| panic!("{s} must pack at width {w}"));
@@ -2166,7 +2444,11 @@ mod numeric_key_tests {
     fn non_minimal_display_scale_refuses() {
         for s in ["1.0", "1.50", "0.00"] {
             let img = image(s);
-            assert_eq!(mk_numeric_datum_bits(datum_of(img.as_bytes()), 8), None, "{s}");
+            assert_eq!(
+                mk_numeric_datum_bits(datum_of(img.as_bytes()), 8),
+                None,
+                "{s}"
+            );
         }
     }
 
@@ -2192,14 +2474,32 @@ mod numeric_key_tests {
         // the width-4/8 range gates, and a deterministic sweep.
         let mut cases: Vec<i64> = (-70..=70).collect();
         cases.extend_from_slice(&[
-            100, -100, 1000, 9999, 10000, 123450, 8388600, 8388607, 8388608, -8388607,
-            -8388608, 83886070, 83886080, i64::MAX, i64::MIN, i64::MIN + 1,
+            100,
+            -100,
+            1000,
+            9999,
+            10000,
+            123450,
+            8388600,
+            8388607,
+            8388608,
+            -8388607,
+            -8388608,
+            83886070,
+            83886080,
+            i64::MAX,
+            i64::MIN,
+            i64::MIN + 1,
         ]);
         let mut x: u64 = 0x243f6a8885a308d3;
         for _ in 0..2000 {
-            x = x.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            x = x
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             cases.push(x as i64);
-            x = x.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            x = x
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             cases.push((x as i64) % 10_000);
         }
         for w in [4u8, 8] {
@@ -2214,7 +2514,17 @@ mod numeric_key_tests {
     #[test]
     fn distinct_values_pack_distinct_bits() {
         let mut seen = std::collections::HashSet::new();
-        for s in ["0", "1", "-1", "10", "0.1", "59", "NaN", "Infinity", "-Infinity"] {
+        for s in [
+            "0",
+            "1",
+            "-1",
+            "10",
+            "0.1",
+            "59",
+            "NaN",
+            "Infinity",
+            "-Infinity",
+        ] {
             let img = image(s);
             let bits = mk_numeric_datum_bits(datum_of(img.as_bytes()), 4).unwrap();
             assert!(seen.insert(bits), "distinct bits for {s}");
@@ -2238,14 +2548,26 @@ pub(crate) fn compact_retrieve_next<'mcx>(
     let mcx = estate.es_query_cxt;
     let ph = node.perhash.as_mut().expect("hashed Agg has perhash");
     let mut row = ph.hashiter as usize;
-    let nrows = ph.compact.as_ref().expect("compact retrieve requires the table").table.nrows();
+    let nrows = ph
+        .compact
+        .as_ref()
+        .expect("compact retrieve requires the table")
+        .table
+        .nrows();
     if let Some(c) = cut {
-        let table = &ph.compact.as_ref().expect("compact retrieve requires the table").table;
+        let table = &ph
+            .compact
+            .as_ref()
+            .expect("compact retrieve requires the table")
+            .table;
         while row < nrows {
             // SAFETY: the row's state block is the group's live AggPerGroup
             // array; transno < its length (resolve checked this node).
             let pg = unsafe {
-                &*table.row_states(row).cast::<AggPerGroup>().add(c.spec.transno as usize)
+                &*table
+                    .row_states(row)
+                    .cast::<AggPerGroup>()
+                    .add(c.spec.transno as usize)
             };
             if !c.skips(pg) {
                 break;
@@ -2262,7 +2584,10 @@ pub(crate) fn compact_retrieve_next<'mcx>(
     }
     ph.hashiter = row as u64 + 1;
     ::exectuples::exec_store_all_null_tuple(&mut ph.first_slot, mcx);
-    let ch = ph.compact.as_ref().expect("compact retrieve requires the table");
+    let ch = ph
+        .compact
+        .as_ref()
+        .expect("compact retrieve requires the table");
     match &ch.key {
         CompactKeySpec::Single { width } => {
             let (key, isnull) = match compact_key_datum(ch, *width, row) {
@@ -2301,7 +2626,9 @@ pub(crate) fn compact_retrieve_next<'mcx>(
         }
     }
     // SAFETY: the row's state block is the group's live AggPerGroup array.
-    Ok(Some(unsafe { NonNull::new_unchecked(ch.table.row_states(row).cast::<AggPerGroup>()) }))
+    Ok(Some(unsafe {
+        NonNull::new_unchecked(ch.table.row_states(row).cast::<AggPerGroup>())
+    }))
 }
 
 /// Rescan/reset hook: drop the compact table (the next build re-decides).
@@ -2340,7 +2667,10 @@ pub fn batch_emit_scan_block<'mcx>(
 ) -> PgResult<(u32, bool)> {
     estate.reset_expr_context(node.ps_ExprContext);
     let ph = node.perhash.as_mut().expect("hashed Agg has perhash");
-    let ch = ph.compact.as_ref().expect("batch emit requires the compact table");
+    let ch = ph
+        .compact
+        .as_ref()
+        .expect("batch emit requires the compact table");
     let nrows = ch.table.nrows();
     let mut row = ph.hashiter as usize;
     plan.idx.clear();
@@ -2351,7 +2681,10 @@ pub fn batch_emit_scan_block<'mcx>(
             // SAFETY: the row's state block is the group's live AggPerGroup
             // array; transno < its length (resolve checked this node).
             let pg = unsafe {
-                &*ch.table.row_states(row).cast::<AggPerGroup>().add(c.spec.transno as usize)
+                &*ch.table
+                    .row_states(row)
+                    .cast::<AggPerGroup>()
+                    .add(c.spec.transno as usize)
             };
             if c.skips(pg) {
                 *c.skipped += 1;
@@ -2374,7 +2707,9 @@ pub fn batch_emit_scan_block<'mcx>(
 #[inline(never)]
 fn bad_int8_transarray() -> Box<::types_error::PgError> {
     // int8_transarray's (numeric.c int8_avg family) exact error.
-    Box::new(::types_error::PgError::error("expected 2-element int8 array"))
+    Box::new(::types_error::PgError::error(
+        "expected 2-element int8 array",
+    ))
 }
 
 /// `int8_avg`'s transarray read without the fmgr frame: the SAME image
@@ -2431,8 +2766,7 @@ mod batch_emit_tests {
 
     fn transarray(count: i64, sum: i64) -> Aligned {
         let mut buf = [0u8; 40];
-        buf[0..4]
-            .copy_from_slice(&::types_tuple::varatt::set_varsize_4b_word(40).to_ne_bytes());
+        buf[0..4].copy_from_slice(&::types_tuple::varatt::set_varsize_4b_word(40).to_ne_bytes());
         buf[4..8].copy_from_slice(&1i32.to_ne_bytes()); // ndim
         buf[8..12].copy_from_slice(&0i32.to_ne_bytes()); // dataoffset (no nulls)
         buf[12..16].copy_from_slice(&20i32.to_ne_bytes()); // elemtype int8
@@ -2445,9 +2779,13 @@ mod batch_emit_tests {
 
     #[test]
     fn transarray_read_matches_layout() {
-        for (c, s) in
-            [(0, 0), (1, 5), (7, -123456789), (i64::MAX, i64::MIN), (1234567, 42)]
-        {
+        for (c, s) in [
+            (0, 0),
+            (1, 5),
+            (7, -123456789),
+            (i64::MAX, i64::MIN),
+            (1234567, 42),
+        ] {
             let img = transarray(c, s);
             let d = Datum::from_usize(img.0.as_ptr() as usize);
             // SAFETY: live, aligned int8[2] image.
@@ -2480,17 +2818,18 @@ mod batch_emit_tests {
         let mut img = transarray(1, 2);
         img.0[8..12].copy_from_slice(&24i32.to_ne_bytes());
         // SAFETY: live image.
-        assert!(unsafe { int8_avg_trans_read(Datum::from_usize(img.0.as_ptr() as usize)) }
-            .is_err());
+        assert!(
+            unsafe { int8_avg_trans_read(Datum::from_usize(img.0.as_ptr() as usize)) }.is_err()
+        );
         // Wrong size (not exactly 2 int8 elements).
         #[repr(align(8))]
         struct Big([u8; 48]);
         let mut big = Big([0u8; 48]);
-        big.0[0..4]
-            .copy_from_slice(&::types_tuple::varatt::set_varsize_4b_word(48).to_ne_bytes());
+        big.0[0..4].copy_from_slice(&::types_tuple::varatt::set_varsize_4b_word(48).to_ne_bytes());
         // SAFETY: live image.
-        assert!(unsafe { int8_avg_trans_read(Datum::from_usize(big.0.as_ptr() as usize)) }
-            .is_err());
+        assert!(
+            unsafe { int8_avg_trans_read(Datum::from_usize(big.0.as_ptr() as usize)) }.is_err()
+        );
     }
 
     /// The batched avg kernel composition (reader → int64_avg_div) feeds the
@@ -2499,9 +2838,13 @@ mod batch_emit_tests {
     /// differential corpus).
     #[test]
     fn avg_int8_kernel_reader_operand_parity() {
-        for (c, s) in
-            [(1i64, 0i64), (3, 10), (7, -22), (9, i64::MAX / 2), (1_000_000, 999_999)]
-        {
+        for (c, s) in [
+            (1i64, 0i64),
+            (3, 10),
+            (7, -22),
+            (9, i64::MAX / 2),
+            (1_000_000, 999_999),
+        ] {
             let arr = transarray(c, s);
             // SAFETY: live, aligned image.
             let (rc, rs) =
@@ -2533,9 +2876,17 @@ pub fn batch_emit_row<'mcx>(
     let row = plan.idx[i as usize] as usize;
     let per_tuple = estate.ecxt(node.ps_ExprContext).per_tuple_mcx();
     {
-        let crate::BatchEmitPlan { cols, keyvals, vals, .. } = &mut *plan;
+        let crate::BatchEmitPlan {
+            cols,
+            keyvals,
+            vals,
+            ..
+        } = &mut *plan;
         let ph = node.perhash.as_mut().expect("hashed Agg has perhash");
-        let ch = ph.compact.as_ref().expect("batch emit requires the compact table");
+        let ch = ph
+            .compact
+            .as_ref()
+            .expect("batch emit requires the compact table");
         match &ch.key {
             CompactKeySpec::Single { width } => {
                 keyvals.clear();
@@ -2579,7 +2930,10 @@ pub fn batch_emit_row<'mcx>(
                             (Datum::null(), true)
                         } else {
                             let img = ::adt_numeric::ops::int64_avg_div(sum, count)?;
-                            (::types_fmgr::byref_result(per_tuple, img.as_bytes())?, false)
+                            (
+                                ::types_fmgr::byref_result(per_tuple, img.as_bytes())?,
+                                false,
+                            )
                         }
                     }
                 }
@@ -2602,9 +2956,10 @@ pub fn batch_emit_row<'mcx>(
                         _ => ::adt_numeric::aggregates::numeric_poly_sum(state)?,
                     };
                     match img {
-                        Some(img) => {
-                            (::types_fmgr::byref_result(per_tuple, img.as_bytes())?, false)
-                        }
+                        Some(img) => (
+                            ::types_fmgr::byref_result(per_tuple, img.as_bytes())?,
+                            false,
+                        ),
                         None => (Datum::null(), true),
                     }
                 }
@@ -2686,14 +3041,18 @@ pub fn topk_finalize_select(
     spec: crate::TopnEmitSpec,
     k: usize,
 ) -> PgResult<Option<(Vec<u32>, u64)>> {
-    let Some(ph) = node.perhash.as_ref() else { return Ok(None) };
+    let Some(ph) = node.perhash.as_ref() else {
+        return Ok(None);
+    };
     if ph.hashiter != 0 {
         // A partially-drained emit cursor: the remaining groups are no longer
         // "all groups", so selection over 0..nrows would be wrong. (The lane
         // feeds drain in one call; this is a belt-and-braces guard.)
         return Ok(None);
     }
-    let Some(ch) = ph.compact.as_ref() else { return Ok(None) };
+    let Some(ch) = ph.compact.as_ref() else {
+        return Ok(None);
+    };
     let nrows = ch.table.nrows();
     let k = k.min(nrows);
     // Max-heap of (badness, row): the root is the WORST kept group, ties on
@@ -2707,7 +3066,10 @@ pub fn topk_finalize_select(
         // SAFETY: the row's state block is the group's live AggPerGroup
         // array; transno < its length (topn_emit_resolve checked this node).
         let pg = unsafe {
-            &*ch.table.row_states(row).cast::<AggPerGroup>().add(spec.transno as usize)
+            &*ch.table
+                .row_states(row)
+                .cast::<AggPerGroup>()
+                .add(spec.transno as usize)
         };
         if pg.no_trans_value || pg.trans_value_is_null {
             return Ok(None);
@@ -2749,8 +3111,12 @@ pub fn batch_emit_set_block<'mcx>(
 /// and flip `agg_done`, exactly where a full block walk would have left them.
 pub fn agg_emit_mark_drained(node: &mut AggStateData<'_>) {
     let ph = node.perhash.as_mut().expect("hashed Agg has perhash");
-    ph.hashiter =
-        ph.compact.as_ref().expect("topkfin requires the compact table").table.nrows() as u64;
+    ph.hashiter = ph
+        .compact
+        .as_ref()
+        .expect("topkfin requires the compact table")
+        .table
+        .nrows() as u64;
     node.agg_done = true;
 }
 

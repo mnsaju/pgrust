@@ -9,28 +9,28 @@
 
 #![allow(non_snake_case)]
 
+use adt_datetime::consts::TZDISP_LIMIT;
 use adt_datetime::tz::{self};
 use adt_datetime::{
     date2isoweek, date2isoyear, date2j, fsec_t, j2date, j2day, pg_tm, DateTimeErrorExtra,
-    DateTimeParseError, DecodeDateTime, DecodeSpecial, DecodeTimeOnly, DecodeUnits,
-    EncodeDateOnly, EncodeTimeOnly, Interval, ParseDateTime, Timestamp, TimeOffset,
-    ValidateDate, DTERR_BAD_FORMAT, DTK_CENTURY, DTK_DATE, DTK_DATE_M, DTK_DAY, DTK_DECADE,
-    DTK_DOW, DTK_DOY, DTK_EARLY, DTK_EPOCH, DTK_HOUR, DTK_ISODOW, DTK_ISOYEAR, DTK_JULIAN,
-    DTK_LATE, DTK_MICROSEC, DTK_MILLENNIUM, DTK_MILLISEC, DTK_MINUTE, DTK_MONTH, DTK_QUARTER,
-    DTK_SECOND, DTK_TZ, DTK_TZ_HOUR, DTK_TZ_MINUTE, DTK_WEEK, DTK_YEAR, IS_VALID_JULIAN,
-    MAXDATEFIELDS, MAXDATELEN, MAX_TIME_PRECISION, MINS_PER_HOUR, POSTGRES_EPOCH_JDATE, RESERV,
-    SECS_PER_DAY, SECS_PER_HOUR, SECS_PER_MINUTE, UNITS, UNIX_EPOCH_JDATE, UNKNOWN_FIELD,
-    USECS_PER_DAY, USECS_PER_HOUR, USECS_PER_MINUTE, USECS_PER_SEC,
+    DateTimeParseError, DecodeDateTime, DecodeSpecial, DecodeTimeOnly, DecodeUnits, EncodeDateOnly,
+    EncodeTimeOnly, Interval, ParseDateTime, TimeOffset, Timestamp, ValidateDate, DTERR_BAD_FORMAT,
+    DTK_CENTURY, DTK_DATE, DTK_DATE_M, DTK_DAY, DTK_DECADE, DTK_DOW, DTK_DOY, DTK_EARLY, DTK_EPOCH,
+    DTK_HOUR, DTK_ISODOW, DTK_ISOYEAR, DTK_JULIAN, DTK_LATE, DTK_MICROSEC, DTK_MILLENNIUM,
+    DTK_MILLISEC, DTK_MINUTE, DTK_MONTH, DTK_QUARTER, DTK_SECOND, DTK_TZ, DTK_TZ_HOUR,
+    DTK_TZ_MINUTE, DTK_WEEK, DTK_YEAR, IS_VALID_JULIAN, MAXDATEFIELDS, MAXDATELEN,
+    MAX_TIME_PRECISION, MINS_PER_HOUR, POSTGRES_EPOCH_JDATE, RESERV, SECS_PER_DAY, SECS_PER_HOUR,
+    SECS_PER_MINUTE, UNITS, UNIX_EPOCH_JDATE, UNKNOWN_FIELD, USECS_PER_DAY, USECS_PER_HOUR,
+    USECS_PER_MINUTE, USECS_PER_SEC,
 };
 use adt_timestamp::{
     interval, timestamp2tm, DecodeTimezoneName, DetermineTimeZoneAbbrevOffsetTS, GetEpochTime,
     PartValue, TzLookup, DT_NOBEGIN, DT_NOEND, IS_VALID_TIMESTAMP, MIN_TIMESTAMP,
     TIMESTAMP_IS_NOBEGIN, TIMESTAMP_IS_NOEND, TIMESTAMP_NOT_FINITE,
 };
-use numeric::{int64_div_fast_to_numeric, int64_to_numeric, numeric_in};
-use adt_datetime::consts::TZDISP_LIMIT;
 use datum::Bytea;
 use mcx::Mcx;
+use numeric::{int64_div_fast_to_numeric, int64_to_numeric, numeric_in};
 use stringinfo::StringInfo;
 use types_core::TimestampTz;
 use types_error::{
@@ -124,8 +124,7 @@ fn date_out_of_range(s: &str) -> Box<PgError> {
 #[cold]
 fn timestamp_out_of_range() -> Box<PgError> {
     Box::new(
-        PgError::error("timestamp out of range")
-            .with_sqlstate(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+        PgError::error("timestamp out of range").with_sqlstate(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
     )
 }
 
@@ -188,10 +187,21 @@ fn decode_str(
     let mut field: [&[u8]; MAXDATEFIELDS] = [b""; MAXDATEFIELDS];
     let mut ftype = [0i32; MAXDATEFIELDS];
     let mut nf = 0usize;
-    let mut d = Decoded { dtype: 0, tm: pg_tm::default(), fsec: 0, tz: 0 };
+    let mut d = Decoded {
+        dtype: 0,
+        tm: pg_tm::default(),
+        fsec: 0,
+        tz: 0,
+    };
 
-    let mut dterr =
-        ParseDateTime(s.as_bytes(), workbuf, &mut field, &mut ftype, MAXDATEFIELDS, &mut nf);
+    let mut dterr = ParseDateTime(
+        s.as_bytes(),
+        workbuf,
+        &mut field,
+        &mut ftype,
+        MAXDATEFIELDS,
+        &mut nf,
+    );
     let mut extra = DateTimeErrorExtra::default();
     if dterr == 0 {
         dterr = if time_only {
@@ -287,7 +297,12 @@ pub fn date_out(date: DateADT, buf: &mut DateBuf) -> usize {
 }
 
 pub fn make_date(year: i32, month: i32, day: i32) -> PgResult<DateADT> {
-    let mut tm = pg_tm { tm_year: year, tm_mon: month, tm_mday: day, ..pg_tm::default() };
+    let mut tm = pg_tm {
+        tm_year: year,
+        tm_mon: month,
+        tm_mday: day,
+        ..pg_tm::default()
+    };
     let mut bc = false;
 
     #[track_caller]
@@ -361,9 +376,7 @@ pub fn date_mi(d1: DateADT, d2: DateADT) -> PgResult<i32> {
 #[track_caller]
 #[cold]
 fn date_out_of_range_plain() -> Box<PgError> {
-    Box::new(
-        PgError::error("date out of range").with_sqlstate(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
-    )
+    Box::new(PgError::error("date out of range").with_sqlstate(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE))
 }
 
 pub fn date_pli(date: DateADT, days: i32) -> PgResult<DateADT> {
@@ -371,7 +384,12 @@ pub fn date_pli(date: DateADT, days: i32) -> PgResult<DateADT> {
         return Ok(date);
     }
     let result = date.wrapping_add(days);
-    if (if days >= 0 { result < date } else { result > date }) || !IS_VALID_DATE(result) {
+    if (if days >= 0 {
+        result < date
+    } else {
+        result > date
+    }) || !IS_VALID_DATE(result)
+    {
         return Err(date_out_of_range_plain());
     }
     Ok(result)
@@ -382,7 +400,12 @@ pub fn date_mii(date: DateADT, days: i32) -> PgResult<DateADT> {
         return Ok(date);
     }
     let result = date.wrapping_sub(days);
-    if (if days >= 0 { result > date } else { result < date }) || !IS_VALID_DATE(result) {
+    if (if days >= 0 {
+        result > date
+    } else {
+        result < date
+    }) || !IS_VALID_DATE(result)
+    {
         return Err(date_out_of_range_plain());
     }
     Ok(result)
@@ -449,8 +472,9 @@ pub fn date2timestamptz_opt_overflow(
     tm.tm_hour = 0;
     tm.tm_min = 0;
     tm.tm_sec = 0;
-    let z = tz::session_timezone()
-        .unwrap_or_else(|| panic!("session timezone not initialized (pg_timezone_initialize) — date2timestamptz"));
+    let z = tz::session_timezone().unwrap_or_else(|| {
+        panic!("session timezone not initialized (pg_timezone_initialize) — date2timestamptz")
+    });
     let tzoff = tz::DetermineTimeZoneOffset(&mut tm, z);
 
     let result = date as i64 * USECS_PER_DAY + tzoff as i64 * USECS_PER_SEC;
@@ -583,8 +607,7 @@ pub fn datetimetz_timestamptz(date: DateADT, time: &TimeTzADT) -> PgResult<Times
 }
 
 pub fn tm2time(tm: &pg_tm, fsec: fsec_t) -> TimeADT {
-    ((tm.tm_hour * MINS_PER_HOUR + tm.tm_min) * SECS_PER_MINUTE + tm.tm_sec) as i64
-        * USECS_PER_SEC
+    ((tm.tm_hour * MINS_PER_HOUR + tm.tm_min) * SECS_PER_MINUTE + tm.tm_sec) as i64 * USECS_PER_SEC
         + fsec as i64
 }
 
@@ -632,8 +655,10 @@ pub fn make_time(hour: i32, min: i32, sec: f64) -> PgResult<TimeADT> {
         // PG's snprintf %g (Infinity/NaN spellings, precision 6).
         let sec = adt_datetime::errors::fmt_sec_g02(sec);
         return Err(Box::new(
-            PgError::error(format!("time field value out of range: {hour}:{min:02}:{sec}"))
-                .with_sqlstate(ERRCODE_DATETIME_FIELD_OVERFLOW),
+            PgError::error(format!(
+                "time field value out of range: {hour}:{min:02}:{sec}"
+            ))
+            .with_sqlstate(ERRCODE_DATETIME_FIELD_OVERFLOW),
         ));
     }
     Ok(
@@ -675,7 +700,7 @@ pub fn anytime_typmod_check(istz: bool, typmod: i32) -> PgResult<i32> {
 }
 
 pub fn AdjustTimeForTypmod(time: &mut TimeADT, typmod: i32) {
-    if typmod >= 0 && typmod <= MAX_TIME_PRECISION {
+    if (0..=MAX_TIME_PRECISION).contains(&typmod) {
         let scale = TIME_SCALES[typmod as usize];
         let offset = TIME_OFFSETS[typmod as usize];
         if *time >= 0 {
@@ -808,8 +833,9 @@ pub fn time_timetz(time: TimeADT) -> TimeTzADT {
     let mut fsec: fsec_t = 0;
     tz::GetCurrentDateTime(&mut tm);
     time2tm(time, &mut tm, &mut fsec);
-    let z = tz::session_timezone()
-        .unwrap_or_else(|| panic!("session timezone not initialized (pg_timezone_initialize) — time_timetz"));
+    let z = tz::session_timezone().unwrap_or_else(|| {
+        panic!("session timezone not initialized (pg_timezone_initialize) — time_timetz")
+    });
     let tzoff = tz::DetermineTimeZoneOffset(&mut tm, z);
     TimeTzADT { time, zone: tzoff }
 }
@@ -908,7 +934,7 @@ pub fn date_send<'mcx>(mcx: Mcx<'mcx>, date: DateADT) -> PgResult<Bytea<'mcx>> {
 
 pub fn time_recv(buf: &mut StringInfo<'_>, typmod: i32) -> PgResult<TimeADT> {
     let mut result = pqformat::pq_getmsgint64(buf)?;
-    if result < 0 || result > USECS_PER_DAY {
+    if !(0..=USECS_PER_DAY).contains(&result) {
         return Err(datetime_out_of_range("time out of range"));
     }
     AdjustTimeForTypmod(&mut result, typmod);
@@ -923,7 +949,7 @@ pub fn time_send<'mcx>(mcx: Mcx<'mcx>, time: TimeADT) -> PgResult<Bytea<'mcx>> {
 
 pub fn timetz_recv(buf: &mut StringInfo<'_>, typmod: i32) -> PgResult<TimeTzADT> {
     let mut time = pqformat::pq_getmsgint64(buf)?;
-    if time < 0 || time > USECS_PER_DAY {
+    if !(0..=USECS_PER_DAY).contains(&time) {
         return Err(datetime_out_of_range("time out of range"));
     }
     let zone = pqformat::pq_getmsgint(buf, 4)? as i32;
@@ -960,7 +986,11 @@ pub fn date_mi_interval(date: DateADT, span: &Interval) -> PgResult<Timestamp> {
 }
 
 pub fn time_interval(time: TimeADT) -> Interval {
-    Interval { time, day: 0, month: 0 }
+    Interval {
+        time,
+        day: 0,
+        month: 0,
+    }
 }
 
 /// Fractional-day portion of the interval; negatives wrap ('-2 hours' -> 22:00).
@@ -979,7 +1009,11 @@ pub fn interval_time(span: &Interval) -> PgResult<TimeADT> {
 }
 
 pub fn time_mi_time(time1: TimeADT, time2: TimeADT) -> Interval {
-    Interval { time: time1 - time2, day: 0, month: 0 }
+    Interval {
+        time: time1 - time2,
+        day: 0,
+        month: 0,
+    }
 }
 
 #[track_caller]
@@ -991,7 +1025,9 @@ fn infinite_interval_time_err(msg: &'static str) -> Box<PgError> {
 
 pub fn time_pl_interval(time: TimeADT, span: &Interval) -> PgResult<TimeADT> {
     if span.not_finite() {
-        return Err(infinite_interval_time_err("cannot add infinite interval to time"));
+        return Err(infinite_interval_time_err(
+            "cannot add infinite interval to time",
+        ));
     }
     let mut result = time.wrapping_add(span.time);
     result -= result / USECS_PER_DAY * USECS_PER_DAY;
@@ -1003,7 +1039,9 @@ pub fn time_pl_interval(time: TimeADT, span: &Interval) -> PgResult<TimeADT> {
 
 pub fn time_mi_interval(time: TimeADT, span: &Interval) -> PgResult<TimeADT> {
     if span.not_finite() {
-        return Err(infinite_interval_time_err("cannot subtract infinite interval from time"));
+        return Err(infinite_interval_time_err(
+            "cannot subtract infinite interval from time",
+        ));
     }
     let mut result = time.wrapping_sub(span.time);
     result -= result / USECS_PER_DAY * USECS_PER_DAY;
@@ -1015,26 +1053,36 @@ pub fn time_mi_interval(time: TimeADT, span: &Interval) -> PgResult<TimeADT> {
 
 pub fn timetz_pl_interval(time: &TimeTzADT, span: &Interval) -> PgResult<TimeTzADT> {
     if span.not_finite() {
-        return Err(infinite_interval_time_err("cannot add infinite interval to time"));
+        return Err(infinite_interval_time_err(
+            "cannot add infinite interval to time",
+        ));
     }
     let mut t = time.time.wrapping_add(span.time);
     t -= t / USECS_PER_DAY * USECS_PER_DAY;
     if t < 0 {
         t += USECS_PER_DAY;
     }
-    Ok(TimeTzADT { time: t, zone: time.zone })
+    Ok(TimeTzADT {
+        time: t,
+        zone: time.zone,
+    })
 }
 
 pub fn timetz_mi_interval(time: &TimeTzADT, span: &Interval) -> PgResult<TimeTzADT> {
     if span.not_finite() {
-        return Err(infinite_interval_time_err("cannot subtract infinite interval from time"));
+        return Err(infinite_interval_time_err(
+            "cannot subtract infinite interval from time",
+        ));
     }
     let mut t = time.time.wrapping_sub(span.time);
     t -= t / USECS_PER_DAY * USECS_PER_DAY;
     if t < 0 {
         t += USECS_PER_DAY;
     }
-    Ok(TimeTzADT { time: t, zone: time.zone })
+    Ok(TimeTzADT {
+        time: t,
+        zone: time.zone,
+    })
 }
 
 // C99 modulo has the wrong sign convention for negative input (C comment).
@@ -1089,8 +1137,9 @@ pub fn timetz_izone(zone: &Interval, time: &TimeTzADT) -> PgResult<TimeTzADT> {
 }
 
 pub fn timetz_at_local(t: &TimeTzADT) -> PgResult<TimeTzADT> {
-    let z = tz::session_timezone()
-        .unwrap_or_else(|| panic!("session timezone not initialized (pg_timezone_initialize) — timetz_at_local"));
+    let z = tz::session_timezone().unwrap_or_else(|| {
+        panic!("session timezone not initialized (pg_timezone_initialize) — timetz_at_local")
+    });
     let tzn = tz::pg_get_timezone_name(z).unwrap_or("");
     timetz_zone(tzn.as_bytes(), t)
 }
@@ -1146,7 +1195,11 @@ pub fn extract_date(units: &[u8], date: DateADT) -> PgResult<PartValue> {
             // Monotonically-increasing units
             DTK_YEAR | DTK_DECADE | DTK_CENTURY | DTK_MILLENNIUM | DTK_JULIAN | DTK_ISOYEAR
             | DTK_EPOCH => {
-                let lit = if DATE_IS_NOBEGIN(date) { "-Infinity" } else { "Infinity" };
+                let lit = if DATE_IS_NOBEGIN(date) {
+                    "-Infinity"
+                } else {
+                    "Infinity"
+                };
                 Ok(PartValue::Numeric(
                     numeric_in(lit, -1, None)?.expect("infinity literal parses"),
                 ))
@@ -1299,11 +1352,7 @@ pub fn time_part_common(units: &[u8], time: TimeADT, retnumeric: bool) -> PgResu
     }
 }
 
-pub fn timetz_part_common(
-    units: &[u8],
-    time: &TimeTzADT,
-    retnumeric: bool,
-) -> PgResult<PartValue> {
+pub fn timetz_part_common(units: &[u8], time: &TimeTzADT, retnumeric: bool) -> PgResult<PartValue> {
     let mut low = [0u8; 64];
     let lowunits = downcase_ident(units, &mut low);
 
@@ -1320,9 +1369,10 @@ pub fn timetz_part_common(
         timetz2tm(time, &mut tm, &mut fsec, Some(&mut tz));
         match val {
             DTK_TZ => Ok(finish_time_part(-tz as i64, retnumeric)),
-            DTK_TZ_MINUTE => {
-                Ok(finish_time_part(((-tz / SECS_PER_MINUTE) % MINS_PER_HOUR) as i64, retnumeric))
-            }
+            DTK_TZ_MINUTE => Ok(finish_time_part(
+                ((-tz / SECS_PER_MINUTE) % MINS_PER_HOUR) as i64,
+                retnumeric,
+            )),
             DTK_TZ_HOUR => Ok(finish_time_part((-tz / SECS_PER_HOUR) as i64, retnumeric)),
             _ => match part_units_time(val, tm.tm_sec, fsec, tm.tm_min, tm.tm_hour, retnumeric)? {
                 Some(v) => Ok(v),
@@ -1336,7 +1386,9 @@ pub fn timetz_part_common(
                 6,
             )?))
         } else {
-            Ok(PartValue::Float(time.time as f64 / 1_000_000.0 + time.zone as f64))
+            Ok(PartValue::Float(
+                time.time as f64 / 1_000_000.0 + time.zone as f64,
+            ))
         }
     } else {
         Err(unit_not_recognized(lowunits, "time with time zone"))

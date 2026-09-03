@@ -1,10 +1,9 @@
 //! digest() and hmac() over PG's in-tree reference hashes (pg_md5/pg_sha1/
 //! pg_sha2). Byte-identical to the C non-OpenSSL build.
 
-// C's px_find_digest name -> (digest_len, hmac block_size).
+// C's px_find_digest name -> hmac block_size.
 struct HashAlgo {
     which: Which,
-    digest_len: usize,
     block_size: usize,
 }
 
@@ -18,16 +17,16 @@ enum Which {
 }
 
 fn find_digest(name: &str) -> Option<HashAlgo> {
-    let (which, digest_len, block_size) = match name.to_ascii_lowercase().as_str() {
-        "md5" => (Which::Md5, 16, 64),
-        "sha1" => (Which::Sha1, 20, 64),
-        "sha224" => (Which::Sha224, 28, 64),
-        "sha256" => (Which::Sha256, 32, 64),
-        "sha384" => (Which::Sha384, 48, 128),
-        "sha512" => (Which::Sha512, 64, 128),
+    let (which, block_size) = match name.to_ascii_lowercase().as_str() {
+        "md5" => (Which::Md5, 64),
+        "sha1" => (Which::Sha1, 64),
+        "sha224" => (Which::Sha224, 64),
+        "sha256" => (Which::Sha256, 64),
+        "sha384" => (Which::Sha384, 128),
+        "sha512" => (Which::Sha512, 128),
         _ => return None,
     };
-    Some(HashAlgo { which, digest_len, block_size })
+    Some(HashAlgo { which, block_size })
 }
 
 fn hash_bytes(algo: &HashAlgo, data: &[u8]) -> Vec<u8> {
@@ -86,8 +85,14 @@ mod tests {
     // Oracle: SELECT digest('abc','<algo>') on C 18.
     #[test]
     fn digests() {
-        assert_eq!(hex(&digest("md5", b"abc").unwrap()), "900150983cd24fb0d6963f7d28e17f72");
-        assert_eq!(hex(&digest("sha1", b"abc").unwrap()), "a9993e364706816aba3e25717850c26c9cd0d89d");
+        assert_eq!(
+            hex(&digest("md5", b"abc").unwrap()),
+            "900150983cd24fb0d6963f7d28e17f72"
+        );
+        assert_eq!(
+            hex(&digest("sha1", b"abc").unwrap()),
+            "a9993e364706816aba3e25717850c26c9cd0d89d"
+        );
         assert_eq!(
             hex(&digest("sha256", b"abc").unwrap()),
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
@@ -96,7 +101,10 @@ mod tests {
 
     #[test]
     fn unknown_algo() {
-        assert_eq!(digest("crc32", b"abc").unwrap_err(), "Cannot use \"crc32\": No such hash algorithm");
+        assert_eq!(
+            digest("crc32", b"abc").unwrap_err(),
+            "Cannot use \"crc32\": No such hash algorithm"
+        );
     }
 
     // RFC 2104 A.2 / C: SELECT hmac('Hi There', '\x0b'*20, 'md5') style.

@@ -226,7 +226,11 @@ fn timed_park_woken_before_deadline_does_not_advance() {
     tb.join().unwrap();
     assert_eq!(got, Some(42));
     assert_eq!(sched.now_ns(), 0, "no advance: the wake beat the deadline");
-    assert!(!sched.dump_log().contains("Advance"), "{}", sched.dump_log());
+    assert!(
+        !sched.dump_log().contains("Advance"),
+        "{}",
+        sched.dump_log()
+    );
 }
 
 // --- G2: never-satisfied-predicate ceiling ------------------------------------
@@ -302,7 +306,11 @@ fn tls_teardown_rules_under_thread_churn() {
     let (dj, dt) = (done.clone(), done.clone());
     let tj = std::thread::spawn(move || {
         sj.enter(j);
-        assert_eq!(super::current_vpid(), Some(201), "rule 2: identity is the vpid");
+        assert_eq!(
+            super::current_vpid(),
+            Some(201),
+            "rule 2: identity is the vpid"
+        );
         let site = Location::caller();
         while !dj.load(Ordering::SeqCst) {
             router().block_on(site, OpClass::Join);
@@ -344,7 +352,9 @@ fn tls_teardown_rules_under_thread_churn() {
     let evs = plock(&events).clone();
     for vpid in [301, 302, 303] {
         assert_eq!(
-            evs.iter().filter(|e| **e == format!("teardown:{vpid}")).count(),
+            evs.iter()
+                .filter(|e| **e == format!("teardown:{vpid}"))
+                .count(),
             1,
             "exactly one teardown per churned thread: {evs:?}"
         );
@@ -352,9 +362,7 @@ fn tls_teardown_rules_under_thread_churn() {
 
     // Rule 2 negative: slot identity is the vpid — re-registering one
     // (live or exited) is a caller bug and panics.
-    let dup = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        sched.register(301, "dup")
-    }));
+    let dup = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| sched.register(301, "dup")));
     let msg = match dup {
         Err(p) => p
             .downcast_ref::<String>()
@@ -473,7 +481,10 @@ fn toy_corpus_same_seed_byte_identical_schedop() {
     let r3 = run_toy_corpus(0xC0FFEE);
     assert_eq!(r1, r2, "same seed => byte-identical SCHEDOP stream");
     assert_eq!(r2, r3, "same seed => byte-identical SCHEDOP stream (x3)");
-    assert!(r1.starts_with("SCHEDOP 0 "), "stream starts at seq 0:\n{r1}");
+    assert!(
+        r1.starts_with("SCHEDOP 0 "),
+        "stream starts at seq 0:\n{r1}"
+    );
     assert!(r1.contains("Exit"), "corpus ran to completion:\n{r1}");
     // The stream is dense: seq numbers are exactly 0..n with no gaps.
     let n = r1.lines().count();
@@ -536,7 +547,10 @@ fn unregistered_threads_fall_through() {
     r.touch(site, OpClass::MutexUnlock);
     r.wake(12345, site);
     assert_eq!(r.pick_waiter(site, 4), 0);
-    assert!(r.timed_park(site, Duration::from_millis(1)), "real-sleep fallback");
+    assert!(
+        r.timed_park(site, Duration::from_millis(1)),
+        "real-sleep fallback"
+    );
     r.exit(12345);
 }
 
@@ -633,7 +647,8 @@ fn cond_blocking1_run(seed: u64, timed: bool) -> String {
     // notifier's exit handoff (FailAction::Panic on ITS thread) while the
     // waiter is parked forever — joining the waiter first would hang the
     // harness instead of failing it.
-    tn.join().expect("notifier completed (a lost wake deadlock-panics here)");
+    tn.join()
+        .expect("notifier completed (a lost wake deadlock-panics here)");
     tw.join().expect("waiter completed");
     sched.dump_log()
 }
@@ -735,7 +750,10 @@ fn pct_depth1_highest_priority_runs_uninterrupted() {
     for seed in 0..16u64 {
         let log = run_pct_touch_corpus(seed, 1, 64, 6);
         let n = preempt_count(&log);
-        assert!(n <= 1, "seed {seed}: depth-1 PCT preempted {n} times:\n{log}");
+        assert!(
+            n <= 1,
+            "seed {seed}: depth-1 PCT preempted {n} times:\n{log}"
+        );
         orders.insert(n);
     }
     assert_eq!(
@@ -755,7 +773,10 @@ fn pct_change_point_preempts_and_replays() {
     for seed in 0..16u64 {
         let l1 = run_pct_touch_corpus(seed, 2, 8, 6);
         let l2 = run_pct_touch_corpus(seed, 2, 8, 6);
-        assert_eq!(l1, l2, "seed {seed}: PCT schedule must replay byte-identically");
+        assert_eq!(
+            l1, l2,
+            "seed {seed}: PCT schedule must replay byte-identically"
+        );
         if preempt_count(&l1) >= 2 {
             cp_preempt_seen = true;
         }
@@ -774,7 +795,10 @@ fn pct_change_point_preempts_and_replays() {
 fn pct_finds_depth2_lost_update_in_seed_sweep() {
     fn run(seed: u64) -> u64 {
         let mut cfg = test_cfg(seed);
-        cfg.algo = PickAlgo::Pct { depth: 2, steps: 64 };
+        cfg.algo = PickAlgo::Pct {
+            depth: 2,
+            steps: 64,
+        };
         let sched = Scheduler::new(cfg);
         let chan = Arc::new(SimChan::new());
         let ctr = Arc::new(Mutex::new(0u64));

@@ -31,7 +31,10 @@ pub fn remove_useless_joins<'mcx>(
             remove_leftjoinrel_from_query(run, innerrelid, &sjinfo)?;
             let mut nremoved = 0;
             joinlist = remove_rel_from_joinlist(run, joinlist, innerrelid, &mut nremoved);
-            assert!(nremoved == 1, "failed to find relation {innerrelid} in joinlist");
+            assert!(
+                nremoved == 1,
+                "failed to find relation {innerrelid} in joinlist"
+            );
             run.root.join_info_list.remove(i);
             continue 'restart;
         }
@@ -66,7 +69,11 @@ fn join_is_removable<'mcx>(
     // (without ojrelid), not joinrelids.
     {
         let rel = run.root.rel(innerrel);
-        if rel.attr_needed.iter().any(|a| !relids_is_subset(a, &inputrelids)) {
+        if rel
+            .attr_needed
+            .iter()
+            .any(|a| !relids_is_subset(a, &inputrelids))
+        {
             return Ok(false);
         }
     }
@@ -198,11 +205,8 @@ fn remove_leftjoinrel_from_query<'mcx>(
             };
             run.root.phinfo_mut(phid).ph_needed = needed;
             let mut lateral = adjust_relid_set(run, &run.root.phinfo(phid).ph_lateral, relid, -1);
-            lateral = crate::relnode::relids_difference(
-                mcx,
-                &lateral,
-                &run.root.phinfo(phid).ph_eval_at,
-            );
+            lateral =
+                crate::relnode::relids_difference(mcx, &lateral, &run.root.phinfo(phid).ph_eval_at);
             run.root.phinfo_mut(phid).ph_lateral = lateral;
             let mut phrels = adjust_relid_set(run, &run.root.phinfo(phid).ph_var_phrels, relid, -1);
             phrels = adjust_relid_set(run, &phrels, ojrelid, -1);
@@ -218,13 +222,18 @@ fn remove_leftjoinrel_from_query<'mcx>(
 
     // Reset attr_needed to only the "relation 0" bits; rebuilt below.
     for rti in 1..run.root.simple_rel_array_size as usize {
-        let Some(other) = run.root.simple_rel_array[rti] else { continue };
+        let Some(other) = run.root.simple_rel_array[rti] else {
+            continue;
+        };
         debug_assert_eq!(run.root.rel(other).relid as usize, rti);
         let n = run.root.rel(other).attr_needed.len();
         for ndx in 0..n {
             let keep = relids_is_member(0, &run.root.rel(other).attr_needed[ndx]);
-            run.root.rel_mut(other).attr_needed[ndx] =
-                if keep { relids_singleton(mcx, 0) } else { crate::relnode::relids_empty() };
+            run.root.rel_mut(other).attr_needed[ndx] = if keep {
+                relids_singleton(mcx, 0)
+            } else {
+                crate::relnode::relids_empty()
+            };
         }
     }
 
@@ -288,7 +297,12 @@ fn remove_join_clause_from_rels(run: &mut PlannerRun<'_>, rid: RinfoId) {
     }
 }
 
-pub(crate) fn remove_rel_from_restrictinfo(run: &mut PlannerRun<'_>, rid: RinfoId, relid: i32, ojrelid: i32) {
+pub(crate) fn remove_rel_from_restrictinfo(
+    run: &mut PlannerRun<'_>,
+    rid: RinfoId,
+    relid: i32,
+    ojrelid: i32,
+) {
     let mcx = run.mcx;
     let mut v = relids_del_member(mcx, &run.root.rinfo(rid).clause_relids, relid);
     v = relids_del_member(mcx, &v, ojrelid);
@@ -334,7 +348,9 @@ fn rebuild_joinclause_attr_needed(run: &mut PlannerRun<'_>) {
     let mcx = run.mcx;
     let mut seen_serials: PgVec<'_, i32> = PgVec::new_in(mcx);
     for rti in 1..run.root.simple_rel_array_size as usize {
-        let Some(brel) = run.root.simple_rel_array[rti] else { continue };
+        let Some(brel) = run.root.simple_rel_array[rti] else {
+            continue;
+        };
         if run.root.rel(brel).reloptkind != RELOPT_BASEREL {
             continue;
         }
@@ -470,8 +486,14 @@ fn rel_is_distinct_for<'mcx>(
             let ri = run.root.rinfo(rid);
             let clause = *run.root.expr_node(ri.clause);
             // The caller's mergejoinability test selected only OpExprs.
-            let op = clause.as_op_expr().expect("mergejoinable clause is an OpExpr");
-            let side = if ri.outer_is_left { op.args.nth(1) } else { op.args.nth(0) };
+            let op = clause
+                .as_op_expr()
+                .expect("mergejoinable clause is an OpExpr");
+            let side = if ri.outer_is_left {
+                op.args.nth(1)
+            } else {
+                op.args.nth(0)
+            };
             let side = side.as_relabel_type().map_or(side, |r| r.arg);
             let Some(v) = side.as_var() else { continue };
             if v.varno != relid as i32 || v.varlevelsup != 0 {
@@ -526,7 +548,11 @@ pub fn query_is_distinct_for(
     let distinct_cols: Vec<DistinctColInfo> = colnos
         .iter()
         .zip(opids.iter())
-        .map(|(&colno, &opid)| DistinctColInfo { colno, opid, collid: types_core::InvalidOid })
+        .map(|(&colno, &opid)| DistinctColInfo {
+            colno,
+            opid,
+            collid: types_core::InvalidOid,
+        })
         .collect();
     query_is_distinct_for_with_collations(query, &distinct_cols)
 }
@@ -587,7 +613,9 @@ fn query_is_distinct_for_with_collations(
     }
 
     if let Some(setop_node) = query.setOperations {
-        let topop = setop_node.as_set_operation_stmt().expect("setOperations stmt");
+        let topop = setop_node
+            .as_set_operation_stmt()
+            .expect("setOperations stmt");
         if !topop.all {
             let mut lg = 0usize;
             let mut matched = true;
@@ -698,7 +726,7 @@ pub fn innerrel_is_unique_ext<'mcx>(
             extra_clauses: pgvec_clone_shallow(run.mcx, &outer_exprs),
         };
         run.root.rel_mut(innerrel).unique_for_rels.push(info);
-        if let Some(out) = extra_clauses.as_deref_mut() {
+        if let Some(out) = extra_clauses {
             *out = outer_exprs;
         }
         Ok(true)
@@ -878,7 +906,10 @@ fn restrict_infos_logically_equal(run: &PlannerRun<'_>, a: RinfoId, b: RinfoId) 
         && relids_equal(&ra.required_relids, &rb.required_relids)
         && relids_equal(&ra.incompatible_relids, &rb.incompatible_relids)
         && relids_equal(&ra.outer_relids, &rb.outer_relids)
-        && types_nodes::equal(*run.root.expr_node(ra.clause), *run.root.expr_node(rb.clause))
+        && types_nodes::equal(
+            *run.root.expr_node(ra.clause),
+            *run.root.expr_node(rb.clause),
+        )
 }
 
 enum KeepList {
@@ -896,7 +927,10 @@ fn add_non_redundant_clauses(
     removed_relid: i32,
 ) -> PgResult<()> {
     for &rid in candidates {
-        debug_assert!(!relids_is_member(removed_relid, &run.root.rinfo(rid).required_relids));
+        debug_assert!(!relids_is_member(
+            removed_relid,
+            &run.root.rinfo(rid).required_relids
+        ));
         let mut is_redundant = false;
         let n = match which {
             KeepList::BaseRestrictInfo => run.root.rel(to_keep).baserestrictinfo.len(),
@@ -1048,11 +1082,8 @@ fn remove_rel_from_query_subst(
         };
         run.root.phinfo_mut(phid).ph_needed = needed;
         let mut lateral = adjust_relid_set(run, &run.root.phinfo(phid).ph_lateral, relid, subst);
-        lateral = crate::relnode::relids_difference(
-            mcx,
-            &lateral,
-            &run.root.phinfo(phid).ph_eval_at,
-        );
+        lateral =
+            crate::relnode::relids_difference(mcx, &lateral, &run.root.phinfo(phid).ph_eval_at);
         run.root.phinfo_mut(phid).ph_lateral = lateral;
         let v = adjust_relid_set(run, &run.root.phinfo(phid).ph_var_phrels, relid, subst);
         run.root.phinfo_mut(phid).ph_var_phrels = v;
@@ -1065,13 +1096,18 @@ fn remove_rel_from_query_subst(
     }
 
     for rti in 1..run.root.simple_rel_array_size as usize {
-        let Some(other) = run.root.simple_rel_array[rti] else { continue };
+        let Some(other) = run.root.simple_rel_array[rti] else {
+            continue;
+        };
         debug_assert_eq!(run.root.rel(other).relid as usize, rti);
         let n = run.root.rel(other).attr_needed.len();
         for ndx in 0..n {
             let keep = relids_is_member(0, &run.root.rel(other).attr_needed[ndx]);
-            run.root.rel_mut(other).attr_needed[ndx] =
-                if keep { relids_singleton(mcx, 0) } else { crate::relnode::relids_empty() };
+            run.root.rel_mut(other).attr_needed[ndx] = if keep {
+                relids_singleton(mcx, 0)
+            } else {
+                crate::relnode::relids_empty()
+            };
         }
         let lvars = pgvec_clone_shallow(mcx, &run.root.rel(other).lateral_vars);
         for &lv in lvars.iter() {
@@ -1162,7 +1198,13 @@ fn remove_self_join_rel<'mcx>(
         KeepList::BaseRestrictInfo,
         remove_relid,
     )?;
-    add_non_redundant_clauses(run, &jinfo_candidates, to_keep, KeepList::JoinInfo, remove_relid)?;
+    add_non_redundant_clauses(
+        run,
+        &jinfo_candidates,
+        to_keep,
+        KeepList::JoinInfo,
+        remove_relid,
+    )?;
 
     let ec_indexes = relids_copy(mcx, &run.root.rel(to_remove).eclass_indexes);
     for i in relids_members(&ec_indexes) {
@@ -1324,10 +1366,11 @@ fn match_unique_clauses(
         let left_empty = relids_is_empty(&run.root.rinfo(rid).left_relids);
         debug_assert!(left_empty ^ relids_is_empty(&run.root.rinfo(rid).right_relids));
 
-        let clause =
-            copyfuncs::copy_object(mcx, *run.root.expr_node(run.root.rinfo(rid).clause))?;
+        let clause = copyfuncs::copy_object(mcx, *run.root.expr_node(run.root.rinfo(rid).clause))?;
         rewrite_manip::ChangeVarNodesExtendedSJE(mcx, clause, relid, outer_relid, 0)?;
-        let op = clause.as_op_expr().expect("mergejoinable clause is an OpExpr");
+        let op = clause
+            .as_op_expr()
+            .expect("mergejoinable clause is an OpExpr");
         let (iclause, c1) = if left_empty {
             (op.args.nth(1), op.args.nth(0))
         } else {
@@ -1341,7 +1384,9 @@ fn match_unique_clauses(
                 continue;
             }
             let oclause_node = *run.root.expr_node(run.root.rinfo(orid).clause);
-            let oop = oclause_node.as_op_expr().expect("mergejoinable clause is an OpExpr");
+            let oop = oclause_node
+                .as_op_expr()
+                .expect("mergejoinable clause is an OpExpr");
             let oleft_empty = relids_is_empty(&run.root.rinfo(orid).left_relids);
             let (oclause, c2) = if oleft_empty {
                 (oop.args.nth(1), oop.args.nth(0))
@@ -1412,8 +1457,7 @@ fn remove_self_joins_one_group<'mcx>(
             }
             if let (Some(kp), Some(rp)) = (kmark, rmark) {
                 let (kid, rid) = (run.root.rowMarks[kp], run.root.rowMarks[rp]);
-                if run.rowmarks[kid.0 as usize].markType != run.rowmarks[rid.0 as usize].markType
-                {
+                if run.rowmarks[kid.0 as usize].markType != run.rowmarks[rid.0 as usize].markType {
                     continue;
                 }
             }

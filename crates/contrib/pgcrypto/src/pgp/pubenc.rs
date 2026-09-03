@@ -1,9 +1,9 @@
-
 use super::consts::*;
 use super::mpi::{self, write_mpi, Mpi};
 use super::packet::write_packet;
-use super::pubkey::{KeyMaterial, PubKey, PGP_PUB_ELG_ENCRYPT, PGP_PUB_RSA_ENCRYPT,
-    PGP_PUB_RSA_ENCRYPT_SIGN};
+use super::pubkey::{
+    KeyMaterial, PubKey, PGP_PUB_ELG_ENCRYPT, PGP_PUB_RSA_ENCRYPT, PGP_PUB_RSA_ENCRYPT_SIGN,
+};
 use ::pg_strong_random::pg_strong_random;
 
 /// `res_len` bytes (pad must be >= 8 nonzero random bytes).
@@ -20,13 +20,13 @@ fn pad_eme_pkcs1_v15(data: &[u8], res_len: usize) -> Result<Vec<u8>, String> {
     if !pg_strong_random(&mut buf[1..1 + pad_len]) {
         return Err("Failed to generate strong random bits".to_string());
     }
-    for i in 1..1 + pad_len {
-        while buf[i] == 0 {
+    for b in buf.iter_mut().skip(1).take(pad_len) {
+        while *b == 0 {
             let mut one = [0u8; 1];
             if !pg_strong_random(&mut one) {
                 return Err("Failed to generate strong random bits".to_string());
             }
-            buf[i] = one[0];
+            *b = one[0];
         }
     }
     buf[pad_len + 1] = 0;

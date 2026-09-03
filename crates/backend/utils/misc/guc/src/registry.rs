@@ -312,6 +312,10 @@ fn reject(elevel: ErrorLevel, e: PgError) -> PgResult<i32> {
     }
 }
 
+// Private, short-lived control-flow result (constructed and matched once per
+// GUC access check, never stored) — not worth threading Box through every
+// construction site for an infrequent path.
+#[allow(clippy::large_enum_variant)]
 enum AccessCheck {
     Ok,
     Skip,
@@ -1714,8 +1718,8 @@ fn restore_stacked_value(
                 changed = true;
             }
         }
-        (GucVariable::Enum(c), Some(config_var_val::Enumval(nv))) => {
-            if current_enum(c) != *nv || extra_differs(&c.gen.extra, &newextra) {
+        (GucVariable::Enum(c), Some(config_var_val::Enumval(nv)))
+            if (current_enum(c) != *nv || extra_differs(&c.gen.extra, &newextra)) => {
                 if let Some(f) = installed_hook(c.assign_hook) {
                     let v = *nv;
                     let extra = newextra.clone();
@@ -1728,7 +1732,6 @@ fn restore_stacked_value(
                 c.gen.extra = newextra;
                 changed = true;
             }
-        }
         _ => {}
     }
     changed
@@ -1797,6 +1800,10 @@ fn pop_var_stack(
         let mut restore_prior = false;
         let mut restore_masked = false;
 
+        // Mirrors C's AtEOXact_GUC if/else-if chain verbatim: the rollback
+        // arm and the explicit-SAVE arm reach the same action for different
+        // reasons, matching the upstream structure rather than merging them.
+        #[allow(clippy::if_same_then_else)]
         if !is_commit {
             restore_prior = true;
         } else if stack.state == GUC_SAVE {

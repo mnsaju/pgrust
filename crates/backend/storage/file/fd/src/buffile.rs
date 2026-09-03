@@ -86,7 +86,10 @@ pub fn BufFileCreateTemp<'mcx>(mcx: Mcx<'mcx>, inter_xact: bool) -> PgResult<Buf
 }
 
 fn seg_name(base: &[u8], segment: usize) -> String {
-    format!("{}.{segment}", core::str::from_utf8(base).expect("fileset name is utf8"))
+    format!(
+        "{}.{segment}",
+        core::str::from_utf8(base).expect("fileset name is utf8")
+    )
 }
 
 /// `BufFileCreateFileSet` (buffile.c): a named, participant-shared temp file.
@@ -126,7 +129,11 @@ pub fn BufFileOpenFileSet<'mcx>(
     read_only: bool,
 ) -> PgResult<BufFile<'mcx>> {
     let base = fileset.name_path(name);
-    let mode = if read_only { libc::O_RDONLY } else { libc::O_RDWR };
+    let mode = if read_only {
+        libc::O_RDONLY
+    } else {
+        libc::O_RDWR
+    };
     let mut files: PgVec<'mcx, File> = vec_with_capacity_in(mcx, 1)?;
     loop {
         let f = fileset.open_seg(&seg_name(base.as_bytes(), files.len()), mode)?;
@@ -169,7 +176,11 @@ pub fn BufFileOpenFileSetMaybe<'mcx>(
     read_only: bool,
 ) -> PgResult<Option<BufFile<'mcx>>> {
     let base = fileset.name_path(name);
-    let mode = if read_only { libc::O_RDONLY } else { libc::O_RDWR };
+    let mode = if read_only {
+        libc::O_RDONLY
+    } else {
+        libc::O_RDWR
+    };
     let probe = fileset.open_seg(&seg_name(base.as_bytes(), 0), mode)?;
     if probe.0 <= 0 {
         return Ok(None);
@@ -200,7 +211,9 @@ pub fn BufFileDeleteFileSet(
     if !found && !missing_ok {
         ereport(ERROR)
             .errcode_for_file_access()
-            .errmsg(format!("could not delete unknown temporary file \"{base}\""))
+            .errmsg(format!(
+                "could not delete unknown temporary file \"{base}\""
+            ))
             .finish(loc("BufFileDeleteFileSet"))?;
     }
     Ok(())
@@ -284,10 +297,7 @@ impl<'mcx> BufFile<'mcx> {
             Some(base) => {
                 // MakeNewFileSetSegment; requires the fileset caller keep the
                 // set alive, which the sts accessor structure guarantees.
-                crate::temp::PathNameCreateTemporaryFile(
-                    &seg_name(base, self.files.len()),
-                    true,
-                )?
+                crate::temp::PathNameCreateTemporaryFile(&seg_name(base, self.files.len()), true)?
             }
         };
         debug_assert!(pfile.0 >= 0);
@@ -313,8 +323,7 @@ impl<'mcx> BufFile<'mcx> {
     }
 
     fn load_buffer(&mut self) -> PgResult<()> {
-        if self.cur_offset >= MAX_PHYSICAL_FILESIZE
-            && (self.cur_file + 1) < self.files.len() as i32
+        if self.cur_offset >= MAX_PHYSICAL_FILESIZE && (self.cur_file + 1) < self.files.len() as i32
         {
             self.cur_file += 1;
             self.cur_offset = 0;
@@ -575,7 +584,10 @@ fn read_failed(file: File) -> PgResult<()> {
     ereport(ERROR)
         .with_saved_errno(get_errno())
         .errcode_for_file_access()
-        .errmsg(format!("could not read file \"{}\": %m", file_path_name_lossy(file)))
+        .errmsg(format!(
+            "could not read file \"{}\": %m",
+            file_path_name_lossy(file)
+        ))
         .finish(loc("BufFileLoadBuffer"))
         .map(|_| ())
 }
@@ -586,7 +598,10 @@ fn write_failed(file: File) -> PgResult<()> {
     ereport(ERROR)
         .with_saved_errno(get_errno())
         .errcode_for_file_access()
-        .errmsg(format!("could not write to file \"{}\": %m", file_path_name_lossy(file)))
+        .errmsg(format!(
+            "could not write to file \"{}\": %m",
+            file_path_name_lossy(file)
+        ))
         .finish(loc("BufFileDumpBuffer"))
         .map(|_| ())
 }

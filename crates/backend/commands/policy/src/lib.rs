@@ -27,27 +27,25 @@ use types_scan::scankey::{BTEqualStrategyNumber, ScanKeyData};
 use types_tuple::{HeapTupleData, TupleDescData};
 
 use catalog_dependency::recordDependencyOnExpr;
-use pg_shdepend::deleteSharedDependencyRecordsFor;
 use parse_clause::transformWhereClause;
 use parse_collate::assign_expr_collations;
 use parse_relation::{addNSItemToQuery, addRangeTableEntryForRelation};
 use parser_small1::{make_parsestate, ParseExprKind};
-use pg_depend::{
-    recordDependencyOn, DependencyType, ObjectAddress,
-};
+use pg_depend::{recordDependencyOn, DependencyType, ObjectAddress};
+use pg_shdepend::deleteSharedDependencyRecordsFor;
 
 pub const POLICY_RELATION_ID: Oid = 3256;
 const POLICY_OID_INDEX_ID: Oid = 3257;
 const POLICY_POLRELID_POLNAME_INDEX_ID: Oid = 3258;
-const Anum_pg_policy_oid: i32 = 1;
-const Anum_pg_policy_polname: i32 = 2;
-const Anum_pg_policy_polrelid: i32 = 3;
-const Anum_pg_policy_polcmd: i32 = 4;
-const Anum_pg_policy_polpermissive: i32 = 5;
-const Anum_pg_policy_polroles: i32 = 6;
-const Anum_pg_policy_polqual: i32 = 7;
-const Anum_pg_policy_polwithcheck: i32 = 8;
-const Natts_pg_policy: usize = 8;
+const ANUM_PG_POLICY_OID: i32 = 1;
+const ANUM_PG_POLICY_POLNAME: i32 = 2;
+const ANUM_PG_POLICY_POLRELID: i32 = 3;
+const ANUM_PG_POLICY_POLCMD: i32 = 4;
+const ANUM_PG_POLICY_POLPERMISSIVE: i32 = 5;
+const ANUM_PG_POLICY_POLROLES: i32 = 6;
+const ANUM_PG_POLICY_POLQUAL: i32 = 7;
+const ANUM_PG_POLICY_POLWITHCHECK: i32 = 8;
+const NATTS_PG_POLICY: usize = 8;
 
 const ACL_SELECT_CHR: u8 = b'r';
 const ACL_INSERT_CHR: u8 = b'a';
@@ -109,13 +107,17 @@ fn text_attr<'mcx>(
     };
     let image = detoast::detoast_attr(mcx, raw)?;
     let bytes = mcx::slice_borrow_in(mcx, &image[datum::varlena::VARHDRSZ..])?;
-    Ok(Some(core::str::from_utf8(bytes).expect("pg_policy qual text is UTF-8")))
+    Ok(Some(
+        core::str::from_utf8(bytes).expect("pg_policy qual text is UTF-8"),
+    ))
 }
 
 fn polroles_attr(td: &TupleDescData<'_>, tup: &HeapTupleData<'_>) -> PgResult<Vec<Oid>> {
-    let (d, isnull) = getattr(td, tup, Anum_pg_policy_polroles);
+    let (d, isnull) = getattr(td, tup, ANUM_PG_POLICY_POLROLES);
     if isnull {
-        return Err(Box::new(PgError::error("unexpected null value in pg_policy.polroles")));
+        return Err(Box::new(PgError::error(
+            "unexpected null value in pg_policy.polroles",
+        )));
     }
     let cx = mcx::MemoryContext::new("polroles");
     let mcx = cx.mcx();
@@ -136,7 +138,9 @@ fn polroles_attr(td: &TupleDescData<'_>, tup: &HeapTupleData<'_>) -> PgResult<Ve
     let a = &image[datum::varlena::VARHDRSZ..];
     let word = |off: usize| u32::from_ne_bytes([a[off], a[off + 1], a[off + 2], a[off + 3]]);
     if word(0) != 1 || word(4) != 0 || word(8) != OIDOID {
-        return Err(Box::new(PgError::error("unexpected pg_policy.polroles array shape")));
+        return Err(Box::new(PgError::error(
+            "unexpected pg_policy.polroles array shape",
+        )));
     }
     let nelems = word(12) as usize;
     Ok((0..nelems).map(|i| word(20 + 4 * i)).collect())
@@ -149,7 +153,9 @@ fn oid_array_datum<'mcx>(mcx: Mcx<'mcx>, oids: &[Oid]) -> PgResult<PgVec<'mcx, u
 }
 
 fn text_datum(mcx: Mcx<'_>, s: &str) -> PgResult<Datum> {
-    let img = varlena::cstring_to_text(mcx, s.as_bytes())?.into_image().leak();
+    let img = varlena::cstring_to_text(mcx, s.as_bytes())?
+        .into_image()
+        .leak();
     Ok(Datum::from_usize(img.as_ptr() as usize))
 }
 
@@ -172,8 +178,10 @@ fn not_a_table(relname: &str) -> Box<PgError> {
 
 fn system_catalog(relname: &str) -> Box<PgError> {
     Box::new(
-        PgError::error(format!("permission denied: \"{relname}\" is a system catalog"))
-            .with_sqlstate(ERRCODE_INSUFFICIENT_PRIVILEGE),
+        PgError::error(format!(
+            "permission denied: \"{relname}\" is a system catalog"
+        ))
+        .with_sqlstate(ERRCODE_INSUFFICIENT_PRIVILEGE),
     )
 }
 
@@ -239,7 +247,9 @@ fn policy_role_list_to_array(roles: &NodeList<'_>) -> PgResult<Vec<Oid>> {
     }
     let mut role_oids: Vec<Oid> = Vec::with_capacity(roles.len());
     for cell in roles.iter() {
-        let spec = cell.as_role_spec().expect("policy TO list cell is a RoleSpec");
+        let spec = cell
+            .as_role_spec()
+            .expect("policy TO list cell is a RoleSpec");
         if spec.roletype == types_nodes::parsenodes::RoleSpecType::ROLESPEC_PUBLIC {
             if roles.len() != 1 {
                 elog::ereport(WARNING)
@@ -259,7 +269,9 @@ fn policy_role_list_to_array(roles: &NodeList<'_>) -> PgResult<Vec<Oid>> {
     Ok(role_oids)
 }
 
-fn to_rel_vocab_rv<'mcx>(prv: &types_nodes::primnodes::RangeVar<'mcx>) -> rel_vocab::RangeVar<'mcx> {
+fn to_rel_vocab_rv<'mcx>(
+    prv: &types_nodes::primnodes::RangeVar<'mcx>,
+) -> rel_vocab::RangeVar<'mcx> {
     rel_vocab::RangeVar {
         catalogname: prv.catalogname,
         schemaname: prv.schemaname,
@@ -270,13 +282,10 @@ fn to_rel_vocab_rv<'mcx>(prv: &types_nodes::primnodes::RangeVar<'mcx>) -> rel_vo
     }
 }
 
-fn lock_table_for_policy<'mcx>(
-    prv: &types_nodes::primnodes::RangeVar<'mcx>,
-) -> PgResult<Oid> {
+fn lock_table_for_policy<'mcx>(prv: &types_nodes::primnodes::RangeVar<'mcx>) -> PgResult<Oid> {
     let rv = to_rel_vocab_rv(prv);
-    let mut callback = |rv: &rel_vocab::RangeVar<'_>, relid: Oid, _old: Oid| {
-        RangeVarCallbackForPolicy(rv, relid)
-    };
+    let mut callback =
+        |rv: &rel_vocab::RangeVar<'_>, relid: Oid, _old: Oid| RangeVarCallbackForPolicy(rv, relid);
     catalog_namespace::RangeVarGetRelidExtended(&rv, AccessExclusiveLock, 0, Some(&mut callback))
 }
 
@@ -291,23 +300,37 @@ fn transform_policy_qual<'mcx>(
     raw: Node<'mcx>,
 ) -> PgResult<PolicyQual<'mcx>> {
     let mut pstate = make_parsestate(mcx, None);
-    let nsitem = addRangeTableEntryForRelation(mcx, &mut pstate, rel, AccessShareLock, None, false, false)?;
+    let nsitem =
+        addRangeTableEntryForRelation(mcx, &mut pstate, rel, AccessShareLock, None, false, false)?;
     addNSItemToQuery(mcx, &mut pstate, nsitem, false, true, true)?;
-    let qual = transformWhereClause(mcx, &mut pstate, Some(raw), ParseExprKind::EXPR_KIND_POLICY, "POLICY")?
-        .expect("policy qual transform yields an expression");
+    let qual = transformWhereClause(
+        mcx,
+        &mut pstate,
+        Some(raw),
+        ParseExprKind::EXPR_KIND_POLICY,
+        "POLICY",
+    )?
+    .expect("policy qual transform yields an expression");
     assign_expr_collations(mcx, &pstate, qual)?;
-    Ok(PolicyQual { expr: qual, rtable: pstate.p_rtable })
+    Ok(PolicyQual {
+        expr: qual,
+        rtable: pstate.p_rtable,
+    })
 }
 
 // Range table carrying only the policy's relation, for dependency extraction
 // on the ALTER POLICY legs that re-read a stored qual.
 fn stored_qual_rtable<'mcx>(mcx: Mcx<'mcx>, rel: &Relation<'mcx>) -> PgResult<NodeList<'mcx>> {
     let mut pstate = make_parsestate(mcx, None);
-    let _ = addRangeTableEntryForRelation(mcx, &mut pstate, rel, AccessShareLock, None, false, false)?;
+    let _ =
+        addRangeTableEntryForRelation(mcx, &mut pstate, rel, AccessShareLock, None, false, false)?;
     Ok(pstate.p_rtable)
 }
 
-pub fn CreatePolicy<'mcx>(mcx: Mcx<'mcx>, stmt: &CreatePolicyStmt<'mcx>) -> PgResult<ObjectAddress> {
+pub fn CreatePolicy<'mcx>(
+    mcx: Mcx<'mcx>,
+    stmt: &CreatePolicyStmt<'mcx>,
+) -> PgResult<ObjectAddress> {
     let polcmd = parse_policy_command(stmt.cmd_name)?;
 
     if (polcmd == ACL_SELECT_CHR || polcmd == ACL_DELETE_CHR) && stmt.with_check.is_some() {
@@ -348,36 +371,45 @@ pub fn CreatePolicy<'mcx>(mcx: Mcx<'mcx>, stmt: &CreatePolicyStmt<'mcx>) -> PgRe
         mcx,
         &pg_policy_rel,
         POLICY_OID_INDEX_ID,
-        Anum_pg_policy_oid as AttrNumber,
+        ANUM_PG_POLICY_OID as AttrNumber,
     )?;
 
-    let mut values = [Datum::null(); Natts_pg_policy];
-    let mut isnull = [true; Natts_pg_policy];
+    let mut values = [Datum::null(); NATTS_PG_POLICY];
+    let mut isnull = [true; NATTS_PG_POLICY];
     let mut set = |anum: i32, v: Datum| {
         values[(anum - 1) as usize] = v;
         isnull[(anum - 1) as usize] = false;
     };
     let pname = name_arg(mcx, policy_name)?;
-    set(Anum_pg_policy_oid, Datum::from_oid(policy_id));
-    set(Anum_pg_policy_polname, Datum::from_usize(pname.as_ptr() as usize));
-    set(Anum_pg_policy_polrelid, Datum::from_oid(table_id));
-    set(Anum_pg_policy_polcmd, Datum::from_i8(polcmd as i8));
-    set(Anum_pg_policy_polpermissive, Datum::from_bool(stmt.permissive));
+    set(ANUM_PG_POLICY_OID, Datum::from_oid(policy_id));
+    set(
+        ANUM_PG_POLICY_POLNAME,
+        Datum::from_usize(pname.as_ptr() as usize),
+    );
+    set(ANUM_PG_POLICY_POLRELID, Datum::from_oid(table_id));
+    set(ANUM_PG_POLICY_POLCMD, Datum::from_i8(polcmd as i8));
+    set(
+        ANUM_PG_POLICY_POLPERMISSIVE,
+        Datum::from_bool(stmt.permissive),
+    );
     let roles_img = oid_array_datum(mcx, &role_oids)?;
-    set(Anum_pg_policy_polroles, Datum::from_usize(roles_img.as_ptr() as usize));
+    set(
+        ANUM_PG_POLICY_POLROLES,
+        Datum::from_usize(roles_img.as_ptr() as usize),
+    );
     let qual_text = match &qual {
         Some(q) => Some(outfuncs::nodeToString(mcx, q.expr)?),
         None => None,
     };
     if let Some(t) = &qual_text {
-        set(Anum_pg_policy_polqual, text_datum(mcx, t.as_str())?);
+        set(ANUM_PG_POLICY_POLQUAL, text_datum(mcx, t.as_str())?);
     }
     let wc_text = match &with_check {
         Some(q) => Some(outfuncs::nodeToString(mcx, q.expr)?),
         None => None,
     };
     if let Some(t) = &wc_text {
-        set(Anum_pg_policy_polwithcheck, text_datum(mcx, t.as_str())?);
+        set(ANUM_PG_POLICY_POLWITHCHECK, text_datum(mcx, t.as_str())?);
     }
 
     let mut tuple = heaptuple::heap_form_tuple(mcx, pg_policy_rel.descr(), &values, &isnull)?;
@@ -433,9 +465,13 @@ fn policy_scan_exists<'mcx>(
 ) -> PgResult<bool> {
     let pname = name_arg(mcx, polname)?;
     let keys = [
-        eq_key(Anum_pg_policy_polrelid as AttrNumber, F_OIDEQ, Datum::from_oid(table_id)),
         eq_key(
-            Anum_pg_policy_polname as AttrNumber,
+            ANUM_PG_POLICY_POLRELID as AttrNumber,
+            F_OIDEQ,
+            Datum::from_oid(table_id),
+        ),
+        eq_key(
+            ANUM_PG_POLICY_POLNAME as AttrNumber,
             F_NAMEEQ,
             Datum::from_usize(pname.as_ptr() as usize),
         ),
@@ -477,9 +513,13 @@ pub fn AlterPolicy<'mcx>(mcx: Mcx<'mcx>, stmt: &AlterPolicyStmt<'mcx>) -> PgResu
 
     let pname = name_arg(mcx, policy_name)?;
     let keys = [
-        eq_key(Anum_pg_policy_polrelid as AttrNumber, F_OIDEQ, Datum::from_oid(table_id)),
         eq_key(
-            Anum_pg_policy_polname as AttrNumber,
+            ANUM_PG_POLICY_POLRELID as AttrNumber,
+            F_OIDEQ,
+            Datum::from_oid(table_id),
+        ),
+        eq_key(
+            ANUM_PG_POLICY_POLNAME as AttrNumber,
             F_NAMEEQ,
             Datum::from_usize(pname.as_ptr() as usize),
         ),
@@ -497,7 +537,7 @@ pub fn AlterPolicy<'mcx>(mcx: Mcx<'mcx>, stmt: &AlterPolicyStmt<'mcx>) -> PgResu
     };
     let td = pg_policy_rel.descr();
 
-    let (polcmd_d, _) = getattr(td, policy_tuple, Anum_pg_policy_polcmd);
+    let (polcmd_d, _) = getattr(td, policy_tuple, ANUM_PG_POLICY_POLCMD);
     let polcmd = polcmd_d.as_u8();
 
     if (polcmd == ACL_SELECT_CHR || polcmd == ACL_DELETE_CHR) && stmt.with_check.is_some() {
@@ -513,7 +553,7 @@ pub fn AlterPolicy<'mcx>(mcx: Mcx<'mcx>, stmt: &AlterPolicyStmt<'mcx>) -> PgResu
         ));
     }
 
-    let (poid_d, _) = getattr(td, policy_tuple, Anum_pg_policy_oid);
+    let (poid_d, _) = getattr(td, policy_tuple, ANUM_PG_POLICY_OID);
     let policy_id = poid_d.as_oid();
 
     if !replace_roles {
@@ -525,7 +565,7 @@ pub fn AlterPolicy<'mcx>(mcx: Mcx<'mcx>, stmt: &AlterPolicyStmt<'mcx>) -> PgResu
     let stored_qual: Option<PolicyQual<'mcx>> = if new_qual.is_some() {
         None
     } else {
-        match text_attr(mcx, td, policy_tuple, Anum_pg_policy_polqual)? {
+        match text_attr(mcx, td, policy_tuple, ANUM_PG_POLICY_POLQUAL)? {
             Some(stored) => Some(PolicyQual {
                 expr: readfuncs::stringToNode(mcx, stored)?,
                 rtable: stored_qual_rtable(mcx, &target_table)?,
@@ -536,7 +576,7 @@ pub fn AlterPolicy<'mcx>(mcx: Mcx<'mcx>, stmt: &AlterPolicyStmt<'mcx>) -> PgResu
     let stored_with_check: Option<PolicyQual<'mcx>> = if new_with_check.is_some() {
         None
     } else {
-        match text_attr(mcx, td, policy_tuple, Anum_pg_policy_polwithcheck)? {
+        match text_attr(mcx, td, policy_tuple, ANUM_PG_POLICY_POLWITHCHECK)? {
             Some(stored) => Some(PolicyQual {
                 expr: readfuncs::stringToNode(mcx, stored)?,
                 rtable: stored_qual_rtable(mcx, &target_table)?,
@@ -555,19 +595,19 @@ pub fn AlterPolicy<'mcx>(mcx: Mcx<'mcx>, stmt: &AlterPolicyStmt<'mcx>) -> PgResu
     let roles_img;
     if replace_roles {
         roles_img = oid_array_datum(mcx, &role_oids)?;
-        repl_values[(Anum_pg_policy_polroles - 1) as usize] =
+        repl_values[(ANUM_PG_POLICY_POLROLES - 1) as usize] =
             Datum::from_usize(roles_img.as_ptr() as usize);
-        repl[(Anum_pg_policy_polroles - 1) as usize] = true;
+        repl[(ANUM_PG_POLICY_POLROLES - 1) as usize] = true;
     }
     if let Some(q) = &new_qual {
         let t = outfuncs::nodeToString(mcx, q.expr)?;
-        repl_values[(Anum_pg_policy_polqual - 1) as usize] = text_datum(mcx, t.as_str())?;
-        repl[(Anum_pg_policy_polqual - 1) as usize] = true;
+        repl_values[(ANUM_PG_POLICY_POLQUAL - 1) as usize] = text_datum(mcx, t.as_str())?;
+        repl[(ANUM_PG_POLICY_POLQUAL - 1) as usize] = true;
     }
     if let Some(q) = &new_with_check {
         let t = outfuncs::nodeToString(mcx, q.expr)?;
-        repl_values[(Anum_pg_policy_polwithcheck - 1) as usize] = text_datum(mcx, t.as_str())?;
-        repl[(Anum_pg_policy_polwithcheck - 1) as usize] = true;
+        repl_values[(ANUM_PG_POLICY_POLWITHCHECK - 1) as usize] = text_datum(mcx, t.as_str())?;
+        repl[(ANUM_PG_POLICY_POLWITHCHECK - 1) as usize] = true;
     }
 
     let mut new_tuple =
@@ -576,7 +616,8 @@ pub fn AlterPolicy<'mcx>(mcx: Mcx<'mcx>, stmt: &AlterPolicyStmt<'mcx>) -> PgResu
     genam::systable_endscan(mcx, scan)?;
     catalog_indexing::CatalogTupleUpdate(mcx, &pg_policy_rel, &otid, &mut new_tuple)?;
 
-    let _ = catalog_dependency::deleteDependencyRecordsFor(mcx, POLICY_RELATION_ID, policy_id, false)?;
+    let _ =
+        catalog_dependency::deleteDependencyRecordsFor(mcx, POLICY_RELATION_ID, policy_id, false)?;
 
     let myself = ObjectAddress::set(POLICY_RELATION_ID, policy_id);
     recordDependencyOn(
@@ -616,9 +657,13 @@ pub fn rename_policy<'mcx>(mcx: Mcx<'mcx>, stmt: &RenameStmt<'mcx>) -> PgResult<
 
     let pname = name_arg(mcx, subname)?;
     let keys = [
-        eq_key(Anum_pg_policy_polrelid as AttrNumber, F_OIDEQ, Datum::from_oid(table_id)),
         eq_key(
-            Anum_pg_policy_polname as AttrNumber,
+            ANUM_PG_POLICY_POLRELID as AttrNumber,
+            F_OIDEQ,
+            Datum::from_oid(table_id),
+        ),
+        eq_key(
+            ANUM_PG_POLICY_POLNAME as AttrNumber,
             F_NAMEEQ,
             Datum::from_usize(pname.as_ptr() as usize),
         ),
@@ -635,7 +680,7 @@ pub fn rename_policy<'mcx>(mcx: Mcx<'mcx>, stmt: &RenameStmt<'mcx>) -> PgResult<
         return Err(policy_not_found(subname, target_table.name()));
     };
     let td = pg_policy_rel.descr();
-    let (poid_d, _) = getattr(td, policy_tuple, Anum_pg_policy_oid);
+    let (poid_d, _) = getattr(td, policy_tuple, ANUM_PG_POLICY_OID);
     let opoloid = poid_d.as_oid();
 
     let natts = td.natts as usize;
@@ -646,9 +691,8 @@ pub fn rename_policy<'mcx>(mcx: Mcx<'mcx>, stmt: &RenameStmt<'mcx>) -> PgResult<
     repl_isnull.resize(natts, false);
     repl.resize(natts, false);
     let nname = name_arg(mcx, newname)?;
-    repl_values[(Anum_pg_policy_polname - 1) as usize] =
-        Datum::from_usize(nname.as_ptr() as usize);
-    repl[(Anum_pg_policy_polname - 1) as usize] = true;
+    repl_values[(ANUM_PG_POLICY_POLNAME - 1) as usize] = Datum::from_usize(nname.as_ptr() as usize);
+    repl[(ANUM_PG_POLICY_POLNAME - 1) as usize] = true;
 
     let mut new_tuple =
         heaptuple::heap_modify_tuple(mcx, policy_tuple, td, &repl_values, &repl_isnull, &repl)?;
@@ -666,7 +710,11 @@ pub fn rename_policy<'mcx>(mcx: Mcx<'mcx>, stmt: &RenameStmt<'mcx>) -> PgResult<
 pub fn RemovePolicyById<'mcx>(mcx: Mcx<'mcx>, policy_id: Oid) -> PgResult<()> {
     let pg_policy_rel = table::table_open(mcx, POLICY_RELATION_ID, RowExclusiveLock)?;
 
-    let keys = [eq_key(Anum_pg_policy_oid as AttrNumber, F_OIDEQ, Datum::from_oid(policy_id))];
+    let keys = [eq_key(
+        ANUM_PG_POLICY_OID as AttrNumber,
+        F_OIDEQ,
+        Datum::from_oid(policy_id),
+    )];
     let mut scan =
         genam::systable_beginscan(mcx, &pg_policy_rel, POLICY_OID_INDEX_ID, true, None, &keys)?;
     let Some(tuple) = genam::systable_getnext(mcx, &mut scan)? else {
@@ -675,7 +723,7 @@ pub fn RemovePolicyById<'mcx>(mcx: Mcx<'mcx>, policy_id: Oid) -> PgResult<()> {
         ))));
     };
     let td = pg_policy_rel.descr();
-    let (relid_d, _) = getattr(td, tuple, Anum_pg_policy_polrelid);
+    let (relid_d, _) = getattr(td, tuple, ANUM_PG_POLICY_POLRELID);
     let relid = relid_d.as_oid();
     let tid = tuple.t_self;
     genam::systable_endscan(mcx, scan)?;
@@ -707,7 +755,11 @@ pub fn RemoveRoleFromObjectPolicy<'mcx>(
     debug_assert_eq!(classid, POLICY_RELATION_ID);
     let pg_policy_rel = table::table_open(mcx, POLICY_RELATION_ID, RowExclusiveLock)?;
 
-    let keys = [eq_key(Anum_pg_policy_oid as AttrNumber, F_OIDEQ, Datum::from_oid(policy_id))];
+    let keys = [eq_key(
+        ANUM_PG_POLICY_OID as AttrNumber,
+        F_OIDEQ,
+        Datum::from_oid(policy_id),
+    )];
     let mut scan =
         genam::systable_beginscan(mcx, &pg_policy_rel, POLICY_OID_INDEX_ID, true, None, &keys)?;
     let Some(tuple) = genam::systable_getnext(mcx, &mut scan)? else {
@@ -716,7 +768,7 @@ pub fn RemoveRoleFromObjectPolicy<'mcx>(
         ))));
     };
     let td = pg_policy_rel.descr();
-    let (relid_d, _) = getattr(td, tuple, Anum_pg_policy_polrelid);
+    let (relid_d, _) = getattr(td, tuple, ANUM_PG_POLICY_POLRELID);
     let relid = relid_d.as_oid();
 
     let roles = polroles_attr(td, tuple)?;
@@ -732,9 +784,9 @@ pub fn RemoveRoleFromObjectPolicy<'mcx>(
         repl_isnull.resize(natts, false);
         repl.resize(natts, false);
         let roles_img = oid_array_datum(mcx, &remaining)?;
-        repl_values[(Anum_pg_policy_polroles - 1) as usize] =
+        repl_values[(ANUM_PG_POLICY_POLROLES - 1) as usize] =
             Datum::from_usize(roles_img.as_ptr() as usize);
-        repl[(Anum_pg_policy_polroles - 1) as usize] = true;
+        repl[(ANUM_PG_POLICY_POLROLES - 1) as usize] = true;
         let mut new_tuple =
             heaptuple::heap_modify_tuple(mcx, tuple, td, &repl_values, &repl_isnull, &repl)?;
         let otid = tuple.t_self;
@@ -767,9 +819,13 @@ pub fn get_relation_policy_oid<'mcx>(
     let pg_policy_rel = table::table_open(mcx, POLICY_RELATION_ID, AccessShareLock)?;
     let pname = name_arg(mcx, policy_name)?;
     let keys = [
-        eq_key(Anum_pg_policy_polrelid as AttrNumber, F_OIDEQ, Datum::from_oid(relid)),
         eq_key(
-            Anum_pg_policy_polname as AttrNumber,
+            ANUM_PG_POLICY_POLRELID as AttrNumber,
+            F_OIDEQ,
+            Datum::from_oid(relid),
+        ),
+        eq_key(
+            ANUM_PG_POLICY_POLNAME as AttrNumber,
             F_NAMEEQ,
             Datum::from_usize(pname.as_ptr() as usize),
         ),
@@ -784,7 +840,7 @@ pub fn get_relation_policy_oid<'mcx>(
     )?;
     let policy_oid = match genam::systable_getnext(mcx, &mut scan)? {
         Some(tuple) => {
-            let (d, _) = getattr(pg_policy_rel.descr(), tuple, Anum_pg_policy_oid);
+            let (d, _) = getattr(pg_policy_rel.descr(), tuple, ANUM_PG_POLICY_OID);
             d.as_oid()
         }
         None => {
@@ -804,8 +860,11 @@ pub fn get_relation_policy_oid<'mcx>(
 
 pub fn relation_has_policies<'mcx>(mcx: Mcx<'mcx>, rel: &Relation<'mcx>) -> PgResult<bool> {
     let catalog_rel = table::table_open(mcx, POLICY_RELATION_ID, AccessShareLock)?;
-    let keys =
-        [eq_key(Anum_pg_policy_polrelid as AttrNumber, F_OIDEQ, Datum::from_oid(rel.rd_id))];
+    let keys = [eq_key(
+        ANUM_PG_POLICY_POLRELID as AttrNumber,
+        F_OIDEQ,
+        Datum::from_oid(rel.rd_id),
+    )];
     let mut scan = genam::systable_beginscan(
         mcx,
         &catalog_rel,
@@ -888,7 +947,11 @@ pub fn RemovePolicyObjects<'mcx>(mcx: Mcx<'mcx>, stmt: &DropStmt<'mcx>) -> PgRes
         let relid = catalog_namespace::RangeVarGetRelidExtended(
             &rv,
             AccessShareLock,
-            if stmt.missing_ok { catalog_namespace::RVR_MISSING_OK } else { 0 },
+            if stmt.missing_ok {
+                catalog_namespace::RVR_MISSING_OK
+            } else {
+                0
+            },
             None,
         )?;
         if relid == InvalidOid {
@@ -896,7 +959,7 @@ pub fn RemovePolicyObjects<'mcx>(mcx: Mcx<'mcx>, stmt: &DropStmt<'mcx>) -> PgRes
                 NOTICE,
                 format!(
                     "relation \"{}\" does not exist, skipping",
-                    name_list_to_string(&names, nnames - 1)
+                    name_list_to_string(names, nnames - 1)
                 ),
                 None,
             )?;
@@ -909,7 +972,7 @@ pub fn RemovePolicyObjects<'mcx>(mcx: Mcx<'mcx>, stmt: &DropStmt<'mcx>) -> PgRes
                 NOTICE,
                 format!(
                     "policy \"{polname}\" for relation \"{}\" does not exist, skipping",
-                    name_list_to_string(&names, nnames - 1)
+                    name_list_to_string(names, nnames - 1)
                 ),
                 None,
             )?;
@@ -921,7 +984,11 @@ pub fn RemovePolicyObjects<'mcx>(mcx: Mcx<'mcx>, stmt: &DropStmt<'mcx>) -> PgRes
             let relname = lsyscache::relation::get_rel_name(mcx, relid)?
                 .map(|n| n.as_str().to_string())
                 .unwrap_or_default();
-            aclchk::aclcheck_error(aclchk::ACLCHECK_NOT_OWNER, ObjectType::OBJECT_POLICY, &relname)?;
+            aclchk::aclcheck_error(
+                aclchk::ACLCHECK_NOT_OWNER,
+                ObjectType::OBJECT_POLICY,
+                &relname,
+            )?;
         }
 
         objects.add_exact_object_address(ObjectAddress::set(POLICY_RELATION_ID, policy_oid));

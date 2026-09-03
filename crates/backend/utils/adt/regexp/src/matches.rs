@@ -102,7 +102,13 @@ pub fn setup_regexp_matches<'a, 'mcx>(
             || (pmatch[0].rm_so < wide_len as i64 && pmatch[0].rm_eo > prev_match_end)
         {
             while array_idx + (npatterns as usize) * 2 + 1 > array_len as usize {
-                array_len += array_len + 1;
+                // Intentional doubling-plus-one (2x+1), not a misrefactored
+                // `+= 1`: matches C's array_len*2+1 growth, keeping the
+                // 2^n-1 sizing the comment above describes.
+                #[allow(clippy::misrefactored_assign_op)]
+                {
+                    array_len += array_len + 1;
+                }
                 if array_len as usize > MAX_ALLOC_SIZE / core::mem::size_of::<i32>() {
                     return Err(too_many_matches().into());
                 }
@@ -200,7 +206,13 @@ fn setup_regexp_matches_re2<'a, 'mcx>(
         }
         if !ignore_degenerate || (groups[0].0 < len as i64 && groups[0].1 > prev_match_end) {
             while array_idx + (npatterns as usize) * 2 + 1 > array_len as usize {
-                array_len += array_len + 1;
+                // Intentional doubling-plus-one (2x+1), not a misrefactored
+                // `+= 1`: matches C's array_len*2+1 growth, keeping the
+                // 2^n-1 sizing the comment above describes.
+                #[allow(clippy::misrefactored_assign_op)]
+                {
+                    array_len += array_len + 1;
+                }
                 if array_len as usize > MAX_ALLOC_SIZE / core::mem::size_of::<i32>() {
                     return Err(too_many_matches().into());
                 }
@@ -288,7 +300,13 @@ pub fn build_regexp_match_result<'mcx>(
         if so < 0 || eo < 0 {
             push(None)?;
         } else {
-            push(Some(fetch_chars(mcx, matchctx.orig_str, &matchctx.wide_str, so, eo)?))?;
+            push(Some(fetch_chars(
+                mcx,
+                matchctx.orig_str,
+                &matchctx.wide_str,
+                so,
+                eo,
+            )?))?;
         }
     }
     Ok(())
@@ -311,7 +329,13 @@ pub fn build_regexp_split_result<'mcx>(
         return Err(PgError::error("invalid match starting position").into());
     }
 
-    fetch_chars(splitctx.mcx, splitctx.orig_str, &splitctx.wide_str, startpos, endpos)
+    fetch_chars(
+        splitctx.mcx,
+        splitctx.orig_str,
+        &splitctx.wide_str,
+        startpos,
+        endpos,
+    )
 }
 
 pub fn regexp_count(
@@ -330,8 +354,16 @@ pub fn regexp_count(
     }
     re_flags.glob = true;
 
-    let matchctx =
-        setup_regexp_matches(mcx, str, pattern, &re_flags, start - 1, collation, false, false)?;
+    let matchctx = setup_regexp_matches(
+        mcx,
+        str,
+        pattern,
+        &re_flags,
+        start - 1,
+        collation,
+        false,
+        false,
+    )?;
 
     Ok(matchctx.nmatches)
 }

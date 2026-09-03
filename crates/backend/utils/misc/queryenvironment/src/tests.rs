@@ -7,8 +7,8 @@ use types_core::{InvalidOid, Oid, INVALID_PROC_NUMBER, RELPERSISTENCE_PERMANENT}
 use types_error::PgResult;
 use types_portal::TuplestoreHandle;
 use types_rel::{
-    FormData_pg_class, LockInfoData, LockRelId, Relation, RelationData, NoLock,
-    RELKIND_RELATION, REPLICA_IDENTITY_DEFAULT, LOCKMODE,
+    FormData_pg_class, LockInfoData, LockRelId, NoLock, Relation, RelationData, LOCKMODE,
+    RELKIND_RELATION, REPLICA_IDENTITY_DEFAULT,
 };
 use types_tuple::{NameData, TupleDescData};
 
@@ -130,7 +130,10 @@ fn tupdesc_inline_branch_shares_stored_descriptor() {
 
     let used_before = ctx.used();
     let out = ENRMetadataGetTupDesc(mcx, &md).unwrap();
-    assert!(Rc::ptr_eq(&out, &desc), "C returns enrmd->tupdesc unchanged");
+    assert!(
+        Rc::ptr_eq(&out, &desc),
+        "C returns enrmd->tupdesc unchanged"
+    );
     assert_eq!(ctx.used(), used_before, "inline path must not allocate");
 }
 
@@ -168,7 +171,9 @@ fn fake_relation_open(mcx: Mcx<'_>, oid: Oid, lockmode: LOCKMODE) -> PgResult<Re
     assert_eq!(oid, TBL);
     let mut relname = NameData::default();
     relname.namestrcpy("tbl");
-    let data = RelationData { rd_locator: Default::default(), rd_smgr: Default::default(),
+    let data = RelationData {
+        rd_locator: Default::default(),
+        rd_smgr: Default::default(),
         rd_id: oid,
         rd_backend: INVALID_PROC_NUMBER,
         rd_islocaltemp: false,
@@ -178,7 +183,10 @@ fn fake_relation_open(mcx: Mcx<'_>, oid: Oid, lockmode: LOCKMODE) -> PgResult<Re
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
         rd_lockInfo: LockInfoData {
-            lockRelId: LockRelId { relId: oid, dbId: 5 },
+            lockRelId: LockRelId {
+                relId: oid,
+                dbId: 5,
+            },
         },
         rd_rel: FormData_pg_class {
             relname,
@@ -214,13 +222,16 @@ fn fake_relation_open(mcx: Mcx<'_>, oid: Oid, lockmode: LOCKMODE) -> PgResult<Re
         pgstat_enabled: Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: PgVec::new_in(mcx),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     };
     Ok(Relation::open(data, Some(record_close)))
 }
@@ -246,7 +257,10 @@ fn tupdesc_catalog_branch_opens_and_closes_with_nolock() {
     };
 
     let out = ENRMetadataGetTupDesc(mcx, &md).unwrap();
-    assert_eq!(out.natts, TBL_NATTS, "descriptor comes from relation rd_att");
+    assert_eq!(
+        out.natts, TBL_NATTS,
+        "descriptor comes from relation rd_att"
+    );
     assert_eq!(LAST_OPEN_LOCKMODE.get(), NoLock);
     assert_eq!(LAST_CLOSED.get(), (TBL, NoLock));
 }

@@ -41,8 +41,16 @@ fn setup_seams() {
     mbutils_seams::get_database_encoding::set(|| 6);
     timestamp_seams::get_current_timestamp::set(|| 0);
     guc_tables::option_sets::io_method_options.install(&[
-        config_enum_entry { name: "sync", val: IOMETHOD_SYNC, hidden: false },
-        config_enum_entry { name: "worker", val: IOMETHOD_WORKER, hidden: false },
+        config_enum_entry {
+            name: "sync",
+            val: IOMETHOD_SYNC,
+            hidden: false,
+        },
+        config_enum_entry {
+            name: "worker",
+            val: IOMETHOD_WORKER,
+            hidden: false,
+        },
     ]);
     guc_tables::vars::io_method.install(GucVarAccessors {
         get: io_method_get,

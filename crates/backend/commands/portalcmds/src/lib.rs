@@ -4,6 +4,7 @@
 
 use ::elog::ereport;
 use ::mcx::{Mcx, MemoryContext, PgBox};
+use ::types_dest::CommandDest;
 use ::types_error::{
     PgResult, ERRCODE_INSUFFICIENT_PRIVILEGE, ERRCODE_INVALID_CURSOR_NAME,
     ERRCODE_UNDEFINED_CURSOR, ERROR,
@@ -11,7 +12,6 @@ use ::types_error::{
 use ::types_nodes::nodes_enums::CmdType;
 use ::types_nodes::parsenodes::{DeclareCursorStmt, FetchStmt, Query};
 use ::types_nodes::plannodes::PlannedStmt;
-use ::types_dest::CommandDest;
 use ::types_portal::{
     CachedPlanHandle, ParamListHandle, Portal, QueryCompletion, QueryDescHandle, CMDTAG_FETCH,
     CMDTAG_MOVE, CMDTAG_SELECT, CURSOR_OPT_HOLD, CURSOR_OPT_NO_SCROLL, CURSOR_OPT_SCROLL,
@@ -77,7 +77,11 @@ pub fn PerformCursorOpen(
     let pmcx = pctx.mcx();
 
     let raw = postgres::pg_parse_query(pmcx, stmt_text)?;
-    assert!(raw.len() == 1, "DECLARE statement slice re-parsed to {} statements", raw.len());
+    assert!(
+        raw.len() == 1,
+        "DECLARE statement slice re-parsed to {} statements",
+        raw.len()
+    );
     let queries = postgres::pg_analyze_and_rewrite_fixedparams(
         pmcx,
         &raw[0],
@@ -85,7 +89,11 @@ pub fn PerformCursorOpen(
         &param_types,
         types_portal::QueryEnvHandle::NULL,
     )?;
-    assert!(queries.len() == 1, "DECLARE analysis yielded {} queries", queries.len());
+    assert!(
+        queries.len() == 1,
+        "DECLARE analysis yielded {} queries",
+        queries.len()
+    );
     let util = queries.into_iter().next().expect("len == 1");
     let cstmt_node = util
         .utilityStmt
@@ -93,11 +101,9 @@ pub fn PerformCursorOpen(
         .expect("re-parsed DECLARE slice is a DeclareCursorStmt");
     // SAFETY: the re-parsed tree is single-owner here; the Query is consumed
     // exactly as C's QueryRewrite consumes its argument.
-    let query_node = unsafe {
-        cstmt_node.with_mut::<DeclareCursorStmt, _>(|d| d.query.take())
-    }
-    .flatten()
-    .ok_or_else(non_select_in_declare)?;
+    let query_node = unsafe { cstmt_node.with_mut::<DeclareCursorStmt, _>(|d| d.query.take()) }
+        .flatten()
+        .ok_or_else(non_select_in_declare)?;
     // SAFETY: as above; no derived refs are live.
     let mut query = unsafe { query_node.with_mut::<Query, _>(core::mem::take) }
         .ok_or_else(non_select_in_declare)?;
@@ -118,8 +124,14 @@ pub fn PerformCursorOpen(
         return Err(non_select_in_declare());
     }
 
-    let plan = postgres::pg_plan_query(pmcx, mcx::leak_in(mcx::alloc_in(pmcx, query)?), source_text, cstmt.options, params)?
-        .expect("planner output for a SELECT");
+    let plan = postgres::pg_plan_query(
+        pmcx,
+        mcx::leak_in(mcx::alloc_in(pmcx, query)?),
+        source_text,
+        cstmt.options,
+        params,
+    )?
+    .expect("planner output for a SELECT");
 
     let portal = portalmem::CreatePortal(name, false, false)?;
 
@@ -168,9 +180,7 @@ pub fn PerformCursorOpen(
             // A POLICY oracle since the backward-execution wave (B10): it
             // decides which cursors accept FETCH BACKWARD by default (C
             // parity); the reads themselves are store-served.
-            if plan.rowMarks.is_nil()
-                && execmain::plan_implicit_scroll_ok(plan.planTree)
-            {
+            if plan.rowMarks.is_nil() && execmain::plan_implicit_scroll_ok(plan.planTree) {
                 p.cursorOptions |= CURSOR_OPT_SCROLL;
             } else {
                 p.cursorOptions |= CURSOR_OPT_NO_SCROLL;
@@ -208,7 +218,11 @@ pub fn PerformPortalFetch(
     };
 
     if let Some(qc) = qc {
-        qc.commandTag = if stmt.ismove { CMDTAG_MOVE } else { CMDTAG_FETCH };
+        qc.commandTag = if stmt.ismove {
+            CMDTAG_MOVE
+        } else {
+            CMDTAG_FETCH
+        };
         qc.nprocessed = nprocessed;
     }
     Ok(())
@@ -271,7 +285,10 @@ pub fn PortalCleanup(portal: &Portal<'static>) -> PgResult<()> {
 
 pub fn PersistHoldablePortal(portal: &Portal<'static>) -> PgResult<()> {
     let query_desc = portal.borrow().queryDesc;
-    assert!(!query_desc.is_null(), "PersistHoldablePortal: portal has no queryDesc");
+    assert!(
+        !query_desc.is_null(),
+        "PersistHoldablePortal: portal has no queryDesc"
+    );
     debug_assert!(!portal.borrow().holdStore.is_null());
     debug_assert!(portal.borrow().holdSnapshot.is_none());
     // C copies tupDesc into holdContext before ExecutorEnd; the portal's Rc
@@ -335,7 +352,8 @@ pub fn PersistHoldablePortal(portal: &Portal<'static>) -> PgResult<()> {
             (p.atEnd, p.portalPos)
         };
         if at_end {
-            while tuplestore_hold_seams::tuplestore_skiptuples::call(hold_store, 1_000_000, true)? {}
+            while tuplestore_hold_seams::tuplestore_skiptuples::call(hold_store, 1_000_000, true)? {
+            }
         } else {
             tuplestore_hold_seams::tuplestore_rescan::call(hold_store)?;
             // No-scroll: the store starts at the not-yet-fetched rows already.

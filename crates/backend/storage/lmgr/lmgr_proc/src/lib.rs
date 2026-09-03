@@ -10,15 +10,15 @@ use std::sync::OnceLock;
 use init_small::globals as g;
 use types_core::{
     BackendType, InvalidLocalTransactionId, InvalidOid, InvalidTransactionId, ProcNumber,
-    TRANSACTION_STATUS_IN_PROGRESS, INVALID_PROC_NUMBER,
+    INVALID_PROC_NUMBER, TRANSACTION_STATUS_IN_PROGRESS,
 };
 use types_error::{PgError, PgResult, ERRCODE_TOO_MANY_CONNECTIONS, ERROR, FATAL};
 use types_storage::lock::{DeadLockState, DEFAULT_LOCKMETHOD, USER_LOCKMETHOD};
 use types_storage::storage::{
-    pg_atomic_uint32, proclist_head, proclist_node, FreeListId, LWLockWaitList, PGPROC, PROC_HDR,
-    Spinlock, SyncCell, XidCacheStatus, FP_LOCK_GROUPS_PER_BACKEND_MAX, FP_LOCK_SLOTS_PER_GROUP,
+    pg_atomic_uint32, proclist_head, proclist_node, FreeListId, LWLockWaitList, Spinlock, SyncCell,
+    XidCacheStatus, FP_LOCK_GROUPS_PER_BACKEND_MAX, FP_LOCK_SLOTS_PER_GROUP,
     LWTRANCHE_LOCK_FASTPATH, NUM_AUXILIARY_PROCS, NUM_LOCK_PARTITIONS, NUM_SPECIAL_WORKER_PROCS,
-    PROC_IS_AUTOVACUUM, PROC_WAIT_STATUS_OK,
+    PGPROC, PROC_HDR, PROC_IS_AUTOVACUUM, PROC_WAIT_STATUS_OK,
 };
 use types_storage::waiteventset::{WL_EXIT_ON_PM_DEATH, WL_LATCH_SET};
 
@@ -253,7 +253,10 @@ const fn maxalign(len: usize) -> usize {
 fn total_procs(cfg: &ProcGlobalConfig) -> PgResult<usize> {
     shmem_seams::add_size::call(
         g::MaxBackends() as usize,
-        shmem_seams::add_size::call(NUM_AUXILIARY_PROCS as usize, cfg.max_prepared_xacts as usize)?,
+        shmem_seams::add_size::call(
+            NUM_AUXILIARY_PROCS as usize,
+            cfg.max_prepared_xacts as usize,
+        )?,
     )
 }
 
@@ -300,7 +303,7 @@ pub fn InitProcGlobal(cfg: &ProcGlobalConfig) {
             + NUM_SPECIAL_WORKER_PROCS
     );
     let groups = cfg.fastpath_lock_groups_per_backend;
-    assert!(groups >= 1 && groups <= FP_LOCK_GROUPS_PER_BACKEND_MAX);
+    assert!((1..=FP_LOCK_GROUPS_PER_BACKEND_MAX).contains(&groups));
 
     let total = max_backends + NUM_AUXILIARY_PROCS + cfg.max_prepared_xacts;
     let slots_per_backend = groups * FP_LOCK_SLOTS_PER_GROUP;
@@ -321,7 +324,8 @@ pub fn InitProcGlobal(cfg: &ProcGlobalConfig) {
     let mut procs = Vec::with_capacity(total as usize);
     for i in 0..total {
         let mut proc = PGPROC::new_zeroed();
-        proc.fpLockBits.set(fp_bits[(i * groups) as usize..].as_ptr());
+        proc.fpLockBits
+            .set(fp_bits[(i * groups) as usize..].as_ptr());
         proc.fpRelId
             .set(fp_relids[(i * slots_per_backend) as usize..].as_ptr());
         proc.fpUseCounts
@@ -447,7 +451,8 @@ pub fn ProcGlobalResetAfterCrash() {
             part.set(types_storage::ilist::dlist_head::new());
         }
         proc.subxidStatus.set(XidCacheStatus::default());
-        proc.subxids.set(types_storage::storage::XidCache::default());
+        proc.subxids
+            .set(types_storage::storage::XidCache::default());
         proc.procArrayGroupMember.store(false, Relaxed);
         proc.procArrayGroupNext
             .value
@@ -1134,7 +1139,7 @@ pub fn LeaveLockGroup() {
 pub fn AuxiliaryProcKill(_code: i32, arg: usize) {
     let hdr = ProcGlobal();
     let proctype = arg as ProcNumber;
-    debug_assert!(proctype >= 0 && proctype < NUM_AUXILIARY_PROCS);
+    debug_assert!((0..NUM_AUXILIARY_PROCS).contains(&proctype));
     let procno = my_proc_required();
     let proc = GetPGProcByNumber(procno);
 
@@ -1308,8 +1313,8 @@ pub fn init_seams() {
             prev: node.prev,
         })
     });
-    s::pg_semaphore_lock::set(|procno| pg_sema_seams::pg_semaphore_lock::call(procno));
-    s::pg_semaphore_unlock::set(|procno| pg_sema_seams::pg_semaphore_unlock::call(procno));
+    s::pg_semaphore_lock::set(pg_sema_seams::pg_semaphore_lock::call);
+    s::pg_semaphore_unlock::set(pg_sema_seams::pg_semaphore_unlock::call);
 
     use guc_tables::{vars, GucVarAccessors};
     macro_rules! install_var {

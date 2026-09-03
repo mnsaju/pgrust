@@ -95,7 +95,10 @@ pub fn WalWriterMain(startup_data: &StartupData) -> ! {
 
     {
         use procsignal::ThreadSignalHandler::{Ignore, Simple};
-        procsignal::pqsignal_thread(procsignal::signums::SIGHUP, Simple(interrupt::SignalHandlerForConfigReload));
+        procsignal::pqsignal_thread(
+            procsignal::signums::SIGHUP,
+            Simple(interrupt::SignalHandlerForConfigReload),
+        );
         procsignal::pqsignal_thread(
             procsignal::signums::SIGINT,
             Simple(interrupt::SignalHandlerForShutdownRequest),
@@ -114,7 +117,9 @@ pub fn WalWriterMain(startup_data: &StartupData) -> ! {
     let mut state = WalWriterState::new();
     transam_xlog::SetWalWriterSleeping(false);
 
-    lmgr_proc::ProcGlobal().walwriterProc.store(g::MyProcNumber(), Relaxed);
+    lmgr_proc::ProcGlobal()
+        .walwriterProc
+        .store(g::MyProcNumber(), Relaxed);
 
     // sigsetjmp(PG_exception_stack) equivalent.
     loop {
@@ -222,7 +227,10 @@ pub fn walwriter_cycle(state: &mut WalWriterState) -> PgResult<i64> {
         pgstat_seams::pgstat_report_wal::call(false);
     }
 
-    Ok(cycle_timeout_ms(state.left_till_hibernate, WalWriterDelay()))
+    Ok(cycle_timeout_ms(
+        state.left_till_hibernate,
+        WalWriterDelay(),
+    ))
 }
 
 fn walwriter_loop(state: &mut WalWriterState) -> PgResult<Never> {

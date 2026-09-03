@@ -36,7 +36,7 @@ fn int4send_fn(
     img.extend_from_slice(&set_varsize_4b(8));
     img.extend_from_slice(&fcinfo.arg(0).as_i32().to_be_bytes());
     Ok(Datum::from_usize(
-        Box::leak(img.into_boxed_slice()).as_ptr() as usize
+        Box::leak(img.into_boxed_slice()).as_ptr() as usize,
     ))
 }
 

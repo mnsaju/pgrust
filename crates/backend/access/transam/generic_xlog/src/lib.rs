@@ -102,7 +102,9 @@ impl GenericXLogState {
                 pd.buffer = buffer;
                 pd.flags = flags;
                 // SAFETY: contract at buffer_page.
-                self.images[block_id].0.copy_from_slice(unsafe { buffer_page(buffer) });
+                self.images[block_id]
+                    .0
+                    .copy_from_slice(unsafe { buffer_page(buffer) });
                 return Ok(&mut self.images[block_id].0);
             } else if pd.buffer == buffer {
                 return Ok(&mut self.images[block_id].0);
@@ -123,11 +125,11 @@ impl GenericXLogState {
     }
 }
 
-pub fn GenericXLogRegisterBuffer<'s>(
-    state: &'s mut GenericXLogState,
+pub fn GenericXLogRegisterBuffer(
+    state: &mut GenericXLogState,
     buffer: Buffer,
     flags: i32,
-) -> PgResult<&'s mut [u8; BLCKSZ]> {
+) -> PgResult<&mut [u8; BLCKSZ]> {
     state.register_buffer(buffer, flags)
 }
 
@@ -173,8 +175,7 @@ fn finish_logged(st: &mut GenericXLogState) -> PgResult<XLogRecPtr> {
         bufdata: &[],
     });
     let mut n = 0;
-    for i in 0..MAX_GENERIC_XLOG_PAGES {
-        let pd = &st.pages[i];
+    for (i, pd) in st.pages.iter().enumerate().take(MAX_GENERIC_XLOG_PAGES) {
         if pd.buffer == InvalidBuffer {
             continue;
         }

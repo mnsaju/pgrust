@@ -5,7 +5,9 @@ use ::types_error::PgResult;
 use crate::lseg::{lseg_contain_point, lseg_interpt_lseg, statlseg_construct};
 use crate::point::point_add_point;
 use crate::proximity::lseg_closept_lseg;
-use crate::{box_contain_box, box_ov, plist_same, point_dt, point_eq_point, point_inside, PolyRef, Pts};
+use crate::{
+    box_contain_box, box_ov, plist_same, point_dt, point_eq_point, point_inside, PolyRef, Pts,
+};
 
 pub fn poly_left(a: &PolyRef<'_>, b: &PolyRef<'_>) -> bool {
     a.boundbox.high.x < b.boundbox.low.x

@@ -4,58 +4,58 @@
 
 pub mod allpaths;
 pub mod analyzejoins;
+pub mod array_selfuncs;
 pub mod clausesel;
 pub mod cluster;
-pub mod extended_stats;
 pub mod costsize;
 pub mod createplan;
+pub mod cte;
 pub mod equivclass;
+pub mod extended_stats;
 pub mod fdwplan;
-pub mod geqo;
 pub mod flatten_group;
+pub mod geqo;
 pub mod grouping;
 pub mod groupingsets;
 pub mod indxpath;
-mod tidpath;
 mod inherit;
 pub mod initsplan;
+pub mod intarray_selfuncs;
 pub mod joinpath;
 pub mod joinrels;
-pub mod pathkeys;
-pub mod placeholder;
-pub mod planagg;
-pub mod orclauses;
-pub mod pathnode;
-pub mod plancat;
-pub mod partprune;
 pub mod like_support;
 mod m5_partwise;
 pub mod m5_suppress;
 pub mod multirangetypes_selfuncs;
 pub mod network_selfuncs;
-pub mod array_selfuncs;
-pub mod intarray_selfuncs;
-pub mod rangetypes_selfuncs;
-pub mod selfuncs;
-pub(crate) mod syscache_memo;
-pub mod ts_selfuncs;
+pub mod orclauses;
+pub mod paramassign;
+pub mod partprune;
+pub mod pathkeys;
+pub mod pathnode;
+pub mod placeholder;
+pub mod planagg;
+pub mod plancat;
 pub mod planmain;
-pub mod prep;
-pub mod prepunion;
-pub mod prepqual;
 pub mod predtest;
-pub mod prepjointree;
-mod pushdown;
+pub mod prep;
 pub mod prepagg;
+pub mod prepjointree;
+pub mod prepqual;
+pub mod prepunion;
+mod pushdown;
+pub mod rangetypes_selfuncs;
 pub mod relnode;
 pub mod run;
+pub mod selfuncs;
 pub mod setrefs;
 pub mod srf;
-pub mod cte;
 pub mod subquery;
-pub mod window;
 pub mod subselect;
-pub mod paramassign;
+pub(crate) mod syscache_memo;
+mod tidpath;
+pub mod ts_selfuncs;
+pub mod window;
 
 #[cfg(test)]
 mod tests;
@@ -68,7 +68,6 @@ use types_nodes::parsenodes::Query;
 use types_nodes::plannodes::PlannedStmt;
 use types_nodes::Node;
 use types_portal::{ParamListHandle, CURSOR_OPT_FAST_PLAN, CURSOR_OPT_PARALLEL_OK};
-use types_pathnodes::PtId;
 
 use crate::createplan::create_plan;
 use crate::pathnode::get_cheapest_fractional_path;
@@ -88,7 +87,7 @@ const PGJIT_DEFORM: i32 = 1 << 4;
 // GUC backing this crate reads (double-install panics flag future homes).
 pub mod gucs {
     guc_tables::session_guc_cluster!(PlannerGucs, PLANNER_GUCS:
-        (cursor_tuple_fraction_cell, f64, cursor_tuple_fraction, set_cursor_tuple_fraction, (0.1) as f64),
+        (cursor_tuple_fraction_cell, f64, cursor_tuple_fraction, set_cursor_tuple_fraction, 0.1_f64),
         // pgrust copy-and-patch JIT defaults (was C's 100000/500000/500000);
         // must match guc_tables::tables boot_vals. 200 amortizes the WHOLE
         // per-execution compile bill over ONE execution: expression kernels
@@ -99,9 +98,9 @@ pub mod gucs {
         // optimize/inline are inert under copy-and-patch (no LLVM phase) so
         // they equal jit_above_cost. Full derivation in guc_tables/tables.rs
         // + docs/design/jit-parallel-defaults.md.
-        (jit_above_cost_cell, f64, jit_above_cost, set_jit_above_cost, (200.0) as f64),
-        (jit_optimize_above_cost_cell, f64, jit_optimize_above_cost, set_jit_optimize_above_cost, (200.0) as f64),
-        (jit_inline_above_cost_cell, f64, jit_inline_above_cost, set_jit_inline_above_cost, (200.0) as f64),
+        (jit_above_cost_cell, f64, jit_above_cost, set_jit_above_cost, 200.0_f64),
+        (jit_optimize_above_cost_cell, f64, jit_optimize_above_cost, set_jit_optimize_above_cost, 200.0_f64),
+        (jit_inline_above_cost_cell, f64, jit_inline_above_cost, set_jit_inline_above_cost, 200.0_f64),
         (from_collapse_limit_cell, i32, from_collapse_limit, set_from_collapse_limit, 8),
         (join_collapse_limit_cell, i32, join_collapse_limit, set_join_collapse_limit, 8),
         (constraint_exclusion_cell, i32, constraint_exclusion, set_constraint_exclusion, guc_tables::consts::CONSTRAINT_EXCLUSION_PARTITION),
@@ -114,19 +113,6 @@ pub mod gucs {
     );
 
     pub use ::costsize::gucs::*;
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
 }
 
 pub fn init_seams() {
@@ -216,10 +202,14 @@ pub fn init_seams() {
         get: gucs::max_parallel_workers_per_gather,
         set: gucs::set_max_parallel_workers_per_gather,
     });
-    guc_tables::vars::jit_enabled
-        .install(GucVarAccessors { get: gucs::jit_enabled, set: gucs::set_jit_enabled });
-    guc_tables::vars::jit_above_cost
-        .install(GucVarAccessors { get: gucs::jit_above_cost, set: gucs::set_jit_above_cost });
+    guc_tables::vars::jit_enabled.install(GucVarAccessors {
+        get: gucs::jit_enabled,
+        set: gucs::set_jit_enabled,
+    });
+    guc_tables::vars::jit_above_cost.install(GucVarAccessors {
+        get: gucs::jit_above_cost,
+        set: gucs::set_jit_above_cost,
+    });
     guc_tables::vars::jit_optimize_above_cost.install(GucVarAccessors {
         get: gucs::jit_optimize_above_cost,
         set: gucs::set_jit_optimize_above_cost,
@@ -228,8 +218,10 @@ pub fn init_seams() {
         get: gucs::jit_inline_above_cost,
         set: gucs::set_jit_inline_above_cost,
     });
-    guc_tables::vars::jit_expressions
-        .install(GucVarAccessors { get: gucs::jit_expressions, set: gucs::set_jit_expressions });
+    guc_tables::vars::jit_expressions.install(GucVarAccessors {
+        get: gucs::jit_expressions,
+        set: gucs::set_jit_expressions,
+    });
     guc_tables::vars::from_collapse_limit.install(GucVarAccessors {
         get: gucs::from_collapse_limit,
         set: gucs::set_from_collapse_limit,
@@ -282,7 +274,13 @@ pub fn planner<'mcx>(
     tap_planner_enter::call_if(|f| f(query_id));
     let result = standard_planner(mcx, parse, query_string, cursor_options, bound_params);
     tap_planner_leave::call_if(|f| {
-        f(result.is_ok(), query_id, stmt_location, stmt_len, query_string)
+        f(
+            result.is_ok(),
+            query_id,
+            stmt_location,
+            stmt_len,
+            query_string,
+        )
     });
     let result = result?;
     backend_status_seams::pgstat_report_plan_id::call(result.planId, false);
@@ -331,11 +329,11 @@ pub fn standard_planner<'mcx>(
         0.0
     };
 
-    subquery_planner(&mut run, parse, false, tuple_fraction, None)?;
+    subquery_planner(run, parse, false, tuple_fraction, None)?;
 
-    let final_rel = fetch_final_rel(&mut run);
-    let best_path = get_cheapest_fractional_path(&run, final_rel, tuple_fraction);
-    let mut top_plan = create_plan(&mut run, best_path)?;
+    let final_rel = fetch_final_rel(run);
+    let best_path = get_cheapest_fractional_path(run, final_rel, tuple_fraction);
+    let mut top_plan = create_plan(run, best_path)?;
 
     // C planner.c:444-451 wraps a SCROLL cursor's plan in Material when
     // !ExecSupportsBackwardScan, so the EXECUTOR can run backwards on demand.
@@ -410,13 +408,13 @@ pub fn standard_planner<'mcx>(
         for i in 0..run.glob.subplans.len() {
             let subplan = run.glob.subplans.nth(i);
             let subroot = &run.subroots[i].root;
-            crate::subselect::ss_finalize_plan(&run, subroot, subplan, &subroot.outer_params)?;
+            crate::subselect::ss_finalize_plan(run, subroot, subplan, &subroot.outer_params)?;
         }
-        crate::subselect::ss_finalize_plan(&run, &run.root, top_plan, &run.root.outer_params)?;
+        crate::subselect::ss_finalize_plan(run, &run.root, top_plan, &run.root.outer_params)?;
     }
 
     debug_assert!(run.glob.finalrtable.is_nil());
-    let top_plan = set_plan_references(&mut run, top_plan)?;
+    let top_plan = set_plan_references(run, top_plan)?;
     // ... and the subplans, each under its own root (C's forboth over
     // glob->subplans/glob->subroots).
     if !run.glob.subplans.is_nil() {
@@ -427,7 +425,7 @@ pub fn standard_planner<'mcx>(
             core::mem::swap(&mut run.subroots[i].root, &mut run.root);
             let top_tlist =
                 core::mem::replace(&mut run.processed_tlist, run.subroots[i].processed_tlist);
-            let fixed = set_plan_references(&mut run, subplan)?;
+            let fixed = set_plan_references(run, subplan)?;
             core::mem::swap(&mut run.subroots[i].root, &mut run.root);
             run.processed_tlist = top_tlist;
             fixed_subplans.lappend(mcx, fixed)?;
@@ -438,10 +436,7 @@ pub fn standard_planner<'mcx>(
     let parse = run.parse();
     let total_cost = top_plan.as_plan().expect("plan node").total_cost;
     let mut jit_flags = 0;
-    if gucs::jit_enabled()
-        && gucs::jit_above_cost() >= 0.0
-        && total_cost > gucs::jit_above_cost()
-    {
+    if gucs::jit_enabled() && gucs::jit_above_cost() >= 0.0 && total_cost > gucs::jit_above_cost() {
         jit_flags |= PGJIT_PERFORM;
         if gucs::jit_optimize_above_cost() >= 0.0 && total_cost > gucs::jit_optimize_above_cost() {
             jit_flags |= PGJIT_OPT3;

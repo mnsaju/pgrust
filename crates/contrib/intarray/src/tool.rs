@@ -47,7 +47,7 @@ impl IntArray {
     /// PG_GETARG_ARRAYTYPE_P(_COPY): owned copy of a detoasted 4B-header
     /// image, dims/null-bitmap preserved.
     pub fn from_image(image: &[u8]) -> IntArray {
-        debug_assert!(image.len() % 4 == 0 && image.len() >= 16);
+        debug_assert!(image.len().is_multiple_of(4) && image.len() >= 16);
         let mut w = vec![0i32; image.len() / 4];
         // SAFETY: plain byte copy into the i32 backing store.
         unsafe {

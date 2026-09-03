@@ -8,8 +8,7 @@ use crate::var::{
 };
 use crate::{
     division_by_zero_error, numeric_can_be_short, Num, NumericDigit, DEC_DIGITS,
-    NUMERIC_DSCALE_MASK,
-    NUMERIC_DSCALE_MAX, NUMERIC_INF_SIGN_MASK, NUMERIC_NEG, NUMERIC_POS,
+    NUMERIC_DSCALE_MASK, NUMERIC_DSCALE_MAX, NUMERIC_INF_SIGN_MASK, NUMERIC_NEG, NUMERIC_POS,
     NUMERIC_SHORT_DSCALE_MASK, NUMERIC_SHORT_DSCALE_SHIFT, NUMERIC_SHORT_SIGN_MASK,
     NUMERIC_WEIGHT_MAX, VARHDRSZ,
 };
@@ -32,13 +31,16 @@ pub fn numerictypmodin_core(tl: &[i32]) -> PgResult<i32> {
             if tl[0] < 1 || tl[0] > crate::NUMERIC_MAX_PRECISION {
                 return param_err(format!(
                     "NUMERIC precision {} must be between 1 and {}",
-                    tl[0], crate::NUMERIC_MAX_PRECISION
+                    tl[0],
+                    crate::NUMERIC_MAX_PRECISION
                 ));
             }
             if tl[1] < crate::NUMERIC_MIN_SCALE || tl[1] > crate::NUMERIC_MAX_SCALE {
                 return param_err(format!(
                     "NUMERIC scale {} must be between {} and {}",
-                    tl[1], crate::NUMERIC_MIN_SCALE, crate::NUMERIC_MAX_SCALE
+                    tl[1],
+                    crate::NUMERIC_MIN_SCALE,
+                    crate::NUMERIC_MAX_SCALE
                 ));
             }
             Ok(make_numeric_typmod(tl[0], tl[1]))
@@ -47,7 +49,8 @@ pub fn numerictypmodin_core(tl: &[i32]) -> PgResult<i32> {
             if tl[0] < 1 || tl[0] > crate::NUMERIC_MAX_PRECISION {
                 return param_err(format!(
                     "NUMERIC precision {} must be between 1 and {}",
-                    tl[0], crate::NUMERIC_MAX_PRECISION
+                    tl[0],
+                    crate::NUMERIC_MAX_PRECISION
                 ));
             }
             Ok(make_numeric_typmod(tl[0], 0))
@@ -503,7 +506,8 @@ pub fn numeric_apply_typmod(num: Num<'_>, typmod: i32) -> PgResult<NumericImage>
         let mut img = NumericImage::from_num(num);
         let hdr_word = num.header();
         let new_hdr = if num.is_short() {
-            (hdr_word & !NUMERIC_SHORT_DSCALE_MASK) | ((dscale as u16) << NUMERIC_SHORT_DSCALE_SHIFT)
+            (hdr_word & !NUMERIC_SHORT_DSCALE_MASK)
+                | ((dscale as u16) << NUMERIC_SHORT_DSCALE_SHIFT)
         } else {
             num.sign() | (dscale as u16 & NUMERIC_DSCALE_MASK)
         };
@@ -521,9 +525,9 @@ pub fn numeric_round_common(num: Num<'_>, scale: i32) -> PgResult<NumericImage> 
         return Ok(NumericImage::from_num(num));
     }
 
-    let scale = scale
-        .max(-(NUMERIC_WEIGHT_MAX + 1) * DEC_DIGITS - 1)
-        .min(NUMERIC_DSCALE_MAX);
+    // clamp is safe here: both bounds are compile-time constants with
+    // min < max (NUMERIC_DSCALE_MAX is positive).
+    let scale = scale.clamp(-(NUMERIC_WEIGHT_MAX + 1) * DEC_DIGITS - 1, NUMERIC_DSCALE_MAX);
 
     let mut arg = NumericVar::from_view(num.view());
     arg.round(scale);
@@ -538,9 +542,9 @@ pub fn numeric_trunc_common(num: Num<'_>, scale: i32) -> PgResult<NumericImage> 
         return Ok(NumericImage::from_num(num));
     }
 
-    let scale = scale
-        .max(-(NUMERIC_WEIGHT_MAX + 1) * DEC_DIGITS)
-        .min(NUMERIC_DSCALE_MAX);
+    // clamp is safe here: both bounds are compile-time constants with
+    // min < max (NUMERIC_DSCALE_MAX is positive).
+    let scale = scale.clamp(-(NUMERIC_WEIGHT_MAX + 1) * DEC_DIGITS, NUMERIC_DSCALE_MAX);
 
     let mut arg = NumericVar::from_view(num.view());
     arg.trunc(scale);
@@ -782,14 +786,13 @@ pub fn numeric_float8_no_overflow(num: Num<'_>) -> f64 {
 // viewing (C: DatumGetNumeric's unpacking copy).
 pub fn numeric_float8_no_overflow_any(payload: &[u8]) -> f64 {
     let num = Num::from_payload(payload);
-    if num.is_special() || (payload.as_ptr() as usize + num.header_size()) % 2 == 0 {
+    if num.is_special() || (payload.as_ptr() as usize + num.header_size()).is_multiple_of(2) {
         return numeric_float8_no_overflow(num);
     }
     let mut buf = vec![0u16; payload.len().div_ceil(2)];
     // SAFETY: the u16 buffer reinterpreted as bytes, sized to cover payload.
-    let dst = unsafe {
-        core::slice::from_raw_parts_mut(buf.as_mut_ptr().cast::<u8>(), payload.len())
-    };
+    let dst =
+        unsafe { core::slice::from_raw_parts_mut(buf.as_mut_ptr().cast::<u8>(), payload.len()) };
     dst.copy_from_slice(payload);
     numeric_float8_no_overflow(Num::from_payload(dst))
 }
@@ -1079,11 +1082,11 @@ pub fn in_range_numeric_numeric(
     less: bool,
 ) -> PgResult<bool> {
     if offset.is_nan() || offset.is_ninf() || offset.sign() == NUMERIC_NEG {
-        return Err(PgError::error(
-            "invalid preceding or following size in window function",
-        )
-        .with_sqlstate(::types_error::ERRCODE_INVALID_PRECEDING_OR_FOLLOWING_SIZE)
-        .into());
+        return Err(
+            PgError::error("invalid preceding or following size in window function")
+                .with_sqlstate(::types_error::ERRCODE_INVALID_PRECEDING_OR_FOLLOWING_SIZE)
+                .into(),
+        );
     }
     // NaN sorts after non-NaN (cf cmp_numerics); the offset cannot change that.
     let result = if val.is_nan() {

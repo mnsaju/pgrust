@@ -67,7 +67,11 @@ fn errno() -> i32 {
 /// matching the socket arm's behavior on a dead descriptor. POLLHUP/POLLERR
 /// likewise count as ready so the op observes EOF/EPIPE.
 pub fn poll_ready(fd: i32, events: i16) -> bool {
-    let mut pfd = libc::pollfd { fd, events, revents: 0 };
+    let mut pfd = libc::pollfd {
+        fd,
+        events,
+        revents: 0,
+    };
     // SAFETY: pfd is a valid pollfd for the duration of the call; nfds = 1.
     let rc = unsafe { libc::poll(&mut pfd, 1, 0) };
     if rc < 0 {
@@ -75,8 +79,7 @@ pub fn poll_ready(fd: i32, events: i16) -> bool {
         // (N2 fix — was "not ready" = eternal EWOULDBLOCK).
         return true;
     }
-    rc > 0
-        && (pfd.revents & (events | libc::POLLHUP | libc::POLLERR | libc::POLLNVAL)) != 0
+    rc > 0 && (pfd.revents & (events | libc::POLLHUP | libc::POLLERR | libc::POLLNVAL)) != 0
 }
 
 /// One emulated-noblock READ attempt against a blocking fd: zero-timeout
@@ -194,7 +197,10 @@ mod tests {
         close(r);
         close(w);
         close(dead);
-        assert!(poll_ready(dead, libc::POLLIN), "POLLNVAL must report ready (N2)");
+        assert!(
+            poll_ready(dead, libc::POLLIN),
+            "POLLNVAL must report ready (N2)"
+        );
         let mut buf = [0u8; 4];
         let (n, e) = read_noblock(dead, &mut buf);
         assert_eq!(n, -1);
@@ -261,7 +267,10 @@ mod tests {
         let (wrote, n, e) = rx
             .recv_timeout(std::time::Duration::from_secs(10))
             .expect("capped noblock flush loop BLOCKED (N1 regression)");
-        assert!(wrote <= drained as usize, "cannot write more than the drained room");
+        assert!(
+            wrote <= drained as usize,
+            "cannot write more than the drained room"
+        );
         assert_eq!((n, e), (-1, libc::EWOULDBLOCK));
         assert!(filled > 0);
         close(r);

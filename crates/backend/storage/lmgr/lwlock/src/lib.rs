@@ -5,13 +5,13 @@ use core::cell::UnsafeCell;
 use core::ops::ControlFlow;
 use core::sync::atomic::{AtomicI32, AtomicU32, AtomicU64, Ordering};
 
+use init_small::globals;
 use lmgr_proc_seams as proc_s;
 use lmgr_proc_seams::{proclist_head, proclist_node};
-use init_small::globals;
+use shmem_seams as shmem;
 use types_core::{ProcNumber, Size, INVALID_PROC_NUMBER, NAMEDATALEN};
 use types_error::{PgError, PgResult, ERROR, FATAL, PANIC};
 use waitevent_seams as waitevent;
-use shmem_seams as shmem;
 
 pub type LWLockMode = u8;
 pub const LW_EXCLUSIVE: LWLockMode = 0;
@@ -61,25 +61,101 @@ pub const LWTRANCHE_FIRST_USER_DEFINED: i32 = LWTRANCHE_XACT_BUFFER + 41;
 pub const LWLOCK_PADDED_SIZE: usize = 128;
 
 const BUILTIN_TRANCHE_NAMES: [&str; LWTRANCHE_FIRST_USER_DEFINED as usize] = [
-    "", "ShmemIndex", "OidGen", "XidGen", "ProcArray", "SInvalRead", "SInvalWrite", "WALBufMapping",
-    "WALWrite", "ControlFile", "", "", "", "MultiXactGen", "", "", "RelCacheInit",
-    "CheckpointerComm", "TwoPhaseState", "TablespaceCreate", "BtreeVacuum", "AddinShmemInit",
-    "Autovacuum", "AutovacuumSchedule", "SyncScan", "RelationMapping", "", "NotifyQueue",
-    "SerializableXactHash", "SerializableFinishedList", "SerializablePredicateList", "", "SyncRep",
-    "BackgroundWorker", "DynamicSharedMemoryControl", "AutoFile", "ReplicationSlotAllocation",
-    "ReplicationSlotControl", "", "CommitTs", "ReplicationOrigin", "MultiXactTruncation", "",
-    "LogicalRepWorker", "XactTruncation", "", "WrapLimitsVacuum", "NotifyQueueTail",
-    "WaitEventCustom", "WALSummarizer", "DSMRegistry", "InjectionPoint", "SerialControl",
-    "AioWorkerSubmissionQueue", "XactBuffer", "CommitTsBuffer", "SubtransBuffer",
-    "MultiXactOffsetBuffer", "MultiXactMemberBuffer", "NotifyBuffer", "SerialBuffer", "WALInsert",
-    "BufferContent", "ReplicationOriginState", "ReplicationSlotIO", "LockFastPath", "BufferMapping",
-    "LockManager", "PredicateLockManager", "ParallelHashJoin", "ParallelBtreeScan",
-    "ParallelQueryDSA", "PerSessionDSA", "PerSessionRecordType", "PerSessionRecordTypmod",
-    "SharedTupleStore", "SharedTidBitmap", "ParallelAppend", "PerXactPredicateList", "PgStatsDSA",
-    "PgStatsHash", "PgStatsData", "LogicalRepLauncherDSA", "LogicalRepLauncherHash",
-    "DSMRegistryDSA", "DSMRegistryHash", "CommitTsSLRU", "MultiXactMemberSLRU",
-    "MultiXactOffsetSLRU", "NotifySLRU", "SerialSLRU", "SubtransSLRU", "XactSLRU",
-    "ParallelVacuumDSA", "AioUringCompletion",
+    "",
+    "ShmemIndex",
+    "OidGen",
+    "XidGen",
+    "ProcArray",
+    "SInvalRead",
+    "SInvalWrite",
+    "WALBufMapping",
+    "WALWrite",
+    "ControlFile",
+    "",
+    "",
+    "",
+    "MultiXactGen",
+    "",
+    "",
+    "RelCacheInit",
+    "CheckpointerComm",
+    "TwoPhaseState",
+    "TablespaceCreate",
+    "BtreeVacuum",
+    "AddinShmemInit",
+    "Autovacuum",
+    "AutovacuumSchedule",
+    "SyncScan",
+    "RelationMapping",
+    "",
+    "NotifyQueue",
+    "SerializableXactHash",
+    "SerializableFinishedList",
+    "SerializablePredicateList",
+    "",
+    "SyncRep",
+    "BackgroundWorker",
+    "DynamicSharedMemoryControl",
+    "AutoFile",
+    "ReplicationSlotAllocation",
+    "ReplicationSlotControl",
+    "",
+    "CommitTs",
+    "ReplicationOrigin",
+    "MultiXactTruncation",
+    "",
+    "LogicalRepWorker",
+    "XactTruncation",
+    "",
+    "WrapLimitsVacuum",
+    "NotifyQueueTail",
+    "WaitEventCustom",
+    "WALSummarizer",
+    "DSMRegistry",
+    "InjectionPoint",
+    "SerialControl",
+    "AioWorkerSubmissionQueue",
+    "XactBuffer",
+    "CommitTsBuffer",
+    "SubtransBuffer",
+    "MultiXactOffsetBuffer",
+    "MultiXactMemberBuffer",
+    "NotifyBuffer",
+    "SerialBuffer",
+    "WALInsert",
+    "BufferContent",
+    "ReplicationOriginState",
+    "ReplicationSlotIO",
+    "LockFastPath",
+    "BufferMapping",
+    "LockManager",
+    "PredicateLockManager",
+    "ParallelHashJoin",
+    "ParallelBtreeScan",
+    "ParallelQueryDSA",
+    "PerSessionDSA",
+    "PerSessionRecordType",
+    "PerSessionRecordTypmod",
+    "SharedTupleStore",
+    "SharedTidBitmap",
+    "ParallelAppend",
+    "PerXactPredicateList",
+    "PgStatsDSA",
+    "PgStatsHash",
+    "PgStatsData",
+    "LogicalRepLauncherDSA",
+    "LogicalRepLauncherHash",
+    "DSMRegistryDSA",
+    "DSMRegistryHash",
+    "CommitTsSLRU",
+    "MultiXactMemberSLRU",
+    "MultiXactOffsetSLRU",
+    "NotifySLRU",
+    "SerialSLRU",
+    "SubtransSLRU",
+    "XactSLRU",
+    "ParallelVacuumDSA",
+    "AioUringCompletion",
 ];
 
 #[repr(C)]
@@ -606,10 +682,12 @@ fn proclist_foreach_modify(head: ProcNumber, mut body: impl FnMut(ProcNumber) ->
     }
 }
 
-// SAFETY contract: caller holds LW_FLAG_LOCKED; the borrow must not
-// outlive that critical section.
-unsafe fn waiters_mut(lock: &LWLock) -> &mut proclist_head {
-    unsafe { &mut *lock.waiters.get() }
+// Raw pointer, not `&mut`: a `&mut` returned with the input's lifetime would
+// let a caller hold two live `&mut` to the same cell (clippy::mut_from_ref).
+// SAFETY contract: caller holds LW_FLAG_LOCKED; the borrow taken by
+// dereferencing this must not outlive that critical section.
+unsafe fn waiters_mut(lock: &LWLock) -> *mut proclist_head {
+    lock.waiters.get()
 }
 
 fn LWLockAttemptLock(lock: &LWLock, mode: LWLockMode) -> bool {
@@ -695,7 +773,7 @@ fn LWLockWakeup(lock: &LWLock) {
     LWLockWaitListLock(lock);
 
     // SAFETY: LW_FLAG_LOCKED held until the flag-clearing CAS below.
-    let waiters = unsafe { waiters_mut(lock) };
+    let waiters = unsafe { &mut *waiters_mut(lock) };
     proclist_foreach_modify(waiters.head, |cur| {
         let wait_mode = proc_s::proc_lw_wait_mode::call(cur);
 
@@ -721,8 +799,7 @@ fn LWLockWakeup(lock: &LWLock) {
     });
 
     debug_assert!(
-        proclist_is_empty(&wakeup)
-            || lock.state.load(Ordering::Relaxed) & LW_FLAG_HAS_WAITERS != 0
+        proclist_is_empty(&wakeup) || lock.state.load(Ordering::Relaxed) & LW_FLAG_HAS_WAITERS != 0
     );
 
     let mut old_state = lock.state.load(Ordering::Relaxed);
@@ -785,7 +862,7 @@ fn LWLockQueueSelf(lock: &LWLock, mode: LWLockMode, my_proc_number: ProcNumber) 
     proc_s::set_proc_lw_wait_mode::call(my_proc_number, mode);
 
     // SAFETY: LW_FLAG_LOCKED held until LWLockWaitListUnlock below.
-    let waiters = unsafe { waiters_mut(lock) };
+    let waiters = unsafe { &mut *waiters_mut(lock) };
     if mode == LW_WAIT_UNTIL_FREE {
         proclist_push_head(waiters, my_proc_number);
     } else {
@@ -802,11 +879,11 @@ fn LWLockDequeueSelf(lock: &LWLock, my_proc_number: ProcNumber) {
     let on_waitlist = proc_s::proc_lw_waiting::call(my_proc_number) == LW_WS_WAITING;
     if on_waitlist {
         // SAFETY: LW_FLAG_LOCKED held until LWLockWaitListUnlock below.
-        proclist_delete(unsafe { waiters_mut(lock) }, my_proc_number);
+        proclist_delete(unsafe { &mut *waiters_mut(lock) }, my_proc_number);
     }
 
     // SAFETY: as above — the wait-list lock is still held.
-    if proclist_is_empty(unsafe { waiters_mut(lock) })
+    if proclist_is_empty(unsafe { &mut *waiters_mut(lock) })
         && (lock.state.load(Ordering::Relaxed) & LW_FLAG_HAS_WAITERS) != 0
     {
         lock.state.fetch_and(!LW_FLAG_HAS_WAITERS, Ordering::AcqRel);
@@ -1066,7 +1143,7 @@ pub fn LWLockUpdateVar(lock: &LWLock, valptr: &AtomicU64, val: u64) {
     debug_assert!(lock.state.load(Ordering::Relaxed) & LW_VAL_EXCLUSIVE != 0);
 
     // SAFETY: LW_FLAG_LOCKED held until LWLockWaitListUnlock below.
-    let waiters = unsafe { waiters_mut(lock) };
+    let waiters = unsafe { &mut *waiters_mut(lock) };
     proclist_foreach_modify(waiters.head, |cur| {
         if proc_s::proc_lw_wait_mode::call(cur) != LW_WAIT_UNTIL_FREE {
             return ControlFlow::Break(());
@@ -1105,7 +1182,10 @@ fn LWLockReleaseInternal(lock: &LWLock, mode: LWLockMode) {
     } else {
         LW_VAL_SHARED
     };
-    let oldstate = lock.state.fetch_sub(sub, Ordering::Release).wrapping_sub(sub);
+    let oldstate = lock
+        .state
+        .fetch_sub(sub, Ordering::Release)
+        .wrapping_sub(sub);
 
     debug_assert!(oldstate & LW_VAL_EXCLUSIVE == 0);
 
@@ -1145,11 +1225,7 @@ pub fn LWLockReleaseAll() -> PgResult<()> {
     // Re-HOLD balances the RESUME inside LWLockRelease; error recovery owns
     // the holdoff count, exactly as C.
     loop {
-        let last = with_held(|held| {
-            held.num_held
-                .checked_sub(1)
-                .map(|i| held.locks[i].lock)
-        });
+        let last = with_held(|held| held.num_held.checked_sub(1).map(|i| held.locks[i].lock));
         let Some(lock) = last else { break };
         globals::HoldInterrupts();
         // SAFETY: held entries were recorded from live `&LWLock`s that must

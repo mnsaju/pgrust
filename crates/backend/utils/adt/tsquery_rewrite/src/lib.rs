@@ -1,7 +1,7 @@
 //! tsquery_rewrite.c — ts_rewrite over the tsquery_core QTNode machinery.
 
 use ::adt_tsquery_core::util::{
-    qt2qtn, qtn2qt, qtn_clear_flags, qtn_copy, qtn_sort, qtn_ternary, qtn_eq, qtnode_compare,
+    qt2qtn, qtn2qt, qtn_clear_flags, qtn_copy, qtn_eq, qtn_sort, qtn_ternary, qtnode_compare,
     QtNode, QTN_NOCHANGE,
 };
 use ::adt_tsvector_core::builtins::arg_tsquery;
@@ -210,7 +210,11 @@ pub fn fc_tsquery_rewrite(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -
 
     let tree = prepared_tree(mcx, query)?;
     let qex = prepared_tree(mcx, ex)?;
-    let subs = if subst.size() != 0 { Some(qt2qtn(mcx, subst, 0)?) } else { None };
+    let subs = if subst.size() != 0 {
+        Some(qt2qtn(mcx, subst, 0)?)
+    } else {
+        None
+    };
 
     let tree = findsubquery(mcx, tree, &qex, subs.as_ref())?;
     finish_tree(mcx, tree)
@@ -225,7 +229,9 @@ fn tsquery_ref_from_datum<'mcx>(mcx: Mcx<'mcx>, d: Datum) -> PgResult<TsQueryRef
     // alignment) and detoasts stored values.
     let flat = detoast::detoast_attr(mcx, image)?;
     let flat = flat.leak();
-    Ok(TsQueryRef { payload: &flat[::types_tuple::varatt::VARHDRSZ..] })
+    Ok(TsQueryRef {
+        payload: &flat[::types_tuple::varatt::VARHDRSZ..],
+    })
 }
 
 // tsquery_rewrite_query (3685): ts_rewrite(tsquery, text) — the SELECT must
@@ -278,7 +284,7 @@ pub fn fc_tsquery_rewrite_query(
             break;
         }
 
-        let mut step = |tree: &mut Option<QtNode<'_>>| -> PgResult<()> {
+        let step = |tree: &mut Option<QtNode<'_>>| -> PgResult<()> {
             spi::tuptable_with(h, |t| -> PgResult<()> {
                 for tup in t.vals.iter() {
                     if tree.is_none() {
@@ -298,8 +304,11 @@ pub fn fc_tsquery_rewrite_query(
                         continue;
                     }
                     let qex = prepared_tree(mcx, qtex)?;
-                    let qsubs =
-                        if qtsubs.size() != 0 { Some(qt2qtn(mcx, qtsubs, 0)?) } else { None };
+                    let qsubs = if qtsubs.size() != 0 {
+                        Some(qt2qtn(mcx, qtsubs, 0)?)
+                    } else {
+                        None
+                    };
                     *tree = findsubquery(mcx, tree.take().expect("tree"), &qex, qsubs.as_ref())?;
                     if let Some(t) = tree.as_mut() {
                         // Ready the tree for another pass.
@@ -322,8 +331,20 @@ pub fn fc_tsquery_rewrite_query(
     finish_tree(mcx, tree)
 }
 
-const fn b(foid: ::types_core::Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+const fn b(
+    foid: ::types_core::Oid,
+    name: &'static str,
+    nargs: i16,
+    func: PGFunction,
+) -> FmgrBuiltin {
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 pub const TSQUERY_REWRITE_BUILTINS: &[FmgrBuiltin] = &[

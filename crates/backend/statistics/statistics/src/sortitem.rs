@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
 use datum::Datum;
+use typcache::TypeCacheEntry;
 use types_core::Oid;
 use types_error::PgResult;
-use typcache::TypeCacheEntry;
 use types_fmgr::FmgrInfo;
 
 // `cmp` is a copy of the entry's cmp_proc_finfo: comparators may re-enter
@@ -23,7 +23,9 @@ pub struct MultiSort {
 
 impl MultiSort {
     pub fn init(ndims: usize) -> MultiSort {
-        MultiSort { dims: Vec::with_capacity(ndims) }
+        MultiSort {
+            dims: Vec::with_capacity(ndims),
+        }
     }
 
     pub fn add_dimension(&mut self, typid: Oid, collation: Oid) -> PgResult<()> {
@@ -35,7 +37,11 @@ impl MultiSort {
             panic!("cache lookup failed for ordering operator for type {typid}");
         }
         let cmp = entry.cmp_proc_finfo().clone();
-        self.dims.push(SortDim { entry, cmp, collation });
+        self.dims.push(SortDim {
+            entry,
+            cmp,
+            collation,
+        });
         Ok(())
     }
 
@@ -122,7 +128,12 @@ pub fn pg_qsort<T: Copy, C: FnMut(&T, &T) -> i32>(a: &mut [T], mut cmp: C) {
     }
 }
 
-fn qsort_rec<T: Copy, C: FnMut(&T, &T) -> i32>(a: &mut [T], mut lo: usize, mut n: usize, cmp: &mut C) {
+fn qsort_rec<T: Copy, C: FnMut(&T, &T) -> i32>(
+    a: &mut [T],
+    mut lo: usize,
+    mut n: usize,
+    cmp: &mut C,
+) {
     loop {
         if n < 7 {
             for pm in lo + 1..lo + n {

@@ -186,7 +186,13 @@ impl PlainPdLocal {
     /// One staged key-lane window: `vals`/`isnull` in row order (the serial
     /// `agg_plain_distinct_insert_lane_batch` twin, partitioned). `kind`
     /// must be the spec's integer kind.
-    pub fn accept_lane_ints(&mut self, kind_i16: bool, kind_i32: bool, vals: &[Datum], isnull: &[bool]) {
+    pub fn accept_lane_ints(
+        &mut self,
+        kind_i16: bool,
+        kind_i32: bool,
+        vals: &[Datum],
+        isnull: &[bool],
+    ) {
         if self.crossed {
             return;
         }
@@ -218,7 +224,13 @@ impl PlainPdLocal {
 
     /// One collected batch of NON-NULL key datums (the `emit_key` fallback
     /// staging), integer kinds.
-    pub fn accept_datums_int(&mut self, kind_i16: bool, kind_i32: bool, keys: &[Datum], saw_null: bool) {
+    pub fn accept_datums_int(
+        &mut self,
+        kind_i16: bool,
+        kind_i32: bool,
+        keys: &[Datum],
+        saw_null: bool,
+    ) {
         if self.crossed {
             return;
         }
@@ -266,7 +278,8 @@ impl PlainPdLocal {
         for &d in keys {
             // SAFETY: non-null live text/varchar varlena — admission proved
             // the argument type; detoast copies land in per-tuple memory.
-            let v = unsafe { ::types_fmgr::datum_varlena_packed(d, estate.ecxt(tmp).per_tuple_mcx()) }?;
+            let v =
+                unsafe { ::types_fmgr::datum_varlena_packed(d, estate.ecxt(tmp).per_tuple_mcx()) }?;
             let c = v.data();
             self.parts[part_of_bytes(c)].insert_bytes(c);
         }
@@ -304,7 +317,10 @@ impl PlainPdLocal {
                 memo[w] |= 1 << b;
                 // SAFETY: dict entries are live decoded text varlena images.
                 let v = unsafe {
-                    ::types_fmgr::datum_varlena_packed(dict[c as usize], estate.ecxt(tmp).per_tuple_mcx())
+                    ::types_fmgr::datum_varlena_packed(
+                        dict[c as usize],
+                        estate.ecxt(tmp).per_tuple_mcx(),
+                    )
                 }?;
                 let content = v.data();
                 self.parts[part_of_bytes(content)].insert_bytes(content);
@@ -318,7 +334,11 @@ impl PlainPdLocal {
     /// split already happened at insert).
     pub fn seal(self) -> PlainPdSealed {
         PlainPdSealed {
-            parts: self.parts.into_iter().map(core::cell::UnsafeCell::new).collect(),
+            parts: self
+                .parts
+                .into_iter()
+                .map(core::cell::UnsafeCell::new)
+                .collect(),
             seen_null: self.seen_null,
         }
     }
@@ -348,7 +368,10 @@ impl PlainPdSealed {
     /// An empty sealed partial (poisoned/aborting workers hand this in; it
     /// unions as a no-op).
     pub fn empty() -> PlainPdSealed {
-        PlainPdSealed { parts: Vec::new(), seen_null: false }
+        PlainPdSealed {
+            parts: Vec::new(),
+            seen_null: false,
+        }
     }
 
     pub fn seen_null(&self) -> bool {
@@ -371,7 +394,9 @@ impl PlainPdSealed {
     fn take_part(&self, p: usize) -> Option<DistinctSet<'static>> {
         // SAFETY: single-claimer-per-partition contract (struct doc); the
         // replaced empty set keeps drops sound.
-        self.parts.get(p).map(|c| unsafe { core::mem::replace(&mut *c.get(), DistinctSet::new()) })
+        self.parts
+            .get(p)
+            .map(|c| unsafe { core::mem::replace(&mut *c.get(), DistinctSet::new()) })
     }
 
     /// Approximate memory of this partial (the combine envelope check).
@@ -379,7 +404,10 @@ impl PlainPdSealed {
     /// with claims).
     pub fn mem_bytes(&self) -> usize {
         // SAFETY: leader-side, pre-combine (doc above).
-        self.parts.iter().map(|c| unsafe { (*c.get()).mem_bytes() }).sum()
+        self.parts
+            .iter()
+            .map(|c| unsafe { (*c.get()).mem_bytes() })
+            .sum()
     }
 }
 
@@ -444,9 +472,15 @@ pub fn plain_pd_combine_steal(
         }
     }
     let Some((bi, blen)) = base else {
-        return PlainPdMerged { ints: Vec::new(), blob: Vec::new(), spans: Vec::new() };
+        return PlainPdMerged {
+            ints: Vec::new(),
+            blob: Vec::new(),
+            spans: Vec::new(),
+        };
     };
-    let mut set = sealed[bi].take_part(part).expect("chosen donor holds the partition");
+    let mut set = sealed[bi]
+        .take_part(part)
+        .expect("chosen donor holds the partition");
     if total > blen {
         // Union ≤ total (exact pre-size; the projection gate keeps small
         // legacy-arm sets untouched).
@@ -482,9 +516,17 @@ fn export_merged(kind_bytes: bool, mut set: DistinctSet<'static>) -> PlainPdMerg
             spans.push((blob.len() as u32, len, h));
             blob.extend_from_slice(c);
         }
-        PlainPdMerged { ints: Vec::new(), blob, spans }
+        PlainPdMerged {
+            ints: Vec::new(),
+            blob,
+            spans,
+        }
     } else {
-        PlainPdMerged { ints: set.take_ints(), blob: Vec::new(), spans: Vec::new() }
+        PlainPdMerged {
+            ints: set.take_ints(),
+            blob: Vec::new(),
+            spans: Vec::new(),
+        }
     }
 }
 
@@ -546,7 +588,9 @@ pub fn plain_sd_derive_spec(
     if node.qual.is_some() {
         return Ok(None);
     }
-    let [grp_col] = node.plan.grpColIdx else { return Ok(None) };
+    let [grp_col] = node.plan.grpColIdx else {
+        return Ok(None);
+    };
     if *grp_col < 1 || node.plan.grpOperators.len() != 1 {
         return Ok(None);
     }
@@ -558,8 +602,12 @@ pub fn plain_sd_derive_spec(
     if tlist.len() != 1 {
         return Ok(None);
     }
-    let Some(te) = tlist.nth(0).as_target_entry() else { return Ok(None) };
-    let Some(v) = te.expr.as_var() else { return Ok(None) };
+    let Some(te) = tlist.nth(0).as_target_entry() else {
+        return Ok(None);
+    };
+    let Some(v) = te.expr.as_var() else {
+        return Ok(None);
+    };
     if v.varno != ::execexpr::OUTER_VAR || v.varlevelsup != 0 || v.varattno != *grp_col {
         return Ok(None);
     }
@@ -620,9 +668,8 @@ pub fn plain_sd_emit_bufs(
                 let pad = (8 - arena.len() % 8) % 8;
                 arena.resize(arena.len() + pad, 0);
                 offs.push(arena.len());
-                let hdr = ::datum::varlena::set_varsize_4b(
-                    len as usize + ::datum::varlena::VARHDRSZ,
-                );
+                let hdr =
+                    ::datum::varlena::set_varsize_4b(len as usize + ::datum::varlena::VARHDRSZ);
                 arena.extend_from_slice(&hdr);
                 arena.extend_from_slice(&m.blob[off as usize..(off + len) as usize]);
             }
@@ -721,15 +768,31 @@ mod tests {
         let mut a = local();
         let mut b = local();
         let mut c = local();
-        a.accept_datums_int(false, false, &[Datum::from_i64(1), Datum::from_i64(-7)], false);
+        a.accept_datums_int(
+            false,
+            false,
+            &[Datum::from_i64(1), Datum::from_i64(-7)],
+            false,
+        );
         a.accept_datums_int(false, false, &[Datum::from_i64(42)], false);
-        b.accept_datums_int(false, false, &[Datum::from_i64(-7), Datum::from_i64(99)], false);
-        c.accept_datums_int(false, false, &[Datum::from_i64(42), Datum::from_i64(1)], true);
+        b.accept_datums_int(
+            false,
+            false,
+            &[Datum::from_i64(-7), Datum::from_i64(99)],
+            false,
+        );
+        c.accept_datums_int(
+            false,
+            false,
+            &[Datum::from_i64(42), Datum::from_i64(1)],
+            true,
+        );
         let sealed = vec![a.seal(), b.seal(), c.seal()];
         assert!(sealed[2].seen_null());
         assert!(!sealed[0].seen_null());
-        let merged: Vec<PlainPdMerged> =
-            (0..PLAIN_PD_PARTS).map(|p| plain_pd_combine(false, p, &sealed)).collect();
+        let merged: Vec<PlainPdMerged> = (0..PLAIN_PD_PARTS)
+            .map(|p| plain_pd_combine(false, p, &sealed))
+            .collect();
         assert_eq!(merged_int_values(&merged), vec![-7, 1, 42, 99]);
     }
 
@@ -737,10 +800,16 @@ mod tests {
     #[test]
     fn int32_sign_extension() {
         let mut a = local();
-        a.accept_datums_int(false, true, &[Datum::from_i32(-1), Datum::from_i32(-1)], false);
+        a.accept_datums_int(
+            false,
+            true,
+            &[Datum::from_i32(-1), Datum::from_i32(-1)],
+            false,
+        );
         let sealed = vec![a.seal()];
-        let merged: Vec<PlainPdMerged> =
-            (0..PLAIN_PD_PARTS).map(|p| plain_pd_combine(false, p, &sealed)).collect();
+        let merged: Vec<PlainPdMerged> = (0..PLAIN_PD_PARTS)
+            .map(|p| plain_pd_combine(false, p, &sealed))
+            .collect();
         assert_eq!(merged_int_values(&merged), vec![-1i64]);
     }
 
@@ -758,10 +827,19 @@ mod tests {
             b.parts[part_of_bytes(s)].insert_bytes(s);
         }
         let sealed = vec![a.seal(), b.seal()];
-        let merged: Vec<PlainPdMerged> =
-            (0..PLAIN_PD_PARTS).map(|p| plain_pd_combine(true, p, &sealed)).collect();
+        let merged: Vec<PlainPdMerged> = (0..PLAIN_PD_PARTS)
+            .map(|p| plain_pd_combine(true, p, &sealed))
+            .collect();
         let vals = merged_bytes_values(&merged);
-        assert_eq!(vals, vec![b"".to_vec(), b"alpha".to_vec(), b"beta".to_vec(), b"gamma".to_vec()]);
+        assert_eq!(
+            vals,
+            vec![
+                b"".to_vec(),
+                b"alpha".to_vec(),
+                b"beta".to_vec(),
+                b"gamma".to_vec()
+            ]
+        );
         let n: usize = merged.iter().map(|m| m.len()).sum();
         assert_eq!(n, 4);
     }
@@ -784,14 +862,19 @@ mod tests {
         let mut b = local();
         let mut c = local();
         // Skew: a is the big donor; b overlaps a; c is empty-ish.
-        let big: Vec<Datum> = (0..5000i64).map(|k| Datum::from_i64(k * 37 % 4096)).collect();
+        let big: Vec<Datum> = (0..5000i64)
+            .map(|k| Datum::from_i64(k * 37 % 4096))
+            .collect();
         a.accept_datums_int(false, false, &big, false);
-        let small: Vec<Datum> = (0..300i64).map(|k| Datum::from_i64(k * 37 % 4096 + 2048)).collect();
+        let small: Vec<Datum> = (0..300i64)
+            .map(|k| Datum::from_i64(k * 37 % 4096 + 2048))
+            .collect();
         b.accept_datums_int(false, false, &small, true);
         c.accept_datums_int(false, false, &[Datum::from_i64(7)], false);
         let sealed_g = vec![a.seal(), b.seal(), c.seal()];
-        let generic: Vec<PlainPdMerged> =
-            (0..PLAIN_PD_PARTS).map(|p| plain_pd_combine(false, p, &sealed_g)).collect();
+        let generic: Vec<PlainPdMerged> = (0..PLAIN_PD_PARTS)
+            .map(|p| plain_pd_combine(false, p, &sealed_g))
+            .collect();
         // Rebuild the same locals for the steal pass (take_part consumes).
         let mut a2 = local();
         let mut b2 = local();
@@ -800,8 +883,9 @@ mod tests {
         b2.accept_datums_int(false, false, &small, true);
         c2.accept_datums_int(false, false, &[Datum::from_i64(7)], false);
         let sealed_s = vec![a2.seal(), b2.seal(), c2.seal()];
-        let steal: Vec<PlainPdMerged> =
-            (0..PLAIN_PD_PARTS).map(|p| plain_pd_combine_steal(false, p, &sealed_s)).collect();
+        let steal: Vec<PlainPdMerged> = (0..PLAIN_PD_PARTS)
+            .map(|p| plain_pd_combine_steal(false, p, &sealed_s))
+            .collect();
         assert_eq!(merged_int_values(&generic), merged_int_values(&steal));
         // Per-partition lengths match too (partition routing untouched).
         let lens = |m: &[PlainPdMerged]| m.iter().map(|x| x.len()).collect::<Vec<_>>();
@@ -811,8 +895,9 @@ mod tests {
     /// GL-LOWDIST-1: steal ≡ generic on the bytes face.
     #[test]
     fn steal_combine_bytes_set_equivalence() {
-        let strs: Vec<Vec<u8>> =
-            (0..600).map(|i| format!("v{}", i * 13 % 400).into_bytes()).collect();
+        let strs: Vec<Vec<u8>> = (0..600)
+            .map(|i| format!("v{}", i * 13 % 400).into_bytes())
+            .collect();
         let build = || {
             let mut a = local();
             let mut b = local();
@@ -828,11 +913,13 @@ mod tests {
             vec![a.seal(), b.seal()]
         };
         let sealed_g = build();
-        let generic: Vec<PlainPdMerged> =
-            (0..PLAIN_PD_PARTS).map(|p| plain_pd_combine(true, p, &sealed_g)).collect();
+        let generic: Vec<PlainPdMerged> = (0..PLAIN_PD_PARTS)
+            .map(|p| plain_pd_combine(true, p, &sealed_g))
+            .collect();
         let sealed_s = build();
-        let steal: Vec<PlainPdMerged> =
-            (0..PLAIN_PD_PARTS).map(|p| plain_pd_combine_steal(true, p, &sealed_s)).collect();
+        let steal: Vec<PlainPdMerged> = (0..PLAIN_PD_PARTS)
+            .map(|p| plain_pd_combine_steal(true, p, &sealed_s))
+            .collect();
         assert_eq!(merged_bytes_values(&generic), merged_bytes_values(&steal));
     }
 }

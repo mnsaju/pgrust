@@ -31,8 +31,8 @@ use ::types_storage::bufpage::{PageMut, PageRef};
 pub use fast::ginInsertCleanup;
 pub use get::gingetbitmap;
 pub use insert::{ginEntryInsert, gininsert};
-pub use scan::{ginbeginscan, ginendscan, ginrescan};
 pub use opclass::gincost_extract_query;
+pub use scan::{ginbeginscan, ginendscan, ginrescan};
 pub use util::{ginGetStats, ginUpdateStats};
 
 pub(crate) const RM_GIN: u8 = ::types_core::primitive::RmgrIds::RM_GIN_ID as u8;
@@ -120,8 +120,7 @@ pub fn relation_needs_wal(rel: &Relation<'_>) -> bool {
     rel.is_permanent()
         && (transam_xlog_seams::xlog_standby_info_active::call()
             || (rel.rd_createSubid.get() == ::types_core::InvalidSubTransactionId
-                && rel.rd_firstRelfilelocatorSubid.get()
-                    == ::types_core::InvalidSubTransactionId))
+                && rel.rd_firstRelfilelocatorSubid.get() == ::types_core::InvalidSubTransactionId))
 }
 
 /// # Safety
@@ -145,7 +144,13 @@ const OPAQUE_OFF: usize = BLCKSZ - SIZEOF_OPAQUE;
 pub fn opaque_of(bytes: &[u8]) -> GinPageOpaqueData {
     debug_assert!(bytes.len() == BLCKSZ);
     // SAFETY: in-bounds 4-aligned special area of a BLCKSZ page image.
-    unsafe { bytes.as_ptr().add(OPAQUE_OFF).cast::<GinPageOpaqueData>().read() }
+    unsafe {
+        bytes
+            .as_ptr()
+            .add(OPAQUE_OFF)
+            .cast::<GinPageOpaqueData>()
+            .read()
+    }
 }
 
 #[inline]
@@ -165,7 +170,12 @@ pub(crate) fn write_opaque_to(bytes: &mut [u8], opaque: &GinPageOpaqueData) {
 pub(crate) fn page_opaque(page: &PageRef<'_>) -> GinPageOpaqueData {
     debug_assert!(page.pd_special() as usize == OPAQUE_OFF);
     // SAFETY: in-bounds 4-aligned special area of a gin page.
-    unsafe { page.as_ptr().add(OPAQUE_OFF).cast::<GinPageOpaqueData>().read() }
+    unsafe {
+        page.as_ptr()
+            .add(OPAQUE_OFF)
+            .cast::<GinPageOpaqueData>()
+            .read()
+    }
 }
 
 #[inline]
@@ -236,7 +246,13 @@ pub(crate) const META_OFF: usize = SizeOfPageHeaderData;
 pub(crate) fn meta_of(bytes: &[u8]) -> GinMetaPageData {
     // SAFETY: metapage contents at MAXALIGN(SizeOfPageHeaderData) == 24,
     // 8-aligned within the BLCKSZ image.
-    unsafe { bytes.as_ptr().add(META_OFF).cast::<GinMetaPageData>().read_unaligned() }
+    unsafe {
+        bytes
+            .as_ptr()
+            .add(META_OFF)
+            .cast::<GinMetaPageData>()
+            .read_unaligned()
+    }
 }
 
 #[inline]
@@ -261,7 +277,8 @@ pub(crate) fn vec_append<'mcx, T: Copy>(
     if n == 0 {
         return Ok(());
     }
-    v.try_reserve(n).map_err(|_| oom(n * core::mem::size_of::<T>()))?;
+    v.try_reserve(n)
+        .map_err(|_| oom(std::mem::size_of_val(src)))?;
     let old = v.len();
     // SAFETY: capacity reserved; src/dst disjoint; set_len covers n items.
     unsafe {

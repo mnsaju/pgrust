@@ -170,12 +170,19 @@ pub(crate) fn be_i32(b: &[u8]) -> i32 {
 }
 
 pub(crate) fn cstr_at(b: &[u8], pos: usize) -> (String, usize) {
-    let end = b[pos..].iter().position(|&c| c == 0).map(|e| pos + e).unwrap_or(b.len());
+    let end = b[pos..]
+        .iter()
+        .position(|&c| c == 0)
+        .map(|e| pos + e)
+        .unwrap_or(b.len());
     (String::from_utf8_lossy(&b[pos..end]).into_owned(), end + 1)
 }
 
 fn parse_diag(body: &[u8]) -> ErrorFields {
-    let mut f = ErrorFields { severity: "ERROR".into(), ..Default::default() };
+    let mut f = ErrorFields {
+        severity: "ERROR".into(),
+        ..Default::default()
+    };
     let mut i = 0;
     while i < body.len() && body[i] != 0 {
         let code = body[i];
@@ -245,7 +252,9 @@ pub fn os_user_name() -> String {
     unsafe {
         let pw = libc::getpwuid(libc::geteuid());
         if !pw.is_null() && !(*pw).pw_name.is_null() {
-            return std::ffi::CStr::from_ptr((*pw).pw_name).to_string_lossy().into_owned();
+            return std::ffi::CStr::from_ptr((*pw).pw_name)
+                .to_string_lossy()
+                .into_owned();
         }
     }
     std::env::var("USER").unwrap_or_default()
@@ -287,7 +296,9 @@ fn unix_connect(path: &str) -> Result<(Stream, RawFd), String> {
             let fd = s.as_raw_fd();
             Ok((Stream::Unix(s), fd))
         }
-        Err(e) => Err(format!("connection to server on socket \"{path}\" failed: {e}")),
+        Err(e) => Err(format!(
+            "connection to server on socket \"{path}\" failed: {e}"
+        )),
     }
 }
 
@@ -316,7 +327,10 @@ pub fn validate_port(opts: &[(String, String)]) -> Result<u16, String> {
     }
     // pqParseIntParam: strtol with surrounding whitespace allowed, no
     // trailing garbage, overflow-checked into int.
-    match port_s.trim_matches(|c: char| c.is_ascii_whitespace()).parse::<i32>() {
+    match port_s
+        .trim_matches(|c: char| c.is_ascii_whitespace())
+        .parse::<i32>()
+    {
         Err(_) => Err(format!(
             "invalid integer value \"{port_s}\" for connection option \"port\""
         )),
@@ -356,14 +370,27 @@ pub fn connect(
             Err(e) => return Ok(Err(e)),
         }
     } else {
-        let target = if !hostaddr.is_empty() { hostaddr.clone() } else { host.clone() };
-        let target = if target.is_empty() { "localhost".to_string() } else { target };
+        let target = if !hostaddr.is_empty() {
+            hostaddr.clone()
+        } else {
+            host.clone()
+        };
+        let target = if target.is_empty() {
+            "localhost".to_string()
+        } else {
+            target
+        };
         match std::net::TcpStream::connect((target.as_str(), port)) {
             Ok(s) => {
                 use std::os::fd::AsRawFd;
                 let _ = s.set_nodelay(true);
                 let fd = s.as_raw_fd();
-                (Stream::Tcp(s), fd, DialTarget::Tcp(target.clone(), port), target)
+                (
+                    Stream::Tcp(s),
+                    fd,
+                    DialTarget::Tcp(target.clone(), port),
+                    target,
+                )
             }
             Err(e) => {
                 return Ok(Err(format!(
@@ -395,9 +422,10 @@ pub fn connect(
             // NAME whose looked-up address differs textually displays
             // "name" (addr) (emitHostIdentityInfo's strcmp arm).
             let peer_ip = match &stream {
-                Stream::Tcp(s) => {
-                    s.peer_addr().map(|a| a.ip().to_string()).unwrap_or_default()
-                }
+                Stream::Tcp(s) => s
+                    .peer_addr()
+                    .map(|a| a.ip().to_string())
+                    .unwrap_or_default(),
                 #[cfg(not(target_family = "wasm"))]
                 Stream::Unix(_) => String::new(),
             };
@@ -472,14 +500,18 @@ pub fn connect_db(
         Err(e) => return Ok(Err(e)),
     };
     let user = resolve_user(&opts);
-    let dbname = opt(&opts, "dbname").filter(|s| !s.is_empty()).unwrap_or(&user).to_string();
+    let dbname = opt(&opts, "dbname")
+        .filter(|s| !s.is_empty())
+        .unwrap_or(&user)
+        .to_string();
     let appname = opt(&opts, "application_name").unwrap_or("").to_string();
     let options = opt(&opts, "options").unwrap_or("").to_string();
     let enc = encoding
         .map(|s| s.to_string())
         .or_else(|| opt(&opts, "client_encoding").map(|s| s.to_string()));
 
-    let mut params: Vec<(&str, &str)> = vec![("user", user.as_str()), ("database", dbname.as_str())];
+    let mut params: Vec<(&str, &str)> =
+        vec![("user", user.as_str()), ("database", dbname.as_str())];
     if !appname.is_empty() {
         params.push(("application_name", appname.as_str()));
     }
@@ -554,7 +586,10 @@ impl PgConn {
 
     /// PQparameterStatus.
     pub fn parameter_status(&self, name: &str) -> Option<&str> {
-        self.params.iter().find(|(k, _)| k == name).map(|(_, v)| v.as_str())
+        self.params
+            .iter()
+            .find(|(k, _)| k == name)
+            .map(|(_, v)| v.as_str())
     }
 
     /// PQclientEncoding, as the encoding NAME the server last reported.
@@ -748,7 +783,11 @@ impl PgConn {
                 let be_pid = be_i32(&body[0..4]);
                 let (channel, next) = cstr_at(body, 4);
                 let (extra, _) = cstr_at(body, next);
-                self.notifies.push_back(Notify { channel, be_pid, extra });
+                self.notifies.push_back(Notify {
+                    channel,
+                    be_pid,
+                    extra,
+                });
             }
             b'K' => {
                 self.be_pid = be_i32(&body[0..4]);
@@ -791,7 +830,11 @@ impl PgConn {
                 b'C' => {
                     let (tag, _) = cstr_at(&mbody, 0);
                     result = QueryResult {
-                        status: if nfields > 0 { ExecStatus::TuplesOk } else { ExecStatus::CommandOk },
+                        status: if nfields > 0 {
+                            ExecStatus::TuplesOk
+                        } else {
+                            ExecStatus::CommandOk
+                        },
                         nfields,
                         rows: std::mem::take(&mut rows),
                         cmd_tag: tag,
@@ -891,7 +934,10 @@ impl PgConn {
 
     /// PQsendPrepare: Parse(name) + Sync (no Describe, exactly libpq).
     pub fn send_prepare(&mut self, stmt_name: &str, query: &str, param_types: &[Oid]) -> bool {
-        let mut pkt = msg(b'P', &parse_body(stmt_name, query, param_types, param_types.len()));
+        let mut pkt = msg(
+            b'P',
+            &parse_body(stmt_name, query, param_types, param_types.len()),
+        );
         pkt.extend_from_slice(&msg(b'S', &[]));
         if let Err(e) = self.send_all(&pkt) {
             self.err = e;
@@ -985,8 +1031,11 @@ impl PgConn {
                 }
                 b'D' => rows.push(parse_data_row(&mbody)),
                 b'C' | b's' => {
-                    let tag =
-                        if t == b'C' { cstr_at(&mbody, 0).0 } else { String::new() };
+                    let tag = if t == b'C' {
+                        cstr_at(&mbody, 0).0
+                    } else {
+                        String::new()
+                    };
                     result = QueryResult {
                         status: if nfields > 0 {
                             ExecStatus::TuplesOk
@@ -1035,8 +1084,8 @@ impl PgConn {
     // discipline pumps with timeouts). Ok(true) = readable; Ok(false) =
     // timed out. Latch wakeups run CHECK_FOR_INTERRUPTS and keep waiting.
     pub fn wait_readable_timeout(&self, timeout_ms: i64) -> PgResult<bool> {
-        let deadline = std::time::Instant::now()
-            + std::time::Duration::from_millis(timeout_ms.max(0) as u64);
+        let deadline =
+            std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms.max(0) as u64);
         loop {
             let left = deadline.saturating_duration_since(std::time::Instant::now());
             if left.is_zero() {
@@ -1145,9 +1194,16 @@ impl PgConn {
                 }
                 b'D' => rows.push(parse_data_row(&body)),
                 b'C' | b's' => {
-                    let tag = if t == b'C' { cstr_at(&body, 0).0 } else { String::new() };
-                    let status =
-                        if nfields > 0 { ExecStatus::TuplesOk } else { ExecStatus::CommandOk };
+                    let tag = if t == b'C' {
+                        cstr_at(&body, 0).0
+                    } else {
+                        String::new()
+                    };
+                    let status = if nfields > 0 {
+                        ExecStatus::TuplesOk
+                    } else {
+                        ExecStatus::CommandOk
+                    };
                     return Ok(Some(QueryResult {
                         status,
                         nfields,
@@ -1195,11 +1251,7 @@ impl PgConn {
     // returned (PQexec's keep-the-last rule), and CHECK_FOR_INTERRUPTS runs
     // per row. On sink error the connection still holds unread results — the
     // caller drains in its error path (C's PG_CATCH does the same).
-    pub fn exec_streaming(
-        &mut self,
-        query: &str,
-        sink: &mut dyn RowSink,
-    ) -> PgResult<QueryResult> {
+    pub fn exec_streaming(&mut self, query: &str, sink: &mut dyn RowSink) -> PgResult<QueryResult> {
         if !self.send_query_raw(query) {
             return Ok(QueryResult::error(self.err.clone()));
         }
@@ -1235,7 +1287,11 @@ impl PgConn {
                         sink.result_start(&*self, nfields)?;
                     }
                     result = QueryResult {
-                        status: if nfields > 0 { ExecStatus::TuplesOk } else { ExecStatus::CommandOk },
+                        status: if nfields > 0 {
+                            ExecStatus::TuplesOk
+                        } else {
+                            ExecStatus::CommandOk
+                        },
                         nfields,
                         rows: Vec::new(),
                         cmd_tag: tag,
@@ -1303,9 +1359,11 @@ impl PgConn {
             DialTarget::Tcp(host, port) => {
                 match std::net::TcpStream::connect((host.as_str(), *port)) {
                     Ok(s) => CancelSock::Tcp(s),
-                    Err(e) => return Ok(Some(format!(
-                        "connection to server at \"{host}\", port {port} failed: {e}"
-                    ))),
+                    Err(e) => {
+                        return Ok(Some(format!(
+                            "connection to server at \"{host}\", port {port} failed: {e}"
+                        )))
+                    }
                 }
             }
             #[cfg(not(target_family = "wasm"))]
@@ -1340,7 +1398,8 @@ impl PgConn {
         sock.set_nonblocking();
         // Await EOF: the server closes the cancel connection once processed.
         let fd = sock.raw_fd();
-        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms.max(0) as u64);
+        let deadline =
+            std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms.max(0) as u64);
         loop {
             let mut buf = [0u8; 16];
             let n = unsafe { libc::recv(fd, buf.as_mut_ptr().cast(), buf.len(), 0) };
@@ -1440,7 +1499,7 @@ fn parse_body(stmt_name: &str, query: &str, param_types: &[Oid], nparams: usize)
     b.push(0);
     b.extend_from_slice(&(nparams as u16).to_be_bytes());
     for i in 0..nparams {
-        let oid = param_types.get(i).copied().map(u32::from).unwrap_or(0);
+        let oid = param_types.get(i).copied().unwrap_or(0);
         b.extend_from_slice(&oid.to_be_bytes());
     }
     b
@@ -1540,8 +1599,12 @@ mod tests {
 
     #[test]
     fn conninfo_parse_errors() {
-        assert!(parse_conninfo("hostonly").unwrap_err().contains("missing \"=\""));
-        assert!(parse_conninfo("host='x").unwrap_err().contains("unterminated"));
+        assert!(parse_conninfo("hostonly")
+            .unwrap_err()
+            .contains("missing \"=\""));
+        assert!(parse_conninfo("host='x")
+            .unwrap_err()
+            .contains("unterminated"));
     }
 
     #[test]
@@ -1556,7 +1619,10 @@ mod tests {
     fn port_validation() {
         let parse = |s: &str| validate_port(&parse_conninfo(s).unwrap());
         assert_eq!(parse("port=-1").unwrap_err(), "invalid port number: \"-1\"");
-        assert_eq!(parse("port=70000").unwrap_err(), "invalid port number: \"70000\"");
+        assert_eq!(
+            parse("port=70000").unwrap_err(),
+            "invalid port number: \"70000\""
+        );
         assert_eq!(parse("port=0").unwrap_err(), "invalid port number: \"0\"");
         assert_eq!(
             parse("port=1foo").unwrap_err(),
@@ -1629,8 +1695,11 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("pgclient-svc-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let f = dir.join("pg_service.conf");
-        std::fs::write(&f, "# c\n\n[test_ldap]\nldap://127.0.0.1:9/base?attribute?one?filter\n")
-            .unwrap();
+        std::fs::write(
+            &f,
+            "# c\n\n[test_ldap]\nldap://127.0.0.1:9/base?attribute?one?filter\n",
+        )
+        .unwrap();
         let mut opts = Vec::new();
         let mut found = false;
         let err = super::conninfo::parse_service_file(
@@ -1642,7 +1711,10 @@ mod tests {
         .unwrap_err();
         assert_eq!(
             err,
-            format!("syntax error in service file \"{}\", line 4", f.to_str().unwrap())
+            format!(
+                "syntax error in service file \"{}\", line 4",
+                f.to_str().unwrap()
+            )
         );
         std::fs::write(&f, "[svc]\nhost=h1\nport=5455\n[other]\nhost=h2\n").unwrap();
         let mut opts = vec![("port".to_string(), "1111".to_string())];

@@ -232,30 +232,6 @@ pub fn fc_brin_desummarize_range(
     Ok(Datum::null())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::BRIN_FUNCS_BUILTINS;
-
-    // Rows must carry pg_proc.dat's metadata: fmgr resolves fn_nargs/strict
-    // from the registered row when the canonical entry is a stub.
-    #[test]
-    fn builtin_rows_match_pg_proc() {
-        let expect = [
-            (3952, "brin_summarize_new_values", 1),
-            (3999, "brin_summarize_range", 2),
-            (4014, "brin_desummarize_range", 2),
-        ];
-        assert_eq!(BRIN_FUNCS_BUILTINS.len(), expect.len());
-        for (b, (foid, name, nargs)) in BRIN_FUNCS_BUILTINS.iter().zip(expect) {
-            assert_eq!(b.foid, foid);
-            assert_eq!(b.name, name);
-            assert_eq!(b.nargs, nargs);
-            assert!(b.strict);
-            assert!(!b.retset);
-        }
-    }
-}
-
 pub static BRIN_FUNCS_BUILTINS: &[FmgrBuiltin] = &[
     FmgrBuiltin {
         foid: 3952,
@@ -282,3 +258,27 @@ pub static BRIN_FUNCS_BUILTINS: &[FmgrBuiltin] = &[
         func: fc_brin_desummarize_range as PGFunction,
     },
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::BRIN_FUNCS_BUILTINS;
+
+    // Rows must carry pg_proc.dat's metadata: fmgr resolves fn_nargs/strict
+    // from the registered row when the canonical entry is a stub.
+    #[test]
+    fn builtin_rows_match_pg_proc() {
+        let expect = [
+            (3952, "brin_summarize_new_values", 1),
+            (3999, "brin_summarize_range", 2),
+            (4014, "brin_desummarize_range", 2),
+        ];
+        assert_eq!(BRIN_FUNCS_BUILTINS.len(), expect.len());
+        for (b, (foid, name, nargs)) in BRIN_FUNCS_BUILTINS.iter().zip(expect) {
+            assert_eq!(b.foid, foid);
+            assert_eq!(b.name, name);
+            assert_eq!(b.nargs, nargs);
+            assert!(b.strict);
+            assert!(!b.retset);
+        }
+    }
+}

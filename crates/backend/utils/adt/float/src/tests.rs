@@ -59,17 +59,26 @@ fn float8in_basic_and_specials() {
 fn float8in_error_surface_matches_live_pg() {
     let err = float8in("1e400", None).unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE);
-    assert_eq!(err.message(), "\"1e400\" is out of range for type double precision");
+    assert_eq!(
+        err.message(),
+        "\"1e400\" is out of range for type double precision"
+    );
     let err = float8in("1e-400", None).unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE);
     let err = float8in(" 1.5x", None).unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_INVALID_TEXT_REPRESENTATION);
-    assert_eq!(err.message(), "invalid input syntax for type double precision: \" 1.5x\"");
+    assert_eq!(
+        err.message(),
+        "invalid input syntax for type double precision: \" 1.5x\""
+    );
     let err = float4in("1e40", None).unwrap_err();
     assert_eq!(err.message(), "\"1e40\" is out of range for type real");
     assert!(float4in("1e-50", None).is_err());
     let err = float8in("", None).unwrap_err();
-    assert_eq!(err.message(), "invalid input syntax for type double precision: \"\"");
+    assert_eq!(
+        err.message(),
+        "invalid input syntax for type double precision: \"\""
+    );
     assert!(float8in("  ", None).is_err());
     assert!(float8in("xyz", None).is_err());
 
@@ -122,7 +131,10 @@ fn hex_floats_match_pg() {
     }
 
     let err = float8in("0x1p1024", None).unwrap_err();
-    assert_eq!(err.message(), "\"0x1p1024\" is out of range for type double precision");
+    assert_eq!(
+        err.message(),
+        "\"0x1p1024\" is out of range for type double precision"
+    );
     assert!(float8in("0x1p-1075", None).is_err());
     assert!(float4in("0x1p128", None).is_err());
     assert!(float8in("0x", None).is_err());
@@ -137,7 +149,14 @@ fn endptr_path_reports_consumed() {
     assert_eq!((v, endptr), (2.71, 4));
 
     let mut endptr = 0usize;
-    let v = float8in_internal("  2.71  rest", Some(&mut endptr), "box", "  2.71  rest", None).unwrap();
+    let v = float8in_internal(
+        "  2.71  rest",
+        Some(&mut endptr),
+        "box",
+        "  2.71  rest",
+        None,
+    )
+    .unwrap();
     assert_eq!((v, endptr), (2.71, 8));
 
     let mut endptr = 0usize;
@@ -208,7 +227,14 @@ fn guc_default_and_live_read() {
 
 #[test]
 fn roundtrip_in_out() {
-    for &s in &["1.5", "3.14159265358979", "1e10", "-2.5e-3", "0", "123456.789"] {
+    for &s in &[
+        "1.5",
+        "3.14159265358979",
+        "1e10",
+        "-2.5e-3",
+        "0",
+        "123456.789",
+    ] {
         let v = float8in(s, None).unwrap();
         assert_eq!(float8in(&out8(v), None).unwrap(), v, "roundtrip {s}");
     }
@@ -292,14 +318,23 @@ fn conversions_match_live_pg() {
 #[cfg_attr(miri, ignore)] // Miri approximates libm; exact-value KATs
 fn math_domains_and_live_pg_values() {
     let err = dsqrt(-1.0).unwrap_err();
-    assert_eq!(err.message(), "cannot take square root of a negative number");
+    assert_eq!(
+        err.message(),
+        "cannot take square root of a negative number"
+    );
     assert_eq!(err.sqlstate(), ERRCODE_INVALID_ARGUMENT_FOR_POWER_FUNCTION);
     let err = dpow(0.0, -1.0).unwrap_err();
-    assert_eq!(err.message(), "zero raised to a negative power is undefined");
+    assert_eq!(
+        err.message(),
+        "zero raised to a negative power is undefined"
+    );
     let err = dlog1(0.0).unwrap_err();
     assert_eq!(err.message(), "cannot take logarithm of zero");
     assert_eq!(err.sqlstate(), ERRCODE_INVALID_ARGUMENT_FOR_LOG);
-    assert_eq!(dlog1(-1.0).unwrap_err().message(), "cannot take logarithm of a negative number");
+    assert_eq!(
+        dlog1(-1.0).unwrap_err().message(),
+        "cannot take logarithm of a negative number"
+    );
     assert_eq!(
         dpow(-2.0, 0.5).unwrap_err().message(),
         "a negative number raised to a non-integer power yields a complex result"
@@ -373,7 +408,10 @@ fn width_bucket_and_in_range() {
     assert_eq!(width_bucket_float8(100.0, 0.0, 10.0, 5).unwrap(), 6);
     assert_eq!(width_bucket_float8(5.0, 10.0, 0.0, 5).unwrap(), 3);
     let err = width_bucket_float8(5.0, 0.0, 10.0, 0).unwrap_err();
-    assert_eq!(err.sqlstate(), ERRCODE_INVALID_ARGUMENT_FOR_WIDTH_BUCKET_FUNCTION);
+    assert_eq!(
+        err.sqlstate(),
+        ERRCODE_INVALID_ARGUMENT_FOR_WIDTH_BUCKET_FUNCTION
+    );
     assert!(width_bucket_float8(f64::NAN, 0.0, 10.0, 5).is_err());
     assert!(width_bucket_float8(5.0, 0.0, 0.0, 5).is_err());
     assert!(width_bucket_float8(5.0, f64::INFINITY, 10.0, 5).is_err());
@@ -381,7 +419,10 @@ fn width_bucket_and_in_range() {
     assert!(in_range_float8_float8(5.0, 3.0, 2.0, false, false).unwrap());
     assert!(!in_range_float8_float8(6.0, 3.0, 2.0, false, true).unwrap());
     let err = in_range_float8_float8(1.0, 1.0, -1.0, false, false).unwrap_err();
-    assert_eq!(err.message(), "invalid preceding or following size in window function");
+    assert_eq!(
+        err.message(),
+        "invalid preceding or following size in window function"
+    );
     assert!(in_range_float8_float8(f64::NAN, f64::NAN, 1.0, false, true).unwrap());
     assert!(in_range_float4_float8(1.0, 1.0, f64::INFINITY, false, true).unwrap());
 }
@@ -408,7 +449,10 @@ fn aggregates_match_live_pg() {
     }
     assert_eq!(out8(float8_corr(r).unwrap()), "0.9986369273154668");
     assert_eq!(out8(float8_regr_slope(r).unwrap()), "0.5650552218562294");
-    assert_eq!(out8(float8_regr_intercept(r).unwrap()), "-0.06761044371245872");
+    assert_eq!(
+        out8(float8_regr_intercept(r).unwrap()),
+        "-0.06761044371245872"
+    );
     assert_eq!(out8(float8_regr_r2(r).unwrap()), "0.997275712598077");
     assert_eq!(out8(float8_covar_pop(r).unwrap()), "14.581249999999999");
     assert_eq!(out8(float8_covar_samp(r).unwrap()), "19.441666666666666");
@@ -450,7 +494,10 @@ fn transarray_image_layout() {
     assert_eq!(check_float8_array::<3>(&img, "t").unwrap(), vals);
 
     let err = check_float8_array::<6>(&img, "float8_regr_sxx").unwrap_err();
-    assert_eq!(err.message(), "float8_regr_sxx: expected 6-element float8 array");
+    assert_eq!(
+        err.message(),
+        "float8_regr_sxx: expected 6-element float8 array"
+    );
     assert!(check_float8_array::<3>(&img[..20], "t").is_err());
 }
 
@@ -492,7 +539,10 @@ fn fmgr_wrappers_and_table() {
     assert_eq!(fc_float4in(None, &mut fci).unwrap().as_f32(), 16.0);
 
     let mut fci = LocalFcinfo::<0>::new(0);
-    assert_eq!(fc_dpi(None, &mut fci).unwrap().as_f64(), core::f64::consts::PI);
+    assert_eq!(
+        fc_dpi(None, &mut fci).unwrap().as_f64(),
+        core::f64::consts::PI
+    );
 
     // Table sanity: unique OIDs, all rows strict/non-retset, and every row
     // matches the canonical pg_proc projection (name + nargs).
@@ -573,7 +623,10 @@ fn float_agg_fmgr_frames() {
     }
     let mut fci = LocalFcinfo::<1>::fresh(0);
     fci.set_arg(0, Datum::from_usize(tp));
-    assert_eq!(out8(fc_float8_avg(None, &mut fci).unwrap().as_f64()), "1.0625");
+    assert_eq!(
+        out8(fc_float8_avg(None, &mut fci).unwrap().as_f64()),
+        "1.0625"
+    );
     assert!(!fci.isnull);
     let mut fci = LocalFcinfo::<1>::fresh(0);
     fci.set_arg(0, Datum::from_usize(tp));
@@ -592,9 +645,15 @@ fn float_agg_fmgr_frames() {
 
     // combine in the agg frame folds t2 into t1 in place.
     let mut t1 = [0u8; float8_transarray_size(3)];
-    write_float8_transarray(&float8_accum(float8_accum([0.0; 3], 1.0).unwrap(), 2.5).unwrap(), &mut t1);
+    write_float8_transarray(
+        &float8_accum(float8_accum([0.0; 3], 1.0).unwrap(), 2.5).unwrap(),
+        &mut t1,
+    );
     let mut t2 = [0u8; float8_transarray_size(3)];
-    write_float8_transarray(&float8_accum(float8_accum([0.0; 3], 4.25).unwrap(), -3.5).unwrap(), &mut t2);
+    write_float8_transarray(
+        &float8_accum(float8_accum([0.0; 3], 4.25).unwrap(), -3.5).unwrap(),
+        &mut t2,
+    );
     let mut fci = LocalFcinfo::<2>::fresh(0);
     fci.context = agg.fm_node_ptr();
     fci.set_arg(0, Datum::from_usize(t1.as_ptr() as usize));
@@ -630,7 +689,10 @@ fn float_agg_fmgr_frames() {
     let mut fci = LocalFcinfo::<1>::fresh(0);
     fci.set_arg(0, Datum::from_usize(tp));
     let err = fc_float8_regr_sxx(None, &mut fci).unwrap_err();
-    assert_eq!(err.message(), "float8_regr_sxx: expected 6-element float8 array");
+    assert_eq!(
+        err.message(),
+        "float8_regr_sxx: expected 6-element float8 array"
+    );
 }
 
 // fnconf batch-1, OID 2467 (atanh): C calls platform libm atanh; Rust std's

@@ -5,8 +5,8 @@ use ::mcx::{Mcx, MemoryContext, PgVec};
 use ::stringinfo::StringInfo;
 use ::types_dest::CommandDest;
 use ::types_error::{
-    ERRCODE_CONNECTION_FAILURE, ERRCODE_PROTOCOL_VIOLATION, ERROR, ErrorLocation, FATAL, LOG,
-    PgError, PgResult,
+    ErrorLocation, PgError, PgResult, ERRCODE_CONNECTION_FAILURE, ERRCODE_PROTOCOL_VIOLATION,
+    ERROR, FATAL, LOG,
 };
 
 use crate::{
@@ -182,7 +182,7 @@ fn InteractiveBackend(in_buf: &mut StringInfo<'_>) -> PgResult<i32> {
                  * In plain mode, newline ends the command unless preceded by
                  * backslash.
                  */
-                if in_buf.len() > 0 && in_buf.as_bytes()[in_buf.len() - 1] == b'\\' {
+                if !in_buf.is_empty() && in_buf.as_bytes()[in_buf.len() - 1] == b'\\' {
                     /* discard backslash from inBuf */
                     in_buf.truncate(in_buf.len() - 1);
                     /* discard newline too */
@@ -862,7 +862,7 @@ fn postgres_main_inner(dbname: &str, username: &str) -> PgResult<()> {
                             pending = next;
                         }
                         Err(payload) => {
-                            pending = Box::new(pg_error_from_panic(payload));
+                            *pending = pg_error_from_panic(payload);
                         }
                     }
                 }

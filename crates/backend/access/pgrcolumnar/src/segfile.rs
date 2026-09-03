@@ -43,9 +43,15 @@ pub fn seg_bytes() -> u64 {
 #[cfg(any(test, pgrust_sim))]
 #[doc(hidden)]
 pub fn set_seg_bytes_for_tests(v: u64) {
-    assert!(v > 0 && v.is_multiple_of(BLCKSZ), "test segment size must be a BLCKSZ multiple");
+    assert!(
+        v > 0 && v.is_multiple_of(BLCKSZ),
+        "test segment size must be a BLCKSZ multiple"
+    );
     let installed = *seg_bytes_cell().get_or_init(|| v);
-    assert!(installed == v, "seg_bytes already initialized to {installed}");
+    assert!(
+        installed == v,
+        "seg_bytes already initialized to {installed}"
+    );
 }
 
 #[cfg(any(test, pgrust_sim))]
@@ -55,7 +61,9 @@ fn seg_bytes_cell() -> &'static std::sync::OnceLock<u64> {
 }
 
 fn io_err(path: &str, e: std::io::Error) -> Box<PgError> {
-    Box::new(PgError::error(format!("cbstore io error on \"{path}\": {e}")))
+    Box::new(PgError::error(format!(
+        "cbstore io error on \"{path}\": {e}"
+    )))
 }
 
 /// The errno of the vfs op that just failed, rendered exactly as the old
@@ -150,7 +158,11 @@ pub struct SegFile {
 impl SegFile {
     pub fn open_rw(base: &str) -> PgResult<SegFile> {
         let f = open_fd(base, libc::O_RDWR)?;
-        let mut sf = SegFile { base: base.to_string(), segs: vec![f], minted: false };
+        let mut sf = SegFile {
+            base: base.to_string(),
+            segs: vec![f],
+            minted: false,
+        };
         loop {
             let p = seg_path(&sf.base, sf.segs.len());
             match open_fd(&p, libc::O_RDWR) {
@@ -164,7 +176,11 @@ impl SegFile {
     fn seg_for(&mut self, segno: usize, create: bool) -> PgResult<libc::c_int> {
         while self.segs.len() <= segno {
             let p = seg_path(&self.base, self.segs.len());
-            let flags = if create { libc::O_RDWR | libc::O_CREAT } else { libc::O_RDWR };
+            let flags = if create {
+                libc::O_RDWR | libc::O_CREAT
+            } else {
+                libc::O_RDWR
+            };
             self.segs.push(open_fd(&p, flags)?);
             if create {
                 self.minted = true;
@@ -228,8 +244,7 @@ impl SegFile {
             // zero-progress write => WriteZero with std's message text.
             let mut done = 0usize;
             while done < take {
-                let n =
-                    vfs::pwrite(fd, &buf[done..take], (seg_off + done as u64) as libc::off_t);
+                let n = vfs::pwrite(fd, &buf[done..take], (seg_off + done as u64) as libc::off_t);
                 if n < 0 {
                     if vfs::get_errno() == libc::EINTR {
                         continue;
@@ -263,8 +278,11 @@ impl SegFile {
             // before the span fills => UnexpectedEof with std's message text.
             let mut done = 0usize;
             while done < take {
-                let n =
-                    vfs::pread(fd, &mut buf[done..take], (seg_off + done as u64) as libc::off_t);
+                let n = vfs::pread(
+                    fd,
+                    &mut buf[done..take],
+                    (seg_off + done as u64) as libc::off_t,
+                );
                 if n < 0 {
                     if vfs::get_errno() == libc::EINTR {
                         continue;
@@ -317,7 +335,9 @@ impl SegFile {
                 let segno = (off / seg_bytes()) as usize;
                 let seg_off = off % seg_bytes();
                 let take = (seg_bytes() - seg_off).min(len);
-                let Ok(fd) = self.seg_for(segno, false) else { return };
+                let Ok(fd) = self.seg_for(segno, false) else {
+                    return;
+                };
                 // Hint via the Vfs boundary; same spans, same order (the
                 // binding no-reorder/no-coalesce rule), errors ignored.
                 vfs::fadvise_willneed(fd, seg_off as libc::off_t, take as libc::off_t);
@@ -343,7 +363,11 @@ impl SegFile {
             };
             let fd = self.seg_for(segno, true)?;
             let mut fi = vfs::FileInfo::zeroed();
-            let cur = if vfs::fstat(fd, &mut fi) == 0 { fi.size as u64 } else { 0 };
+            let cur = if vfs::fstat(fd, &mut fi) == 0 {
+                fi.size as u64
+            } else {
+                0
+            };
             if cur < want {
                 // std File::set_len parity: ftruncate, EINTR retried.
                 while vfs::ftruncate(fd, want as libc::off_t) < 0 {
@@ -408,9 +432,10 @@ unsafe impl Sync for SegMap {}
 // a new mapping; the old dies with its last holder. The registry holds
 // Weak — it never extends a mapping's lifetime. Kill switch:
 // PGRUST_CBSTORE_SHARED_MAP=0/off (historical private mapping per open).
-static SHARED_MAPS: std::sync::Mutex<
-    Option<std::collections::HashMap<(u64, u64, usize), std::sync::Weak<SegMap>>>,
-> = std::sync::Mutex::new(None);
+// (st_dev, st_ino, maplen) -> the live shared mapping, if any.
+type SharedMaps = std::collections::HashMap<(u64, u64, usize), std::sync::Weak<SegMap>>;
+
+static SHARED_MAPS: std::sync::Mutex<Option<SharedMaps>> = std::sync::Mutex::new(None);
 
 fn shared_map_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
@@ -422,12 +447,16 @@ fn shared_map_enabled() -> bool {
     })
 }
 
+// The opened segment fds, each segment's byte length, and the total
+// reservation length ((nsegs-1)*SEG_BYTES + last seg len).
+type StatSegsResult = (Vec<SegFd>, Vec<u64>, usize);
+
 impl SegMap {
     // Stat pass shared by open/open_shared: the segment files plus the
     // reservation length ((nsegs-1)*SEG_BYTES + last seg len). None = empty.
     // Fronted (DST P1): opens via vfs::open (O_RDONLY|O_CLOEXEC — the
     // File::open flags), sizes via vfs::fstat, close via SegFd/vfs::close.
-    fn stat_segs(base: &str) -> PgResult<Option<(Vec<SegFd>, Vec<u64>, usize)>> {
+    fn stat_segs(base: &str) -> PgResult<Option<StatSegsResult>> {
         let mut files: Vec<SegFd> = Vec::new();
         loop {
             let p = seg_path(base, files.len());
@@ -463,14 +492,14 @@ impl SegMap {
     /// seg0's (the part-cache identity vocabulary — the caller already
     /// stat'd them; a recreate changes ino, a published append changes
     /// maplen, so equal keys imply the identical sealed byte image).
-    pub fn open_shared(
-        base: &str,
-        dev: u64,
-        ino: u64,
-    ) -> PgResult<Option<std::sync::Arc<SegMap>>> {
-        let Some((files, lens, maplen)) = SegMap::stat_segs(base)? else { return Ok(None) };
+    pub fn open_shared(base: &str, dev: u64, ino: u64) -> PgResult<Option<std::sync::Arc<SegMap>>> {
+        let Some((files, lens, maplen)) = SegMap::stat_segs(base)? else {
+            return Ok(None);
+        };
         if !shared_map_enabled() {
-            return Ok(Some(std::sync::Arc::new(SegMap::map_segs(&files, &lens, maplen)?)));
+            return Ok(Some(std::sync::Arc::new(SegMap::map_segs(
+                &files, &lens, maplen,
+            )?)));
         }
         let key = (dev, ino, maplen);
         let mut guard = SHARED_MAPS.lock().unwrap();
@@ -487,7 +516,9 @@ impl SegMap {
     }
 
     pub fn open(base: &str) -> PgResult<Option<SegMap>> {
-        let Some((files, lens, maplen)) = SegMap::stat_segs(base)? else { return Ok(None) };
+        let Some((files, lens, maplen)) = SegMap::stat_segs(base)? else {
+            return Ok(None);
+        };
         Ok(Some(SegMap::map_segs(&files, &lens, maplen)?))
     }
 
@@ -548,7 +579,9 @@ impl SegMap {
                 0,
             );
             if reserve == libc::MAP_FAILED {
-                return Err(Box::new(PgError::error("cbstore: mmap reserve failed".to_string())));
+                return Err(Box::new(PgError::error(
+                    "cbstore: mmap reserve failed".to_string(),
+                )));
             }
             for (i, f) in files.iter().enumerate() {
                 if lens[i] == 0 {
@@ -572,7 +605,10 @@ impl SegMap {
                 #[cfg(target_os = "linux")]
                 libc::madvise(p, lens[i] as usize, libc::MADV_SEQUENTIAL);
             }
-            Ok(SegMap { ptr: reserve as *const u8, maplen })
+            Ok(SegMap {
+                ptr: reserve as *const u8,
+                maplen,
+            })
         }
     }
 
@@ -605,8 +641,8 @@ mod dirsync_tests {
     use super::*;
 
     fn tmp(name: &str) -> String {
-        let p = std::env::temp_dir()
-            .join(format!("cbstore-dirsync-{}-{}", std::process::id(), name));
+        let p =
+            std::env::temp_dir().join(format!("cbstore-dirsync-{}-{}", std::process::id(), name));
         let _ = std::fs::remove_file(&p);
         let _ = std::fs::remove_file(format!("{}.1", p.display()));
         std::fs::write(&p, []).unwrap();
@@ -636,7 +672,10 @@ mod dirsync_tests {
 
         // Reopening an existing multi-segment part mints nothing.
         let f2 = SegFile::open_rw(&base).unwrap();
-        assert!(!f2.dirents_pending(), "open_rw of existing segments is not a mint");
+        assert!(
+            !f2.dirents_pending(),
+            "open_rw of existing segments is not a mint"
+        );
         drop(f2);
         std::fs::remove_file(&base).unwrap();
         std::fs::remove_file(format!("{base}.1")).unwrap();
@@ -650,7 +689,10 @@ mod dirsync_tests {
         let mut f = SegFile::open_rw(&base).unwrap();
         f.write_all_at(b"hello", 0).unwrap();
         f.pad_and_sync(5).unwrap();
-        assert!(!f.dirents_pending(), "seg 0 existed already; nothing minted");
+        assert!(
+            !f.dirents_pending(),
+            "seg 0 existed already; nothing minted"
+        );
         f.sync_dir_if_minted().unwrap(); // no-op, must not error
         drop(f);
         std::fs::remove_file(&base).unwrap();

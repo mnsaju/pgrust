@@ -2,13 +2,13 @@ use core::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use ::mcx::PgVec;
-use ::types_fmgr::FmgrInfo;
-use ::types_nbtree::BTMetaPageData;
 use ::types_core::{
     InvalidRelFileNumber, Oid, ProcNumber, SubTransactionId, BLCKSZ, RELPERSISTENCE_PERMANENT,
     RELPERSISTENCE_TEMP,
 };
 use ::types_error::PgResult;
+use ::types_fmgr::FmgrInfo;
+use ::types_nbtree::BTMetaPageData;
 use ::types_storage::smgr::SmgrHandle;
 use ::types_storage::RelFileLocator;
 use ::types_tuple::TupleDescData;
@@ -17,6 +17,10 @@ use crate::lock::{LockInfoData, NoLock, LOCKMODE};
 use crate::pg_class::{FormData_pg_class, RELKIND_HAS_STORAGE, RELKIND_MATVIEW, RELKIND_RELATION};
 use crate::pg_index::FormData_pg_index;
 use crate::reloptions::RdOptions;
+
+// Per-key-column opclass options: one parsed-options byte blob per index key
+// column, or None where the column has none.
+pub type RdOpcoptions = [Option<std::boxed::Box<[u8]>>];
 
 // RelationData (utils/rel.h) trimmed to the fields ports consume. Cell fields are
 // the ones C writes through the backend-shared relcache entry pointer (inval, subxact
@@ -67,7 +71,7 @@ pub struct RelationData<'mcx> {
     // C rd_opcoptions (rule-5 cache): parsed per-key-column opclass options
     // struct images, built lazily by RelationGetIndexAttOptions; Rc so AM
     // states keep the parse alive across relcache invalidation.
-    pub rd_opcoptions: RefCell<Option<Rc<[Option<std::boxed::Box<[u8]>>]>>>,
+    pub rd_opcoptions: RefCell<Option<Rc<RdOpcoptions>>>,
     // C rd_indexlist family (rule-5 cache): None == !rd_indexvalid, inval clears it;
     // 'static (CacheMemoryContext copy, as C's) keeps RelationData covariant in 'mcx.
     pub rd_indexlist: RefCell<Option<RdIndexList>>,
@@ -164,8 +168,7 @@ impl<'mcx> RelationData<'mcx> {
 
     #[inline]
     pub fn is_mapped(&self) -> bool {
-        RELKIND_HAS_STORAGE(self.rd_rel.relkind)
-            && self.rd_rel.relfilenode == InvalidRelFileNumber
+        RELKIND_HAS_STORAGE(self.rd_rel.relkind) && self.rd_rel.relfilenode == InvalidRelFileNumber
     }
 
     #[inline]
@@ -360,7 +363,10 @@ mod tests {
             rd_firstRelfilelocatorSubid: Cell::new(0),
             rd_droppedSubid: Cell::new(0),
             rd_lockInfo: LockInfoData {
-                lockRelId: crate::lock::LockRelId { relId: oid, dbId: 5 },
+                lockRelId: crate::lock::LockRelId {
+                    relId: oid,
+                    dbId: 5,
+                },
             },
             rd_rel: form_pg_class(oid),
             rd_att: Rc::new(td),
@@ -381,7 +387,8 @@ mod tests {
             rd_opcoptions: Default::default(),
             rd_indexlist: Default::default(),
             rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+            rd_hastriggers: false,
+            rd_hasrules: false,
         }
     }
 
@@ -449,7 +456,10 @@ mod tests {
         assert_eq!(rel.get_target_page_free_space(HEAP_DEFAULT_FILLFACTOR), 0);
         rel.rd_options = Some(RdOptions::Std(std_options(70)));
         assert_eq!(rel.get_fillfactor(HEAP_DEFAULT_FILLFACTOR), 70);
-        assert_eq!(rel.get_target_page_usage(HEAP_DEFAULT_FILLFACTOR), BLCKSZ * 70 / 100);
+        assert_eq!(
+            rel.get_target_page_usage(HEAP_DEFAULT_FILLFACTOR),
+            BLCKSZ * 70 / 100
+        );
         assert_eq!(
             rel.get_target_page_free_space(HEAP_DEFAULT_FILLFACTOR),
             BLCKSZ * 30 / 100

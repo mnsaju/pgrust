@@ -729,7 +729,11 @@ pub fn exec_copy_slot_minimal_tuple_planned<'mcx, 'out>(
     if let SlotData::Virtual(v) = slot {
         debug_assert_eq!(
             plan.natts(),
-            v.base.tts_tupleDescriptor.as_ref().expect("copy without descriptor").natts as usize
+            v.base
+                .tts_tupleDescriptor
+                .as_ref()
+                .expect("copy without descriptor")
+                .natts as usize
         );
         if !v.base.tts_isnull[..plan.natts()].contains(&true) {
             return heap_form_minimal_tuple_planned(out_mcx, plan, &v.base.tts_values, extra);
@@ -746,7 +750,10 @@ pub enum FetchedHeapTuple<'a, 'mcx, 'out> {
 
 pub enum FetchedMinimalTuple<'a, 'out> {
     /// Full-image-provenance pointer, live for `'a`; a `&MinimalTupleData` here would shrink provenance to the header (UB on deform).
-    Slot(NonNull<MinimalTupleData>, core::marker::PhantomData<&'a MinimalTupleData>),
+    Slot(
+        NonNull<MinimalTupleData>,
+        core::marker::PhantomData<&'a MinimalTupleData>,
+    ),
     Copied(MinimalTuple<'out>),
 }
 
@@ -1057,12 +1064,11 @@ pub fn execute_attr_map_slot<'mcx>(
     debug_assert!(in_slot.base().tts_tupleDescriptor.is_some());
     debug_assert!(out_slot.base().tts_tupleDescriptor.is_some());
 
-    let outnatts = attmap.len();
     slot_getallattrs(in_slot);
     exec_clear_tuple(out_slot, mcx);
 
-    for i in 0..outnatts {
-        let j = attmap[i] - 1;
+    for (i, &a) in attmap.iter().enumerate() {
+        let j = a - 1;
         let (value, isnull) = if j < 0 {
             (Datum::null(), true)
         } else {

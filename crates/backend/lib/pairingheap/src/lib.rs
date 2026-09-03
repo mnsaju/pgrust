@@ -24,7 +24,12 @@ pub struct PairingHeap<T, C: Fn(&T, &T) -> i32> {
 
 impl<T, C: Fn(&T, &T) -> i32> PairingHeap<T, C> {
     pub fn new(compare: C) -> Self {
-        PairingHeap { slots: Vec::new(), free: Vec::new(), root: INVALID, compare }
+        PairingHeap {
+            slots: Vec::new(),
+            free: Vec::new(),
+            root: INVALID,
+            compare,
+        }
     }
 
     #[inline]

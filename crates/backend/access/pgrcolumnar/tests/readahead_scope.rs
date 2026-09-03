@@ -15,11 +15,11 @@
 use std::rc::Rc;
 use std::sync::Mutex;
 
+use datum::Datum;
+use mcx::{Mcx, MemoryContext, PgVec};
 use pgrcolumnar::scan::CbScanDescData;
 use pgrcolumnar::writer::open_writer_at;
 use pgrcolumnar::ColType;
-use datum::Datum;
-use mcx::{Mcx, MemoryContext, PgVec};
 use types_core::{Oid, INVALID_PROC_NUMBER, RELPERSISTENCE_PERMANENT};
 use types_rel::{FormData_pg_class, LockInfoData, LockRelId, Relation, RELKIND_RELATION};
 use types_tuple::{CompactAttribute, FormData_pg_attribute, NameData, TupleDescData};
@@ -113,7 +113,12 @@ fn test_relation<'mcx>(mcx: Mcx<'mcx>, oid: Oid) -> Relation<'mcx> {
         rd_newRelfilelocatorSubid: std::cell::Cell::new(0),
         rd_firstRelfilelocatorSubid: std::cell::Cell::new(0),
         rd_droppedSubid: std::cell::Cell::new(0),
-        rd_lockInfo: LockInfoData { lockRelId: LockRelId { relId: oid, dbId: 5 } },
+        rd_lockInfo: LockInfoData {
+            lockRelId: LockRelId {
+                relId: oid,
+                dbId: 5,
+            },
+        },
         rd_rel,
         rd_att: tupdesc(mcx),
         rd_index: None,
@@ -169,12 +174,13 @@ fn write_part(tag: &str) -> (String, usize) {
     // 3 row groups: 2 full RGs (RG_ROWS = 65536) + a partial tail.
     let n_rows = 2 * 65_536 + 12_345;
     let vocab: [&[u8]; 6] = [b"alpha", b"beta", b"gamma", b"delta", b"eps", b"zeta"];
-    let mut w =
-        open_writer_at(&path, vec![ColType::I64, ColType::Text]).unwrap();
+    let mut w = open_writer_at(&path, vec![ColType::I64, ColType::Text]).unwrap();
     let mut keep = Vec::new();
     for i in 0..n_rows {
-        let vals =
-            [Datum::from_i64((i as i64 * 13) % 1000), text_datum(vocab[i % 6], &mut keep)];
+        let vals = [
+            Datum::from_i64((i as i64 * 13) % 1000),
+            text_datum(vocab[i % 6], &mut keep),
+        ];
         w.append_row(&vals, &[false, false]).unwrap();
         if keep.len() > 512 {
             keep.clear();
@@ -185,7 +191,11 @@ fn write_part(tag: &str) -> (String, usize) {
 }
 
 fn open_part(path: &str) -> std::sync::Arc<pgrcolumnar::reader::Part> {
-    std::sync::Arc::new(pgrcolumnar::reader::Part::open(path, 2).unwrap().expect("part exists"))
+    std::sync::Arc::new(
+        pgrcolumnar::reader::Part::open(path, 2)
+            .unwrap()
+            .expect("part exists"),
+    )
 }
 
 // Drive next_window to exhaustion; returns total staged rows.
@@ -216,13 +226,22 @@ fn serial_scan_advises_claim_channel_only() {
         vec![ColType::I64, ColType::Text],
     );
     assert_eq!(drive(&mut scan), n_rows);
-    assert!(scan.rgs_claim_readahead > 0, "serial default advises (claim channel)");
-    assert_eq!(scan.rgs_readahead, 0, "legacy parallel channel stays 0 on serial");
+    assert!(
+        scan.rgs_claim_readahead > 0,
+        "serial default advises (claim channel)"
+    );
+    assert_eq!(
+        scan.rgs_readahead, 0,
+        "legacy parallel channel stays 0 on serial"
+    );
     // Rescan advises again (fresh physical pass).
     let before = scan.rgs_claim_readahead;
     scan.reset_position();
     assert_eq!(drive(&mut scan), n_rows);
-    assert!(scan.rgs_claim_readahead > before, "serial rescan advises again");
+    assert!(
+        scan.rgs_claim_readahead > before,
+        "serial rescan advises again"
+    );
     assert_eq!(scan.rgs_readahead, 0);
     std::fs::remove_file(&path).unwrap();
 }
@@ -242,7 +261,10 @@ fn serial_opt_out_restores_prefetch_free_arm() {
     );
     std::env::remove_var("PGRUST_CBSTORE_READAHEAD_SERIAL");
     assert_eq!(drive(&mut scan), n_rows);
-    assert_eq!(scan.rgs_claim_readahead, 0, "SERIAL=0 restores the prefetch-free arm");
+    assert_eq!(
+        scan.rgs_claim_readahead, 0,
+        "SERIAL=0 restores the prefetch-free arm"
+    );
     assert_eq!(scan.rgs_readahead, 0);
     std::fs::remove_file(&path).unwrap();
 }
@@ -256,8 +278,7 @@ fn parallel_claims_advise_next_rg() {
     assert!(nrgs >= 3, "fixture must span row groups");
     let ctx = MemoryContext::new("cbreadahead-parallel");
     let mcx = ctx.mcx();
-    let mut pdesc =
-        Box::new(::tableam_vocab::ParallelBlockTableScanDescData::default());
+    let mut pdesc = Box::new(::tableam_vocab::ParallelBlockTableScanDescData::default());
     let pptr = std::ptr::NonNull::from(pdesc.as_mut());
     let mut scan = CbScanDescData::new_with_part(
         scan_base(mcx, 41012, Some(pptr)),
@@ -282,8 +303,7 @@ fn parallel_kill_switch_disables_advises() {
     let part = open_part(&path);
     let ctx = MemoryContext::new("cbreadahead-kill");
     let mcx = ctx.mcx();
-    let mut pdesc =
-        Box::new(::tableam_vocab::ParallelBlockTableScanDescData::default());
+    let mut pdesc = Box::new(::tableam_vocab::ParallelBlockTableScanDescData::default());
     let pptr = std::ptr::NonNull::from(pdesc.as_mut());
     std::env::set_var("PGRUST_CBSTORE_READAHEAD", "0");
     let mut scan = CbScanDescData::new_with_part(
@@ -293,7 +313,10 @@ fn parallel_kill_switch_disables_advises() {
     );
     std::env::remove_var("PGRUST_CBSTORE_READAHEAD");
     assert_eq!(drive(&mut scan), n_rows);
-    assert_eq!(scan.rgs_readahead, 0, "PGRUST_CBSTORE_READAHEAD=0 must kill advises");
+    assert_eq!(
+        scan.rgs_readahead, 0,
+        "PGRUST_CBSTORE_READAHEAD=0 must kill advises"
+    );
     drop(scan);
     drop(pdesc);
     std::fs::remove_file(&path).unwrap();
@@ -362,7 +385,10 @@ fn claim_drive_advises_own_and_next_rg() {
     // Per RG switch: own RG + 1 ahead, out-of-range successor of the last
     // RG skipped => 2*(nrgs-1) + 1.
     assert_eq!(scan.rgs_claim_readahead, (2 * (nrgs - 1) + 1) as u64);
-    assert_eq!(scan.rgs_readahead, 0, "legacy counter untouched by the claim drive");
+    assert_eq!(
+        scan.rgs_readahead, 0,
+        "legacy counter untouched by the claim drive"
+    );
     std::fs::remove_file(&path).unwrap();
 }
 
@@ -382,7 +408,10 @@ fn claim_drive_kill_switches() {
     );
     std::env::remove_var("PGRUST_CBSTORE_READAHEAD");
     assert_eq!(drive_claims(&mut scan), n_rows);
-    assert_eq!(scan.rgs_claim_readahead, 0, "PGRUST_CBSTORE_READAHEAD=0 must kill claim advises");
+    assert_eq!(
+        scan.rgs_claim_readahead, 0,
+        "PGRUST_CBSTORE_READAHEAD=0 must kill claim advises"
+    );
     drop(scan);
     // Hook-scoped switch: PGRUST_CBSTORE_READAHEAD_CLAIMS=off.
     let ctx2 = MemoryContext::new("cbreadahead-claimoff");
@@ -395,7 +424,10 @@ fn claim_drive_kill_switches() {
     );
     std::env::remove_var("PGRUST_CBSTORE_READAHEAD_CLAIMS");
     assert_eq!(drive_claims(&mut scan), n_rows);
-    assert_eq!(scan.rgs_claim_readahead, 0, "CLAIMS=off must disable the claim hook");
+    assert_eq!(
+        scan.rgs_claim_readahead, 0,
+        "CLAIMS=off must disable the claim hook"
+    );
     std::fs::remove_file(&path).unwrap();
 }
 
@@ -414,7 +446,10 @@ fn serial_kill_switch_covers_claim_channel() {
     );
     std::env::remove_var("PGRUST_CBSTORE_READAHEAD");
     assert_eq!(drive(&mut scan), n_rows);
-    assert_eq!(scan.rgs_claim_readahead, 0, "global kill switch silences the serial drive");
+    assert_eq!(
+        scan.rgs_claim_readahead, 0,
+        "global kill switch silences the serial drive"
+    );
     assert_eq!(scan.rgs_readahead, 0);
     std::fs::remove_file(&path).unwrap();
 }

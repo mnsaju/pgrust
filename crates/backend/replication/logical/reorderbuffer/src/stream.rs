@@ -11,9 +11,7 @@ use types_error::PgResult;
 
 use snapmgr::Snapshot;
 
-use crate::{
-    dl_iter, ReorderBuffer, TxnId, RBTXN_SENT_PREPARE,
-};
+use crate::{dl_iter, ReorderBuffer, TxnId, RBTXN_SENT_PREPARE};
 
 impl ReorderBuffer {
     // ReorderBufferCanStartStreaming (reorderbuffer.c:4285): the plugin must
@@ -31,7 +29,9 @@ impl ReorderBuffer {
     pub(crate) fn largest_streamable_top_txn(&self) -> Option<TxnId> {
         let mut largest: Option<TxnId> = None;
         let mut largest_size = 0usize;
-        for id in dl_iter(&self.txns, self.txns_by_base_snapshot_lsn, |t| t.base_snapshot_node) {
+        for id in dl_iter(&self.txns, self.txns_by_base_snapshot_lsn, |t| {
+            t.base_snapshot_node
+        }) {
             let txn = self.txn(id);
             debug_assert!(!txn.is_known_subxact());
             debug_assert!(txn.base_snapshot.is_some());
@@ -81,8 +81,7 @@ impl ReorderBuffer {
             debug_assert!(!self.txn(txn).is_streamed());
             debug_assert!(self.txn(txn).command_id == InvalidCommandId);
 
-            let subs: Vec<TxnId> =
-                dl_iter(&self.txns, self.txn(txn).subtxns, |t| t.node).collect();
+            let subs: Vec<TxnId> = dl_iter(&self.txns, self.txn(txn).subtxns, |t| t.node).collect();
             for sub in subs {
                 self.transfer_snap_to_parent(txn, sub);
             }
@@ -103,7 +102,11 @@ impl ReorderBuffer {
             // subxacts that appeared since then are added to subxip.
             debug_assert!(self.txn(txn).is_streamed());
             command_id = self.txn(txn).command_id;
-            let prev = self.txn_mut(txn).snapshot_now.take().expect("checked above");
+            let prev = self
+                .txn_mut(txn)
+                .snapshot_now
+                .take()
+                .expect("checked above");
             debug_assert!(prev.copied);
             snapshot_now = self.copy_snap(&prev, txn, command_id);
         }

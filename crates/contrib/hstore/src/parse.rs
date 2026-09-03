@@ -21,7 +21,11 @@ enum Gv {
 }
 
 // get_val: one token starting at ptr; Ok(None) is EOF at token start.
-fn get_val(input: &[u8], mut ptr: usize, ignoreeq: bool) -> PgResult<Option<(Vec<u8>, bool, usize)>> {
+fn get_val(
+    input: &[u8],
+    mut ptr: usize,
+    ignoreeq: bool,
+) -> PgResult<Option<(Vec<u8>, bool, usize)>> {
     let mut st = Gv::WaitVal;
     let mut word: Vec<u8> = Vec::with_capacity(32);
     let mut escaped = false;
@@ -137,8 +141,7 @@ pub fn parse_hstore(input: &[u8]) -> PgResult<Vec<Pair>> {
                 Some((word, escaped, newptr)) => {
                     ptr = newptr;
                     check_val_len(word.len())?;
-                    let isnull =
-                        word.len() == 4 && !escaped && word.eq_ignore_ascii_case(b"null");
+                    let isnull = word.len() == 4 && !escaped && word.eq_ignore_ascii_case(b"null");
                     pairs.push(Pair {
                         key: cur_key.take().expect("key set before value"),
                         val: (!isnull).then_some(word),
@@ -223,7 +226,10 @@ mod tests {
     fn basic_forms() {
         assert_eq!(kv("a=>b"), vec![("a".into(), Some("b".into()))]);
         assert_eq!(kv(" a => NULL "), vec![("a".into(), None)]);
-        assert_eq!(kv(r#""x y"=>"z,w""#), vec![("x y".into(), Some("z,w".into()))]);
+        assert_eq!(
+            kv(r#""x y"=>"z,w""#),
+            vec![("x y".into(), Some("z,w".into()))]
+        );
         assert_eq!(kv(r#"a=>"NULL""#), vec![("a".into(), Some("NULL".into()))]);
         assert_eq!(kv(r"a\=>b=>1"), vec![("a=>b".into(), Some("1".into()))]);
         assert!(kv("").is_empty());

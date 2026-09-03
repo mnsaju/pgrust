@@ -55,7 +55,16 @@ fn parse_numeric_standby_name() {
 
 #[test]
 fn parse_errors() {
-    for bad in ["", "2 (", "()", "any (s1)", "first s1", "s1,", "\"unterminated", "2 (s1) x"] {
+    for bad in [
+        "",
+        "2 (",
+        "()",
+        "any (s1)",
+        "first s1",
+        "s1,",
+        "\"unterminated",
+        "2 (s1) x",
+    ] {
         assert!(
             parse_synchronous_standby_names(bad).is_err(),
             "expected parse failure for {bad:?}"

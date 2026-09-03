@@ -169,7 +169,11 @@ impl TestTuple {
     }
 }
 
-fn mvcc_snapshot<'m>(mcx: ::mcx::Mcx<'m>, xmin: TransactionId, xmax: TransactionId) -> SnapshotData<'m> {
+fn mvcc_snapshot<'m>(
+    mcx: ::mcx::Mcx<'m>,
+    xmin: TransactionId,
+    xmax: TransactionId,
+) -> SnapshotData<'m> {
     let mut s = SnapshotData::sentinel(mcx, SnapshotType::SNAPSHOT_MVCC);
     s.xmin = xmin;
     s.xmax = xmax;
@@ -401,21 +405,17 @@ fn seam_dispatch_covers_read_lane() {
     let snap = mvcc_snapshot(cx.mcx(), 10, 20);
 
     let mut t = TestTuple::new(5, 0, HEAP_XMIN_COMMITTED | HEAP_XMAX_INVALID);
-    assert!(heapam_visibility_seams::heap_tuple_satisfies_visibility::call(
-        &mut t.htup(),
-        &snap,
-        BUF
-    )
-    .unwrap());
+    assert!(
+        heapam_visibility_seams::heap_tuple_satisfies_visibility::call(&mut t.htup(), &snap, BUF)
+            .unwrap()
+    );
 
     let any = SnapshotData::sentinel(cx.mcx(), SnapshotType::SNAPSHOT_ANY);
     let mut t = TestTuple::new(5, 0, 0);
-    assert!(heapam_visibility_seams::heap_tuple_satisfies_visibility::call(
-        &mut t.htup(),
-        &any,
-        BUF
-    )
-    .unwrap());
+    assert!(
+        heapam_visibility_seams::heap_tuple_satisfies_visibility::call(&mut t.htup(), &any, BUF)
+            .unwrap()
+    );
 
     let mut t = TestTuple::new(5, XID_DONE, HEAP_XMIN_COMMITTED | HEAP_XMAX_COMMITTED);
     assert_eq!(
@@ -537,14 +537,17 @@ fn install_tuplecids(cmin: CommandId, cmax: CommandId) {
 
     let cx: &'static ::mcx::MemoryContext =
         Box::leak(Box::new(::mcx::MemoryContext::new("historic test")));
-    let mut hash: TupleCidHash =
-        ::mcx::PgFxHashMap::with_hasher_in(Default::default(), cx.mcx());
+    let mut hash: TupleCidHash = ::mcx::PgFxHashMap::with_hasher_in(Default::default(), cx.mcx());
     hash.insert(
         ReorderBufferTupleCidKey {
             rlocator: test_historic_rlocator(),
             tid: ::types_tuple::ItemPointerData::new(0, 1),
         },
-        ReorderBufferTupleCidEnt { cmin, cmax, combocid: InvalidCommandId },
+        ReorderBufferTupleCidEnt {
+            cmin,
+            cmax,
+            combocid: InvalidCommandId,
+        },
     );
     let dummy = Rc::new(SnapshotData::sentinel(
         cx.mcx(),

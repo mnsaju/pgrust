@@ -201,7 +201,13 @@ fn setenv(name: &str, value: &str) -> bool {
     let cname = cstr(name);
     let cval = cstr(value);
     // SAFETY: both arguments are NUL-terminated.
-    unsafe { libc::setenv(cname.as_ptr() as *const c_char, cval.as_ptr() as *const c_char, 1) == 0 }
+    unsafe {
+        libc::setenv(
+            cname.as_ptr() as *const c_char,
+            cval.as_ptr() as *const c_char,
+            1,
+        ) == 0
+    }
 }
 
 pub fn pg_perm_setlocale<'mcx>(
@@ -351,21 +357,18 @@ pub fn assign_locale_messages(newval: &str) {
 pub(crate) fn install_guc_hooks() {
     use guc_tables::{hooks, vars, GucVarAccessors};
 
-    hooks::check_locale_monetary.install(|newval, _extra, _source| {
-        check_locale_monetary(newval.as_deref().unwrap_or(""))
-    });
+    hooks::check_locale_monetary
+        .install(|newval, _extra, _source| check_locale_monetary(newval.as_deref().unwrap_or("")));
     hooks::assign_locale_monetary.install(|newval, _extra| {
         assign_locale_monetary(newval.unwrap_or(""));
     });
-    hooks::check_locale_numeric.install(|newval, _extra, _source| {
-        check_locale_numeric(newval.as_deref().unwrap_or(""))
-    });
+    hooks::check_locale_numeric
+        .install(|newval, _extra, _source| check_locale_numeric(newval.as_deref().unwrap_or("")));
     hooks::assign_locale_numeric.install(|newval, _extra| {
         assign_locale_numeric(newval.unwrap_or(""));
     });
-    hooks::check_locale_time.install(|newval, _extra, _source| {
-        check_locale_time(newval.as_deref().unwrap_or(""))
-    });
+    hooks::check_locale_time
+        .install(|newval, _extra, _source| check_locale_time(newval.as_deref().unwrap_or("")));
     hooks::assign_locale_time.install(|newval, _extra| {
         assign_locale_time(newval.unwrap_or(""));
     });

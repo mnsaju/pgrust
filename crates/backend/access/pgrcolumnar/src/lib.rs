@@ -87,8 +87,13 @@ pub fn footer_rows(rel: &::types_rel::Relation<'_>) -> PgResult<Option<u64>> {
 // audit 2026-07-14). Pre-v2 parts carry an empty ndv vec on Part — mapped
 // back to None to preserve part_footer_ndv's exact contract.
 pub fn footer_ndv(rel: &::types_rel::Relation<'_>) -> PgResult<Option<Vec<u64>>> {
-    Ok(part_cache::cached_part(rel)?
-        .and_then(|p| if p.ndv.is_empty() { None } else { Some(p.ndv.clone()) }))
+    Ok(part_cache::cached_part(rel)?.and_then(|p| {
+        if p.ndv.is_empty() {
+            None
+        } else {
+            Some(p.ndv.clone())
+        }
+    }))
 }
 
 // v8 per-column NDV register sketches (the inherited-ANALYZE union source:
@@ -99,9 +104,7 @@ pub fn footer_ndv(rel: &::types_rel::Relation<'_>) -> PgResult<Option<Vec<u64>>>
 // plan-time cache for it. None: no committed footer (zero committed rows).
 // Per-column None entries: sketch absent (pre-v8 part, append-invalidated
 // chain, or the writer kill switch).
-pub fn footer_ndv_hll(
-    rel: &::types_rel::Relation<'_>,
-) -> PgResult<Option<Vec<Option<hll::Hll>>>> {
+pub fn footer_ndv_hll(rel: &::types_rel::Relation<'_>) -> PgResult<Option<Vec<Option<hll::Hll>>>> {
     let ncols = writer::coltypes_of(rel)?.len();
     reader::part_footer_ndv_hll(&rel_main_path(rel), ncols)
 }

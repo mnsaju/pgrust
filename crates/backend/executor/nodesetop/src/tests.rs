@@ -9,8 +9,8 @@ use ::types_nodes::list::NodeList;
 use ::types_nodes::node_tree::Node;
 use ::types_nodes::plannodes::SetOp;
 use ::types_pathnodes::{
-    SETOPCMD_EXCEPT, SETOPCMD_EXCEPT_ALL, SETOPCMD_INTERSECT, SETOPCMD_INTERSECT_ALL,
-    SETOP_HASHED, SETOP_SORTED,
+    SETOPCMD_EXCEPT, SETOPCMD_EXCEPT_ALL, SETOPCMD_INTERSECT, SETOPCMD_INTERSECT_ALL, SETOP_HASHED,
+    SETOP_SORTED,
 };
 use ::types_slot::TupleSlotKind;
 use ::types_tuple::{
@@ -48,18 +48,21 @@ fn install_seams() {
             }))
         });
         syscache_seams::lookup_pg_operator_shape::set(|opno| {
-            Ok((opno == INT4_EQ).then_some(syscache_seams::PgOperatorShape { oprnamespace: 11,
-                oprleft: INT4OID,
-                oprright: INT4OID,
-                oprresult: 16,
-                oprcom: INT4_EQ,
-                oprnegate: 518,
-                oprcode: F_INT4EQ,
-                oprrest: 101,
-                oprjoin: 105,
-                oprcanmerge: true,
-                oprcanhash: true,
-            }))
+            Ok(
+                (opno == INT4_EQ).then_some(syscache_seams::PgOperatorShape {
+                    oprnamespace: 11,
+                    oprleft: INT4OID,
+                    oprright: INT4OID,
+                    oprresult: 16,
+                    oprcom: INT4_EQ,
+                    oprnegate: 518,
+                    oprcode: F_INT4EQ,
+                    oprrest: 101,
+                    oprjoin: 105,
+                    oprcanmerge: true,
+                    oprcanhash: true,
+                }),
+            )
         });
         syscache_seams::lookup_pg_amop_members_by_operator::set(|mcx, opno| {
             let mut v = PgVec::new_in(mcx);
@@ -128,8 +131,16 @@ fn one_col_desc(mcx: Mcx<'_>) -> Rc<TupleDescData<'_>> {
 }
 
 fn mk_setop(mcx: Mcx<'_>, cmd: u32, strategy: u32) -> &SetOp<'_> {
-    let var = Node::mk_var(mcx, ::types_nodes::primnodes::OUTER_VAR, 1, INT4OID, -1, 0, 0)
-        .unwrap();
+    let var = Node::mk_var(
+        mcx,
+        ::types_nodes::primnodes::OUTER_VAR,
+        1,
+        INT4OID,
+        -1,
+        0,
+        0,
+    )
+    .unwrap();
     let tle = Node::mk_target_entry(mcx, var, 1, Some("a"), false).unwrap();
     let mut s = Node::build::<SetOp>(mcx).unwrap();
     s.plan.targetlist = NodeList::make1(mcx, tle).unwrap();
@@ -139,7 +150,11 @@ fn mk_setop(mcx: Mcx<'_>, cmd: u32, strategy: u32) -> &SetOp<'_> {
     s.cmpColIdx = mcx::slice_borrow_in(mcx, &[1i16]).unwrap();
     s.cmpOperators = mcx::slice_borrow_in(
         mcx,
-        &[if strategy == SETOP_HASHED { INT4_EQ } else { INT4_LT }],
+        &[if strategy == SETOP_HASHED {
+            INT4_EQ
+        } else {
+            INT4_LT
+        }],
     )
     .unwrap();
     s.cmpCollations = mcx::slice_borrow_in(mcx, &[0u32]).unwrap();
@@ -191,19 +206,21 @@ fn run_setop(
         let child_desc = one_col_desc(mcx);
         let outer_id =
             estate.exec_init_extra_tuple_slot(Some(child_desc.clone()), TupleSlotKind::Virtual);
-        let inner_id =
-            estate.exec_init_extra_tuple_slot(Some(child_desc), TupleSlotKind::Virtual);
+        let inner_id = estate.exec_init_extra_tuple_slot(Some(child_desc), TupleSlotKind::Virtual);
         // SAFETY: so is leaked ('static) and read-only.
         let so = unsafe { shorten(so) };
         let result_desc = one_col_desc(leaked_mcx());
-        let mut state =
-            exec_init_set_op(so, estate, 0, &result_desc.clone(), result_desc).unwrap();
+        let mut state = exec_init_set_op(so, estate, 0, &result_desc.clone(), result_desc).unwrap();
 
-        let got = collect(&mut state, estate, outer_id, inner_id, outer_rows, inner_rows);
+        let got = collect(
+            &mut state, estate, outer_id, inner_id, outer_rows, inner_rows,
+        );
         let rescan_children = exec_rescan_set_op(&mut state, estate);
         assert_eq!(rescan_children, strategy == SETOP_SORTED);
         // Hashed re-walks the built table (feeders unused); sorted re-reads.
-        let again = collect(&mut state, estate, outer_id, inner_id, outer_rows, inner_rows);
+        let again = collect(
+            &mut state, estate, outer_id, inner_id, outer_rows, inner_rows,
+        );
         assert_eq!(again, got);
         got
     })
@@ -284,16 +301,16 @@ fn hashed_except_all() {
 #[test]
 fn hashed_nulls_group_together() {
     assert_eq!(
-        run_setop(
-            SETOPCMD_INTERSECT,
-            SETOP_HASHED,
-            &[None, Some(1)],
-            &[None],
-        ),
+        run_setop(SETOPCMD_INTERSECT, SETOP_HASHED, &[None, Some(1)], &[None],),
         vec![None]
     );
     assert_eq!(
-        run_setop(SETOPCMD_EXCEPT, SETOP_HASHED, &[None, None, Some(1)], &[None]),
+        run_setop(
+            SETOPCMD_EXCEPT,
+            SETOP_HASHED,
+            &[None, None, Some(1)],
+            &[None]
+        ),
         vec![Some(1)]
     );
 }

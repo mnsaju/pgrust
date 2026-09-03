@@ -83,7 +83,10 @@ fn _assert_part_send_sync() {
 // Kill switch: PGRUST_CBSTORE_SHARED_PART=0/off (per-thread parse, the
 // historical behavior). PGRUST_CBSTORE_PART_CACHE=0 disables this too (the
 // registry is probed only from the cache-miss path).
-static SHARED_PARTS: Mutex<Option<HashMap<(u64, u64, u64), Weak<Part>>>> = Mutex::new(None);
+// PartIdent (st_dev, st_ino, st_size) -> the live shared Part, if any.
+type SharedParts = HashMap<(u64, u64, u64), Weak<Part>>;
+
+static SHARED_PARTS: Mutex<Option<SharedParts>> = Mutex::new(None);
 
 // Per-process counters (always on, uncontended increments): full directory
 // parses at Part::open vs registry shares. The A/B evidence channel for the
@@ -189,7 +192,9 @@ fn probe(e: &Entry, path: &str, ncols: usize) -> bool {
     if e.path != path || e.ncols != ncols {
         return false;
     }
-    let Some(md) = stat_info(path) else { return false };
+    let Some(md) = stat_info(path) else {
+        return false;
+    };
     if (md.dev, md.ino, md.size as u64) != (e.dev, e.ino, e.len) {
         return false;
     }
@@ -213,7 +218,9 @@ pub fn cached_part(rel: &::types_rel::Relation<'_>) -> PgResult<Option<Arc<Part>
     let hit = CACHE.with(|cell| {
         let b = cell.borrow();
         let map = b.as_ref().expect("part cache initialized");
-        map.get(&relid).filter(|e| probe(e, &path, ncols)).map(|e| Arc::clone(&e.part))
+        map.get(&relid)
+            .filter(|e| probe(e, &path, ncols))
+            .map(|e| Arc::clone(&e.part))
     });
     if let Some(part) = hit {
         if debug_log() {
@@ -358,12 +365,14 @@ mod tests {
         let live = shared_lookup(key, 3).expect("live entry upgrades");
         assert!(Arc::ptr_eq(&part, &live));
         let (k2, p2) = (key, Arc::clone(&part));
-        let cross = std::thread::spawn(move || {
-            shared_lookup(k2, 3).map(|l| Arc::ptr_eq(&p2, &l))
-        })
-        .join()
-        .unwrap();
-        assert_eq!(cross, Some(true), "cross-thread share must hit the same Part");
+        let cross = std::thread::spawn(move || shared_lookup(k2, 3).map(|l| Arc::ptr_eq(&p2, &l)))
+            .join()
+            .unwrap();
+        assert_eq!(
+            cross,
+            Some(true),
+            "cross-thread share must hit the same Part"
+        );
 
         // ncols drift refuses the share.
         assert!(shared_lookup(key, 4).is_none());
@@ -379,7 +388,10 @@ mod tests {
             f.seek(SeekFrom::Start(16)).unwrap();
             f.write_all(&(orig_word + 8).to_le_bytes()).unwrap();
         }
-        assert!(shared_lookup(key, 3).is_none(), "stale footer_off must refuse");
+        assert!(
+            shared_lookup(key, 3).is_none(),
+            "stale footer_off must refuse"
+        );
         {
             use std::io::{Seek, SeekFrom, Write};
             let mut f = std::fs::OpenOptions::new().write(true).open(&path).unwrap();
@@ -390,7 +402,10 @@ mod tests {
 
         // Weak lifetime: with every holder dropped the entry dies.
         drop((part, live));
-        assert!(shared_lookup(key, 3).is_none(), "Weak registry must not retain");
+        assert!(
+            shared_lookup(key, 3).is_none(),
+            "Weak registry must not retain"
+        );
         std::fs::remove_file(&path).unwrap();
     }
 }

@@ -76,7 +76,10 @@ pub struct RunBuf {
 
 impl RunBuf {
     pub fn new(natts: usize) -> RunBuf {
-        RunBuf { natts, ..RunBuf::default() }
+        RunBuf {
+            natts,
+            ..RunBuf::default()
+        }
     }
 
     /// Heap bytes retained (the budget meter's read).
@@ -123,7 +126,8 @@ impl RunBuf {
             self.arena.resize(self.arena.len() + pad, 0);
             let off = self.arena.len();
             // SAFETY: caller contract — `size` readable bytes at `p`.
-            self.arena.extend_from_slice(unsafe { core::slice::from_raw_parts(p, size) });
+            self.arena
+                .extend_from_slice(unsafe { core::slice::from_raw_parts(p, size) });
             self.values.push(Datum::from_usize(off));
         }
         self.nrows += 1;
@@ -155,7 +159,10 @@ impl RunBuf {
     pub fn row(&self, i: usize) -> (&[Datum], &[bool]) {
         debug_assert!(self.fixed, "row read before seal_fixup");
         let base = i * self.natts;
-        (&self.values[base..base + self.natts], &self.nulls[base..base + self.natts])
+        (
+            &self.values[base..base + self.natts],
+            &self.nulls[base..base + self.natts],
+        )
     }
 }
 
@@ -180,7 +187,12 @@ pub struct FullAdopted {
 
 impl FullAdopted {
     pub fn new(runs: Vec<std::sync::Arc<FullRun>>, parts: Vec<Vec<(u16, u32)>>) -> FullAdopted {
-        FullAdopted { runs, parts, part: 0, pos: 0 }
+        FullAdopted {
+            runs,
+            parts,
+            part: 0,
+            pos: 0,
+        }
     }
 
     /// Next row in the canonical order; `None` = drained.
@@ -294,12 +306,17 @@ mod tests {
     use super::*;
 
     fn ent(keys: &[(i64, bool)], flags: &[(bool, bool)], rowref: u64, bufrow: u32) -> RunEnt {
-        RunEnt { key: WideEntry::encode(keys, flags, rowref), bufrow }
+        RunEnt {
+            key: WideEntry::encode(keys, flags, rowref),
+            bufrow,
+        }
     }
 
     /// Deterministic pseudo-random (no dev-deps in this crate).
     fn rng(seed: &mut u64) -> u64 {
-        *seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        *seed = seed
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         *seed >> 11
     }
 
@@ -335,11 +352,14 @@ mod tests {
     #[test]
     fn partitions_concatenate_to_the_global_sort() {
         let mut seed = 42u64;
-        for &(arity, nruns, nparts) in
-            &[(1usize, 1usize, 1usize), (1, 4, 8), (2, 3, 16), (4, 5, 7), (1, 6, 256)]
-        {
-            let flags: Vec<(bool, bool)> =
-                (0..arity).map(|i| (i % 2 == 1, i % 3 == 0)).collect();
+        for &(arity, nruns, nparts) in &[
+            (1usize, 1usize, 1usize),
+            (1, 4, 8),
+            (2, 3, 16),
+            (4, 5, 7),
+            (1, 6, 256),
+        ] {
+            let flags: Vec<(bool, bool)> = (0..arity).map(|i| (i % 2 == 1, i % 3 == 0)).collect();
             let mut rowref = 0u64;
             let runs: Vec<Vec<RunEnt>> = (0..nruns)
                 .map(|_| {
@@ -420,21 +440,31 @@ mod tests {
     fn runbuf_roundtrip_byval_and_varlena() {
         // Two cols: int8 byval + a varlena (short text image built by
         // hand: 4-byte header, 4B length law of varsize_any on 4b).
-        let cols =
-            [RunCol { byval: true, len: 8 }, RunCol { byval: false, len: -1 }];
+        let cols = [
+            RunCol {
+                byval: true,
+                len: 8,
+            },
+            RunCol {
+                byval: false,
+                len: -1,
+            },
+        ];
         let mut buf = RunBuf::new(2);
         let mut images: Vec<Vec<u8>> = Vec::new();
         for i in 0..40i64 {
             let body = format!("row-{i}-{}", "x".repeat((i as usize) % 17));
             let total = 4 + body.len();
             let mut img = Vec::with_capacity(total);
-            img.extend_from_slice(&(((total as u32) << 2)).to_le_bytes());
+            img.extend_from_slice(&((total as u32) << 2).to_le_bytes());
             img.extend_from_slice(body.as_bytes());
             images.push(img);
         }
         for (i, img) in images.iter().enumerate() {
-            let vals =
-                [Datum::from_i64(i as i64 * 3), Datum::from_usize(img.as_ptr() as usize)];
+            let vals = [
+                Datum::from_i64(i as i64 * 3),
+                Datum::from_usize(img.as_ptr() as usize),
+            ];
             let nulls = [false, i % 7 == 0];
             // SAFETY: img is a live 4b varlena image.
             unsafe { buf.push_row(&vals, &nulls, &cols) };

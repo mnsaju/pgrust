@@ -11,9 +11,7 @@ use types_scan::scankey::{ScanKeyData, SK_ISNULL};
 use types_snapshot::IsMVCCSnapshot;
 use types_tuple::itemptr::ItemPointerData;
 
-fn opaque<'a, 'mcx>(
-    scan: &'a mut IndexScanDescData<'mcx>,
-) -> &'a mut HnswScanOpaqueData<'mcx> {
+fn opaque<'a, 'mcx>(scan: &'a mut IndexScanDescData<'mcx>) -> &'a mut HnswScanOpaqueData<'mcx> {
     match &mut scan.opaque {
         IndexScanOpaque::Hnsw(so) => so,
         _ => unreachable!("non-hnsw scan opaque"),
@@ -108,10 +106,7 @@ pub fn hnswendscan(scan: &mut IndexScanDescData<'_>) -> PgResult<()> {
 // GetScanValue: detoast, then normalize for cosine-family opclasses.
 // Scratch goes in a local bump (C allocates in tmpCtx); the returned image
 // is owned so it frees at the next rescan.
-fn get_scan_value(
-    support: &mut HnswSupport,
-    orderby: &ScanKeyData,
-) -> PgResult<Option<Vec<u8>>> {
+fn get_scan_value(support: &mut HnswSupport, orderby: &ScanKeyData) -> PgResult<Option<Vec<u8>>> {
     if orderby.sk_flags & SK_ISNULL != 0 {
         return Ok(None);
     }
@@ -120,9 +115,7 @@ fn get_scan_value(
     let d = orderby.sk_argument;
     let p = d.as_usize() as *const u8;
     // SAFETY: non-null vector varlena datum.
-    let raw = unsafe {
-        core::slice::from_raw_parts(p, types_tuple::varatt::varsize_any(p))
-    };
+    let raw = unsafe { core::slice::from_raw_parts(p, types_tuple::varatt::varsize_any(p)) };
     let flat = detoast::detoast_attr(tmcx, raw)?;
 
     if support.normprocinfo.is_some() {
@@ -176,11 +169,7 @@ const SCAN_TUPLE_MEM: usize = 200;
 
 // GetScanItems (algorithm 5).
 fn get_scan_items(scan: &mut IndexScanDescData<'_>) -> PgResult<()> {
-    let index = scan
-        .indexRelation
-        .as_ref()
-        .expect("index open")
-        .alias();
+    let index = scan.indexRelation.as_ref().expect("index open").alias();
     let so = match &mut scan.opaque {
         IndexScanOpaque::Hnsw(so) => &mut **so,
         _ => unreachable!(),
@@ -204,18 +193,42 @@ fn get_scan_items(scan: &mut IndexScanDescData<'_>) -> PgResult<()> {
     let ep_id = pool.from_block(entry.blkno, entry.offno);
     pool.get_mut(ep_id).level = entry.level;
     let mut ep_dist = 0.0f64;
-    load_element(&mut pool, ep_id, Some(&mut ep_dist), q, &index, &mut support, false, None)?;
+    load_element(
+        &mut pool,
+        ep_id,
+        Some(&mut ep_dist),
+        q,
+        &index,
+        &mut support,
+        false,
+        None,
+    )?;
 
     let mut ep: PgVec<'_, SearchCandidate> = mcx::vec_with_capacity_in_infallible(tmcx, 1);
-    ep.push(SearchCandidate { element: ep_id, distance: ep_dist });
+    ep.push(SearchCandidate {
+        element: ep_id,
+        distance: ep_dist,
+    });
 
     let mut lc = entry.level as i32;
     while lc >= 1 {
         let mut visited: Visited<'_> =
             PgFxHashMap::with_capacity_and_hasher_in(64, Default::default(), tmcx);
         ep = search_layer_disk(
-            &mut pool, q, ep, 1, lc, &index, &mut support, so.m, false, None, &mut visited,
-            None, true, None,
+            &mut pool,
+            q,
+            ep,
+            1,
+            lc,
+            &index,
+            &mut support,
+            so.m,
+            false,
+            None,
+            &mut visited,
+            None,
+            true,
+            None,
         )?;
         lc -= 1;
     }
@@ -226,12 +239,11 @@ fn get_scan_items(scan: &mut IndexScanDescData<'_>) -> PgResult<()> {
     let mut discarded = iterative.then(|| DiscardedHeap::new(tmcx));
 
     // Layer-0 visited persists across iterations in so.visited.
-    let mut visited0: Visited<'_> =
-        PgFxHashMap::with_capacity_and_hasher_in(
-            (ef_search * so.m * 2) as usize,
-            Default::default(),
-            tmcx,
-        );
+    let mut visited0: Visited<'_> = PgFxHashMap::with_capacity_and_hasher_in(
+        (ef_search * so.m * 2) as usize,
+        Default::default(),
+        tmcx,
+    );
     let mut tuples = so.tuples;
     let w = search_layer_disk(
         &mut pool,
@@ -272,11 +284,7 @@ fn get_scan_items(scan: &mut IndexScanDescData<'_>) -> PgResult<()> {
 
 // ResumeScanItems.
 fn resume_scan_items(scan: &mut IndexScanDescData<'_>) -> PgResult<()> {
-    let index = scan
-        .indexRelation
-        .as_ref()
-        .expect("index open")
-        .alias();
+    let index = scan.indexRelation.as_ref().expect("index open").alias();
     let so = match &mut scan.opaque {
         IndexScanOpaque::Hnsw(so) => &mut **so,
         _ => unreachable!(),
@@ -310,16 +318,16 @@ fn resume_scan_items(scan: &mut IndexScanDescData<'_>) -> PgResult<()> {
             pe.heaptids_len = e.heaptids_len;
             pe.neighbor_page = e.neighbor_page;
             pe.neighbor_offno = e.neighbor_offno;
-            ep.push(SearchCandidate { element: id, distance: e.distance });
+            ep.push(SearchCandidate {
+                element: id,
+                distance: e.distance,
+            });
         }
     }
 
     // Bounded working copy of the persistent visited set keyed the same.
-    let mut visited: Visited<'_> = PgFxHashMap::with_capacity_and_hasher_in(
-        so.visited.len() + 256,
-        Default::default(),
-        tmcx,
-    );
+    let mut visited: Visited<'_> =
+        PgFxHashMap::with_capacity_and_hasher_in(so.visited.len() + 256, Default::default(), tmcx);
     for k in so.visited.iter() {
         visited.insert(*k, ());
     }
@@ -425,7 +433,12 @@ pub fn hnswgettuple(
         }
         if drain_one {
             let so = opaque(scan);
-            let e = so.discarded.as_mut().expect("some").pop().expect("nonempty");
+            let e = so
+                .discarded
+                .as_mut()
+                .expect("some")
+                .pop()
+                .expect("nonempty");
             so.w.push(e);
         } else if need_resume {
             lmgr::LockPage(&index, HNSW_SCAN_LOCK, types_storage::lock::ShareLock)?;

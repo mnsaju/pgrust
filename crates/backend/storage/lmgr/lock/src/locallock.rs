@@ -1,3 +1,6 @@
+// LOCALLOCK/LOCALLOCKOWNER are C struct names (lock.h) kept verbatim.
+#![allow(clippy::upper_case_acronyms)]
+
 use std::cell::{Cell, UnsafeCell};
 use std::mem::ManuallyDrop;
 
@@ -5,8 +8,8 @@ use mcx::{Mcx, MemoryContext, PgFxHashMap, PgVec};
 use types_error::PgResult;
 use types_resowner::ResourceOwner;
 use types_storage::lock::{
-    LOCALLOCKTAG, LOCK, LOCKBIT_ON, LOCKMETHODID, LOCKMODE, LOCKTAG, LOCKTAG_RELATION_EXTEND,
-    MaxLockMode, PROCLOCK,
+    MaxLockMode, LOCALLOCKTAG, LOCK, LOCKBIT_ON, LOCKMETHODID, LOCKMODE, LOCKTAG,
+    LOCKTAG_RELATION_EXTEND, PROCLOCK,
 };
 
 use crate::fastpath::{decrement_strong_lock_count, FastPathStrongLockHashPartition};
@@ -163,7 +166,10 @@ pub(crate) enum LocalGrant {
 pub(crate) fn prepare_or_grant_locallock(tag: &LOCALLOCKTAG, owner: ResourceOwner) -> LocalGrant {
     let out = with_local(|state| {
         let mcx = state.mcx;
-        let entry = state.table.entry(*tag).or_insert_with(|| new_locallock(tag, mcx));
+        let entry = state
+            .table
+            .entry(*tag)
+            .or_insert_with(|| new_locallock(tag, mcx));
         if entry.nLocks > 0 {
             entry.nLocks += 1;
             let new_slot = grant_owner_slot(&mut entry.lockOwners, owner);

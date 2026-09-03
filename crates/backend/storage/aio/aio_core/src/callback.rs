@@ -23,7 +23,10 @@ pub fn pgaio_io_register_callbacks(index: u32, cb_id: u8, cb_data: u8) {
     // SAFETY: HANDED_OUT, owner thread.
     let d = unsafe { h.data() };
     if d.num_callbacks as usize >= PGAIO_HANDLE_MAX_CALLBACKS {
-        panic!("too many callbacks, the max is {}", PGAIO_HANDLE_MAX_CALLBACKS);
+        panic!(
+            "too many callbacks, the max is {}",
+            PGAIO_HANDLE_MAX_CALLBACKS
+        );
     }
     d.callbacks[d.num_callbacks as usize] = cb_id;
     d.callbacks_data[d.num_callbacks as usize] = cb_data;
@@ -106,13 +109,11 @@ pub(crate) fn pgaio_io_call_complete_shared(index: u32) {
             PGAIO_HCB_MD_READV => {
                 smgr_seams::aio_md_readv_complete::call(index, result, callbacks_data[i])
             }
-            PGAIO_HCB_SHARED_BUFFER_READV => {
-                bufmgr_seams::aio_shared_buffer_readv_complete::call(
-                    index,
-                    result,
-                    callbacks_data[i],
-                )
-            }
+            PGAIO_HCB_SHARED_BUFFER_READV => bufmgr_seams::aio_shared_buffer_readv_complete::call(
+                index,
+                result,
+                callbacks_data[i],
+            ),
             PGAIO_HCB_LOCAL_BUFFER_READV => result,
             id => panic!("aio callback {id} has no complete_shared"),
         };
@@ -128,7 +129,12 @@ pub(crate) fn pgaio_io_call_complete_local(index: u32) -> PgAioResult {
     // SAFETY: owner thread past COMPLETED_SHARED.
     let (num, callbacks, callbacks_data, mut result) = unsafe {
         let d = h.data();
-        (d.num_callbacks as usize, d.callbacks, d.callbacks_data, d.distilled_result)
+        (
+            d.num_callbacks as usize,
+            d.callbacks,
+            d.callbacks_data,
+            d.distilled_result,
+        )
     };
     debug_assert!(result.status != PgAioResultStatus::Unknown);
 
@@ -141,13 +147,11 @@ pub(crate) fn pgaio_io_call_complete_local(index: u32) -> PgAioResult {
                     callbacks_data[i],
                 )
             }
-            PGAIO_HCB_LOCAL_BUFFER_READV => {
-                bufmgr_seams::aio_local_buffer_readv_complete::call(
-                    index,
-                    result,
-                    callbacks_data[i],
-                )
-            }
+            PGAIO_HCB_LOCAL_BUFFER_READV => bufmgr_seams::aio_local_buffer_readv_complete::call(
+                index,
+                result,
+                callbacks_data[i],
+            ),
             _ => result,
         };
         debug_assert!(result.status != PgAioResultStatus::Unknown);

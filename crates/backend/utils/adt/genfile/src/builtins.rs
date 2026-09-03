@@ -17,7 +17,10 @@ fn arg_filename(fcinfo: &Fcinfo, i: usize) -> PgResult<String> {
 }
 
 fn bytes_result(fcinfo: &Fcinfo, bytes: &[u8]) -> PgResult<Datum> {
-    Ok(varlena_result(varlena::cstring_to_text(fcinfo.result_mcx(), bytes)?))
+    Ok(varlena_result(varlena::cstring_to_text(
+        fcinfo.result_mcx(),
+        bytes,
+    )?))
 }
 
 fn read_file(
@@ -28,8 +31,13 @@ fn read_file(
     missing_ok: bool,
 ) -> PgResult<Datum> {
     let filename = arg_filename(fcinfo, 0)?;
-    match crate::pg_read_file_common(&filename, seek_offset, bytes_to_read, read_to_eof, missing_ok)?
-    {
+    match crate::pg_read_file_common(
+        &filename,
+        seek_offset,
+        bytes_to_read,
+        read_to_eof,
+        missing_ok,
+    )? {
         Some(buf) => bytes_result(fcinfo, &buf),
         None => Ok(fcinfo.return_null()),
     }
@@ -71,10 +79,7 @@ pub fn fc_pg_read_file_off_len_missing(
     read_file(fcinfo, off, len, false, missing_ok)
 }
 
-pub fn fc_pg_read_file_all(
-    _flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_pg_read_file_all(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     read_file(fcinfo, 0, -1, true, false)
 }
 
@@ -117,7 +122,6 @@ pub fn fc_pg_read_binary_file_all_missing(
     read_binary_file(fcinfo, 0, -1, true, missing_ok)
 }
 
-
 // (size, atime, mtime, ctime) in time_t seconds, C's pg_stat_file words.
 #[cfg(not(target_family = "wasm"))]
 fn stat_words(md: &std::fs::Metadata, _path: &str) -> (i64, i64, i64, i64) {
@@ -132,12 +136,19 @@ fn stat_words(md: &std::fs::Metadata, _path: &str) -> (i64, i64, i64, i64) {
 #[cfg(target_family = "wasm")]
 fn stat_words(md: &std::fs::Metadata, path: &str) -> (i64, i64, i64, i64) {
     let size = md.len() as i64;
-    let Ok(c) = std::ffi::CString::new(path) else { return (size, 0, 0, 0) };
+    let Ok(c) = std::ffi::CString::new(path) else {
+        return (size, 0, 0, 0);
+    };
     // SAFETY: stat fills the zeroed out-param only on rc==0, which gates reads.
     unsafe {
         let mut st: libc::stat = std::mem::zeroed();
         if libc::stat(c.as_ptr(), &mut st) == 0 {
-            (size, st.st_atim.tv_sec as i64, st.st_mtim.tv_sec as i64, st.st_ctim.tv_sec as i64)
+            (
+                size,
+                st.st_atim.tv_sec as i64,
+                st.st_mtim.tv_sec as i64,
+                st.st_ctim.tv_sec as i64,
+            )
         } else {
             (size, 0, 0, 0)
         }
@@ -164,7 +175,10 @@ fn stat_file(
             if missing_ok && e.kind() == std::io::ErrorKind::NotFound {
                 return Ok(fcinfo.return_null());
             }
-            return Err(io_error(&e, format!("could not stat file \"{filename}\": %m")));
+            return Err(io_error(
+                &e,
+                format!("could not stat file \"{filename}\": %m"),
+            ));
         }
     };
 
@@ -174,7 +188,9 @@ fn stat_file(
     if resolved.class != funcapi::TypeFuncClass::Composite {
         return Err(not_row_type());
     }
-    let tupdesc = resolved.result_tuple_desc.expect("composite result carries a tupdesc");
+    let tupdesc = resolved
+        .result_tuple_desc
+        .expect("composite result carries a tupdesc");
 
     let (f_size, f_atime, f_mtime, f_ctime) = stat_words(&md, &filename);
     let values = [
@@ -212,14 +228,13 @@ fn read_dir_error(e: &std::io::Error, dir: &str) -> Box<PgError> {
 }
 
 fn entry_name(entry: std::fs::DirEntry) -> String {
-    entry.file_name().into_string().expect("non-UTF-8 directory entry name")
+    entry
+        .file_name()
+        .into_string()
+        .expect("non-UTF-8 directory entry name")
 }
 
-fn ls_dir(
-    flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-    three_args: bool,
-) -> PgResult<Datum> {
+fn ls_dir(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo, three_args: bool) -> PgResult<Datum> {
     let location = convert_and_check_filename(&arg_filename(fcinfo, 0)?)?;
 
     let mut missing_ok = false;
@@ -366,10 +381,7 @@ pub fn fc_pg_ls_tmpdir_noargs(
     ls_dir_files(flinfo, fcinfo, &dir, true)
 }
 
-pub fn fc_pg_ls_tmpdir_1arg(
-    flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_pg_ls_tmpdir_1arg(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let tblspc = fcinfo.arg(0).as_oid();
     let dir = tmpdir_path(tblspc)?;
     ls_dir_files(flinfo, fcinfo, &dir, true)
@@ -389,10 +401,7 @@ pub fn fc_pg_ls_logicalmapdir(
     ls_dir_files(flinfo, fcinfo, PG_LOGICAL_MAPPINGS_DIR, false)
 }
 
-pub fn fc_pg_ls_replslotdir(
-    flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_pg_ls_replslotdir(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let slotname = arg_filename(fcinfo, 0)?;
     if slot::SearchNamedReplicationSlot(&slotname, true)?.is_none() {
         return Err(Box::new(
@@ -407,11 +416,25 @@ pub fn fc_pg_ls_replslotdir(
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 const fn srf(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: true, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: true,
+        func,
+    }
 }
 
 // pg_proc.dat rows (all proisstrict), OID-ascending.
@@ -419,20 +442,55 @@ pub const GENFILE_BUILTINS: &[FmgrBuiltin] = &[
     b(2623, "pg_stat_file_1arg", 1, fc_pg_stat_file_1arg),
     b(2624, "pg_read_file_off_len", 3, fc_pg_read_file_off_len),
     srf(2625, "pg_ls_dir_1arg", 1, fc_pg_ls_dir_1arg),
-    b(3293, "pg_read_file_off_len_missing", 4, fc_pg_read_file_off_len_missing),
-    b(3295, "pg_read_binary_file_off_len_missing", 4, fc_pg_read_binary_file_off_len_missing),
+    b(
+        3293,
+        "pg_read_file_off_len_missing",
+        4,
+        fc_pg_read_file_off_len_missing,
+    ),
+    b(
+        3295,
+        "pg_read_binary_file_off_len_missing",
+        4,
+        fc_pg_read_binary_file_off_len_missing,
+    ),
     srf(3297, "pg_ls_dir", 3, fc_pg_ls_dir),
     b(3307, "pg_stat_file", 2, fc_pg_stat_file),
     srf(3353, "pg_ls_logdir", 0, fc_pg_ls_logdir),
     srf(3354, "pg_ls_waldir", 0, fc_pg_ls_waldir),
     b(3826, "pg_read_file_all", 1, fc_pg_read_file_all),
-    b(3827, "pg_read_binary_file_off_len", 3, fc_pg_read_binary_file_off_len),
-    b(3828, "pg_read_binary_file_all", 1, fc_pg_read_binary_file_all),
+    b(
+        3827,
+        "pg_read_binary_file_off_len",
+        3,
+        fc_pg_read_binary_file_off_len,
+    ),
+    b(
+        3828,
+        "pg_read_binary_file_all",
+        1,
+        fc_pg_read_binary_file_all,
+    ),
     srf(5029, "pg_ls_tmpdir_noargs", 0, fc_pg_ls_tmpdir_noargs),
     srf(5030, "pg_ls_tmpdir_1arg", 1, fc_pg_ls_tmpdir_1arg),
-    srf(5031, "pg_ls_archive_statusdir", 0, fc_pg_ls_archive_statusdir),
-    b(6208, "pg_read_file_all_missing", 2, fc_pg_read_file_all_missing),
-    b(6209, "pg_read_binary_file_all_missing", 2, fc_pg_read_binary_file_all_missing),
+    srf(
+        5031,
+        "pg_ls_archive_statusdir",
+        0,
+        fc_pg_ls_archive_statusdir,
+    ),
+    b(
+        6208,
+        "pg_read_file_all_missing",
+        2,
+        fc_pg_read_file_all_missing,
+    ),
+    b(
+        6209,
+        "pg_read_binary_file_all_missing",
+        2,
+        fc_pg_read_binary_file_all_missing,
+    ),
     srf(6270, "pg_ls_logicalsnapdir", 0, fc_pg_ls_logicalsnapdir),
     srf(6271, "pg_ls_logicalmapdir", 0, fc_pg_ls_logicalmapdir),
     srf(6272, "pg_ls_replslotdir", 1, fc_pg_ls_replslotdir),

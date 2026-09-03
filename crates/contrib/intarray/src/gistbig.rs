@@ -11,8 +11,8 @@ use crate::boolquery;
 use crate::tool::{gensign, getbit, hashval, IntArray};
 use crate::{
     detoasted_image, entry_arg, entry_result, image_result, opclass_option_i32,
-    RT_CONTAINED_BY, RT_CONTAINS, RT_OLD_CONTAINED_BY, RT_OLD_CONTAINS, RT_OVERLAP, RT_SAME,
-    BOOLEAN_SEARCH_STRATEGY,
+    BOOLEAN_SEARCH_STRATEGY, RT_CONTAINED_BY, RT_CONTAINS, RT_OLD_CONTAINED_BY, RT_OLD_CONTAINS,
+    RT_OVERLAP, RT_SAME,
 };
 
 pub(crate) const SIGLEN_DEFAULT: i32 = 63 * 4;
@@ -109,8 +109,8 @@ pub(crate) fn fc_g_intbig_compress(
     let img = crate::key_image(entry.key);
     if !is_alltrue(img) {
         let sign = sign_of(img);
-        for i in 0..siglen {
-            if sign[i] != 0xff {
+        for &s in sign.iter().take(siglen) {
+            if s != 0xff {
                 return Ok(fcinfo.arg(0));
             }
         }
@@ -179,8 +179,11 @@ pub(crate) fn fc_g_intbig_penalty(
     let penalty = fcinfo.arg(2).as_usize() as *mut f32;
     // SAFETY: penalty out-param live in the caller frame.
     unsafe {
-        *penalty =
-            hemdist(crate::key_image(origentry.key), crate::key_image(newentry.key), siglen) as f32
+        *penalty = hemdist(
+            crate::key_image(origentry.key),
+            crate::key_image(newentry.key),
+            siglen,
+        ) as f32
     };
     Ok(fcinfo.arg(2))
 }
@@ -193,9 +196,15 @@ struct SignKey {
 impl SignKey {
     fn from_image(img: &[u8], siglen: usize) -> SignKey {
         if is_alltrue(img) {
-            SignKey { alltrue: true, sign: vec![0u8; siglen] }
+            SignKey {
+                alltrue: true,
+                sign: vec![0u8; siglen],
+            }
         } else {
-            SignKey { alltrue: false, sign: sign_of(img)[..siglen].to_vec() }
+            SignKey {
+                alltrue: false,
+                sign: sign_of(img)[..siglen].to_vec(),
+            }
         }
     }
 
@@ -265,7 +274,10 @@ pub(crate) fn fc_g_intbig_picksplit(
     for j in 1..=maxoff {
         let size_alpha = datum_l.hemdist_img(key(j), siglen);
         let size_beta = datum_r.hemdist_img(key(j), siglen);
-        costvector.push(SplitCost { pos: j, cost: (size_alpha - size_beta).abs() });
+        costvector.push(SplitCost {
+            pos: j,
+            cost: (size_alpha - size_beta).abs(),
+        });
     }
     costvector.sort_by_key(|c| c.cost);
 
@@ -294,8 +306,8 @@ pub(crate) fn fc_g_intbig_picksplit(
                 }
             } else {
                 let ptr = sign_of(jimg);
-                for i in 0..siglen {
-                    datum_l.sign[i] |= ptr[i];
+                for (d, &p) in datum_l.sign.iter_mut().zip(ptr.iter()).take(siglen) {
+                    *d |= p;
                 }
             }
             spl_left.push(j as u16);
@@ -306,8 +318,8 @@ pub(crate) fn fc_g_intbig_picksplit(
                 }
             } else {
                 let ptr = sign_of(jimg);
-                for i in 0..siglen {
-                    datum_r.sign[i] |= ptr[i];
+                for (d, &p) in datum_r.sign.iter_mut().zip(ptr.iter()).take(siglen) {
+                    *d |= p;
                 }
             }
             spl_right.push(j as u16);
@@ -353,8 +365,18 @@ pub(crate) fn fc_g_intbig_consistent(
     let query = IntArray::from_image(query_img);
     query.check_valid()?;
 
-    let overlap = |sign: &[u8]| query.elems().iter().any(|&v| getbit(sign, hashval(v, siglen)));
-    let contains = |sign: &[u8]| query.elems().iter().all(|&v| getbit(sign, hashval(v, siglen)));
+    let overlap = |sign: &[u8]| {
+        query
+            .elems()
+            .iter()
+            .any(|&v| getbit(sign, hashval(v, siglen)))
+    };
+    let contains = |sign: &[u8]| {
+        query
+            .elems()
+            .iter()
+            .all(|&v| getbit(sign, hashval(v, siglen)))
+    };
 
     let retval = match strategy {
         RT_OVERLAP => overlap(sign),

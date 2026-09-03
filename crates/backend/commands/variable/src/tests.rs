@@ -37,7 +37,10 @@ fn setup() {
 #[test]
 fn boot_defaults_flow_through_hooks() {
     setup();
-    assert_eq!(guc::store::get_string("DateStyle").unwrap().as_deref(), Some("ISO, MDY"));
+    assert_eq!(
+        guc::store::get_string("DateStyle").unwrap().as_deref(),
+        Some("ISO, MDY")
+    );
     assert_eq!(adt_datetime::settings::date_style(), USE_ISO_DATES);
     assert_eq!(adt_datetime::settings::date_order(), DATEORDER_MDY);
     assert!(tz::session_timezone().is_some());
@@ -190,7 +193,10 @@ fn client_encoding_canonicalizes_with_unicode_kluge() {
     let mut extra = None;
     assert!(check_client_encoding(&mut val, &mut extra, PGC_S_SESSION).unwrap());
     assert_eq!(val.as_deref(), Some("UTF8"));
-    assert_eq!(extra.as_ref().unwrap().downcast_ref::<i32>(), Some(&wchar::PG_UTF8));
+    assert_eq!(
+        extra.as_ref().unwrap().downcast_ref::<i32>(),
+        Some(&wchar::PG_UTF8)
+    );
 
     let mut val = Some("UNICODE".to_string());
     assert!(check_client_encoding(&mut val, &mut None, PGC_S_SESSION).unwrap());

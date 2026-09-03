@@ -21,12 +21,10 @@ mod tests;
 use mcx::{Mcx, PgVec};
 use types_core::{InvalidOid, Oid, OidIsValid, RELPERSISTENCE_PERMANENT};
 use types_error::{
-    ereturn, PgError, PgResult, SoftErrorContext, ERRCODE_AMBIGUOUS_FUNCTION,
-    ERRCODE_INVALID_NAME, ERRCODE_INVALID_TEXT_REPRESENTATION,
-    ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE, ERRCODE_SYNTAX_ERROR, ERRCODE_TOO_MANY_ARGUMENTS,
-    ERRCODE_UNDEFINED_PARAMETER,
-    ERRCODE_UNDEFINED_FUNCTION, ERRCODE_UNDEFINED_OBJECT, ERRCODE_UNDEFINED_SCHEMA,
-    ERRCODE_UNDEFINED_TABLE,
+    ereturn, PgError, PgResult, SoftErrorContext, ERRCODE_AMBIGUOUS_FUNCTION, ERRCODE_INVALID_NAME,
+    ERRCODE_INVALID_TEXT_REPRESENTATION, ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE, ERRCODE_SYNTAX_ERROR,
+    ERRCODE_TOO_MANY_ARGUMENTS, ERRCODE_UNDEFINED_FUNCTION, ERRCODE_UNDEFINED_OBJECT,
+    ERRCODE_UNDEFINED_PARAMETER, ERRCODE_UNDEFINED_SCHEMA, ERRCODE_UNDEFINED_TABLE,
 };
 use types_rel::NoLock;
 
@@ -294,12 +292,18 @@ fn funcname_candidates<'mcx>(
     mcx: Mcx<'mcx>,
     names: &[&str],
     nargs: Option<usize>,
-) -> PgResult<(PgVec<'mcx, syscache_seams::PgProcCandidate<'mcx>>, Vec<FuncCand>)> {
+) -> PgResult<(
+    PgVec<'mcx, syscache_seams::PgProcCandidate<'mcx>>,
+    Vec<FuncCand>,
+)> {
     let (schemaname, funcname) = deconstruct_qualified_name(names)?;
     let raw = syscache_seams::lookup_pg_proc_name_candidates::call(mcx, funcname)?;
     // C FuncnameGetCandidates: regproc callers pass missing_ok=true — a
     // missing schema yields NULL candidates ("function does not exist"),
     // never a schema error.
+    // InvalidOid keeps its established (non-SCREAMING_SNAKE) name to match
+    // its declaration and every other use across the tree.
+    #[allow(non_upper_case_globals)]
     let ns_filter = match schemaname {
         Some(name) => match lookup_explicit_namespace(name, true)? {
             InvalidOid => return Ok((raw, Vec::new())),
@@ -329,15 +333,24 @@ fn funcname_candidates<'mcx>(
             },
             (None, None) => unreachable!(),
         };
-        match kept.iter_mut().find(|prev| {
-            raw[prev.raw_index].proargtypes.as_slice() == cand.proargtypes.as_slice()
-        }) {
+        match kept
+            .iter_mut()
+            .find(|prev| raw[prev.raw_index].proargtypes.as_slice() == cand.proargtypes.as_slice())
+        {
             Some(prev) => {
                 if pathpos < prev.pathpos {
-                    *prev = FuncCand { oid: cand.oid, pathpos, raw_index: i };
+                    *prev = FuncCand {
+                        oid: cand.oid,
+                        pathpos,
+                        raw_index: i,
+                    };
                 }
             }
-            None => kept.push(FuncCand { oid: cand.oid, pathpos, raw_index: i }),
+            None => kept.push(FuncCand {
+                oid: cand.oid,
+                pathpos,
+                raw_index: i,
+            }),
         }
     }
     Ok((raw, kept))
@@ -459,7 +472,11 @@ fn parse_name_and_arg_types(
             return ereturn(esc, None, invalid_text_rep("improper type name"));
         }
         let mut token = &ptr[..i];
-        (had_comma, ptr) = if i < ptr.len() { (true, &ptr[i + 1..]) } else { (false, &[][..]) };
+        (had_comma, ptr) = if i < ptr.len() {
+            (true, &ptr[i + 1..])
+        } else {
+            (false, &[][..])
+        };
         while let [head @ .., c] = token {
             if !scanner_isspace(*c) {
                 break;
@@ -857,7 +874,6 @@ pub fn text_regclass(mcx: Mcx<'_>, s: &str) -> PgResult<Oid> {
     let rv = make_range_var(&names)?;
     range_var_get_relid(mcx, &rv, false)
 }
-
 
 // FunctionIsVisible / OperatorIsVisible search-path walk, local to this
 // crate (a catalog_namespace dep cycles through fmgr_core).

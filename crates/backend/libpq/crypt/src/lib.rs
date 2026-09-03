@@ -1,10 +1,10 @@
 //! crypt.c.
 
 use mcx::{Mcx, PgString};
-use pg_md5::{MD5_PASSWD_CHARSET, MD5_PASSWD_LEN, pg_md5_encrypt};
+use pg_md5::{pg_md5_encrypt, MD5_PASSWD_CHARSET, MD5_PASSWD_LEN};
 use types_error::{
-    ERRCODE_PROGRAM_LIMIT_EXCEEDED, ERRCODE_WARNING_DEPRECATED_FEATURE, ERROR, ErrorLocation,
-    PgResult, WARNING,
+    ErrorLocation, PgResult, ERRCODE_PROGRAM_LIMIT_EXCEEDED, ERRCODE_WARNING_DEPRECATED_FEATURE,
+    ERROR, WARNING,
 };
 
 use std::cell::Cell;

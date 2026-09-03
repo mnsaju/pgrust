@@ -21,8 +21,8 @@ use types_core::init::{
 };
 use types_error::{
     ErrorLocation, PgResult, DEBUG5, ERRCODE_CONFIG_FILE_ERROR,
-    ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION,
-    ERRCODE_INVALID_PASSWORD, ERRCODE_PROTOCOL_VIOLATION, ERROR, FATAL, LOG,
+    ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION, ERRCODE_INVALID_PASSWORD,
+    ERRCODE_PROTOCOL_VIOLATION, ERROR, FATAL, LOG,
 };
 use types_startup::{clientCertDN, clientCertFull, clientCertOff, Port};
 
@@ -159,8 +159,7 @@ pub fn set_authn_id(port: &Port, id: &str) -> PgResult<()> {
     let auth_method = port_auth_method(port);
     miscinit::set_client_connection_info(Some(id), auth_method);
 
-    if backend_startup::log_connections::get() & backend_startup::LOG_CONNECTION_AUTHENTICATION
-        != 0
+    if backend_startup::log_connections::get() & backend_startup::LOG_CONNECTION_AUTHENTICATION != 0
     {
         let hba = port.hba.as_ref().expect("port->hba is NULL");
         ereport(LOG)
@@ -218,15 +217,13 @@ pub fn ClientAuthentication(port: &mut Port) -> PgResult<()> {
         m => unreachable!("ClientAuthentication: unreachable auth method {m}"),
     };
 
-    let status = if (status == STATUS_OK && clientcert == clientCertFull) || auth_method == uaCert
-    {
+    let status = if (status == STATUS_OK && clientcert == clientCertFull) || auth_method == uaCert {
         CheckCertAuth(port)?
     } else {
         status
     };
 
-    if backend_startup::log_connections::get() & backend_startup::LOG_CONNECTION_AUTHENTICATION
-        != 0
+    if backend_startup::log_connections::get() & backend_startup::LOG_CONNECTION_AUTHENTICATION != 0
         && status == STATUS_OK
         && miscinit::client_connection_info().0.is_none()
     {
@@ -322,7 +319,7 @@ fn interpret_ident_response(ident_response: &[u8]) -> Option<String> {
         return None;
     }
     cursor += 1; // Go over colon
-    // Skip over operating system field.
+                 // Skip over operating system field.
     while at(cursor) != b':' && at(cursor) != b'\r' {
         if cursor >= len {
             return None;
@@ -396,7 +393,12 @@ fn ident_inet(port: &Port) -> PgResult<i32> {
         socktype: ip::sys::SOCK_STREAM,
     };
     let mut ident_serv: Vec<PgAddrInfo> = Vec::new();
-    let rc = pg_getaddrinfo_all(Some(&remote_addr_s), Some(&ident_port), &hints, &mut ident_serv);
+    let rc = pg_getaddrinfo_all(
+        Some(&remote_addr_s),
+        Some(&ident_port),
+        &hints,
+        &mut ident_serv,
+    );
     if rc != 0 || ident_serv.is_empty() {
         return Ok(STATUS_ERROR); // we don't expect this to happen
     }
@@ -512,7 +514,11 @@ fn ident_inet_exchange(
         postgres_seams::check_for_interrupts::call()?;
         // SAFETY: the query buffer is valid for its length.
         let rc = unsafe { libc::send(sock_fd, ident_query.as_ptr().cast(), ident_query.len(), 0) };
-        let errnum = if rc < 0 { elog::errno::current_errno() } else { 0 };
+        let errnum = if rc < 0 {
+            elog::errno::current_errno()
+        } else {
+            0
+        };
         if rc < 0 && errnum == libc::EINTR {
             continue;
         }
@@ -541,7 +547,11 @@ fn ident_inet_exchange(
                 0,
             )
         };
-        let errnum = if rc < 0 { elog::errno::current_errno() } else { 0 };
+        let errnum = if rc < 0 {
+            elog::errno::current_errno()
+        } else {
+            0
+        };
         if rc < 0 && errnum == libc::EINTR {
             continue;
         }
@@ -562,7 +572,10 @@ fn ident_inet_exchange(
     let ident_user = interpret_ident_response(response);
     if ident_user.is_none() {
         // C prints the NUL-terminated buffer with %s.
-        let printable = &response[..response.iter().position(|&b| b == 0).unwrap_or(response.len())];
+        let printable = &response[..response
+            .iter()
+            .position(|&b| b == 0)
+            .unwrap_or(response.len())];
         ereport(LOG)
             .errmsg(format!(
                 "invalidly formatted response from Ident server: \"{}\"",
@@ -647,13 +660,15 @@ fn auth_peer(port: &Port) -> PgResult<i32> {
     let mut pwbuf: libc::passwd = unsafe { std::mem::zeroed() };
     let mut buf = [0u8; 1024];
     let mut pw: *mut libc::passwd = std::ptr::null_mut();
-    let rc = unsafe {
-        libc::getpwuid_r(uid, &mut pwbuf, buf.as_mut_ptr().cast(), buf.len(), &mut pw)
-    };
+    let rc =
+        unsafe { libc::getpwuid_r(uid, &mut pwbuf, buf.as_mut_ptr().cast(), buf.len(), &mut pw) };
     if rc != 0 {
         ereport(LOG)
             .with_saved_errno(rc)
-            .errmsg(format!("could not look up local user ID {}: %m", uid as i64))
+            .errmsg(format!(
+                "could not look up local user ID {}: %m",
+                uid as i64
+            ))
             .finish(loc(1888, "auth_peer"))?;
         return Ok(STATUS_ERROR);
     }
@@ -684,7 +699,12 @@ fn auth_peer(port: &Port) -> PgResult<i32> {
 
 fn reject_arm(port: &Port, explicit_reject: bool) -> PgResult<()> {
     let mut hostinfo = String::new();
-    ip::pg_getnameinfo_all(&port.raddr, Some(&mut hostinfo), None, ip::sys::NI_NUMERICHOST);
+    ip::pg_getnameinfo_all(
+        &port.raddr,
+        Some(&mut hostinfo),
+        None,
+        ip::sys::NI_NUMERICHOST,
+    );
 
     let encryption_state = if port.ssl_in_use {
         "SSL encryption"

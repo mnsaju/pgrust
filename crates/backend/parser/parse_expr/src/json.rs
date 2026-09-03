@@ -1,9 +1,7 @@
 // SQL/JSON constructor + query-function transforms (parse_expr.c 3280-4980).
 use mcx::Mcx;
 use parser_small1::{ParseExprKind, ParseState};
-use types_core::catalog::{
-    BOOLOID, BYTEAOID, INT4OID, JSONBOID, JSONOID, TEXTOID, UNKNOWNOID,
-};
+use types_core::catalog::{BOOLOID, BYTEAOID, INT4OID, JSONBOID, JSONOID, TEXTOID, UNKNOWNOID};
 use types_core::{Oid, ParseLoc};
 use types_error::PgResult;
 use types_nodes::primnodes::{
@@ -12,9 +10,7 @@ use types_nodes::primnodes::{
     JsonIsPredicate, JsonReturning, JsonValueExpr, JsonWrapper, WindowFunc, AGGKIND_NORMAL,
 };
 use types_nodes::rawnodes::{JsonQuotes, RangeSubselect, ResTarget, TypeName};
-use types_nodes::{
-    CoercionForm, Node, NodeList, NodeTag, SubLink, SubLinkType,
-};
+use types_nodes::{CoercionForm, Node, NodeList, NodeTag, SubLink, SubLinkType};
 
 use crate::{expr_location, expr_type, transformExprRecurse};
 
@@ -70,11 +66,20 @@ fn mk_format<'mcx>(
     encoding: JsonEncoding,
     location: ParseLoc,
 ) -> PgResult<&'mcx JsonFormat> {
-    Ok(Node::mk_mut(mcx, JsonFormat { format_type, encoding, location })?.seal_ref())
+    Ok(Node::mk_mut(
+        mcx,
+        JsonFormat {
+            format_type,
+            encoding,
+            location,
+        },
+    )?
+    .seal_ref())
 }
 
 fn jve<'mcx>(n: Node<'mcx>, what: &str) -> &'mcx JsonValueExpr<'mcx> {
-    n.as_json_value_expr().unwrap_or_else(|| panic!("{what}: expected JsonValueExpr"))
+    n.as_json_value_expr()
+        .unwrap_or_else(|| panic!("{what}: expected JsonValueExpr"))
 }
 
 // getJsonEncodingConst (parse_expr.c:3249): NAMEOID Const with the encoding
@@ -99,7 +104,16 @@ fn get_json_encoding_const<'mcx>(mcx: Mcx<'mcx>, format: &JsonFormat) -> PgResul
     mcx::vec_append_bytes(&mut name, &block)?;
     let d = datum::Datum::from_usize(name.as_ptr() as usize);
     core::mem::forget(name);
-    Node::mk_const(mcx, types_core::catalog::NAMEOID, -1, 0, 64, d, false, false)
+    Node::mk_const(
+        mcx,
+        types_core::catalog::NAMEOID,
+        -1,
+        0,
+        64,
+        d,
+        false,
+        false,
+    )
 }
 
 // makeJsonByteaToTextConversion (parse_expr.c:3288): convert_from(expr, enc).
@@ -205,9 +219,7 @@ fn transformJsonValueExpr<'mcx>(
         format = default_fmt;
     }
 
-    if format != JsonFormatType::JS_FORMAT_DEFAULT
-        || (targettype != 0 && exprtype != targettype)
-    {
+    if format != JsonFormatType::JS_FORMAT_DEFAULT || (targettype != 0 && exprtype != targettype) {
         let only_allow_cast = targettype != 0;
 
         if !isarg
@@ -224,7 +236,11 @@ fn transformJsonValueExpr<'mcx>(
                 pstate,
                 types_error::ERRCODE_DATATYPE_MISMATCH,
                 msg.into(),
-                if ve_format.location >= 0 { ve_format.location } else { location },
+                if ve_format.location >= 0 {
+                    ve_format.location
+                } else {
+                    location
+                },
             ));
         }
 
@@ -268,7 +284,11 @@ fn transformJsonValueExpr<'mcx>(
                         location,
                     ));
                 }
-                let fnoid = if targettype == JSONOID { F_TO_JSON } else { F_TO_JSONB };
+                let fnoid = if targettype == JSONOID {
+                    F_TO_JSON
+                } else {
+                    F_TO_JSONB
+                };
                 Node::mk(
                     mcx,
                     FuncExpr {
@@ -365,7 +385,11 @@ fn transformJsonOutput<'mcx>(
     let Some(output) = output else {
         return Ok(Node::mk_mut(
             mcx,
-            JsonReturning { format: Some(default_format(mcx)?), typid: 0, typmod: -1 },
+            JsonReturning {
+                format: Some(default_format(mcx)?),
+                typid: 0,
+                typmod: -1,
+            },
         )?
         .seal_ref());
     };
@@ -413,7 +437,15 @@ fn transformJsonOutput<'mcx>(
         base_format
     };
 
-    Ok(Node::mk_mut(mcx, JsonReturning { format: Some(format), typid, typmod })?.seal_ref())
+    Ok(Node::mk_mut(
+        mcx,
+        JsonReturning {
+            format: Some(format),
+            typid,
+            typmod,
+        },
+    )?
+    .seal_ref())
 }
 
 fn transformJsonConstructorOutput<'mcx>(
@@ -435,7 +467,15 @@ fn transformJsonConstructorOutput<'mcx>(
     };
     let old = returning.format.expect("format");
     let format = mk_format(mcx, ftype, old.encoding, old.location)?;
-    Ok(Node::mk_mut(mcx, JsonReturning { format: Some(format), typid, typmod: -1 })?.seal_ref())
+    Ok(Node::mk_mut(
+        mcx,
+        JsonReturning {
+            format: Some(format),
+            typid,
+            typmod: -1,
+        },
+    )?
+    .seal_ref())
 }
 
 // coerceJsonFuncExpr: coerce a json[b]-valued expression to the output type.
@@ -507,7 +547,11 @@ fn coerceJsonFuncExpr<'mcx>(
                 type_name(exprtype),
                 type_name(returning.typid)
             ),
-            if location >= 0 { location } else { expr_location(expr) },
+            if location >= 0 {
+                location
+            } else {
+                expr_location(expr)
+            },
         ));
     }
     Ok(res)
@@ -550,9 +594,13 @@ fn makeJsonConstructorExpr<'mcx>(
         )?,
     };
 
-    let coercion = coerceJsonFuncExpr(mcx, pstate, placeholder, returning, true)?
-        .expect("report_error=true");
-    let coercion = if coercion.ptr_eq(placeholder) { None } else { Some(coercion) };
+    let coercion =
+        coerceJsonFuncExpr(mcx, pstate, placeholder, returning, true)?.expect("report_error=true");
+    let coercion = if coercion.ptr_eq(placeholder) {
+        None
+    } else {
+        Some(coercion)
+    };
 
     Node::mk(
         mcx,
@@ -672,7 +720,10 @@ pub(crate) fn transformJsonArrayQueryConstructor<'mcx>(
     fields.lappend(mcx, Node::mk_string(mcx, "a")?)?;
     let colref = Node::mk(
         mcx,
-        types_nodes::rawnodes::ColumnRef { fields, location: ctor.location },
+        types_nodes::rawnodes::ColumnRef {
+            fields,
+            location: ctor.location,
+        },
     )?;
     let agg_arg = Node::mk(
         mcx,
@@ -761,7 +812,9 @@ fn transformJsonAggConstructor<'mcx>(
     unique: bool,
     absent_on_null: bool,
 ) -> PgResult<Node<'mcx>> {
-    let agg_ctor = agg_ctor_node.as_json_agg_constructor().expect("JsonAggConstructor");
+    let agg_ctor = agg_ctor_node
+        .as_json_agg_constructor()
+        .expect("JsonAggConstructor");
 
     let aggfilter = match agg_ctor.agg_filter {
         None => None,
@@ -845,7 +898,11 @@ pub(crate) fn transformJsonObjectAgg<'mcx>(
     expr: Node<'mcx>,
 ) -> PgResult<Node<'mcx>> {
     let agg = expr.as_json_object_agg().unwrap();
-    let arg = agg.arg.expect("arg").as_json_key_value().expect("JsonKeyValue");
+    let arg = agg
+        .arg
+        .expect("arg")
+        .as_json_key_value()
+        .expect("JsonKeyValue");
 
     let key = transformExprRecurse(mcx, pstate, arg.key.expect("key"))?;
     let val = transformJsonValueExpr(
@@ -861,11 +918,13 @@ pub(crate) fn transformJsonObjectAgg<'mcx>(
     args.lappend(mcx, val)?;
 
     let ctor_node = agg.constructor.expect("constructor");
-    let output = ctor_node.as_json_agg_constructor().expect("JsonAggConstructor").output;
+    let output = ctor_node
+        .as_json_agg_constructor()
+        .expect("JsonAggConstructor")
+        .output;
     let returning = transformJsonConstructorOutput(mcx, pstate, output, &args)?;
 
-    let is_jsonb =
-        returning.format.expect("format").format_type == JsonFormatType::JS_FORMAT_JSONB;
+    let is_jsonb = returning.format.expect("format").format_type == JsonFormatType::JS_FORMAT_JSONB;
     let (aggfnoid, aggtype) = if is_jsonb {
         (
             match (agg.absent_on_null, agg.unique) {
@@ -921,15 +980,31 @@ pub(crate) fn transformJsonArrayAgg<'mcx>(
     let args = NodeList::make1(mcx, arg)?;
 
     let ctor_node = agg.constructor.expect("constructor");
-    let output = ctor_node.as_json_agg_constructor().expect("JsonAggConstructor").output;
+    let output = ctor_node
+        .as_json_agg_constructor()
+        .expect("JsonAggConstructor")
+        .output;
     let returning = transformJsonConstructorOutput(mcx, pstate, output, &args)?;
 
-    let is_jsonb =
-        returning.format.expect("format").format_type == JsonFormatType::JS_FORMAT_JSONB;
+    let is_jsonb = returning.format.expect("format").format_type == JsonFormatType::JS_FORMAT_JSONB;
     let (aggfnoid, aggtype) = if is_jsonb {
-        (if agg.absent_on_null { F_JSONB_AGG_STRICT } else { F_JSONB_AGG }, JSONBOID)
+        (
+            if agg.absent_on_null {
+                F_JSONB_AGG_STRICT
+            } else {
+                F_JSONB_AGG
+            },
+            JSONBOID,
+        )
     } else {
-        (if agg.absent_on_null { F_JSON_AGG_STRICT } else { F_JSON_AGG }, JSONOID)
+        (
+            if agg.absent_on_null {
+                F_JSON_AGG_STRICT
+            } else {
+                F_JSON_AGG
+            },
+            JSONOID,
+        )
     };
 
     transformJsonAggConstructor(
@@ -1017,7 +1092,10 @@ pub(crate) fn transformJsonIsPredicate<'mcx>(
         return Err(err(
             pstate,
             types_error::ERRCODE_DATATYPE_MISMATCH,
-            format!("cannot use type {} in IS JSON predicate", type_name(exprtype)),
+            format!(
+                "cannot use type {} in IS JSON predicate",
+                type_name(exprtype)
+            ),
             -1,
         ));
     }
@@ -1067,10 +1145,19 @@ fn transformJsonReturning<'mcx>(
         }
         Ok(returning)
     } else {
-        let format = mk_format(mcx, JsonFormatType::JS_FORMAT_JSON, JsonEncoding::JS_ENC_DEFAULT, -1)?;
+        let format = mk_format(
+            mcx,
+            JsonFormatType::JS_FORMAT_JSON,
+            JsonEncoding::JS_ENC_DEFAULT,
+            -1,
+        )?;
         Ok(Node::mk_mut(
             mcx,
-            JsonReturning { format: Some(format), typid: JSONOID, typmod: -1 },
+            JsonReturning {
+                format: Some(format),
+                typid: JSONOID,
+                typmod: -1,
+            },
         )?
         .seal_ref())
     }
@@ -1197,10 +1284,21 @@ pub(crate) fn transformJsonSerializeExpr<'mcx>(
         returning
     } else {
         // RETURNING TEXT FORMAT JSON by default.
-        let format =
-            mk_format(mcx, JsonFormatType::JS_FORMAT_JSON, JsonEncoding::JS_ENC_DEFAULT, -1)?;
-        Node::mk_mut(mcx, JsonReturning { format: Some(format), typid: TEXTOID, typmod: -1 })?
-            .seal_ref()
+        let format = mk_format(
+            mcx,
+            JsonFormatType::JS_FORMAT_JSON,
+            JsonEncoding::JS_ENC_DEFAULT,
+            -1,
+        )?;
+        Node::mk_mut(
+            mcx,
+            JsonReturning {
+                format: Some(format),
+                typid: TEXTOID,
+                typmod: -1,
+            },
+        )?
+        .seal_ref()
     };
 
     makeJsonConstructorExpr(
@@ -1297,8 +1395,7 @@ pub(crate) fn transformJsonFuncExpr<'mcx>(
             return Err(err(
                 pstate,
                 types_error::ERRCODE_SYNTAX_ERROR,
-                "SQL/JSON QUOTES behavior must not be specified when WITH WRAPPER is used"
-                    .into(),
+                "SQL/JSON QUOTES behavior must not be specified when WITH WRAPPER is used".into(),
                 func.location,
             ));
         }
@@ -1455,7 +1552,11 @@ pub(crate) fn transformJsonFuncExpr<'mcx>(
             let returning = if returning.typid == 0 {
                 Node::mk_mut(
                     mcx,
-                    JsonReturning { format: returning.format, typid: BOOLOID, typmod: -1 },
+                    JsonReturning {
+                        format: returning.format,
+                        typid: BOOLOID,
+                        typmod: -1,
+                    },
                 )?
                 .seal_ref()
             } else {
@@ -1478,7 +1579,11 @@ pub(crate) fn transformJsonFuncExpr<'mcx>(
             let returning = if returning.typid == 0 {
                 Node::mk_mut(
                     mcx,
-                    JsonReturning { format: returning.format, typid: JSONBOID, typmod: -1 },
+                    JsonReturning {
+                        format: returning.format,
+                        typid: JSONBOID,
+                        typmod: -1,
+                    },
                 )?
                 .seal_ref()
             } else {
@@ -1512,7 +1617,11 @@ pub(crate) fn transformJsonFuncExpr<'mcx>(
             let returning = if returning.typid == 0 {
                 Node::mk_mut(
                     mcx,
-                    JsonReturning { format: returning.format, typid: TEXTOID, typmod: -1 },
+                    JsonReturning {
+                        format: returning.format,
+                        typid: TEXTOID,
+                        typmod: -1,
+                    },
                 )?
                 .seal_ref()
             } else {
@@ -1598,9 +1707,9 @@ pub(crate) fn transformJsonFuncExpr<'mcx>(
 fn valid_json_behavior_default_expr(expr: Node<'_>) -> bool {
     match expr.node_tag() {
         NodeTag::T_Const | NodeTag::T_FuncExpr | NodeTag::T_OpExpr => true,
-        NodeTag::T_CoerceViaIO => valid_json_behavior_default_expr(
-            expr.as_coerce_via_io().unwrap().arg,
-        ),
+        NodeTag::T_CoerceViaIO => {
+            valid_json_behavior_default_expr(expr.as_coerce_via_io().unwrap().arg)
+        }
         NodeTag::T_ArrayCoerceExpr => {
             let a = expr.as_array_coerce_expr().unwrap();
             valid_json_behavior_default_expr(a.arg)
@@ -1609,9 +1718,9 @@ fn valid_json_behavior_default_expr(expr: Node<'_>) -> bool {
         NodeTag::T_ConvertRowtypeExpr => {
             valid_json_behavior_default_expr(expr.as_convert_rowtype_expr().unwrap().arg)
         }
-        NodeTag::T_CoerceToDomain => valid_json_behavior_default_expr(
-            expr.as_coerce_to_domain().unwrap().arg,
-        ),
+        NodeTag::T_CoerceToDomain => {
+            valid_json_behavior_default_expr(expr.as_coerce_to_domain().unwrap().arg)
+        }
         NodeTag::T_RelabelType => {
             valid_json_behavior_default_expr(expr.as_relabel_type().unwrap().arg)
         }
@@ -1630,7 +1739,8 @@ fn jsonb_const<'mcx>(mcx: Mcx<'mcx>, json: &str, location: ParseLoc) -> PgResult
     let n = Node::mk_const(mcx, JSONBOID, -1, 0, -1, d, false, false)?;
     // SAFETY: parse-tree owned Const, no derived refs.
     unsafe {
-        n.with_mut::<types_nodes::Const, _>(|c| c.location = location).expect("Const");
+        n.with_mut::<types_nodes::Const, _>(|c| c.location = location)
+            .expect("Const");
     }
     Ok(n)
 }
@@ -1643,24 +1753,46 @@ fn get_json_behavior_const<'mcx>(
     let n = match btype {
         JsonBehaviorType::JSON_BEHAVIOR_EMPTY_ARRAY => return jsonb_const(mcx, "[]", location),
         JsonBehaviorType::JSON_BEHAVIOR_EMPTY_OBJECT => return jsonb_const(mcx, "{}", location),
-        JsonBehaviorType::JSON_BEHAVIOR_TRUE => {
-            Node::mk_const(mcx, BOOLOID, -1, 0, 1, datum::Datum::from_bool(true), false, true)?
-        }
-        JsonBehaviorType::JSON_BEHAVIOR_FALSE => {
-            Node::mk_const(mcx, BOOLOID, -1, 0, 1, datum::Datum::from_bool(false), false, true)?
-        }
+        JsonBehaviorType::JSON_BEHAVIOR_TRUE => Node::mk_const(
+            mcx,
+            BOOLOID,
+            -1,
+            0,
+            1,
+            datum::Datum::from_bool(true),
+            false,
+            true,
+        )?,
+        JsonBehaviorType::JSON_BEHAVIOR_FALSE => Node::mk_const(
+            mcx,
+            BOOLOID,
+            -1,
+            0,
+            1,
+            datum::Datum::from_bool(false),
+            false,
+            true,
+        )?,
         JsonBehaviorType::JSON_BEHAVIOR_NULL
         | JsonBehaviorType::JSON_BEHAVIOR_UNKNOWN
-        | JsonBehaviorType::JSON_BEHAVIOR_EMPTY => {
-            Node::mk_const(mcx, INT4OID, -1, 0, 4, datum::Datum::from_i32(0), true, true)?
-        }
+        | JsonBehaviorType::JSON_BEHAVIOR_EMPTY => Node::mk_const(
+            mcx,
+            INT4OID,
+            -1,
+            0,
+            4,
+            datum::Datum::from_i32(0),
+            true,
+            true,
+        )?,
         JsonBehaviorType::JSON_BEHAVIOR_DEFAULT | JsonBehaviorType::JSON_BEHAVIOR_ERROR => {
             unreachable!("handled by caller")
         }
     };
     // SAFETY: parse-tree owned Const, no derived refs.
     unsafe {
-        n.with_mut::<types_nodes::Const, _>(|c| c.location = location).expect("Const");
+        n.with_mut::<types_nodes::Const, _>(|c| c.location = location)
+            .expect("Const");
     }
     Ok(n)
 }
@@ -1751,20 +1883,22 @@ fn transformJsonBehavior<'mcx>(
             {
                 coerce_at_runtime = true;
                 if expr_type(e) == BOOLOID {
-                    let val =
-                        if btype == JsonBehaviorType::JSON_BEHAVIOR_TRUE { "true" } else { "false" };
+                    let val = if btype == JsonBehaviorType::JSON_BEHAVIOR_TRUE {
+                        "true"
+                    } else {
+                        "false"
+                    };
                     expr = Some(jsonb_const(mcx, val, -1)?);
                 }
             } else {
                 let typcategory = lsyscache::get_type_category_preferred(returning.typid)?.0;
                 // 'V' = TYPCATEGORY_BITSTRING.
-                let ccontext = if typcategory == coerce::TYPCATEGORY_STRING
-                    || typcategory == b'V' as i8
-                {
-                    coerce::COERCION_ASSIGNMENT
-                } else {
-                    coerce::COERCION_EXPLICIT
-                };
+                let ccontext =
+                    if typcategory == coerce::TYPCATEGORY_STRING || typcategory == b'V' as i8 {
+                        coerce::COERCION_ASSIGNMENT
+                    } else {
+                        coerce::COERCION_EXPLICIT
+                    };
                 let coerced = coerce::coerce_to_target_type(
                     mcx,
                     pstate,
@@ -1804,6 +1938,11 @@ fn transformJsonBehavior<'mcx>(
 
     Node::mk(
         mcx,
-        JsonBehavior { btype, expr, coerce: coerce_at_runtime, location },
+        JsonBehavior {
+            btype,
+            expr,
+            coerce: coerce_at_runtime,
+            location,
+        },
     )
 }

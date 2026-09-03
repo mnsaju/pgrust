@@ -93,7 +93,10 @@ fn mk_state<'mcx>(
             log_verbosity: crate::CopyLogVerbosityChoice::Default,
             reject_limit: 0,
         },
-        src: CopySrc::File { fd: -1, filename: "" },
+        src: CopySrc::File {
+            fd: -1,
+            filename: "",
+        },
         raw_buf: mcx::vec_from_elem_in(mcx, 0u8, RAW_BUF_SIZE + 1),
         raw_buf_index: 0,
         raw_buf_len: 0,
@@ -319,7 +322,11 @@ fn read_attributes_csv_matches_c() {
     let f = split_line_csv(b"a,b,c", "");
     assert_eq!(
         f,
-        vec![Some(b"a".to_vec()), Some(b"b".to_vec()), Some(b"c".to_vec())]
+        vec![
+            Some(b"a".to_vec()),
+            Some(b"b".to_vec()),
+            Some(b"c".to_vec())
+        ]
     );
 
     // Unquoted empty matches null_print ""; quoted empty is an empty string.

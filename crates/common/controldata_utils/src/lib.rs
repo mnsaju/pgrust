@@ -482,9 +482,11 @@ pub fn get_controlfile_by_exact_path(path: &str) -> PgResult<(ControlFileData, b
     let control_file = ControlFileData::from_disk_bytes(&image);
     let crc_ok = crc_of_image(&image) == control_file.crc;
 
-    if control_file.pg_control_version % 65536 == 0 && control_file.pg_control_version / 65536 != 0
+    if control_file.pg_control_version.is_multiple_of(65536) && control_file.pg_control_version / 65536 != 0
     {
-        ereport(ERROR).errmsg("byte ordering mismatch").finish(loc(F))?;
+        ereport(ERROR)
+            .errmsg("byte ordering mismatch")
+            .finish(loc(F))?;
         unreachable!()
     }
 

@@ -82,6 +82,7 @@ impl BufferDesc {
 
     /// Read under the header lock; armed == a uring read is (or was) in flight.
     #[inline]
+    #[allow(dead_code)]
     pub(crate) fn io_wref_armed(&self) -> bool {
         // SAFETY: header lock held per contract above.
         let w = unsafe { &*self.io_wref.get() };
@@ -152,6 +153,7 @@ fn pool_descs() -> *const BufferDescPadded {
     p
 }
 
+#[allow(dead_code)]
 pub fn buffer_pool_initialized() -> bool {
     !POOL.descs.load(Ordering::Relaxed).is_null()
 }
@@ -209,13 +211,13 @@ pub fn BufferManagerShmemInit() -> PgResult<()> {
         .expect("buffer block layout");
     // SAFETY: non-zero layout; zeroed like a fresh shmem segment.
     let blocks = unsafe { std::alloc::alloc_zeroed(blk_layout) };
-    let cv_layout = core::alloc::Layout::array::<ConditionVariable>(nu).expect("buffer IO CV layout");
+    let cv_layout =
+        core::alloc::Layout::array::<ConditionVariable>(nu).expect("buffer IO CV layout");
     // SAFETY: non-zero layout; initialized element-by-element below before publish.
     let io_cvs = unsafe { std::alloc::alloc(cv_layout) } as *mut ConditionVariable;
     if descs.is_null() || blocks.is_null() || io_cvs.is_null() {
         return Err(Box::new(
-            types_error::PgError::new(ERROR, "out of memory")
-                .with_sqlstate(ERRCODE_OUT_OF_MEMORY),
+            types_error::PgError::new(ERROR, "out of memory").with_sqlstate(ERRCODE_OUT_OF_MEMORY),
         ));
     }
     for i in 0..nu {

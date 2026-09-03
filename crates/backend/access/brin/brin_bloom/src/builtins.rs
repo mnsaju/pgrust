@@ -59,8 +59,21 @@ fn fc_options(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum>
     Ok(Datum::from_usize(0))
 }
 
-const fn b(foid: ::types_core::Oid, name: &'static str, nargs: i16, strict: bool, func: ::fmgr::PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict, retset: false, func }
+const fn b(
+    foid: ::types_core::Oid,
+    name: &'static str,
+    nargs: i16,
+    strict: bool,
+    func: ::fmgr::PGFunction,
+) -> FmgrBuiltin {
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict,
+        retset: false,
+        func,
+    }
 }
 
 pub const BLOOM_BUILTINS: &[FmgrBuiltin] = &[

@@ -17,8 +17,8 @@
 //! (injection_points_set_local) are not ported: every backend is a thread of
 //! the one server process, and no test in our suite uses set_local.
 
-use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 use pgsync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 
 use condition_variable::{
     ConditionVariable, ConditionVariableBroadcast, ConditionVariableCancelSleep,

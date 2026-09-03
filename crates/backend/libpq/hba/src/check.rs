@@ -182,7 +182,10 @@ pub(crate) fn hostname_match(pattern: &[u8], actual_hostname: &[u8]) -> bool {
         if actual_hostname.len() < pattern.len() {
             return false;
         }
-        pg_strcasecmp(pattern, &actual_hostname[actual_hostname.len() - pattern.len()..]) == 0
+        pg_strcasecmp(
+            pattern,
+            &actual_hostname[actual_hostname.len() - pattern.len()..],
+        ) == 0
     } else {
         pg_strcasecmp(pattern, actual_hostname) == 0
     }
@@ -262,27 +265,25 @@ pub(crate) fn check_ip(raddr: &SockAddr, addr: &SockAddr, mask: &SockAddr) -> bo
     }
 }
 
-pub(crate) fn check_same_host_or_net(
-    raddr: &SockAddr,
-    method: IPCompareMethod,
-) -> PgResult<bool> {
+pub(crate) fn check_same_host_or_net(raddr: &SockAddr, method: IPCompareMethod) -> PgResult<bool> {
     let mut result = false;
     let res = ifaddr::pg_foreach_ifaddr(|addr, netmask| {
         if result {
             return;
         }
         if method == ipCmpSameHost {
-            match ifaddr::pg_sockaddr_cidr_mask(
+            if let Ok(mask) = ifaddr::pg_sockaddr_cidr_mask(
                 None,
                 match addr {
                     IpAddr::V4(_) => ifaddr::AddressFamily::Inet,
                     IpAddr::V6(_) => ifaddr::AddressFamily::Inet6,
                 },
             ) {
-                Ok(mask) => {
-                    result = check_ip(raddr, &ipaddr_to_sockaddr(&addr), &ipaddr_to_sockaddr(&mask));
-                }
-                Err(_) => {}
+                result = check_ip(
+                    raddr,
+                    &ipaddr_to_sockaddr(&addr),
+                    &ipaddr_to_sockaddr(&mask),
+                );
             }
         } else {
             result = check_ip(
@@ -350,9 +351,7 @@ pub fn check_hba(port: &mut Port) -> PgResult<()> {
                     }
                 } else if hba.ip_cmp_method == ipCmpAll {
                     // matches anything
-                } else if hba.ip_cmp_method == ipCmpSameHost
-                    || hba.ip_cmp_method == ipCmpSameNet
-                {
+                } else if hba.ip_cmp_method == ipCmpSameHost || hba.ip_cmp_method == ipCmpSameNet {
                     if !check_same_host_or_net(&port.raddr, hba.ip_cmp_method)? {
                         continue;
                     }

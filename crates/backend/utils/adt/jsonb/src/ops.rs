@@ -63,8 +63,16 @@ fn compare_step(
         }
         if va.type_ord() == vb.type_ord() {
             match (va, vb) {
-                (JsonbItem::Array { n_elems: na, raw_scalar: rsa },
-                 JsonbItem::Array { n_elems: nb, raw_scalar: rsb }) => {
+                (
+                    JsonbItem::Array {
+                        n_elems: na,
+                        raw_scalar: rsa,
+                    },
+                    JsonbItem::Array {
+                        n_elems: nb,
+                        raw_scalar: rsb,
+                    },
+                ) => {
                     // C quirk preserved: the raw-scalar result may be
                     // overridden by the nElems check (no else) — an empty
                     // top-level array sorts less than null.
@@ -247,10 +255,18 @@ pub fn deep_contains(
             }
         }
         WjbToken::BeginArray => {
-            let JsonbItem::Array { n_elems: n_lhs_elems, raw_scalar: lhs_raw } = vval else {
+            let JsonbItem::Array {
+                n_elems: n_lhs_elems,
+                raw_scalar: lhs_raw,
+            } = vval
+            else {
                 panic!("expected array item")
             };
-            let JsonbItem::Array { raw_scalar: cont_raw, .. } = _vcont else {
+            let JsonbItem::Array {
+                raw_scalar: cont_raw,
+                ..
+            } = _vcont
+            else {
                 panic!("expected array item")
             };
             // A raw scalar may not contain a real array.
@@ -433,9 +449,7 @@ pub fn jsonb_hash_extended(mcx: Mcx<'_>, payload: &[u8], seed: u64) -> PgResult<
         match r {
             WjbToken::Done => break,
             WjbToken::BeginArray => hash ^= (u64::from(JB_FARRAY) << 32) | u64::from(JB_FARRAY),
-            WjbToken::BeginObject => {
-                hash ^= (u64::from(JB_FOBJECT) << 32) | u64::from(JB_FOBJECT)
-            }
+            WjbToken::BeginObject => hash ^= (u64::from(JB_FOBJECT) << 32) | u64::from(JB_FOBJECT),
             WjbToken::Key | WjbToken::Value | WjbToken::Elem => {
                 hash_scalar_value_extended(&v, &mut hash, seed)
             }

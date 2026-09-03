@@ -4,10 +4,10 @@
 use datum::Datum;
 use types_core::Oid;
 use types_error::{PgError, PgResult};
-use types_tuple::htup::FirstLowInvalidHeapAttributeNumber as FLIA;
 use types_fmgr::{FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFunction};
 use types_trigger::{TRIGGER_FIRED_BY_DELETE, TRIGGER_FIRED_BY_UPDATE, TRIGGER_FIRED_FOR_ROW};
 use types_trigger_call::trigger_data_from_fcinfo;
+use types_tuple::htup::FirstLowInvalidHeapAttributeNumber as FLIA;
 use types_tuple::HeapTupleData;
 
 const LIBRARY: &str = "lo";
@@ -36,7 +36,9 @@ fn atooid(s: &[u8]) -> Oid {
 fn fc_lo_manage(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: the trigger call machinery keeps the TriggerData live for the call.
     let Some(td) = (unsafe { trigger_data_from_fcinfo(fcinfo) }) else {
-        return Err(internal_err("lo_manage: not fired by trigger manager".to_string()));
+        return Err(internal_err(
+            "lo_manage: not fired by trigger manager".to_string(),
+        ));
     };
     let tgname = td.tg_trigger.tgname.as_str();
     if !TRIGGER_FIRED_FOR_ROW(td.tg_event) {

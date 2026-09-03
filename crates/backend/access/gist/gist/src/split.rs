@@ -27,6 +27,12 @@ pub struct GistSplitVector {
     pub spl_dontcare: Option<Vec<bool>>,
 }
 
+impl Default for GistSplitVector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GistSplitVector {
     pub fn new() -> Self {
         GistSplitVector {
@@ -217,7 +223,11 @@ fn supportSecondarySplit(
             leave_on_left = false;
         }
     } else {
-        let entry1 = if sv.spl_ldatum_exists { &entry_l } else { &entry_r };
+        let entry1 = if sv.spl_ldatum_exists {
+            &entry_l
+        } else {
+            &entry_r
+        };
         let entry1 = *entry1;
         let penalty1 = gistpenalty(mcx, giststate, attno, &entry1, false, &entry_sl, false)?;
         let penalty2 = gistpenalty(mcx, giststate, attno, &entry1, false, &entry_sr, false)?;
@@ -265,7 +275,7 @@ fn genericPickSplit(
     v.spl_right = Vec::with_capacity(maxoff as usize + 2);
 
     for i in FirstOffsetNumber..=maxoff {
-        if i <= (maxoff - FirstOffsetNumber + 1) / 2 {
+        if i <= (maxoff - FirstOffsetNumber).div_ceil(2) {
             v.spl_left.push(i);
         } else {
             v.spl_right.push(i);

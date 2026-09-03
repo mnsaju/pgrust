@@ -66,7 +66,12 @@ fn delete_shared_object_rows(
 // DropSetting (pg_db_role_setting.c) with databaseid valid, roleid invalid.
 fn drop_setting(mcx: Mcx<'_>, databaseid: Oid) -> PgResult<()> {
     let keys = [oid_key(1, databaseid)];
-    delete_where(mcx, DbRoleSettingRelationId, DbRoleSettingDatidRolidIndexId, &keys)
+    delete_where(
+        mcx,
+        DbRoleSettingRelationId,
+        DbRoleSettingDatidRolidIndexId,
+        &keys,
+    )
 }
 
 // CountDBSubscriptions (pg_subscription.c): RowExclusiveLock held to commit
@@ -84,7 +89,10 @@ fn count_db_subscriptions(mcx: Mcx<'_>, dbid: Oid) -> PgResult<i32> {
     Ok(n)
 }
 
-pub(crate) fn name_key<'mcx>(mcx: Mcx<'mcx>, name: &str) -> PgResult<(mcx::PgBox<'mcx, NameData>, ScanKeyData)> {
+pub(crate) fn name_key<'mcx>(
+    mcx: Mcx<'mcx>,
+    name: &str,
+) -> PgResult<(mcx::PgBox<'mcx, NameData>, ScanKeyData)> {
     let mut nd = NameData::default();
     nd.namestrcpy(name);
     let boxed = mcx::PgBox::new_in(nd, mcx);
@@ -116,11 +124,12 @@ fn set_database_invalid(
     let desc = pgdbrel.descr();
     let natts = desc.natts as usize;
     let mut values = vec![Datum::null(); natts];
-    let mut isnull = vec![false; natts];
+    let isnull = vec![false; natts];
     let mut replace = vec![false; natts];
     values[Anum_pg_database_datconnlimit as usize - 1] = Datum::from_i32(DATCONNLIMIT_INVALID_DB);
     replace[Anum_pg_database_datconnlimit as usize - 1] = true;
-    let newtup = heaptuple::heap_modify_tuple(mcx, tup.as_tuple(), desc, &values, &isnull, &replace)?;
+    let newtup =
+        heaptuple::heap_modify_tuple(mcx, tup.as_tuple(), desc, &values, &isnull, &replace)?;
     genam::systable_inplace_update_finish(mcx, state, newtup.as_tuple())?;
     transam_xlog::write::XLogFlush(transam_xlog::XactLastRecEnd())
 }
@@ -194,7 +203,9 @@ pub fn dropdb(mcx: Mcx<'_>, dbname: &str, missing_ok: bool, force: bool) -> PgRe
     if let Some((notherbackends, npreparedxacts)) = procarray::CountOtherDBBackends(db_id)? {
         return Err(ereport(ERROR)
             .errcode(ERRCODE_OBJECT_IN_USE)
-            .errmsg(format!("database \"{dbname}\" is being accessed by other users"))
+            .errmsg(format!(
+                "database \"{dbname}\" is being accessed by other users"
+            ))
             .errdetail(errdetail_busy_db(notherbackends, npreparedxacts))
             .into_error()
             .into());
@@ -226,7 +237,8 @@ pub fn dropdb(mcx: Mcx<'_>, dbname: &str, missing_ok: bool, force: bool) -> PgRe
     set_database_invalid(mcx, &pgdbrel, dbname, db_id)?;
 
     let (_nd, key) = name_key(mcx, dbname)?;
-    let mut scan = genam::systable_beginscan(mcx, &pgdbrel, DatabaseNameIndexId, true, None, &[key])?;
+    let mut scan =
+        genam::systable_beginscan(mcx, &pgdbrel, DatabaseNameIndexId, true, None, &[key])?;
     let Some(tup) = genam::systable_getnext(mcx, &mut scan)? else {
         panic!("cache lookup failed for database {db_id}");
     };
@@ -247,7 +259,8 @@ pub fn dropdb(mcx: Mcx<'_>, dbname: &str, missing_ok: bool, force: bool) -> PgRe
             | transam_xlog::CHECKPOINT_WAIT,
     )?;
 
-    let gen = procsignal::EmitProcSignalBarrier(ProcSignalBarrierType::PROCSIGNAL_BARRIER_SMGRRELEASE);
+    let gen =
+        procsignal::EmitProcSignalBarrier(ProcSignalBarrierType::PROCSIGNAL_BARRIER_SMGRRELEASE);
     procsignal::WaitForProcSignalBarrier(gen)?;
 
     crate::remove_dbtablespaces(mcx, db_id)?;

@@ -41,9 +41,10 @@ pub(crate) fn read_backup_label() -> PgResult<Option<BackupLabel>> {
         Ok(c) => c,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(e) => {
-            { ereport(FATAL)
+            ereport(FATAL)
                 .errmsg(format!("could not read file \"{BACKUP_LABEL_FILE}\": {e}"))
-                .finish(loc("read_backup_label"))?; unreachable!() }
+                .finish(loc("read_backup_label"))?;
+            unreachable!()
         }
     };
     let mut out = BackupLabel {
@@ -97,12 +98,15 @@ pub(crate) fn read_backup_label() -> PgResult<Option<BackupLabel>> {
         } else if let Some(v) = line.strip_prefix("START TIMELINE: ") {
             if let Ok(tli_from_file) = v.trim().parse::<u32>() {
                 if tli_from_walseg != tli_from_file {
-                    { ereport(FATAL)
-                        .errmsg(format!("invalid data in file \"{BACKUP_LABEL_FILE}\""))
-                        .errdetail(format!(
+                    {
+                        ereport(FATAL)
+                            .errmsg(format!("invalid data in file \"{BACKUP_LABEL_FILE}\""))
+                            .errdetail(format!(
                             "Timeline ID parsed is {tli_from_file}, but expected {tli_from_walseg}."
                         ))
-                        .finish(loc("read_backup_label"))?; unreachable!() }
+                            .finish(loc("read_backup_label"))?;
+                        unreachable!()
+                    }
                 }
                 let _ = elog(
                     DEBUG1,
@@ -114,7 +118,7 @@ pub(crate) fn read_backup_label() -> PgResult<Option<BackupLabel>> {
                 .errmsg("this is an incremental backup, not a data directory")
                 .errhint("Use pg_combinebackup to reconstruct a valid data directory.")
                 .finish(loc("read_backup_label"))?;
-        unreachable!()
+            unreachable!()
         }
     }
     Ok(Some(out))
@@ -131,9 +135,10 @@ pub(crate) fn read_tablespace_map() -> PgResult<Option<Vec<TablespaceInfo>>> {
         Ok(c) => c,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(e) => {
-            { ereport(FATAL)
+            ereport(FATAL)
                 .errmsg(format!("could not read file \"{TABLESPACE_MAP}\": {e}"))
-                .finish(loc("read_tablespace_map"))?; unreachable!() }
+                .finish(loc("read_tablespace_map"))?;
+            unreachable!()
         }
     };
 

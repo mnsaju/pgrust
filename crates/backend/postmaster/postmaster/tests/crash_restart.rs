@@ -70,7 +70,9 @@ fn crash_fans_out_sigquit_and_reinit_completes() {
     // AsyncShmemInit scans pg_notify/ during reinit; no datadir in this test.
     file_seams::with_allocated_dir::set(|dirname, cb| {
         let mut ret = false;
-        let Ok(entries) = std::fs::read_dir(dirname) else { return Ok(false) };
+        let Ok(entries) = std::fs::read_dir(dirname) else {
+            return Ok(false);
+        };
         for entry in entries {
             ret = cb(entry.unwrap().file_name().to_str().unwrap())?;
             if ret {
@@ -189,19 +191,27 @@ fn crash_fans_out_sigquit_and_reinit_completes() {
     postmaster_seams::announce_child_exit::call(VICTIM_PID, libc::SIGABRT);
     postmaster::process_pm_child_exit().unwrap();
 
-    assert!(with_pm(|pm| pm.fatal_error), "HandleFatalError must set fatal_error");
+    assert!(
+        with_pm(|pm| pm.fatal_error),
+        "HandleFatalError must set fatal_error"
+    );
     assert_eq!(with_pm(|pm| pm.pm_state), PMState::PM_WAIT_BACKENDS);
 
     announce_tx.send(()).unwrap();
     sibling.join().unwrap();
-    assert!(SIGQUIT_SEEN.load(Ordering::SeqCst), "sibling must observe SIGQUIT");
+    assert!(
+        SIGQUIT_SEEN.load(Ordering::SeqCst),
+        "sibling must observe SIGQUIT"
+    );
     assert_eq!(
         QUIT_REASON_SEEN.load(Ordering::SeqCst),
         pmsignal::QuitSignalReason::PMQUIT_FOR_CRASH as u32,
         "sibling must see PMQUIT_FOR_CRASH at its quickdie point"
     );
 
-    varsup::TransamVariables().nextOid.store(777, Ordering::Relaxed);
+    varsup::TransamVariables()
+        .nextOid
+        .store(777, Ordering::Relaxed);
     let lock0 = lwlock::main_lock(0);
     lock0
         .state
@@ -226,7 +236,10 @@ fn crash_fans_out_sigquit_and_reinit_completes() {
         PMState::PM_STARTUP,
         "reinit arm must re-enter PM_STARTUP"
     );
-    assert!(with_pm(|pm| pm.startup.is_some()), "a fresh startup child must be launched");
+    assert!(
+        with_pm(|pm| pm.startup.is_some()),
+        "a fresh startup child must be launched"
+    );
     assert_eq!(with_pm(|pm| pm.startup_status), StartupStatusEnum::Running);
     assert_eq!(with_pm(|pm| pm.abort_start_time), 0);
     assert!(

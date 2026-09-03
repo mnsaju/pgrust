@@ -39,7 +39,11 @@ fn kernel_paths() {
     for rep in 0..3 {
         for (p, s, exp) in cases {
             assert_eq!(run(p, s, 0, 4), *exp, "rep {rep} pattern {p:?}");
-            assert_eq!(run(p, s, REG_SMALL, 0), *exp, "REG_SMALL rep {rep} pattern {p:?}");
+            assert_eq!(
+                run(p, s, REG_SMALL, 0),
+                *exp,
+                "REG_SMALL rep {rep} pattern {p:?}"
+            );
         }
     }
 }

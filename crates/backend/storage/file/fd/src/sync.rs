@@ -9,8 +9,12 @@ use ::types_storage::{
     TABLESPACE_VERSION_DIRECTORY,
 };
 
-use crate::desc::{AllocateDir, CloseTransientFile, FreeDesc, FreeDir, OpenTransientFile, ReadDirExtended};
-use crate::vfd::{self, get_errno, loc, set_errno, with_fd, FD_CLOSE_AT_EOXACT, FD_DELETE_AT_CLOSE};
+use crate::desc::{
+    AllocateDir, CloseTransientFile, FreeDesc, FreeDir, OpenTransientFile, ReadDirExtended,
+};
+use crate::vfd::{
+    self, get_errno, loc, set_errno, with_fd, FD_CLOSE_AT_EOXACT, FD_DELETE_AT_CLOSE,
+};
 
 // xlog.h enum WalSyncMethod.
 const WAL_SYNC_METHOD_FSYNC_WRITETHROUGH: i32 = 3;
@@ -217,7 +221,11 @@ pub fn write_whole_file(path: &str, data: &[u8], do_sync: bool) -> Result<(), i3
             continue;
         }
         if n <= 0 {
-            let e = if get_errno() == 0 { libc::ENOSPC } else { get_errno() };
+            let e = if get_errno() == 0 {
+                libc::ENOSPC
+            } else {
+                get_errno()
+            };
             vfs::close(fd);
             return Err(e);
         }
@@ -538,7 +546,9 @@ pub fn fsync_fname_ext(
 
 fn fsync_parent_path(fname: &str, elevel: ErrorLevel) -> PgResult<i32> {
     // get_parent_directory yields "" for a bare file name; treat as ".".
-    let parent = Path::new(fname).parent().filter(|p| !p.as_os_str().is_empty());
+    let parent = Path::new(fname)
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty());
     let parentpath = parent.and_then(Path::to_str).unwrap_or(".");
     fsync_fname_ext(parentpath, true, false, elevel)
 }
@@ -674,7 +684,9 @@ fn do_syncfs(path: &str) -> PgResult<()> {
         ereport(LOG)
             .with_saved_errno(get_errno())
             .errcode_for_file_access()
-            .errmsg(format!("could not synchronize file system for file \"{path}\": %m"))
+            .errmsg(format!(
+                "could not synchronize file system for file \"{path}\": %m"
+            ))
             .finish(loc("do_syncfs"))?;
     }
     CloseTransientFile(fd);
@@ -769,7 +781,11 @@ pub fn RemovePgTempFiles() -> PgResult<()> {
     Ok(())
 }
 
-pub fn RemovePgTempFilesInDir(tmpdirname: &str, missing_ok: bool, unlink_all: bool) -> PgResult<()> {
+pub fn RemovePgTempFilesInDir(
+    tmpdirname: &str,
+    missing_ok: bool,
+    unlink_all: bool,
+) -> PgResult<()> {
     let temp_dir = AllocateDir(tmpdirname)?;
     if temp_dir.is_none() && missing_ok && get_errno() == libc::ENOENT {
         return Ok(());

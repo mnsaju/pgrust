@@ -47,12 +47,25 @@ fn transaction_stmt_kind_values_match_parsenodes_h() {
         assert_eq!(k as u32, i as u32);
     }
     // Field completeness vs the C struct (kind/options/savepoint_name/gid/chain/location).
-    let TransactionStmt { kind: _, options: _, savepoint_name: _, gid: _, chain: _, location: _ } =
-        TransactionStmt::default();
+    let TransactionStmt {
+        kind: _,
+        options: _,
+        savepoint_name: _,
+        gid: _,
+        chain: _,
+        location: _,
+    } = TransactionStmt::default();
 }
 
 fn trans_node(ctx: &MemoryContext, kind: TransactionStmtKind) -> Node<'_> {
-    Node::mk(ctx.mcx(), TransactionStmt { kind, ..TransactionStmt::default() }).unwrap()
+    Node::mk(
+        ctx.mcx(),
+        TransactionStmt {
+            kind,
+            ..TransactionStmt::default()
+        },
+    )
+    .unwrap()
 }
 
 #[test]
@@ -83,17 +96,33 @@ fn create_command_tag_select_path() {
     let select = Node::mk(mcx, SelectStmt::default()).unwrap();
     assert_eq!(CreateCommandTag(select), CMDTAG_SELECT);
 
-    let raw =
-        Node::mk(mcx, RawStmt { stmt: Some(select), stmt_location: 0, stmt_len: 0 }).unwrap();
+    let raw = Node::mk(
+        mcx,
+        RawStmt {
+            stmt: Some(select),
+            stmt_location: 0,
+            stmt_len: 0,
+        },
+    )
+    .unwrap();
     assert_eq!(CreateCommandTag(raw), CMDTAG_SELECT);
 
-    let query =
-        Node::mk(mcx, Query { commandType: CmdType::CMD_SELECT, ..Query::default() }).unwrap();
+    let query = Node::mk(
+        mcx,
+        Query {
+            commandType: CmdType::CMD_SELECT,
+            ..Query::default()
+        },
+    )
+    .unwrap();
     assert_eq!(CreateCommandTag(query), CMDTAG_SELECT);
 
     let pstmt = Node::mk(
         mcx,
-        PlannedStmt { commandType: CmdType::CMD_SELECT, ..PlannedStmt::default() },
+        PlannedStmt {
+            commandType: CmdType::CMD_SELECT,
+            ..PlannedStmt::default()
+        },
     )
     .unwrap();
     assert_eq!(CreateCommandTag(pstmt), CMDTAG_SELECT);
@@ -106,7 +135,11 @@ fn create_command_tag_utility_query_recurses() {
     let begin = trans_node(&ctx, TRANS_STMT_BEGIN);
     let query = Node::mk(
         mcx,
-        Query { commandType: CmdType::CMD_UTILITY, utilityStmt: Some(begin), ..Query::default() },
+        Query {
+            commandType: CmdType::CMD_UTILITY,
+            utilityStmt: Some(begin),
+            ..Query::default()
+        },
     )
     .unwrap();
     assert_eq!(CreateCommandTag(query), CMDTAG_BEGIN);
@@ -132,10 +165,19 @@ fn command_log_levels() {
     let select = Node::mk(mcx, SelectStmt::default()).unwrap();
     assert_eq!(GetCommandLogLevel(select), LOGSTMT_ALL);
 
-    assert_eq!(GetCommandLogLevel(trans_node(&ctx, TRANS_STMT_COMMIT)), LOGSTMT_ALL);
+    assert_eq!(
+        GetCommandLogLevel(trans_node(&ctx, TRANS_STMT_COMMIT)),
+        LOGSTMT_ALL
+    );
 
-    let insert_query =
-        Node::mk(mcx, Query { commandType: CmdType::CMD_INSERT, ..Query::default() }).unwrap();
+    let insert_query = Node::mk(
+        mcx,
+        Query {
+            commandType: CmdType::CMD_INSERT,
+            ..Query::default()
+        },
+    )
+    .unwrap();
     assert_eq!(GetCommandLogLevel(insert_query), LOGSTMT_MOD);
 
     let util_query = Node::mk(
@@ -167,7 +209,11 @@ fn classify_transaction_stmt_read_only() {
             COMMAND_IS_STRICTLY_READ_ONLY
         );
     }
-    for kind in [TRANS_STMT_PREPARE, TRANS_STMT_COMMIT_PREPARED, TRANS_STMT_ROLLBACK_PREPARED] {
+    for kind in [
+        TRANS_STMT_PREPARE,
+        TRANS_STMT_COMMIT_PREPARED,
+        TRANS_STMT_ROLLBACK_PREPARED,
+    ] {
         assert_eq!(
             ClassifyUtilityCommandAsReadOnly(trans_node(&ctx, kind)).unwrap(),
             COMMAND_OK_IN_READ_ONLY_TXN
@@ -185,7 +231,10 @@ fn utility_returns_tuples_and_descriptor_defaults() {
 
 #[test]
 fn command_is_read_only_shapes() {
-    let select = PlannedStmt { commandType: CmdType::CMD_SELECT, ..PlannedStmt::default() };
+    let select = PlannedStmt {
+        commandType: CmdType::CMD_SELECT,
+        ..PlannedStmt::default()
+    };
     assert!(CommandIsReadOnly(&select));
 
     let modifying = PlannedStmt {
@@ -195,10 +244,16 @@ fn command_is_read_only_shapes() {
     };
     assert!(!CommandIsReadOnly(&modifying));
 
-    let insert = PlannedStmt { commandType: CmdType::CMD_INSERT, ..PlannedStmt::default() };
+    let insert = PlannedStmt {
+        commandType: CmdType::CMD_INSERT,
+        ..PlannedStmt::default()
+    };
     assert!(!CommandIsReadOnly(&insert));
 
-    let utility = PlannedStmt { commandType: CmdType::CMD_UTILITY, ..PlannedStmt::default() };
+    let utility = PlannedStmt {
+        commandType: CmdType::CMD_UTILITY,
+        ..PlannedStmt::default()
+    };
     assert!(!CommandIsReadOnly(&utility));
 }
 
@@ -233,10 +288,17 @@ fn dispatch_savepoint_family_requires_transaction_block() {
     install_xact_test_seams();
     let ctx = MemoryContext::new("t");
 
-    for kind in [TRANS_STMT_SAVEPOINT, TRANS_STMT_RELEASE, TRANS_STMT_ROLLBACK_TO] {
+    for kind in [
+        TRANS_STMT_SAVEPOINT,
+        TRANS_STMT_RELEASE,
+        TRANS_STMT_ROLLBACK_TO,
+    ] {
         xact::reset_xact_state_for_tests();
         let err = run_utility(&ctx, kind).unwrap_err();
-        assert_eq!(err.sqlstate(), types_error::ERRCODE_NO_ACTIVE_SQL_TRANSACTION);
+        assert_eq!(
+            err.sqlstate(),
+            types_error::ERRCODE_NO_ACTIVE_SQL_TRANSACTION
+        );
     }
 }
 
@@ -246,9 +308,14 @@ fn seams_installed() {
     let ctx = MemoryContext::new("t");
     let node = trans_node(&ctx, TRANS_STMT_BEGIN);
     assert_eq!(utility_seams::create_command_tag::call(node), CMDTAG_BEGIN);
-    assert_eq!(utility_seams::get_command_log_level::call(node), guc_tables::consts::LOGSTMT_ALL);
+    assert_eq!(
+        utility_seams::get_command_log_level::call(node),
+        guc_tables::consts::LOGSTMT_ALL
+    );
     assert!(!utility_seams::utility_returns_tuples::call(node));
-    assert!(utility_seams::utility_tuple_descriptor::call(node).unwrap().is_none());
+    assert!(utility_seams::utility_tuple_descriptor::call(node)
+        .unwrap()
+        .is_none());
     assert!(utility_seams::process_utility::is_installed());
 }
 
@@ -279,7 +346,11 @@ fn create_command_tag_variable_set() {
     ] {
         let node = Node::mk(
             mcx,
-            VariableSetStmt { kind, name: Some("x"), ..VariableSetStmt::default() },
+            VariableSetStmt {
+                kind,
+                name: Some("x"),
+                ..VariableSetStmt::default()
+            },
         )
         .unwrap();
         assert_eq!(CreateCommandTag(node), tag);
@@ -305,18 +376,34 @@ fn create_command_tag_alter_object_types() {
         (ObjectType::OBJECT_FOREIGN_TABLE, CMDTAG_ALTER_FOREIGN_TABLE),
         (ObjectType::OBJECT_TYPE, CMDTAG_ALTER_TYPE),
     ] {
-        let node = Node::mk(mcx, AlterTableStmt { objtype, ..Default::default() }).unwrap();
+        let node = Node::mk(
+            mcx,
+            AlterTableStmt {
+                objtype,
+                ..Default::default()
+            },
+        )
+        .unwrap();
         assert_eq!(CreateCommandTag(node), tag);
     }
 
     for (objtype, tag) in [
         (ObjectType::OBJECT_FUNCTION, CMDTAG_ALTER_FUNCTION),
         (ObjectType::OBJECT_CAST, CMDTAG_ALTER_CAST),
-        (ObjectType::OBJECT_TSCONFIGURATION, CMDTAG_ALTER_TEXT_SEARCH_CONFIGURATION),
+        (
+            ObjectType::OBJECT_TSCONFIGURATION,
+            CMDTAG_ALTER_TEXT_SEARCH_CONFIGURATION,
+        ),
         (ObjectType::OBJECT_LARGEOBJECT, CMDTAG_ALTER_LARGE_OBJECT),
     ] {
-        let node =
-            Node::mk(mcx, AlterOwnerStmt { objectType: objtype, ..Default::default() }).unwrap();
+        let node = Node::mk(
+            mcx,
+            AlterOwnerStmt {
+                objectType: objtype,
+                ..Default::default()
+            },
+        )
+        .unwrap();
         assert_eq!(CreateCommandTag(node), tag);
     }
 
@@ -343,7 +430,10 @@ fn create_command_tag_alter_object_types() {
     assert_eq!(CreateCommandTag(node), CMDTAG_ALTER_FOREIGN_TABLE);
     let node = Node::mk(
         mcx,
-        RenameStmt { renameType: ObjectType::OBJECT_TRIGGER, ..Default::default() },
+        RenameStmt {
+            renameType: ObjectType::OBJECT_TRIGGER,
+            ..Default::default()
+        },
     )
     .unwrap();
     assert_eq!(CreateCommandTag(node), CMDTAG_ALTER_TRIGGER);
@@ -357,24 +447,35 @@ fn explain_log_level_and_descriptor() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
         syscache_seams::lookup_pg_type_shape::set(|typid| {
-            Ok((typid == types_core::TEXTOID).then_some(types_tuple::PgTypeShape {
-                typlen: -1,
-                typbyval: false,
-                typalign: b'i' as i8,
-                typstorage: b'x' as i8,
-                typcollation: 100,
-            }))
+            Ok(
+                (typid == types_core::TEXTOID).then_some(types_tuple::PgTypeShape {
+                    typlen: -1,
+                    typbyval: false,
+                    typalign: b'i' as i8,
+                    typstorage: b'x' as i8,
+                    typcollation: 100,
+                }),
+            )
         });
     });
 
     let ctx = MemoryContext::new("t");
     let mcx = ctx.mcx();
 
-    let insert_query =
-        Node::mk(mcx, Query { commandType: CmdType::CMD_INSERT, ..Query::default() }).unwrap();
+    let insert_query = Node::mk(
+        mcx,
+        Query {
+            commandType: CmdType::CMD_INSERT,
+            ..Query::default()
+        },
+    )
+    .unwrap();
     let plain = Node::mk(
         mcx,
-        ExplainStmt { query: Some(insert_query), ..ExplainStmt::default() },
+        ExplainStmt {
+            query: Some(insert_query),
+            ..ExplainStmt::default()
+        },
     )
     .unwrap();
     // Plain EXPLAIN never recurses; EXPLAIN ANALYZE takes the inner level.
@@ -382,7 +483,10 @@ fn explain_log_level_and_descriptor() {
 
     let analyze = Node::mk(
         mcx,
-        DefElem { defname: Some("analyze"), ..DefElem::default() },
+        DefElem {
+            defname: Some("analyze"),
+            ..DefElem::default()
+        },
     )
     .unwrap();
     let analyzed = Node::mk(
@@ -411,7 +515,10 @@ fn fetch_stmt_tag_returns_and_descriptor() {
 
     let fetch = Node::mk(
         mcx,
-        FetchStmt { portalname: Some("nope"), ..FetchStmt::default() },
+        FetchStmt {
+            portalname: Some("nope"),
+            ..FetchStmt::default()
+        },
     )
     .unwrap();
     assert_eq!(CreateCommandTag(fetch), CMDTAG_FETCH);
@@ -421,7 +528,11 @@ fn fetch_stmt_tag_returns_and_descriptor() {
 
     let mv = Node::mk(
         mcx,
-        FetchStmt { portalname: Some("nope"), ismove: true, ..FetchStmt::default() },
+        FetchStmt {
+            portalname: Some("nope"),
+            ismove: true,
+            ..FetchStmt::default()
+        },
     )
     .unwrap();
     assert_eq!(CreateCommandTag(mv), CMDTAG_MOVE);

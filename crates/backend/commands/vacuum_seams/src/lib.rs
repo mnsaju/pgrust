@@ -1,3 +1,6 @@
+// vac_update_relstats mirrors C's call-frame argument-for-argument.
+#![allow(clippy::too_many_arguments)]
+
 use types_core::BlockNumber;
 use types_error::PgResult;
 use types_rel::RelationData;

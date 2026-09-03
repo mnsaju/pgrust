@@ -82,9 +82,30 @@ fn create_toast_table<'mcx>(
     let toast_idxname = format!("pg_toast_{relOid}_index");
 
     let mut tupdesc = tupdesc::CreateTemplateTupleDesc(mcx, 3)?;
-    tupdesc::TupleDescInitEntry(&mut tupdesc, 1 as AttrNumber, Some("chunk_id"), OIDOID, -1, 0)?;
-    tupdesc::TupleDescInitEntry(&mut tupdesc, 2 as AttrNumber, Some("chunk_seq"), INT4OID, -1, 0)?;
-    tupdesc::TupleDescInitEntry(&mut tupdesc, 3 as AttrNumber, Some("chunk_data"), BYTEAOID, -1, 0)?;
+    tupdesc::TupleDescInitEntry(
+        &mut tupdesc,
+        1 as AttrNumber,
+        Some("chunk_id"),
+        OIDOID,
+        -1,
+        0,
+    )?;
+    tupdesc::TupleDescInitEntry(
+        &mut tupdesc,
+        2 as AttrNumber,
+        Some("chunk_seq"),
+        INT4OID,
+        -1,
+        0,
+    )?;
+    tupdesc::TupleDescInitEntry(
+        &mut tupdesc,
+        3 as AttrNumber,
+        Some("chunk_data"),
+        BYTEAOID,
+        -1,
+        0,
+    )?;
     for i in 0..3 {
         let att = tupdesc.attr_mut(i);
         att.attstorage = TYPSTORAGE_PLAIN;

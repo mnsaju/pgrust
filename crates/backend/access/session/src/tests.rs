@@ -634,7 +634,7 @@ fn tls_source_census_and_session_surface_are_pinned() {
     //      exactly: exists only between the drive frame's publish and
     //      clear on ONE thread, torn down before unbind on every path; no
     //      session identity (the binder owns all session state movement).
-        // POOL-QOS interactive tier delta (+1), deliberately NON-SESSION TLS:
+    // POOL-QOS interactive tier delta (+1), deliberately NON-SESSION TLS:
     //   access/transam/parallel/src/standing.rs — the serve-yield block
     //      {YIELD_DETACHED, CURRENT_SERVE_BOARD, YIELD_PENDING}: pool-
     //      serve-scoped protocol bookkeeping (the DetachGuard suppression

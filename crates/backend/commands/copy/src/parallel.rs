@@ -42,8 +42,8 @@ use types_error::{PgError, PgResult, ERROR, WARNING};
 use types_fmgr::FmgrInfo;
 use types_rel::Relation;
 
-use backend_progress::progress::{PROGRESS_COPY_BYTES_PROCESSED, PROGRESS_COPY_TUPLES_PROCESSED};
 use backend_progress::pgstat_progress_update_param;
+use backend_progress::progress::{PROGRESS_COPY_BYTES_PROCESSED, PROGRESS_COPY_TUPLES_PROCESSED};
 
 use crate::from::{copy_from_error_context, CopyFromState, CopySrc};
 use crate::fromparse::EolType;
@@ -108,7 +108,9 @@ fn sort_budget() -> usize {
 fn dop(rt: &runtime::Runtime) -> i32 {
     static N: OnceLock<Option<u64>> = OnceLock::new();
     let req = *N.get_or_init(|| {
-        std::env::var("PGRUST_PARALLEL_COPY_DOP").ok().and_then(|v| v.trim().parse().ok())
+        std::env::var("PGRUST_PARALLEL_COPY_DOP")
+            .ok()
+            .and_then(|v| v.trim().parse().ok())
     });
     let d = req.unwrap_or(rt.config().workers as u64);
     d.clamp(1, (runtime::MAX_EXTERNAL_LANES as u64).min(32)) as i32
@@ -119,7 +121,9 @@ fn dop(rt: &runtime::Runtime) -> i32 {
 fn window(k: i32) -> u64 {
     static N: OnceLock<Option<u64>> = OnceLock::new();
     let req = *N.get_or_init(|| {
-        std::env::var("PGRUST_PARALLEL_COPY_WINDOW").ok().and_then(|v| v.trim().parse().ok())
+        std::env::var("PGRUST_PARALLEL_COPY_WINDOW")
+            .ok()
+            .and_then(|v| v.trim().parse().ok())
     });
     req.unwrap_or((2 * k as u64) + 4).max(2)
 }
@@ -156,9 +160,7 @@ fn stitch_pool_threads() -> usize {
 /// `v2_less` + the v2_matches_heap_reference oracle).
 fn fill_v2() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
-    *ON.get_or_init(|| {
-        std::env::var("PGRUST_PARALLEL_COPY_FILL_V2").is_ok_and(|v| v.trim() == "1")
-    })
+    *ON.get_or_init(|| std::env::var("PGRUST_PARALLEL_COPY_FILL_V2").is_ok_and(|v| v.trim() == "1"))
 }
 
 /// loadcommit C0: PGRUST_PARALLEL_COPY_FILL_SPLIT=1 — per-row advance
@@ -246,7 +248,6 @@ fn parquet_budget_bytes() -> u64 {
     })
 }
 
-
 /// copyfast lever 1: PGRUST_PARALLEL_COPY_SORT_MEMRUNS — keep sorted runs
 /// in MEMORY (same lz4 frames as the run files) instead of spilling, so a
 /// fitting load sorts in one pass: no run write, no merge re-read. Budgeted
@@ -266,14 +267,16 @@ enum MemRuns {
 
 fn memruns_knob() -> MemRuns {
     static M: OnceLock<MemRuns> = OnceLock::new();
-    *M.get_or_init(|| match std::env::var("PGRUST_PARALLEL_COPY_SORT_MEMRUNS") {
-        Ok(v) => match v.trim() {
-            "" | "0" => MemRuns::Off,
-            "1" | "auto" => MemRuns::Auto,
-            v => v.parse::<u64>().map(MemRuns::CapMb).unwrap_or(MemRuns::Off),
+    *M.get_or_init(
+        || match std::env::var("PGRUST_PARALLEL_COPY_SORT_MEMRUNS") {
+            Ok(v) => match v.trim() {
+                "" | "0" => MemRuns::Off,
+                "1" | "auto" => MemRuns::Auto,
+                v => v.parse::<u64>().map(MemRuns::CapMb).unwrap_or(MemRuns::Off),
+            },
+            Err(_) => MemRuns::Off,
         },
-        Err(_) => MemRuns::Off,
-    })
+    )
 }
 
 /// GL-LOADDET-1: PGRUST_PARALLEL_COPY_SORT_DETERMINISTIC — make the loaded
@@ -339,9 +342,7 @@ fn memory_headroom_bytes() -> Option<u64> {
 /// only copies row images out of the stream.
 fn analyze_inline_flag() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
-    *ON.get_or_init(|| {
-        std::env::var("PGRUST_COPY_ANALYZE_INLINE").is_ok_and(|v| v.trim() == "1")
-    })
+    *ON.get_or_init(|| std::env::var("PGRUST_COPY_ANALYZE_INLINE").is_ok_and(|v| v.trim() == "1"))
 }
 
 /// Lever-3 per-statement plan: targrows resolved via the ANALYZE examine
@@ -398,9 +399,8 @@ impl StreamSampler {
             }
             if self.rowstoskip <= 0.0 {
                 let k = (self.targrows as f64
-                    * commands_analyze::sampling::sampler_random_fract(
-                        &mut self.rstate.randstate,
-                    )) as usize;
+                    * commands_analyze::sampling::sampler_random_fract(&mut self.rstate.randstate))
+                    as usize;
                 debug_assert!(k < self.targrows);
                 let slot = &mut self.sample[k];
                 slot.0 = self.ord;
@@ -437,7 +437,9 @@ fn memrun_budget(k: i32) -> u64 {
             let reserve = (k as u64) * (sort_budget() as u64) * 3 / 2 + (2u64 << 30);
             let budget = headroom.saturating_sub(reserve) * 4 / 5;
             if budget < (1 << 30) {
-                ptrace(&format!("memruns auto refused: headroom {headroom} reserve {reserve}"));
+                ptrace(&format!(
+                    "memruns auto refused: headroom {headroom} reserve {reserve}"
+                ));
                 return 0;
             }
             budget
@@ -604,7 +606,7 @@ impl Segmentator {
         if k == base {
             run += self.trailing_bs;
         }
-        run % 2 == 0
+        run.is_multiple_of(2)
     }
 
     /// The in-progress line's first two bytes, given the line started at
@@ -643,7 +645,11 @@ impl Segmentator {
         // Unknown; the \r at the edge decides Cr vs Crnl by this byte).
         if self.pending_cr {
             self.pending_cr = false;
-            self.eol = if data.first() == Some(&b'\n') { SegEol::Crnl } else { SegEol::Cr };
+            self.eol = if data.first() == Some(&b'\n') {
+                SegEol::Crnl
+            } else {
+                SegEol::Cr
+            };
             if self.eol == SegEol::Crnl {
                 i = 1;
             }
@@ -651,8 +657,7 @@ impl Segmentator {
             if self.row_boundary(buf, data, &mut chunk_start, i, &mut line_start, out) {
                 return i;
             }
-        } else if self.prev_ended_cr && self.eol == SegEol::Crnl && data.first() == Some(&b'\n')
-        {
+        } else if self.prev_ended_cr && self.eol == SegEol::Crnl && data.first() == Some(&b'\n') {
             // Decided-Crnl mode, \r|\n split across the buffer edge.
             self.prev_ended_cr = false;
             i = 1;
@@ -681,16 +686,33 @@ impl Segmentator {
                         b'\n' => {
                             self.eol = SegEol::Nl;
                             i += 1;
-                            if self.row_boundary(buf, data, &mut chunk_start, i, &mut line_start, out) {
+                            if self.row_boundary(
+                                buf,
+                                data,
+                                &mut chunk_start,
+                                i,
+                                &mut line_start,
+                                out,
+                            ) {
                                 return i;
                             }
                         }
                         b'\r' => {
                             if i + 1 < len {
-                                self.eol =
-                                    if data[i + 1] == b'\n' { SegEol::Crnl } else { SegEol::Cr };
+                                self.eol = if data[i + 1] == b'\n' {
+                                    SegEol::Crnl
+                                } else {
+                                    SegEol::Cr
+                                };
                                 i += if self.eol == SegEol::Crnl { 2 } else { 1 };
-                                if self.row_boundary(buf, data, &mut chunk_start, i, &mut line_start, out) {
+                                if self.row_boundary(
+                                    buf,
+                                    data,
+                                    &mut chunk_start,
+                                    i,
+                                    &mut line_start,
+                                    out,
+                                ) {
                                     return i;
                                 }
                             } else {
@@ -748,7 +770,11 @@ impl Segmentator {
 
         // Buffer exhausted: carry the tail into the current chunk + state.
         if chunk_start < len {
-            self.segs.push(ChunkSeg { buf: Arc::clone(buf), start: chunk_start, end: len });
+            self.segs.push(ChunkSeg {
+                buf: Arc::clone(buf),
+                start: chunk_start,
+                end: len,
+            });
         }
         // Trailing backslash run (for parity across the edge). The detect
         // phase tracks escapes itself; boundary modes use run parity.
@@ -802,14 +828,22 @@ impl Segmentator {
             // replays serial marker validation (aloneness, EOL style).
             self.eoc = true;
             if *chunk_start < end {
-                self.segs.push(ChunkSeg { buf: Arc::clone(buf), start: *chunk_start, end });
+                self.segs.push(ChunkSeg {
+                    buf: Arc::clone(buf),
+                    start: *chunk_start,
+                    end,
+                });
             }
             *chunk_start = end;
             self.cut_chunk(out);
             return true;
         }
         if self.rows >= self.rows_per_chunk {
-            self.segs.push(ChunkSeg { buf: Arc::clone(buf), start: *chunk_start, end });
+            self.segs.push(ChunkSeg {
+                buf: Arc::clone(buf),
+                start: *chunk_start,
+                end,
+            });
             *chunk_start = end;
             self.cut_chunk(out);
         }
@@ -945,7 +979,10 @@ struct EolPre {
 
 impl ParCopyShared {
     fn record_error(&self, chunk: u64, e: Box<PgError>) {
-        self.errors.lock().unwrap_or_else(|p| p.into_inner()).insert(chunk, e);
+        self.errors
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .insert(chunk, e);
         self.error_floor.fetch_min(chunk, Ordering::SeqCst);
         self.wake_leader();
     }
@@ -975,7 +1012,10 @@ impl ParCopyShared {
     }
 
     fn take_hard_error(&self) -> Option<Box<PgError>> {
-        self.hard_error.lock().unwrap_or_else(|p| p.into_inner()).take()
+        self.hard_error
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .take()
     }
 }
 
@@ -985,9 +1025,8 @@ impl runtime::TaskSetWork for ParCopyShared {
         match r {
             Ok(Ok(())) => {}
             Ok(Err(e)) => self.fail_hard(e),
-            Err(_panic) => self.fail_hard(
-                PgError::new(ERROR, "parallel COPY worker panicked in a chunk").into(),
-            ),
+            Err(_panic) => self
+                .fail_hard(PgError::new(ERROR, "parallel COPY worker panicked in a chunk").into()),
         }
     }
 
@@ -1079,7 +1118,10 @@ impl ParCopyShared {
                     // the morsel's own, and the leader must never see a task
                     // complete while part of its rows are still in a batch.
                     self.cut_run_at_task_end(wcx)?;
-                    self.done.lock().unwrap_or_else(|p| p.into_inner()).insert(g, None);
+                    self.done
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner())
+                        .insert(g, None);
                     self.wake_leader();
                 }
                 Err(e) => {
@@ -1109,7 +1151,10 @@ impl ParCopyShared {
         match self.parse_encode_chunk(wcx, chunk, eol) {
             Ok(enc) => {
                 self.cut_run_at_task_end(wcx)?;
-                self.done.lock().unwrap_or_else(|p| p.into_inner()).insert(g, enc);
+                self.done
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .insert(g, enc);
                 self.wake_leader();
             }
             Err(e) => {
@@ -1161,7 +1206,11 @@ impl ParCopyShared {
                 since_cfi = 0;
                 postgres_seams::check_for_interrupts::call()?;
             }
-            let t0 = if trace { Some(std::time::Instant::now()) } else { None };
+            let t0 = if trace {
+                Some(std::time::Instant::now())
+            } else {
+                None
+            };
             wcx.row_cx.reset();
             exectuples::exec_clear_tuple(&mut wcx.slot, wcx.mcx);
             // SAFETY (lifetime erasure): per-row datums land in row_cx and
@@ -1171,7 +1220,10 @@ impl ParCopyShared {
             let row_mcx: Mcx<'_> = unsafe { core::mem::transmute(wcx.row_cx.mcx()) };
             {
                 let base = wcx.slot.base_mut();
-                if !wcx.st.next_copy_from(row_mcx, &mut base.tts_values, &mut base.tts_isnull)? {
+                if !wcx
+                    .st
+                    .next_copy_from(row_mcx, &mut base.tts_values, &mut base.tts_isnull)?
+                {
                     break;
                 }
             }
@@ -1306,7 +1358,9 @@ impl ParCopyShared {
         if !sort_deterministic() {
             return Ok(());
         }
-        let Some(st) = wcx.sort_state.as_mut() else { return Ok(()) };
+        let Some(st) = wcx.sort_state.as_mut() else {
+            return Ok(());
+        };
         if st.batch.is_empty() {
             return Ok(());
         }
@@ -1338,9 +1392,8 @@ impl ParCopyShared {
         if fd::MakePGDirectory("base/pgsql_tmp") < 0 {
             let en = fd::get_errno();
             let mut fi = fd::FileInfo::zeroed();
-            let usable_dir = en == libc::EEXIST
-                && fd::pg_stat("base/pgsql_tmp", &mut fi) == 0
-                && fi.is_dir();
+            let usable_dir =
+                en == libc::EEXIST && fd::pg_stat("base/pgsql_tmp", &mut fi) == 0 && fi.is_dir();
             if !usable_dir {
                 let e = std::io::Error::from_raw_os_error(en);
                 return Err(Box::new(PgError::error(format!(
@@ -1367,8 +1420,14 @@ impl ParCopyShared {
     /// sort-mode body — constraints, NULL refusal, memcmp-key encode, run
     /// spill — identical to the text arm from the slot onward.
     fn parquet_decode_rg(&self, wcx: &mut ParCopyWorkerCx<'_, '_>, g: u64) -> PgResult<()> {
-        let pq = self.parquet.as_ref().expect("parquet task without parquet mode");
-        let sort = self.sort.as_ref().expect("parquet parallel is sort-mode only");
+        let pq = self
+            .parquet
+            .as_ref()
+            .expect("parquet task without parquet mode");
+        let sort = self
+            .sort
+            .as_ref()
+            .expect("parquet parallel is sort-mode only");
         let rg_idx = pq.rg_order[g as usize];
         let mut rgr = parquet_read::RowGroupReader::open(
             &pq.file,
@@ -1378,7 +1437,8 @@ impl ParCopyShared {
             &pq.plan.cols,
             &pq.plan.vutf8,
         )?;
-        pq.bytes_read.fetch_add(rgr.compressed_bytes, Ordering::Relaxed);
+        pq.bytes_read
+            .fetch_add(rgr.compressed_bytes, Ordering::Relaxed);
         if wcx.pq_batches.is_none() {
             wcx.pq_batches = Some(pq.plan.make_batches(&pq.meta));
         }
@@ -1389,7 +1449,11 @@ impl ParCopyShared {
         while rgr.rows_remaining() > 0 {
             postgres_seams::check_for_interrupts::call()?;
             let n = rgr.rows_remaining().min(BATCH_ROWS) as usize;
-            let t0 = if trace { Some(std::time::Instant::now()) } else { None };
+            let t0 = if trace {
+                Some(std::time::Instant::now())
+            } else {
+                None
+            };
             rgr.read_batches(wcx.pq_batches.as_mut().expect("built above"), n)?;
             if let (Some(t0), Some(st)) = (t0, wcx.sort_state.as_mut()) {
                 st.t_parse += t0.elapsed();
@@ -1443,13 +1507,13 @@ impl ParCopyShared {
                             .with_sqlstate(types_error::ERRCODE_FEATURE_NOT_SUPPORTED),
                     ));
                 }
-                let t1 = if trace { Some(std::time::Instant::now()) } else { None };
+                let t1 = if trace {
+                    Some(std::time::Instant::now())
+                } else {
+                    None
+                };
                 st.keybuf.clear();
-                pgrcolumnar::sortkey::encode_sort_key(
-                    &sort.keys,
-                    &base.tts_values,
-                    &mut st.keybuf,
-                );
+                pgrcolumnar::sortkey::encode_sort_key(&sort.keys, &base.tts_values, &mut st.keybuf);
                 st.rowbuf.clear();
                 st.codec.serialize_row(&base.tts_values, &mut st.rowbuf)?;
                 st.batch.push(&st.keybuf, &st.rowbuf);
@@ -1471,8 +1535,12 @@ impl ParCopyShared {
 /// connected the helper to the leader's database, restored leader state,
 /// and entered parallel mode).
 fn parallel_copy_worker_main(pshared: &parallel::ParallelShared) -> PgResult<()> {
-    let Some(private) = pshared.private() else { return Ok(()) };
-    let Ok(shared) = private.downcast::<ParCopyShared>() else { return Ok(()) };
+    let Some(private) = pshared.private() else {
+        return Ok(());
+    };
+    let Ok(shared) = private.downcast::<ParCopyShared>() else {
+        return Ok(());
+    };
 
     let r = catch_unwind(AssertUnwindSafe(|| worker_drive(&shared)));
     let outcome = match r {
@@ -1485,7 +1553,10 @@ fn parallel_copy_worker_main(pshared: &parallel::ParallelShared) -> PgResult<()>
                 ));
                 std::panic::resume_unwind(unwind);
             }
-            Err(Box::new(PgError::new(ERROR, "parallel COPY worker failed (see leader error)")))
+            Err(Box::new(PgError::new(
+                ERROR,
+                "parallel COPY worker failed (see leader error)",
+            )))
         }
     };
     latch::SetLatch(types_storage::latch::LatchHandle::proc(
@@ -1680,9 +1751,10 @@ fn worker_drive(shared: &Arc<ParCopyShared>) -> PgResult<()> {
     // pointer is cleared before wcx drops.
     WORKER_CX.with(|c| {
         c.set(unsafe {
-            core::mem::transmute::<*mut ParCopyWorkerCx<'_, '_>, *mut ParCopyWorkerCx<'static, 'static>>(
-                &mut wcx as *mut ParCopyWorkerCx<'_, '_>,
-            )
+            core::mem::transmute::<
+                *mut ParCopyWorkerCx<'_, '_>,
+                *mut ParCopyWorkerCx<'static, 'static>,
+            >(&mut wcx as *mut ParCopyWorkerCx<'_, '_>)
         })
     });
     let _outcome = shared.rt.drive_pinned(&mut lane_local, &rg);
@@ -1810,10 +1882,7 @@ fn merge_sorted_runs(
             })
             .collect();
         MergeKind::V2(pgrcolumnar::loadsort::RunMergeV2::open_mixed(
-            inputs,
-            sort.key_w,
-            prefetch,
-            lz4,
+            inputs, sort.key_w, prefetch, lz4,
         )?)
     } else {
         // Mem runs exist only under FILL_V2 (memstore admission requires
@@ -1877,8 +1946,7 @@ fn merge_sorted_runs(
     // mailbox is MPMC by construction: receivers are shared by CLONING and
     // every park runs with the queue lock released (the mailbox law).
     let (work_tx, work_rx) = pgsync::mailbox::<Batch>(Some(nenc + 1));
-    let (done_tx, done_rx) =
-        pgsync::mailbox::<(u64, PgResult<pgrcolumnar::EncodedRg>)>(None);
+    let (done_tx, done_rx) = pgsync::mailbox::<(u64, PgResult<pgrcolumnar::EncodedRg>)>(None);
     let abort = std::sync::atomic::AtomicBool::new(false);
 
     let key_w = sort.key_w;
@@ -1903,10 +1971,9 @@ fn merge_sorted_runs(
                     // dropped its sender (end of input / error / abort) and
                     // the queue is drained.
                     let Some(b) = rx.recv() else { break };
-                    let r = catch_unwind(AssertUnwindSafe(
-                        || -> PgResult<pgrcolumnar::EncodedRg> {
-                            let mut enc =
-                                pgrcolumnar::RgChunkEncoder::new(Arc::clone(&plan));
+                    let r =
+                        catch_unwind(AssertUnwindSafe(|| -> PgResult<pgrcolumnar::EncodedRg> {
+                            let mut enc = pgrcolumnar::RgChunkEncoder::new(Arc::clone(&plan));
                             let mut off = 0usize;
                             for &l in &b.lens {
                                 let l = l as usize;
@@ -1920,8 +1987,7 @@ fn merge_sorted_runs(
                                 off += l;
                             }
                             Ok(enc.seal())
-                        },
-                    ));
+                        }));
                     let r = match r {
                         Ok(r) => r,
                         Err(_) => Err(Box::new(PgError::new(
@@ -1937,9 +2003,9 @@ fn merge_sorted_runs(
             });
         }
         drop(done_tx); // encoder clones remain; done_rx closes when they exit
-        // The encoder clones are the only work receivers now: if the pool
-        // exits early, the pump's send observes the closed receive side
-        // (Err) exactly as mpsc's disconnected SendError did.
+                       // The encoder clones are the only work receivers now: if the pool
+                       // exits early, the pump's send observes the closed receive side
+                       // (Err) exactly as mpsc's disconnected SendError did.
         drop(work_rx);
 
         // PUMP: owns the RunMerge and the work sender; exits (dropping the
@@ -1949,7 +2015,11 @@ fn merge_sorted_runs(
         let pump = scope.spawn(move || -> (PgResult<()>, u64, u64, Option<Vec<Vec<u8>>>) {
             let mut key: Vec<u8> = Vec::with_capacity(key_w);
             let mut row: Vec<u8> = Vec::new();
-            let mut cur = Batch { idx: 0, arena: Vec::new(), lens: Vec::new() };
+            let mut cur = Batch {
+                idx: 0,
+                arena: Vec::new(),
+                lens: Vec::new(),
+            };
             let mut sent = 0u64;
             let mut n_rows = 0u64;
             let mut t_fill = std::time::Duration::ZERO;
@@ -2011,7 +2081,11 @@ fn merge_sorted_runs(
                         let t1 = std::time::Instant::now();
                         let full = std::mem::replace(
                             &mut cur,
-                            Batch { idx: sent + 1, arena: Vec::new(), lens: Vec::new() },
+                            Batch {
+                                idx: sent + 1,
+                                arena: Vec::new(),
+                                lens: Vec::new(),
+                            },
                         );
                         if work_tx.send(full).is_err() {
                             return Err(Box::new(PgError::new(
@@ -2086,7 +2160,7 @@ fn merge_sorted_runs(
                     break;
                 }
                 committed += 1;
-                if committed % 16 == 0 {
+                if committed.is_multiple_of(16) {
                     pgstat_progress_update_param(
                         PROGRESS_COPY_TUPLES_PROCESSED,
                         (committed * RG as u64) as i64,
@@ -2097,7 +2171,10 @@ fn merge_sorted_runs(
         }
         let (pr, n_rows, sent, sample) = pump.join().unwrap_or_else(|_| {
             (
-                Err(Box::new(PgError::new(ERROR, "parallel load-sort pump panicked"))),
+                Err(Box::new(PgError::new(
+                    ERROR,
+                    "parallel load-sort pump panicked",
+                ))),
                 0,
                 0,
                 None,
@@ -2132,7 +2209,9 @@ fn merge_sorted_runs(
 }
 
 fn vacuum_style_shutdown(private: &(dyn std::any::Any + Send + Sync)) {
-    let Some(payload) = private.downcast_ref::<ParCopyShared>() else { return };
+    let Some(payload) = private.downcast_ref::<ParCopyShared>() else {
+        return;
+    };
     payload.source.close();
     payload.rt.notify_source_progress();
     if let Some(rg) = payload.rg.get().and_then(|w| w.upgrade()) {
@@ -2174,7 +2253,12 @@ fn drain_rg(rt: &'static Arc<runtime::Runtime>, rg: &runtime::RgHandle) -> bool 
 /// Fail-closed admission. `Ok(None)` = serial COPY, byte-identically. All
 /// checks are metadata-only: NO input is consumed before this passes.
 /// Engagement decision: (runtime, gang size, sort mode, parquet mode).
-type Admission = Option<(&'static Arc<runtime::Runtime>, i32, Option<ParCopySort>, Option<ParquetPar>)>;
+type Admission = Option<(
+    &'static Arc<runtime::Runtime>,
+    i32,
+    Option<ParCopySort>,
+    Option<ParquetPar>,
+)>;
 
 fn admit<'mcx>(
     cstate: &CopyFromState<'mcx, '_>,
@@ -2185,7 +2269,9 @@ fn admit<'mcx>(
     if !flag_enabled() || !runtime::runtime_enabled() {
         return Ok(None);
     }
-    let Some(rt) = runtime::global() else { refuse!("no runtime pool") };
+    let Some(rt) = runtime::global() else {
+        refuse!("no runtime pool")
+    };
     if parallel::IsParallelWorker() || !init_small::globals::IsUnderPostmaster() {
         refuse!("not a postmaster session leader");
     }
@@ -2309,7 +2395,10 @@ fn admit<'mcx>(
         };
         let reader = psrc.reader();
         if reader.file_len() < file_floor() {
-            refuse!(format!("parquet file smaller than the {}B floor", file_floor()));
+            refuse!(format!(
+                "parquet file smaller than the {}B floor",
+                file_floor()
+            ));
         }
         let meta = reader.meta_arc();
         let plan = psrc.plan_arc();
@@ -2452,7 +2541,9 @@ pub(crate) fn copy_from_parallel<'mcx>(
         null_print: cstate.opts.null_print.to_string(),
         freeze: cstate.opts.freeze,
         file_encoding: cstate.file_encoding,
-        eol: Mutex::new(EolPre { later: EolType::Unknown }),
+        eol: Mutex::new(EolPre {
+            later: EolType::Unknown,
+        }),
         attnumlist: cstate.attnumlist.iter().copied().collect(),
         plan: Arc::new(plan),
         chunks: Mutex::new(HashMap::new()),
@@ -2479,9 +2570,8 @@ pub(crate) fn copy_from_parallel<'mcx>(
     struct RunCleanup(Arc<ParCopyShared>);
     impl Drop for RunCleanup {
         fn drop(&mut self) {
-            let runs = std::mem::take(
-                &mut *self.0.sort_runs.lock().unwrap_or_else(|p| p.into_inner()),
-            );
+            let runs =
+                std::mem::take(&mut *self.0.sort_runs.lock().unwrap_or_else(|p| p.into_inner()));
             for (_, _, r) in runs {
                 match r {
                     RunLoc::File(p) => {
@@ -2542,7 +2632,10 @@ fn inline_analyze_apply<'mcx>(
     let codec = pgrcolumnar::loadsort::RowCodec::new(plan.coltypes.clone());
     let tupdesc = rel.descr();
     let ncols = plan.coltypes.len();
-    debug_assert_eq!(ncols, tupdesc.natts as usize, "parallel COPY admits full column lists only");
+    debug_assert_eq!(
+        ncols, tupdesc.natts as usize,
+        "parallel COPY admits full column lists only"
+    );
     let mut values = vec![::datum::Datum::null(); ncols];
     let isnull = vec![false; ncols];
     let mut arena: Vec<u8> = Vec::new();
@@ -2589,7 +2682,11 @@ fn ceremony(
         let source: Arc<dyn runtime::MorselSource> = Arc::clone(&shared.source) as _;
         let (rg, waiter) = rt.submit_pinned(runtime::QuerySpec {
             query_id: NEXT_QUERY_ID.fetch_add(1, Ordering::SeqCst),
-            tasksets: vec![runtime::TaskSetSpec { source, work, deps: vec![] }],
+            tasksets: vec![runtime::TaskSetSpec {
+                source,
+                work,
+                deps: vec![],
+            }],
         });
         shared
             .rg
@@ -2829,7 +2926,10 @@ fn ceremony(
             if let Some(e) = shared.take_hard_error() {
                 return Err(e);
             }
-            ptrace(&format!("sort phase: worker drain {:.2}s", t_parse.elapsed().as_secs_f64()));
+            ptrace(&format!(
+                "sort phase: worker drain {:.2}s",
+                t_parse.elapsed().as_secs_f64()
+            ));
             let (n, sample) = merge_sorted_runs(writer, shared)?;
             processed = n;
             inline_sample = sample;
@@ -2846,7 +2946,11 @@ fn ceremony(
             if !drain_rg(rt, rg) {
                 ereport(WARNING)
                     .errmsg("parallel COPY leaked a pinned resource group during teardown")
-                    .finish(types_error::ErrorLocation::new(file!(), line!() as i32, "ceremony"))?;
+                    .finish(types_error::ErrorLocation::new(
+                        file!(),
+                        line!() as i32,
+                        "ceremony",
+                    ))?;
             }
         }
     }
@@ -2907,8 +3011,7 @@ mod segmentator_tests {
             assert_eq!(chunks[0].first_lineno, 1);
             assert_eq!(chunks[1].first_lineno, 11);
             assert_eq!(chunks[2].first_lineno, 21);
-            let joined: Vec<u8> =
-                chunks.iter().flat_map(|c| chunk_bytes(c)).collect();
+            let joined: Vec<u8> = chunks.iter().flat_map(chunk_bytes).collect();
             assert_eq!(joined, input, "block {block}");
         }
     }
@@ -2973,7 +3076,7 @@ mod segmentator_tests {
         for block in [1, 2, 3, 64] {
             let (chunks, seg) = segment(&input, 10, block);
             assert!(seg.eoc, "block {block}");
-            let joined: Vec<u8> = chunks.iter().flat_map(|c| chunk_bytes(c)).collect();
+            let joined: Vec<u8> = chunks.iter().flat_map(chunk_bytes).collect();
             assert_eq!(joined, b"a\nb\n\\.\n".to_vec(), "block {block}");
         }
     }
@@ -3005,7 +3108,7 @@ mod segmentator_tests {
             input.extend_from_slice(format!("{i}\tabcdefghij\n").as_bytes());
         }
         let (chunks, _) = segment(&input, 40, 17);
-        let joined: Vec<u8> = chunks.iter().flat_map(|c| chunk_bytes(c)).collect();
+        let joined: Vec<u8> = chunks.iter().flat_map(chunk_bytes).collect();
         assert_eq!(joined, input);
     }
 }

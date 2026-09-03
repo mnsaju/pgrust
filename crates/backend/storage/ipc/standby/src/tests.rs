@@ -36,8 +36,16 @@ fn running_xacts_header_matches_c_layout() {
 #[test]
 fn standby_lock_body_matches_c_layout() {
     let locks = [
-        xl_standby_lock { xid: 700, dbOid: 5, relOid: 16384 },
-        xl_standby_lock { xid: 701, dbOid: 5, relOid: 16385 },
+        xl_standby_lock {
+            xid: 700,
+            dbOid: 5,
+            relOid: 16384,
+        },
+        xl_standby_lock {
+            xid: 701,
+            dbOid: 5,
+            relOid: 16385,
+        },
     ];
     let body = standby_locks_body(&locks);
     assert_eq!(body.len(), 2 * SIZE_OF_XL_STANDBY_LOCK);

@@ -37,7 +37,7 @@ pub fn fc_json_out(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRes
 
 pub fn fc_json_recv(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: catalog arg 0 of json_recv is a live &mut StringInfo (internal ABI).
-    let buf = unsafe { fcinfo.arg_stringinfo(0) };
+    let buf = unsafe { &mut *fcinfo.arg_stringinfo(0) };
     let mcx = fcinfo.result_mcx();
     Ok(varlena_result(crate::json_recv(mcx, buf)?))
 }
@@ -103,10 +103,7 @@ pub fn fc_row_to_json_pretty(
     row_to_json_common(fcinfo, use_line_feeds)
 }
 
-pub fn fc_json_build_object(
-    flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_json_build_object(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let d = {
         let mcx = fcinfo.result_mcx();
         match funcapi::extract_variadic_args(mcx, flinfo.as_deref(), fcinfo, 0, true)? {
@@ -130,10 +127,7 @@ pub fn fc_json_build_object_noargs(
     Ok(varlena_result(varlena::cstring_to_text(mcx, b"{}")?))
 }
 
-pub fn fc_json_build_array(
-    flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_json_build_array(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let d = {
         let mcx = fcinfo.result_mcx();
         match funcapi::extract_variadic_args(mcx, flinfo.as_deref(), fcinfo, 0, true)? {
@@ -306,10 +300,7 @@ pub fn fc_json_array_length(
     )?))
 }
 
-pub fn fc_json_strip_nulls(
-    _flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_json_strip_nulls(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let mcx = fcinfo.result_mcx();
     // SAFETY: catalog arg 0 is a non-null json varlena (strict fn).
     let json = unsafe { fcinfo.arg_varlena_packed(0)? };
@@ -333,10 +324,7 @@ pub fn fc_json_typeof(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> Pg
     Ok(varlena_result(varlena::cstring_to_text(mcx, t.as_bytes())?))
 }
 
-pub fn fc_json_object_keys(
-    flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_json_object_keys(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     crate::srfs::srf_drive(flinfo, fcinfo, "json_object_keys", |fcinfo| {
         let mcx = fcinfo.result_mcx();
         // SAFETY: catalog arg 0 is a non-null json varlena (strict fn).
@@ -431,25 +419,80 @@ pub const JSON_BUILTINS: &[FmgrBuiltin] = &[
     b(3155, "row_to_json", 1, fc_row_to_json),
     b(3156, "row_to_json_pretty", 2, fc_row_to_json_pretty),
     b(3176, "to_json", 1, fc_to_json),
-    b_lax(3173, "json_agg_transfn", 2, crate::aggs::fc_json_agg_transfn),
-    b_lax(3174, "json_agg_finalfn", 1, crate::aggs::fc_json_agg_finalfn),
-    b_lax(6275, "json_agg_strict_transfn", 2, crate::aggs::fc_json_agg_strict_transfn),
-    b_lax(3180, "json_object_agg_transfn", 3, crate::aggs::fc_json_object_agg_transfn),
-    b_lax(6277, "json_object_agg_strict_transfn", 3, crate::aggs::fc_json_object_agg_strict_transfn),
-    b_lax(6278, "json_object_agg_unique_transfn", 3, crate::aggs::fc_json_object_agg_unique_transfn),
-    b_lax(6279, "json_object_agg_unique_strict_transfn", 3, crate::aggs::fc_json_object_agg_unique_strict_transfn),
-    b_lax(3196, "json_object_agg_finalfn", 1, crate::aggs::fc_json_object_agg_finalfn),
+    b_lax(
+        3173,
+        "json_agg_transfn",
+        2,
+        crate::aggs::fc_json_agg_transfn,
+    ),
+    b_lax(
+        3174,
+        "json_agg_finalfn",
+        1,
+        crate::aggs::fc_json_agg_finalfn,
+    ),
+    b_lax(
+        6275,
+        "json_agg_strict_transfn",
+        2,
+        crate::aggs::fc_json_agg_strict_transfn,
+    ),
+    b_lax(
+        3180,
+        "json_object_agg_transfn",
+        3,
+        crate::aggs::fc_json_object_agg_transfn,
+    ),
+    b_lax(
+        6277,
+        "json_object_agg_strict_transfn",
+        3,
+        crate::aggs::fc_json_object_agg_strict_transfn,
+    ),
+    b_lax(
+        6278,
+        "json_object_agg_unique_transfn",
+        3,
+        crate::aggs::fc_json_object_agg_unique_transfn,
+    ),
+    b_lax(
+        6279,
+        "json_object_agg_unique_strict_transfn",
+        3,
+        crate::aggs::fc_json_object_agg_unique_strict_transfn,
+    ),
+    b_lax(
+        3196,
+        "json_object_agg_finalfn",
+        1,
+        crate::aggs::fc_json_object_agg_finalfn,
+    ),
     b_lax(3198, "json_build_array", 1, fc_json_build_array),
-    b_lax(3199, "json_build_array_noargs", 0, fc_json_build_array_noargs),
+    b_lax(
+        3199,
+        "json_build_array_noargs",
+        0,
+        fc_json_build_array_noargs,
+    ),
     b_lax(3200, "json_build_object", 1, fc_json_build_object),
-    b_lax(3201, "json_build_object_noargs", 0, fc_json_build_object_noargs),
+    b_lax(
+        3201,
+        "json_build_object_noargs",
+        0,
+        fc_json_build_object_noargs,
+    ),
     b(3202, "json_object", 1, fc_json_object),
     b(3203, "json_object_two_arg", 2, fc_json_object_two_arg),
     b(3261, "json_strip_nulls", 2, fc_json_strip_nulls),
     b(3947, "json_object_field", 2, fc_json_object_field),
     b(3948, "json_object_field_text", 2, fc_json_object_field_text),
     b(3949, "json_array_element", 2, fc_json_array_element),
-    b(3950, "json_array_element_text", 2, fc_json_array_element_text),
+    b(
+        3950,
+        "json_array_element_text",
+        2,
+        fc_json_array_element_text,
+    ),
     b(3951, "json_extract_path", 2, fc_json_extract_path),
     b(3953, "json_extract_path_text", 2, fc_json_extract_path_text),
     srf(3955, "json_array_elements", 1, fc_json_array_elements),
@@ -458,5 +501,10 @@ pub const JSON_BUILTINS: &[FmgrBuiltin] = &[
     srf(3958, "json_each", 1, fc_json_each),
     srf(3959, "json_each_text", 1, fc_json_each_text),
     b(3968, "json_typeof", 1, fc_json_typeof),
-    srf(3969, "json_array_elements_text", 1, fc_json_array_elements_text),
+    srf(
+        3969,
+        "json_array_elements_text",
+        1,
+        fc_json_array_elements_text,
+    ),
 ];

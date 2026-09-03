@@ -7,13 +7,15 @@ use ::mcx::{vec_with_capacity_in, Mcx, PgVec};
 use ::types_core::{InvalidOid, Oid, FLOAT8OID, RECORDOID};
 use ::types_error::{
     PgError, PgResult, ERRCODE_ARRAY_SUBSCRIPT_ERROR, ERRCODE_DATATYPE_MISMATCH,
-    ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_INVALID_PARAMETER_VALUE,
-    ERRCODE_NULL_VALUE_NOT_ALLOWED, ERRCODE_PROGRAM_LIMIT_EXCEEDED, ERRCODE_UNDEFINED_FUNCTION,
+    ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_INVALID_PARAMETER_VALUE, ERRCODE_NULL_VALUE_NOT_ALLOWED,
+    ERRCODE_PROGRAM_LIMIT_EXCEEDED, ERRCODE_UNDEFINED_FUNCTION,
 };
 use ::types_fmgr::{byref_result, FmgrInfo, FunctionCallInfoBaseData as Fcinfo, LocalFcinfo};
 
 use crate::builtins::arg_array_bytes;
-use crate::construct::{array_contains_nulls, construct_empty_array, construct_md_array, deconstruct_array};
+use crate::construct::{
+    array_contains_nulls, construct_empty_array, construct_md_array, deconstruct_array,
+};
 use crate::foundation::{
     arr_data_offset, arr_elemtype, arr_ndim, arr_nullbitmap_off, arr_overhead_nonulls,
     arr_overhead_withnulls, array_cast_and_set, att_addlength_pointer, att_align_nominal,
@@ -48,8 +50,8 @@ impl<'a> FlatIter<'a> {
             }
         }
         let p = self.img[self.off..].as_ptr();
-        let d = fetch_att(p, typbyval, typlen);
-        self.off = att_addlength_pointer(self.off, typlen, p);
+        let d = unsafe { fetch_att(p, typbyval, typlen) };
+        self.off = unsafe { att_addlength_pointer(self.off, typlen, p) };
         self.off = att_align_nominal(self.off, typalign);
         (d, false)
     }
@@ -89,11 +91,11 @@ enum TcWant {
 
 const F_HASH_RECORD: Oid = 6192;
 
-fn cached_typentry<'f>(
-    flinfo: &'f mut FmgrInfo,
+fn cached_typentry(
+    flinfo: &mut FmgrInfo,
     element_type: Oid,
     want: TcWant,
-) -> PgResult<&'f mut TcMemo> {
+) -> PgResult<&mut TcMemo> {
     let need = match flinfo.fn_extra_ref::<TcMemo>() {
         Some(m) => m.entry.type_id != element_type,
         None => true,
@@ -113,12 +115,18 @@ fn fresh_typentry(element_type: Oid, want: TcWant) -> PgResult<TcMemo> {
     };
     let entry = ::typcache::lookup_type_cache(element_type, flags)?;
     let (valid, what) = match want {
-        TcWant::Eq => (entry.eq_opr_finfo().fn_oid != InvalidOid, "an equality operator"),
+        TcWant::Eq => (
+            entry.eq_opr_finfo().fn_oid != InvalidOid,
+            "an equality operator",
+        ),
         TcWant::Cmp => (
             entry.cmp_proc_finfo().fn_oid != InvalidOid,
             "a comparison function",
         ),
-        TcWant::Hash => (entry.hash_proc_finfo().fn_oid != InvalidOid, "a hash function"),
+        TcWant::Hash => (
+            entry.hash_proc_finfo().fn_oid != InvalidOid,
+            "a hash function",
+        ),
         TcWant::HashExtended => (
             entry.hash_extended_proc_finfo().fn_oid != InvalidOid,
             "an extended hash function",
@@ -352,7 +360,11 @@ pub(crate) fn hash_array_core(
     unsafe { lfc.set_result_mcx(mcx) };
 
     let mut result: u64 = 1;
-    let mask: u64 = if seed.is_some() { u64::MAX } else { u32::MAX as u64 };
+    let mask: u64 = if seed.is_some() {
+        u64::MAX
+    } else {
+        u32::MAX as u64
+    };
     for _ in 0..nitems {
         let (elt, isnull) = iter.next(meta.typlen, meta.typbyval, meta.typalign);
         let elthash = if isnull {
@@ -593,7 +605,6 @@ pub(crate) fn replace_core<'m>(
     }
 
     if !changed {
-        drop(iter);
         return Ok(array);
     }
 
@@ -745,7 +756,9 @@ pub fn fc_array_cardinality(
     let mcx = fcinfo.result_mcx();
     let array = arg_array_bytes(fcinfo, 0, mcx)?;
     let (ndim, dims, _lbs) = read_dims_lbounds(&array);
-    Ok(Datum::from_i32(::arrayutils::array_get_n_items(ndim, &dims)?))
+    Ok(Datum::from_i32(::arrayutils::array_get_n_items(
+        ndim, &dims,
+    )?))
 }
 
 pub(crate) fn text_result<'m>(mcx: Mcx<'m>, bytes: &[u8]) -> PgResult<Datum> {
@@ -775,13 +788,21 @@ pub fn fc_generate_subscripts(
         };
         let reqdim = fcinfo.arg(1).as_i32();
         let state = if ndim <= 0 || ndim > MAXDIM as i32 || reqdim <= 0 || reqdim > ndim {
-            GenerateSubscriptsFctx { lower: 1, upper: 0, reverse: false }
+            GenerateSubscriptsFctx {
+                lower: 1,
+                upper: 0,
+                reverse: false,
+            }
         } else {
             let i = (reqdim - 1) as usize;
             GenerateSubscriptsFctx {
                 lower: lbs[i],
                 upper: dims[i] + lbs[i] - 1,
-                reverse: if fcinfo.nargs() < 3 { false } else { fcinfo.arg(2).as_bool() },
+                reverse: if fcinfo.nargs() < 3 {
+                    false
+                } else {
+                    fcinfo.arg(2).as_bool()
+                },
             }
         };
         let fctx = ::funcapi_srf::init_MultiFuncCall(flinfo, fcinfo)?;
@@ -803,7 +824,11 @@ pub fn fc_generate_subscripts(
             fctx.upper -= 1;
             v
         };
-        Ok(::funcapi_srf::srf_return_next(flinfo, fcinfo, Datum::from_i32(v)))
+        Ok(::funcapi_srf::srf_return_next(
+            flinfo,
+            fcinfo,
+            Datum::from_i32(v),
+        ))
     } else {
         Ok(::funcapi_srf::srf_return_done(flinfo, fcinfo))
     }
@@ -833,11 +858,17 @@ fn fill_param_ints<'m>(mcx: Mcx<'m>, img: &[u8]) -> PgResult<(i32, PgVec<'m, i32
                 .with_sqlstate(ERRCODE_NULL_VALUE_NOT_ALLOWED),
         ));
     }
-    let n = if ndim > 0 { crate::foundation::arr_dim(img, 0) } else { 0 };
+    let n = if ndim > 0 {
+        crate::foundation::arr_dim(img, 0)
+    } else {
+        0
+    };
     let mut out: PgVec<'m, i32> = vec_with_capacity_in(mcx, n.max(0) as usize)?;
     let base = arr_data_offset(img);
     for i in 0..n.max(0) as usize {
-        out.push(i32::from_ne_bytes(img[base + 4 * i..base + 4 * i + 4].try_into().unwrap()));
+        out.push(i32::from_ne_bytes(
+            img[base + 4 * i..base + 4 * i + 4].try_into().unwrap(),
+        ));
     }
     Ok((n, out))
 }
@@ -907,7 +938,7 @@ pub(crate) fn array_fill_core<'m>(
         let nbytes = if elmlen > 0 {
             elmlen as usize
         } else {
-            att_addlength_pointer(0, elmlen, value.as_usize() as *const u8)
+            unsafe { att_addlength_pointer(0, elmlen, value.as_usize() as *const u8) }
         };
         let nbytes = att_align_nominal(nbytes, elmalign);
         debug_assert!(nbytes > 0);
@@ -935,7 +966,15 @@ pub(crate) fn array_fill_core<'m>(
         let dataoffset = arr_overhead_withnulls(ndims, nitems);
         let mut img: PgVec<'m, u8> = vec_with_capacity_in(mcx, dataoffset)?;
         img.resize(dataoffset, 0);
-        write_envelope(&mut img, dataoffset, ndims, dataoffset as i32, elmtype, &dimv, lbsv);
+        write_envelope(
+            &mut img,
+            dataoffset,
+            ndims,
+            dataoffset as i32,
+            elmtype,
+            &dimv,
+            lbsv,
+        );
         Ok(img)
     }
 }
@@ -952,7 +991,7 @@ fn write_envelope(
     out[0..4].copy_from_slice(&::datum::varlena::set_varsize_4b(nbytes));
     out[4..8].copy_from_slice(&ndims.to_ne_bytes());
     out[8..12].copy_from_slice(&dataoffset.to_ne_bytes());
-    out[12..16].copy_from_slice(&(elmtype as u32).to_ne_bytes());
+    out[12..16].copy_from_slice(&elmtype.to_ne_bytes());
     let mut off = 16usize;
     for d in dimv.iter().take(ndims as usize) {
         out[off..off + 4].copy_from_slice(&d.to_ne_bytes());
@@ -974,7 +1013,11 @@ fn fill_common(
     }
     let mcx = fcinfo.result_mcx();
     let dims = arg_array_bytes(fcinfo, 1, mcx)?;
-    let lbs = if with_lbs { Some(arg_array_bytes(fcinfo, 2, mcx)?) } else { None };
+    let lbs = if with_lbs {
+        Some(arg_array_bytes(fcinfo, 2, mcx)?)
+    } else {
+        None
+    };
     let (value, isnull) = if !fcinfo.argisnull(0) {
         (fcinfo.arg(0), false)
     } else {
@@ -983,7 +1026,9 @@ fn fill_common(
     let flinfo = flinfo.expect("array_fill: NULL flinfo");
     let elmtype = ::fmgr_seams::get_fn_expr_argtype::call(flinfo, 0);
     if elmtype == InvalidOid {
-        return Err(Box::new(PgError::error("could not determine data type of input")));
+        return Err(Box::new(PgError::error(
+            "could not determine data type of input",
+        )));
     }
 
     let need = match flinfo.fn_extra_ref::<crate::expanded::ArrayMetaState>() {
@@ -999,8 +1044,14 @@ fn fill_common(
             typalign: typalign as u8,
         });
     }
-    let m = flinfo.fn_extra_ref::<crate::expanded::ArrayMetaState>().unwrap();
-    let meta = ElemMeta { typlen: m.typlen as i32, typbyval: m.typbyval, typalign: m.typalign };
+    let m = flinfo
+        .fn_extra_ref::<crate::expanded::ArrayMetaState>()
+        .unwrap();
+    let meta = ElemMeta {
+        typlen: m.typlen as i32,
+        typbyval: m.typbyval,
+        typalign: m.typalign,
+    };
 
     let out = array_fill_core(mcx, &dims, lbs.as_deref(), value, isnull, elmtype, meta)?;
     byref_result(mcx, &out)
@@ -1068,7 +1119,7 @@ pub(crate) fn width_bucket_array_fixed(
         let p = thresholds[off + mid as usize * typlen..].as_ptr();
         lfc.rearm(collation);
         lfc.set_arg(0, operand);
-        lfc.set_arg(1, fetch_att(p, meta.typbyval, meta.typlen));
+        lfc.set_arg(1, unsafe { fetch_att(p, meta.typbyval, meta.typlen) });
         let cmpresult = cmpfn.invoke(&mut lfc)?.as_i32();
         if cmpresult < 0 {
             right = mid;
@@ -1103,27 +1154,30 @@ pub(crate) fn width_bucket_array_variable(
         let mut off = thresholds_off;
         let mut p = thresholds[off..].as_ptr();
         for _ in left..mid {
-            off = att_addlength_pointer(off, meta.typlen, p);
+            off = unsafe { att_addlength_pointer(off, meta.typlen, p) };
             off = att_align_nominal(off, meta.typalign);
             p = thresholds[off..].as_ptr();
         }
 
         lfc.rearm(collation);
         lfc.set_arg(0, operand);
-        lfc.set_arg(1, fetch_att(p, meta.typbyval, meta.typlen));
+        lfc.set_arg(1, unsafe { fetch_att(p, meta.typbyval, meta.typlen) });
         let cmpresult = cmpfn.invoke(&mut lfc)?.as_i32();
         if cmpresult < 0 {
             right = mid;
         } else {
             left = mid + 1;
-            off = att_addlength_pointer(off, meta.typlen, p);
+            off = unsafe { att_addlength_pointer(off, meta.typlen, p) };
             thresholds_off = att_align_nominal(off, meta.typalign);
         }
     }
     Ok(left)
 }
 
-pub fn fc_width_bucket_array(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+pub fn fc_width_bucket_array(
+    flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     let mcx = fcinfo.result_mcx();
     let operand = fcinfo.arg(0);
     let thresholds = arg_array_bytes(fcinfo, 1, mcx)?;
@@ -1155,9 +1209,25 @@ pub fn fc_width_bucket_array(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo)
         let mut cmpfn = memo.entry.cmp_proc_finfo();
 
         if meta.typlen > 0 {
-            width_bucket_array_fixed(mcx, operand, &thresholds, collation, meta, &mut cmpfn, nitems)?
+            width_bucket_array_fixed(
+                mcx,
+                operand,
+                &thresholds,
+                collation,
+                meta,
+                &mut cmpfn,
+                nitems,
+            )?
         } else {
-            width_bucket_array_variable(mcx, operand, &thresholds, collation, meta, &mut cmpfn, nitems)?
+            width_bucket_array_variable(
+                mcx,
+                operand,
+                &thresholds,
+                collation,
+                meta,
+                &mut cmpfn,
+                nitems,
+            )?
         }
     };
 

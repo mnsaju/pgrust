@@ -59,11 +59,22 @@ fn objdef_err(msg: &str) -> Box<PgError> {
 // aclcheck_error_type (aclchk.c): arrays report their element type.
 pub(crate) fn aclcheck_error_type(aclerr: i32, typeOid: Oid) -> PgResult<()> {
     let element_type = lsyscache::get_element_type(typeOid)?;
-    let typeOid = if OidIsValid(element_type) { element_type } else { typeOid };
-    aclchk::aclcheck_error(aclerr, ObjectType::OBJECT_TYPE, &format_type::format_type_be(typeOid)?)
+    let typeOid = if OidIsValid(element_type) {
+        element_type
+    } else {
+        typeOid
+    };
+    aclchk::aclcheck_error(
+        aclerr,
+        ObjectType::OBJECT_TYPE,
+        &format_type::format_type_be(typeOid)?,
+    )
 }
 
-fn typename_oid<'a>(mcx: Mcx<'_>, node: Option<types_nodes::Node<'a>>) -> PgResult<(Oid, &'a TypeName<'a>)> {
+fn typename_oid<'a>(
+    mcx: Mcx<'_>,
+    node: Option<types_nodes::Node<'a>>,
+) -> PgResult<(Oid, &'a TypeName<'a>)> {
     let tn = node
         .expect("TypeName node")
         .as_variant::<TypeName>()
@@ -169,7 +180,10 @@ pub fn CreateCast<'mcx>(mcx: Mcx<'mcx>, stmt: &CreateCastStmt<'mcx>) -> PgResult
         incastid = cast;
         if nargs > 1 && proargtypes[1] != INT4OID {
             return Err(err(
-                format!("second argument of cast function must be type {}", "integer"),
+                format!(
+                    "second argument of cast function must be type {}",
+                    "integer"
+                ),
                 ERRCODE_INVALID_OBJECT_DEFINITION,
             ));
         }
@@ -206,7 +220,9 @@ pub fn CreateCast<'mcx>(mcx: Mcx<'mcx>, stmt: &CreateCastStmt<'mcx>) -> PgResult
         let (typ1len, typ1byval, typ1align) = lsyscache::get_typlenbyvalalign(sourcetypeid)?;
         let (typ2len, typ2byval, typ2align) = lsyscache::get_typlenbyvalalign(targettypeid)?;
         if typ1len != typ2len || typ1byval != typ2byval || typ1align != typ2align {
-            return Err(objdef_err("source and target data types are not physically compatible"));
+            return Err(objdef_err(
+                "source and target data types are not physically compatible",
+            ));
         }
 
         // Composite, array, range and enum types embed OIDs; never
@@ -232,13 +248,17 @@ pub fn CreateCast<'mcx>(mcx: Mcx<'mcx>, stmt: &CreateCastStmt<'mcx>) -> PgResult
         // Domain-to-base is already allowed; the other way must go through
         // domain coercion for constraint checking.
         if sourcetyptype == TYPTYPE_DOMAIN || targettyptype == TYPTYPE_DOMAIN {
-            return Err(objdef_err("domain data types must not be marked binary-compatible"));
+            return Err(objdef_err(
+                "domain data types must not be marked binary-compatible",
+            ));
         }
     }
 
     // Same source and target only for length coercion (multi-arg) functions.
     if sourcetypeid == targettypeid && nargs < 2 {
-        return Err(objdef_err("source data type and target data type are the same"));
+        return Err(objdef_err(
+            "source data type and target data type are the same",
+        ));
     }
 
     let castcontext = match stmt.context {
@@ -276,7 +296,10 @@ fn check_transform_function(shape: &syscache_seams::PgProcShape, argtype0: Oid) 
     }
     if argtype0 != INTERNALOID {
         return Err(err(
-            format!("first argument of transform function must be type {}", "internal"),
+            format!(
+                "first argument of transform function must be type {}",
+                "internal"
+            ),
             ERRCODE_INVALID_OBJECT_DEFINITION,
         ));
     }
@@ -288,7 +311,9 @@ fn transform_func_lookup<'mcx>(
     node: types_nodes::Node<'mcx>,
     userid: Oid,
 ) -> PgResult<(Oid, Oid, syscache_seams::PgProcShape)> {
-    let owa = node.as_variant::<ObjectWithArgs>().expect("transform function is an ObjectWithArgs");
+    let owa = node
+        .as_variant::<ObjectWithArgs>()
+        .expect("transform function is an ObjectWithArgs");
     let funcid = parse_func::LookupFuncWithArgs(ObjectType::OBJECT_FUNCTION, owa, false)?;
 
     if !aclchk::object_ownercheck(PROCEDURE_RELATION_ID, funcid, userid)? {
@@ -373,7 +398,10 @@ pub fn CreateTransform<'mcx>(
             let (funcid, argtype0, shape) = transform_func_lookup(mcx, node, userid)?;
             if shape.prorettype != INTERNALOID {
                 return Err(err(
-                    format!("return data type of FROM SQL function must be {}", "internal"),
+                    format!(
+                        "return data type of FROM SQL function must be {}",
+                        "internal"
+                    ),
                     ERRCODE_INVALID_OBJECT_DEFINITION,
                 ));
             }
@@ -424,7 +452,12 @@ pub fn CreateTransform<'mcx>(
             let mut isnull = false;
             // SAFETY: oid is the fixed first NOT NULL pg_transform column.
             let oid = unsafe {
-                types_tuple::heap_getattr(oldtup, Anum_pg_transform_oid, relation.descr(), &mut isnull)
+                types_tuple::heap_getattr(
+                    oldtup,
+                    Anum_pg_transform_oid,
+                    relation.descr(),
+                    &mut isnull,
+                )
             }
             .as_oid();
             let mut replaces = [false; Natts_pg_transform];
@@ -498,7 +531,12 @@ pub fn CreateTransform<'mcx>(
     Ok(myself)
 }
 
-pub fn get_transform_oid(mcx: Mcx<'_>, type_id: Oid, lang_id: Oid, missing_ok: bool) -> PgResult<Oid> {
+pub fn get_transform_oid(
+    mcx: Mcx<'_>,
+    type_id: Oid,
+    lang_id: Oid,
+    missing_ok: bool,
+) -> PgResult<Oid> {
     let oid = cache_syscache::GetSysCacheOid(
         cache_syscache::cacheinfo::TRFTYPELANG,
         Anum_pg_transform_oid,
@@ -570,7 +608,9 @@ mod tests {
         assert!(e.to_string().contains("must take one argument"));
 
         let e = check_transform_function(&shape(), INT4OID).unwrap_err();
-        assert!(e.to_string().contains("first argument of transform function"));
+        assert!(e
+            .to_string()
+            .contains("first argument of transform function"));
     }
 
     #[test]

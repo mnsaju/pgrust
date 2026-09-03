@@ -37,10 +37,6 @@ impl<'a> PktReader<'a> {
         PktReader { data, pos: 0 }
     }
 
-    pub fn eof(&self) -> bool {
-        self.pos >= self.data.len()
-    }
-
     fn byte(&mut self) -> Result<u8, ()> {
         if self.pos >= self.data.len() {
             return Err(());

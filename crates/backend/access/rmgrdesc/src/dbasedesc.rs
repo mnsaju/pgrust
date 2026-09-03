@@ -27,7 +27,12 @@ pub fn dbase_desc(buf: &mut StringInfo<'_>, record: &XLogReaderState) -> PgResul
     } else if info == XLOG_DBASE_CREATE_WAL_LOG {
         // xl_dbase_create_wal_log_rec: db_id 0, tablespace_id 4.
         let what = "xl_dbase_create_wal_log_rec";
-        appendf!(buf, "create dir {}/{}", rec.u32(4, what)?, rec.u32(0, what)?)?;
+        appendf!(
+            buf,
+            "create dir {}/{}",
+            rec.u32(4, what)?,
+            rec.u32(0, what)?
+        )?;
     } else if info == XLOG_DBASE_DROP {
         // xl_dbase_drop_rec: db_id 0, ntablespaces 4, tablespace_ids[] 8.
         let what = "xl_dbase_drop_rec";

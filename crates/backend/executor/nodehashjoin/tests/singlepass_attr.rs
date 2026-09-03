@@ -35,7 +35,10 @@ use nodehashjoin::shared_build::{
 };
 
 fn knob(name: &str, default: u64) -> u64 {
-    std::env::var(name).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
+    std::env::var(name)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(default)
 }
 
 /// splitmix64 — the same key->hash shape the in-crate tests use.
@@ -53,10 +56,10 @@ fn hash_of_key(k: u64) -> u32 {
 
 #[derive(Clone, Copy, PartialEq)]
 enum Case {
-    UniqHi,  // dim unique: rows distinct keys (spread heads — designed win)
-    Mid,     // 4096 distinct build keys
-    SkewLo,  // 16 distinct build keys (hot heads)
-    Hot1,    // ~90% of build rows on ONE key (max contention)
+    UniqHi, // dim unique: rows distinct keys (spread heads — designed win)
+    Mid,    // 4096 distinct build keys
+    SkewLo, // 16 distinct build keys (hot heads)
+    Hot1,   // ~90% of build rows on ONE key (max contention)
 }
 
 impl Case {
@@ -191,14 +194,24 @@ fn build(case: Case, rows: u64, workers: usize, single_pass: bool) -> BuildOut {
         finish_ms = t1.elapsed().as_secs_f64() * 1e3;
     }
     let table = freeze(plan, &locals);
-    BuildOut { table, accept_ms, finish_ms }
+    BuildOut {
+        table,
+        accept_ms,
+        finish_ms,
+    }
 }
 
 /// Probe the table with the case's fact stream across `workers` threads
 /// (chunked). Returns (probe_ms, candidates_visited, hash_matches) — the
 /// counts double as an OFF/ON equivalence check (identical multisets must
 /// yield identical counts).
-fn probe(case: Case, table: &FrozenJoinTable, rows: u64, probes: u64, workers: usize) -> (f64, u64, u64) {
+fn probe(
+    case: Case,
+    table: &FrozenJoinTable,
+    rows: u64,
+    probes: u64,
+    workers: usize,
+) -> (f64, u64, u64) {
     let cand = AtomicU64::new(0);
     let matched = AtomicU64::new(0);
     let t0 = Instant::now();
@@ -244,8 +257,17 @@ fn attribution_sweep() {
     );
     println!(
         "{:<8} {:>5} | {:>10} {:>10} {:>10} | {:>10} {:>10} {:>10} | {:>9} {:>9} {:>9}",
-        "case", "W", "2p_accept", "2p_combine", "2p_build", "sp_accept", "sp_seal", "sp_build",
-        "2p_probe", "sp_probe", "probe_r"
+        "case",
+        "W",
+        "2p_accept",
+        "2p_combine",
+        "2p_build",
+        "sp_accept",
+        "sp_seal",
+        "sp_build",
+        "2p_probe",
+        "sp_probe",
+        "probe_r"
     );
     for &w in &[workers, 1] {
         for &case in &[Case::UniqHi, Case::Mid, Case::SkewLo, Case::Hot1] {
@@ -262,14 +284,24 @@ fn attribution_sweep() {
                     None => true,
                     Some((bt, bo, bp2, bp1)) => {
                         (two.accept_ms + two.finish_ms + one.accept_ms + one.finish_ms + p2 + p1)
-                            < (bt.accept_ms + bt.finish_ms + bo.accept_ms + bo.finish_ms + bp2 + bp1)
+                            < (bt.accept_ms
+                                + bt.finish_ms
+                                + bo.accept_ms
+                                + bo.finish_ms
+                                + bp2
+                                + bp1)
                     }
                 };
                 if better {
                     best = Some((two, one, p2, p1));
                 }
             }
-            assert_eq!(ck2, ck1, "{}: candidate/match counts diverge two-pass vs single-pass", case.name());
+            assert_eq!(
+                ck2,
+                ck1,
+                "{}: candidate/match counts diverge two-pass vs single-pass",
+                case.name()
+            );
             let (two, one, p2, p1) = best.unwrap();
             let b2 = two.accept_ms + two.finish_ms;
             let b1 = one.accept_ms + one.finish_ms;

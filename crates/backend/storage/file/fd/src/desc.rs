@@ -86,7 +86,9 @@ fn current_subid() -> SubTransactionId {
 // underlying close result.
 pub(crate) fn FreeDesc(index: i32) -> i32 {
     let desc = with_fd(|fd| {
-        let desc = fd.allocated_descs[index as usize].take().expect("FreeDesc: occupied slot");
+        let desc = fd.allocated_descs[index as usize]
+            .take()
+            .expect("FreeDesc: occupied slot");
         while matches!(fd.allocated_descs.last(), Some(None)) {
             fd.allocated_descs.pop();
         }
@@ -121,7 +123,6 @@ pub(crate) fn FreeDesc(index: i32) -> i32 {
     }
 }
 
-
 // First tombstoned slot, else append (stable indices; see FreeDesc).
 fn install_desc(fd: &mut FdState, desc: AllocateDesc) -> i32 {
     match fd.allocated_descs.iter().position(Option::is_none) {
@@ -151,7 +152,10 @@ pub fn AllocateFile(name: &str, mode: &str) -> PgResult<i32> {
                 return with_fd(|fd| {
                     Ok(install_desc(
                         fd,
-                        AllocateDesc { create_subid, desc: AllocatedHandle::File(file) },
+                        AllocateDesc {
+                            create_subid,
+                            desc: AllocatedHandle::File(file),
+                        },
                     ))
                 });
             }
@@ -174,7 +178,10 @@ pub fn FreeFile(index: i32) -> PgResult<i32> {
     let found = with_fd(|fd| {
         matches!(
             fd.allocated_descs.get(index as usize),
-            Some(Some(AllocateDesc { desc: AllocatedHandle::File(_), .. }))
+            Some(Some(AllocateDesc {
+                desc: AllocatedHandle::File(_),
+                ..
+            }))
         )
     });
     if found {
@@ -220,8 +227,10 @@ pub fn OpenTransientFilePerm(file_name: &str, file_flags: i32, file_mode: u32) -
 pub fn CloseTransientFile(fd_to_close: i32) -> i32 {
     let index = with_fd(|fd| {
         for i in (0..fd.allocated_descs.len()).rev() {
-            if let Some(AllocateDesc { desc: AllocatedHandle::RawFd(f), .. }) =
-                &fd.allocated_descs[i]
+            if let Some(AllocateDesc {
+                desc: AllocatedHandle::RawFd(f),
+                ..
+            }) = &fd.allocated_descs[i]
             {
                 if f.as_raw_fd() == fd_to_close {
                     return Some(i as i32);
@@ -260,7 +269,10 @@ pub fn OpenPipeStream(command: &str, mode: &str) -> PgResult<i32> {
                 return with_fd(|fd| {
                     Ok(install_desc(
                         fd,
-                        AllocateDesc { create_subid, desc: AllocatedHandle::Pipe(pipe) },
+                        AllocateDesc {
+                            create_subid,
+                            desc: AllocatedHandle::Pipe(pipe),
+                        },
                     ))
                 });
             }
@@ -323,7 +335,10 @@ pub fn ClosePipeStream(index: i32) -> PgResult<i32> {
     let found = with_fd(|fd| {
         matches!(
             fd.allocated_descs.get(index as usize),
-            Some(Some(AllocateDesc { desc: AllocatedHandle::Pipe(_), .. }))
+            Some(Some(AllocateDesc {
+                desc: AllocatedHandle::Pipe(_),
+                ..
+            }))
         )
     });
     if found {
@@ -353,7 +368,10 @@ pub fn AllocateDir(dirname: &str) -> PgResult<Option<Dir>> {
                 return with_fd(|fd| {
                     Ok(Some(install_desc(
                         fd,
-                        AllocateDesc { create_subid, desc: AllocatedHandle::Dir(Some(iter)) },
+                        AllocateDesc {
+                            create_subid,
+                            desc: AllocatedHandle::Dir(Some(iter)),
+                        },
                     )))
                 });
             }
@@ -394,9 +412,10 @@ pub fn ReadDirExtended(
     };
 
     let next = with_fd(|fd| match fd.allocated_descs[index as usize].as_mut() {
-        Some(AllocateDesc { desc: AllocatedHandle::Dir(iter), .. }) => {
-            iter.as_mut().and_then(Iterator::next)
-        }
+        Some(AllocateDesc {
+            desc: AllocatedHandle::Dir(iter),
+            ..
+        }) => iter.as_mut().and_then(Iterator::next),
         _ => None,
     });
 
@@ -423,7 +442,10 @@ pub fn FreeDir(dir: Option<Dir>) -> PgResult<i32> {
     let found = with_fd(|fd| {
         matches!(
             fd.allocated_descs.get(index as usize),
-            Some(Some(AllocateDesc { desc: AllocatedHandle::Dir(_), .. }))
+            Some(Some(AllocateDesc {
+                desc: AllocatedHandle::Dir(_),
+                ..
+            }))
         )
     });
     if found {
@@ -578,9 +600,13 @@ pub fn with_allocated_stdio<R>(index: i32, f: impl FnOnce(&mut StdFile) -> R) ->
 // descriptor bypasses the VFS. Sim-scope callers must not use it.
 pub fn TransientFileRawFd(fd_value: i32) -> Option<RawFd> {
     with_fd(|fd| {
-        fd.allocated_descs.iter().rev().flatten().find_map(|d| match &d.desc {
-            AllocatedHandle::RawFd(f) if f.as_raw_fd() == fd_value => Some(f.as_raw_fd()),
-            _ => None,
-        })
+        fd.allocated_descs
+            .iter()
+            .rev()
+            .flatten()
+            .find_map(|d| match &d.desc {
+                AllocatedHandle::RawFd(f) if f.as_raw_fd() == fd_value => Some(f.as_raw_fd()),
+                _ => None,
+            })
     })
 }

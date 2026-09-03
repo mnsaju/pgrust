@@ -1,11 +1,11 @@
 use super::*;
 use ::mcx::MemoryContext;
-use ::types_core::{BLCKSZ, INVALID_PROC_NUMBER, InvalidBuffer, Oid, RELPERSISTENCE_PERMANENT};
+use ::types_core::{InvalidBuffer, Oid, BLCKSZ, INVALID_PROC_NUMBER, RELPERSISTENCE_PERMANENT};
 use ::types_rel::{FormData_pg_class, LockInfoData, LockRelId, RELKIND_RELATION};
 use ::types_scan::sdir::ForwardScanDirection;
 use ::types_snapshot::SnapshotType;
 use ::types_storage::bufpage::{
-    ItemIdData, LP_DEAD, LP_NORMAL, LP_REDIRECT, LP_UNUSED, PD_ALL_VISIBLE, SizeOfPageHeaderData,
+    ItemIdData, SizeOfPageHeaderData, LP_DEAD, LP_NORMAL, LP_REDIRECT, LP_UNUSED, PD_ALL_VISIBLE,
 };
 use ::types_tuple::{CompactAttribute, FormData_pg_attribute, NameData, TupleDescData};
 use datum::Datum;
@@ -821,11 +821,9 @@ fn tidrange_limits_and_empty_range() {
         &ItemPointerData::new(1, 1),
     );
     assert_eq!(scan.rs_numblocks, 0);
-    assert!(
-        heap_getnext(&mut scan, ForwardScanDirection)
-            .unwrap()
-            .is_none()
-    );
+    assert!(heap_getnext(&mut scan, ForwardScanDirection)
+        .unwrap()
+        .is_none());
     heap_endscan(scan).unwrap();
     quiesced();
 }

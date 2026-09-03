@@ -25,26 +25,23 @@ pub(crate) unsafe fn node_to_xmltype(cur: *mut xmlNode) -> PgResult<Vec<u8>> {
         if t != XML_ATTRIBUTE_NODE && t != XML_TEXT_NODE {
             let buf = (x.xmlBufferCreate)();
             if buf.is_null() {
-                return Err(xml_ereport("could not allocate xmlBuffer", ERRCODE_OUT_OF_MEMORY)
-                    .into());
+                return Err(
+                    xml_ereport("could not allocate xmlBuffer", ERRCODE_OUT_OF_MEMORY).into(),
+                );
             }
             let cur_copy = (x.xmlCopyNode)(cur, 1);
             if cur_copy.is_null() {
                 (x.xmlBufferFree)(buf);
-                return Err(
-                    xml_ereport("could not copy node", ERRCODE_OUT_OF_MEMORY).into()
-                );
+                return Err(xml_ereport("could not copy node", ERRCODE_OUT_OF_MEMORY).into());
             }
             let is_doc = libxml::node_type(cur_copy) == XML_DOCUMENT_NODE;
             let bytes = (x.xmlNodeDump)(buf, core::ptr::null_mut(), cur_copy, 0, 0);
+            // SAFETY: cur_copy is the live copy freed exactly once.
             let free_copy = || {
-                // SAFETY: cur_copy is the live copy freed exactly once.
-                unsafe {
-                    if is_doc {
-                        (x.xmlFreeDoc)(cur_copy as *mut libxml::xmlDoc);
-                    } else {
-                        (x.xmlFreeNode)(cur_copy);
-                    }
+                if is_doc {
+                    (x.xmlFreeDoc)(cur_copy as *mut libxml::xmlDoc);
+                } else {
+                    (x.xmlFreeNode)(cur_copy);
                 }
             };
             if bytes == -1 {
@@ -71,7 +68,11 @@ fn float8out(v: f64) -> String {
     if v.is_nan() {
         "NaN".to_string()
     } else if v.is_infinite() {
-        if v < 0.0 { "-Infinity".to_string() } else { "Infinity".to_string() }
+        if v < 0.0 {
+            "-Infinity".to_string()
+        } else {
+            "Infinity".to_string()
+        }
     } else {
         format!("{v}")
     }
@@ -104,7 +105,11 @@ unsafe fn xpathobj_to_xmlarray(
             XPATH_BOOLEAN => {
                 if let Some(out) = collect {
                     // map_sql_value_to_xml_value(BOOLOID).
-                    out.push(if hdr.boolval != 0 { b"true".to_vec() } else { b"false".to_vec() });
+                    out.push(if hdr.boolval != 0 {
+                        b"true".to_vec()
+                    } else {
+                        b"false".to_vec()
+                    });
                 }
                 Ok(1)
             }
@@ -168,7 +173,10 @@ pub fn xpath_internal(
                         .with_sqlstate(ERRCODE_NULL_VALUE_NOT_ALLOWED)
                         .into());
                 }
-                ns_pairs.push((text_datum_payload(elems[i]), text_datum_payload(elems[i + 1])));
+                ns_pairs.push((
+                    text_datum_payload(elems[i]),
+                    text_datum_payload(elems[i + 1]),
+                ));
                 i += 2;
             }
         }
@@ -222,23 +230,21 @@ pub fn xpath_internal(
         }
         crate::errhandler::flush_xml_warnings();
 
+        // SAFETY: each pointer is live (or null-checked) and freed once.
         let cleanup = |xpathobj: *mut libxml::xmlXPathObject,
                        xpathcomp: *mut libxml::xmlXPathCompExpr,
                        xpathctx: *mut libxml::xmlXPathContext| {
-            // SAFETY: each pointer is live (or null-checked) and freed once.
-            unsafe {
-                if !xpathobj.is_null() {
-                    (x.xmlXPathFreeObject)(xpathobj);
-                }
-                if !xpathcomp.is_null() {
-                    (x.xmlXPathFreeCompExpr)(xpathcomp);
-                }
-                if !xpathctx.is_null() {
-                    (x.xmlXPathFreeContext)(xpathctx);
-                }
-                (x.xmlFreeDoc)(doc);
-                (x.xmlFreeParserCtxt)(ctxt);
+            if !xpathobj.is_null() {
+                (x.xmlXPathFreeObject)(xpathobj);
             }
+            if !xpathcomp.is_null() {
+                (x.xmlXPathFreeCompExpr)(xpathcomp);
+            }
+            if !xpathctx.is_null() {
+                (x.xmlXPathFreeContext)(xpathctx);
+            }
+            (x.xmlFreeDoc)(doc);
+            (x.xmlFreeParserCtxt)(ctxt);
         };
 
         let xpathctx = (x.xmlXPathNewContext)(doc);
@@ -269,19 +275,21 @@ pub fn xpath_internal(
         let xpathcomp = (x.xmlXPathCtxtCompile)(xpathctx, expr.as_ptr());
         if xpathcomp.is_null() || xml_err_occurred() {
             cleanup(core::ptr::null_mut(), core::ptr::null_mut(), xpathctx);
-            return Err(
-                xml_ereport("invalid XPath expression", ERRCODE_INVALID_ARGUMENT_FOR_XQUERY)
-                    .into(),
-            );
+            return Err(xml_ereport(
+                "invalid XPath expression",
+                ERRCODE_INVALID_ARGUMENT_FOR_XQUERY,
+            )
+            .into());
         }
 
         let xpathobj = (x.xmlXPathCompiledEval)(xpathcomp, xpathctx);
         if xpathobj.is_null() || xml_err_occurred() {
             cleanup(core::ptr::null_mut(), xpathcomp, xpathctx);
-            return Err(
-                xml_ereport("could not create XPath object", ERRCODE_INVALID_ARGUMENT_FOR_XQUERY)
-                    .into(),
-            );
+            return Err(xml_ereport(
+                "could not create XPath object",
+                ERRCODE_INVALID_ARGUMENT_FOR_XQUERY,
+            )
+            .into());
         }
 
         let result = xpathobj_to_xmlarray(xpathobj, collect);

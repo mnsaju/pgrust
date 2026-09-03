@@ -105,10 +105,9 @@ pub(crate) fn decode_form<'mcx>(
     let mut req = |attno: i32| -> PgResult<Datum> {
         let (d, isnull) = att(attno)?;
         if isnull {
-            return Err(PgError::error(format!(
-                "unexpected null in pg_database column {attno}"
-            ))
-            .into());
+            return Err(
+                PgError::error(format!("unexpected null in pg_database column {attno}")).into(),
+            );
         }
         Ok(d)
     };
@@ -233,8 +232,9 @@ pub fn search_database_syscache<'mcx>(
     else {
         return Ok(None);
     };
-    let decoded =
-        decode_form(mcx, |attno| cache_syscache::SysCacheGetAttr(DATABASEOID, &tup, attno));
+    let decoded = decode_form(mcx, |attno| {
+        cache_syscache::SysCacheGetAttr(DATABASEOID, &tup, attno)
+    });
     cache_syscache::ReleaseSysCache(tup);
     decoded.map(Some)
 }

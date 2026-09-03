@@ -14,3 +14,9 @@ types_tuple = { path = "../../../../_support/types/types_tuple" }
 bufmgr_seams = { path = "../../../storage/buffer/bufmgr_seams" }
 xlogreader_seams = { path = "../../transam/xlogreader_seams" }
 xlogutils = { path = "../../transam/xlogutils" }
+
+# `pgrust_sim` is the non-default cfg selecting SimVfs (contract §1.2). It is
+# set exclusively by the sim harness's RUSTFLAGS — never in .cargo/config, any
+# product profile, or fleet submit envs.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(pgrust_sim)'] }

@@ -9,8 +9,8 @@ use std::rc::Rc;
 
 use ::datum::Datum;
 use ::execexpr::{
-    exec_build_grouping_equal, exec_build_hash32_from_attrs, exec_eval_expr, exec_qual,
-    EvalSlots, ExprState,
+    exec_build_grouping_equal, exec_build_hash32_from_attrs, exec_eval_expr, exec_qual, EvalSlots,
+    ExprState,
 };
 use ::mcx::{vec_with_capacity_in, Mcx, PgBox, PgVec};
 use ::types_core::Oid;
@@ -109,7 +109,12 @@ impl TupleHashEntryData {
         key: Datum,
         key_isnull: bool,
     ) -> TupleHashEntryData {
-        TupleHashEntryData { first_tuple: tuple, hash, key_isnull, key }
+        TupleHashEntryData {
+            first_tuple: tuple,
+            hash,
+            key_isnull,
+            key,
+        }
     }
 
     /// The entry's pergroup prefix (entry_additional's per-entry form).
@@ -133,9 +138,15 @@ const _: () = assert!(core::mem::size_of::<TupleHashEntryData>() == 24);
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ProbeKernel {
     Expr,
-    Int2 { att: u16 },
-    Int4 { att: u16 },
-    Int8 { att: u16 },
+    Int2 {
+        att: u16,
+    },
+    Int4 {
+        att: u16,
+    },
+    Int8 {
+        att: u16,
+    },
     /// Single text/varchar key under a DETERMINISTIC collation (resolved once
     /// at build — `varlena::text_collation_is_raw_bytes`): C-exact
     /// hashtext = hash_any(raw bytes) and texteq = length + memcmp, inline
@@ -144,7 +155,9 @@ enum ProbeKernel {
     /// image (deformed once per new group), so matches skip the per-probe
     /// stored-tuple store + deform entirely. Nondeterministic or invalid
     /// collations keep the Expr path (bit-identical semantics + C's errors).
-    Text { att: u16 },
+    Text {
+        att: u16,
+    },
 }
 
 /// Per-grouping-column classification for the lane's multi-key packed
@@ -234,18 +247,16 @@ impl ProbeKernel {
                 // hashtext / texteq (text and varchar keys), raw-bytes
                 // collations only. A determinism-probe error falls back to
                 // Expr, whose per-row program raises C's error at C's row.
-                (400, 67) => {
-                    if ::varlena::text_collation_is_raw_bytes(*collid).unwrap_or(false) {
+                (400, 67)
+                    if ::varlena::text_collation_is_raw_bytes(*collid).unwrap_or(false) => {
                         return ProbeKernel::Text { att };
                     }
-                }
                 _ => {}
             }
         }
         ProbeKernel::Expr
     }
 }
-
 
 // simplehash.h-parity open-addressing index over `entries`: robin-hood
 // insertion, doubling growth, backward iteration from the first free bucket.
@@ -286,9 +297,8 @@ impl SimpleHashIndex {
     }
 
     fn with_nelements(nelements: usize) -> Self {
-        let size = Self::compute_size(
-            (SH_MAX_SIZE as f64).min(nelements as f64 / SH_FILLFACTOR) as u64,
-        );
+        let size =
+            Self::compute_size((SH_MAX_SIZE as f64).min(nelements as f64 / SH_FILLFACTOR) as u64);
         let mut t = SimpleHashIndex {
             buckets: vec![SH_EMPTY; size as usize],
             sizemask: (size - 1) as u32,
@@ -346,7 +356,7 @@ impl SimpleHashIndex {
                 startelem = i;
                 break;
             }
-            let optimal = entry_hash(old[i as usize]) & ((oldsize - 1) as u32);
+            let optimal = entry_hash(old[i as usize]) & (oldsize - 1);
             if optimal == i {
                 startelem = i;
                 break;
@@ -411,8 +421,7 @@ impl SimpleHashIndex {
                         }
                         emptydist += 1;
                         if emptydist > SH_GROW_MAX_MOVE
-                            && (self.members as f64 / self.size() as f64)
-                                >= SH_GROW_MIN_FILLFACTOR
+                            && (self.members as f64 / self.size() as f64) >= SH_GROW_MIN_FILLFACTOR
                         {
                             self.stat_restarts += 1;
                             self.grow_threshold = 0;
@@ -475,12 +484,15 @@ impl SimpleHashIndex {
     fn iterate(&self, cursor: &mut u64) -> Option<u32> {
         let size = self.size() as usize;
         let (start, mut visited) = if *cursor == 0 {
-            let start =
-                (0..size).find(|&i| self.buckets[i] == SH_EMPTY).expect("free bucket exists")
-                    as u32;
+            let start = (0..size)
+                .find(|&i| self.buckets[i] == SH_EMPTY)
+                .expect("free bucket exists") as u32;
             (start, 0usize)
         } else {
-            ((*cursor >> 32) as u32, ((*cursor & 0xffff_ffff) as usize) - 1)
+            (
+                (*cursor >> 32) as u32,
+                ((*cursor & 0xffff_ffff) as usize) - 1,
+            )
         };
         let mut result = None;
         while visited < size {
@@ -654,7 +666,11 @@ pub fn build_tuple_hash_table_with_iv<'mcx>(
         kernel: ProbeKernel::select(key_col_idx, eqfuncoids, hashfunctions, collations),
         key_cols: key_col_idx
             .iter()
-            .zip(eqfuncoids.iter().zip(hashfunctions.iter().zip(collations.iter())))
+            .zip(
+                eqfuncoids
+                    .iter()
+                    .zip(hashfunctions.iter().zip(collations.iter())),
+            )
             .map(|(&col, (&eq, (&hash, &collid)))| GroupKeyCol {
                 att: (col - 1) as u16,
                 kind: group_key_kind(hash, eq, collid),
@@ -766,12 +782,20 @@ impl<'mcx> TupleHashTable<'mcx> {
             }
             ProbeKernel::Int4 { att } => {
                 let (key, isnull) = kernel_key(input_slot, att);
-                let h = if isnull { 0 } else { ::hashfn::hash_bytes_uint32(key.as_u32()) };
+                let h = if isnull {
+                    0
+                } else {
+                    ::hashfn::hash_bytes_uint32(key.as_u32())
+                };
                 Ok(::hashfn::murmurhash32(iv_rot ^ h))
             }
             ProbeKernel::Int8 { att } => {
                 let (key, isnull) = kernel_key(input_slot, att);
-                let h = if isnull { 0 } else { ::hashfn::hash_bytes_uint32(hashint8_fold(key)) };
+                let h = if isnull {
+                    0
+                } else {
+                    ::hashfn::hash_bytes_uint32(hashint8_fold(key))
+                };
                 Ok(::hashfn::murmurhash32(iv_rot ^ h))
             }
             ProbeKernel::Text { att } => {
@@ -786,7 +810,11 @@ impl<'mcx> TupleHashTable<'mcx> {
                 Ok(::hashfn::murmurhash32(iv_rot ^ h))
             }
             ProbeKernel::Expr => {
-                let mut slots = EvalSlots { scan: None, inner: Some(input_slot), outer: None };
+                let mut slots = EvalSlots {
+                    scan: None,
+                    inner: Some(input_slot),
+                    outer: None,
+                };
                 let r = exec_eval_expr(&mut self.tab_hash_expr, &mut slots)?;
                 debug_assert!(!r.isnull);
                 Ok(::hashfn::murmurhash32(r.value.as_u32()))
@@ -818,8 +846,15 @@ impl<'mcx> TupleHashTable<'mcx> {
                 );
             }
         }
-        let TupleHashTable { entries, hashtab, tab_eq_func, tableslot, kernel, temp_ctx, .. } =
-            self;
+        let TupleHashTable {
+            entries,
+            hashtab,
+            tab_eq_func,
+            tableslot,
+            kernel,
+            temp_ctx,
+            ..
+        } = self;
         let mut eq_err: Option<Box<PgError>> = None;
         let input_slot = input_slot;
         // Kernel match = NOT DISTINCT over the entry's cached key datum.
@@ -878,8 +913,7 @@ impl<'mcx> TupleHashTable<'mcx> {
                         (Some(a), false) => {
                             // SAFETY: e.key points into the live stored image
                             // (insert caches it; relocate_entry rebases it).
-                            let b =
-                                unsafe { ::types_fmgr::datum_varlena_packed(e.key, det_mcx) }?;
+                            let b = unsafe { ::types_fmgr::datum_varlena_packed(e.key, det_mcx) }?;
                             Ok(a.data() == b.data())
                         }
                         (None, true) => Ok(true),
@@ -956,7 +990,12 @@ impl<'mcx> TupleHashTable<'mcx> {
                 .try_reserve(add)
                 .map_err(|_| oom_entries(*self.entries.allocator(), add))?;
         }
-        self.entries.push(TupleHashEntryData { first_tuple, hash, key_isnull, key });
+        self.entries.push(TupleHashEntryData {
+            first_tuple,
+            hash,
+            key_isnull,
+            key,
+        });
         let entries = &self.entries;
         // The match closure never fires: the find above proved absence.
         let (got, found) =
@@ -1050,7 +1089,8 @@ impl<'mcx> TupleHashTable<'mcx> {
         hash: u32,
         eq: impl FnMut(u32) -> PgResult<bool>,
     ) -> PgResult<Option<u32>> {
-        self.hashtab.find(hash, |ix| self.entries[ix as usize].hash, eq)
+        self.hashtab
+            .find(hash, |ix| self.entries[ix as usize].hash, eq)
     }
 
     /// C SH_START_ITERATE/SH_ITERATE bucket-order drain; `cursor` starts 0.
@@ -1090,7 +1130,12 @@ impl<'mcx> TupleHashTable<'mcx> {
     /// Contract (like `hash_staged`): a non-null staged datum is a live value
     /// of the kernel's key type.
     pub fn find_staged(&self, key: Datum, isnull: bool, hash: u32) -> PgResult<Option<u32>> {
-        let TupleHashTable { entries, hashtab, kernel, .. } = self;
+        let TupleHashTable {
+            entries,
+            hashtab,
+            kernel,
+            ..
+        } = self;
         let entry_hash = |ix: u32| entries[ix as usize].hash;
         match *kernel {
             ProbeKernel::Int2 { .. } => hashtab.find(hash, entry_hash, |ix| {
@@ -1128,8 +1173,7 @@ impl<'mcx> TupleHashTable<'mcx> {
                     match (&a, e.key_isnull) {
                         (Some(a), false) => {
                             // SAFETY: e.key points into the live stored image.
-                            let b =
-                                unsafe { ::types_fmgr::datum_varlena_packed(e.key, det_mcx) }?;
+                            let b = unsafe { ::types_fmgr::datum_varlena_packed(e.key, det_mcx) }?;
                             Ok(a.data() == b.data())
                         }
                         (None, true) => Ok(true),
@@ -1145,11 +1189,7 @@ impl<'mcx> TupleHashTable<'mcx> {
     /// (table-handoff install), rebasing the Text kernel's cached key pointer
     /// into the new image (the copy preserves byte layout, so the key's
     /// offset from the tuple start is invariant). Byval caches are untouched.
-    pub fn relocate_entry(
-        &self,
-        e: &mut TupleHashEntryData,
-        new_tuple: NonNull<MinimalTupleData>,
-    ) {
+    pub fn relocate_entry(&self, e: &mut TupleHashEntryData, new_tuple: NonNull<MinimalTupleData>) {
         if matches!(self.kernel, ProbeKernel::Text { .. }) && !e.key_isnull {
             let off = e
                 .key
@@ -1241,12 +1281,7 @@ impl<'mcx> TupleHashTable<'mcx> {
     ///
     /// Safety contract (inline, like `kernel_key`): non-null staged datums
     /// must be live values of the kernel's key type.
-    pub fn hash_staged(
-        &self,
-        keys: &[Datum],
-        isnull: &[bool],
-        out: &mut Vec<u32>,
-    ) -> PgResult<()> {
+    pub fn hash_staged(&self, keys: &[Datum], isnull: &[bool], out: &mut Vec<u32>) -> PgResult<()> {
         debug_assert_eq!(keys.len(), isnull.len());
         out.clear();
         out.reserve(keys.len());
@@ -1272,13 +1307,21 @@ impl<'mcx> TupleHashTable<'mcx> {
             }
             ProbeKernel::Int4 { .. } => {
                 for (&k, &n) in keys.iter().zip(isnull) {
-                    let h = if n { 0 } else { ::hashfn::hash_bytes_uint32(k.as_u32()) };
+                    let h = if n {
+                        0
+                    } else {
+                        ::hashfn::hash_bytes_uint32(k.as_u32())
+                    };
                     out.push(::hashfn::murmurhash32(iv_rot ^ h));
                 }
             }
             ProbeKernel::Int8 { .. } => {
                 for (&k, &n) in keys.iter().zip(isnull) {
-                    let h = if n { 0 } else { ::hashfn::hash_bytes_uint32(hashint8_fold(k)) };
+                    let h = if n {
+                        0
+                    } else {
+                        ::hashfn::hash_bytes_uint32(hashint8_fold(k))
+                    };
                     out.push(::hashfn::murmurhash32(iv_rot ^ h));
                 }
             }

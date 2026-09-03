@@ -6,10 +6,9 @@ use ::types_error::{PgError, PgResult, ERRCODE_DATA_EXCEPTION, ERRCODE_UNDEFINED
 use ::types_fmgr::{function_call1_coll_in, function_call2_coll_in, FmgrInfo};
 
 use crate::{
-    cmp_elem_vals, make_empty_range, make_range, range_bound_slots, range_cmp_bounds,
-    range_deserialize_into,
-    range_get_flags, range_is_empty, range_type_oid, range_types_do_not_match, RangeBound,
-    RangeInfo, range_cmp_bound_values,
+    cmp_elem_vals, make_empty_range, make_range, range_bound_slots, range_cmp_bound_values,
+    range_cmp_bounds, range_deserialize_into, range_get_flags, range_is_empty, range_type_oid,
+    range_types_do_not_match, RangeBound, RangeInfo,
 };
 
 fn check_same_type(r1: &[u8], r2: &[u8]) -> PgResult<()> {
@@ -44,7 +43,12 @@ pub fn range_ne_internal(mcx: Mcx<'_>, ri: &mut RangeInfo, r1: &[u8], r2: &[u8])
     Ok(!range_eq_internal(mcx, ri, r1, r2)?)
 }
 
-pub fn range_contains_internal(mcx: Mcx<'_>, ri: &mut RangeInfo, r1: &[u8], r2: &[u8]) -> PgResult<bool> {
+pub fn range_contains_internal(
+    mcx: Mcx<'_>,
+    ri: &mut RangeInfo,
+    r1: &[u8],
+    r2: &[u8],
+) -> PgResult<bool> {
     check_same_type(r1, r2)?;
     let (mut lower1, mut upper1) = range_bound_slots();
     let empty1 = range_deserialize_into(&ri.elem, r1, &mut lower1, &mut upper1);
@@ -65,7 +69,12 @@ pub fn range_contains_internal(mcx: Mcx<'_>, ri: &mut RangeInfo, r1: &[u8], r2: 
     Ok(true)
 }
 
-pub fn range_contained_by_internal(mcx: Mcx<'_>, ri: &mut RangeInfo, r1: &[u8], r2: &[u8]) -> PgResult<bool> {
+pub fn range_contained_by_internal(
+    mcx: Mcx<'_>,
+    ri: &mut RangeInfo,
+    r1: &[u8],
+    r2: &[u8],
+) -> PgResult<bool> {
     range_contains_internal(mcx, ri, r2, r1)
 }
 
@@ -101,7 +110,12 @@ pub fn range_contains_elem_internal(
     Ok(true)
 }
 
-pub fn range_before_internal(mcx: Mcx<'_>, ri: &mut RangeInfo, r1: &[u8], r2: &[u8]) -> PgResult<bool> {
+pub fn range_before_internal(
+    mcx: Mcx<'_>,
+    ri: &mut RangeInfo,
+    r1: &[u8],
+    r2: &[u8],
+) -> PgResult<bool> {
     check_same_type(r1, r2)?;
     let (mut _lower1, mut upper1) = range_bound_slots();
     let empty1 = range_deserialize_into(&ri.elem, r1, &mut _lower1, &mut upper1);
@@ -113,7 +127,12 @@ pub fn range_before_internal(mcx: Mcx<'_>, ri: &mut RangeInfo, r1: &[u8], r2: &[
     Ok(range_cmp_bounds(mcx, ri, &upper1, &lower2)? < 0)
 }
 
-pub fn range_after_internal(mcx: Mcx<'_>, ri: &mut RangeInfo, r1: &[u8], r2: &[u8]) -> PgResult<bool> {
+pub fn range_after_internal(
+    mcx: Mcx<'_>,
+    ri: &mut RangeInfo,
+    r1: &[u8],
+    r2: &[u8],
+) -> PgResult<bool> {
     check_same_type(r1, r2)?;
     let (mut lower1, mut _upper1) = range_bound_slots();
     let empty1 = range_deserialize_into(&ri.elem, r1, &mut lower1, &mut _upper1);
@@ -169,7 +188,12 @@ pub fn range_adjacent_internal(
     Ok(bounds_adjacent(mcx, ri, upper1, lower2)? || bounds_adjacent(mcx, ri, upper2, lower1)?)
 }
 
-pub fn range_overlaps_internal(mcx: Mcx<'_>, ri: &mut RangeInfo, r1: &[u8], r2: &[u8]) -> PgResult<bool> {
+pub fn range_overlaps_internal(
+    mcx: Mcx<'_>,
+    ri: &mut RangeInfo,
+    r1: &[u8],
+    r2: &[u8],
+) -> PgResult<bool> {
     check_same_type(r1, r2)?;
     let (mut lower1, mut upper1) = range_bound_slots();
     let empty1 = range_deserialize_into(&ri.elem, r1, &mut lower1, &mut upper1);
@@ -178,18 +202,25 @@ pub fn range_overlaps_internal(mcx: Mcx<'_>, ri: &mut RangeInfo, r1: &[u8], r2: 
     if empty1 || empty2 {
         return Ok(false);
     }
-    if range_cmp_bounds(mcx, ri, &lower1, &lower2)? >= 0 && range_cmp_bounds(mcx, ri, &lower1, &upper2)? <= 0
+    if range_cmp_bounds(mcx, ri, &lower1, &lower2)? >= 0
+        && range_cmp_bounds(mcx, ri, &lower1, &upper2)? <= 0
     {
         return Ok(true);
     }
-    if range_cmp_bounds(mcx, ri, &lower2, &lower1)? >= 0 && range_cmp_bounds(mcx, ri, &lower2, &upper1)? <= 0
+    if range_cmp_bounds(mcx, ri, &lower2, &lower1)? >= 0
+        && range_cmp_bounds(mcx, ri, &lower2, &upper1)? <= 0
     {
         return Ok(true);
     }
     Ok(false)
 }
 
-pub fn range_overleft_internal(mcx: Mcx<'_>, ri: &mut RangeInfo, r1: &[u8], r2: &[u8]) -> PgResult<bool> {
+pub fn range_overleft_internal(
+    mcx: Mcx<'_>,
+    ri: &mut RangeInfo,
+    r1: &[u8],
+    r2: &[u8],
+) -> PgResult<bool> {
     check_same_type(r1, r2)?;
     let (mut _l1, mut upper1) = range_bound_slots();
     let empty1 = range_deserialize_into(&ri.elem, r1, &mut _l1, &mut upper1);
@@ -201,7 +232,12 @@ pub fn range_overleft_internal(mcx: Mcx<'_>, ri: &mut RangeInfo, r1: &[u8], r2: 
     Ok(range_cmp_bounds(mcx, ri, &upper1, &upper2)? <= 0)
 }
 
-pub fn range_overright_internal(mcx: Mcx<'_>, ri: &mut RangeInfo, r1: &[u8], r2: &[u8]) -> PgResult<bool> {
+pub fn range_overright_internal(
+    mcx: Mcx<'_>,
+    ri: &mut RangeInfo,
+    r1: &[u8],
+    r2: &[u8],
+) -> PgResult<bool> {
     check_same_type(r1, r2)?;
     let (mut lower1, mut _u1) = range_bound_slots();
     let empty1 = range_deserialize_into(&ri.elem, r1, &mut lower1, &mut _u1);
@@ -326,10 +362,16 @@ pub fn range_union_internal<'m>(
         return Err(range_union_not_contiguous());
     }
 
-    let mut result_lower =
-        if range_cmp_bounds(mcx, ri, &lower1, &lower2)? < 0 { lower1 } else { lower2 };
-    let mut result_upper =
-        if range_cmp_bounds(mcx, ri, &upper1, &upper2)? > 0 { upper1 } else { upper2 };
+    let mut result_lower = if range_cmp_bounds(mcx, ri, &lower1, &lower2)? < 0 {
+        lower1
+    } else {
+        lower2
+    };
+    let mut result_upper = if range_cmp_bounds(mcx, ri, &upper1, &upper2)? > 0 {
+        upper1
+    } else {
+        upper2
+    };
 
     Ok(UnionResult::New(
         make_range(mcx, ri, &mut result_lower, &mut result_upper, false, None)?
@@ -352,13 +394,21 @@ pub fn range_intersect_internal<'m>(
         return make_empty_range(mcx, ri);
     }
 
-    let mut result_lower =
-        if range_cmp_bounds(mcx, ri, &lower1, &lower2)? >= 0 { lower1 } else { lower2 };
-    let mut result_upper =
-        if range_cmp_bounds(mcx, ri, &upper1, &upper2)? <= 0 { upper1 } else { upper2 };
+    let mut result_lower = if range_cmp_bounds(mcx, ri, &lower1, &lower2)? >= 0 {
+        lower1
+    } else {
+        lower2
+    };
+    let mut result_upper = if range_cmp_bounds(mcx, ri, &upper1, &upper2)? <= 0 {
+        upper1
+    } else {
+        upper2
+    };
 
-    Ok(make_range(mcx, ri, &mut result_lower, &mut result_upper, false, None)?
-        .expect("hard error path returns Some"))
+    Ok(
+        make_range(mcx, ri, &mut result_lower, &mut result_upper, false, None)?
+            .expect("hard error path returns Some"),
+    )
 }
 
 /// range_split_internal: both outputs, or None when r2 does not split r1.
@@ -374,7 +424,9 @@ pub fn range_split_internal<'m>(
     let (mut lower2, mut upper2) = range_bound_slots();
     let _e2 = range_deserialize_into(&ri.elem, r2, &mut lower2, &mut upper2);
 
-    if range_cmp_bounds(mcx, ri, &lower1, &lower2)? < 0 && range_cmp_bounds(mcx, ri, &upper1, &upper2)? > 0 {
+    if range_cmp_bounds(mcx, ri, &lower1, &lower2)? < 0
+        && range_cmp_bounds(mcx, ri, &upper1, &upper2)? > 0
+    {
         lower2.inclusive = !lower2.inclusive;
         lower2.lower = false;
         upper2.inclusive = !upper2.inclusive;
@@ -486,14 +538,26 @@ pub fn hash_range_extended_internal(
     elem_hash_extended_finfo(ri)?;
 
     let lower_hash = if crate::range_has_lbound(flags) {
-        function_call2_coll_in(ri.elem_hash_extended.as_mut().unwrap(), collation, mcx, lower.val, seed)?
-            .as_u64()
+        function_call2_coll_in(
+            ri.elem_hash_extended.as_mut().unwrap(),
+            collation,
+            mcx,
+            lower.val,
+            seed,
+        )?
+        .as_u64()
     } else {
         0
     };
     let upper_hash = if crate::range_has_ubound(flags) {
-        function_call2_coll_in(ri.elem_hash_extended.as_mut().unwrap(), collation, mcx, upper.val, seed)?
-            .as_u64()
+        function_call2_coll_in(
+            ri.elem_hash_extended.as_mut().unwrap(),
+            collation,
+            mcx,
+            upper.val,
+            seed,
+        )?
+        .as_u64()
     } else {
         0
     };

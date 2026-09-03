@@ -43,10 +43,12 @@ fn invalid_escape_string() -> Box<PgError> {
 #[cold]
 #[inline(never)]
 fn indeterminate_collation(op: &str) -> Box<PgError> {
-    PgError::error(format!("could not determine which collation to use for {op}"))
-        .with_sqlstate(ERRCODE_INDETERMINATE_COLLATION)
-        .with_hint("Use the COLLATE clause to set the collation explicitly.")
-        .into()
+    PgError::error(format!(
+        "could not determine which collation to use for {op}"
+    ))
+    .with_sqlstate(ERRCODE_INDETERMINATE_COLLATION)
+    .with_hint("Use the COLLATE clause to set the collation explicitly.")
+    .into()
 }
 
 #[track_caller]
@@ -312,7 +314,7 @@ pub fn generic_match_text(s: &[u8], p: &[u8], collation: Oid) -> PgResult<i32> {
     } else if mbutils::GetDatabaseEncoding() == PG_UTF8 {
         match_text::<Utf8Cs>(s, p, locale)
     } else {
-        return Err(mb_matchtext_unported(mbutils::GetDatabaseEncoding()))
+        Err(mb_matchtext_unported(mbutils::GetDatabaseEncoding()))
     }
 }
 
@@ -361,7 +363,7 @@ pub fn generic_text_ic_like(
             return if mbutils::GetDatabaseEncoding() == PG_UTF8 {
                 match_text::<Utf8Cs>(&str_, &pat, &LOCALE_NONE)
             } else {
-                return Err(mb_matchtext_unported(mbutils::GetDatabaseEncoding()))
+                return Err(mb_matchtext_unported(mbutils::GetDatabaseEncoding()));
             };
         }
         lower_into(&mut scratch.p, p);
@@ -369,7 +371,7 @@ pub fn generic_text_ic_like(
         if mbutils::GetDatabaseEncoding() == PG_UTF8 {
             match_text::<Utf8Cs>(&scratch.s, &scratch.p, &LOCALE_NONE)
         } else {
-            return Err(mb_matchtext_unported(mbutils::GetDatabaseEncoding()))
+            Err(mb_matchtext_unported(mbutils::GetDatabaseEncoding()))
         }
     } else {
         match_text::<SbIc>(s, p, locale)

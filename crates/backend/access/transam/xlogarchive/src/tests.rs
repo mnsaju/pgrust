@@ -32,7 +32,10 @@ fn install_vars() {
 
 fn with_wal_cwd(f: impl FnOnce()) {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    let _g = LOCK.get_or_init(|| Mutex::new(())).lock().unwrap_or_else(|e| e.into_inner());
+    let _g = LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     install_vars();
     let dir = std::env::temp_dir().join(format!(
         "xlogarchive-test-{}-{:?}",
@@ -166,5 +169,8 @@ fn build_restore_command_substitution() {
 fn restore_archived_file_not_in_archive_recovery() {
     // ArchiveRecoveryRequested=false short-circuits to the pg_wal fallback.
     xlogrecovery_seams::archive_recovery_requested::set(|| false);
-    assert_eq!(RestoreArchivedFile(SEG, "RECOVERYXLOG", 0, false).unwrap(), None);
+    assert_eq!(
+        RestoreArchivedFile(SEG, "RECOVERYXLOG", 0, false).unwrap(),
+        None
+    );
 }

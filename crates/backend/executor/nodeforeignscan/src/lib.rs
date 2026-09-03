@@ -32,10 +32,8 @@ pub struct ForeignScanState<'mcx> {
 pub struct FdwExecRoutine {
     pub begin:
         for<'mcx> fn(&mut ForeignScanState<'mcx>, &mut EStateData<'mcx>, i32) -> PgResult<()>,
-    pub iterate:
-        for<'mcx> fn(&mut ForeignScanState<'mcx>, &mut EStateData<'mcx>) -> PgResult<bool>,
-    pub rescan:
-        for<'mcx> fn(&mut ForeignScanState<'mcx>, &mut EStateData<'mcx>) -> PgResult<()>,
+    pub iterate: for<'mcx> fn(&mut ForeignScanState<'mcx>, &mut EStateData<'mcx>) -> PgResult<bool>,
+    pub rescan: for<'mcx> fn(&mut ForeignScanState<'mcx>, &mut EStateData<'mcx>) -> PgResult<()>,
     pub end: for<'mcx> fn(&mut ForeignScanState<'mcx>, &mut EStateData<'mcx>) -> PgResult<()>,
     /// Emits FdwExplainProp, not ExplainState; FdwExplainFlags carries the
     /// ExplainState bits C's hooks read (es->costs, es->verbose).
@@ -53,8 +51,10 @@ static FDW_EXEC_ROUTINES: [AtomicPtr<FdwExecRoutine>; NUM_FDW_KINDS] =
     [const { AtomicPtr::new(core::ptr::null_mut()) }; NUM_FDW_KINDS];
 
 pub fn install_fdw_exec_routine(kind: FdwKind, routine: &'static FdwExecRoutine) {
-    FDW_EXEC_ROUTINES[kind.index()]
-        .store(routine as *const FdwExecRoutine as *mut FdwExecRoutine, Ordering::Release);
+    FDW_EXEC_ROUTINES[kind.index()].store(
+        routine as *const FdwExecRoutine as *mut FdwExecRoutine,
+        Ordering::Release,
+    );
 }
 
 fn fdw_exec_routine(kind: FdwKind) -> &'static FdwExecRoutine {
@@ -75,11 +75,7 @@ impl<'mcx> ScanNode<'mcx> for ForeignScanState<'mcx> {
     }
 
     /// `ForeignRecheck` (RecheckForeignScan callback unmodeled: no provider).
-    fn epq_recheck(
-        &mut self,
-        estate: &mut EStateData<'mcx>,
-        slot: ExecSlotId,
-    ) -> PgResult<bool> {
+    fn epq_recheck(&mut self, estate: &mut EStateData<'mcx>, slot: ExecSlotId) -> PgResult<bool> {
         let ecxt = self.ss.ps_ExprContext;
         estate.ecxt_mut(ecxt).ecxt_scantuple = Some(slot);
         let passes = {
@@ -103,7 +99,10 @@ impl<'mcx> ScanNode<'mcx> for ForeignScanState<'mcx> {
         let routine = fdw_exec_routine(self.fdwroutine);
         let found = (routine.iterate)(self, estate)?;
         if found && self.table_oid != InvalidOid {
-            estate.slot_mut(self.ss.ss_ScanTupleSlot).base_mut().tts_tableOid = self.table_oid;
+            estate
+                .slot_mut(self.ss.ss_ScanTupleSlot)
+                .base_mut()
+                .tts_tableOid = self.table_oid;
         }
         Ok(found)
     }
@@ -144,17 +143,25 @@ pub fn exec_init_foreign_scan<'mcx>(
     // unported: ExecInitForeignScan (nodeForeignscan.c) direct-modify, FDW
     // outer-plan, and fdw_scan_tlist lanes raise clean feature errors.
     if node.operation != CmdType::CMD_SELECT || node.resultRelation != 0 {
-        return Err(foreign_scan_unported("direct modification of a foreign table"));
+        return Err(foreign_scan_unported(
+            "direct modification of a foreign table",
+        ));
     }
     if node.scan.plan.lefttree.is_some() {
-        return Err(foreign_scan_unported("a foreign scan with an outer subplan"));
+        return Err(foreign_scan_unported(
+            "a foreign scan with an outer subplan",
+        ));
     }
     if node.scan.scanrelid == 0 || !node.fdw_scan_tlist.is_nil() {
-        return Err(foreign_scan_unported("a foreign scan with a custom scan tuple list"));
+        return Err(foreign_scan_unported(
+            "a foreign scan with a custom scan tuple list",
+        ));
     }
 
     let ps_ExprContext = estate.exec_assign_expr_context();
-    let rel = estate.exec_get_range_table_relation(node.scan.scanrelid, false)?.alias();
+    let rel = estate
+        .exec_get_range_table_relation(node.scan.scanrelid, false)?
+        .alias();
     let fdwroutine = foreigncmds_seams::get_fdw_routine_by_rel_id::call(mcx, rel.rd_id)?;
     // C copies the descriptor: FDW rows need not satisfy NOT NULL.
     let scan_tupdesc = tupdesc::CreateTupleDescCopy(mcx, &rel.rd_att)?;
@@ -162,7 +169,11 @@ pub fn exec_init_foreign_scan<'mcx>(
         Some(alloc::rc::Rc::new(scan_tupdesc)),
         TupleSlotKind::Virtual,
     );
-    let table_oid = if node.fsSystemCol { rel.rd_id } else { InvalidOid };
+    let table_oid = if node.fsSystemCol {
+        rel.rd_id
+    } else {
+        InvalidOid
+    };
 
     let mut ss = ScanState {
         qual: None,

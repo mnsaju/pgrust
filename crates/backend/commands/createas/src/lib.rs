@@ -77,8 +77,7 @@ pub fn ExecCreateTableAs<'mcx>(
     let mut query: Query<'mcx> = unsafe { query_node.with_mut::<Query, _>(core::mem::take) }
         .expect("CreateTableAsStmt.query is an analyzed Query");
 
-    if parser_analyze::tap_post_parse_analyze::is_installed() && queryjumble::IsQueryIdEnabled()
-    {
+    if parser_analyze::tap_post_parse_analyze::is_installed() && queryjumble::IsQueryIdEnabled() {
         let js = queryjumble::JumbleQuery(mcx, &mut query)?;
         parser_analyze::tap_post_parse_analyze::call_if(|f| f(&mut query, &js, source_text));
     } else if queryjumble::IsQueryIdEnabled() {
@@ -133,7 +132,11 @@ pub fn ExecCreateTableAs<'mcx>(
     let mut dest = tcop_dest::DestReceiver::IntoRel(IntoRelState::new(mcx, into_node));
 
     let rewritten = rewrite_handler_seams::query_rewrite::call(mcx, query)?;
-    assert_eq!(rewritten.len(), 1, "unexpected rewrite result for CREATE TABLE AS SELECT");
+    assert_eq!(
+        rewritten.len(),
+        1,
+        "unexpected rewrite result for CREATE TABLE AS SELECT"
+    );
     let query = rewritten.into_iter().next().expect("checked above");
     debug_assert!(query.commandType == CmdType::CMD_SELECT);
 
@@ -169,7 +172,7 @@ pub fn ExecCreateTableAs<'mcx>(
         &mut dest,
     )?;
 
-    if let Some(qc) = qc.as_deref_mut() {
+    if let Some(qc) = qc {
         qc.commandTag = CMDTAG_SELECT;
         qc.nprocessed = execmain_seams::query_desc_es_processed::call(qd);
     }
@@ -248,14 +251,14 @@ fn create_ctas_internal<'mcx>(
     let into = into_node.as_variant::<IntoClause>().expect("IntoClause");
     let is_matview = view_query.is_some();
     debug_assert!(is_matview == into.viewQuery.is_some());
-    let relkind =
-        if is_matview { types_rel::RELKIND_MATVIEW } else { types_rel::RELKIND_RELATION };
+    let relkind = if is_matview {
+        types_rel::RELKIND_MATVIEW
+    } else {
+        types_rel::RELKIND_RELATION
+    };
 
     let create = CreateStmt {
-        relation: into
-            .rel
-            .expect("IntoClause.rel")
-            .as_range_var(),
+        relation: into.rel.expect("IntoClause.rel").as_range_var(),
         tableElts: attr_list,
         options: into.options.clone_in(mcx)?,
         oncommit: into.onCommit,
@@ -287,7 +290,9 @@ fn create_ctas_nodata<'mcx>(
     let mut attr_list = NodeList::nil();
     let mut colnames = into.colNames.iter();
     for t in query.targetList.iter() {
-        let tle = t.as_target_entry().expect("targetlist entry is a TargetEntry");
+        let tle = t
+            .as_target_entry()
+            .expect("targetlist entry is a TargetEntry");
         if tle.resjunk {
             continue;
         }
@@ -355,8 +360,6 @@ fn too_many_column_names() -> Box<types_error::PgError> {
     )
 }
 
-
-
 fn intorel_startup<'mcx>(
     state: &mut IntoRelState<'mcx>,
     _operation: i32,
@@ -414,9 +417,17 @@ fn intorel_startup<'mcx>(
     state.reladdr = relid;
     state.output_cid = xact::GetCurrentCommandId(true)?;
     state.ti_options = tableam_vocab::TABLE_INSERT_SKIP_FSM;
-    state.bistate = if !into.skipData { Some(heapam::GetBulkInsertState()) } else { None };
+    state.bistate = if !into.skipData {
+        Some(heapam::GetBulkInsertState())
+    } else {
+        None
+    };
     // W1 multi-insert buffering (PGRUST_CTAS_MULTIINSERT, default OFF).
-    state.mibuf = if !into.skipData { tableam::write_buffer::write_buffer_begin(&rel) } else { None };
+    state.mibuf = if !into.skipData {
+        tableam::write_buffer::write_buffer_begin(&rel)
+    } else {
+        None
+    };
     state.rel = Some(rel);
     Ok(())
 }

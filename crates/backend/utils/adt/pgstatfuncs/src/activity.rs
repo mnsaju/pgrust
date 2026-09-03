@@ -9,13 +9,18 @@ const PG_STAT_GET_ACTIVITY_COLS: usize = 31;
 pub(crate) const ROLE_PG_READ_ALL_STATS: Oid = 3375;
 
 pub(crate) fn text_datum(fcinfo: &Fcinfo, s: &str) -> PgResult<Datum> {
-    Ok(varlena_result(varlena::cstring_to_text(fcinfo.result_mcx(), s.as_bytes())?))
+    Ok(varlena_result(varlena::cstring_to_text(
+        fcinfo.result_mcx(),
+        s.as_bytes(),
+    )?))
 }
 
 pub(crate) fn has_pgstat_permissions(userid: Oid) -> PgResult<bool> {
     let uid = miscinit::GetUserId();
-    Ok(acl_seams::has_privs_of_role::call(uid, ROLE_PG_READ_ALL_STATS)?
-        || acl_seams::has_privs_of_role::call(uid, userid)?)
+    Ok(
+        acl_seams::has_privs_of_role::call(uid, ROLE_PG_READ_ALL_STATS)?
+            || acl_seams::has_privs_of_role::call(uid, userid)?,
+    )
 }
 
 // C: sockaddr_storage ss_family; on both linux and macos targets the libc
@@ -93,7 +98,11 @@ pub fn fc_pg_stat_get_activity(
 ) -> PgResult<Datum> {
     let flinfo = flinfo.expect("pg_stat_get_activity: resolved FmgrInfo required");
     let num_backends = backend_status::pgstat_fetch_stat_numbackends();
-    let pid_filter = if fcinfo.argisnull(0) { -1 } else { fcinfo.arg(0).as_i32() };
+    let pid_filter = if fcinfo.argisnull(0) {
+        -1
+    } else {
+        fcinfo.arg(0).as_i32()
+    };
 
     // SAFETY: executor arms es_query_cxt pre-call; it outlives this frame.
     let mcx = unsafe { fcinfo.result_mcx_detached() };
@@ -171,12 +180,15 @@ pub fn fc_pg_stat_get_activity(
             let mut wait_event_type = None;
             let mut wait_event = None;
             if let Some(proc) = proc {
-                let raw = proc.wait_event_info.load(core::sync::atomic::Ordering::Relaxed);
+                let raw = proc
+                    .wait_event_info
+                    .load(core::sync::atomic::Ordering::Relaxed);
                 wait_event_type = waitevent::pgstat_get_wait_event_type(raw);
                 wait_event = waitevent::pgstat_get_wait_event(raw);
 
-                let leader: ProcNumber =
-                    proc.lockGroupLeader.load(core::sync::atomic::Ordering::Relaxed);
+                let leader: ProcNumber = proc
+                    .lockGroupLeader
+                    .load(core::sync::atomic::Ordering::Relaxed);
                 if leader != INVALID_PROC_NUMBER {
                     let leader_pid = lmgr_proc::GetPGProcByNumber(leader)
                         .pid
@@ -187,7 +199,8 @@ pub fn fc_pg_stat_get_activity(
                     }
                 } else if be.st_backendType == BackendType::BgWorker {
                     // InvalidPid (-1) unless this is a parallel apply worker.
-                    let leader_pid = launcher_seams::get_leader_apply_worker_pid::call(be.st_procpid);
+                    let leader_pid =
+                        launcher_seams::get_leader_apply_worker_pid::call(be.st_procpid);
                     if leader_pid != -1 {
                         values[29] = Datum::from_i32(leader_pid);
                         nulls[29] = false;
@@ -237,7 +250,7 @@ pub fn fc_pg_stat_get_activity(
                     // C:525-556 — inet datum of the numeric remote host,
                     // st_clienthostname only when log_hostname captured one,
                     // client_port = atoi(remote_port).
-                    f if f == AF_INET as i32 || f == AF_INET6 as i32 => {
+                    f if f == AF_INET || f == AF_INET6 => {
                         match client_addr_port(&be.st_clientaddr) {
                             Some((remote_host, remote_port)) => {
                                 values[12] = inet_datum(fcinfo, &remote_host)?;
@@ -247,8 +260,7 @@ pub fn fc_pg_stat_get_activity(
                                     nulls[13] = true;
                                 }
                                 // C:549 atoi() — NI_NUMERICSERV is all digits.
-                                values[14] =
-                                    Datum::from_i32(remote_port.parse().unwrap_or(0));
+                                values[14] = Datum::from_i32(remote_port.parse().unwrap_or(0));
                             }
                             None => {
                                 nulls[12] = true;
@@ -259,7 +271,7 @@ pub fn fc_pg_stat_get_activity(
                     }
                     // C:558-569 — unix sockets report NULL host and -1 port,
                     // distinguishable from no-permission / error rows.
-                    f if f == AF_UNIX as i32 => {
+                    f if f == AF_UNIX => {
                         nulls[12] = true;
                         nulls[13] = true;
                         values[14] = Datum::from_i32(-1);
@@ -279,8 +291,7 @@ pub fn fc_pg_stat_get_activity(
                     None => nulls[17] = true,
                 }
             } else {
-                values[17] =
-                    text_datum(fcinfo, miscinit::GetBackendTypeDesc(be.st_backendType))?;
+                values[17] = text_datum(fcinfo, miscinit::GetBackendTypeDesc(be.st_backendType))?;
             }
 
             if be.st_ssl {
@@ -340,8 +351,8 @@ pub fn fc_pg_stat_get_activity(
         } else {
             values[5] = text_datum(fcinfo, "<insufficient privilege>")?;
             for i in [
-                4usize, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
-                27, 28, 29, 30,
+                4usize, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
+                28, 29, 30,
             ] {
                 nulls[i] = true;
             }
@@ -438,7 +449,9 @@ mod tests {
         // The DirectFunctionCall1(inet_in, ...) leg: the numeric-host strings
         // client_addr_port produces are always valid inet input.
         for host in ["192.0.2.5", "::1", "fe80::1", "::ffff:192.0.2.5"] {
-            assert!(adt_network::network_in(host, false, None).unwrap().is_some());
+            assert!(adt_network::network_in(host, false, None)
+                .unwrap()
+                .is_some());
         }
     }
 }

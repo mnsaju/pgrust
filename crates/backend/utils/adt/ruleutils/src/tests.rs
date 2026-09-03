@@ -151,9 +151,7 @@ fn install() {
                 attgenerated: 0,
             }))
         });
-        s::pg_class_relname::set(|relid| {
-            Ok((relid == REL_OID).then(|| name("orders")))
-        });
+        s::pg_class_relname::set(|relid| Ok((relid == REL_OID).then(|| name("orders"))));
         s::lookup_pg_class_ls_shape::set(|relid| {
             Ok((relid == REL_OID).then(|| syscache_seams::PgClassLsShape {
                 relnamespace: 2200,
@@ -237,8 +235,14 @@ fn expr_with_rel(nodetree: &str, pretty: bool) -> String {
 
 #[test]
 fn booltest_nulltest_deparse_matches_c() {
-    assert_eq!(expr_with_rel(BOOL_NULLTEST, false), "((id IS NOT NULL) AND (NOT (qty IS NULL)))");
-    assert_eq!(expr_with_rel(BOOL_NULLTEST, true), "id IS NOT NULL AND NOT qty IS NULL");
+    assert_eq!(
+        expr_with_rel(BOOL_NULLTEST, false),
+        "((id IS NOT NULL) AND (NOT (qty IS NULL)))"
+    );
+    assert_eq!(
+        expr_with_rel(BOOL_NULLTEST, true),
+        "id IS NOT NULL AND NOT qty IS NULL"
+    );
 }
 
 #[test]
@@ -252,14 +256,20 @@ fn expr_with_var_and_no_relation_errors() {
 #[test]
 fn pretty_flags_match_c() {
     assert_eq!(get_pretty_flags(false), PRETTYFLAG_INDENT);
-    assert_eq!(get_pretty_flags(true), PRETTYFLAG_PAREN | PRETTYFLAG_INDENT | PRETTYFLAG_SCHEMA);
+    assert_eq!(
+        get_pretty_flags(true),
+        PRETTYFLAG_PAREN | PRETTYFLAG_INDENT | PRETTYFLAG_SCHEMA
+    );
 }
 
 #[test]
 fn quote_qualified() {
     assert_eq!(quote_qualified_identifier(None, "foo"), "foo");
     assert_eq!(quote_qualified_identifier(Some("public"), "t"), "public.t");
-    assert_eq!(quote_qualified_identifier(Some("Wei rd"), "a\"b"), "\"Wei rd\".\"a\"\"b\"");
+    assert_eq!(
+        quote_qualified_identifier(Some("Wei rd"), "a\"b"),
+        "\"Wei rd\".\"a\"\"b\""
+    );
     assert_eq!(quote_qualified_identifier(None, "select"), "\"select\"");
 }
 
@@ -290,7 +300,10 @@ fn deparse_view_action(action: &str, attnames: &[&str]) -> String {
 #[test]
 fn viewdef_select_1_matches_c() {
     let action = include_str!("fixtures/v1_action.txt");
-    assert_eq!(deparse_view_action(action, &["?column?"]), " SELECT 1 AS \"?column?\";");
+    assert_eq!(
+        deparse_view_action(action, &["?column?"]),
+        " SELECT 1 AS \"?column?\";"
+    );
 }
 
 #[test]

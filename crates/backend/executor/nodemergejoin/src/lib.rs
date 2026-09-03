@@ -7,8 +7,8 @@ use std::rc::Rc;
 
 use ::datum::Datum;
 use ::execexpr::{
-    exec_build_projection_info_subplans, exec_init_expr_subplans,
-    exec_init_qual_subplans, exec_project, exec_qual, EvalSlots, ExprState,
+    exec_build_projection_info_subplans, exec_init_expr_subplans, exec_init_qual_subplans,
+    exec_project, exec_qual, EvalSlots, ExprState,
 };
 use ::executils::{EStateData, EcxtId, ExecSlotId};
 use ::mcx::PgBox;
@@ -168,19 +168,24 @@ pub fn exec_init_merge_join<'mcx>(
     {
         return Err(non_mergeable_join_cond(node.join.jointype));
     }
-    let mut null_slot = |desc: &Rc<TupleDescData<'static>>, estate: &mut EStateData<'mcx>| {
-        let slot_id =
-            estate.exec_init_extra_tuple_slot(Some(desc.clone()), TupleSlotKind::Virtual);
+    let null_slot = |desc: &Rc<TupleDescData<'static>>, estate: &mut EStateData<'mcx>| {
+        let slot_id = estate.exec_init_extra_tuple_slot(Some(desc.clone()), TupleSlotKind::Virtual);
         exectuples::exec_store_all_null_tuple(
             &mut estate.es_tupleTable[slot_id.0 as usize],
             estate.es_query_cxt,
         );
         slot_id
     };
-    let mj_NullInnerTupleSlot =
-        if mj_FillOuter { Some(null_slot(inner_desc, estate)) } else { None };
-    let mj_NullOuterTupleSlot =
-        if mj_FillInner { Some(null_slot(outer_desc, estate)) } else { None };
+    let mj_NullInnerTupleSlot = if mj_FillOuter {
+        Some(null_slot(inner_desc, estate))
+    } else {
+        None
+    };
+    let mj_NullOuterTupleSlot = if mj_FillInner {
+        Some(null_slot(outer_desc, estate))
+    } else {
+        None
+    };
 
     let params = estate.param_bind();
     let (proj, otherqual, joinqual) =
@@ -217,8 +222,7 @@ pub fn exec_init_merge_join<'mcx>(
         mj_JoinState: EXEC_MJ_INITIALIZE_OUTER,
         mj_SkipMarkRestore: node.skip_mark_restore,
         mj_ExtraMarks,
-        js_single_match: node.join.inner_unique
-            || node.join.jointype == JoinType::JOIN_SEMI,
+        js_single_match: node.join.inner_unique || node.join.jointype == JoinType::JOIN_SEMI,
         mj_ConstFalseJoin,
         mj_FillOuter,
         mj_FillInner,
@@ -248,7 +252,10 @@ pub fn inner_child_eflags(eflags: i32, skip_mark_restore: bool) -> i32 {
 
 // check_constant_qual (nodeMergejoin.c): the planner throws away non-constant
 // terms ANDed with a constant false, so a surviving non-Const term is an error.
-fn check_constant_qual(qual: &::types_nodes::list::NodeList<'_>, is_const_false: &mut bool) -> bool {
+fn check_constant_qual(
+    qual: &::types_nodes::list::NodeList<'_>,
+    is_const_false: &mut bool,
+) -> bool {
     for n in qual.iter() {
         let Some(con) = n.as_const() else {
             return false;
@@ -269,14 +276,20 @@ fn check_constant_qual(qual: &::types_nodes::list::NodeList<'_>, is_const_false:
 #[cold]
 #[inline(never)]
 fn mergejoin_out_of_order() -> Box<PgError> {
-    Box::new(PgError::error("mergejoin input data is out of order".to_string()))
+    Box::new(PgError::error(
+        "mergejoin input data is out of order".to_string(),
+    ))
 }
 
 #[track_caller]
 #[cold]
 #[inline(never)]
 fn non_mergeable_join_cond(jointype: JoinType) -> Box<PgError> {
-    let kind = if jointype == JoinType::JOIN_FULL { "FULL" } else { "RIGHT" };
+    let kind = if jointype == JoinType::JOIN_FULL {
+        "FULL"
+    } else {
+        "RIGHT"
+    };
     Box::new(
         PgError::error(format!(
             "{kind} JOIN is only supported with merge-joinable join conditions"
@@ -298,9 +311,12 @@ fn examine_quals<'mcx>(
     let mut out: ::mcx::PgVec<'mcx, MergeJoinClause<'mcx>> = ::mcx::PgVec::new_in(mcx);
     out.reserve(n);
     for (i, qual) in node.mergeclauses.iter().enumerate() {
-        let op = qual.as_op_expr().filter(|o| o.args.len() == 2).unwrap_or_else(|| {
-            panic!("MJExamineQuals (nodeMergejoin.c): mergeclause is not a binary OpExpr")
-        });
+        let op = qual
+            .as_op_expr()
+            .filter(|o| o.args.len() == 2)
+            .unwrap_or_else(|| {
+                panic!("MJExamineQuals (nodeMergejoin.c): mergeclause is not a binary OpExpr")
+            });
         // C MJExamineQuals compiles the operands with the MergeJoinState
         // parent, so SubPlans are legal in them.
         let (mut lexpr, mut rexpr) =
@@ -463,7 +479,11 @@ fn eval_qual_with<'mcx>(
     let [inner, outer] = table
         .get_disjoint_mut([inner_id.0 as usize, outer_id.0 as usize])
         .expect("distinct in-range merge slot ids");
-    let mut slots = EvalSlots { scan: None, inner: Some(inner), outer: Some(outer) };
+    let mut slots = EvalSlots {
+        scan: None,
+        inner: Some(inner),
+        outer: Some(outer),
+    };
     let state = match which {
         Qual::Join => node.joinqual.as_deref_mut(),
         Qual::Other => node.otherqual.as_deref_mut(),
@@ -549,9 +569,17 @@ fn project_result_with<'mcx>(
     let result_id = node.ps_ResultTupleSlot;
     let table = &mut estate.es_tupleTable[..];
     let [inner, outer, result] = table
-        .get_disjoint_mut([inner_id.0 as usize, outer_id.0 as usize, result_id.0 as usize])
+        .get_disjoint_mut([
+            inner_id.0 as usize,
+            outer_id.0 as usize,
+            result_id.0 as usize,
+        ])
         .expect("distinct in-range merge slot ids");
-    let mut slots = EvalSlots { scan: None, inner: Some(inner), outer: Some(outer) };
+    let mut slots = EvalSlots {
+        scan: None,
+        inner: Some(inner),
+        outer: Some(outer),
+    };
     exec_project(&mut node.proj, &mut slots, result, mcx)?;
     Ok(result_id)
 }
@@ -758,8 +786,7 @@ where
             }
             EXEC_MJ_JOINTUPLES => {
                 node.mj_JoinState = EXEC_MJ_NEXTINNER;
-                let matched =
-                    !node.mj_ConstFalseJoin && eval_qual(node, estate, Qual::Join)?;
+                let matched = !node.mj_ConstFalseJoin && eval_qual(node, estate, Qual::Join)?;
                 if matched {
                     node.mj_MatchedOuter = true;
                     node.mj_MatchedInner = true;
@@ -853,9 +880,7 @@ where
                 } else if cmp > 0 {
                     match eval_inner_values(node, estate, node.mj_InnerTupleSlot)? {
                         MJEvalResult::Matchable => node.mj_JoinState = EXEC_MJ_SKIP_TEST,
-                        MJEvalResult::NonMatchable => {
-                            node.mj_JoinState = EXEC_MJ_SKIPINNER_ADVANCE
-                        }
+                        MJEvalResult::NonMatchable => node.mj_JoinState = EXEC_MJ_SKIPINNER_ADVANCE,
                         MJEvalResult::EndOfJoin => {
                             if node.mj_FillOuter {
                                 node.mj_JoinState = EXEC_MJ_ENDINNER;
@@ -919,7 +944,10 @@ pub fn exec_end_merge_join(node: &mut MergeJoinState<'_>) {
 }
 
 /// `ExecReScanMergeJoin` node-local half; the caller rescans both children.
-pub fn exec_rescan_merge_join<'mcx>(node: &mut MergeJoinState<'mcx>, estate: &mut EStateData<'mcx>) {
+pub fn exec_rescan_merge_join<'mcx>(
+    node: &mut MergeJoinState<'mcx>,
+    estate: &mut EStateData<'mcx>,
+) {
     let mcx = estate.es_query_cxt;
     exectuples::exec_clear_tuple(estate.slot_mut(node.mj_MarkedTupleSlot), mcx);
     node.mj_JoinState = EXEC_MJ_INITIALIZE_OUTER;
@@ -931,7 +959,9 @@ pub fn exec_rescan_merge_join<'mcx>(node: &mut MergeJoinState<'mcx>, estate: &mu
 
 /// `ExecGetResultType` for a MergeJoin node.
 pub fn merge_join_result_type(node: &MergeJoinState<'_>) -> Rc<TupleDescData<'static>> {
-    node.ps_ResultTupleDesc.clone().expect("merge join already ended")
+    node.ps_ResultTupleDesc
+        .clone()
+        .expect("merge join already ended")
 }
 
 // Exempt: all released in exec_end_merge_join; SortSupport no-drop, proven below.

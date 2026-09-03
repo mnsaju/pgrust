@@ -59,9 +59,10 @@ pub fn ReplaceSessionIdentityState(state: SessionIdentityState) -> SessionIdenti
     SECURITY_RESTRICTION_CONTEXT.set(state.security_restriction_context);
     SET_ROLE_IS_ACTIVE.set(state.set_role_is_active);
     if let Some(procno) = lmgr_proc::MyProc() {
-        lmgr_proc::GetPGProcByNumber(procno)
-            .roleId
-            .store(state.authenticated_user_id, std::sync::atomic::Ordering::Relaxed);
+        lmgr_proc::GetPGProcByNumber(procno).roleId.store(
+            state.authenticated_user_id,
+            std::sync::atomic::Ordering::Relaxed,
+        );
     }
     old
 }
@@ -205,17 +206,15 @@ pub fn InitializeSessionUserId(
     inval_seams::accept_invalidation_messages::call()?;
 
     let form = match rolename {
-        Some(rname) => {
-            match syscache_seams::lookup_authid_session_by_rolname::call(rname)? {
-                Some(f) => f,
-                None => {
-                    return elog::ereport(types_error::FATAL)
-                        .errcode(types_error::ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION)
-                        .errmsg(format!("role \"{rname}\" does not exist"))
-                        .finish(crate::process::loc(802, "InitializeSessionUserId"));
-                }
+        Some(rname) => match syscache_seams::lookup_authid_session_by_rolname::call(rname)? {
+            Some(f) => f,
+            None => {
+                return elog::ereport(types_error::FATAL)
+                    .errcode(types_error::ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION)
+                    .errmsg(format!("role \"{rname}\" does not exist"))
+                    .finish(crate::process::loc(802, "InitializeSessionUserId"));
             }
-        }
+        },
         None => match syscache_seams::lookup_authid_session_by_oid::call(roleid)? {
             Some(f) => f,
             None => {

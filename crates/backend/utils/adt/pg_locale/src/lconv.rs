@@ -66,8 +66,8 @@ fn localeconv_non_c() -> ::types_error::PgResult<&'static PgLconv> {
 
 #[cfg(not(target_family = "wasm"))]
 fn localeconv_non_c() -> ::types_error::PgResult<&'static PgLconv> {
-    use std::collections::HashMap;
     use pgsync::{Mutex, OnceLock};
+    use std::collections::HashMap;
 
     static CACHE: OnceLock<Mutex<HashMap<(String, String), &'static PgLconv>>> = OnceLock::new();
     let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));

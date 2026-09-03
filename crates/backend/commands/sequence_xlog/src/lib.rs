@@ -45,7 +45,10 @@ fn panic_err(msg: String) -> Box<PgError> {
 }
 
 pub fn seq_redo(record: &mut XLogReaderState) -> PgResult<()> {
-    let rec = record.record.as_ref().expect("seq_redo with no decoded record");
+    let rec = record
+        .record
+        .as_ref()
+        .expect("seq_redo with no decoded record");
     let info = rec.xl_info & !XLR_INFO_MASK;
     if info != XLOG_SEQ_LOG {
         return Err(panic_err(format!("seq_redo: unknown op code {info}")));
@@ -57,7 +60,7 @@ pub fn seq_redo(record: &mut XLogReaderState) -> PgResult<()> {
     let buffer = XLogInitBufferForRedo(record, 0)?;
 
     // Whole-page rebuild in local workspace, memcpy'd in (hot-standby rule).
-    let mut local = PageTemp::new(BLCKSZ).map_err(Box::new)?;
+    let mut local = PageTemp::new(BLCKSZ)?;
     {
         // SAFETY: local is an owned BLCKSZ buffer.
         let ptr = core::ptr::NonNull::new(local.as_mut_bytes().as_mut_ptr()).expect("PageTemp ptr");

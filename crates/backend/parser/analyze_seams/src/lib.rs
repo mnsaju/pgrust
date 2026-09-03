@@ -1,3 +1,7 @@
+// These seam signatures mirror C's pg_analyze_and_rewrite call-frames
+// argument-for-argument.
+#![allow(clippy::too_many_arguments)]
+
 use mcx::Mcx;
 use types_core::Oid;
 use types_error::PgResult;

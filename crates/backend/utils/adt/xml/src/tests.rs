@@ -64,14 +64,19 @@ fn print_xml_decl_forms() {
 #[test]
 fn doctype_in_content_forms() {
     assert!(xml_doctype_in_content(b"<!DOCTYPE a><a/>\0"));
-    assert!(xml_doctype_in_content(b"  <!-- c --> <?pi x?> <!DOCTYPE a><a/>\0"));
+    assert!(xml_doctype_in_content(
+        b"  <!-- c --> <?pi x?> <!DOCTYPE a><a/>\0"
+    ));
     assert!(!xml_doctype_in_content(b"<a/>\0"));
     assert!(!xml_doctype_in_content(b"text\0"));
 }
 
 #[test]
 fn escape_xml_specials() {
-    assert_eq!(escape_xml(b"a<b>&c\rd"), b"a&lt;b&gt;&amp;c&#x0d;d".to_vec());
+    assert_eq!(
+        escape_xml(b"a<b>&c\rd"),
+        b"a&lt;b&gt;&amp;c&#x0d;d".to_vec()
+    );
 }
 
 #[test]
@@ -102,7 +107,10 @@ fn xmlroot_rewrites_decl() {
         XmlStandaloneType::XML_STANDALONE_YES,
     )
     .unwrap();
-    assert_eq!(out, b"<?xml version=\"1.1\" standalone=\"yes\"?><a/>".to_vec());
+    assert_eq!(
+        out,
+        b"<?xml version=\"1.1\" standalone=\"yes\"?><a/>".to_vec()
+    );
     let out = xmlroot(b"<a/>", None, XmlStandaloneType::XML_STANDALONE_OMITTED).unwrap();
     assert_eq!(out, b"<a/>".to_vec());
 }
@@ -126,5 +134,8 @@ fn map_identifiers_round() {
 #[test]
 fn errdetail_codes() {
     assert_eq!(errdetail_for_xml_code(9), "Invalid character value.");
-    assert_eq!(errdetail_for_xml_code(4242), "Unrecognized libxml error code: 4242.");
+    assert_eq!(
+        errdetail_for_xml_code(4242),
+        "Unrecognized libxml error code: 4242."
+    );
 }

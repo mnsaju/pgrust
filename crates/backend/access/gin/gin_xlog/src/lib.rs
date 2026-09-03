@@ -32,14 +32,17 @@ pub mod sim_red {
     }
 }
 
-fn main_data<'a>(record: &'a XLogReaderState) -> &'a [u8] {
-    let rec = record.record.as_ref().expect("gin redo with no decoded record");
+fn main_data(record: &XLogReaderState) -> &[u8] {
+    let rec = record
+        .record
+        .as_ref()
+        .expect("gin redo with no decoded record");
     // SAFETY: points into the reader's decode buffer, valid for the redo
     // callback's duration.
     unsafe { rec.main_data_bytes() }
 }
 
-fn block_data<'a>(record: &'a XLogReaderState, block_id: u8) -> &'a [u8] {
+fn block_data(record: &XLogReaderState, block_id: u8) -> &[u8] {
     unsafe { record.block(block_id).data_bytes() }
 }
 
@@ -65,7 +68,13 @@ fn unlock_release(buffer: Buffer) -> PgResult<()> {
 
 fn opaque_of(bytes: &[u8]) -> GinPageOpaqueData {
     // SAFETY: in-bounds 4-aligned special area of a BLCKSZ image.
-    unsafe { bytes.as_ptr().add(OPAQUE_OFF).cast::<GinPageOpaqueData>().read() }
+    unsafe {
+        bytes
+            .as_ptr()
+            .add(OPAQUE_OFF)
+            .cast::<GinPageOpaqueData>()
+            .read()
+    }
 }
 
 fn write_opaque_to(bytes: &mut [u8], o: &GinPageOpaqueData) {
@@ -204,9 +213,8 @@ fn redo_recompress(buffer: Buffer, rdata: &[u8]) -> PgResult<()> {
     let nactions = u16::from_ne_bytes([rdata[0], rdata[1]]) as usize;
     let mut walbuf = &rdata[2..];
 
-    let seg_size_at = |b: &[u8]| -> usize {
-        size_of_gin_posting_list(u16::from_ne_bytes([b[6], b[7]]) as usize)
-    };
+    let seg_size_at =
+        |b: &[u8]| -> usize { size_of_gin_posting_list(u16::from_ne_bytes([b[6], b[7]]) as usize) };
 
     let list_start = GinDataPageDataOffset;
     let pd_lower = u16::from_ne_bytes([bytes[12], bytes[13]]) as usize;
@@ -387,8 +395,7 @@ fn redo_insert_data(
     } else {
         let offset = u16::from_ne_bytes([rdata[0], rdata[1]]) as OffsetNumber;
         // SAFETY: PostingItem is a 10-byte POD in the WAL image.
-        let newitem =
-            unsafe { rdata.as_ptr().add(2).cast::<PostingItem>().read_unaligned() };
+        let newitem = unsafe { rdata.as_ptr().add(2).cast::<PostingItem>().read_unaligned() };
         // SAFETY: redo lock protocol.
         let bytes = unsafe { page_bytes_mut(buffer) };
 
@@ -397,7 +404,11 @@ fn redo_insert_data(
         unsafe {
             let mut old = bytes.as_ptr().add(p).cast::<PostingItem>().read_unaligned();
             PostingItemSetBlockNumber(&mut old, rightblkno);
-            bytes.as_mut_ptr().add(p).cast::<PostingItem>().write_unaligned(old);
+            bytes
+                .as_mut_ptr()
+                .add(p)
+                .cast::<PostingItem>()
+                .write_unaligned(old);
         }
 
         let mut o = opaque_of(bytes);
@@ -518,19 +529,19 @@ fn redo_update_metapage(record: &XLogReaderState) -> PgResult<()> {
             let payload = block_data(record, 1);
             // SAFETY: redo lock protocol.
             let mut page = unsafe { page_mut(buffer) };
-            let mut off = if page.as_ref().pd_lower() as usize <= SIZE_OF_PAGE_HEADER {
+            let mut p = 0usize;
+            for off in (if page.as_ref().pd_lower() as usize <= SIZE_OF_PAGE_HEADER {
                 FirstOffsetNumber
             } else {
                 page.as_ref().max_offset_number() + 1
-            };
-            let mut p = 0usize;
-            for _ in 0..ntuples {
+            }..)
+                .take(ntuples as usize)
+            {
                 let tupsize = itup_size(&payload[p..]);
                 if page.add_item(&payload[p..p + tupsize], off, 0).is_none() {
                     return Err(error_err("failed to add item to index page".into()));
                 }
                 p += tupsize;
-                off += 1;
             }
             debug_assert!(p == payload.len());
             // SAFETY: redo lock protocol.
@@ -597,15 +608,13 @@ fn redo_insert_listpage(record: &XLogReaderState) -> PgResult<()> {
         let payload = block_data(record, 0);
         // SAFETY: redo lock protocol.
         let mut page = unsafe { page_mut(buffer) };
-        let mut off = FirstOffsetNumber;
         let mut p = 0usize;
-        for _ in 0..ntuples {
+        for off in (FirstOffsetNumber..).take(ntuples as usize) {
             let tupsize = itup_size(&payload[p..]);
             if page.add_item(&payload[p..p + tupsize], off, 0).is_none() {
                 return Err(error_err("failed to add item to index page".into()));
             }
             p += tupsize;
-            off += 1;
         }
         debug_assert!(p == payload.len());
     }
@@ -735,7 +744,11 @@ fn redo_delete_page(record: &XLogReaderState) -> PgResult<()> {
 }
 
 pub fn gin_redo(record: &mut XLogReaderState) -> PgResult<()> {
-    let info = record.record.as_ref().expect("gin_redo with no decoded record").xl_info
+    let info = record
+        .record
+        .as_ref()
+        .expect("gin_redo with no decoded record")
+        .xl_info
         & !XLR_INFO_MASK;
     match info {
         XLOG_GIN_CREATE_PTREE => redo_create_ptree(record),

@@ -90,7 +90,10 @@ fn var_key<'a>(d: Datum) -> &'a [u8] {
 }
 
 fn ctx<'a>(f: Option<&'a mut FmgrInfo>, fcinfo: &Fcinfo) -> Ctx<'a> {
-    Ctx { flinfo: f, collation: fcinfo.get_collation() }
+    Ctx {
+        flinfo: f,
+        collation: fcinfo.get_collation(),
+    }
 }
 
 fn out_bool(fcinfo: &Fcinfo, i: usize, v: bool) {
@@ -221,7 +224,9 @@ macro_rules! scalar_penalty {
             natts: u16,
             _: &mut Ctx,
         ) -> PgResult<f32> {
-            Ok(penalty_num(o.0 as f64, o.1 as f64, n.0 as f64, n.1 as f64, natts))
+            Ok(penalty_num(
+                o.0 as f64, o.1 as f64, n.0 as f64, n.1 as f64, natts,
+            ))
         }
     };
 }
@@ -355,9 +360,9 @@ scalar_numops!(InetT, f64, 8, 16, rd_f64);
 impl NumProc for InetT {
     fn val_from_datum(d: Datum, mcx: Mcx<'_>) -> PgResult<f64> {
         let img = detoasted_image(mcx, d)?;
-        Ok(adt_network::convert_network_to_scalar(adt_network::InetRef::from_payload(
-            &img[VARHDRSZ..],
-        )))
+        Ok(adt_network::convert_network_to_scalar(
+            adt_network::InetRef::from_payload(&img[VARHDRSZ..]),
+        ))
     }
     fn fetch_datum(_: f64, key: Datum) -> Datum {
         key
@@ -413,7 +418,11 @@ impl NumOps for Ts {
     }
     fn key_cmp(a: (i64, i64), b: (i64, i64), _: &mut Ctx) -> PgResult<i32> {
         let res = adt_timestamp::timestamp_cmp_internal(a.0, b.0);
-        Ok(if res == 0 { adt_timestamp::timestamp_cmp_internal(a.1, b.1) } else { res })
+        Ok(if res == 0 {
+            adt_timestamp::timestamp_cmp_internal(a.1, b.1)
+        } else {
+            res
+        })
     }
     const HAS_DIST: bool = true;
     fn dist(a: i64, b: i64, _: &mut Ctx) -> PgResult<f64> {
@@ -477,7 +486,11 @@ impl NumOps for TimeT {
     }
     fn key_cmp(a: (i64, i64), b: (i64, i64), _: &mut Ctx) -> PgResult<i32> {
         let res = adt_date::time_cmp_internal(a.0, b.0);
-        Ok(if res == 0 { adt_date::time_cmp_internal(a.1, b.1) } else { res })
+        Ok(if res == 0 {
+            adt_date::time_cmp_internal(a.1, b.1)
+        } else {
+            res
+        })
     }
     const HAS_DIST: bool = true;
     fn dist(a: i64, b: i64, _: &mut Ctx) -> PgResult<f64> {
@@ -539,7 +552,11 @@ impl NumOps for DateT {
     }
     fn key_cmp(a: (i32, i32), b: (i32, i32), _: &mut Ctx) -> PgResult<i32> {
         let res = adt_date::date_cmp_internal(a.0, b.0);
-        Ok(if res == 0 { adt_date::date_cmp_internal(a.1, b.1) } else { res })
+        Ok(if res == 0 {
+            adt_date::date_cmp_internal(a.1, b.1)
+        } else {
+            res
+        })
     }
     const HAS_DIST: bool = true;
     fn dist(a: i32, b: i32, _: &mut Ctx) -> PgResult<f64> {
@@ -672,11 +689,7 @@ macro_rules! bytes_numops {
             fn lt(a: Self::V, b: Self::V, _: &mut Ctx) -> PgResult<bool> {
                 Ok(a < b)
             }
-            fn key_cmp(
-                a: (Self::V, Self::V),
-                b: (Self::V, Self::V),
-                _: &mut Ctx,
-            ) -> PgResult<i32> {
+            fn key_cmp(a: (Self::V, Self::V), b: (Self::V, Self::V), _: &mut Ctx) -> PgResult<i32> {
                 Ok(match a.0.cmp(&b.0).then(a.1.cmp(&b.1)) {
                     core::cmp::Ordering::Less => -1,
                     core::cmp::Ordering::Greater => 1,
@@ -855,7 +868,10 @@ fn num_compress<T: NumProc>(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> P
     let v = T::val_from_datum(entry.key, mcx)?;
     let img = num::make_key::<T>(v, v);
     let key = image_result(fcinfo, &img)?;
-    entry_result(fcinfo, &GISTENTRY::init(key, entry.offset, false, entry.page_is_leaf))
+    entry_result(
+        fcinfo,
+        &GISTENTRY::init(key, entry.offset, false, entry.page_is_leaf),
+    )
 }
 
 fn num_fetch<T: NumProc>(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -863,7 +879,10 @@ fn num_fetch<T: NumProc>(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRe
     let entry = unsafe { entry_arg(fcinfo, 0) };
     let lower = T::read(num_key::<T>(entry.key));
     let d = T::fetch_datum(lower, entry.key);
-    entry_result(fcinfo, &GISTENTRY::init(d, entry.offset, false, entry.page_is_leaf))
+    entry_result(
+        fcinfo,
+        &GISTENTRY::init(d, entry.offset, false, entry.page_is_leaf),
+    )
 }
 
 fn num_consistent<T: NumProc>(f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -970,7 +989,10 @@ fn fc_gbt_timetz_compress(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgR
     let v = timetz_to_time(entry.key);
     let img = num::make_key::<TimeT>(v, v);
     let key = image_result(fcinfo, &img)?;
-    entry_result(fcinfo, &GISTENTRY::init(key, entry.offset, false, entry.page_is_leaf))
+    entry_result(
+        fcinfo,
+        &GISTENTRY::init(key, entry.offset, false, entry.page_is_leaf),
+    )
 }
 
 fn fc_gbt_timetz_consistent(f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -1152,7 +1174,10 @@ fn var_compress<T: VarProc>(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> P
     let leaf = detoasted_image(mcx, entry.key)?;
     let img = var::key_from_datum(leaf);
     let key = image_result(fcinfo, &img)?;
-    entry_result(fcinfo, &GISTENTRY::init(key, entry.offset, true, entry.page_is_leaf))
+    entry_result(
+        fcinfo,
+        &GISTENTRY::init(key, entry.offset, true, entry.page_is_leaf),
+    )
 }
 
 fn var_consistent<T: VarProc>(f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -1266,7 +1291,11 @@ fn fc_gbt_numeric_penalty(f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRe
 
     let mut result: f32;
     if nm::numeric_is_nan(us.num()) {
-        result = if nm::numeric_is_nan(os.num()) { 0.0 } else { 1.0 };
+        result = if nm::numeric_is_nan(os.num()) {
+            0.0
+        } else {
+            1.0
+        };
     } else {
         let nul = nm::int64_to_numeric(0);
         result = 0.0;
@@ -1333,9 +1362,11 @@ fn fc_gbtreekey_in(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<D
     let name =
         format_type::format_type_extended(typioparam, -1, format_type::FORMAT_TYPE_ALLOW_INVALID)?
             .unwrap_or_else(|| "-".to_string());
-    Err(PgError::error(format!("cannot accept a value of type {name}"))
-        .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED)
-        .into())
+    Err(
+        PgError::error(format!("cannot accept a value of type {name}"))
+            .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED)
+            .into(),
+    )
 }
 
 fn fc_gbtreekey_out(_f: Option<&mut FmgrInfo>, _fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -1408,7 +1439,7 @@ fn fc_cash_dist(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datu
 
 fn fc_oid_dist(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let (a, b) = (fcinfo.arg(0).as_oid(), fcinfo.arg(1).as_oid());
-    Ok(Datum::from_oid(if a < b { b - a } else { a - b }))
+    Ok(Datum::from_oid(b.abs_diff(a)))
 }
 
 fn fc_float4_dist(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -1435,7 +1466,11 @@ fn fc_date_dist(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datu
 }
 
 fn abs_interval(a: Interval) -> PgResult<Interval> {
-    let zero = Interval { time: 0, day: 0, month: 0 };
+    let zero = Interval {
+        time: 0,
+        day: 0,
+        month: 0,
+    };
     if adt_timestamp::interval::interval_cmp_internal(&a, &zero) < 0 {
         adt_timestamp::interval::interval_um(&a)
     } else {
@@ -1451,7 +1486,11 @@ fn fc_time_dist(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datu
 fn ts_dist_common(fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let (a, b) = (fcinfo.arg(0).as_i64(), fcinfo.arg(1).as_i64());
     if adt_timestamp::TIMESTAMP_NOT_FINITE(a) || adt_timestamp::TIMESTAMP_NOT_FINITE(b) {
-        let p = Interval { time: i64::MAX, day: i32::MAX, month: i32::MAX };
+        let p = Interval {
+            time: i64::MAX,
+            day: i32::MAX,
+            month: i32::MAX,
+        };
         return interval_result(fcinfo, &p);
     }
     let r = adt_timestamp::interval::timestamp_mi(a, b)?;

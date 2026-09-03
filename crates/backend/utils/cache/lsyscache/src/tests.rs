@@ -198,15 +198,17 @@ fn install() {
             })
         });
         s::pg_type_default_strings::set(|_mcx, typid| {
-            Ok((typid == INT4OID).then(|| syscache_seams::PgTypeDefaultShape {
-                typdefaultbin: None,
-                typdefault: None,
-            }))
+            Ok(
+                (typid == INT4OID).then(|| syscache_seams::PgTypeDefaultShape {
+                    typdefaultbin: None,
+                    typdefault: None,
+                }),
+            )
         });
         s::lookup_pg_operator_shape::set(|opno| {
             Ok(match opno {
                 INT4_EQ => Some(PgOperatorShape {
-                oprnamespace: 11,
+                    oprnamespace: 11,
                     oprleft: INT4OID,
                     oprright: INT4OID,
                     oprresult: BOOLOID,
@@ -219,7 +221,7 @@ fn install() {
                     oprcanhash: true,
                 }),
                 INT4_LT => Some(PgOperatorShape {
-                oprnamespace: 11,
+                    oprnamespace: 11,
                     oprleft: INT4OID,
                     oprright: INT4OID,
                     oprresult: BOOLOID,
@@ -299,8 +301,7 @@ fn install() {
         });
         s::lookup_pg_amproc::set(|opfamily, lefttype, righttype, procnum| {
             Ok(
-                if (opfamily, lefttype, righttype, procnum) == (INT_HASH_FAM, INT4OID, INT4OID, 1)
-                {
+                if (opfamily, lefttype, righttype, procnum) == (INT_HASH_FAM, INT4OID, INT4OID, 1) {
                     450
                 } else {
                     InvalidOid
@@ -336,16 +337,22 @@ fn install() {
             Ok(Some((BOOLOID, args)))
         });
         s::lookup_pg_attribute_shape::set(|relid, attnum| {
-            Ok(((relid, attnum) == (REL_OID, 1)).then_some(PgAttributeLsShape {
-                attname: name("id"),
-                atttypid: INT4OID,
-                atttypmod: -1,
-                attcollation: InvalidOid,
-                attgenerated: 0,
-            }))
+            Ok(
+                ((relid, attnum) == (REL_OID, 1)).then_some(PgAttributeLsShape {
+                    attname: name("id"),
+                    atttypid: INT4OID,
+                    atttypmod: -1,
+                    attcollation: InvalidOid,
+                    attgenerated: 0,
+                }),
+            )
         });
         s::lookup_pg_attribute_attnum_by_name::set(|relid, attname| {
-            Ok(if relid == REL_OID && attname == "id" { 1 } else { InvalidAttrNumber })
+            Ok(if relid == REL_OID && attname == "id" {
+                1
+            } else {
+                InvalidAttrNumber
+            })
         });
         s::pg_attribute_attoptions::set(|_mcx, relid, attnum| {
             Ok(((relid, attnum) == (REL_OID, 1)).then_some(None))
@@ -365,7 +372,11 @@ fn install() {
         });
         s::pg_class_relname::set(|relid| Ok((relid == REL_OID).then(|| name("t1"))));
         s::lookup_pg_class_relid_by_name::set(|relname, nsp| {
-            Ok(if relname == "t1" && nsp == 2200 { REL_OID } else { InvalidOid })
+            Ok(if relname == "t1" && nsp == 2200 {
+                REL_OID
+            } else {
+                InvalidOid
+            })
         });
         s::lookup_pg_index_ls_shape::set(|index_oid| {
             Ok((index_oid == IDX_OID).then_some(PgIndexLsShape {
@@ -401,7 +412,11 @@ fn install() {
             })
         });
         s::lookup_pg_cast_oid::set(|src, tgt| {
-            Ok(if (src, tgt) == (INT4OID, TEXTOID) { 7777 } else { InvalidOid })
+            Ok(if (src, tgt) == (INT4OID, TEXTOID) {
+                7777
+            } else {
+                InvalidOid
+            })
         });
         s::lookup_pg_collation_shape::set(|colloid| {
             Ok((colloid == 100).then_some(PgCollationShape {
@@ -427,10 +442,12 @@ fn install() {
         });
         s::lookup_pg_language_name::set(|langoid| Ok((langoid == 13).then(|| name("plpgsql"))));
         s::lookup_pg_transform_shape::set(|typid, langid| {
-            Ok(((typid, langid) == (INT4OID, 13)).then_some(PgTransformShape {
-                trffromsql: 9001,
-                trftosql: 9002,
-            }))
+            Ok(
+                ((typid, langid) == (INT4OID, 13)).then_some(PgTransformShape {
+                    trffromsql: 9001,
+                    trftosql: 9002,
+                }),
+            )
         });
         s::pg_namespace_nspname::set(|nspid| Ok((nspid == 2200).then(|| name("public"))));
         s::lookup_pg_range_shape::set(|range_oid| {
@@ -449,7 +466,11 @@ fn install() {
         });
         s::pg_publication_pubname::set(|pubid| Ok((pubid == 6001).then(|| name("pub1"))));
         s::lookup_pg_subscription_oid::set(|dbid, subname| {
-            Ok(if dbid == 1 && subname == "sub1" { 6002 } else { InvalidOid })
+            Ok(if dbid == 1 && subname == "sub1" {
+                6002
+            } else {
+                InvalidOid
+            })
         });
         s::pg_subscription_subname::set(|subid| Ok((subid == 6002).then(|| name("sub1"))));
         s::pg_statistic_stawidth::set(|relid, attnum, inh| {
@@ -479,7 +500,10 @@ fn type_getters() {
         assert!(get_typbyval(INT4OID).unwrap());
         assert!(!get_typbyval(1).unwrap());
         assert_eq!(get_typlenbyval(INT4OID).unwrap(), (4, true));
-        assert_eq!(get_typlenbyvalalign(TEXTOID).unwrap(), (-1, false, TYPALIGN_INT));
+        assert_eq!(
+            get_typlenbyvalalign(TEXTOID).unwrap(),
+            (-1, false, TYPALIGN_INT)
+        );
         assert!(get_typlenbyval(1).is_err());
         assert_eq!(get_typstorage(TEXTOID).unwrap(), TYPSTORAGE_EXTENDED);
         assert_eq!(get_typstorage(1).unwrap(), TYPSTORAGE_PLAIN);
@@ -496,7 +520,10 @@ fn type_getters() {
         assert!(!type_is_enum(INT4OID).unwrap());
         assert!(!type_is_range(INT4OID).unwrap());
         assert!(!type_is_multirange(INT4OID).unwrap());
-        assert_eq!(get_type_category_preferred(INT4OID).unwrap(), (b'N' as i8, true));
+        assert_eq!(
+            get_type_category_preferred(INT4OID).unwrap(),
+            (b'N' as i8, true)
+        );
         assert_eq!(get_typ_typrelid(COMPOSITE_OID).unwrap(), 4242);
         assert_eq!(get_typ_typrelid(INT4OID).unwrap(), InvalidOid);
     });
@@ -506,7 +533,10 @@ fn type_getters() {
 fn type_domain_and_array() {
     with_mcx(|_m| {
         let mut typmod = -1;
-        assert_eq!(getBaseTypeAndTypmod(DOMAIN_OID, &mut typmod).unwrap(), TEXTOID);
+        assert_eq!(
+            getBaseTypeAndTypmod(DOMAIN_OID, &mut typmod).unwrap(),
+            TEXTOID
+        );
         assert_eq!(typmod, 7);
         assert_eq!(getBaseType(TEXTOID).unwrap(), TEXTOID);
         assert_eq!(get_element_type(INT4_ARRAY).unwrap(), INT4OID);
@@ -531,10 +561,16 @@ fn type_io() {
         let err = getTypeInputInfo(SHELL_OID).unwrap_err();
         assert!(err.message().contains("is only a shell"));
         let io = get_type_io_data(INT4_ARRAY, IOFuncSelector::IOFunc_output).unwrap();
-        assert_eq!((io.typlen, io.typbyval, io.typioparam, io.func), (-1, false, INT4OID, 751));
+        assert_eq!(
+            (io.typlen, io.typbyval, io.typioparam, io.func),
+            (-1, false, INT4OID, 751)
+        );
         assert_eq!(get_typmodin(INT4OID).unwrap(), InvalidOid);
         assert_eq!(get_typmodout(1).unwrap(), InvalidOid);
-        assert_eq!(get_typsubscript(INT4_ARRAY).unwrap(), (typ::F_ARRAY_SUBSCRIPT_HANDLER, INT4OID));
+        assert_eq!(
+            get_typsubscript(INT4_ARRAY).unwrap(),
+            (typ::F_ARRAY_SUBSCRIPT_HANDLER, INT4OID)
+        );
         assert!(getSubscriptingRoutines(INT4OID).unwrap().is_none());
         assert!(get_typdefault(m, INT4OID).unwrap().is_none());
         assert_eq!(get_typavgwidth(INT4OID, -1).unwrap(), 4);
@@ -572,13 +608,19 @@ fn amop_getters() {
         assert!(!op_in_opfamily(999, INT_BTREE_FAM).unwrap());
         assert_eq!(get_op_opfamily_strategy(INT4_EQ, INT_BTREE_FAM).unwrap(), 3);
         assert_eq!(get_op_opfamily_strategy(999, INT_BTREE_FAM).unwrap(), 0);
-        assert_eq!(get_op_opfamily_sortfamily(INT4_EQ, INT_BTREE_FAM).unwrap(), InvalidOid);
+        assert_eq!(
+            get_op_opfamily_sortfamily(INT4_EQ, INT_BTREE_FAM).unwrap(),
+            InvalidOid
+        );
         assert_eq!(
             get_op_opfamily_properties(INT4_LT, INT_BTREE_FAM, false).unwrap(),
             (1, INT4OID, INT4OID)
         );
         assert!(get_op_opfamily_properties(999, INT_BTREE_FAM, false).is_err());
-        assert_eq!(get_opfamily_member(INT_BTREE_FAM, INT4OID, INT4OID, 1).unwrap(), INT4_LT);
+        assert_eq!(
+            get_opfamily_member(INT_BTREE_FAM, INT4OID, INT4OID, 1).unwrap(),
+            INT4_LT
+        );
         assert_eq!(
             get_opfamily_member_for_cmptype(INT_BTREE_FAM, INT4OID, INT4OID, COMPARE_EQ).unwrap(),
             INT4_EQ
@@ -592,10 +634,16 @@ fn amop_getters() {
             get_equality_op_for_ordering_op(INT4_LT).unwrap(),
             Some((INT4_EQ, false))
         );
-        assert_eq!(get_ordering_op_for_equality_op(INT4_EQ, true).unwrap(), INT4_LT);
+        assert_eq!(
+            get_ordering_op_for_equality_op(INT4_EQ, true).unwrap(),
+            INT4_LT
+        );
         let fams = get_mergejoin_opfamilies(m, INT4_EQ).unwrap();
         assert_eq!(fams.as_slice(), &[INT_BTREE_FAM]);
-        assert_eq!(get_compatible_hash_operators(INT4_EQ).unwrap(), Some((INT4_EQ, INT4_EQ)));
+        assert_eq!(
+            get_compatible_hash_operators(INT4_EQ).unwrap(),
+            Some((INT4_EQ, INT4_EQ))
+        );
         assert_eq!(get_op_hash_functions(INT4_EQ).unwrap(), Some((450, 450)));
         let interp = get_op_index_interpretation(m, INT4_EQ).unwrap();
         assert_eq!(interp.len(), 1);
@@ -603,7 +651,10 @@ fn amop_getters() {
         assert_eq!(interp[0].cmptype, COMPARE_EQ);
         assert!(equality_ops_are_compatible(INT4_EQ, INT4_EQ).unwrap());
         assert!(comparison_ops_are_compatible(INT4_EQ, INT4_LT).unwrap());
-        assert_eq!(get_opfamily_proc(INT_HASH_FAM, INT4OID, INT4OID, 1).unwrap(), 450);
+        assert_eq!(
+            get_opfamily_proc(INT_HASH_FAM, INT4OID, INT4OID, 1).unwrap(),
+            450
+        );
     });
 }
 
@@ -617,11 +668,20 @@ fn opclass_opfamily_getters() {
             Some((INT_BTREE_FAM, INT4OID))
         );
         assert!(get_opclass_opfamily_and_input_type(1).unwrap().is_none());
-        assert_eq!(get_opclass_method(INT4_OPCLASS).unwrap(), types_core::BTREE_AM_OID);
-        assert!(get_opclass_family(1).is_err());
-        assert_eq!(get_opfamily_method(INT_BTREE_FAM).unwrap(), types_core::BTREE_AM_OID);
         assert_eq!(
-            get_opfamily_name(m, INT_BTREE_FAM, false).unwrap().unwrap().as_str(),
+            get_opclass_method(INT4_OPCLASS).unwrap(),
+            types_core::BTREE_AM_OID
+        );
+        assert!(get_opclass_family(1).is_err());
+        assert_eq!(
+            get_opfamily_method(INT_BTREE_FAM).unwrap(),
+            types_core::BTREE_AM_OID
+        );
+        assert_eq!(
+            get_opfamily_name(m, INT_BTREE_FAM, false)
+                .unwrap()
+                .unwrap()
+                .as_str(),
             "integer_ops"
         );
         assert!(get_opfamily_name(m, 1, true).unwrap().is_none());
@@ -631,7 +691,10 @@ fn opclass_opfamily_getters() {
 #[test]
 fn function_getters() {
     with_mcx(|m| {
-        assert_eq!(get_func_name(m, F_INT4EQ).unwrap().unwrap().as_str(), "int4eq");
+        assert_eq!(
+            get_func_name(m, F_INT4EQ).unwrap().unwrap().as_str(),
+            "int4eq"
+        );
         assert!(get_func_name(m, 1).unwrap().is_none());
         assert_eq!(get_func_namespace(F_INT4EQ).unwrap(), 11);
         assert_eq!(get_func_rettype(F_INT4EQ).unwrap(), BOOLOID);
@@ -655,7 +718,10 @@ fn function_getters() {
 #[test]
 fn attribute_getters() {
     with_mcx(|m| {
-        assert_eq!(get_attname(m, REL_OID, 1, false).unwrap().unwrap().as_str(), "id");
+        assert_eq!(
+            get_attname(m, REL_OID, 1, false).unwrap().unwrap().as_str(),
+            "id"
+        );
         assert!(get_attname(m, REL_OID, 9, true).unwrap().is_none());
         assert!(get_attname(m, REL_OID, 9, false).is_err());
         assert_eq!(get_attnum(REL_OID, "id").unwrap(), 1);
@@ -704,22 +770,43 @@ fn misc_getters() {
         assert_eq!(get_cast_oid(INT4OID, TEXTOID, false).unwrap(), 7777);
         let err = get_cast_oid(TEXTOID, INT4OID, false).unwrap_err();
         assert_eq!(err.sqlstate(), types_error::ERRCODE_UNDEFINED_OBJECT);
-        assert_eq!(err.message(), "cast from type text to type integer does not exist");
+        assert_eq!(
+            err.message(),
+            "cast from type text to type integer does not exist"
+        );
         assert_eq!(get_cast_oid(TEXTOID, INT4OID, true).unwrap(), InvalidOid);
-        assert_eq!(get_collation_name(m, 100).unwrap().unwrap().as_str(), "default");
+        assert_eq!(
+            get_collation_name(m, 100).unwrap().unwrap().as_str(),
+            "default"
+        );
         assert!(get_collation_isdeterministic(100).unwrap());
         assert!(get_collation_isdeterministic(1).is_err());
-        assert_eq!(get_constraint_name(m, 8001).unwrap().unwrap().as_str(), "t1_pkey");
+        assert_eq!(
+            get_constraint_name(m, 8001).unwrap().unwrap().as_str(),
+            "t1_pkey"
+        );
         assert_eq!(get_constraint_index(8001).unwrap(), IDX_OID);
         assert_eq!(get_constraint_index(8002).unwrap(), InvalidOid);
         assert_eq!(get_constraint_type(8002).unwrap(), misc::CONSTRAINT_FOREIGN);
-        assert_eq!(get_language_name(m, 13, false).unwrap().unwrap().as_str(), "plpgsql");
+        assert_eq!(
+            get_language_name(m, 13, false).unwrap().unwrap().as_str(),
+            "plpgsql"
+        );
         assert!(get_language_name(m, 1, true).unwrap().is_none());
         assert!(get_language_name(m, 1, false).is_err());
-        assert_eq!(get_transform_fromsql(INT4OID, 13, &[INT4OID]).unwrap(), 9001);
-        assert_eq!(get_transform_fromsql(INT4OID, 13, &[TEXTOID]).unwrap(), InvalidOid);
+        assert_eq!(
+            get_transform_fromsql(INT4OID, 13, &[INT4OID]).unwrap(),
+            9001
+        );
+        assert_eq!(
+            get_transform_fromsql(INT4OID, 13, &[TEXTOID]).unwrap(),
+            InvalidOid
+        );
         assert_eq!(get_transform_tosql(INT4OID, 13, &[INT4OID]).unwrap(), 9002);
-        assert_eq!(get_namespace_name(m, 2200).unwrap().unwrap().as_str(), "public");
+        assert_eq!(
+            get_namespace_name(m, 2200).unwrap().unwrap().as_str(),
+            "public"
+        );
         assert_eq!(get_range_subtype(3904).unwrap(), INT4OID);
         assert_eq!(get_range_subtype(1).unwrap(), InvalidOid);
         assert_eq!(get_range_collation(3904).unwrap(), InvalidOid);
@@ -727,10 +814,22 @@ fn misc_getters() {
         assert_eq!(get_multirange_range(4451).unwrap(), 3904);
         assert_eq!(get_publication_oid("pub1", false).unwrap(), 6001);
         assert!(get_publication_oid("nope", false).is_err());
-        assert_eq!(get_publication_name(m, 6001, false).unwrap().unwrap().as_str(), "pub1");
+        assert_eq!(
+            get_publication_name(m, 6001, false)
+                .unwrap()
+                .unwrap()
+                .as_str(),
+            "pub1"
+        );
         init_small::globals::SetMyDatabaseId(1);
         assert_eq!(get_subscription_oid("sub1", false).unwrap(), 6002);
-        assert_eq!(get_subscription_name(m, 6002, false).unwrap().unwrap().as_str(), "sub1");
+        assert_eq!(
+            get_subscription_name(m, 6002, false)
+                .unwrap()
+                .unwrap()
+                .as_str(),
+            "sub1"
+        );
     });
 }
 
@@ -755,12 +854,16 @@ fn statistics_getters() {
                 InvalidOid,
             )
         };
-        let slot = get_attstatsslot(m, &tuple, 1, InvalidOid, 0).unwrap().unwrap();
+        let slot = get_attstatsslot(m, &tuple, 1, InvalidOid, 0)
+            .unwrap()
+            .unwrap();
         assert_eq!(slot.staop, INT4_EQ);
         assert!(slot.values.is_empty());
         let slot2 = get_attstatsslot(m, &tuple, 2, INT4_LT, 0).unwrap().unwrap();
         assert_eq!(slot2.staop, INT4_LT);
-        assert!(get_attstatsslot(m, &tuple, 7, InvalidOid, 0).unwrap().is_none());
+        assert!(get_attstatsslot(m, &tuple, 7, InvalidOid, 0)
+            .unwrap()
+            .is_none());
         free_attstatsslot(slot);
     });
 }
@@ -770,7 +873,10 @@ fn init_seams_installs() {
     install();
     static INIT: Once = Once::new();
     INIT.call_once(super::init_seams);
-    assert_eq!(lsyscache_seams::get_type_output_info::call(INT4OID).unwrap(), (43, false));
+    assert_eq!(
+        lsyscache_seams::get_type_output_info::call(INT4OID).unwrap(),
+        (43, false)
+    );
     assert_eq!(
         lsyscache_seams::get_type_binary_output_info::call(INT4_ARRAY).unwrap(),
         (2401, true)

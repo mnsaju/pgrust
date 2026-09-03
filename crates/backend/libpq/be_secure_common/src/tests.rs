@@ -19,7 +19,9 @@ fn setup() {
         init_small_seams::my_proc_pid::set(|| 0);
         // FATAL diverges through proc_exit; surface it as a typed panic the
         // FATAL-path tests can catch.
-        ipc_seams::proc_exit::set(|code, _| std::panic::panic_any(format!("test proc_exit({code})")));
+        ipc_seams::proc_exit::set(|code, _| {
+            std::panic::panic_any(format!("test proc_exit({code})"))
+        });
     });
     fd::InitFileAccess();
 }
@@ -27,10 +29,8 @@ fn setup() {
 fn scratch_file(tag: &str, mode: u32) -> String {
     static COUNTER: AtomicU32 = AtomicU32::new(0);
     let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-    let path = std::env::temp_dir().join(format!(
-        "pgrust_besec_{}_{tag}_{n}.key",
-        std::process::id()
-    ));
+    let path =
+        std::env::temp_dir().join(format!("pgrust_besec_{}_{tag}_{n}.key", std::process::id()));
     std::fs::write(&path, b"KEY").unwrap();
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
     path.to_str().unwrap().to_owned()
@@ -65,7 +65,10 @@ fn key_file_permissions_group_access_rejected() {
         crate::check_ssl_key_file_permissions(&path, true)
     }));
     let payload = r.expect_err("FATAL must diverge through proc_exit");
-    let msg = payload.downcast_ref::<String>().map(String::as_str).unwrap_or("");
+    let msg = payload
+        .downcast_ref::<String>()
+        .map(String::as_str)
+        .unwrap_or("");
     assert_eq!(msg, "test proc_exit(1)");
 }
 

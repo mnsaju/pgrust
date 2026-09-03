@@ -69,8 +69,7 @@ pub fn get_extension_oid(extname: &str, missing_ok: bool) -> PgResult<Oid> {
 }
 
 pub fn get_extension_name<'mcx>(mcx: Mcx<'mcx>, ext_oid: Oid) -> PgResult<Option<PgString<'mcx>>> {
-    let Some(tuple) =
-        SearchSysCache1(EXTENSIONOID, SysCacheKey::Value(Datum::from_oid(ext_oid)))?
+    let Some(tuple) = SearchSysCache1(EXTENSIONOID, SysCacheKey::Value(Datum::from_oid(ext_oid)))?
     else {
         return Ok(None);
     };
@@ -88,8 +87,7 @@ pub fn get_extension_name<'mcx>(mcx: Mcx<'mcx>, ext_oid: Oid) -> PgResult<Option
 }
 
 pub fn get_extension_schema(ext_oid: Oid) -> PgResult<Oid> {
-    let Some(tuple) =
-        SearchSysCache1(EXTENSIONOID, SysCacheKey::Value(Datum::from_oid(ext_oid)))?
+    let Some(tuple) = SearchSysCache1(EXTENSIONOID, SysCacheKey::Value(Datum::from_oid(ext_oid)))?
     else {
         return Ok(InvalidOid);
     };
@@ -116,29 +114,25 @@ pub fn check_valid_extension_name(extensionname: &str) -> PgResult<()> {
         return Err(invalid_name(
             format!("invalid extension name: \"{extensionname}\""),
             "Extension names must not be empty.",
-        )
-        .into());
+        ));
     }
     if extensionname.contains("--") {
         return Err(invalid_name(
             format!("invalid extension name: \"{extensionname}\""),
             "Extension names must not contain \"--\".",
-        )
-        .into());
+        ));
     }
     if bytes[0] == b'-' || bytes[bytes.len() - 1] == b'-' {
         return Err(invalid_name(
             format!("invalid extension name: \"{extensionname}\""),
             "Extension names must not begin or end with \"-\".",
-        )
-        .into());
+        ));
     }
     if first_dir_separator(extensionname).is_some() {
         return Err(invalid_name(
             format!("invalid extension name: \"{extensionname}\""),
             "Extension names must not contain directory separator characters.",
-        )
-        .into());
+        ));
     }
     Ok(())
 }
@@ -149,29 +143,25 @@ pub fn check_valid_version_name(versionname: &str) -> PgResult<()> {
         return Err(invalid_name(
             format!("invalid extension version name: \"{versionname}\""),
             "Version names must not be empty.",
-        )
-        .into());
+        ));
     }
     if versionname.contains("--") {
         return Err(invalid_name(
             format!("invalid extension version name: \"{versionname}\""),
             "Version names must not contain \"--\".",
-        )
-        .into());
+        ));
     }
     if bytes[0] == b'-' || bytes[bytes.len() - 1] == b'-' {
         return Err(invalid_name(
             format!("invalid extension version name: \"{versionname}\""),
             "Version names must not begin or end with \"-\".",
-        )
-        .into());
+        ));
     }
     if first_dir_separator(versionname).is_some() {
         return Err(invalid_name(
             format!("invalid extension version name: \"{versionname}\""),
             "Version names must not contain directory separator characters.",
-        )
-        .into());
+        ));
     }
     Ok(())
 }
@@ -192,7 +182,9 @@ pub fn is_extension_script_filename(filename: &str) -> bool {
 pub fn init_seams() {
     control::install_extension_control_path_guc();
     extension_seams::pg_available_extensions::set(funcs::fc_pg_available_extensions);
-    extension_seams::pg_available_extension_versions::set(funcs::fc_pg_available_extension_versions);
+    extension_seams::pg_available_extension_versions::set(
+        funcs::fc_pg_available_extension_versions,
+    );
     extension_seams::pg_extension_update_paths::set(funcs::fc_pg_extension_update_paths);
     extension_seams::get_extension_name::set(|ext_oid| {
         let cx = mcx::MemoryContext::new_bump("get_extension_name");

@@ -218,7 +218,6 @@ pub fn init_seams() {
         )
     });
 
-
     // pgstat.c owns these GUC variables' backing storage (pgstat.c:204-205).
     use guc_tables::{vars, GucVarAccessors};
     vars::pgstat_track_counts.install(GucVarAccessors {

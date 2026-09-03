@@ -41,8 +41,12 @@ pub struct PlanDeparse<'mcx> {
 }
 
 fn plan_of(node: Node<'_>) -> &Plan<'_> {
-    node.as_plan()
-        .unwrap_or_else(|| gap("set_deparse_plan", &format!("{:?} plan vocabulary", node.node_tag())))
+    node.as_plan().unwrap_or_else(|| {
+        gap(
+            "set_deparse_plan",
+            &format!("{:?} plan vocabulary", node.node_tag()),
+        )
+    })
 }
 
 pub fn deparse_context_for_plan_tree<'mcx>(
@@ -103,7 +107,11 @@ pub fn select_rtable_names_for_explain<'mcx>(
     // Bitmapset has no representation), and set_rtable_names treats NULL as
     // "no filter": every RTE keeps its name (scanless plans, e.g. a dummy
     // join under GroupAggregate, still deparse qualified Vars).
-    let rels_used = if rels_used.is_empty() { None } else { Some(rels_used) };
+    let rels_used = if rels_used.is_empty() {
+        None
+    } else {
+        Some(rels_used)
+    };
     query::set_rtable_names(mcx, &mut dpns, &[], rels_used)?;
     Ok(std::mem::take(&mut dpns.rtable_names))
 }
@@ -166,7 +174,6 @@ pub(crate) fn set_deparse_plan<'mcx>(
 
     ps.index_tlist = plan.as_index_only_scan().map(|ios| &ios.indextlist);
 }
-
 
 // find_recursive_union (ruleutils.c): the parent RecursiveUnion supplying a
 // WorkTableScan's rows, located by wtParam among the ancestor plans.
@@ -329,7 +336,8 @@ pub(crate) fn find_param_referent<'mcx>(
             AncestorEntry::Plan(ancestor) => {
                 if let Some(nl) = ancestor.as_nest_loop() {
                     let inner = nl.join.plan.righttree;
-                    if child_plan.is_some() && inner.is_some_and(|i| i.ptr_eq(child_plan.unwrap())) {
+                    if child_plan.is_some() && inner.is_some_and(|i| i.ptr_eq(child_plan.unwrap()))
+                    {
                         for nlp_node in &nl.nestParams {
                             let nlp = nlp_node.as_nest_loop_param().expect("nestParams cell");
                             if nlp.paramno == param.paramid {
@@ -373,7 +381,9 @@ pub(crate) fn find_param_generator<'mcx>(
         return Some(hit);
     }
     for tle_node in plan_of(plan).targetlist.iter() {
-        let tle = tle_node.as_target_entry().expect("targetlist holds TargetEntries");
+        let tle = tle_node
+            .as_target_entry()
+            .expect("targetlist holds TargetEntries");
         if let Some(subplan) = tle.expr.as_sub_plan() {
             if subplan.subLinkType == types_nodes::primnodes::SubLinkType::MULTIEXPR_SUBLINK {
                 if let Some(i) = subplan.setParam.iter().position(|id| id == param.paramid) {
@@ -428,19 +438,24 @@ pub(crate) fn inner_plan_drilldown<'mcx>(
     let attnum = var.varattno;
     let colnames_len = rte.eref.map_or(0, |e| e.colnames.len());
     let ps = dpns.plan.borrow();
-    if !matches!(rte.rtekind, types_nodes::RTEKind::RTE_SUBQUERY | types_nodes::RTEKind::RTE_CTE)
-        || attnum as i32 <= colnames_len as i32
+    if !matches!(
+        rte.rtekind,
+        types_nodes::RTEKind::RTE_SUBQUERY | types_nodes::RTEKind::RTE_CTE
+    ) || attnum as i32 <= colnames_len as i32
         || ps.inner_plan.is_none()
     {
         return Ok(false);
     }
-    let tle = get_tle_by_resno(ps.inner_tlist.expect("inner_plan implies inner_tlist"), attnum)
-        .unwrap_or_else(|| {
-            panic!(
-                "invalid attnum {attnum} for relation \"{}\"",
-                rte.eref.and_then(|e| e.aliasname).unwrap_or("")
-            )
-        });
+    let tle = get_tle_by_resno(
+        ps.inner_tlist.expect("inner_plan implies inner_tlist"),
+        attnum,
+    )
+    .unwrap_or_else(|| {
+        panic!(
+            "invalid attnum {attnum} for relation \"{}\"",
+            rte.eref.and_then(|e| e.aliasname).unwrap_or("")
+        )
+    });
     let inner = ps.inner_plan.unwrap();
     drop(ps);
     let save = push_child_plan(dpns, inner);

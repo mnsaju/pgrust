@@ -30,16 +30,23 @@ pub fn fc_format_type(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> Pg
     Ok(varlena_result(datum::Varlena::from_image(image)))
 }
 
-const fn b(foid: Oid, name: &'static str, nargs: i16, strict: bool, func: PGFunction) -> FmgrBuiltin {
+const fn b(
+    foid: Oid,
+    name: &'static str,
+    nargs: i16,
+    strict: bool,
+    func: PGFunction,
+) -> FmgrBuiltin {
     FmgrBuiltin {
         foid,
         name,
         nargs,
         strict,
         retset: false,
-    func,
+        func,
     }
 }
 
 // pg_proc.dat row: format_type is not strict.
-pub const FORMAT_TYPE_BUILTINS: &[FmgrBuiltin] = &[b(1081, "format_type", 2, false, fc_format_type)];
+pub const FORMAT_TYPE_BUILTINS: &[FmgrBuiltin] =
+    &[b(1081, "format_type", 2, false, fc_format_type)];

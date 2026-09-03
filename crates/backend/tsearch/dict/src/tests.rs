@@ -27,7 +27,9 @@ fn synonym_sample_parse() {
     let idx = find(b"indices").unwrap();
     assert_eq!(idx.output.as_slice(), b"index");
     assert_eq!(idx.flags, TSL_PREFIX);
-    assert!(syn.windows(2).all(|w| w[0].input.as_slice() <= w[1].input.as_slice()));
+    assert!(syn
+        .windows(2)
+        .all(|w| w[0].input.as_slice() <= w[1].input.as_slice()));
     assert_eq!(syn.len(), 5);
 }
 

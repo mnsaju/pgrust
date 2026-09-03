@@ -4,8 +4,8 @@ use crate::*;
 use types_core::{BlockNumber, BTREE_AM_OID, GIN_AM_OID, HASH_AM_OID};
 use types_error::{ERRCODE_INDEX_CORRUPTED, ERRCODE_WRONG_OBJECT_TYPE};
 use types_hash::hashpage::{
-    HashMetaPageData, HashPageOpaqueData, HASH_MAGIC, HASH_VERSION, LH_BITMAP_PAGE,
-    LH_BUCKET_PAGE, LH_META_PAGE, LH_OVERFLOW_PAGE, LH_PAGE_TYPE, LH_UNUSED_PAGE,
+    HashMetaPageData, HashPageOpaqueData, HASH_MAGIC, HASH_VERSION, LH_BITMAP_PAGE, LH_BUCKET_PAGE,
+    LH_META_PAGE, LH_OVERFLOW_PAGE, LH_PAGE_TYPE, LH_UNUSED_PAGE,
 };
 use types_nbtree::page::{P_IGNORE, P_ISDELETED, P_ISLEAF, P_NONE};
 use types_rel::pg_class::{RELKIND_HAS_STORAGE, RELKIND_INDEX};
@@ -105,9 +105,9 @@ fn pgstatindex_impl(
     let mcx = unsafe { fcinfo.result_mcx_detached() };
     let tupdesc = composite_tupdesc(mcx, flinfo)?;
 
-    let index_size = (1 + stat.leaf_pages + stat.internal_pages + stat.deleted_pages
-        + stat.empty_pages)
-        * BLCKSZ as u64;
+    let index_size =
+        (1 + stat.leaf_pages + stat.internal_pages + stat.deleted_pages + stat.empty_pages)
+            * BLCKSZ as u64;
     let avg_leaf_density = if stat.max_avail > 0 {
         format!(
             "{:.2}",
@@ -140,7 +140,10 @@ fn pgstatindex_impl(
     cstrings_composite_result(mcx, &tupdesc, &values)
 }
 
-pub(crate) fn fc_pgstatindex(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+pub(crate) fn fc_pgstatindex(
+    flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     let flinfo = flinfo.expect("pgstatindex: resolved FmgrInfo required");
     require_superuser()?;
     // SAFETY: the arming context outlives this call.
@@ -189,9 +192,12 @@ fn pg_relpages_impl(rel: types_rel::Relation<'_>) -> PgResult<Datum> {
     if !RELKIND_HAS_STORAGE(rel.rd_rel.relkind) {
         let detail = pg_class_seams::errdetail_relkind_not_supported::call(rel.rd_rel.relkind)?;
         return Err(Box::new(
-            PgError::error(format!("cannot get page count of relation \"{}\"", rel.name()))
-                .with_sqlstate(ERRCODE_WRONG_OBJECT_TYPE)
-                .with_detail(detail),
+            PgError::error(format!(
+                "cannot get page count of relation \"{}\"",
+                rel.name()
+            ))
+            .with_sqlstate(ERRCODE_WRONG_OBJECT_TYPE)
+            .with_detail(detail),
         ));
     }
 
@@ -202,7 +208,10 @@ fn pg_relpages_impl(rel: types_rel::Relation<'_>) -> PgResult<Datum> {
     Ok(Datum::from_i64(relpages as i64))
 }
 
-pub(crate) fn fc_pg_relpages(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+pub(crate) fn fc_pg_relpages(
+    _flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     require_superuser()?;
     // SAFETY: the arming context outlives this call.
     let mcx = unsafe { fcinfo.result_mcx_detached() };

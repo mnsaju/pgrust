@@ -64,7 +64,10 @@ fn fence_prevent_command_if_parallel_mode() {
     let _s = serial();
     let _g = ParallelModeGuard::enter();
     let err = xact::PreventCommandIfParallelMode("INSERT").unwrap_err();
-    assert_eq!(err.message(), "cannot execute INSERT during a parallel operation");
+    assert_eq!(
+        err.message(),
+        "cannot execute INSERT during a parallel operation"
+    );
     assert_eq!(err.sqlstate(), ERRCODE_INVALID_TRANSACTION_STATE);
 }
 
@@ -74,7 +77,10 @@ fn fence_query_snapshot_in_parallel_mode() {
     xact_seams_boot();
     let _g = ParallelModeGuard::enter();
     let err = snapmgr::GetTransactionSnapshot().unwrap_err();
-    assert_eq!(err.message(), "cannot take query snapshot during a parallel operation");
+    assert_eq!(
+        err.message(),
+        "cannot take query snapshot during a parallel operation"
+    );
 }
 
 #[test]
@@ -86,7 +92,10 @@ fn entrypoint_lookup_and_registration() {
     register_parallel_worker_entrypoint("substrate_test_entry", entry);
     assert!(LookupParallelWorkerFunction("postgres", "substrate_test_entry").is_ok());
     let err = LookupParallelWorkerFunction("postgres", "no_such_entry").unwrap_err();
-    assert_eq!(err.message(), "internal function \"no_such_entry\" not found");
+    assert_eq!(
+        err.message(),
+        "internal function \"no_such_entry\" not found"
+    );
 }
 
 #[test]
@@ -163,7 +172,11 @@ fn reinitialize_clamps_launch_count_only() {
     let _g = ParallelModeGuard::enter();
     let id = CreateParallelContext("postgres", "substrate_test_entry", 4).unwrap();
     assert_eq!(nworkers(id), 4);
-    assert_eq!(nworkers_to_launch(id), 4, "launch count starts at plan width");
+    assert_eq!(
+        nworkers_to_launch(id),
+        4,
+        "launch count starts at plan width"
+    );
 
     // Grant k < N: launched < planned, DSM sizing (nworkers) untouched.
     ReinitializeParallelWorkers(id, 2);

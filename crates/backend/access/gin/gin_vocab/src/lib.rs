@@ -7,7 +7,7 @@
 
 use ::datum::Datum;
 use ::mcx::{Mcx, PgBox, PgVec};
-use ::tidbitmap::{TbmPrivateIterator, TIDBitmap, TBM_MAX_TUPLES_PER_PAGE};
+use ::tidbitmap::{TIDBitmap, TbmPrivateIterator, TBM_MAX_TUPLES_PER_PAGE};
 use ::types_core::{
     uint16, uint32, BlockNumber, Buffer, InvalidBlockNumber, InvalidBuffer, OffsetNumber, Oid,
     BLCKSZ,
@@ -481,7 +481,7 @@ pub struct GinState {
 impl GinState {
     #[inline]
     pub fn col(&self, attnum: OffsetNumber) -> &GinColState {
-        debug_assert!(attnum >= 1 && (attnum as u16) <= self.natts);
+        debug_assert!(attnum >= 1 && attnum <= self.natts);
         &self.cols[attnum as usize - 1]
     }
 }
@@ -568,8 +568,16 @@ impl GinScanEntryData {
             matchBlockno: InvalidBlockNumber,
             matchLossy: false,
             matchNtuples: -1,
-            matchOffsets: unsafe { core::mem::transmute(offsets) },
-            list: unsafe { core::mem::transmute(mcx::vec_new_in::<ItemPointerData>(mcx)) },
+            matchOffsets: unsafe {
+                core::mem::transmute::<PgVec<'_, OffsetNumber>, PgVec<'static, OffsetNumber>>(
+                    offsets,
+                )
+            },
+            list: unsafe {
+                core::mem::transmute::<PgVec<'_, ItemPointerData>, PgVec<'static, ItemPointerData>>(
+                    mcx::vec_new_in::<ItemPointerData>(mcx),
+                )
+            },
             offset: 0,
             isFinished: false,
             reduceResult: false,

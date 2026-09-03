@@ -10,7 +10,9 @@ static SETUP: Once = Once::new();
 static CWD: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 fn enter_datadir(dir: &str) -> std::sync::MutexGuard<'static, ()> {
-    let guard = CWD.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let guard = CWD
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     std::fs::create_dir_all(format!("{dir}/base/pgsql_tmp")).unwrap();
     std::env::set_current_dir(dir).unwrap();
     // Sim has no cwd: relative paths resolve against "/" (sim.rs norm_path),
@@ -62,7 +64,11 @@ fn vfs_write_file(path: &str, data: &[u8]) {
         libc::O_RDWR | libc::O_CREAT | libc::O_TRUNC,
         0o600,
     );
-    assert!(fd >= 0, "vfs_write_file open({path}): errno {}", vfs::get_errno());
+    assert!(
+        fd >= 0,
+        "vfs_write_file open({path}): errno {}",
+        vfs::get_errno()
+    );
     if !data.is_empty() {
         assert_eq!(vfs::pwrite(fd, data, 0), data.len() as isize, "{path}");
     }
@@ -72,7 +78,11 @@ fn vfs_write_file(path: &str, data: &[u8]) {
 /// Whole-file read through the active vfs.
 fn vfs_read_file(path: &str) -> Vec<u8> {
     let fd = vfs::open(&cpath(path), libc::O_RDONLY, 0);
-    assert!(fd >= 0, "vfs_read_file open({path}): errno {}", vfs::get_errno());
+    assert!(
+        fd >= 0,
+        "vfs_read_file open({path}): errno {}",
+        vfs::get_errno()
+    );
     let size = vfs::file_size(fd);
     assert!(size >= 0, "{path}");
     let mut buf = vec![0u8; size as usize];
@@ -108,10 +118,7 @@ fn setup() {
 fn scratch_dir(tag: &str) -> String {
     static COUNTER: AtomicU32 = AtomicU32::new(0);
     let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!(
-        "pgrust_fd_test_{}_{tag}_{n}",
-        std::process::id()
-    ));
+    let dir = std::env::temp_dir().join(format!("pgrust_fd_test_{}_{tag}_{n}", std::process::id()));
     // Real-fs side stays: the posix carve-outs (AllocateFile stdio fopen,
     // OpenPipeStream popen) resolve scratch paths on the real filesystem
     // under BOTH cfgs (contract §1.1 — stdio/pipes are out of Vfs scope).
@@ -123,8 +130,8 @@ fn scratch_dir(tag: &str) -> String {
 }
 
 fn open_rw(path: &str) -> File {
-    let f = crate::io::PathNameOpenFile(path, libc::O_RDWR | libc::O_CREAT | libc::O_TRUNC)
-        .unwrap();
+    let f =
+        crate::io::PathNameOpenFile(path, libc::O_RDWR | libc::O_CREAT | libc::O_TRUNC).unwrap();
     assert!(f.0 > 0, "open failed: {path}");
     f
 }
@@ -202,7 +209,10 @@ fn lru_evicts_and_reopens_transparently() {
     let files: Vec<File> = (0..8)
         .map(|i| {
             let f = open_rw(&format!("{dir}/f{i}"));
-            assert_eq!(crate::io::FileWrite(f, format!("data{i}").as_bytes(), 0, 0).unwrap(), 5);
+            assert_eq!(
+                crate::io::FileWrite(f, format!("data{i}").as_bytes(), 0, 0).unwrap(),
+                5
+            );
             f
         })
         .collect();
@@ -269,7 +279,10 @@ fn temp_file_limit_enforced_with_sqlstate() {
     let saved = guc_tables::vars::temp_file_limit.read();
     guc_tables::vars::temp_file_limit.write(1);
     let err = crate::io::FileWrite(f, &[0u8; 2048], 0, 0).unwrap_err();
-    assert_eq!(err.sqlstate(), ::types_error::ERRCODE_CONFIGURATION_LIMIT_EXCEEDED);
+    assert_eq!(
+        err.sqlstate(),
+        ::types_error::ERRCODE_CONFIGURATION_LIMIT_EXCEEDED
+    );
     guc_tables::vars::temp_file_limit.write(saved);
 
     crate::io::FileClose(f).unwrap();
@@ -319,14 +332,23 @@ fn durable_rename_and_unlink() {
     vfs_write_file(&old, b"payload");
     vfs_write_file(&new, b"stale");
 
-    assert_eq!(crate::sync::durable_rename(&old, &new, ::types_error::LOG).unwrap(), 0);
+    assert_eq!(
+        crate::sync::durable_rename(&old, &new, ::types_error::LOG).unwrap(),
+        0
+    );
     assert!(!vfs_path_exists(&old));
     assert_eq!(vfs_read_file(&new), b"payload");
 
-    assert_eq!(crate::sync::durable_unlink(&new, ::types_error::LOG).unwrap(), 0);
+    assert_eq!(
+        crate::sync::durable_unlink(&new, ::types_error::LOG).unwrap(),
+        0
+    );
     assert!(!vfs_path_exists(&new));
 
-    assert_eq!(crate::sync::durable_unlink(&new, ::types_error::LOG).unwrap(), -1);
+    assert_eq!(
+        crate::sync::durable_unlink(&new, ::types_error::LOG).unwrap(),
+        -1
+    );
 }
 
 #[test]
@@ -397,11 +419,19 @@ fn subxact_reassigns_or_frees_descs() {
     vfs_write_file(&path, b"x");
 
     let td = crate::desc::OpenTransientFile(&path, libc::O_RDWR).unwrap();
-    let idx = with_fd(|fd| fd.allocated_descs.iter().rposition(Option::is_some).unwrap());
+    let idx = with_fd(|fd| {
+        fd.allocated_descs
+            .iter()
+            .rposition(Option::is_some)
+            .unwrap()
+    });
     with_fd(|fd| fd.allocated_descs[idx].as_mut().unwrap().create_subid = 7);
 
     crate::sync::AtEOSubXact_Files(true, 7, 3);
-    assert_eq!(with_fd(|fd| fd.allocated_descs[idx].as_ref().unwrap().create_subid), 3);
+    assert_eq!(
+        with_fd(|fd| fd.allocated_descs[idx].as_ref().unwrap().create_subid),
+        3
+    );
 
     crate::sync::AtEOSubXact_Files(false, 3, 1);
     assert!(crate::desc::TransientFileRawFd(td).is_none());
@@ -410,10 +440,27 @@ fn subxact_reassigns_or_frees_descs() {
 #[test]
 fn temp_rel_name_matcher_matches_c() {
     setup();
-    for ok in ["t1_2", "t123_456", "t1_2_fsm", "t1_2_vm.3", "t1_2.0", "t1_2_init.42"] {
+    for ok in [
+        "t1_2",
+        "t123_456",
+        "t1_2_fsm",
+        "t1_2_vm.3",
+        "t1_2.0",
+        "t1_2_init.42",
+    ] {
         assert!(crate::sync::looks_like_temp_rel_name(ok), "{ok}");
     }
-    for bad in ["x1_2", "t_2", "t1", "t1_", "t1_2_", "t1_2_main", "t1_2.", "t1_2_bogus", "t1_2x"] {
+    for bad in [
+        "x1_2",
+        "t_2",
+        "t1",
+        "t1_",
+        "t1_2_",
+        "t1_2_main",
+        "t1_2.",
+        "t1_2_bogus",
+        "t1_2x",
+    ] {
         assert!(!crate::sync::looks_like_temp_rel_name(bad), "{bad}");
     }
 }
@@ -448,7 +495,10 @@ fn temp_tablespace_list_round_robin() {
 
     crate::sync::AtEOXact_Files(true).unwrap();
     assert!(!crate::temp::TempTablespacesAreSet());
-    assert_eq!(crate::temp::GetNextTempTableSpace(), ::types_core::InvalidOid);
+    assert_eq!(
+        crate::temp::GetNextTempTableSpace(),
+        ::types_core::InvalidOid
+    );
 }
 
 #[test]
@@ -598,7 +648,6 @@ fn allocate_file_stdio_free_closes_posix_side_not_vfs() {
     );
 }
 
-
 // DST P4 finding F1b: every RAII holder of a vfs-minted fd must release
 // through the SAME Vfs provider that minted it. Pre-guard, the holders were
 // plain OwnedFd, whose Drop closes posix-side: any unwind or thread exit with
@@ -621,12 +670,19 @@ fn dropped_holders_release_into_sim_namespace_not_posix() {
     let tpath = format!("{dir}/t");
     vfs_write_file(&tpath, b"x");
     let tfd = crate::desc::OpenTransientFile(&tpath, libc::O_RDWR).unwrap();
-    assert!(tfd >= vfs::sim::SIM_FD_BASE, "transient fd must be sim-minted");
+    assert!(
+        tfd >= vfs::sim::SIM_FD_BASE,
+        "transient fd must be sim-minted"
+    );
 
     // Holder 2: Vfd.fd (VFD cache), vfs-minted.
     let f = open_rw(&format!("{dir}/v"));
     let vraw = with_fd(|fd| {
-        fd.vfd_cache[f.0 as usize].fd.as_ref().map(|h| h.as_raw_fd()).unwrap()
+        fd.vfd_cache[f.0 as usize]
+            .fd
+            .as_ref()
+            .map(|h| h.as_raw_fd())
+            .unwrap()
     });
     assert!(vraw >= vfs::sim::SIM_FD_BASE, "vfd fd must be sim-minted");
 
@@ -652,7 +708,11 @@ fn dropped_holders_release_into_sim_namespace_not_posix() {
         "transient-desc holder leaked its sim fd on drop"
     );
     assert_eq!(vfd::get_errno(), libc::EBADF);
-    assert_eq!(vfs::fstat(vraw, &mut info), -1, "Vfd.fd holder leaked its sim fd on drop");
+    assert_eq!(
+        vfs::fstat(vraw, &mut info),
+        -1,
+        "Vfd.fd holder leaked its sim fd on drop"
+    );
     assert_eq!(vfd::get_errno(), libc::EBADF);
 }
 
@@ -694,8 +754,8 @@ fn install_resowner_seams_once() {
 fn buffile_write_seek_read_roundtrip() {
     setup();
     install_resowner_seams_once();
-    let owner = resowner::ResourceOwnerCreate(types_resowner::ResourceOwner::NULL, "buffile-test")
-        .unwrap();
+    let owner =
+        resowner::ResourceOwnerCreate(types_resowner::ResourceOwner::NULL, "buffile-test").unwrap();
     resowner_seams::set_current_resource_owner::call(owner);
     let dir = scratch_dir("buffile");
     let _cwd = enter_datadir(&dir);
@@ -771,8 +831,8 @@ fn parse_filename_for_nontemp_relation_shapes() {
 fn buffile_close_after_proc_exit_cleanup_is_inert() {
     setup();
     install_resowner_seams_once();
-    let owner = resowner::ResourceOwnerCreate(types_resowner::ResourceOwner::NULL, "p2s-test")
-        .unwrap();
+    let owner =
+        resowner::ResourceOwnerCreate(types_resowner::ResourceOwner::NULL, "p2s-test").unwrap();
     resowner_seams::set_current_resource_owner::call(owner);
     let dir = scratch_dir("procexitclose");
     let _cwd = enter_datadir(&dir);
@@ -784,13 +844,12 @@ fn buffile_close_after_proc_exit_cleanup_is_inert() {
 
     // The abort resowner release closes and frees the temp-file VFDs while
     // the BufFile still references them.
-    let files: Vec<::types_storage::File> =
-        with_fd(|fd| {
-            (1..fd.size_vfd_cache() as i32)
-                .filter(|&i| fd.vfd_cache[i as usize].file_name.is_some())
-                .map(::types_storage::File)
-                .collect()
-        });
+    let files: Vec<::types_storage::File> = with_fd(|fd| {
+        (1..fd.size_vfd_cache() as i32)
+            .filter(|&i| fd.vfd_cache[i as usize].file_name.is_some())
+            .map(::types_storage::File)
+            .collect()
+    });
     assert!(!files.is_empty());
     for f in &files {
         crate::io::FileClose(*f).unwrap();
@@ -817,7 +876,10 @@ fn file_close_is_idempotent_no_freelist_aliasing() {
 
     let a = crate::temp::OpenTemporaryFile(true).unwrap();
     let b = crate::temp::OpenTemporaryFile(true).unwrap();
-    assert_ne!(a.0, b.0, "freelist aliased two live files onto one VFD slot");
+    assert_ne!(
+        a.0, b.0,
+        "freelist aliased two live files onto one VFD slot"
+    );
     crate::io::FileClose(a).unwrap();
     crate::io::FileClose(b).unwrap();
 }
@@ -1030,7 +1092,10 @@ fn generous_limit_reproduces_c_arithmetic() {
         c_answer
     );
     // Unknown ceiling (no getrlimit — the sim/wasm arm) falls back to C's.
-    assert_eq!(vfd::compute_max_safe_fds(1000, 1000, None, 300, 120), c_answer);
+    assert_eq!(
+        vfd::compute_max_safe_fds(1000, 1000, None, 300, 120),
+        c_answer
+    );
     // Single-user boot: one thread, whole budget, C's answer.
     assert_eq!(
         vfd::compute_max_safe_fds(1000, 1000, Some(1_048_576), 1, 1),
@@ -1047,8 +1112,14 @@ fn tight_limit_is_shared_between_sessions() {
     let sessions = 120;
     let got = vfd::compute_max_safe_fds(1000, 1000, Some(ceiling), children, sessions);
     let c_answer = 1000 - ::types_storage::NUM_RESERVED_FDS;
-    assert!(got < c_answer, "sharing must lower the budget: {got} vs {c_answer}");
-    assert!(got >= ::types_storage::FD_MINFREE, "{got} should still be workable");
+    assert!(
+        got < c_answer,
+        "sharing must lower the budget: {got} vs {c_answer}"
+    );
+    assert!(
+        got >= ::types_storage::FD_MINFREE,
+        "{got} should still be workable"
+    );
 
     // The whole server has to fit: every session filling its cache, plus every
     // live child's setup descriptors, plus the supervisor's.

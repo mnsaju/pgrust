@@ -11,7 +11,7 @@ pub fn init_seams() {
     init_small_seams::crit_section_count::set(globals::CritSectionCount);
 
     // globals.c is the `conf->variable` backing store for these GUC slots.
-    use guc_tables::{GucVarAccessors, vars};
+    use guc_tables::{vars, GucVarAccessors};
     macro_rules! install_var {
         ($($slot:ident: $get:ident / $set:ident;)+) => {
             $(vars::$slot.install(GucVarAccessors {

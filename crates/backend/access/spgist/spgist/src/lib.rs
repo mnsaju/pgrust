@@ -21,13 +21,13 @@ use ::types_tuple::itemptr::ItemPointerData;
 pub use ::types_spgist::{spgFormDeadTuple, spgPageIndexMultiDelete, spgUpdateNodeLink};
 pub use doinsert::{spgdoinsert, RM_SPGIST_ID};
 pub use scan::{spgbeginscan, spgcanreturn, spgendscan, spggetbitmap, spggettuple, spgrescan};
-pub use vacuum::{spgbulkdelete, spgbulkdelete_collect, spgvacuumcleanup};
 pub use utils::{
     buf_page_mut as spg_buf_page_mut, initSpGistState,
     relation_needs_wal as spg_relation_needs_wal, spgGetCache,
-    unlock_release as spg_unlock_release, SpGistGetBuffer, SpGistInitBuffer,
-    SpGistInitMetapage, SpGistNewBuffer, SpGistSetLastUsedPage, SpGistUpdateMetaPage,
+    unlock_release as spg_unlock_release, SpGistGetBuffer, SpGistInitBuffer, SpGistInitMetapage,
+    SpGistNewBuffer, SpGistSetLastUsedPage, SpGistUpdateMetaPage,
 };
+pub use vacuum::{spgbulkdelete, spgbulkdelete_collect, spgvacuumcleanup};
 
 #[cold]
 #[inline(never)]

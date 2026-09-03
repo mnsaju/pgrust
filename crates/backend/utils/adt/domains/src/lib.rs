@@ -43,7 +43,12 @@ fn domain_state_setup(domainType: Oid, binary: bool) -> PgResult<DomainIOData> {
         lsyscache::getTypeInputInfo(baseType)?
     };
     let proc = fmgr_seams::fmgr_info::call(typiofunc)?;
-    Ok(DomainIOData { domain_type: domainType, typioparam, typtypmod, proc })
+    Ok(DomainIOData {
+        domain_type: domainType,
+        typioparam,
+        typtypmod,
+        proc,
+    })
 }
 
 pub fn fc_domain_in(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -74,7 +79,9 @@ pub fn fc_domain_in(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRes
     // SAFETY: fcinfo.context, if set, is a live ErrorSaveNode armed for this call.
     let esc = unsafe { fcinfo.error_save_node() };
     let mut value = Datum::null();
-    let my = flinfo.fn_extra_mut::<DomainIOData>().expect("just installed");
+    let my = flinfo
+        .fn_extra_mut::<DomainIOData>()
+        .expect("just installed");
     if !input_function_call_safe(
         &mut my.proc,
         string,
@@ -127,13 +134,15 @@ pub fn fc_domain_recv(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgR
     }
 
     let mcx = fcinfo.result_mcx();
-    let my = flinfo.fn_extra_mut::<DomainIOData>().expect("just installed");
+    let my = flinfo
+        .fn_extra_mut::<DomainIOData>()
+        .expect("just installed");
     let buf = if buf_is_null {
         None
     } else {
         // SAFETY: non-null recv arg 0 is the live StringInfo pointer per the
         // recv ABI.
-        Some(unsafe { fcinfo.arg_stringinfo(0) })
+        Some(unsafe { &mut *fcinfo.arg_stringinfo(0) })
     };
     let value =
         types_fmgr::receive_function_call(&mut my.proc, buf, my.typioparam, my.typtypmod, mcx)?;

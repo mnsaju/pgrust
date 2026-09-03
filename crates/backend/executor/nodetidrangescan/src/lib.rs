@@ -3,7 +3,7 @@
 
 extern crate alloc;
 
-use ::execexpr::{exec_eval_expr, exec_init_expr, exec_init_qual, EvalSlots, ExprState};
+use ::execexpr::{exec_eval_expr, exec_init_expr, EvalSlots, ExprState};
 use ::execscan::{exec_scan, exec_scan_rescan, ScanNode, ScanState};
 use ::executils::{EStateData, ExecSlotId};
 use ::mcx::{Mcx, PgBox, PgVec};
@@ -15,9 +15,7 @@ use ::types_core::primitive::InvalidBlockNumber;
 use ::types_error::{PgError, PgResult};
 use ::types_nodes::plannodes::TidRangeScan;
 use ::types_nodes::Node;
-use ::types_tuple::itemptr::{
-    ItemPointerCompare, ItemPointerData, ItemPointerDec, ItemPointerInc,
-};
+use ::types_tuple::itemptr::{ItemPointerCompare, ItemPointerData, ItemPointerDec, ItemPointerInc};
 
 pub fn init_seams() {}
 
@@ -49,7 +47,8 @@ pub struct TidRangeScanState<'mcx> {
 }
 
 fn is_ctid_var(node: Node<'_>) -> bool {
-    node.as_var().is_some_and(|v| v.varattno == SELF_ITEM_POINTER_ATTR)
+    node.as_var()
+        .is_some_and(|v| v.varattno == SELF_ITEM_POINTER_ATTR)
 }
 
 #[track_caller]
@@ -81,21 +80,32 @@ fn tid_expr_list_create<'mcx>(
         } else {
             return Err(elog_internal("could not identify CTID variable"));
         };
-        let exprstate =
-            exec_init_expr(mcx, Some(other), params)?.expect("tid bound exprstate");
+        let exprstate = exec_init_expr(mcx, Some(other), params)?.expect("tid bound exprstate");
 
         let (exprtype, inclusive) = match op.opno {
             TID_LESS_EQ_OPERATOR | TID_LESS_OPERATOR => (
-                if invert { TidExprType::LowerBound } else { TidExprType::UpperBound },
+                if invert {
+                    TidExprType::LowerBound
+                } else {
+                    TidExprType::UpperBound
+                },
                 op.opno == TID_LESS_EQ_OPERATOR,
             ),
             TID_GREATER_EQ_OPERATOR | TID_GREATER_OPERATOR => (
-                if invert { TidExprType::UpperBound } else { TidExprType::LowerBound },
+                if invert {
+                    TidExprType::UpperBound
+                } else {
+                    TidExprType::LowerBound
+                },
                 op.opno == TID_GREATER_EQ_OPERATOR,
             ),
             _ => return Err(elog_internal("could not identify CTID operator")),
         };
-        tidexprs.push(TidOpExpr { exprtype, exprstate, inclusive });
+        tidexprs.push(TidOpExpr {
+            exprtype,
+            exprstate,
+            inclusive,
+        });
     }
     Ok(tidexprs)
 }
@@ -115,8 +125,15 @@ impl<'mcx> TidRangeScanState<'mcx> {
             }
             let te = &mut self.trss_tidexprs[i];
             // SAFETY: the per-tuple context object outlives the plan.
-            unsafe { te.exprstate.arm_result_mcx_raw(estate.ecxt(ecxt).per_tuple_mcx()) };
-            let mut slots = EvalSlots { scan: None, inner: None, outer: None };
+            unsafe {
+                te.exprstate
+                    .arm_result_mcx_raw(estate.ecxt(ecxt).per_tuple_mcx())
+            };
+            let mut slots = EvalSlots {
+                scan: None,
+                inner: None,
+                outer: None,
+            };
             let nd = exec_eval_expr(&mut te.exprstate, &mut slots)?;
             if nd.isnull {
                 return Ok(false);
@@ -183,7 +200,10 @@ impl<'mcx> ScanNode<'mcx> for TidRangeScanState<'mcx> {
                 let snapshot = estate.es_snapshot.clone();
                 self.ss.ss_currentScanDesc = Some(table_beginscan_tidrange(
                     mcx,
-                    self.ss.ss_currentRelation.as_ref().expect("tidrangescan has a relation"),
+                    self.ss
+                        .ss_currentRelation
+                        .as_ref()
+                        .expect("tidrangescan has a relation"),
                     snapshot,
                     &self.trss_mintid,
                     &self.trss_maxtid,
@@ -224,7 +244,9 @@ pub fn exec_init_tid_range_scan<'mcx>(
 ) -> PgResult<TidRangeScanState<'mcx>> {
     debug_assert!(node.scan.plan.lefttree.is_none() && node.scan.plan.righttree.is_none());
 
-    let rel = estate.exec_get_range_table_relation(node.scan.scanrelid, false)?.alias();
+    let rel = estate
+        .exec_get_range_table_relation(node.scan.scanrelid, false)?
+        .alias();
     let ps_ExprContext = estate.exec_assign_expr_context();
     let kind = table_slot_callbacks(&rel);
     let ss_ScanTupleSlot = estate.exec_init_extra_tuple_slot(Some(rel.rd_att.clone()), kind);

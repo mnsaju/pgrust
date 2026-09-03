@@ -30,16 +30,16 @@ pub mod write;
 mod tests;
 
 pub use control_file::{
-    CheckPoint, ControlFileData, DataChecksumsEnabled, GetActiveWalLevelOnStandby,
-    GetDefaultCharSignedness,
-    control_file_mark_read_for_tests, GetMockAuthenticationNonce, GetSystemIdentifier,
-    LocalProcessControlFile, ReadControlFile,
-    UpdateControlFile,
+    control_file_mark_read_for_tests, CheckPoint, ControlFileData, DataChecksumsEnabled,
+    GetActiveWalLevelOnStandby, GetDefaultCharSignedness, GetMockAuthenticationNonce,
+    GetSystemIdentifier, LocalProcessControlFile, ReadControlFile, UpdateControlFile,
 };
-pub use ctl::{GetWALInsertionTimeLineIfSet, XLOGShmemInit, XLOGShmemResetAfterCrash, XLOGShmemSize};
+pub use ctl::{
+    GetWALInsertionTimeLineIfSet, XLOGShmemInit, XLOGShmemResetAfterCrash, XLOGShmemSize,
+};
 pub use insert::{
-    GetFullPageWriteInfo, GetInsertRecPtr, GetLastImportantRecPtr, GetRedoRecPtr, GetXLogInsertRecPtr,
-    RecoveryInProgress, XLogInsertAllowed, XLogInsertRecord,
+    GetFullPageWriteInfo, GetInsertRecPtr, GetLastImportantRecPtr, GetRedoRecPtr,
+    GetXLogInsertRecPtr, RecoveryInProgress, XLogInsertAllowed, XLogInsertRecord,
 };
 pub use startup::{
     CreateCheckPoint, CreateRestartPoint, ReachedEndOfBackup, ResetInstallXLogFileSegmentActive,
@@ -168,7 +168,9 @@ pub fn StatusFilePath(xlog: &str, suffix: &str) -> String {
 pub fn IsTLHistoryFileName(fname: &str) -> bool {
     let b = fname.as_bytes();
     b.len() == 8 + ".history".len()
-        && b[..8].iter().all(|c| c.is_ascii_digit() || (b'A'..=b'F').contains(c))
+        && b[..8]
+            .iter()
+            .all(|c| c.is_ascii_digit() || (b'A'..=b'F').contains(c))
         && fname.ends_with(".history")
 }
 
@@ -193,7 +195,11 @@ pub fn GetOldestRestartPoint() -> PgResult<(XLogRecPtr, TimeLineID)> {
 
 /// RequestXLogSwitch (xlog.c): XLOG SWITCH record, no data.
 pub fn RequestXLogSwitch(mark_unimportant: bool) -> PgResult<XLogRecPtr> {
-    let flags = if mark_unimportant { XLOG_MARK_UNIMPORTANT } else { 0 };
+    let flags = if mark_unimportant {
+        XLOG_MARK_UNIMPORTANT
+    } else {
+        0
+    };
     xloginsert_seams::xlog_insert_with_flags::call(RM_XLOG_ID, XLOG_SWITCH, flags, &[])
 }
 
@@ -264,7 +270,7 @@ pub fn XLogFilePath(tli: TimeLineID, segno: XLogSegNo, wal_segsz: i32) -> String
 }
 
 pub const fn INSERT_FREESPACE(endptr: XLogRecPtr) -> usize {
-    if endptr % XLOG_BLCKSZ as u64 == 0 {
+    if endptr.is_multiple_of(XLOG_BLCKSZ as u64) {
         0
     } else {
         XLOG_BLCKSZ - (endptr % XLOG_BLCKSZ as u64) as usize
@@ -275,18 +281,14 @@ pub fn XLogBytePosToRecPtr(bytepos: u64) -> XLogRecPtr {
     let usable_seg = UsableBytesInSegment();
     let fullsegs = bytepos / usable_seg;
     let mut bytesleft = bytepos % usable_seg;
-    let seg_offset;
-    if bytesleft < (XLOG_BLCKSZ - SizeOfXLogLongPHD) as u64 {
-        seg_offset = bytesleft + SizeOfXLogLongPHD as u64;
+    let seg_offset = if bytesleft < (XLOG_BLCKSZ - SizeOfXLogLongPHD) as u64 {
+        bytesleft + SizeOfXLogLongPHD as u64
     } else {
         bytesleft -= (XLOG_BLCKSZ - SizeOfXLogLongPHD) as u64;
         let fullpages = bytesleft / UsableBytesInPage;
         bytesleft %= UsableBytesInPage;
-        seg_offset = XLOG_BLCKSZ as u64
-            + fullpages * XLOG_BLCKSZ as u64
-            + bytesleft
-            + SizeOfXLogShortPHD as u64;
-    }
+        XLOG_BLCKSZ as u64 + fullpages * XLOG_BLCKSZ as u64 + bytesleft + SizeOfXLogShortPHD as u64
+    };
     XLogSegNoOffsetToRecPtr(fullsegs, seg_offset as u32, wal_segment_size())
 }
 
@@ -294,9 +296,12 @@ pub fn XLogBytePosToEndRecPtr(bytepos: u64) -> XLogRecPtr {
     let usable_seg = UsableBytesInSegment();
     let fullsegs = bytepos / usable_seg;
     let mut bytesleft = bytepos % usable_seg;
-    let seg_offset;
-    if bytesleft < (XLOG_BLCKSZ - SizeOfXLogLongPHD) as u64 {
-        seg_offset = if bytesleft == 0 { 0 } else { bytesleft + SizeOfXLogLongPHD as u64 };
+    let seg_offset = if bytesleft < (XLOG_BLCKSZ - SizeOfXLogLongPHD) as u64 {
+        if bytesleft == 0 {
+            0
+        } else {
+            bytesleft + SizeOfXLogLongPHD as u64
+        }
     } else {
         bytesleft -= (XLOG_BLCKSZ - SizeOfXLogLongPHD) as u64;
         let fullpages = bytesleft / UsableBytesInPage;
@@ -305,8 +310,8 @@ pub fn XLogBytePosToEndRecPtr(bytepos: u64) -> XLogRecPtr {
         if bytesleft != 0 {
             off += SizeOfXLogShortPHD as u64;
         }
-        seg_offset = off;
-    }
+        off
+    };
     XLogSegNoOffsetToRecPtr(fullsegs, seg_offset as u32, wal_segment_size())
 }
 
@@ -354,10 +359,7 @@ pub fn XLogCheckpointNeeded(new_segno: XLogSegNo) -> bool {
 fn assign_max_wal_size(_newval: i32, _extra: Option<&guc_tables::GucHookExtra>) {
     CalculateCheckpointSegments();
 }
-fn assign_checkpoint_completion_target(
-    _newval: f64,
-    _extra: Option<&guc_tables::GucHookExtra>,
-) {
+fn assign_checkpoint_completion_target(_newval: f64, _extra: Option<&guc_tables::GucHookExtra>) {
     CalculateCheckpointSegments();
 }
 fn check_wal_segment_size_hook(
@@ -420,7 +422,9 @@ fn assign_wal_consistency_checking_hook(
 }
 pub fn InitializeWalConsistencyChecking() -> PgResult<()> {
     debug_assert!(matches!(
-        guc_tables::vars::wal_consistency_checking_string.read().as_deref(),
+        guc_tables::vars::wal_consistency_checking_string
+            .read()
+            .as_deref(),
         None | Some("")
     ));
     Ok(())
@@ -504,8 +508,7 @@ pub fn init_seams() {
     guc_tables::hooks::check_wal_segment_size.install(check_wal_segment_size_hook);
     guc_tables::hooks::check_wal_buffers.install(check_wal_buffers_hook);
     guc_tables::hooks::assign_wal_sync_method.install(write::assign_wal_sync_method);
-    guc_tables::hooks::check_wal_consistency_checking
-        .install(check_wal_consistency_checking_hook);
+    guc_tables::hooks::check_wal_consistency_checking.install(check_wal_consistency_checking_hook);
     guc_tables::hooks::assign_wal_consistency_checking
         .install(assign_wal_consistency_checking_hook);
     guc_vars::install_wal_consistency_checking_string();

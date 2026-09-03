@@ -1,4 +1,3 @@
-
 use super::cfb::PgpCfb;
 use super::consts::*;
 use super::context::PgpContext;
@@ -51,8 +50,8 @@ pub fn encrypt_symmetric(
         ctx.s2k_cipher_algo = ctx.cipher_algo;
     }
 
-    let mut s2k = S2k::fill(ctx.s2k_mode, ctx.s2k_digest_algo, ctx.s2k_count)
-        .map_err(|e| e.to_string())?;
+    let mut s2k =
+        S2k::fill(ctx.s2k_mode, ctx.s2k_digest_algo, ctx.s2k_count).map_err(|e| e.to_string())?;
     s2k.process(ctx.s2k_cipher_algo, passphrase)
         .map_err(|e| e.to_string())?;
 
@@ -69,11 +68,13 @@ pub fn encrypt_symmetric(
 
     let mut out = Vec::new();
 
-    let mut esk = Vec::new();
-    esk.push(4); // version
-    esk.push(ctx.s2k_cipher_algo as u8);
-    esk.push(s2k.mode as u8);
-    esk.push(s2k.digest_algo as u8);
+    // version, cipher algo, s2k mode, s2k digest algo.
+    let mut esk = vec![
+        4,
+        ctx.s2k_cipher_algo as u8,
+        s2k.mode as u8,
+        s2k.digest_algo as u8,
+    ];
     if s2k.mode > 0 {
         esk.extend_from_slice(&s2k.salt);
     }
@@ -140,8 +141,8 @@ pub fn write_encdata_packet(
     }
 
     let resync = !mdc;
-    let mut cfb = PgpCfb::create(ctx.cipher_algo, sess_key, resync, None)
-        .map_err(|e| e.to_string())?;
+    let mut cfb =
+        PgpCfb::create(ctx.cipher_algo, sess_key, resync, None).map_err(|e| e.to_string())?;
     let ciphertext = cfb.encrypt(&plaintext);
 
     let tag = if mdc {

@@ -107,7 +107,7 @@ pub fn fc_oidout(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResul
 
 pub fn fc_oidrecv(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: catalog arg 0 of oidrecv is internal (StringInfo).
-    let buf = unsafe { fcinfo.arg_stringinfo(0) };
+    let buf = unsafe { &mut *fcinfo.arg_stringinfo(0) };
     Ok(Datum::from_oid(::pqformat::pq_getmsgint(buf, 4)? as u32))
 }
 
@@ -158,7 +158,7 @@ pub fn fc_cideq(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult
 
 pub fn fc_xidrecv(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: catalog arg 0 of xidrecv/cidrecv is internal (StringInfo).
-    let buf = unsafe { fcinfo.arg_stringinfo(0) };
+    let buf = unsafe { &mut *fcinfo.arg_stringinfo(0) };
     Ok(Datum::from_u32(::pqformat::pq_getmsgint(buf, 4)? as u32))
 }
 
@@ -172,7 +172,9 @@ pub fn fc_xidsend(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResu
 
 pub fn fc_hash_uint32(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let [a] = fcinfo.args_n::<1>();
-    Ok(Datum::from_u32(::hashfn::hash_bytes_uint32(a.value.as_u32())))
+    Ok(Datum::from_u32(::hashfn::hash_bytes_uint32(
+        a.value.as_u32(),
+    )))
 }
 
 pub fn fc_hash_uint32_extended(
@@ -215,7 +217,7 @@ pub fn fc_xid8out(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResu
 
 pub fn fc_xid8recv(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: catalog arg 0 of xid8recv is internal (StringInfo).
-    let buf = unsafe { fcinfo.arg_stringinfo(0) };
+    let buf = unsafe { &mut *fcinfo.arg_stringinfo(0) };
     Ok(Datum::from_u64(::pqformat::pq_getmsgint64(buf)? as u64))
 }
 
@@ -247,7 +249,10 @@ fc_xid8_cmp! {
 
 pub fn fc_xid8cmp(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let [a, b] = fcinfo.args_n::<2>();
-    Ok(Datum::from_i32(crate::xid8cmp(a.value.as_u64(), b.value.as_u64())))
+    Ok(Datum::from_i32(crate::xid8cmp(
+        a.value.as_u64(),
+        b.value.as_u64(),
+    )))
 }
 
 pub fn fc_xid8toxid(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -274,10 +279,7 @@ pub fn fc_hashxid8(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRes
     Ok(Datum::from_u32(::hashfn::hash_bytes_uint32(lohalf)))
 }
 
-pub fn fc_hashxid8extended(
-    _flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_hashxid8extended(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let [a, b] = fcinfo.args_n::<2>();
     let val = a.value.as_i64();
     let lohalf = val as u32;
@@ -353,7 +355,7 @@ pub fn fc_tidout(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResul
 
 pub fn fc_tidrecv(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: recv arg0 is the live StringInfo pointer per the recv ABI.
-    let buf = unsafe { fcinfo.arg_stringinfo(0) };
+    let buf = unsafe { &mut *fcinfo.arg_stringinfo(0) };
     let block = ::pqformat::pq_getmsgint(buf, 4)? as u32;
     let offset = ::pqformat::pq_getmsgint(buf, 2)? as u16;
     tid_result(fcinfo, Tid { block, offset })
@@ -415,7 +417,6 @@ pub fn fc_hashtidextended(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -
     Ok(Datum::from_u64(::hashfn::hash_bytes_extended(b, seed)))
 }
 
-
 pub fn fc_oidvectoreq(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: strict catalog args are non-null plain-storage oidvectors;
     // dim1 Oids follow the 24-byte header (buildoidvector shape).
@@ -473,7 +474,13 @@ pub fn fc_currtid_byrelname(
     let mcx = fcinfo.result_mcx();
     let ip = ::types_tuple::ItemPointerData::new(tid.block, tid.offset);
     let result = crate::currtid_byrelname(mcx, &relname, ip)?;
-    tid_result(fcinfo, Tid { block: ::types_tuple::ItemPointerGetBlockNumberNoCheck(&result), offset: result.ip_posid })
+    tid_result(
+        fcinfo,
+        Tid {
+            block: ::types_tuple::ItemPointerGetBlockNumberNoCheck(&result),
+            offset: result.ip_posid,
+        },
+    )
 }
 
 // SAFETY: as fc_oidvectoreq, but layout-checked (SQL-boundary contract).
@@ -505,7 +512,7 @@ pub fn fc_oidvectorin(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> Pg
     loop {
         // C-locale isspace (includes \x0B).
         rest = rest
-            .trim_start_matches(|c: char| matches!(c, ' ' | '\t' | '\n' | '\x0B' | '\x0C' | '\r'));
+            .trim_start_matches([' ', '\t', '\n', '\x0B', '\x0C', '\r']);
         if rest.is_empty() {
             break;
         }
@@ -518,7 +525,7 @@ pub fn fc_oidvectorin(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> Pg
     img[0..4].copy_from_slice(&::datum::varlena::set_varsize_4b(total));
     img[4..8].copy_from_slice(&1i32.to_ne_bytes());
     img[8..12].copy_from_slice(&0i32.to_ne_bytes());
-    img[12..16].copy_from_slice(&(::types_core::catalog::OIDOID as u32).to_ne_bytes());
+    img[12..16].copy_from_slice(&::types_core::catalog::OIDOID.to_ne_bytes());
     img[16..20].copy_from_slice(&n.to_ne_bytes());
     img[20..24].copy_from_slice(&0i32.to_ne_bytes());
     Ok(Datum::from_usize(img.leak().as_ptr() as usize))

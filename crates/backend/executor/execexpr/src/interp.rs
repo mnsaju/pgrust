@@ -54,7 +54,10 @@ pub struct RetSlots<'a, 'mcx> {
 
 impl RetSlots<'_, '_> {
     pub fn none() -> Self {
-        RetSlots { old: RetSlot::None, new: RetSlot::None }
+        RetSlots {
+            old: RetSlot::None,
+            new: RetSlot::None,
+        }
     }
 }
 
@@ -104,10 +107,18 @@ pub struct Resume {
 
 impl Suspension {
     pub fn resume_with(self, result: NullableDatum) -> Resume {
-        Resume { step: self.step, regs: self.regs, result }
+        Resume {
+            step: self.step,
+            regs: self.regs,
+            result,
+        }
     }
 
-    pub(crate) fn new(sstate: core::ptr::NonNull<()>, step: u32, regs: NullableDatum) -> Suspension {
+    pub(crate) fn new(
+        sstate: core::ptr::NonNull<()>,
+        step: u32,
+        regs: NullableDatum,
+    ) -> Suspension {
         Suspension { sstate, step, regs }
     }
 }
@@ -167,13 +178,15 @@ pub fn exec_qual_outcome<'mcx>(
 ) -> PgResult<QualOutcome> {
     debug_assert!(state.is_qual());
     check_still_valid(state, slots)?;
-    Ok(match eval(state, slots, &mut RetSlots::none(), None, resume)? {
-        EvalOutcome::Done(r) => {
-            debug_assert!(!r.isnull);
-            QualOutcome::Done(r.value.as_bool())
-        }
-        EvalOutcome::Suspended(s) => QualOutcome::Suspended(s),
-    })
+    Ok(
+        match eval(state, slots, &mut RetSlots::none(), None, resume)? {
+            EvalOutcome::Done(r) => {
+                debug_assert!(!r.isnull);
+                QualOutcome::Done(r.value.as_bool())
+            }
+            EvalOutcome::Suspended(s) => QualOutcome::Suspended(s),
+        },
+    )
 }
 
 pub fn exec_project_outcome<'mcx>(
@@ -183,10 +196,18 @@ pub fn exec_project_outcome<'mcx>(
     resume: Option<Resume>,
 ) -> PgResult<Option<Suspension>> {
     check_still_valid(state, slots)?;
-    Ok(match eval(state, slots, &mut RetSlots::none(), Some(result_slot), resume)? {
-        EvalOutcome::Done(_) => None,
-        EvalOutcome::Suspended(s) => Some(s),
-    })
+    Ok(
+        match eval(
+            state,
+            slots,
+            &mut RetSlots::none(),
+            Some(result_slot),
+            resume,
+        )? {
+            EvalOutcome::Done(_) => None,
+            EvalOutcome::Suspended(s) => Some(s),
+        },
+    )
 }
 
 /// C `ExecQual`: false on NULL, expression compiled by [`exec_init_qual`];
@@ -207,7 +228,14 @@ pub fn exec_qual<'mcx>(
         let v = exectuples::slot_getattr(scan, attnum as i32 + 1, &mut isnull);
         return Ok(!isnull && cmp.eval(v, konst));
     }
-    if let Kernel::QualVarCmpVar { a_src, a_attnum, b_src, b_attnum, cmp } = state.kernel {
+    if let Kernel::QualVarCmpVar {
+        a_src,
+        a_attnum,
+        b_src,
+        b_attnum,
+        cmp,
+    } = state.kernel
+    {
         let mut isnull = false;
         let a = exectuples::slot_getattr(slots.get(a_src), a_attnum as i32 + 1, &mut isnull);
         if isnull {
@@ -318,7 +346,11 @@ fn eval_kernel<'mcx>(
     match state.kernel {
         Kernel::Program => unreachable!("run_program handled by eval"),
         Kernel::JustConst { value, isnull } => Ok(NullableDatum { value, isnull }),
-        Kernel::JustConstAssign { value, isnull, resultnum } => {
+        Kernel::JustConstAssign {
+            value,
+            isnull,
+            resultnum,
+        } => {
             let rslot = result_slot.unwrap_or_else(|| no_result_slot());
             assign_to_result(rslot, resultnum, value, isnull);
             Ok(NullableDatum::null())
@@ -341,7 +373,11 @@ fn eval_kernel<'mcx>(
                 })
             }
         }
-        Kernel::JustAssignVar { src, attnum, resultnum } => {
+        Kernel::JustAssignVar {
+            src,
+            attnum,
+            resultnum,
+        } => {
             let rslot = result_slot.unwrap_or_else(|| no_result_slot());
             let slot = slots.get(src);
             let mut isnull = false;
@@ -349,7 +385,11 @@ fn eval_kernel<'mcx>(
             assign_to_result(rslot, resultnum, value, isnull);
             Ok(NullableDatum::null())
         }
-        Kernel::JustAssignVarVirt { src, attnum, resultnum } => {
+        Kernel::JustAssignVarVirt {
+            src,
+            attnum,
+            resultnum,
+        } => {
             let rslot = result_slot.unwrap_or_else(|| no_result_slot());
             let base = slots.get(src).base();
             debug_assert!((attnum as i32) < base.tts_nvalid as i32);
@@ -372,11 +412,20 @@ fn eval_kernel<'mcx>(
                 isnull: false,
             })
         }
-        Kernel::QualVarCmpVar { a_src, a_attnum, b_src, b_attnum, cmp } => {
+        Kernel::QualVarCmpVar {
+            a_src,
+            a_attnum,
+            b_src,
+            b_attnum,
+            cmp,
+        } => {
             let mut isnull = false;
             let a = exectuples::slot_getattr(slots.get(a_src), a_attnum as i32 + 1, &mut isnull);
             if isnull {
-                return Ok(NullableDatum { value: Datum::from_bool(false), isnull: false });
+                return Ok(NullableDatum {
+                    value: Datum::from_bool(false),
+                    isnull: false,
+                });
             }
             let b = exectuples::slot_getattr(slots.get(b_src), b_attnum as i32 + 1, &mut isnull);
             Ok(NullableDatum {
@@ -388,22 +437,36 @@ fn eval_kernel<'mcx>(
             let mut isnull = false;
             let v = exectuples::slot_getattr(slots.get(src), attnum as i32 + 1, &mut isnull);
             if isnull {
-                return Ok(NullableDatum { value: Datum::from_u32(0), isnull: false });
+                return Ok(NullableDatum {
+                    value: Datum::from_u32(0),
+                    isnull: false,
+                });
             }
             let f = &mut state.frames[frame as usize];
             // SAFETY: 'mcx-live frame fcinfo image + boxed FmgrInfo, sole refs.
             let fcinfo = unsafe { fcinfo_mut(f.fcinfo, 1) };
             // SAFETY: arg 0 of the live image, via the reborrow — an older-tag write would invalidate fcinfo.
             unsafe {
-                crate::steps::arg_slot_of(core::ptr::NonNull::from(&mut *fcinfo).cast(), 0)
-                    .write(NullableDatum { value: v, isnull: false })
+                crate::steps::arg_slot_of(core::ptr::NonNull::from(&mut *fcinfo).cast(), 0).write(
+                    NullableDatum {
+                        value: v,
+                        isnull: false,
+                    },
+                )
             };
             fcinfo.isnull = false;
             let flinfo = unsafe { &mut *f.flinfo.as_ptr() };
             let value = (flinfo.fn_addr)(Some(flinfo), fcinfo)?;
-            Ok(NullableDatum { value, isnull: false })
+            Ok(NullableDatum {
+                value,
+                isnull: false,
+            })
         }
-        Kernel::AggTransByVal { call, pergroup, strict } => {
+        Kernel::AggTransByVal {
+            call,
+            pergroup,
+            strict,
+        } => {
             // SAFETY: once-allocated stable pergroup, sole access here (the
             // interp AggPlainTrans[Strict]ByVal arms' contract verbatim).
             unsafe {
@@ -420,7 +483,11 @@ fn eval_kernel<'mcx>(
             }
             Ok(NullableDatum::null())
         }
-        Kernel::AggTransByValThin { call, pergroup, strict } => {
+        Kernel::AggTransByValThin {
+            call,
+            pergroup,
+            strict,
+        } => {
             // SAFETY: as AggTransByVal; thin callee never sets isnull.
             unsafe {
                 let pg = pergroup.as_ptr();
@@ -435,7 +502,12 @@ fn eval_kernel<'mcx>(
             }
             Ok(NullableDatum::null())
         }
-        Kernel::JustFunc { fn_addr, frame, nargs, strict } => {
+        Kernel::JustFunc {
+            fn_addr,
+            frame,
+            nargs,
+            strict,
+        } => {
             let f = &mut state.frames[frame as usize];
             // SAFETY: the frame's fcinfo image and mcx-boxed FmgrInfo are
             // live for 'mcx; no other references exist during this call.
@@ -445,7 +517,10 @@ fn eval_kernel<'mcx>(
             }
             fcinfo.isnull = false;
             let value = fn_addr(Some(unsafe { &mut *f.flinfo.as_ptr() }), fcinfo)?;
-            Ok(NullableDatum { value, isnull: fcinfo.isnull })
+            Ok(NullableDatum {
+                value,
+                isnull: fcinfo.isnull,
+            })
         }
     }
 }
@@ -497,7 +572,13 @@ fn run_program<'mcx>(
     resume: Option<Resume>,
 ) -> PgResult<EvalOutcome> {
     let flags = state.flags;
-    let ExprState { steps, frames, resnd, saop_tables, .. } = state;
+    let ExprState {
+        steps,
+        frames,
+        resnd,
+        saop_tables,
+        ..
+    } = state;
     let res = *resnd;
     let steps = steps.as_slice();
     let mut scan = slots.scan.as_deref_mut();
@@ -515,12 +596,20 @@ fn run_program<'mcx>(
     };
     macro_rules! old_slot {
         () => {
-            if old_is_scan { need_slot(&mut scan) } else { need_slot(&mut old) }
+            if old_is_scan {
+                need_slot(&mut scan)
+            } else {
+                need_slot(&mut old)
+            }
         };
     }
     macro_rules! new_slot {
         () => {
-            if new_is_scan { need_slot(&mut scan) } else { need_slot(&mut new) }
+            if new_is_scan {
+                need_slot(&mut scan)
+            } else {
+                need_slot(&mut new)
+            }
         };
     }
     // No entry reset: as in C, every DONE_RETURN path writes the cell first.
@@ -597,8 +686,7 @@ fn run_program<'mcx>(
                     write_out(*out, Datum::null(), true);
                 } else {
                     let mut isnull = false;
-                    let d =
-                        exectuples::slot_getsysattr(old_slot!(), *attnum as i32, &mut isnull)?;
+                    let d = exectuples::slot_getsysattr(old_slot!(), *attnum as i32, &mut isnull)?;
                     write_out(*out, d, isnull);
                 }
             }
@@ -607,12 +695,15 @@ fn run_program<'mcx>(
                     write_out(*out, Datum::null(), true);
                 } else {
                     let mut isnull = false;
-                    let d =
-                        exectuples::slot_getsysattr(new_slot!(), *attnum as i32, &mut isnull)?;
+                    let d = exectuples::slot_getsysattr(new_slot!(), *attnum as i32, &mut isnull)?;
                     write_out(*out, d, isnull);
                 }
             }
-            Step::ReturningExprStep { nullflag, jumpdone, out } => {
+            Step::ReturningExprStep {
+                nullflag,
+                jumpdone,
+                out,
+            } => {
                 if flags & *nullflag != 0 {
                     write_out(*out, Datum::null(), true);
                     // SAFETY: jump targets validated < steps.len() at ready.
@@ -632,7 +723,11 @@ fn run_program<'mcx>(
                 let nd = read_var(need_slot(&mut outer), *attnum);
                 write_out(*out, nd.value, nd.isnull);
             }
-            Step::NextValueExpr { seqid, seqtypid, out } => {
+            Step::NextValueExpr {
+                seqid,
+                seqtypid,
+                out,
+            } => {
                 let newval = sequence_seams::nextval_internal::call(*seqid, false)?;
                 let d = match *seqtypid {
                     types_core::INT2OID => Datum::from_i16(newval as i16),
@@ -642,7 +737,12 @@ fn run_program<'mcx>(
                 };
                 write_out(*out, d, false);
             }
-            Step::WholeRow { src, wr, frame, out } => {
+            Step::WholeRow {
+                src,
+                wr,
+                frame,
+                out,
+            } => {
                 // C ExecEvalWholeRowVar: an OLD/NEW whole-row is NULL when
                 // that row doesn't exist.
                 if (matches!(src, crate::steps::SlotSrc::Old)
@@ -665,58 +765,81 @@ fn run_program<'mcx>(
             }
             Step::ScanSysVar { attnum, out } => {
                 let mut isnull = false;
-                let d = exectuples::slot_getsysattr(need_slot(&mut scan), *attnum as i32, &mut isnull)?;
+                let d =
+                    exectuples::slot_getsysattr(need_slot(&mut scan), *attnum as i32, &mut isnull)?;
                 write_out(*out, d, isnull);
             }
             Step::InnerSysVar { attnum, out } => {
                 let mut isnull = false;
-                let d =
-                    exectuples::slot_getsysattr(need_slot(&mut inner), *attnum as i32, &mut isnull)?;
+                let d = exectuples::slot_getsysattr(
+                    need_slot(&mut inner),
+                    *attnum as i32,
+                    &mut isnull,
+                )?;
                 write_out(*out, d, isnull);
             }
             Step::OuterSysVar { attnum, out } => {
                 let mut isnull = false;
-                let d =
-                    exectuples::slot_getsysattr(need_slot(&mut outer), *attnum as i32, &mut isnull)?;
+                let d = exectuples::slot_getsysattr(
+                    need_slot(&mut outer),
+                    *attnum as i32,
+                    &mut isnull,
+                )?;
                 write_out(*out, d, isnull);
             }
             Step::AssignScanVar { attnum, resultnum } => {
                 let nd = read_var(need_slot(&mut scan), *attnum);
-                let rslot = result_slot.as_deref_mut().unwrap_or_else(|| no_result_slot());
+                let rslot = result_slot
+                    .as_deref_mut()
+                    .unwrap_or_else(|| no_result_slot());
                 assign_to_result(rslot, *resultnum, nd.value, nd.isnull);
             }
             Step::AssignInnerVar { attnum, resultnum } => {
                 let nd = read_var(need_slot(&mut inner), *attnum);
-                let rslot = result_slot.as_deref_mut().unwrap_or_else(|| no_result_slot());
+                let rslot = result_slot
+                    .as_deref_mut()
+                    .unwrap_or_else(|| no_result_slot());
                 assign_to_result(rslot, *resultnum, nd.value, nd.isnull);
             }
             Step::AssignOuterVar { attnum, resultnum } => {
                 let nd = read_var(need_slot(&mut outer), *attnum);
-                let rslot = result_slot.as_deref_mut().unwrap_or_else(|| no_result_slot());
+                let rslot = result_slot
+                    .as_deref_mut()
+                    .unwrap_or_else(|| no_result_slot());
                 assign_to_result(rslot, *resultnum, nd.value, nd.isnull);
             }
             Step::AssignOldVar { attnum, resultnum } => {
                 let nd = read_var(old_slot!(), *attnum);
-                let rslot = result_slot.as_deref_mut().unwrap_or_else(|| no_result_slot());
+                let rslot = result_slot
+                    .as_deref_mut()
+                    .unwrap_or_else(|| no_result_slot());
                 assign_to_result(rslot, *resultnum, nd.value, nd.isnull);
             }
             Step::AssignNewVar { attnum, resultnum } => {
                 let nd = read_var(new_slot!(), *attnum);
-                let rslot = result_slot.as_deref_mut().unwrap_or_else(|| no_result_slot());
+                let rslot = result_slot
+                    .as_deref_mut()
+                    .unwrap_or_else(|| no_result_slot());
                 assign_to_result(rslot, *resultnum, nd.value, nd.isnull);
             }
             Step::AssignTmp { resultnum } => {
-                let rslot = result_slot.as_deref_mut().unwrap_or_else(|| no_result_slot());
+                let rslot = result_slot
+                    .as_deref_mut()
+                    .unwrap_or_else(|| no_result_slot());
                 // SAFETY: res is the state's live result cell.
                 let r = unsafe { res.read() };
                 assign_to_result(rslot, *resultnum, r.value, r.isnull);
             }
             Step::AssignTmpMakeRo { resultnum } => {
-                let rslot = result_slot.as_deref_mut().unwrap_or_else(|| no_result_slot());
+                let rslot = result_slot
+                    .as_deref_mut()
+                    .unwrap_or_else(|| no_result_slot());
                 // SAFETY: live result cell; non-null by-ref datum = live varlena.
                 let r = unsafe { res.read() };
                 let value = if !r.isnull {
-                    unsafe { datum::expandeddatum::make_expanded_object_read_only_internal(r.value) }
+                    unsafe {
+                        datum::expandeddatum::make_expanded_object_read_only_internal(r.value)
+                    }
                 } else {
                     r.value
                 };
@@ -751,14 +874,30 @@ fn run_program<'mcx>(
             Step::IoCoerceSafe { calls, out } => {
                 step_io_coerce_safe(*calls, *out)?;
             }
-            Step::ScalarArrayOp { call, use_or, strict, typlen, typbyval, typalign, out } => {
+            Step::ScalarArrayOp {
+                call,
+                use_or,
+                strict,
+                typlen,
+                typbyval,
+                typalign,
+                out,
+            } => {
                 let arr = read_out(*out);
                 let (value, isnull) = eval_scalar_array_op(
                     call, *use_or, *strict, *typlen, *typbyval, *typalign, arr,
                 )?;
                 write_out(*out, value, isnull);
             }
-            Step::HashedScalarArrayOp { call, inclause, typlen, typbyval, typalign, table, out } => {
+            Step::HashedScalarArrayOp {
+                call,
+                inclause,
+                typlen,
+                typbyval,
+                typalign,
+                table,
+                out,
+            } => {
                 let arr = read_out(*out);
                 let (value, isnull) = eval_hashed_scalar_array_op(
                     &mut saop_tables[*table as usize],
@@ -786,14 +925,28 @@ fn run_program<'mcx>(
                 )?;
                 write_out(*out, value, isnull);
             }
-            Step::RowExprStep { elems, nelems, frame, desc, out } => {
+            Step::RowExprStep {
+                elems,
+                nelems,
+                frame,
+                desc,
+                out,
+            } => {
                 let (value, isnull) = eval_row_expr(frames, *elems, *nelems, *frame, *desc)?;
                 write_out(*out, value, isnull);
             }
-            Step::JsonConstructor { jcstate, frame, out } => {
+            Step::JsonConstructor {
+                jcstate,
+                frame,
+                out,
+            } => {
                 eval_json_constructor_step(frames, *jcstate, *frame, *out)?;
             }
-            Step::JsonExprPath { jsestate, frame, out } => {
+            Step::JsonExprPath {
+                jsestate,
+                frame,
+                out,
+            } => {
                 let target = eval_json_expr_path(frames, *jsestate, *frame, *out)?;
                 // SAFETY: jump targets validated < steps.len() at ready.
                 sp = unsafe { base.add(target as usize) };
@@ -805,7 +958,13 @@ fn run_program<'mcx>(
             Step::JsonCoercionFinish { jsestate, out } => {
                 eval_json_coercion_finish(*jsestate, *out)?;
             }
-            Step::IsJson { exprtype, item_type, unique_keys, frame, out } => {
+            Step::IsJson {
+                exprtype,
+                item_type,
+                unique_keys,
+                frame,
+                out,
+            } => {
                 eval_is_json_step(frames, *exprtype, *item_type, *unique_keys, *frame, *out)?;
             }
             Step::FuncExprStrict1 { call, out } => {
@@ -865,13 +1024,28 @@ fn run_program<'mcx>(
                 let (value, isnull) = crate::xmlops::eval_xml_expr(st)?;
                 write_out(*out, value, isnull);
             }
-            Step::MinMax { call, slots, nelems, least, out } => {
+            Step::MinMax {
+                call,
+                slots,
+                nelems,
+                least,
+                out,
+            } => {
                 step_min_max(call, *slots, *nelems, *least, *out)?;
             }
-            Step::SqlValueFunction { op, typmod, scratch, out } => {
+            Step::SqlValueFunction {
+                op,
+                typmod,
+                scratch,
+                out,
+            } => {
                 step_sql_value_function(*op, *typmod, *scratch, *out)?;
             }
-            Step::MergeSupportFunc { action, scratch, out } => {
+            Step::MergeSupportFunc {
+                action,
+                scratch,
+                out,
+            } => {
                 step_merge_support_func(*action, *scratch, *out)?;
             }
             Step::Jump { jumpdone } => {
@@ -927,7 +1101,11 @@ fn run_program<'mcx>(
                 let r = crate::arrayops::eval_array_expr(st)?;
                 write_out(*out, r.value, r.isnull);
             }
-            Step::SbsrefSubscripts { state, jumpdone, out } => {
+            Step::SbsrefSubscripts {
+                state,
+                jumpdone,
+                out,
+            } => {
                 // SAFETY: as ArrayExprEval.
                 let st = unsafe { &mut *state.as_ptr() };
                 if !crate::arrayops::sbsref_check_subscripts(st)? {
@@ -954,7 +1132,11 @@ fn run_program<'mcx>(
                 let cur = read_out(*out);
                 crate::arrayops::sbsref_fetch_old(st, cur)?;
             }
-            Step::JsonbSbsrefSubscripts { state, jumpdone, out } => {
+            Step::JsonbSbsrefSubscripts {
+                state,
+                jumpdone,
+                out,
+            } => {
                 // SAFETY: as ArrayExprEval.
                 let st = unsafe { &mut *state.as_ptr() };
                 if !crate::jsonbsubs::check_subscripts(st)? {
@@ -1009,15 +1191,26 @@ fn run_program<'mcx>(
                 if r.isnull || !r.value.as_bool() {
                     // SAFETY: as above.
                     unsafe {
-                        res.write(NullableDatum { value: Datum::from_bool(false), isnull: false })
+                        res.write(NullableDatum {
+                            value: Datum::from_bool(false),
+                            isnull: false,
+                        })
                     };
                     // SAFETY: jump targets validated < steps.len() at ready.
                     sp = unsafe { base.add(*jumpdone as usize) };
                     continue;
                 }
             }
-            Step::BoolAndStepFirst { anynull, jumpdone, out }
-            | Step::BoolAndStep { anynull, jumpdone, out } => {
+            Step::BoolAndStepFirst {
+                anynull,
+                jumpdone,
+                out,
+            }
+            | Step::BoolAndStep {
+                anynull,
+                jumpdone,
+                out,
+            } => {
                 if matches!(step, Step::BoolAndStepFirst { .. }) {
                     // SAFETY: compile-allocated scratch, live for 'mcx.
                     unsafe { anynull.write(false) };
@@ -1039,8 +1232,16 @@ fn run_program<'mcx>(
                     write_out(*out, Datum::null(), true);
                 }
             }
-            Step::BoolOrStepFirst { anynull, jumpdone, out }
-            | Step::BoolOrStep { anynull, jumpdone, out } => {
+            Step::BoolOrStepFirst {
+                anynull,
+                jumpdone,
+                out,
+            }
+            | Step::BoolOrStep {
+                anynull,
+                jumpdone,
+                out,
+            } => {
                 if matches!(step, Step::BoolOrStepFirst { .. }) {
                     // SAFETY: compile-allocated scratch, live for 'mcx.
                     unsafe { anynull.write(false) };
@@ -1078,7 +1279,12 @@ fn run_program<'mcx>(
                 let b = eval_row_null(frames, *rn, *frame, r, false)?;
                 write_out(*out, Datum::from_bool(b), false);
             }
-            Step::FieldSelect { fieldnum, resulttype, frame, out } => {
+            Step::FieldSelect {
+                fieldnum,
+                resulttype,
+                frame,
+                out,
+            } => {
                 let r = read_out(*out);
                 if !r.isnull {
                     let (value, isnull) =
@@ -1095,7 +1301,11 @@ fn run_program<'mcx>(
                     write_out(*out, nd.value, nd.isnull);
                 }
             }
-            Step::ConvertRowtype { state: crs, frame, out } => {
+            Step::ConvertRowtype {
+                state: crs,
+                frame,
+                out,
+            } => {
                 let r = read_out(*out);
                 if !r.isnull {
                     // SAFETY: compile-allocated state, sole live access.
@@ -1131,7 +1341,9 @@ fn run_program<'mcx>(
                 } else {
                     // SAFETY: non-null by-ref datum of a varlena-typed domain
                     // input (compile emits this step only for typlen -1).
-                    unsafe { ::datum::expandeddatum::make_expanded_object_read_only_internal(r.value) }
+                    unsafe {
+                        ::datum::expandeddatum::make_expanded_object_read_only_internal(r.value)
+                    }
                 };
                 write_out(*out, v, r.isnull);
             }
@@ -1139,14 +1351,23 @@ fn run_program<'mcx>(
                 let r = read_out(*src);
                 write_out(*out, r.value, r.isnull);
             }
-            Step::DomainNotNull { resulttype, escontext, out } => {
+            Step::DomainNotNull {
+                resulttype,
+                escontext,
+                out,
+            } => {
                 if read_out(*out).isnull {
                     // SAFETY: escontext points at the owning JsonExprState's
                     // node, live for the program.
                     errsave(*escontext, || domain_not_null_violation(*resulttype))?;
                 }
             }
-            Step::DomainCheck { resulttype, name, check, escontext } => {
+            Step::DomainCheck {
+                resulttype,
+                name,
+                check,
+                escontext,
+            } => {
                 // SAFETY: compile-allocated scratch, live for 'mcx.
                 let r = unsafe { check.read() };
                 if !r.isnull && !r.value.as_bool() {
@@ -1157,10 +1378,14 @@ fn run_program<'mcx>(
                     })?;
                 }
             }
-            Step::AggStrictInputCheck { args, nargs, jumpnull } => {
+            Step::AggStrictInputCheck {
+                args,
+                nargs,
+                jumpnull,
+            } => {
                 // SAFETY: args[0..nargs] live fcinfo slots; jumps ready-checked.
-                let anynull = (0..*nargs as usize)
-                    .any(|i| unsafe { args.as_ptr().add(i).read().isnull });
+                let anynull =
+                    (0..*nargs as usize).any(|i| unsafe { args.as_ptr().add(i).read().isnull });
                 if anynull {
                     sp = unsafe { base.add(*jumpnull as usize) };
                     continue;
@@ -1182,10 +1407,19 @@ fn run_program<'mcx>(
                 let (v, n) = unsafe { (value.read(), null.read()) };
                 write_out(*out, v, n);
             }
-            Step::GroupingFuncEval { cols, ncols, current, out } => {
+            Step::GroupingFuncEval {
+                cols,
+                ncols,
+                current,
+                out,
+            } => {
                 step_grouping_func(*cols, *ncols, *current, *out);
             }
-            Step::AggSetCurrent { agg, aggref, shared } => {
+            Step::AggSetCurrent {
+                agg,
+                aggref,
+                shared,
+            } => {
                 // SAFETY: the caller's query-lifetime AggStateNode; no &mut
                 // is live across expression evaluation.
                 unsafe { agg.as_ref() }.set_current_agg(*aggref, *shared);
@@ -1194,7 +1428,11 @@ fn run_program<'mcx>(
                 let (value, isnull) = invoke(call)?;
                 write_out(*out, value, isnull);
             }
-            Step::AggStrictDeserialize { call, out, jumpnull } => {
+            Step::AggStrictDeserialize {
+                call,
+                out,
+                jumpnull,
+            } => {
                 // SAFETY: slot 0 of the live 2-arg ds fcinfo image.
                 if unsafe { crate::steps::arg_slot_of(call.fcinfo, 0).read().isnull } {
                     sp = unsafe { base.add(*jumpnull as usize) };
@@ -1215,25 +1453,41 @@ fn run_program<'mcx>(
                 // SAFETY: as AggPlainTransByVal.
                 unsafe { agg_trans_init_strict_byval(call, pergroup.as_ptr())? }
             }
-            Step::AggTransInitStrictByValIndirect { call, base, transno } => {
+            Step::AggTransInitStrictByValIndirect {
+                call,
+                base,
+                transno,
+            } => {
                 // SAFETY: as AggTransByValIndirect.
                 unsafe {
                     agg_trans_init_strict_byval(call, base.read().as_ptr().add(*transno as usize))?
                 }
             }
-            Step::AggTransByValIndirect { call, base, transno } => {
+            Step::AggTransByValIndirect {
+                call,
+                base,
+                transno,
+            } => {
                 // SAFETY: base is a live cell nodeAgg repoints at the current
                 // group's once-allocated pergroup array before evaluation;
                 // transno < that array's length (build invariant).
                 unsafe { agg_trans_byval(call, base.read().as_ptr().add(*transno as usize))? }
             }
-            Step::AggTransStrictByValIndirect { call, base, transno } => {
+            Step::AggTransStrictByValIndirect {
+                call,
+                base,
+                transno,
+            } => {
                 // SAFETY: as AggTransByValIndirect.
                 unsafe {
                     agg_trans_strict_byval(call, base.read().as_ptr().add(*transno as usize))?
                 }
             }
-            Step::AggPlainTransInitStrictByRef { call, pergroup, byref } => {
+            Step::AggPlainTransInitStrictByRef {
+                call,
+                pergroup,
+                byref,
+            } => {
                 // SAFETY: once-allocated stable pergroup, sole access here.
                 unsafe {
                     let pg = pergroup.as_ptr();
@@ -1244,7 +1498,11 @@ fn run_program<'mcx>(
                     }
                 }
             }
-            Step::AggPlainTransStrictByRef { call, pergroup, byref } => {
+            Step::AggPlainTransStrictByRef {
+                call,
+                pergroup,
+                byref,
+            } => {
                 // SAFETY: as AggPlainTransInitStrictByRef.
                 unsafe {
                     let pg = pergroup.as_ptr();
@@ -1253,11 +1511,20 @@ fn run_program<'mcx>(
                     }
                 }
             }
-            Step::AggPlainTransByRef { call, pergroup, byref } => {
+            Step::AggPlainTransByRef {
+                call,
+                pergroup,
+                byref,
+            } => {
                 // SAFETY: as AggPlainTransInitStrictByRef.
                 unsafe { agg_plain_trans_byref(call, pergroup.as_ptr(), *byref)? }
             }
-            Step::AggTransInitStrictByRefIndirect { call, base, transno, byref } => {
+            Step::AggTransInitStrictByRefIndirect {
+                call,
+                base,
+                transno,
+                byref,
+            } => {
                 // SAFETY: as AggTransByValIndirect + AggPlainTransByRef.
                 unsafe {
                     let pg = base.read().as_ptr().add(*transno as usize);
@@ -1268,7 +1535,12 @@ fn run_program<'mcx>(
                     }
                 }
             }
-            Step::AggTransStrictByRefIndirect { call, base, transno, byref } => {
+            Step::AggTransStrictByRefIndirect {
+                call,
+                base,
+                transno,
+                byref,
+            } => {
                 // SAFETY: as AggTransInitStrictByRefIndirect.
                 unsafe {
                     let pg = base.read().as_ptr().add(*transno as usize);
@@ -1277,7 +1549,12 @@ fn run_program<'mcx>(
                     }
                 }
             }
-            Step::AggTransByRefIndirect { call, base, transno, byref } => {
+            Step::AggTransByRefIndirect {
+                call,
+                base,
+                transno,
+                byref,
+            } => {
                 // SAFETY: as AggTransInitStrictByRefIndirect.
                 unsafe {
                     let pg = base.read().as_ptr().add(*transno as usize);
@@ -1319,7 +1596,13 @@ fn run_program<'mcx>(
             Step::NullIf { call, out } => {
                 step_nullif(call, *out)?;
             }
-            Step::RowCompareStep { call, strict, jumpnull, jumpdone, out } => {
+            Step::RowCompareStep {
+                call,
+                strict,
+                jumpnull,
+                jumpdone,
+                out,
+            } => {
                 match eval_row_compare_step(call, *strict)? {
                     None => {
                         write_out(*out, Datum::null(), true);
@@ -1341,7 +1624,13 @@ fn run_program<'mcx>(
                 let v = eval_row_compare_final(*cmptype, read_out(*out).value.as_i32());
                 write_out(*out, Datum::from_bool(v), false);
             }
-            Step::ScanVarFuncStrict2 { attnum, argno, call, out, .. } => {
+            Step::ScanVarFuncStrict2 {
+                attnum,
+                argno,
+                call,
+                out,
+                ..
+            } => {
                 let nd = read_var(need_slot(&mut scan), *attnum);
                 // SAFETY: argno/1-argno are args 0/1 of the live fcinfo image.
                 let other = unsafe {
@@ -1355,7 +1644,12 @@ fn run_program<'mcx>(
                     write_out(*out, value, isnull);
                 }
             }
-            Step::FuncFuncStrict2 { call1, argno, call2, out } => {
+            Step::FuncFuncStrict2 {
+                call1,
+                argno,
+                call2,
+                out,
+            } => {
                 let r1 = strict2_eval(call1)?;
                 // SAFETY: as ScanVarFuncStrict2, for call2's image.
                 let other = unsafe {
@@ -1369,7 +1663,11 @@ fn run_program<'mcx>(
                     write_out(*out, value, isnull);
                 }
             }
-            Step::FuncStrict2Qual { call, jumpdone, out } => {
+            Step::FuncStrict2Qual {
+                call,
+                jumpdone,
+                out,
+            } => {
                 let r = strict2_eval(call)?;
                 if r.isnull || !r.value.as_bool() {
                     write_out(*out, Datum::from_bool(false), false);
@@ -1379,7 +1677,13 @@ fn run_program<'mcx>(
                 }
                 write_out(*out, r.value, r.isnull);
             }
-            Step::OuterVarNotDistinct { attnum, argno, call, out, .. } => {
+            Step::OuterVarNotDistinct {
+                attnum,
+                argno,
+                call,
+                out,
+                ..
+            } => {
                 let nd = read_var(need_slot(&mut outer), *attnum);
                 // SAFETY: as ScanVarFuncStrict2.
                 let other = unsafe {
@@ -1395,7 +1699,11 @@ fn run_program<'mcx>(
                     write_out(*out, value, isnull);
                 }
             }
-            Step::NotDistinctQual { call, jumpdone, out } => {
+            Step::NotDistinctQual {
+                call,
+                jumpdone,
+                out,
+            } => {
                 // SAFETY: args 0/1 of the call's live fcinfo image.
                 let (a0, a1) = unsafe {
                     (
@@ -1404,9 +1712,15 @@ fn run_program<'mcx>(
                     )
                 };
                 let r = if a0.isnull && a1.isnull {
-                    NullableDatum { value: Datum::from_bool(true), isnull: false }
+                    NullableDatum {
+                        value: Datum::from_bool(true),
+                        isnull: false,
+                    }
                 } else if a0.isnull || a1.isnull {
-                    NullableDatum { value: Datum::from_bool(false), isnull: false }
+                    NullableDatum {
+                        value: Datum::from_bool(false),
+                        isnull: false,
+                    }
                 } else {
                     let (value, isnull) = invoke2(call)?;
                     NullableDatum { value, isnull }
@@ -1419,7 +1733,14 @@ fn run_program<'mcx>(
                 }
                 write_out(*out, r.value, r.isnull);
             }
-            Step::OuterVarAggTransByValIndirect { attnum, argno, call, base: pgbase, transno, .. } => {
+            Step::OuterVarAggTransByValIndirect {
+                attnum,
+                argno,
+                call,
+                base: pgbase,
+                transno,
+                ..
+            } => {
                 let nd = read_var(need_slot(&mut outer), *attnum);
                 // SAFETY: as ScanVarFuncStrict2 + AggTransByValIndirect.
                 unsafe {
@@ -1434,10 +1755,17 @@ fn run_program<'mcx>(
                     (*pg).trans_value_is_null = isnull;
                 }
             }
-            Step::AssignScanVar2 { attnum1, resultnum1, attnum2, resultnum2 } => {
+            Step::AssignScanVar2 {
+                attnum1,
+                resultnum1,
+                attnum2,
+                resultnum2,
+            } => {
                 let nd1 = read_var(need_slot(&mut scan), *attnum1);
                 let nd2 = read_var(need_slot(&mut scan), *attnum2);
-                let rslot = result_slot.as_deref_mut().unwrap_or_else(|| no_result_slot());
+                let rslot = result_slot
+                    .as_deref_mut()
+                    .unwrap_or_else(|| no_result_slot());
                 assign_to_result(rslot, *resultnum1, nd1.value, nd1.isnull);
                 assign_to_result(rslot, *resultnum2, nd2.value, nd2.isnull);
             }
@@ -1454,7 +1782,13 @@ fn run_program<'mcx>(
                 let r = strict2_thin_eval(call)?;
                 write_out(*out, r.value, r.isnull);
             }
-            Step::ScanVarFuncStrict2Thin { attnum, argno, call, out, .. } => {
+            Step::ScanVarFuncStrict2Thin {
+                attnum,
+                argno,
+                call,
+                out,
+                ..
+            } => {
                 let nd = read_var(need_slot(&mut scan), *attnum);
                 // SAFETY: argno/1-argno are args 0/1 of the live fcinfo image.
                 let other = unsafe {
@@ -1467,7 +1801,12 @@ fn run_program<'mcx>(
                     write_out(*out, invoke_thin(call)?, false);
                 }
             }
-            Step::FuncFuncStrict2Thin { call1, argno, call2, out } => {
+            Step::FuncFuncStrict2Thin {
+                call1,
+                argno,
+                call2,
+                out,
+            } => {
                 let r1 = strict2_thin_eval(call1)?;
                 // SAFETY: as ScanVarFuncStrict2, for call2's image.
                 let other = unsafe {
@@ -1480,7 +1819,11 @@ fn run_program<'mcx>(
                     write_out(*out, invoke_thin(call2)?, false);
                 }
             }
-            Step::FuncStrict2QualThin { call, jumpdone, out } => {
+            Step::FuncStrict2QualThin {
+                call,
+                jumpdone,
+                out,
+            } => {
                 let r = strict2_thin_eval(call)?;
                 if r.isnull || !r.value.as_bool() {
                     write_out(*out, Datum::from_bool(false), false);
@@ -1490,7 +1833,13 @@ fn run_program<'mcx>(
                 }
                 write_out(*out, r.value, r.isnull);
             }
-            Step::OuterVarNotDistinctThin { attnum, argno, call, out, .. } => {
+            Step::OuterVarNotDistinctThin {
+                attnum,
+                argno,
+                call,
+                out,
+                ..
+            } => {
                 let nd = read_var(need_slot(&mut outer), *attnum);
                 // SAFETY: as ScanVarFuncStrict2.
                 let other = unsafe {
@@ -1505,7 +1854,11 @@ fn run_program<'mcx>(
                     write_out(*out, invoke_thin(call)?, false);
                 }
             }
-            Step::NotDistinctQualThin { call, jumpdone, out } => {
+            Step::NotDistinctQualThin {
+                call,
+                jumpdone,
+                out,
+            } => {
                 // SAFETY: args 0/1 of the call's live fcinfo image.
                 let (a0, a1) = unsafe {
                     (
@@ -1528,7 +1881,11 @@ fn run_program<'mcx>(
                 }
                 write_out(*out, v, false);
             }
-            Step::AggTransStrictByValIndirectThin { call, base, transno } => {
+            Step::AggTransStrictByValIndirectThin {
+                call,
+                base,
+                transno,
+            } => {
                 // SAFETY: as AggTransByValIndirect; thin callee never sets isnull.
                 unsafe {
                     let pg = base.read().as_ptr().add(*transno as usize);
@@ -1552,9 +1909,7 @@ fn run_program<'mcx>(
 }
 
 #[inline(always)]
-fn need_slot<'a, 'b, 'mcx>(
-    slot: &'a mut Option<&'b mut SlotData<'mcx>>,
-) -> &'a mut SlotData<'mcx> {
+fn need_slot<'a, 'mcx>(slot: &'a mut Option<&mut SlotData<'mcx>>) -> &'a mut SlotData<'mcx> {
     match slot {
         Some(s) => s,
         None => missing_slot_hoisted(),
@@ -1616,7 +1971,7 @@ fn eval_scalar_array_op(
         return Ok((Datum::null(), true));
     }
 
-    let mut result = !use_or;
+    let result = !use_or;
     let mut resultnull = false;
     let bitmap_off = ::arrayfuncs::foundation::arr_nullbitmap_off(img);
     let mut off = ::arrayfuncs::foundation::arr_data_offset(img);
@@ -1634,8 +1989,8 @@ fn eval_scalar_array_op(
             off = ::arrayfuncs::foundation::att_align_nominal(off, typalign);
             // SAFETY: off stays within the VARSIZE image per the array layout.
             let ep = unsafe { img.as_ptr().add(off) };
-            let elt = ::arrayfuncs::foundation::fetch_att(ep, typbyval, typlen as i32);
-            off = ::arrayfuncs::foundation::att_addlength_pointer(off, typlen as i32, ep);
+            let elt = unsafe { ::arrayfuncs::foundation::fetch_att(ep, typbyval, typlen as i32) };
+            off = unsafe { ::arrayfuncs::foundation::att_addlength_pointer(off, typlen as i32, ep) };
             (elt, false)
         };
 
@@ -1644,8 +1999,10 @@ fn eval_scalar_array_op(
         } else {
             // SAFETY: arg slot 1 of the call's live fcinfo image.
             unsafe {
-                crate::steps::arg_slot_of(call.fcinfo, 1)
-                    .write(NullableDatum { value: elt, isnull: this_null })
+                crate::steps::arg_slot_of(call.fcinfo, 1).write(NullableDatum {
+                    value: elt,
+                    isnull: this_null,
+                })
             };
             invoke(call)?
         };
@@ -1701,8 +2058,10 @@ fn eval_hashed_scalar_array_op(
     let hash_of = |hashcall: &FuncCall, v: Datum| -> PgResult<u32> {
         // SAFETY: arg slot 0 of the hashcall's live fcinfo image.
         unsafe {
-            crate::steps::arg_slot_of(hashcall.fcinfo, 0)
-                .write(NullableDatum { value: v, isnull: false })
+            crate::steps::arg_slot_of(hashcall.fcinfo, 0).write(NullableDatum {
+                value: v,
+                isnull: false,
+            })
         };
         let (h, _) = invoke(hashcall)?;
         Ok(h.as_i32() as u32)
@@ -1710,10 +2069,14 @@ fn eval_hashed_scalar_array_op(
     let eq_of = |call: &FuncCall, a: Datum, b: Datum| -> PgResult<bool> {
         // SAFETY: arg slots 0/1 of the call's live fcinfo image.
         unsafe {
-            crate::steps::arg_slot_of(call.fcinfo, 0)
-                .write(NullableDatum { value: a, isnull: false });
-            crate::steps::arg_slot_of(call.fcinfo, 1)
-                .write(NullableDatum { value: b, isnull: false });
+            crate::steps::arg_slot_of(call.fcinfo, 0).write(NullableDatum {
+                value: a,
+                isnull: false,
+            });
+            crate::steps::arg_slot_of(call.fcinfo, 1).write(NullableDatum {
+                value: b,
+                isnull: false,
+            });
         }
         let (r, _) = invoke(call)?;
         Ok(r.as_bool())
@@ -1758,8 +2121,8 @@ fn eval_hashed_scalar_array_op(
                 off = ::arrayfuncs::foundation::att_align_nominal(off, typalign);
                 // SAFETY: off stays within the VARSIZE image per the array layout.
                 let ep = unsafe { img.as_ptr().add(off) };
-                let elt = ::arrayfuncs::foundation::fetch_att(ep, typbyval, typlen as i32);
-                off = ::arrayfuncs::foundation::att_addlength_pointer(off, typlen as i32, ep);
+                let elt = unsafe { ::arrayfuncs::foundation::fetch_att(ep, typbyval, typlen as i32) };
+                off = unsafe { ::arrayfuncs::foundation::att_addlength_pointer(off, typlen as i32, ep) };
 
                 let h = hash_of(&hashcall, elt)?;
                 let bucket = tab
@@ -1806,9 +2169,12 @@ fn eval_hashed_scalar_array_op(
                     off = ::arrayfuncs::foundation::att_align_nominal(off, typalign);
                     // SAFETY: off stays within the VARSIZE image per the array layout.
                     let ep = unsafe { img.as_ptr().add(off) };
-                    let elt = ::arrayfuncs::foundation::fetch_att(ep, typbyval, typlen as i32);
-                    off = ::arrayfuncs::foundation::att_addlength_pointer(off, typlen as i32, ep);
-                    NullableDatum { value: elt, isnull: false }
+                    let elt = unsafe { ::arrayfuncs::foundation::fetch_att(ep, typbyval, typlen as i32) };
+                    off = unsafe { ::arrayfuncs::foundation::att_addlength_pointer(off, typlen as i32, ep) };
+                    NullableDatum {
+                        value: elt,
+                        isnull: false,
+                    }
                 };
                 // SAFETY: arg slots 0/1 of the call's live fcinfo image.
                 unsafe {
@@ -1832,7 +2198,11 @@ fn eval_hashed_scalar_array_op(
                 }
             }
             // Invert non-NULL results for NOT IN.
-            tab.null_lhs_result = if !resultnull && !inclause { !result } else { result };
+            tab.null_lhs_result = if !resultnull && !inclause {
+                !result
+            } else {
+                result
+            };
             tab.null_lhs_isnull = resultnull;
         }
         tab.built = true;
@@ -2041,11 +2411,19 @@ fn eval_json_constructor(
             if jc.is_jsonb {
                 // SAFETY: compile-resolved carrier, exclusive during this step.
                 let cat = unsafe { &mut *jc.scalar_jsonb.expect("scalar_jsonb").as_ptr() };
-                Ok((image_datum(::adt_jsonb::tojsonb::datum_to_jsonb_cat(mcx, values[0], cat)?), false))
+                Ok((
+                    image_datum(::adt_jsonb::tojsonb::datum_to_jsonb_cat(
+                        mcx, values[0], cat,
+                    )?),
+                    false,
+                ))
             } else {
                 // SAFETY: compile-resolved carrier, exclusive during this step.
                 let cat = unsafe { &mut *jc.scalar_json.expect("scalar_json").as_ptr() };
-                Ok((varlena_datum(::adt_json::tojson::datum_to_json_cat(mcx, values[0], cat)?), false))
+                Ok((
+                    varlena_datum(::adt_json::tojson::datum_to_json_cat(mcx, values[0], cat)?),
+                    false,
+                ))
             }
         }
         JC::JSCTOR_JSON_PARSE => {
@@ -2067,7 +2445,10 @@ fn eval_json_constructor(
             }
         }
         JC::JSCTOR_JSON_OBJECTAGG | JC::JSCTOR_JSON_ARRAYAGG | JC::JSCTOR_JSON_SERIALIZE => {
-            panic!("invalid JsonConstructorExpr type {:?} in EEOP_JSON_CONSTRUCTOR", jc.ctor_type)
+            panic!(
+                "invalid JsonConstructorExpr type {:?} in EEOP_JSON_CONSTRUCTOR",
+                jc.ctor_type
+            )
         }
     }
 }
@@ -2081,8 +2462,7 @@ unsafe fn varlena_image_4b<'m>(mcx: ::mcx::Mcx<'m>, d: Datum) -> PgResult<&'m [u
     let p = d.as_usize() as *const u8;
     // SAFETY: forwarded caller contract.
     unsafe {
-        if varatt::varatt_is_1b_e(p) || (!varatt::varatt_is_1b(p) && !varatt::varatt_is_4b_u(p))
-        {
+        if varatt::varatt_is_1b_e(p) || (!varatt::varatt_is_1b(p) && !varatt::varatt_is_4b_u(p)) {
             let image = core::slice::from_raw_parts(p, varatt::varsize_any(p));
             Ok(detoast_seams::detoast_attr::call(mcx, image)?.leak())
         } else if varatt::varatt_is_1b(p) {
@@ -2135,9 +2515,7 @@ fn json_value_item_cstring<'m>(
                 ParsedDatetime::Time(t) => ::adt_date::time_out(*t, &mut buf),
                 ParsedDatetime::TimeTz(t) => ::adt_date::timetz_out(t, &mut buf),
                 ParsedDatetime::Timestamp(ts) => ::adt_timestamp::timestamp_out(*ts, &mut buf)?,
-                ParsedDatetime::TimestampTz(ts) => {
-                    ::adt_timestamp::timestamptz_out(*ts, &mut buf)?
-                }
+                ParsedDatetime::TimestampTz(ts) => ::adt_timestamp::timestamptz_out(*ts, &mut buf)?,
             };
             cstring_in(mcx, &buf[..n])
         }
@@ -2182,7 +2560,27 @@ fn eval_json_expr_path(
     let mcx = unsafe { fcinfo_mut(f.fcinfo, 0) }.result_mcx();
 
     // SAFETY: compile-allocated state; shared borrow of Copy fields, ends here.
-    let (op, formatted, pathspec, wrapper, returning_typid, use_io, use_json, throw_error, nvars, vars_p, var_cells, input_fcinfo, column_name_p, on_error_btype, on_empty_btype, jump_error, jump_empty, jump_eval_coercion, jump_end) = unsafe {
+    let (
+        op,
+        formatted,
+        pathspec,
+        wrapper,
+        returning_typid,
+        use_io,
+        use_json,
+        throw_error,
+        nvars,
+        vars_p,
+        var_cells,
+        input_fcinfo,
+        column_name_p,
+        on_error_btype,
+        on_empty_btype,
+        jump_error,
+        jump_empty,
+        jump_eval_coercion,
+        jump_end,
+    ) = unsafe {
         let js = &*jsp;
         (
             js.op,
@@ -2217,8 +2615,14 @@ fn eval_json_expr_path(
     // SAFETY: short-scoped exclusive borrow of the live state.
     unsafe {
         let js = &mut *jsp;
-        js.error = NullableDatum { value: Datum::null(), isnull: false };
-        js.empty = NullableDatum { value: Datum::null(), isnull: false };
+        js.error = NullableDatum {
+            value: Datum::null(),
+            isnull: false,
+        };
+        js.empty = NullableDatum {
+            value: Datum::null(),
+            isnull: false,
+        };
         js.escontext.ctx = ::types_error::SoftErrorContext::new(false);
     }
 
@@ -2292,8 +2696,10 @@ fn eval_json_expr_path(
                 JsonPathValueResult::Value(jbv) => {
                     if returning_typid == JSONOID || returning_typid == JSONBOID {
                         let img = ::adt_jsonpath_exec::jbv_to_jsonb_image(mcx, &jbv)?;
-                        val_string =
-                            Some(::adt_jsonb::io::jsonb_out(mcx, &img[::datum::varlena::VARHDRSZ..])?);
+                        val_string = Some(::adt_jsonb::io::jsonb_out(
+                            mcx,
+                            &img[::datum::varlena::VARHDRSZ..],
+                        )?);
                         // C leaves resnull untouched here (zeroed = false on the
                         // reachable path); the io-coercion guard below must see
                         // non-null for val_string to reach the input function.
@@ -2337,9 +2743,9 @@ fn eval_json_expr_path(
     if !cur.isnull && use_io {
         debug_assert!(jump_eval_coercion < 0);
         let call = input_fcinfo.expect("io-coercion input call resolved at compile");
-        let s = val_string
-            .as_ref()
-            .unwrap_or_else(|| panic!("EEOP_JSONEXPR_PATH: use_io_coercion without a value string"));
+        let s = val_string.as_ref().unwrap_or_else(|| {
+            panic!("EEOP_JSONEXPR_PATH: use_io_coercion without a value string")
+        });
         // SAFETY: arg 0 of the compile-resolved 3-arg input fcinfo.
         unsafe {
             crate::steps::arg_slot_of(call.fcinfo, 0).write(NullableDatum {
@@ -2366,7 +2772,11 @@ fn eval_json_expr_path(
                     js.empty.value = Datum::from_bool(true);
                     js.escontext.ctx = ::types_error::SoftErrorContext::new(true);
                 }
-                return Ok(if jump_empty >= 0 { jump_empty } else { jump_end } as u32);
+                return Ok(if jump_empty >= 0 {
+                    jump_empty
+                } else {
+                    jump_end
+                } as u32);
             }
         } else if on_error_btype != JBT::JSON_BEHAVIOR_ERROR {
             unsafe {
@@ -2375,7 +2785,11 @@ fn eval_json_expr_path(
                 js.escontext.ctx = ::types_error::SoftErrorContext::new(true);
             }
             debug_assert!(soft);
-            return Ok(if jump_error >= 0 { jump_error } else { jump_end } as u32);
+            return Ok(if jump_error >= 0 {
+                jump_error
+            } else {
+                jump_end
+            } as u32);
         }
         return Err(no_json_item(column_name));
     }
@@ -2388,10 +2802,18 @@ fn eval_json_expr_path(
             js.error.value = Datum::from_bool(true);
             js.escontext.ctx = ::types_error::SoftErrorContext::new(true);
         }
-        return Ok(if jump_error >= 0 { jump_error } else { jump_end } as u32);
+        return Ok(if jump_error >= 0 {
+            jump_error
+        } else {
+            jump_end
+        } as u32);
     }
 
-    Ok(if jump_eval_coercion >= 0 { jump_eval_coercion } else { jump_end } as u32)
+    Ok(if jump_eval_coercion >= 0 {
+        jump_eval_coercion
+    } else {
+        jump_end
+    } as u32)
 }
 
 // C ExecEvalJsonCoercion (execExprInterp.c:5111); the composite/record
@@ -2433,7 +2855,11 @@ fn eval_json_coercion(
         }
         let img = ::adt_jsonb::io::jsonb_in(
             mcx,
-            if cur.value.as_bool() { b"true" } else { b"false" },
+            if cur.value.as_bool() {
+                b"true"
+            } else {
+                b"false"
+            },
             None,
         )?
         .expect("hard errsave without escontext returns Err");
@@ -2487,7 +2913,8 @@ fn eval_json_coercion_finish(
     if js.empty.value.as_bool() {
         return Err(behavior_coercion_error(
             "ON EMPTY",
-            js.on_empty_btype.expect("ON EMPTY coercion implies on_empty"),
+            js.on_empty_btype
+                .expect("ON EMPTY coercion implies on_empty"),
             js.escontext.ctx.take_error(),
         ));
     }
@@ -2507,7 +2934,14 @@ fn behavior_coercion_error(
 ) -> Box<PgError> {
     // C GetJsonBehaviorValueString: order matches JsonBehaviorType.
     const NAMES: [&str; 9] = [
-        "NULL", "ERROR", "EMPTY", "TRUE", "FALSE", "UNKNOWN", "EMPTY ARRAY", "EMPTY OBJECT",
+        "NULL",
+        "ERROR",
+        "EMPTY",
+        "TRUE",
+        "FALSE",
+        "UNKNOWN",
+        "EMPTY ARRAY",
+        "EMPTY OBJECT",
         "DEFAULT",
     ];
     let mut e = PgError::error(format!(
@@ -2645,11 +3079,11 @@ fn eval_field_select(
         return Ok((Datum::null(), true));
     }
     if resulttype != att.atttypid {
-        return Err(::types_error::PgError::error(format!(
-            "attribute {fieldnum} has wrong type"
-        ))
-        .with_sqlstate(ERRCODE_DATATYPE_MISMATCH)
-        .into());
+        return Err(
+            ::types_error::PgError::error(format!("attribute {fieldnum} has wrong type"))
+                .with_sqlstate(ERRCODE_DATATYPE_MISMATCH)
+                .into(),
+        );
     }
     // SAFETY: MAXALIGN'd detoasted image of datum_length() bytes.
     let tuple = unsafe {
@@ -2712,8 +3146,7 @@ fn eval_convert_rowtype(
             let outnatts = outdesc.natts as usize;
             let mut outvalues: ::mcx::PgVec<'_, Datum> =
                 ::mcx::vec_with_capacity_in(mcx, outnatts)?;
-            let mut outnulls: ::mcx::PgVec<'_, bool> =
-                ::mcx::vec_with_capacity_in(mcx, outnatts)?;
+            let mut outnulls: ::mcx::PgVec<'_, bool> = ::mcx::vec_with_capacity_in(mcx, outnatts)?;
             for &attno in map {
                 if attno > 0 {
                     outvalues.push(invalues[(attno - 1) as usize]);
@@ -2759,7 +3192,10 @@ fn eval_field_store_deform(
     let columns = unsafe { core::slice::from_raw_parts_mut(st.columns.as_ptr(), n) };
     if r.isnull {
         for c in columns {
-            *c = NullableDatum { value: Datum::null(), isnull: true };
+            *c = NullableDatum {
+                value: Datum::null(),
+                isnull: true,
+            };
         }
         return Ok(());
     }
@@ -2792,7 +3228,10 @@ fn eval_field_store_deform(
     ::types_tuple::heap_deform_tuple(&tuple, desc, &mut values, &mut nulls);
     core::mem::forget(tuple);
     for (i, c) in columns.iter_mut().enumerate() {
-        *c = NullableDatum { value: values[i], isnull: nulls[i] };
+        *c = NullableDatum {
+            value: values[i],
+            isnull: nulls[i],
+        };
     }
     Ok(())
 }
@@ -2915,7 +3354,10 @@ fn strict2_thin_eval(call: &crate::steps::CallThin) -> PgResult<NullableDatum> {
     if a0.isnull || a1.isnull {
         return Ok(NullableDatum::null());
     }
-    Ok(NullableDatum { value: invoke_thin(call)?, isnull: false })
+    Ok(NullableDatum {
+        value: invoke_thin(call)?,
+        isnull: false,
+    })
 }
 
 #[inline(always)]
@@ -2994,11 +3436,7 @@ unsafe fn agg_plain_trans_byref(
 
 /// datumCopy (datum.c), by-ref arms, at palloc (max) alignment.
 /// # Safety: `value` is a non-null by-ref datum readable for its full size.
-pub unsafe fn agg_datum_copy(
-    mcx: ::mcx::Mcx<'_>,
-    value: Datum,
-    typlen: i16,
-) -> PgResult<Datum> {
+pub unsafe fn agg_datum_copy(mcx: ::mcx::Mcx<'_>, value: Datum, typlen: i16) -> PgResult<Datum> {
     let p = value.as_usize() as *const u8;
     // SAFETY: forwarded caller contract.
     let size = unsafe {
@@ -3084,8 +3522,11 @@ pub unsafe fn agg_datum_replace(
 fn var_slot_dropped(attnum: u16, tdtypeid: ::types_core::Oid) -> Box<PgError> {
     let t = format_type::format_type_be(tdtypeid).unwrap_or_else(|_| tdtypeid.to_string());
     Box::new(
-        PgError::error(format!("attribute {} of type {t} has been dropped", attnum + 1))
-            .with_sqlstate(::types_error::ERRCODE_UNDEFINED_COLUMN),
+        PgError::error(format!(
+            "attribute {} of type {t} has been dropped",
+            attnum + 1
+        ))
+        .with_sqlstate(::types_error::ERRCODE_UNDEFINED_COLUMN),
     )
 }
 
@@ -3098,24 +3539,29 @@ fn var_slot_wrong_type(
     tabletype: ::types_core::Oid,
     vartype: ::types_core::Oid,
 ) -> Box<PgError> {
-    let f = |o: ::types_core::Oid| {
-        format_type::format_type_be(o).unwrap_or_else(|_| o.to_string())
-    };
+    let f = |o: ::types_core::Oid| format_type::format_type_be(o).unwrap_or_else(|_| o.to_string());
     Box::new(
-        PgError::error(format!("attribute {} of type {} has wrong type", attnum + 1, f(tdtypeid)))
-            .with_sqlstate(ERRCODE_DATATYPE_MISMATCH)
-            .with_detail(format!(
-                "Table has type {}, but query expects {}.",
-                f(tabletype),
-                f(vartype)
-            )),
+        PgError::error(format!(
+            "attribute {} of type {} has wrong type",
+            attnum + 1,
+            f(tdtypeid)
+        ))
+        .with_sqlstate(ERRCODE_DATATYPE_MISMATCH)
+        .with_detail(format!(
+            "Table has type {}, but query expects {}.",
+            f(tabletype),
+            f(vartype)
+        )),
     )
 }
 
 #[cold]
 #[inline(never)]
 fn var_slot_out_of_range(attnum: u16, natts: i32) -> ! {
-    panic!("attribute number {} exceeds number of columns {natts}", attnum + 1);
+    panic!(
+        "attribute number {} exceeds number of columns {natts}",
+        attnum + 1
+    );
 }
 
 // C CheckExprStillValid/CheckVarSlotCompatibility: first-evaluation check of
@@ -3152,16 +3598,30 @@ fn check_still_valid_slow<'mcx>(
 ) -> PgResult<()> {
     for step in state.steps.as_slice() {
         let (src, attnum, vartype) = match *step {
-            Step::ScanVar { attnum, vartype, .. }
-            | Step::ScanVarFuncStrict2 { attnum, vartype, .. } => (SlotSrc::Scan, attnum, vartype),
-            Step::InnerVar { attnum, vartype, .. } => (SlotSrc::Inner, attnum, vartype),
-            Step::OuterVar { attnum, vartype, .. }
-            | Step::OuterVarNotDistinct { attnum, vartype, .. }
-            | Step::OuterVarAggTransByValIndirect { attnum, vartype, .. } => {
-                (SlotSrc::Outer, attnum, vartype)
+            Step::ScanVar {
+                attnum, vartype, ..
             }
-            Step::OldVar { attnum, vartype, .. } => (SlotSrc::Old, attnum, vartype),
-            Step::NewVar { attnum, vartype, .. } => (SlotSrc::New, attnum, vartype),
+            | Step::ScanVarFuncStrict2 {
+                attnum, vartype, ..
+            } => (SlotSrc::Scan, attnum, vartype),
+            Step::InnerVar {
+                attnum, vartype, ..
+            } => (SlotSrc::Inner, attnum, vartype),
+            Step::OuterVar {
+                attnum, vartype, ..
+            }
+            | Step::OuterVarNotDistinct {
+                attnum, vartype, ..
+            }
+            | Step::OuterVarAggTransByValIndirect {
+                attnum, vartype, ..
+            } => (SlotSrc::Outer, attnum, vartype),
+            Step::OldVar {
+                attnum, vartype, ..
+            } => (SlotSrc::Old, attnum, vartype),
+            Step::NewVar {
+                attnum, vartype, ..
+            } => (SlotSrc::New, attnum, vartype),
             _ => continue,
         };
         let slot = match src {
@@ -3191,7 +3651,12 @@ fn check_still_valid_slow<'mcx>(
             return Err(var_slot_dropped(attnum, desc.tdtypeid));
         }
         if attr.atttypid != vartype {
-            return Err(var_slot_wrong_type(attnum, desc.tdtypeid, attr.atttypid, vartype));
+            return Err(var_slot_wrong_type(
+                attnum,
+                desc.tdtypeid,
+                attr.atttypid,
+                vartype,
+            ));
         }
     }
     state.flags |= EEO_FLAG_STILL_VALID_CHECKED;
@@ -3202,8 +3667,9 @@ fn check_still_valid_slow<'mcx>(
 #[cold]
 fn errdatatype(e: &mut PgError, typid: u32) {
     if let Ok(Some(t)) = ::syscache_seams::pg_type_domain_shape::call(typid) {
-        e.datatype_name =
-            core::str::from_utf8(t.typname.name_str()).ok().map(|s| s.to_string());
+        e.datatype_name = core::str::from_utf8(t.typname.name_str())
+            .ok()
+            .map(|s| s.to_string());
         let cx = ::mcx::MemoryContext::new("errdatatype");
         let nsp = lsyscache::get_namespace_name(cx.mcx(), t.typnamespace);
         if let Ok(Some(nsp)) = &nsp {
@@ -3329,8 +3795,12 @@ fn eval_whole_row(
     };
     if wr.first {
         wr.slow = false;
-        let slot_desc =
-            slot.base().tts_tupleDescriptor.as_ref().expect("slot has a descriptor").clone();
+        let slot_desc = slot
+            .base()
+            .tts_tupleDescriptor
+            .as_ref()
+            .expect("slot has a descriptor")
+            .clone();
         if !wr.record {
             // SAFETY: compile-allocated plan-mcx tupdesc, live for the plan.
             let var_desc = unsafe { wr.tupdesc.expect("named leg compiles a tupdesc").as_ref() };
@@ -3378,7 +3848,10 @@ fn eval_whole_row(
     let var_desc = unsafe { wr.tupdesc.expect("resolved above").as_ref() };
     exectuples::slot_getallattrs(slot);
     let base = slot.base();
-    let slot_desc = base.tts_tupleDescriptor.as_ref().expect("slot has a descriptor");
+    let slot_desc = base
+        .tts_tupleDescriptor
+        .as_ref()
+        .expect("slot has a descriptor");
     if wr.slow {
         for i in 0..var_desc.natts as usize {
             let vattr = &var_desc.compact_attrs[i];
@@ -3467,7 +3940,11 @@ pub(crate) fn domain_not_null_violation(typid: u32) -> Box<PgError> {
 #[cold]
 #[inline(never)]
 fn row_type_mismatch_natts(slot_natts: i32, var_natts: i32) -> alloc::boxed::Box<PgError> {
-    let att = if slot_natts == 1 { "attribute" } else { "attributes" };
+    let att = if slot_natts == 1 {
+        "attribute"
+    } else {
+        "attributes"
+    };
     alloc::boxed::Box::new(
         PgError::error("table row type and query-specified row type do not match")
             .with_sqlstate(::types_error::ERRCODE_DATATYPE_MISMATCH)
@@ -3497,10 +3974,10 @@ fn row_type_mismatch_type(
     i: usize,
     var_type: ::types_core::Oid,
 ) -> alloc::boxed::Box<PgError> {
-    let st = ::format_type::format_type_be(slot_type)
-        .unwrap_or_else(|_| alloc::format!("{slot_type}"));
-    let vt = ::format_type::format_type_be(var_type)
-        .unwrap_or_else(|_| alloc::format!("{var_type}"));
+    let st =
+        ::format_type::format_type_be(slot_type).unwrap_or_else(|_| alloc::format!("{slot_type}"));
+    let vt =
+        ::format_type::format_type_be(var_type).unwrap_or_else(|_| alloc::format!("{var_type}"));
     alloc::boxed::Box::new(
         PgError::error("table row type and query-specified row type do not match")
             .with_sqlstate(::types_error::ERRCODE_DATATYPE_MISMATCH)
@@ -3565,7 +4042,6 @@ fn eval_row_compare_final(cmptype: i32, cmpresult: i32) -> bool {
 // NULLIF: null-or-unequal keeps arg0; strict equality only when both
 // non-null (C ExecEvalFuncExpr + NULLIF special case semantics, shared by
 // run_program and the JIT single-step tier).
-#[inline(always)]
 fn step_nullif(call: &FuncCall, out: OutRef) -> PgResult<()> {
     // SAFETY: args 0/1 of the call's live fcinfo image.
     let (a0, a1) = unsafe {
@@ -3599,12 +4075,17 @@ fn step_io_coerce_safe(
     let c = unsafe { calls.as_ref() };
     let nd = read_out(out);
     let strv = if nd.isnull {
-        NullableDatum { value: Datum::null(), isnull: true }
+        NullableDatum {
+            value: Datum::null(),
+            isnull: true,
+        }
     } else {
         // SAFETY: arg 0 of the outcall's live fcinfo image.
         unsafe {
-            crate::steps::arg_slot_of(c.outcall.fcinfo, 0)
-                .write(NullableDatum { value: nd.value, isnull: false })
+            crate::steps::arg_slot_of(c.outcall.fcinfo, 0).write(NullableDatum {
+                value: nd.value,
+                isnull: false,
+            })
         };
         let (v, isnull) = invoke(&c.outcall)?;
         NullableDatum { value: v, isnull }
@@ -3612,8 +4093,10 @@ fn step_io_coerce_safe(
     if !c.in_strict || !strv.isnull {
         // SAFETY: arg 0 of the incall's live fcinfo image.
         unsafe {
-            crate::steps::arg_slot_of(c.incall.fcinfo, 0)
-                .write(NullableDatum { value: strv.value, isnull: nd.isnull })
+            crate::steps::arg_slot_of(c.incall.fcinfo, 0).write(NullableDatum {
+                value: strv.value,
+                isnull: nd.isnull,
+            })
         };
         let (v, _) = invoke(&c.incall)?;
         // SAFETY: context is the compile-armed ErrorSaveNode
@@ -3629,17 +4112,25 @@ fn step_io_coerce_safe(
     Ok(())
 }
 
-fn step_io_coerce(calls: core::ptr::NonNull<crate::steps::IoCoerceCalls>, out: OutRef) -> PgResult<()> {
+fn step_io_coerce(
+    calls: core::ptr::NonNull<crate::steps::IoCoerceCalls>,
+    out: OutRef,
+) -> PgResult<()> {
     // SAFETY: 'mcx-owned pair written once at compile.
     let c = unsafe { calls.as_ref() };
     let nd = read_out(out);
     let strv = if nd.isnull {
-        NullableDatum { value: Datum::null(), isnull: true }
+        NullableDatum {
+            value: Datum::null(),
+            isnull: true,
+        }
     } else {
         // SAFETY: arg 0 of the outcall's live fcinfo image.
         unsafe {
-            crate::steps::arg_slot_of(c.outcall.fcinfo, 0)
-                .write(NullableDatum { value: nd.value, isnull: false })
+            crate::steps::arg_slot_of(c.outcall.fcinfo, 0).write(NullableDatum {
+                value: nd.value,
+                isnull: false,
+            })
         };
         let (v, isnull) = invoke(&c.outcall)?;
         NullableDatum { value: v, isnull }
@@ -3678,10 +4169,14 @@ fn step_min_max(
         }
         // SAFETY: args 0/1 of the call's live 2-arg fcinfo image.
         unsafe {
-            crate::steps::arg_slot_of(call.fcinfo, 0)
-                .write(NullableDatum { value, isnull: false });
-            crate::steps::arg_slot_of(call.fcinfo, 1)
-                .write(NullableDatum { value: nd.value, isnull: false });
+            crate::steps::arg_slot_of(call.fcinfo, 0).write(NullableDatum {
+                value,
+                isnull: false,
+            });
+            crate::steps::arg_slot_of(call.fcinfo, 1).write(NullableDatum {
+                value: nd.value,
+                isnull: false,
+            });
         }
         let (cmp, cmpnull) = invoke(call)?;
         if cmpnull {
@@ -3755,7 +4250,9 @@ fn step_sql_value_function(
         Op::SVFOP_LOCALTIMESTAMP | Op::SVFOP_LOCALTIMESTAMP_N => {
             Datum::from_i64(adt_timestamp::GetSQLLocalTimestamp(typmod)?)
         }
-        Op::SVFOP_CURRENT_ROLE | Op::SVFOP_CURRENT_USER | Op::SVFOP_USER
+        Op::SVFOP_CURRENT_ROLE
+        | Op::SVFOP_CURRENT_USER
+        | Op::SVFOP_USER
         | Op::SVFOP_SESSION_USER => {
             let roleid = if matches!(op, Op::SVFOP_SESSION_USER) {
                 miscinit_seams::get_session_user_id::call()
@@ -3775,16 +4272,18 @@ fn step_sql_value_function(
             Datum::from_usize(scratch.as_ptr() as usize)
         }
         Op::SVFOP_CURRENT_CATALOG => {
-            let dbname = ::dbcommands_seams::get_database_name::call(
-                ::init_small::globals::MyDatabaseId(),
-            )?
-            .expect("current database has a pg_database row");
+            let dbname =
+                ::dbcommands_seams::get_database_name::call(::init_small::globals::MyDatabaseId())?
+                    .expect("current database has a pg_database row");
             let mut name = ::types_tuple::NameData::default();
             name.namestrcpy(&dbname);
             // SAFETY: compile-allocated NameData-sized image slot
             // owned by this step (steps.rs note).
             unsafe {
-                scratch.as_ptr().cast::<::types_tuple::NameData>().write(name);
+                scratch
+                    .as_ptr()
+                    .cast::<::types_tuple::NameData>()
+                    .write(name);
             }
             Datum::from_usize(scratch.as_ptr() as usize)
         }
@@ -3806,7 +4305,10 @@ fn step_sql_value_function(
             // SAFETY: compile-allocated NameData-sized image slot
             // owned by this step (steps.rs note).
             unsafe {
-                scratch.as_ptr().cast::<::types_tuple::NameData>().write(name);
+                scratch
+                    .as_ptr()
+                    .cast::<::types_tuple::NameData>()
+                    .write(name);
             }
             Datum::from_usize(scratch.as_ptr() as usize)
         }
@@ -3888,7 +4390,11 @@ fn step_hash_datum_first(call: &FuncCall, out: OutRef) -> PgResult<()> {
     // SAFETY: arg 0 of the call's live fcinfo image; hash fns
     // never return NULL (C reads fn_addr's Datum directly).
     let a0 = unsafe { crate::steps::arg_slot_of(call.fcinfo, 0).read() };
-    let v = if a0.isnull { Datum::null() } else { invoke(call)?.0 };
+    let v = if a0.isnull {
+        Datum::null()
+    } else {
+        invoke(call)?.0
+    };
     write_out(out, v, false);
     Ok(())
 }
@@ -4019,7 +4525,13 @@ pub(crate) fn exec_one_step<'mcx>(
     // OLD/NEW-is-null bits are rewritten per row by the RETURNING driver:
     // read at every step, exactly like run_program's per-call read.
     let flags = state.flags;
-    let ExprState { steps, frames, resnd, saop_tables, .. } = state;
+    let ExprState {
+        steps,
+        frames,
+        resnd,
+        saop_tables,
+        ..
+    } = state;
     let res = *resnd;
     let step = steps[ix as usize];
     // run_program's OLD/NEW resolution (RetSlot::Scan aliases the scan slot).
@@ -4124,15 +4636,23 @@ pub(crate) fn exec_one_step<'mcx>(
         }
         Step::AssignOldVar { attnum, resultnum } => {
             let nd = read_var(old_slot!(), attnum);
-            let rslot = result_slot.as_deref_mut().unwrap_or_else(|| no_result_slot());
+            let rslot = result_slot
+                .as_deref_mut()
+                .unwrap_or_else(|| no_result_slot());
             assign_to_result(rslot, resultnum, nd.value, nd.isnull);
         }
         Step::AssignNewVar { attnum, resultnum } => {
             let nd = read_var(new_slot!(), attnum);
-            let rslot = result_slot.as_deref_mut().unwrap_or_else(|| no_result_slot());
+            let rslot = result_slot
+                .as_deref_mut()
+                .unwrap_or_else(|| no_result_slot());
             assign_to_result(rslot, resultnum, nd.value, nd.isnull);
         }
-        Step::ReturningExprStep { nullflag, jumpdone, out } => {
+        Step::ReturningExprStep {
+            nullflag,
+            jumpdone,
+            out,
+        } => {
             if flags & nullflag != 0 {
                 write_out(out, Datum::null(), true);
                 return Ok(StepFlow::Jump(jumpdone));
@@ -4144,8 +4664,14 @@ pub(crate) fn exec_one_step<'mcx>(
         Step::IoCoerceSafe { calls, out } => {
             step_io_coerce_safe(calls, out)?;
         }
-        Step::JsonExprPath { jsestate, frame, out } => {
-            return Ok(StepFlow::Jump(eval_json_expr_path(frames, jsestate, frame, out)?));
+        Step::JsonExprPath {
+            jsestate,
+            frame,
+            out,
+        } => {
+            return Ok(StepFlow::Jump(eval_json_expr_path(
+                frames, jsestate, frame, out,
+            )?));
         }
         Step::JsonCoercion { jc, frame, out } => {
             eval_json_coercion(frames, jc, frame, out)?;
@@ -4160,7 +4686,11 @@ pub(crate) fn exec_one_step<'mcx>(
             let (value, isnull) = invoke(&call)?;
             write_out(out, value, isnull);
         }
-        Step::AggStrictDeserialize { call, out, jumpnull } => {
+        Step::AggStrictDeserialize {
+            call,
+            out,
+            jumpnull,
+        } => {
             // SAFETY: slot 0 of the live 2-arg ds fcinfo image.
             if unsafe { crate::steps::arg_slot_of(call.fcinfo, 0).read().isnull } {
                 return Ok(StepFlow::Jump(jumpnull));
@@ -4179,27 +4709,36 @@ pub(crate) fn exec_one_step<'mcx>(
         }
         Step::AssignScanVar { attnum, resultnum } => {
             let nd = read_var(slots.get(SlotSrc::Scan), attnum);
-            let rslot = result_slot.as_deref_mut().unwrap_or_else(|| no_result_slot());
+            let rslot = result_slot
+                .as_deref_mut()
+                .unwrap_or_else(|| no_result_slot());
             assign_to_result(rslot, resultnum, nd.value, nd.isnull);
         }
         Step::AssignInnerVar { attnum, resultnum } => {
             let nd = read_var(slots.get(SlotSrc::Inner), attnum);
-            let rslot = result_slot.as_deref_mut().unwrap_or_else(|| no_result_slot());
+            let rslot = result_slot
+                .as_deref_mut()
+                .unwrap_or_else(|| no_result_slot());
             assign_to_result(rslot, resultnum, nd.value, nd.isnull);
         }
         Step::AssignOuterVar { attnum, resultnum } => {
             let nd = read_var(slots.get(SlotSrc::Outer), attnum);
-            let rslot = result_slot.as_deref_mut().unwrap_or_else(|| no_result_slot());
+            let rslot = result_slot
+                .as_deref_mut()
+                .unwrap_or_else(|| no_result_slot());
             assign_to_result(rslot, resultnum, nd.value, nd.isnull);
         }
         Step::AssignTmp { resultnum } => {
-            let rslot = result_slot.as_deref_mut().unwrap_or_else(|| no_result_slot());
+            let rslot = result_slot
+                .as_deref_mut()
+                .unwrap_or_else(|| no_result_slot());
             // SAFETY: res is the state's live result cell.
             let r = unsafe { res.read() };
             assign_to_result(rslot, resultnum, r.value, r.isnull);
         }
         Step::AssignTmpMakeRo { resultnum } => {
-            let rslot = result_slot.as_deref_mut().unwrap_or_else(|| no_result_slot());
+            let rslot = result_slot
+                .unwrap_or_else(|| no_result_slot());
             // SAFETY: live result cell; non-null by-ref datum = live varlena.
             let r = unsafe { res.read() };
             let value = if !r.isnull {
@@ -4211,7 +4750,8 @@ pub(crate) fn exec_one_step<'mcx>(
         }
         Step::ScanSysVar { attnum, out } => {
             let mut isnull = false;
-            let d = exectuples::slot_getsysattr(slots.get(SlotSrc::Scan), attnum as i32, &mut isnull)?;
+            let d =
+                exectuples::slot_getsysattr(slots.get(SlotSrc::Scan), attnum as i32, &mut isnull)?;
             write_out(out, d, isnull);
         }
         Step::InnerSysVar { attnum, out } => {
@@ -4277,7 +4817,11 @@ pub(crate) fn exec_one_step<'mcx>(
             };
             write_out(out, value, r.isnull);
         }
-        Step::NextValueExpr { seqid, seqtypid, out } => {
+        Step::NextValueExpr {
+            seqid,
+            seqtypid,
+            out,
+        } => {
             let newval = sequence_seams::nextval_internal::call(seqid, false)?;
             let d = match seqtypid {
                 types_core::INT2OID => Datum::from_i16(newval as i16),
@@ -4287,12 +4831,16 @@ pub(crate) fn exec_one_step<'mcx>(
             };
             write_out(out, d, false);
         }
-        Step::WholeRow { src, wr, frame, out } => {
+        Step::WholeRow {
+            src,
+            wr,
+            frame,
+            out,
+        } => {
             // C ExecEvalWholeRowVar: OLD/NEW whole-row is NULL when that
             // row doesn't exist (run_program parity).
             if (matches!(src, SlotSrc::Old) && flags & crate::steps::EEO_FLAG_OLD_IS_NULL != 0)
-                || (matches!(src, SlotSrc::New)
-                    && flags & crate::steps::EEO_FLAG_NEW_IS_NULL != 0)
+                || (matches!(src, SlotSrc::New) && flags & crate::steps::EEO_FLAG_NEW_IS_NULL != 0)
             {
                 write_out(out, Datum::null(), true);
             } else {
@@ -4308,13 +4856,29 @@ pub(crate) fn exec_one_step<'mcx>(
         Step::IoCoerce { calls, out } => {
             step_io_coerce(calls, out)?;
         }
-        Step::ScalarArrayOp { call, use_or, strict, typlen, typbyval, typalign, out } => {
+        Step::ScalarArrayOp {
+            call,
+            use_or,
+            strict,
+            typlen,
+            typbyval,
+            typalign,
+            out,
+        } => {
             let arr = read_out(out);
             let (value, isnull) =
                 eval_scalar_array_op(&call, use_or, strict, typlen, typbyval, typalign, arr)?;
             write_out(out, value, isnull);
         }
-        Step::HashedScalarArrayOp { call, inclause, typlen, typbyval, typalign, table, out } => {
+        Step::HashedScalarArrayOp {
+            call,
+            inclause,
+            typlen,
+            typbyval,
+            typalign,
+            table,
+            out,
+        } => {
             let arr = read_out(out);
             let (value, isnull) = eval_hashed_scalar_array_op(
                 &mut saop_tables[table as usize],
@@ -4327,19 +4891,45 @@ pub(crate) fn exec_one_step<'mcx>(
             )?;
             write_out(out, value, isnull);
         }
-        Step::ArrayExprStep { elems, nelems, frame, elmtype, elmlen, elmbyval, elmalign, out } => {
-            let (value, isnull) =
-                eval_array_expr(frames, elems, nelems, frame, elmtype, elmlen, elmbyval, elmalign)?;
+        Step::ArrayExprStep {
+            elems,
+            nelems,
+            frame,
+            elmtype,
+            elmlen,
+            elmbyval,
+            elmalign,
+            out,
+        } => {
+            let (value, isnull) = eval_array_expr(
+                frames, elems, nelems, frame, elmtype, elmlen, elmbyval, elmalign,
+            )?;
             write_out(out, value, isnull);
         }
-        Step::RowExprStep { elems, nelems, frame, desc, out } => {
+        Step::RowExprStep {
+            elems,
+            nelems,
+            frame,
+            desc,
+            out,
+        } => {
             let (value, isnull) = eval_row_expr(frames, elems, nelems, frame, desc)?;
             write_out(out, value, isnull);
         }
-        Step::JsonConstructor { jcstate, frame, out } => {
+        Step::JsonConstructor {
+            jcstate,
+            frame,
+            out,
+        } => {
             eval_json_constructor_step(frames, jcstate, frame, out)?;
         }
-        Step::IsJson { exprtype, item_type, unique_keys, frame, out } => {
+        Step::IsJson {
+            exprtype,
+            item_type,
+            unique_keys,
+            frame,
+            out,
+        } => {
             eval_is_json_step(frames, exprtype, item_type, unique_keys, frame, out)?;
         }
         Step::XmlExprEval { state: xs, out } => {
@@ -4348,13 +4938,28 @@ pub(crate) fn exec_one_step<'mcx>(
             let (value, isnull) = crate::xmlops::eval_xml_expr(st)?;
             write_out(out, value, isnull);
         }
-        Step::MinMax { call, slots: vals, nelems, least, out } => {
+        Step::MinMax {
+            call,
+            slots: vals,
+            nelems,
+            least,
+            out,
+        } => {
             step_min_max(&call, vals, nelems, least, out)?;
         }
-        Step::SqlValueFunction { op, typmod, scratch, out } => {
+        Step::SqlValueFunction {
+            op,
+            typmod,
+            scratch,
+            out,
+        } => {
             step_sql_value_function(op, typmod, scratch, out)?;
         }
-        Step::MergeSupportFunc { action, scratch, out } => {
+        Step::MergeSupportFunc {
+            action,
+            scratch,
+            out,
+        } => {
             step_merge_support_func(action, scratch, out)?;
         }
         Step::NullTestRowIsNull { rn, frame, out } => {
@@ -4367,7 +4972,12 @@ pub(crate) fn exec_one_step<'mcx>(
             let b = eval_row_null(frames, rn, frame, r, false)?;
             write_out(out, Datum::from_bool(b), false);
         }
-        Step::FieldSelect { fieldnum, resulttype, frame, out } => {
+        Step::FieldSelect {
+            fieldnum,
+            resulttype,
+            frame,
+            out,
+        } => {
             let r = read_out(out);
             if !r.isnull {
                 let (value, isnull) =
@@ -4384,7 +4994,11 @@ pub(crate) fn exec_one_step<'mcx>(
                 write_out(out, nd.value, nd.isnull);
             }
         }
-        Step::ConvertRowtype { state: crs, frame, out } => {
+        Step::ConvertRowtype {
+            state: crs,
+            frame,
+            out,
+        } => {
             let r = read_out(out);
             if !r.isnull {
                 // SAFETY: compile-allocated state, sole live access.
@@ -4409,14 +5023,23 @@ pub(crate) fn exec_one_step<'mcx>(
             let r = read_out(src);
             write_out(out, r.value, r.isnull);
         }
-        Step::DomainNotNull { resulttype, escontext, out } => {
+        Step::DomainNotNull {
+            resulttype,
+            escontext,
+            out,
+        } => {
             if read_out(out).isnull {
                 // SAFETY: escontext points at the owning JsonExprState's node,
                 // live for the program.
                 errsave(escontext, || domain_not_null_violation(resulttype))?;
             }
         }
-        Step::DomainCheck { resulttype, name, check, escontext } => {
+        Step::DomainCheck {
+            resulttype,
+            name,
+            check,
+            escontext,
+        } => {
             // SAFETY: compile-allocated scratch, live for 'mcx.
             let r = unsafe { check.read() };
             if !r.isnull && !r.value.as_bool() {
@@ -4433,7 +5056,11 @@ pub(crate) fn exec_one_step<'mcx>(
             let r = crate::arrayops::eval_array_expr(st)?;
             write_out(out, r.value, r.isnull);
         }
-        Step::SbsrefSubscripts { state: sref, jumpdone, out } => {
+        Step::SbsrefSubscripts {
+            state: sref,
+            jumpdone,
+            out,
+        } => {
             // SAFETY: as ArrayExprEval.
             let st = unsafe { &mut *sref.as_ptr() };
             if !crate::arrayops::sbsref_check_subscripts(st)? {
@@ -4441,7 +5068,11 @@ pub(crate) fn exec_one_step<'mcx>(
                 return Ok(StepFlow::Jump(jumpdone));
             }
         }
-        Step::SbsrefFetch { state: sref, slice, out } => {
+        Step::SbsrefFetch {
+            state: sref,
+            slice,
+            out,
+        } => {
             // SAFETY: as ArrayExprEval.
             let st = unsafe { &mut *sref.as_ptr() };
             let cur = read_out(out);
@@ -4458,7 +5089,11 @@ pub(crate) fn exec_one_step<'mcx>(
             let cur = read_out(out);
             crate::arrayops::sbsref_fetch_old(st, cur)?;
         }
-        Step::SbsrefAssign { state: sref, slice, out } => {
+        Step::SbsrefAssign {
+            state: sref,
+            slice,
+            out,
+        } => {
             // SAFETY: as ArrayExprEval.
             let st = unsafe { &mut *sref.as_ptr() };
             let cur = read_out(out);
@@ -4469,7 +5104,11 @@ pub(crate) fn exec_one_step<'mcx>(
             };
             write_out(out, r.value, r.isnull);
         }
-        Step::JsonbSbsrefSubscripts { state: sref, jumpdone, out } => {
+        Step::JsonbSbsrefSubscripts {
+            state: sref,
+            jumpdone,
+            out,
+        } => {
             // SAFETY: as ArrayExprEval.
             let st = unsafe { &mut *sref.as_ptr() };
             if !crate::jsonbsubs::check_subscripts(st)? {
@@ -4516,15 +5155,28 @@ pub(crate) fn exec_one_step<'mcx>(
             let (v, n) = unsafe { (value.read(), null.read()) };
             write_out(out, v, n);
         }
-        Step::GroupingFuncEval { cols, ncols, current, out } => {
+        Step::GroupingFuncEval {
+            cols,
+            ncols,
+            current,
+            out,
+        } => {
             step_grouping_func(cols, ncols, current, out);
         }
-        Step::AggSetCurrent { agg, aggref, shared } => {
+        Step::AggSetCurrent {
+            agg,
+            aggref,
+            shared,
+        } => {
             // SAFETY: the caller's query-lifetime AggStateNode; no &mut
             // is live across expression evaluation.
             unsafe { agg.as_ref() }.set_current_agg(aggref, shared);
         }
-        Step::AggStrictInputCheck { args, nargs, jumpnull } => {
+        Step::AggStrictInputCheck {
+            args,
+            nargs,
+            jumpnull,
+        } => {
             // SAFETY: args[0..nargs] live fcinfo slots; jumps ready-checked.
             let anynull =
                 (0..nargs as usize).any(|i| unsafe { args.as_ptr().add(i).read().isnull });
@@ -4554,21 +5206,37 @@ pub(crate) fn exec_one_step<'mcx>(
             // SAFETY: as AggPlainTransByVal.
             unsafe { agg_trans_init_strict_byval(&call, pergroup.as_ptr())? }
         }
-        Step::AggTransByValIndirect { call, base, transno } => {
+        Step::AggTransByValIndirect {
+            call,
+            base,
+            transno,
+        } => {
             // SAFETY: live repointed pergroup cell (run_program contract).
             unsafe { agg_trans_byval(&call, base.read().as_ptr().add(transno as usize))? }
         }
-        Step::AggTransStrictByValIndirect { call, base, transno } => {
+        Step::AggTransStrictByValIndirect {
+            call,
+            base,
+            transno,
+        } => {
             // SAFETY: as AggTransByValIndirect.
             unsafe { agg_trans_strict_byval(&call, base.read().as_ptr().add(transno as usize))? }
         }
-        Step::AggTransInitStrictByValIndirect { call, base, transno } => {
+        Step::AggTransInitStrictByValIndirect {
+            call,
+            base,
+            transno,
+        } => {
             // SAFETY: as AggTransByValIndirect.
             unsafe {
                 agg_trans_init_strict_byval(&call, base.read().as_ptr().add(transno as usize))?
             }
         }
-        Step::AggPlainTransInitStrictByRef { call, pergroup, byref } => {
+        Step::AggPlainTransInitStrictByRef {
+            call,
+            pergroup,
+            byref,
+        } => {
             // SAFETY: once-allocated stable pergroup, sole access here.
             unsafe {
                 let pg = pergroup.as_ptr();
@@ -4579,7 +5247,11 @@ pub(crate) fn exec_one_step<'mcx>(
                 }
             }
         }
-        Step::AggPlainTransStrictByRef { call, pergroup, byref } => {
+        Step::AggPlainTransStrictByRef {
+            call,
+            pergroup,
+            byref,
+        } => {
             // SAFETY: as AggPlainTransInitStrictByRef.
             unsafe {
                 let pg = pergroup.as_ptr();
@@ -4588,11 +5260,20 @@ pub(crate) fn exec_one_step<'mcx>(
                 }
             }
         }
-        Step::AggPlainTransByRef { call, pergroup, byref } => {
+        Step::AggPlainTransByRef {
+            call,
+            pergroup,
+            byref,
+        } => {
             // SAFETY: as AggPlainTransInitStrictByRef.
             unsafe { agg_plain_trans_byref(&call, pergroup.as_ptr(), byref)? }
         }
-        Step::AggTransInitStrictByRefIndirect { call, base, transno, byref } => {
+        Step::AggTransInitStrictByRefIndirect {
+            call,
+            base,
+            transno,
+            byref,
+        } => {
             // SAFETY: as AggTransByValIndirect + AggPlainTransByRef.
             unsafe {
                 let pg = base.read().as_ptr().add(transno as usize);
@@ -4603,7 +5284,12 @@ pub(crate) fn exec_one_step<'mcx>(
                 }
             }
         }
-        Step::AggTransStrictByRefIndirect { call, base, transno, byref } => {
+        Step::AggTransStrictByRefIndirect {
+            call,
+            base,
+            transno,
+            byref,
+        } => {
             // SAFETY: as AggTransInitStrictByRefIndirect.
             unsafe {
                 let pg = base.read().as_ptr().add(transno as usize);
@@ -4612,7 +5298,12 @@ pub(crate) fn exec_one_step<'mcx>(
                 }
             }
         }
-        Step::AggTransByRefIndirect { call, base, transno, byref } => {
+        Step::AggTransByRefIndirect {
+            call,
+            base,
+            transno,
+            byref,
+        } => {
             // SAFETY: as AggTransInitStrictByRefIndirect.
             unsafe {
                 agg_plain_trans_byref(&call, base.read().as_ptr().add(transno as usize), byref)?
@@ -4627,20 +5318,24 @@ pub(crate) fn exec_one_step<'mcx>(
         Step::HashDatumNext32 { call, iresult, out } => {
             step_hash_datum_next32(&call, iresult, out)?;
         }
-        Step::RowCompareStep { call, strict, jumpnull, jumpdone, out } => {
-            match eval_row_compare_step(&call, strict)? {
-                None => {
-                    write_out(out, Datum::null(), true);
-                    return Ok(StepFlow::Jump(jumpnull));
-                }
-                Some(v) => {
-                    write_out(out, Datum::from_i32(v), false);
-                    if v != 0 {
-                        return Ok(StepFlow::Jump(jumpdone));
-                    }
+        Step::RowCompareStep {
+            call,
+            strict,
+            jumpnull,
+            jumpdone,
+            out,
+        } => match eval_row_compare_step(&call, strict)? {
+            None => {
+                write_out(out, Datum::null(), true);
+                return Ok(StepFlow::Jump(jumpnull));
+            }
+            Some(v) => {
+                write_out(out, Datum::from_i32(v), false);
+                if v != 0 {
+                    return Ok(StepFlow::Jump(jumpdone));
                 }
             }
-        }
+        },
         Step::RowCompareFinal { cmptype, out } => {
             let v = eval_row_compare_final(cmptype, read_out(out).value.as_i32());
             write_out(out, Datum::from_bool(v), false);

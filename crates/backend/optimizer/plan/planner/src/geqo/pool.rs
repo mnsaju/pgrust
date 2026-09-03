@@ -22,11 +22,18 @@ pub(super) fn alloc_pool(pool_size: i32, string_length: i32) -> Pool {
             worth: 0.0,
         });
     }
-    Pool { data, size: pool_size, string_length }
+    Pool {
+        data,
+        size: pool_size,
+        string_length,
+    }
 }
 
 pub(super) fn alloc_chromo(string_length: i32) -> Chromosome {
-    Chromosome { string: vec![0 as super::Gene; (string_length + 1) as usize], worth: 0.0 }
+    Chromosome {
+        string: vec![0 as super::Gene; (string_length + 1) as usize],
+        worth: 0.0,
+    }
 }
 
 // Seed the pool, discarding invalid individuals (fitness DBL_MAX); give up

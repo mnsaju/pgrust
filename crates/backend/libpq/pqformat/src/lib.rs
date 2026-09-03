@@ -303,7 +303,10 @@ impl PqString<'_, '_> {
 fn scan_cstring_len(msg: &StringInfo<'_>) -> PgResult<usize> {
     let bytes = msg.as_bytes();
     let cursor = msg.cursor;
-    match bytes.get(cursor..).and_then(|r| r.iter().position(|&b| b == 0)) {
+    match bytes
+        .get(cursor..)
+        .and_then(|r| r.iter().position(|&b| b == 0))
+    {
         Some(slen) => Ok(slen),
         None => Err(protocol_violation("invalid string in message")),
     }

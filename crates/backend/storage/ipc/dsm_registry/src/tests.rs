@@ -3,7 +3,10 @@ use super::*;
 #[test]
 fn name_and_size_validation_matches_c() {
     let e = GetNamedDSMSegment("", 8, None).unwrap_err();
-    assert!(e.message().contains("DSM segment name cannot be empty"), "{e:?}");
+    assert!(
+        e.message().contains("DSM segment name cannot be empty"),
+        "{e:?}"
+    );
 
     let long = "x".repeat(DSM_REGISTRY_NAME_LEN);
     let e = GetNamedDSMSegment(&long, 8, None).unwrap_err();
@@ -11,7 +14,10 @@ fn name_and_size_validation_matches_c() {
 
     let ok_len = "x".repeat(DSM_REGISTRY_NAME_LEN - 1);
     let e = GetNamedDSMSegment(&ok_len, 0, None).unwrap_err();
-    assert!(e.message().contains("DSM segment size must be nonzero"), "{e:?}");
+    assert!(
+        e.message().contains("DSM segment size must be nonzero"),
+        "{e:?}"
+    );
 }
 
 #[test]

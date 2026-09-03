@@ -183,7 +183,7 @@ fn ssl_errmessage(stack: Option<&ErrorStack>) -> String {
 }
 
 fn ssl_errmessage_ext(stack: Option<&ErrorStack>, replacement: &str) -> String {
-    if stack.map_or(true, |s| s.errors().is_empty()) {
+    if stack.is_none_or(|s| s.errors().is_empty()) {
         replacement.to_string()
     } else {
         ssl_errmessage(stack)

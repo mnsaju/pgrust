@@ -23,7 +23,7 @@ const fn maxalign(x: usize) -> usize {
 
 #[inline]
 const fn bitmaplen(natts: usize) -> usize {
-    (natts + 7) / 8
+    natts.div_ceil(8)
 }
 
 fn alloc_bytes<'mcx>(mcx: Mcx<'mcx>, bytes: &[u8]) -> PgResult<&'mcx [u8]> {
@@ -84,10 +84,7 @@ pub fn brin_form_tuple<'mcx>(
                 unsafe {
                     let mut p = value.as_usize() as *const u8;
                     if varatt_is_1b_e(p) {
-                        let flat = detoast::detoast_external_attr(
-                            mcx,
-                            external_image(p),
-                        )?;
+                        let flat = detoast::detoast_external_attr(mcx, external_image(p))?;
                         value = Datum::from_usize(flat.leak().as_ptr() as usize);
                         p = value.as_usize() as *const u8;
                     }
@@ -210,8 +207,7 @@ pub fn brin_form_placeholder_tuple<'mcx>(
     rettuple.resize(len, 0);
     brin_tuple_set_blkno(&mut rettuple, blkno);
     debug_assert!(len & (BRIN_OFFSET_MASK as usize) == len);
-    rettuple[4] =
-        len as u8 | BRIN_NULLS_MASK | BRIN_PLACEHOLDER_MASK | BRIN_EMPTY_RANGE_MASK;
+    rettuple[4] = len as u8 | BRIN_NULLS_MASK | BRIN_PLACEHOLDER_MASK | BRIN_EMPTY_RANGE_MASK;
 
     for bit in 0..natts {
         rettuple[SizeOfBrinTuple + bit / 8] |= 1 << (bit % 8);

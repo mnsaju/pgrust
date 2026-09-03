@@ -9,7 +9,6 @@ use ::types_error::{ERRCODE_INVALID_TEXT_REPRESENTATION, ERRCODE_SYNTAX_ERROR};
 
 use crate::gram::{parsejsonpath, ParseItem, ParseValue};
 
-
 /// On-disk item-type bytes (jsonpath.h JsonPathItemType); pg_upgrade freezes
 /// the order, first four share jbvType discriminants.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -188,7 +187,7 @@ fn flatten_item(
     check_stack_depth()?;
 
     let pos = buf.len() as i32 - JSONPATH_HDRSZ as i32;
-    let mut chld: i32 = 0;
+    let mut chld: i32;
     let mut arg_nesting_level = 0i32;
 
     vec_append_bytes(buf, &[item.typ as u8])?;
@@ -275,7 +274,11 @@ fn flatten_item(
         }
         ItemType::LikeRegex => {
             let (expr, pattern, flags) = match item.value {
-                ParseValue::LikeRegex { expr, pattern, flags } => (expr, pattern, flags),
+                ParseValue::LikeRegex {
+                    expr,
+                    pattern,
+                    flags,
+                } => (expr, pattern, flags),
                 _ => unreachable!("LikeRegex carries LikeRegex value"),
             };
 
@@ -365,11 +368,10 @@ fn flatten_item(
 
             for (i, elem) in elems.iter().enumerate() {
                 let from = elem.from.expect("subscript from is non-null");
-                let frompos =
-                    match flatten_item(buf, escontext, from, nesting_level, true)? {
-                        Some(p) => p - pos,
-                        None => return Ok(None),
-                    };
+                let frompos = match flatten_item(buf, escontext, from, nesting_level, true)? {
+                    Some(p) => p - pos,
+                    None => return Ok(None),
+                };
 
                 let topos = if let Some(to) = elem.to {
                     match flatten_item(buf, escontext, to, nesting_level, true)? {
@@ -439,16 +441,15 @@ fn set_varsize(data: &mut [u8], len: usize) {
 }
 
 #[cold]
-fn invalid_input_syntax(
-    escontext: Option<&mut SoftErrorContext>,
-    input: &[u8],
-) -> PgResult<()> {
+fn invalid_input_syntax(escontext: Option<&mut SoftErrorContext>, input: &[u8]) -> PgResult<()> {
     let in_str = String::from_utf8_lossy(input);
     ereturn(
         escontext,
         (),
-        PgError::error(format!("invalid input syntax for type jsonpath: \"{in_str}\""))
-            .with_sqlstate(ERRCODE_INVALID_TEXT_REPRESENTATION),
+        PgError::error(format!(
+            "invalid input syntax for type jsonpath: \"{in_str}\""
+        ))
+        .with_sqlstate(ERRCODE_INVALID_TEXT_REPRESENTATION),
     )
 }
 
@@ -657,7 +658,13 @@ pub fn jsp_init_by_buffer(base: &[u8], pos: i32) -> JsonPathItem<'_> {
         }
     }
 
-    JsonPathItem { typ, next_pos, buffer: base, base: node_base, content }
+    JsonPathItem {
+        typ,
+        next_pos,
+        buffer: base,
+        base: node_base,
+        content,
+    }
 }
 
 impl<'a> JsonPathItem<'a> {
@@ -1143,10 +1150,7 @@ pub fn jsonpath_out<'mcx>(mcx: Mcx<'mcx>, image: &[u8]) -> PgResult<PgVec<'mcx, 
 }
 
 /// C: jsonpath_recv (binary framing: 1-byte version + text).
-pub fn jsonpath_recv<'mcx>(
-    mcx: Mcx<'mcx>,
-    buf: &mut StringInfo<'_>,
-) -> PgResult<PgVec<'mcx, u8>> {
+pub fn jsonpath_recv<'mcx>(mcx: Mcx<'mcx>, buf: &mut StringInfo<'_>) -> PgResult<PgVec<'mcx, u8>> {
     let version = pqformat::pq_getmsgint(buf, 1)?;
     if version != JSONPATH_VERSION {
         return Err(Box::new(PgError::error(format!(

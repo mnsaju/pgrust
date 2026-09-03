@@ -55,7 +55,11 @@ fn boot_image() -> ScanLocations {
     }; SYNC_SCAN_NELEM];
     for (i, item) in items.iter_mut().enumerate() {
         item.prev = if i > 0 { (i - 1) as u8 } else { NONE };
-        item.next = if i < SYNC_SCAN_NELEM - 1 { (i + 1) as u8 } else { NONE };
+        item.next = if i < SYNC_SCAN_NELEM - 1 {
+            (i + 1) as u8
+        } else {
+            NONE
+        };
     }
     ScanLocations {
         head: 0,
@@ -132,7 +136,9 @@ fn ss_search(
 }
 
 fn get_location(locator: RelFileLocator, relnblocks: BlockNumber) -> PgResult<BlockNumber> {
-    let cell = SCAN_LOCATIONS.get().expect("syncscan shmem not initialized");
+    let cell = SCAN_LOCATIONS
+        .get()
+        .expect("syncscan shmem not initialized");
     LWLockAcquire(sync_scan_lock(), LW_EXCLUSIVE, g::MyProcNumber())?;
     // SAFETY: SyncScanLock held exclusively.
     let startloc = ss_search(unsafe { &mut *cell.ptr() }, locator, 0, false);
@@ -146,10 +152,12 @@ fn get_location(locator: RelFileLocator, relnblocks: BlockNumber) -> PgResult<Bl
 }
 
 fn report_location(locator: RelFileLocator, location: BlockNumber) -> PgResult<()> {
-    if location % SYNC_SCAN_REPORT_INTERVAL == 0 {
+    if location.is_multiple_of(SYNC_SCAN_REPORT_INTERVAL) {
         // Contended hint updates are skippable; never block a running scan.
         if LWLockConditionalAcquire(sync_scan_lock(), LW_EXCLUSIVE)? {
-            let cell = SCAN_LOCATIONS.get().expect("syncscan shmem not initialized");
+            let cell = SCAN_LOCATIONS
+                .get()
+                .expect("syncscan shmem not initialized");
             // SAFETY: SyncScanLock held exclusively.
             ss_search(unsafe { &mut *cell.ptr() }, locator, location, true);
             LWLockRelease(sync_scan_lock())?;

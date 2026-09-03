@@ -6,12 +6,12 @@ use core::ffi::CStr;
 use libc::{c_char, locale_t};
 use types_error::{PgResult, WARNING};
 use wchar::{
-    pg_enc, PG_BIG5, PG_EUC_CN, PG_EUC_JP, PG_EUC_KR, PG_EUC_TW, PG_GB18030, PG_GBK,
-    PG_ISO_8859_5, PG_ISO_8859_6, PG_ISO_8859_7, PG_ISO_8859_8, PG_JOHAB, PG_KOI8R, PG_KOI8U,
-    PG_LATIN1, PG_LATIN10, PG_LATIN2, PG_LATIN3, PG_LATIN4, PG_LATIN5, PG_LATIN6, PG_LATIN7,
-    PG_LATIN8, PG_LATIN9, PG_SHIFT_JIS_2004, PG_SJIS, PG_SQL_ASCII, PG_UHC, PG_UTF8, PG_WIN1250,
-    PG_WIN1251, PG_WIN1252, PG_WIN1253, PG_WIN1254, PG_WIN1255, PG_WIN1256, PG_WIN1257,
-    PG_WIN1258, PG_WIN866, PG_WIN874,
+    pg_enc, PG_BIG5, PG_EUC_CN, PG_EUC_JP, PG_EUC_KR, PG_EUC_TW, PG_GB18030, PG_GBK, PG_ISO_8859_5,
+    PG_ISO_8859_6, PG_ISO_8859_7, PG_ISO_8859_8, PG_JOHAB, PG_KOI8R, PG_KOI8U, PG_LATIN1,
+    PG_LATIN10, PG_LATIN2, PG_LATIN3, PG_LATIN4, PG_LATIN5, PG_LATIN6, PG_LATIN7, PG_LATIN8,
+    PG_LATIN9, PG_SHIFT_JIS_2004, PG_SJIS, PG_SQL_ASCII, PG_UHC, PG_UTF8, PG_WIN1250, PG_WIN1251,
+    PG_WIN1252, PG_WIN1253, PG_WIN1254, PG_WIN1255, PG_WIN1256, PG_WIN1257, PG_WIN1258, PG_WIN866,
+    PG_WIN874,
 };
 
 const ENCODING_MATCH_LIST: &[(pg_enc, &str)] = &[
@@ -148,8 +148,7 @@ pub fn pg_get_encoding_from_locale(ctype: Option<&str>, write_message: bool) -> 
                 None => {
                     // SAFETY: setlocale(cat, NULL) only reads; result copied
                     // before any other locale call.
-                    let p =
-                        unsafe { libc::setlocale(crate::lc::LC_CTYPE, core::ptr::null()) };
+                    let p = unsafe { libc::setlocale(crate::lc::LC_CTYPE, core::ptr::null()) };
                     if p.is_null() {
                         String::new()
                     } else {
@@ -162,7 +161,7 @@ pub fn pg_get_encoding_from_locale(ctype: Option<&str>, write_message: bool) -> 
     };
 
     if ctype.eq_ignore_ascii_case("C") || ctype.eq_ignore_ascii_case("POSIX") {
-        return Ok(PG_SQL_ASCII as i32);
+        return Ok(PG_SQL_ASCII);
     }
 
     let mut cbuf = Vec::with_capacity(ctype.len() + 1);
@@ -194,7 +193,7 @@ pub fn pg_get_encoding_from_locale(ctype: Option<&str>, write_message: bool) -> 
 
     for (enc, name) in ENCODING_MATCH_LIST {
         if sys.eq_ignore_ascii_case(name) {
-            return Ok(*enc as i32);
+            return Ok(*enc);
         }
     }
 

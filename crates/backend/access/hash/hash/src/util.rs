@@ -114,8 +114,12 @@ pub(crate) fn _hash_datum2hashkey_type(
     key: Datum,
     keytype: Oid,
 ) -> PgResult<u32> {
-    let hash_proc: RegProcedure =
-        lsyscache::get_opfamily_proc(rel.rd_opfamily[0], keytype, keytype, HASHSTANDARD_PROC as i16)?;
+    let hash_proc: RegProcedure = lsyscache::get_opfamily_proc(
+        rel.rd_opfamily[0],
+        keytype,
+        keytype,
+        HASHSTANDARD_PROC as i16,
+    )?;
     if hash_proc == 0 {
         return Err(Box::new(PgError::error(format!(
             "missing support function {HASHSTANDARD_PROC}({keytype},{keytype}) for index \"{}\"",
@@ -141,11 +145,19 @@ fn missing_support_function(rel: &Relation<'_>, lefttype: Oid, righttype: Oid) -
 #[inline(never)]
 pub(crate) fn index_corrupted(msg: String, hint: bool) -> Box<PgError> {
     let e = PgError::error(msg).with_sqlstate(ERRCODE_INDEX_CORRUPTED);
-    Box::new(if hint { e.with_hint("Please REINDEX it.") } else { e })
+    Box::new(if hint {
+        e.with_hint("Please REINDEX it.")
+    } else {
+        e
+    })
 }
 
 /// _hash_checkpage.
-pub(crate) fn _hash_checkpage(rel: &Relation<'_>, buf: types_core::Buffer, flags: u16) -> PgResult<()> {
+pub(crate) fn _hash_checkpage(
+    rel: &Relation<'_>,
+    buf: types_core::Buffer,
+    flags: u16,
+) -> PgResult<()> {
     // SAFETY: caller holds the pin (and lock unless HASH_NOLOCK) per the C
     // call contract.
     let page = unsafe { crate::page::page_ref(buf) };
@@ -250,11 +262,14 @@ pub(crate) fn _hash_binsearch(page: &PageRef<'_>, hash_value: u32) -> ::types_co
 }
 
 /// _hash_binsearch_last: last offset with hashkey <= hash_value (0 if none).
-pub(crate) fn _hash_binsearch_last(page: &PageRef<'_>, hash_value: u32) -> ::types_core::OffsetNumber {
+pub(crate) fn _hash_binsearch_last(
+    page: &PageRef<'_>,
+    hash_value: u32,
+) -> ::types_core::OffsetNumber {
     let mut upper = page.max_offset_number();
     let mut lower = 0;
     while upper > lower {
-        let off = (upper + lower + 1) / 2;
+        let off = (upper + lower).div_ceil(2);
         // SAFETY: 1 <= off <= max_offset_number as above.
         let hashkey = unsafe {
             let id = page.item_id(off);
@@ -280,7 +295,9 @@ pub(crate) fn _hash_get_oldblock_from_newbucket(
     let old_bucket = new_bucket & mask;
 
     let metabuf = _hash_getbuf(rel, HASH_METAPAGE, HASH_READ, LH_META_PAGE)?;
-    let blkno = with_meta(metabuf, |metap: &HashMetaPageData| metap.bucket_to_blkno(old_bucket));
+    let blkno = with_meta(metabuf, |metap: &HashMetaPageData| {
+        metap.bucket_to_blkno(old_bucket)
+    });
     _hash_relbuf(metabuf)?;
     Ok(blkno)
 }

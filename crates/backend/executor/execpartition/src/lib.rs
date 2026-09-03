@@ -76,11 +76,7 @@ impl<'mcx> PartitionTupleRouting<'mcx> {
 
     // ExecInitPartitionDispatchInfo: tupmap/tupslot convert from the
     // immediate parent's layout, per C.
-    fn init_dispatch(
-        &mut self,
-        rel: Relation<'mcx>,
-        parent_idx: Option<usize>,
-    ) -> PgResult<usize> {
+    fn init_dispatch(&mut self, rel: Relation<'mcx>, parent_idx: Option<usize>) -> PgResult<usize> {
         let key = partcache::RelationGetPartitionKey(&rel)?;
         // C ExecInitPartitionDispatchInfo's CreatePartitionDirectory: routing
         // omits detach-pending partitions except under snapshot isolation.
@@ -165,7 +161,11 @@ impl<'mcx> PartitionTupleRouting<'mcx> {
         // 291): a tuple that does not belong in the root itself is rejected
         // before any dispatch.
         if self.dispatches[0].rel.rd_rel.relispartition {
-            let PartitionTupleRouting { dispatches, root_check, .. } = &mut *self;
+            let PartitionTupleRouting {
+                dispatches,
+                root_check,
+                ..
+            } = &mut *self;
             let rel = &dispatches[0].rel;
             if !exec_partition_check(mcx, root_check, rel, slot)? {
                 return Err(partition_constraint_violation(mcx, rel, slot, None, None));
@@ -184,7 +184,11 @@ impl<'mcx> PartitionTupleRouting<'mcx> {
         loop {
             // C ExecFindPartition's per-level tupmap conversion.
             if self.dispatches[dispatch_idx].tupmap.is_some() {
-                let PartitionTupleRouting { dispatches, dispatch_slots, .. } = &mut *self;
+                let PartitionTupleRouting {
+                    dispatches,
+                    dispatch_slots,
+                    ..
+                } = &mut *self;
                 let map = dispatches[dispatch_idx].tupmap.as_ref().expect("checked");
                 match cur {
                     None => {
@@ -212,11 +216,17 @@ impl<'mcx> PartitionTupleRouting<'mcx> {
             }
             // Reassigned on every descent, so no reset here.
             if pending_default_check {
-                let PartitionTupleRouting { dispatches, dispatch_slots, .. } = &mut *self;
+                let PartitionTupleRouting {
+                    dispatches,
+                    dispatch_slots,
+                    ..
+                } = &mut *self;
                 assert!(dispatch_idx > 0);
                 let (head, tail) = dispatches.split_at_mut(dispatch_idx);
                 let root_rel = &head[0].rel;
-                let PartitionDispatch { rel, default_check, .. } = &mut tail[0];
+                let PartitionDispatch {
+                    rel, default_check, ..
+                } = &mut tail[0];
                 let cur_slot: &mut SlotData<'mcx> = match cur {
                     None => &mut *slot,
                     Some(i) => dispatch_slots[i].as_mut().expect("converted"),
@@ -235,7 +245,11 @@ impl<'mcx> PartitionTupleRouting<'mcx> {
                 }
             }
             let (oid, is_leaf, is_default) = {
-                let PartitionTupleRouting { dispatches, dispatch_slots, .. } = &mut *self;
+                let PartitionTupleRouting {
+                    dispatches,
+                    dispatch_slots,
+                    ..
+                } = &mut *self;
                 let pd = &mut dispatches[dispatch_idx];
                 let cur_slot: &mut SlotData<'mcx> = match cur {
                     None => &mut *slot,
@@ -266,8 +280,11 @@ impl<'mcx> PartitionTupleRouting<'mcx> {
                         let state = keystate_item
                             .next()
                             .expect("wrong number of partition key expressions");
-                        let mut slots =
-                            execexpr::EvalSlots { scan: Some(cur_slot), inner: None, outer: None };
+                        let mut slots = execexpr::EvalSlots {
+                            scan: Some(cur_slot),
+                            inner: None,
+                            outer: None,
+                        };
                         let r = execexpr::exec_eval_expr(state, &mut slots)?;
                         values[i] = r.value;
                         isnull[i] = r.isnull;
@@ -300,7 +317,12 @@ impl<'mcx> PartitionTupleRouting<'mcx> {
                     // C converts from the ROOT slot via the root-to-child map
                     // (never from the intermediate level's layout).
                     let PartitionTupleRouting {
-                        dispatches, leaves, leaf_maps, leaf_checks, leaf_check_slots, ..
+                        dispatches,
+                        leaves,
+                        leaf_maps,
+                        leaf_checks,
+                        leaf_check_slots,
+                        ..
                     } = &mut *self;
                     let root_rel = &dispatches[0].rel;
                     let target = &leaves[idx];
@@ -383,7 +405,11 @@ pub fn exec_partition_check<'mcx>(
     // C evaluates in the caller econtext's per-tuple memory; by-ref call
     // results ride the armed result mcx.
     state.arm_result_mcx(mcx);
-    let mut slots = execexpr::EvalSlots { scan: Some(slot), inner: None, outer: None };
+    let mut slots = execexpr::EvalSlots {
+        scan: Some(slot),
+        inner: None,
+        outer: None,
+    };
     let r = execexpr::exec_eval_expr(state, &mut slots)?;
     Ok(r.isnull || r.value.as_bool())
 }
@@ -474,8 +500,7 @@ pub fn slot_value_description<'mcx>(
             let aclok =
                 aclchk_seams::pg_attribute_aclcheck::call(relid, att.attnum, userid, ACL_SELECT)?
                     == ACLCHECK_OK;
-            let modified = modified_cols
-                .is_some_and(|mc| mc.is_member(att.attnum as i32 - FLIHAN));
+            let modified = modified_cols.is_some_and(|mc| mc.is_member(att.attnum as i32 - FLIHAN));
             if !aclok && !modified {
                 continue;
             }
@@ -509,10 +534,8 @@ pub fn slot_value_description<'mcx>(
         let mut finfo = fmgr_core::fmgr_info(foutoid)?;
         let out = fmgr_core::function_call1_coll_in(&mut finfo, 0, mcx, value)?;
         // SAFETY: output fns return a NUL-terminated cstring datum.
-        let s = unsafe {
-            core::ffi::CStr::from_ptr(out.as_usize() as *const core::ffi::c_char)
-        }
-        .to_bytes();
+        let s = unsafe { core::ffi::CStr::from_ptr(out.as_usize() as *const core::ffi::c_char) }
+            .to_bytes();
         let s = core::str::from_utf8(s).expect("type output is UTF-8");
         if s.len() <= MAX_FIELD_LEN {
             buf.push_str(s);
@@ -619,8 +642,7 @@ fn get_partition_for_tuple(
                     }
                 }
                 let mut equal = false;
-                bound_offset =
-                    range_datum_bsearch(supfuncs, key, boundinfo, values, &mut equal);
+                bound_offset = range_datum_bsearch(supfuncs, key, boundinfo, values, &mut equal);
                 part_index = boundinfo.indexes[(bound_offset + 1) as usize];
             }
         }
@@ -634,7 +656,9 @@ fn get_partition_for_tuple(
 
     debug_assert!(bound_offset >= 0);
     if bound_offset == partdesc.last_found_datum_index.get() {
-        partdesc.last_found_count.set(partdesc.last_found_count.get() + 1);
+        partdesc
+            .last_found_count
+            .set(partdesc.last_found_count.get() + 1);
     } else {
         partdesc.last_found_count.set(1);
         partdesc.last_found_part_index.set(part_index);
@@ -790,7 +814,10 @@ fn no_partition_error(
         return Box::new(
             PgError::new(
                 ERROR,
-                format!("no partition of relation \"{}\" found for row", pd.rel.name()),
+                format!(
+                    "no partition of relation \"{}\" found for row",
+                    pd.rel.name()
+                ),
             )
             .with_sqlstate(ERRCODE_CHECK_VIOLATION),
         );
@@ -817,10 +844,11 @@ fn no_partition_error(
             let mut finfo = fmgr_core::fmgr_info(foutoid)?;
             let out = fmgr_core::function_call1_coll_in(&mut finfo, 0, mcx, values[i])?;
             // SAFETY: output fns return a NUL-terminated cstring datum.
-            let s = unsafe {
-                core::ffi::CStr::from_ptr(out.as_usize() as *const core::ffi::c_char)
-            };
-            Ok(core::str::from_utf8(s.to_bytes()).expect("type output is UTF-8").to_string())
+            let s =
+                unsafe { core::ffi::CStr::from_ptr(out.as_usize() as *const core::ffi::c_char) };
+            Ok(core::str::from_utf8(s.to_bytes())
+                .expect("type output is UTF-8")
+                .to_string())
         })()
         .unwrap_or_default();
         keydesc.push_str(&out);
@@ -834,7 +862,9 @@ fn no_partition_error(
                 pd.rel.name()
             ),
         )
-        .with_detail(format!("Partition key of the failing row contains {keydesc}."))
+        .with_detail(format!(
+            "Partition key of the failing row contains {keydesc}."
+        ))
         .with_sqlstate(ERRCODE_CHECK_VIOLATION),
     )
 }

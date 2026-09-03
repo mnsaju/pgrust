@@ -165,7 +165,7 @@ pub fn heapam_index_fetch_tuple<'mcx>(
             all_dead.is_some(),
             !*call_again,
         )?;
-        if let (Some(dst), Some(v)) = (all_dead.as_deref_mut(), res.all_dead) {
+        if let (Some(dst), Some(v)) = (all_dead, res.all_dead) {
             *dst = v;
         }
         found = if res.found {
@@ -491,8 +491,11 @@ pub fn heapam_tuple_lock<'mcx>(
 
                 let mut res = ::heapam::heap_fetch_dirty(relation, &mut dirty, cur_tid, true)?;
                 if res.found {
-                    let xmin =
-                        res.tuple().expect("heap_fetch found without tuple").t_data().xmin();
+                    let xmin = res
+                        .tuple()
+                        .expect("heap_fetch found without tuple")
+                        .t_data()
+                        .xmin();
                     if xmin != prior_xmax {
                         // xmin recycled: latest version was deleted
                         res.pin.take().expect("found holds a pin").release();
@@ -534,7 +537,9 @@ pub fn heapam_tuple_lock<'mcx>(
                     if xact_seams::transaction_id_is_current_transaction_id::call(prior_xmax) {
                         // GetCmin asserts our-own-xmin; only reachable here
                         let cmin = combocid_seams::heap_tuple_header_get_cmin::call(
-                            res.tuple().expect("heap_fetch found without tuple").t_data(),
+                            res.tuple()
+                                .expect("heap_fetch found without tuple")
+                                .t_data(),
                         );
                         if cmin >= cid {
                             tmfd.xmax = prior_xmax;
@@ -580,8 +585,7 @@ pub fn heapam_tuple_lock<'mcx>(
         let (ptr, len) = unsafe { pin.page().item_raw_unchecked(lp) };
         // SAFETY: image on the page pinned by `pin`, whose pin transfers to
         // the slot (ExecStorePinnedBufferHeapTuple contract).
-        let tuple =
-            unsafe { HeapTupleData::from_raw_parts(ptr, len, cur_tid, relation.rd_id) };
+        let tuple = unsafe { HeapTupleData::from_raw_parts(ptr, len, cur_tid, relation.rd_id) };
         slot.base_mut().tts_tableOid = relation.rd_id;
         exectuples::exec_store_pinned_buffer_heap_tuple(slot, mcx, tuple, pin.into_buffer());
         return Ok(result);

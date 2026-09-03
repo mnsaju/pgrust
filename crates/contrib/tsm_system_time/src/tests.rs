@@ -48,7 +48,11 @@ fn large_budget_visits_every_block_exactly_once() {
         assert_eq!(blocks.len(), nblocks as usize);
         blocks.sort_unstable();
         blocks.dedup();
-        assert_eq!(blocks.len(), nblocks as usize, "walk missed or repeated a block");
+        assert_eq!(
+            blocks.len(),
+            nblocks as usize,
+            "walk missed or repeated a block"
+        );
     }
 }
 
@@ -81,9 +85,24 @@ fn negative_or_nan_time_is_2202h() {
 
 #[test]
 fn sample_size_estimates_match_c() {
-    assert_eq!(sample_scan_get_sample_size(Some(40.0), 4.0, 100, 10000.0), (10, 1000.0));
-    assert_eq!(sample_scan_get_sample_size(None, 4.0, 100, 10000.0), (100, 10000.0));
-    assert_eq!(sample_scan_get_sample_size(Some(f64::NAN), 4.0, 100, 10000.0), (100, 10000.0));
-    assert_eq!(sample_scan_get_sample_size(Some(8.0), 0.0, 100, 10000.0), (8, 800.0));
-    assert_eq!(sample_scan_get_sample_size(Some(7.0), 4.0, 0, 0.0), (1, 1.0));
+    assert_eq!(
+        sample_scan_get_sample_size(Some(40.0), 4.0, 100, 10000.0),
+        (10, 1000.0)
+    );
+    assert_eq!(
+        sample_scan_get_sample_size(None, 4.0, 100, 10000.0),
+        (100, 10000.0)
+    );
+    assert_eq!(
+        sample_scan_get_sample_size(Some(f64::NAN), 4.0, 100, 10000.0),
+        (100, 10000.0)
+    );
+    assert_eq!(
+        sample_scan_get_sample_size(Some(8.0), 0.0, 100, 10000.0),
+        (8, 800.0)
+    );
+    assert_eq!(
+        sample_scan_get_sample_size(Some(7.0), 4.0, 0, 0.0),
+        (1, 1.0)
+    );
 }

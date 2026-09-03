@@ -7,9 +7,7 @@ use mcx::PgVec;
 // lifetimes awkwardly; per-query, bounded by clause/statistics counts.
 use types_error::PgResult;
 use types_nodes::Node;
-use types_pathnodes::{
-    JoinType, RelId, Relids, RinfoId, SpecialJoinInfo, StatisticExtInfo,
-};
+use types_pathnodes::{JoinType, RelId, Relids, RinfoId, SpecialJoinInfo, StatisticExtInfo};
 
 use crate::relnode::{relids_is_member, relids_is_subset, relids_num_members};
 use crate::run::PlannerRun;
@@ -27,9 +25,9 @@ const F_SCALARGTSEL: u32 = 104;
 const F_SCALARLESEL: u32 = 336;
 const F_SCALARGESEL: u32 = 337;
 
-const Anum_data_stxdndistinct: i32 = 3;
-const Anum_data_stxddependencies: i32 = 4;
-const Anum_data_stxdmcv: i32 = 5;
+const ANUM_DATA_STXDNDISTINCT: i32 = 3;
+const ANUM_DATA_STXDDEPENDENCIES: i32 = 4;
+const ANUM_DATA_STXDMCV: i32 = 5;
 
 fn clamp_probability(p: f64) -> f64 {
     p.clamp(0.0, 1.0)
@@ -66,8 +64,8 @@ pub fn get_relation_statistics<'mcx>(
         // either-zero rule, as with index expressions).
         let mut exprs: PgVec<'mcx, types_pathnodes::NodeId> = PgVec::new_in(mcx);
         if form.has_exprs {
-            let src = syscache_seams::statext_exprs_src::call(mcx, statoid)?
-                .expect("stxexprs non-null");
+            let src =
+                syscache_seams::statext_exprs_src::call(mcx, statoid)?.expect("stxexprs non-null");
             let node = readfuncs::stringToNode(mcx, src.as_str())?;
             let list = node.as_list().expect("stxexprs is a List");
             for e in list.iter() {
@@ -154,7 +152,12 @@ pub fn find_single_rel_for_clauses<'mcx>(
         }
     }
     if lastrelid != 0 {
-        return run.root.simple_rel_array.get(lastrelid as usize).copied().flatten();
+        return run
+            .root
+            .simple_rel_array
+            .get(lastrelid as usize)
+            .copied()
+            .flatten();
     }
     None
 }
@@ -189,7 +192,12 @@ pub fn find_single_rel_for_clause_nodes<'mcx>(
         }
     }
     if lastrelid != 0 {
-        return Ok(run.root.simple_rel_array.get(lastrelid as usize).copied().flatten());
+        return Ok(run
+            .root
+            .simple_rel_array
+            .get(lastrelid as usize)
+            .copied()
+            .flatten());
     }
     Ok(None)
 }
@@ -205,9 +213,12 @@ pub fn statext_clauselist_selectivity<'mcx>(
     rel: RelId,
     estimated: &mut [bool],
 ) -> PgResult<f64> {
-    let mut sel =
-        statext_mcv_clauselist_selectivity(run, clauses, varrelid, jointype, sjinfo, rel, estimated)?;
-    sel *= dependencies_clauselist_selectivity(run, clauses, varrelid, jointype, sjinfo, rel, estimated)?;
+    let mut sel = statext_mcv_clauselist_selectivity(
+        run, clauses, varrelid, jointype, sjinfo, rel, estimated,
+    )?;
+    sel *= dependencies_clauselist_selectivity(
+        run, clauses, varrelid, jointype, sjinfo, rel, estimated,
+    )?;
     Ok(sel)
 }
 
@@ -257,8 +268,7 @@ fn compatible_internal<'mcx>(
             return Ok(false);
         };
         match lsyscache::get_oprrest(op.opno)? {
-            F_EQSEL | F_NEQSEL | F_SCALARLTSEL | F_SCALARLESEL | F_SCALARGTSEL
-            | F_SCALARGESEL => {}
+            F_EQSEL | F_NEQSEL | F_SCALARLTSEL | F_SCALARLESEL | F_SCALARGTSEL | F_SCALARGESEL => {}
             _ => return Ok(false),
         }
         if *leakproof {
@@ -275,7 +285,8 @@ fn compatible_internal<'mcx>(
         if saop.args.len() != 2 {
             return Ok(false);
         }
-        let Some((expr, _cst, expronleft)) = examine_opclause_args(saop.args.nth(0), saop.args.nth(1))
+        let Some((expr, _cst, expronleft)) =
+            examine_opclause_args(saop.args.nth(0), saop.args.nth(1))
         else {
             return Ok(false);
         };
@@ -283,8 +294,7 @@ fn compatible_internal<'mcx>(
             return Ok(false);
         }
         match lsyscache::get_oprrest(saop.opno)? {
-            F_EQSEL | F_NEQSEL | F_SCALARLTSEL | F_SCALARLESEL | F_SCALARGTSEL
-            | F_SCALARGESEL => {}
+            F_EQSEL | F_NEQSEL | F_SCALARLTSEL | F_SCALARLESEL | F_SCALARGTSEL | F_SCALARGESEL => {}
             _ => return Ok(false),
         }
         if *leakproof {
@@ -430,7 +440,9 @@ fn stat_covers_expressions(
 ) -> bool {
     let mut idxs: Vec<usize> = Vec::new();
     for &e in exprs {
-        let Some(i) = stat_find_expression(sexprs, e) else { return false };
+        let Some(i) = stat_find_expression(sexprs, e) else {
+            return false;
+        };
         idxs.push(i);
     }
     if let Some(out) = expr_idxs {
@@ -504,9 +516,11 @@ fn load_mcv<'mcx>(
     statoid: types_core::Oid,
     inh: bool,
 ) -> PgResult<statistics::mcv::MCVList<'mcx>> {
-    let img = syscache_seams::statext_data_blob::call(run.mcx, statoid, inh, Anum_data_stxdmcv)?
+    let img = syscache_seams::statext_data_blob::call(run.mcx, statoid, inh, ANUM_DATA_STXDMCV)?
         .unwrap_or_else(|| {
-            panic!("requested statistics kind \"m\" is not yet built for statistics object {statoid}")
+            panic!(
+                "requested statistics kind \"m\" is not yet built for statistics object {statoid}"
+            )
         });
     statistics::mcv::statext_mcv_deserialize(run.mcx, &img[4..])
 }
@@ -540,8 +554,7 @@ fn statext_mcv_clauselist_selectivity<'mcx>(
     }
 
     loop {
-        let Some(si) = choose_best_statistics(run, rel, STATS_EXT_MCV, inh, &clause_data)
-        else {
+        let Some(si) = choose_best_statistics(run, rel, STATS_EXT_MCV, inh, &clause_data) else {
             break;
         };
         let stat_id = run.root.rel(rel).statlist[si];
@@ -553,10 +566,10 @@ fn statext_mcv_clauselist_selectivity<'mcx>(
 
         let mut stat_clauses: Vec<RinfoId> = Vec::new();
         for (i, &rid) in clauses.iter().enumerate() {
-            let Some((ca, ce)) = &clause_data[i] else { continue };
-            if !relids_is_subset(ca, &stat_keys)
-                || !stat_covers_expressions(&sexprs, ce, None)
-            {
+            let Some((ca, ce)) = &clause_data[i] else {
+                continue;
+            };
+            if !relids_is_subset(ca, &stat_keys) || !stat_covers_expressions(&sexprs, ce, None) {
                 continue;
             }
             stat_clauses.push(rid);
@@ -610,8 +623,7 @@ fn statext_mcv_clauselist_selectivity_or_nodes<'mcx>(
     }
 
     loop {
-        let Some(si) = choose_best_statistics(run, rel, STATS_EXT_MCV, inh, &clause_data)
-        else {
+        let Some(si) = choose_best_statistics(run, rel, STATS_EXT_MCV, inh, &clause_data) else {
             break;
         };
         let stat_id = run.root.rel(rel).statlist[si];
@@ -624,10 +636,10 @@ fn statext_mcv_clauselist_selectivity_or_nodes<'mcx>(
         let mut stat_clauses: Vec<Node<'mcx>> = Vec::new();
         let mut simple_clauses: Vec<bool> = Vec::new();
         for (i, &clause) in clauses.iter().enumerate() {
-            let Some((ca, ce)) = &clause_data[i] else { continue };
-            if !relids_is_subset(ca, &stat_keys)
-                || !stat_covers_expressions(&sexprs, ce, None)
-            {
+            let Some((ca, ce)) = &clause_data[i] else {
+                continue;
+            };
+            if !relids_is_subset(ca, &stat_keys) || !stat_covers_expressions(&sexprs, ce, None) {
                 continue;
             }
             simple_clauses.push(
@@ -730,7 +742,10 @@ fn mcv_clauselist_selectivity<'mcx>(
 
 fn bms_member_index(keys: &Relids<'_>, attnum: i16) -> usize {
     // Unset (not merely all-zero) keys are the caller bug this guards.
-    assert!(!crate::relnode::relids_is_unset(keys), "mcv_match_expression: empty keys");
+    assert!(
+        !crate::relnode::relids_is_unset(keys),
+        "mcv_match_expression: empty keys"
+    );
     let mut idx = 0usize;
     for (i, w) in crate::relnode::relids_word_slice(keys).iter().enumerate() {
         let mut w = *w;
@@ -828,7 +843,12 @@ fn mcv_get_match_bitmap<'mcx>(
                 let elemtype = arrayfuncs::arr_elemtype(img);
                 let (elmlen, elmbyval, elmalign) = lsyscache::get_typlenbyvalalign(elemtype)?;
                 Some(arrayfuncs::deconstruct_array(
-                    run.mcx, img, elmlen as i32, elmbyval, elmalign as u8, true,
+                    run.mcx,
+                    img,
+                    elmlen as i32,
+                    elmbyval,
+                    elmalign as u8,
+                    true,
                 )?)
             } else {
                 None
@@ -1008,7 +1028,9 @@ fn dependency_compatible_node<'mcx>(
         clause_expr = clause;
     }
     let clause_expr = strip_relabel(clause_expr);
-    let Some(var) = clause_expr.as_var() else { return Ok(None) };
+    let Some(var) = clause_expr.as_var() else {
+        return Ok(None);
+    };
     if var.varno != relid || var.varlevelsup != 0 || var.varattno <= 0 {
         return Ok(None);
     }
@@ -1126,7 +1148,10 @@ fn find_strongest_dependency(deps: &[DepItem], attnums: &Relids<'_>) -> Option<u
                 continue;
             }
         }
-        if d.attributes.iter().all(|&a| relids_is_member(a as i32, attnums)) {
+        if d.attributes
+            .iter()
+            .all(|&a| relids_is_member(a as i32, attnums))
+        {
             strongest = Some(i);
         }
     }
@@ -1172,10 +1197,11 @@ fn dependencies_clauselist_selectivity<'mcx>(
             None
         } else if let Some(a) = dependency_is_compatible_clause(run, rid, relid)? {
             Some(a)
-        } else if let Some(expr) =
-            dependency_is_compatible_expression(run, rid, &dep_stat_exprs)?
-        {
-            let idx = match unique_exprs.iter().position(|&e| types_nodes::equal(e, expr)) {
+        } else if let Some(expr) = dependency_is_compatible_expression(run, rid, &dep_stat_exprs)? {
+            let idx = match unique_exprs
+                .iter()
+                .position(|&e| types_nodes::equal(e, expr))
+            {
                 Some(j) => j,
                 None => {
                     unique_exprs.push(expr);
@@ -1189,16 +1215,17 @@ fn dependencies_clauselist_selectivity<'mcx>(
         list_attnums.push(a);
     }
 
-    let attnum_offset: i16 =
-        if unique_exprs.is_empty() { 0 } else { unique_exprs.len() as i16 + 1 };
+    let attnum_offset: i16 = if unique_exprs.is_empty() {
+        0
+    } else {
+        unique_exprs.len() as i16 + 1
+    };
 
     let mut clauses_attnums: Relids<'mcx> = crate::relnode::relids_empty();
-    for a in list_attnums.iter_mut() {
-        if let Some(v) = a {
-            *v += attnum_offset;
-            let single = crate::relnode::relids_singleton(run.mcx, *v as u32);
-            clauses_attnums = crate::relnode::relids_union(run.mcx, &clauses_attnums, &single);
-        }
+    for v in list_attnums.iter_mut().flatten() {
+        *v += attnum_offset;
+        let single = crate::relnode::relids_singleton(run.mcx, *v as u32);
+        clauses_attnums = crate::relnode::relids_union(run.mcx, &clauses_attnums, &single);
     }
 
     if relids_num_members(&clauses_attnums) < 2 {
@@ -1244,12 +1271,15 @@ fn dependencies_clauselist_selectivity<'mcx>(
             run.mcx,
             stat_oid,
             inh,
-            Anum_data_stxddependencies,
+            ANUM_DATA_STXDDEPENDENCIES,
         )?
         .unwrap_or_else(|| {
-            panic!("requested statistics kind \"f\" is not yet built for statistics object {stat_oid}")
+            panic!(
+                "requested statistics kind \"f\" is not yet built for statistics object {stat_oid}"
+            )
         });
-        let loaded = statistics::dependencies::statext_dependencies_deserialize(run.mcx, &img[4..])?;
+        let loaded =
+            statistics::dependencies::statext_dependencies_deserialize(run.mcx, &img[4..])?;
         'dep: for d in loaded.deps.iter() {
             let mut attrs: Vec<i16> = Vec::with_capacity(d.attributes.len());
             for &a in d.attributes.iter() {
@@ -1262,15 +1292,19 @@ fn dependencies_clauselist_selectivity<'mcx>(
                 } else {
                     let idx = (-(1 + a)) as usize;
                     let expr = this_stat_exprs[idx];
-                    let Some(m) =
-                        unique_exprs.iter().position(|&ue| types_nodes::equal(ue, expr))
+                    let Some(m) = unique_exprs
+                        .iter()
+                        .position(|&ue| types_nodes::equal(ue, expr))
                     else {
                         continue 'dep;
                     };
                     attrs.push(-((m + 1) as i16) + attnum_offset);
                 }
             }
-            deps.push(DepItem { degree: d.degree, attributes: attrs });
+            deps.push(DepItem {
+                degree: d.degree,
+                attributes: attrs,
+            });
         }
     }
     if deps.is_empty() {
@@ -1330,7 +1364,11 @@ fn dependencies_clauselist_selectivity<'mcx>(
         let idx = attnums.binary_search(&implied).expect("implied attnum");
         let s2 = attr_sel[idx];
         let f = dep.degree;
-        attr_sel[idx] = if s1 <= s2 { f + (1.0 - f) * s2 } else { f * s2 / s1 + (1.0 - f) * s2 };
+        attr_sel[idx] = if s1 <= s2 {
+            f + (1.0 - f) * s2
+        } else {
+            f * s2 / s1 + (1.0 - f) * s2
+        };
     }
 
     let mut s1 = 1.0f64;
@@ -1340,11 +1378,7 @@ fn dependencies_clauselist_selectivity<'mcx>(
     Ok(clamp_probability(s1))
 }
 
-fn relids_del_member<'mcx>(
-    run: &PlannerRun<'mcx>,
-    r: &Relids<'mcx>,
-    x: i32,
-) -> Relids<'mcx> {
+fn relids_del_member<'mcx>(run: &PlannerRun<'mcx>, r: &Relids<'mcx>, x: i32) -> Relids<'mcx> {
     let mut cloned = clone_relids(run, r);
     if let Some(w) = crate::relnode::relids_word_slice_mut(&mut cloned).get_mut(x as usize / 64) {
         *w &= !(1u64 << (x % 64));
@@ -1408,7 +1442,9 @@ pub fn estimate_multivariate_ndistinct<'mcx>(
             nmatches_exprs = nshared_exprs;
         }
     }
-    let Some(matched_id) = best else { return Ok(None) };
+    let Some(matched_id) = best else {
+        return Ok(None);
+    };
     let matched_exprs = stat_exprs(run, matched_id);
     let (stat_oid, matched_keys) = {
         let info = run.root.statistic_ext(matched_id);
@@ -1419,15 +1455,18 @@ pub fn estimate_multivariate_ndistinct<'mcx>(
         run.mcx,
         stat_oid,
         inh,
-        Anum_data_stxdndistinct,
+        ANUM_DATA_STXDNDISTINCT,
     )?
     .unwrap_or_else(|| {
         panic!("requested statistics kind \"d\" is not yet built for statistics object {stat_oid}")
     });
     let nd = statistics::mvdistinct::statext_ndistinct_deserialize(run.mcx, &img[4..])?;
 
-    let attnum_offset: i32 =
-        if matched_exprs.is_empty() { 0 } else { matched_exprs.len() as i32 + 1 };
+    let attnum_offset: i32 = if matched_exprs.is_empty() {
+        0
+    } else {
+        matched_exprs.len() as i32 + 1
+    };
 
     let mut matched: Vec<i32> = Vec::new();
     for &node in nodes {
@@ -1473,7 +1512,9 @@ pub fn estimate_multivariate_ndistinct<'mcx>(
             break;
         }
     }
-    let Some(ndistinct) = item_ndistinct else { panic!("corrupt MVNDistinct entry") };
+    let Some(ndistinct) = item_ndistinct else {
+        panic!("corrupt MVNDistinct entry")
+    };
 
     let mut consumed: Vec<bool> = Vec::with_capacity(nodes.len());
     for &node in nodes {

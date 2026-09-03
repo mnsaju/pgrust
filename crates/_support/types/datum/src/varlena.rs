@@ -58,9 +58,15 @@ impl<'a> VarlenaRef<'a> {
         // 1B/1B_E headers misread as a u32 length; short-form datums (tuple,
         // array-element, param sources) must go through a VARSIZE_ANY lane.
         #[cfg(target_endian = "little")]
-        debug_assert!(word & 0x01 == 0, "VarlenaRef::varsize on a 1-byte-header varlena");
+        debug_assert!(
+            word & 0x01 == 0,
+            "VarlenaRef::varsize on a 1-byte-header varlena"
+        );
         #[cfg(target_endian = "big")]
-        debug_assert!(word & 0x8000_0000 == 0, "VarlenaRef::varsize on a 1-byte-header varlena");
+        debug_assert!(
+            word & 0x8000_0000 == 0,
+            "VarlenaRef::varsize on a 1-byte-header varlena"
+        );
         #[cfg(target_endian = "big")]
         let len = word & VARLENA_SIZE_MASK;
         #[cfg(target_endian = "little")]

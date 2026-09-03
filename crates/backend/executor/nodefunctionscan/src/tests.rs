@@ -88,7 +88,9 @@ fn elided_expression_stores_one_row() {
         true,
     )
     .unwrap();
-    let elided = crate::exec_init_expr(mcx, Some(konst), estate.param_bind()).unwrap().unwrap();
+    let elided = crate::exec_init_expr(mcx, Some(konst), estate.param_bind())
+        .unwrap()
+        .unwrap();
     let mut setexpr = SetExprState {
         flinfo: None,
         args: PgVec::new_in(mcx),
@@ -99,9 +101,15 @@ fn elided_expression_stores_one_row() {
     };
 
     let mut arg_mcx = MemoryContext::new("t-args");
-    let mut store =
-        exec_make_table_function_result(&mut setexpr, &desc, false, &mut estate, ecxt, &mut arg_mcx)
-            .unwrap();
+    let mut store = exec_make_table_function_result(
+        &mut setexpr,
+        &desc,
+        false,
+        &mut estate,
+        ecxt,
+        &mut arg_mcx,
+    )
+    .unwrap();
     assert_eq!(store.tuple_count(), 1);
     store.rescan();
     let mut slot =
@@ -124,9 +132,15 @@ fn materialize_mode_srf_feeds_the_scan_store() {
     let mut setexpr = setexpr_for(mcx, true);
 
     let mut arg_mcx = MemoryContext::new("t-args");
-    let mut store =
-        exec_make_table_function_result(&mut setexpr, &desc, false, &mut estate, ecxt, &mut arg_mcx)
-            .unwrap();
+    let mut store = exec_make_table_function_result(
+        &mut setexpr,
+        &desc,
+        false,
+        &mut estate,
+        ecxt,
+        &mut arg_mcx,
+    )
+    .unwrap();
     assert_eq!(store.tuple_count(), 2);
 
     let mut slot =

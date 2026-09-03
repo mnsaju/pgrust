@@ -75,7 +75,7 @@ fn KnownAssignedXidsCompress(reason: KAXCompressReason, have_lock: bool) -> PgRe
     } else if reason == TransactionEnd {
         let counter = TRANSACTION_ENDS_COUNTER.get();
         TRANSACTION_ENDS_COUNTER.set(counter.wrapping_add(1));
-        if counter % KAX_COMPRESS_FREQUENCY != 0 {
+        if !counter.is_multiple_of(KAX_COMPRESS_FREQUENCY) {
             return Ok(());
         }
         if nelements < 2 * num {
@@ -107,7 +107,8 @@ fn KnownAssignedXidsCompress(reason: KAXCompressReason, have_lock: bool) -> PgRe
     debug_assert_eq!(compress_index as i32, pa.numKnownAssignedXids.load(Relaxed));
 
     pa.tailKnownAssignedXids.store(0, Relaxed);
-    pa.headKnownAssignedXids.store(compress_index as i32, Release);
+    pa.headKnownAssignedXids
+        .store(compress_index as i32, Release);
 
     if !have_lock {
         LWLockRelease(ProcArrayLock())?;
@@ -362,7 +363,11 @@ fn KnownAssignedXidsDisplay(trace_level: ErrorLevel) {
     for i in tail as usize..head as usize {
         if pa.knownAssignedXidsValid[i].load(Relaxed) {
             nxids += 1;
-            buf.push_str(&format!("[{}]={} ", i, pa.knownAssignedXids[i].load(Relaxed)));
+            buf.push_str(&format!(
+                "[{}]={} ",
+                i,
+                pa.knownAssignedXids[i].load(Relaxed)
+            ));
         }
     }
 
@@ -390,9 +395,7 @@ fn MaintainLatestCompletedXidRecovery(latest_xid: TransactionId) {
     // read without XidGenLock from the startup process.
     let rel = FullTransactionId::from_u64(tv.nextXid.load(Relaxed));
     debug_assert!(rel.is_valid());
-    if !cur_latest.is_valid()
-        || TransactionIdPrecedes(cur_latest.xid(), latest_xid)
-    {
+    if !cur_latest.is_valid() || TransactionIdPrecedes(cur_latest.xid(), latest_xid) {
         tv.latestCompletedXid
             .store(FullXidRelativeTo(rel, latest_xid).value, Relaxed);
     }
@@ -651,7 +654,7 @@ pub fn ExpireAllKnownAssignedTransactionIds() -> PgResult<()> {
 
 pub fn ExpireOldKnownAssignedTransactionIds(xid: TransactionId) -> PgResult<()> {
     LWLockAcquire(ProcArrayLock(), LW_EXCLUSIVE, my_procno())?;
-    let locked = (|| -> PgResult<()> {
+    let locked = {
         let mut latest_xid = xid;
         TransactionIdRetreat(&mut latest_xid);
         MaintainLatestCompletedXidRecovery(latest_xid);
@@ -662,7 +665,7 @@ pub fn ExpireOldKnownAssignedTransactionIds(xid: TransactionId) -> PgResult<()> 
             pa.lastOverflowedXid.set(InvalidTransactionId);
         }
         KnownAssignedXidsRemovePreceding(xid)
-    })();
+    };
     LWLockRelease(ProcArrayLock())?;
     locked
 }

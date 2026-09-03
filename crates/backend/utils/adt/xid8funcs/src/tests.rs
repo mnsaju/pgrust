@@ -46,9 +46,9 @@ fn parse_errors_22p02() {
     let ctx = MemoryContext::new("t");
     let mcx = ctx.mcx();
     for s in [
-        "31:12:",   // xmax < xmin
-        "0:1:",     // invalid xmin
-        "12:13:0",  // xip < xmin
+        "31:12:",      // xmax < xmin
+        "0:1:",        // invalid xmin
+        "12:13:0",     // xip < xmin
         "12:16:14,13", // out of order
         "12:16:14,,16",
         "12:16:14 16",
@@ -60,9 +60,14 @@ fn parse_errors_22p02() {
         "12:13:14", // xip >= xmax
     ] {
         let err = parse(mcx, s).unwrap_err();
-        assert_eq!(err.sqlstate(), types_error::ERRCODE_INVALID_TEXT_REPRESENTATION, "input {s}");
+        assert_eq!(
+            err.sqlstate(),
+            types_error::ERRCODE_INVALID_TEXT_REPRESENTATION,
+            "input {s}"
+        );
         assert!(
-            err.message().contains("invalid input syntax for type pg_snapshot"),
+            err.message()
+                .contains("invalid input syntax for type pg_snapshot"),
             "input {s}: {}",
             err.message()
         );
@@ -159,22 +164,31 @@ fn recv_vectors() {
         mk(-1, 12, 18, &[]),
         mk(0, 18, 12, &[]),
         mk(0, 0, 12, &[]),
-        mk(1, 12, 18, &[11]), // xip < xmin
-        mk(1, 12, 18, &[19]), // xip > xmax
+        mk(1, 12, 18, &[11]),     // xip < xmin
+        mk(1, 12, 18, &[19]),     // xip > xmax
         mk(2, 12, 18, &[16, 14]), // out of order
     ] {
         let mut si = si_of(&bad);
         let err = snapshot_recv(mcx, &mut si).unwrap_err();
-        assert_eq!(err.sqlstate(), types_error::ERRCODE_INVALID_BINARY_REPRESENTATION);
+        assert_eq!(
+            err.sqlstate(),
+            types_error::ERRCODE_INVALID_BINARY_REPRESENTATION
+        );
     }
 }
 
 #[test]
 fn allowable_at_epochs() {
     // xid at or below next's low word: same epoch.
-    assert_eq!(full_xid_from_allowable_at((3 << 32) | 100, 50), (3 << 32) | 50);
+    assert_eq!(
+        full_xid_from_allowable_at((3 << 32) | 100, 50),
+        (3 << 32) | 50
+    );
     // xid above next's low word: previous epoch.
-    assert_eq!(full_xid_from_allowable_at((3 << 32) | 100, 200), (2 << 32) | 200);
+    assert_eq!(
+        full_xid_from_allowable_at((3 << 32) | 100, 200),
+        (2 << 32) | 200
+    );
     // special xids keep epoch 0.
     assert_eq!(full_xid_from_allowable_at((3 << 32) | 100, 2), 2);
     assert_eq!(full_xid_from_allowable_at((3 << 32) | 100, 0), 0);

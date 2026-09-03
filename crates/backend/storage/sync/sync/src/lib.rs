@@ -142,8 +142,7 @@ pub fn InitSync() -> PgResult<()> {
         PENDING.with(|p| {
             let mut slot = p.borrow_mut();
             if slot.is_none() {
-                let cx: &'static MemoryContext =
-                    ::mcx::session_root("Pending ops context");
+                let cx: &'static MemoryContext = ::mcx::session_root("Pending ops context");
                 // LIFO: empty the droppy TLS slot before its context is freed.
                 ::mcx::register_session_cleanup(Box::new(|| {
                     PENDING.with(|p| drop(p.borrow_mut().take()));

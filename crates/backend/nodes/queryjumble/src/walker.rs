@@ -50,7 +50,10 @@ impl<'mcx> JumbleState<'mcx> {
         self.append(&v.to_ne_bytes());
     }
 
+    // Kept for symmetry with C's JUMBLE_FIELD width family even though no
+    // currently-jumbled node has a u64 field.
     #[inline]
+    #[allow(dead_code)]
     fn f_u64(&mut self, v: u64) {
         self.append(&v.to_ne_bytes());
     }
@@ -140,6 +143,9 @@ fn oid_list(js: J<'_, '_>, l: &OidList<'_>) {
     }
 }
 
+// Kept for symmetry with oid_list even though no currently-jumbled node has
+// an XidList field.
+#[allow(dead_code)]
 fn xid_list(js: J<'_, '_>, l: &XidList<'_>) {
     if l.is_nil() {
         js.append_null();
@@ -415,12 +421,11 @@ fn is_squashable_constant(element: Node<'_>) -> bool {
                     return false;
                 }
                 for (i, arg) in func.args.iter().enumerate() {
-                    if arg.node_tag() != NodeTag::T_Const {
-                        if i == 0 && stack_depth::stack_is_too_deep() {
-                            return false;
-                        } else if !is_squashable_constant(arg) {
-                            return false;
-                        }
+                    if arg.node_tag() != NodeTag::T_Const
+                        && ((i == 0 && stack_depth::stack_is_too_deep())
+                            || !is_squashable_constant(arg))
+                    {
+                        return false;
                     }
                 }
                 return true;
@@ -448,10 +453,7 @@ fn elements<'mcx>(js: J<'_, 'mcx>, l: &NodeList<'mcx>, e: &p::ArrayExpr<'mcx>) -
     list(js, l)
 }
 
-pub(crate) fn jumble_query_struct<'mcx>(
-    js: J<'_, 'mcx>,
-    e: &q::Query<'mcx>,
-) -> PgResult<()> {
+pub(crate) fn jumble_query_struct<'mcx>(js: J<'_, 'mcx>, e: &q::Query<'mcx>) -> PgResult<()> {
     js.tag(NodeTag::T_Query);
     js.f_u32(e.commandType as u32);
     node(js, e.utilityStmt)?;

@@ -111,7 +111,6 @@ pub fn assign_list_collations<'mcx>(
     walk_top_list(mcx, pstate, exprs)
 }
 
-
 pub fn assign_expr_collations<'mcx>(
     mcx: Mcx<'mcx>,
     pstate: &ParseState<'_, 'mcx>,
@@ -243,7 +242,11 @@ fn assign_collations_walker<'mcx>(
         // RowExpr subexpressions are independent (C assign_list_collations);
         // the RECORD result is never collatable, so no impact on the parent.
         NodeTag::T_RowExpr => {
-            walk_top_list(context.mcx, context.pstate, &node.as_row_expr().unwrap().args)?;
+            walk_top_list(
+                context.mcx,
+                context.pstate,
+                &node.as_row_expr().unwrap().args,
+            )?;
             return Ok(());
         }
         // Each column pair gets its own common collation; no common collation
@@ -301,8 +304,11 @@ fn assign_collations_walker<'mcx>(
                 strength = CollateStrength::None;
                 location = -1;
             }
-            let set_coll =
-                if strength == CollateStrength::Conflict { InvalidOid } else { collation };
+            let set_coll = if strength == CollateStrength::Conflict {
+                InvalidOid
+            } else {
+                collation
+            };
             // SAFETY: parse analysis exclusively owns the just-built tree; the
             // child borrows above have ended.
             unsafe {
@@ -500,10 +506,7 @@ fn assign_collations_walker<'mcx>(
                     )?;
                 }
                 NodeTag::T_RelabelType => {
-                    assign_collations_walker(
-                        node.as_relabel_type().unwrap().arg,
-                        &mut loccontext,
-                    )?;
+                    assign_collations_walker(node.as_relabel_type().unwrap().arg, &mut loccontext)?;
                 }
                 // Resjunk ORDER BY args and FILTER are held at arm's length
                 // (independent walks): they must not conflict with regular
@@ -523,11 +526,7 @@ fn assign_collations_walker<'mcx>(
                                 let tle =
                                     tle_node.as_target_entry().expect("Aggref arg TargetEntry");
                                 if tle.resjunk {
-                                    assign_expr_collations(
-                                        context.mcx,
-                                        context.pstate,
-                                        tle_node,
-                                    )?;
+                                    assign_expr_collations(context.mcx, context.pstate, tle_node)?;
                                 } else {
                                     assign_collations_walker(tle_node, &mut loccontext)?;
                                 }
@@ -576,15 +575,11 @@ fn assign_collations_walker<'mcx>(
                 }
                 NodeTag::T_SubscriptingRef => {
                     let s = node.as_subscripting_ref().unwrap();
-                    for e in &s.refupperindexpr {
-                        if let Some(e) = e {
-                            assign_collations_walker(e, &mut loccontext)?;
-                        }
+                    for e in (&s.refupperindexpr).into_iter().flatten() {
+                        assign_collations_walker(e, &mut loccontext)?;
                     }
-                    for e in &s.reflowerindexpr {
-                        if let Some(e) = e {
-                            assign_collations_walker(e, &mut loccontext)?;
-                        }
+                    for e in (&s.reflowerindexpr).into_iter().flatten() {
+                        assign_collations_walker(e, &mut loccontext)?;
                     }
                     if let Some(e) = s.refexpr {
                         assign_collations_walker(e, &mut loccontext)?;
@@ -607,7 +602,10 @@ fn assign_collations_walker<'mcx>(
                 NodeTag::T_MergeSupportFunc => {}
                 NodeTag::T_NamedArgExpr => {
                     assign_collations_walker(
-                        node.as_named_arg_expr().unwrap().arg.expect("NamedArgExpr has an arg"),
+                        node.as_named_arg_expr()
+                            .unwrap()
+                            .arg
+                            .expect("NamedArgExpr has an arg"),
                         &mut loccontext,
                     )?;
                 }
@@ -683,7 +681,11 @@ fn assign_collations_walker<'mcx>(
                 location = -1;
             }
 
-            let set_coll = if strength == CollateStrength::Conflict { InvalidOid } else { collation };
+            let set_coll = if strength == CollateStrength::Conflict {
+                InvalidOid
+            } else {
+                collation
+            };
             let input_coll = if loccontext.strength == CollateStrength::Conflict {
                 InvalidOid
             } else {
@@ -731,9 +733,7 @@ fn assign_collations_walker<'mcx>(
                         .with_mut::<types_nodes::CoerceViaIO, _>(|c| c.resultcollid = set_coll)
                         .unwrap(),
                     NodeTag::T_ArrayCoerceExpr => node
-                        .with_mut::<types_nodes::ArrayCoerceExpr, _>(|a| {
-                            a.resultcollid = set_coll
-                        })
+                        .with_mut::<types_nodes::ArrayCoerceExpr, _>(|a| a.resultcollid = set_coll)
                         .unwrap(),
                     // exprSetCollation(ConvertRowtypeExpr) is assert-only in C.
                     NodeTag::T_ConvertRowtypeExpr => {
@@ -817,30 +817,29 @@ fn assign_collations_walker<'mcx>(
                     // result (IS_XMLSERIALIZE) carries DEFAULT_COLLATION_OID,
                     // xml results none.
                     NodeTag::T_XmlExpr => {
-                        debug_assert!(
-                            if node.as_xml_expr().unwrap().op
-                                == types_nodes::XmlExprOp::IS_XMLSERIALIZE
-                            {
-                                set_coll == types_core::catalog::DEFAULT_COLLATION_OID
-                            } else {
-                                !OidIsValid(set_coll)
-                            }
-                        );
+                        debug_assert!(if node.as_xml_expr().unwrap().op
+                            == types_nodes::XmlExprOp::IS_XMLSERIALIZE
+                        {
+                            set_coll == types_core::catalog::DEFAULT_COLLATION_OID
+                        } else {
+                            !OidIsValid(set_coll)
+                        });
                     }
                     NodeTag::T_SQLValueFunction => {
-                        debug_assert!(
-                            if node.as_sql_value_function().unwrap().r#type
-                                == types_core::catalog::NAMEOID
-                            {
-                                set_coll == types_core::catalog::C_COLLATION_OID
-                            } else {
-                                !OidIsValid(set_coll)
-                            }
-                        );
+                        debug_assert!(if node.as_sql_value_function().unwrap().r#type
+                            == types_core::catalog::NAMEOID
+                        {
+                            set_coll == types_core::catalog::C_COLLATION_OID
+                        } else {
+                            !OidIsValid(set_coll)
+                        });
                     }
                     // exprSetCollation Json arms (nodeFuncs.c:1251).
                     NodeTag::T_JsonValueExpr => expr_set_collation(
-                        node.as_json_value_expr().unwrap().formatted_expr.expect("formatted"),
+                        node.as_json_value_expr()
+                            .unwrap()
+                            .formatted_expr
+                            .expect("formatted"),
                         set_coll,
                     ),
                     NodeTag::T_JsonConstructorExpr => {
@@ -896,12 +895,12 @@ unsafe fn expr_set_collation(node: Node<'_>, coll: Oid) {
     // SAFETY: caller contract.
     unsafe {
         match node.node_tag() {
-            NodeTag::T_FuncExpr => {
-                node.with_mut::<types_nodes::FuncExpr, _>(|f| f.funccollid = coll).unwrap()
-            }
-            NodeTag::T_OpExpr => {
-                node.with_mut::<types_nodes::OpExpr, _>(|o| o.opcollid = coll).unwrap()
-            }
+            NodeTag::T_FuncExpr => node
+                .with_mut::<types_nodes::FuncExpr, _>(|f| f.funccollid = coll)
+                .unwrap(),
+            NodeTag::T_OpExpr => node
+                .with_mut::<types_nodes::OpExpr, _>(|o| o.opcollid = coll)
+                .unwrap(),
             NodeTag::T_RelabelType => node
                 .with_mut::<types_nodes::RelabelType, _>(|r| r.resultcollid = coll)
                 .unwrap(),
@@ -914,9 +913,9 @@ unsafe fn expr_set_collation(node: Node<'_>, coll: Oid) {
             NodeTag::T_CoerceToDomain => node
                 .with_mut::<types_nodes::CoerceToDomain, _>(|c| c.resultcollid = coll)
                 .unwrap(),
-            NodeTag::T_Const => {
-                node.with_mut::<types_nodes::Const, _>(|c| c.constcollid = coll).unwrap()
-            }
+            NodeTag::T_Const => node
+                .with_mut::<types_nodes::Const, _>(|c| c.constcollid = coll)
+                .unwrap(),
             NodeTag::T_MergeSupportFunc => node
                 .with_mut::<types_nodes::primnodes::MergeSupportFunc, _>(|m| m.msfcollid = coll)
                 .unwrap(),
@@ -962,7 +961,9 @@ fn assign_hypothetical_collations<'mcx>(
             continue;
         }
         let s_tle_node = agg.args.nth(i - extra_args);
-        let s_tle = s_tle_node.as_target_entry().expect("Aggref arg TargetEntry");
+        let s_tle = s_tle_node
+            .as_target_entry()
+            .expect("Aggref arg TargetEntry");
 
         let mut paircontext = AssignCollationsCtx::new(mcx, loccontext.pstate);
         assign_collations_walker(h_arg, &mut paircontext)?;
@@ -979,8 +980,7 @@ fn assign_hypothetical_collations<'mcx>(
             ));
         }
 
-        if OidIsValid(paircontext.collation)
-            && paircontext.collation != expr_collation(s_tle.expr)
+        if OidIsValid(paircontext.collation) && paircontext.collation != expr_collation(s_tle.expr)
         {
             let relabel = Node::mk(
                 mcx,
@@ -1083,11 +1083,13 @@ fn collation_mismatch_error(
             .unwrap_or_else(|| format!("{c}"))
     };
     let encoding = mbutils::GetDatabaseEncoding();
-    let mut report = elog::ereport(ERROR).errcode(ERRCODE_COLLATION_MISMATCH).errmsg(format!(
-        "collation mismatch between {kind} collations \"{}\" and \"{}\"",
-        name(coll1),
-        name(coll2)
-    ));
+    let mut report = elog::ereport(ERROR)
+        .errcode(ERRCODE_COLLATION_MISMATCH)
+        .errmsg(format!(
+            "collation mismatch between {kind} collations \"{}\" and \"{}\"",
+            name(coll1),
+            name(coll2)
+        ));
     // C attaches the hint only on the implicit variant.
     if kind == "implicit" {
         report = report.errhint(

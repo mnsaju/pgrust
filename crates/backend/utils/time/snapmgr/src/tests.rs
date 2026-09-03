@@ -173,7 +173,10 @@ fn first_snapshot_sets_and_eoxact_clears_xmin() {
 
     end_xact();
     assert!(!FirstSnapshotSet());
-    assert_eq!(lmgr_proc::GetPGProcByNumber(me).xmin.read(), InvalidTransactionId);
+    assert_eq!(
+        lmgr_proc::GetPGProcByNumber(me).xmin.read(),
+        InvalidTransactionId
+    );
     assert_eq!(TransactionXmin(), InvalidTransactionId);
 }
 
@@ -230,7 +233,10 @@ fn register_unregister_lifecycle() {
     assert_eq!(reg.regd_count.get(), 0);
     assert_eq!(FORGOTTEN.get(), f0 + 1);
     drop(reg);
-    assert_eq!(lmgr_proc::GetPGProcByNumber(me).xmin.read(), InvalidTransactionId);
+    assert_eq!(
+        lmgr_proc::GetPGProcByNumber(me).xmin.read(),
+        InvalidTransactionId
+    );
     assert!(!HaveRegisteredOrActiveSnapshot());
 
     end_xact();
@@ -363,7 +369,10 @@ fn serialize_restore_roundtrip_across_thread() {
 
     std::thread::spawn(move || {
         let restored = RestoreSnapshot(&ser);
-        assert_eq!(restored.snapshot_type, types_snapshot::SnapshotType::SNAPSHOT_MVCC);
+        assert_eq!(
+            restored.snapshot_type,
+            types_snapshot::SnapshotType::SNAPSHOT_MVCC
+        );
         assert_eq!(restored.xmin, 100);
         assert_eq!(restored.xmax, 200);
         assert_eq!(restored.xip[..], [110, 120, 150]);
@@ -451,7 +460,9 @@ fn panic_inside_with_state_does_not_poison_the_session() {
     PopActiveSnapshot().unwrap();
 
     AtEOXact_Snapshot(false, true).expect("abort-path AtEOXact_Snapshot");
-    assert!(with_state(|s| s.active.is_empty() && s.registered.is_empty()));
+    assert!(with_state(
+        |s| s.active.is_empty() && s.registered.is_empty()
+    ));
     assert!(!with_state(|s| s.first_snapshot_set));
 }
 
@@ -479,13 +490,21 @@ fn vfs_mkdir(dir: &str) {
 
 fn vfs_read_file(path: &str) -> Vec<u8> {
     let fd = vfs::open(&cpath(path), libc::O_RDONLY, 0);
-    assert!(fd >= 0, "vfs_read_file open({path}): errno {}", vfs::get_errno());
+    assert!(
+        fd >= 0,
+        "vfs_read_file open({path}): errno {}",
+        vfs::get_errno()
+    );
     let mut out = Vec::new();
     let mut buf = [0u8; 4096];
     let mut off = 0i64;
     loop {
         let n = vfs::pread(fd, &mut buf, off);
-        assert!(n >= 0, "vfs_read_file pread({path}): errno {}", vfs::get_errno());
+        assert!(
+            n >= 0,
+            "vfs_read_file pread({path}): errno {}",
+            vfs::get_errno()
+        );
         if n == 0 {
             break;
         }
@@ -499,7 +518,9 @@ fn vfs_read_file(path: &str) -> Vec<u8> {
 static CWD: Mutex<()> = Mutex::new(());
 
 fn enter_dir(dir: &str) -> std::sync::MutexGuard<'static, ()> {
-    let guard = CWD.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let guard = CWD
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     std::env::set_current_dir(dir).unwrap();
     guard
 }

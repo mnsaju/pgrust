@@ -111,8 +111,16 @@ fn vfs_mkdir_p(path: &str) {
 }
 
 fn vfs_write_file(path: &str, data: &[u8]) {
-    let fd = vfs::open(&cpath(path), libc::O_RDWR | libc::O_CREAT | libc::O_TRUNC, 0o600);
-    assert!(fd >= 0, "vfs_write_file open({path}): errno {}", vfs::get_errno());
+    let fd = vfs::open(
+        &cpath(path),
+        libc::O_RDWR | libc::O_CREAT | libc::O_TRUNC,
+        0o600,
+    );
+    assert!(
+        fd >= 0,
+        "vfs_write_file open({path}): errno {}",
+        vfs::get_errno()
+    );
     if !data.is_empty() {
         assert_eq!(vfs::pwrite(fd, data, 0), data.len() as isize, "{path}");
     }
@@ -121,13 +129,21 @@ fn vfs_write_file(path: &str, data: &[u8]) {
 
 fn vfs_read_file(path: &str) -> Vec<u8> {
     let fd = vfs::open(&cpath(path), libc::O_RDONLY, 0);
-    assert!(fd >= 0, "vfs_read_file open({path}): errno {}", vfs::get_errno());
+    assert!(
+        fd >= 0,
+        "vfs_read_file open({path}): errno {}",
+        vfs::get_errno()
+    );
     let mut out = Vec::new();
     let mut buf = [0u8; 4096];
     let mut off = 0i64;
     loop {
         let n = vfs::pread(fd, &mut buf, off);
-        assert!(n >= 0, "vfs_read_file pread({path}): errno {}", vfs::get_errno());
+        assert!(
+            n >= 0,
+            "vfs_read_file pread({path}): errno {}",
+            vfs::get_errno()
+        );
         if n == 0 {
             break;
         }
@@ -206,7 +222,10 @@ fn update_map_routes_pending_and_cci_activates() {
     setup();
     RelationMapInitialize();
     RelationMapUpdateMap(1259, 300, false, false).unwrap();
-    assert_eq!(RelationMapOidToFilenumber(1259, false), InvalidRelFileNumber);
+    assert_eq!(
+        RelationMapOidToFilenumber(1259, false),
+        InvalidRelFileNumber
+    );
     AtCCI_RelationMap().unwrap();
     assert_eq!(RelationMapOidToFilenumber(1259, false), 300);
 
@@ -214,7 +233,10 @@ fn update_map_routes_pending_and_cci_activates() {
     assert_eq!(RelationMapOidToFilenumber(2662, true), 301);
 
     AtEOXact_RelationMap(false, false).unwrap();
-    assert_eq!(RelationMapOidToFilenumber(1259, false), InvalidRelFileNumber);
+    assert_eq!(
+        RelationMapOidToFilenumber(1259, false),
+        InvalidRelFileNumber
+    );
     assert_eq!(RelationMapOidToFilenumber(2662, true), InvalidRelFileNumber);
 }
 
@@ -469,13 +491,17 @@ static LOCK_TESTS: Mutex<()> = Mutex::new(());
 // RelationMappingLock is process-global; without a PGPROC the lwlock cannot
 // wait, so lock-taking tests are serialized here.
 fn lock_guard() -> std::sync::MutexGuard<'static, ()> {
-    LOCK_TESTS.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    LOCK_TESTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 static CWD: Mutex<()> = Mutex::new(());
 
 fn enter_dir(dir: &str) -> std::sync::MutexGuard<'static, ()> {
-    let guard = CWD.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let guard = CWD
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     std::env::set_current_dir(dir).unwrap();
     guard
 }

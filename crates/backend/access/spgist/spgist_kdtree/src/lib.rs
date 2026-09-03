@@ -80,7 +80,11 @@ fn fc_spg_kd_choose(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<
     let coord = input.prefixDatum.as_f64();
 
     *out = spgChooseOut::MatchNode {
-        nodeN: if getSide(coord, input.level % 2 != 0, &in_point) > 0 { 0 } else { 1 },
+        nodeN: if getSide(coord, input.level % 2 != 0, &in_point) > 0 {
+            0
+        } else {
+            1
+        },
         levelAdd: 1,
         // restDatum = PointPGetDatum(inPoint): the input pointer, as in C.
         restDatum: input.datum,
@@ -114,7 +118,11 @@ fn fc_spg_kd_picksplit(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResu
         sorted.sort_by(|a, b| cmp_coord(a.0.y, b.0.y));
     }
     let middle = n >> 1;
-    let coord = if by_x { sorted[middle].0.x } else { sorted[middle].0.y };
+    let coord = if by_x {
+        sorted[middle].0.x
+    } else {
+        sorted[middle].0.y
+    };
 
     out.hasPrefix = true;
     out.prefixDatum = Datum::from_f64(coord);
@@ -239,8 +247,14 @@ fn fc_spg_kd_inner_consistent(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) ->
             // SAFETY: the parent stored a box in traversalValue on this path.
             unsafe { box_at(Datum::from_usize(input.traversalValue)) }
         };
-        let mut b0 = BOX { high: area.high, low: area.low };
-        let mut b1 = BOX { high: area.high, low: area.low };
+        let mut b0 = BOX {
+            high: area.high,
+            low: area.low,
+        };
+        let mut b1 = BOX {
+            high: area.high,
+            low: area.low,
+        };
         if by_x {
             b0.high.x = coord;
             b1.low.x = coord;
@@ -271,14 +285,10 @@ fn fc_spg_kd_inner_consistent(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) ->
                 core::mem::forget(buf);
                 // SAFETY: norderbys orderby scankeys per protocol.
                 let orderbys = unsafe {
-                    core::slice::from_raw_parts(
-                        input.orderbys,
-                        input.norderbys.max(0) as usize,
-                    )
+                    core::slice::from_raw_parts(input.orderbys, input.norderbys.max(0) as usize)
                 };
-                let row = ::spgist_proc::spg_key_orderbys_distances(
-                    mcx, box_datum, false, orderbys,
-                )?;
+                let row =
+                    ::spgist_proc::spg_key_orderbys_distances(mcx, box_datum, false, orderbys)?;
                 tvals.push(box_datum.as_usize());
                 rows.push(row.as_ptr());
                 core::mem::forget(row);
@@ -302,13 +312,30 @@ fn fc_spg_kd_inner_consistent(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) ->
     Ok(Datum::null())
 }
 
-const fn b(foid: Oid, name: &'static str, nargs: i16, func: ::types_fmgr::PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+const fn b(
+    foid: Oid,
+    name: &'static str,
+    nargs: i16,
+    func: ::types_fmgr::PGFunction,
+) -> FmgrBuiltin {
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 pub const SPGIST_KD_BUILTINS: &[FmgrBuiltin] = &[
     b(4023, "spg_kd_config", 2, fc_spg_kd_config),
     b(4024, "spg_kd_choose", 2, fc_spg_kd_choose),
     b(4025, "spg_kd_picksplit", 2, fc_spg_kd_picksplit),
-    b(4026, "spg_kd_inner_consistent", 2, fc_spg_kd_inner_consistent),
+    b(
+        4026,
+        "spg_kd_inner_consistent",
+        2,
+        fc_spg_kd_inner_consistent,
+    ),
 ];

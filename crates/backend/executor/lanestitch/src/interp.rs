@@ -43,7 +43,9 @@ fn out_of_range(width: u8) -> Box<PgError> {
 #[cold]
 #[inline(never)]
 pub(crate) fn rowop_misuse(what: &str) -> Box<PgError> {
-    Box::new(PgError::error(format!("lanestitch row-chain contract violation: {what}")))
+    Box::new(PgError::error(format!(
+        "lanestitch row-chain contract violation: {what}"
+    )))
 }
 
 /// int.c / int8.c parity: checked add/sub/mul (width-exact overflow) and the
@@ -55,9 +57,15 @@ fn arith_eval(op: ArithOp, a: Datum, b: Datum) -> PgResult<Datum> {
     let w = op.width();
     let oor = || out_of_range(w);
     match op {
-        Add2 => (a.as_i16().checked_add(b.as_i16())).map(Datum::from_i16).ok_or_else(oor),
-        Sub2 => (a.as_i16().checked_sub(b.as_i16())).map(Datum::from_i16).ok_or_else(oor),
-        Mul2 => (a.as_i16().checked_mul(b.as_i16())).map(Datum::from_i16).ok_or_else(oor),
+        Add2 => (a.as_i16().checked_add(b.as_i16()))
+            .map(Datum::from_i16)
+            .ok_or_else(oor),
+        Sub2 => (a.as_i16().checked_sub(b.as_i16()))
+            .map(Datum::from_i16)
+            .ok_or_else(oor),
+        Mul2 => (a.as_i16().checked_mul(b.as_i16()))
+            .map(Datum::from_i16)
+            .ok_or_else(oor),
         Div2 => {
             let (x, y) = (a.as_i16(), b.as_i16());
             if y == 0 {
@@ -65,9 +73,15 @@ fn arith_eval(op: ArithOp, a: Datum, b: Datum) -> PgResult<Datum> {
             }
             x.checked_div(y).map(Datum::from_i16).ok_or_else(oor)
         }
-        Add4 => (a.as_i32().checked_add(b.as_i32())).map(Datum::from_i32).ok_or_else(oor),
-        Sub4 => (a.as_i32().checked_sub(b.as_i32())).map(Datum::from_i32).ok_or_else(oor),
-        Mul4 => (a.as_i32().checked_mul(b.as_i32())).map(Datum::from_i32).ok_or_else(oor),
+        Add4 => (a.as_i32().checked_add(b.as_i32()))
+            .map(Datum::from_i32)
+            .ok_or_else(oor),
+        Sub4 => (a.as_i32().checked_sub(b.as_i32()))
+            .map(Datum::from_i32)
+            .ok_or_else(oor),
+        Mul4 => (a.as_i32().checked_mul(b.as_i32()))
+            .map(Datum::from_i32)
+            .ok_or_else(oor),
         Div4 => {
             let (x, y) = (a.as_i32(), b.as_i32());
             if y == 0 {
@@ -75,9 +89,15 @@ fn arith_eval(op: ArithOp, a: Datum, b: Datum) -> PgResult<Datum> {
             }
             x.checked_div(y).map(Datum::from_i32).ok_or_else(oor)
         }
-        Add8 => (a.as_i64().checked_add(b.as_i64())).map(Datum::from_i64).ok_or_else(oor),
-        Sub8 => (a.as_i64().checked_sub(b.as_i64())).map(Datum::from_i64).ok_or_else(oor),
-        Mul8 => (a.as_i64().checked_mul(b.as_i64())).map(Datum::from_i64).ok_or_else(oor),
+        Add8 => (a.as_i64().checked_add(b.as_i64()))
+            .map(Datum::from_i64)
+            .ok_or_else(oor),
+        Sub8 => (a.as_i64().checked_sub(b.as_i64()))
+            .map(Datum::from_i64)
+            .ok_or_else(oor),
+        Mul8 => (a.as_i64().checked_mul(b.as_i64()))
+            .map(Datum::from_i64)
+            .ok_or_else(oor),
         Div8 => {
             let (x, y) = (a.as_i64(), b.as_i64());
             if y == 0 {
@@ -139,7 +159,10 @@ fn eval_pure_step(
             regs[out as usize] = if a.isnull || b.isnull {
                 NullableDatum::null()
             } else {
-                NullableDatum { value: arith_eval(op, a.value, b.value)?, isnull: false }
+                NullableDatum {
+                    value: arith_eval(op, a.value, b.value)?,
+                    isnull: false,
+                }
             };
         }
         Step::NullTest { a, out, kind } => {
@@ -148,7 +171,10 @@ fn eval_pure_step(
                 NullTestKind::IsNull => r.isnull,
                 NullTestKind::IsNotNull => !r.isnull,
             };
-            regs[out as usize] = NullableDatum { value: Datum::from_bool(v), isnull: false };
+            regs[out as usize] = NullableDatum {
+                value: Datum::from_bool(v),
+                isnull: false,
+            };
         }
         Step::BoolTest { a, out, kind } => {
             let r = regs[a as usize];
@@ -161,7 +187,10 @@ fn eval_pure_step(
                 BoolTestKind::IsFalse => is_false,
                 BoolTestKind::IsNotFalse => !is_false,
             };
-            regs[out as usize] = NullableDatum { value: Datum::from_bool(v), isnull: false };
+            regs[out as usize] = NullableDatum {
+                value: Datum::from_bool(v),
+                isnull: false,
+            };
         }
         Step::SaopAny { a, out, op, arr } => {
             // Strict-OR ScalarArrayOpExpr three-valued result: scan for a
@@ -182,11 +211,17 @@ fn eval_pure_step(
                 }
             }
             regs[out as usize] = if res {
-                NullableDatum { value: Datum::from_bool(true), isnull: false }
+                NullableDatum {
+                    value: Datum::from_bool(true),
+                    isnull: false,
+                }
             } else if resnull {
                 NullableDatum::null()
             } else {
-                NullableDatum { value: Datum::from_bool(false), isnull: false }
+                NullableDatum {
+                    value: Datum::from_bool(false),
+                    isnull: false,
+                }
             };
         }
         Step::Qual { a } => {
@@ -308,7 +343,10 @@ pub(crate) fn chain_next_pos(prog: &Program) -> Option<usize> {
         }
     }
     let pos = pos?;
-    if prog.steps[..pos].iter().all(|s| matches!(s, Step::ProtocolCall { .. })) {
+    if prog.steps[..pos]
+        .iter()
+        .all(|s| matches!(s, Step::ProtocolCall { .. }))
+    {
         Some(pos)
     } else {
         None
@@ -358,7 +396,9 @@ pub fn eval_row_chain(
     'chain: loop {
         // Loop-top segment (validated ProtocolCall-only).
         for step in &prog.steps[..next_pos] {
-            let Step::ProtocolCall { call } = *step else { unreachable!("validated above") };
+            let Step::ProtocolCall { call } = *step else {
+                unreachable!("validated above")
+            };
             match host.protocol_call(call)? {
                 ChainVerdict::Continue => {}
                 ChainVerdict::SkipRow | ChainVerdict::EmitPause => {

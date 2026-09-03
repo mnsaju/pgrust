@@ -185,6 +185,7 @@ pub struct TableSampleClause<'mcx> {
     pub repeatable: Option<Node<'mcx>>,
 }
 
+#[derive(Default)]
 pub struct RangeTblFunction<'mcx> {
     pub funcexpr: Option<Node<'mcx>>,
     pub funccolcount: i32,
@@ -195,20 +196,8 @@ pub struct RangeTblFunction<'mcx> {
     pub funcparams: Bitmapset<'mcx>,
 }
 
-impl Default for RangeTblFunction<'_> {
-    fn default() -> Self {
-        RangeTblFunction {
-            funcexpr: None,
-            funccolcount: 0,
-            funccolnames: NodeList::nil(),
-            funccoltypes: OidList::nil(),
-            funccoltypmods: IntList::nil(),
-            funccolcollations: OidList::nil(),
-            funcparams: Bitmapset::empty(),
-        }
-    }
-}
 
+#[derive(Default)]
 pub struct RTEPermissionInfo<'mcx> {
     pub relid: Oid,
     pub inh: bool,
@@ -219,19 +208,6 @@ pub struct RTEPermissionInfo<'mcx> {
     pub updatedCols: Bitmapset<'mcx>,
 }
 
-impl Default for RTEPermissionInfo<'_> {
-    fn default() -> Self {
-        RTEPermissionInfo {
-            relid: 0,
-            inh: false,
-            requiredPerms: 0,
-            checkAsUser: 0,
-            selectedCols: Bitmapset::empty(),
-            insertedCols: Bitmapset::empty(),
-            updatedCols: Bitmapset::empty(),
-        }
-    }
-}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SortGroupClause {
@@ -636,7 +612,11 @@ pub struct WithClause<'mcx> {
 
 impl Default for WithClause<'_> {
     fn default() -> Self {
-        WithClause { ctes: NodeList::nil(), recursive: false, location: -1 }
+        WithClause {
+            ctes: NodeList::nil(),
+            recursive: false,
+            location: -1,
+        }
     }
 }
 
@@ -1364,7 +1344,11 @@ pub struct DeallocateStmt<'mcx> {
 
 impl Default for DeallocateStmt<'_> {
     fn default() -> Self {
-        DeallocateStmt { name: None, isall: false, location: -1 }
+        DeallocateStmt {
+            name: None,
+            isall: false,
+            location: -1,
+        }
     }
 }
 
@@ -1837,7 +1821,14 @@ impl<'mcx> Node<'mcx> {
         content: NodeList<'mcx>,
         location: ParseLoc,
     ) -> types_error::PgResult<Node<'mcx>> {
-        Self::mk(mcx, GroupingSet { kind, content, location })
+        Self::mk(
+            mcx,
+            GroupingSet {
+                kind,
+                content,
+                location,
+            },
+        )
     }
 
     #[inline]
@@ -1931,7 +1922,9 @@ impl<'mcx> Node<'mcx> {
     }
 
     #[inline]
-    pub fn as_alter_default_privileges_stmt(self) -> Option<&'mcx AlterDefaultPrivilegesStmt<'mcx>> {
+    pub fn as_alter_default_privileges_stmt(
+        self,
+    ) -> Option<&'mcx AlterDefaultPrivilegesStmt<'mcx>> {
         self.as_variant()
     }
 

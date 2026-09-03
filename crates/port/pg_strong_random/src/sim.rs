@@ -106,10 +106,7 @@ mod tests {
         assert_eq!(parse_sim_seed("0"), Some(0));
         assert_eq!(parse_sim_seed(" 42 "), Some(42));
         assert_eq!(parse_sim_seed("18446744073709551615"), Some(u64::MAX));
-        assert_eq!(
-            parse_sim_seed("0xFFFFFFFFFFFFFFFF"),
-            Some(u64::MAX)
-        );
+        assert_eq!(parse_sim_seed("0xFFFFFFFFFFFFFFFF"), Some(u64::MAX));
         // empty
         assert_eq!(parse_sim_seed(""), None);
         assert_eq!(parse_sim_seed("   "), None);

@@ -129,11 +129,10 @@ pub fn iterate_jsonb_values(
                         action(&numscratch)?;
                     }
                 }
-                JsonbItem::Bool(b) => {
-                    if flags & JTI_BOOL != 0 {
+                JsonbItem::Bool(b)
+                    if flags & JTI_BOOL != 0 => {
                         action(if b { b"true" } else { b"false" })?;
                     }
-                }
                 _ => {}
             },
             _ => {}
@@ -294,7 +293,10 @@ pub fn transform_json_string_values<'mcx>(
     action: &mut dyn FnMut(&[u8]) -> PgResult<PgVec<'mcx, u8>>,
 ) -> PgResult<PgVec<'mcx, u8>> {
     let mut lex = JsonLexDe::new(mcx, json, mbutils::GetDatabaseEncoding());
-    let mut sem = TransformSem { strval: StringInfo::with_capacity_in(mcx, json.len())?, action };
+    let mut sem = TransformSem {
+        strval: StringInfo::with_capacity_in(mcx, json.len())?,
+        action,
+    };
     let r = adt_json::jsonapi::parse_sem(&mut lex, &mut sem)?;
     if r != adt_json::jsonapi::JsonError::Success {
         adt_json::errsave_parse_error(r, &lex.lex, None)?;

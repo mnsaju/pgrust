@@ -52,7 +52,10 @@ impl PermitThreadReg {
     /// which all task-body spill I/O runs.
     pub unsafe fn new(sem: &Semaphore) -> PermitThreadReg {
         let prev = PERMIT_SEM.with(|c| c.replace(sem as *const Semaphore));
-        PermitThreadReg { prev, _not_send: PhantomData }
+        PermitThreadReg {
+            prev,
+            _not_send: PhantomData,
+        }
     }
 }
 

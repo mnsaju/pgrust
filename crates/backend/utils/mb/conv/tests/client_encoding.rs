@@ -54,10 +54,7 @@ fn latin1_client_round_trip_and_22p05() {
         to_client(&ctx, "caf\u{e9} \u{c9}L\u{c8}VE".as_bytes()).unwrap(),
         b"caf\xe9 \xc9L\xc8VE"
     );
-    assert_eq!(
-        to_server(&ctx, b"caf\xe9").unwrap(),
-        "caf\u{e9}".as_bytes()
-    );
+    assert_eq!(to_server(&ctx, b"caf\xe9").unwrap(), "caf\u{e9}".as_bytes());
     // Identity when no high-bit conversion output differs? No: conversion runs
     // regardless; pure-ASCII still round-trips through the proc.
     assert_eq!(to_client(&ctx, b"plain").unwrap(), b"plain");
@@ -84,10 +81,7 @@ fn win1252_client_euro_and_quotes() {
         to_client(&ctx, "\u{20ac}99 \u{201c}hi\u{201d}".as_bytes()).unwrap(),
         b"\x8099 \x93hi\x94"
     );
-    assert_eq!(
-        to_server(&ctx, b"\x8099").unwrap(),
-        "\u{20ac}99".as_bytes()
-    );
+    assert_eq!(to_server(&ctx, b"\x8099").unwrap(), "\u{20ac}99".as_bytes());
 }
 
 #[test]

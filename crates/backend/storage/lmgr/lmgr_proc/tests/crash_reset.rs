@@ -18,8 +18,7 @@ const CFG: lmgr_proc::ProcGlobalConfig = lmgr_proc::ProcGlobalConfig {
 };
 const MAX_CONNECTIONS: i32 = 4;
 const MAX_WORKER_PROCESSES: i32 = 2;
-const MAX_BACKENDS: i32 =
-    MAX_CONNECTIONS + 3 + MAX_WORKER_PROCESSES + 2 + NUM_SPECIAL_WORKER_PROCS;
+const MAX_BACKENDS: i32 = MAX_CONNECTIONS + 3 + MAX_WORKER_PROCESSES + 2 + NUM_SPECIAL_WORKER_PROCS;
 
 fn thread_globals(pid: i32) {
     g::SetMaxConnections(MAX_CONNECTIONS);

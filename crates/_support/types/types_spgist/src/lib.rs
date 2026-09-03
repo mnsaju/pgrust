@@ -1,6 +1,7 @@
 //! SP-GiST vocabulary (spgist.h + spgist_private.h + spgxlog.h): on-disk
 //! tuple/page codecs, state carriers, opclass call frames, xlog records.
 #![allow(non_snake_case)]
+#![allow(non_camel_case_types)]
 #![allow(non_upper_case_globals)]
 
 pub mod state;
@@ -132,7 +133,7 @@ fn special_off(bytes: *const u8) -> usize {
     // SAFETY: pd_special is at a 2-aligned in-page offset (page contract).
     let off = unsafe { bytes.add(PD_SPECIAL_OFF).cast::<u16>().read() } as usize;
     debug_assert!(
-        off >= SizeOfPageHeaderData && off <= BLCKSZ,
+        (SizeOfPageHeaderData..=BLCKSZ).contains(&off),
         "corrupt pd_special"
     );
     off.min(BLCKSZ - core::mem::size_of::<SpGistPageOpaqueData>())
@@ -476,7 +477,11 @@ pub fn read_item_pointer(b: &[u8]) -> ItemPointerData {
 pub fn write_item_pointer(b: &mut [u8], ip: &ItemPointerData) {
     debug_assert!(b.len() >= 6);
     // SAFETY: 6 bytes checked; unaligned write of a 6-byte POD.
-    unsafe { b.as_mut_ptr().cast::<ItemPointerData>().write_unaligned(*ip) }
+    unsafe {
+        b.as_mut_ptr()
+            .cast::<ItemPointerData>()
+            .write_unaligned(*ip)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -562,7 +567,11 @@ pub fn spgPageIndexMultiDelete(
     let mut tuple: Option<([u8; SGDTSIZE], u8)> = None;
 
     for &itemno in &sortednos[..nitems] {
-        let tupstate = if itemno == first_item { firststate } else { reststate };
+        let tupstate = if itemno == first_item {
+            firststate
+        } else {
+            reststate
+        };
         let img = match tuple {
             Some((img, st)) if st == tupstate => img,
             _ => {

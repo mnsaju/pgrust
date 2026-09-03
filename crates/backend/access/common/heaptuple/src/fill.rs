@@ -117,11 +117,7 @@ pub(crate) unsafe fn fill_val(
         } else if attispackable && varatt_can_make_short(val) {
             data_length = varatt_converted_short_size(val);
             set_varsize_short(base.add(*off), data_length);
-            core::ptr::copy_nonoverlapping(
-                val.add(VARHDRSZ),
-                base.add(*off + 1),
-                data_length - 1,
-            );
+            core::ptr::copy_nonoverlapping(val.add(VARHDRSZ), base.add(*off + 1), data_length - 1);
         } else {
             *off = att_nominal_alignby(*off, attalignby);
             data_length = varsize_4b(val);
@@ -169,7 +165,15 @@ pub unsafe fn heap_fill_tuple(
     match bits {
         Some(bp) => {
             for i in 0..natts {
-                fill_val(&atts[i], Some((bp, i)), data, &mut off, infomask, values[i], isnull[i]);
+                fill_val(
+                    &atts[i],
+                    Some((bp, i)),
+                    data,
+                    &mut off,
+                    infomask,
+                    values[i],
+                    isnull[i],
+                );
             }
         }
         None => {

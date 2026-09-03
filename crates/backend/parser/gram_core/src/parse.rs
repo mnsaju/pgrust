@@ -114,12 +114,9 @@ impl<'mcx> Parser<'mcx> {
                         ));
                     }
                     let escstr = esc_val.str_val().as_bytes();
-                    if escstr.len() != 1
-                        || !parser_small1::udeescape::check_uescapechar(escstr[0])
+                    if escstr.len() != 1 || !parser_small1::udeescape::check_uescapechar(escstr[0])
                     {
-                        return Err(
-                            self.syntax_error("invalid Unicode escape character", esc_loc)
-                        );
+                        return Err(self.syntax_error("invalid Unicode escape character", esc_loc));
                     }
                     // All three tokens consumed (C clears have_lookahead).
                     self.have_lookahead = false;
@@ -137,11 +134,7 @@ impl<'mcx> Parser<'mcx> {
                 )
                 .map_err(|e| self.udeescape_error(e))?;
                 let out_tok = if t == tokens::UIDENT {
-                    parser_small1::truncate_identifier(
-                        &mut decoded,
-                        true,
-                        self.settings.encoding,
-                    )?;
+                    parser_small1::truncate_identifier(&mut decoded, true, self.settings.encoding)?;
                     tokens::IDENT
                 } else {
                     tokens::SCONST
@@ -251,9 +244,13 @@ impl<'mcx> Parser<'mcx> {
                     if yychar == YYEMPTY {
                         yychar = self.base_yylex(&mut yylval, &mut yylloc)?;
                     }
-                    let yytoken = if yychar <= YYEOF { YYEOF } else { yytranslate(yychar) };
+                    let yytoken = if yychar <= YYEOF {
+                        YYEOF
+                    } else {
+                        yytranslate(yychar)
+                    };
                     let idx = pact + yytoken;
-                    if idx < 0 || idx > YYLAST || YYCHECK[idx as usize] as i32 != yytoken {
+                    if !(0..=YYLAST).contains(&idx) || YYCHECK[idx as usize] as i32 != yytoken {
                         break 'decide;
                     }
                     let act = YYTABLE[idx as usize] as i32;

@@ -19,8 +19,8 @@ use crate::format::{
     ExplainPropertyFloat, ExplainPropertyInteger, ExplainPropertyList, ExplainPropertyText,
     ExplainPropertyUInteger,
 };
-use define::str_in;
 use crate::state::{ExplainState, EXPLAIN_FORMAT_TEXT};
+use define::str_in;
 
 // SetOpCmd/SetOpStrategy wire values (nodes.h; canonical consts live in
 // types_pathnodes, not a dep of this crate).
@@ -41,7 +41,10 @@ fn plan_of(node: Node<'_>) -> &Plan<'_> {
     node.as_plan().unwrap_or_else(|| {
         node_gap(
             "ExplainNode",
-            &format!("{:?} plan vocabulary unported (M2+ plan lanes)", node.node_tag()),
+            &format!(
+                "{:?} plan vocabulary unported (M2+ plan lanes)",
+                node.node_tag()
+            ),
         )
     })
 }
@@ -53,10 +56,14 @@ pub fn ExplainPrintPlan<'mcx>(
 ) -> PgResult<()> {
     es.pstmt = Some(pstmt);
     es.rtable = Some(&pstmt.rtable);
-    let root = pstmt.planTree.expect("ExplainPrintPlan: PlannedStmt without planTree");
+    let root = pstmt
+        .planTree
+        .expect("ExplainPrintPlan: PlannedStmt without planTree");
     let mut rels_used = Bitmapset::empty();
-    let spctx =
-        SubPlanScanCtx { analyze: es.analyze, part_prune_infos: &pstmt.partPruneInfos };
+    let spctx = SubPlanScanCtx {
+        analyze: es.analyze,
+        part_prune_infos: &pstmt.partPruneInfos,
+    };
     ExplainPreScanNode(mcx, root, &pstmt.subplans, es.qd, spctx, &mut rels_used)?;
     let rtable_names = ruleutils::select_rtable_names_for_explain(mcx, &pstmt.rtable, &rels_used)?;
     let mut names: PgVec<'mcx, Option<&'mcx str>> = PgVec::new_in(mcx);
@@ -67,7 +74,11 @@ pub fn ExplainPrintPlan<'mcx>(
         });
     }
     es.rtable_names = names;
-    es.deparse_cxt = Some(ruleutils::deparse_context_for_plan_tree(mcx, pstmt, rtable_names)?);
+    es.deparse_cxt = Some(ruleutils::deparse_context_for_plan_tree(
+        mcx,
+        pstmt,
+        rtable_names,
+    )?);
     // plan_ids are per-PlannedStmt: a rewrite product restarts the dedup set.
     es.printed_subplans = Bitmapset::empty();
     es.rtable_size = pstmt.rtable.len() as i32;
@@ -82,7 +93,10 @@ pub fn ExplainPrintPlan<'mcx>(
     let mut root = root;
     if let Some(g) = root.as_gather() {
         if g.invisible {
-            root = g.plan.lefttree.expect("invisible Gather without an outer plan");
+            root = g
+                .plan
+                .lefttree
+                .expect("invisible Gather without an outer plan");
             es.hide_workers = true;
         }
     }
@@ -164,27 +178,34 @@ fn ExplainPreScanNode<'mcx>(
             rels_used.add_member(mcx, node.as_tid_scan().unwrap().scan.scanrelid as i32)?;
         }
         NodeTag::T_TidRangeScan => {
-            rels_used
-                .add_member(mcx, node.as_tid_range_scan().unwrap().scan.scanrelid as i32)?;
+            rels_used.add_member(mcx, node.as_tid_range_scan().unwrap().scan.scanrelid as i32)?;
         }
         NodeTag::T_IndexOnlyScan => {
-            rels_used
-                .add_member(mcx, node.as_index_only_scan().unwrap().scan.scanrelid as i32)?;
+            rels_used.add_member(
+                mcx,
+                node.as_index_only_scan().unwrap().scan.scanrelid as i32,
+            )?;
         }
         NodeTag::T_BitmapHeapScan => {
-            rels_used
-                .add_member(mcx, node.as_bitmap_heap_scan().unwrap().scan.scanrelid as i32)?;
+            rels_used.add_member(
+                mcx,
+                node.as_bitmap_heap_scan().unwrap().scan.scanrelid as i32,
+            )?;
         }
         NodeTag::T_CteScan => {
             rels_used.add_member(mcx, node.as_cte_scan().unwrap().scan.scanrelid as i32)?;
         }
         NodeTag::T_NamedTuplestoreScan => {
-            rels_used
-                .add_member(mcx, node.as_named_tuplestore_scan().unwrap().scan.scanrelid as i32)?;
+            rels_used.add_member(
+                mcx,
+                node.as_named_tuplestore_scan().unwrap().scan.scanrelid as i32,
+            )?;
         }
         NodeTag::T_WorkTableScan => {
-            rels_used
-                .add_member(mcx, node.as_work_table_scan().unwrap().scan.scanrelid as i32)?;
+            rels_used.add_member(
+                mcx,
+                node.as_work_table_scan().unwrap().scan.scanrelid as i32,
+            )?;
         }
         NodeTag::T_ValuesScan => {
             rels_used.add_member(mcx, node.as_values_scan().unwrap().scan.scanrelid as i32)?;
@@ -196,13 +217,22 @@ fn ExplainPreScanNode<'mcx>(
             rels_used.add_member(mcx, node.as_function_scan().unwrap().scan.scanrelid as i32)?;
         }
         NodeTag::T_TableFuncScan => {
-            rels_used
-                .add_member(mcx, node.as_table_func_scan().unwrap().scan.scanrelid as i32)?;
+            rels_used.add_member(
+                mcx,
+                node.as_table_func_scan().unwrap().scan.scanrelid as i32,
+            )?;
         }
         NodeTag::T_SubqueryScan => {
             let sq = node.as_subquery_scan().unwrap();
             rels_used.add_member(mcx, sq.scan.scanrelid as i32)?;
-            ExplainPreScanNode(mcx, sq.subplan.expect("SubqueryScan subplan"), subplans, qd, ctx, rels_used)?;
+            ExplainPreScanNode(
+                mcx,
+                sq.subplan.expect("SubqueryScan subplan"),
+                subplans,
+                qd,
+                ctx,
+                rels_used,
+            )?;
         }
         NodeTag::T_ModifyTable => {
             let mt = node.as_modify_table().unwrap();
@@ -271,13 +301,15 @@ fn ExplainPreScanNode<'mcx>(
     // rels_used, as C's NULLed glob->subplans cells do.
     for sp_node in plan.initPlan.iter() {
         let sp = sp_node.as_sub_plan().expect("initPlan holds SubPlan nodes");
-        let child =
-            subplans.nth(sp.plan_id as usize - 1).expect("EXPLAIN pstmt has no subplan holes");
+        let child = subplans
+            .nth(sp.plan_id as usize - 1)
+            .expect("EXPLAIN pstmt has no subplan holes");
         ExplainPreScanNode(mcx, child, subplans, qd, ctx, rels_used)?;
     }
     for sp in collect_node_subplans(mcx, node, ctx)?.iter() {
-        let child =
-            subplans.nth(sp.plan_id as usize - 1).expect("EXPLAIN pstmt has no subplan holes");
+        let child = subplans
+            .nth(sp.plan_id as usize - 1)
+            .expect("EXPLAIN pstmt has no subplan holes");
         ExplainPreScanNode(mcx, child, subplans, qd, ctx, rels_used)?;
     }
     if let Some(l) = plan.lefttree {
@@ -330,7 +362,7 @@ fn collect_node_subplans<'mcx>(
 ) -> PgResult<PgVec<'mcx, &'mcx types_nodes::primnodes::SubPlan<'mcx>>> {
     let plan = plan_of(node);
     let mut out: PgVec<'mcx, &'mcx types_nodes::primnodes::SubPlan<'mcx>> = PgVec::new_in(mcx);
-    let mut walk_list = |out: &mut PgVec<'mcx, &'mcx types_nodes::primnodes::SubPlan<'mcx>>,
+    let walk_list = |out: &mut PgVec<'mcx, &'mcx types_nodes::primnodes::SubPlan<'mcx>>,
                          list: &NodeList<'mcx>| {
         for n in list {
             collect_subplans_expr(n, out);
@@ -388,9 +420,13 @@ fn collect_node_subplans<'mcx>(
                 }
             }
             for mal in mt.mergeActionLists.iter() {
-                let Some(actions) = mal.as_list() else { continue };
+                let Some(actions) = mal.as_list() else {
+                    continue;
+                };
                 for action_node in actions {
-                    let Some(action) = action_node.as_merge_action() else { continue };
+                    let Some(action) = action_node.as_merge_action() else {
+                        continue;
+                    };
                     if let Some(q) = action.qual {
                         // Preprocessed WHEN quals are implicit-AND Lists.
                         match q.as_list() {
@@ -464,7 +500,10 @@ fn collect_node_subplans<'mcx>(
         NodeTag::T_BitmapHeapScan => {
             walk_list(&mut out, &plan.targetlist);
             walk_list(&mut out, &plan.qual);
-            walk_list(&mut out, &node.as_bitmap_heap_scan().unwrap().bitmapqualorig);
+            walk_list(
+                &mut out,
+                &node.as_bitmap_heap_scan().unwrap().bitmapqualorig,
+            );
         }
         // ExecInitPartitionExecPruning inits the exec-pruning step exprs on
         // the parent Append/MergeAppend node; initial steps init parentless
@@ -488,7 +527,9 @@ fn collect_node_subplans<'mcx>(
                             .as_partitioned_rel_prune_info()
                             .expect("PartitionedRelPruneInfo node");
                         for step in prel.exec_pruning_steps.iter() {
-                            let Some(op) = step.as_partition_prune_step_op() else { continue };
+                            let Some(op) = step.as_partition_prune_step_op() else {
+                                continue;
+                            };
                             walk_list(&mut out, &op.exprs);
                         }
                     }
@@ -529,9 +570,7 @@ fn collect_subplans_expr<'mcx>(
                 }
             }
         }
-        NodeTag::T_TargetEntry => {
-            collect_subplans_expr(node.as_target_entry().unwrap().expr, out)
-        }
+        NodeTag::T_TargetEntry => collect_subplans_expr(node.as_target_entry().unwrap().expr, out),
         NodeTag::T_OpExpr => {
             for a in &node.as_op_expr().unwrap().args {
                 collect_subplans_expr(a, out);
@@ -547,9 +586,7 @@ fn collect_subplans_expr<'mcx>(
                 collect_subplans_expr(a, out);
             }
         }
-        NodeTag::T_RelabelType => {
-            collect_subplans_expr(node.as_relabel_type().unwrap().arg, out)
-        }
+        NodeTag::T_RelabelType => collect_subplans_expr(node.as_relabel_type().unwrap().arg, out),
         NodeTag::T_NullTest => {
             if let Some(a) = node.as_null_test().unwrap().arg {
                 collect_subplans_expr(a, out);
@@ -616,9 +653,7 @@ fn collect_subplans_expr<'mcx>(
                 collect_subplans_expr(a, out);
             }
         }
-        NodeTag::T_CoerceViaIO => {
-            collect_subplans_expr(node.as_coerce_via_io().unwrap().arg, out)
-        }
+        NodeTag::T_CoerceViaIO => collect_subplans_expr(node.as_coerce_via_io().unwrap().arg, out),
         NodeTag::T_CoerceToDomain => {
             collect_subplans_expr(node.as_coerce_to_domain().unwrap().arg, out)
         }
@@ -663,9 +698,10 @@ pub fn ExplainNode<'mcx>(
                     strategy = Some("Hashed");
                     "HashSetOp"
                 }
-                other => {
-                    node_gap("ExplainNode", &format!("SetOp strategy {other} unrecognized"))
-                }
+                other => node_gap(
+                    "ExplainNode",
+                    &format!("SetOp strategy {other} unrecognized"),
+                ),
             };
             (p, "SetOp")
         }
@@ -684,8 +720,7 @@ pub fn ExplainNode<'mcx>(
         NodeTag::T_ValuesScan => ("Values Scan", "Values Scan"),
         NodeTag::T_ForeignScan => {
             assert!(
-                node.as_foreign_scan().unwrap().operation
-                    == types_nodes::CmdType::CMD_SELECT,
+                node.as_foreign_scan().unwrap().operation == types_nodes::CmdType::CMD_SELECT,
                 "ExplainNode (explain.c): ForeignScan direct modify unported"
             );
             ("Foreign Scan", "Foreign Scan")
@@ -755,10 +790,22 @@ pub fn ExplainNode<'mcx>(
             operation = Some(p);
             (p, "ModifyTable")
         }
-        t => node_gap("ExplainNode", &format!("{t:?} display arm unported (M2+ plan lanes)")),
+        t => node_gap(
+            "ExplainNode",
+            &format!("{t:?} display arm unported (M2+ plan lanes)"),
+        ),
     };
 
-    ExplainOpenGroup("Plan", if relationship.is_some() { None } else { Some("Plan") }, true, es);
+    ExplainOpenGroup(
+        "Plan",
+        if relationship.is_some() {
+            None
+        } else {
+            Some("Plan")
+        },
+        true,
+        es,
+    );
 
     if es.format == EXPLAIN_FORMAT_TEXT {
         if let Some(name) = plan_name {
@@ -841,7 +888,10 @@ pub fn ExplainNode<'mcx>(
             SETOPCMD_INTERSECT_ALL => "Intersect All",
             SETOPCMD_EXCEPT => "Except",
             SETOPCMD_EXCEPT_ALL => "Except All",
-            other => node_gap("ExplainNode", &format!("SetOp command {other} unrecognized")),
+            other => node_gap(
+                "ExplainNode",
+                &format!("SetOp command {other} unrecognized"),
+            ),
         };
         if es.format == EXPLAIN_FORMAT_TEXT {
             append!(es, " {setopcmd}");
@@ -1024,7 +1074,9 @@ pub fn ExplainNode<'mcx>(
 
     // Per-worker general execution details.
     if es.workers_state.is_some() && es.verbose {
-        let w = worker_instrument.as_ref().expect("workers_state implies worker data");
+        let w = worker_instrument
+            .as_ref()
+            .expect("workers_state implies worker data");
         for (n, i) in w.iter().enumerate() {
             let nloops = i.nloops;
             if nloops <= 0.0 {
@@ -1331,9 +1383,15 @@ pub fn ExplainNode<'mcx>(
         }
         // Unique, Limit, Append, SetOp, LockRows, ProjectSet show nothing
         // extra without ANALYZE.
-        NodeTag::T_Unique | NodeTag::T_Limit | NodeTag::T_Append | NodeTag::T_SetOp
-        | NodeTag::T_LockRows | NodeTag::T_BitmapAnd | NodeTag::T_BitmapOr
-        | NodeTag::T_ProjectSet | NodeTag::T_RecursiveUnion => {}
+        NodeTag::T_Unique
+        | NodeTag::T_Limit
+        | NodeTag::T_Append
+        | NodeTag::T_SetOp
+        | NodeTag::T_LockRows
+        | NodeTag::T_BitmapAnd
+        | NodeTag::T_BitmapOr
+        | NodeTag::T_ProjectSet
+        | NodeTag::T_RecursiveUnion => {}
         // show_modifytable_info: FDW/ON CONFLICT legs absent (asserted at the
         // name arm). C reads mtstate->resultRelInfo; the filter below rebuilds
         // it from the plan list minus initially-pruned rels, keeping the first
@@ -1457,7 +1515,13 @@ pub fn ExplainNode<'mcx>(
                             append!(es, "\n");
                         }
                     } else {
-                        crate::format::ExplainPropertyFloat("Tuples Inserted", None, inserted, 0, es);
+                        crate::format::ExplainPropertyFloat(
+                            "Tuples Inserted",
+                            None,
+                            inserted,
+                            0,
+                            es,
+                        );
                         crate::format::ExplainPropertyFloat("Tuples Updated", None, updated, 0, es);
                         crate::format::ExplainPropertyFloat("Tuples Deleted", None, deleted, 0, es);
                         crate::format::ExplainPropertyFloat("Tuples Skipped", None, skipped, 0, es);
@@ -1537,7 +1601,10 @@ pub fn ExplainNode<'mcx>(
                         append!(es, "\n");
                         let (rs, rf, np) = (p.rows_scanned, p.rows_survived, p.partials);
                         crate::format::ExplainIndentText(es);
-                        append!(es, "  Rows: {rs} scanned -> {rf} filtered -> {np} partials\n");
+                        append!(
+                            es,
+                            "  Rows: {rs} scanned -> {rf} filtered -> {np} partials\n"
+                        );
                         let (pruned, bloom, meta, windows) =
                             (p.prune[1], p.prune[2], p.prune[3], p.prune[6]);
                         crate::format::ExplainIndentText(es);
@@ -1554,10 +1621,9 @@ pub fn ExplainNode<'mcx>(
                                 let wall_ms = wall_ns as f64 / 1e6;
                                 let cpu_ms = p.busy_ns as f64 / 1e6;
                                 let dop = p.busy_ns as f64 / wall_ns as f64;
-                                let stall_ms = ((p.workers as u64 * wall_ns)
-                                    .saturating_sub(p.busy_ns))
-                                    as f64
-                                    / 1e6;
+                                let stall_ms =
+                                    ((p.workers as u64 * wall_ns).saturating_sub(p.busy_ns)) as f64
+                                        / 1e6;
                                 crate::format::ExplainIndentText(es);
                                 append!(
                                     es,
@@ -1630,8 +1696,7 @@ pub fn ExplainNode<'mcx>(
                                 ExplainPropertyFloat(
                                     "Stall Time",
                                     Some("ms"),
-                                    ((p.workers as u64 * wall_ns).saturating_sub(p.busy_ns))
-                                        as f64
+                                    ((p.workers as u64 * wall_ns).saturating_sub(p.busy_ns)) as f64
                                         / 1e6,
                                     3,
                                     es,
@@ -1730,7 +1795,9 @@ pub fn ExplainNode<'mcx>(
     // Per-worker buffer usage, then flush the worker
     // sections and pop the set-aside state.
     if es.workers_state.is_some() && es.buffers && es.verbose {
-        let w = worker_instrument.as_ref().expect("workers_state implies worker data");
+        let w = worker_instrument
+            .as_ref()
+            .expect("workers_state implies worker data");
         for (n, i) in w.iter().enumerate() {
             if i.nloops <= 0.0 {
                 continue;
@@ -1752,7 +1819,9 @@ pub fn ExplainNode<'mcx>(
     // ExplainMissingMembers: subplans removed by initial runtime pruning.
     let append_children = match node.as_append() {
         Some(a) => Some((&a.appendplans, a.part_prune_index)),
-        None => node.as_merge_append().map(|m| (&m.mergeplans, m.part_prune_index)),
+        None => node
+            .as_merge_append()
+            .map(|m| (&m.mergeplans, m.part_prune_index)),
     };
     let append_valid: Option<Vec<i32>> = match append_children {
         Some((_, ppi)) if ppi >= 0 && !es.qd.is_null() => {
@@ -1768,11 +1837,16 @@ pub fn ExplainNode<'mcx>(
         }
     }
 
-    let pushed = Ancestors { entry: AncestorEntry::Plan(node), parent: ancestors };
+    let pushed = Ancestors {
+        entry: AncestorEntry::Plan(node),
+        parent: ancestors,
+    };
     let member_subplans = {
         let pstmt = es.pstmt.expect("ExplainNode before ExplainPrintPlan");
-        let spctx =
-            SubPlanScanCtx { analyze: es.analyze, part_prune_infos: &pstmt.partPruneInfos };
+        let spctx = SubPlanScanCtx {
+            analyze: es.analyze,
+            part_prune_infos: &pstmt.partPruneInfos,
+        };
         collect_node_subplans(es.str.allocator(), node, spctx)?
     };
     let haschildren = !plan.initPlan.is_nil()
@@ -1802,7 +1876,13 @@ pub fn ExplainNode<'mcx>(
         match &append_valid {
             Some(valid) => {
                 for &i in valid {
-                    ExplainNode(children.nth(i as usize), Some("Member"), None, Some(&pushed), es)?;
+                    ExplainNode(
+                        children.nth(i as usize),
+                        Some("Member"),
+                        None,
+                        Some(&pushed),
+                        es,
+                    )?;
                 }
             }
             None => {
@@ -1824,7 +1904,13 @@ pub fn ExplainNode<'mcx>(
         }
     }
     if let Some(sq) = node.as_subquery_scan() {
-        ExplainNode(sq.subplan.expect("SubqueryScan subplan"), Some("Subquery"), None, Some(&pushed), es)?;
+        ExplainNode(
+            sq.subplan.expect("SubqueryScan subplan"),
+            Some("Subquery"),
+            None,
+            Some(&pushed),
+            es,
+        )?;
     }
     // ExplainSubPlans over planstate->subPlan.
     for sp in member_subplans.iter() {
@@ -1838,7 +1924,16 @@ pub fn ExplainNode<'mcx>(
     if es.format == EXPLAIN_FORMAT_TEXT {
         es.indent = save_indent;
     }
-    ExplainCloseGroup("Plan", if relationship.is_some() { None } else { Some("Plan") }, true, es);
+    ExplainCloseGroup(
+        "Plan",
+        if relationship.is_some() {
+            None
+        } else {
+            Some("Plan")
+        },
+        true,
+        es,
+    );
     Ok(())
 }
 
@@ -1859,11 +1954,18 @@ fn explain_sub_plan<'mcx>(
         .subplans
         .nth(sp.plan_id as usize - 1)
         .expect("EXPLAIN pstmt has no subplan holes");
-    let sub = Ancestors { entry: AncestorEntry::Sub(sp), parent: Some(pushed) };
+    let sub = Ancestors {
+        entry: AncestorEntry::Sub(sp),
+        parent: Some(pushed),
+    };
     ExplainNode(child, Some(relationship), sp.plan_name, Some(&sub), es)
 }
 
-fn show_plan_tlist<'mcx>(node: Node<'mcx>, ancestors: Option<&Ancestors<'_, 'mcx>>, es: &mut ExplainState<'mcx>) -> PgResult<()> {
+fn show_plan_tlist<'mcx>(
+    node: Node<'mcx>,
+    ancestors: Option<&Ancestors<'_, 'mcx>>,
+    es: &mut ExplainState<'mcx>,
+) -> PgResult<()> {
     let plan = plan_of(node);
     if plan.targetlist.is_nil() {
         return Ok(());
@@ -1878,7 +1980,9 @@ fn show_plan_tlist<'mcx>(node: Node<'mcx>, ancestors: Option<&Ancestors<'_, 'mcx
     let useprefix = es.rtable_size > 1;
     let mut result: PgVec<'mcx, PgString<'mcx>> = PgVec::new_in(mcx);
     for tle_node in plan.targetlist.iter() {
-        let tle = tle_node.as_target_entry().expect("targetlist holds TargetEntries");
+        let tle = tle_node
+            .as_target_entry()
+            .expect("targetlist holds TargetEntries");
         let mut buf = PgString::new_in(mcx);
         deparse_expr(es, node, ancestors, tle.expr, useprefix, false, &mut buf)?;
         result.push(buf);
@@ -1903,7 +2007,13 @@ fn show_incremental_sort_keys<'mcx>(
     es: &mut ExplainState<'mcx>,
 ) -> PgResult<()> {
     let isort = node.as_incremental_sort().expect("IncrementalSort node");
-    show_sort_node_keys(node, &isort.sort, isort.nPresortedCols as usize, ancestors, es)
+    show_sort_node_keys(
+        node,
+        &isort.sort,
+        isort.nPresortedCols as usize,
+        ancestors,
+        es,
+    )
 }
 
 fn show_sort_node_keys<'mcx>(
@@ -2004,7 +2114,13 @@ fn show_sort_info<'mcx>(node: Node<'mcx>, es: &mut ExplainState<'mcx>) -> PgResu
         let space_type = si.spaceType.name();
         if es.format == EXPLAIN_FORMAT_TEXT {
             crate::format::ExplainIndentText(es);
-            append!(es, "Sort Method: {}  {}: {}kB\n", sort_method, space_type, si.spaceUsed);
+            append!(
+                es,
+                "Sort Method: {}  {}: {}kB\n",
+                sort_method,
+                space_type,
+                si.spaceUsed
+            );
         } else {
             ExplainPropertyText("Sort Method", sort_method, es);
             ExplainPropertyInteger("Sort Space Used", Some("kB"), si.spaceUsed, es);
@@ -2045,14 +2161,20 @@ fn show_sort_info<'mcx>(node: Node<'mcx>, es: &mut ExplainState<'mcx>) -> PgResu
 fn explain_open_worker(n: usize, es: &mut ExplainState<'_>) {
     let mcx = es.str.allocator();
     let (mut buf, first_time) = {
-        let ws = es.workers_state.as_mut().expect("open_worker without workers_state");
+        let ws = es
+            .workers_state
+            .as_mut()
+            .expect("open_worker without workers_state");
         let first = ws.worker_str[n].is_none();
         if first {
             ws.worker_str[n] =
                 Some(stringinfo::StringInfo::new_in(mcx).expect("explain output append"));
             ws.worker_inited[n] = true;
         }
-        (ws.worker_str[n].take().expect("worker buffer present"), first)
+        (
+            ws.worker_str[n].take().expect("worker buffer present"),
+            first,
+        )
     };
     core::mem::swap(&mut es.str, &mut buf);
     es.workers_state.as_mut().unwrap().worker_str[n] = Some(buf);
@@ -2063,8 +2185,11 @@ fn explain_open_worker(n: usize, es: &mut ExplainState<'_>) {
             ExplainPropertyInteger("Worker Number", None, n as i64, es);
         }
     } else {
-        let saved =
-            es.workers_state.as_ref().expect("workers_state").worker_state_save[n];
+        let saved = es
+            .workers_state
+            .as_ref()
+            .expect("workers_state")
+            .worker_state_save[n];
         crate::format::ExplainRestoreGroup(es, 2, &saved);
     }
     if es.format == EXPLAIN_FORMAT_TEXT {
@@ -2081,7 +2206,10 @@ fn explain_open_worker(n: usize, es: &mut ExplainState<'_>) {
 fn explain_close_worker(n: usize, es: &mut ExplainState<'_>) {
     let mut saved = 0;
     crate::format::ExplainSaveGroup(es, 2, &mut saved);
-    es.workers_state.as_mut().expect("workers_state").worker_state_save[n] = saved;
+    es.workers_state
+        .as_mut()
+        .expect("workers_state")
+        .worker_state_save[n] = saved;
     if es.format == EXPLAIN_FORMAT_TEXT {
         let bytes = es.str.as_bytes();
         let mut len = bytes.len();
@@ -2092,8 +2220,13 @@ fn explain_close_worker(n: usize, es: &mut ExplainState<'_>) {
         es.indent -= 1;
     }
     let mut buf = {
-        let ws = es.workers_state.as_mut().expect("close_worker without workers_state");
-        ws.worker_str[n].take().expect("worker slot holds the main buffer")
+        let ws = es
+            .workers_state
+            .as_mut()
+            .expect("close_worker without workers_state");
+        ws.worker_str[n]
+            .take()
+            .expect("worker slot holds the main buffer")
     };
     core::mem::swap(&mut es.str, &mut buf);
     es.workers_state.as_mut().unwrap().worker_str[n] = Some(buf);
@@ -2101,13 +2234,18 @@ fn explain_close_worker(n: usize, es: &mut ExplainState<'_>) {
 
 // ExplainFlushWorkersState (explain.c).
 fn explain_flush_workers_state(es: &mut ExplainState<'_>) {
-    let ws = es.workers_state.take().expect("flush without workers_state");
+    let ws = es
+        .workers_state
+        .take()
+        .expect("flush without workers_state");
     ExplainOpenGroup("Workers", Some("Workers"), false, es);
     for (inited, buf) in ws.worker_inited.iter().zip(ws.worker_str.iter()) {
         if *inited {
             ExplainOpenGroup("Worker", None, true, es);
             if let Some(b) = buf {
-                es.str.append_bytes(b.as_bytes()).expect("explain output append");
+                es.str
+                    .append_bytes(b.as_bytes())
+                    .expect("explain output append");
             }
             ExplainCloseGroup("Worker", None, true, es);
         }
@@ -2131,15 +2269,22 @@ fn show_incremental_sort_group_info(
         TuplesortMethod::ExternalSort,
         TuplesortMethod::ExternalMerge,
     ];
-    let methods: Vec<&TuplesortMethod> =
-        METHOD_BITS.iter().filter(|m| group_info.sortMethods & m.bit() != 0).collect();
+    let methods: Vec<&TuplesortMethod> = METHOD_BITS
+        .iter()
+        .filter(|m| group_info.sortMethods & m.bit() != 0)
+        .collect();
     if es.format == EXPLAIN_FORMAT_TEXT {
         if indent {
             es.str
                 .append_spaces(es.indent as usize * 2)
                 .expect("explain output append");
         }
-        append!(es, "{} Groups: {}  Sort Method", group_label, group_info.groupCount);
+        append!(
+            es,
+            "{} Groups: {}  Sort Method",
+            group_label,
+            group_info.groupCount
+        );
         append!(es, "{}", if methods.len() > 1 { "s: " } else { ": " });
         for (i, m) in methods.iter().enumerate() {
             if i > 0 {
@@ -2202,10 +2347,7 @@ fn show_incremental_sort_group_info(
 // show_incremental_sort_info (explain.c). The group-info helper carries the
 // trailing newline C's caller appends, so the stanza composition stays
 // byte-identical.
-fn show_incremental_sort_info<'mcx>(
-    node: Node<'mcx>,
-    es: &mut ExplainState<'mcx>,
-) -> PgResult<()> {
+fn show_incremental_sort_info<'mcx>(node: Node<'mcx>, es: &mut ExplainState<'mcx>) -> PgResult<()> {
     if !es.analyze || es.qd.is_null() {
         return Ok(());
     }
@@ -2261,7 +2403,11 @@ fn show_incremental_sort_info<'mcx>(
 
 // show_agg_keys -> show_sort_group_keys (explain.c): key columns resolve in
 // the child plan's tlist; deparsed with showimplicit=true as C.
-fn show_agg_keys<'mcx>(node: Node<'mcx>, ancestors: Option<&Ancestors<'_, 'mcx>>, es: &mut ExplainState<'mcx>) -> PgResult<()> {
+fn show_agg_keys<'mcx>(
+    node: Node<'mcx>,
+    ancestors: Option<&Ancestors<'_, 'mcx>>,
+    es: &mut ExplainState<'mcx>,
+) -> PgResult<()> {
     let agg = node.as_agg().expect("Agg plan node");
     if agg.numCols <= 0 && agg.groupingSets.is_nil() {
         return Ok(());
@@ -2273,13 +2419,24 @@ fn show_agg_keys<'mcx>(node: Node<'mcx>, ancestors: Option<&Ancestors<'_, 'mcx>>
     let child_tlist = &plan_of(child).targetlist;
     let mcx = es.str.allocator();
     let useprefix = es.rtable_size > 1 || es.verbose;
-    let pushed = Ancestors { entry: AncestorEntry::Plan(node), parent: ancestors };
+    let pushed = Ancestors {
+        entry: AncestorEntry::Plan(node),
+        parent: ancestors,
+    };
     let mut result: PgVec<'mcx, PgString<'mcx>> = PgVec::new_in(mcx);
     for &resno in agg.grpColIdx {
         let tle = get_tle_by_resno(child_tlist, resno)
             .unwrap_or_else(|| node_gap("show_sort_group_keys", "no tlist entry for key column"));
         let mut buf = PgString::new_in(mcx);
-        deparse_expr(es, child, Some(&pushed), tle.expr, useprefix, true, &mut buf)?;
+        deparse_expr(
+            es,
+            child,
+            Some(&pushed),
+            tle.expr,
+            useprefix,
+            true,
+            &mut buf,
+        )?;
         result.push(buf);
     }
     ExplainPropertyList("Group Key", &result, es);
@@ -2288,19 +2445,34 @@ fn show_agg_keys<'mcx>(node: Node<'mcx>, ancestors: Option<&Ancestors<'_, 'mcx>>
 
 // show_group_keys -> show_sort_group_keys (explain.c): key columns resolve in
 // the child plan's tlist; deparsed with showimplicit=true as C.
-fn show_group_keys<'mcx>(node: Node<'mcx>, ancestors: Option<&Ancestors<'_, 'mcx>>, es: &mut ExplainState<'mcx>) -> PgResult<()> {
+fn show_group_keys<'mcx>(
+    node: Node<'mcx>,
+    ancestors: Option<&Ancestors<'_, 'mcx>>,
+    es: &mut ExplainState<'mcx>,
+) -> PgResult<()> {
     let grp = node.as_group().expect("Group plan node");
     let child = grp.plan.lefttree.expect("Group has an outer plan");
     let child_tlist = &plan_of(child).targetlist;
     let mcx = es.str.allocator();
     let useprefix = es.rtable_size > 1 || es.verbose;
-    let pushed = Ancestors { entry: AncestorEntry::Plan(node), parent: ancestors };
+    let pushed = Ancestors {
+        entry: AncestorEntry::Plan(node),
+        parent: ancestors,
+    };
     let mut result: PgVec<'mcx, PgString<'mcx>> = PgVec::new_in(mcx);
     for &resno in grp.grpColIdx {
         let tle = get_tle_by_resno(child_tlist, resno)
             .unwrap_or_else(|| node_gap("show_sort_group_keys", "no tlist entry for key column"));
         let mut buf = PgString::new_in(mcx);
-        deparse_expr(es, child, Some(&pushed), tle.expr, useprefix, true, &mut buf)?;
+        deparse_expr(
+            es,
+            child,
+            Some(&pushed),
+            tle.expr,
+            useprefix,
+            true,
+            &mut buf,
+        )?;
         result.push(buf);
     }
     ExplainPropertyList("Group Key", &result, es);
@@ -2324,15 +2496,15 @@ fn show_hash_info<'mcx>(node: Node<'mcx>, es: &mut ExplainState<'mcx>) -> PgResu
     let space_peak_kb = hi.space_peak.div_ceil(1024);
     if es.format != EXPLAIN_FORMAT_TEXT {
         ExplainPropertyInteger("Hash Buckets", None, hi.nbuckets as i64, es);
-        ExplainPropertyInteger("Original Hash Buckets", None, hi.nbuckets_original as i64, es);
-        ExplainPropertyInteger("Hash Batches", None, hi.nbatch as i64, es);
-        ExplainPropertyInteger("Original Hash Batches", None, hi.nbatch_original as i64, es);
-        crate::format::ExplainPropertyUInteger(
-            "Peak Memory Usage",
-            Some("kB"),
-            space_peak_kb,
+        ExplainPropertyInteger(
+            "Original Hash Buckets",
+            None,
+            hi.nbuckets_original as i64,
             es,
         );
+        ExplainPropertyInteger("Hash Batches", None, hi.nbatch as i64, es);
+        ExplainPropertyInteger("Original Hash Batches", None, hi.nbatch_original as i64, es);
+        crate::format::ExplainPropertyUInteger("Peak Memory Usage", Some("kB"), space_peak_kb, es);
     } else if hi.nbatch_original != hi.nbatch || hi.nbuckets_original != hi.nbuckets {
         crate::format::ExplainIndentText(es);
         append!(
@@ -2388,12 +2560,20 @@ fn show_grouping_set_keys<'mcx>(
     let useprefix = es.rtable_size > 1 || es.verbose;
     // C reads plan->targetlist (the Agg's own); our planner's Agg tlist is not
     // C's passthrough shape, and grpColIdx resnos address the child tlist.
-    let child = node.as_agg().expect("Agg plan node").plan.lefttree.expect("Agg has an outer plan");
+    let child = node
+        .as_agg()
+        .expect("Agg plan node")
+        .plan
+        .lefttree
+        .expect("Agg has an outer plan");
     let tlist = &plan_of(child).targetlist;
     // The child tlist's own INNER/OUTER refs resolve at the child's level:
     // push the Agg as an ancestor and deparse in the child's context (the
     // show_group_keys shape).
-    let pushed = Ancestors { entry: AncestorEntry::Plan(node), parent: ancestors };
+    let pushed = Ancestors {
+        entry: AncestorEntry::Plan(node),
+        parent: ancestors,
+    };
     let (keyname, keysetname) = if aggnode.aggstrategy == 2 || aggnode.aggstrategy == 3 {
         ("Hash Key", "Hash Keys")
     } else {
@@ -2410,7 +2590,15 @@ fn show_grouping_set_keys<'mcx>(
                 node_gap("show_sort_group_keys", "no tlist entry for key column")
             });
             let mut buf = PgString::new_in(mcx);
-            deparse_expr(es, child, Some(&pushed), tle.expr, useprefix, true, &mut buf)?;
+            deparse_expr(
+                es,
+                child,
+                Some(&pushed),
+                tle.expr,
+                useprefix,
+                true,
+                &mut buf,
+            )?;
             show_sortorder_options(
                 &mut buf,
                 tle.expr,
@@ -2439,7 +2627,15 @@ fn show_grouping_set_keys<'mcx>(
                 node_gap("show_grouping_set_keys", "no tlist entry for key column")
             });
             let mut buf = PgString::new_in(mcx);
-            deparse_expr(es, child, Some(&pushed), tle.expr, useprefix, true, &mut buf)?;
+            deparse_expr(
+                es,
+                child,
+                Some(&pushed),
+                tle.expr,
+                useprefix,
+                true,
+                &mut buf,
+            )?;
             result.push(buf);
         }
         if result.is_empty() && es.format == EXPLAIN_FORMAT_TEXT {
@@ -2534,29 +2730,33 @@ fn show_window_def<'mcx>(
     let wagg = node.as_window_agg().expect("WindowAgg node");
     let mcx = es.str.allocator();
     let mut buf = PgString::new_in(mcx);
-    buf.try_push_str(&quote_identifier(wagg.winname.expect("named window (name_active_windows)")))?;
+    buf.try_push_str(&quote_identifier(
+        wagg.winname.expect("named window (name_active_windows)"),
+    ))?;
     buf.try_push_str(" AS (")?;
     let child = wagg.plan.lefttree.expect("WindowAgg has a child");
     let mut needspace = false;
     // show_window_keys: key columns refer to the child's tlist, deparsed in
     // the child's context with the WindowAgg pushed onto the ancestors.
-    let pushed = Ancestors { entry: AncestorEntry::Plan(node), parent: ancestors };
-    let mut keys = |buf: &mut PgString<'mcx>,
-                    es: &mut ExplainState<'mcx>,
-                    idx: &[i16]|
-     -> PgResult<()> {
-        let useprefix = es.rtable_size > 1 || es.verbose;
-        let child_tlist = &plan_of(child).targetlist;
-        for (i, &resno) in idx.iter().enumerate() {
-            if i > 0 {
-                buf.try_push_str(", ")?;
-            }
-            let tle = get_tle_by_resno(child_tlist, resno)
-                .unwrap_or_else(|| node_gap("show_window_keys", "no tlist entry for key column"));
-            deparse_expr(es, child, Some(&pushed), tle.expr, useprefix, true, buf)?;
-        }
-        Ok(())
+    let pushed = Ancestors {
+        entry: AncestorEntry::Plan(node),
+        parent: ancestors,
     };
+    let keys =
+        |buf: &mut PgString<'mcx>, es: &mut ExplainState<'mcx>, idx: &[i16]| -> PgResult<()> {
+            let useprefix = es.rtable_size > 1 || es.verbose;
+            let child_tlist = &plan_of(child).targetlist;
+            for (i, &resno) in idx.iter().enumerate() {
+                if i > 0 {
+                    buf.try_push_str(", ")?;
+                }
+                let tle = get_tle_by_resno(child_tlist, resno).unwrap_or_else(|| {
+                    node_gap("show_window_keys", "no tlist entry for key column")
+                });
+                deparse_expr(es, child, Some(&pushed), tle.expr, useprefix, true, buf)?;
+            }
+            Ok(())
+        };
     if wagg.partNumCols > 0 {
         buf.try_push_str("PARTITION BY ")?;
         keys(&mut buf, es, wagg.partColIdx)?;
@@ -2605,10 +2805,9 @@ fn get_window_frame_options<'mcx>(
         FRAMEOPTION_END_OFFSET_FOLLOWING, FRAMEOPTION_END_OFFSET_PRECEDING,
         FRAMEOPTION_END_UNBOUNDED_FOLLOWING, FRAMEOPTION_EXCLUDE_CURRENT_ROW,
         FRAMEOPTION_EXCLUDE_GROUP, FRAMEOPTION_EXCLUDE_TIES, FRAMEOPTION_GROUPS,
-        FRAMEOPTION_NONDEFAULT, FRAMEOPTION_RANGE, FRAMEOPTION_ROWS,
-        FRAMEOPTION_START_CURRENT_ROW, FRAMEOPTION_START_OFFSET,
-        FRAMEOPTION_START_OFFSET_FOLLOWING, FRAMEOPTION_START_OFFSET_PRECEDING,
-        FRAMEOPTION_START_UNBOUNDED_PRECEDING,
+        FRAMEOPTION_NONDEFAULT, FRAMEOPTION_RANGE, FRAMEOPTION_ROWS, FRAMEOPTION_START_CURRENT_ROW,
+        FRAMEOPTION_START_OFFSET, FRAMEOPTION_START_OFFSET_FOLLOWING,
+        FRAMEOPTION_START_OFFSET_PRECEDING, FRAMEOPTION_START_UNBOUNDED_PRECEDING,
     };
     debug_assert!(frame_options & FRAMEOPTION_NONDEFAULT != 0);
     let useprefix = es.rtable_size > 1 || es.verbose;
@@ -2687,8 +2886,8 @@ fn get_window_frame_options<'mcx>(
     Ok(())
 }
 
-fn get_tle_by_resno<'a, 'mcx>(
-    tlist: &'a NodeList<'mcx>,
+fn get_tle_by_resno<'mcx>(
+    tlist: &NodeList<'mcx>,
     resno: i16,
 ) -> Option<&'mcx types_nodes::primnodes::TargetEntry<'mcx>> {
     tlist
@@ -2732,7 +2931,11 @@ fn show_sortorder_options(
         }
     };
     if nulls_first != reverse {
-        buf.try_push_str(if nulls_first { " NULLS FIRST" } else { " NULLS LAST" })?;
+        buf.try_push_str(if nulls_first {
+            " NULLS FIRST"
+        } else {
+            " NULLS LAST"
+        })?;
     }
     Ok(())
 }
@@ -2820,7 +3023,11 @@ fn show_instrumentation_count(
         return;
     }
     let Some(i) = instrument else { return };
-    let nfiltered = if which == 2 { i.nfiltered2 } else { i.nfiltered1 };
+    let nfiltered = if which == 2 {
+        i.nfiltered2
+    } else {
+        i.nfiltered1
+    };
     if i.nloops > 0.0 && (nfiltered > 0.0 || es.format != EXPLAIN_FORMAT_TEXT) {
         crate::format::ExplainPropertyFloat(qlabel, None, nfiltered / i.nloops, 0, es);
     }
@@ -2900,14 +3107,22 @@ fn show_tidbitmap_info<'mcx>(node: Node<'mcx>, es: &mut ExplainState<'mcx>) {
 // show_storage_info (explain.c). maxSpace inherits the arena-vs-palloc
 // accounting caveat only through tuplestore's chunk_space mirror (byte-exact
 // vs C by construction; see tuplestore::chunk_space).
-fn show_storage_info(stats: types_core::instrument::TuplestoreInstrumentation, es: &mut ExplainState<'_>) {
+fn show_storage_info(
+    stats: types_core::instrument::TuplestoreInstrumentation,
+    es: &mut ExplainState<'_>,
+) {
     let kb = (stats.max_space + 1023) / 1024;
     if es.format != EXPLAIN_FORMAT_TEXT {
         ExplainPropertyText("Storage", stats.space_type.name(), es);
-        ExplainPropertyInteger("Maximum Storage", Some("kB"), kb as i64, es);
+        ExplainPropertyInteger("Maximum Storage", Some("kB"), kb, es);
     } else {
         crate::format::ExplainIndentText(es);
-        append!(es, "Storage: {}  Maximum Storage: {}kB\n", stats.space_type.name(), kb);
+        append!(
+            es,
+            "Storage: {}  Maximum Storage: {}kB\n",
+            stats.space_type.name(),
+            kb
+        );
     }
 }
 
@@ -2946,7 +3161,11 @@ fn show_memoize_info<'mcx>(
         sep = ", ";
     }
     ExplainPropertyText("Cache Key", keystr.as_str(), es);
-    ExplainPropertyText("Cache Mode", if m.binary_mode { "binary" } else { "logical" }, es);
+    ExplainPropertyText(
+        "Cache Mode",
+        if m.binary_mode { "binary" } else { "logical" },
+        es,
+    );
 
     if !es.analyze || es.qd.is_null() {
         return Ok(());
@@ -2956,7 +3175,7 @@ fn show_memoize_info<'mcx>(
         return Ok(());
     };
     if si.cache_misses > 0 {
-        let mem_peak_kb = (si.mem_peak + 1023) / 1024;
+        let mem_peak_kb = si.mem_peak.div_ceil(1024);
         if es.format != EXPLAIN_FORMAT_TEXT {
             ExplainPropertyInteger("Cache Hits", None, si.cache_hits as i64, es);
             ExplainPropertyInteger("Cache Misses", None, si.cache_misses as i64, es);
@@ -2991,7 +3210,10 @@ fn show_foreignscan_info<'mcx>(plan_node_id: i32, es: &mut ExplainState<'mcx>) -
         return Ok(());
     }
     let qd = es.qd;
-    let flags = types_nodes::FdwExplainFlags { costs: es.costs, verbose: es.verbose };
+    let flags = types_nodes::FdwExplainFlags {
+        costs: es.costs,
+        verbose: es.verbose,
+    };
     execmain_seams::query_desc_foreign_explain::call(qd, plan_node_id, flags, &mut |label, v| {
         match v {
             types_nodes::FdwExplainProp::Text(t) => ExplainPropertyText(label, t, es),
@@ -3043,7 +3265,14 @@ fn wrap_multi_quals<'mcx>(
     for q in quals {
         args.lappend(mcx, q)?;
     }
-    let wrapped = Node::mk(mcx, BoolExpr { boolop, args, location: -1 })?;
+    let wrapped = Node::mk(
+        mcx,
+        BoolExpr {
+            boolop,
+            args,
+            location: -1,
+        },
+    )?;
     let mut out = NodeList::nil();
     out.lappend(mcx, wrapped)?;
     Ok(out)
@@ -3087,8 +3316,8 @@ fn show_tablesample<'mcx>(
     let mcx = es.str.allocator();
     let useprefix = es.rtable_size > 1;
 
-    let method_name = lsyscache::get_func_name(mcx, tsc.tsmhandler)?
-        .expect("TSM handler has a pg_proc row");
+    let method_name =
+        lsyscache::get_func_name(mcx, tsc.tsmhandler)?.expect("TSM handler has a pg_proc row");
     let mut params: PgVec<'mcx, PgString<'mcx>> = PgVec::new_in(mcx);
     for arg in tsc.args.iter() {
         let mut buf = PgString::new_in(mcx);
@@ -3170,7 +3399,10 @@ fn deparse_expr<'mcx>(
     showimplicit: bool,
     buf: &mut PgString<'mcx>,
 ) -> PgResult<()> {
-    let cxt = es.deparse_cxt.as_ref().expect("deparse before ExplainPrintPlan");
+    let cxt = es
+        .deparse_cxt
+        .as_ref()
+        .expect("deparse before ExplainPrintPlan");
     ruleutils::set_deparse_context_plan(cxt, plan_node, ancestors_vec(ancestors));
     let s = ruleutils::deparse_expression(es.str.allocator(), expr, cxt, useprefix, showimplicit)?;
     buf.try_push_str(&s)?;
@@ -3188,7 +3420,6 @@ fn ancestors_vec<'mcx>(
     }
     v
 }
-
 
 fn ExplainScanTarget(scanrelid: types_core::Index, es: &mut ExplainState<'_>) -> PgResult<()> {
     ExplainTargetRel(scanrelid, es)
@@ -3260,8 +3491,15 @@ fn ExplainFunctionTarget<'mcx>(
     }
     let namespace = match (es.verbose, &objectname) {
         (true, Some(_)) => {
-            let rtfunc = fs.functions.nth(0).as_range_tbl_function().expect("functions cell");
-            let fe = rtfunc.funcexpr.and_then(|n| n.as_func_expr()).expect("FuncExpr");
+            let rtfunc = fs
+                .functions
+                .nth(0)
+                .as_range_tbl_function()
+                .expect("functions cell");
+            let fe = rtfunc
+                .funcexpr
+                .and_then(|n| n.as_func_expr())
+                .expect("FuncExpr");
             lsyscache::get_namespace_name_or_temp(mcx, lsyscache::get_func_namespace(fe.funcid)?)?
         }
         _ => None,
@@ -3274,7 +3512,12 @@ fn ExplainFunctionTarget<'mcx>(
         append!(es, " on");
         if let Some(ns) = &namespace {
             let obj = objectname.expect("namespace implies objectname");
-            append!(es, " {}.{}", quote_identifier(ns.as_str()), quote_identifier(obj));
+            append!(
+                es,
+                " {}.{}",
+                quote_identifier(ns.as_str()),
+                quote_identifier(obj)
+            );
         } else if let Some(obj) = objectname {
             append!(es, " {}", quote_identifier(obj));
         }
@@ -3327,7 +3570,12 @@ fn ExplainTargetRel<'mcx>(rti: types_core::Index, es: &mut ExplainState<'mcx>) -
         append!(es, " on");
         if let Some(ns) = &namespace {
             let obj = objectname.expect("namespace implies objectname");
-            append!(es, " {}.{}", quote_identifier(ns.as_str()), quote_identifier(obj));
+            append!(
+                es,
+                " {}.{}",
+                quote_identifier(ns.as_str()),
+                quote_identifier(obj)
+            );
         } else if let Some(obj) = objectname {
             append!(es, " {}", quote_identifier(obj));
         }

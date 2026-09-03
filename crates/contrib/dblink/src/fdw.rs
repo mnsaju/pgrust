@@ -3,8 +3,9 @@
 // keywords is libpq's PQconndefaults table (pgclient::CONNINFO_OPTIONS); the
 // context rules mirror C's dispchar-based classification.
 use datum::Datum;
-use types_core::{Oid, FOREIGN_DATA_WRAPPER_RELATION_ID, FOREIGN_SERVER_RELATION_ID,
-    USER_MAPPING_RELATION_ID};
+use types_core::{
+    Oid, FOREIGN_DATA_WRAPPER_RELATION_ID, FOREIGN_SERVER_RELATION_ID, USER_MAPPING_RELATION_ID,
+};
 use types_error::{PgError, PgResult, ERRCODE_FDW_OPTION_NAME_NOT_FOUND};
 use types_fmgr::FmgrInfo;
 use types_fmgr::FunctionCallInfoBaseData as Fcinfo;
@@ -87,6 +88,22 @@ fn invalid_option_error(mcx: mcx::Mcx<'_>, name: &str, context: Oid) -> PgResult
     Ok(Box::new(e))
 }
 
+pub fn fc_dblink_fdw_validator(
+    _flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
+    let mcx = fcinfo.result_mcx();
+    let options = foreigncmds::options::untransform_options(mcx, Some(fcinfo.arg(0)))?;
+    let context = fcinfo.arg(1).as_oid();
+
+    for opt in options.iter() {
+        if !is_valid_dblink_fdw_option(opt.name, context) {
+            return Err(invalid_option_error(mcx, opt.name, context)?);
+        }
+    }
+    Ok(Datum::null())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -104,29 +121,28 @@ mod tests {
         assert!(is_valid_dblink_option("host", SERVER_CONTEXT));
         // banned everywhere.
         assert!(!is_valid_dblink_option("client_encoding", SERVER_CONTEXT));
-        assert!(!is_valid_dblink_option("client_encoding", USER_MAPPING_CONTEXT));
+        assert!(!is_valid_dblink_option(
+            "client_encoding",
+            USER_MAPPING_CONTEXT
+        ));
         assert!(!is_valid_dblink_option("replication", SERVER_CONTEXT)); // debug 'D'
         assert!(!is_valid_dblink_option("oauth_issuer", SERVER_CONTEXT));
-        assert!(!is_valid_dblink_option("oauth_client_id", USER_MAPPING_CONTEXT));
+        assert!(!is_valid_dblink_option(
+            "oauth_client_id",
+            USER_MAPPING_CONTEXT
+        ));
         assert!(!is_valid_dblink_option("bogus", SERVER_CONTEXT));
     }
 
     #[test]
     fn fdw_specific_option() {
-        assert!(is_valid_dblink_fdw_option("use_scram_passthrough", SERVER_CONTEXT));
-        assert!(!is_valid_dblink_option("use_scram_passthrough", SERVER_CONTEXT));
+        assert!(is_valid_dblink_fdw_option(
+            "use_scram_passthrough",
+            SERVER_CONTEXT
+        ));
+        assert!(!is_valid_dblink_option(
+            "use_scram_passthrough",
+            SERVER_CONTEXT
+        ));
     }
-}
-
-pub fn fc_dblink_fdw_validator(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
-    let mcx = fcinfo.result_mcx();
-    let options = foreigncmds::options::untransform_options(mcx, Some(fcinfo.arg(0)))?;
-    let context = fcinfo.arg(1).as_oid();
-
-    for opt in options.iter() {
-        if !is_valid_dblink_fdw_option(opt.name, context) {
-            return Err(invalid_option_error(mcx, opt.name, context)?);
-        }
-    }
-    Ok(Datum::null())
 }

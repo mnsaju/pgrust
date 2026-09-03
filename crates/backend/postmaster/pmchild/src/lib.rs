@@ -59,8 +59,8 @@ pub fn MaxLivePostmasterChildren() -> i32 {
 pub fn InitPostmasterChildSlots() {
     let mut pool_sizes = [0i32; BACKEND_NUM_TYPES];
     // Extra headroom for authenticating connections; WAL senders share the pool.
-    pool_sizes[BackendType::Backend as usize] = 2
-        * (init_small::globals::MaxConnections() + guc_tables::vars::max_wal_senders.read());
+    pool_sizes[BackendType::Backend as usize] =
+        2 * (init_small::globals::MaxConnections() + guc_tables::vars::max_wal_senders.read());
     pool_sizes[BackendType::AutovacWorker as usize] =
         guc_tables::vars::autovacuum_worker_slots.read();
     pool_sizes[BackendType::BgWorker as usize] = init_small::globals::max_worker_processes();
@@ -94,13 +94,21 @@ pub fn InitPostmasterChildSlots() {
         }
         // C grants FIFO (push_tail/pop_head).
         freelist.reverse();
-        pools.push(PMChildPool { size, first_slotno, freelist });
+        pools.push(PMChildPool {
+            size,
+            first_slotno,
+            freelist,
+        });
     }
     assert_eq!(slotno, num_slots);
 
     let mut guard = REGISTRY.lock().unwrap_or_else(|e| e.into_inner());
     assert!(guard.is_none(), "InitPostmasterChildSlots called twice");
-    *guard = Some(Registry { pools, active: Vec::new(), next_dead_end_id: -1 });
+    *guard = Some(Registry {
+        pools,
+        active: Vec::new(),
+        next_dead_end_id: -1,
+    });
     NUM_PMCHILD_SLOTS.store(num_slots, std::sync::atomic::Ordering::Relaxed);
 }
 
@@ -108,13 +116,19 @@ pub fn AssignPostmasterChildSlot(btype: BackendType) -> Option<i32> {
     let pmchild = with_registry(|reg| {
         let pool = &mut reg.pools[btype as usize];
         if pool.size == 0 {
-            panic!("cannot allocate a PMChild slot for backend type {}", btype as u32);
+            panic!(
+                "cannot allocate a PMChild slot for backend type {}",
+                btype as u32
+            );
         }
         let Some(child_slot) = pool.freelist.pop() else {
             return None;
         };
         if !(child_slot >= pool.first_slotno && child_slot < pool.first_slotno + pool.size) {
-            panic!("pmchild freelist for backend type {} is corrupt", btype as u32);
+            panic!(
+                "pmchild freelist for backend type {} is corrupt",
+                btype as u32
+            );
         }
         let entry = PMChild {
             pid: 0,
@@ -268,7 +282,11 @@ pub fn CountChildren(target_mask: u32) -> i32 {
                 launch_backend::postmaster_child_name(bp.bkend_type),
                 bp.pid
             ))
-            .finish(types_error::ErrorLocation::new(file!(), line!() as i32, "CountChildren"));
+            .finish(types_error::ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "CountChildren",
+            ));
     })
 }
 
@@ -295,7 +313,10 @@ pub fn SignalChildren(signal: i32, target_mask: u32) -> bool {
         // path; the ServerLoop SIGKILL escalation is the loud backstop for
         // that window.
         if procsignal::SendThreadSignal(bp.pid, signal) < 0 {
-            let _ = report(DEBUG3, format!("kill({},{}) failed: No such process", bp.pid, signal));
+            let _ = report(
+                DEBUG3,
+                format!("kill({},{}) failed: No such process", bp.pid, signal),
+            );
         }
     });
     matched > 0

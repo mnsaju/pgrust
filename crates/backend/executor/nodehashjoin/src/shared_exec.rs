@@ -21,9 +21,9 @@
 
 use std::ptr::NonNull;
 
+use ::execexpr::{exec_qual, EvalSlots};
 use ::exectuples::exec_fetch_slot_minimal_tuple;
 use ::executils::{EStateData, ExecSlotId};
-use ::execexpr::{exec_qual, EvalSlots};
 use ::types_error::PgResult;
 use ::types_nodes::JoinType;
 use ::types_tuple::MinimalTupleData;
@@ -144,7 +144,11 @@ pub fn shared_probe_outer<'mcx>(
     estate: &mut EStateData<'mcx>,
     table: &FrozenJoinTable,
     outer_slot: ExecSlotId,
-    emit: &mut dyn FnMut(&mut HashJoinState<'mcx>, &mut EStateData<'mcx>, ExecSlotId) -> PgResult<()>,
+    emit: &mut dyn FnMut(
+        &mut HashJoinState<'mcx>,
+        &mut EStateData<'mcx>,
+        ExecSlotId,
+    ) -> PgResult<()>,
 ) -> PgResult<()> {
     let hashvalue = shared_probe_outer_hash(node, estate, outer_slot)?;
     probe_after_hash(node, hs, estate, table, outer_slot, hashvalue, emit)
@@ -192,7 +196,11 @@ pub fn shared_probe_outer_hashed<'mcx>(
     table: &FrozenJoinTable,
     outer_slot: ExecSlotId,
     hashvalue: u32,
-    emit: &mut dyn FnMut(&mut HashJoinState<'mcx>, &mut EStateData<'mcx>, ExecSlotId) -> PgResult<()>,
+    emit: &mut dyn FnMut(
+        &mut HashJoinState<'mcx>,
+        &mut EStateData<'mcx>,
+        ExecSlotId,
+    ) -> PgResult<()>,
 ) -> PgResult<()> {
     let ecxt = node.ps_ExprContext;
     {
@@ -214,9 +222,16 @@ fn probe_after_hash<'mcx>(
     table: &FrozenJoinTable,
     outer_slot: ExecSlotId,
     hashvalue: u32,
-    emit: &mut dyn FnMut(&mut HashJoinState<'mcx>, &mut EStateData<'mcx>, ExecSlotId) -> PgResult<()>,
+    emit: &mut dyn FnMut(
+        &mut HashJoinState<'mcx>,
+        &mut EStateData<'mcx>,
+        ExecSlotId,
+    ) -> PgResult<()>,
 ) -> PgResult<()> {
-    debug_assert!(shared_join_admissible(node, hs), "runtime probe on refused shape");
+    debug_assert!(
+        shared_join_admissible(node, hs),
+        "runtime probe on refused shape"
+    );
     let ecxt = node.ps_ExprContext;
     let jointype = node.plan.join.jointype;
     let hslot = hs.hash_tuple_slot;
@@ -249,7 +264,11 @@ fn probe_after_hash<'mcx>(
             let [inner, outer] = tbl
                 .get_disjoint_mut([hslot.0 as usize, outer_slot.0 as usize])
                 .expect("distinct in-range hashjoin slot ids");
-            let mut slots = EvalSlots { scan: None, inner: Some(inner), outer: Some(outer) };
+            let mut slots = EvalSlots {
+                scan: None,
+                inner: Some(inner),
+                outer: Some(outer),
+            };
             exec_qual(node.hashclauses.as_deref_mut(), &mut slots)?
         };
         if !key_eq {
@@ -292,7 +311,11 @@ fn probe_candidate_matched<'mcx>(
     ecxt: EcxtId,
     jointype: JoinType,
     matched_outer: &mut bool,
-    emit: &mut dyn FnMut(&mut HashJoinState<'mcx>, &mut EStateData<'mcx>, ExecSlotId) -> PgResult<()>,
+    emit: &mut dyn FnMut(
+        &mut HashJoinState<'mcx>,
+        &mut EStateData<'mcx>,
+        ExecSlotId,
+    ) -> PgResult<()>,
 ) -> PgResult<CandStep> {
     // RIGHT_SEMI: an already-emitted build tuple is skipped BEFORE the
     // joinqual (HJ_SCAN_BUCKET's has-match skip; racy-stale reads are
@@ -364,7 +387,11 @@ fn probe_fill_outer<'mcx>(
     estate: &mut EStateData<'mcx>,
     ecxt: EcxtId,
     matched_outer: bool,
-    emit: &mut dyn FnMut(&mut HashJoinState<'mcx>, &mut EStateData<'mcx>, ExecSlotId) -> PgResult<()>,
+    emit: &mut dyn FnMut(
+        &mut HashJoinState<'mcx>,
+        &mut EStateData<'mcx>,
+        ExecSlotId,
+    ) -> PgResult<()>,
 ) -> PgResult<()> {
     if !matched_outer && node.hj_fill_outer {
         let null_inner = node.hj_NullInnerTupleSlot.expect("null inner slot");
@@ -394,9 +421,16 @@ pub fn shared_probe_outer_dense<'mcx>(
     estate: &mut EStateData<'mcx>,
     table: &FrozenJoinTable,
     outer_slot: ExecSlotId,
-    emit: &mut dyn FnMut(&mut HashJoinState<'mcx>, &mut EStateData<'mcx>, ExecSlotId) -> PgResult<()>,
+    emit: &mut dyn FnMut(
+        &mut HashJoinState<'mcx>,
+        &mut EStateData<'mcx>,
+        ExecSlotId,
+    ) -> PgResult<()>,
 ) -> PgResult<()> {
-    debug_assert!(shared_join_admissible(node, hs), "runtime probe on refused shape");
+    debug_assert!(
+        shared_join_admissible(node, hs),
+        "runtime probe on refused shape"
+    );
     let seat = table.seat().expect("dense probe without a seat");
     let dc = node.dense_cols.expect("dense probe without dense cols");
     let ecxt = node.ps_ExprContext;
@@ -465,7 +499,11 @@ pub fn shared_fill_partition<'mcx>(
     estate: &mut EStateData<'mcx>,
     table: &FrozenJoinTable,
     part: u64,
-    emit: &mut dyn FnMut(&mut HashJoinState<'mcx>, &mut EStateData<'mcx>, ExecSlotId) -> PgResult<()>,
+    emit: &mut dyn FnMut(
+        &mut HashJoinState<'mcx>,
+        &mut EStateData<'mcx>,
+        ExecSlotId,
+    ) -> PgResult<()>,
 ) -> PgResult<()> {
     debug_assert!(node.hj_fill_inner, "fill walk on a non-fill join type");
     let ecxt = node.ps_ExprContext;

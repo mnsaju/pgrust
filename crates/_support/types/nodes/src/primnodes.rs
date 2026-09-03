@@ -310,6 +310,7 @@ pub struct FieldStore<'mcx> {
 }
 
 // cmptype is CompareType (cmptype.h); EQ/NE never appear here.
+#[derive(Default)]
 pub struct RowCompareExpr<'mcx> {
     pub cmptype: i32,
     pub opnos: crate::list::OidList<'mcx>,
@@ -319,18 +320,6 @@ pub struct RowCompareExpr<'mcx> {
     pub rargs: NodeList<'mcx>,
 }
 
-impl Default for RowCompareExpr<'_> {
-    fn default() -> Self {
-        RowCompareExpr {
-            cmptype: 0,
-            opnos: crate::list::OidList::nil(),
-            opfamilies: crate::list::OidList::nil(),
-            inputcollids: crate::list::OidList::nil(),
-            largs: NodeList::nil(),
-            rargs: NodeList::nil(),
-        }
-    }
-}
 
 pub struct GroupingFunc<'mcx> {
     pub args: NodeList<'mcx>,
@@ -826,7 +815,11 @@ pub struct JsonReturning<'mcx> {
 
 impl Default for JsonReturning<'_> {
     fn default() -> Self {
-        JsonReturning { format: None, typid: 0, typmod: -1 }
+        JsonReturning {
+            format: None,
+            typid: 0,
+            typmod: -1,
+        }
     }
 }
 
@@ -1018,7 +1011,13 @@ pub struct JsonTablePathScan<'mcx> {
 
 impl Default for JsonTablePathScan<'_> {
     fn default() -> Self {
-        JsonTablePathScan { path: None, errorOnError: false, child: None, colMin: -1, colMax: -1 }
+        JsonTablePathScan {
+            path: None,
+            errorOnError: false,
+            child: None,
+            colMin: -1,
+            colMax: -1,
+        }
     }
 }
 

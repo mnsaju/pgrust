@@ -149,30 +149,64 @@ pub enum BoolTestKind {
 #[derive(Clone, Copy, Debug)]
 pub enum Step {
     /// reg[out] = lane[col] row value.
-    LoadLane { col: u16, out: u8 },
-    LoadConst { k: u16, out: u8 },
+    LoadLane {
+        col: u16,
+        out: u8,
+    },
+    LoadConst {
+        k: u16,
+        out: u8,
+    },
     /// Strict comparison: NULL if either input NULL.
-    Cmp { op: CmpOp, a: u8, b: u8, out: u8 },
+    Cmp {
+        op: CmpOp,
+        a: u8,
+        b: u8,
+        out: u8,
+    },
     /// int2/int4/int8 arithmetic with production error behavior (erroring
     /// step — refuse-and-replay for overflow / zero divisor).
-    Arith { op: ArithOp, a: u8, b: u8, out: u8 },
+    Arith {
+        op: ArithOp,
+        a: u8,
+        b: u8,
+        out: u8,
+    },
     /// reg[out] = (reg[a] IS [NOT] NULL) — non-erroring, non-NULL.
-    NullTest { a: u8, out: u8, kind: NullTestKind },
+    NullTest {
+        a: u8,
+        out: u8,
+        kind: NullTestKind,
+    },
     /// reg[out] = (reg[a] IS [NOT] TRUE/FALSE) — non-erroring, non-NULL.
-    BoolTest { a: u8, out: u8, kind: BoolTestKind },
+    BoolTest {
+        a: u8,
+        out: u8,
+        kind: BoolTestKind,
+    },
     /// reg[out] = reg[a] <op> ANY (const array `arr`), strict-OR three-valued
     /// (production ScalarArrayOpExpr useOr): non-erroring for the whitelisted
     /// fixed-width by-value comparators. NULL scalar or all-non-matching with
     /// a NULL element yields NULL; else the OR of the element matches.
-    SaopAny { a: u8, out: u8, op: CmpOp, arr: u16 },
+    SaopAny {
+        a: u8,
+        out: u8,
+        op: CmpOp,
+        arr: u16,
+    },
     /// Clause boundary: reg[a] NULL or false fails the row (short-circuit:
     /// later clauses never evaluate for this row).
-    Qual { a: u8 },
+    Qual {
+        a: u8,
+    },
     /// Projection output: out_lane[out][row] = reg[a] (value + isnull).
     /// Projection programs only — a qual program carrying StoreOut refuses
     /// (fail closed), and a projection program carrying Qual refuses too:
     /// the two segment kinds never mix in one program.
-    StoreOut { a: u8, out: u16 },
+    StoreOut {
+        a: u8,
+        out: u16,
+    },
     // ===== WS-AA wave-7 RowOp append region (fusion inc-0) — append only ====
     /// RowOp: advance the chain to the next source row (the row-loop pull of
     /// a forever-row operator chain, docs/design/rowmode-endgame.md §2).
@@ -190,7 +224,9 @@ pub enum Step {
     /// law: the target IS the node's own Rust helper, so its error path is
     /// the normal PgError unwind — byte-identical by construction, never
     /// refuse-and-replay.
-    ProtocolCall { call: u16 },
+    ProtocolCall {
+        call: u16,
+    },
 }
 
 // ===== WS-AA wave-7 RowOp chain currency (fusion inc-0) =====================
@@ -258,7 +294,12 @@ pub struct Program {
 
 impl Program {
     pub fn new() -> Program {
-        Program { steps: Vec::new(), consts: Vec::new(), arrays: Vec::new(), volatile: false }
+        Program {
+            steps: Vec::new(),
+            consts: Vec::new(),
+            arrays: Vec::new(),
+            volatile: false,
+        }
     }
 
     pub fn push_const(&mut self, nd: NullableDatum) -> u16 {
@@ -493,9 +534,29 @@ pub(crate) fn is_float_cmp(op: CmpOp) -> bool {
     use CmpOp::*;
     matches!(
         op,
-        Float4Eq | Float4Ne | Float4Lt | Float4Le | Float4Gt | Float4Ge
-            | Float8Eq | Float8Ne | Float8Lt | Float8Le | Float8Gt | Float8Ge
-            | Float48Eq | Float48Ne | Float48Lt | Float48Le | Float48Gt | Float48Ge
-            | Float84Eq | Float84Ne | Float84Lt | Float84Le | Float84Gt | Float84Ge
+        Float4Eq
+            | Float4Ne
+            | Float4Lt
+            | Float4Le
+            | Float4Gt
+            | Float4Ge
+            | Float8Eq
+            | Float8Ne
+            | Float8Lt
+            | Float8Le
+            | Float8Gt
+            | Float8Ge
+            | Float48Eq
+            | Float48Ne
+            | Float48Lt
+            | Float48Le
+            | Float48Gt
+            | Float48Ge
+            | Float84Eq
+            | Float84Ne
+            | Float84Lt
+            | Float84Le
+            | Float84Gt
+            | Float84Ge
     )
 }

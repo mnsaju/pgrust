@@ -91,7 +91,11 @@ fn rows_only_mode_counts_without_clock() {
 fn buffer_usage_diff_and_add_match_c() {
     let mut a = BufferUsage::default();
     let mut hi = BufferUsage::default();
-    let lo = BufferUsage { shared_blks_hit: 2, shared_blks_read: 1, ..BufferUsage::default() };
+    let lo = BufferUsage {
+        shared_blks_hit: 2,
+        shared_blks_read: 1,
+        ..BufferUsage::default()
+    };
     hi.shared_blks_hit = 7;
     hi.shared_blks_read = 4;
     hi.temp_blks_written = 3;
@@ -103,8 +107,16 @@ fn buffer_usage_diff_and_add_match_c() {
     assert_eq!(a.shared_blks_hit, 7);
 
     let mut w = WalUsage::default();
-    let hi = WalUsage { wal_records: 5, wal_bytes: 100, ..WalUsage::default() };
-    let lo = WalUsage { wal_records: 2, wal_bytes: 30, ..WalUsage::default() };
+    let hi = WalUsage {
+        wal_records: 5,
+        wal_bytes: 100,
+        ..WalUsage::default()
+    };
+    let lo = WalUsage {
+        wal_records: 2,
+        wal_bytes: 30,
+        ..WalUsage::default()
+    };
     wal_usage_accum_diff(&mut w, &hi, &lo);
     assert_eq!(w.wal_records, 3);
     assert_eq!(w.wal_bytes, 70);

@@ -43,7 +43,11 @@ struct ChildProcessKind {
 
 /// C `child_process_kinds[]`, in BackendType order (asserted in tests).
 static CHILD_PROCESS_KINDS: [ChildProcessKind; BACKEND_NUM_TYPES] = [
-    ChildProcessKind { name: "invalid", main_fn: Main::None, shmem_attach: false },
+    ChildProcessKind {
+        name: "invalid",
+        main_fn: Main::None,
+        shmem_attach: false,
+    },
     ChildProcessKind {
         name: "backend",
         main_fn: Main::Ported(backend_startup::backend_main),
@@ -69,13 +73,21 @@ static CHILD_PROCESS_KINDS: [ChildProcessKind; BACKEND_NUM_TYPES] = [
         main_fn: Main::Ported(bgworker::BackgroundWorkerMain),
         shmem_attach: true,
     },
-    ChildProcessKind { name: "wal sender", main_fn: Main::None, shmem_attach: true },
+    ChildProcessKind {
+        name: "wal sender",
+        main_fn: Main::None,
+        shmem_attach: true,
+    },
     ChildProcessKind {
         name: "slot sync worker",
         main_fn: Main::Ported(slotsync::ReplSlotSyncWorkerMain),
         shmem_attach: true,
     },
-    ChildProcessKind { name: "standalone backend", main_fn: Main::None, shmem_attach: false },
+    ChildProcessKind {
+        name: "standalone backend",
+        main_fn: Main::None,
+        shmem_attach: false,
+    },
     ChildProcessKind {
         name: "archiver",
         main_fn: Main::Ported(pgarch::PgArchiverMain),
@@ -222,7 +234,9 @@ pub fn join_announced_child(pid: pid_t) {
     }
     let handle = {
         let mut t = CHILD_THREADS.lock().unwrap_or_else(|e| e.into_inner());
-        let Some(idx) = t.iter().position(|(p, _)| *p == pid) else { return };
+        let Some(idx) = t.iter().position(|(p, _)| *p == pid) else {
+            return;
+        };
         t.swap_remove(idx).1
     };
     // NB-2 (permit-s2 review, closed at permit-s5): under the permit
@@ -408,9 +422,7 @@ pub fn report_startup_failure_to_client(sock: i32, msg: &str) {
         if flags >= 0 && libc::fcntl(sock, libc::F_SETFL, flags | libc::O_NONBLOCK) >= 0 {
             loop {
                 let rc = libc::send(sock, buf.as_ptr() as *const libc::c_void, buf.len(), 0);
-                if rc >= 0
-                    || std::io::Error::last_os_error().raw_os_error() != Some(libc::EINTR)
-                {
+                if rc >= 0 || std::io::Error::last_os_error().raw_os_error() != Some(libc::EINTR) {
                     break;
                 }
             }
@@ -433,8 +445,7 @@ fn run_child_task(
         Main::Ported(f) => f,
         Main::Unported(what) => panic!(
             "run_child_task: {} unported (child kind \"{}\")",
-            what,
-            CHILD_PROCESS_KINDS[child_type as usize].name
+            what, CHILD_PROCESS_KINDS[child_type as usize].name
         ),
         Main::None => panic!(
             "run_child_task: no main_fn for child kind \"{}\"",
@@ -443,12 +454,12 @@ fn run_child_task(
     };
 
     if is_external_connection_backend(child_type) {
-        let StartupData::Backend(bsdata) = &startup_data else { unreachable!() };
+        let StartupData::Backend(bsdata) = &startup_data else {
+            unreachable!()
+        };
         backend_startup::conn_timing::set_socket_create(bsdata.socket_created);
         backend_startup::conn_timing::set_fork_start(bsdata.fork_started);
-        backend_startup::conn_timing::set_fork_end(
-            timestamp_seams::get_current_timestamp::call(),
-        );
+        backend_startup::conn_timing::set_fork_end(timestamp_seams::get_current_timestamp::call());
     }
 
     // ClosePostmasterPorts: no-op, shared fd table (module doc).
@@ -505,9 +516,9 @@ fn run_child_task(
         init_small::globals::SetMyClientSocket(cs);
     }
 
-    let Err(payload) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        main_fn(&startup_data)
-    })) else {
+    let Err(payload) =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| main_fn(&startup_data)))
+    else {
         unreachable!("child main_fn returns !")
     };
     // proc_exit's deferred half: the unwind above ran the stack's Drop glue
@@ -522,8 +533,7 @@ fn run_child_task(
     // estate drain ran after a quickdie that skipped the abort ceremony and
     // dropped a FAILED portal into freed memory). Read BEFORE the drain
     // consumes the flag.
-    let clean_proc_exit =
-        payload.is::<ipc::ProcExitThread>() && ipc::exit_callbacks_pending();
+    let clean_proc_exit = payload.is::<ipc::ProcExitThread>() && ipc::exit_callbacks_pending();
     let payload = match payload.downcast_ref::<ipc::ProcExitThread>() {
         Some(p) => {
             let code = p.code;
@@ -546,7 +556,11 @@ fn run_child_task(
     let exitstatus = payload
         .downcast_ref::<ipc::ProcExitThread>()
         .map(|p| p.code << 8)
-        .or_else(|| payload.downcast_ref::<ipc::KilledBySignal>().map(|k| k.signo))
+        .or_else(|| {
+            payload
+                .downcast_ref::<ipc::KilledBySignal>()
+                .map(|k| k.signo)
+        })
         .unwrap_or(procsignal::signums::SIGABRT);
     // Park in flight (wretain): the reaper must treat this announce as a
     // task end, not a thread end. Marked before the announce so the reaper
@@ -569,8 +583,7 @@ fn run_child_task(
     // death; the postmaster's crash cycle follows anyway. Parked standbys
     // keep their retained caches by design. The payload re-check drops the
     // clean claim if a deferred callback crashed mid-drain.
-    if !parks && clean_proc_exit && payload.downcast_ref::<ipc::ProcExitThread>().is_some()
-    {
+    if !parks && clean_proc_exit && payload.downcast_ref::<ipc::ProcExitThread>().is_some() {
         mcxt_stats::run_session_teardown();
         // Hand freed-but-retained segments back before the thread dies
         // (mi_collect(force) via the installed hook): without it the dead
@@ -623,8 +636,7 @@ pub fn postmaster_child_launch(
     client_sock: Option<ClientSocket>,
 ) -> pid_t {
     debug_assert!(
-        init_small::globals::IsPostmasterEnvironment()
-            && !init_small::globals::IsUnderPostmaster()
+        init_small::globals::IsPostmasterEnvironment() && !init_small::globals::IsUnderPostmaster()
     );
 
     // M4 bgjobs virtual child (docs/design/m4-bgjobs.md §3.6): a migrated
@@ -644,13 +656,19 @@ pub fn postmaster_child_launch(
     }
 
     let kind = &CHILD_PROCESS_KINDS[child_type as usize];
-    let main_fn: ChildMainFn = match kind.main_fn {
+    let _main_fn: ChildMainFn = match kind.main_fn {
         Main::Ported(f) => f,
         Main::Unported(what) => {
-            panic!("postmaster_child_launch: {} unported (child kind \"{}\")", what, kind.name)
+            panic!(
+                "postmaster_child_launch: {} unported (child kind \"{}\")",
+                what, kind.name
+            )
         }
         Main::None => {
-            panic!("postmaster_child_launch: no main_fn for child kind \"{}\"", kind.name)
+            panic!(
+                "postmaster_child_launch: no main_fn for child kind \"{}\"",
+                kind.name
+            )
         }
     };
 
@@ -683,8 +701,7 @@ pub fn postmaster_child_launch(
     // lossless and stays below the synthetic ranges). No-op unless
     // PGRUST_SIM_SCHED=1 under `pgrust_sim`.
     #[cfg(pgrust_sim)]
-    let sim_sched_slot =
-        pgsync::sim::spawn_door::register_child(child_pid as u32, kind.name);
+    let sim_sched_slot = pgsync::sim::spawn_door::register_child(child_pid as u32, kind.name);
     // SIMVFS-SHARED: parent-side universe capture — the simulated process's
     // filesystem follows its threads (a fork inherits the fd table). None
     // when sharing is off: the child keeps its private universe, exactly
@@ -774,7 +791,11 @@ fn child_thread_stack_size() -> usize {
     let rlim = stack_depth::get_stack_depth_rlimit();
     let unlimited_reserve =
         (16usize << 20).max(stack_depth::max_stack_depth_bytes().max(0) as usize + (2 << 20));
-    let rlim = if rlim > 0 && rlim < isize::MAX { rlim as usize } else { unlimited_reserve };
+    let rlim = if rlim > 0 && rlim < isize::MAX {
+        rlim as usize
+    } else {
+        unlimited_reserve
+    };
     let min_stack = std::env::var("RUST_MIN_STACK")
         .ok()
         .and_then(|v| v.parse::<usize>().ok())
@@ -808,9 +829,7 @@ pub fn init_seams() {
     // cannot name pmsignal in production — the POOL_GATE fn-pointer
     // precedent).
     parallel::standing::install_pool_busy_poke(|| {
-        pmsignal::SendPostmasterSignal(
-            pmsignal::PMSignalReason::PMSIGNAL_ADVANCE_STATE_MACHINE,
-        )
+        pmsignal::SendPostmasterSignal(pmsignal::PMSignalReason::PMSIGNAL_ADVANCE_STATE_MACHINE)
     });
 }
 
@@ -1063,8 +1082,7 @@ pub mod wpool {
                 let _local_latch_release = miscinit::LocalLatchReleaseGuard::new();
                 // As on the spawn path: a rotating standby's exit must close
                 // its wait event sets (parked standbys keep them warm).
-                let _wait_event_sets_release =
-                    waiteventset::WaitEventSetReleaseGuard::new();
+                let _wait_event_sets_release = waiteventset::WaitEventSetReleaseGuard::new();
                 inherited.apply();
                 let _ = stack_depth::set_stack_base();
                 // cpuaff increment A (default OFF): standbys ride the full
@@ -1131,9 +1149,7 @@ pub mod wpool {
                     // §5 leak guard: a claimed standby must not carry a
                     // previous session's GUC bind.
                     debug_assert!(!guc::store::session_bound());
-                    init_small::wretain::begin_task(
-                        init_small::wretain::retention_enabled(),
-                    );
+                    init_small::wretain::begin_task(init_small::wretain::retention_enabled());
                     super::run_child_task(
                         BackendType::BgWorker,
                         task.child_pid,
@@ -1225,8 +1241,9 @@ pub mod wpool {
                     // freelist.
                     release_retained_identity(parked_crash_epoch);
                     let _ = ack_tx.try_send(());
-                    let mut t =
-                        super::CHILD_THREADS.lock().unwrap_or_else(|e| e.into_inner());
+                    let mut t = super::CHILD_THREADS
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner());
                     if let Some(i) = t.iter().position(|(p, _)| *p == thread_key) {
                         t.swap_remove(i);
                     }
@@ -1324,8 +1341,7 @@ pub mod wpool {
                 // retires the standby; its own wake skips the shared-
                 // memory release through the parked-epoch check.
                 let mut avail = available();
-                if FLUSH_EPOCH.load(Relaxed) == pop_flush
-                    && CRASH_EPOCH.load(Relaxed) == pop_crash
+                if FLUSH_EPOCH.load(Relaxed) == pop_flush && CRASH_EPOCH.load(Relaxed) == pop_crash
                 {
                     avail.push(sb);
                 }
@@ -1388,7 +1404,9 @@ pub mod wpool {
         if old_pid == new_pid {
             return;
         }
-        let mut t = super::CHILD_THREADS.lock().unwrap_or_else(|e| e.into_inner());
+        let mut t = super::CHILD_THREADS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         if let Some(entry) = t.iter_mut().find(|(p, _)| *p == old_pid) {
             entry.0 = new_pid;
         }
@@ -1636,7 +1654,10 @@ pub mod rtpool {
         if let Err(e) = guc_ok {
             let _ = elog::elog(
                 types_error::WARNING,
-                format!("pool executor {ordinal}: GUC bring-up failed: {}", e.message()),
+                format!(
+                    "pool executor {ordinal}: GUC bring-up failed: {}",
+                    e.message()
+                ),
             );
             POOL_IDENT.with(|c| c.set(PoolIdent::Poisoned));
             body();
@@ -1768,8 +1789,11 @@ pub mod rtpool {
     fn respawn_pool_slot(ordinal: usize) {
         let Some(rt) = RUNTIME.get() else { return };
         let rt2 = Arc::clone(rt);
-        if spawn_worker(ordinal, Box::new(move || runtime::worker_loop(&rt2, ordinal)))
-            .is_err()
+        if spawn_worker(
+            ordinal,
+            Box::new(move || runtime::worker_loop(&rt2, ordinal)),
+        )
+        .is_err()
         {
             let _ = elog::elog(
                 types_error::WARNING,
@@ -1977,20 +2001,11 @@ pub mod rtpool {
                 } else {
                     guc::store::initialize_guc_options_for_child(&guc_snapshot)
                         .and_then(|()| guc::store::restore_nondefault_variables(&guc_snapshot))
-                        .unwrap_or_else(|e| {
-                            panic!("bgjobs dispatcher GUC prelude failed: {e:?}")
-                        });
+                        .unwrap_or_else(|e| panic!("bgjobs dispatcher GUC prelude failed: {e:?}"));
                 }
                 body();
             });
-        match spawned {
-            Ok(h) => Ok(h),
-            Err(e) => {
-                #[cfg(pgrust_sim)]
-                pgsync::sim::spawn_door::cancel_child(sim_sched_slot);
-                Err(e)
-            }
-        }
+        spawned
     }
 
     /// M4 bgjobs increment 4 (docs/design/m4-bgjobs.md §3.6, the virtual
@@ -2114,8 +2129,7 @@ pub mod rtgang {
     #[cfg(pgrust_sim)]
     fn doorskip_red_armed() -> bool {
         static ARMED: OnceLock<bool> = OnceLock::new();
-        *ARMED
-            .get_or_init(|| std::env::var("PGRUST_SIM_DOORSKIP").as_deref() == Ok("rtgang"))
+        *ARMED.get_or_init(|| std::env::var("PGRUST_SIM_DOORSKIP").as_deref() == Ok("rtgang"))
     }
 
     /// PGPROCs to boot-reserve for the gang: PGRUST_RUNTIME=1 (+ the
@@ -2159,8 +2173,7 @@ pub mod rtgang {
         }
         let _ = BOOT.set(Boot {
             inherited: super::Inherited::capture(),
-            guc_base: guc::layers::base_share_enabled()
-                .then(guc::layers::ensure_base_current),
+            guc_base: guc::layers::base_share_enabled().then(guc::layers::ensure_base_current),
             guc_snapshot: if guc::layers::base_share_enabled() {
                 Vec::new()
             } else {
@@ -2253,7 +2266,10 @@ pub mod rtgang {
         if let Err(e) = guc_ok {
             let _ = elog::elog(
                 types_error::WARNING,
-                format!("standing executor {ordinal}: GUC bring-up failed: {}", e.message()),
+                format!(
+                    "standing executor {ordinal}: GUC bring-up failed: {}",
+                    e.message()
+                ),
             );
             parallel::standing::note_worker_exit(ordinal);
             return;
@@ -2264,7 +2280,10 @@ pub mod rtgang {
         if let Err(e) = miscinit::InitPostmasterChild(child_pid) {
             let _ = elog::elog(
                 types_error::WARNING,
-                format!("standing executor {ordinal}: InitPostmasterChild failed: {}", e.message()),
+                format!(
+                    "standing executor {ordinal}: InitPostmasterChild failed: {}",
+                    e.message()
+                ),
             );
             parallel::standing::note_worker_exit(ordinal);
             return;
@@ -2305,14 +2324,20 @@ pub mod rtgang {
             if let Err(e) = lmgr_proc::InitProcess(types_core::init::BackendType::BgWorker) {
                 let _ = elog::elog(
                     types_error::WARNING,
-                    format!("standing executor {ordinal}: InitProcess failed: {}", e.message()),
+                    format!(
+                        "standing executor {ordinal}: InitProcess failed: {}",
+                        e.message()
+                    ),
                 );
                 return;
             }
             if let Err(e) = postinit::BaseInit() {
                 let _ = elog::elog(
                     types_error::WARNING,
-                    format!("standing executor {ordinal}: BaseInit failed: {}", e.message()),
+                    format!(
+                        "standing executor {ordinal}: BaseInit failed: {}",
+                        e.message()
+                    ),
                 );
                 // PGPROC is claimed: release identity via the exit path.
                 ipc::proc_exit(1, init_small::globals::MyProcPid());
@@ -2343,9 +2368,7 @@ pub mod rtgang {
                     // included); a mid-drain panic leaves us no worse.
                     let _ = elog::elog(
                         types_error::WARNING,
-                        format!(
-                            "standing executor {ordinal} died on a panic; releasing identity"
-                        ),
+                        format!("standing executor {ordinal} died on a panic; releasing identity"),
                     );
                     // proc_exit arms the deferred-callback flag (and
                     // unwinds ProcExitThread, caught here); the drain then

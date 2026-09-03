@@ -42,7 +42,7 @@ macro_rules! scalar_global {
 // `SHOW data_directory_mode` at 0700 on a group-access (0750) cluster
 // (pg_basebackup/010 group-permission leg).
 static DATA_DIRECTORY_MODE: std::sync::atomic::AtomicI32 =
-    std::sync::atomic::AtomicI32::new(PG_DIR_MODE_OWNER as i32);
+    std::sync::atomic::AtomicI32::new(PG_DIR_MODE_OWNER);
 
 #[inline]
 pub fn data_directory_mode() -> i32 {

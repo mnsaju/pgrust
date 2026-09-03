@@ -6,10 +6,10 @@
 
 use ::datum::Datum;
 use ::mcx::{Mcx, PgBox, PgVec};
-use ::types_nodes::NodeList;
 use ::types_core::{AttrNumber, Oid, INDEX_MAX_KEYS};
 use ::types_error::{PgError, PgResult, ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE};
 use ::types_nbtree::genam::IndexUniqueCheck;
+use ::types_nodes::NodeList;
 use ::types_rel::{Relation, RowExclusiveLock};
 use ::types_slot::SlotData;
 use ::types_tuple::itemptr::{ItemPointerEquals, ItemPointerIsValid, ItemPointerSetInvalid};
@@ -138,7 +138,8 @@ pub fn RelationGetIndexExpressions<'mcx>(
     let Some(src) = form.indexprs_src.as_ref() else {
         return Ok(NodeList::nil());
     };
-    if let Some(hit) = with_expr_cache(|st| st.exprs.get(&index.rd_id).map(|l| copy_list_in(mcx, l)))
+    if let Some(hit) =
+        with_expr_cache(|st| st.exprs.get(&index.rd_id).map(|l| copy_list_in(mcx, l)))
     {
         return hit;
     }
@@ -170,7 +171,8 @@ pub fn RelationGetIndexPredicate<'mcx>(
     let Some(src) = form.indpred_src.as_ref() else {
         return Ok(NodeList::nil());
     };
-    if let Some(hit) = with_expr_cache(|st| st.preds.get(&index.rd_id).map(|l| copy_list_in(mcx, l)))
+    if let Some(hit) =
+        with_expr_cache(|st| st.preds.get(&index.rd_id).map(|l| copy_list_in(mcx, l)))
     {
         return hit;
     }
@@ -198,11 +200,8 @@ pub fn RelationGetExclusionInfo(
 ) -> PgResult<()> {
     let indexstruct = index.rd_index.as_ref().expect("index relation");
     let indnkeyatts = indexstruct.indnkeyatts as usize;
-    let conexclop = relcache_build_seams::scan_exclusion_ops::call(
-        mcx,
-        indexstruct.indrelid,
-        index.rd_id,
-    )?;
+    let conexclop =
+        relcache_build_seams::scan_exclusion_ops::call(mcx, indexstruct.indrelid, index.rd_id)?;
     assert!(
         conexclop.len() == indnkeyatts,
         "conexclop is not a 1-D Oid array"
@@ -255,7 +254,10 @@ pub fn RelationGetDummyIndexExpressions<'mcx>(
 }
 
 /// BuildDummyIndexInfo (catalog/index.c): dummy exprs, no predicate.
-pub fn BuildDummyIndexInfo<'mcx>(mcx: Mcx<'mcx>, index: &Relation<'_>) -> PgResult<IndexInfo<'mcx>> {
+pub fn BuildDummyIndexInfo<'mcx>(
+    mcx: Mcx<'mcx>,
+    index: &Relation<'_>,
+) -> PgResult<IndexInfo<'mcx>> {
     let indexstruct = index.rd_index.as_ref().expect("index relation");
     let numatts = indexstruct.indnatts as i32;
     let mut attrs = [0 as AttrNumber; INDEX_MAX_KEYS as usize];
@@ -340,7 +342,9 @@ pub fn BuildIndexInfo<'mcx>(mcx: Mcx<'mcx>, index: &Relation<'_>) -> PgResult<In
 pub fn BuildSpeculativeIndexInfo(index: &Relation<'_>, ii: &mut IndexInfo) -> PgResult<()> {
     debug_assert!(ii.ii_Unique);
     if index.rd_rel.relam != ::types_core::catalog::BTREE_AM_OID {
-        return Err(unported("ON CONFLICT arbiter over a non-btree unique index"));
+        return Err(unported(
+            "ON CONFLICT arbiter over a non-btree unique index",
+        ));
     }
     let indnkeyatts = ii.ii_NumIndexKeyAttrs as usize;
     for i in 0..indnkeyatts {
@@ -408,7 +412,11 @@ pub fn ExecOpenIndices<'mcx>(
         // equality strategy; the exclusion recheck arbitrates instead).
         if speculative
             && ii.ii_Unique
-            && !indexDesc.rd_index.as_ref().expect("index relation").indisexclusion
+            && !indexDesc
+                .rd_index
+                .as_ref()
+                .expect("index relation")
+                .indisexclusion
         {
             BuildSpeculativeIndexInfo(&indexDesc, &mut ii)?;
         }
@@ -476,8 +484,14 @@ pub fn FormIndexDatum<'mcx>(
             values[i] = exectuples::slot_getattr(slot, keycol as i32, &mut null);
             isnull[i] = null;
         } else {
-            let state = indexpr_item.next().expect("wrong number of index expressions");
-            let mut slots = execexpr::EvalSlots { scan: Some(slot), inner: None, outer: None };
+            let state = indexpr_item
+                .next()
+                .expect("wrong number of index expressions");
+            let mut slots = execexpr::EvalSlots {
+                scan: Some(slot),
+                inner: None,
+                outer: None,
+            };
             let r = execexpr::exec_eval_expr(state, &mut slots)?;
             values[i] = r.value;
             isnull[i] = r.isnull;
@@ -528,7 +542,11 @@ pub fn index_predicate_passes<'mcx>(
         // before the caller resets it.
         unsafe { state.arm_result_mcx_raw(eval_mcx) };
     }
-    let mut slots = execexpr::EvalSlots { scan: Some(slot), inner: None, outer: None };
+    let mut slots = execexpr::EvalSlots {
+        scan: Some(slot),
+        inner: None,
+        outer: None,
+    };
     execexpr::exec_qual(indexInfo.ii_PredicateState.as_deref_mut(), &mut slots)
 }
 
@@ -579,8 +597,7 @@ pub fn ExecInsertIndexTuples<'mcx>(
         let indexRelation = &state.descs[i];
         let index_form = indexRelation.rd_index.as_ref().expect("index relation");
         let applyNoDupErr = noDupErr
-            && (arbiter_indexes.is_empty()
-                || arbiter_indexes.contains(&index_form.indexrelid));
+            && (arbiter_indexes.is_empty() || arbiter_indexes.contains(&index_form.indexrelid));
         let checkUnique = if !index_form.indisunique {
             IndexUniqueCheck::UNIQUE_CHECK_NO
         } else if applyNoDupErr {
@@ -637,8 +654,7 @@ pub fn ExecInsertIndexTuples<'mcx>(
             )?;
         }
 
-        if (checkUnique == IndexUniqueCheck::UNIQUE_CHECK_PARTIAL
-            || state.infos[i].ii_HasExclusion)
+        if (checkUnique == IndexUniqueCheck::UNIQUE_CHECK_PARTIAL || state.infos[i].ii_HasExclusion)
             && !satisfiesConstraint
         {
             recheck_indexes.push(index_form.indexrelid);
@@ -678,16 +694,12 @@ pub fn ExecCheckIndexConstraints<'mcx>(
 
     for i in 0..state.descs.len() {
         let indexInfo = &mut state.infos[i];
-        if (!indexInfo.ii_Unique && !indexInfo.ii_HasExclusion)
-            || !indexInfo.ii_ReadyForInserts
-        {
+        if (!indexInfo.ii_Unique && !indexInfo.ii_HasExclusion) || !indexInfo.ii_ReadyForInserts {
             continue;
         }
         let indexRelation = &state.descs[i];
         let index_form = indexRelation.rd_index.as_ref().expect("index relation");
-        if !arbiter_indexes.is_empty()
-            && !arbiter_indexes.contains(&index_form.indexrelid)
-        {
+        if !arbiter_indexes.is_empty() && !arbiter_indexes.contains(&index_form.indexrelid) {
             continue;
         }
         if !index_form.indimmediate {
@@ -868,7 +880,11 @@ fn check_exclusion_or_unique_constraint<'mcx>(
                 dirty.dirty_xmax.get(),
                 dirty.dirty_speculative_token.get(),
             );
-            let xwait = if dirty_xmin != 0 { dirty_xmin } else { dirty_xmax };
+            let xwait = if dirty_xmin != 0 {
+                dirty_xmin
+            } else {
+                dirty_xmax
+            };
             if xwait != 0
                 && (wait_mode == CeoucWaitMode::Wait
                     || (wait_mode == CeoucWaitMode::LivelockPreventingWait
@@ -979,7 +995,14 @@ pub fn IndexCheckExclusion<'mcx>(
         {
             continue;
         }
-        FormIndexDatum(mcx, eval_mcx, index_info, &mut slot, &mut values, &mut isnull)?;
+        FormIndexDatum(
+            mcx,
+            eval_mcx,
+            index_info,
+            &mut slot,
+            &mut values,
+            &mut isnull,
+        )?;
         let tupleid = slot.base().tts_tid;
         check_exclusion_or_unique_constraint(
             mcx,

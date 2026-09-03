@@ -53,7 +53,10 @@ pub fn RelationSetNewRelfilenumber<'mcx>(
         | types_rel::RELKIND_MATVIEW => {
             tableam::table_relation_set_new_filelocator(rel, &newrlocator, persistence as i8)?
         }
-        k => panic!("relation \"{}\" does not have storage (relkind {k})", rel.name()),
+        k => panic!(
+            "relation \"{}\" does not have storage (relkind {k})",
+            rel.name()
+        ),
     };
 
     if rel.is_mapped() {
@@ -97,9 +100,18 @@ pub fn RelationSetNewRelfilenumber<'mcx>(
             set(Anum_pg_class_relallvisible, Datum::from_i32(0));
             set(Anum_pg_class_relallfrozen, Datum::from_i32(0));
         }
-        set(Anum_pg_class_relfrozenxid, Datum::from_transaction_id(freeze_xid));
-        set(Anum_pg_class_relminmxid, Datum::from_transaction_id(minmulti));
-        set(Anum_pg_class_relpersistence, Datum::from_char(persistence as i8));
+        set(
+            Anum_pg_class_relfrozenxid,
+            Datum::from_transaction_id(freeze_xid),
+        );
+        set(
+            Anum_pg_class_relminmxid,
+            Datum::from_transaction_id(minmulti),
+        );
+        set(
+            Anum_pg_class_relpersistence,
+            Datum::from_char(persistence as i8),
+        );
         let mut newtup = heaptuple::heap_modify_tuple(
             mcx,
             reltup,
@@ -298,7 +310,11 @@ pub fn reindex_index<'mcx>(
                     .unwrap_or_default()
             ))
             .errdetail_internal(pg_rusage::pg_rusage_show(&ru0).as_str().to_string())
-            .finish(types_error::ErrorLocation::new(file!(), line!() as i32, "reindex_index"))?;
+            .finish(types_error::ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "reindex_index",
+            ))?;
     }
 
     guc::AtEOXact_GUC(false, save_nestlevel);
@@ -385,8 +401,7 @@ fn reindex_index_flags_fixup<'mcx>(
 ) -> PgResult<()> {
     let pg_index = table::table_open(mcx, INDEX_RELATION_ID, RowExclusiveLock)?;
     let key = [oid_scankey(1, indexId)];
-    let mut scan =
-        genam::systable_beginscan(mcx, &pg_index, IndexRelidIndexId, true, None, &key)?;
+    let mut scan = genam::systable_beginscan(mcx, &pg_index, IndexRelidIndexId, true, None, &key)?;
     let tup = genam::systable_getnext(mcx, &mut scan)?
         .unwrap_or_else(|| panic!("cache lookup failed for index {indexId}"));
     let desc = pg_index.descr();
@@ -419,8 +434,7 @@ fn reindex_index_flags_fixup<'mcx>(
         set(Anum_pg_index_indisvalid, Datum::from_bool(true));
         set(Anum_pg_index_indisready, Datum::from_bool(true));
         set(Anum_pg_index_indislive, Datum::from_bool(true));
-        let mut newtup =
-            heaptuple::heap_modify_tuple(mcx, tup, desc, &values, &isnull, &replace)?;
+        let mut newtup = heaptuple::heap_modify_tuple(mcx, tup, desc, &values, &isnull, &replace)?;
         let otid = tup.t_self;
         genam::systable_endscan(mcx, scan)?;
         catalog_indexing::CatalogTupleUpdate(mcx, &pg_index, &otid, &mut newtup)?;
@@ -462,10 +476,7 @@ pub fn reindex_relation<'mcx>(
     let indexIds = relcache::indexlist::RelationGetIndexList(mcx, relid)?;
 
     if flags & REINDEX_REL_SUPPRESS_INDEX_USE != 0 {
-        types_rel::reindex::set_reindex_pending(
-            &indexIds,
-            xact::GetCurrentTransactionNestLevel(),
-        );
+        types_rel::reindex::set_reindex_pending(&indexIds, xact::GetCurrentTransactionNestLevel());
         xact::CommandCounterIncrement()?;
     }
 
@@ -487,9 +498,7 @@ pub fn reindex_relation<'mcx>(
 
     for &indexOid in indexIds.iter() {
         let indexNamespaceId = lsyscache::get_rel_namespace(indexOid)?;
-        if catalog::IsToastNamespace(indexNamespaceId)
-            && !lsyscache::get_index_isvalid(indexOid)?
-        {
+        if catalog::IsToastNamespace(indexNamespaceId) && !lsyscache::get_index_isvalid(indexOid)? {
             elog_seams::ereport::call(
                 PgError::new(
                     WARNING,

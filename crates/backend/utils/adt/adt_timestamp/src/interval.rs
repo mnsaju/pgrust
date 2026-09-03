@@ -14,17 +14,15 @@ use adt_datetime::{
     DTK_EARLY, DTK_EPOCH, DTK_HOUR, DTK_LATE, DTK_MICROSEC, DTK_MILLENNIUM, DTK_MILLISEC,
     DTK_MINUTE, DTK_MONTH, DTK_QUARTER, DTK_SECOND, DTK_WEEK, DTK_YEAR, HOUR, HOURS_PER_DAY,
     INTERVAL_FULL_RANGE, INTERVAL_MASK, MAXDATEFIELDS, MAXDATELEN, MAX_INTERVAL_PRECISION,
-    MINS_PER_HOUR, MINUTE, MONTH, MONTHS_PER_YEAR, RESERV, SECOND, SECS_PER_DAY,
-    SECS_PER_MINUTE, UNITS, UNKNOWN_FIELD, USECS_PER_DAY, USECS_PER_HOUR, USECS_PER_MINUTE,
-    USECS_PER_SEC, YEAR,
+    MINS_PER_HOUR, MINUTE, MONTH, MONTHS_PER_YEAR, RESERV, SECOND, SECS_PER_DAY, SECS_PER_MINUTE,
+    UNITS, UNKNOWN_FIELD, USECS_PER_DAY, USECS_PER_HOUR, USECS_PER_MINUTE, USECS_PER_SEC, YEAR,
 };
 use numeric::{int64_div_fast_to_numeric, int64_to_numeric, numeric_add_common};
 use types_core::TimestampTz;
 use types_error::{
     ereturn, ErrorLocation, PgError, PgResult, SoftErrorContext,
-    ERRCODE_DATETIME_VALUE_OUT_OF_RANGE, ERRCODE_DIVISION_BY_ZERO,
-    ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_INTERNAL_ERROR, ERRCODE_INVALID_PARAMETER_VALUE,
-    WARNING,
+    ERRCODE_DATETIME_VALUE_OUT_OF_RANGE, ERRCODE_DIVISION_BY_ZERO, ERRCODE_FEATURE_NOT_SUPPORTED,
+    ERRCODE_INTERNAL_ERROR, ERRCODE_INVALID_PARAMETER_VALUE, WARNING,
 };
 
 use crate::{
@@ -147,8 +145,7 @@ pub fn AdjustIntervalForTypmod(
         interval.month = (interval.month / MONTHS_PER_YEAR) * MONTHS_PER_YEAR;
         interval.day = 0;
         interval.time = 0;
-    } else if range == INTERVAL_MASK(MONTH) || range == INTERVAL_MASK(YEAR) | INTERVAL_MASK(MONTH)
-    {
+    } else if range == INTERVAL_MASK(MONTH) || range == INTERVAL_MASK(YEAR) | INTERVAL_MASK(MONTH) {
         interval.day = 0;
         interval.time = 0;
     } else if range == INTERVAL_MASK(DAY) {
@@ -161,10 +158,11 @@ pub fn AdjustIntervalForTypmod(
     {
         interval.time = (interval.time / USECS_PER_MINUTE) * USECS_PER_MINUTE;
     } else if range == INTERVAL_MASK(SECOND)
-        || range == INTERVAL_MASK(DAY)
-            | INTERVAL_MASK(HOUR)
-            | INTERVAL_MASK(MINUTE)
-            | INTERVAL_MASK(SECOND)
+        || range
+            == INTERVAL_MASK(DAY)
+                | INTERVAL_MASK(HOUR)
+                | INTERVAL_MASK(MINUTE)
+                | INTERVAL_MASK(SECOND)
         || range == INTERVAL_MASK(HOUR) | INTERVAL_MASK(MINUTE) | INTERVAL_MASK(SECOND)
         || range == INTERVAL_MASK(MINUTE) | INTERVAL_MASK(SECOND)
     {
@@ -226,7 +224,11 @@ pub fn interval_in(
     let mut ftype = [0i32; MAXDATEFIELDS];
     let mut nf = 0usize;
 
-    let range = if typmod >= 0 { INTERVAL_RANGE(typmod) } else { INTERVAL_FULL_RANGE };
+    let range = if typmod >= 0 {
+        INTERVAL_RANGE(typmod)
+    } else {
+        INTERVAL_FULL_RANGE
+    };
 
     let mut dterr = ParseDateTime(
         s.as_bytes(),
@@ -237,7 +239,14 @@ pub fn interval_in(
         &mut nf,
     );
     if dterr == 0 {
-        dterr = DecodeInterval(&field[..nf], &ftype[..nf], nf, range, &mut dtype, &mut itm_in);
+        dterr = DecodeInterval(
+            &field[..nf],
+            &ftype[..nf],
+            nf,
+            range,
+            &mut dtype,
+            &mut itm_in,
+        );
     }
 
     // if those functions think it's a bad format, try ISO8601 style
@@ -246,7 +255,11 @@ pub fn interval_in(
     }
 
     if dterr != 0 {
-        let dterr = if dterr == DTERR_FIELD_OVERFLOW { DTERR_INTERVAL_OVERFLOW } else { dterr };
+        let dterr = if dterr == DTERR_FIELD_OVERFLOW {
+            DTERR_INTERVAL_OVERFLOW
+        } else {
+            dterr
+        };
         let extra = DateTimeErrorExtra::default();
         adt_datetime::DateTimeParseError(dterr, Some(&extra), s, "interval", escontext)?;
         return Ok(Interval::default());
@@ -433,12 +446,12 @@ fn ts_round(j: f64) -> f64 {
 #[inline]
 fn float8_fits_in_int32(num: f64) -> bool {
     // exclusive upper bound per C FLOAT8_FITS_IN_INT32
-    num >= -2147483648.0 && num < 2147483648.0
+    (-2147483648.0..2147483648.0).contains(&num)
 }
 
 #[inline]
 fn float8_fits_in_int64(num: f64) -> bool {
-    num >= -9223372036854775808.0 && num < 9223372036854775808.0
+    (-9223372036854775808.0..9223372036854775808.0).contains(&num)
 }
 
 pub fn interval_mul(span: &Interval, factor: f64) -> PgResult<Interval> {
@@ -460,7 +473,11 @@ pub fn interval_mul(span: &Interval, factor: f64) -> PgResult<Interval> {
         if isign == 0 {
             return Err(interval_out_of_range());
         }
-        return Ok(if factor * (isign as f64) < 0.0 { Interval::NOBEGIN } else { Interval::NOEND });
+        return Ok(if factor * (isign as f64) < 0.0 {
+            Interval::NOBEGIN
+        } else {
+            Interval::NOEND
+        });
     }
 
     let orig_month = span.month;
@@ -490,12 +507,15 @@ pub fn interval_mul(span: &Interval, factor: f64) -> PgResult<Interval> {
 
     // may exceed a day due to rounding or cascade
     if sec_remainder.abs() >= SECS_PER_DAY as f64 {
-        let Some(day) = result.day.checked_add((sec_remainder / SECS_PER_DAY as f64) as i32)
+        let Some(day) = result
+            .day
+            .checked_add((sec_remainder / SECS_PER_DAY as f64) as i32)
         else {
             return Err(interval_out_of_range());
         };
         result.day = day;
-        sec_remainder -= ((sec_remainder / SECS_PER_DAY as f64) as i32) as f64 * SECS_PER_DAY as f64;
+        sec_remainder -=
+            ((sec_remainder / SECS_PER_DAY as f64) as i32) as f64 * SECS_PER_DAY as f64;
     }
 
     let Some(day) = result.day.checked_add(month_remainder_days as i32) else {
@@ -559,12 +579,15 @@ pub fn interval_div(span: &Interval, factor: f64) -> PgResult<Interval> {
         * SECS_PER_DAY as f64;
     sec_remainder = ts_round(sec_remainder);
     if sec_remainder.abs() >= SECS_PER_DAY as f64 {
-        let Some(day) = result.day.checked_add((sec_remainder / SECS_PER_DAY as f64) as i32)
+        let Some(day) = result
+            .day
+            .checked_add((sec_remainder / SECS_PER_DAY as f64) as i32)
         else {
             return Err(interval_out_of_range());
         };
         result.day = day;
-        sec_remainder -= ((sec_remainder / SECS_PER_DAY as f64) as i32) as f64 * SECS_PER_DAY as f64;
+        sec_remainder -=
+            ((sec_remainder / SECS_PER_DAY as f64) as i32) as f64 * SECS_PER_DAY as f64;
     }
 
     let Some(day) = result.day.checked_add(month_remainder_days as i32) else {
@@ -706,15 +729,16 @@ pub fn timestamp_mi(dt1: Timestamp, dt2: Timestamp) -> PgResult<Interval> {
     let Some(time) = dt1.checked_sub(dt2) else {
         return Err(interval_out_of_range());
     };
-    let result = Interval { time, day: 0, month: 0 };
+    let result = Interval {
+        time,
+        day: 0,
+        month: 0,
+    };
     // wrong, but removing it breaks a lot of regression tests (per C)
     interval_justify_hours(&result)
 }
 
-fn month_day_carry(
-    tm: &mut pg_tm,
-    span_month: i32,
-) -> PgResult<()> {
+fn month_day_carry(tm: &mut pg_tm, span_month: i32) -> PgResult<()> {
     let Some(mon) = tm.tm_mon.checked_add(span_month) else {
         return Err(timestamp_out_of_range());
     };
@@ -817,12 +841,20 @@ pub fn in_range_timestamp_interval(
     if interval_sign(offset) < 0 {
         return Err(invalid_in_range_offset());
     }
-    if offset.is_noend() && (if sub { TIMESTAMP_IS_NOEND(base) } else { TIMESTAMP_IS_NOBEGIN(base) })
+    if offset.is_noend()
+        && (if sub {
+            TIMESTAMP_IS_NOEND(base)
+        } else {
+            TIMESTAMP_IS_NOBEGIN(base)
+        })
     {
         return Ok(true);
     }
-    let sum =
-        if sub { timestamp_mi_interval(base, offset)? } else { timestamp_pl_interval(base, offset)? };
+    let sum = if sub {
+        timestamp_mi_interval(base, offset)?
+    } else {
+        timestamp_pl_interval(base, offset)?
+    };
     Ok(if less { val <= sum } else { val >= sum })
 }
 
@@ -836,7 +868,12 @@ pub fn in_range_timestamptz_interval(
     if interval_sign(offset) < 0 {
         return Err(invalid_in_range_offset());
     }
-    if offset.is_noend() && (if sub { TIMESTAMP_IS_NOEND(base) } else { TIMESTAMP_IS_NOBEGIN(base) })
+    if offset.is_noend()
+        && (if sub {
+            TIMESTAMP_IS_NOEND(base)
+        } else {
+            TIMESTAMP_IS_NOBEGIN(base)
+        })
     {
         return Ok(true);
     }
@@ -858,10 +895,20 @@ pub fn in_range_interval_interval(
     if interval_sign(offset) < 0 {
         return Err(invalid_in_range_offset());
     }
-    if offset.is_noend() && (if sub { base.is_noend() } else { base.is_nobegin() }) {
+    if offset.is_noend()
+        && (if sub {
+            base.is_noend()
+        } else {
+            base.is_nobegin()
+        })
+    {
         return Ok(true);
     }
-    let sum = if sub { interval_mi(base, offset)? } else { interval_pl(base, offset)? };
+    let sum = if sub {
+        interval_mi(base, offset)?
+    } else {
+        interval_pl(base, offset)?
+    };
     Ok(if less {
         interval_cmp_internal(val, &sum) <= 0
     } else {
@@ -903,8 +950,15 @@ pub fn timestamptz_pl_interval_internal(
         let mut tm = pg_tm::default();
         let mut fsec: fsec_t = 0;
         let mut tzv = 0i32;
-        if timestamp2tm(timestamp, Some(&mut tzv), &mut tm, &mut fsec, None, Some(attimezone))
-            .is_err()
+        if timestamp2tm(
+            timestamp,
+            Some(&mut tzv),
+            &mut tm,
+            &mut fsec,
+            None,
+            Some(attimezone),
+        )
+        .is_err()
         {
             return Err(timestamp_out_of_range());
         }
@@ -919,8 +973,15 @@ pub fn timestamptz_pl_interval_internal(
         let mut tm = pg_tm::default();
         let mut fsec: fsec_t = 0;
         let mut tzv = 0i32;
-        if timestamp2tm(timestamp, Some(&mut tzv), &mut tm, &mut fsec, None, Some(attimezone))
-            .is_err()
+        if timestamp2tm(
+            timestamp,
+            Some(&mut tzv),
+            &mut tm,
+            &mut fsec,
+            None,
+            Some(attimezone),
+        )
+        .is_err()
         {
             return Err(timestamp_out_of_range());
         }
@@ -973,7 +1034,9 @@ pub fn timestamp2timestamptz_opt_overflow(
     // we don't expect this to fail, but check it pro forma
     if timestamp2tm(timestamp, None, &mut tm, &mut fsec, None, None).is_ok() {
         let attimezone = tz::session_timezone().unwrap_or_else(|| {
-            panic!("session timezone not initialized (pg_timezone_initialize) — timestamp2timestamptz")
+            panic!(
+                "session timezone not initialized (pg_timezone_initialize) — timestamp2timestamptz"
+            )
         });
         let tzv = tz::DetermineTimeZoneOffset(&mut tm, attimezone);
         let result = timestamp.wrapping_sub(-(tzv as i64) * USECS_PER_SEC);
@@ -1046,10 +1109,7 @@ pub fn interval_scale(interval: &Interval, typmod: i32) -> PgResult<Interval> {
     Ok(result)
 }
 
-pub fn interval_recv(
-    buf: &mut ::stringinfo::StringInfo<'_>,
-    typmod: i32,
-) -> PgResult<Interval> {
+pub fn interval_recv(buf: &mut ::stringinfo::StringInfo<'_>, typmod: i32) -> PgResult<Interval> {
     let time = ::pqformat::pq_getmsgint64(buf)?;
     let day = ::pqformat::pq_getmsgint(buf, 4)? as i32;
     let month = ::pqformat::pq_getmsgint(buf, 4)? as i32;
@@ -1173,7 +1233,10 @@ pub fn intervaltypmodout(typmod: i32, buf: &mut [u8; 64]) -> PgResult<usize> {
     } else if fields == (INTERVAL_MASK(DAY) | INTERVAL_MASK(HOUR) | INTERVAL_MASK(MINUTE)) {
         b" day to minute"
     } else if fields
-        == (INTERVAL_MASK(DAY) | INTERVAL_MASK(HOUR) | INTERVAL_MASK(MINUTE) | INTERVAL_MASK(SECOND))
+        == (INTERVAL_MASK(DAY)
+            | INTERVAL_MASK(HOUR)
+            | INTERVAL_MASK(MINUTE)
+            | INTERVAL_MASK(SECOND))
     {
         b" day to second"
     } else if fields == (INTERVAL_MASK(HOUR) | INTERVAL_MASK(MINUTE)) {
@@ -1228,8 +1291,7 @@ pub fn intervaltypmodleastfield(typmod: i32) -> PgResult<i32> {
         Ok(4)
     } else if fields == INTERVAL_MASK(DAY) {
         Ok(3)
-    } else if fields == INTERVAL_MASK(HOUR)
-        || fields == (INTERVAL_MASK(DAY) | INTERVAL_MASK(HOUR))
+    } else if fields == INTERVAL_MASK(HOUR) || fields == (INTERVAL_MASK(DAY) | INTERVAL_MASK(HOUR))
     {
         Ok(2)
     } else if fields == INTERVAL_MASK(MINUTE)
@@ -1316,7 +1378,11 @@ pub fn interval_avg_final(state: &IntervalAggState) -> PgResult<Option<Interval>
         if state.pInfcount > 0 && state.nInfcount > 0 {
             return Err(interval_out_of_range());
         }
-        return Ok(Some(if state.pInfcount > 0 { Interval::NOEND } else { Interval::NOBEGIN }));
+        return Ok(Some(if state.pInfcount > 0 {
+            Interval::NOEND
+        } else {
+            Interval::NOBEGIN
+        }));
     }
     Ok(Some(interval_div(&state.sumX, state.N as f64)?))
 }
@@ -1371,7 +1437,9 @@ pub fn make_interval(
     if !float8_fits_in_int64(secs) {
         return Err(interval_out_of_range());
     }
-    time = time.checked_add(secs as i64).ok_or_else(interval_out_of_range)?;
+    time = time
+        .checked_add(secs as i64)
+        .ok_or_else(interval_out_of_range)?;
 
     let result = Interval { time, day, month };
     if result.not_finite() {
@@ -1627,7 +1695,14 @@ pub fn interval_trunc(units: &[u8], interval: &Interval) -> PgResult<Interval> {
     interval2itm(*interval, &mut tm);
 
     const CHAIN: [i32; 8] = [
-        DTK_YEAR, DTK_QUARTER, DTK_MONTH, DTK_DAY, DTK_HOUR, DTK_MINUTE, DTK_SECOND, -1,
+        DTK_YEAR,
+        DTK_QUARTER,
+        DTK_MONTH,
+        DTK_DAY,
+        DTK_HOUR,
+        DTK_MINUTE,
+        DTK_SECOND,
+        -1,
     ];
     match val {
         DTK_MILLENNIUM | DTK_CENTURY | DTK_DECADE | DTK_YEAR | DTK_QUARTER | DTK_MONTH
@@ -1696,7 +1771,11 @@ fn NonFiniteIntervalPart(
 
         // Monotonically-increasing units
         DTK_HOUR | DTK_DAY | DTK_YEAR | DTK_DECADE | DTK_CENTURY | DTK_MILLENNIUM | DTK_EPOCH => {
-            Ok(if is_negative { f64::NEG_INFINITY } else { f64::INFINITY })
+            Ok(if is_negative {
+                f64::NEG_INFINITY
+            } else {
+                f64::INFINITY
+            })
         }
 
         _ => Err(interval_unit_not_supported(lowunits)),
@@ -1794,8 +1873,8 @@ pub fn interval_part_common(
             let mut result = interval.time as f64 / 1_000_000.0;
             result +=
                 DAYS_PER_YEAR * SECS_PER_DAY as f64 * (interval.month / MONTHS_PER_YEAR) as f64;
-            result += (DAYS_PER_MONTH * SECS_PER_DAY) as f64
-                * (interval.month % MONTHS_PER_YEAR) as f64;
+            result +=
+                (DAYS_PER_MONTH * SECS_PER_DAY) as f64 * (interval.month % MONTHS_PER_YEAR) as f64;
             result += SECS_PER_DAY as f64 * interval.day as f64;
             Ok(PartValue::Float(result))
         }
@@ -1811,7 +1890,11 @@ const _: () = {
     assert!(MAXDATELEN + 1 >= 64);
 };
 
-pub fn timestamp_bin(stride: &Interval, timestamp: Timestamp, origin: Timestamp) -> PgResult<Timestamp> {
+pub fn timestamp_bin(
+    stride: &Interval,
+    timestamp: Timestamp,
+    origin: Timestamp,
+) -> PgResult<Timestamp> {
     if TIMESTAMP_NOT_FINITE(timestamp) {
         return Ok(timestamp);
     }
@@ -1829,10 +1912,8 @@ pub fn timestamp_bin(stride: &Interval, timestamp: Timestamp, origin: Timestamp)
     }
     if stride.month != 0 {
         return Err(Box::new(
-            PgError::error(
-                "timestamps cannot be binned into intervals containing months or years",
-            )
-            .with_sqlstate(types_error::ERRCODE_FEATURE_NOT_SUPPORTED),
+            PgError::error("timestamps cannot be binned into intervals containing months or years")
+                .with_sqlstate(types_error::ERRCODE_FEATURE_NOT_SUPPORTED),
         ));
     }
     let stride_usecs = (stride.day as i64)
@@ -1845,7 +1926,9 @@ pub fn timestamp_bin(stride: &Interval, timestamp: Timestamp, origin: Timestamp)
                 .with_sqlstate(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
         ));
     }
-    let tm_diff = timestamp.checked_sub(origin).ok_or_else(interval_out_of_range)?;
+    let tm_diff = timestamp
+        .checked_sub(origin)
+        .ok_or_else(interval_out_of_range)?;
     let tm_modulo = tm_diff % stride_usecs;
     let tm_delta = tm_diff - tm_modulo;
     let mut result = origin + tm_delta;

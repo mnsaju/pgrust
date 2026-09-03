@@ -35,18 +35,21 @@ fn install_seams() {
             }))
         });
         syscache_seams::lookup_pg_operator_shape::set(|opno| {
-            Ok((opno == INT4_EQ).then_some(syscache_seams::PgOperatorShape { oprnamespace: 11,
-                oprleft: INT4OID,
-                oprright: INT4OID,
-                oprresult: 16,
-                oprcom: INT4_EQ,
-                oprnegate: 518,
-                oprcode: F_INT4EQ,
-                oprrest: 101,
-                oprjoin: 105,
-                oprcanmerge: true,
-                oprcanhash: true,
-            }))
+            Ok(
+                (opno == INT4_EQ).then_some(syscache_seams::PgOperatorShape {
+                    oprnamespace: 11,
+                    oprleft: INT4OID,
+                    oprright: INT4OID,
+                    oprresult: 16,
+                    oprcom: INT4_EQ,
+                    oprnegate: 518,
+                    oprcode: F_INT4EQ,
+                    oprrest: 101,
+                    oprjoin: 105,
+                    oprcanmerge: true,
+                    oprcanhash: true,
+                }),
+            )
         });
     });
 }
@@ -87,8 +90,16 @@ fn one_col_desc(mcx: Mcx<'_>) -> Rc<TupleDescData<'_>> {
 }
 
 fn mk_unique(mcx: Mcx<'_>) -> &Unique<'_> {
-    let var = Node::mk_var(mcx, ::types_nodes::primnodes::OUTER_VAR, 1, INT4OID, -1, 0, 0)
-        .unwrap();
+    let var = Node::mk_var(
+        mcx,
+        ::types_nodes::primnodes::OUTER_VAR,
+        1,
+        INT4OID,
+        -1,
+        0,
+        0,
+    )
+    .unwrap();
     let tle = Node::mk_target_entry(mcx, var, 1, Some("a"), false).unwrap();
     let mut u = Node::build::<Unique>(mcx).unwrap();
     u.plan.targetlist = NodeList::make1(mcx, tle).unwrap();
@@ -135,13 +146,11 @@ fn run_unique(rows: &'static [Option<i32>]) -> Vec<Option<i32>> {
     estate_owner.with_mut(|estate| {
         let mcx = estate.es_query_cxt;
         let outer_desc = one_col_desc(mcx);
-        let outer_id =
-            estate.exec_init_extra_tuple_slot(Some(outer_desc), TupleSlotKind::Virtual);
+        let outer_id = estate.exec_init_extra_tuple_slot(Some(outer_desc), TupleSlotKind::Virtual);
         // SAFETY: uq is leaked ('static) and read-only.
         let uq = unsafe { shorten(uq) };
         let result_desc = one_col_desc(leaked_mcx());
-        let mut state =
-            exec_init_unique(uq, estate, 0, &result_desc.clone(), result_desc).unwrap();
+        let mut state = exec_init_unique(uq, estate, 0, &result_desc.clone(), result_desc).unwrap();
 
         let mut got: Vec<Option<i32>> = Vec::new();
         {

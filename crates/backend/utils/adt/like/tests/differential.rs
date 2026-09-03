@@ -11,16 +11,80 @@ use types_error::{unpack_sqlstate, PgError};
 use wchar::PG_UTF8;
 
 const STRINGS: &[&str] = &[
-    "", "a", "b", "abc", "ABC", "aXc", "hello", "HELLO", "Hello World", "50%", "100%", "a_c",
-    "a\\c", "\\", "%", "_", "héllo", "HÉLLO", "ÉÉ", "éé", "日本語", "日本", "abé", "abcdef",
-    "aa", "aXbXc", "indio",
+    "",
+    "a",
+    "b",
+    "abc",
+    "ABC",
+    "aXc",
+    "hello",
+    "HELLO",
+    "Hello World",
+    "50%",
+    "100%",
+    "a_c",
+    "a\\c",
+    "\\",
+    "%",
+    "_",
+    "héllo",
+    "HÉLLO",
+    "ÉÉ",
+    "éé",
+    "日本語",
+    "日本",
+    "abé",
+    "abcdef",
+    "aa",
+    "aXbXc",
+    "indio",
 ];
 
 const PATTERNS: &[&str] = &[
-    "", "%", "%%", "_", "__", "___", "abc", "ABC", "a%", "%c", "%b%", "%ell%", "a_c", "h_llo",
-    "h__lo", "_____", "50\\%", "a\\_c", "a\\\\c", "\\%", "\\_", "\\\\", "\\", "%\\", "ab%\\",
-    "abc\\", "a%c_e_", "h%x", "%_%", "a__", "é", "é%", "%é", "_é_", "É%", "héllo", "HÉLLO",
-    "日%", "%語", "_本_", "___語", "%日本語%", "h_LLO", "%ELL%",
+    "",
+    "%",
+    "%%",
+    "_",
+    "__",
+    "___",
+    "abc",
+    "ABC",
+    "a%",
+    "%c",
+    "%b%",
+    "%ell%",
+    "a_c",
+    "h_llo",
+    "h__lo",
+    "_____",
+    "50\\%",
+    "a\\_c",
+    "a\\\\c",
+    "\\%",
+    "\\_",
+    "\\\\",
+    "\\",
+    "%\\",
+    "ab%\\",
+    "abc\\",
+    "a%c_e_",
+    "h%x",
+    "%_%",
+    "a__",
+    "é",
+    "é%",
+    "%é",
+    "_é_",
+    "É%",
+    "héllo",
+    "HÉLLO",
+    "日%",
+    "%語",
+    "_本_",
+    "___語",
+    "%日本語%",
+    "h_LLO",
+    "%ELL%",
 ];
 
 const ESCAPES: &[(&str, &str)] = &[
@@ -53,7 +117,10 @@ const ESCAPES: &[(&str, &str)] = &[
 ];
 
 fn err_tag(e: &PgError) -> String {
-    format!("E{}", String::from_utf8(unpack_sqlstate(e.sqlstate()).to_vec()).unwrap())
+    format!(
+        "E{}",
+        String::from_utf8(unpack_sqlstate(e.sqlstate()).to_vec()).unwrap()
+    )
 }
 
 fn sql_quote(s: &str) -> String {
@@ -62,7 +129,10 @@ fn sql_quote(s: &str) -> String {
 
 fn psql(sql: &str, fname: &str, nrows: usize) -> Option<Vec<String>> {
     let path = std::env::temp_dir().join(fname);
-    std::fs::File::create(&path).ok()?.write_all(sql.as_bytes()).ok()?;
+    std::fs::File::create(&path)
+        .ok()?
+        .write_all(sql.as_bytes())
+        .ok()?;
     let out = Command::new("psql")
         .args(["-h", "/tmp", "-p", "5432", "-d", "postgres", "-X"])
         .args(["-tAF", "\t", "-v", "ON_ERROR_STOP=0", "-f"])
@@ -117,7 +187,13 @@ fn differential_like_vs_live_pg() {
         if i > 0 {
             sql.push_str(",\n");
         }
-        sql.push_str(&format!("({}, {}, {}, {})", i, sql_quote(s), sql_quote(p), op));
+        sql.push_str(&format!(
+            "({}, {}, {}, {})",
+            i,
+            sql_quote(s),
+            sql_quote(p),
+            op
+        ));
     }
     sql.push_str("\n) AS v(id, s, p, op) ORDER BY v.id;\n");
 
@@ -143,7 +219,13 @@ fn differential_like_vs_live_pg() {
         let r = match op {
             0 => textlike(s.as_bytes(), p.as_bytes(), C_COLLATION_OID),
             1 => textnlike(s.as_bytes(), p.as_bytes(), C_COLLATION_OID),
-            2 => texticlike(mcx, s.as_bytes(), p.as_bytes(), C_COLLATION_OID, &mut scratch),
+            2 => texticlike(
+                mcx,
+                s.as_bytes(),
+                p.as_bytes(),
+                C_COLLATION_OID,
+                &mut scratch,
+            ),
             _ => bytealike(s.as_bytes(), p.as_bytes()),
         };
         let got = match r {
@@ -152,16 +234,26 @@ fn differential_like_vs_live_pg() {
             Err(e) => err_tag(&e),
         };
         if &got != expect {
-            mismatches.push(format!("  s={s:?} p={p:?} op={op}  pg={expect}  pgrust={got}"));
+            mismatches.push(format!(
+                "  s={s:?} p={p:?} op={op}  pg={expect}  pgrust={got}"
+            ));
         }
     }
-    eprintln!("like differential: {compared} pairs compared, {} mismatches", mismatches.len());
+    eprintln!(
+        "like differential: {compared} pairs compared, {} mismatches",
+        mismatches.len()
+    );
     assert!(
         mismatches.is_empty(),
         "{} / {} mismatches vs live PG:\n{}",
         mismatches.len(),
         compared,
-        mismatches.iter().take(60).cloned().collect::<Vec<_>>().join("\n")
+        mismatches
+            .iter()
+            .take(60)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n")
     );
 }
 

@@ -153,8 +153,7 @@ pub fn pg_u_isblank(code: u32) -> bool {
 
 pub fn pg_u_isgraph(code: u32) -> bool {
     let cat = unicode_category(code);
-    if cat == PG_U_CONTROL || cat == PG_U_SURROGATE || cat == PG_U_UNASSIGNED
-        || pg_u_isspace(code)
+    if cat == PG_U_CONTROL || cat == PG_U_SURROGATE || cat == PG_U_UNASSIGNED || pg_u_isspace(code)
     {
         return false;
     }

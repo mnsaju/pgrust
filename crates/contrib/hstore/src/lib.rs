@@ -63,12 +63,12 @@ pub(crate) unsafe fn arg_hstore<'a>(fcinfo: &'a Fcinfo, i: usize) -> PgResult<Hs
     Ok(HstoreView::from_vardata(v.data()))
 }
 
-pub(crate) unsafe fn arg_text<'a>(fcinfo: &'a Fcinfo, i: usize) -> PgResult<&'a [u8]> {
+pub(crate) unsafe fn arg_text(fcinfo: &Fcinfo, i: usize) -> PgResult<&[u8]> {
     Ok(unsafe { fcinfo.arg_varlena_packed(i)? }.data())
 }
 
 // Full header-ful image of a varlena arg (arrays keep their dims header).
-pub(crate) unsafe fn arg_image<'a>(fcinfo: &'a Fcinfo, i: usize) -> PgResult<&'a [u8]> {
+pub(crate) unsafe fn arg_image(fcinfo: &Fcinfo, i: usize) -> PgResult<&[u8]> {
     let mcx = unsafe { fcinfo.result_mcx_detached() };
     crate::gist::detoasted_image(mcx, fcinfo.arg(i))
 }
@@ -93,7 +93,7 @@ pub(crate) fn ret_null(fcinfo: &mut Fcinfo) -> Datum {
     Datum::null()
 }
 
-pub(crate) fn ret_array(fcinfo: &Fcinfo, img: mcx::PgVec<'_, u8>) -> Datum {
+pub(crate) fn ret_array(_fcinfo: &Fcinfo, img: mcx::PgVec<'_, u8>) -> Datum {
     let d = Datum::from_usize(img.as_ptr() as usize);
     core::mem::forget(img);
     d
@@ -115,7 +115,11 @@ pub(crate) fn deconstruct_text_array<'m>(
                 // SAFETY: non-null text element datum inside the array image.
                 unsafe {
                     let total = types_tuple::varatt::varsize_any(p);
-                    let hdr = if types_tuple::varatt::varatt_is_1b(p) { 1 } else { 4 };
+                    let hdr = if types_tuple::varatt::varatt_is_1b(p) {
+                        1
+                    } else {
+                        4
+                    };
                     core::slice::from_raw_parts(p.add(hdr), total - hdr).to_vec()
                 }
             })
@@ -216,7 +220,7 @@ fn fc_hstore_out(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Dat
 
 fn fc_hstore_recv(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: recv arg 0 is the live StringInfo pointer per the recv ABI.
-    let buf = unsafe { fcinfo.arg_stringinfo(0) };
+    let buf = unsafe { &mut *fcinfo.arg_stringinfo(0) };
     let pcount = pqformat::pq_getmsgint(buf, 4)? as i32;
     if pcount == 0 {
         return ret_hstore(fcinfo, &build_hstore(&[]));
@@ -246,7 +250,11 @@ fn fc_hstore_recv(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Da
             check_val_len(v.len())?;
             Some(v)
         };
-        pairs.push(Pair { key, val, needfree: true });
+        pairs.push(Pair {
+            key,
+            val,
+            needfree: true,
+        });
     }
     let pairs = unique_pairs(pairs);
     ret_hstore(fcinfo, &build_hstore(&pairs))
@@ -299,7 +307,14 @@ fn fc_hstore_from_text(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResu
         check_val_len(v.len())?;
         Some(v)
     };
-    ret_hstore(fcinfo, &build_hstore(&[Pair { key, val, needfree: false }]))
+    ret_hstore(
+        fcinfo,
+        &build_hstore(&[Pair {
+            key,
+            val,
+            needfree: false,
+        }]),
+    )
 }
 
 // hstore(text[], text[]); NOT STRICT.
@@ -339,7 +354,11 @@ fn fc_hstore_from_arrays(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRe
                 }
             },
         };
-        pairs.push(Pair { key, val, needfree: false });
+        pairs.push(Pair {
+            key,
+            val,
+            needfree: false,
+        });
     }
     let pairs = unique_pairs(pairs);
     ret_hstore(fcinfo, &build_hstore(&pairs))
@@ -396,7 +415,11 @@ fn fc_hstore_from_array(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRes
                 Some(v.clone())
             }
         };
-        pairs.push(Pair { key, val, needfree: false });
+        pairs.push(Pair {
+            key,
+            val,
+            needfree: false,
+        });
     }
     let pairs = unique_pairs(pairs);
     ret_hstore(fcinfo, &build_hstore(&pairs))
@@ -438,7 +461,11 @@ pub(crate) fn array_to_keys(image: &[u8]) -> PgResult<Vec<Vec<u8>>> {
     let pairs: Vec<Pair> = elems
         .into_iter()
         .flatten()
-        .map(|k| Pair { key: k, val: None, needfree: false })
+        .map(|k| Pair {
+            key: k,
+            val: None,
+            needfree: false,
+        })
         .collect();
     Ok(unique_pairs(pairs).into_iter().map(|p| p.key).collect())
 }
@@ -761,8 +788,7 @@ pub(crate) fn hstore_cmp(hs1: &HstoreView<'_>, hs2: &HstoreView<'_>) -> i32 {
                 return if c1 > c2 { 1 } else { -1 };
             }
             for i in 0..c1 * 2 {
-                if hs1.raw_endpos(i) != hs2.raw_endpos(i)
-                    || hs1.raw_isnull(i) != hs2.raw_isnull(i)
+                if hs1.raw_endpos(i) != hs2.raw_endpos(i) || hs1.raw_isnull(i) != hs2.raw_isnull(i)
                 {
                     if hs1.raw_endpos(i) < hs2.raw_endpos(i) {
                         return -1;

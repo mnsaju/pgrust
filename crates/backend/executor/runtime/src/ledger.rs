@@ -445,7 +445,8 @@ impl AdmissionLedger {
     /// Production keeps PGRUST_RUNTIME_UTIL_PERMITS (default cores/8,
     /// floor 1). Takes effect at the next recompute (membership event).
     pub(crate) fn set_util_cores(&self, n: u32) {
-        self.util_cores.store(n.clamp(1, self.budgets.cores), Ordering::SeqCst);
+        self.util_cores
+            .store(n.clamp(1, self.budgets.cores), Ordering::SeqCst);
     }
 
     /// ARRIVAL: register + recompute targets (incumbents over their new
@@ -453,19 +454,16 @@ impl AdmissionLedger {
     /// start_rg_locked under the membership lock (lock order:
     /// membership → ledger.inner; never inverted). `class` selects the
     /// budget tier (Track-4 Q1) — Standard is today's algebra exactly.
-    pub(crate) fn admit(
-        &self,
-        slot: usize,
-        req: WidthRequest,
-        class: LedgerClass,
-    ) -> ArrivalNudge {
+    pub(crate) fn admit(&self, slot: usize, req: WidthRequest, class: LedgerClass) -> ArrivalNudge {
         let mut inner = lock(&self.inner);
         debug_assert!(slot < self.entries.len(), "pool admit into the gang region");
-        debug_assert!(inner.table[slot].is_none(), "slot admitted twice without retire");
+        debug_assert!(
+            inner.table[slot].is_none(),
+            "slot admitted twice without retire"
+        );
         inner.table[slot] = Some(LedgerEntry::Pool(req, class));
         inner.admitted += 1;
-        let advertises =
-            req.est_work_ns >= self.join_threshold_ns.load(Ordering::Relaxed);
+        let advertises = req.est_work_ns >= self.join_threshold_ns.load(Ordering::Relaxed);
         let e = &self.entries[slot];
         // Epoch first: a join racing this admission resolves against the new
         // epoch (try_join's CAS-undo), never against the retired occupant's.
@@ -473,7 +471,10 @@ impl AdmissionLedger {
         e.advert.store(advertises as u32, Ordering::Relaxed);
         self.recompute_locked(&mut inner);
         let wake = if advertises {
-            self.entries[slot].target.load(Ordering::Relaxed).min(self.budgets.cores)
+            self.entries[slot]
+                .target
+                .load(Ordering::Relaxed)
+                .min(self.budgets.cores)
         } else {
             RuntimeStats::tick(&self.stats.sub_threshold_admits);
             0
@@ -488,7 +489,10 @@ impl AdmissionLedger {
     /// occupant) is a no-op.
     pub(crate) fn retire(&self, slot: usize) -> u32 {
         let mut inner = lock(&self.inner);
-        debug_assert!(slot < self.entries.len(), "pool retire into the gang region");
+        debug_assert!(
+            slot < self.entries.len(),
+            "pool retire into the gang region"
+        );
         if inner.table[slot].take().is_none() {
             return 0;
         }
@@ -517,12 +521,10 @@ impl AdmissionLedger {
             if t != 0 && g >= t {
                 return false;
             }
-            match e.granted.compare_exchange_weak(
-                g,
-                g + 1,
-                Ordering::Relaxed,
-                Ordering::Relaxed,
-            ) {
+            match e
+                .granted
+                .compare_exchange_weak(g, g + 1, Ordering::Relaxed, Ordering::Relaxed)
+            {
                 Ok(_) => {
                     if e.epoch.load(Ordering::Relaxed) != epoch {
                         // The slot rolled to a new admission between the
@@ -627,7 +629,10 @@ impl AdmissionLedger {
         if granted == 0 {
             RuntimeStats::tick(&self.stats.gang_zero_grants);
         }
-        inner.table[id] = Some(LedgerEntry::Gang(GangEntry { granted, active: granted }));
+        inner.table[id] = Some(LedgerEntry::Gang(GangEntry {
+            granted,
+            active: granted,
+        }));
         // Charge the grant against pool targets NOW through the ONE
         // recompute (narrowing only — the widened count is always 0 here).
         self.recompute_locked(&mut inner);
@@ -854,7 +859,7 @@ impl AdmissionLedger {
         let n_std = n - n_util;
         let mut charged: u64 = 0;
         let mut widened = 0u32;
-        let mut tier = |inner: &LedgerInner,
+        let tier = |inner: &LedgerInner,
                         class: LedgerClass,
                         count: u32,
                         tier_budget: u32,
@@ -869,7 +874,9 @@ impl AdmissionLedger {
             let mut widened = 0u32;
             let mut total = 0u32;
             for (slot, entry) in inner.table.iter().enumerate() {
-                let Some(LedgerEntry::Pool(req, c)) = entry else { continue };
+                let Some(LedgerEntry::Pool(req, c)) = entry else {
+                    continue;
+                };
                 if *c != class {
                     continue;
                 }
@@ -889,20 +896,20 @@ impl AdmissionLedger {
                     t = t.min(room.min(u64::from(u32::MAX)) as u32);
                 }
                 let t = t.max(1); // liveness floor: target >= 1 while admitted
-                *charged = charged
-                    .saturating_add(u64::from(t).saturating_mul(req.cache_bytes_per_worker));
+                *charged =
+                    charged.saturating_add(u64::from(t).saturating_mul(req.cache_bytes_per_worker));
                 total += t;
                 let e = &self.entries[slot];
                 let old = e.target.swap(t, Ordering::Relaxed);
                 if t > old {
                     widened += 1;
                 }
-                e.renudge_left.store(self.budgets.renudge_max, Ordering::Relaxed);
+                e.renudge_left
+                    .store(self.budgets.renudge_max, Ordering::Relaxed);
             }
             (widened, total)
         };
-        let (w_std, std_total) =
-            tier(inner, LedgerClass::Standard, n_std, budget, &mut charged);
+        let (w_std, std_total) = tier(inner, LedgerClass::Standard, n_std, budget, &mut charged);
         widened += w_std;
         if n_util > 0 {
             let util_budget = if n_std == 0 {
@@ -912,8 +919,13 @@ impl AdmissionLedger {
                     .load(Ordering::Relaxed)
                     .min(budget.saturating_sub(std_total))
             };
-            let (w_util, _) =
-                tier(inner, LedgerClass::Utility, n_util, util_budget, &mut charged);
+            let (w_util, _) = tier(
+                inner,
+                LedgerClass::Utility,
+                n_util,
+                util_budget,
+                &mut charged,
+            );
             widened += w_util;
         }
         inner.cache_charged = charged;

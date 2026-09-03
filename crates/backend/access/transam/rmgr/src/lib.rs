@@ -28,7 +28,10 @@ fn xlog_redo(record: &mut XLogReaderState) -> PgResult<()> {
 }
 
 fn xact_redo(record: &mut XLogReaderState) -> PgResult<()> {
-    let rec = record.record.as_ref().expect("xact_redo with no decoded record");
+    let rec = record
+        .record
+        .as_ref()
+        .expect("xact_redo with no decoded record");
     // SAFETY: main_data points into the reader's decode buffer, valid for the
     // redo callback's duration.
     let data = unsafe { rec.main_data_bytes() };
@@ -41,7 +44,8 @@ fn xact_redo(record: &mut XLogReaderState) -> PgResult<()> {
         data,
     })
 }
-pub type RmDesc = for<'mcx> fn(buf: &mut StringInfo<'mcx>, record: &XLogReaderState) -> PgResult<()>;
+pub type RmDesc =
+    for<'mcx> fn(buf: &mut StringInfo<'mcx>, record: &XLogReaderState) -> PgResult<()>;
 pub type RmIdentify = fn(info: u8) -> Option<&'static str>;
 // C rm_startup is void(void); impls allocate under CurrentMemoryContext, threaded as `parent`.
 pub type RmStartup = for<'mcx> fn(parent: Mcx<'mcx>) -> PgResult<()>;

@@ -1,4 +1,7 @@
-use ::execexpr::{exec_build_projection_info_subplans, exec_init_qual_subplans, exec_project, exec_qual, ExprState};
+use ::execexpr::{
+    exec_build_projection_info_subplans, exec_init_qual_subplans, exec_project, exec_qual,
+    ExprState,
+};
 use ::executils::{EStateData, ExecSlotId};
 use ::mcx::{alloc_in, PgBox};
 use ::types_error::PgResult;
@@ -37,13 +40,8 @@ pub fn exec_init_result<'mcx>(
     let params = estate.param_bind();
     let (proj, qual, resconstantqual) =
         ::executils::with_subplan_compile_env(estate, |env| -> PgResult<_> {
-            let proj = exec_build_projection_info_subplans(
-                mcx,
-                &node.plan.targetlist,
-                None,
-                params,
-                env,
-            )?;
+            let proj =
+                exec_build_projection_info_subplans(mcx, &node.plan.targetlist, None, params, env)?;
             let qual = exec_init_qual_subplans(mcx, &node.plan.qual, params, env)?;
             let resconstantqual = match node.resconstantqual {
                 None => None,
@@ -87,7 +85,10 @@ pub fn exec_result<'mcx>(
     estate: &mut EStateData<'mcx>,
 ) -> PgResult<Option<ExecSlotId>> {
     crate::cfi()?;
-    let ecxt = node.ps.ps_ExprContext.expect("ResultState without ExprContext");
+    let ecxt = node
+        .ps
+        .ps_ExprContext
+        .expect("ResultState without ExprContext");
 
     if node.rs_checkqual && !lane_result_gate(node, estate)? {
         return Ok(None);
@@ -141,7 +142,10 @@ pub(crate) fn lane_result_childless_next<'mcx>(
     if node.rs_checkqual && !lane_result_gate(node, estate)? {
         return Ok(None);
     }
-    let ecxt = node.ps.ps_ExprContext.expect("ResultState without ExprContext");
+    let ecxt = node
+        .ps
+        .ps_ExprContext
+        .expect("ResultState without ExprContext");
     estate.reset_expr_context(ecxt);
     if node.rs_done {
         return Ok(None);
@@ -159,7 +163,10 @@ pub(crate) fn lane_result_gate<'mcx>(
     estate: &mut EStateData<'mcx>,
 ) -> PgResult<bool> {
     debug_assert!(node.rs_checkqual);
-    let ecxt = node.ps.ps_ExprContext.expect("ResultState without ExprContext");
+    let ecxt = node
+        .ps
+        .ps_ExprContext
+        .expect("ResultState without ExprContext");
     // C runs pending initplans lazily inside ExecQual (ExecEvalParamExec);
     // the One-Time Filter's $n params resolve here instead (execscan note).
     let deps = node.resconstantqual.as_deref().unwrap().param_exec_deps();
@@ -170,7 +177,9 @@ pub(crate) fn lane_result_gate<'mcx>(
     let qual_result = if resconstantqual.as_ref().is_some_and(|q| q.has_subplan()) {
         ::executils::exec_qual_with_subplans(resconstantqual, estate, ecxt)?
     } else {
-        with_eval_slots(estate, ecxt, None, |slots, _, _| exec_qual(resconstantqual, slots))?
+        with_eval_slots(estate, ecxt, None, |slots, _, _| {
+            exec_qual(resconstantqual, slots)
+        })?
     };
     node.rs_checkqual = false;
     if !qual_result {
@@ -188,7 +197,9 @@ pub(crate) fn lane_result_project<'mcx>(
     estate: &mut EStateData<'mcx>,
 ) -> PgResult<ExecSlotId> {
     let ecxt = ps.ps_ExprContext.expect("ResultState without ExprContext");
-    let result_slot = ps.ps_ResultTupleSlot.expect("ResultState without result slot");
+    let result_slot = ps
+        .ps_ResultTupleSlot
+        .expect("ResultState without result slot");
     if !ps
         .ps_ProjInfo
         .as_deref()
@@ -199,7 +210,10 @@ pub(crate) fn lane_result_project<'mcx>(
         let deps = ps.ps_ProjInfo.as_deref().unwrap().param_exec_deps();
         ::executils::exec_eval_param_exec_params(estate, deps)?;
     }
-    let proj = ps.ps_ProjInfo.as_deref_mut().expect("ResultState without projection");
+    let proj = ps
+        .ps_ProjInfo
+        .as_deref_mut()
+        .expect("ResultState without projection");
     if proj.has_subplan() {
         ::executils::exec_project_with_subplans(proj, estate, ecxt, result_slot)?;
     } else {

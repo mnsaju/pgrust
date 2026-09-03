@@ -61,7 +61,14 @@ fn set_stmt<'mcx>(
     args: NodeList<'mcx>,
     is_local: bool,
 ) -> VariableSetStmt<'mcx> {
-    VariableSetStmt { kind, name, args, jumble_args: false, is_local, location: -1 }
+    VariableSetStmt {
+        kind,
+        name,
+        args,
+        jumble_args: false,
+        is_local,
+        location: -1,
+    }
 }
 
 fn string_const<'mcx>(mcx: mcx::Mcx<'mcx>, s: &'mcx str) -> Node<'mcx> {
@@ -74,7 +81,9 @@ fn string_const<'mcx>(mcx: mcx::Mcx<'mcx>, s: &'mcx str) -> Node<'mcx> {
 }
 
 fn attr_name(desc: &types_tuple::TupleDescData<'_>, i: usize) -> String {
-    std::str::from_utf8(desc.attr(i).attname.name_str()).unwrap().to_string()
+    std::str::from_utf8(desc.attr(i).attname.name_str())
+        .unwrap()
+        .to_string()
 }
 
 #[test]
@@ -85,14 +94,24 @@ fn exec_set_variable_stmt_sets_and_resets() {
 
     let mut args = NodeList::nil();
     args.lappend(mcx, string_const(mcx, "German, YMD")).unwrap();
-    let stmt = set_stmt(VariableSetKind::VAR_SET_VALUE, Some("DateStyle"), args, false);
+    let stmt = set_stmt(
+        VariableSetKind::VAR_SET_VALUE,
+        Some("DateStyle"),
+        args,
+        false,
+    );
     ExecSetVariableStmt(&stmt, true).unwrap();
     assert_eq!(
         guc::store::get_string("DateStyle").unwrap().as_deref(),
         Some("German, YMD")
     );
 
-    let stmt = set_stmt(VariableSetKind::VAR_RESET, Some("DateStyle"), NodeList::nil(), false);
+    let stmt = set_stmt(
+        VariableSetKind::VAR_RESET,
+        Some("DateStyle"),
+        NodeList::nil(),
+        false,
+    );
     ExecSetVariableStmt(&stmt, true).unwrap();
     assert_eq!(
         guc::store::get_string("DateStyle").unwrap().as_deref(),
@@ -100,8 +119,24 @@ fn exec_set_variable_stmt_sets_and_resets() {
     );
 
     let mut args = NodeList::nil();
-    args.lappend(mcx, Node::mk_a_const(mcx, Some(ValUnion::Integer(types_nodes::node_tree::Integer { ival: 30000 })), -1).unwrap()).unwrap();
-    let stmt = set_stmt(VariableSetKind::VAR_SET_VALUE, Some("statement_timeout"), args, false);
+    args.lappend(
+        mcx,
+        Node::mk_a_const(
+            mcx,
+            Some(ValUnion::Integer(types_nodes::node_tree::Integer {
+                ival: 30000,
+            })),
+            -1,
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let stmt = set_stmt(
+        VariableSetKind::VAR_SET_VALUE,
+        Some("statement_timeout"),
+        args,
+        false,
+    );
     ExecSetVariableStmt(&stmt, true).unwrap();
     assert_eq!(guc::store::get_int("statement_timeout"), Some(30000));
 
@@ -188,8 +223,16 @@ fn extract_set_current_reads_live_value() {
         NodeList::nil(),
         false,
     );
-    assert_eq!(ExtractSetVariableArgs(&stmt).unwrap().as_deref(), Some("ISO, MDY"));
-    let stmt = set_stmt(VariableSetKind::VAR_RESET, Some("DateStyle"), NodeList::nil(), false);
+    assert_eq!(
+        ExtractSetVariableArgs(&stmt).unwrap().as_deref(),
+        Some("ISO, MDY")
+    );
+    let stmt = set_stmt(
+        VariableSetKind::VAR_RESET,
+        Some("DateStyle"),
+        NodeList::nil(),
+        false,
+    );
     assert_eq!(ExtractSetVariableArgs(&stmt).unwrap(), None);
 }
 
@@ -221,7 +264,9 @@ fn show_all_rows_are_sorted_and_visible() {
             std::cmp::Ordering::Greater
         );
     }
-    assert!(rows.iter().any(|(n, v, _)| n == "DateStyle" && v.as_deref() == Some("ISO, MDY")));
+    assert!(rows
+        .iter()
+        .any(|(n, v, _)| n == "DateStyle" && v.as_deref() == Some("ISO, MDY")));
     // NO_SHOW_ALL options are filtered.
     assert!(!rows.iter().any(|(n, _, _)| n == "default_with_oids"));
 }
@@ -293,15 +338,14 @@ fn flags_of(mcx: mcx::Mcx<'_>, name: &str) -> Option<Vec<String>> {
     }
     let p = d.as_usize() as *const u8;
     let img = unsafe { core::slice::from_raw_parts(p, arrayfuncs::foundation::varsize_any(p)) };
-    let (elems, _) = arrayfuncs::deconstruct_array_builtin(mcx, img, types_core::TEXTOID, true)
-        .unwrap();
+    let (elems, _) =
+        arrayfuncs::deconstruct_array_builtin(mcx, img, types_core::TEXTOID, true).unwrap();
     Some(
         elems
             .iter()
             .map(|d| {
                 let p = d.as_usize() as *const u8;
-                let bytes =
-                    unsafe { datum::VarlenaRef::from_ptr(p) }.data().to_vec();
+                let bytes = unsafe { datum::VarlenaRef::from_ptr(p) }.data().to_vec();
                 String::from_utf8(bytes).unwrap()
             })
             .collect(),
@@ -313,6 +357,9 @@ fn pg_settings_get_flags_cases() {
     setup();
     let ctx = MemoryContext::new("t");
     let mcx = ctx.mcx();
-    assert_eq!(flags_of(mcx, "enable_seqscan").as_deref(), Some(&["EXPLAIN".to_string()][..]));
+    assert_eq!(
+        flags_of(mcx, "enable_seqscan").as_deref(),
+        Some(&["EXPLAIN".to_string()][..])
+    );
     assert_eq!(flags_of(mcx, "no_such_guc_xyz"), None);
 }

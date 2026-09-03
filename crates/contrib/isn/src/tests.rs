@@ -22,45 +22,105 @@ fn roundtrip(s: &str, accept: IsnType, short: bool) -> String {
 
 #[test]
 fn ean13_valid_conversions() {
-    assert_eq!(roundtrip("9780123456786", IsnType::Ean13, false), "978-0-12-345678-6");
-    assert_eq!(roundtrip("9790123456785", IsnType::Ean13, false), "979-0-1234-5678-5");
-    assert_eq!(roundtrip("9791234567896", IsnType::Ean13, false), "979-123456789-6");
-    assert_eq!(roundtrip("9771234567898", IsnType::Ean13, false), "977-1234-567-89-8");
-    assert_eq!(roundtrip("0123456789012", IsnType::Ean13, false), "012-345678901-2");
-    assert_eq!(roundtrip("1234567890128", IsnType::Ean13, false), "123-456789012-8");
+    assert_eq!(
+        roundtrip("9780123456786", IsnType::Ean13, false),
+        "978-0-12-345678-6"
+    );
+    assert_eq!(
+        roundtrip("9790123456785", IsnType::Ean13, false),
+        "979-0-1234-5678-5"
+    );
+    assert_eq!(
+        roundtrip("9791234567896", IsnType::Ean13, false),
+        "979-123456789-6"
+    );
+    assert_eq!(
+        roundtrip("9771234567898", IsnType::Ean13, false),
+        "977-1234-567-89-8"
+    );
+    assert_eq!(
+        roundtrip("0123456789012", IsnType::Ean13, false),
+        "012-345678901-2"
+    );
+    assert_eq!(
+        roundtrip("1234567890128", IsnType::Ean13, false),
+        "123-456789012-8"
+    );
 }
 
 #[test]
 fn isbn_short_and_13() {
     // ::ISBN uses isn_out (short); ::ISBN13 uses ean13_out (long).
-    assert_eq!(roundtrip("9780123456786", IsnType::Isbn, true), "0-12-345678-9");
-    assert_eq!(roundtrip("123456789X", IsnType::Isbn, true), "1-234-56789-X");
-    assert_eq!(roundtrip("9791234567896", IsnType::Isbn, true), "979-123456789-6");
-    assert_eq!(roundtrip("9780123456786", IsnType::Isbn, false), "978-0-12-345678-6");
-    assert_eq!(roundtrip("123456789X", IsnType::Isbn, false), "978-1-234-56789-7");
-    assert_eq!(roundtrip("9791234567896", IsnType::Isbn, false), "979-123456789-6");
+    assert_eq!(
+        roundtrip("9780123456786", IsnType::Isbn, true),
+        "0-12-345678-9"
+    );
+    assert_eq!(
+        roundtrip("123456789X", IsnType::Isbn, true),
+        "1-234-56789-X"
+    );
+    assert_eq!(
+        roundtrip("9791234567896", IsnType::Isbn, true),
+        "979-123456789-6"
+    );
+    assert_eq!(
+        roundtrip("9780123456786", IsnType::Isbn, false),
+        "978-0-12-345678-6"
+    );
+    assert_eq!(
+        roundtrip("123456789X", IsnType::Isbn, false),
+        "978-1-234-56789-7"
+    );
+    assert_eq!(
+        roundtrip("9791234567896", IsnType::Isbn, false),
+        "979-123456789-6"
+    );
 }
 
 #[test]
 fn ismn_short_and_13() {
-    assert_eq!(roundtrip("9790123456785", IsnType::Ismn, true), "M-1234-5678-5");
-    assert_eq!(roundtrip("M123456785", IsnType::Ismn, true), "M-1234-5678-5");
-    assert_eq!(roundtrip("M-1234-5678-5", IsnType::Ismn, true), "M-1234-5678-5");
-    assert_eq!(roundtrip("9790123456785", IsnType::Ismn, false), "979-0-1234-5678-5");
-    assert_eq!(roundtrip("M123456785", IsnType::Ismn, false), "979-0-1234-5678-5");
+    assert_eq!(
+        roundtrip("9790123456785", IsnType::Ismn, true),
+        "M-1234-5678-5"
+    );
+    assert_eq!(
+        roundtrip("M123456785", IsnType::Ismn, true),
+        "M-1234-5678-5"
+    );
+    assert_eq!(
+        roundtrip("M-1234-5678-5", IsnType::Ismn, true),
+        "M-1234-5678-5"
+    );
+    assert_eq!(
+        roundtrip("9790123456785", IsnType::Ismn, false),
+        "979-0-1234-5678-5"
+    );
+    assert_eq!(
+        roundtrip("M123456785", IsnType::Ismn, false),
+        "979-0-1234-5678-5"
+    );
 }
 
 #[test]
 fn issn_short_and_13() {
     assert_eq!(roundtrip("9771234567003", IsnType::Issn, true), "1234-5679");
     assert_eq!(roundtrip("12345679", IsnType::Issn, true), "1234-5679");
-    assert_eq!(roundtrip("9771234567003", IsnType::Issn, false), "977-1234-567-00-3");
-    assert_eq!(roundtrip("9771234567898", IsnType::Issn, false), "977-1234-567-89-8");
+    assert_eq!(
+        roundtrip("9771234567003", IsnType::Issn, false),
+        "977-1234-567-00-3"
+    );
+    assert_eq!(
+        roundtrip("9771234567898", IsnType::Issn, false),
+        "977-1234-567-89-8"
+    );
 }
 
 #[test]
 fn upc_output() {
-    assert_eq!(roundtrip("0123456789012", IsnType::Upc, true), "123456789012");
+    assert_eq!(
+        roundtrip("0123456789012", IsnType::Upc, true),
+        "123456789012"
+    );
 }
 
 #[test]

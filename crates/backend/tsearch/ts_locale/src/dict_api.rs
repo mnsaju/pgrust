@@ -18,7 +18,8 @@ pub struct LexizeResult<'mcx>(pub PgVec<'mcx, TsLexeme<'mcx>>);
 
 pub type DictSubStatePtr = *mut DictSubState;
 
-// SAFETY: callers pass a lexize-result Datum word whose result mcx is live.
+/// # Safety
+/// Callers pass a lexize-result Datum word whose result mcx is live.
 pub unsafe fn lexize_result_ref<'a>(addr: usize) -> Option<&'a LexizeResult<'a>> {
     if addr == 0 {
         None

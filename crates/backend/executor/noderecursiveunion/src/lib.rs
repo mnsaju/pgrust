@@ -8,13 +8,13 @@ use alloc::rc::Rc;
 
 use ::execgrouping::TupleHashTable;
 use ::executils::{EStateData, EcxtId, ExecSlotId, WorkTableShared};
+use ::tuplestore::Tuplestore;
 use ::types_error::PgResult;
 use ::types_nodes::bitmapset::Bitmapset;
 use ::types_nodes::node_tree::Node;
 use ::types_nodes::plannodes::RecursiveUnion;
 use ::types_slot::{EXEC_FLAG_BACKWARD, EXEC_FLAG_MARK};
 use ::types_tuple::TupleDescData;
-use ::tuplestore::Tuplestore;
 
 pub fn init_seams() {}
 
@@ -106,9 +106,7 @@ pub fn exec_init_recursive_union<'mcx>(
         // compressed by-ref keys must not accumulate in query memory.
         // SAFETY: the ExprContext is arena-boxed in the same estate and
         // outlives the table.
-        unsafe {
-            hashtable.set_temp_ctx_raw(estate.ecxt(ps_ExprContext).per_tuple_mcx())
-        };
+        unsafe { hashtable.set_temp_ctx_raw(estate.ecxt(ps_ExprContext).per_tuple_mcx()) };
         (Some(hashtable), Some(ps_ExprContext))
     } else {
         (None, None)
@@ -131,7 +129,10 @@ fn lookup_is_new<'mcx>(
     estate: &mut EStateData<'mcx>,
 ) -> PgResult<bool> {
     let mcx = estate.es_query_cxt;
-    let ht = node.hashtable.as_mut().expect("numCols > 0 implies a hash table");
+    let ht = node
+        .hashtable
+        .as_mut()
+        .expect("numCols > 0 implies a hash table");
     let slot = estate.slot_mut(slot_id);
     let hash = ht.hash_slot(slot)?;
     let (_, isnew) = ht.lookup(slot, hash, Some(mcx), mcx)?;
@@ -144,9 +145,14 @@ fn take_shared<'mcx>(
     estate: &mut EStateData<'mcx>,
 ) -> WorkTableShared {
     let param = node.plan.wtParam as usize;
-    estate.worktable_shared_slot(param).take().unwrap_or_else(|| {
-        panic!("ExecRecursiveUnion (nodeRecursiveunion.c): es_worktable_shared[{param}] missing")
-    })
+    estate
+        .worktable_shared_slot(param)
+        .take()
+        .unwrap_or_else(|| {
+            panic!(
+                "ExecRecursiveUnion (nodeRecursiveunion.c): es_worktable_shared[{param}] missing"
+            )
+        })
 }
 
 fn put_shared<'mcx>(
@@ -177,12 +183,16 @@ where
 
     if !node.recursing {
         loop {
-            let Some(slot_id) = outer.exec_proc(estate)? else { break };
+            let Some(slot_id) = outer.exec_proc(estate)? else {
+                break;
+            };
             if num_cols > 0 && !lookup_is_new(node, slot_id, estate)? {
                 continue;
             }
             let mut shared = take_shared(node, estate);
-            let put = shared.working_table.puttupleslot(estate.slot_mut(slot_id), mcx);
+            let put = shared
+                .working_table
+                .puttupleslot(estate.slot_mut(slot_id), mcx);
             put_shared(node, estate, shared);
             put?;
             return Ok(Some(slot_id));
@@ -209,7 +219,9 @@ where
         }
         node.intermediate_empty = false;
         let mut shared = take_shared(node, estate);
-        let put = shared.intermediate_table.puttupleslot(estate.slot_mut(slot_id), mcx);
+        let put = shared
+            .intermediate_table
+            .puttupleslot(estate.slot_mut(slot_id), mcx);
         put_shared(node, estate, shared);
         put?;
         return Ok(Some(slot_id));
@@ -222,7 +234,10 @@ pub fn exec_end_recursive_union<'mcx>(
     node: &mut RecursiveUnionState<'mcx>,
     estate: &mut EStateData<'mcx>,
 ) {
-    if let Some(shared) = estate.worktable_shared_slot(node.plan.wtParam as usize).take() {
+    if let Some(shared) = estate
+        .worktable_shared_slot(node.plan.wtParam as usize)
+        .take()
+    {
         shared.working_table.end();
         shared.intermediate_table.end();
     }
@@ -241,7 +256,10 @@ pub fn exec_rescan_recursive_union<'mcx>(
     }
     node.recursing = false;
     node.intermediate_empty = true;
-    if let Some(shared) = estate.worktable_shared_slot(node.plan.wtParam as usize).as_mut() {
+    if let Some(shared) = estate
+        .worktable_shared_slot(node.plan.wtParam as usize)
+        .as_mut()
+    {
         shared.working_table.clear();
         shared.intermediate_table.clear();
     }

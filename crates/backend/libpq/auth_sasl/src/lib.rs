@@ -93,7 +93,7 @@ pub fn CheckSASLAuth<M: SaslMech>(
 
         elog(
             DEBUG4,
-            &format!("processing received SASL response of length {}", buf.len()),
+            format!("processing received SASL response of length {}", buf.len()),
         )?;
 
         let input: Option<Vec<u8>> = if initial {
@@ -116,7 +116,9 @@ pub fn CheckSASLAuth<M: SaslMech>(
         pqformat::pq_getmsgend(&buf)?;
         drop(buf);
 
-        let state = opaq.as_mut().expect("SASL state initialized on first message");
+        let state = opaq
+            .as_mut()
+            .expect("SASL state initialized on first message");
         let (r, output) = mech.exchange(state, port, input.as_deref(), logdetail)?;
         result = r;
 
@@ -129,7 +131,7 @@ pub fn CheckSASLAuth<M: SaslMech>(
 
             elog(
                 DEBUG4,
-                &format!("sending SASL challenge of length {}", output.len()),
+                format!("sending SASL challenge of length {}", output.len()),
             )?;
 
             if result == PG_SASL_EXCHANGE_SUCCESS {

@@ -47,9 +47,9 @@ fn install() {
         snapmgr_seams::unregister_snapshot::set(|_s| {
             UNREGISTERED.with(|c| c.set(c.get() + 1));
         });
-        procarray_seams::transaction_id_is_in_progress::set(|_| {
-            Ok(XID_IN_PROGRESS.with(Cell::get))
-        });
+        procarray_seams::transaction_id_is_in_progress::set(
+            |_| Ok(XID_IN_PROGRESS.with(Cell::get)),
+        );
         transam_seams::transaction_id_did_commit::set(|_| Ok(XID_COMMITTED.with(Cell::get)));
         transam_xlog_seams::xlog_standby_info_active::set(|| false);
         // BTORDER_PROC lookup for the live btree read path: btint4cmp.
@@ -80,11 +80,13 @@ fn make<'mcx>(mcx: Mcx<'mcx>, oid: Oid, name: &str, relkind: u8, relam: Oid) -> 
             indisready: true,
             indkey,
             has_indpred: false,
-        indexprs_src: None,
-        indpred_src: None,
+            indexprs_src: None,
+            indpred_src: None,
         }
     });
-    let data = RelationData { rd_locator: Default::default(), rd_smgr: Default::default(),
+    let data = RelationData {
+        rd_locator: Default::default(),
+        rd_smgr: Default::default(),
         rd_id: oid,
         rd_backend: INVALID_PROC_NUMBER,
         rd_islocaltemp: false,
@@ -94,7 +96,10 @@ fn make<'mcx>(mcx: Mcx<'mcx>, oid: Oid, name: &str, relkind: u8, relam: Oid) -> 
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
         rd_lockInfo: LockInfoData {
-            lockRelId: LockRelId { relId: oid, dbId: 5 },
+            lockRelId: LockRelId {
+                relId: oid,
+                dbId: 5,
+            },
         },
         rd_rel: FormData_pg_class {
             relname,
@@ -138,13 +143,16 @@ fn make<'mcx>(mcx: Mcx<'mcx>, oid: Oid, name: &str, relkind: u8, relam: Oid) -> 
         pgstat_enabled: Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: two_col_vec(mcx, relkind, 0),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     };
     Relation::open(data, Some(record_close))
 }
@@ -165,7 +173,13 @@ fn record_close(_oid: Oid, _lockmode: LOCKMODE) -> PgResult<()> {
 fn fake_relation_open(mcx: Mcx<'_>, oid: Oid, _lockmode: LOCKMODE) -> PgResult<Relation<'_>> {
     match oid {
         TBL => Ok(make(mcx, TBL, "pg_class", RELKIND_RELATION, HEAP_AM)),
-        IDX => Ok(make(mcx, IDX, "pg_class_oid_index", RELKIND_INDEX, BTREE_AM_OID)),
+        IDX => Ok(make(
+            mcx,
+            IDX,
+            "pg_class_oid_index",
+            RELKIND_INDEX,
+            BTREE_AM_OID,
+        )),
         _ => panic!("unexpected relation {oid}"),
     }
 }
@@ -317,8 +331,7 @@ fn ignore_system_indexes_forces_the_heap_arm() {
 
     miscinit::SetIgnoreSystemIndexes(true);
     let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _ =
-            systable_beginscan(mcx, &tbl, IDX, true, Some(static_snapshot()), &[key_on(1)]);
+        let _ = systable_beginscan(mcx, &tbl, IDX, true, Some(static_snapshot()), &[key_on(1)]);
     }));
     miscinit::SetIgnoreSystemIndexes(false);
 

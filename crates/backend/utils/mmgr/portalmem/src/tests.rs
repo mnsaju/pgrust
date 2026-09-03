@@ -43,7 +43,11 @@ fn install() {
             ResourceOwner::from_parts(id, 1)
         });
         resowner_portal_seams::resource_owner_release::set(|o, phase, is_commit, top| {
-            log(format!("release({},{:?},{is_commit},{top})", o.slot(), phase));
+            log(format!(
+                "release({},{:?},{is_commit},{top})",
+                o.slot(),
+                phase
+            ));
         });
         resowner_portal_seams::resource_owner_delete::set(|o| {
             log(format!("owner_delete({})", o.slot()));
@@ -60,7 +64,10 @@ fn install() {
         portalcmds_seams::portal_cleanup::set(|p| {
             log(format!("cleanup({})", p.borrow().name.as_str()));
             if CLEANUP_FAILS.get() {
-                return Err(ereport(ERROR).errmsg_internal("cleanup boom").into_error().into());
+                return Err(ereport(ERROR)
+                    .errmsg_internal("cleanup boom")
+                    .into_error()
+                    .into());
             }
             Ok(())
         });
@@ -141,7 +148,9 @@ fn create_lookup_drop() {
 fn duplicate_name_semantics() {
     setup();
     let a = CreatePortal("dup", false, false).unwrap();
-    let Err(err) = CreatePortal("dup", false, false) else { panic!("expected error") };
+    let Err(err) = CreatePortal("dup", false, false) else {
+        panic!("expected error")
+    };
     assert_eq!(err.sqlstate(), ERRCODE_DUPLICATE_CURSOR);
     assert!(err.message().contains("cursor \"dup\" already exists"));
 
@@ -158,7 +167,9 @@ fn overlong_names_truncate_and_collide() {
     let long_b = format!("{}{}", "x".repeat(63), "different-tail");
     let a = CreatePortal(&long_a, false, false).unwrap();
     assert_eq!(a.borrow().name.len(), MAX_PORTALNAME_LEN - 1);
-    let Err(err) = CreatePortal(&long_b, false, false) else { panic!("expected error") };
+    let Err(err) = CreatePortal(&long_b, false, false) else {
+        panic!("expected error")
+    };
     assert_eq!(err.sqlstate(), ERRCODE_DUPLICATE_CURSOR);
     PortalDrop(&a, false).unwrap();
 }
@@ -375,7 +386,9 @@ fn subxact_lifecycle() {
         assert_eq!(p.createSubid, 1);
         assert_eq!(p.createLevel, 1);
     }
-    assert!(events().iter().any(|e| e.starts_with("new_parent(") && e.ends_with(",900)")));
+    assert!(events()
+        .iter()
+        .any(|e| e.starts_with("new_parent(") && e.ends_with(",900)")));
 
     AtSubAbort_Portals(6, 1, ResourceOwner::from_parts(901, 1), parent_owner).unwrap();
     assert_eq!(portal.borrow().createSubid, 1);
@@ -467,9 +480,10 @@ fn forget_portal_snapshots_balances() {
     setup();
     let portal = CreatePortal("fs", false, false).unwrap();
     let top = mgr("test", |m| m.top).unwrap();
-    portal.borrow_mut().portalSnapshot = Some(Rc::new(
-        ::types_snapshot::SnapshotData::sentinel(top.mcx(), ::types_snapshot::SNAPSHOT_MVCC),
-    ));
+    portal.borrow_mut().portalSnapshot = Some(Rc::new(::types_snapshot::SnapshotData::sentinel(
+        top.mcx(),
+        ::types_snapshot::SNAPSHOT_MVCC,
+    )));
     ACTIVE_SNAPS.set(1);
     ForgetPortalSnapshots().unwrap();
     assert!(portal.borrow().portalSnapshot.is_none());

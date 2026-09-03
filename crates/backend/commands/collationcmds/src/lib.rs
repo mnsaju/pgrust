@@ -29,7 +29,11 @@ fn err_pos(
     location: i32,
 ) -> Box<PgError> {
     let pos = parser_small1::parser_errposition(pstate, location, mbutils::GetDatabaseEncoding());
-    Box::new(PgError::new(ERROR, msg).with_sqlstate(sqlstate).with_cursor_position(pos))
+    Box::new(
+        PgError::new(ERROR, msg)
+            .with_sqlstate(sqlstate)
+            .with_cursor_position(pos),
+    )
 }
 
 // errorConflictingDefElem (define.c).
@@ -44,7 +48,9 @@ fn conflicting_def_elem(pstate: &ParseState<'_, '_>, defel: &DefElem<'_>) -> Box
 
 fn err_detail(sqlstate: types_error::SqlState, msg: &str, detail: &str) -> Box<PgError> {
     Box::new(
-        PgError::new(ERROR, msg.to_string()).with_sqlstate(sqlstate).with_detail(detail.to_string()),
+        PgError::new(ERROR, msg.to_string())
+            .with_sqlstate(sqlstate)
+            .with_detail(detail.to_string()),
     )
 }
 
@@ -60,8 +66,11 @@ fn param_required(param: &str) -> Box<PgError> {
 fn from_collation_oid<'mcx>(mcx: Mcx<'mcx>, def: &DefElem<'_>) -> PgResult<types_core::Oid> {
     let Some(arg) = def.arg else {
         return Err(Box::new(
-            PgError::new(ERROR, format!("{} requires a parameter", def.defname.unwrap_or("")))
-                .with_sqlstate(ERRCODE_SYNTAX_ERROR),
+            PgError::new(
+                ERROR,
+                format!("{} requires a parameter", def.defname.unwrap_or("")),
+            )
+            .with_sqlstate(ERRCODE_SYNTAX_ERROR),
         ));
     };
     match arg.node_tag() {
@@ -219,8 +228,7 @@ pub fn DefineCollation<'mcx>(
         if collprovider == COLLPROVIDER_BUILTIN {
             let loc = clocale.as_deref().ok_or_else(|| param_required("locale"))?;
             clocale = Some(
-                pg_locale::builtin_validate_locale(mbutils::GetDatabaseEncoding(), loc)?
-                    .to_owned(),
+                pg_locale::builtin_validate_locale(mbutils::GetDatabaseEncoding(), loc)?.to_owned(),
             );
         } else if collprovider == COLLPROVIDER_LIBC {
             if ccollate.is_none() {
@@ -233,8 +241,7 @@ pub fn DefineCollation<'mcx>(
             let Some(loc) = clocale.as_deref() else {
                 return Err(param_required("locale"));
             };
-            let elevel =
-                types_error::ErrorLevel(guc_tables::vars::icu_validation_level.read());
+            let elevel = types_error::ErrorLevel(guc_tables::vars::icu_validation_level.read());
             if let Some(langtag) = pg_locale::icu_language_tag(loc, elevel)? {
                 if langtag != loc {
                     elog::ereport(types_error::NOTICE)
@@ -417,10 +424,10 @@ pub fn AlterCollation<'mcx>(
     mcx: Mcx<'mcx>,
     stmt: &types_nodes::parsenodes::AlterCollationStmt<'mcx>,
 ) -> PgResult<Oid> {
-    const Anum_pg_collation_collprovider: i32 = 5;
-    const Anum_pg_collation_collcollate: i32 = 8;
-    const Anum_pg_collation_colllocale: i32 = 10;
-    const Anum_pg_collation_collversion: i32 = 12;
+    const ANUM_PG_COLLATION_COLLPROVIDER: i32 = 5;
+    const ANUM_PG_COLLATION_COLLCOLLATE: i32 = 8;
+    const ANUM_PG_COLLATION_COLLLOCALE: i32 = 10;
+    const ANUM_PG_COLLATION_COLLVERSION: i32 = 12;
 
     let rel = table::table_open(mcx, COLLATION_RELATION_ID, types_rel::RowExclusiveLock)?;
     let coll_oid = catalog_namespace::get_collation_oid_list(&stmt.collname, false)?;
@@ -469,15 +476,18 @@ pub fn AlterCollation<'mcx>(
         (d, isnull)
     };
 
-    let (version_datum, version_isnull) = getattr(Anum_pg_collation_collversion);
-    let oldversion =
-        if version_isnull { None } else { Some(text_datum_to_string(version_datum)) };
-
-    let collprovider = getattr(Anum_pg_collation_collprovider).0.as_u8();
-    let locale_attno = if collprovider == COLLPROVIDER_LIBC {
-        Anum_pg_collation_collcollate
+    let (version_datum, version_isnull) = getattr(ANUM_PG_COLLATION_COLLVERSION);
+    let oldversion = if version_isnull {
+        None
     } else {
-        Anum_pg_collation_colllocale
+        Some(text_datum_to_string(version_datum))
+    };
+
+    let collprovider = getattr(ANUM_PG_COLLATION_COLLPROVIDER).0.as_u8();
+    let locale_attno = if collprovider == COLLPROVIDER_LIBC {
+        ANUM_PG_COLLATION_COLLCOLLATE
+    } else {
+        ANUM_PG_COLLATION_COLLLOCALE
     };
     let (locale_datum, locale_isnull) = getattr(locale_attno);
     assert!(!locale_isnull, "unexpected null locale in pg_collation row");
@@ -504,7 +514,7 @@ pub fn AlterCollation<'mcx>(
                 .finish(loc(476))?;
             let img = version_image.insert(varlena::cstring_to_text(mcx, new.as_bytes())?);
             replacements.push((
-                Anum_pg_collation_collversion,
+                ANUM_PG_COLLATION_COLLVERSION,
                 Datum::from_usize(img.as_bytes().as_ptr() as usize),
             ));
         }

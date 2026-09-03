@@ -195,7 +195,9 @@ fn differential_corpus_vs_live_pg() {
 #[test]
 fn soft_error_lane() {
     let mut soft = SoftErrorContext::new(true);
-    assert!(network_in("junk", false, Some(&mut soft)).unwrap().is_none());
+    assert!(network_in("junk", false, Some(&mut soft))
+        .unwrap()
+        .is_none());
     assert!(soft.error_occurred());
 
     let mut soft = SoftErrorContext::new(true);
@@ -429,9 +431,15 @@ fn session_quartet_reads_raddr_and_laddr() {
         sockaddr_in4([192, 0, 2, 5], 45678),
         sockaddr_in4([198, 51, 100, 7], 5433),
     );
-    assert_eq!(session_addr_str(fc_inet_client_addr).as_deref(), Some("192.0.2.5"));
+    assert_eq!(
+        session_addr_str(fc_inet_client_addr).as_deref(),
+        Some("192.0.2.5")
+    );
     assert_eq!(session_port_num(fc_inet_client_port), Some(45678));
-    assert_eq!(session_addr_str(fc_inet_server_addr).as_deref(), Some("198.51.100.7"));
+    assert_eq!(
+        session_addr_str(fc_inet_server_addr).as_deref(),
+        Some("198.51.100.7")
+    );
     assert_eq!(session_port_num(fc_inet_server_port), Some(5433));
 }
 
@@ -452,8 +460,14 @@ fn session_addr_strips_the_ipv6_zone() {
     ip6[0] = 0xfe;
     ip6[1] = 0x80;
     ip6[15] = 1;
-    set_proc_port(sockaddr_in6(ip6, 40000, 1), sockaddr_in4([10, 0, 0, 1], 5432));
-    assert_eq!(session_addr_str(fc_inet_client_addr).as_deref(), Some("fe80::1"));
+    set_proc_port(
+        sockaddr_in6(ip6, 40000, 1),
+        sockaddr_in4([10, 0, 0, 1], 5432),
+    );
+    assert_eq!(
+        session_addr_str(fc_inet_client_addr).as_deref(),
+        Some("fe80::1")
+    );
     assert_eq!(session_port_num(fc_inet_client_port), Some(40000));
 }
 

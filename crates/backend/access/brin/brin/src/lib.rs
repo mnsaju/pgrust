@@ -17,7 +17,7 @@ use ::types_core::{BlockNumber, Buffer, ForkNumber, InvalidBuffer};
 use ::types_error::PgResult;
 use ::types_rel::{AccessShareLock, Relation};
 use ::types_relscan::{relation_get_index_scan, IndexScanDescData, IndexScanOpaque};
-use ::types_scan::scankey::{ScanKeyData, SK_ISNULL, SK_SEARCHNULL, SK_SEARCHNOTNULL};
+use ::types_scan::scankey::{ScanKeyData, SK_ISNULL, SK_SEARCHNOTNULL, SK_SEARCHNULL};
 use ::types_storage::bufpage::PageRef;
 use ::types_tuple::itemptr::{ItemPointerData, ItemPointerGetBlockNumber};
 use ::types_tuple::{CompactAttribute, FormData_pg_attribute, TupleDescData};
@@ -80,9 +80,7 @@ pub fn brin_build_desc<'mcx>(mcx: Mcx<'mcx>, rel: &Relation<'mcx>) -> PgResult<B
         )?;
         let col = match opcinfo_proc {
             F_BRIN_MINMAX_OPCINFO => brin_minmax::brin_minmax_opcinfo(opcintype),
-            F_BRIN_MINMAX_MULTI_OPCINFO => {
-                brin_minmax_multi::brin_minmax_multi_opcinfo(opcintype)
-            }
+            F_BRIN_MINMAX_MULTI_OPCINFO => brin_minmax_multi::brin_minmax_multi_opcinfo(opcintype),
             F_BRIN_INCLUSION_OPCINFO => brin_inclusion::brin_inclusion_opcinfo(opcintype),
             F_BRIN_BLOOM_OPCINFO => brin_bloom::brin_bloom_opcinfo(opcintype),
             // unported: opclasses beyond the four in-core families
@@ -109,7 +107,7 @@ pub fn brin_build_desc<'mcx>(mcx: Mcx<'mcx>, rel: &Relation<'mcx>) -> PgResult<B
     let mut compact: PgVec<'mcx, CompactAttribute> = vec_with_capacity_in(mcx, totalstored)?;
     for keyno in 0..natts {
         for i in 0..info[keyno].oi_nstored as usize {
-            let mut att = tupdesc.attr(keyno).clone();
+            let mut att = *tupdesc.attr(keyno);
             att.attnum = (attrs.len() + 1) as i16;
             att.atttypmod = -1;
             att.attndims = 0;
@@ -185,8 +183,7 @@ pub fn brinGetStats(index: &Relation<'_>) -> PgResult<BrinStatsData> {
     let metabuffer = read_buffer::call(index, BRIN_METAPAGE_BLKNO)?;
     lock_buffer::call(metabuffer, BUFFER_LOCK_SHARE)?;
     // SAFETY: pinned + share locked.
-    let metadata =
-        brin_meta_read(unsafe { &PageRef::from_raw(buffer_get_page::call(metabuffer)) });
+    let metadata = brin_meta_read(unsafe { &PageRef::from_raw(buffer_get_page::call(metabuffer)) });
     lock_buffer::call(metabuffer, BUFFER_LOCK_UNLOCK)?;
     release_buffer::call(metabuffer)?;
     Ok(BrinStatsData {
@@ -201,7 +198,11 @@ fn initialize_brin_insertstate<'mcx>(
 ) -> PgResult<BrinInsertState<'mcx>> {
     let bis_desc = brin_build_desc(mcx, idxRel)?;
     let (bis_rmAccess, bis_pages_per_range) = brinRevmapInitialize(idxRel)?;
-    Ok(BrinInsertState { bis_rmAccess, bis_desc, bis_pages_per_range })
+    Ok(BrinInsertState {
+        bis_rmAccess,
+        bis_desc,
+        bis_pages_per_range,
+    })
 }
 
 /// brininsert. `amcache` is C's indexInfo->ii_AmCache slot, owned by the
@@ -334,8 +335,14 @@ pub fn brinbeginscan<'mcx>(
 ) -> PgResult<IndexScanDescData<'mcx>> {
     let (bo_rmAccess, bo_pagesPerRange) = brinRevmapInitialize(r)?;
     let bo_bdesc = brin_build_desc(mcx, r)?;
-    let opaque =
-        ::mcx::alloc_in(mcx, BrinOpaque { bo_pagesPerRange, bo_rmAccess, bo_bdesc })?;
+    let opaque = ::mcx::alloc_in(
+        mcx,
+        BrinOpaque {
+            bo_pagesPerRange,
+            bo_rmAccess,
+            bo_bdesc,
+        },
+    )?;
     relation_get_index_scan(
         mcx,
         r,
@@ -374,10 +381,12 @@ pub fn bringetbitmap(
     )?;
     heapRel.close(AccessShareLock)?;
 
-    let mut keys: Vec<Vec<&ScanKeyData>> =
-        (0..natts).map(|_| Vec::with_capacity(nkeys_total)).collect();
-    let mut nullkeys: Vec<Vec<&ScanKeyData>> =
-        (0..natts).map(|_| Vec::with_capacity(nkeys_total)).collect();
+    let mut keys: Vec<Vec<&ScanKeyData>> = (0..natts)
+        .map(|_| Vec::with_capacity(nkeys_total))
+        .collect();
+    let mut nullkeys: Vec<Vec<&ScanKeyData>> = (0..natts)
+        .map(|_| Vec::with_capacity(nkeys_total))
+        .collect();
     for key in scan.keyData.iter().take(nkeys_total) {
         let keyattno = key.sk_attno as usize;
         debug_assert!(
@@ -574,7 +583,11 @@ pub fn add_values_to_range(
     let empty_range_at_entry = dtup.bt_empty_range;
     let mut modified = empty_range_at_entry;
 
-    let BrinMemTuple { bt_context, bt_columns, .. } = dtup;
+    let BrinMemTuple {
+        bt_context,
+        bt_columns,
+        ..
+    } = dtup;
     let mcx = bt_context.mcx();
 
     for keyno in 0..bdesc.natts() {
@@ -668,7 +681,12 @@ pub fn union_tuples(bdesc: &BrinDesc<'_>, a: &mut BrinMemTuple, b: &[u8]) -> PgR
         return Ok(());
     }
 
-    let BrinMemTuple { bt_context, bt_columns, bt_empty_range, .. } = a;
+    let BrinMemTuple {
+        bt_context,
+        bt_columns,
+        bt_empty_range,
+        ..
+    } = a;
     let mcx = bt_context.mcx();
 
     if *bt_empty_range {

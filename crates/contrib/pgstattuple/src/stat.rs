@@ -64,7 +64,7 @@ fn pgstat_relation(
     }
 
     if RELKIND_HAS_TABLE_AM(rel.rd_rel.relkind) || rel.rd_rel.relkind == RELKIND_SEQUENCE {
-        return pgstat_heap(rel, flinfo, fcinfo);
+        pgstat_heap(rel, flinfo, fcinfo)
     } else if rel.rd_rel.relkind == RELKIND_INDEX {
         // see pgstatindex_impl
         if !rel.rd_index.as_ref().is_some_and(|i| i.indisvalid) {
@@ -80,8 +80,12 @@ fn pgstat_relation(
             _ => "unknown index",
         };
         Err(Box::new(
-            PgError::error(format!("index \"{}\" ({}) is not supported", rel.name(), err))
-                .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED),
+            PgError::error(format!(
+                "index \"{}\" ({}) is not supported",
+                rel.name(),
+                err
+            ))
+            .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED),
         ))
     } else {
         let detail = pg_class_seams::errdetail_relkind_not_supported::call(rel.rd_rel.relkind)?;
@@ -102,11 +106,10 @@ fn pgstat_heap(
     fcinfo: &mut Fcinfo,
 ) -> PgResult<Datum> {
     // Sequences always use heap AM without showing it in the catalogs.
-    if rel.rd_rel.relkind != RELKIND_SEQUENCE
-        && rel.rd_rel.relam != tableam::HEAP_TABLE_AM_OID
-    {
+    if rel.rd_rel.relkind != RELKIND_SEQUENCE && rel.rd_rel.relam != tableam::HEAP_TABLE_AM_OID {
         return Err(Box::new(
-            PgError::error("only heap AM is supported").with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED),
+            PgError::error("only heap AM is supported")
+                .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED),
         ));
     }
 
@@ -143,11 +146,16 @@ fn pgstat_heap(
         postgres_seams::check_for_interrupts::call()?;
 
         // A buffer lock must be held to call HeapTupleSatisfiesVisibility.
-        let buf = hscan.rs_cbuf.as_ref().expect("current scan buffer").buffer();
+        let buf = hscan
+            .rs_cbuf
+            .as_ref()
+            .expect("current scan buffer")
+            .buffer();
         bufmgr::LockBuffer(buf, bufmgr::BUFFER_LOCK_SHARE)?;
         // SAFETY: the tuple image lives in the pinned current buffer.
-        let mut htup =
-            unsafe { types_tuple::htup::HeapTupleData::from_raw_parts(hdr, t_len, t_self, t_table_oid) };
+        let mut htup = unsafe {
+            types_tuple::htup::HeapTupleData::from_raw_parts(hdr, t_len, t_self, t_table_oid)
+        };
         if heapam_visibility::HeapTupleSatisfiesVisibility(&mut htup, &mut dirty, buf)? {
             stat.tuple_len += t_len as u64;
             stat.tuple_count += 1;
@@ -223,7 +231,12 @@ fn pgstat_one_page(stat: &mut PgStatTuple, kind: IndexKind, b: &[u8]) {
                     // deleted or half-dead page
                     stat.free_space += BLCKSZ as u64;
                 } else if P_ISLEAF(&o) {
-                    pgstat_index_page(stat, b, P_FIRSTDATAKEY(&o) as usize, page_max_offset_number(b));
+                    pgstat_index_page(
+                        stat,
+                        b,
+                        P_FIRSTDATAKEY(&o) as usize,
+                        page_max_offset_number(b),
+                    );
                 } else {
                     // internal page
                 }
@@ -274,7 +287,8 @@ fn pgstat_index(
     flinfo: &mut FmgrInfo,
     fcinfo: &mut Fcinfo,
 ) -> PgResult<Datum> {
-    let bstrategy = bufmgr::GetAccessStrategy(types_storage::buf::BufferAccessStrategyType::BasBulkread);
+    let bstrategy =
+        bufmgr::GetAccessStrategy(types_storage::buf::BufferAccessStrategyType::BasBulkread);
 
     let mut stat = PgStatTuple::default();
     let mut blkno = start;
@@ -303,7 +317,10 @@ fn pgstat_index(
     build_pgstattuple_type(&stat, flinfo, fcinfo)
 }
 
-pub(crate) fn fc_pgstattuple(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+pub(crate) fn fc_pgstattuple(
+    flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     let flinfo = flinfo.expect("pgstattuple: resolved FmgrInfo required");
     // Pre-1.5 installs could call this as any user; the check must stay.
     require_superuser()?;

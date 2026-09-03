@@ -174,7 +174,10 @@ pub fn parallel_vacuum_init(
         pool_indexes_processed: AtomicI64::new(0),
         pool_delay_ns: AtomicI64::new(0),
     });
-    parallel::set_private(pcxt, Arc::clone(&shared) as Arc<dyn std::any::Any + Send + Sync>);
+    parallel::set_private(
+        pcxt,
+        Arc::clone(&shared) as Arc<dyn std::any::Any + Send + Sync>,
+    );
 
     // M4.1 pool channel (arm once per vacuum; passes engage per pass):
     // binder target + standing driver on THIS pcxt. Fail-closed: any
@@ -242,11 +245,24 @@ pub fn parallel_vacuum_bulkdel_all_indexes(
 ) -> PgResult<()> {
     debug_assert!(!parallel::IsParallelWorker());
 
-    pvs.shared.reltuples.store(num_table_tuples.to_bits(), SeqCst);
+    pvs.shared
+        .reltuples
+        .store(num_table_tuples.to_bits(), SeqCst);
     pvs.shared.estimated_count.store(true, SeqCst);
-    *pvs.shared.dead_items.lock().unwrap_or_else(|e| e.into_inner()) = Arc::from(dead_items);
+    *pvs.shared
+        .dead_items
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = Arc::from(dead_items);
 
-    parallel_vacuum_process_all_indexes(pvs, mcx, heaprel, indrels, bstrategy, num_index_scans, true)
+    parallel_vacuum_process_all_indexes(
+        pvs,
+        mcx,
+        heaprel,
+        indrels,
+        bstrategy,
+        num_index_scans,
+        true,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -262,9 +278,14 @@ pub fn parallel_vacuum_cleanup_all_indexes(
 ) -> PgResult<()> {
     debug_assert!(!parallel::IsParallelWorker());
 
-    pvs.shared.reltuples.store(num_table_tuples.to_bits(), SeqCst);
+    pvs.shared
+        .reltuples
+        .store(num_table_tuples.to_bits(), SeqCst);
     pvs.shared.estimated_count.store(estimated_count, SeqCst);
-    *pvs.shared.dead_items.lock().unwrap_or_else(|e| e.into_inner()) = Arc::from(Vec::new());
+    *pvs.shared
+        .dead_items
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = Arc::from(Vec::new());
 
     parallel_vacuum_process_all_indexes(
         pvs,
@@ -314,8 +335,11 @@ fn parallel_vacuum_compute_workers(
         return Ok(0);
     }
 
-    let parallel_workers =
-        if nrequested > 0 { nrequested.min(nindexes_parallel) } else { nindexes_parallel };
+    let parallel_workers = if nrequested > 0 {
+        nrequested.min(nindexes_parallel)
+    } else {
+        nindexes_parallel
+    };
     Ok(parallel_workers.min(guc_tables::vars::max_parallel_maintenance_workers.read()))
 }
 
@@ -419,9 +443,7 @@ fn ptrace_enabled() -> bool {
 /// Observability only, pg_clock (DST P2), default-off zero cost.
 fn claim_timing_enabled() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
-    *ON.get_or_init(|| {
-        std::env::var("PGRUST_VACUUM_CLAIM_TIMING").is_ok_and(|v| v.trim() == "1")
-    })
+    *ON.get_or_init(|| std::env::var("PGRUST_VACUUM_CLAIM_TIMING").is_ok_and(|v| v.trim() == "1"))
 }
 
 fn ptrace(msg: &str) {
@@ -562,8 +584,7 @@ impl runtime::TaskSetWork for PvPoolPass {
             Ok(Ok(())) => {}
             Ok(Err(e)) => self.fail(e),
             Err(_panic) => self.fail(
-                PgError::new(ERROR, "parallel index vacuum worker panicked in a morsel")
-                    .into(),
+                PgError::new(ERROR, "parallel index vacuum worker panicked in a morsel").into(),
             ),
         }
     }
@@ -578,9 +599,7 @@ impl PvPoolPass {
     fn morsel_body(&self, range: runtime::MorselRange) -> PgResult<()> {
         let p = POOL_CX.with(|c| c.get());
         if p.is_null() {
-            return Err(
-                PgError::new(ERROR, "index vacuum morsel without a bound worker").into()
-            );
+            return Err(PgError::new(ERROR, "index vacuum morsel without a bound worker").into());
         }
         // SAFETY: set by THIS thread's drive frame; the frame outlives the
         // drive, and run_morsel only executes on the claiming thread.
@@ -653,7 +672,10 @@ impl PvPoolPass {
         }
         unit.busy.store(false, SeqCst);
         let more = r?;
-        let stream = self.stream.as_ref().expect("chunk ticket on the coarse arm");
+        let stream = self
+            .stream
+            .as_ref()
+            .expect("chunk ticket on the coarse arm");
         if more {
             let n = {
                 let mut t = self.tickets.lock().unwrap_or_else(|p| p.into_inner());
@@ -675,10 +697,7 @@ impl PvPoolPass {
         // pool worker's freshly published ticket to the (possibly parked)
         // leader too; a leader-published ticket needs no wake (the leader
         // is awake) and self-wakes would only cost a spurious re-poll.
-        if more
-            && pool_index_leader_enabled()
-            && parallel::standing::serving_on_pool()
-        {
+        if more && pool_index_leader_enabled() && parallel::standing::serving_on_pool() {
             latch::SetLatch(::types_storage::latch::LatchHandle::proc(
                 self.target.parallel_leader_proc_number,
             ));
@@ -746,13 +765,10 @@ impl PvPoolPass {
         let quantum = pool_index_quantum();
         let done = match &mut *run {
             PvUnitRun::Bulkdelete(scan) => {
-                let dead =
-                    Arc::clone(&shared.dead_items.lock().unwrap_or_else(|e| e.into_inner()));
+                let dead = Arc::clone(&shared.dead_items.lock().unwrap_or_else(|e| e.into_inner()));
                 nbtree::bt_chunked_scan_step(&ivinfo, scan, Some(&dead), quantum)?
             }
-            PvUnitRun::Cleanup(scan) => {
-                nbtree::bt_chunked_scan_step(&ivinfo, scan, None, quantum)?
-            }
+            PvUnitRun::Cleanup(scan) => nbtree::bt_chunked_scan_step(&ivinfo, scan, None, quantum)?,
             PvUnitRun::Pending | PvUnitRun::Done => {
                 unreachable!("stepped index-vacuum unit without a live sweep")
             }
@@ -795,7 +811,9 @@ impl PvPoolPass {
     /// publishes directly).
     fn unit_complete(&self, i: usize, istat_res: Option<IndexBulkDeleteResult>) {
         {
-            let mut s = self.shared.indstats[i].lock().unwrap_or_else(|e| e.into_inner());
+            let mut s = self.shared.indstats[i]
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             if let Some(res) = istat_res {
                 s.istat = res;
                 s.istat_updated = true;
@@ -856,9 +874,18 @@ fn vacuum_index_pooldb_serve(
 /// supplies what the launched substrate supplies a bgworker. Exit-committed
 /// unwinds (FATAL) rethrow to the pool glue.
 fn parallel_vacuum_pool_driver(shared: &parallel::ParallelShared) {
-    let Some(private) = shared.private() else { return };
-    let Ok(pv) = private.downcast::<PvShared>() else { return };
-    let Some(pass) = pv.pool_pass.lock().unwrap_or_else(|p| p.into_inner()).clone() else {
+    let Some(private) = shared.private() else {
+        return;
+    };
+    let Ok(pv) = private.downcast::<PvShared>() else {
+        return;
+    };
+    let Some(pass) = pv
+        .pool_pass
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .clone()
+    else {
         // Board raced pass teardown (close precedes the slot clear, so this
         // is a straggler): nothing to serve.
         return;
@@ -893,9 +920,7 @@ fn parallel_vacuum_pool_driver(shared: &parallel::ParallelShared) {
             }
         }
         Err(unwind) => {
-            pass.fail(
-                PgError::new(ERROR, "parallel index vacuum pool executor panicked").into(),
-            );
+            pass.fail(PgError::new(ERROR, "parallel index vacuum pool executor panicked").into());
             latch::SetLatch(::types_storage::latch::LatchHandle::proc(
                 shared.parallel_leader_proc_number,
             ));
@@ -990,7 +1015,12 @@ fn pool_index_drive(shared: &Arc<PvShared>, pass: &Arc<PvPoolPass>) -> PgResult<
         shared.ring_nbuffers * (BLCKSZ as i32 / 1024),
     );
 
-    let mut cx = PvWorkerCx { mcx, heaprel: &rel, indrels: &indrels, bstrategy: &bstrategy };
+    let mut cx = PvWorkerCx {
+        mcx,
+        heaprel: &rel,
+        indrels: &indrels,
+        bstrategy: &bstrategy,
+    };
     // Publish the worker cx for run_morsel (this thread only), drive, clear.
     // SAFETY (lifetime erasure): cx outlives the drive on this frame; the
     // pointer is cleared before cx drops.
@@ -1084,8 +1114,14 @@ fn pool_drain_rg(rt: &'static Arc<runtime::Runtime>, rg: &runtime::RgHandle) -> 
 /// join (close + await detach) so pool participants never outlive the leader
 /// arena.
 fn parallel_vacuum_pool_shutdown(private: &(dyn std::any::Any + Send + Sync)) {
-    let Some(pv) = private.downcast_ref::<PvShared>() else { return };
-    let pass = pv.pool_pass.lock().unwrap_or_else(|p| p.into_inner()).take();
+    let Some(pv) = private.downcast_ref::<PvShared>() else {
+        return;
+    };
+    let pass = pv
+        .pool_pass
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .take();
     let Some(pass) = pass else { return };
     if let Some(rt) = runtime::global() {
         if let Some(rg) = pass.rg.get().and_then(|w| w.upgrade()) {
@@ -1126,10 +1162,7 @@ fn pool_claim_deadline() -> std::time::Duration {
 /// board, run the cost carry-in, submit the bound utility RG. None =
 /// channel unavailable / nothing parallel-safe — the launched gang takes
 /// over with NOTHING consumed (the pass payload is cleared).
-fn pool_engage_pass(
-    pvs: &ParallelVacuumState,
-    nworkers: i32,
-) -> Option<PoolEngaged> {
+fn pool_engage_pass(pvs: &ParallelVacuumState, nworkers: i32) -> Option<PoolEngaged> {
     let rt = runtime::global()?;
     let safe: Vec<usize> = pvs
         .shared
@@ -1137,7 +1170,9 @@ fn pool_engage_pass(
         .iter()
         .enumerate()
         .filter(|(_, s)| {
-            s.lock().unwrap_or_else(|e| e.into_inner()).parallel_workers_can_process
+            s.lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .parallel_workers_can_process
         })
         .map(|(i, _)| i)
         .collect();
@@ -1185,12 +1220,18 @@ fn pool_engage_pass(
         error: Mutex::new(None),
         failed: AtomicBool::new(false),
     });
-    *pvs.shared.pool_pass.lock().unwrap_or_else(|p| p.into_inner()) = Some(Arc::clone(&pass));
+    *pvs.shared
+        .pool_pass
+        .lock()
+        .unwrap_or_else(|p| p.into_inner()) = Some(Arc::clone(&pass));
 
     // C's leader cost-balance carry-in (the launched block's discipline) —
     // BEFORE the submission goes live: pool workers may serve the instant
     // the publication lands.
-    pvs.shared.cost.cost_balance.store(g::VacuumCostBalance() as u32, SeqCst);
+    pvs.shared
+        .cost
+        .cost_balance
+        .store(g::VacuumCostBalance() as u32, SeqCst);
     pvs.shared.cost.active_nworkers.store(0, SeqCst);
 
     static NEXT_QUERY_ID: AtomicU64 = AtomicU64::new(1);
@@ -1198,7 +1239,9 @@ fn pool_engage_pass(
         // Q2 chunks arm: the ticket stream (quantum claims).
         Some(s) => Arc::clone(s) as _,
         // Coarse arm: M4.1's one-index-per-claim geometry.
-        None => Arc::new(IndexGranuleSource { total: pass.safe.len() as u64 }),
+        None => Arc::new(IndexGranuleSource {
+            total: pass.safe.len() as u64,
+        }),
     };
     let work: Arc<dyn runtime::TaskSetWork> = Arc::clone(&pass) as _;
     let descriptor = runtime::BoundDescriptor {
@@ -1209,7 +1252,11 @@ fn pool_engage_pass(
     let (rg, waiter) = rt.submit_pinned_bound_utility(
         runtime::QuerySpec {
             query_id: NEXT_QUERY_ID.fetch_add(1, SeqCst),
-            tasksets: vec![runtime::TaskSetSpec { source, work, deps: vec![] }],
+            tasksets: vec![runtime::TaskSetSpec {
+                source,
+                work,
+                deps: vec![],
+            }],
         },
         0,
         Some(runtime::WidthRequest::unbounded(nworkers.max(1) as u32)),
@@ -1239,7 +1286,12 @@ fn pool_engage_pass(
             pool_index_leader_enabled(),
         ));
     }
-    Some(PoolEngaged { pass, entry, rg, waiter })
+    Some(PoolEngaged {
+        pass,
+        entry,
+        rg,
+        waiter,
+    })
 }
 
 /// One pool pass's leader join verdict.
@@ -1275,7 +1327,11 @@ fn pool_leader_join(
         // Take the board slot first (the shutdown hook's double-close
         // guard), then the arena-lifetime join, then the pass slot; the
         // unit sweep (Q2) runs after detach so no step is in flight.
-        eng.pass.board.lock().unwrap_or_else(|p| p.into_inner()).take();
+        eng.pass
+            .board
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .take();
         parallel::standing::close_and_await(entry);
         eng.pass.release_units();
         *shared.pool_pass.lock().unwrap_or_else(|p| p.into_inner()) = None;
@@ -1288,7 +1344,12 @@ fn pool_leader_join(
     // leader-participation identity, unchanged).
     let leader_eligible = eng.pass.stream.is_some() && pool_index_leader_enabled();
     let mut leader_drive: Option<(runtime::ExternalLane, runtime::WorkerLocal)> = None;
-    let mut leader_cx = PvWorkerCx { mcx, heaprel, indrels, bstrategy };
+    let mut leader_cx = PvWorkerCx {
+        mcx,
+        heaprel,
+        indrels,
+        bstrategy,
+    };
     // DST P2: the claim deadline is BEHAVIORAL (changes execution path) —
     // its clock is pg_clock (the standing_channel precedent).
     let t0 = pg_clock::MonoStamp::now();
@@ -1353,7 +1414,9 @@ fn pool_leader_join(
         if started == 0 && refused >= entry.tickets() {
             pool_drain_rg(rt, &eng.rg);
             cleanup(shared, entry);
-            ptrace(&format!("pooldb refused ({refused} refusals) — launched fallback"));
+            ptrace(&format!(
+                "pooldb refused ({refused} refusals) — launched fallback"
+            ));
             return Ok(PoolPassWait::Fallback);
         }
         if started == 0
@@ -1444,7 +1507,10 @@ fn launch_gang(
     }
 
     if carry_in {
-        pvs.shared.cost.cost_balance.store(g::VacuumCostBalance() as u32, SeqCst);
+        pvs.shared
+            .cost
+            .cost_balance
+            .store(g::VacuumCostBalance() as u32, SeqCst);
         pvs.shared.cost.active_nworkers.store(0, SeqCst);
     }
 
@@ -1482,7 +1548,10 @@ fn parallel_vacuum_process_all_indexes(
     let mut census_channel = "leader-serial";
 
     let (new_status, mut nworkers) = if vacuum {
-        (PvIndVacStatus::NeedBulkdelete, pvs.nindexes_parallel_bulkdel)
+        (
+            PvIndVacStatus::NeedBulkdelete,
+            pvs.nindexes_parallel_bulkdel,
+        )
     } else {
         let mut n = pvs.nindexes_parallel_cleanup;
         if num_index_scans == 0 {
@@ -1679,7 +1748,9 @@ fn parallel_vacuum_process_one_index(
     // reports per-unit through unit_complete instead).
     let census_t0 = ptrace_enabled().then(|| (pg_clock::mono_ms(), pg_clock::MonoStamp::now()));
     let (status, istat) = {
-        let s = shared.indstats[idx].lock().unwrap_or_else(|e| e.into_inner());
+        let s = shared.indstats[idx]
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         (s.status, if s.istat_updated { Some(s.istat) } else { None })
     };
 
@@ -1706,7 +1777,9 @@ fn parallel_vacuum_process_one_index(
     };
 
     {
-        let mut s = shared.indstats[idx].lock().unwrap_or_else(|e| e.into_inner());
+        let mut s = shared.indstats[idx]
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         if let Some(res) = istat_res {
             s.istat = res;
             s.istat_updated = true;
@@ -1877,10 +1950,16 @@ mod tests {
             eprintln!("SKIP: chunk_gates_default_posture (env overrides present)");
             return;
         }
-        assert!(pool_index_chunks_enabled(), "chunks default ON under the pool arm");
+        assert!(
+            pool_index_chunks_enabled(),
+            "chunks default ON under the pool arm"
+        );
         assert!(pool_index_quantum() > 0, "quantum must be positive");
         assert_eq!(pool_index_quantum(), 256, "default quantum of record");
-        assert!(pool_index_leader_enabled(), "leader participation default ON");
+        assert!(
+            pool_index_leader_enabled(),
+            "leader participation default ON"
+        );
     }
 
     /// One-index-per-claim contract: every granule is its own hard boundary
@@ -1892,7 +1971,11 @@ mod tests {
         let s = IndexGranuleSource { total: 5 };
         assert_eq!(s.total_granules(), 5);
         for g in 0..5u64 {
-            assert_eq!(s.next_boundary_after(g), g + 1, "granule {g} is its own boundary");
+            assert_eq!(
+                s.next_boundary_after(g),
+                g + 1,
+                "granule {g} is its own boundary"
+            );
         }
         assert!(s.whole_boundary_claims());
         assert_eq!(s.startup_c0(), 1);

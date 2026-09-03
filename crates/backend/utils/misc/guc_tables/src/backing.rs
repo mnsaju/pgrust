@@ -96,9 +96,9 @@ crate::session_guc_cluster!(BackingSessionGucs, BACKING_SESSION_GUCS:
     (log_min_duration_statement_cell, i32, log_min_duration_statement, set_log_min_duration_statement, -1),
     (log_statement_cell, i32, log_statement, set_log_statement, 0),
     (compute_query_id_cell, i32, compute_query_id, set_compute_query_id, 2),
-    (phony_random_seed_cell, f64, phony_random_seed, set_phony_random_seed, (0.0) as f64),
-    (log_statement_sample_rate_cell, f64, log_statement_sample_rate, set_log_statement_sample_rate, (1.0) as f64),
-    (log_xact_sample_rate_cell, f64, log_xact_sample_rate, set_log_xact_sample_rate, (0.0) as f64),
+    (phony_random_seed_cell, f64, phony_random_seed, set_phony_random_seed, 0.0_f64),
+    (log_statement_sample_rate_cell, f64, log_statement_sample_rate, set_log_statement_sample_rate, 1.0_f64),
+    (log_xact_sample_rate_cell, f64, log_xact_sample_rate, set_log_xact_sample_rate, 0.0_f64),
 );
 
 macro_rules! bool_var {
@@ -144,7 +144,12 @@ macro_rules! string_var {
     };
 }
 
-bool_var!(B_AllowAlterSystem, AllowAlterSystem, set_AllowAlterSystem, true);
+bool_var!(
+    B_AllowAlterSystem,
+    AllowAlterSystem,
+    set_AllowAlterSystem,
+    true
+);
 
 bool_var!(B_assert_enabled, assert_enabled, set_assert_enabled, false);
 
@@ -168,7 +173,12 @@ bool_var!(B_pgrust_runtime, pgrust_runtime, set_pgrust_runtime, true);
 // from night/mem-defaults into the config train). PGC_POSTMASTER, default OFF
 // so the byte-identical SHOW ALL / pg_settings conformance suite is unaffected
 // unless the operator opts in. Seeded by the PGRUST_MEM_AUTOTUNE boot env var.
-bool_var!(B_pgrust_mem_autotune, pgrust_mem_autotune, set_pgrust_mem_autotune, false);
+bool_var!(
+    B_pgrust_mem_autotune,
+    pgrust_mem_autotune,
+    set_pgrust_mem_autotune,
+    false
+);
 
 // pgrust.runtime_vacuum_pool (pgrust-only, GL-M41-3 flip): parallel VACUUM's
 // driver rides the morsel-pool workers (M4.1 ⊕ Q2, PGPROC-leasing bound gate
@@ -241,7 +251,12 @@ bool_var!(
 );
 
 int_var!(I_huge_page_size, huge_page_size, set_huge_page_size, 0);
-int_var!(I_max_function_args, max_function_args, set_max_function_args, 100); // FUNC_MAX_ARGS
+int_var!(
+    I_max_function_args,
+    max_function_args,
+    set_max_function_args,
+    100
+); // FUNC_MAX_ARGS
 int_var!(I_max_index_keys, max_index_keys, set_max_index_keys, 32); // INDEX_MAX_KEYS
 int_var!(
     I_max_identifier_length,
@@ -270,7 +285,12 @@ int_var!(
     set_shared_memory_size_in_huge_pages,
     -1
 );
-int_var!(I_num_os_semaphores, num_os_semaphores, set_num_os_semaphores, 0);
+int_var!(
+    I_num_os_semaphores,
+    num_os_semaphores,
+    set_num_os_semaphores,
+    0
+);
 
 int_var!(
     I_SuperuserReservedConnections,
@@ -340,20 +360,23 @@ int_var!(
     3
 ); // HUGE_PAGES_UNKNOWN
 
- // COMPUTE_QUERY_ID_AUTO
+// COMPUTE_QUERY_ID_AUTO
 
 string_var!(CELL_event_source, event_source, set_event_source, None);
-session_string_var!(CELL_client_encoding_string,
+session_string_var!(
+    CELL_client_encoding_string,
     client_encoding_string,
     set_client_encoding_string,
     Some("SQL_ASCII")
 );
-session_string_var!(CELL_datestyle_string,
+session_string_var!(
+    CELL_datestyle_string,
     datestyle_string,
     set_datestyle_string,
     Some("ISO, MDY")
 );
-session_string_var!(CELL_server_encoding_string,
+session_string_var!(
+    CELL_server_encoding_string,
     server_encoding_string,
     set_server_encoding_string,
     Some("SQL_ASCII")
@@ -364,12 +387,9 @@ string_var!(
     set_server_version_string,
     Some("18.3") // PG_VERSION
 );
-session_string_var!(CELL_role_string,
-    role_string,
-    set_role_string,
-    Some("none")
-);
-session_string_var!(CELL_session_authorization_string,
+session_string_var!(CELL_role_string, role_string, set_role_string, Some("none"));
+session_string_var!(
+    CELL_session_authorization_string,
     session_authorization_string,
     set_session_authorization_string,
     None
@@ -380,7 +400,8 @@ string_var!(
     set_syslog_ident_str,
     Some("postgres")
 );
-session_string_var!(CELL_timezone_string,
+session_string_var!(
+    CELL_timezone_string,
     timezone_string,
     set_timezone_string,
     Some("GMT")
@@ -391,7 +412,8 @@ string_var!(
     set_log_timezone_string,
     Some("GMT")
 );
-session_string_var!(CELL_timezone_abbreviations_string,
+session_string_var!(
+    CELL_timezone_abbreviations_string,
     timezone_abbreviations_string,
     set_timezone_abbreviations_string,
     None
@@ -402,7 +424,12 @@ string_var!(
     set_data_directory,
     None
 );
-string_var!(CELL_ConfigFileName, ConfigFileName, set_ConfigFileName, None);
+string_var!(
+    CELL_ConfigFileName,
+    ConfigFileName,
+    set_ConfigFileName,
+    None
+);
 string_var!(CELL_HbaFileName, HbaFileName, set_HbaFileName, None);
 string_var!(CELL_IdentFileName, IdentFileName, set_IdentFileName, None);
 string_var!(
@@ -411,12 +438,14 @@ string_var!(
     set_external_pid_file,
     None
 );
-session_string_var!(CELL_application_name,
+session_string_var!(
+    CELL_application_name,
     application_name,
     set_application_name,
     Some("")
 );
-session_string_var!(CELL_backtrace_functions,
+session_string_var!(
+    CELL_backtrace_functions,
     backtrace_functions,
     set_backtrace_functions,
     Some("")
@@ -481,8 +510,18 @@ string_var!(
     set_recoveryEndCommand,
     Some("")
 );
-string_var!(CELL_PrimaryConnInfo, PrimaryConnInfo, set_PrimaryConnInfo, Some(""));
-string_var!(CELL_PrimarySlotName, PrimarySlotName, set_PrimarySlotName, Some(""));
+string_var!(
+    CELL_PrimaryConnInfo,
+    PrimaryConnInfo,
+    set_PrimaryConnInfo,
+    Some("")
+);
+string_var!(
+    CELL_PrimarySlotName,
+    PrimarySlotName,
+    set_PrimarySlotName,
+    Some("")
+);
 bool_var!(
     B_recoveryTargetInclusive,
     recoveryTargetInclusive,
@@ -553,7 +592,12 @@ int_var!(
     set_ssl_max_protocol_version,
     crate::consts::PG_TLS_ANY
 );
-string_var!(CELL_ssl_library, ssl_library, set_ssl_library, Some("OpenSSL"));
+string_var!(
+    CELL_ssl_library,
+    ssl_library,
+    set_ssl_library,
+    Some("OpenSSL")
+);
 string_var!(
     CELL_ssl_cert_file,
     ssl_cert_file,

@@ -19,7 +19,7 @@ use ::types_fmgr::{
 // + pq_sendfloat + endtypsend.
 pub fn fc_float4recv(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: recv arg0 is the live StringInfo pointer per the recv ABI.
-    let buf = unsafe { fcinfo.arg_stringinfo(0) };
+    let buf = unsafe { &mut *fcinfo.arg_stringinfo(0) };
     Ok(Datum::from_f32(pqformat::pq_getmsgfloat4(buf)?))
 }
 
@@ -32,7 +32,7 @@ pub fn fc_float4send(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgR
 
 pub fn fc_float8recv(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: recv arg0 is the live StringInfo pointer per the recv ABI.
-    let buf = unsafe { fcinfo.arg_stringinfo(0) };
+    let buf = unsafe { &mut *fcinfo.arg_stringinfo(0) };
     Ok(Datum::from_f64(pqformat::pq_getmsgfloat8(buf)?))
 }
 
@@ -302,17 +302,25 @@ pub fn fc_hashfloat4(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgR
     if key == 0.0 {
         return Ok(Datum::from_u32(0));
     }
-    Ok(Datum::from_u32(::hashfn::hash_bytes(&float8_hash_image(key as f64))))
+    Ok(Datum::from_u32(::hashfn::hash_bytes(&float8_hash_image(
+        key as f64,
+    ))))
 }
 
-pub fn fc_hashfloat4extended(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+pub fn fc_hashfloat4extended(
+    _flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     let [a, seed] = fcinfo.args_n::<2>();
     let key = a.value.as_f32();
     let seed = seed.value.as_i64() as u64;
     if key == 0.0 {
         return Ok(Datum::from_u64(seed));
     }
-    Ok(Datum::from_u64(::hashfn::hash_bytes_extended(&float8_hash_image(key as f64), seed)))
+    Ok(Datum::from_u64(::hashfn::hash_bytes_extended(
+        &float8_hash_image(key as f64),
+        seed,
+    )))
 }
 
 pub fn fc_hashfloat8(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -328,14 +336,20 @@ pub fn hashfloat8(key: f64) -> u32 {
     ::hashfn::hash_bytes(&float8_hash_image(key))
 }
 
-pub fn fc_hashfloat8extended(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+pub fn fc_hashfloat8extended(
+    _flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     let [a, seed] = fcinfo.args_n::<2>();
     let key = a.value.as_f64();
     let seed = seed.value.as_i64() as u64;
     if key == 0.0 {
         return Ok(Datum::from_u64(seed));
     }
-    Ok(Datum::from_u64(::hashfn::hash_bytes_extended(&float8_hash_image(key), seed)))
+    Ok(Datum::from_u64(::hashfn::hash_bytes_extended(
+        &float8_hash_image(key),
+        seed,
+    )))
 }
 
 // float8[] transvalue frame: in an agg/window context (C's
@@ -413,7 +427,10 @@ pub fn fc_float8_combine(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) ->
 }
 
 // float8_regr_accum args: (state, Y, X).
-pub fn fc_float8_regr_accum(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+pub fn fc_float8_regr_accum(
+    _flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     let y = fcinfo.arg_f64(1);
     let x = fcinfo.arg_f64(2);
     float8_trans_result::<6>(fcinfo, "float8_regr_accum", |t| {

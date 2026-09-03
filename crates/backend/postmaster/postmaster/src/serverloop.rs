@@ -12,8 +12,8 @@ use types_storage::waiteventset::{WaitEvent, WL_LATCH_SET, WL_SOCKET_ACCEPT};
 
 use crate::statemachine::{signal_child, ExitPostmaster, StartChildProcess, TerminateChildren};
 use crate::{
-    btmask_all_except, loc, pmstate_name, report, report_internal, with_pm, PMState, FastShutdown,
-    ImmediateShutdown, NoShutdown, FORCED_EXIT_AFTER_LETHAL_SECS, MAXLISTEN,
+    btmask_all_except, loc, pmstate_name, report, report_internal, with_pm, FastShutdown,
+    ImmediateShutdown, NoShutdown, PMState, FORCED_EXIT_AFTER_LETHAL_SECS, MAXLISTEN,
     SIGKILL_CHILDREN_AFTER_SECS,
 };
 
@@ -24,7 +24,11 @@ pub fn ConfigurePostmasterWaitSet(accept_connections: bool) -> PgResult<()> {
         if let Some(set) = pm.pm_wait_set.take() {
             waiteventset::FreeWaitEventSet(set);
         }
-        let n = if accept_connections { 1 + pm.listen_sockets.len() } else { 1 };
+        let n = if accept_connections {
+            1 + pm.listen_sockets.len()
+        } else {
+            1
+        };
         let set = waiteventset::CreateWaitEventSet(n as i32)?;
         waiteventset::AddWaitEventToSet(
             set,
@@ -47,7 +51,12 @@ pub fn ConfigurePostmasterWaitSet(accept_connections: bool) -> PgResult<()> {
 /// just long enough that they restart on schedule.
 pub fn DetermineSleepTime() -> i64 {
     let (shutdown, abort_start_time, start_worker_needed, have_crashed_worker) = with_pm(|pm| {
-        (pm.shutdown, pm.abort_start_time, pm.start_worker_needed, pm.have_crashed_worker)
+        (
+            pm.shutdown,
+            pm.abort_start_time,
+            pm.start_worker_needed,
+            pm.have_crashed_worker,
+        )
     });
     if shutdown > NoShutdown || (!start_worker_needed && !have_crashed_worker) {
         if abort_start_time != 0 {
@@ -71,10 +80,21 @@ pub fn DetermineSleepTime() -> i64 {
         // uptime passed the bound and spun the postmaster at 100% CPU.
         let stall_bound = crate::pm_shutdown_stall_secs();
         let (fatal_error, escalated, pm_state, state_since) = with_pm(|pm| {
-            (pm.fatal_error, pm.stall_escalated, pm.pm_state, pm.pm_state_since)
+            (
+                pm.fatal_error,
+                pm.stall_escalated,
+                pm.pm_state,
+                pm.pm_state_since,
+            )
         });
-        if shutdown_stall_armed(shutdown, fatal_error, escalated, pm_state, state_since, stall_bound)
-        {
+        if shutdown_stall_armed(
+            shutdown,
+            fatal_error,
+            escalated,
+            pm_state,
+            state_since,
+            stall_bound,
+        ) {
             let seconds = stall_bound - (now_secs() - state_since);
             return (seconds * 1000).max(0).min(60 * 1000);
         }
@@ -328,7 +348,11 @@ pub fn ServerLoop() -> PgResult<i32> {
                 1758,
                 "ServerLoop",
             );
-            TerminateChildren(if send_abort { procsignal::signums::SIGABRT } else { procsignal::signums::SIGKILL });
+            TerminateChildren(if send_abort {
+                procsignal::signums::SIGABRT
+            } else {
+                procsignal::signums::SIGKILL
+            });
             with_pm(|pm| {
                 pm.abort_start_time = 0;
                 // Arm the forced-exit floor: the thread rendering of SIGKILL
@@ -406,9 +430,8 @@ pub fn canAcceptConnections(backend_type: BackendType) -> CacState {
         backend_type == BackendType::Backend || backend_type == BackendType::AutovacWorker
     );
 
-    let (pm_state, shutdown, fatal_error, conns_allowed) = with_pm(|pm| {
-        (pm.pm_state, pm.shutdown, pm.fatal_error, pm.conns_allowed)
-    });
+    let (pm_state, shutdown, fatal_error, conns_allowed) =
+        with_pm(|pm| (pm.pm_state, pm.shutdown, pm.fatal_error, pm.conns_allowed));
 
     if pm_state != PMState::PM_RUN && pm_state != PMState::PM_HOT_STANDBY {
         if shutdown > NoShutdown {
@@ -465,7 +488,12 @@ pub fn BackendStartup(client_sock: ClientSocket) -> i32 {
     );
     if pid < 0 {
         pmchild_seams::release_postmaster_child_slot::call(child_slot);
-        report(LOG, "could not fork new process for connection".into(), 3608, "BackendStartup");
+        report(
+            LOG,
+            "could not fork new process for connection".into(),
+            3608,
+            "BackendStartup",
+        );
         report_fork_failure_to_client(&client_sock);
         return STATUS_ERROR;
     }
@@ -611,8 +639,8 @@ pub fn LaunchMissingBackgroundProcesses() {
         with_pm(|pm| pm.slotsync_worker = c);
     }
 
-    if with_pm(|pm| pm.wal_receiver_requested) {
-        if with_pm(|pm| {
+    if with_pm(|pm| pm.wal_receiver_requested)
+        && with_pm(|pm| {
             pm.walreceiver.is_none()
                 && matches!(
                     pm.pm_state,
@@ -628,7 +656,6 @@ pub fn LaunchMissingBackgroundProcesses() {
                 }
             });
         }
-    }
 
     if guc_tables::vars::summarize_wal.read()
         && with_pm(|pm| {

@@ -1,14 +1,21 @@
+// These seam signatures mirror the C planner call-frames they replace
+// argument-for-argument.
+#![allow(clippy::too_many_arguments)]
+
+use datum::Datum;
 use mcx::Mcx;
+use types_core::Oid;
 use types_error::PgResult;
 use types_nodes::parsenodes::Query;
 use types_nodes::plannodes::PlannedStmt;
-use types_portal::ParamListHandle;
 use types_nodes::Node;
 use types_pathnodes::run::PlannerRun;
-use types_pathnodes::{AppendRelInfo, EcId, IndexOptInfo, JoinType, NodeId, PathId, PathKey, PlannerInfo, QualCost, RelId, Relids, RinfoId, ScanDirection, SpecialJoinInfo};
+use types_pathnodes::{
+    AppendRelInfo, EcId, IndexOptInfo, JoinType, NodeId, PathId, PathKey, PlannerInfo, QualCost,
+    RelId, Relids, RinfoId, ScanDirection, SpecialJoinInfo,
+};
+use types_portal::ParamListHandle;
 use types_rel::Relation;
-use types_core::Oid;
-use datum::Datum;
 
 seam_core::seam!(
     // parse is arena-resident and mutated in place (C mutates the Query and

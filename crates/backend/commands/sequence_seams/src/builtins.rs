@@ -6,12 +6,17 @@ use types_fmgr::{FmgrBuiltin, FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFu
 
 fn fc_nextval_oid(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let [a] = fcinfo.args_n::<1>();
-    Ok(Datum::from_i64(crate::nextval_internal::call(a.value.as_oid(), true)?))
+    Ok(Datum::from_i64(crate::nextval_internal::call(
+        a.value.as_oid(),
+        true,
+    )?))
 }
 
 fn fc_currval_oid(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let [a] = fcinfo.args_n::<1>();
-    Ok(Datum::from_i64(crate::currval_internal::call(a.value.as_oid())?))
+    Ok(Datum::from_i64(crate::currval_internal::call(
+        a.value.as_oid(),
+    )?))
 }
 
 fn fc_lastval(_flinfo: Option<&mut FmgrInfo>, _fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -31,7 +36,14 @@ fn fc_setval3_oid(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResu
 }
 
 const fn b(foid: types_core::Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 pub const SEQUENCE_BUILTINS: &[FmgrBuiltin] = &[

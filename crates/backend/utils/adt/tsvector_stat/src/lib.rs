@@ -40,7 +40,10 @@ pub(crate) fn detoasted_image<'m>(mcx: Mcx<'m>, d: Datum) -> PgResult<&'m [u8]> 
             );
             let total = 4 + src.len();
             let mut buf = ::mcx::vec_with_capacity_in(mcx, total)?;
-            ::mcx::vec_append_bytes(&mut buf, &varatt::set_varsize_4b_word(total as u32).to_ne_bytes())?;
+            ::mcx::vec_append_bytes(
+                &mut buf,
+                &varatt::set_varsize_4b_word(total as u32).to_ne_bytes(),
+            )?;
             ::mcx::vec_append_bytes(&mut buf, src)?;
             let out = core::slice::from_raw_parts(buf.as_ptr(), buf.len());
             core::mem::forget(buf);
@@ -116,7 +119,9 @@ fn ts_accum(acc: &mut HashMap<Vec<u8>, (i32, i32)>, weight: u16, img: &[u8]) {
 
 fn ts_stat_sql(mcx: Mcx<'_>, txt: &[u8], ws: Option<&[u8]>) -> PgResult<Vec<(Vec<u8>, i32, i32)>> {
     let query = core::str::from_utf8(txt).map_err(|_| {
-        Box::new(PgError::error("ts_stat query is not valid UTF-8".to_string()))
+        Box::new(PgError::error(
+            "ts_stat query is not valid UTF-8".to_string(),
+        ))
     })?;
     let plan = ::spi::SPI_prepare(query, &[])?;
     if plan == ::spi::SpiPlanPtr::NULL {
@@ -178,7 +183,11 @@ fn stat_rows(fcinfo: &Fcinfo, ws_arg: bool) -> PgResult<Vec<Vec<u8>>> {
     ::spi::SPI_connect()?;
     let result = (|| {
         let txt = text_data(fcinfo, 0)?;
-        let ws = if ws_arg { Some(text_data(fcinfo, 1)?) } else { None };
+        let ws = if ws_arg {
+            Some(text_data(fcinfo, 1)?)
+        } else {
+            None
+        };
         ts_stat_sql(mcx, txt, ws)
     })();
     ::spi::SPI_finish()?;
@@ -238,7 +247,9 @@ fn srf_drive(
 }
 
 pub fn fc_ts_stat1(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
-    srf_drive(flinfo, fcinfo, "ts_stat1", |fcinfo| stat_rows(fcinfo, false))
+    srf_drive(flinfo, fcinfo, "ts_stat1", |fcinfo| {
+        stat_rows(fcinfo, false)
+    })
 }
 
 pub fn fc_ts_stat2(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -246,7 +257,14 @@ pub fn fc_ts_stat2(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResu
 }
 
 const fn srf(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: true, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: true,
+        func,
+    }
 }
 
 pub const TS_STAT_BUILTINS: &[FmgrBuiltin] = &[

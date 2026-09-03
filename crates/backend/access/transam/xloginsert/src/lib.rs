@@ -286,7 +286,11 @@ fn assemble(
             fork_flags |= BKPBLOCK_HAS_IMAGE;
             num_fpi += 1;
 
-            bimg_info = if cbimg_hole_length == 0 { 0 } else { BKPIMAGE_HAS_HOLE };
+            bimg_info = if cbimg_hole_length == 0 {
+                0
+            } else {
+                BKPIMAGE_HAS_HOLE
+            };
             if needs_backup {
                 bimg_info |= BKPIMAGE_APPLY;
             }
@@ -301,7 +305,9 @@ fn assemble(
                 if cbimg_hole_length == 0 {
                     scratch.rdatas.push(erased(blk.page));
                 } else {
-                    scratch.rdatas.push(erased(&blk.page[..bimg_hole_offset as usize]));
+                    scratch
+                        .rdatas
+                        .push(erased(&blk.page[..bimg_hole_offset as usize]));
                     scratch.rdatas.push(erased(
                         &blk.page[(bimg_hole_offset + cbimg_hole_length) as usize..],
                     ));
@@ -569,8 +575,7 @@ fn xlog_insert_record_seam(
         });
     }
     // SAFETY: blocks[..n] initialized by the loop above (n <= array len).
-    let blocks =
-        unsafe { core::slice::from_raw_parts(blocks.as_ptr().cast::<RegBlock<'_>>(), n) };
+    let blocks = unsafe { core::slice::from_raw_parts(blocks.as_ptr().cast::<RegBlock<'_>>(), n) };
     insert_record(rmid, info, record_flags, main_data, blocks)
 }
 
@@ -696,7 +701,7 @@ pub fn log_newpages(
                 rlocator: *rlocator,
                 forknum,
                 block: blknos[i + j],
-                page: &pages[i + j],
+                page: pages[i + j],
                 flags,
                 bufdata: &[],
             });

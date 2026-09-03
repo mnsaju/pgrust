@@ -17,19 +17,19 @@ const fn build_digit_table() -> [u8; 200] {
 
 #[inline]
 pub fn pow5bits(e: i32) -> u32 {
-    debug_assert!(e >= 0 && e <= 3528);
+    debug_assert!((0..=3528).contains(&e));
     (((e as u32).wrapping_mul(1217359)) >> 19) + 1
 }
 
 #[inline]
 pub fn log10_pow2(e: i32) -> i32 {
-    debug_assert!(e >= 0 && e <= 1650);
+    debug_assert!((0..=1650).contains(&e));
     (((e as u32).wrapping_mul(78913)) >> 18) as i32
 }
 
 #[inline]
 pub fn log10_pow5(e: i32) -> i32 {
-    debug_assert!(e >= 0 && e <= 2620);
+    debug_assert!((0..=2620).contains(&e));
     (((e as u32).wrapping_mul(732923)) >> 20) as i32
 }
 

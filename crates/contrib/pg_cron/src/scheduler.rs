@@ -21,7 +21,7 @@ use pgsync::Mutex;
 use bgworker::{BackgroundWorker, BgWorkerStartTime, BGW_EXTRALEN, BGW_NEVER_RESTART};
 use elog::{elog as log_report, ereport};
 use init_small::globals as g;
-use mcx::{MemoryContext, Mcx};
+use mcx::{Mcx, MemoryContext};
 use types_core::TimestampTz;
 use types_error::{PgResult, LOG, WARNING};
 use types_storage::waiteventset::{WL_EXIT_ON_PM_DEATH, WL_LATCH_SET, WL_TIMEOUT};
@@ -160,7 +160,7 @@ pub fn PgCronLauncherMain(_main_arg: u64) -> PgResult<()> {
                 Err(e) => {
                     let _ = xact::AbortCurrentTransaction();
                     consecutive_read_failures += 1;
-                    if consecutive_read_failures == 1 || consecutive_read_failures % 30 == 0 {
+                    if consecutive_read_failures == 1 || consecutive_read_failures.is_multiple_of(30) {
                         let _ = log_report(
                             WARNING,
                             format!("pg_cron: could not read cron.job, will retry: {e}"),
@@ -185,14 +185,19 @@ pub fn PgCronLauncherMain(_main_arg: u64) -> PgResult<()> {
                 Err(e) => {
                     let _ = log_report(
                         WARNING,
-                        format!("pg_cron: job {} has an invalid schedule \"{}\": {e}", job.jobid, job.schedule),
+                        format!(
+                            "pg_cron: job {} has an invalid schedule \"{}\": {e}",
+                            job.jobid, job.schedule
+                        ),
                     );
                     continue;
                 }
             };
 
             let due = match &schedule {
-                CronSchedule::Fields { .. } => minute_changed && schedule::is_due(&schedule, now_tm),
+                CronSchedule::Fields { .. } => {
+                    minute_changed && schedule::is_due(&schedule, now_tm)
+                }
                 CronSchedule::Seconds(interval) => {
                     let last = seconds_last_fired
                         .iter()
@@ -200,7 +205,10 @@ pub fn PgCronLauncherMain(_main_arg: u64) -> PgResult<()> {
                         .map(|(_, t)| *t)
                         .unwrap_or(0);
                     if now_epoch - last >= i64::from(*interval) {
-                        if let Some(entry) = seconds_last_fired.iter_mut().find(|(id, _)| *id == job.jobid) {
+                        if let Some(entry) = seconds_last_fired
+                            .iter_mut()
+                            .find(|(id, _)| *id == job.jobid)
+                        {
                             entry.1 = now_epoch;
                         } else {
                             seconds_last_fired.push((job.jobid, now_epoch));
@@ -325,12 +333,18 @@ fn launch_job_worker(job: &CronJobRow) {
         Ok(None) => {
             let _ = log_report(
                 WARNING,
-                format!("pg_cron: out of background worker slots; could not launch job {}", job.jobid),
+                format!(
+                    "pg_cron: out of background worker slots; could not launch job {}",
+                    job.jobid
+                ),
             );
             with_ctx(|ctx| ctx.slots[slot].in_use = false);
         }
         Err(e) => {
-            let _ = log_report(WARNING, format!("pg_cron: failed to launch job {}: {e}", job.jobid));
+            let _ = log_report(
+                WARNING,
+                format!("pg_cron: failed to launch job {}: {e}", job.jobid),
+            );
             with_ctx(|ctx| ctx.slots[slot].in_use = false);
         }
     }
@@ -347,7 +361,12 @@ fn job_worker_bgw_main(slot_arg: u64) -> PgResult<()> {
     let slot = slot_arg as usize;
     let (jobid, command, database, username) = with_ctx(|ctx| {
         let s = &ctx.slots[slot];
-        (s.jobid, s.command.clone(), s.database.clone(), s.username.clone())
+        (
+            s.jobid,
+            s.command.clone(),
+            s.database.clone(),
+            s.username.clone(),
+        )
     });
 
     procsignal::pqsignal_thread(procsignal::signums::SIGTERM, Fallible(postgres::die));
@@ -360,7 +379,8 @@ fn job_worker_bgw_main(slot_arg: u64) -> PgResult<()> {
 
     let start = timestamp_seams::get_current_timestamp::call();
     xact::StartTransactionCommand()?;
-    let outcome = snapmgr::PushActiveSnapshot(&snapmgr::GetTransactionSnapshot()?).and_then(|()| run_job_command(&command));
+    let outcome = snapmgr::PushActiveSnapshot(&snapmgr::GetTransactionSnapshot()?)
+        .and_then(|()| run_job_command(&command));
     let message = match &outcome {
         Ok(()) => None,
         Err(e) => Some(e.to_string()),
@@ -374,13 +394,28 @@ fn job_worker_bgw_main(slot_arg: u64) -> PgResult<()> {
             let _ = xact::AbortCurrentTransaction();
         }
     }
-    let status = if outcome.is_ok() { "succeeded" } else { "failed" };
+    let status = if outcome.is_ok() {
+        "succeeded"
+    } else {
+        "failed"
+    };
     let end = timestamp_seams::get_current_timestamp::call();
 
     if gucs::cron_log_run() {
-        if let Err(e) = record_job_run(jobid, &database, &username, &command, status, message.as_deref(), start, end)
-        {
-            let _ = log_report(WARNING, format!("pg_cron: could not record run details for job {jobid}: {e}"));
+        if let Err(e) = record_job_run(
+            jobid,
+            &database,
+            &username,
+            &command,
+            status,
+            message.as_deref(),
+            start,
+            end,
+        ) {
+            let _ = log_report(
+                WARNING,
+                format!("pg_cron: could not record run details for job {jobid}: {e}"),
+            );
         }
     }
 
@@ -448,7 +483,11 @@ fn quote_literal(text: &str) -> String {
 
 fn read_cron_jobs(mcx: Mcx<'_>) -> PgResult<Vec<CronJobRow>> {
     spi::SPI_connect()?;
-    let outcome = spi::SPI_execute("SELECT jobid, schedule, command, database, username, active FROM cron.job", true, 0);
+    let outcome = spi::SPI_execute(
+        "SELECT jobid, schedule, command, database, username, active FROM cron.job",
+        true,
+        0,
+    );
     let rows = match outcome {
         Ok(ret) if ret == spi::SPI_OK_SELECT => {
             let proc = spi::SPI_processed() as usize;
@@ -490,11 +529,16 @@ fn column_text(
     column: i32,
 ) -> PgResult<String> {
     let bytes = spi::SPI_getvalue(mcx, tuple, tupdesc, column)?;
-    Ok(bytes.map(|b| String::from_utf8_lossy(b).into_owned()).unwrap_or_default())
+    Ok(bytes
+        .map(|b| String::from_utf8_lossy(b).into_owned())
+        .unwrap_or_default())
 }
 
 fn bad_job_row(field: &str) -> Box<types_error::PgError> {
-    types_error::PgError::error(format!("pg_cron: cron.job.{field} has an unexpected format")).into()
+    types_error::PgError::error(format!(
+        "pg_cron: cron.job.{field} has an unexpected format"
+    ))
+    .into()
 }
 
 fn unix_epoch_seconds() -> i64 {
@@ -531,5 +575,11 @@ fn broken_down_time(unix_seconds: i64) -> BrokenDownTime {
     // day_of_week: 1970-01-01 was a Thursday (weekday 4, 0 = Sunday).
     let day_of_week = ((days % 7 + 7 + 4) % 7) as u32;
 
-    BrokenDownTime { minute, hour, day_of_month: day, month, day_of_week }
+    BrokenDownTime {
+        minute,
+        hour,
+        day_of_month: day,
+        month,
+        day_of_week,
+    }
 }

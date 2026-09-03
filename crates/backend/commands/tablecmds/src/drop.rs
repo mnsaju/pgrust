@@ -1,10 +1,10 @@
 // RemoveRelations + RangeVarCallbackForDropRelation (tablecmds.c) over the
 // relation removeTypes.
 use mcx::Mcx;
+use rel_vocab::RangeVar;
 use types_core::{AttrNumber, InvalidOid, Oid, RELATION_RELATION_ID};
 use types_error::{PgError, PgResult, ERRCODE_UNDEFINED_TABLE, ERROR, NOTICE};
 use types_nodes::parsenodes::{DropStmt, ObjectType};
-use rel_vocab::RangeVar;
 use types_nodes::NodeList;
 use types_rel::{AccessExclusiveLock, RELKIND_PARTITIONED_TABLE, RELKIND_RELATION};
 
@@ -183,10 +183,16 @@ pub fn RemoveRelations<'mcx>(mcx: Mcx<'mcx>, drop: &DropStmt<'mcx>) -> PgResult<
                 .with_sqlstate(types_error::ERRCODE_FEATURE_NOT_SUPPORTED),
             ));
         }
-        if matches!(drop.behavior, types_nodes::parsenodes::DropBehavior::DROP_CASCADE) {
+        if matches!(
+            drop.behavior,
+            types_nodes::parsenodes::DropBehavior::DROP_CASCADE
+        ) {
             return Err(Box::new(
-                PgError::new(ERROR, "DROP INDEX CONCURRENTLY does not support CASCADE".to_string())
-                    .with_sqlstate(types_error::ERRCODE_FEATURE_NOT_SUPPORTED),
+                PgError::new(
+                    ERROR,
+                    "DROP INDEX CONCURRENTLY does not support CASCADE".to_string(),
+                )
+                .with_sqlstate(types_error::ERRCODE_FEATURE_NOT_SUPPORTED),
             ));
         }
     }
@@ -204,7 +210,7 @@ pub fn RemoveRelations<'mcx>(mcx: Mcx<'mcx>, drop: &DropStmt<'mcx>) -> PgResult<
 
     for cell in drop.objects.iter() {
         let names = cell.as_list().expect("DROP object is a name list");
-        let rel = makeRangeVarFromNameList(&names);
+        let rel = makeRangeVarFromNameList(names);
 
         inval::local::AcceptInvalidationMessages()?;
 
@@ -241,12 +247,9 @@ pub fn RemoveRelations<'mcx>(mcx: Mcx<'mcx>, drop: &DropStmt<'mcx>) -> PgResult<
             continue;
         }
 
-        if drop.concurrent
-            && actual_relpersistence.get() != types_core::RELPERSISTENCE_TEMP
-        {
+        if drop.concurrent && actual_relpersistence.get() != types_core::RELPERSISTENCE_TEMP {
             debug_assert!(
-                drop.objects.len() == 1
-                    && matches!(drop.removeType, ObjectType::OBJECT_INDEX)
+                drop.objects.len() == 1 && matches!(drop.removeType, ObjectType::OBJECT_INDEX)
             );
             flags |= catalog_dependency::PERFORM_DELETION_CONCURRENTLY;
         }
@@ -274,10 +277,8 @@ pub fn RemoveRelations<'mcx>(mcx: Mcx<'mcx>, drop: &DropStmt<'mcx>) -> PgResult<
             pg_inherits::find_all_inheritors(mcx, heap_oid.get(), heap_lockmode)?;
         }
 
-        objects.add_exact_object_address(pg_depend::ObjectAddress::set(
-            RELATION_RELATION_ID,
-            relOid,
-        ));
+        objects
+            .add_exact_object_address(pg_depend::ObjectAddress::set(RELATION_RELATION_ID, relOid));
     }
 
     catalog_dependency::performMultipleDeletions(mcx, &objects, drop.behavior, flags)
@@ -307,14 +308,8 @@ fn RangeVarCallbackForDropRelation<'mcx>(
     key.sk_func = fmgr_seams::fmgr_info::call(types_core::fmgr::F_OIDEQ)
         .unwrap_or_else(|e| panic!("fmgr_info(F_OIDEQ) failed: {e:?}"));
     key.sk_argument = datum::Datum::from_oid(relOid);
-    let mut scan = genam::systable_beginscan(
-        mcx,
-        &pg_class,
-        catalog::ClassOidIndexId,
-        true,
-        None,
-        &[key],
-    )?;
+    let mut scan =
+        genam::systable_beginscan(mcx, &pg_class, catalog::ClassOidIndexId, true, None, &[key])?;
     let Some(tup) = genam::systable_getnext(mcx, &mut scan)? else {
         genam::systable_endscan(mcx, scan)?;
         pg_class.close(types_rel::AccessShareLock)?;
@@ -345,7 +340,11 @@ fn RangeVarCallbackForDropRelation<'mcx>(
         relkind
     };
     if actual_expected != expected_relkind {
-        return Err(DropErrorMsgWrongType(rel.relname, relkind, expected_relkind));
+        return Err(DropErrorMsgWrongType(
+            rel.relname,
+            relkind,
+            expected_relkind,
+        ));
     }
 
     // DROP is allowed to either the table owner or the schema owner.
@@ -364,15 +363,13 @@ fn RangeVarCallbackForDropRelation<'mcx>(
     }
 
     // IsSystemClass: catalog oid range or pg_toast namespace.
-    let is_system = catalog::IsCatalogRelationOid(relOid) || catalog::IsToastNamespace(relnamespace);
+    let is_system =
+        catalog::IsCatalogRelationOid(relOid) || catalog::IsToastNamespace(relnamespace);
     if is_system && !init_small::globals::allowSystemTableMods() {
         return Err(Box::new(
             PgError::new(
                 ERROR,
-                format!(
-                    "permission denied: \"{}\" is a system catalog",
-                    rel.relname
-                ),
+                format!("permission denied: \"{}\" is a system catalog", rel.relname),
             )
             .with_sqlstate(types_error::ERRCODE_INSUFFICIENT_PRIVILEGE),
         ));

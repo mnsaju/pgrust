@@ -3,10 +3,10 @@
 
 extern crate alloc;
 
-use ::execexpr::{exec_eval_expr, exec_init_expr, exec_init_qual, EvalSlots, ExprState};
-use ::mcx::PgBox;
+use ::execexpr::{exec_eval_expr, exec_init_expr, EvalSlots, ExprState};
 use ::execscan::{exec_scan_extended, ScanNode, ScanState};
 use ::executils::{EStateData, EcxtId, ExecSlotId};
+use ::mcx::PgBox;
 use ::mcx::{Mcx, PgVec};
 use ::types_error::PgResult;
 use ::types_nodes::plannodes::ValuesScan;
@@ -36,17 +36,15 @@ impl<'mcx> ScanNode<'mcx> for ValuesScanState<'mcx> {
     }
 
     /// `ValuesRecheck`: nothing to check.
-    fn epq_recheck(
-        &mut self,
-        _estate: &mut EStateData<'mcx>,
-        _slot: ExecSlotId,
-    ) -> PgResult<bool> {
+    fn epq_recheck(&mut self, _estate: &mut EStateData<'mcx>, _slot: ExecSlotId) -> PgResult<bool> {
         Ok(true)
     }
 
     fn scan_next(&mut self, estate: &mut EStateData<'mcx>) -> PgResult<bool> {
-        let forward =
-            matches!(estate.es_direction, ::types_scan::ScanDirection::ForwardScanDirection);
+        let forward = matches!(
+            estate.es_direction,
+            ::types_scan::ScanDirection::ForwardScanDirection
+        );
         if forward {
             if self.curr_idx < self.array_len {
                 self.curr_idx += 1;
@@ -67,7 +65,9 @@ impl<'mcx> ScanNode<'mcx> for ValuesScanState<'mcx> {
         if self.exprstatelists[self.curr_idx as usize].is_some() {
             let rowcontext = self.rowcontext;
             let scan_slot = self.ss.ss_ScanTupleSlot;
-            let states = self.exprstatelists[self.curr_idx as usize].as_mut().unwrap();
+            let states = self.exprstatelists[self.curr_idx as usize]
+                .as_mut()
+                .unwrap();
             {
                 let natts = estate.slot_mut(scan_slot).base_mut().tts_values.len();
                 assert_eq!(states.len(), natts, "values row length vs scan tupdesc");
@@ -92,9 +92,15 @@ impl<'mcx> ScanNode<'mcx> for ValuesScanState<'mcx> {
             return Ok(true);
         }
 
-        let row = self.exprlists[self.curr_idx as usize].as_list().expect("values row is a List");
+        let row = self.exprlists[self.curr_idx as usize]
+            .as_list()
+            .expect("values row is a List");
         {
-            let natts = estate.slot_mut(self.ss.ss_ScanTupleSlot).base_mut().tts_values.len();
+            let natts = estate
+                .slot_mut(self.ss.ss_ScanTupleSlot)
+                .base_mut()
+                .tts_values
+                .len();
             assert_eq!(row.len(), natts, "values row length vs scan tupdesc");
         }
 
@@ -110,7 +116,11 @@ impl<'mcx> ScanNode<'mcx> for ValuesScanState<'mcx> {
                 // C evaluates in the per-row context (CurrentMemoryContext);
                 // by-ref results (RowExpr forms) need the frames armed with it.
                 state.arm_result_mcx(mcx);
-                let mut slots = EvalSlots { scan: None, inner: None, outer: None };
+                let mut slots = EvalSlots {
+                    scan: None,
+                    inner: None,
+                    outer: None,
+                };
                 exec_eval_expr(&mut state, &mut slots)?
             };
             let base = estate.slot_mut(self.ss.ss_ScanTupleSlot).base_mut();
@@ -151,8 +161,12 @@ pub fn exec_init_values_scan<'mcx>(
     let rowcontext = estate.exec_assign_expr_context();
     let ps_ExprContext = estate.exec_assign_expr_context();
 
-    let first_row = node.values_lists.nth(0).as_list().expect("values_lists cell is a List");
-    let tupdesc = exec_type_from_expr_list(mcx, &first_row)?;
+    let first_row = node
+        .values_lists
+        .nth(0)
+        .as_list()
+        .expect("values_lists cell is a List");
+    let tupdesc = exec_type_from_expr_list(mcx, first_row)?;
     let ss_ScanTupleSlot = estate
         .exec_init_extra_tuple_slot(Some(alloc::rc::Rc::new(tupdesc)), TupleSlotKind::Virtual);
 
@@ -193,7 +207,9 @@ pub fn exec_init_values_scan<'mcx>(
             let row_list = row.as_list().expect("values row is a List");
             let pb = estate.param_bind();
             let mut states: PgVec<'mcx, PgBox<'mcx, ExprState<'mcx>>> = PgVec::new_in(mcx);
-            states.try_reserve(row_list.len()).map_err(|_| mcx.oom(row_list.len()))?;
+            states
+                .try_reserve(row_list.len())
+                .map_err(|_| mcx.oom(row_list.len()))?;
             ::executils::with_subplan_compile_env(estate, |env| -> PgResult<()> {
                 for e in row_list.iter() {
                     states.push(
@@ -215,7 +231,14 @@ pub fn exec_init_values_scan<'mcx>(
         exprlists.push(row);
     }
 
-    Ok(ValuesScanState { ss, rowcontext, exprlists, exprstatelists, curr_idx: -1, array_len })
+    Ok(ValuesScanState {
+        ss,
+        rowcontext,
+        exprlists,
+        exprstatelists,
+        curr_idx: -1,
+        array_len,
+    })
 }
 
 // ExecTypeFromExprList (execTuples.c): anonymous RECORD rowtype from the

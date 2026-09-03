@@ -8,19 +8,19 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 
-use types_core::{BLCKSZ, Buffer, InvalidBuffer, OffsetNumber, TransactionId};
+use types_core::{Buffer, InvalidBuffer, OffsetNumber, TransactionId, BLCKSZ};
 use types_error::{PgError, PgResult};
 use types_storage::bufpage::{
-    MaxHeapTupleSize, MaxHeapTuplesPerPage, PAI_IS_HEAP, PAI_OVERWRITE, PageMut,
-    SizeofHeapTupleHeader,
+    MaxHeapTupleSize, MaxHeapTuplesPerPage, PageMut, SizeofHeapTupleHeader, PAI_IS_HEAP,
+    PAI_OVERWRITE,
 };
 use types_tuple::{
-    HEAP_KEYS_UPDATED, HEAP_MOVED, HEAP_XMAX_BITS, HEAP_XMAX_EXCL_LOCK, HEAP_XMAX_IS_LOCKED_ONLY,
-    HEAP_XMAX_IS_MULTI, HEAP_XMAX_KEYSHR_LOCK, HEAP_XMAX_LOCK_ONLY, HeapTupleHeaderData,
-    ItemPointerData,
+    HeapTupleHeaderData, ItemPointerData, HEAP_KEYS_UPDATED, HEAP_MOVED, HEAP_XMAX_BITS,
+    HEAP_XMAX_EXCL_LOCK, HEAP_XMAX_IS_LOCKED_ONLY, HEAP_XMAX_IS_MULTI, HEAP_XMAX_KEYSHR_LOCK,
+    HEAP_XMAX_LOCK_ONLY,
 };
 use xlogreader_seams::XLogReaderState;
-use xlogutils::{BLK_NEEDS_REDO, XLogInitBufferForRedo, XLogReadBufferForRedo};
+use xlogutils::{XLogInitBufferForRedo, XLogReadBufferForRedo, BLK_NEEDS_REDO};
 
 pub const XLOG_HEAP_INSERT: u8 = 0x00;
 pub const XLOG_HEAP_DELETE: u8 = 0x10;
@@ -98,7 +98,7 @@ const XLR_INFO_MASK: u8 = 0x0F;
 const SizeOfHeapHeader: usize = 5;
 const FirstCommandId: u32 = 0;
 
-fn main_data<'a>(record: &'a XLogReaderState) -> &'a [u8] {
+fn main_data(record: &XLogReaderState) -> &[u8] {
     let rec = record
         .record
         .as_ref()
@@ -1281,6 +1281,7 @@ fn heap_xlog_logical_rewrite(record: &mut XLogReaderState) -> PgResult<()> {
     let file = match std::fs::OpenOptions::new()
         .create(true)
         .write(true)
+        .truncate(false)
         .open(&path)
     {
         Ok(f) => f,

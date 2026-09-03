@@ -13,6 +13,9 @@ mod bgwriter_sync;
 mod buf_hdr;
 mod buf_table;
 pub mod counters;
+mod dbcopy;
+mod drop_buffers;
+mod evict;
 mod extend;
 mod freelist;
 mod gucs;
@@ -20,27 +23,26 @@ mod localbuf;
 mod ops;
 mod pin;
 mod privref;
-mod dbcopy;
-mod evict;
 mod read;
 mod uring;
 mod write;
-mod drop_buffers;
 
-use types_core::{
-    BlockNumber, Buffer, ForkNumber, Oid, INVALID_PROC_NUMBER, RELPERSISTENCE_TEMP,
-};
+use types_core::{BlockNumber, Buffer, ForkNumber, Oid, INVALID_PROC_NUMBER, RELPERSISTENCE_TEMP};
 use types_error::{ErrorLocation, PgResult, ERROR};
+use types_rel::rel::RelationData;
 use types_storage::buf::BufferAccessStrategy;
 use types_storage::{ReadBufferMode, RelFileLocator, RelFileLocatorBackend};
-use types_rel::rel::RelationData;
 
+pub use bgwriter_sync::{BgBufferSync, BgwSyncState};
 pub use buf_hdr::{
     BufferDesc, BufferDescriptorGetBuffer, BufferGetBlockPtr, BufferManagerShmemInit,
     BufferManagerShmemResetAfterCrash, GetBufferDescriptor, LockBufHdr, NBuffersInited,
     UnlockBufHdr, BUFFERDESC_PAD_TO_SIZE,
 };
 pub use buf_table::{BufMappingPartitionLock, BufTableHashCode, BufTableLookup};
+pub use evict::{
+    EvictAllUnpinnedBuffers, EvictCounts, EvictRelUnpinnedBuffers, EvictUnpinnedBuffer,
+};
 pub use freelist::{
     have_free_buffer, FreeAccessStrategy, GetAccessStrategy, GetAccessStrategyWithSize,
     GetPinLimit, IOContextForStrategy, StrategyFreeBuffer, StrategyGetBuffer,
@@ -52,14 +54,12 @@ pub use ops::{
     ConditionalLockBuffer, IsBufferCleanupOK, LockBuffer, LockBufferForCleanup, MarkBufferDirty,
     UnlockReleaseBuffer, BUFFER_LOCK_EXCLUSIVE, BUFFER_LOCK_SHARE, BUFFER_LOCK_UNLOCK,
 };
-pub use bgwriter_sync::{BgBufferSync, BgwSyncState};
-pub use write::{BufferSync, CheckPointBuffers, FlushOneBuffer, PageSetChecksumInplace};
 pub use pin::{
     AtEOXact_Buffers, BufferIsPinned, CheckBufferIsPinnedOnce, IncrBufferRefCount, ReleaseBuffer,
     UnlockBuffers,
 };
 pub use privref::{debug_all_private_pins, GetPrivateRefCount, ReservePrivateRefCountEntry};
-pub use evict::{EvictAllUnpinnedBuffers, EvictCounts, EvictRelUnpinnedBuffers, EvictUnpinnedBuffer};
+pub use write::{BufferSync, CheckPointBuffers, FlushOneBuffer, PageSetChecksumInplace};
 
 // Diagnostic (PGRUST_REDO_PIN_CHECK): wait out this thread's in-flight uring
 // prefetch pins so the check sees only genuine leaks.
@@ -75,16 +75,16 @@ pub fn debug_buffer_tag_string(buffer: types_core::Buffer) -> String {
         t.spcOid, t.dbOid, t.relNumber, t.forkNum as i32, t.blockNum
     )
 }
+pub use extend::{ExtendBufferedRelBy, ExtendBufferedRelTo, ExtendBufferedRelToSmgr};
+pub use gucs::ignore_checksum_failure;
 pub use localbuf::{
     n_loc_buffer, AtEOXact_LocalBuffers, AtProcExit_LocalBuffers, DropRelationAllLocalBuffers,
     DropRelationLocalBuffers,
 };
-pub use gucs::ignore_checksum_failure;
 pub use read::{
     page_is_verified, relpath_backend_desc, relpath_desc, ReadBufferWithoutRelcache,
     ReadBuffer_common, ReadRecentBuffer, PIV_IGNORE_CHECKSUM_FAILURE, PIV_LOG_LOG, PIV_LOG_WARNING,
 };
-pub use extend::{ExtendBufferedRelBy, ExtendBufferedRelTo, ExtendBufferedRelToSmgr};
 
 const DEFAULTTABLESPACE_OID: Oid = 1663;
 const GLOBALTABLESPACE_OID: Oid = 1664;
@@ -162,12 +162,13 @@ pub fn ReadBufferExtended(
 ) -> PgResult<Buffer> {
     if rel.rd_rel.relpersistence == RELPERSISTENCE_TEMP && !rel.rd_islocaltemp {
         return Err(Box::new(
-            types_error::PgError::new(
-                ERROR,
-                "cannot access temporary tables of other sessions",
-            )
-            .with_sqlstate(types_error::ERRCODE_FEATURE_NOT_SUPPORTED)
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "ReadBufferExtended")),
+            types_error::PgError::new(ERROR, "cannot access temporary tables of other sessions")
+                .with_sqlstate(types_error::ERRCODE_FEATURE_NOT_SUPPORTED)
+                .with_error_location(ErrorLocation::new(
+                    file!(),
+                    line!() as i32,
+                    "ReadBufferExtended",
+                )),
         ));
     }
     let (buffer, hit) = read::ReadBuffer_common(
@@ -209,12 +210,13 @@ pub fn ReadBufferBatched(
 ) -> PgResult<Buffer> {
     if rel.rd_rel.relpersistence == RELPERSISTENCE_TEMP && !rel.rd_islocaltemp {
         return Err(Box::new(
-            types_error::PgError::new(
-                ERROR,
-                "cannot access temporary tables of other sessions",
-            )
-            .with_sqlstate(types_error::ERRCODE_FEATURE_NOT_SUPPORTED)
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "ReadBufferExtended")),
+            types_error::PgError::new(ERROR, "cannot access temporary tables of other sessions")
+                .with_sqlstate(types_error::ERRCODE_FEATURE_NOT_SUPPORTED)
+                .with_error_location(ErrorLocation::new(
+                    file!(),
+                    line!() as i32,
+                    "ReadBufferExtended",
+                )),
         ));
     }
     let (buffer, hit) = read::ReadBuffer_batched(
@@ -274,6 +276,9 @@ pub fn RelationGetNumberOfBlocksInFork(
     smgr_seams::rel_smgr_nblocks::call(rel, forknum)
 }
 
+// Kept ready for the next not-yet-ported bufmgr.c entry point, even though
+// nothing currently invokes it.
+#[allow(unused_macros)]
 macro_rules! unported {
     ($(fn $name:ident($($ty:ty),*) -> $ret:ty, $cfn:literal;)+) => {
         $(pub fn $name($(_: $ty),*) -> $ret {

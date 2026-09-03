@@ -6,13 +6,14 @@
 extern crate alloc;
 
 use crate::tojson::{
-    datum_to_json_internal, json_categorize_type, no_input_type, JsonTypeCategory,
-    TypeCat,
+    datum_to_json_internal, json_categorize_type, no_input_type, JsonTypeCategory, TypeCat,
 };
 use datum::Datum;
 use mcx::{Mcx, PgFxHashMap};
 use stringinfo::StringInfo;
-use types_error::{PgError, PgResult, ERRCODE_DUPLICATE_JSON_OBJECT_KEY_VALUE, ERRCODE_NULL_VALUE_NOT_ALLOWED};
+use types_error::{
+    PgError, PgResult, ERRCODE_DUPLICATE_JSON_OBJECT_KEY_VALUE, ERRCODE_NULL_VALUE_NOT_ALLOWED,
+};
 use types_fmgr::{varlena_result, FmgrInfo, FunctionCallInfoBaseData as Fcinfo};
 
 // C JsonUniqueBuilderState (object_id fixed at 0 for this flat builder —
@@ -89,7 +90,10 @@ fn new_state(aggmcx: Mcx<'_>, open: &[u8], unique_keys: bool) -> PgResult<*mut J
         let m: PgFxHashMap<'_, &[u8], ()> = PgFxHashMap::with_hasher_in(Default::default(), aggmcx);
         // SAFETY: as the str transmute above.
         let keys: UniqueKeys = unsafe { core::mem::transmute(m) };
-        Some(UniqueCheck { keys, skipped: None })
+        Some(UniqueCheck {
+            keys,
+            skipped: None,
+        })
     } else {
         None
     };
@@ -106,10 +110,10 @@ fn new_state(aggmcx: Mcx<'_>, open: &[u8], unique_keys: bool) -> PgResult<*mut J
     Ok(p)
 }
 
-fn cats<'f>(
-    flinfo: &'f mut FmgrInfo,
+fn cats(
+    flinfo: &mut FmgrInfo,
     build: impl FnOnce() -> PgResult<AggCats>,
-) -> PgResult<&'f mut AggCats> {
+) -> PgResult<&mut AggCats> {
     if flinfo.fn_extra_ref::<AggCats>().is_none() {
         let c = build()?;
         flinfo.set_fn_extra(c);
@@ -156,10 +160,19 @@ fn json_agg_transfn_worker(
     }
 
     let mcx = fcinfo.result_mcx();
-    let c = flinfo.fn_extra_mut::<AggCats>().expect("cats built on first call");
+    let c = flinfo
+        .fn_extra_mut::<AggCats>()
+        .expect("cats built on first call");
     if b.isnull {
         let mut null_cat = TypeCat::null();
-        datum_to_json_internal(mcx, &mut *state.str, Datum::null(), true, &mut null_cat, false)?;
+        datum_to_json_internal(
+            mcx,
+            &mut state.str,
+            Datum::null(),
+            true,
+            &mut null_cat,
+            false,
+        )?;
         return Ok(state_datum);
     }
 
@@ -173,7 +186,7 @@ fn json_agg_transfn_worker(
         state.str.append_bytes(b"\n ")?;
     }
 
-    datum_to_json_internal(mcx, &mut *state.str, b.value, false, &mut c.val, false)?;
+    datum_to_json_internal(mcx, &mut state.str, b.value, false, &mut c.val, false)?;
     Ok(state_datum)
 }
 
@@ -278,7 +291,9 @@ fn json_object_agg_transfn_worker(
     }
 
     let mcx = fcinfo.result_mcx();
-    let c = flinfo.fn_extra_mut::<AggCats>().expect("cats built on first call");
+    let c = flinfo
+        .fn_extra_mut::<AggCats>()
+        .expect("cats built on first call");
 
     // C json_unique_builder_get_throwawaybuf: a key-only scratch buffer that
     // never enters the output, reset (not reallocated) on each skip.
@@ -298,7 +313,14 @@ fn json_object_agg_transfn_worker(
             state.str.append_bytes(b", ")?;
         }
         key_offset = state.str.len();
-        datum_to_json_internal(mcx, &mut *state.str, k.value, false, c.key.as_mut().unwrap(), true)?;
+        datum_to_json_internal(
+            mcx,
+            &mut state.str,
+            k.value,
+            false,
+            c.key.as_mut().unwrap(),
+            true,
+        )?;
     }
 
     if unique_keys {
@@ -318,7 +340,7 @@ fn json_object_agg_transfn_worker(
 
     state.str.append_bytes(b" : ")?;
     let val = if v.isnull { Datum::null() } else { v.value };
-    datum_to_json_internal(mcx, &mut *state.str, val, v.isnull, &mut c.val, false)?;
+    datum_to_json_internal(mcx, &mut state.str, val, v.isnull, &mut c.val, false)?;
     Ok(state_datum)
 }
 

@@ -113,7 +113,11 @@ fn get_rmgr_unregistered_errors_like_rmgr_not_found() {
         Ok(_) => panic!("expected RmgrNotFound error"),
     };
     assert_eq!(err.message, "resource manager with ID 131 not registered");
-    assert!(err.hint.as_deref().unwrap().contains("shared_preload_libraries"));
+    assert!(err
+        .hint
+        .as_deref()
+        .unwrap()
+        .contains("shared_preload_libraries"));
 }
 
 #[test]

@@ -62,13 +62,12 @@ pub fn preprocess_minmax_aggregates<'mcx>(run: &mut PlannerRun<'mcx>) -> PgResul
 
     for i in 0..aggs_list.len() {
         let aggsortop = aggs_list[i].aggsortop;
-        let (eqop, reverse) =
-            match lsyscache::amop::get_equality_op_for_ordering_op(aggsortop)? {
-                Some((eqop, reverse)) if eqop != 0 => (eqop, reverse),
-                _ => {
-                    return Err(could_not_find_eqop(aggsortop));
-                }
-            };
+        let (eqop, reverse) = match lsyscache::amop::get_equality_op_for_ordering_op(aggsortop)? {
+            Some((eqop, reverse)) if eqop != 0 => (eqop, reverse),
+            _ => {
+                return Err(could_not_find_eqop(aggsortop));
+            }
+        };
         // NULLS FIRST is likelier available under a reverse-sort operator, so
         // try reverse's polarity first (planagg.c).
         if build_minmax_path(run, &mut aggs_list[i], eqop, aggsortop, reverse, reverse)? {
@@ -100,7 +99,8 @@ pub fn preprocess_minmax_aggregates<'mcx>(run: &mut PlannerRun<'mcx>) -> PgResul
         }
         v
     };
-    let mm_path = crate::pathnode::create_minmaxagg_path(run, grouped_rel, target, aggs_list, quals)?;
+    let mm_path =
+        crate::pathnode::create_minmaxagg_path(run, grouped_rel, target, aggs_list, quals)?;
     add_path(run, grouped_rel, mm_path);
     Ok(())
 }
@@ -191,10 +191,8 @@ fn build_minmax_path<'mcx>(
     let tle = Node::mk_target_entry(mcx, tle_target, 1, Some("agg_target"), false)?;
     // assignSortGroupRef: the single fresh tle takes ref 1.
     // SAFETY: freshly built node; no other reference is live.
-    unsafe {
-        tle.with_mut::<types_nodes::primnodes::TargetEntry, _>(|t| t.ressortgroupref = 1)
-    }
-    .expect("TargetEntry node");
+    unsafe { tle.with_mut::<types_nodes::primnodes::TargetEntry, _>(|t| t.ressortgroupref = 1) }
+        .expect("TargetEntry node");
     subparse.targetList = NodeList::make1(mcx, tle)?;
 
     subparse.havingQual = None;
@@ -213,7 +211,10 @@ fn build_minmax_path<'mcx>(
     )?;
     let old_f = subparse.jointree.expect("jointree is a FromExpr");
     let mut quals = match old_f.quals {
-        Some(q) => q.as_list().expect("preprocessed quals are a list").clone_in(mcx)?,
+        Some(q) => q
+            .as_list()
+            .expect("preprocessed quals are a list")
+            .clone_in(mcx)?,
         None => NodeList::nil(),
     };
     if !quals.iter().any(|n| types_nodes::equal(n, ntest)) {
@@ -272,11 +273,14 @@ fn build_minmax_path<'mcx>(
     crate::subselect::ss_charge_for_initplans(run, final_rel)?;
 
     let final_rows = run.root.rel(final_rel).rows;
-    let path_fraction = if final_rows > 1.0 { 1.0 / final_rows } else { 1.0 };
+    let path_fraction = if final_rows > 1.0 {
+        1.0 / final_rows
+    } else {
+        1.0
+    };
 
     let pathlist = crate::relnode::pgvec_clone_shallow(mcx, &run.root.rel(final_rel).pathlist);
-    let query_pathkeys =
-        crate::relnode::pgvec_clone_shallow(mcx, &run.root.query_pathkeys);
+    let query_pathkeys = crate::relnode::pgvec_clone_shallow(mcx, &run.root.query_pathkeys);
     let sorted_path = crate::pathkeys::get_cheapest_fractional_path_for_pathkeys(
         run,
         &pathlist,
@@ -314,19 +318,19 @@ fn minmax_qp_callback<'mcx>(run: &mut PlannerRun<'mcx>) -> PgResult<()> {
     let parse = run.parse();
     run.root.sort_pathkeys =
         crate::pathkeys::make_pathkeys_for_sortclauses(run, &parse.sortClause, &parse.targetList)?;
-    run.root.query_pathkeys =
-        crate::relnode::pgvec_clone_shallow(run.mcx, &run.root.sort_pathkeys);
+    run.root.query_pathkeys = crate::relnode::pgvec_clone_shallow(run.mcx, &run.root.sort_pathkeys);
     Ok(())
 }
 
 fn fetch_agg_sort_op(aggfnoid: types_core::Oid) -> PgResult<types_core::Oid> {
-    Ok(match syscache_seams::lookup_pg_aggregate_shape::call(aggfnoid)? {
-        Some(form) => form.aggsortop,
-        None => 0,
-    })
+    Ok(
+        match syscache_seams::lookup_pg_aggregate_shape::call(aggfnoid)? {
+            Some(form) => form.aggsortop,
+            None => 0,
+        },
+    )
 }
 
-pub(crate) use types_pathnodes::run::subroot_path_base;
 
 #[track_caller]
 #[cold]

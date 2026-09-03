@@ -1,5 +1,5 @@
-use mcx::{vec_with_capacity_in, Mcx, PgVec};
 use crate::scanner_isspace;
+use mcx::{vec_with_capacity_in, Mcx, PgVec};
 use wchar::{
     is_utf16_surrogate_first, is_utf16_surrogate_second, is_valid_unicode_codepoint, pg_enc,
     pg_wchar, surrogate_pair_to_codepoint, unicode_to_utf8, unicode_utf8len, PG_UTF8,
@@ -30,7 +30,11 @@ fn check_unicode_value(c: pg_wchar, escpos: i32) -> Result<(), UdeescapeError> {
     if is_valid_unicode_codepoint(c) {
         Ok(())
     } else {
-        Err(UdeescapeError { message: "invalid Unicode escape value", location: escpos, hint: None })
+        Err(UdeescapeError {
+            message: "invalid Unicode escape value",
+            location: escpos,
+            hint: None,
+        })
     }
 }
 
@@ -133,8 +137,11 @@ fn emit(
     server_encoding: pg_enc,
 ) -> Result<(), UdeescapeError> {
     check_unicode_value(unicode, escpos)?;
-    let invalid_pair =
-        UdeescapeError { message: "invalid Unicode surrogate pair", location: escpos, hint: None };
+    let invalid_pair = UdeescapeError {
+        message: "invalid Unicode surrogate pair",
+        location: escpos,
+        hint: None,
+    };
     let cp = if *pair_first != 0 {
         if !is_utf16_surrogate_second(unicode) {
             return Err(invalid_pair);

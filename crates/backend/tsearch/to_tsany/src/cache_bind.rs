@@ -27,7 +27,10 @@ pub fn config_map<'mcx>(mcx: Mcx<'mcx>, cfg: Oid) -> PgResult<ConfigMap<'mcx>> {
         }
         map.push(dicts);
     }
-    Ok(ConfigMap { prs_id: entry.prs_id, map })
+    Ok(ConfigMap {
+        prs_id: entry.prs_id,
+        map,
+    })
 }
 
 pub fn parser_fns(prs_oid: Oid) -> PgResult<ParserFns> {

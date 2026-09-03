@@ -1,4 +1,4 @@
-use guc::{NewGUCNestLevel, AtEOXact_GUC, set_config_option, GUC_ACTION_SAVE};
+use guc::{set_config_option, AtEOXact_GUC, NewGUCNestLevel, GUC_ACTION_SAVE};
 use types_error::ErrorLevel;
 use types_guc::{PGC_S_SESSION, PGC_USERSET};
 

@@ -10,8 +10,8 @@ use stringinfo::StringInfo;
 use types_core::{InvalidOid, Oid, FUNC_MAX_ARGS, NAMESPACE_RELATION_ID, PROCEDURE_RELATION_ID};
 use types_error::{
     PgResult, ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_INVALID_BINARY_REPRESENTATION,
-    ERRCODE_INVALID_PARAMETER_VALUE, ERRCODE_PROTOCOL_VIOLATION, ERRCODE_UNDEFINED_FUNCTION,
-    ERROR, LOG,
+    ERRCODE_INVALID_PARAMETER_VALUE, ERRCODE_PROTOCOL_VIOLATION, ERRCODE_UNDEFINED_FUNCTION, ERROR,
+    LOG,
 };
 use types_fmgr::{FmgrInfo, LocalFcinfo, PackedVarlena};
 use types_nodes::parsenodes::ObjectType;
@@ -24,7 +24,7 @@ struct FpInfo {
     flinfo: FmgrInfo,
     namespace: Oid,
     rettype: Oid,
-    argtypes: [Oid; FUNC_MAX_ARGS as usize],
+    argtypes: [Oid; FUNC_MAX_ARGS],
     fname: String,
 }
 
@@ -92,7 +92,9 @@ fn fetch_fp_info<'mcx>(mcx: Mcx<'mcx>, func_id: Oid) -> PgResult<FpInfo> {
     if pp.prokind != PROKIND_FUNCTION || pp.proretset {
         return Err(ereport(ERROR)
             .errcode(ERRCODE_FEATURE_NOT_SUPPORTED)
-            .errmsg(format!("cannot call function \"{fname}\" via fastpath interface"))
+            .errmsg(format!(
+                "cannot call function \"{fname}\" via fastpath interface"
+            ))
             .into_error()
             .into());
     }
@@ -106,7 +108,7 @@ fn fetch_fp_info<'mcx>(mcx: Mcx<'mcx>, func_id: Oid) -> PgResult<FpInfo> {
             .into());
     }
 
-    let mut argtypes = [InvalidOid; FUNC_MAX_ARGS as usize];
+    let mut argtypes = [InvalidOid; FUNC_MAX_ARGS];
     let Some((_rettype, sig_argtypes)) =
         syscache_seams::lookup_pg_proc_signature::call(mcx, func_id)?
     else {
@@ -202,7 +204,7 @@ pub fn HandleFunctionRequest<'mcx>(
 
     // Note: collation = InvalidOid, so collation-sensitive functions can't be
     // called this way.
-    let mut fcinfo = LocalFcinfo::<{ FUNC_MAX_ARGS as usize }>::fresh(InvalidOid);
+    let mut fcinfo = LocalFcinfo::<{ FUNC_MAX_ARGS }>::fresh(InvalidOid);
     // SAFETY: the message context outlives this call.
     unsafe { fcinfo.set_result_mcx(mcx) };
 
@@ -237,7 +239,7 @@ fn parse_fcall_arguments<'mcx>(
     mcx: Mcx<'mcx>,
     msg_buf: &mut StringInfo<'mcx>,
     fip: &FpInfo,
-    fcinfo: &mut LocalFcinfo<{ FUNC_MAX_ARGS as usize }>,
+    fcinfo: &mut LocalFcinfo<{ FUNC_MAX_ARGS }>,
 ) -> PgResult<i16> {
     let numAFormats = pqformat::pq_getmsgint(msg_buf, 2)? as i32;
     let mut aformats: PgVec<'mcx, i16> = PgVec::new_in(mcx);
@@ -315,8 +317,7 @@ fn parse_fcall_arguments<'mcx>(
             // C stores the value even for a NULL arg; isnull was set above.
             fcinfo.args[i].value = v;
         } else if aformat == 1 {
-            let (typreceive, typioparam) =
-                lsyscache::typ::getTypeBinaryInputInfo(fip.argtypes[i])?;
+            let (typreceive, typioparam) = lsyscache::typ::getTypeBinaryInputInfo(fip.argtypes[i])?;
             let mut finfo = fmgr_seams::fmgr_info::call(typreceive)?;
             match raw {
                 None => {

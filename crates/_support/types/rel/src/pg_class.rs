@@ -27,18 +27,23 @@ pub const fn RELKIND_HAS_STORAGE(relkind: u8) -> bool {
 
 #[inline]
 pub const fn RELKIND_HAS_PARTITIONS(relkind: u8) -> bool {
-    matches!(relkind, RELKIND_PARTITIONED_TABLE | RELKIND_PARTITIONED_INDEX)
+    matches!(
+        relkind,
+        RELKIND_PARTITIONED_TABLE | RELKIND_PARTITIONED_INDEX
+    )
 }
 
 #[inline]
 pub const fn RELKIND_HAS_TABLESPACE(relkind: u8) -> bool {
-    (RELKIND_HAS_STORAGE(relkind) || RELKIND_HAS_PARTITIONS(relkind))
-        && relkind != RELKIND_SEQUENCE
+    (RELKIND_HAS_STORAGE(relkind) || RELKIND_HAS_PARTITIONS(relkind)) && relkind != RELKIND_SEQUENCE
 }
 
 #[inline]
 pub const fn RELKIND_HAS_TABLE_AM(relkind: u8) -> bool {
-    matches!(relkind, RELKIND_RELATION | RELKIND_TOASTVALUE | RELKIND_MATVIEW)
+    matches!(
+        relkind,
+        RELKIND_RELATION | RELKIND_TOASTVALUE | RELKIND_MATVIEW
+    )
 }
 
 // FormData_pg_class trimmed to the fields ports consume (the decode-once
@@ -88,7 +93,12 @@ mod tests {
             (RELKIND_PARTITIONED_INDEX, false, false),
         ] {
             assert_eq!(RELKIND_HAS_STORAGE(kind), storage, "kind {}", kind as char);
-            assert_eq!(RELKIND_HAS_TABLE_AM(kind), table_am, "kind {}", kind as char);
+            assert_eq!(
+                RELKIND_HAS_TABLE_AM(kind),
+                table_am,
+                "kind {}",
+                kind as char
+            );
         }
         assert!(!RELKIND_HAS_TABLESPACE(RELKIND_SEQUENCE));
         assert!(RELKIND_HAS_TABLESPACE(RELKIND_PARTITIONED_TABLE));

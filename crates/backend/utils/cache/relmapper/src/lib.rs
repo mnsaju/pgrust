@@ -647,7 +647,10 @@ fn write_relmap_file(
     tsid: Oid,
     dbpath: &str,
 ) -> PgResult<()> {
-    debug_assert!(lwlock::LWLockHeldByMeInMode(map_lock(), lwlock::LW_EXCLUSIVE));
+    debug_assert!(lwlock::LWLockHeldByMeInMode(
+        map_lock(),
+        lwlock::LW_EXCLUSIVE
+    ));
 
     newmap.magic = RELMAPPER_FILEMAGIC;
     if newmap.num_mappings < 0 || newmap.num_mappings > MAX_MAPPINGS as i32 {

@@ -65,7 +65,9 @@ fc_bytealike! {
 }
 
 fn ic_scratch<'a>(flinfo: Option<&'a mut FmgrInfo>, name: &'static str) -> &'a mut IcScratch {
-    let Some(flinfo) = flinfo else { no_flinfo(name) };
+    let Some(flinfo) = flinfo else {
+        no_flinfo(name)
+    };
     if !flinfo.has_fn_extra() {
         flinfo.set_fn_extra(IcScratch::default());
     }
@@ -115,7 +117,9 @@ fn escape_out(
     name: &'static str,
     bytea: bool,
 ) -> PgResult<Datum> {
-    let Some(flinfo) = flinfo else { no_flinfo(name) };
+    let Some(flinfo) = flinfo else {
+        no_flinfo(name)
+    };
     if !flinfo.has_fn_extra() {
         flinfo.set_fn_extra(OutBuf(Vec::new()));
     }
@@ -214,5 +218,10 @@ pub const LIKE_BUILTINS: &[FmgrBuiltin] = &[
     b(2007, "like", 2, fc_bytealike),
     b(2008, "notlike", 2, fc_byteanlike),
     b(2009, "like_escape", 2, fc_like_escape_bytea),
-    b(6242, "text_starts_with_support", 1, fc_text_starts_with_support),
+    b(
+        6242,
+        "text_starts_with_support",
+        1,
+        fc_text_starts_with_support,
+    ),
 ];

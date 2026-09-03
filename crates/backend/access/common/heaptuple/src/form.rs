@@ -7,11 +7,11 @@ use ::types_error::{PgError, PgResult, ERRCODE_TOO_MANY_COLUMNS};
 use ::types_tuple::tupmacs::{att_addlength_datum, att_datum_alignby};
 use ::types_tuple::{
     heap_deform_tuple, HeapTupleData, HeapTupleHeaderData, ItemPointerData, ItemPointerSetInvalid,
-    MinimalTupleData, TupleDescData, BITMAPLEN, MAXALIGN, MINIMAL_TUPLE_OFFSET,
-    MaxTupleAttributeNumber, SizeofHeapTupleHeader, SizeofMinimalTupleHeader,
+    MaxTupleAttributeNumber, MinimalTupleData, SizeofHeapTupleHeader, SizeofMinimalTupleHeader,
+    TupleDescData, BITMAPLEN, MAXALIGN, MINIMAL_TUPLE_OFFSET,
 };
 
-use crate::fill::{fill_val, heap_fill_tuple, heap_compute_data_size};
+use crate::fill::{fill_val, heap_compute_data_size, heap_fill_tuple};
 use crate::tuple::{alloc_image, HeapTuple, MinimalTuple};
 
 #[track_caller]
@@ -96,8 +96,8 @@ pub fn execute_attr_map_tuple<'mcx>(
 
     let mut invalues = vec_with_capacity_in(mcx, in_natts)?;
     let mut innulls = vec_with_capacity_in(mcx, in_natts)?;
-    invalues.extend(core::iter::repeat(Datum::null()).take(in_natts));
-    innulls.extend(core::iter::repeat(true).take(in_natts));
+    invalues.extend(core::iter::repeat_n(Datum::null(), in_natts));
+    innulls.extend(core::iter::repeat_n(true, in_natts));
     heap_deform_tuple(tuple, indesc, &mut invalues, &mut innulls);
 
     let mut outvalues = vec_with_capacity_in(mcx, out_natts)?;

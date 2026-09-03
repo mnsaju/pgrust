@@ -23,7 +23,9 @@ pub fn SelectConfigFiles(user_d_option: Option<&str>, progname: &str) -> PgResul
 
     if let Some(dir) = configdir.as_deref() {
         if let Err(e) = std::fs::metadata(dir) {
-            write_stderr(&format!("{progname}: could not access directory \"{dir}\": {e}\n"));
+            write_stderr(&format!(
+                "{progname}: could not access directory \"{dir}\": {e}\n"
+            ));
             if e.kind() == std::io::ErrorKind::NotFound {
                 write_stderr(
                     "Run initdb or pg_basebackup to initialize a PostgreSQL data directory.\n",
@@ -77,7 +79,12 @@ pub fn SelectConfigFiles(user_d_option: Option<&str>, progname: &str) -> PgResul
     let data_dir = init_small::globals::DataDir()
         .expect("SelectConfigFiles: SetDataDir published DataDir")
         .to_string();
-    crate::SetConfigOption("data_directory", Some(&data_dir), PGC_POSTMASTER, PGC_S_OVERRIDE)?;
+    crate::SetConfigOption(
+        "data_directory",
+        Some(&data_dir),
+        PGC_POSTMASTER,
+        PGC_S_OVERRIDE,
+    )?;
 
     // Second pass picks up postgresql.auto.conf now that DataDir is known.
     guc_file::ProcessConfigFile(PGC_POSTMASTER)?;

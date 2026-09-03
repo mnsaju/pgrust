@@ -1,5 +1,7 @@
+#![allow(non_camel_case_types)]
 // libcrypto/libssl entry points the `openssl` crate does not surface; symbols
-// resolve against the vendored OpenSSL that openssl-sys links.
+// resolve against the vendored OpenSSL that openssl-sys links (C typedef
+// names kept verbatim for grep-ability against OpenSSL headers).
 
 use libc::{c_char, c_int, c_long, c_ulong, c_void};
 use openssl_sys as ossl;

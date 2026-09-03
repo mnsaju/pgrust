@@ -9,12 +9,14 @@ use std::sync::Arc;
 use pgsync::Mutex;
 
 use ::execexpr::ExprState;
-use ::executils::exec_recheck_qual_and_reset;
 use ::execscan::{ScanNode, ScanState};
+use ::executils::exec_recheck_qual_and_reset;
 use ::executils::{EStateData, ExecSlotId};
 use ::mcx::{Mcx, PgBox};
 use ::tableam::{table_beginscan_bm, table_endscan, table_rescan, table_slot_callbacks};
-use ::tidbitmap::{TbmIterator, TbmRangeIterator, TbmSharedIterator, TbmSharedIterState, TIDBitmap};
+use ::tidbitmap::{
+    TIDBitmap, TbmIterator, TbmRangeIterator, TbmSharedIterState, TbmSharedIterator,
+};
 use ::types_error::PgResult;
 use ::types_nodes::plannodes::BitmapHeapScan;
 use ::types_rel::Relation;
@@ -98,11 +100,7 @@ impl<'mcx> ScanNode<'mcx> for BitmapHeapScanState<'mcx> {
     }
 
     /// `BitmapHeapRecheck`: does the EPQ test tuple meet the original quals?
-    fn epq_recheck(
-        &mut self,
-        estate: &mut EStateData<'mcx>,
-        slot: ExecSlotId,
-    ) -> PgResult<bool> {
+    fn epq_recheck(&mut self, estate: &mut EStateData<'mcx>, slot: ExecSlotId) -> PgResult<bool> {
         let ecxt = self.ss.ps_ExprContext;
         exec_recheck_qual_and_reset(self.bitmapqualorig.as_deref_mut(), estate, ecxt, slot)
     }
@@ -248,9 +246,7 @@ impl BitmapHeapScanState<'_> {
 /// The 10ms timed park is the interrupt-check cadence (C's
 /// ConditionVariableSleep checks interrupts per wakeup); the publish wake
 /// itself rides the waker-word list (see [`ParallelBitmapHeapState`]).
-pub fn bitmap_should_initialize_shared_state(
-    pstate: &ParallelBitmapHeapState,
-) -> PgResult<bool> {
+pub fn bitmap_should_initialize_shared_state(pstate: &ParallelBitmapHeapState) -> PgResult<bool> {
     let mut guard = pstate.shared.lock().unwrap_or_else(|e| e.into_inner());
     loop {
         match guard.state {
@@ -276,8 +272,7 @@ pub fn bitmap_should_initialize_shared_state(
                         // Unwind hygiene (the row-2/3 class rule): drop the
                         // registration so the list never carries dead words
                         // into the publisher's drain.
-                        let mut g =
-                            pstate.shared.lock().unwrap_or_else(|p| p.into_inner());
+                        let mut g = pstate.shared.lock().unwrap_or_else(|p| p.into_inner());
                         if let Some(pos) = g.wakers.iter().position(|w| *w == word) {
                             g.wakers.swap_remove(pos);
                         }
@@ -302,7 +297,10 @@ pub fn exec_bitmap_heap_initialize_dsm(
 
 /// `ExecBitmapHeapReInitializeDSM`.
 pub fn exec_bitmap_heap_reinitialize_dsm(node: &mut BitmapHeapScanState<'_>) {
-    let pstate = node.pstate.as_ref().expect("parallel bitmap scan was initialized");
+    let pstate = node
+        .pstate
+        .as_ref()
+        .expect("parallel bitmap scan was initialized");
     let mut guard = pstate.shared.lock().unwrap_or_else(|e| e.into_inner());
     guard.state = SharedBitmapState::Initial;
     guard.iterator = None;
@@ -330,7 +328,11 @@ pub fn bitmap_table_scan_setup<'mcx>(
     match (&node.pstate, tbm) {
         (None, Some(tbm)) => {
             node.tbm = Some(tbm);
-            let iter = node.tbm.as_mut().expect("just set").begin_private_iterate()?;
+            let iter = node
+                .tbm
+                .as_mut()
+                .expect("just set")
+                .begin_private_iterate()?;
             node.tbmiterator = TbmIterator::private(iter);
         }
         (Some(ps), Some(mut tbm)) => {
@@ -355,7 +357,12 @@ pub fn bitmap_table_scan_setup<'mcx>(
             let shared = {
                 let guard = ps.shared.lock().unwrap_or_else(|e| e.into_inner());
                 debug_assert!(guard.state == SharedBitmapState::Finished);
-                Arc::clone(guard.iterator.as_ref().expect("BM_FINISHED without an iterator"))
+                Arc::clone(
+                    guard
+                        .iterator
+                        .as_ref()
+                        .expect("BM_FINISHED without an iterator"),
+                )
             };
             node.tbmiterator = TbmIterator::shared(TbmSharedIterator::attach(shared));
         }
@@ -369,7 +376,10 @@ pub fn bitmap_table_scan_setup<'mcx>(
             .expect("bitmap heap scan requires es_snapshot");
         node.ss.ss_currentScanDesc = Some(table_beginscan_bm(
             estate.es_query_cxt,
-            node.ss.ss_currentRelation.as_ref().expect("bitmap heap scan has a relation"),
+            node.ss
+                .ss_currentRelation
+                .as_ref()
+                .expect("bitmap heap scan has a relation"),
             Some(snapshot),
         )?);
     }
@@ -390,7 +400,10 @@ fn ensure_bm_scandesc<'mcx>(
             .expect("bitmap heap scan requires es_snapshot");
         node.ss.ss_currentScanDesc = Some(table_beginscan_bm(
             estate.es_query_cxt,
-            node.ss.ss_currentRelation.as_ref().expect("bitmap heap scan has a relation"),
+            node.ss
+                .ss_currentRelation
+                .as_ref()
+                .expect("bitmap heap scan has a relation"),
             Some(snapshot),
         )?);
     }

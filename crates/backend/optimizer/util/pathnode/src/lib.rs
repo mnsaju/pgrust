@@ -14,7 +14,7 @@ use costsize::{clamp_width_est, cost_qual_eval_node, gucs, JoinCostWorkspace};
 use types_pathnodes::run::PlannerRun;
 use types_pathnodes::{
     compare_pathkeys, HashPath, JoinPath, MaterialPath, MemoizePath, MergePath, NestPath,
-    PathKeysComparison, RinfoId, SemiAntiJoinFactors, SpecialJoinInfo,
+    PathKeysComparison, RinfoId, SemiAntiJoinFactors,
 };
 
 pub use costsize::SubqueryScanInfo;
@@ -173,7 +173,9 @@ pub fn create_projection_path<'mcx>(
     let subpath_id = match run.root.path(subpath_id) {
         PathNode::ProjectionPath(subpp) => {
             debug_assert_eq!(subpp.path.parent, rel_id);
-            let inner = subpp.subpath.expect("stripped ProjectionPath has a subpath");
+            let inner = subpp
+                .subpath
+                .expect("stripped ProjectionPath has a subpath");
             debug_assert!(!matches!(run.root.path(inner), PathNode::ProjectionPath(_)));
             inner
         }
@@ -218,7 +220,11 @@ pub fn create_projection_path<'mcx>(
             + newt.cost.startup
             + (gucs::cpu_tuple_cost() + newt.cost.per_tuple) * sub.rows;
     }
-    PathNode::ProjectionPath(ProjectionPath { path, subpath: Some(subpath_id), dummypp })
+    PathNode::ProjectionPath(ProjectionPath {
+        path,
+        subpath: Some(subpath_id),
+        dummypp,
+    })
 }
 
 // create_set_projection_path (pathnode.c).
@@ -334,15 +340,25 @@ pub enum CostSelector {
 }
 pub fn compare_path_costs(path1: &Path<'_>, path2: &Path<'_>, criterion: CostSelector) -> i32 {
     if path1.disabled_nodes != path2.disabled_nodes {
-        return if path1.disabled_nodes < path2.disabled_nodes { -1 } else { 1 };
+        return if path1.disabled_nodes < path2.disabled_nodes {
+            -1
+        } else {
+            1
+        };
     }
     let (a1, b1, a2, b2) = match criterion {
-        CostSelector::Startup => {
-            (path1.startup_cost, path2.startup_cost, path1.total_cost, path2.total_cost)
-        }
-        CostSelector::Total => {
-            (path1.total_cost, path2.total_cost, path1.startup_cost, path2.startup_cost)
-        }
+        CostSelector::Startup => (
+            path1.startup_cost,
+            path2.startup_cost,
+            path1.total_cost,
+            path2.total_cost,
+        ),
+        CostSelector::Total => (
+            path1.total_cost,
+            path2.total_cost,
+            path1.startup_cost,
+            path2.startup_cost,
+        ),
     };
     if a1 < b1 {
         return -1;
@@ -441,9 +457,7 @@ pub fn reparameterize_path<'mcx>(
     if pathtype == tag16(NodeTag::T_SeqScan) {
         return Ok(Some(create_seqscan_path(run, rel_id, required_outer, 0)?));
     }
-    if pathtype == tag16(NodeTag::T_Result)
-        && matches!(run.root.path(path_id), PathNode::Path(_))
-    {
+    if pathtype == tag16(NodeTag::T_Result) && matches!(run.root.path(path_id), PathNode::Path(_)) {
         return Ok(Some(create_resultscan_path(run, rel_id, required_outer)?));
     }
     // C's default arm returns NULL: a path kind we cannot reparameterize is
@@ -484,9 +498,8 @@ pub fn add_path<'mcx>(run: &mut PlannerRun<'mcx>, rel_id: RelId, new_id: PathId)
         if costcmp != PathCostComparison::Different {
             let keyscmp = compare_pathkeys(&new_path.pathkeys, &old_path.pathkeys);
             if keyscmp != PathKeysComparison::Different {
-                let outercmp = || {
-                    relids_subset_compare(path_req_outer(new_path), path_req_outer(old_path))
-                };
+                let outercmp =
+                    || relids_subset_compare(path_req_outer(new_path), path_req_outer(old_path));
                 match costcmp {
                     PathCostComparison::Equal => match keyscmp {
                         PathKeysComparison::Better1 => {
@@ -509,9 +522,9 @@ pub fn add_path<'mcx>(run: &mut PlannerRun<'mcx>, rel_id: RelId, new_id: PathId)
                         }
                         PathKeysComparison::Equal => match outercmp() {
                             SubsetCmp::Equal => {
-                                if new_path.parallel_safe > old_path.parallel_safe {
+                                if new_path.parallel_safe & !old_path.parallel_safe {
                                     remove_old = true;
-                                } else if new_path.parallel_safe < old_path.parallel_safe {
+                                } else if !new_path.parallel_safe & old_path.parallel_safe {
                                     accept_new = false;
                                 } else if new_path.rows < old_path.rows {
                                     remove_old = true;
@@ -768,15 +781,21 @@ pub fn get_baserel_parampathinfo<'mcx>(
     required_outer: &types_pathnodes::Relids<'mcx>,
 ) -> PgResult<Option<mcx::PgBox<'mcx, types_pathnodes::ParamPathInfo<'mcx>>>> {
     use types_pathnodes::relids::{
-        relids_add_member, relids_copy, relids_is_empty, relids_is_subset,
-        relids_overlap, relids_union,
+        relids_add_member, relids_copy, relids_is_empty, relids_is_subset, relids_overlap,
+        relids_union,
     };
     let mcx = run.mcx;
-    debug_assert!(relids_is_subset(&run.root.rel(rel_id).lateral_relids, required_outer));
+    debug_assert!(relids_is_subset(
+        &run.root.rel(rel_id).lateral_relids,
+        required_outer
+    ));
     if relids_is_empty(required_outer) {
         return Ok(None);
     }
-    debug_assert!(!relids_overlap(&run.root.rel(rel_id).relids, required_outer));
+    debug_assert!(!relids_overlap(
+        &run.root.rel(rel_id).relids,
+        required_outer
+    ));
     if let Some(i) = find_param_path_info(run, rel_id, required_outer) {
         let ppi = run.root.rel(rel_id).ppilist[i].clone();
         return Ok(Some(mcx::box_new_in(mcx, ppi)));
@@ -799,7 +818,12 @@ pub fn get_baserel_parampathinfo<'mcx>(
         None,
     )?;
     for &rid in eqclauses.iter() {
-        debug_assert!(join_clause_is_movable_into(run, rid, &rel_relids, &joinrelids));
+        debug_assert!(join_clause_is_movable_into(
+            run,
+            rid,
+            &rel_relids,
+            &joinrelids
+        ));
         pclauses.push(rid);
     }
     let mut pserials: types_pathnodes::Relids<'mcx> = types_pathnodes::relids::relids_empty();
@@ -830,15 +854,20 @@ pub fn get_joinrel_parampathinfo<'mcx>(
     restrict_clauses: &mut PgVec<'mcx, types_pathnodes::RinfoId>,
 ) -> PgResult<Option<mcx::PgBox<'mcx, types_pathnodes::ParamPathInfo<'mcx>>>> {
     use types_pathnodes::relids::{
-        relids_copy, relids_is_empty, relids_is_subset, relids_overlap,
-        relids_union,
+        relids_copy, relids_is_empty, relids_is_subset, relids_overlap, relids_union,
     };
     let mcx = run.mcx;
-    debug_assert!(relids_is_subset(&run.root.rel(joinrel).lateral_relids, required_outer));
+    debug_assert!(relids_is_subset(
+        &run.root.rel(joinrel).lateral_relids,
+        required_outer
+    ));
     if relids_is_empty(required_outer) {
         return Ok(None);
     }
-    debug_assert!(!relids_overlap(&run.root.rel(joinrel).relids, required_outer));
+    debug_assert!(!relids_overlap(
+        &run.root.rel(joinrel).relids,
+        required_outer
+    ));
 
     let joinrel_relids = relids_copy(mcx, &run.root.rel(joinrel).relids);
     let join_and_req = relids_union(mcx, &joinrel_relids, required_outer);
@@ -867,7 +896,8 @@ pub fn get_joinrel_parampathinfo<'mcx>(
         types_pathnodes::relids::relids_empty()
     };
 
-    let joininfo = types_pathnodes::relids::pgvec_clone_shallow(mcx, &run.root.rel(joinrel).joininfo);
+    let joininfo =
+        types_pathnodes::relids::pgvec_clone_shallow(mcx, &run.root.rel(joinrel).joininfo);
     let mut pclauses: PgVec<'mcx, types_pathnodes::RinfoId> = PgVec::new_in(mcx);
     for &rid in joininfo.iter() {
         if join_clause_is_movable_into(run, rid, &joinrel_relids, &join_and_req)
@@ -887,7 +917,12 @@ pub fn get_joinrel_parampathinfo<'mcx>(
     )?;
     let mut dropped_ecs: PgVec<'mcx, types_pathnodes::EcId> = PgVec::new_in(mcx);
     for &rid in eclauses.iter() {
-        debug_assert!(join_clause_is_movable_into(run, rid, &joinrel_relids, &join_and_req));
+        debug_assert!(join_clause_is_movable_into(
+            run,
+            rid,
+            &joinrel_relids,
+            &join_and_req
+        ));
         if join_clause_is_movable_into(run, rid, &outer_parent_relids, &outer_and_req) {
             continue;
         }
@@ -970,11 +1005,17 @@ pub fn get_appendrel_parampathinfo<'mcx>(
 ) -> Option<mcx::PgBox<'mcx, types_pathnodes::ParamPathInfo<'mcx>>> {
     use types_pathnodes::relids::{relids_copy, relids_is_empty, relids_is_subset, relids_overlap};
     let mcx = run.mcx;
-    debug_assert!(relids_is_subset(&run.root.rel(appendrel).lateral_relids, required_outer));
+    debug_assert!(relids_is_subset(
+        &run.root.rel(appendrel).lateral_relids,
+        required_outer
+    ));
     if relids_is_empty(required_outer) {
         return None;
     }
-    debug_assert!(!relids_overlap(&run.root.rel(appendrel).relids, required_outer));
+    debug_assert!(!relids_overlap(
+        &run.root.rel(appendrel).relids,
+        required_outer
+    ));
     if let Some(i) = find_param_path_info(run, appendrel, required_outer) {
         let ppi = run.root.rel(appendrel).ppilist[i].clone();
         return Some(mcx::box_new_in(mcx, ppi));
@@ -1036,7 +1077,12 @@ pub fn get_param_path_clause_serials<'mcx>(
     }
     relids_copy(
         mcx,
-        &node.base().param_info.as_ref().expect("parameterized path").ppi_serials,
+        &node
+            .base()
+            .param_info
+            .as_ref()
+            .expect("parameterized path")
+            .ppi_serials,
     )
 }
 
@@ -1059,7 +1105,6 @@ pub fn create_seqscan_path<'mcx>(
     costsize::cost_seqscan(run, id, rel_id);
     Ok(id)
 }
-
 
 // add_partial_path (pathnode.c): simpler than add_path — partial paths are
 // never parameterized, row counts all agree, and startup cost is irrelevant
@@ -1155,7 +1200,15 @@ pub fn add_partial_path_precheck(
     // Neither clearly better nor worse than another partial path: reject if
     // it loses to a complete path even before the Gather overhead
     // (total_cost passed for startup too — partial plans run to completion).
-    add_path_precheck(run, rel_id, disabled_nodes, total_cost, total_cost, pathkeys, &types_pathnodes::relids::RELIDS_UNSET)
+    add_path_precheck(
+        run,
+        rel_id,
+        disabled_nodes,
+        total_cost,
+        total_cost,
+        pathkeys,
+        &types_pathnodes::relids::RELIDS_UNSET,
+    )
 }
 
 // create_gather_path (pathnode.c); required_outer is empty at every ported
@@ -1193,12 +1246,14 @@ pub fn create_gather_path<'mcx>(
         total_cost: 0.0,
         pathkeys,
     };
-    let id = run.root.alloc_path(PathNode::GatherPath(types_pathnodes::GatherPath {
-        path,
-        subpath: Some(subpath_id),
-        single_copy,
-        num_workers,
-    }));
+    let id = run
+        .root
+        .alloc_path(PathNode::GatherPath(types_pathnodes::GatherPath {
+            path,
+            subpath: Some(subpath_id),
+            single_copy,
+            num_workers,
+        }));
     costsize::cost_gather(run, id, rel_id, rows);
     id
 }
@@ -1238,12 +1293,22 @@ pub fn create_gather_merge_path<'mcx>(
         total_cost: 0.0,
         pathkeys,
     };
-    let id = run.root.alloc_path(PathNode::GatherMergePath(types_pathnodes::GatherMergePath {
-        path,
-        subpath: Some(subpath_id),
-        num_workers,
-    }));
-    costsize::cost_gather_merge(run, id, rel_id, input_disabled, input_startup, input_total, rows);
+    let id = run.root.alloc_path(PathNode::GatherMergePath(
+        types_pathnodes::GatherMergePath {
+            path,
+            subpath: Some(subpath_id),
+            num_workers,
+        },
+    ));
+    costsize::cost_gather_merge(
+        run,
+        id,
+        rel_id,
+        input_disabled,
+        input_startup,
+        input_total,
+        rows,
+    );
     id
 }
 
@@ -1282,12 +1347,14 @@ pub fn create_foreignscan_path<'mcx>(
     path.startup_cost = startup_cost;
     path.total_cost = total_cost;
     path.pathkeys = pathkeys;
-    Ok(run.root.alloc_path(PathNode::ForeignPath(types_pathnodes::ForeignPath {
-        path,
-        fdw_outerpath,
-        fdw_restrictinfo,
-        fdw_private,
-    })))
+    Ok(run
+        .root
+        .alloc_path(PathNode::ForeignPath(types_pathnodes::ForeignPath {
+            path,
+            fdw_outerpath,
+            fdw_restrictinfo,
+            fdw_private,
+        })))
 }
 
 // create_samplescan_path (pathnode.c); result is always unordered.
@@ -1431,8 +1498,12 @@ pub fn create_recursiveunion_path<'mcx>(
         (l.parallel_safe, l.parallel_workers)
     };
     let r_safe = run.root.path(rightpath).base().parallel_safe;
-    let mut path =
-        base_path(run, NodeTag::T_RecursiveUnionPath, NodeTag::T_RecursiveUnion, rel_id);
+    let mut path = base_path(
+        run,
+        NodeTag::T_RecursiveUnionPath,
+        NodeTag::T_RecursiveUnion,
+        rel_id,
+    );
     path.pathtarget_id = Some(target_id);
     path.parallel_aware = false;
     path.parallel_safe = run.root.rel(rel_id).consider_parallel && l_safe && r_safe;
@@ -1466,7 +1537,10 @@ pub fn create_tidscan_path<'mcx>(
     let quals = types_pathnodes::relids::pgvec_clone_shallow(run.mcx, &tidquals);
     let id = run
         .root
-        .alloc_path(PathNode::TidPath(types_pathnodes::TidPath { path, tidquals }));
+        .alloc_path(PathNode::TidPath(types_pathnodes::TidPath {
+            path,
+            tidquals,
+        }));
     costsize::cost_tidscan(run, id, rel_id, &quals)?;
     Ok(id)
 }
@@ -1479,15 +1553,22 @@ pub fn create_tidrangescan_path<'mcx>(
     required_outer: &types_pathnodes::Relids<'mcx>,
 ) -> PgResult<PathId> {
     let param_info = get_baserel_parampathinfo(run, rel_id, required_outer)?;
-    let mut path = base_path(run, NodeTag::T_TidRangePath, NodeTag::T_TidRangeScan, rel_id);
+    let mut path = base_path(
+        run,
+        NodeTag::T_TidRangePath,
+        NodeTag::T_TidRangeScan,
+        rel_id,
+    );
     path.param_info = param_info;
     path.parallel_aware = false;
     path.parallel_safe = run.root.rel(rel_id).consider_parallel;
     let quals = types_pathnodes::relids::pgvec_clone_shallow(run.mcx, &tidrangequals);
-    let id = run.root.alloc_path(PathNode::TidRangePath(types_pathnodes::TidRangePath {
-        path,
-        tidrangequals,
-    }));
+    let id = run
+        .root
+        .alloc_path(PathNode::TidRangePath(types_pathnodes::TidRangePath {
+            path,
+            tidrangequals,
+        }));
     costsize::cost_tidrangescan(run, id, rel_id, &quals)?;
     Ok(id)
 }
@@ -1514,7 +1595,11 @@ pub fn create_bitmap_and_path<'mcx>(
     path.param_info = param_info;
     path.parallel_aware = false;
     path.parallel_safe = run.root.rel(rel_id).consider_parallel;
-    let node = types_pathnodes::BitmapAndPath { path, bitmapquals, bitmapselectivity: 0.0 };
+    let node = types_pathnodes::BitmapAndPath {
+        path,
+        bitmapquals,
+        bitmapselectivity: 0.0,
+    };
     let id = run.root.alloc_path(PathNode::BitmapAndPath(node));
     costsize::cost_bitmap_and_node(run, id);
     Ok(id)
@@ -1542,7 +1627,11 @@ pub fn create_bitmap_or_path<'mcx>(
     path.param_info = param_info;
     path.parallel_aware = false;
     path.parallel_safe = run.root.rel(rel_id).consider_parallel;
-    let node = types_pathnodes::BitmapOrPath { path, bitmapquals, bitmapselectivity: 0.0 };
+    let node = types_pathnodes::BitmapOrPath {
+        path,
+        bitmapquals,
+        bitmapselectivity: 0.0,
+    };
     let id = run.root.alloc_path(PathNode::BitmapOrPath(node));
     costsize::cost_bitmap_or_node(run, id);
     Ok(id)
@@ -1558,12 +1647,20 @@ pub fn create_bitmap_heap_path<'mcx>(
     parallel_degree: i32,
 ) -> PgResult<PathId> {
     let param_info = get_baserel_parampathinfo(run, rel_id, required_outer)?;
-    let mut path = base_path(run, NodeTag::T_BitmapHeapPath, NodeTag::T_BitmapHeapScan, rel_id);
+    let mut path = base_path(
+        run,
+        NodeTag::T_BitmapHeapPath,
+        NodeTag::T_BitmapHeapScan,
+        rel_id,
+    );
     path.param_info = param_info;
     path.parallel_aware = parallel_degree > 0;
     path.parallel_safe = run.root.rel(rel_id).consider_parallel;
     path.parallel_workers = parallel_degree;
-    let node = types_pathnodes::BitmapHeapPath { path, bitmapqual: Some(bitmapqual) };
+    let node = types_pathnodes::BitmapHeapPath {
+        path,
+        bitmapqual: Some(bitmapqual),
+    };
     let id = run.root.alloc_path(PathNode::BitmapHeapPath(node));
     costsize::cost_bitmap_heap_scan(run, id, rel_id, bitmapqual, loop_count);
     Ok(id)
@@ -1586,7 +1683,11 @@ pub fn create_index_path<'mcx>(
 ) -> PgResult<PathId> {
     let rel_id = index.rel.expect("IndexOptInfo rel set");
     let param_info = get_baserel_parampathinfo(run, rel_id, required_outer)?;
-    let pathtype = if indexonly { NodeTag::T_IndexOnlyScan } else { NodeTag::T_IndexScan };
+    let pathtype = if indexonly {
+        NodeTag::T_IndexOnlyScan
+    } else {
+        NodeTag::T_IndexScan
+    };
     let mut path = base_path(run, NodeTag::T_IndexPath, pathtype, rel_id);
     path.param_info = param_info;
     path.parallel_safe = run.root.rel(rel_id).consider_parallel;
@@ -1634,17 +1735,23 @@ pub fn create_group_path<'mcx>(
         // Group doesn't change sort ordering.
         pathkeys: types_pathnodes::relids::pgvec_clone_shallow(run.mcx, &sub.pathkeys),
     };
-    let (sub_disabled, sub_startup, sub_total, sub_rows) =
-        (sub.disabled_nodes, sub.startup_cost, sub.total_cost, sub.rows);
+    let (sub_disabled, sub_startup, sub_total, sub_rows) = (
+        sub.disabled_nodes,
+        sub.startup_cost,
+        sub.total_cost,
+        sub.rows,
+    );
     let num_group_cols = group_clause.len() as i32;
     let quals = types_pathnodes::relids::pgvec_clone_shallow(run.mcx, &qual);
 
-    let id = run.root.alloc_path(PathNode::GroupPath(types_pathnodes::GroupPath {
-        path,
-        subpath: Some(subpath_id),
-        groupClause: group_clause,
-        qual,
-    }));
+    let id = run
+        .root
+        .alloc_path(PathNode::GroupPath(types_pathnodes::GroupPath {
+            path,
+            subpath: Some(subpath_id),
+            groupClause: group_clause,
+            qual,
+        }));
     costsize::cost_group(
         run,
         id,
@@ -1707,23 +1814,31 @@ pub fn create_agg_path<'mcx>(
         total_cost: 0.0,
         pathkeys,
     };
-    let (sub_disabled, sub_startup, sub_total, sub_rows) =
-        (sub.disabled_nodes, sub.startup_cost, sub.total_cost, sub.rows);
-    let sub_width = sub.pathtarget_id.map_or(0, |pt| run.root.pathtarget(pt).width);
+    let (sub_disabled, sub_startup, sub_total, sub_rows) = (
+        sub.disabled_nodes,
+        sub.startup_cost,
+        sub.total_cost,
+        sub.rows,
+    );
+    let sub_width = sub
+        .pathtarget_id
+        .map_or(0, |pt| run.root.pathtarget(pt).width);
     let num_group_cols = group_clause.len() as i32;
     let quals = types_pathnodes::relids::pgvec_clone_shallow(run.mcx, &qual);
     let transition_space = aggcosts.transitionSpace as u64;
 
-    let id = run.root.alloc_path(PathNode::AggPath(types_pathnodes::AggPath {
-        path,
-        subpath: Some(subpath_id),
-        aggstrategy,
-        aggsplit,
-        numGroups: num_groups,
-        transitionSpace: transition_space,
-        groupClause: group_clause,
-        qual,
-    }));
+    let id = run
+        .root
+        .alloc_path(PathNode::AggPath(types_pathnodes::AggPath {
+            path,
+            subpath: Some(subpath_id),
+            aggstrategy,
+            aggsplit,
+            numGroups: num_groups,
+            transitionSpace: transition_space,
+            groupClause: group_clause,
+            qual,
+        }));
     costsize::cost_agg(
         run,
         id,
@@ -1827,21 +1942,27 @@ pub fn create_groupingsets_path<'mcx>(
         total_cost: 0.0,
         pathkeys,
     };
-    let (sub_disabled, sub_startup, sub_total, sub_rows) =
-        (sub.disabled_nodes, sub.startup_cost, sub.total_cost, sub.rows);
-    let sub_width = sub.pathtarget_id.map_or(0, |pt| run.root.pathtarget(pt).width);
+    let (sub_disabled, sub_startup, sub_total, sub_rows) = (
+        sub.disabled_nodes,
+        sub.startup_cost,
+        sub.total_cost,
+        sub.rows,
+    );
+    let sub_width = sub
+        .pathtarget_id
+        .map_or(0, |pt| run.root.pathtarget(pt).width);
     let quals = types_pathnodes::relids::pgvec_clone_shallow(mcx, &having_qual);
 
-    let id = run
-        .root
-        .alloc_path(PathNode::GroupingSetsPath(types_pathnodes::GroupingSetsPath {
+    let id = run.root.alloc_path(PathNode::GroupingSetsPath(
+        types_pathnodes::GroupingSetsPath {
             path,
             subpath: Some(subpath_id),
             aggstrategy,
             rollups,
             qual: having_qual,
             transitionSpace: agg_costs.transitionSpace as u64,
-        }));
+        },
+    ));
 
     let nrollups = match run.root.path(id) {
         PathNode::GroupingSetsPath(p) => p.rollups.len(),
@@ -1884,24 +2005,23 @@ pub fn create_groupingsets_path<'mcx>(
         } else if is_hashed || is_first_sort {
             // Aggregation only; input cost is not re-charged (hashed rollups
             // and the first sorted rollup consume the shared input).
-            let (agg_rows, agg_disabled, _agg_startup, agg_total) =
-                costsize::cost_agg_shape(
-                    run,
-                    if is_hashed {
-                        types_pathnodes::AGG_HASHED
-                    } else {
-                        types_pathnodes::AGG_SORTED
-                    },
-                    agg_costs,
-                    num_group_cols,
-                    num_groups,
-                    &quals,
-                    0,
-                    0.0,
-                    0.0,
-                    sub_rows,
-                    sub_width,
-                )?;
+            let (agg_rows, agg_disabled, _agg_startup, agg_total) = costsize::cost_agg_shape(
+                run,
+                if is_hashed {
+                    types_pathnodes::AGG_HASHED
+                } else {
+                    types_pathnodes::AGG_SORTED
+                },
+                agg_costs,
+                num_group_cols,
+                num_groups,
+                &quals,
+                0,
+                0.0,
+                0.0,
+                sub_rows,
+                sub_width,
+            )?;
             if !is_hashed {
                 is_first_sort = false;
             }
@@ -1921,20 +2041,19 @@ pub fn create_groupingsets_path<'mcx>(
                 init_small::globals::work_mem(),
                 -1.0,
             );
-            let (agg_rows, agg_disabled, _agg_startup, agg_total) =
-                costsize::cost_agg_shape(
-                    run,
-                    types_pathnodes::AGG_SORTED,
-                    agg_costs,
-                    num_group_cols,
-                    num_groups,
-                    &quals,
-                    sort_disabled,
-                    sort_startup,
-                    sort_total,
-                    sub_rows,
-                    sub_width,
-                )?;
+            let (agg_rows, agg_disabled, _agg_startup, agg_total) = costsize::cost_agg_shape(
+                run,
+                types_pathnodes::AGG_SORTED,
+                agg_costs,
+                num_group_cols,
+                num_groups,
+                &quals,
+                sort_disabled,
+                sort_startup,
+                sort_total,
+                sub_rows,
+                sub_width,
+            )?;
             let p = run.root.path_mut(id).base_mut();
             p.disabled_nodes += agg_disabled;
             p.total_cost += agg_total;
@@ -1975,19 +2094,24 @@ pub fn create_upper_unique_path<'mcx>(
         rows: num_groups,
         disabled_nodes: sub.disabled_nodes,
         startup_cost: sub.startup_cost,
-        total_cost: sub.total_cost
-            + gucs::cpu_operator_cost() * sub.rows * num_cols as f64,
+        total_cost: sub.total_cost + gucs::cpu_operator_cost() * sub.rows * num_cols as f64,
         pathkeys: types_pathnodes::relids::pgvec_clone_shallow(run.mcx, &sub.pathkeys),
     };
-    run.root.alloc_path(PathNode::UpperUniquePath(types_pathnodes::UpperUniquePath {
-        path,
-        subpath: Some(subpath_id),
-        numkeys: num_cols,
-    }))
+    run.root.alloc_path(PathNode::UpperUniquePath(
+        types_pathnodes::UpperUniquePath {
+            path,
+            subpath: Some(subpath_id),
+            numkeys: num_cols,
+        },
+    ))
 }
 
 // get_cheapest_fractional_path (planner.c).
-pub fn get_cheapest_fractional_path(run: &PlannerRun<'_>, rel_id: RelId, tuple_fraction: f64) -> PathId {
+pub fn get_cheapest_fractional_path(
+    run: &PlannerRun<'_>,
+    rel_id: RelId,
+    tuple_fraction: f64,
+) -> PathId {
     let mut best = run
         .root
         .rel(rel_id)
@@ -2019,7 +2143,11 @@ pub fn get_cheapest_fractional_path(run: &PlannerRun<'_>, rel_id: RelId, tuple_f
 
 pub fn compare_fractional_path_costs(path1: &Path<'_>, path2: &Path<'_>, fraction: f64) -> i32 {
     if path1.disabled_nodes != path2.disabled_nodes {
-        return if path1.disabled_nodes < path2.disabled_nodes { -1 } else { 1 };
+        return if path1.disabled_nodes < path2.disabled_nodes {
+            -1
+        } else {
+            1
+        };
     }
     if fraction <= 0.0 || fraction >= 1.0 {
         return compare_path_costs(path1, path2, CostSelector::Total);
@@ -2035,7 +2163,6 @@ pub fn compare_fractional_path_costs(path1: &Path<'_>, path2: &Path<'_>, fractio
     0
 }
 
-
 // costing-rider leg (2026-07-07): a full-input Sort directly over a
 // Gather/GatherMerge on a pgrcolumnar-fed plan denies the workers the fused
 // bounded-sort feed (top-k admission + ref decode clamp): every surviving row
@@ -2048,10 +2175,7 @@ pub fn compare_fractional_path_costs(path1: &Path<'_>, path2: &Path<'_>, fractio
 // first output row). Heap plans keep C costing.
 fn pgrcolumnar_gather_sort_penalty(run: &PlannerRun<'_>, subpath_id: PathId) -> f64 {
     let sub = run.root.path(subpath_id);
-    if !matches!(
-        sub,
-        PathNode::GatherPath(_) | PathNode::GatherMergePath(_)
-    ) {
+    if !matches!(sub, PathNode::GatherPath(_) | PathNode::GatherMergePath(_)) {
         return 0.0;
     }
     if !costsize::pgrcolumnar_feeds_plan(run) {
@@ -2086,7 +2210,9 @@ pub fn create_sort_path<'mcx>(
         pathkeys,
     };
     let (sub_disabled, sub_total, sub_rows) = (sub.disabled_nodes, sub.total_cost, sub.rows);
-    let width = sub.pathtarget_id.map_or(0, |pt| run.root.pathtarget(pt).width);
+    let width = sub
+        .pathtarget_id
+        .map_or(0, |pt| run.root.pathtarget(pt).width);
     let id = run
         .root
         .alloc_path(PathNode::SortPath(types_pathnodes::SortPath {
@@ -2139,13 +2265,22 @@ pub fn create_incremental_sort_path<'mcx>(
         total_cost: 0.0,
         pathkeys,
     };
-    let (sub_disabled, sub_startup, sub_total, sub_rows) =
-        (sub.disabled_nodes, sub.startup_cost, sub.total_cost, sub.rows);
-    let width = sub.pathtarget_id.map_or(0, |pt| run.root.pathtarget(pt).width);
+    let (sub_disabled, sub_startup, sub_total, sub_rows) = (
+        sub.disabled_nodes,
+        sub.startup_cost,
+        sub.total_cost,
+        sub.rows,
+    );
+    let width = sub
+        .pathtarget_id
+        .map_or(0, |pt| run.root.pathtarget(pt).width);
     let keys = types_pathnodes::relids::pgvec_clone_shallow(run.mcx, &path.pathkeys);
     let id = run.root.alloc_path(PathNode::IncrementalSortPath(
         types_pathnodes::IncrementalSortPath {
-            spath: types_pathnodes::SortPath { path, subpath: Some(subpath_id) },
+            spath: types_pathnodes::SortPath {
+                path,
+                subpath: Some(subpath_id),
+            },
             nPresortedCols: presorted_keys as i32,
         },
     ));
@@ -2211,13 +2346,14 @@ pub fn create_limit_path<'mcx>(
     );
     let limit_offset_id = limit_offset.map(|n| run.intern_expr(n));
     let limit_count_id = limit_count.map(|n| run.intern_expr(n));
-    run.root.alloc_path(PathNode::LimitPath(types_pathnodes::LimitPath {
-        path,
-        subpath: Some(subpath_id),
-        limitOffset: limit_offset_id,
-        limitCount: limit_count_id,
-        limitOption: limit_option as u32,
-    }))
+    run.root
+        .alloc_path(PathNode::LimitPath(types_pathnodes::LimitPath {
+            path,
+            subpath: Some(subpath_id),
+            limitOffset: limit_offset_id,
+            limitCount: limit_count_id,
+            limitOption: limit_option as u32,
+        }))
 }
 
 // create_lockrows_path (pathnode.c): pathkeys NIL (locking can reorder).
@@ -2245,12 +2381,13 @@ pub fn create_lockrows_path<'mcx>(
         total_cost: sub.total_cost + gucs::cpu_tuple_cost() * sub.rows,
         pathkeys: PgVec::new_in(mcx),
     };
-    run.root.alloc_path(PathNode::LockRowsPath(types_pathnodes::LockRowsPath {
-        path,
-        subpath: Some(subpath_id),
-        rowMarks: row_marks,
-        epqParam: epq_param,
-    }))
+    run.root
+        .alloc_path(PathNode::LockRowsPath(types_pathnodes::LockRowsPath {
+            path,
+            subpath: Some(subpath_id),
+            rowMarks: row_marks,
+            epqParam: epq_param,
+        }))
 }
 
 pub fn adjust_limit_rows_costs(
@@ -2292,8 +2429,8 @@ pub fn adjust_limit_rows_costs(
             count_rows = *rows;
         }
         if input_rows > 0.0 {
-            *total_cost = *startup_cost
-                + (input_total_cost - input_startup_cost) * count_rows / input_rows;
+            *total_cost =
+                *startup_cost + (input_total_cost - input_startup_cost) * count_rows / input_rows;
         }
         *rows = count_rows;
         if *rows < 1.0 {
@@ -2334,8 +2471,12 @@ pub fn create_windowagg_path<'mcx>(
         total_cost: 0.0,
         pathkeys,
     };
-    let (sub_disabled, sub_startup, sub_total, sub_rows) =
-        (sub.disabled_nodes, sub.startup_cost, sub.total_cost, sub.rows);
+    let (sub_disabled, sub_startup, sub_total, sub_rows) = (
+        sub.disabled_nodes,
+        sub.startup_cost,
+        sub.total_cost,
+        sub.rows,
+    );
     let winclause = run.intern_expr(winclause_node);
     let mut qual_ids = PgVec::new_in(run.mcx);
     for &n in qual {
@@ -2345,14 +2486,16 @@ pub fn create_windowagg_path<'mcx>(
     for &n in run_condition {
         run_condition_ids.push(run.intern_expr(n));
     }
-    let id = run.root.alloc_path(PathNode::WindowAggPath(types_pathnodes::WindowAggPath {
-        path,
-        subpath: Some(subpath_id),
-        winclause,
-        qual: qual_ids,
-        runCondition: run_condition_ids,
-        topwindow,
-    }));
+    let id = run
+        .root
+        .alloc_path(PathNode::WindowAggPath(types_pathnodes::WindowAggPath {
+            path,
+            subpath: Some(subpath_id),
+            winclause,
+            qual: qual_ids,
+            runCondition: run_condition_ids,
+            topwindow,
+        }));
     costsize::cost_windowagg(
         run,
         id,
@@ -2406,7 +2549,11 @@ pub fn create_unique_path<'mcx>(
     if is_other_rel {
         // Parent punt: all RHS columns equated to constants leaves nothing
         // to unique-ify at the child either.
-        let top = run.root.rel(rel_id).top_parent.expect("other rel has a top_parent");
+        let top = run
+            .root
+            .rel(rel_id)
+            .top_parent
+            .expect("other rel has a top_parent");
         let Some(parent_upath) = run.root.rel(top).cheapest_unique_path else {
             return Ok(None);
         };
@@ -2535,13 +2682,15 @@ pub fn create_unique_path<'mcx>(
         path.startup_cost = sub_startup;
         path.total_cost = sub_total;
         path.pathkeys = sub_pathkeys;
-        let id = run.root.alloc_path(PathNode::UniquePath(types_pathnodes::UniquePath {
-            path,
-            subpath: Some(subpath_id),
-            umethod: types_pathnodes::UNIQUE_PATH_NOOP,
-            in_operators,
-            uniq_exprs,
-        }));
+        let id = run
+            .root
+            .alloc_path(PathNode::UniquePath(types_pathnodes::UniquePath {
+                path,
+                subpath: Some(subpath_id),
+                umethod: types_pathnodes::UNIQUE_PATH_NOOP,
+                in_operators,
+                uniq_exprs,
+            }));
         run.root.rel_mut(rel_id).cheapest_unique_path = Some(id);
         return Ok(Some(id));
     }
@@ -2594,13 +2743,15 @@ pub fn create_unique_path<'mcx>(
                 total_cost: path.total_cost,
                 pathkeys: PgVec::new_in(mcx),
             };
-            let id = run.root.alloc_path(PathNode::UniquePath(types_pathnodes::UniquePath {
-                path: scratch,
-                subpath: Some(subpath_id),
-                umethod: types_pathnodes::UNIQUE_PATH_HASH,
-                in_operators: types_pathnodes::relids::pgvec_clone_shallow(mcx, &in_operators),
-                uniq_exprs: types_pathnodes::relids::pgvec_clone_shallow(mcx, &uniq_exprs),
-            }));
+            let id = run
+                .root
+                .alloc_path(PathNode::UniquePath(types_pathnodes::UniquePath {
+                    path: scratch,
+                    subpath: Some(subpath_id),
+                    umethod: types_pathnodes::UNIQUE_PATH_HASH,
+                    in_operators: types_pathnodes::relids::pgvec_clone_shallow(mcx, &in_operators),
+                    uniq_exprs: types_pathnodes::relids::pgvec_clone_shallow(mcx, &uniq_exprs),
+                }));
             costsize::cost_agg(
                 run,
                 id,
@@ -2643,13 +2794,15 @@ pub fn create_unique_path<'mcx>(
     path.disabled_nodes = d;
     path.startup_cost = s;
     path.total_cost = t;
-    let id = run.root.alloc_path(PathNode::UniquePath(types_pathnodes::UniquePath {
-        path,
-        subpath: Some(subpath_id),
-        umethod,
-        in_operators,
-        uniq_exprs,
-    }));
+    let id = run
+        .root
+        .alloc_path(PathNode::UniquePath(types_pathnodes::UniquePath {
+            path,
+            subpath: Some(subpath_id),
+            umethod,
+            in_operators,
+            uniq_exprs,
+        }));
     run.root.rel_mut(rel_id).cheapest_unique_path = Some(id);
     Ok(Some(id))
 }
@@ -2712,7 +2865,9 @@ pub fn relation_has_unique_index_for<'mcx>(
                     continue;
                 }
                 let clause = *run.root.expr_node(ri.clause);
-                let o = clause.as_op_expr().expect("mergejoinable clause is an OpExpr");
+                let o = clause
+                    .as_op_expr()
+                    .expect("mergejoinable clause is an OpExpr");
                 let rexpr = strip_relabel(if ri.outer_is_left {
                     o.args.nth(1)
                 } else {
@@ -2759,23 +2914,33 @@ pub fn create_subqueryscan_path<'mcx>(
     sub: &SubqueryScanInfo,
 ) -> PgResult<PathId> {
     let param_info = get_baserel_parampathinfo(run, rel_id, required_outer)?;
-    let mut path = base_path(run, NodeTag::T_SubqueryScanPath, NodeTag::T_SubqueryScan, rel_id);
+    let mut path = base_path(
+        run,
+        NodeTag::T_SubqueryScanPath,
+        NodeTag::T_SubqueryScan,
+        rel_id,
+    );
     path.param_info = param_info;
     path.parallel_aware = false;
     path.parallel_safe = run.root.rel(rel_id).consider_parallel && sub.parallel_safe;
     path.parallel_workers = sub.parallel_workers;
     path.pathkeys = pathkeys;
-    let id = run.root.alloc_path(PathNode::SubqueryScanPath(types_pathnodes::SubqueryScanPath {
-        path,
-        subpath: None,
-        subroot_subpath: Some(subroot_subpath),
-    }));
+    let id = run.root.alloc_path(PathNode::SubqueryScanPath(
+        types_pathnodes::SubqueryScanPath {
+            path,
+            subpath: None,
+            subroot_subpath: Some(subroot_subpath),
+        },
+    ));
     costsize::cost_subqueryscan(run, id, rel_id, sub, trivial_pathtarget)?;
     Ok(id)
 }
 
 // bms_compare (bitmapset.c): big-integer comparison of the two sets.
-fn relids_cmp(a: &types_pathnodes::Relids<'_>, b: &types_pathnodes::Relids<'_>) -> core::cmp::Ordering {
+fn relids_cmp(
+    a: &types_pathnodes::Relids<'_>,
+    b: &types_pathnodes::Relids<'_>,
+) -> core::cmp::Ordering {
     let mut am: Vec<i32> = types_pathnodes::relids::relids_members(a).collect();
     let mut bm: Vec<i32> = types_pathnodes::relids::relids_members(b).collect();
     loop {
@@ -2791,16 +2956,15 @@ fn relids_cmp(a: &types_pathnodes::Relids<'_>, b: &types_pathnodes::Relids<'_>) 
 
 // append_total_cost_compare / append_startup_cost_compare (pathnode.c):
 // descending cost, ties broken by bms_compare on parent relids.
-fn sort_append_subpaths(
-    run: &PlannerRun<'_>,
-    subpaths: &mut [PathId],
-    selector: CostSelector,
-) {
+fn sort_append_subpaths(run: &PlannerRun<'_>, subpaths: &mut [PathId], selector: CostSelector) {
     subpaths.sort_by(|&a, &b| {
         let pa = run.root.path(a).base();
         let pb = run.root.path(b).base();
         match compare_path_costs(pa, pb, selector) {
-            0 => relids_cmp(&run.root.rel(pa.parent).relids, &run.root.rel(pb.parent).relids),
+            0 => relids_cmp(
+                &run.root.rel(pa.parent).relids,
+                &run.root.rel(pb.parent).relids,
+            ),
             c if c < 0 => core::cmp::Ordering::Greater,
             _ => core::cmp::Ordering::Less,
         }
@@ -2865,12 +3029,14 @@ pub fn create_append_path<'mcx>(
     }
     debug_assert!(!parallel_aware || path.parallel_safe);
     let single = (subpaths.len() == 1).then(|| subpaths[0]);
-    let id = run.root.alloc_path(PathNode::AppendPath(types_pathnodes::AppendPath {
-        path,
-        subpaths,
-        first_partial_path,
-        limit_tuples,
-    }));
+    let id = run
+        .root
+        .alloc_path(PathNode::AppendPath(types_pathnodes::AppendPath {
+            path,
+            subpaths,
+            first_partial_path,
+            limit_tuples,
+        }));
     match single {
         // A single child whose parallel awareness matches makes the Append a
         // no-op that setrefs removes: inherit its size, cost and pathkeys.
@@ -2914,7 +3080,12 @@ pub fn create_merge_append_path<'mcx>(
     debug_assert!(types_pathnodes::relids::relids_is_empty(
         &run.root.rel(rel_id).lateral_relids
     ));
-    let mut path = base_path(run, NodeTag::T_MergeAppendPath, NodeTag::T_MergeAppend, rel_id);
+    let mut path = base_path(
+        run,
+        NodeTag::T_MergeAppendPath,
+        NodeTag::T_MergeAppend,
+        rel_id,
+    );
     path.parallel_aware = false;
     path.parallel_safe = run.root.rel(rel_id).consider_parallel;
     path.pathkeys = types_pathnodes::relids::pgvec_clone_shallow(run.mcx, &pathkeys);
@@ -2941,7 +3112,8 @@ pub fn create_merge_append_path<'mcx>(
                 s.startup_cost,
                 s.total_cost,
                 types_pathnodes::pathkeys_contained_in(&pathkeys, &s.pathkeys),
-                s.pathtarget_id.map_or(0, |pt| run.root.pathtarget(pt).width),
+                s.pathtarget_id
+                    .map_or(0, |pt| run.root.pathtarget(pt).width),
             )
         };
         rows += s_rows;
@@ -2968,11 +3140,13 @@ pub fn create_merge_append_path<'mcx>(
     path.rows = rows;
     let n_streams = subpaths.len();
     let single = (n_streams == 1).then(|| subpaths[0]);
-    let id = run.root.alloc_path(PathNode::MergeAppendPath(types_pathnodes::MergeAppendPath {
-        path,
-        subpaths,
-        limit_tuples,
-    }));
+    let id = run.root.alloc_path(PathNode::MergeAppendPath(
+        types_pathnodes::MergeAppendPath {
+            path,
+            subpaths,
+            limit_tuples,
+        },
+    ));
     match single {
         // Single non-parallel-aware child: the MergeAppend is a no-op that
         // setrefs removes; inherit the input costs.
@@ -3026,7 +3200,14 @@ pub fn create_setop_path<'mcx>(
     };
     let (r_startup, r_total, r_rows, r_disabled, r_safe, r_workers) = {
         let r = run.root.path(rightpath).base();
-        (r.startup_cost, r.total_cost, r.rows, r.disabled_nodes, r.parallel_safe, r.parallel_workers)
+        (
+            r.startup_cost,
+            r.total_cost,
+            r.rows,
+            r.disabled_nodes,
+            r.parallel_safe,
+            r.parallel_workers,
+        )
     };
     let rel = run.root.rel(rel_id);
     let mut path = Path {
@@ -3057,28 +3238,28 @@ pub fn create_setop_path<'mcx>(
             + gucs::cpu_operator_cost() * (l_rows + r_rows) * n_group_cols
             + gucs::cpu_operator_cost() * output_rows;
     } else {
-        path.startup_cost = l_total
-            + r_total
-            + gucs::cpu_operator_cost() * (l_rows + r_rows) * n_group_cols;
+        path.startup_cost =
+            l_total + r_total + gucs::cpu_operator_cost() * (l_rows + r_rows) * n_group_cols;
         path.total_cost = path.startup_cost + gucs::cpu_operator_cost() * output_rows;
         if !gucs::enable_hashagg() {
             path.disabled_nodes += 1;
         }
-        let hashentrysize = maxalign8(l_width.max(0) as usize)
-            + maxalign8(types_tuple::SizeofMinimalTupleHeader);
+        let hashentrysize =
+            maxalign8(l_width.max(0) as usize) + maxalign8(types_tuple::SizeofMinimalTupleHeader);
         if hashentrysize as f64 * num_groups > ::nodehash::get_hash_memory_limit() as f64 {
             path.disabled_nodes += 1;
         }
     }
-    run.root.alloc_path(PathNode::SetOpPath(types_pathnodes::SetOpPath {
-        path,
-        leftpath: Some(leftpath),
-        rightpath: Some(rightpath),
-        cmd,
-        strategy,
-        groupList: group_list,
-        numGroups: num_groups,
-    }))
+    run.root
+        .alloc_path(PathNode::SetOpPath(types_pathnodes::SetOpPath {
+            path,
+            leftpath: Some(leftpath),
+            rightpath: Some(rightpath),
+            cmd,
+            strategy,
+            groupList: group_list,
+            numGroups: num_groups,
+        }))
 }
 
 const fn maxalign8(n: usize) -> usize {
@@ -3098,14 +3279,19 @@ pub fn apply_projection_to_path<'mcx>(
         let pn = create_projection_path(run, rel_id, path_id, target_id, safe);
         return Ok(run.root.alloc_path(pn));
     }
-    let old_target = run.root.path(path_id).base().pathtarget_id.expect("path has a pathtarget");
+    let old_target = run
+        .root
+        .path(path_id)
+        .base()
+        .pathtarget_id
+        .expect("path has a pathtarget");
     let oldcost = run.root.pathtarget(old_target).cost;
     let newcost = run.root.pathtarget(target_id).cost;
     let p = run.root.path_mut(path_id).base_mut();
     p.pathtarget_id = Some(target_id);
     p.startup_cost += newcost.startup - oldcost.startup;
-    p.total_cost += newcost.startup - oldcost.startup
-        + (newcost.per_tuple - oldcost.per_tuple) * p.rows;
+    p.total_cost +=
+        newcost.startup - oldcost.startup + (newcost.per_tuple - oldcost.per_tuple) * p.rows;
 
     // Gather/GatherMerge: push a parallel-safe target below so workers help
     // project (a fresh ProjectionPath — never modify the subpath in place);
@@ -3167,8 +3353,7 @@ pub fn create_minmaxagg_path<'mcx>(
     let tcost = run.root.pathtarget(target_id).cost;
     path.disabled_nodes = initplan_disabled_nodes;
     path.startup_cost = initplan_cost + tcost.startup;
-    path.total_cost =
-        initplan_cost + tcost.startup + tcost.per_tuple + gucs::cpu_tuple_cost();
+    path.total_cost = initplan_cost + tcost.startup + tcost.per_tuple + gucs::cpu_tuple_cost();
 
     if !quals.is_empty() {
         let mut qual_cost = types_pathnodes::QualCost::default();
@@ -3194,11 +3379,13 @@ pub fn create_minmaxagg_path<'mcx>(
         }
     }
 
-    Ok(run.root.alloc_path(PathNode::MinMaxAggPath(types_pathnodes::MinMaxAggPath {
-        path,
-        mmaggregates,
-        quals,
-    })))
+    Ok(run
+        .root
+        .alloc_path(PathNode::MinMaxAggPath(types_pathnodes::MinMaxAggPath {
+            path,
+            mmaggregates,
+            quals,
+        })))
 }
 
 // add_path_precheck (pathnode.c); required_outer is NULL on every path this
@@ -3242,8 +3429,12 @@ pub fn add_path_precheck(
 pub fn create_material_path(run: &mut PlannerRun<'_>, rel: RelId, subpath: PathId) -> PathId {
     let sub = run.root.path(subpath).base();
     debug_assert!(sub.parent == rel);
-    let (sub_disabled, sub_startup, sub_total, sub_rows) =
-        (sub.disabled_nodes, sub.startup_cost, sub.total_cost, sub.rows);
+    let (sub_disabled, sub_startup, sub_total, sub_rows) = (
+        sub.disabled_nodes,
+        sub.startup_cost,
+        sub.total_cost,
+        sub.rows,
+    );
     let sub_parallel_safe = sub.parallel_safe;
     let sub_parallel_workers = sub.parallel_workers;
     // C: Material inherits the subpath's parameterization.
@@ -3316,16 +3507,17 @@ pub fn create_memoize_path<'mcx>(
         total_cost: sub.total_cost + gucs::cpu_tuple_cost(),
         pathkeys,
     };
-    run.root.alloc_path(types_pathnodes::PathNode::MemoizePath(MemoizePath {
-        path,
-        subpath: Some(subpath),
-        hash_operators,
-        param_exprs,
-        singlerow,
-        binary_mode,
-        calls: costsize::clamp_row_est(calls),
-        est_entries: 0,
-    }))
+    run.root
+        .alloc_path(types_pathnodes::PathNode::MemoizePath(MemoizePath {
+            path,
+            subpath: Some(subpath),
+            hash_operators,
+            param_exprs,
+            singlerow,
+            binary_mode,
+            calls: costsize::clamp_row_est(calls),
+            est_entries: 0,
+        }))
 }
 
 // create_nestloop_path (pathnode.c).
@@ -3418,9 +3610,10 @@ pub fn create_nestloop_path<'mcx>(
         },
     };
     costsize::final_cost_nestloop(run, &mut node, workspace, semifactors)?;
-    Ok(run.root.alloc_path(types_pathnodes::PathNode::NestPath(node)))
+    Ok(run
+        .root
+        .alloc_path(types_pathnodes::PathNode::NestPath(node)))
 }
-
 
 #[allow(clippy::too_many_arguments)]
 pub fn create_hashjoin_path<'mcx>(
@@ -3491,9 +3684,10 @@ pub fn create_hashjoin_path<'mcx>(
         inner_rows_total: workspace.inner_rows_total,
     };
     costsize::final_cost_hashjoin(run, &mut node, workspace, semifactors)?;
-    Ok(run.root.alloc_path(types_pathnodes::PathNode::HashPath(node)))
+    Ok(run
+        .root
+        .alloc_path(types_pathnodes::PathNode::HashPath(node)))
 }
-
 
 // create_mergejoin_path (pathnode.c).
 #[allow(clippy::too_many_arguments)]
@@ -3534,7 +3728,6 @@ pub fn create_mergejoin_path<'mcx>(
         run.root.rel(joinrel).consider_parallel && outer.parallel_safe && inner.parallel_safe;
     let parallel_workers = outer.parallel_workers;
 
-
     let path = Path {
         type_: tag16(NodeTag::T_MergePath),
         pathtype: tag16(NodeTag::T_MergeJoin),
@@ -3567,5 +3760,7 @@ pub fn create_mergejoin_path<'mcx>(
         materialize_inner: false,
     };
     costsize::final_cost_mergejoin(run, &mut node, workspace, inner_unique)?;
-    Ok(run.root.alloc_path(types_pathnodes::PathNode::MergePath(node)))
+    Ok(run
+        .root
+        .alloc_path(types_pathnodes::PathNode::MergePath(node)))
 }

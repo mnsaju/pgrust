@@ -157,10 +157,7 @@ impl<'mcx> GistBuildBuffers<'mcx> {
             .remove(&node_blkno)
             .expect("node buffer exists");
         let res = self.push_itup_inner(&mut nb, Some(node_blkno), itup);
-        if res.is_ok()
-            && nb.blocks_count > self.pages_per_buffer / 2
-            && !nb.queued_for_emptying
-        {
+        if res.is_ok() && nb.blocks_count > self.pages_per_buffer / 2 && !nb.queued_for_emptying {
             self.buffer_emptying_queue.push_front(node_blkno);
             nb.queued_for_emptying = true;
         }
@@ -241,7 +238,10 @@ impl<'mcx> GistBuildBuffers<'mcx> {
     fn load_node_buffer(&mut self, nb: &mut NodeBuffer, key: Option<BlockNumber>) -> PgResult<()> {
         if nb.page_buffer.is_none() && nb.blocks_count > 0 {
             let mut page = new_page_buffer();
-            let blkno = nb.page_blocknum.take().expect("unloaded buffer has a file block");
+            let blkno = nb
+                .page_blocknum
+                .take()
+                .expect("unloaded buffer has a file block");
             self.read_block(blkno, &mut page)?;
             self.release_block(blkno);
             nb.page_buffer = Some(page);
@@ -356,7 +356,15 @@ pub fn gistRelocateBuildBuffersOnSplit<'m>(
     for si in splitinfo.iter() {
         let mut entry = [GISTENTRY::default(); K];
         let mut isnull = [false; K];
-        gistDeCompressAtt(mcx, giststate, r, si.downlink.as_ptr(), 0, &mut entry, &mut isnull)?;
+        gistDeCompressAtt(
+            mcx,
+            giststate,
+            r,
+            si.downlink.as_ptr(),
+            0,
+            &mut entry,
+            &mut isnull,
+        )?;
         let si_blkno = ::bufmgr_seams::buffer_get_block_number::call(si.buf);
         gfbb.get_node_buffer(si_blkno, level);
         infos.push(RelocationBufferInfo {

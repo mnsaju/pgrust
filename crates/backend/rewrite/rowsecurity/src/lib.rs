@@ -57,7 +57,11 @@ pub fn get_row_security_policies<'mcx>(
     let check_as_user = perminfo.checkAsUser;
     let required_perms = perminfo.requiredPerms;
 
-    let user_id = if check_as_user != InvalidOid { check_as_user } else { GetUserId() };
+    let user_id = if check_as_user != InvalidOid {
+        check_as_user
+    } else {
+        GetUserId()
+    };
 
     let rls_status = rls_seams::check_enable_rls::call(rte.relid, check_as_user, false)?;
 
@@ -114,7 +118,15 @@ pub fn get_row_security_policies<'mcx>(
             WCOKind::WCO_RLS_UPDATE_CHECK
         };
         add_with_check_options(
-            mcx, policies, relname, rt_index, kind, &permissive, &restrictive, false, &mut out,
+            mcx,
+            policies,
+            relname,
+            rt_index,
+            kind,
+            &permissive,
+            &restrictive,
+            false,
+            &mut out,
         )?;
 
         if required_perms & ACL_SELECT != 0 {
@@ -392,7 +404,7 @@ fn add_with_check_options<'mcx>(
     force_using: bool,
     out: &mut RlsQuals<'mcx>,
 ) -> PgResult<()> {
-    fn qual_for_wco<'a>(policy: &'a RowSecurityPolicyMeta, force_using: bool) -> Option<&'a str> {
+    fn qual_for_wco(policy: &RowSecurityPolicyMeta, force_using: bool) -> Option<&str> {
         if !force_using {
             if let Some(wc) = policy.with_check_src.as_ref() {
                 return Some(wc.as_str());
@@ -481,7 +493,10 @@ fn check_role_for_policy(roles: &[Oid], user_id: Oid) -> PgResult<bool> {
 // C caches hassublinks (qual OR with_check) in the rsdesc at build time; the
 // text-holding cache recomputes it per use — behavior-identical.
 fn policy_hassublinks(mcx: Mcx<'_>, policy: &RowSecurityPolicyMeta) -> PgResult<bool> {
-    for src in [policy.qual_src.as_ref(), policy.with_check_src.as_ref()].into_iter().flatten() {
+    for src in [policy.qual_src.as_ref(), policy.with_check_src.as_ref()]
+        .into_iter()
+        .flatten()
+    {
         if expr_has_sublink(readfuncs::stringToNode(mcx, src.as_str())?)? {
             return Ok(true);
         }
@@ -544,7 +559,8 @@ fn set_check_as_user(node: Node<'_>, userid: Oid) {
     }
     let mut w = S { userid };
     use nodes_core::NodeWalker as _;
-    w.visit(node).expect("set_check_as_user walker is infallible");
+    w.visit(node)
+        .expect("set_check_as_user walker is infallible");
 }
 
 fn list_append_unique<'mcx>(list: &mut PgVec<'mcx, Node<'mcx>>, node: Node<'mcx>) {
@@ -558,7 +574,14 @@ fn list_append_unique<'mcx>(list: &mut PgVec<'mcx, Node<'mcx>>, node: Node<'mcx>
 
 fn make_or_expr<'mcx>(mcx: Mcx<'mcx>, args: &PgVec<'mcx, Node<'mcx>>) -> PgResult<Node<'mcx>> {
     let list = types_nodes::list::NodeList::from_slice(mcx, args)?;
-    Node::mk(mcx, BoolExpr { boolop: BoolExprType::OR_EXPR, args: list, location: -1 })
+    Node::mk(
+        mcx,
+        BoolExpr {
+            boolop: BoolExprType::OR_EXPR,
+            args: list,
+            location: -1,
+        },
+    )
 }
 
 fn make_false_const(mcx: Mcx<'_>) -> PgResult<Node<'_>> {
@@ -587,5 +610,7 @@ fn mcx_str<'mcx>(mcx: Mcx<'mcx>, s: &str) -> PgResult<&'mcx str> {
 #[cold]
 #[inline(never)]
 fn unrecognized_policy_command(cmd: i32) -> Box<PgError> {
-    Box::new(PgError::error(format!("unrecognized policy command type {cmd}")))
+    Box::new(PgError::error(format!(
+        "unrecognized policy command type {cmd}"
+    )))
 }

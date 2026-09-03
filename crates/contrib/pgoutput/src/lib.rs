@@ -31,11 +31,10 @@ use logicalproto::{
     logicalrep_write_insert, logicalrep_write_message, logicalrep_write_prepare,
     logicalrep_write_rel, logicalrep_write_rollback_prepared, logicalrep_write_stream_abort,
     logicalrep_write_stream_commit, logicalrep_write_stream_start, logicalrep_write_stream_stop,
-    logicalrep_write_truncate,
-    logicalrep_write_typ, logicalrep_write_update, LOGICALREP_PROTO_MAX_VERSION_NUM,
-    LOGICALREP_PROTO_MIN_VERSION_NUM, LOGICALREP_PROTO_STREAM_PARALLEL_VERSION_NUM,
-    LOGICALREP_PROTO_STREAM_VERSION_NUM, LOGICALREP_PROTO_TWOPHASE_VERSION_NUM,
-    PUBLISH_GENCOLS_NONE, PUBLISH_GENCOLS_STORED,
+    logicalrep_write_truncate, logicalrep_write_typ, logicalrep_write_update,
+    LOGICALREP_PROTO_MAX_VERSION_NUM, LOGICALREP_PROTO_MIN_VERSION_NUM,
+    LOGICALREP_PROTO_STREAM_PARALLEL_VERSION_NUM, LOGICALREP_PROTO_STREAM_VERSION_NUM,
+    LOGICALREP_PROTO_TWOPHASE_VERSION_NUM, PUBLISH_GENCOLS_NONE, PUBLISH_GENCOLS_STORED,
 };
 use mcx::MemoryContext;
 use reorderbuffer::{ReorderBuffer, ReorderBufferChange, ReorderBufferChangeData, TxnId};
@@ -697,8 +696,7 @@ fn pgoutput_stream_start(
     let data = data_from(opc);
     let t = rb.txn(txn);
     // Send the origin id only in the first stream for this xid.
-    let send_replication_origin =
-        t.origin_id != InvalidRepOriginId && !t.is_streamed();
+    let send_replication_origin = t.origin_id != InvalidRepOriginId && !t.is_streamed();
     let first_segment = !t.is_streamed();
     let (xid, origin_id) = (t.xid, t.origin_id);
 
@@ -752,7 +750,11 @@ fn pgoutput_stream_abort(
     let t = rb.txn(txn);
     let subxid = t.xid;
     let abort_time = t.xact_time;
-    let topxid = if t.is_known_subxact() { t.toplevel_xid } else { t.xid };
+    let topxid = if t.is_known_subxact() {
+        t.toplevel_xid
+    } else {
+        t.xid
+    };
 
     OutputPluginPrepareWrite(opc, true)?;
     logicalrep_write_stream_abort(
@@ -830,7 +832,11 @@ fn maybe_send_schema(
     let data = data_from(opc);
     let (xid, topxid) = if data.in_streaming {
         let ct = rb.txn(change_txn);
-        let topxid = if ct.is_known_subxact() { ct.toplevel_xid } else { ct.xid };
+        let topxid = if ct.is_known_subxact() {
+            ct.toplevel_xid
+        } else {
+            ct.xid
+        };
         (ct.xid, topxid)
     } else {
         (InvalidTransactionId, InvalidTransactionId)
@@ -1098,13 +1104,7 @@ fn pgoutput_truncate(
         };
 
         OutputPluginPrepareWrite(opc, true)?;
-        logicalrep_write_truncate(
-            opc.out.as_mut_vec(),
-            xid,
-            &relids,
-            cascade,
-            restart_seqs,
-        );
+        logicalrep_write_truncate(opc.out.as_mut_vec(), xid, &relids, cascade, restart_seqs);
         OutputPluginWrite(opc, true)?;
     }
     Ok(())
@@ -1269,7 +1269,7 @@ fn rel_sync_cache_publication_cb(_arg: Datum, _cacheid: i32, _hashvalue: u32) {
 fn is_publishable_relation_data(rel: &RelationData<'static>) -> bool {
     pg_publication::is_publishable_class(
         rel.rd_id,
-        rel.rd_rel.relkind as u8,
+        rel.rd_rel.relkind,
         rel.rd_rel.relpersistence,
     )
 }
@@ -1416,8 +1416,7 @@ fn pgoutput_column_list_init(
                     if att.attisdropped {
                         continue;
                     }
-                    if att.attgenerated != 0
-                        && entry.include_gencols_type != PUBLISH_GENCOLS_STORED
+                    if att.attgenerated != 0 && entry.include_gencols_type != PUBLISH_GENCOLS_STORED
                     {
                         continue;
                     }

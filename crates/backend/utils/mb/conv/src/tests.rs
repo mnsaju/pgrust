@@ -27,23 +27,13 @@ fn call(
     Ok((consumed, dest))
 }
 
-fn ok(
-    f: PGFunction,
-    src_enc: pg_enc,
-    dest_enc: pg_enc,
-    src: &[u8],
-) -> Vec<u8> {
+fn ok(f: PGFunction, src_enc: pg_enc, dest_enc: pg_enc, src: &[u8]) -> Vec<u8> {
     let (consumed, out) = call(f, src_enc, dest_enc, src, false).unwrap();
     assert_eq!(consumed as usize, src.len());
     out
 }
 
-fn err(
-    f: PGFunction,
-    src_enc: pg_enc,
-    dest_enc: pg_enc,
-    src: &[u8],
-) -> Box<PgError> {
+fn err(f: PGFunction, src_enc: pg_enc, dest_enc: pg_enc, src: &[u8]) -> Box<PgError> {
     call(f, src_enc, dest_enc, src, false).unwrap_err()
 }
 
@@ -92,7 +82,12 @@ fn utf8_to_latin1_untranslatable_is_c_exact_22p05() {
 
 #[test]
 fn invalid_utf8_is_c_exact_22021() {
-    let e = err(fc_utf8_to_iso8859_1, PG_UTF8, PG_LATIN1, &[b'a', 0xe9, b'x']);
+    let e = err(
+        fc_utf8_to_iso8859_1,
+        PG_UTF8,
+        PG_LATIN1,
+        &[b'a', 0xe9, b'x'],
+    );
     assert_eq!(
         e.sqlstate(),
         types_error::ERRCODE_CHARACTER_NOT_IN_REPERTOIRE
@@ -407,18 +402,42 @@ fn double_byte_families_roundtrip_all_mapped_codes() {
 
 #[test]
 fn known_cjk_vectors() {
-    assert_eq!(ok(fc_euc_kr_to_utf8, PG_EUC_KR, PG_UTF8, &[0xb0, 0xa1]), "가".as_bytes());
-    assert_eq!(ok(fc_uhc_to_utf8, PG_UHC, PG_UTF8, &[0xb0, 0xa1]), "가".as_bytes());
-    assert_eq!(ok(fc_big5_to_utf8, PG_BIG5, PG_UTF8, &[0xa4, 0x40]), "一".as_bytes());
-    assert_eq!(ok(fc_gbk_to_utf8, PG_GBK, PG_UTF8, &[0xd6, 0xd0]), "中".as_bytes());
-    assert_eq!(ok(fc_euc_cn_to_utf8, PG_EUC_CN, PG_UTF8, &[0xd6, 0xd0]), "中".as_bytes());
-    assert_eq!(ok(fc_sjis_to_utf8, PG_SJIS, PG_UTF8, &[0x82, 0xa0]), "あ".as_bytes());
-    assert_eq!(ok(fc_euc_jp_to_utf8, PG_EUC_JP, PG_UTF8, &[0xa4, 0xa2]), "あ".as_bytes());
+    assert_eq!(
+        ok(fc_euc_kr_to_utf8, PG_EUC_KR, PG_UTF8, &[0xb0, 0xa1]),
+        "가".as_bytes()
+    );
+    assert_eq!(
+        ok(fc_uhc_to_utf8, PG_UHC, PG_UTF8, &[0xb0, 0xa1]),
+        "가".as_bytes()
+    );
+    assert_eq!(
+        ok(fc_big5_to_utf8, PG_BIG5, PG_UTF8, &[0xa4, 0x40]),
+        "一".as_bytes()
+    );
+    assert_eq!(
+        ok(fc_gbk_to_utf8, PG_GBK, PG_UTF8, &[0xd6, 0xd0]),
+        "中".as_bytes()
+    );
+    assert_eq!(
+        ok(fc_euc_cn_to_utf8, PG_EUC_CN, PG_UTF8, &[0xd6, 0xd0]),
+        "中".as_bytes()
+    );
+    assert_eq!(
+        ok(fc_sjis_to_utf8, PG_SJIS, PG_UTF8, &[0x82, 0xa0]),
+        "あ".as_bytes()
+    );
+    assert_eq!(
+        ok(fc_euc_jp_to_utf8, PG_EUC_JP, PG_UTF8, &[0xa4, 0xa2]),
+        "あ".as_bytes()
+    );
     assert_eq!(
         ok(fc_gb18030_to_utf8, PG_GB18030, PG_UTF8, &[0xd6, 0xd0]),
         "中".as_bytes()
     );
-    assert_eq!(ok(fc_utf8_to_gbk, PG_UTF8, PG_GBK, "中".as_bytes()), [0xd6, 0xd0]);
+    assert_eq!(
+        ok(fc_utf8_to_gbk, PG_UTF8, PG_GBK, "中".as_bytes()),
+        [0xd6, 0xd0]
+    );
 }
 
 #[test]
@@ -436,7 +455,12 @@ fn gb18030_algorithmic_ranges() {
         "\u{10000}".as_bytes()
     );
     // U+0452 -> 0x8130D330 (range table start).
-    let four = ok(fc_utf8_to_gb18030, PG_UTF8, PG_GB18030, "\u{452}".as_bytes());
+    let four = ok(
+        fc_utf8_to_gb18030,
+        PG_UTF8,
+        PG_GB18030,
+        "\u{452}".as_bytes(),
+    );
     assert_eq!(four, [0x81, 0x30, 0xd3, 0x30]);
     assert_eq!(
         ok(fc_gb18030_to_utf8, PG_GB18030, PG_UTF8, &four),
@@ -506,8 +530,14 @@ fn euc_jp_sjis_direct() {
         [0x82, 0xa0]
     );
     // 1-byte kana: SJIS 0xb1 <-> EUC 0x8e 0xb1.
-    assert_eq!(ok(fc_sjis_to_euc_jp, PG_SJIS, PG_EUC_JP, &[0xb1]), [0x8e, 0xb1]);
-    assert_eq!(ok(fc_euc_jp_to_sjis, PG_EUC_JP, PG_SJIS, &[0x8e, 0xb1]), [0xb1]);
+    assert_eq!(
+        ok(fc_sjis_to_euc_jp, PG_SJIS, PG_EUC_JP, &[0xb1]),
+        [0x8e, 0xb1]
+    );
+    assert_eq!(
+        ok(fc_euc_jp_to_sjis, PG_EUC_JP, PG_SJIS, &[0x8e, 0xb1]),
+        [0xb1]
+    );
     // Full JIS X0208 roundtrip through SJIS.
     let mut count = 0;
     for c1 in 0xa1u8..=0xf4 {
@@ -585,12 +615,27 @@ fn mic_roundtrips() {
 fn cyrillic_local2local_roundtrip() {
     use super::cyrillic_and_mic::*;
     let pairs: &[(PGFunction, PGFunction, pg_enc, pg_enc)] = &[
-        (fc_koi8r_to_win1251, fc_win1251_to_koi8r, PG_KOI8R, PG_WIN1251),
+        (
+            fc_koi8r_to_win1251,
+            fc_win1251_to_koi8r,
+            PG_KOI8R,
+            PG_WIN1251,
+        ),
         (fc_koi8r_to_win866, fc_win866_to_koi8r, PG_KOI8R, PG_WIN866),
         (fc_koi8r_to_iso, fc_iso_to_koi8r, PG_KOI8R, PG_ISO_8859_5),
-        (fc_win1251_to_iso, fc_iso_to_win1251, PG_WIN1251, PG_ISO_8859_5),
+        (
+            fc_win1251_to_iso,
+            fc_iso_to_win1251,
+            PG_WIN1251,
+            PG_ISO_8859_5,
+        ),
         (fc_win866_to_iso, fc_iso_to_win866, PG_WIN866, PG_ISO_8859_5),
-        (fc_win866_to_win1251, fc_win1251_to_win866, PG_WIN866, PG_WIN1251),
+        (
+            fc_win866_to_win1251,
+            fc_win1251_to_win866,
+            PG_WIN866,
+            PG_WIN1251,
+        ),
     ];
     for &(fwd, back, src_enc, dst_enc) in pairs {
         let mut mapped = 0;

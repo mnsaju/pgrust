@@ -3,8 +3,8 @@ use std::collections::HashMap;
 
 use crate::store::{entry_alloc, entry_dealloc};
 use crate::{
-    Counters, PgssGlobalStats, PgssHashKey, PgssShared, ASSUMED_LENGTH_INIT,
-    ASSUMED_MEDIAN_INIT, PGSS_EXEC, USAGE_INIT,
+    Counters, PgssGlobalStats, PgssHashKey, PgssShared, ASSUMED_LENGTH_INIT, ASSUMED_MEDIAN_INIT,
+    PGSS_EXEC, USAGE_INIT,
 };
 
 fn shared(max: usize) -> PgssShared {
@@ -18,7 +18,12 @@ fn shared(max: usize) -> PgssShared {
 }
 
 fn key(q: i64) -> PgssHashKey {
-    PgssHashKey { userid: 10, dbid: 5, queryid: q, toplevel: true }
+    PgssHashKey {
+        userid: 10,
+        dbid: 5,
+        queryid: q,
+        toplevel: true,
+    }
 }
 
 #[test]
@@ -35,7 +40,10 @@ fn sticky_entries_evicted_first() {
     assert_eq!(s.hash.len(), 91);
     assert_eq!(s.stats.dealloc, 1);
     for q in 0..10 {
-        assert!(!s.hash.contains_key(&key(q)), "lowest-usage entry {q} survived");
+        assert!(
+            !s.hash.contains_key(&key(q)),
+            "lowest-usage entry {q} survived"
+        );
     }
     assert!(s.hash.contains_key(&key(1000)));
 }
@@ -68,7 +76,10 @@ fn dealloc_decays_usage_and_tracks_mean_len() {
 
 #[test]
 fn counters_dump_roundtrip() {
-    let mut c = Counters { usage: 3.5, ..Counters::default() };
+    let mut c = Counters {
+        usage: 3.5,
+        ..Counters::default()
+    };
     c.calls[0] = 7;
     c.calls[1] = 9;
     c.total_time[1] = 1.25;
@@ -85,7 +96,10 @@ fn counters_dump_roundtrip() {
     let words = crate::store::counters_to_words(&c);
     let arr: [u64; crate::store::COUNTER_WORDS] = words.try_into().unwrap();
     let back = crate::store::counters_from_words(&arr);
-    assert_eq!(crate::store::counters_to_words(&back), crate::store::counters_to_words(&c));
+    assert_eq!(
+        crate::store::counters_to_words(&back),
+        crate::store::counters_to_words(&c)
+    );
     assert_eq!(back.calls, c.calls);
     assert_eq!(back.wal_bytes, c.wal_bytes);
     assert_eq!(back.rows, c.rows);

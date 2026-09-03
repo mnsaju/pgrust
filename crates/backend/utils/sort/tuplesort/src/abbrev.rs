@@ -53,7 +53,8 @@ impl VarStrXfrmState {
         self.last_valid = true;
 
         let bsize = if self.locale.pg_strnxfrm_prefix_enabled() {
-            self.locale.pg_strnxfrm_prefix(&mut self.buf2[..MAX_PREFIX_BYTES], data)
+            self.locale
+                .pg_strnxfrm_prefix(&mut self.buf2[..MAX_PREFIX_BYTES], data)
         } else {
             loop {
                 let bsize = self.locale.pg_strnxfrm(&mut self.buf2[..], data);
@@ -96,7 +97,10 @@ impl AbbrevState {
                 ConverterState::Numeric(::adt_numeric::sortsupport::NumericAbbrevState::new())
             }
         };
-        AbbrevState { full_comparator: arm.full_comparator, conv }
+        AbbrevState {
+            full_comparator: arm.full_comparator,
+            conv,
+        }
     }
 
     /// # Safety
@@ -105,9 +109,7 @@ impl AbbrevState {
     #[inline]
     pub unsafe fn convert(&mut self, original: Datum) -> Datum {
         let word = match &mut self.conv {
-            ConverterState::VarStr(s) => {
-                with_varlena_payload(original, |b| s.convert_slim(b))
-            }
+            ConverterState::VarStr(s) => with_varlena_payload(original, |b| s.convert_slim(b)),
             ConverterState::VarStrXfrm(s) => with_varlena_payload(original, |b| s.convert(b)),
             ConverterState::Uuid(s) => {
                 s.convert(&*(original.as_usize() as *const ::adt_uuid::PgUuid))

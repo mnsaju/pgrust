@@ -3,7 +3,10 @@ use super::*;
 #[test]
 fn prop_names_case_insensitive() {
     assert!(matches!(lookup_prop_name(b"ASC"), Prop::Asc));
-    assert!(matches!(lookup_prop_name(b"distance_orderable"), Prop::DistanceOrderable));
+    assert!(matches!(
+        lookup_prop_name(b"distance_orderable"),
+        Prop::DistanceOrderable
+    ));
     assert!(matches!(lookup_prop_name(b"Can_Include"), Prop::CanInclude));
     assert!(matches!(lookup_prop_name(b"bogus"), Prop::Unknown));
     assert!(matches!(lookup_prop_name(b"asc2"), Prop::Unknown));

@@ -7,18 +7,17 @@ use mcx::Mcx;
 use types_error::PgResult;
 use types_nodes::nodes_enums::{CmdType, LimitOption, LockClauseStrength, LockWaitPolicy};
 use types_nodes::parsenodes::{CTEMaterialize, RangeTblFunction, SetOperation, WindowClause};
+use types_nodes::primnodes::{Alias, FromExpr, JoinExpr};
 use types_nodes::primnodes::{CoercionForm, OverridingKind, SubLinkType};
 use types_nodes::rawnodes::{
     FRAMEOPTION_BETWEEN, FRAMEOPTION_END_CURRENT_ROW, FRAMEOPTION_END_OFFSET,
     FRAMEOPTION_END_OFFSET_FOLLOWING, FRAMEOPTION_END_OFFSET_PRECEDING,
     FRAMEOPTION_END_UNBOUNDED_FOLLOWING, FRAMEOPTION_EXCLUDE_CURRENT_ROW,
     FRAMEOPTION_EXCLUDE_GROUP, FRAMEOPTION_EXCLUDE_TIES, FRAMEOPTION_GROUPS,
-    FRAMEOPTION_NONDEFAULT, FRAMEOPTION_RANGE, FRAMEOPTION_ROWS,
-    FRAMEOPTION_START_CURRENT_ROW, FRAMEOPTION_START_OFFSET,
-    FRAMEOPTION_START_OFFSET_FOLLOWING, FRAMEOPTION_START_OFFSET_PRECEDING,
-    FRAMEOPTION_START_UNBOUNDED_PRECEDING,
+    FRAMEOPTION_NONDEFAULT, FRAMEOPTION_RANGE, FRAMEOPTION_ROWS, FRAMEOPTION_START_CURRENT_ROW,
+    FRAMEOPTION_START_OFFSET, FRAMEOPTION_START_OFFSET_FOLLOWING,
+    FRAMEOPTION_START_OFFSET_PRECEDING, FRAMEOPTION_START_UNBOUNDED_PRECEDING,
 };
-use types_nodes::primnodes::{Alias, FromExpr, JoinExpr};
 use types_nodes::{JoinType, Node, NodeList, NodeTag, Query, RTEKind, RangeTblEntry};
 
 use crate::deparse::{
@@ -218,19 +217,15 @@ pub(crate) fn set_simple_column_names<'mcx>(
     Ok(())
 }
 
-fn from_expr_children<'a, 'mcx>(
-    jt: &'a FromExpr<'mcx>,
-) -> impl Iterator<Item = Node<'mcx>> + 'a {
+fn from_expr_children<'a, 'mcx>(jt: &'a FromExpr<'mcx>) -> impl Iterator<Item = Node<'mcx>> + 'a {
     jt.fromlist.iter()
 }
 
 fn has_dangerous_join_using(dpns: &DeparseNamespace<'_>, jtnode: Node<'_>) -> bool {
     match jtnode.node_tag() {
         NodeTag::T_RangeTblRef => false,
-        NodeTag::T_FromExpr => {
-            from_expr_children(jtnode.as_from_expr().unwrap())
-                .any(|n| has_dangerous_join_using(dpns, n))
-        }
+        NodeTag::T_FromExpr => from_expr_children(jtnode.as_from_expr().unwrap())
+            .any(|n| has_dangerous_join_using(dpns, n)),
         NodeTag::T_JoinExpr => {
             let j = jtnode.as_join_expr().unwrap();
             if j.alias.is_none() && !j.usingClause.is_nil() {
@@ -255,11 +250,7 @@ fn jt_rtindex(node: Node<'_>) -> usize {
     }
 }
 
-fn identify_join_columns(
-    j: &JoinExpr<'_>,
-    jrte: &RangeTblEntry<'_>,
-    colinfo: &mut DeparseColumns,
-) {
+fn identify_join_columns(j: &JoinExpr<'_>, jrte: &RangeTblEntry<'_>, colinfo: &mut DeparseColumns) {
     colinfo.leftrti = jt_rtindex(j.larg);
     colinfo.rightrti = jt_rtindex(j.rarg);
     let numjoincols = jrte.joinaliasvars.len();
@@ -292,11 +283,7 @@ fn expand_colnames_array_to(colinfo: &mut DeparseColumns, n: usize) {
     }
 }
 
-fn colname_is_unique(
-    colname: &str,
-    dpns_using_names: &[String],
-    colinfo: &DeparseColumns,
-) -> bool {
+fn colname_is_unique(colname: &str, dpns_using_names: &[String], colinfo: &DeparseColumns) -> bool {
     if colinfo.colnames.iter().flatten().any(|n| n == colname) {
         return false;
     }
@@ -363,7 +350,9 @@ fn set_using_names(
 
             if rte.alias.is_none() {
                 for i in 0..colinfo.colnames.len() {
-                    let Some(colname) = colinfo.colnames[i].clone() else { continue };
+                    let Some(colname) = colinfo.colnames[i].clone() else {
+                        continue;
+                    };
                     if colinfo.leftattnos[i] > 0 {
                         let la = colinfo.leftattnos[i] as usize;
                         expand_colnames_array_to(&mut dpns.rtable_columns[leftidx], la);
@@ -392,11 +381,8 @@ fn set_using_names(
                                 }
                                 _ => written,
                             };
-                            let unique = make_colname_unique(
-                                preferred,
-                                &dpns.using_names,
-                                &colinfo,
-                            );
+                            let unique =
+                                make_colname_unique(preferred, &dpns.using_names, &colinfo);
                             if dpns.unique_using {
                                 dpns.using_names.push(unique.clone());
                             }
@@ -469,7 +455,11 @@ fn set_relation_column_names<'mcx>(
                 .iter()
                 .map(|c| {
                     let s = c.as_string().expect("expanded colname").sval;
-                    if s.is_empty() { None } else { Some(s.to_owned()) }
+                    if s.is_empty() {
+                        None
+                    } else {
+                        Some(s.to_owned())
+                    }
                 })
                 .collect()
         }
@@ -480,7 +470,11 @@ fn set_relation_column_names<'mcx>(
                     .iter()
                     .map(|c| {
                         let s = c.as_string().expect("eref colname").sval;
-                        if s.is_empty() { None } else { Some(s.to_owned()) }
+                        if s.is_empty() {
+                            None
+                        } else {
+                            Some(s.to_owned())
+                        }
                     })
                     .collect()
             })
@@ -551,7 +545,12 @@ fn set_join_column_names(dpns: &mut DeparseNamespace<'_>, idx: usize) -> PgResul
             dpns.rtable_columns[rightidx].colnames[colinfo.rightattnos[i] as usize - 1].clone()
         } else {
             rte.eref.map(|e| {
-                e.colnames.nth(i).as_string().expect("eref colname").sval.to_owned()
+                e.colnames
+                    .nth(i)
+                    .as_string()
+                    .expect("eref colname")
+                    .sval
+                    .to_owned()
             })
         };
         let Some(real_colname) = real_colname else {
@@ -588,9 +587,11 @@ fn set_join_column_names(dpns: &mut DeparseNamespace<'_>, idx: usize) -> PgResul
     let mut rightmerged = vec![false; right.colnames.len() + 1];
     let mut i = 0usize;
     while i < noldcolumns && colinfo.leftattnos[i] != 0 && colinfo.rightattnos[i] != 0 {
-        colinfo
-            .new_colnames
-            .push(colinfo.colnames[i].clone().expect("merged column name assigned"));
+        colinfo.new_colnames.push(
+            colinfo.colnames[i]
+                .clone()
+                .expect("merged column name assigned"),
+        );
         colinfo.is_new_col.push(false);
         if colinfo.leftattnos[i] > 0 {
             leftmerged[colinfo.leftattnos[i] as usize] = true;
@@ -603,9 +604,10 @@ fn set_join_column_names(dpns: &mut DeparseNamespace<'_>, idx: usize) -> PgResul
 
     let leftattnos = colinfo.leftattnos.clone();
     let rightattnos = colinfo.rightattnos.clone();
-    for (child, merged, attnos) in
-        [(left, &leftmerged, &leftattnos), (right, &rightmerged, &rightattnos)]
-    {
+    for (child, merged, attnos) in [
+        (left, &leftmerged, &leftattnos),
+        (right, &rightmerged, &rightattnos),
+    ] {
         let mut ic = 0usize;
         for jc in 0..child.new_colnames.len() {
             let child_colname = &child.new_colnames[jc];
@@ -630,8 +632,7 @@ fn set_join_column_names(dpns: &mut DeparseNamespace<'_>, idx: usize) -> PgResul
                 i += 1;
             } else {
                 let assigned = if rte.alias.is_some() {
-                    let unique =
-                        make_colname_unique(child_colname, &dpns.using_names, &colinfo);
+                    let unique = make_colname_unique(child_colname, &dpns.using_names, &colinfo);
                     if !changed_any && unique != *child_colname {
                         changed_any = true;
                     }
@@ -646,7 +647,11 @@ fn set_join_column_names(dpns: &mut DeparseNamespace<'_>, idx: usize) -> PgResul
     }
     debug_assert_eq!(colinfo.new_colnames.len(), nnewcolumns);
 
-    colinfo.printaliases = if rte.alias.is_some() { changed_any } else { false };
+    colinfo.printaliases = if rte.alias.is_some() {
+        changed_any
+    } else {
+        false
+    };
     dpns.rtable_columns[idx] = colinfo;
     Ok(())
 }
@@ -714,7 +719,8 @@ pub(crate) fn get_query_def<'mcx>(
                 .unwrap_or_else(|| gap("get_utility_query_def", "non-NOTIFY utility statement"));
             append_context_keyword(ctx, "", 0, PRETTYINDENT_STD, 1);
             let name = stmt.conditionname.expect("NOTIFY has a condition name");
-            ctx.buf.push_str(&format!("NOTIFY {}", quote_identifier(name)));
+            ctx.buf
+                .push_str(&format!("NOTIFY {}", quote_identifier(name)));
             if let Some(payload) = stmt.payload {
                 ctx.buf.push_str(", ");
                 crate::deparse::simple_quote_literal(&mut ctx.buf, payload);
@@ -744,11 +750,16 @@ fn get_with_clause<'mcx>(query: &'mcx Query<'mcx>, ctx: &mut DeparseContext<'mcx
         ctx.indent_level += PRETTYINDENT_STD;
         ctx.buf.push(' ');
     }
-    let mut sep = if query.hasRecursive { "WITH RECURSIVE " } else { "WITH " };
+    let mut sep = if query.hasRecursive {
+        "WITH RECURSIVE "
+    } else {
+        "WITH "
+    };
     for cte_node in query.cteList.iter() {
         let cte = cte_node.as_common_table_expr().expect("cteList entry");
         ctx.buf.push_str(sep);
-        ctx.buf.push_str(&quote_identifier(cte.ctename.expect("CTE has a name")));
+        ctx.buf
+            .push_str(&quote_identifier(cte.ctename.expect("CTE has a name")));
         if !cte.aliascolnames.is_nil() {
             ctx.buf.push('(');
             let mut first = true;
@@ -757,7 +768,8 @@ fn get_with_clause<'mcx>(query: &'mcx Query<'mcx>, ctx: &mut DeparseContext<'mcx
                     ctx.buf.push_str(", ");
                 }
                 first = false;
-                ctx.buf.push_str(&quote_identifier(col.as_string().expect("colname").sval));
+                ctx.buf
+                    .push_str(&quote_identifier(col.as_string().expect("colname").sval));
             }
             ctx.buf.push(')');
         }
@@ -783,7 +795,11 @@ fn get_with_clause<'mcx>(query: &'mcx Query<'mcx>, ctx: &mut DeparseContext<'mcx
         if let Some(sc) = cte.search_clause.and_then(|n| n.as_cte_search_clause()) {
             ctx.buf.push_str(&format!(
                 " SEARCH {} FIRST BY ",
-                if sc.search_breadth_first { "BREADTH" } else { "DEPTH" }
+                if sc.search_breadth_first {
+                    "BREADTH"
+                } else {
+                    "DEPTH"
+                }
             ));
             let mut first = true;
             for col in sc.search_col_list.iter() {
@@ -791,7 +807,8 @@ fn get_with_clause<'mcx>(query: &'mcx Query<'mcx>, ctx: &mut DeparseContext<'mcx
                     ctx.buf.push_str(", ");
                 }
                 first = false;
-                ctx.buf.push_str(&quote_identifier(col.as_string().expect("colname").sval));
+                ctx.buf
+                    .push_str(&quote_identifier(col.as_string().expect("colname").sval));
             }
             ctx.buf.push_str(&format!(
                 " SET {}",
@@ -806,7 +823,8 @@ fn get_with_clause<'mcx>(query: &'mcx Query<'mcx>, ctx: &mut DeparseContext<'mcx
                     ctx.buf.push_str(", ");
                 }
                 first = false;
-                ctx.buf.push_str(&quote_identifier(col.as_string().expect("colname").sval));
+                ctx.buf
+                    .push_str(&quote_identifier(col.as_string().expect("colname").sval));
             }
             ctx.buf.push_str(&format!(
                 " SET {}",
@@ -815,7 +833,9 @@ fn get_with_clause<'mcx>(query: &'mcx Query<'mcx>, ctx: &mut DeparseContext<'mcx
             let mark_value = cc.cycle_mark_value.expect("cycle_mark_value");
             let mark_default = cc.cycle_mark_default.expect("cycle_mark_default");
             let cmv = mark_value.as_const().expect("cycle_mark_value is a Const");
-            let cmd = mark_default.as_const().expect("cycle_mark_default is a Const");
+            let cmd = mark_default
+                .as_const()
+                .expect("cycle_mark_default is a Const");
             let default_marks = cmv.consttype == types_core::BOOLOID
                 && !cmv.constisnull
                 && cmv.constvalue.as_bool()
@@ -940,7 +960,8 @@ fn get_select_query_def<'mcx>(
             };
             append_context_keyword(ctx, kw, -PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
             let name = get_rtable_name(rc.rti as usize, ctx).expect("locked rel has a refname");
-            ctx.buf.push_str(&format!(" OF {}", quote_identifier(&name)));
+            ctx.buf
+                .push_str(&format!(" OF {}", quote_identifier(&name)));
             match rc.waitPolicy {
                 LockWaitPolicy::LockWaitError => ctx.buf.push_str(" NOWAIT"),
                 LockWaitPolicy::LockWaitSkip => ctx.buf.push_str(" SKIP LOCKED"),
@@ -962,16 +983,19 @@ fn get_returning_clause<'mcx>(
     let mut have_with = false;
     if let Some(old_alias) = query.returningOldAlias {
         if old_alias != "old" {
-            ctx.buf.push_str(&format!(" WITH (OLD AS {}", quote_identifier(old_alias)));
+            ctx.buf
+                .push_str(&format!(" WITH (OLD AS {}", quote_identifier(old_alias)));
             have_with = true;
         }
     }
     if let Some(new_alias) = query.returningNewAlias {
         if new_alias != "new" {
             if have_with {
-                ctx.buf.push_str(&format!(", NEW AS {}", quote_identifier(new_alias)));
+                ctx.buf
+                    .push_str(&format!(", NEW AS {}", quote_identifier(new_alias)));
             } else {
-                ctx.buf.push_str(&format!(" WITH (NEW AS {}", quote_identifier(new_alias)));
+                ctx.buf
+                    .push_str(&format!(" WITH (NEW AS {}", quote_identifier(new_alias)));
                 have_with = true;
             }
         }
@@ -1048,15 +1072,18 @@ fn get_insert_query_def<'mcx>(
     }
 
     match query.r#override {
-        OverridingKind::OVERRIDING_SYSTEM_VALUE => {
-            ctx.buf.push_str("OVERRIDING SYSTEM VALUE ")
-        }
+        OverridingKind::OVERRIDING_SYSTEM_VALUE => ctx.buf.push_str("OVERRIDING SYSTEM VALUE "),
         OverridingKind::OVERRIDING_USER_VALUE => ctx.buf.push_str("OVERRIDING USER VALUE "),
         OverridingKind::OVERRIDING_NOT_SET => {}
     }
 
     if let Some(srte) = select_rte {
-        get_query_def(srte.subquery.expect("subquery RTE has a subquery"), ctx, None, false)?;
+        get_query_def(
+            srte.subquery.expect("subquery RTE has a subquery"),
+            ctx,
+            None,
+            false,
+        )?;
     } else if let Some(vrte) = values_rte {
         get_values_def(&vrte.values_lists, ctx)?;
     } else if !strippedexprs.is_empty() {
@@ -1293,15 +1320,25 @@ fn get_merge_query_def<'mcx>(
 
     get_from_clause(query, " USING ", ctx)?;
     append_context_keyword(ctx, " ON ", -PRETTYINDENT_STD, PRETTYINDENT_STD, 2);
-    get_rule_expr(query.mergeJoinCondition.expect("MERGE has a join condition"), ctx, false)?;
+    get_rule_expr(
+        query
+            .mergeJoinCondition
+            .expect("MERGE has a join condition"),
+        ctx,
+        false,
+    )?;
 
     let have_not_matched_by_source = query.mergeActionList.iter().any(|n| {
-        n.as_merge_action().expect("mergeActionList entry").matchKind
+        n.as_merge_action()
+            .expect("mergeActionList entry")
+            .matchKind
             == MergeMatchKind::MERGE_WHEN_NOT_MATCHED_BY_SOURCE
     });
 
     for action_node in query.mergeActionList.iter() {
-        let action = action_node.as_merge_action().expect("mergeActionList entry");
+        let action = action_node
+            .as_merge_action()
+            .expect("mergeActionList entry");
         append_context_keyword(ctx, " WHEN ", -PRETTYINDENT_STD, PRETTYINDENT_STD, 2);
         ctx.buf.push_str(match action.matchKind {
             MergeMatchKind::MERGE_WHEN_MATCHED => "MATCHED",
@@ -1497,7 +1534,8 @@ fn get_basic_select_query<'mcx>(
         return get_values_def(&values_rte.values_lists, ctx);
     }
 
-    ctx.buf.push_str(if query.isReturn { "RETURN" } else { "SELECT" });
+    ctx.buf
+        .push_str(if query.isReturn { "RETURN" } else { "SELECT" });
 
     if !query.distinctClause.is_nil() {
         if query.hasDistinctOn {
@@ -1573,9 +1611,7 @@ fn get_rule_windowclause<'mcx>(
         let wc = wc_node.as_window_clause().expect("windowClause entry");
         let Some(name) = wc.name else { continue };
         match sep {
-            None => {
-                append_context_keyword(ctx, " WINDOW ", -PRETTYINDENT_STD, PRETTYINDENT_STD, 1)
-            }
+            None => append_context_keyword(ctx, " WINDOW ", -PRETTYINDENT_STD, PRETTYINDENT_STD, 1),
             Some(s) => ctx.buf.push_str(s),
         }
         sep = Some(", ");
@@ -1718,7 +1754,11 @@ fn get_target_list<'mcx>(
             Some(var) => get_variable(tle.expr, var, 0, true, ctx)?,
             None => {
                 get_rule_expr(tle.expr, ctx, true)?;
-                if ctx.colnames_visible { None } else { Some("?column?".to_string()) }
+                if ctx.colnames_visible {
+                    None
+                } else {
+                    Some("?column?".to_string())
+                }
             }
         };
 
@@ -1875,13 +1915,8 @@ fn get_tablesample_def<'mcx>(
     ctx: &mut DeparseContext<'mcx>,
 ) -> PgResult<()> {
     const INTERNALOID: types_core::Oid = 2281;
-    let fname = crate::generate_function_name(
-        ctx.mcx,
-        tablesample.tsmhandler,
-        &[INTERNALOID],
-        &[],
-        false,
-    )?;
+    let fname =
+        crate::generate_function_name(ctx.mcx, tablesample.tsmhandler, &[INTERNALOID], &[], false)?;
     ctx.buf.push_str(&format!(" TABLESAMPLE {fname} ("));
     let mut nargs = 0;
     for arg in tablesample.args.iter() {
@@ -1994,7 +2029,8 @@ pub(crate) fn get_rule_orderby<'mcx>(
     for n in order_list.iter() {
         let srt = n.as_sort_group_clause().expect("sortClause entry");
         ctx.buf.push_str(sep);
-        let sortexpr = get_rule_sortgroupclause(srt.tleSortGroupRef, target_list, force_colno, ctx)?;
+        let sortexpr =
+            get_rule_sortgroupclause(srt.tleSortGroupRef, target_list, force_colno, ctx)?;
         let sortcoltype = parse_expr::expr_type(sortexpr);
         let typentry = typcache::lookup_type_cache(
             sortcoltype,
@@ -2012,7 +2048,11 @@ pub(crate) fn get_rule_orderby<'mcx>(
         } else {
             let opname = generate_operator_name(ctx.mcx, srt.sortop, sortcoltype, sortcoltype)?;
             ctx.buf.push_str(&format!(" USING {opname}"));
-            ctx.buf.push_str(if srt.nulls_first { " NULLS FIRST" } else { " NULLS LAST" });
+            ctx.buf.push_str(if srt.nulls_first {
+                " NULLS FIRST"
+            } else {
+                " NULLS LAST"
+            });
         }
         sep = ", ";
     }
@@ -2024,7 +2064,9 @@ fn get_from_clause<'mcx>(
     prefix: &str,
     ctx: &mut DeparseContext<'mcx>,
 ) -> PgResult<()> {
-    let Some(jt) = query.jointree else { return Ok(()) };
+    let Some(jt) = query.jointree else {
+        return Ok(());
+    };
     let mut first = true;
     for jtnode in jt.fromlist.iter() {
         if let Some(rtr) = jtnode.as_range_tbl_ref() {
@@ -2151,8 +2193,7 @@ fn get_from_clause_item<'mcx>(
                             ctx.buf.push_str("ROWS FROM(");
                             let mut funcno = 0;
                             for f in rte.functions.iter() {
-                                let rtfunc =
-                                    f.as_range_tbl_function().expect("functions entry");
+                                let rtfunc = f.as_range_tbl_function().expect("functions entry");
                                 if funcno > 0 {
                                     ctx.buf.push_str(", ");
                                 }
@@ -2203,8 +2244,9 @@ fn get_from_clause_item<'mcx>(
             }
             if rte.rtekind == RTEKind::RTE_RELATION {
                 if let Some(ts) = rte.tablesample {
-                    let ts =
-                        ts.as_table_sample_clause().expect("tablesample is a TableSampleClause");
+                    let ts = ts
+                        .as_table_sample_clause()
+                        .expect("tablesample is a TableSampleClause");
                     get_tablesample_def(ts, ctx)?;
                 }
             }
@@ -2214,7 +2256,7 @@ fn get_from_clause_item<'mcx>(
             let j = jtnode.as_join_expr().unwrap();
             let need_paren_on_right = ctx.pretty_paren()
                 && j.rarg.node_tag() != NodeTag::T_RangeTblRef
-                && !(j.rarg.as_join_expr().is_some_and(|rj| rj.alias.is_some()));
+                && j.rarg.as_join_expr().is_none_or(|rj| rj.alias.is_none());
 
             if !ctx.pretty_paren() || j.alias.is_some() {
                 ctx.buf.push('(');
@@ -2276,8 +2318,9 @@ fn get_from_clause_item<'mcx>(
 
             if !j.usingClause.is_nil() {
                 ctx.buf.push_str(" USING (");
-                let using_names =
-                    ctx.namespaces[0].rtable_columns[j.rtindex as usize - 1].using_names.clone();
+                let using_names = ctx.namespaces[0].rtable_columns[j.rtindex as usize - 1]
+                    .using_names
+                    .clone();
                 let mut first = true;
                 for name in &using_names {
                     if !first {
@@ -2311,8 +2354,8 @@ fn get_from_clause_item<'mcx>(
             }
 
             if j.alias.is_some() {
-                let name = get_rtable_name(j.rtindex as usize, ctx)
-                    .expect("aliased join has a refname");
+                let name =
+                    get_rtable_name(j.rtindex as usize, ctx).expect("aliased join has a refname");
                 ctx.buf.push_str(&format!(" {}", quote_identifier(&name)));
                 get_column_alias_list(j.rtindex as usize, ctx);
             }

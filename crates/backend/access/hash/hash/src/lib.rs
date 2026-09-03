@@ -14,15 +14,17 @@ pub(crate) mod wal;
 
 use ::datum::Datum;
 use ::mcx::Mcx;
-use ::types_core::{BlockNumber, Buffer, ForkNumber, InvalidBlockNumber, InvalidBuffer, OffsetNumber};
+use ::types_core::{
+    BlockNumber, Buffer, ForkNumber, InvalidBlockNumber, InvalidBuffer, OffsetNumber,
+};
 use ::types_error::PgResult;
 use ::types_hash::*;
+use ::types_nbtree::IndexBulkDeleteResult;
 use ::types_rel::Relation;
 use ::types_relscan::{relation_get_index_scan, IndexScanDescData, IndexScanOpaque};
 use ::types_scan::scankey::ScanKeyData;
 use ::types_scan::sdir::ScanDirection;
 use ::types_storage::buf::BufferAccessStrategy;
-use ::types_nbtree::IndexBulkDeleteResult;
 use ::types_tuple::itemptr::ItemPointerData;
 use ::xloginsert_seams::{XLogRegBuf, REGBUF_NO_CHANGE, REGBUF_NO_IMAGE, REGBUF_STANDARD};
 
@@ -76,7 +78,9 @@ macro_rules! split_scan {
             non_hash_opaque()
         };
         HashScanCtx {
-            rel: indexRelation.as_ref().expect("index scan parked (skeleton)"),
+            rel: indexRelation
+                .as_ref()
+                .expect("index scan parked (skeleton)"),
             so: &mut **so,
             snapshot: xs_snapshot.as_deref(),
             ignore_killed_tuples: *ignore_killed_tuples,
@@ -101,11 +105,12 @@ pub fn hashinsert<'mcx>(
         return Ok(false);
     };
 
-    let mut itup =
-        nbtree::itup::index_form_tuple(mcx, &rel.rd_att, &[hash_datum], &[false])?;
+    let mut itup = nbtree::itup::index_form_tuple(mcx, &rel.rd_att, &[hash_datum], &[false])?;
     // SAFETY: t_tid = first 6 bytes of the owned image (itup.h).
     unsafe {
-        itup.as_mut_ptr().cast::<ItemPointerData>().write_unaligned(*ht_ctid);
+        itup.as_mut_ptr()
+            .cast::<ItemPointerData>()
+            .write_unaligned(*ht_ctid);
     }
     // SAFETY: itup.size() bytes of the live owned image.
     let image = unsafe { core::slice::from_raw_parts(itup.as_ptr(), itup.size()) };
@@ -127,9 +132,10 @@ pub fn hashgettuple(scan: &mut IndexScanDescData<'_>, dir: ScanDirection) -> PgR
     } else {
         if kill_prior_tuple {
             if ctx.so.killedItems.capacity() == 0 {
-                ctx.so.killedItems.try_reserve_exact(MaxIndexTuplesPerPage).map_err(|_| {
-                    Box::new(::types_error::PgError::error("out of memory"))
-                })?;
+                ctx.so
+                    .killedItems
+                    .try_reserve_exact(MaxIndexTuplesPerPage)
+                    .map_err(|_| Box::new(::types_error::PgError::error("out of memory")))?;
             }
             if (ctx.so.numKilled as usize) < MaxIndexTuplesPerPage {
                 // C's killedItems[numKilled++] overwrite (see nbtree twin):
@@ -195,11 +201,10 @@ pub fn hashrescan(
 ) -> PgResult<()> {
     {
         let mut ctx = split_scan!(&mut *scan);
-        if HashScanPosIsValid(&ctx.so.currPos) {
-            if ctx.so.numKilled > 0 {
+        if HashScanPosIsValid(&ctx.so.currPos)
+            && ctx.so.numKilled > 0 {
                 search::_hash_kill_items(&mut ctx)?;
             }
-        }
         page::_hash_dropscanbuf(ctx.so)?;
         HashScanPosInvalidate(&mut ctx.so.currPos);
         ctx.so.hashso_buc_populated = false;
@@ -219,11 +224,10 @@ pub fn hashrescan(
 /// hashendscan. Storage is freed with the scan value (mcx lifetime).
 pub fn hashendscan(scan: &mut IndexScanDescData<'_>) -> PgResult<()> {
     let mut ctx = split_scan!(&mut *scan);
-    if HashScanPosIsValid(&ctx.so.currPos) {
-        if ctx.so.numKilled > 0 {
+    if HashScanPosIsValid(&ctx.so.currPos)
+        && ctx.so.numKilled > 0 {
             search::_hash_kill_items(&mut ctx)?;
         }
-    }
     page::_hash_dropscanbuf(ctx.so)?;
     Ok(())
 }
@@ -318,8 +322,7 @@ fn hashbulkdelete_guts<'mcx>(
                     // metapage was read; with the primary page locked (no
                     // further splits possible), refresh if stale.
                     debug_assert!(opaque.hasho_prevblkno != InvalidBlockNumber);
-                    if opaque.hasho_prevblkno
-                        > page::with_cached_metap(rel, |m| m.hashm_maxbucket)
+                    if opaque.hasho_prevblkno > page::with_cached_metap(rel, |m| m.hashm_maxbucket)
                     {
                         page::_hash_getcachedmetap(rel, &mut metabuf, true)?;
                     }
@@ -528,7 +531,7 @@ pub(crate) fn hashbucketcleanup(
             }
             bucket_dirty = true;
 
-            let removed_any = tuples_removed.as_deref().map_or(false, |t| *t > 0.0);
+            let removed_any = tuples_removed.as_deref().is_some_and(|t| *t > 0.0);
             if removed_any && H_HAS_DEAD_TUPLES(opaque.hasho_flag) {
                 // SAFETY: lock held on buf.
                 let mut page = unsafe { page_mut(buf) };

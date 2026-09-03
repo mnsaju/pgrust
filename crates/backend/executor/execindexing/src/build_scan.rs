@@ -5,7 +5,7 @@
 // (XactLockTableWait lane; "anyvisible" mode indexes those without waiting).
 use ::datum::Datum;
 use ::mcx::{Mcx, PgVec};
-use ::types_core::{BlockNumber, INDEX_MAX_KEYS, InvalidBlockNumber};
+use ::types_core::{BlockNumber, InvalidBlockNumber, INDEX_MAX_KEYS};
 use ::types_error::PgResult;
 use ::types_rel::Relation;
 use ::types_slot::SlotData;
@@ -169,7 +169,10 @@ where
         };
 
         if scan.rs_cblock != root_blkno {
-            let pin = scan.rs_cbuf.as_ref().expect("pinned page for returned tuple");
+            let pin = scan
+                .rs_cbuf
+                .as_ref()
+                .expect("pinned page for returned tuple");
             let guard = pin.lock_share()?;
             pruneheap::heap_get_root_tuples(pin.page(), &mut root_offsets)?;
             drop(guard);
@@ -184,9 +187,13 @@ where
             tuple_is_alive = true;
             reltuples += 1.0;
         } else {
-            let pin = scan.rs_cbuf.as_ref().expect("pinned page for returned tuple");
+            let pin = scan
+                .rs_cbuf
+                .as_ref()
+                .expect("pinned page for returned tuple");
             let guard = pin.lock_share()?;
-            let htsv = heapam_visibility::HeapTupleSatisfiesVacuum(&mut tuple, oldest_xmin, buffer)?;
+            let htsv =
+                heapam_visibility::HeapTupleSatisfiesVacuum(&mut tuple, oldest_xmin, buffer)?;
             drop(guard);
             match htsv {
                 HEAPTUPLE_DEAD => {
@@ -242,7 +249,9 @@ where
                 HEAPTUPLE_DELETE_IN_PROGRESS => {
                     let xwait = heapam::HeapTupleHeaderGetUpdateXid(tuple.t_data())?;
                     if !xact::TransactionIdIsCurrentTransactionId(xwait) {
-                        if !is_system_catalog || checking_uniqueness || tuple.t_data().is_hot_updated()
+                        if !is_system_catalog
+                            || checking_uniqueness
+                            || tuple.t_data().is_hot_updated()
                         {
                             // unported: XactLockTableWait lane
                             // (heapam_index_build_range_scan).
@@ -289,7 +298,10 @@ where
             let offnum = self_tid.ip_posid;
             let mut root = root_offsets[offnum as usize - 1];
             if root == InvalidOffsetNumber {
-                let pin = scan.rs_cbuf.as_ref().expect("pinned page for returned tuple");
+                let pin = scan
+                    .rs_cbuf
+                    .as_ref()
+                    .expect("pinned page for returned tuple");
                 let guard = pin.lock_share()?;
                 pruneheap::heap_get_root_tuples(pin.page(), &mut root_offsets)?;
                 drop(guard);
@@ -304,9 +316,21 @@ where
                 .with_sqlstate(types_error::ERRCODE_DATA_CORRUPTED)));
             }
             let tid = ItemPointerData::new(blkno, root);
-            callback(index_relation, &tid, &values[..], &isnull[..], tuple_is_alive)?;
+            callback(
+                index_relation,
+                &tid,
+                &values[..],
+                &isnull[..],
+                tuple_is_alive,
+            )?;
         } else {
-            callback(index_relation, &self_tid, &values[..], &isnull[..], tuple_is_alive)?;
+            callback(
+                index_relation,
+                &self_tid,
+                &values[..],
+                &isnull[..],
+                tuple_is_alive,
+            )?;
         }
     }
 
@@ -329,9 +353,8 @@ fn next_tuple<'mcx>(
     let buffer = scan.rs_cbuf.as_ref().expect("pinned").buffer();
     // SAFETY: same live pinned image rs_ctup views; hint-bit writes through
     // the &mut view are the C SatisfiesVacuum contract (buffer share-locked).
-    let tuple = unsafe {
-        HeapTupleData::from_raw_parts(t.header_ptr(), t.t_len, t.t_self, t.t_tableOid)
-    };
+    let tuple =
+        unsafe { HeapTupleData::from_raw_parts(t.header_ptr(), t.t_len, t.t_self, t.t_tableOid) };
     Ok(Some((tuple, buffer)))
 }
 

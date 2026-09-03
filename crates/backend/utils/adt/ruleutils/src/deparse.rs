@@ -86,8 +86,8 @@ pub(crate) fn append_context_keyword(
         let amount = if ctx.indent_level < PRETTYINDENT_LIMIT {
             ctx.indent_level.max(0) + indent_plus
         } else {
-            let mut a =
-                PRETTYINDENT_LIMIT + (ctx.indent_level - PRETTYINDENT_LIMIT) / (PRETTYINDENT_STD / 2);
+            let mut a = PRETTYINDENT_LIMIT
+                + (ctx.indent_level - PRETTYINDENT_LIMIT) / (PRETTYINDENT_STD / 2);
             a %= PRETTYINDENT_LIMIT;
             a + indent_plus
         };
@@ -122,7 +122,8 @@ pub fn deparse_expression_pretty<'mcx>(
             .expect("deparse_context_for: relation exists")
             .as_str()
             .to_owned();
-        ctx.namespaces.push(Rc::new(query::deparse_context_for(mcx, &relname, relid)?));
+        ctx.namespaces
+            .push(Rc::new(query::deparse_context_for(mcx, &relname, relid)?));
     }
     get_rule_expr(expr, &mut ctx, showimplicit)?;
     Ok(ctx.buf)
@@ -176,7 +177,13 @@ pub(crate) fn get_rule_expr<'mcx>(
             if relabel.relabelformat == CoercionForm::COERCE_IMPLICIT_CAST && !showimplicit {
                 get_rule_expr_paren(relabel.arg, ctx, false, Some(node))
             } else {
-                get_coercion_expr(relabel.arg, ctx, relabel.resulttype, relabel.resulttypmod, node)
+                get_coercion_expr(
+                    relabel.arg,
+                    ctx,
+                    relabel.resulttype,
+                    relabel.resulttypmod,
+                    node,
+                )
             }
         }
         NodeTag::T_CoerceViaIO => {
@@ -192,7 +199,13 @@ pub(crate) fn get_rule_expr<'mcx>(
             if acoerce.coerceformat == CoercionForm::COERCE_IMPLICIT_CAST && !showimplicit {
                 get_rule_expr_paren(acoerce.arg, ctx, false, Some(node))
             } else {
-                get_coercion_expr(acoerce.arg, ctx, acoerce.resulttype, acoerce.resulttypmod, node)
+                get_coercion_expr(
+                    acoerce.arg,
+                    ctx,
+                    acoerce.resulttype,
+                    acoerce.resulttypmod,
+                    node,
+                )
             }
         }
         NodeTag::T_ConvertRowtypeExpr => {
@@ -225,7 +238,9 @@ pub(crate) fn get_rule_expr<'mcx>(
                 Some(name) => ctx
                     .buf
                     .push_str(&format!("CURRENT OF {}", quote_identifier(name))),
-                None => ctx.buf.push_str(&format!("CURRENT OF ${}", cexpr.cursor_param)),
+                None => ctx
+                    .buf
+                    .push_str(&format!("CURRENT OF ${}", cexpr.cursor_param)),
             }
             Ok(())
         }
@@ -340,7 +355,8 @@ pub(crate) fn get_rule_expr<'mcx>(
                 }
                 Op::SVFOP_CURRENT_TIMESTAMP => ctx.buf.push_str("CURRENT_TIMESTAMP"),
                 Op::SVFOP_CURRENT_TIMESTAMP_N => {
-                    ctx.buf.push_str(&format!("CURRENT_TIMESTAMP({})", svf.typmod));
+                    ctx.buf
+                        .push_str(&format!("CURRENT_TIMESTAMP({})", svf.typmod));
                 }
                 Op::SVFOP_LOCALTIME => ctx.buf.push_str("LOCALTIME"),
                 Op::SVFOP_LOCALTIME_N => ctx.buf.push_str(&format!("LOCALTIME({})", svf.typmod)),
@@ -363,7 +379,8 @@ pub(crate) fn get_rule_expr<'mcx>(
             if refexpr.node_tag() == NodeTag::T_CaseTestExpr {
                 gap("get_rule_expr", "SubscriptingRef inside FieldStore");
             }
-            let need_parens = !matches!(refexpr.node_tag(), NodeTag::T_Var | NodeTag::T_FieldSelect);
+            let need_parens =
+                !matches!(refexpr.node_tag(), NodeTag::T_Var | NodeTag::T_FieldSelect);
             if need_parens {
                 ctx.buf.push('(');
             }
@@ -387,8 +404,10 @@ pub(crate) fn get_rule_expr<'mcx>(
             let arg = fselect.arg;
             // C: a Var argument MUST be parenthesized — name-count correctness,
             // not simplicity.
-            let need_parens =
-                !matches!(arg.node_tag(), NodeTag::T_SubscriptingRef | NodeTag::T_FieldSelect);
+            let need_parens = !matches!(
+                arg.node_tag(),
+                NodeTag::T_SubscriptingRef | NodeTag::T_FieldSelect
+            );
             if need_parens {
                 ctx.buf.push('(');
             }
@@ -423,9 +442,7 @@ pub(crate) fn get_rule_expr<'mcx>(
             Ok(())
         }
         NodeTag::T_XmlExpr => get_xml_expr(node, ctx),
-        NodeTag::T_TableFunc => {
-            get_tablefunc(node.as_table_func().unwrap(), ctx, showimplicit)
-        }
+        NodeTag::T_TableFunc => get_tablefunc(node.as_table_func().unwrap(), ctx, showimplicit),
         NodeTag::T_SubPlan => {
             let subplan = node.as_sub_plan().unwrap();
             ctx.buf.push_str(match subplan.subLinkType {
@@ -451,7 +468,8 @@ pub(crate) fn get_rule_expr<'mcx>(
                 if subplan.useHashTable {
                     ctx.buf.push_str("hashed ");
                 }
-                ctx.buf.push_str(subplan.plan_name.expect("planned SubPlan has a name"));
+                ctx.buf
+                    .push_str(subplan.plan_name.expect("planned SubPlan has a name"));
                 ctx.buf.push(')');
             }
             Ok(())
@@ -469,7 +487,8 @@ pub(crate) fn get_rule_expr<'mcx>(
                 if splan.useHashTable {
                     ctx.buf.push_str("hashed ");
                 }
-                ctx.buf.push_str(splan.plan_name.expect("planned SubPlan has a name"));
+                ctx.buf
+                    .push_str(splan.plan_name.expect("planned SubPlan has a name"));
             }
             ctx.buf.push(')');
             Ok(())
@@ -617,7 +636,9 @@ pub(crate) fn get_rule_expr<'mcx>(
 // The datum leg of C get_range_partbound_string: get_const_expr with
 // showtype -1 (no ::type suffix); seam entry for partbounds' errdetail.
 pub fn deparse_partbound_const<'mcx>(mcx: Mcx<'mcx>, expr: Node<'mcx>) -> PgResult<String> {
-    let c = expr.as_const().expect("range partition datum value is a Const");
+    let c = expr
+        .as_const()
+        .expect("range partition datum value is a Const");
     let mut ctx = DeparseContext::new(mcx, 0);
     get_const_expr(c, &mut ctx, -1)?;
     Ok(ctx.buf)
@@ -659,11 +680,12 @@ fn get_json_format(format: Option<&types_nodes::JsonFormat>, ctx: &mut DeparseCo
     if format.format_type == JsonFormatType::JS_FORMAT_DEFAULT {
         return;
     }
-    ctx.buf.push_str(if format.format_type == JsonFormatType::JS_FORMAT_JSONB {
-        " FORMAT JSONB"
-    } else {
-        " FORMAT JSON"
-    });
+    ctx.buf
+        .push_str(if format.format_type == JsonFormatType::JS_FORMAT_JSONB {
+            " FORMAT JSONB"
+        } else {
+            " FORMAT JSON"
+        });
     if format.encoding != JsonEncoding::JS_ENC_DEFAULT {
         ctx.buf.push_str(" ENCODING ");
         ctx.buf.push_str(match format.encoding {
@@ -684,15 +706,16 @@ fn get_json_returning(
         return Ok(());
     }
     ctx.buf.push_str(" RETURNING ");
-    ctx.buf.push_str(&format_type_with_typemod(returning.typid, returning.typmod)?);
+    ctx.buf.push_str(&format_type_with_typemod(
+        returning.typid,
+        returning.typmod,
+    )?);
     let expected = if returning.typid == types_core::catalog::JSONBOID {
         JsonFormatType::JS_FORMAT_JSONB
     } else {
         JsonFormatType::JS_FORMAT_JSON
     };
-    if !json_format_by_default
-        || returning.format.expect("format").format_type != expected
-    {
+    if !json_format_by_default || returning.format.expect("format").format_type != expected {
         get_json_format(returning.format, ctx);
     }
     Ok(())
@@ -704,10 +727,16 @@ fn get_json_constructor_options(
 ) -> PgResult<()> {
     use types_nodes::JsonConstructorType as JC;
     if ctor.absent_on_null {
-        if matches!(ctor.r#type, JC::JSCTOR_JSON_OBJECT | JC::JSCTOR_JSON_OBJECTAGG) {
+        if matches!(
+            ctor.r#type,
+            JC::JSCTOR_JSON_OBJECT | JC::JSCTOR_JSON_OBJECTAGG
+        ) {
             ctx.buf.push_str(" ABSENT ON NULL");
         }
-    } else if matches!(ctor.r#type, JC::JSCTOR_JSON_ARRAY | JC::JSCTOR_JSON_ARRAYAGG) {
+    } else if matches!(
+        ctor.r#type,
+        JC::JSCTOR_JSON_ARRAY | JC::JSCTOR_JSON_ARRAYAGG
+    ) {
         ctx.buf.push_str(" NULL ON NULL");
     }
     if ctor.unique {
@@ -747,7 +776,11 @@ fn get_json_constructor<'mcx>(
     let is_json_object = ctor.r#type == JC::JSCTOR_JSON_OBJECT;
     for (curridx, arg) in ctor.args.iter().enumerate() {
         if curridx > 0 {
-            ctx.buf.push_str(if is_json_object && curridx % 2 != 0 { " : " } else { ", " });
+            ctx.buf.push_str(if is_json_object && curridx % 2 != 0 {
+                " : "
+            } else {
+                ", "
+            });
         }
         get_rule_expr(arg, ctx, true)?;
     }
@@ -765,24 +798,33 @@ fn get_json_agg_constructor<'mcx>(
     let func = ctor.func.expect("func");
     let Some(aggref) = func.as_aggref() else {
         let Some(wfunc) = func.as_window_func() else {
-            gap("get_json_agg_constructor", "non-Aggref/WindowFunc constructor func");
+            gap(
+                "get_json_agg_constructor",
+                "non-Aggref/WindowFunc constructor func",
+            );
         };
         return get_windowfunc_expr_helper(wfunc, ctx, Some((ctor, funcname, is_json_objectagg)));
     };
     // get_agg_expr_helper: funcname override + options suffix.
     if aggref.aggsplit != types_nodes::primnodes::AGGSPLIT_SIMPLE {
-        gap("get_json_agg_constructor", "partial/combining aggregate deparse");
+        gap(
+            "get_json_agg_constructor",
+            "partial/combining aggregate deparse",
+        );
     }
     ctx.buf.push_str(funcname);
     ctx.buf.push('(');
     let mut i = 0;
     for tle_node in aggref.args.iter() {
-        let tle = tle_node.as_target_entry().expect("Aggref args are TargetEntries");
+        let tle = tle_node
+            .as_target_entry()
+            .expect("Aggref args are TargetEntries");
         if tle.resjunk {
             continue;
         }
         if i > 0 {
-            ctx.buf.push_str(if is_json_objectagg { " : " } else { ", " });
+            ctx.buf
+                .push_str(if is_json_objectagg { " : " } else { ", " });
         }
         i += 1;
         get_rule_expr(tle.expr, ctx, true)?;
@@ -838,7 +880,11 @@ fn get_json_expr_options<'mcx>(
             JSW_UNCONDITIONAL => ctx.buf.push_str(" WITH UNCONDITIONAL WRAPPER"),
             JSW_NONE | JSW_UNSPEC => ctx.buf.push_str(" WITHOUT WRAPPER"),
         }
-        ctx.buf.push_str(if jexpr.omit_quotes { " OMIT QUOTES" } else { " KEEP QUOTES" });
+        ctx.buf.push_str(if jexpr.omit_quotes {
+            " OMIT QUOTES"
+        } else {
+            " KEEP QUOTES"
+        });
     }
     if let Some(oe) = jexpr.on_empty {
         let b = oe.as_json_behavior().expect("JsonBehavior");
@@ -868,7 +914,11 @@ fn get_json_expr<'mcx>(
         JSON_VALUE_OP => "JSON_VALUE(",
         JSON_TABLE_OP => panic!("unrecognized JsonExpr op"),
     });
-    get_rule_expr(jexpr.formatted_expr.expect("formatted_expr"), ctx, showimplicit)?;
+    get_rule_expr(
+        jexpr.formatted_expr.expect("formatted_expr"),
+        ctx,
+        showimplicit,
+    )?;
     ctx.buf.push_str(", ");
     let path_spec = jexpr.path_spec.expect("path_spec");
     if let Some(c) = path_spec.as_const() {
@@ -997,25 +1047,34 @@ fn is_simple_node(node: Node<'_>, parent: Option<Node<'_>>, pretty_flags: i32) -
         NodeTag::T_FieldSelect => parent.node_tag() != NodeTag::T_FieldSelect,
         NodeTag::T_FieldStore => parent.node_tag() != NodeTag::T_FieldStore,
 
-        NodeTag::T_RelabelType => {
-            is_simple_node(node.as_relabel_type().unwrap().arg, Some(node), pretty_flags)
-        }
-        NodeTag::T_CoerceViaIO => {
-            is_simple_node(node.as_coerce_via_io().unwrap().arg, Some(node), pretty_flags)
-        }
-        NodeTag::T_ArrayCoerceExpr => {
-            is_simple_node(node.as_array_coerce_expr().unwrap().arg, Some(node), pretty_flags)
-        }
-        NodeTag::T_ConvertRowtypeExpr => {
-            is_simple_node(node.as_convert_rowtype_expr().unwrap().arg, Some(node), pretty_flags)
-        }
-        NodeTag::T_ReturningExpr => {
-            is_simple_node(node.as_returning_expr().unwrap().retexpr, Some(node), pretty_flags)
-        }
+        NodeTag::T_RelabelType => is_simple_node(
+            node.as_relabel_type().unwrap().arg,
+            Some(node),
+            pretty_flags,
+        ),
+        NodeTag::T_CoerceViaIO => is_simple_node(
+            node.as_coerce_via_io().unwrap().arg,
+            Some(node),
+            pretty_flags,
+        ),
+        NodeTag::T_ArrayCoerceExpr => is_simple_node(
+            node.as_array_coerce_expr().unwrap().arg,
+            Some(node),
+            pretty_flags,
+        ),
+        NodeTag::T_ConvertRowtypeExpr => is_simple_node(
+            node.as_convert_rowtype_expr().unwrap().arg,
+            Some(node),
+            pretty_flags,
+        ),
+        NodeTag::T_ReturningExpr => is_simple_node(
+            node.as_returning_expr().unwrap().retexpr,
+            Some(node),
+            pretty_flags,
+        ),
 
         NodeTag::T_OpExpr => {
-            if pretty_flags & crate::PRETTYFLAG_PAREN != 0
-                && parent.node_tag() == NodeTag::T_OpExpr
+            if pretty_flags & crate::PRETTYFLAG_PAREN != 0 && parent.node_tag() == NodeTag::T_OpExpr
             {
                 let this = node.as_op_expr().unwrap();
                 // Only the scratch names matter; a throwaway context is fine
@@ -1195,12 +1254,8 @@ pub(crate) fn get_variable<'mcx>(
     }
     let rte: &RangeTblEntry<'_> = dpns.rtable[varno - 1];
     let mut refname = match var.varreturningtype {
-        VarReturningType::VAR_RETURNING_OLD => {
-            dpns.plan.borrow().ret_old_alias.map(str::to_owned)
-        }
-        VarReturningType::VAR_RETURNING_NEW => {
-            dpns.plan.borrow().ret_new_alias.map(str::to_owned)
-        }
+        VarReturningType::VAR_RETURNING_OLD => dpns.plan.borrow().ret_old_alias.map(str::to_owned),
+        VarReturningType::VAR_RETURNING_NEW => dpns.plan.borrow().ret_new_alias.map(str::to_owned),
         VarReturningType::VAR_RETURNING_DEFAULT => dpns.rtable_names[varno - 1].clone(),
     };
     let colinfo = &dpns.rtable_columns[varno - 1];
@@ -1296,7 +1351,8 @@ pub(crate) fn get_variable<'mcx>(
             ctx.buf.push('*');
             if istoplevel {
                 ctx.buf.push_str("::");
-                ctx.buf.push_str(&format_type_with_typemod(var.vartype, var.vartypmod)?);
+                ctx.buf
+                    .push_str(&format_type_with_typemod(var.vartype, var.vartypmod)?);
             }
         }
     }
@@ -1398,7 +1454,9 @@ fn oid_output_function_call(mcx: Mcx<'_>, typoutput: Oid, value: Datum) -> PgRes
     // SAFETY: out functions return a NUL-terminated cstring datum; copied out
     // before finfo (and its scratch) dies.
     let s = unsafe { core::ffi::CStr::from_ptr(d.as_usize() as *const core::ffi::c_char) };
-    Ok(s.to_str().expect("non-UTF-8 output function result").to_owned())
+    Ok(s.to_str()
+        .expect("non-UTF-8 output function result")
+        .to_owned())
 }
 
 pub(crate) fn get_const_expr(
@@ -1410,7 +1468,8 @@ pub(crate) fn get_const_expr(
         ctx.buf.push_str("NULL");
         if showtype >= 0 {
             ctx.buf.push_str("::");
-            ctx.buf.push_str(&format_type_with_typemod(c.consttype, c.consttypmod)?);
+            ctx.buf
+                .push_str(&format_type_with_typemod(c.consttype, c.consttypmod)?);
             get_const_collation(c, ctx)?;
         }
         return Ok(());
@@ -1439,7 +1498,9 @@ pub(crate) fn get_const_expr(
                 needlabel = true;
             }
         }
-        BOOLOID => ctx.buf.push_str(if extval == "t" { "true" } else { "false" }),
+        BOOLOID => ctx
+            .buf
+            .push_str(if extval == "t" { "true" } else { "false" }),
         _ => simple_quote_literal(&mut ctx.buf, &extval),
     }
 
@@ -1455,7 +1516,8 @@ pub(crate) fn get_const_expr(
     }
     if needlabel || showtype > 0 {
         ctx.buf.push_str("::");
-        ctx.buf.push_str(&format_type_with_typemod(c.consttype, c.consttypmod)?);
+        ctx.buf
+            .push_str(&format_type_with_typemod(c.consttype, c.consttypmod)?);
     }
     get_const_collation(c, ctx)
 }
@@ -1480,7 +1542,11 @@ pub(crate) fn simple_quote_literal(buf: &mut String, val: &str) {
     buf.push('\'');
 }
 
-fn get_oper_expr<'mcx>(node: Node<'mcx>, expr: &OpExpr<'mcx>, ctx: &mut DeparseContext<'mcx>) -> PgResult<()> {
+fn get_oper_expr<'mcx>(
+    node: Node<'mcx>,
+    expr: &OpExpr<'mcx>,
+    ctx: &mut DeparseContext<'mcx>,
+) -> PgResult<()> {
     if !ctx.pretty_paren() {
         ctx.buf.push('(');
     }
@@ -1549,8 +1615,13 @@ fn get_func_expr<'mcx>(
         }
         argtypes.push(parse_expr::expr_type(arg));
     }
-    let funcname =
-        generate_function_name(ctx.mcx, expr.funcid, &argtypes, &argnames, expr.funcvariadic)?;
+    let funcname = generate_function_name(
+        ctx.mcx,
+        expr.funcid,
+        &argtypes,
+        &argnames,
+        expr.funcvariadic,
+    )?;
     ctx.buf.push_str(&funcname);
     ctx.buf.push('(');
     let nargs = expr.args.len();
@@ -1576,8 +1647,9 @@ const F_TIMEZONE_TEXT_TIMETZ: Oid = 2037;
 const F_TIMEZONE_TIMESTAMP: Oid = 6335;
 const F_TIMEZONE_TIMESTAMPTZ: Oid = 6334;
 const F_TIMEZONE_TIMETZ: Oid = 6336;
-const F_OVERLAPS_OIDS: [Oid; 13] =
-    [1271, 1304, 1305, 1306, 1307, 1308, 1309, 1310, 1311, 2041, 2042, 2043, 2044];
+const F_OVERLAPS_OIDS: [Oid; 13] = [
+    1271, 1304, 1305, 1306, 1307, 1308, 1309, 1310, 1311, 2041, 2042, 2043, 2044,
+];
 const F_EXTRACT_OIDS: [Oid; 6] = [6199, 6200, 6201, 6202, 6203, 6204];
 const F_IS_NORMALIZED: Oid = 4351;
 const F_PG_COLLATION_FOR: Oid = 3162;
@@ -1813,11 +1885,17 @@ fn get_agg_expr_original<'mcx>(
         let nargs = aggref
             .args
             .iter()
-            .filter(|n| !n.as_target_entry().expect("Aggref args are TargetEntries").resjunk)
+            .filter(|n| {
+                !n.as_target_entry()
+                    .expect("Aggref args are TargetEntries")
+                    .resjunk
+            })
             .count();
         let mut i = 0;
         for tle_node in aggref.args.iter() {
-            let tle = tle_node.as_target_entry().expect("Aggref args are TargetEntries");
+            let tle = tle_node
+                .as_target_entry()
+                .expect("Aggref args are TargetEntries");
             if tle.resjunk {
                 continue;
             }
@@ -1871,7 +1949,8 @@ fn get_windowfunc_expr_helper<'mcx>(
             }
             argtypes.push(parse_expr::expr_type(arg));
         }
-        let funcname = generate_function_name(ctx.mcx, wfunc.winfnoid, &argtypes, &argnames, false)?;
+        let funcname =
+            generate_function_name(ctx.mcx, wfunc.winfnoid, &argtypes, &argnames, false)?;
         ctx.buf.push_str(&funcname);
     }
     ctx.buf.push('(');
@@ -1959,7 +2038,13 @@ fn get_case_expr<'mcx>(caseexpr: &CaseExpr<'mcx>, ctx: &mut DeparseContext<'mcx>
         ctx.buf.push(' ');
     }
     append_context_keyword(ctx, "ELSE ", 0, 0, 0);
-    get_rule_expr(caseexpr.defresult.expect("transformed CASE has a defresult"), ctx, true)?;
+    get_rule_expr(
+        caseexpr
+            .defresult
+            .expect("transformed CASE has a defresult"),
+        ctx,
+        true,
+    )?;
     if !ctx.pretty_indent() {
         ctx.buf.push(' ');
     }
@@ -2008,7 +2093,10 @@ pub(crate) fn strip_implicit_coercions(node: Node<'_>) -> Node<'_> {
     }
 }
 
-fn get_array_expr<'mcx>(arrayexpr: &ArrayExpr<'mcx>, ctx: &mut DeparseContext<'mcx>) -> PgResult<()> {
+fn get_array_expr<'mcx>(
+    arrayexpr: &ArrayExpr<'mcx>,
+    ctx: &mut DeparseContext<'mcx>,
+) -> PgResult<()> {
     ctx.buf.push_str("ARRAY[");
     let mut first = true;
     for e in arrayexpr.elements.iter() {
@@ -2021,7 +2109,8 @@ fn get_array_expr<'mcx>(arrayexpr: &ArrayExpr<'mcx>, ctx: &mut DeparseContext<'m
     ctx.buf.push(']');
     if arrayexpr.elements.is_nil() {
         ctx.buf.push_str("::");
-        ctx.buf.push_str(&format_type_with_typemod(arrayexpr.array_typeid, -1)?);
+        ctx.buf
+            .push_str(&format_type_with_typemod(arrayexpr.array_typeid, -1)?);
     }
     Ok(())
 }
@@ -2074,7 +2163,10 @@ fn get_saop_expr<'mcx>(
         parse_expr::expr_type(arg1),
         lsyscache::get_base_element_type(parse_expr::expr_type(arg2))?,
     )?;
-    ctx.buf.push_str(&format!(" {opname} {} (", if expr.useOr { "ANY" } else { "ALL" }));
+    ctx.buf.push_str(&format!(
+        " {opname} {} (",
+        if expr.useOr { "ANY" } else { "ALL" }
+    ));
     get_rule_expr_paren(arg2, ctx, true, Some(node))?;
     if arg2.node_tag() == NodeTag::T_SubLink
         && arg2.as_sub_link().unwrap().subLinkType == SubLinkType::EXPR_SUBLINK
@@ -2121,8 +2213,9 @@ fn get_sublink_expr<'mcx>(sublink: &SubLink<'mcx>, ctx: &mut DeparseContext<'mcx
                 ctx.buf.push('(');
                 let mut first = true;
                 for l in testexpr.as_bool_expr().unwrap().args.iter() {
-                    let opexpr =
-                        l.as_op_expr().unwrap_or_else(|| gap("get_sublink_expr", "row testexpr"));
+                    let opexpr = l
+                        .as_op_expr()
+                        .unwrap_or_else(|| gap("get_sublink_expr", "row testexpr"));
                     if !first {
                         ctx.buf.push_str(", ");
                     }
@@ -2167,7 +2260,9 @@ fn get_sublink_expr<'mcx>(sublink: &SubLink<'mcx>, ctx: &mut DeparseContext<'mcx
     match sublink.subLinkType {
         SubLinkType::EXISTS_SUBLINK => ctx.buf.push_str("EXISTS "),
         SubLinkType::ANY_SUBLINK => {
-            let op = opname.as_deref().expect("ANY sublink has a testexpr operator");
+            let op = opname
+                .as_deref()
+                .expect("ANY sublink has a testexpr operator");
             if op == "=" {
                 ctx.buf.push_str(" IN ");
             } else {
@@ -2175,16 +2270,20 @@ fn get_sublink_expr<'mcx>(sublink: &SubLink<'mcx>, ctx: &mut DeparseContext<'mcx
             }
         }
         SubLinkType::ALL_SUBLINK => {
-            let op = opname.as_deref().expect("ALL sublink has a testexpr operator");
+            let op = opname
+                .as_deref()
+                .expect("ALL sublink has a testexpr operator");
             ctx.buf.push_str(&format!(" {op} ALL "));
         }
         SubLinkType::ROWCOMPARE_SUBLINK => {
-            let op = opname.as_deref().expect("ROWCOMPARE sublink has a testexpr operator");
+            let op = opname
+                .as_deref()
+                .expect("ROWCOMPARE sublink has a testexpr operator");
             ctx.buf.push_str(&format!(" {op} "));
         }
-        SubLinkType::EXPR_SUBLINK
-        | SubLinkType::MULTIEXPR_SUBLINK
-        | SubLinkType::ARRAY_SUBLINK => need_paren = false,
+        SubLinkType::EXPR_SUBLINK | SubLinkType::MULTIEXPR_SUBLINK | SubLinkType::ARRAY_SUBLINK => {
+            need_paren = false
+        }
         other => gap("get_sublink_expr", &format!("{other:?} deparse")),
     }
 
@@ -2222,7 +2321,8 @@ pub(crate) fn get_coercion_expr<'mcx>(
         }
     }
     ctx.buf.push_str("::");
-    ctx.buf.push_str(&format_type_with_typemod(resulttype, resulttypmod)?);
+    ctx.buf
+        .push_str(&format_type_with_typemod(resulttype, resulttypmod)?);
     Ok(())
 }
 
@@ -2233,7 +2333,11 @@ fn get_bool_expr<'mcx>(
 ) -> PgResult<()> {
     match expr.boolop {
         BoolExprType::AND_EXPR | BoolExprType::OR_EXPR => {
-            let sep = if expr.boolop == BoolExprType::AND_EXPR { " AND " } else { " OR " };
+            let sep = if expr.boolop == BoolExprType::AND_EXPR {
+                " AND "
+            } else {
+                " OR "
+            };
             if !ctx.pretty_paren() {
                 ctx.buf.push('(');
             }
@@ -2305,11 +2409,12 @@ fn get_xml_expr<'mcx>(node: Node<'mcx>, ctx: &mut DeparseContext<'mcx>) -> PgRes
         IS_DOCUMENT => {}
     }
     if matches!(x.op, IS_XMLPARSE | IS_XMLSERIALIZE) {
-        ctx.buf.push_str(if x.xmloption == XmlOptionType::XMLOPTION_DOCUMENT {
-            "DOCUMENT "
-        } else {
-            "CONTENT "
-        });
+        ctx.buf
+            .push_str(if x.xmloption == XmlOptionType::XMLOPTION_DOCUMENT {
+                "DOCUMENT "
+            } else {
+                "CONTENT "
+            });
     }
     if let Some(name) = x.name {
         ctx.buf.push_str("NAME ");
@@ -2331,7 +2436,8 @@ fn get_xml_expr<'mcx>(node: Node<'mcx>, ctx: &mut DeparseContext<'mcx>) -> PgRes
             get_rule_expr(e, ctx, true)?;
             ctx.buf.push_str(" AS ");
             let argname = narg.as_string().expect("arg_names cell").sval;
-            ctx.buf.push_str(&quote_identifier(&xml_name_to_sql(argname)?));
+            ctx.buf
+                .push_str(&quote_identifier(&xml_name_to_sql(argname)?));
             needcomma = true;
         }
         if x.op != IS_XMLFOREST {
@@ -2406,8 +2512,10 @@ fn get_xml_expr<'mcx>(node: Node<'mcx>, ctx: &mut DeparseContext<'mcx>) -> PgRes
     }
     if x.op == IS_XMLSERIALIZE {
         ctx.buf.push_str(" AS ");
-        ctx.buf.push_str(&format_type_with_typemod(x.r#type, x.typmod)?);
-        ctx.buf.push_str(if x.indent { " INDENT" } else { " NO INDENT" });
+        ctx.buf
+            .push_str(&format_type_with_typemod(x.r#type, x.typmod)?);
+        ctx.buf
+            .push_str(if x.indent { " INDENT" } else { " NO INDENT" });
     }
     if x.op == IS_DOCUMENT {
         ctx.buf.push_str(" IS DOCUMENT");
@@ -2441,14 +2549,31 @@ fn get_json_table_nested_columns<'mcx>(
         }
         ctx.buf.push(' ');
         append_context_keyword(ctx, "NESTED PATH ", 0, 0, 0);
-        let path = scan.path.expect("path").as_json_table_path().expect("JsonTablePath");
-        get_const_expr(path.value.expect("path value").as_const().expect("Const"), ctx, -1)?;
+        let path = scan
+            .path
+            .expect("path")
+            .as_json_table_path()
+            .expect("JsonTablePath");
+        get_const_expr(
+            path.value.expect("path value").as_const().expect("Const"),
+            ctx,
+            -1,
+        )?;
         ctx.buf.push_str(" AS ");
-        ctx.buf.push_str(&quote_identifier(path.name.expect("path name")));
+        ctx.buf
+            .push_str(&quote_identifier(path.name.expect("path name")));
         get_json_table_columns(tf, scan, ctx, showimplicit)
     } else {
-        let join = plan.as_json_table_sibling_join().expect("JsonTableSiblingJoin");
-        get_json_table_nested_columns(tf, join.lplan.expect("lplan"), ctx, showimplicit, needcomma)?;
+        let join = plan
+            .as_json_table_sibling_join()
+            .expect("JsonTableSiblingJoin");
+        get_json_table_nested_columns(
+            tf,
+            join.lplan.expect("lplan"),
+            ctx,
+            showimplicit,
+            needcomma,
+        )?;
         get_json_table_nested_columns(tf, join.rplan.expect("rplan"), ctx, showimplicit, true)
     }
 }
@@ -2488,8 +2613,9 @@ fn get_json_table_columns<'mcx>(
         }
         colnum += 1;
         append_context_keyword(ctx, "", 0, 0, 0);
-        ctx.buf
-            .push_str(&quote_identifier(colname.as_string().expect("colnames cell").sval));
+        ctx.buf.push_str(&quote_identifier(
+            colname.as_string().expect("colnames cell").sval,
+        ));
         ctx.buf.push(' ');
         let Some(colexpr) = colvalexpr else {
             ctx.buf.push_str("FOR ORDINALITY");
@@ -2503,8 +2629,7 @@ fn get_json_table_columns<'mcx>(
             default_behavior = JsonBehaviorType::JSON_BEHAVIOR_FALSE;
         } else {
             if colexpr.op == JsonExprOp::JSON_QUERY_OP {
-                let (typcategory, _typispreferred) =
-                    lsyscache::get_type_category_preferred(typid)?;
+                let (typcategory, _typispreferred) = lsyscache::get_type_category_preferred(typid)?;
                 if typcategory == TYPCATEGORY_STRING {
                     ctx.buf.push_str(
                         if colexpr.format.expect("format").format_type
@@ -2544,19 +2669,40 @@ fn get_json_table<'mcx>(
     showimplicit: bool,
 ) -> PgResult<()> {
     use types_nodes::JsonBehaviorType;
-    let jexpr = tf.docexpr.expect("docexpr").as_json_expr().expect("JsonExpr");
-    let root = tf.plan.expect("plan").as_json_table_path_scan().expect("JsonTablePathScan");
+    let jexpr = tf
+        .docexpr
+        .expect("docexpr")
+        .as_json_expr()
+        .expect("JsonExpr");
+    let root = tf
+        .plan
+        .expect("plan")
+        .as_json_table_path_scan()
+        .expect("JsonTablePathScan");
     ctx.buf.push_str("JSON_TABLE(");
     if ctx.pretty_indent() {
         ctx.indent_level += PRETTYINDENT_VAR;
     }
     append_context_keyword(ctx, "", 0, 0, 0);
-    get_rule_expr(jexpr.formatted_expr.expect("formatted_expr"), ctx, showimplicit)?;
+    get_rule_expr(
+        jexpr.formatted_expr.expect("formatted_expr"),
+        ctx,
+        showimplicit,
+    )?;
     ctx.buf.push_str(", ");
-    let path = root.path.expect("path").as_json_table_path().expect("JsonTablePath");
-    get_const_expr(path.value.expect("path value").as_const().expect("Const"), ctx, -1)?;
+    let path = root
+        .path
+        .expect("path")
+        .as_json_table_path()
+        .expect("JsonTablePath");
+    get_const_expr(
+        path.value.expect("path value").as_const().expect("Const"),
+        ctx,
+        -1,
+    )?;
     ctx.buf.push_str(" AS ");
-    ctx.buf.push_str(&quote_identifier(path.name.expect("path name")));
+    ctx.buf
+        .push_str(&quote_identifier(path.name.expect("path name")));
     if !jexpr.passing_values.is_nil() {
         ctx.buf.push(' ');
         append_context_keyword(ctx, "PASSING ", 0, 0, 0);
@@ -2572,14 +2718,20 @@ fn get_json_table<'mcx>(
             append_context_keyword(ctx, "", 0, 0, 0);
             get_rule_expr(value, ctx, false)?;
             ctx.buf.push_str(" AS ");
-            ctx.buf.push_str(&quote_identifier(name.as_string().expect("passing name").sval));
+            ctx.buf.push_str(&quote_identifier(
+                name.as_string().expect("passing name").sval,
+            ));
         }
         if ctx.pretty_indent() {
             ctx.indent_level -= PRETTYINDENT_VAR;
         }
     }
     get_json_table_columns(tf, root, ctx, showimplicit)?;
-    let on_error = jexpr.on_error.expect("on_error").as_json_behavior().expect("JsonBehavior");
+    let on_error = jexpr
+        .on_error
+        .expect("on_error")
+        .as_json_behavior()
+        .expect("JsonBehavior");
     if on_error.btype != JsonBehaviorType::JSON_BEHAVIOR_EMPTY_ARRAY {
         get_json_behavior(on_error, ctx, "ERROR")?;
     }
@@ -2608,8 +2760,9 @@ fn get_xmltable<'mcx>(
                 Some(n) => {
                     get_rule_expr(expr, ctx, showimplicit)?;
                     ctx.buf.push_str(" AS ");
-                    ctx.buf
-                        .push_str(&quote_identifier(n.as_string().expect("ns_names cell").sval));
+                    ctx.buf.push_str(&quote_identifier(
+                        n.as_string().expect("ns_names cell").sval,
+                    ));
                 }
                 None => {
                     ctx.buf.push_str("DEFAULT ");
@@ -2620,9 +2773,17 @@ fn get_xmltable<'mcx>(
         ctx.buf.push_str("), ");
     }
     ctx.buf.push('(');
-    get_rule_expr(tf.rowexpr.expect("XMLTABLE has a rowexpr"), ctx, showimplicit)?;
+    get_rule_expr(
+        tf.rowexpr.expect("XMLTABLE has a rowexpr"),
+        ctx,
+        showimplicit,
+    )?;
     ctx.buf.push_str(") PASSING (");
-    get_rule_expr(tf.docexpr.expect("XMLTABLE has a docexpr"), ctx, showimplicit)?;
+    get_rule_expr(
+        tf.docexpr.expect("XMLTABLE has a docexpr"),
+        ctx,
+        showimplicit,
+    )?;
     ctx.buf.push(')');
     if !tf.colexprs.is_nil() {
         ctx.buf.push_str(" COLUMNS ");
@@ -2639,8 +2800,9 @@ fn get_xmltable<'mcx>(
             if colnum > 0 {
                 ctx.buf.push_str(", ");
             }
-            ctx.buf
-                .push_str(&quote_identifier(colname.as_string().expect("colnames cell").sval));
+            ctx.buf.push_str(&quote_identifier(
+                colname.as_string().expect("colnames cell").sval,
+            ));
             ctx.buf.push(' ');
             if ordinality {
                 ctx.buf.push_str("FOR ORDINALITY");
@@ -2686,8 +2848,7 @@ fn tupdesc_field_name<'mcx>(mcx: Mcx<'mcx>, expr: Node<'mcx>, fieldno: i32) -> P
     let tupdesc = funcapi::get_expr_result_tupdesc(mcx, Some(expr), false)?
         .expect("composite expression has a tupdesc");
     debug_assert!(fieldno >= 1 && fieldno <= tupdesc.natts as i32);
-    Ok(String::from_utf8_lossy(tupdesc.attr(fieldno as usize - 1).attname.name_str())
-        .into_owned())
+    Ok(String::from_utf8_lossy(tupdesc.attr(fieldno as usize - 1).attname.name_str()).into_owned())
 }
 
 fn get_rte_attribute_name_string<'mcx>(
@@ -2710,10 +2871,12 @@ fn get_rte_attribute_name_string<'mcx>(
         }
     }
     if rte.rtekind == RTEKind::RTE_RELATION {
-        return Ok(lsyscache::get_attname(mcx, rte.relid, attnum as i16, false)?
-            .expect("get_attname missing_ok=false")
-            .as_str()
-            .to_owned());
+        return Ok(
+            lsyscache::get_attname(mcx, rte.relid, attnum as i16, false)?
+                .expect("get_attname missing_ok=false")
+                .as_str()
+                .to_owned(),
+        );
     }
     let eref = rte.eref.expect("RTE has eref");
     if attnum > 0 && attnum <= eref.colnames.len() as i32 {
@@ -2890,8 +3053,7 @@ pub(crate) fn get_name_for_var_field<'mcx>(
                     .ctequery
                     .and_then(|n| n.as_query())
                     .expect("transformed CTE holds a Query");
-                let tl = if ctequery.commandType == types_nodes::nodes_enums::CmdType::CMD_SELECT
-                {
+                let tl = if ctequery.commandType == types_nodes::nodes_enums::CmdType::CMD_SELECT {
                     &ctequery.targetList
                 } else {
                     &ctequery.returningList

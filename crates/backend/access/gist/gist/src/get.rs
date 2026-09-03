@@ -21,8 +21,8 @@ use ::types_scan::sdir::ScanDirection;
 use ::types_storage::bufpage::MaxIndexTuplesPerPage;
 
 use crate::util::{
-    gist_index_getattr, gist_tuple_is_invalid, gistFetchTupleValues, gistcheckpage,
-    gistdentryinit, itup_get_tid, FirstOffsetNumber, ITup,
+    gistFetchTupleValues, gist_index_getattr, gist_tuple_is_invalid, gistcheckpage, gistdentryinit,
+    itup_get_tid, FirstOffsetNumber, ITup,
 };
 
 const GIST_SHARE: i32 = bufmgr::BUFFER_LOCK_SHARE;
@@ -38,8 +38,7 @@ fn gistkillitems(scan: &mut IndexScanDescData<'_>) -> PgResult<()> {
     debug_assert!(so.curPageLSN != 0);
     debug_assert!(so.killedItems.is_some());
 
-    let pin = BufferPin::adopt(bufmgr::read_buffer::call(&rel, so.curBlkno)?)
-        .expect("ReadBuffer");
+    let pin = BufferPin::adopt(bufmgr::read_buffer::call(&rel, so.curBlkno)?).expect("ReadBuffer");
     bufmgr::lock_buffer::call(pin.buffer(), GIST_SHARE)?;
     gistcheckpage(&rel, &pin)?;
 
@@ -218,13 +217,15 @@ fn gist_scan_page(
     };
     let so = &mut **so;
 
-    let pin = BufferPin::adopt(bufmgr::read_buffer::call(&rel, page_item_blkno)?)
-        .expect("ReadBuffer");
+    let pin =
+        BufferPin::adopt(bufmgr::read_buffer::call(&rel, page_item_blkno)?).expect("ReadBuffer");
     bufmgr::lock_buffer::call(pin.buffer(), GIST_SHARE)?;
     predicate_seams::predicate_lock_page::call(
         &rel,
         pin.block_number(),
-        scan.xs_snapshot.as_deref().expect("gist scan has a snapshot"),
+        scan.xs_snapshot
+            .as_deref()
+            .expect("gist scan has a snapshot"),
     )?;
     gistcheckpage(&rel, &pin)?;
     let page = pin.page();
@@ -306,7 +307,8 @@ fn gist_scan_page(
                 item.recontup = Some(fetch_recontup(so, &rel, it)?);
             }
             if so.pageData.len() <= so.nPageData {
-                so.pageData.resize(so.nPageData + 1, GISTSearchHeapItem::default());
+                so.pageData
+                    .resize(so.nPageData + 1, GISTSearchHeapItem::default());
             }
             so.pageData[so.nPageData] = item;
             so.nPageData += 1;
@@ -369,7 +371,14 @@ fn fetch_recontup(
     let mut isnull = [false; K];
     let (off, len) = {
         let mcx = so.temp.mcx();
-        gistFetchTupleValues(mcx, &mut so.giststate, rel, it, &mut fetchatt[..natts], &mut isnull[..natts])?;
+        gistFetchTupleValues(
+            mcx,
+            &mut so.giststate,
+            rel,
+            it,
+            &mut fetchatt[..natts],
+            &mut isnull[..natts],
+        )?;
         let tupdesc = so
             .giststate
             .fetchTupdesc
@@ -382,7 +391,7 @@ fn fetch_recontup(
         let img = unsafe { core::slice::from_raw_parts(formed.as_ptr(), formed.size()) };
         so.fetch_buf.extend_from_slice(img);
         // 8-align the next tuple (itup deform requires it)
-        while so.fetch_buf.len() % 8 != 0 {
+        while !so.fetch_buf.len().is_multiple_of(8) {
             so.fetch_buf.push(0);
         }
         (off, img.len() as u32)
@@ -404,7 +413,14 @@ fn fetch_recontup_owned(
     let mut isnull = [false; K];
     let out = {
         let mcx = so.temp.mcx();
-        gistFetchTupleValues(mcx, &mut so.giststate, rel, it, &mut fetchatt[..natts], &mut isnull[..natts])?;
+        gistFetchTupleValues(
+            mcx,
+            &mut so.giststate,
+            rel,
+            it,
+            &mut fetchatt[..natts],
+            &mut isnull[..natts],
+        )?;
         let tupdesc = so
             .giststate
             .fetchTupdesc
@@ -542,9 +558,7 @@ fn publish_item(scan: &mut IndexScanDescData<'_>) {
     if scan.xs_want_itup {
         let (off, _len) = item.recontup.expect("IOS items carry recontup");
         // xs_itup points into fetch_buf; valid until the next page/rescan.
-        scan.xs_itup = core::ptr::NonNull::new(
-            so.fetch_buf[off as usize..].as_ptr() as *mut u8,
-        );
+        scan.xs_itup = core::ptr::NonNull::new(so.fetch_buf[off as usize..].as_ptr() as *mut u8);
     }
     so.curPageData += 1;
 }
@@ -618,7 +632,7 @@ pub fn gistgettuple(scan: &mut IndexScanDescData<'_>, dir: ScanDirection) -> PgR
                 let do_kill = so.curBlkno != InvalidBlockNumber && so.numKilled > 0;
                 (do_kill, ())
             };
-            let _ = item;
+            item;
             if do_kill {
                 gistkillitems(scan)?;
             }

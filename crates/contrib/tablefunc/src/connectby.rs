@@ -27,7 +27,7 @@ fn err(msg: &str, detail: &str, sqlstate: types_error::SqlState) -> Box<PgError>
     Box::new(e)
 }
 
-fn arg_str<'a>(fcinfo: &'a Fcinfo, i: usize) -> PgResult<&'a str> {
+fn arg_str(fcinfo: &Fcinfo, i: usize) -> PgResult<&str> {
     // SAFETY: catalog args are non-null text varlenas (STRICT fns).
     let v = unsafe { fcinfo.arg_varlena_packed(i)? };
     Ok(core::str::from_utf8(v.data()).expect("text arg is valid UTF-8"))
@@ -65,7 +65,12 @@ pub(crate) fn fc_connectby_text(
         max_depth: fcinfo.arg_i32(4),
     };
     let start_with = arg_str(fcinfo, 3)?.to_string();
-    connectby_body(flinfo.expect("connectby_text: NULL flinfo"), fcinfo, params, start_with)
+    connectby_body(
+        flinfo.expect("connectby_text: NULL flinfo"),
+        fcinfo,
+        params,
+        start_with,
+    )
 }
 
 pub(crate) fn fc_connectby_text_serial(
@@ -113,7 +118,10 @@ fn validate_connectby_tupdesc(
     if td.natts as usize != expected_cols {
         return Err(err(
             "invalid connectby return type",
-            &format!("Return row must have {expected_cols} columns, not {}.", td.natts),
+            &format!(
+                "Return row must have {expected_cols} columns, not {}.",
+                td.natts
+            ),
             ERRCODE_DATATYPE_MISMATCH,
         ));
     }
@@ -160,10 +168,7 @@ fn validate_connectby_tupdesc(
     Ok(())
 }
 
-fn compat_connectby_tupdescs(
-    ret: &TupleDescData<'_>,
-    sql: &TupleDescData<'_>,
-) -> PgResult<()> {
+fn compat_connectby_tupdescs(ret: &TupleDescData<'_>, sql: &TupleDescData<'_>) -> PgResult<()> {
     if sql.natts < 2 {
         return Err(err(
             "invalid connectby source data query",
@@ -189,7 +194,11 @@ fn compat_connectby_tupdescs(
                 )
             };
             let _ = label;
-            return Err(err("invalid connectby return type", &detail, ERRCODE_DATATYPE_MISMATCH));
+            return Err(err(
+                "invalid connectby return type",
+                &detail,
+                ERRCODE_DATATYPE_MISMATCH,
+            ));
         }
     }
     Ok(())
@@ -264,7 +273,10 @@ fn build_tuplestore_recursively(
             params.key_fld,
             params.key_fld,
             params.parent_key_fld,
-            params.orderby_fld.as_deref().expect("serial mode carries orderby_fld"),
+            params
+                .orderby_fld
+                .as_deref()
+                .expect("serial mode carries orderby_fld"),
         )
     };
 
@@ -306,9 +318,11 @@ fn build_tuplestore_recursively(
         for i in 0..proc as usize {
             let current_key =
                 spi::SPI_getvalue(mcx, &t.vals[i], &t.tupdesc, 1)?.map(|s| s.to_vec());
-            let parent_key =
-                spi::SPI_getvalue(mcx, &t.vals[i], &t.tupdesc, 2)?.map(|s| s.to_vec());
-            rows.push(Row { current_key, parent_key });
+            let parent_key = spi::SPI_getvalue(mcx, &t.vals[i], &t.tupdesc, 2)?.map(|s| s.to_vec());
+            rows.push(Row {
+                current_key,
+                parent_key,
+            });
         }
         Ok(rows)
     })?;
@@ -317,26 +331,26 @@ fn build_tuplestore_recursively(
         // Cycle detection: chk_branchstr = delim + branch + delim, and the
         // current key wrapped in delimiters must not already appear in it.
         if let Some(ck) = row.current_key.as_deref() {
-            let chk_branch = format!(
-                "{d}{b}{d}",
-                d = params.branch_delim,
-                b = branch
-            );
+            let chk_branch = format!("{d}{b}{d}", d = params.branch_delim, b = branch);
             let ck_str = String::from_utf8_lossy(ck);
-            let chk_current = format!(
-                "{d}{k}{d}",
-                d = params.branch_delim,
-                k = ck_str
-            );
+            let chk_current = format!("{d}{k}{d}", d = params.branch_delim, k = ck_str);
             if chk_branch.contains(&chk_current) {
-                return Err(err("infinite recursion detected", "", ERRCODE_INVALID_RECURSION));
+                return Err(err(
+                    "infinite recursion detected",
+                    "",
+                    ERRCODE_INVALID_RECURSION,
+                ));
             }
         }
 
         // Extend the branch with the current key.
         let current_branch = match row.current_key.as_deref() {
             Some(ck) => {
-                format!("{branch}{}{}", params.branch_delim, String::from_utf8_lossy(ck))
+                format!(
+                    "{branch}{}{}",
+                    params.branch_delim,
+                    String::from_utf8_lossy(ck)
+                )
             }
             None => branch.to_string(),
         };

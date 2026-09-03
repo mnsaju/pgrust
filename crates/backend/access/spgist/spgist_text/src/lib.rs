@@ -8,11 +8,11 @@ use ::mcx::Mcx;
 use ::types_core::{Oid, BLCKSZ};
 use ::types_error::PgResult;
 use ::types_fmgr::{FmgrBuiltin, FmgrInfo, FunctionCallInfoBaseData as Fcinfo};
+use ::types_spgist::spgConfigOut;
 use ::types_spgist::state::{
     spgChooseIn, spgChooseOut, spgInnerConsistentIn, spgInnerConsistentOut, spgLeafConsistentIn,
     spgLeafConsistentOut, spgPickSplitIn, spgPickSplitOut,
 };
-use ::types_spgist::spgConfigOut;
 
 const TEXTOID: Oid = 25;
 const INT2OID: Oid = 21;
@@ -22,7 +22,11 @@ const VARATT_SHORT_MAX: usize = 0x7F;
 
 const SPGIST_MAX_PREFIX_LENGTH: usize = {
     let v = BLCKSZ as isize - 258 * 16 - 100;
-    if v > 32 { v as usize } else { 32 }
+    if v > 32 {
+        v as usize
+    } else {
+        32
+    }
 };
 
 const SPG_STRATEGY_ADDITION: u16 = 10;
@@ -139,7 +143,7 @@ fn fc_spg_text_choose(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResul
     let level = input.level as usize;
 
     let mut common_len = 0usize;
-    let mut node_char: i16 = 0;
+    let node_char: i16;
 
     if input.hasPrefix {
         // SAFETY: prefix datum is a live text value.
@@ -286,7 +290,7 @@ fn fc_spg_text_picksplit(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRe
     // order of c and C's qsort on equal keys is order-unspecified too. Use a
     // stable sort so tuple->node mapping is deterministic (matches C's
     // practical med3 behavior for the regression corpus).
-    nodes.sort_by(|a, b| a.c.cmp(&b.c));
+    nodes.sort_by_key(|a| a.c);
 
     let mut labels: ::mcx::PgVec<'_, Datum> = ::mcx::vec_with_capacity_in(mcx, n)?;
     let mut map: ::mcx::PgVec<'_, i32> = ::mcx::vec_with_capacity_in(mcx, n)?;
@@ -332,9 +336,7 @@ fn fc_spg_text_inner_consistent(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) 
     let collate_is_c = pg_locale::pg_newlocale_from_collation(collation)?.collate_is_c;
 
     let level = input.level as usize;
-    debug_assert!(
-        (input.reconstructedValue.as_usize() == 0) == (level == 0)
-    );
+    debug_assert!((input.reconstructedValue.as_usize() == 0) == (level == 0));
 
     let mut max_reconstr_len = level + 1;
     let prefix: &[u8] = if input.hasPrefix {
@@ -537,7 +539,12 @@ fn fc_spghandler(_f: Option<&mut FmgrInfo>, _fcinfo: &mut Fcinfo) -> PgResult<Da
     panic!("spghandler: the closed AM set dispatches via IndexAmKind, never through fmgr")
 }
 
-const fn b(foid: Oid, name: &'static str, nargs: i16, func: ::types_fmgr::PGFunction) -> FmgrBuiltin {
+const fn b(
+    foid: Oid,
+    name: &'static str,
+    nargs: i16,
+    func: ::types_fmgr::PGFunction,
+) -> FmgrBuiltin {
     FmgrBuiltin {
         foid,
         name,
@@ -553,6 +560,16 @@ pub const SPGIST_TEXT_BUILTINS: &[FmgrBuiltin] = &[
     b(4027, "spg_text_config", 2, fc_spg_text_config),
     b(4028, "spg_text_choose", 2, fc_spg_text_choose),
     b(4029, "spg_text_picksplit", 2, fc_spg_text_picksplit),
-    b(4030, "spg_text_inner_consistent", 2, fc_spg_text_inner_consistent),
-    b(4031, "spg_text_leaf_consistent", 2, fc_spg_text_leaf_consistent),
+    b(
+        4030,
+        "spg_text_inner_consistent",
+        2,
+        fc_spg_text_inner_consistent,
+    ),
+    b(
+        4031,
+        "spg_text_leaf_consistent",
+        2,
+        fc_spg_text_leaf_consistent,
+    ),
 ];

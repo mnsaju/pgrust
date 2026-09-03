@@ -44,7 +44,7 @@ pub fn c_format_g(val: f64) -> String {
     let e_form = c_sprintf_e(val, (PREC - 1) as usize);
     let (mant, exp_s) = e_form.split_once('e').unwrap();
     let exp: i32 = exp_s.parse().unwrap();
-    if exp < -4 || exp >= PREC {
+    if !(-4..PREC).contains(&exp) {
         // %e style with trailing zeros stripped from the fraction
         let mut m = mant.to_string();
         if m.contains('.') {
@@ -55,12 +55,7 @@ pub fn c_format_g(val: f64) -> String {
                 m.pop();
             }
         }
-        format!(
-            "{}e{}{:02}",
-            m,
-            if exp < 0 { '-' } else { '+' },
-            exp.abs()
-        )
+        format!("{}e{}{:02}", m, if exp < 0 { '-' } else { '+' }, exp.abs())
     } else {
         // %f style with PREC-1-exp fraction digits, trailing zeros stripped
         let frac = (PREC - 1 - exp).max(0) as usize;
@@ -82,7 +77,11 @@ pub fn c_format_g(val: f64) -> String {
 /// would leave in `result`.
 pub fn restore(val: f32, n_in: i32) -> Vec<u8> {
     // cap the digit count (n <= 0 protects against corrupted data)
-    let n = if n_in <= 0 { FLT_DIG } else { n_in.min(FLT_DIG) };
+    let n = if n_in <= 0 {
+        FLT_DIG
+    } else {
+        n_in.min(FLT_DIG)
+    };
     let sign = val < 0.0;
 
     // print in %e style to start with (float promoted to double)
@@ -151,9 +150,7 @@ pub fn restore(val: f32, n_in: i32) -> Vec<u8> {
         }
         out.push(b'0');
         out.push(b'.');
-        for _ in 0..(-exp - 1) {
-            out.push(b'0');
-        }
+        out.extend(core::iter::repeat_n(b'0', (-exp - 1) as usize));
         out.extend_from_slice(&digits);
     }
     out

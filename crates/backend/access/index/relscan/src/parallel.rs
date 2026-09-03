@@ -22,9 +22,14 @@ pub enum BtParallelSkipArg {
 }
 
 pub enum BtParallelArrayElem {
-    Saop { cur_elem: i32 },
+    Saop {
+        cur_elem: i32,
+    },
     // arg None iff flags carry SK_BT_MINVAL/SK_BT_MAXVAL or SK_ISNULL.
-    Skip { flags: i32, arg: Option<BtParallelSkipArg> },
+    Skip {
+        flags: i32,
+        arg: Option<BtParallelSkipArg>,
+    },
 }
 
 pub struct BtParallelScanState {

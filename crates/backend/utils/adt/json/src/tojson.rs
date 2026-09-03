@@ -168,7 +168,11 @@ fn timestamp_out_of_range() -> Box<PgError> {
 }
 
 /// C: JsonEncodeDateTime with tzp=NULL. Returns the encoded length in `buf`.
-pub fn json_encode_datetime(buf: &mut [u8; MAXDATELEN + 1], val: Datum, typid: Oid) -> PgResult<usize> {
+pub fn json_encode_datetime(
+    buf: &mut [u8; MAXDATELEN + 1],
+    val: Datum,
+    typid: Oid,
+) -> PgResult<usize> {
     json_encode_datetime_tz(buf, val, typid, None)
 }
 
@@ -222,7 +226,15 @@ pub fn json_encode_datetime_tz(
                 let mut fsec = 0;
                 adt_timestamp::timestamp2tm(timestamp, None, &mut tm, &mut fsec, None, None)
                     .map_err(|_| timestamp_out_of_range())?;
-                adt_datetime::encode::EncodeDateTime(&mut tm, fsec, false, 0, None, USE_XSD_DATES, buf)
+                adt_datetime::encode::EncodeDateTime(
+                    &mut tm,
+                    fsec,
+                    false,
+                    0,
+                    None,
+                    USE_XSD_DATES,
+                    buf,
+                )
             }
         }
         TIMESTAMPTZOID => {
@@ -277,11 +289,7 @@ pub fn json_encode_datetime_in<'mcx>(
     Ok(mcx::slice_in(mcx, &buf[..len])?.leak())
 }
 
-fn append_quoted_datetime(
-    result: &mut StringInfo<'_>,
-    val: Datum,
-    typid: Oid,
-) -> PgResult<()> {
+fn append_quoted_datetime(result: &mut StringInfo<'_>, val: Datum, typid: Oid) -> PgResult<()> {
     let mut buf = [0u8; MAXDATELEN + 1];
     let len = json_encode_datetime(&mut buf, val, typid)?;
     result.append_byte(b'"')?;
@@ -317,7 +325,11 @@ pub fn datum_to_json_internal(
         Composite => composite_to_json(mcx, result, val, false),
         Bool => {
             if key_scalar {
-                result.append_bytes(if val.as_bool() { b"\"true\"" } else { b"\"false\"" })
+                result.append_bytes(if val.as_bool() {
+                    b"\"true\""
+                } else {
+                    b"\"false\""
+                })
             } else {
                 result.append_bytes(if val.as_bool() { b"true" } else { b"false" })
             }
@@ -391,7 +403,16 @@ fn array_dim_to_json(
             *valcount += 1;
         } else {
             array_dim_to_json(
-                mcx, result, dim + 1, ndims, dims, vals, nulls, valcount, cat, false,
+                mcx,
+                result,
+                dim + 1,
+                ndims,
+                dims,
+                vals,
+                nulls,
+                valcount,
+                cat,
+                false,
             )?;
         }
     }
@@ -587,7 +608,7 @@ pub fn json_build_object_worker<'mcx>(
     absent_on_null: bool,
     unique_keys: bool,
 ) -> PgResult<datum::Varlena<'mcx>> {
-    if args.len() % 2 != 0 {
+    if !args.len().is_multiple_of(2) {
         return Err(odd_argument_list());
     }
     let mut result = StringInfo::new_in(mcx)?;
@@ -640,7 +661,14 @@ pub fn json_build_object_worker<'mcx>(
             }
         }
         result.append_bytes(b" : ")?;
-        add_json(mcx, &mut result, args[i + 1], nulls[i + 1], types[i + 1], false)?;
+        add_json(
+            mcx,
+            &mut result,
+            args[i + 1],
+            nulls[i + 1],
+            types[i + 1],
+            false,
+        )?;
         i += 2;
     }
     result.append_byte(b'}')?;
@@ -741,8 +769,10 @@ pub fn json_object_two_arg<'mcx>(
     if nkdims == 0 {
         return varlena::cstring_to_text(mcx, b"{}");
     }
-    let (key_elems, key_nulls) = arrayfuncs::deconstruct_array_builtin(mcx, key_array, TEXTOID, true)?;
-    let (val_elems, val_nulls) = arrayfuncs::deconstruct_array_builtin(mcx, val_array, TEXTOID, true)?;
+    let (key_elems, key_nulls) =
+        arrayfuncs::deconstruct_array_builtin(mcx, key_array, TEXTOID, true)?;
+    let (val_elems, val_nulls) =
+        arrayfuncs::deconstruct_array_builtin(mcx, val_array, TEXTOID, true)?;
     if key_elems.len() != val_elems.len() {
         return Err(subscript_error("mismatched array dimensions"));
     }

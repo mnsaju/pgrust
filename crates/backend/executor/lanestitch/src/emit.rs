@@ -100,12 +100,12 @@ impl Emitter {
     }
 
     pub fn ldr_x(&mut self, rt: u32, rn: u32, off: u32) {
-        debug_assert!(off % 8 == 0 && off / 8 <= 4095);
+        debug_assert!(off.is_multiple_of(8) && off / 8 <= 4095);
         self.raw(0xF940_0000 | ((off / 8) << 10) | (rn << 5) | rt);
     }
 
     pub fn str_x(&mut self, rt: u32, rn: u32, off: u32) {
-        debug_assert!(off % 8 == 0 && off / 8 <= 4095);
+        debug_assert!(off.is_multiple_of(8) && off / 8 <= 4095);
         self.raw(0xF900_0000 | ((off / 8) << 10) | (rn << 5) | rt);
     }
 
@@ -340,7 +340,7 @@ impl Emitter {
 
     // LDP Qt, Qt2, [Xn, #imm] (imm 16-scaled).
     pub fn ldp_q(&mut self, rt: u32, rt2: u32, rn: u32, imm: u32) {
-        debug_assert!(imm % 16 == 0 && imm / 16 <= 63);
+        debug_assert!(imm.is_multiple_of(16) && imm / 16 <= 63);
         self.raw(0xAD40_0000 | ((imm / 16) << 15) | (rt2 << 10) | (rn << 5) | rt);
     }
 
@@ -528,12 +528,12 @@ impl Emitter {
 
     // SUB SP, SP, #imm / ADD SP, SP, #imm (frame setup; imm 16-aligned).
     pub fn sub_sp_imm(&mut self, imm12: u32) {
-        debug_assert!(imm12 <= 4095 && imm12 % 16 == 0);
+        debug_assert!(imm12 <= 4095 && imm12.is_multiple_of(16));
         self.raw(0xD100_03FF | (imm12 << 10));
     }
 
     pub fn add_sp_imm(&mut self, imm12: u32) {
-        debug_assert!(imm12 <= 4095 && imm12 % 16 == 0);
+        debug_assert!(imm12 <= 4095 && imm12.is_multiple_of(16));
         self.raw(0x9100_03FF | (imm12 << 10));
     }
 
@@ -675,7 +675,7 @@ impl Emitter {
     /// Appends the literal pool, resolves every literal load and label fixup.
     /// Returns the finished word stream.
     pub fn finish(mut self) -> Vec<u32> {
-        if self.code.len() % 2 != 0 {
+        if !self.code.len().is_multiple_of(2) {
             self.raw(0xD503_201F); // nop: 8-align the pool
         }
         let pool_pos = self.code.len();
@@ -717,7 +717,11 @@ mod tests {
     #[test]
     fn stencil_encodings_match_clang() {
         let cases: &[(fn(&mut Emitter), u32, &str)] = &[
-            (|e| e.add_x_lsl3(5, 2, 3), 0x8B030C45, "add x5, x2, x3, lsl #3"),
+            (
+                |e| e.add_x_lsl3(5, 2, 3),
+                0x8B030C45,
+                "add x5, x2, x3, lsl #3",
+            ),
             (|e| e.adds_x(2, 3, 4), 0xAB040062, "adds x2, x3, x4"),
             (|e| e.subs_x(2, 3, 4), 0xEB040062, "subs x2, x3, x4"),
             (|e| e.mul_w(2, 3, 4), 0x1B047C62, "mul w2, w3, w4"),
@@ -728,7 +732,11 @@ mod tests {
             (|e| e.cmn_x_imm(3, 1), 0xB100047F, "cmn x3, #1"),
             (|e| e.sxth_w(2, 3), 0x13003C62, "sxth w2, w3"),
             (|e| e.movn_w(2, 0x1234), 0x12824682, "movn w2, #0x1234"),
-            (|e| e.movn_w(15, 0x7FFF), 0x128FFFEF, "movn w15, #0x7fff (i16::MIN)"),
+            (
+                |e| e.movn_w(15, 0x7FFF),
+                0x128FFFEF,
+                "movn w15, #0x7fff (i16::MIN)",
+            ),
             (|e| e.sub_x_imm(5, 2, 1), 0xD1000445, "sub x5, x2, #1"),
             (|e| e.sub_x(5, 2, 3), 0xCB030045, "sub x5, x2, x3"),
             (|e| e.and_x(5, 2, 3), 0x8A030045, "and x5, x2, x3"),
@@ -737,66 +745,166 @@ mod tests {
             (|e| e.clz_x(5, 2), 0xDAC01045, "clz x5, x2"),
             (|e| e.orr_x(5, 2, 3), 0xAA030045, "orr x5, x2, x3"),
             (|e| e.ldp_q(2, 3, 4, 0), 0xAD400C82, "ldp q2, q3, [x4]"),
-            (|e| e.ldp_q(2, 3, 4, 32), 0xAD410C82, "ldp q2, q3, [x4, #32]"),
+            (
+                |e| e.ldp_q(2, 3, 4, 32),
+                0xAD410C82,
+                "ldp q2, q3, [x4, #32]",
+            ),
             (|e| e.ldr_d_idx(2, 4, 3), 0xFC636882, "ldr d2, [x4, x3]"),
             (|e| e.dup_2d_x(2, 3), 0x4E080C62, "dup v2.2d, x3"),
             (|e| e.fmov_d_x(2, 3), 0x9E670062, "fmov d2, x3"),
-            (|e| e.cmeq_2d(2, 3, 4), 0x6EE48C62, "cmeq v2.2d, v3.2d, v4.2d"),
-            (|e| e.cmgt_2d(2, 3, 4), 0x4EE43462, "cmgt v2.2d, v3.2d, v4.2d"),
-            (|e| e.cmge_2d(2, 3, 4), 0x4EE43C62, "cmge v2.2d, v3.2d, v4.2d"),
-            (|e| e.cmhi_2d(2, 3, 4), 0x6EE43462, "cmhi v2.2d, v3.2d, v4.2d"),
-            (|e| e.cmhs_2d(2, 3, 4), 0x6EE43C62, "cmhs v2.2d, v3.2d, v4.2d"),
+            (
+                |e| e.cmeq_2d(2, 3, 4),
+                0x6EE48C62,
+                "cmeq v2.2d, v3.2d, v4.2d",
+            ),
+            (
+                |e| e.cmgt_2d(2, 3, 4),
+                0x4EE43462,
+                "cmgt v2.2d, v3.2d, v4.2d",
+            ),
+            (
+                |e| e.cmge_2d(2, 3, 4),
+                0x4EE43C62,
+                "cmge v2.2d, v3.2d, v4.2d",
+            ),
+            (
+                |e| e.cmhi_2d(2, 3, 4),
+                0x6EE43462,
+                "cmhi v2.2d, v3.2d, v4.2d",
+            ),
+            (
+                |e| e.cmhs_2d(2, 3, 4),
+                0x6EE43C62,
+                "cmhs v2.2d, v3.2d, v4.2d",
+            ),
             (|e| e.fmov_s_w(0, 11), 0x1E270160, "fmov s0, w11"),
             (|e| e.fcvt_d_s(0, 0), 0x1E22C000, "fcvt d0, s0"),
             (|e| e.fcmp_d(0, 1), 0x1E612000, "fcmp d0, d1"),
-            (|e| e.fcmeq_2d(2, 3, 3), 0x4E63E462, "fcmeq v2.2d, v3.2d, v3.2d"),
-            (|e| e.fcmgt_2d(2, 3, 24), 0x6EF8E462, "fcmgt v2.2d, v3.2d, v24.2d"),
-            (|e| e.fcmge_2d(2, 24, 3), 0x6E63E702, "fcmge v2.2d, v24.2d, v3.2d"),
+            (
+                |e| e.fcmeq_2d(2, 3, 3),
+                0x4E63E462,
+                "fcmeq v2.2d, v3.2d, v3.2d",
+            ),
+            (
+                |e| e.fcmgt_2d(2, 3, 24),
+                0x6EF8E462,
+                "fcmgt v2.2d, v3.2d, v24.2d",
+            ),
+            (
+                |e| e.fcmge_2d(2, 24, 3),
+                0x6E63E702,
+                "fcmge v2.2d, v24.2d, v3.2d",
+            ),
             (|e| e.xtn_2s_2d(2, 3), 0x0EA12862, "xtn v2.2s, v3.2d"),
             (|e| e.fcvtl_2d_2s(2, 3), 0x0E617862, "fcvtl v2.2d, v3.2s"),
             (|e| e.not_16b(2, 3), 0x6E205862, "mvn v2.16b, v3.16b"),
-            (|e| e.orr_16b(2, 3, 4), 0x4EA41C62, "orr v2.16b, v3.16b, v4.16b"),
+            (
+                |e| e.orr_16b(2, 3, 4),
+                0x4EA41C62,
+                "orr v2.16b, v3.16b, v4.16b",
+            ),
             (|e| e.not_8b(2, 3), 0x2E205862, "mvn v2.8b, v3.8b"),
-            (|e| e.uzp1_4s(2, 3, 4), 0x4E841862, "uzp1 v2.4s, v3.4s, v4.4s"),
-            (|e| e.uzp1_8h(2, 3, 4), 0x4E441862, "uzp1 v2.8h, v3.8h, v4.8h"),
+            (
+                |e| e.uzp1_4s(2, 3, 4),
+                0x4E841862,
+                "uzp1 v2.4s, v3.4s, v4.4s",
+            ),
+            (
+                |e| e.uzp1_8h(2, 3, 4),
+                0x4E441862,
+                "uzp1 v2.8h, v3.8h, v4.8h",
+            ),
             (|e| e.xtn_8b(2, 3), 0x0E212862, "xtn v2.8b, v3.8h"),
             (|e| e.cmeq0_8b(2, 3), 0x0E209862, "cmeq v2.8b, v3.8b, #0"),
             (|e| e.cmeq0_2d(2, 3), 0x4EE09862, "cmeq v2.2d, v3.2d, #0"),
-            (|e| e.and_16b(2, 3, 4), 0x4E241C62, "and v2.16b, v3.16b, v4.16b"),
-            (|e| e.bic_16b(2, 3, 4), 0x4E641C62, "bic v2.16b, v3.16b, v4.16b"),
-            (|e| e.eor_16b(2, 3, 4), 0x6E241C62, "eor v2.16b, v3.16b, v4.16b"),
+            (
+                |e| e.and_16b(2, 3, 4),
+                0x4E241C62,
+                "and v2.16b, v3.16b, v4.16b",
+            ),
+            (
+                |e| e.bic_16b(2, 3, 4),
+                0x4E641C62,
+                "bic v2.16b, v3.16b, v4.16b",
+            ),
+            (
+                |e| e.eor_16b(2, 3, 4),
+                0x6E241C62,
+                "eor v2.16b, v3.16b, v4.16b",
+            ),
             (|e| e.and_8b(2, 3, 4), 0x0E241C62, "and v2.8b, v3.8b, v4.8b"),
             (|e| e.orr_8b(2, 3, 4), 0x0EA41C62, "orr v2.8b, v3.8b, v4.8b"),
             (|e| e.addv_b_8b(2, 3), 0x0E31B862, "addv b2, v3.8b"),
             (|e| e.umov_w_b0(2, 3), 0x0E013C62, "umov w2, v3.b[0]"),
             // ---- SVE2 tier (clang -march=armv8-a+sve2, objdump-verified).
-            (|e| e.ubfx_x_byte(12, 9, 8), 0xD3483D2C, "ubfx x12, x9, #8, #8"),
+            (
+                |e| e.ubfx_x_byte(12, 9, 8),
+                0xD3483D2C,
+                "ubfx x12, x9, #8, #8",
+            ),
             (|e| e.lsrv_x(14, 14, 13), 0x9ACD25CE, "lsr x14, x14, x13"),
             (|e| e.lsr_x_imm(13, 13, 2), 0xD342FDAD, "lsr x13, x13, #2"),
             (|e| e.and_x_1(14, 14), 0x924001CE, "and x14, x14, #1"),
-            (|e| e.ldr_w_idx2(13, 12, 10), 0xB86A798D, "ldr w13, [x12, x10, lsl #2]"),
-            (|e| e.add_x_lsl2(11, 11, 12), 0x8B0C096B, "add x11, x11, x12, lsl #2"),
+            (
+                |e| e.ldr_w_idx2(13, 12, 10),
+                0xB86A798D,
+                "ldr w13, [x12, x10, lsl #2]",
+            ),
+            (
+                |e| e.add_x_lsl2(11, 11, 12),
+                0x8B0C096B,
+                "add x11, x11, x12, lsl #2",
+            ),
             (|e| e.sub_sp_imm(624), 0xD109C3FF, "sub sp, sp, #624"),
             (|e| e.add_sp_imm(624), 0x9109C3FF, "add sp, sp, #624"),
             (|e| e.cnt_8b(0, 0), 0x0E205800, "cnt v0.8b, v0.8b"),
-            (|e| e.zip1_2d(18, 18, 16), 0x4ED03A52, "zip1 v18.2d, v18.2d, v16.2d"),
+            (
+                |e| e.zip1_2d(18, 18, 16),
+                0x4ED03A52,
+                "zip1 v18.2d, v18.2d, v16.2d",
+            ),
             (|e| e.ptrue_s_all(0), 0x2598E3E0, "ptrue p0.s"),
             (|e| e.ptrue_h_vl8(1), 0x2558E101, "ptrue p1.h, vl8"),
             (|e| e.ptrue_b_vl8(2), 0x2518E102, "ptrue p2.b, vl8"),
             (|e| e.dup_z_b_w(0, 12), 0x05203980, "mov z0.b, w12"),
             (|e| e.and_z(0, 0, 30), 0x043E3000, "and z0.d, z0.d, z30.d"),
-            (|e| e.cmpne_b_imm0(3, 2, 0), 0x25008813, "cmpne p3.b, p2/z, z0.b, #0"),
+            (
+                |e| e.cmpne_b_imm0(3, 2, 0),
+                0x25008813,
+                "cmpne p3.b, p2/z, z0.b, #0",
+            ),
             (|e| e.punpklo(4, 3), 0x05304064, "punpklo p4.h, p3.b"),
             (|e| e.punpkhi(6, 4), 0x05314086, "punpkhi p6.h, p4.b"),
             (|e| e.index_s_imm(6, 0, 1), 0x04A14006, "index z6.s, #0, #1"),
             (|e| e.index_s_imm(7, 4, 1), 0x04A14087, "index z7.s, #4, #1"),
             (|e| e.add_z_s_imm(6, 8), 0x25A0C106, "add z6.s, z6.s, #8"),
-            (|e| e.compact_s(4, 5, 6), 0x05A194C4, "compact z4.s, p5, z6.s"),
+            (
+                |e| e.compact_s(4, 5, 6),
+                0x05A194C4,
+                "compact z4.s, p5, z6.s",
+            ),
             (|e| e.cntp_s(12, 0, 5), 0x25A080AC, "cntp x12, p0, p5.s"),
-            (|e| e.st1w_s(4, 0, 11), 0xE540E164, "st1w { z4.s }, p0, [x11]"),
-            (|e| e.match_h(3, 1, 16, 18), 0x45728603, "match p3.h, p1/z, z16.h, z18.h"),
-            (|e| e.orr_p(3, 1, 3, 4), 0x25844463, "orr p3.b, p1/z, p3.b, p4.b"),
-            (|e| e.cpy_z_h_neg1(17, 3), 0x05531FF1, "mov z17.h, p3/z, #-1"),
+            (
+                |e| e.st1w_s(4, 0, 11),
+                0xE540E164,
+                "st1w { z4.s }, p0, [x11]",
+            ),
+            (
+                |e| e.match_h(3, 1, 16, 18),
+                0x45728603,
+                "match p3.h, p1/z, z16.h, z18.h",
+            ),
+            (
+                |e| e.orr_p(3, 1, 3, 4),
+                0x25844463,
+                "orr p3.b, p1/z, p3.b, p4.b",
+            ),
+            (
+                |e| e.cpy_z_h_neg1(17, 3),
+                0x05531FF1,
+                "mov z17.h, p3/z, #-1",
+            ),
         ];
         for (emit, want, asm) in cases {
             let mut e = Emitter::new();

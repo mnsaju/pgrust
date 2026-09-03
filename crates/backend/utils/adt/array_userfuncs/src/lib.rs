@@ -84,7 +84,9 @@ fn append_prepend_index(array: &[u8], is_append: bool) -> PgResult<(i32, i32)> {
     let (ndims, dims, lbs) = read_dims_lbounds(array);
     if ndims == 1 {
         if is_append {
-            let indx = lbs[0].checked_add(dims[0]).ok_or_else(integer_out_of_range)?;
+            let indx = lbs[0]
+                .checked_add(dims[0])
+                .ok_or_else(integer_out_of_range)?;
             Ok((indx, lbs[0]))
         } else {
             let indx = lbs[0].checked_sub(1).ok_or_else(integer_out_of_range)?;
@@ -111,7 +113,17 @@ pub fn array_append_internal<'m>(
     meta: &ElemMeta,
 ) -> PgResult<PgVec<'m, u8>> {
     let (indx, _lb0) = append_prepend_index(array, true)?;
-    array_set_element(mcx, array, &[indx], elem, isnull, -1, meta.typlen, meta.typbyval, meta.typalign)
+    array_set_element(
+        mcx,
+        array,
+        &[indx],
+        elem,
+        isnull,
+        -1,
+        meta.typlen,
+        meta.typbyval,
+        meta.typalign,
+    )
 }
 
 pub fn array_prepend_internal<'m>(
@@ -123,7 +135,15 @@ pub fn array_prepend_internal<'m>(
 ) -> PgResult<PgVec<'m, u8>> {
     let (indx, lb0) = append_prepend_index(array, false)?;
     let mut out = array_set_element(
-        mcx, array, &[indx], elem, isnull, -1, meta.typlen, meta.typbyval, meta.typalign,
+        mcx,
+        array,
+        &[indx],
+        elem,
+        isnull,
+        -1,
+        meta.typlen,
+        meta.typbyval,
+        meta.typalign,
     )?;
     // C keeps the input's lower bound after prepending (lbound[0] restored).
     if arr_ndim(&out) == 1 {
@@ -132,11 +152,7 @@ pub fn array_prepend_internal<'m>(
     Ok(out)
 }
 
-pub fn array_cat_internal<'m>(
-    mcx: Mcx<'m>,
-    v1: &[u8],
-    v2: &[u8],
-) -> PgResult<PgVec<'m, u8>> {
+pub fn array_cat_internal<'m>(mcx: Mcx<'m>, v1: &[u8], v2: &[u8]) -> PgResult<PgVec<'m, u8>> {
     let element_type1 = arr_elemtype(v1);
     let element_type2 = arr_elemtype(v2);
     if element_type1 != element_type2 {
@@ -243,9 +259,21 @@ pub fn array_cat_internal<'m>(
 
     if hasnulls {
         let bo = ARRAYTYPE_HDRSZ + 2 * 4 * ndims as usize;
-        array_bitmap_copy(&mut out, bo, 0, arr_nullbitmap_off(v1).map(|b| (v1, b)), 0, nitems1);
         array_bitmap_copy(
-            &mut out, bo, nitems1, arr_nullbitmap_off(v2).map(|b| (v2, b)), 0, nitems2,
+            &mut out,
+            bo,
+            0,
+            arr_nullbitmap_off(v1).map(|b| (v1, b)),
+            0,
+            nitems1,
+        );
+        array_bitmap_copy(
+            &mut out,
+            bo,
+            nitems1,
+            arr_nullbitmap_off(v2).map(|b| (v2, b)),
+            0,
+            nitems2,
         );
     }
     Ok(out)
@@ -253,12 +281,12 @@ pub fn array_cat_internal<'m>(
 
 fn write_dims_lbs(out: &mut [u8], ndims: i32, dims: &[i32], lbs: &[i32]) {
     let mut off = ARRAYTYPE_HDRSZ;
-    for i in 0..ndims as usize {
-        out[off..off + 4].copy_from_slice(&dims[i].to_ne_bytes());
+    for &d in dims.iter().take(ndims as usize) {
+        out[off..off + 4].copy_from_slice(&d.to_ne_bytes());
         off += 4;
     }
-    for i in 0..ndims as usize {
-        out[off..off + 4].copy_from_slice(&lbs[i].to_ne_bytes());
+    for &l in lbs.iter().take(ndims as usize) {
+        out[off..off + 4].copy_from_slice(&l.to_ne_bytes());
         off += 4;
     }
 }
@@ -280,7 +308,8 @@ pub fn array_position_internal(
     let (_nd, _dims, lbs) = read_dims_lbounds(array);
     let mut position = lbs[0] - 1;
     let position_min = s.position_min.unwrap_or(lbs[0]);
-    let (elems, nulls) = deconstruct_array(mcx, array, meta.typlen, meta.typbyval, meta.typalign, true)?;
+    let (elems, nulls) =
+        deconstruct_array(mcx, array, meta.typlen, meta.typbyval, meta.typalign, true)?;
     for (i, &value) in elems.iter().enumerate() {
         position += 1;
         if position < position_min {
@@ -317,7 +346,8 @@ pub fn array_positions_internal<'m>(
 
     let (_nd, _dims, lbs) = read_dims_lbounds(array);
     let mut position = lbs[0] - 1;
-    let (elems, nulls) = deconstruct_array(mcx, array, meta.typlen, meta.typbyval, meta.typalign, true)?;
+    let (elems, nulls) =
+        deconstruct_array(mcx, array, meta.typlen, meta.typbyval, meta.typalign, true)?;
     for (i, &value) in elems.iter().enumerate() {
         position += 1;
         let isnull = nulls[i];
@@ -328,7 +358,8 @@ pub fn array_positions_internal<'m>(
                 .as_bool()
         };
         if hit {
-            astate = accum_array_result(mcx, Some(astate), Datum::from_i32(position), false, INT4OID)?;
+            astate =
+                accum_array_result(mcx, Some(astate), Datum::from_i32(position), false, INT4OID)?;
         }
     }
     ::arrayfuncs::build::make_array_result(mcx, &astate)
@@ -441,7 +472,7 @@ pub fn accum_array_result_arr<'m>(
         match st.nullbitmap.as_mut() {
             None => {
                 st.aitems = pg_nextpower2_32(core::cmp::max(256, newnitems + 1) as u32) as i32;
-                let need = (st.aitems as usize + 7) / 8;
+                let need = (st.aitems as usize).div_ceil(8);
                 let mut bm: PgVec<u8> = vec_with_capacity_in(mcx, need)?;
                 bm.resize(need, 0);
                 array_bitmap_copy(&mut bm, 0, 0, None, 0, st.nitems);
@@ -450,7 +481,7 @@ pub fn accum_array_result_arr<'m>(
             Some(bm) => {
                 if newnitems > st.aitems {
                     st.aitems = core::cmp::max(st.aitems * 2, newnitems);
-                    bm.resize((st.aitems as usize + 7) / 8, 0);
+                    bm.resize((st.aitems as usize).div_ceil(8), 0);
                 }
             }
         }
@@ -488,7 +519,7 @@ pub fn make_array_result_arr<'m>(
     out[0..4].copy_from_slice(&set_varsize_4b(nbytes));
     out[4..8].copy_from_slice(&st.ndims.to_ne_bytes());
     out[8..12].copy_from_slice(&dataoffset.to_ne_bytes());
-    out[12..16].copy_from_slice(&(st.element_type as u32).to_ne_bytes());
+    out[12..16].copy_from_slice(&st.element_type.to_ne_bytes());
     write_dims_lbs(&mut out, st.ndims, &st.dims, &st.lbs);
     let dst = arr_data_offset(&out);
     out[dst..dst + st.nbytes as usize].copy_from_slice(&st.data[..st.nbytes as usize]);
@@ -523,7 +554,7 @@ pub fn clone_array_build_state_arr<'m>(
     vec_append_bytes(&mut data, &s2.data[..s2.nbytes as usize])?;
     s1.data = data;
     if let Some(bm2) = s2.nullbitmap.as_deref() {
-        let size = (s2.aitems as usize + 7) / 8;
+        let size = (s2.aitems as usize).div_ceil(8);
         let mut bm: PgVec<'m, u8> = vec_with_capacity_in(mcx, size)?;
         vec_append_bytes(&mut bm, &bm2[..size])?;
         s1.nullbitmap = Some(bm);
@@ -555,9 +586,10 @@ pub fn combine_array_build_state_arr(
     debug_assert_eq!(s1.array_type, s2.array_type);
     debug_assert_eq!(s1.element_type, s2.element_type);
 
-    let (Some(reqsize), Some(newnitems)) =
-        (s1.nbytes.checked_add(s2.nbytes), s1.nitems.checked_add(s2.nitems))
-    else {
+    let (Some(reqsize), Some(newnitems)) = (
+        s1.nbytes.checked_add(s2.nbytes),
+        s1.nitems.checked_add(s2.nitems),
+    ) else {
         return Err(array_size_exceeded());
     };
     if s1.abytes < reqsize {
@@ -573,7 +605,7 @@ pub fn combine_array_build_state_arr(
                 // First input with nulls: retrospectively mark all previous
                 // items non-null.
                 s1.aitems = pg_nextpower2_32(core::cmp::max(256, newnitems) as u32) as i32;
-                let need = (s1.aitems as usize + 7) / 8;
+                let need = (s1.aitems as usize).div_ceil(8);
                 let mut bm: PgVec<u8> = vec_with_capacity_in(s1.mcx, need)?;
                 bm.resize(need, 0);
                 array_bitmap_copy(&mut bm, 0, 0, None, 0, s1.nitems);
@@ -582,7 +614,7 @@ pub fn combine_array_build_state_arr(
             Some(bm) => {
                 if newnitems > s1.aitems {
                     s1.aitems = pg_nextpower2_32(newnitems as u32) as i32;
-                    bm.resize((s1.aitems as usize + 7) / 8, 0);
+                    bm.resize((s1.aitems as usize).div_ceil(8), 0);
                 }
             }
         }
@@ -603,15 +635,15 @@ pub fn serialize_array_build_state_arr<'m>(
     st: &ArrayBuildStateArr<'_>,
 ) -> PgResult<::datum::Bytea<'m>> {
     let mut buf = ::pqformat::pq_begintypsend(mcx)?;
-    ::pqformat::pq_sendint32(&mut buf, st.element_type as u32)?;
-    ::pqformat::pq_sendint32(&mut buf, st.array_type as u32)?;
+    ::pqformat::pq_sendint32(&mut buf, st.element_type)?;
+    ::pqformat::pq_sendint32(&mut buf, st.array_type)?;
     ::pqformat::pq_sendint32(&mut buf, st.nbytes as u32)?;
     ::pqformat::pq_sendbytes(&mut buf, &st.data[..st.nbytes as usize])?;
     ::pqformat::pq_sendint32(&mut buf, st.abytes as u32)?;
     ::pqformat::pq_sendint32(&mut buf, st.aitems as u32)?;
     if let Some(bm) = st.nullbitmap.as_deref() {
         debug_assert!(st.aitems > 0);
-        ::pqformat::pq_sendbytes(&mut buf, &bm[..(st.aitems as usize + 7) / 8])?;
+        ::pqformat::pq_sendbytes(&mut buf, &bm[..(st.aitems as usize).div_ceil(8)])?;
     }
     ::pqformat::pq_sendint32(&mut buf, st.nitems as u32)?;
     ::pqformat::pq_sendint32(&mut buf, st.ndims as u32)?;
@@ -640,14 +672,17 @@ pub fn deserialize_array_build_state_arr<'m>(
     // element type it would return.
     let mut result = init_array_result_arr(mcx, array_type, element_type)?;
     let mut data: PgVec<'m, u8> = vec_with_capacity_in(mcx, nbytes as usize)?;
-    vec_append_bytes(&mut data, ::pqformat::pq_getmsgbytes(&mut buf, nbytes as usize)?)?;
+    vec_append_bytes(
+        &mut data,
+        ::pqformat::pq_getmsgbytes(&mut buf, nbytes as usize)?,
+    )?;
     result.data = data;
     result.nbytes = nbytes;
 
     result.abytes = ::pqformat::pq_getmsgint(&mut buf, 4)? as i32;
     result.aitems = ::pqformat::pq_getmsgint(&mut buf, 4)? as i32;
     if result.aitems > 0 {
-        let size = (result.aitems as usize + 7) / 8;
+        let size = (result.aitems as usize).div_ceil(8);
         let mut bm: PgVec<'m, u8> = vec_with_capacity_in(mcx, size)?;
         vec_append_bytes(&mut bm, ::pqformat::pq_getmsgbytes(&mut buf, size)?)?;
         result.nullbitmap = Some(bm);
@@ -694,7 +729,16 @@ pub fn trim_array_internal<'m>(
         upper_provided[0] = true;
     }
     ::arrayfuncs::element::array_get_slice(
-        mcx, v, 1, &mut upper, &mut lower, &upper_provided, &lower_provided, -1, elmlen, elmalign,
+        mcx,
+        v,
+        1,
+        &mut upper,
+        &mut lower,
+        &upper_provided,
+        &lower_provided,
+        -1,
+        elmlen,
+        elmalign,
     )
 }
 
@@ -730,16 +774,20 @@ pub fn array_shuffle_n<'m>(
         rlbs[0] = 1;
     }
     construct_md_array(
-        mcx, &elems, Some(&nulls), ndim, &rdims, &rlbs, meta.element_type, meta.typlen,
-        meta.typbyval, meta.typalign,
+        mcx,
+        &elems,
+        Some(&nulls),
+        ndim,
+        &rdims,
+        &rlbs,
+        meta.element_type,
+        meta.typlen,
+        meta.typbyval,
+        meta.typalign,
     )
 }
 
-pub fn array_reverse_n<'m>(
-    mcx: Mcx<'m>,
-    array: &[u8],
-    meta: &ElemMeta,
-) -> PgResult<PgVec<'m, u8>> {
+pub fn array_reverse_n<'m>(mcx: Mcx<'m>, array: &[u8], meta: &ElemMeta) -> PgResult<PgVec<'m, u8>> {
     let (ndim, dims, lbs) = read_dims_lbounds(array);
     let (mut elems, mut nulls) =
         deconstruct_array(mcx, array, meta.typlen, meta.typbyval, meta.typalign, true)?;
@@ -755,8 +803,16 @@ pub fn array_reverse_n<'m>(
         }
     }
     construct_md_array(
-        mcx, &elems, Some(&nulls), ndim, &dims, &lbs, meta.element_type, meta.typlen,
-        meta.typbyval, meta.typalign,
+        mcx,
+        &elems,
+        Some(&nulls),
+        ndim,
+        &dims,
+        &lbs,
+        meta.element_type,
+        meta.typlen,
+        meta.typbyval,
+        meta.typalign,
     )
 }
 
@@ -779,7 +835,10 @@ pub fn array_sort_with<'m>(
     match subarray_type {
         None => {
             for (i, &d) in elems.iter().enumerate() {
-                items.push(NullableDatum { value: d, isnull: nulls[i] });
+                items.push(NullableDatum {
+                    value: d,
+                    isnull: nulls[i],
+                });
             }
         }
         Some(_) => {
@@ -790,8 +849,16 @@ pub fn array_sort_with<'m>(
                 let a = (i * nelm) as usize;
                 let b = a + nelm as usize;
                 let img = construct_md_array(
-                    mcx, &elems[a..b], Some(&nulls[a..b]), subndim, &dims[1..], &lbs[1..],
-                    meta.element_type, meta.typlen, meta.typbyval, meta.typalign,
+                    mcx,
+                    &elems[a..b],
+                    Some(&nulls[a..b]),
+                    subndim,
+                    &dims[1..],
+                    &lbs[1..],
+                    meta.element_type,
+                    meta.typlen,
+                    meta.typbyval,
+                    meta.typalign,
                 )?;
                 items.push(NullableDatum {
                     value: Datum::from_usize(img.as_ptr() as usize),

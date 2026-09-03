@@ -65,14 +65,27 @@ fn reads_live_captured_view_rule() {
     assert_eq!((te0.resorigtbl, te0.resorigcol), (16384, 1));
     assert!(!te0.resjunk);
     let v0 = te0.expr.as_var().unwrap();
-    assert_eq!((v0.varno, v0.varattno, v0.vartype, v0.vartypmod), (1, 1, 23, -1));
+    assert_eq!(
+        (v0.varno, v0.varattno, v0.vartype, v0.vartypmod),
+        (1, 1, 23, -1)
+    );
     assert_eq!(v0.varcollid, 0);
     assert!(v0.varnullingrels.is_empty());
     assert_eq!(v0.varlevelsup, 0);
     assert_eq!((v0.varnosyn, v0.varattnosyn), (1, 1));
     assert_eq!(v0.location, -1);
-    let v1 = q.targetList.nth(1).as_target_entry().unwrap().expr.as_var().unwrap();
-    assert_eq!((v1.varno, v1.varattno, v1.vartype, v1.varcollid), (1, 2, 25, 100));
+    let v1 = q
+        .targetList
+        .nth(1)
+        .as_target_entry()
+        .unwrap()
+        .expr
+        .as_var()
+        .unwrap();
+    assert_eq!(
+        (v1.varno, v1.varattno, v1.vartype, v1.varcollid),
+        (1, 2, 25, 100)
+    );
 }
 
 // Captured from live PostgreSQL 18.3 initdb:
@@ -151,13 +164,25 @@ fn reads_pg_stat_activity_view_rule() {
     assert_eq!(outer.rtindex, 5);
     assert!(outer.usingClause.is_nil() && outer.join_using_alias.is_none());
     assert!(outer.alias.is_none());
-    assert!(outer.quals.expect("outer join quals").as_op_expr().is_some());
+    assert!(outer
+        .quals
+        .expect("outer join quals")
+        .as_op_expr()
+        .is_some());
     let inner = outer.larg.as_join_expr().expect("inner JoinExpr");
     assert_eq!(inner.jointype, JoinType::JOIN_LEFT);
     assert_eq!(inner.rtindex, 3);
     assert_eq!(inner.larg.as_range_tbl_ref().unwrap().rtindex, 1);
     assert_eq!(inner.rarg.as_range_tbl_ref().unwrap().rtindex, 2);
-    assert_eq!(inner.quals.expect("inner join quals").as_op_expr().unwrap().opno, 607);
+    assert_eq!(
+        inner
+            .quals
+            .expect("inner join quals")
+            .as_op_expr()
+            .unwrap()
+            .opno,
+        607
+    );
     assert_eq!(outer.rarg.as_range_tbl_ref().unwrap().rtindex, 4);
 
     assert_eq!(q.targetList.len(), 22);
@@ -243,7 +268,10 @@ fn coerce_to_domain_value_conbin() {
     let op = n.as_op_expr().unwrap();
     assert_eq!((op.opno, op.opfuncid), (521, 147));
     let dv = op.args.nth(0).as_coerce_to_domain_value().unwrap();
-    assert_eq!((dv.typeId, dv.typeMod, dv.collation, dv.location), (23, -1, 0, -1));
+    assert_eq!(
+        (dv.typeId, dv.typeMod, dv.collation, dv.location),
+        (23, -1, 0, -1)
+    );
 }
 
 #[test]
@@ -301,7 +329,13 @@ fn search_cycle_ev_action() {
     let cc = cte.cycle_clause.unwrap().as_cte_cycle_clause().unwrap();
     assert_eq!(cc.cycle_mark_column, Some("is_c"));
     assert_eq!(cc.cycle_path_column, Some("pth"));
-    assert!(cc.cycle_mark_value.unwrap().as_const().unwrap().constvalue.as_bool());
+    assert!(cc
+        .cycle_mark_value
+        .unwrap()
+        .as_const()
+        .unwrap()
+        .constvalue
+        .as_bool());
     assert_eq!(cc.cycle_mark_type, 16);
 }
 
@@ -328,8 +362,20 @@ fn reads_nil_element_in_node_list_field() {
     let node = stringToNode(mcx, &s).unwrap();
     let q = node.as_list().unwrap().nth(0).as_query().unwrap();
     assert_eq!(q.groupingSets.len(), 2);
-    assert_eq!(q.groupingSets.nth(0).as_int_list().unwrap().iter().collect::<Vec<_>>(), [1]);
-    let empty = q.groupingSets.nth(1).as_list().expect("NIL member reads as a List");
+    assert_eq!(
+        q.groupingSets
+            .nth(0)
+            .as_int_list()
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        [1]
+    );
+    let empty = q
+        .groupingSets
+        .nth(1)
+        .as_list()
+        .expect("NIL member reads as a List");
     assert!(empty.is_nil());
 }
 
@@ -339,7 +385,9 @@ fn reads_nil_element_in_node_list_field() {
 #[test]
 fn bare_null_marker_reads_as_none() {
     let ctx = MemoryContext::new("t");
-    assert!(crate::stringToNodeNullable(ctx.mcx(), "<>").unwrap().is_none());
+    assert!(crate::stringToNodeNullable(ctx.mcx(), "<>")
+        .unwrap()
+        .is_none());
 }
 
 // The non-null entry keeps the loud panic for columns that never hold "<>"

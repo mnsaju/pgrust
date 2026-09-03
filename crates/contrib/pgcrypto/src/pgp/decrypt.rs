@@ -1,4 +1,3 @@
-
 use super::cfb::PgpCfb;
 use super::consts::*;
 use super::context::PgpContext;
@@ -9,6 +8,8 @@ pub struct SessKey {
     pub cipher: i32,
     pub key: Vec<u8>,
 }
+
+type SessKeyCallback<'a> = dyn FnMut(&mut PgpContext, &[u8]) -> Result<SessKey, String> + 'a;
 
 pub fn decrypt_symmetric(
     ctx: &mut PgpContext,
@@ -35,7 +36,7 @@ pub fn decrypt_pubkey(
 fn decrypt_message(
     ctx: &mut PgpContext,
     data: &[u8],
-    sesskey: &mut dyn FnMut(&mut PgpContext, &[u8]) -> Result<SessKey, String>,
+    sesskey: &mut SessKeyCallback<'_>,
 ) -> Result<Vec<u8>, String> {
     let mut rdr = PktReader::new(data);
     let mut sess: Option<SessKey> = None;
@@ -91,7 +92,8 @@ fn parse_symenc_sesskey(
     }
     let s2k_cipher = body[1] as i32;
     let (mut s2k, consumed) = S2k::read(&body[2..]).map_err(|e| e.to_string())?;
-    s2k.process(s2k_cipher, passphrase).map_err(|e| e.to_string())?;
+    s2k.process(s2k_cipher, passphrase)
+        .map_err(|e| e.to_string())?;
 
     ctx.s2k_mode = s2k.mode;
     ctx.s2k_digest_algo = s2k.digest_algo;
@@ -110,7 +112,8 @@ fn parse_symenc_sesskey(
         })
     } else {
         ctx.use_sess_key = 1;
-        let mut cfb = PgpCfb::create(s2k_cipher, &s2k.key, false, None).map_err(|e| e.to_string())?;
+        let mut cfb =
+            PgpCfb::create(s2k_cipher, &s2k.key, false, None).map_err(|e| e.to_string())?;
         let dec = cfb.decrypt(rest);
         if dec.is_empty() {
             return Err(CORRUPT_DATA.to_string());

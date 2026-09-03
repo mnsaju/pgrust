@@ -24,16 +24,32 @@ fn match_operators() {
         ("", "^$", true),
         ("abc", "a.c", true),
     ] {
-        assert_eq!(textregexeq(m, s.as_bytes(), p.as_bytes(), C).unwrap(), want, "{s:?} ~ {p:?}");
-        assert_eq!(textregexne(m, s.as_bytes(), p.as_bytes(), C).unwrap(), !want, "{s:?} !~ {p:?}");
+        assert_eq!(
+            textregexeq(m, s.as_bytes(), p.as_bytes(), C).unwrap(),
+            want,
+            "{s:?} ~ {p:?}"
+        );
+        assert_eq!(
+            textregexne(m, s.as_bytes(), p.as_bytes(), C).unwrap(),
+            !want,
+            "{s:?} !~ {p:?}"
+        );
     }
     for (s, p, want) in [
         ("thomas", ".*Thomas.*", true),
         ("THOMAS", "^tho", true),
         ("thomas", "^MAS", false),
     ] {
-        assert_eq!(texticregexeq(m, s.as_bytes(), p.as_bytes(), C).unwrap(), want, "{s:?} ~* {p:?}");
-        assert_eq!(texticregexne(m, s.as_bytes(), p.as_bytes(), C).unwrap(), !want, "{s:?} !~* {p:?}");
+        assert_eq!(
+            texticregexeq(m, s.as_bytes(), p.as_bytes(), C).unwrap(),
+            want,
+            "{s:?} ~* {p:?}"
+        );
+        assert_eq!(
+            texticregexne(m, s.as_bytes(), p.as_bytes(), C).unwrap(),
+            !want,
+            "{s:?} !~* {p:?}"
+        );
     }
     assert!(nameregexeq(m, b"pg_class", b"^pg_", C).unwrap());
     assert!(nameregexne(m, b"pg_class", b"^xx", C).unwrap());
@@ -56,7 +72,12 @@ fn submatches_filled() {
     let cx = MemoryContext::new("test");
     let mut pmatch = [RegMatch::UNSET; 3];
     let matched = RE_compile_and_execute(
-        cx.mcx(), b"^(a+)(b+)$", b"aabbb", REG_ADVANCED, C, &mut pmatch,
+        cx.mcx(),
+        b"^(a+)(b+)$",
+        b"aabbb",
+        REG_ADVANCED,
+        C,
+        &mut pmatch,
     )
     .unwrap();
     assert!(matched);
@@ -145,7 +166,9 @@ fn fixed_prefix() {
     assert!(regexp_fixed_prefix(m, b"test", false, C).unwrap().is_none());
     assert!(regexp_fixed_prefix(m, b"^foo", true, C).unwrap().is_none());
 
-    let (pre, exact) = regexp_fixed_prefix(m, b"^abc(def|dex)", false, C).unwrap().unwrap();
+    let (pre, exact) = regexp_fixed_prefix(m, b"^abc(def|dex)", false, C)
+        .unwrap()
+        .unwrap();
     assert_eq!(pre.as_slice(), b"abcd");
     assert!(!exact);
 }
@@ -251,7 +274,10 @@ fn parse_flags() {
 
     let err = parse_re_flags(Some(b"z")).unwrap_err();
     let msg = sqlstate(&err);
-    assert!(msg.contains("invalid regular expression option: \"z\""), "{msg}");
+    assert!(
+        msg.contains("invalid regular expression option: \"z\""),
+        "{msg}"
+    );
     assert_eq!(&code(&err), b"22023");
 }
 
@@ -266,7 +292,9 @@ fn regex_substr() {
     let r = textregexsubstr(m, b"foobar", b"o(.)b", C).unwrap().unwrap();
     assert_eq!(r.as_slice(), b"o");
     assert!(textregexsubstr(m, b"foobar", b"xyz", C).unwrap().is_none());
-    assert!(textregexsubstr(m, b"foo", b"foo(bar)?", C).unwrap().is_none());
+    assert!(textregexsubstr(m, b"foo", b"foo(bar)?", C)
+        .unwrap()
+        .is_none());
 }
 
 #[test]
@@ -286,21 +314,46 @@ fn regex_replace() {
     let r = textregexreplace(m, b"abc", b"", b"X", b"g", C).unwrap();
     assert_eq!(r.as_slice(), b"XaXbXcX");
 
-    let r = textregexreplace_extended(m, b"A PostgreSQL function", b"a|e|i|o|u", b"X",
-        Some(1), Some(3), Some(b"i"), C).unwrap();
+    let r = textregexreplace_extended(
+        m,
+        b"A PostgreSQL function",
+        b"a|e|i|o|u",
+        b"X",
+        Some(1),
+        Some(3),
+        Some(b"i"),
+        C,
+    )
+    .unwrap();
     assert_eq!(r.as_slice(), b"A PostgrXSQL function");
-    let r = textregexreplace_extended(m, b"A PostgreSQL function", b"a|e|i|o|u", b"X",
-        Some(1), Some(0), Some(b"i"), C).unwrap();
+    let r = textregexreplace_extended(
+        m,
+        b"A PostgreSQL function",
+        b"a|e|i|o|u",
+        b"X",
+        Some(1),
+        Some(0),
+        Some(b"i"),
+        C,
+    )
+    .unwrap();
     assert_eq!(r.as_slice(), b"X PXstgrXSQL fXnctXXn");
 
     let err = textregexreplace_extended(m, b"x", b"x", b"y", Some(0), None, None, C).unwrap_err();
     assert!(sqlstate(&err).contains("invalid value for parameter \"start\": 0"));
-    let err = textregexreplace_extended(m, b"x", b"x", b"y", Some(1), Some(-1), None, C).unwrap_err();
+    let err =
+        textregexreplace_extended(m, b"x", b"x", b"y", Some(1), Some(-1), None, C).unwrap_err();
     assert!(sqlstate(&err).contains("invalid value for parameter \"n\": -1"));
     let err = textregexreplace(m, b"x", b"x", b"y", b"1", C).unwrap_err();
     let msg = sqlstate(&err);
-    assert!(msg.contains("invalid regular expression option: \"1\""), "{msg}");
-    assert!(msg.contains("cast the fourth argument to integer explicitly"), "{msg}");
+    assert!(
+        msg.contains("invalid regular expression option: \"1\""),
+        "{msg}"
+    );
+    assert!(
+        msg.contains("cast the fourth argument to integer explicitly"),
+        "{msg}"
+    );
 }
 
 #[test]
@@ -343,21 +396,75 @@ fn count_instr_like() {
     let m = cx.mcx();
     use crate::matches::{regexp_count, regexp_instr, regexp_like};
 
-    assert_eq!(regexp_count(m, b"ABCABCAXYaxy", b"A.", None, None, C).unwrap(), 3);
-    assert_eq!(regexp_count(m, b"ABCABCAXYaxy", b"A.", Some(5), None, C).unwrap(), 1);
-    assert_eq!(regexp_count(m, b"ABCABCAXYaxy", b"A.", Some(1), Some(b"i"), C).unwrap(), 4);
+    assert_eq!(
+        regexp_count(m, b"ABCABCAXYaxy", b"A.", None, None, C).unwrap(),
+        3
+    );
+    assert_eq!(
+        regexp_count(m, b"ABCABCAXYaxy", b"A.", Some(5), None, C).unwrap(),
+        1
+    );
+    assert_eq!(
+        regexp_count(m, b"ABCABCAXYaxy", b"A.", Some(1), Some(b"i"), C).unwrap(),
+        4
+    );
     assert_eq!(regexp_count(m, b"abc", b"", None, None, C).unwrap(), 4);
     let err = regexp_count(m, b"x", b"x", Some(0), None, C).unwrap_err();
     assert!(sqlstate(&err).contains("invalid value for parameter \"start\": 0"));
     let err = regexp_count(m, b"x", b"x", None, Some(b"g"), C).unwrap_err();
     assert!(sqlstate(&err).contains("regexp_count() does not support the \"global\" option"));
 
-    let i = regexp_instr(m, b"number of your street, town zip, FR", b"[^,]+", None, Some(2), None, None, None, C).unwrap();
+    let i = regexp_instr(
+        m,
+        b"number of your street, town zip, FR",
+        b"[^,]+",
+        None,
+        Some(2),
+        None,
+        None,
+        None,
+        C,
+    )
+    .unwrap();
     assert_eq!(i, 23);
-    assert_eq!(regexp_instr(m, b"ABCDEF", b"c(.)(..)", None, None, None, Some(b"i"), Some(2), C).unwrap(), 5);
-    assert_eq!(regexp_instr(m, b"ABCDEF", b"c(.)(..)", None, None, Some(1), Some(b"i"), Some(2), C).unwrap(), 7);
-    assert_eq!(regexp_instr(m, b"abc", b"x", None, None, None, None, None, C).unwrap(), 0);
-    assert_eq!(regexp_instr(m, b"abc", b"a(x)?b", None, None, None, None, Some(1), C).unwrap(), 0);
+    assert_eq!(
+        regexp_instr(
+            m,
+            b"ABCDEF",
+            b"c(.)(..)",
+            None,
+            None,
+            None,
+            Some(b"i"),
+            Some(2),
+            C
+        )
+        .unwrap(),
+        5
+    );
+    assert_eq!(
+        regexp_instr(
+            m,
+            b"ABCDEF",
+            b"c(.)(..)",
+            None,
+            None,
+            Some(1),
+            Some(b"i"),
+            Some(2),
+            C
+        )
+        .unwrap(),
+        7
+    );
+    assert_eq!(
+        regexp_instr(m, b"abc", b"x", None, None, None, None, None, C).unwrap(),
+        0
+    );
+    assert_eq!(
+        regexp_instr(m, b"abc", b"a(x)?b", None, None, None, None, Some(1), C).unwrap(),
+        0
+    );
     let err = regexp_instr(m, b"x", b"x", None, Some(0), None, None, None, C).unwrap_err();
     assert!(sqlstate(&err).contains("invalid value for parameter \"n\": 0"));
     let err = regexp_instr(m, b"x", b"x", None, None, Some(2), None, None, C).unwrap_err();
@@ -377,9 +484,7 @@ fn match_and_matches() {
     full_setup();
     let cx = MemoryContext::new("test");
     let m = cx.mcx();
-    use crate::matches::{
-        build_regexp_match_result, regexp_match, regexp_matches_setup,
-    };
+    use crate::matches::{build_regexp_match_result, regexp_match, regexp_matches_setup};
 
     let row = |ctx: &crate::matches::RegexpMatchesCtx<'_, '_>| {
         let mut out: Vec<Option<Vec<u8>>> = Vec::new();
@@ -391,25 +496,50 @@ fn match_and_matches() {
         out
     };
 
-    let ctx = regexp_match(m, b"foobarbequebaz", b"(bar)(beque)", None, C).unwrap().unwrap();
-    assert_eq!(row(&ctx), vec![Some(b"bar".to_vec()), Some(b"beque".to_vec())]);
+    let ctx = regexp_match(m, b"foobarbequebaz", b"(bar)(beque)", None, C)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        row(&ctx),
+        vec![Some(b"bar".to_vec()), Some(b"beque".to_vec())]
+    );
 
-    let ctx = regexp_match(m, b"foo", b"foo(bar)?", None, C).unwrap().unwrap();
+    let ctx = regexp_match(m, b"foo", b"foo(bar)?", None, C)
+        .unwrap()
+        .unwrap();
     assert_eq!(row(&ctx), vec![None]);
 
     assert!(regexp_match(m, b"abc", b"xyz", None, C).unwrap().is_none());
-    let err = regexp_match(m, b"x", b"x", Some(b"g"), C).map(|_| ()).unwrap_err();
+    let err = regexp_match(m, b"x", b"x", Some(b"g"), C)
+        .map(|_| ())
+        .unwrap_err();
     let msg = sqlstate(&err);
-    assert!(msg.contains("regexp_match() does not support the \"global\" option"), "{msg}");
-    assert!(msg.contains("Use the regexp_matches function instead."), "{msg}");
+    assert!(
+        msg.contains("regexp_match() does not support the \"global\" option"),
+        "{msg}"
+    );
+    assert!(
+        msg.contains("Use the regexp_matches function instead."),
+        "{msg}"
+    );
 
-    let mut ctx = regexp_matches_setup(m, b"foobarbequebazilbarfbonk", b"b[^b]+", Some(b"g"), C).unwrap();
+    let mut ctx =
+        regexp_matches_setup(m, b"foobarbequebazilbarfbonk", b"b[^b]+", Some(b"g"), C).unwrap();
     let mut rows = Vec::new();
     while ctx.next_match < ctx.nmatches {
         rows.push(row(&ctx)[0].clone().unwrap());
         ctx.next_match += 1;
     }
-    assert_eq!(rows, vec![b"bar".to_vec(), b"beque".to_vec(), b"bazil".to_vec(), b"barf".to_vec(), b"bonk".to_vec()]);
+    assert_eq!(
+        rows,
+        vec![
+            b"bar".to_vec(),
+            b"beque".to_vec(),
+            b"bazil".to_vec(),
+            b"barf".to_vec(),
+            b"bonk".to_vec()
+        ]
+    );
 }
 
 #[test]
@@ -419,13 +549,32 @@ fn substr_and_split() {
     let m = cx.mcx();
     use crate::matches::{build_regexp_split_result, regexp_split_setup, regexp_substr};
 
-    let r = regexp_substr(m, b"number of your street, town zip, FR", b"[^,]+", None, Some(2), None, None, C)
-        .unwrap()
-        .unwrap();
+    let r = regexp_substr(
+        m,
+        b"number of your street, town zip, FR",
+        b"[^,]+",
+        None,
+        Some(2),
+        None,
+        None,
+        C,
+    )
+    .unwrap()
+    .unwrap();
     assert_eq!(r.as_slice(), b" town zip");
-    assert!(regexp_substr(m, b"abc", b"x", None, None, None, None, C).unwrap().is_none());
-    assert!(regexp_substr(m, b"abc", b"a(x)?c", None, None, None, Some(1), C).unwrap().is_none());
-    assert!(regexp_substr(m, b"abc", b"a(b)c", None, None, None, Some(2), C).unwrap().is_none());
+    assert!(regexp_substr(m, b"abc", b"x", None, None, None, None, C)
+        .unwrap()
+        .is_none());
+    assert!(
+        regexp_substr(m, b"abc", b"a(x)?c", None, None, None, Some(1), C)
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        regexp_substr(m, b"abc", b"a(b)c", None, None, None, Some(2), C)
+            .unwrap()
+            .is_none()
+    );
 
     let split = |s: &[u8], p: &[u8], f: Option<&[u8]>| -> Vec<Vec<u8>> {
         let mut ctx = regexp_split_setup(m, s, p, f, C, "regexp_split_to_array()").unwrap();
@@ -438,17 +587,25 @@ fn substr_and_split() {
     };
     assert_eq!(
         split(b"the quick brown fox", b"\\s+", None),
-        vec![b"the".to_vec(), b"quick".to_vec(), b"brown".to_vec(), b"fox".to_vec()]
+        vec![
+            b"the".to_vec(),
+            b"quick".to_vec(),
+            b"brown".to_vec(),
+            b"fox".to_vec()
+        ]
     );
     assert_eq!(
         split(b"abc", b"", None),
         vec![b"a".to_vec(), b"b".to_vec(), b"c".to_vec()]
     );
     assert_eq!(split(b"", b",", None), vec![b"".to_vec()]);
-    let err = regexp_split_setup(m, b"x", b"x", Some(b"g"), C, "regexp_split_to_array()").map(|_| ()).unwrap_err();
-    assert!(sqlstate(&err).contains("regexp_split_to_array() does not support the \"global\" option"));
+    let err = regexp_split_setup(m, b"x", b"x", Some(b"g"), C, "regexp_split_to_array()")
+        .map(|_| ())
+        .unwrap_err();
+    assert!(
+        sqlstate(&err).contains("regexp_split_to_array() does not support the \"global\" option")
+    );
 }
-
 
 // regex_engine differential corpus: at engine=auto, classifier-admitted
 // patterns run RE2 in POSIX longest-match mode; every regexp entry point
@@ -649,8 +806,16 @@ fn auto_vs_spencer_differential() {
         "^é?a",
         "^([0-9]{1,3})b",
     ];
-    let incompatible: &[&str] =
-        &[r"(a)\1", r"\w+", r"\bword\b", "a*?", "[[:alpha:]]", r"\d", r"[\d]", "(?i)a"];
+    let incompatible: &[&str] = &[
+        r"(a)\1",
+        r"\w+",
+        r"\bword\b",
+        "a*?",
+        "[[:alpha:]]",
+        r"\d",
+        r"[\d]",
+        "(?i)a",
+    ];
     // Whole-match tier: quantified capture subtrees dispatch for
     // whole-match-only probes but must fall to Spencer for every
     // capture-consuming probe (adversarial find, pinned: RE2-longest and
@@ -667,7 +832,9 @@ fn auto_vs_spencer_differential() {
     for p in compatible {
         regexp_alt::set_regex_engine(regexp_alt::REGEX_ENGINE_AUTO);
         assert!(
-            regexp_alt::dispatch(p.as_bytes(), REG_ADVANCED, b"x").unwrap().is_some(),
+            regexp_alt::dispatch(p.as_bytes(), REG_ADVANCED, b"x")
+                .unwrap()
+                .is_some(),
             "expected {p:?} to dispatch to re2"
         );
         for s in corpus {
@@ -677,7 +844,9 @@ fn auto_vs_spencer_differential() {
     for p in incompatible {
         regexp_alt::set_regex_engine(regexp_alt::REGEX_ENGINE_AUTO);
         assert!(
-            regexp_alt::dispatch(p.as_bytes(), REG_ADVANCED, b"x").unwrap().is_none(),
+            regexp_alt::dispatch(p.as_bytes(), REG_ADVANCED, b"x")
+                .unwrap()
+                .is_none(),
             "expected {p:?} to fail closed to spencer"
         );
         for s in corpus {
@@ -687,7 +856,9 @@ fn auto_vs_spencer_differential() {
 
     for p in whole_match_only {
         regexp_alt::set_regex_engine(regexp_alt::REGEX_ENGINE_AUTO);
-        let re = regexp_alt::dispatch(p.as_bytes(), REG_ADVANCED, b"x").unwrap().unwrap();
+        let re = regexp_alt::dispatch(p.as_bytes(), REG_ADVANCED, b"x")
+            .unwrap()
+            .unwrap();
         assert!(!re.capture_safe(), "expected {p:?} to be whole-match tier");
         for s in corpus {
             assert_engine_parity(m, s.as_bytes(), p.as_bytes());
@@ -700,7 +871,9 @@ fn auto_vs_spencer_differential() {
     // must fail it closed so the error surface stays Spencer's.
     let toobig = "x*y*z*".repeat(1000);
     regexp_alt::set_regex_engine(regexp_alt::REGEX_ENGINE_AUTO);
-    assert!(regexp_alt::dispatch(toobig.as_bytes(), REG_ADVANCED, b"x").unwrap().is_none());
+    assert!(regexp_alt::dispatch(toobig.as_bytes(), REG_ADVANCED, b"x")
+        .unwrap()
+        .is_none());
     assert_engine_parity(m, b"x", toobig.as_bytes());
 }
 
@@ -760,7 +933,9 @@ fn data_adversarial_differential() {
     for p in patterns {
         regexp_alt::set_regex_engine(regexp_alt::REGEX_ENGINE_AUTO);
         assert!(
-            regexp_alt::dispatch(p, REG_ADVANCED, b"clean").unwrap().is_some(),
+            regexp_alt::dispatch(p, REG_ADVANCED, b"clean")
+                .unwrap()
+                .is_some(),
             "expected {:?} to dispatch to re2 on clean subjects",
             String::from_utf8_lossy(p)
         );
@@ -776,7 +951,9 @@ fn data_adversarial_differential() {
     // NUL-bearing patterns classify to Spencer (Spencer's pattern view stops
     // at the NUL; RE2 would compile the full byte string).
     regexp_alt::set_regex_engine(regexp_alt::REGEX_ENGINE_AUTO);
-    assert!(regexp_alt::dispatch(b"a\x00b", REG_ADVANCED, b"clean").unwrap().is_none());
+    assert!(regexp_alt::dispatch(b"a\x00b", REG_ADVANCED, b"clean")
+        .unwrap()
+        .is_none());
     for s in [&b"ab"[..], b"a\x00b", b"a"] {
         assert_engine_parity(m, s, b"a\x00b");
     }
@@ -811,7 +988,12 @@ fn long_haystack_differential() {
         br"^https?://(?:www\.)?([^/]+)/.*$",
         b"e.d",
     ] {
-        for s in [clean.as_bytes(), &nul_deep, &invalid_deep, long_url.as_bytes()] {
+        for s in [
+            clean.as_bytes(),
+            &nul_deep,
+            &invalid_deep,
+            long_url.as_bytes(),
+        ] {
             assert_engine_parity(m, s, p);
         }
     }
@@ -828,7 +1010,10 @@ struct Lcg(u64);
 
 impl Lcg {
     fn next(&mut self, bound: usize) -> usize {
-        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        self.0 = self
+            .0
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         ((self.0 >> 33) as usize) % bound
     }
 }
@@ -889,7 +1074,9 @@ fn gen_pattern(rng: &mut Lcg) -> String {
 
 fn gen_haystack(rng: &mut Lcg) -> String {
     const CHARS: &[char] = &['a', 'b', 'c', '0', '1', '/', ',', ' ', '\n', 'é', 'x'];
-    (0..rng.next(13)).map(|_| CHARS[rng.next(CHARS.len())]).collect()
+    (0..rng.next(13))
+        .map(|_| CHARS[rng.next(CHARS.len())])
+        .collect()
 }
 
 #[test]
@@ -917,7 +1104,10 @@ fn generated_adversarial_parity() {
         }
         assert_engine_parity(m, b"", p.as_bytes());
     }
-    assert!(admitted >= 200, "only {admitted}/300 generated patterns dispatched to re2");
+    assert!(
+        admitted >= 200,
+        "only {admitted}/300 generated patterns dispatched to re2"
+    );
 }
 
 // Dispatch-overhead microbench (run with --ignored --nocapture): the auto

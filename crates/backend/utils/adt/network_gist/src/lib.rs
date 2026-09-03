@@ -95,7 +95,7 @@ pub fn gk_image(family: u8, minbits: i32, commonbits: i32, addr: &[u8]) -> ([u8;
     img[GK_HDR] = family;
     img[GK_HDR + 1] = minbits as u8;
     img[GK_HDR + 2] = commonbits as u8;
-    let nbytes = (commonbits as usize + 7) / 8;
+    let nbytes = (commonbits as usize).div_ceil(8);
     img[GK_ADDR_OFF..GK_ADDR_OFF + nbytes].copy_from_slice(&addr[..nbytes]);
     if commonbits % 8 != 0 {
         img[GK_ADDR_OFF + commonbits as usize / 8] &= !(0xFFu8 >> (commonbits % 8));
@@ -168,11 +168,10 @@ pub fn consistent_internal(key: GkRef<'_>, query: InetRef<'_>, strategy: u16, le
                 return false;
             }
         }
-        INETSTRAT_SUP => {
-            if key.minbits() >= qbits {
+        INETSTRAT_SUP
+            if key.minbits() >= qbits => {
                 return false;
             }
-        }
         _ => {}
     }
 
@@ -180,8 +179,9 @@ pub fn consistent_internal(key: GkRef<'_>, query: InetRef<'_>, strategy: u16, le
     let order = bitncmp(key.addr(), query.addr, minbits);
 
     match strategy {
-        INETSTRAT_SUB | INETSTRAT_SUBEQ | INETSTRAT_OVERLAPS | INETSTRAT_SUPEQ
-        | INETSTRAT_SUP => return order == 0,
+        INETSTRAT_SUB | INETSTRAT_SUBEQ | INETSTRAT_OVERLAPS | INETSTRAT_SUPEQ | INETSTRAT_SUP => {
+            return order == 0
+        }
         INETSTRAT_LT | INETSTRAT_LE => {
             if order > 0 {
                 return false;
@@ -206,11 +206,10 @@ pub fn consistent_internal(key: GkRef<'_>, query: InetRef<'_>, strategy: u16, le
                 return true;
             }
         }
-        INETSTRAT_NE => {
-            if order != 0 || !leaf {
+        INETSTRAT_NE
+            if (order != 0 || !leaf) => {
                 return true;
             }
-        }
         _ => {}
     }
 
@@ -238,11 +237,10 @@ pub fn consistent_internal(key: GkRef<'_>, query: InetRef<'_>, strategy: u16, le
                 return false;
             }
         }
-        INETSTRAT_NE => {
-            if key.minbits() != qbits {
+        INETSTRAT_NE
+            if key.minbits() != qbits => {
                 return true;
             }
-        }
         _ => {}
     }
 
@@ -320,7 +318,8 @@ fn fc_inet_gist_compress(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRe
     }
     let key = if entry.key.as_usize() != 0 {
         // SAFETY: non-null leaf key is an inet varlena (never external).
-        let pv = unsafe { ::types_fmgr::PackedVarlena::from_ptr(entry.key.as_usize() as *const u8) };
+        let pv =
+            unsafe { ::types_fmgr::PackedVarlena::from_ptr(entry.key.as_usize() as *const u8) };
         let ip = InetRef::from_payload(pv.data());
         let mut img = [0u8; 20];
         let len = GK_ADDR_OFF + ip.addrsize();
@@ -328,8 +327,7 @@ fn fc_inet_gist_compress(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRe
         img[GK_HDR] = ip.family;
         img[GK_HDR + 1] = ip.bits;
         img[GK_HDR + 2] = ip.maxbits();
-        img[GK_ADDR_OFF..GK_ADDR_OFF + ip.addrsize()]
-            .copy_from_slice(&ip.addr[..ip.addrsize()]);
+        img[GK_ADDR_OFF..GK_ADDR_OFF + ip.addrsize()].copy_from_slice(&ip.addr[..ip.addrsize()]);
         byref_result(fcinfo.result_mcx(), &img[..len])?
     } else {
         Datum::null()

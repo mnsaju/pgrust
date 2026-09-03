@@ -50,8 +50,18 @@ macro_rules! overflow_fns {
     };
 }
 
-overflow_fns!(pg_add_s16_overflow, pg_sub_s16_overflow, pg_mul_s16_overflow, i16);
-overflow_fns!(pg_add_s32_overflow, pg_sub_s32_overflow, pg_mul_s32_overflow, i32);
+overflow_fns!(
+    pg_add_s16_overflow,
+    pg_sub_s16_overflow,
+    pg_mul_s16_overflow,
+    i16
+);
+overflow_fns!(
+    pg_add_s32_overflow,
+    pg_sub_s32_overflow,
+    pg_mul_s32_overflow,
+    i32
+);
 
 #[inline(always)]
 pub(crate) fn pg_add_s64_overflow(a: i64, b: i64, result: &mut i64) -> bool {
@@ -160,7 +170,7 @@ pub fn buildint2vector<'mcx>(mcx: Mcx<'mcx>, int2s: &[i16]) -> PgResult<PgVec<'m
         core::ptr::copy_nonoverlapping(
             int2s.as_ptr().cast::<u8>(),
             p.add(INT2VECTOR_HDRSZ),
-            n * core::mem::size_of::<i16>(),
+            std::mem::size_of_val(int2s),
         );
         v.set_len(size);
     }
@@ -209,7 +219,11 @@ fn strtol_base10(s: &[u8]) -> (i64, usize) {
         return (0, 0);
     }
     let val = if overflow {
-        if neg { i64::MIN } else { i64::MAX }
+        if neg {
+            i64::MIN
+        } else {
+            i64::MAX
+        }
     } else if neg {
         -acc
     } else {
@@ -335,7 +349,7 @@ pub fn i2toi4(arg1: i16) -> i32 {
 
 #[inline]
 pub fn i4toi2(arg1: i32) -> PgResult<i16> {
-    if arg1 < SHRT_MIN || arg1 > SHRT_MAX {
+    if !(SHRT_MIN..=SHRT_MAX).contains(&arg1) {
         return Err(smallint_out_of_range());
     }
     Ok(arg1 as i16)
@@ -348,7 +362,11 @@ pub fn int4_bool(arg: i32) -> bool {
 
 #[inline]
 pub fn bool_int4(arg: bool) -> i32 {
-    if arg { 1 } else { 0 }
+    if arg {
+        1
+    } else {
+        0
+    }
 }
 
 macro_rules! cmp_ops {
@@ -396,7 +414,13 @@ pub fn in_range_int4_int4(
     Ok(if less { val <= sum } else { val >= sum })
 }
 
-pub fn in_range_int4_int2(val: i32, base: i32, offset: i16, sub: bool, less: bool) -> PgResult<bool> {
+pub fn in_range_int4_int2(
+    val: i32,
+    base: i32,
+    offset: i16,
+    sub: bool,
+    less: bool,
+) -> PgResult<bool> {
     in_range_int4_int4(val, base, offset as i32, sub, less)
 }
 
@@ -444,11 +468,23 @@ pub fn in_range_int2_int4(
     Ok(if less { val <= sum } else { val >= sum })
 }
 
-pub fn in_range_int2_int2(val: i16, base: i16, offset: i16, sub: bool, less: bool) -> PgResult<bool> {
+pub fn in_range_int2_int2(
+    val: i16,
+    base: i16,
+    offset: i16,
+    sub: bool,
+    less: bool,
+) -> PgResult<bool> {
     in_range_int2_int4(val, base, offset as i32, sub, less)
 }
 
-pub fn in_range_int2_int8(val: i16, base: i16, offset: i64, sub: bool, less: bool) -> PgResult<bool> {
+pub fn in_range_int2_int8(
+    val: i16,
+    base: i16,
+    offset: i64,
+    sub: bool,
+    less: bool,
+) -> PgResult<bool> {
     in_range_int4_int8(val as i32, base as i32, offset, sub, less)
 }
 
@@ -740,22 +776,38 @@ pub fn int4lcm(arg1: i32, arg2: i32) -> PgResult<i32> {
 
 #[inline]
 pub fn int2larger(arg1: i16, arg2: i16) -> i16 {
-    if arg1 > arg2 { arg1 } else { arg2 }
+    if arg1 > arg2 {
+        arg1
+    } else {
+        arg2
+    }
 }
 
 #[inline]
 pub fn int2smaller(arg1: i16, arg2: i16) -> i16 {
-    if arg1 < arg2 { arg1 } else { arg2 }
+    if arg1 < arg2 {
+        arg1
+    } else {
+        arg2
+    }
 }
 
 #[inline]
 pub fn int4larger(arg1: i32, arg2: i32) -> i32 {
-    if arg1 > arg2 { arg1 } else { arg2 }
+    if arg1 > arg2 {
+        arg1
+    } else {
+        arg2
+    }
 }
 
 #[inline]
 pub fn int4smaller(arg1: i32, arg2: i32) -> i32 {
-    if arg1 < arg2 { arg1 } else { arg2 }
+    if arg1 < arg2 {
+        arg1
+    } else {
+        arg2
+    }
 }
 
 #[inline]

@@ -33,13 +33,21 @@ oid_cmp_ops! {
 /// `oidlarger` (oid.c): the greater of two OIDs.
 #[inline]
 pub fn oidlarger(arg1: Oid, arg2: Oid) -> Oid {
-    if arg1 > arg2 { arg1 } else { arg2 }
+    if arg1 > arg2 {
+        arg1
+    } else {
+        arg2
+    }
 }
 
 /// `oidsmaller` (oid.c): the lesser of two OIDs.
 #[inline]
 pub fn oidsmaller(arg1: Oid, arg2: Oid) -> Oid {
-    if arg1 < arg2 { arg1 } else { arg2 }
+    if arg1 < arg2 {
+        arg1
+    } else {
+        arg2
+    }
 }
 
 /// `xidout` (xid.c) into a caller buffer; returns the byte length.
@@ -167,7 +175,10 @@ pub fn tidin(s: &[u8]) -> Option<Tid> {
     if s.get(coord[1] + used) != Some(&b')') || cvt > u16::MAX as u64 {
         return None;
     }
-    Some(Tid { block, offset: cvt as u16 })
+    Some(Tid {
+        block,
+        offset: cvt as u16,
+    })
 }
 
 pub fn tidout(tid: Tid, buf: &mut [u8]) -> usize {

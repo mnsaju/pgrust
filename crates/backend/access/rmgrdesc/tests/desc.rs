@@ -9,7 +9,10 @@ fn record_with(info: u8, data: &[u8]) -> XLogReaderState {
     rec.xl_info = info;
     rec.main_data = data.as_ptr();
     rec.main_data_len = data.len() as u32;
-    XLogReaderState { record: Some(rec), ..Default::default() }
+    XLogReaderState {
+        record: Some(rec),
+        ..Default::default()
+    }
 }
 
 fn run(desc: rmgr::RmDesc, info: u8, data: &[u8]) -> String {
@@ -30,7 +33,10 @@ fn clog_truncate() {
     d.extend_from_slice(&7i64.to_ne_bytes());
     d.extend_from_slice(&le32(100));
     d.extend_from_slice(&le32(1));
-    assert_eq!(run(rmgrdesc::clogdesc::clog_desc, 0x10, &d), "page 7; oldestXact 100");
+    assert_eq!(
+        run(rmgrdesc::clogdesc::clog_desc, 0x10, &d),
+        "page 7; oldestXact 100"
+    );
     assert_eq!(rmgrdesc::clogdesc::clog_identify(0x10), Some("TRUNCATE"));
 }
 
@@ -89,7 +95,10 @@ fn dbase_records() {
     d.extend_from_slice(&le32(2)); // ntablespaces
     d.extend_from_slice(&le32(1663));
     d.extend_from_slice(&le32(1665));
-    assert_eq!(run(rmgrdesc::dbasedesc::dbase_desc, 0x20, &d), "dir 1663/16384 1665/16384");
+    assert_eq!(
+        run(rmgrdesc::dbasedesc::dbase_desc, 0x20, &d),
+        "dir 1663/16384 1665/16384"
+    );
 }
 
 #[test]
@@ -97,7 +106,10 @@ fn tblspc_create() {
     let mut d = vec![];
     d.extend_from_slice(&le32(16385));
     d.extend_from_slice(b"/tmp/ts1\0");
-    assert_eq!(run(rmgrdesc::tblspcdesc::tblspc_desc, 0x00, &d), "16385 \"/tmp/ts1\"");
+    assert_eq!(
+        run(rmgrdesc::tblspcdesc::tblspc_desc, 0x00, &d),
+        "16385 \"/tmp/ts1\""
+    );
     assert_eq!(
         run(rmgrdesc::tblspcdesc::tblspc_desc, 0x10, &le32(16385)),
         "16385"
@@ -110,7 +122,10 @@ fn seq_log() {
     for v in [1663u32, 5, 16390] {
         d.extend_from_slice(&le32(v));
     }
-    assert_eq!(run(rmgrdesc::seqdesc::seq_desc, 0x00, &d), "rel 1663/5/16390");
+    assert_eq!(
+        run(rmgrdesc::seqdesc::seq_desc, 0x00, &d),
+        "rel 1663/5/16390"
+    );
     assert_eq!(rmgrdesc::seqdesc::seq_identify(0x00), Some("LOG"));
 }
 
@@ -126,7 +141,10 @@ fn generic_pages() {
         run(rmgrdesc::genericdesc::generic_desc, 0x00, &d),
         "offset 24, length 2; offset 96, length 0"
     );
-    assert_eq!(rmgrdesc::genericdesc::generic_identify(0xFF), Some("Generic"));
+    assert_eq!(
+        rmgrdesc::genericdesc::generic_identify(0xFF),
+        Some("Generic")
+    );
 }
 
 #[test]
@@ -179,7 +197,10 @@ fn hash_vacuum_one_page() {
         run(rmgrdesc::hashdesc::hash_desc, 0xC0, &d),
         "ntuples 3, snapshotConflictHorizon 555, isCatalogRel T"
     );
-    assert_eq!(rmgrdesc::hashdesc::hash_identify(0xC0), Some("VACUUM_ONE_PAGE"));
+    assert_eq!(
+        rmgrdesc::hashdesc::hash_identify(0xC0),
+        Some("VACUUM_ONE_PAGE")
+    );
 }
 
 #[test]
@@ -193,9 +214,15 @@ fn hash_split_allocate_page() {
         run(rmgrdesc::hashdesc::hash_desc, 0x40, &d),
         "new_bucket 7, meta_page_masks_updated T, issplitpoint_changed T"
     );
-    assert_eq!(rmgrdesc::hashdesc::hash_identify(0x40), Some("SPLIT_ALLOCATE_PAGE"));
+    assert_eq!(
+        rmgrdesc::hashdesc::hash_identify(0x40),
+        Some("SPLIT_ALLOCATE_PAGE")
+    );
     assert_eq!(rmgrdesc::hashdesc::hash_identify(0x50), Some("SPLIT_PAGE"));
-    assert_eq!(rmgrdesc::hashdesc::hash_identify(0xA0), Some("SPLIT_CLEANUP"));
+    assert_eq!(
+        rmgrdesc::hashdesc::hash_identify(0xA0),
+        Some("SPLIT_CLEANUP")
+    );
 }
 
 #[test]
@@ -209,7 +236,10 @@ fn hash_init_meta_page() {
         run(rmgrdesc::hashdesc::hash_desc, 0x00, &d),
         "num_tuples 100, fillfactor 75"
     );
-    assert_eq!(rmgrdesc::hashdesc::hash_identify(0x00), Some("INIT_META_PAGE"));
+    assert_eq!(
+        rmgrdesc::hashdesc::hash_identify(0x00),
+        Some("INIT_META_PAGE")
+    );
 }
 
 #[test]
@@ -242,14 +272,20 @@ fn gist_delete_and_page_reuse() {
 fn gist_page_split_and_delete() {
     let mut d = vec![0u8; 24];
     d[18..20].copy_from_slice(&4u16.to_ne_bytes()); // npage
-    assert_eq!(run(rmgrdesc::gistdesc::gist_desc, 0x30, &d), "page_split: splits to 4 pages");
+    assert_eq!(
+        run(rmgrdesc::gistdesc::gist_desc, 0x30, &d),
+        "page_split: splits to 4 pages"
+    );
     assert_eq!(rmgrdesc::gistdesc::gist_identify(0x30), Some("PAGE_SPLIT"));
 
     let mut d = vec![];
     let delete_xid: u64 = (2u64 << 32) | 55u64;
     d.extend_from_slice(&delete_xid.to_ne_bytes());
     d.extend_from_slice(&9u16.to_ne_bytes());
-    assert_eq!(run(rmgrdesc::gistdesc::gist_desc, 0x60, &d), "deleteXid 2:55; downlink 9");
+    assert_eq!(
+        run(rmgrdesc::gistdesc::gist_desc, 0x60, &d),
+        "deleteXid 2:55; downlink 9"
+    );
     assert_eq!(rmgrdesc::gistdesc::gist_identify(0x60), Some("PAGE_DELETE"));
 
     assert_eq!(run(rmgrdesc::gistdesc::gist_desc, 0x00, &[]), "");
@@ -269,13 +305,23 @@ fn replorigin_set_and_drop() {
         run(rmgrdesc::replorigindesc::replorigin_desc, 0x00, &d),
         "set 3; lsn 1/2C; force: 1"
     );
-    assert_eq!(rmgrdesc::replorigindesc::replorigin_identify(0x00), Some("SET"));
+    assert_eq!(
+        rmgrdesc::replorigindesc::replorigin_identify(0x00),
+        Some("SET")
+    );
 
     assert_eq!(
-        run(rmgrdesc::replorigindesc::replorigin_desc, 0x10, &7u16.to_ne_bytes()),
+        run(
+            rmgrdesc::replorigindesc::replorigin_desc,
+            0x10,
+            &7u16.to_ne_bytes()
+        ),
         "drop 7"
     );
-    assert_eq!(rmgrdesc::replorigindesc::replorigin_identify(0x10), Some("DROP"));
+    assert_eq!(
+        rmgrdesc::replorigindesc::replorigin_identify(0x10),
+        Some("DROP")
+    );
 
     // C divergence: replorigin_identify does not mask XLR_INFO_MASK bits.
     assert_eq!(rmgrdesc::replorigindesc::replorigin_identify(0x01), None);
@@ -297,7 +343,10 @@ fn logicalmsg_transactional_and_not() {
         run(rmgrdesc::logicalmsgdesc::logicalmsg_desc, 0x00, &d),
         "transactional, prefix \"myprefix\"; payload (5 bytes): 68 65 6C 6C 6F"
     );
-    assert_eq!(rmgrdesc::logicalmsgdesc::logicalmsg_identify(0x00), Some("MESSAGE"));
+    assert_eq!(
+        rmgrdesc::logicalmsgdesc::logicalmsg_identify(0x00),
+        Some("MESSAGE")
+    );
 
     d[4] = 0; // non-transactional
     assert_eq!(
@@ -309,7 +358,8 @@ fn logicalmsg_transactional_and_not() {
 #[test]
 fn gin_split_and_delete_listpage() {
     let mut d = vec![0u8; 26];
-    d[24..26].copy_from_slice(&(gin_vocab::GIN_SPLIT_ROOT | gin_vocab::GIN_INSERT_ISDATA).to_ne_bytes());
+    d[24..26]
+        .copy_from_slice(&(gin_vocab::GIN_SPLIT_ROOT | gin_vocab::GIN_INSERT_ISDATA).to_ne_bytes());
     assert_eq!(
         run(rmgrdesc::gindesc::gin_desc, 0x30, &d),
         "isrootsplit: T isdata: T isleaf: F"
@@ -319,7 +369,10 @@ fn gin_split_and_delete_listpage() {
     let mut d = vec![0u8; 56 + 4];
     d[56..60].copy_from_slice(&le32(3));
     assert_eq!(run(rmgrdesc::gindesc::gin_desc, 0x80, &d), "ndeleted: 3");
-    assert_eq!(rmgrdesc::gindesc::gin_identify(0x80), Some("DELETE_LISTPAGE"));
+    assert_eq!(
+        rmgrdesc::gindesc::gin_identify(0x80),
+        Some("DELETE_LISTPAGE")
+    );
 
     assert_eq!(run(rmgrdesc::gindesc::gin_desc, 0x10, &[]), "");
     assert_eq!(rmgrdesc::gindesc::gin_identify(0x10), Some("CREATE_PTREE"));

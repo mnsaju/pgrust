@@ -5,7 +5,9 @@ use adt_acl::{
     ACL_NO_RIGHTS,
 };
 use cache_syscache::cacheinfo::DEFACLROLENSPOBJ;
-use cache_syscache::{ReleaseSysCache, SearchSysCache3, SysCacheGetAttr, SysCacheGetAttrNotNull, SysCacheKey};
+use cache_syscache::{
+    ReleaseSysCache, SearchSysCache3, SysCacheGetAttr, SysCacheGetAttrNotNull, SysCacheKey,
+};
 use datum::Datum;
 use mcx::{Mcx, PgVec};
 use types_core::{AttrNumber, InvalidOid, Oid, NAMESPACE_RELATION_ID};
@@ -13,9 +15,7 @@ use types_error::{
     PgError, PgResult, ERRCODE_INSUFFICIENT_PRIVILEGE, ERRCODE_INVALID_GRANT_OPERATION,
     ERRCODE_SYNTAX_ERROR,
 };
-use types_nodes::parsenodes::{
-    AlterDefaultPrivilegesStmt, DropBehavior, ObjectType, RoleSpecType,
-};
+use types_nodes::parsenodes::{AlterDefaultPrivilegesStmt, DropBehavior, ObjectType, RoleSpecType};
 use types_rel::RowExclusiveLock;
 
 use crate::grant::{
@@ -24,13 +24,13 @@ use crate::grant::{
 use crate::with_acl_datum;
 
 pub const DefaultAclRelationId: Oid = 826;
-pub const DefaultAclOidIndexId: Oid = 828;
-const Anum_pg_default_acl_oid: AttrNumber = 1;
-const Anum_pg_default_acl_defaclrole: AttrNumber = 2;
-const Anum_pg_default_acl_defaclnamespace: AttrNumber = 3;
-const Anum_pg_default_acl_defaclobjtype: AttrNumber = 4;
-const Anum_pg_default_acl_defaclacl: AttrNumber = 5;
-const Natts_pg_default_acl: usize = 5;
+pub const DEFAULT_ACL_OID_INDEX_ID: Oid = 828;
+const ANUM_PG_DEFAULT_ACL_OID: AttrNumber = 1;
+const ANUM_PG_DEFAULT_ACL_DEFACLROLE: AttrNumber = 2;
+const ANUM_PG_DEFAULT_ACL_DEFACLNAMESPACE: AttrNumber = 3;
+const ANUM_PG_DEFAULT_ACL_DEFACLOBJTYPE: AttrNumber = 4;
+const ANUM_PG_DEFAULT_ACL_DEFACLACL: AttrNumber = 5;
+const NATTS_PG_DEFAULT_ACL: usize = 5;
 
 const DEFACLOBJ_RELATION: u8 = b'r';
 const DEFACLOBJ_SEQUENCE: u8 = b'S';
@@ -60,7 +60,9 @@ pub fn ExecAlterDefaultPrivilegesStmt<'mcx>(
     mcx: Mcx<'mcx>,
     stmt: &AlterDefaultPrivilegesStmt<'_>,
 ) -> PgResult<()> {
-    let action = stmt.action.expect("AlterDefaultPrivilegesStmt without action");
+    let action = stmt
+        .action
+        .expect("AlterDefaultPrivilegesStmt without action");
 
     let mut dnspnames = None;
     let mut drolespecs = None;
@@ -69,13 +71,19 @@ pub fn ExecAlterDefaultPrivilegesStmt<'mcx>(
         match defel.defname.unwrap_or("") {
             "schemas" => {
                 if dnspnames.is_some() {
-                    return Err(err("conflicting or redundant options".into(), ERRCODE_SYNTAX_ERROR));
+                    return Err(err(
+                        "conflicting or redundant options".into(),
+                        ERRCODE_SYNTAX_ERROR,
+                    ));
                 }
                 dnspnames = defel.arg;
             }
             "roles" => {
                 if drolespecs.is_some() {
-                    return Err(err("conflicting or redundant options".into(), ERRCODE_SYNTAX_ERROR));
+                    return Err(err(
+                        "conflicting or redundant options".into(),
+                        ERRCODE_SYNTAX_ERROR,
+                    ));
                 }
                 drolespecs = defel.arg;
             }
@@ -139,11 +147,16 @@ pub fn ExecAlterDefaultPrivilegesStmt<'mcx>(
                     ERRCODE_INVALID_GRANT_OPERATION,
                 ));
             }
-            let priv_name = privnode.priv_name.expect("AccessPriv node must specify privilege");
+            let priv_name = privnode
+                .priv_name
+                .expect("AccessPriv node must specify privilege");
             let privilege = string_to_privilege(priv_name)?;
             if privilege & !all_privileges != 0 {
                 return Err(err(
-                    format!("invalid privilege type {} for {what}", privilege_to_string(privilege)),
+                    format!(
+                        "invalid privilege type {} for {what}",
+                        privilege_to_string(privilege)
+                    ),
                     ERRCODE_INVALID_GRANT_OPERATION,
                 ));
             }
@@ -203,8 +216,8 @@ pub(crate) fn remove_role_from_default_acl<'mcx>(
     use types_rel::AccessShareLock;
 
     let rel = table::table_open(mcx, DefaultAclRelationId, AccessShareLock)?;
-    let skey = [pg_largeobject::oid_key(Anum_pg_default_acl_oid, objid)];
-    let mut scan = genam::systable_beginscan(mcx, &rel, DefaultAclOidIndexId, true, None, &skey)?;
+    let skey = [pg_largeobject::oid_key(ANUM_PG_DEFAULT_ACL_OID, objid)];
+    let mut scan = genam::systable_beginscan(mcx, &rel, DEFAULT_ACL_OID_INDEX_ID, true, None, &skey)?;
     let Some(tuple) = genam::systable_getnext(mcx, &mut scan)? else {
         return Err(Box::new(PgError::error(format!(
             "could not find tuple for default ACL {objid}"
@@ -219,21 +232,21 @@ pub(crate) fn remove_role_from_default_acl<'mcx>(
         (
             types_tuple::heap_getattr(
                 tuple,
-                Anum_pg_default_acl_defaclrole as i32,
+                ANUM_PG_DEFAULT_ACL_DEFACLROLE as i32,
                 desc,
                 &mut isnull,
             )
             .as_oid(),
             types_tuple::heap_getattr(
                 tuple,
-                Anum_pg_default_acl_defaclnamespace as i32,
+                ANUM_PG_DEFAULT_ACL_DEFACLNAMESPACE as i32,
                 desc,
                 &mut isnull,
             )
             .as_oid(),
             types_tuple::heap_getattr(
                 tuple,
-                Anum_pg_default_acl_defaclobjtype as i32,
+                ANUM_PG_DEFAULT_ACL_DEFACLOBJTYPE as i32,
                 desc,
                 &mut isnull,
             )
@@ -358,8 +371,11 @@ fn SetDefaultACL<'mcx>(mcx: Mcx<'mcx>, iacls: &InternalDefaultACL<'_>) -> PgResu
 
     let mut old_acl: Option<PgVec<'mcx, AclItem>> = None;
     if let Some(tuple) = &tuple {
-        let (acl_datum, is_null) =
-            SysCacheGetAttr(DEFACLROLENSPOBJ, tuple, Anum_pg_default_acl_defaclacl as i32)?;
+        let (acl_datum, is_null) = SysCacheGetAttr(
+            DEFACLROLENSPOBJ,
+            tuple,
+            ANUM_PG_DEFAULT_ACL_DEFACLACL as i32,
+        )?;
         if !is_null {
             old_acl = Some(with_acl_datum(acl_datum, |acl| adt_acl::aclcopy(mcx, acl))?);
         }
@@ -396,7 +412,7 @@ fn SetDefaultACL<'mcx>(mcx: Mcx<'mcx>, iacls: &InternalDefaultACL<'_>) -> PgResu
         if !is_new {
             let tuple = tuple.as_ref().expect("tracked pg_default_acl row");
             let defacl_oid =
-                SysCacheGetAttrNotNull(DEFACLROLENSPOBJ, tuple, Anum_pg_default_acl_oid as i32)?
+                SysCacheGetAttrNotNull(DEFACLROLENSPOBJ, tuple, ANUM_PG_DEFAULT_ACL_OID as i32)?
                     .as_oid();
             dependency_seams::perform_deletion::call(
                 mcx,
@@ -408,9 +424,9 @@ fn SetDefaultACL<'mcx>(mcx: Mcx<'mcx>, iacls: &InternalDefaultACL<'_>) -> PgResu
             )?;
         }
     } else {
-        let mut values = [Datum::null(); Natts_pg_default_acl];
-        let mut nulls = [false; Natts_pg_default_acl];
-        let mut replaces = [false; Natts_pg_default_acl];
+        let mut values = [Datum::null(); NATTS_PG_DEFAULT_ACL];
+        let nulls = [false; NATTS_PG_DEFAULT_ACL];
+        let mut replaces = [false; NATTS_PG_DEFAULT_ACL];
         let acl_img = acl_image(mcx, &new_acl)?;
         let defacl_oid;
 
@@ -418,27 +434,25 @@ fn SetDefaultACL<'mcx>(mcx: Mcx<'mcx>, iacls: &InternalDefaultACL<'_>) -> PgResu
             defacl_oid = catalog::GetNewOidWithIndex(
                 mcx,
                 &rel,
-                DefaultAclOidIndexId,
-                Anum_pg_default_acl_oid,
+                DEFAULT_ACL_OID_INDEX_ID,
+                ANUM_PG_DEFAULT_ACL_OID,
             )?;
-            values[Anum_pg_default_acl_oid as usize - 1] = Datum::from_oid(defacl_oid);
-            values[Anum_pg_default_acl_defaclrole as usize - 1] = Datum::from_oid(iacls.roleid);
-            values[Anum_pg_default_acl_defaclnamespace as usize - 1] =
-                Datum::from_oid(iacls.nspid);
-            values[Anum_pg_default_acl_defaclobjtype as usize - 1] =
-                Datum::from_i8(objtype as i8);
-            values[Anum_pg_default_acl_defaclacl as usize - 1] =
+            values[ANUM_PG_DEFAULT_ACL_OID as usize - 1] = Datum::from_oid(defacl_oid);
+            values[ANUM_PG_DEFAULT_ACL_DEFACLROLE as usize - 1] = Datum::from_oid(iacls.roleid);
+            values[ANUM_PG_DEFAULT_ACL_DEFACLNAMESPACE as usize - 1] = Datum::from_oid(iacls.nspid);
+            values[ANUM_PG_DEFAULT_ACL_DEFACLOBJTYPE as usize - 1] = Datum::from_i8(objtype as i8);
+            values[ANUM_PG_DEFAULT_ACL_DEFACLACL as usize - 1] =
                 Datum::from_usize(acl_img.as_ptr() as usize);
             let mut newtuple = heaptuple::heap_form_tuple(mcx, rel.descr(), &values, &nulls)?;
             catalog_indexing::CatalogTupleInsert(mcx, &rel, &mut newtuple)?;
         } else {
             let tuple = tuple.as_ref().expect("tracked pg_default_acl row");
             defacl_oid =
-                SysCacheGetAttrNotNull(DEFACLROLENSPOBJ, tuple, Anum_pg_default_acl_oid as i32)?
+                SysCacheGetAttrNotNull(DEFACLROLENSPOBJ, tuple, ANUM_PG_DEFAULT_ACL_OID as i32)?
                     .as_oid();
-            values[Anum_pg_default_acl_defaclacl as usize - 1] =
+            values[ANUM_PG_DEFAULT_ACL_DEFACLACL as usize - 1] =
                 Datum::from_usize(acl_img.as_ptr() as usize);
-            replaces[Anum_pg_default_acl_defaclacl as usize - 1] = true;
+            replaces[ANUM_PG_DEFAULT_ACL_DEFACLACL as usize - 1] = true;
             let mut newtuple = heaptuple::heap_modify_tuple(
                 mcx,
                 &tuple.tuple(),
@@ -452,7 +466,12 @@ fn SetDefaultACL<'mcx>(mcx: Mcx<'mcx>, iacls: &InternalDefaultACL<'_>) -> PgResu
         }
 
         if is_new {
-            pg_depend::recordDependencyOnOwner(mcx, DefaultAclRelationId, defacl_oid, iacls.roleid)?;
+            pg_depend::recordDependencyOnOwner(
+                mcx,
+                DefaultAclRelationId,
+                defacl_oid,
+                iacls.roleid,
+            )?;
             if iacls.nspid != InvalidOid {
                 let myself = pg_depend::ObjectAddress {
                     classId: DefaultAclRelationId,
@@ -521,8 +540,11 @@ fn get_default_acl_internal<'mcx>(
     else {
         return Ok(None);
     };
-    let (acl_datum, is_null) =
-        SysCacheGetAttr(DEFACLROLENSPOBJ, &tuple, Anum_pg_default_acl_defaclacl as i32)?;
+    let (acl_datum, is_null) = SysCacheGetAttr(
+        DEFACLROLENSPOBJ,
+        &tuple,
+        ANUM_PG_DEFAULT_ACL_DEFACLACL as i32,
+    )?;
     let result = if is_null {
         None
     } else {

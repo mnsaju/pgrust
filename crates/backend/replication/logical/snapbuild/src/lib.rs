@@ -17,13 +17,11 @@ use types_core::{
     TransactionId, TransactionIdFollows, TransactionIdFollowsOrEquals, TransactionIdIsNormal,
     TransactionIdIsValid, TransactionIdPrecedes, TransactionIdPrecedesOrEquals, XLogRecPtr,
 };
-use xact::XACT_XINFO_HAS_INVALS;
 use types_error::{ErrorLocation, PgResult, DEBUG1, DEBUG2, DEBUG3, ERROR, LOG};
 use types_snapshot::{SnapshotData, SNAPSHOT_HISTORIC_MVCC};
+use xact::XACT_XINFO_HAS_INVALS;
 
-pub use ondisk::{
-    SnapBuildOnDisk, PG_LOGICAL_SNAPSHOTS_DIR, SNAPBUILD_MAGIC, SNAPBUILD_VERSION,
-};
+pub use ondisk::{SnapBuildOnDisk, PG_LOGICAL_SNAPSHOTS_DIR, SNAPBUILD_MAGIC, SNAPBUILD_VERSION};
 
 #[cold]
 #[inline(never)]
@@ -244,7 +242,10 @@ impl SnapBuild {
         // Don't allow older snapshots: about to overwrite MyProc->xmin.
         snapmgr::InvalidateCatalogSnapshot();
         if snapmgr::HaveRegisteredOrActiveSnapshot() {
-            elog(ERROR, "cannot build an initial slot snapshot when snapshots exist")?;
+            elog(
+                ERROR,
+                "cannot build an initial slot snapshot when snapshots exist",
+            )?;
             unreachable!();
         }
 
@@ -461,7 +462,10 @@ impl SnapBuild {
                 ),
             )?;
 
-            let snap = self.snapshot.clone().expect("distributing a built snapshot");
+            let snap = self
+                .snapshot
+                .clone()
+                .expect("distributing a built snapshot");
             rb.add_snapshot(txn_xid, lsn, snap)?;
 
             if txn_xid != xid && !msgs.is_empty() {
@@ -768,10 +772,7 @@ impl SnapBuild {
                 .finish(loc("SnapBuildFindSnapshot"))?;
 
             return Ok(false);
-        } else if !self.building_full_snapshot
-            && !self.in_slot_creation
-            && self.restore(rb, lsn)?
-        {
+        } else if !self.building_full_snapshot && !self.in_slot_creation && self.restore(rb, lsn)? {
             return Ok(false);
         } else if self.state == Start {
             self.state = Building;
@@ -932,7 +933,11 @@ impl SnapBuild {
         if unsafe { libc::write(fd_, image.as_ptr().cast(), image.len()) } != image.len() as isize {
             let save_errno = errno::current_errno();
             fd::CloseTransientFile(fd_);
-            let save_errno = if save_errno != 0 { save_errno } else { libc::ENOSPC };
+            let save_errno = if save_errno != 0 {
+                save_errno
+            } else {
+                libc::ENOSPC
+            };
             return ereport(ERROR)
                 .with_saved_errno(save_errno)
                 .errcode_for_file_access()
@@ -1040,7 +1045,10 @@ pub fn snap_build_clear_exported_snapshot() -> PgResult<()> {
         return Ok(());
     }
     if !xact::IsTransactionState() {
-        elog(ERROR, "clearing exported snapshot in wrong transaction state")?;
+        elog(
+            ERROR,
+            "clearing exported snapshot in wrong transaction state",
+        )?;
     }
     // AbortCurrentTransaction takes care of resetting the snapshot state
     // (and, in this port, the resource owner C restores by hand).

@@ -3,7 +3,7 @@ use ::types_core::Oid;
 use ::types_error::PgResult;
 use ::types_fmgr::{FmgrBuiltin, FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFunction};
 
-fn arg_text<'a>(fcinfo: &'a Fcinfo, i: usize) -> PgResult<&'a [u8]> {
+fn arg_text(fcinfo: &Fcinfo, i: usize) -> PgResult<&[u8]> {
     // SAFETY: strict text arg is a non-null live varlena.
     let pv = unsafe { fcinfo.arg_varlena_packed(i) }?;
     if pv.is_short() {
@@ -26,7 +26,14 @@ fn fc_gin_cmp_prefix(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 pub const TSGINIDX_BUILTINS: &[FmgrBuiltin] = &[

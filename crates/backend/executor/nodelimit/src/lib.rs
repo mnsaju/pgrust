@@ -89,7 +89,10 @@ pub fn exec_init_limit<'mcx>(
     let params = estate.param_bind();
     let mut limitOffset = ::execexpr::exec_init_expr(mcx, node.limitOffset, params)?;
     let mut limitCount = ::execexpr::exec_init_expr(mcx, node.limitCount, params)?;
-    for st in [limitOffset.as_mut(), limitCount.as_mut()].into_iter().flatten() {
+    for st in [limitOffset.as_mut(), limitCount.as_mut()]
+        .into_iter()
+        .flatten()
+    {
         // C recomputes LIMIT/OFFSET in ps_ExprContext's per-tuple memory;
         // by-ref intermediates ride the armed result mcx.
         // SAFETY: the ExprContext outlives the programs (same estate).
@@ -425,9 +428,7 @@ pub fn lane_limit_feed(node: &mut LimitState<'_>, slot: ExecSlotId) -> LaneLimit
 /// True once the window is complete: C's next ExecLimit call would flip to
 /// LIMIT_WINDOWEND and return NULL without pulling the child.
 pub fn lane_limit_window_done(node: &LimitState<'_>) -> bool {
-    node.lstate == LIMIT_INWINDOW
-        && !node.noCount
-        && node.position - node.offset >= node.count
+    node.lstate == LIMIT_INWINDOW && !node.noCount && node.position - node.offset >= node.count
 }
 
 /// The deferred LIMIT_WINDOWEND flip — the `Finished` half of the lane's
@@ -441,7 +442,11 @@ pub fn lane_limit_end_window(node: &mut LimitState<'_>) {
 /// (LIMIT_RESCAN → LIMIT_EMPTY; LIMIT_INWINDOW → LIMIT_SUBPLANEOF).
 pub fn lane_limit_eof(node: &mut LimitState<'_>) {
     debug_assert!(matches!(node.lstate, LIMIT_RESCAN | LIMIT_INWINDOW));
-    node.lstate = if node.lstate == LIMIT_RESCAN { LIMIT_EMPTY } else { LIMIT_SUBPLANEOF };
+    node.lstate = if node.lstate == LIMIT_RESCAN {
+        LIMIT_EMPTY
+    } else {
+        LIMIT_SUBPLANEOF
+    };
 }
 
 /// `ExecReScanLimit` minus the outer rescan (caller rescans the child after,

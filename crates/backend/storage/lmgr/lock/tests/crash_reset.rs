@@ -8,9 +8,7 @@ use std::sync::{Condvar, Mutex, OnceLock};
 use init_small::globals as g;
 use types_core::BackendType;
 use types_error::PgError;
-use types_storage::lock::{
-    AccessExclusiveLock, DeadLockState, ShareLock, LOCKACQUIRE_OK, LOCKTAG,
-};
+use types_storage::lock::{AccessExclusiveLock, DeadLockState, ShareLock, LOCKACQUIRE_OK, LOCKTAG};
 
 const TESTDB: u32 = 7777;
 const MAX_CONNECTIONS: i32 = 8;
@@ -27,8 +25,7 @@ const CFG: lmgr_proc::ProcGlobalConfig = lmgr_proc::ProcGlobalConfig {
 static NEXT_PID: AtomicI32 = AtomicI32::new(9100);
 
 fn semas() -> &'static (Mutex<HashMap<types_core::ProcNumber, i32>>, Condvar) {
-    static SEMS: OnceLock<(Mutex<HashMap<types_core::ProcNumber, i32>>, Condvar)> =
-        OnceLock::new();
+    static SEMS: OnceLock<(Mutex<HashMap<types_core::ProcNumber, i32>>, Condvar)> = OnceLock::new();
     SEMS.get_or_init(|| (Mutex::new(HashMap::new()), Condvar::new()))
 }
 
@@ -110,7 +107,10 @@ fn setup() {
     deadlock_seams::init_dead_lock_checking::set(|| Ok(()));
     deadlock_seams::dead_lock_check::set(|_| DeadLockState::NoDeadLock);
     deadlock_seams::dead_lock_report::set(|| {
-        Err(Box::new(PgError::new(types_error::ERROR, "deadlock detected")))
+        Err(Box::new(PgError::new(
+            types_error::ERROR,
+            "deadlock detected",
+        )))
     });
     deadlock_seams::remember_simple_deadlock::set(|_, _, _, _| {});
     deadlock_seams::get_blocking_autovacuum_procno::set(|| None);
@@ -153,8 +153,8 @@ fn become_backend() {
         .databaseId
         .store(TESTDB, SeqCst);
     lock::InitLockManagerAccess();
-    let owner = resowner::ResourceOwnerCreate(types_resowner::ResourceOwner::NULL, "crash reset")
-        .unwrap();
+    let owner =
+        resowner::ResourceOwnerCreate(types_resowner::ResourceOwner::NULL, "crash reset").unwrap();
     resowner::SetCurrentResourceOwner(owner);
 }
 

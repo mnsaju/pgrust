@@ -12,9 +12,9 @@
 
 #[cfg(not(target_family = "wasm"))]
 use be_secure_openssl as tls;
+use datum::Datum;
 #[cfg(target_family = "wasm")]
 use tls_stub as tls;
-use datum::Datum;
 
 /// wasm arm: there is no OpenSSL and no SSL transport at all, so the no-SSL
 /// answers (None / false / zero extensions) are the TRUE answers — every

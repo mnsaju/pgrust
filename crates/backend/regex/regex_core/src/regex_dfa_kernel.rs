@@ -41,7 +41,9 @@ use core::marker::PhantomData;
 use crate::regex_consts::REG_ASSERT;
 use crate::regex_error::{RegError, RegResult};
 use crate::regex_exec::{pickss, Arcp, Dfa, Pos, Sset, LOCKED, NOPROGRESS, NOSS, POSTSTATE, UBITS};
-use crate::regguts::{chr, color, Cnfa, ColorMap, CHR_MIN, CNFA_NOPROGRESS, MAX_SIMPLE_CHR, RAINBOW};
+use crate::regguts::{
+    chr, color, Cnfa, ColorMap, CHR_MIN, CNFA_NOPROGRESS, MAX_SIMPLE_CHR, RAINBOW,
+};
 
 struct Rows<'a> {
     ssets: *mut Sset,
@@ -366,7 +368,11 @@ pub(crate) fn build_stateset(
             }
         }
     }
-    Built { gotstate, ispost, noprogress }
+    Built {
+        gotstate,
+        ispost,
+        noprogress,
+    }
 }
 
 /// miss()'s entry probe: the cached transition, NOSS on a true miss.

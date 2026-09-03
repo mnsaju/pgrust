@@ -10,7 +10,7 @@ use types_core::instrument::{instr_time, BufferUsage, WalUsage};
 use types_error::LOG;
 
 use crate::{
-    gucs, nesting_level, Counters, PgssEntry, PgssGlobalStats, PgssHashKey, PgssShared,
+    gucs, nesting_level, Counters, PgssEntry, PgssHashKey, PgssShared,
     ASSUMED_LENGTH_INIT, PGSS, PGSS_DUMP_FILE, PGSS_EXEC, PGSS_FILE_HEADER, PGSS_NUMKIND,
     PGSS_PG_MAJOR_VERSION, PGSS_PLAN, STICKY_DECREASE_FACTOR, USAGE_DEALLOC_PERCENT,
     USAGE_DECREASE_FACTOR, USAGE_EXEC, USAGE_INIT,
@@ -144,11 +144,18 @@ pub(crate) fn entry_alloc(
         return;
     }
     let now = adt_timestamp::GetCurrentTimestamp();
-    let usage = if sticky { shared.cur_median_usage } else { USAGE_INIT };
+    let usage = if sticky {
+        shared.cur_median_usage
+    } else {
+        USAGE_INIT
+    };
     shared.hash.insert(
         key,
         PgssEntry {
-            counters: Counters { usage, ..Counters::default() },
+            counters: Counters {
+                usage,
+                ..Counters::default()
+            },
             query_text: query_text.to_owned(),
             encoding,
             stats_since: now,
@@ -180,8 +187,11 @@ pub(crate) fn entry_dealloc(shared: &mut PgssShared) {
     if n > 0 {
         shared.cur_median_usage = usages[n / 2].1;
     }
-    shared.mean_query_len =
-        if nvalidtexts > 0 { tottextlen / nvalidtexts } else { ASSUMED_LENGTH_INIT };
+    shared.mean_query_len = if nvalidtexts > 0 {
+        tottextlen / nvalidtexts
+    } else {
+        ASSUMED_LENGTH_INIT
+    };
 
     let nvictims = std::cmp::min(std::cmp::max(10, n * USAGE_DEALLOC_PERCENT / 100), n);
     for (k, _) in usages.iter().take(nvictims) {
@@ -224,7 +234,12 @@ pub(crate) fn entry_reset(
     if userid != 0 && dbid != 0 && queryid != 0 {
         // All parameters given: probe the two (toplevel) slots directly.
         for toplevel in [false, true] {
-            let key = PgssHashKey { userid, dbid, queryid, toplevel };
+            let key = PgssHashKey {
+                userid,
+                dbid,
+                queryid,
+                toplevel,
+            };
             if shared.hash.contains_key(&key) {
                 reset_one(shared, &key);
             }
@@ -270,7 +285,13 @@ pub(crate) fn counters_to_words(c: &Counters) -> Vec<u64> {
     for k in 0..PGSS_NUMKIND {
         w.push(c.calls[k] as u64);
     }
-    for arr in [&c.total_time, &c.min_time, &c.max_time, &c.mean_time, &c.sum_var_time] {
+    for arr in [
+        &c.total_time,
+        &c.min_time,
+        &c.max_time,
+        &c.mean_time,
+        &c.sum_var_time,
+    ] {
         for k in 0..PGSS_NUMKIND {
             w.push(arr[k].to_bits());
         }
@@ -456,14 +477,21 @@ pub(crate) fn load_dump_file(shared: &mut PgssShared) {
             }
             let mut qbuf = vec![0u8; qlen];
             file.read_exact(&mut qbuf)?;
-            let Ok(query_text) = String::from_utf8(qbuf) else { return Ok(false) };
+            let Ok(query_text) = String::from_utf8(qbuf) else {
+                return Ok(false);
+            };
 
             let counters = counters_from_words(&words);
             // C skips loading sticky entries.
             if counters.is_sticky() {
                 continue;
             }
-            let key = PgssHashKey { userid, dbid, queryid, toplevel };
+            let key = PgssHashKey {
+                userid,
+                dbid,
+                queryid,
+                toplevel,
+            };
             entry_alloc(shared, key, &query_text, encoding, false);
             if let Some(e) = shared.hash.get_mut(&key) {
                 e.counters = counters;
@@ -485,7 +513,10 @@ pub(crate) fn load_dump_file(shared: &mut PgssShared) {
             let _ = std::fs::remove_file(&path);
         }
         Ok(false) => {
-            let _ = elog(LOG, format!("ignoring invalid data in file \"{}\"", path.display()));
+            let _ = elog(
+                LOG,
+                format!("ignoring invalid data in file \"{}\"", path.display()),
+            );
             let _ = std::fs::remove_file(&path);
         }
         Err(_) => {

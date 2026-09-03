@@ -133,7 +133,7 @@ pub fn pg_open_tzfile(
     }
 
     if let Some(canonname) = canonname {
-        let canonical = fullname[orignamelen + 1..].as_bytes();
+        let canonical = &fullname.as_bytes()[orignamelen + 1..];
         let n = canonical.len().min(TZ_STRLEN_MAX);
         canonname[..n].copy_from_slice(&canonical[..n]);
         canonname[n] = 0;
@@ -363,9 +363,7 @@ pub fn pg_tzenumerate_next(dir: &mut PgTzEnum) -> PgResult<Option<&PgTz>> {
         })?;
         if meta.is_dir() {
             if dir.depth >= (MAX_TZDIR_DEPTH - 1) as isize {
-                return Err(
-                    PgError::error("timezone directory stack overflow".to_string()).into(),
-                );
+                return Err(PgError::error("timezone directory stack overflow".to_string()).into());
             }
             let sub = fd::AllocateDir(&fullname)?;
             if sub.is_none() {
@@ -382,7 +380,7 @@ pub fn pg_tzenumerate_next(dir: &mut PgTzEnum) -> PgResult<Option<&PgTz>> {
         }
 
         // tzload() not pg_tzset(), so the cache isn't filled.
-        let relname = fullname[dir.baselen..].as_bytes();
+        let relname = &fullname.as_bytes()[dir.baselen..];
         match tzload(relname, None, &mut dir.tz.state, true) {
             Ok(()) => {}
             Err(TzLoadError::Report(e)) => return Err(e),

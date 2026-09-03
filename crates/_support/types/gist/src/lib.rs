@@ -6,9 +6,7 @@
 
 use ::datum::Datum;
 use ::types_core::xact::FullTransactionId;
-use ::types_core::{
-    uint16, BlockNumber, OffsetNumber, Oid, TransactionId, XLogRecPtr, BLCKSZ,
-};
+use ::types_core::{uint16, BlockNumber, OffsetNumber, Oid, TransactionId, XLogRecPtr, BLCKSZ};
 use ::types_storage::bufpage::{PageMut, PageRef, SizeOfPageHeaderData};
 
 pub mod pairingheap;
@@ -87,7 +85,7 @@ fn special_off(bytes: *const u8) -> usize {
     // SAFETY: pd_special is at a 2-aligned in-page offset (page contract).
     let off = unsafe { bytes.add(PD_SPECIAL_OFF).cast::<u16>().read() } as usize;
     debug_assert!(
-        off >= SizeOfPageHeaderData && off <= BLCKSZ,
+        (SizeOfPageHeaderData..=BLCKSZ).contains(&off),
         "corrupt pd_special"
     );
     off.min(BLCKSZ - core::mem::size_of::<GistPageOpaqueDisk>())
@@ -291,9 +289,7 @@ impl GistxlogPageSplit {
     pub fn decode(b: &[u8]) -> Self {
         Self {
             origrlink: BlockNumber::from_ne_bytes([b[0], b[1], b[2], b[3]]),
-            orignsn: GistNSN::from_ne_bytes([
-                b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15],
-            ]),
+            orignsn: GistNSN::from_ne_bytes([b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]]),
             origleaf: b[16] != 0,
             npage: u16::from_ne_bytes([b[18], b[19]]),
             markfollowright: b[20] != 0,
@@ -397,8 +393,7 @@ impl Default for GISTENTRY {
 // sortsupport proc receives a pointer to this shim (its "SortSupport") and
 // installs a leaf-key comparator; tuplesort applies it with the column's
 // collation on its mcx-threaded lane.
-pub type GistSsupCmp =
-    fn(Datum, Datum, Oid, ::mcx::Mcx<'_>) -> ::types_error::PgResult<i32>;
+pub type GistSsupCmp = fn(Datum, Datum, Oid, ::mcx::Mcx<'_>) -> ::types_error::PgResult<i32>;
 
 pub struct GistSortSupportShim {
     pub ssup_collation: Oid,

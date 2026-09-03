@@ -117,7 +117,10 @@ pub fn batch_of(hashvalue: u32, log2n: u32) -> u32 {
 /// they slice bits their ancestors never consumed.
 #[inline]
 pub fn split_child(hashvalue: u32, consumed: u32, jbits: u32) -> u32 {
-    debug_assert!(jbits >= 1 && consumed + jbits <= 56, "split slice out of remix range");
+    debug_assert!(
+        jbits >= 1 && consumed + jbits <= 56,
+        "split slice out of remix range"
+    );
     ((batch_mix(hashvalue) >> (64 - consumed - jbits)) & ((1u64 << jbits) - 1)) as u32
 }
 
@@ -131,7 +134,11 @@ pub const LEAF_PENDING: u16 = u16::MAX - 1;
 pub enum MapNode {
     Leaf(u16),
     /// Children occupy nodes `child_base .. child_base + (1 << jbits)`.
-    Split { consumed: u8, jbits: u8, child_base: u32 },
+    Split {
+        consumed: u8,
+        jbits: u8,
+        child_base: u32,
+    },
 }
 
 /// The PLAN-BATCHES trie: level-0 batches → (splits) → leaf slots.
@@ -163,15 +170,24 @@ impl LeafMap {
     /// Split a LEVEL-0 batch node into `1 << jbits` children. Returns the
     /// child node base; children start PENDING.
     pub fn split_node(&mut self, node: u32, jbits: u32) -> u32 {
-        debug_assert!((node as usize) < (1usize << self.log2n), "level-0 nodes only");
-        debug_assert!(matches!(self.nodes[node as usize], MapNode::Leaf(LEAF_PENDING)));
+        debug_assert!(
+            (node as usize) < (1usize << self.log2n),
+            "level-0 nodes only"
+        );
+        debug_assert!(matches!(
+            self.nodes[node as usize],
+            MapNode::Leaf(LEAF_PENDING)
+        ));
         self.split_at(node, self.log2n, jbits)
     }
 
     /// Split a pending CHILD node whose consumed-bit depth the caller
     /// tracked (the PLAN/round bookkeeping carries it).
     pub fn split_child_node(&mut self, node: u32, consumed: u32, jbits: u32) -> u32 {
-        debug_assert!(matches!(self.nodes[node as usize], MapNode::Leaf(LEAF_PENDING)));
+        debug_assert!(matches!(
+            self.nodes[node as usize],
+            MapNode::Leaf(LEAF_PENDING)
+        ));
         self.split_at(node, consumed, jbits)
     }
 
@@ -190,7 +206,10 @@ impl LeafMap {
     }
 
     pub fn set_leaf(&mut self, node: u32, leaf: u16) {
-        debug_assert!(matches!(self.nodes[node as usize], MapNode::Leaf(LEAF_PENDING)));
+        debug_assert!(matches!(
+            self.nodes[node as usize],
+            MapNode::Leaf(LEAF_PENDING)
+        ));
         self.nodes[node as usize] = MapNode::Leaf(leaf);
     }
 
@@ -213,9 +232,12 @@ impl LeafMap {
                     debug_assert_ne!(l, LEAF_PENDING, "resolve on an unfrozen map");
                     return l;
                 }
-                MapNode::Split { consumed, jbits, child_base } => {
-                    node = child_base
-                        + split_child(hashvalue, consumed as u32, jbits as u32);
+                MapNode::Split {
+                    consumed,
+                    jbits,
+                    child_base,
+                } => {
+                    node = child_base + split_child(hashvalue, consumed as u32, jbits as u32);
                 }
             }
         }
@@ -291,8 +313,7 @@ mod tests {
                 bytes.len(),
             );
         }
-        let view =
-            unsafe { std::slice::from_raw_parts(words.as_ptr().cast::<u8>(), bytes.len()) };
+        let view = unsafe { std::slice::from_raw_parts(words.as_ptr().cast::<u8>(), bytes.len()) };
         let mut it = BatchRecords::new(view);
         while let Some((_, t)) = it.next_rec().unwrap() {
             if !t.is_empty() {

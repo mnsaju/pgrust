@@ -87,7 +87,9 @@ pub struct RangeInfo {
 #[track_caller]
 #[cold]
 fn not_a_range_type(rngtypid: Oid) -> Box<PgError> {
-    Box::new(PgError::error(format!("type {rngtypid} is not a range type")))
+    Box::new(PgError::error(format!(
+        "type {rngtypid} is not a range type"
+    )))
 }
 
 impl RangeInfo {
@@ -128,10 +130,10 @@ impl RangeInfo {
 }
 
 // range_get_typcache (rangetypes.c): fn_extra memo keyed by rngtypid.
-pub fn cached_range_info<'f>(
-    flinfo: &'f mut FmgrInfo,
+pub fn cached_range_info(
+    flinfo: &mut FmgrInfo,
     rngtypid: Oid,
-) -> PgResult<&'f mut RangeInfo> {
+) -> PgResult<&mut RangeInfo> {
     let need = match flinfo.fn_extra_ref::<RangeInfo>() {
         Some(ri) => ri.rngtypid != rngtypid,
         None => true,
@@ -172,10 +174,18 @@ pub fn range_types_do_not_match() -> Box<PgError> {
 /// the caller's own slots and field reads match store widths (C's shape).
 #[inline]
 pub fn range_deserialize(elem: &ElemInfo, range: &[u8]) -> (RangeBound, RangeBound, bool) {
-    let mut lower =
-        RangeBound { val: Datum::from_usize(0), infinite: false, inclusive: false, lower: true };
-    let mut upper =
-        RangeBound { val: Datum::from_usize(0), infinite: false, inclusive: false, lower: false };
+    let mut lower = RangeBound {
+        val: Datum::from_usize(0),
+        infinite: false,
+        inclusive: false,
+        lower: true,
+    };
+    let mut upper = RangeBound {
+        val: Datum::from_usize(0),
+        infinite: false,
+        inclusive: false,
+        lower: false,
+    };
     let empty = range_deserialize_into(elem, range, &mut lower, &mut upper);
     (lower, upper, empty)
 }
@@ -189,8 +199,18 @@ pub fn range_deserialize(elem: &ElemInfo, range: &[u8]) -> (RangeBound, RangeBou
 #[inline(always)]
 pub fn range_bound_slots() -> (RangeBound, RangeBound) {
     (
-        RangeBound { val: Datum::from_usize(0), infinite: false, inclusive: false, lower: true },
-        RangeBound { val: Datum::from_usize(0), infinite: false, inclusive: false, lower: false },
+        RangeBound {
+            val: Datum::from_usize(0),
+            infinite: false,
+            inclusive: false,
+            lower: true,
+        },
+        RangeBound {
+            val: Datum::from_usize(0),
+            infinite: false,
+            inclusive: false,
+            lower: false,
+        },
     )
 }
 
@@ -210,8 +230,8 @@ pub fn range_deserialize_into(
 
     lower.val = if range_has_lbound(flags) {
         // SAFETY: `off` stays within the serialized image range_serialize built.
-        let d = fetch_att(unsafe { base.add(off) }, elem.typbyval, typlen);
-        off = arrayfuncs::foundation::att_addlength_pointer(off, typlen, unsafe { base.add(off) });
+        let d = unsafe { fetch_att(base.add(off), elem.typbyval, typlen) };
+        off = unsafe { arrayfuncs::foundation::att_addlength_pointer(off, typlen, base.add(off)) };
         d
     } else {
         Datum::from_usize(0)
@@ -222,7 +242,7 @@ pub fn range_deserialize_into(
     upper.val = if range_has_ubound(flags) {
         off = att_align_ptr(base, off, elem.typalign, elem.typlen);
         // SAFETY: as above.
-        fetch_att(unsafe { base.add(off) }, elem.typbyval, typlen)
+        unsafe { fetch_att(base.add(off), elem.typbyval, typlen) }
     } else {
         Datum::from_usize(0)
     };
@@ -261,9 +281,10 @@ fn varatt_is_4b_u(p: *const u8) -> bool {
     unsafe { *p & 0x03 == 0x00 }
 }
 
+/// # Safety
+/// `p` must point to a live, valid 4-byte varlena header.
 #[inline]
-pub fn varsize_4b(p: *const u8) -> usize {
-    // SAFETY: live 4-byte varlena header.
+pub unsafe fn varsize_4b(p: *const u8) -> usize {
     let w = unsafe { u32::from_ne_bytes(core::slice::from_raw_parts(p, 4).try_into().unwrap()) };
     (w >> 2) as usize
 }
@@ -279,9 +300,11 @@ const fn type_is_packable(typlen: i16, typstorage: u8) -> bool {
     typlen == -1 && typstorage != TYPSTORAGE_PLAIN
 }
 
+/// # Safety
+/// `p` must point to a live varlena datum.
 #[inline]
-fn varatt_can_make_short(p: *const u8) -> bool {
-    varatt_is_4b_u(p) && varsize_4b(p) - 4 + 1 <= 0x7F
+unsafe fn varatt_can_make_short(p: *const u8) -> bool {
+    varatt_is_4b_u(p) && unsafe { varsize_4b(p) } - 4 < 0x7F
 }
 
 fn datum_compute_size(
@@ -293,8 +316,9 @@ fn datum_compute_size(
     typstorage: u8,
 ) -> usize {
     let p = val.as_usize() as *const u8;
-    if type_is_packable(typlen, typstorage) && varatt_can_make_short(p) {
-        data_length += varsize_4b(p) - 4 + 1;
+    // SAFETY: p is a live varlena datum per this fn's contract.
+    if type_is_packable(typlen, typstorage) && unsafe { varatt_can_make_short(p) } {
+        data_length += unsafe { varsize_4b(p) } - 4 + 1;
     } else if typlen == -1 && !typbyval && varatt_is_1b(p) {
         // att_align_datum: an already-short varlena takes no padding.
         data_length += varsize_short(p);
@@ -306,7 +330,8 @@ fn datum_compute_size(
             if varatt_is_1b(p) {
                 varsize_short(p)
             } else {
-                varsize_4b(p)
+                // SAFETY: p is a live varlena datum per this fn's contract.
+                unsafe { varsize_4b(p) }
             }
         } else if typlen == -2 {
             // SAFETY: NUL-terminated cstring datum.
@@ -356,8 +381,9 @@ fn datum_write(
             // SAFETY: short varlena of n total bytes.
             out[off..off + n].copy_from_slice(unsafe { core::slice::from_raw_parts(p, n) });
             off += n;
-        } else if type_is_packable(typlen, typstorage) && varatt_can_make_short(p) {
-            let n = varsize_4b(p) - 4 + 1;
+        } else if type_is_packable(typlen, typstorage) && unsafe { varatt_can_make_short(p) } {
+            // SAFETY: p is a live varlena datum per this fn's contract.
+            let n = unsafe { varsize_4b(p) } - 4 + 1;
             out[off] = ((n as u8) << 1) | 0x01;
             // SAFETY: 4-byte-header varlena; payload follows the header.
             out[off + 1..off + n]
@@ -365,7 +391,8 @@ fn datum_write(
             off += n;
         } else {
             off = att_align_nominal(off, typalign);
-            let n = varsize_4b(p);
+            // SAFETY: p is a live varlena datum per this fn's contract.
+            let n = unsafe { varsize_4b(p) };
             // SAFETY: live varlena of n total bytes.
             out[off..off + n].copy_from_slice(unsafe { core::slice::from_raw_parts(p, n) });
             off += n;
@@ -412,9 +439,7 @@ fn detoast_bound_packed<'m>(mcx: Mcx<'m>, val: Datum) -> PgResult<Datum> {
     let is_compressed = unsafe { *p & 0x03 == 0x02 };
     if varatt_is_1b_e(p) || is_compressed {
         // SAFETY: live varlena image; varsize_any reads only header bytes.
-        let raw = unsafe {
-            core::slice::from_raw_parts(p, ::types_tuple::varatt::varsize_any(p))
-        };
+        let raw = unsafe { core::slice::from_raw_parts(p, ::types_tuple::varatt::varsize_any(p)) };
         let flat = ::detoast_seams::detoast_attr::call(mcx, raw)?;
         Ok(Datum::from_usize(flat.leak().as_ptr() as usize))
     } else {
@@ -458,7 +483,12 @@ pub fn range_serialize<'m>(
         }
     }
 
-    let ElemInfo { typlen, typbyval, typalign, typstorage } = ri.elem;
+    let ElemInfo {
+        typlen,
+        typbyval,
+        typalign,
+        typstorage,
+    } = ri.elem;
     let mut msize = RANGE_HDRSZ;
     if range_has_lbound(flags) {
         if typlen == -1 {
@@ -480,10 +510,14 @@ pub fn range_serialize<'m>(
     img[4..8].copy_from_slice(&ri.rngtypid.to_ne_bytes());
     let mut off = RANGE_HDRSZ;
     if range_has_lbound(flags) {
-        off = datum_write(&mut img, off, lower.val, typbyval, typalign, typlen, typstorage);
+        off = datum_write(
+            &mut img, off, lower.val, typbyval, typalign, typlen, typstorage,
+        );
     }
     if range_has_ubound(flags) {
-        off = datum_write(&mut img, off, upper.val, typbyval, typalign, typlen, typstorage);
+        off = datum_write(
+            &mut img, off, upper.val, typbyval, typalign, typlen, typstorage,
+        );
     }
     img[msize - 1] = flags;
     debug_assert_eq!(off + 1, msize);
@@ -555,10 +589,8 @@ fn canonicalize<'m>(
             // so holding the RefMut across invoke double-borrows. The
             // placeholder's InvalidOid fn_oid only reaches the callee's
             // fn_extra memo, whose canonical fc consumers never read it.
-            let mut finfo = core::mem::replace(
-                &mut *pin.rng_canonical_finfo(),
-                FmgrInfo::unresolved(),
-            );
+            let mut finfo =
+                core::mem::replace(&mut *pin.rng_canonical_finfo(), FmgrInfo::unresolved());
             let r = finfo.invoke(&mut lfc);
             *pin.rng_canonical_finfo() = finfo;
             let r = r?;
@@ -671,10 +703,18 @@ pub(crate) fn canonical_adjust_date(
 }
 
 pub fn make_empty_range<'m>(mcx: Mcx<'m>, ri: &mut RangeInfo) -> PgResult<PgVec<'m, u8>> {
-    let mut lower =
-        RangeBound { val: Datum::from_usize(0), infinite: false, inclusive: false, lower: true };
-    let mut upper =
-        RangeBound { val: Datum::from_usize(0), infinite: false, inclusive: false, lower: false };
+    let mut lower = RangeBound {
+        val: Datum::from_usize(0),
+        infinite: false,
+        inclusive: false,
+        lower: true,
+    };
+    let mut upper = RangeBound {
+        val: Datum::from_usize(0),
+        infinite: false,
+        inclusive: false,
+        lower: false,
+    };
     Ok(make_range(mcx, ri, &mut lower, &mut upper, true, None)?
         .expect("empty range never soft-fails"))
 }

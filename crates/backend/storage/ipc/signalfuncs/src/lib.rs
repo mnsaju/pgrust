@@ -56,7 +56,9 @@ fn pg_signal_backend(pid: i32, sig: i32) -> PgResult<i32> {
     }
 
     if procsignal::SendThreadSignal(pid, sig) != 0 {
-        warn(format!("could not send signal to process {pid}: No such process"))?;
+        warn(format!(
+            "could not send signal to process {pid}: No such process"
+        ))?;
         return Ok(SIGNAL_BACKEND_ERROR);
     }
     Ok(SIGNAL_BACKEND_SUCCESS)
@@ -91,7 +93,10 @@ fn signal_denied(errmsg: &str, errdetail: &str) -> Box<types_error::PgError> {
     )
 }
 
-pub fn fc_pg_cancel_backend(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+pub fn fc_pg_cancel_backend(
+    _flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     let r = pg_signal_backend(fcinfo.arg_i32(0), SIGINT)?;
     let detail = match r {
         SIGNAL_BACKEND_NOSUPERUSER => {
@@ -108,7 +113,7 @@ pub fn fc_pg_cancel_backend(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo)
         }
         _ => return Ok(Datum::from_bool(r == SIGNAL_BACKEND_SUCCESS)),
     };
-    Err(signal_denied("permission denied to cancel query", detail).into())
+    Err(signal_denied("permission denied to cancel query", detail))
 }
 
 // pg_wait_until_termination: the kill(pid, 0)/ESRCH probe is a procarray
@@ -140,8 +145,14 @@ fn pg_wait_until_termination(pid: i32, timeout: i64) -> PgResult<bool> {
             break;
         }
     }
-    let unit = if timeout == 1 { "millisecond" } else { "milliseconds" };
-    warn(format!("backend with PID {pid} did not terminate within {timeout} {unit}"))?;
+    let unit = if timeout == 1 {
+        "millisecond"
+    } else {
+        "milliseconds"
+    };
+    warn(format!(
+        "backend with PID {pid} did not terminate within {timeout} {unit}"
+    ))?;
     Ok(false)
 }
 
@@ -177,7 +188,7 @@ pub fn fc_pg_terminate_backend(
         _ => None,
     };
     if let Some(detail) = detail {
-        return Err(signal_denied("permission denied to terminate process", detail).into());
+        return Err(signal_denied("permission denied to terminate process", detail));
     }
 
     if r == SIGNAL_BACKEND_SUCCESS && timeout > 0 {
@@ -207,7 +218,14 @@ pub fn fc_pg_rotate_logfile(
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 pub const SIGNALFUNCS_BUILTINS: &[FmgrBuiltin] = &[

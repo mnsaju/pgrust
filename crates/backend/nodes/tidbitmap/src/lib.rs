@@ -50,7 +50,12 @@ const _: () = assert!(core::mem::size_of::<PagetableEntry>() <= 48);
 impl PagetableEntry {
     #[inline]
     fn zeroed(blockno: BlockNumber) -> Self {
-        PagetableEntry { blockno, ischunk: false, recheck: false, words: [0; TBM_WORDS] }
+        PagetableEntry {
+            blockno,
+            ischunk: false,
+            recheck: false,
+            words: [0; TBM_WORDS],
+        }
     }
 }
 
@@ -153,8 +158,8 @@ impl TbmIterateResult<'_> {
 }
 
 pub fn tbm_calculate_entries(maxbytes: usize) -> i32 {
-    let nbuckets = maxbytes
-        / (core::mem::size_of::<PagetableEntry>() + 2 * core::mem::size_of::<*const u8>());
+    let nbuckets =
+        maxbytes / (core::mem::size_of::<PagetableEntry>() + 2 * core::mem::size_of::<*const u8>());
     nbuckets.clamp(16, (i32::MAX - 1) as usize) as i32
 }
 
@@ -255,7 +260,12 @@ impl<'mcx> TIDBitmap<'mcx> {
             self.union_page(&b.entry1)?;
         } else {
             debug_assert!(b.status == TbmStatus::Hash);
-            for bpage in b.pagetable.as_ref().expect("TBM_HASH without pagetable").values() {
+            for bpage in b
+                .pagetable
+                .as_ref()
+                .expect("TBM_HASH without pagetable")
+                .values()
+            {
                 self.union_page(bpage)?;
             }
         }
@@ -361,7 +371,11 @@ impl<'mcx> TIDBitmap<'mcx> {
             debug_assert!(!self.entry1.ischunk);
             return Some(&self.entry1);
         }
-        let page = self.pagetable.as_ref().expect("TBM_HASH without pagetable").get(&pageno)?;
+        let page = self
+            .pagetable
+            .as_ref()
+            .expect("TBM_HASH without pagetable")
+            .get(&pageno)?;
         if page.ischunk {
             return None;
         }
@@ -389,7 +403,9 @@ impl<'mcx> TIDBitmap<'mcx> {
         }
         let mcx = self.mcx;
         let table = self.pagetable.as_mut().expect("TBM_HASH without pagetable");
-        table.try_reserve(1).map_err(|_| mcx.oom(core::mem::size_of::<PagetableEntry>()))?;
+        table
+            .try_reserve(1)
+            .map_err(|_| mcx.oom(core::mem::size_of::<PagetableEntry>()))?;
         let mut found = true;
         let page = table.entry(pageno).or_insert_with(|| {
             found = false;
@@ -410,7 +426,12 @@ impl<'mcx> TIDBitmap<'mcx> {
         debug_assert!(self.status == TbmStatus::Hash);
         let bitno = pageno as usize % PAGES_PER_CHUNK;
         let chunk_pageno = pageno - bitno as BlockNumber;
-        match self.pagetable.as_ref().expect("TBM_HASH without pagetable").get(&chunk_pageno) {
+        match self
+            .pagetable
+            .as_ref()
+            .expect("TBM_HASH without pagetable")
+            .get(&chunk_pageno)
+        {
             Some(page) if page.ischunk => {
                 page.words[wordnum(bitno)] & ((1 as bitmapword) << bitnum(bitno)) != 0
             }
@@ -430,7 +451,9 @@ impl<'mcx> TIDBitmap<'mcx> {
             self.nentries -= 1;
             self.npages -= 1;
         }
-        table.try_reserve(1).map_err(|_| mcx.oom(core::mem::size_of::<PagetableEntry>()))?;
+        table
+            .try_reserve(1)
+            .map_err(|_| mcx.oom(core::mem::size_of::<PagetableEntry>()))?;
         match table.entry(chunk_pageno) {
             hashbrown::hash_map::Entry::Vacant(v) => {
                 let mut entry = PagetableEntry::zeroed(chunk_pageno);
@@ -469,14 +492,21 @@ impl<'mcx> TIDBitmap<'mcx> {
         // one is tolerated — C's walk has the identical race and tolerates it
         // the same way. Growth never shrinks the table, so a stale index
         // stays in bounds.
-        let nbuckets =
-            self.pagetable.as_ref().expect("TBM_HASH without pagetable").raw_table().buckets();
+        let nbuckets = self
+            .pagetable
+            .as_ref()
+            .expect("TBM_HASH without pagetable")
+            .raw_table()
+            .buckets();
         let mask = nbuckets - 1;
         let start = self.lossify_start & mask;
         for k in 0..nbuckets {
             let idx = (start + k) & mask;
-            let table =
-                self.pagetable.as_ref().expect("TBM_HASH without pagetable").raw_table();
+            let table = self
+                .pagetable
+                .as_ref()
+                .expect("TBM_HASH without pagetable")
+                .raw_table();
             // SAFETY: idx < nbuckets <= table.buckets() (grow-only), and the
             // bucket reference is copied out before any table mutation.
             let (blockno, ischunk) = unsafe {
@@ -486,7 +516,7 @@ impl<'mcx> TIDBitmap<'mcx> {
                 let (blockno, page) = table.bucket(idx).as_ref();
                 (*blockno, page.ischunk)
             };
-            if ischunk || blockno as usize % PAGES_PER_CHUNK == 0 {
+            if ischunk || (blockno as usize).is_multiple_of(PAGES_PER_CHUNK) {
                 continue;
             }
             self.mark_page_lossy(blockno)?;
@@ -534,7 +564,11 @@ impl<'mcx> TIDBitmap<'mcx> {
             self.schunks = Some(schunks);
         }
         self.iterating = TbmIterating::Private;
-        Ok(TbmPrivateIterator { spageptr: 0, schunkptr: 0, schunkbit: 0 })
+        Ok(TbmPrivateIterator {
+            spageptr: 0,
+            schunkptr: 0,
+            schunkbit: 0,
+        })
     }
 
     /// `tbm_prepare_shared_iterate`: freezes the pagetable into a flat entry
@@ -544,11 +578,17 @@ impl<'mcx> TIDBitmap<'mcx> {
         debug_assert!(self.iterating != TbmIterating::Private);
         let oom = |n: usize| self.mcx.oom(n * core::mem::size_of::<PagetableEntry>());
         let mut ptbase: Vec<PagetableEntry> = Vec::new();
-        ptbase.try_reserve_exact(self.nentries.max(0) as usize).map_err(|_| oom(self.nentries.max(0) as usize))?;
+        ptbase
+            .try_reserve_exact(self.nentries.max(0) as usize)
+            .map_err(|_| oom(self.nentries.max(0) as usize))?;
         let mut ptpages: Vec<i32> = Vec::new();
-        ptpages.try_reserve_exact(self.npages.max(0) as usize).map_err(|_| oom(1))?;
+        ptpages
+            .try_reserve_exact(self.npages.max(0) as usize)
+            .map_err(|_| oom(1))?;
         let mut ptchunks: Vec<i32> = Vec::new();
-        ptchunks.try_reserve_exact(self.nchunks.max(0) as usize).map_err(|_| oom(1))?;
+        ptchunks
+            .try_reserve_exact(self.nchunks.max(0) as usize)
+            .map_err(|_| oom(1))?;
         match self.status {
             TbmStatus::Hash => {
                 let table = self.pagetable.as_ref().expect("TBM_HASH without pagetable");
@@ -579,7 +619,11 @@ impl<'mcx> TIDBitmap<'mcx> {
             ptbase,
             ptpages,
             ptchunks,
-            cursor: Mutex::new(TbmSharedCursor { spageptr: 0, schunkptr: 0, schunkbit: 0 }),
+            cursor: Mutex::new(TbmSharedCursor {
+                spageptr: 0,
+                schunkptr: 0,
+                schunkbit: 0,
+            }),
         }))
     }
 }
@@ -667,7 +711,10 @@ impl TbmPrivateIterator {
             let next_exact_blockno = if tbm.status == TbmStatus::OnePage {
                 Some(tbm.entry1.blockno)
             } else {
-                tbm.spages.as_deref().and_then(|s| s.get(self.spageptr)).map(|p| p.blockno)
+                tbm.spages
+                    .as_deref()
+                    .and_then(|s| s.get(self.spageptr))
+                    .map(|p| p.blockno)
             };
             if self.spageptr >= npages || next_exact_blockno.is_none_or(|b| chunk_blockno < b) {
                 self.schunkbit += 1;
@@ -709,6 +756,10 @@ impl TbmSharedIterator {
     }
 
     /// `tbm_shared_iterate`; cursor advance under the mutex (C: istate->lock).
+    // Borrows self for the returned item's lifetime (a "lending
+    // iterator"), which std::iter::Iterator cannot express; not a real
+    // Iterator despite the name (kept to match the C entry point).
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Option<TbmIterateResult<'_>> {
         let st = &*self.state;
         let ptbase: &[PagetableEntry] = &st.ptbase;
@@ -783,12 +834,20 @@ impl TbmRangeIterator {
     /// end <= npages + nchunks (the morsel source's granule count).
     pub fn new(state: Arc<TbmSharedIterState>, start: u64, end: u64) -> Self {
         debug_assert!(
-            end <= (state.npages.max(0) as u64 + state.nchunks.max(0) as u64)
-                && start <= end
+            end <= (state.npages.max(0) as u64 + state.nchunks.max(0) as u64) && start <= end
         );
-        TbmRangeIterator { state, pos: start, end, schunkbit: 0 }
+        TbmRangeIterator {
+            state,
+            pos: start,
+            end,
+            schunkbit: 0,
+        }
     }
 
+    // Borrows self for the returned item's lifetime (a "lending
+    // iterator"), which std::iter::Iterator cannot express; not a real
+    // Iterator despite the name (kept to match the C entry point).
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Option<TbmIterateResult<'_>> {
         let st = &*self.state;
         let npages = st.npages.max(0) as u64;
@@ -836,20 +895,36 @@ pub struct TbmIterator {
 
 impl TbmIterator {
     pub fn empty() -> Self {
-        TbmIterator { private: None, shared: None, range: None }
+        TbmIterator {
+            private: None,
+            shared: None,
+            range: None,
+        }
     }
 
     pub fn private(iter: TbmPrivateIterator) -> Self {
-        TbmIterator { private: Some(iter), shared: None, range: None }
+        TbmIterator {
+            private: Some(iter),
+            shared: None,
+            range: None,
+        }
     }
 
     pub fn shared(iter: TbmSharedIterator) -> Self {
-        TbmIterator { private: None, shared: Some(iter), range: None }
+        TbmIterator {
+            private: None,
+            shared: Some(iter),
+            range: None,
+        }
     }
 
     /// bitmap-morsels: a claimed-window iterator (self-contained, lock-free).
     pub fn range(iter: TbmRangeIterator) -> Self {
-        TbmIterator { private: None, shared: None, range: Some(iter) }
+        TbmIterator {
+            private: None,
+            shared: None,
+            range: Some(iter),
+        }
     }
 
     pub fn exhausted(&self) -> bool {
@@ -871,7 +946,10 @@ impl TbmIterator {
         if let Some(r) = self.range.as_mut() {
             return r.next();
         }
-        self.shared.as_mut().expect("tbm_iterate on an exhausted TBMIterator").next()
+        self.shared
+            .as_mut()
+            .expect("tbm_iterate on an exhausted TBMIterator")
+            .next()
     }
 }
 

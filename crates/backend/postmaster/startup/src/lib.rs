@@ -125,11 +125,20 @@ pub fn StartupProcessMain(startup_data: &StartupData) -> ! {
 
     {
         use procsignal::ThreadSignalHandler::{Ignore, Simple};
-        procsignal::pqsignal_thread(procsignal::signums::SIGHUP, Simple(StartupProcSigHupHandler));
+        procsignal::pqsignal_thread(
+            procsignal::signums::SIGHUP,
+            Simple(StartupProcSigHupHandler),
+        );
         procsignal::pqsignal_thread(procsignal::signums::SIGINT, Ignore);
-        procsignal::pqsignal_thread(procsignal::signums::SIGTERM, Simple(StartupProcShutdownHandler));
+        procsignal::pqsignal_thread(
+            procsignal::signums::SIGTERM,
+            Simple(StartupProcShutdownHandler),
+        );
         procsignal::pqsignal_thread(procsignal::signums::SIGPIPE, Ignore);
-        procsignal::pqsignal_thread(procsignal::signums::SIGUSR2, Simple(StartupProcTriggerHandler));
+        procsignal::pqsignal_thread(
+            procsignal::signums::SIGUSR2,
+            Simple(StartupProcTriggerHandler),
+        );
     }
 
     timeout::InitializeTimeouts();

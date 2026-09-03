@@ -282,6 +282,9 @@ fn mk_ref<'d, T: NodeVariant<'d>>(mcx: Mcx<'d>, v: T) -> PgResult<&'d T> {
     Ok(Node::mk(mcx, v)?.as_variant::<T>().expect("fresh node tag"))
 }
 
+// Only called for node types outside all_variants; unused whenever every
+// current node type is a NodeVariant (mk_ref covers them all instead).
+#[allow(dead_code)]
 fn alloc_ref<'d, T>(mcx: Mcx<'d>, v: T) -> PgResult<&'d T> {
     Ok(leak_in(alloc_in(mcx, v)?))
 }""")

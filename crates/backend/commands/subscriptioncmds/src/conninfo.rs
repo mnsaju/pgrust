@@ -3,7 +3,7 @@
 
 use mcx::{Mcx, PgString, PgVec};
 use types_error::{
-    PgError, PgResult, ERRCODE_S_R_E_PROHIBITED_SQL_STATEMENT_ATTEMPTED, ERRCODE_SYNTAX_ERROR,
+    PgError, PgResult, ERRCODE_SYNTAX_ERROR, ERRCODE_S_R_E_PROHIBITED_SQL_STATEMENT_ATTEMPTED,
 };
 
 const KNOWN_OPTIONS: &[&str] = &[
@@ -186,13 +186,16 @@ pub(crate) fn walrcv_check_conninfo(
 
     if must_use_password {
         let password_idx = KNOWN_OPTIONS.iter().position(|k| *k == "password").unwrap();
-        let uses_password =
-            opts.iter().any(|(i, v)| *i == password_idx && !v.as_str().is_empty());
+        let uses_password = opts
+            .iter()
+            .any(|(i, v)| *i == password_idx && !v.as_str().is_empty());
         if !uses_password {
             return Err(Box::new(
                 PgError::error("password is required")
                     .with_sqlstate(ERRCODE_S_R_E_PROHIBITED_SQL_STATEMENT_ATTEMPTED)
-                    .with_detail("Non-superusers must provide a password in the connection string."),
+                    .with_detail(
+                        "Non-superusers must provide a password in the connection string.",
+                    ),
             ));
         }
     }

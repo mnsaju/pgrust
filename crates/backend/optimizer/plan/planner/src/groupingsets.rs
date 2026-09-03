@@ -19,7 +19,7 @@ fn int_list_members<'mcx>(mcx: Mcx<'mcx>, node: Node<'mcx>) -> PgVec<'mcx, i32> 
     let mut v = PgVec::new_in(mcx);
     match node.as_int_list() {
         Some(il) => v.extend(il.iter()),
-            None => debug_assert!(node.as_list().is_some_and(|l| l.is_nil())),
+        None => debug_assert!(node.as_list().is_some_and(|l| l.is_nil())),
     }
     v
 }
@@ -102,10 +102,17 @@ pub fn preprocess_grouping_sets<'mcx>(
     let nchains = sets.len();
     for chain in sets {
         let mut rollup = RollupData::new(mcx);
-        let sortclause =
-            if nchains == 1 { run.parse().sortClause.clone_in(mcx)? } else { NodeList::nil() };
+        let sortclause = if nchains == 1 {
+            run.parse().sortClause.clone_in(mcx)?
+        } else {
+            NodeList::nil()
+        };
         let current_sets = reorder_grouping_sets(mcx, chain, &sortclause);
-        let first_set = current_sets[0].set.iter().map(|&r| r as i32).collect::<Vec<i32>>();
+        let first_set = current_sets[0]
+            .set
+            .iter()
+            .map(|&r| r as i32)
+            .collect::<Vec<i32>>();
 
         rollup.groupClause = if !first_set.is_empty() {
             crate::grouping::preprocess_groupclause(run, Some(&first_set))?
@@ -153,7 +160,11 @@ pub fn remap_to_groupclause_idx<'mcx>(
 ) -> PgVec<'mcx, PgVec<'mcx, i32>> {
     let mcx = run.mcx;
     for (i, &gc_id) in group_clause.iter().enumerate() {
-        let gc = run.root.expr_node(gc_id).as_sort_group_clause().expect("group clause cell");
+        let gc = run
+            .root
+            .expr_node(gc_id)
+            .as_sort_group_clause()
+            .expect("group clause cell");
         tleref_to_colnum_map[gc.tleSortGroupRef as usize] = i as i32;
     }
     let mut result: PgVec<'mcx, PgVec<'mcx, i32>> = PgVec::new_in(mcx);
@@ -220,7 +231,10 @@ pub fn extract_rollup_sets<'mcx>(
             // back-to-front: effective visit order is ascending k.
             let mut adj: Vec<i16> = Vec::new();
             for k in 1..j {
-                if set_masks[k].iter().all(|x| candidate_set.binary_search(x).is_ok()) {
+                if set_masks[k]
+                    .iter()
+                    .all(|x| candidate_set.binary_search(x).is_ok())
+                {
                     adj.push(k as i16);
                 }
             }
@@ -358,8 +372,11 @@ pub fn reorder_grouping_sets<'mcx>(
     let mut result: PgVec<'mcx, GroupingSetData<'mcx>> = PgVec::new_in(mcx);
     let mut sortclause_live = !sortclause.is_nil();
     for candidate in grouping_sets {
-        let mut new_elems: Vec<i32> =
-            candidate.iter().copied().filter(|x| !previous.contains(x)).collect();
+        let mut new_elems: Vec<i32> = candidate
+            .iter()
+            .copied()
+            .filter(|x| !previous.contains(x))
+            .collect();
 
         while sortclause_live && sortclause.len() > previous.len() && !new_elems.is_empty() {
             let sc = sortclause
@@ -401,7 +418,7 @@ fn estimate_hashagg_tablesize(
     let hashentrysize = ::nodeagg::hash_agg_entry_size(
         run.root.aggtransinfos.len(),
         width.max(0) as usize,
-        agg_costs.transitionSpace as usize,
+        agg_costs.transitionSpace,
     );
     hashentrysize * d_num_groups
 }
@@ -561,7 +578,13 @@ pub fn consider_groupingsets_paths<'mcx>(
         return Ok(());
     }
 
-    if run.gset_data.as_ref().expect("grouping sets preprocessed").rollups.is_empty() {
+    if run
+        .gset_data
+        .as_ref()
+        .expect("grouping sets preprocessed")
+        .rollups
+        .is_empty()
+    {
         return Ok(());
     }
 
@@ -570,8 +593,8 @@ pub fn consider_groupingsets_paths<'mcx>(
     if can_hash && gd.any_hashable {
         let mut hash_sets: Vec<GroupingSetData<'mcx>> =
             gd.unsortable_sets.iter().cloned().collect();
-        let availspace = hash_mem_limit
-            - estimate_hashagg_tablesize(run, path, agg_costs, gd.dNumHashGroups);
+        let availspace =
+            hash_mem_limit - estimate_hashagg_tablesize(run, path, agg_costs, gd.dNumHashGroups);
 
         let gd = run.gset_data.as_ref().unwrap();
         let mut rollups: Vec<RollupData<'mcx>> = Vec::new();

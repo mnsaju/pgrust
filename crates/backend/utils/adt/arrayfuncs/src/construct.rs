@@ -6,7 +6,9 @@ use ::types_core::{
     Oid, CHAROID, CSTRINGOID, FLOAT4OID, FLOAT8OID, INT2OID, INT4OID, INT8OID, NAMEOID, OIDOID,
     REGTYPEOID, TEXTOID, TIDOID, XIDOID,
 };
-use ::types_error::{PgError, PgResult, ERRCODE_NULL_VALUE_NOT_ALLOWED, ERRCODE_PROGRAM_LIMIT_EXCEEDED};
+use ::types_error::{
+    PgError, PgResult, ERRCODE_NULL_VALUE_NOT_ALLOWED, ERRCODE_PROGRAM_LIMIT_EXCEEDED,
+};
 
 use crate::foundation::*;
 use ::arrayutils::{array_check_bounds, array_get_n_items};
@@ -170,7 +172,9 @@ pub fn construct_array<'mcx>(
 ) -> PgResult<PgVec<'mcx, u8>> {
     let dims = [elems.len() as i32];
     let lbs = [1i32];
-    construct_md_array(mcx, elems, None, 1, &dims, &lbs, elmtype, elmlen, elmbyval, elmalign)
+    construct_md_array(
+        mcx, elems, None, 1, &dims, &lbs, elmtype, elmlen, elmbyval, elmalign,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -292,25 +296,31 @@ fn att_addlength_datum_offset(cur: usize, attlen: i32, _datum: Datum, p: *const 
     if attlen > 0 {
         cur + attlen as usize
     } else {
-        att_addlength_pointer(cur, attlen, p)
+        unsafe { att_addlength_pointer(cur, attlen, p) }
     }
 }
 
-pub(crate) fn write_header(out: &mut [u8], total_size: usize, ndim: i32, dataoffset: i32, elemtype: Oid) {
+pub(crate) fn write_header(
+    out: &mut [u8],
+    total_size: usize,
+    ndim: i32,
+    dataoffset: i32,
+    elemtype: Oid,
+) {
     out[0..4].copy_from_slice(&set_varsize_4b(total_size));
     out[4..8].copy_from_slice(&ndim.to_ne_bytes());
     out[8..12].copy_from_slice(&dataoffset.to_ne_bytes());
-    out[12..16].copy_from_slice(&(elemtype as u32).to_ne_bytes());
+    out[12..16].copy_from_slice(&elemtype.to_ne_bytes());
 }
 
 pub(crate) fn write_dims_lbounds(out: &mut [u8], ndim: i32, dims: &[i32], lbs: &[i32]) {
     let mut off = ARRAYTYPE_HDRSZ;
-    for i in 0..ndim as usize {
-        out[off..off + 4].copy_from_slice(&dims[i].to_ne_bytes());
+    for &d in dims.iter().take(ndim as usize) {
+        out[off..off + 4].copy_from_slice(&d.to_ne_bytes());
         off += 4;
     }
-    for i in 0..ndim as usize {
-        out[off..off + 4].copy_from_slice(&lbs[i].to_ne_bytes());
+    for &l in lbs.iter().take(ndim as usize) {
+        out[off..off + 4].copy_from_slice(&l.to_ne_bytes());
         off += 4;
     }
 }
@@ -365,10 +375,7 @@ pub(crate) fn copy_array_els(
 
 // C `ArrayGetIntegerTypmods` (arrayutils.c); lives here because it needs
 // deconstruct_array and arrayutils sits below this crate.
-pub fn array_get_integer_typmods<'mcx>(
-    mcx: Mcx<'mcx>,
-    arr: &[u8],
-) -> PgResult<PgVec<'mcx, i32>> {
+pub fn array_get_integer_typmods<'mcx>(mcx: Mcx<'mcx>, arr: &[u8]) -> PgResult<PgVec<'mcx, i32>> {
     if arr_elemtype(arr) != CSTRINGOID {
         return Err(Box::new(
             PgError::error("typmod array must be type cstring[]")
@@ -394,9 +401,9 @@ pub fn array_get_integer_typmods<'mcx>(
         // SAFETY: each element datum is a live NUL-terminated cstring from
         // the deconstructed image.
         let s = unsafe { core::ffi::CStr::from_ptr(d.as_usize() as *const core::ffi::c_char) };
-        out.push(::numutils::pg_strtoint32(&alloc::string::String::from_utf8_lossy(
-            s.to_bytes(),
-        ))?);
+        out.push(::numutils::pg_strtoint32(
+            &alloc::string::String::from_utf8_lossy(s.to_bytes()),
+        )?);
     }
     Ok(out)
 }

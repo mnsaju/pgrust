@@ -244,7 +244,11 @@ pub fn ConvertTimeZoneAbbrevs(abbrevs: &[TzEntry<'_>]) -> &'static ZoneAbbrevTab
             }
             None => (if abbr.is_dst { DTZ } else { TZ }, abbr.offset),
         };
-        tokens.push(DateTkn { token, typ: typ as i8, value });
+        tokens.push(DateTkn {
+            token,
+            typ: typ as i8,
+            value,
+        });
     }
     debug_assert!(crate::decode::CheckDateTokenTable(&tokens));
     Box::leak(Box::new(ZoneAbbrevTable {
@@ -278,7 +282,8 @@ pub fn FetchDynamicTimeZone<'a>(
     }
     match pg_tzset(dtza.zone) {
         Some(tz) => {
-            dtza.tz.store(tz as *const PgTz as *mut PgTz, Ordering::Release);
+            dtza.tz
+                .store(tz as *const PgTz as *mut PgTz, Ordering::Release);
             Some(tz)
         }
         None => {

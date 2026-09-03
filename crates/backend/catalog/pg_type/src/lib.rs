@@ -64,7 +64,9 @@ fn oid_not_set(loc_fn: &'static str, what: &str) -> Box<PgError> {
     Box::new(
         ereport(ERROR)
             .errcode(ERRCODE_INVALID_PARAMETER_VALUE)
-            .errmsg(format!("{what} OID value not set when in binary upgrade mode"))
+            .errmsg(format!(
+                "{what} OID value not set when in binary upgrade mode"
+            ))
             .into_error()
             .with_error_location(ErrorLocation::new(file!(), line!() as i32, loc_fn)),
     )
@@ -277,10 +279,9 @@ pub fn TypeCreate<'mcx>(mcx: Mcx<'mcx>, p: &TypeCreateParams<'_>) -> PgResult<Ob
         let desc = pg_type_desc.descr();
         let mut isnull = false;
         // SAFETY (both): fixed NOT NULL pg_type columns under its descriptor.
-        let isdefined = unsafe {
-            types_tuple::heap_getattr(tup, Anum_pg_type_typisdefined, desc, &mut isnull)
-        }
-        .as_bool();
+        let isdefined =
+            unsafe { types_tuple::heap_getattr(tup, Anum_pg_type_typisdefined, desc, &mut isnull) }
+                .as_bool();
         let typowner =
             unsafe { types_tuple::heap_getattr(tup, Anum_pg_type_typowner, desc, &mut isnull) }
                 .as_oid();
@@ -302,8 +303,7 @@ pub fn TypeCreate<'mcx>(mcx: Mcx<'mcx>, p: &TypeCreateParams<'_>) -> PgResult<Ob
         );
         let mut replaces = [true; Natts_pg_type];
         replaces[0] = false;
-        let mut newtup =
-            heaptuple::heap_modify_tuple(mcx, tup, desc, &values, &nulls, &replaces)?;
+        let mut newtup = heaptuple::heap_modify_tuple(mcx, tup, desc, &values, &nulls, &replaces)?;
         let otid = tup.t_self;
         genam::systable_endscan(mcx, scan)?;
         catalog_indexing::CatalogTupleUpdate(mcx, &pg_type_desc, &otid, &mut newtup)?;
@@ -322,7 +322,14 @@ pub fn TypeCreate<'mcx>(mcx: Mcx<'mcx>, p: &TypeCreateParams<'_>) -> PgResult<Ob
     };
 
     if !miscinit_seams::is_bootstrap_processing_mode::call() {
-        GenerateTypeDependencies(mcx, typeObjectId, p, isDependentType, typacl.as_deref(), rebuildDeps)?;
+        GenerateTypeDependencies(
+            mcx,
+            typeObjectId,
+            p,
+            isDependentType,
+            typacl.as_deref(),
+            rebuildDeps,
+        )?;
     }
 
     pg_type_desc.close(RowExclusiveLock)?;
@@ -589,13 +596,9 @@ pub fn makeMultirangeTypeName(rangeTypeName: &str, typeNamespace: Oid) -> PgResu
             n + 11
         }
     };
-    let clipped = mbutils_seams::pg_mbcliplen::call(
-        &buf[..len],
-        len as i32,
-        NAMEDATALEN as i32 - 1,
-    ) as usize;
-    let candidate =
-        core::str::from_utf8(&buf[..clipped]).expect("multirange type name UTF-8");
+    let clipped =
+        mbutils_seams::pg_mbcliplen::call(&buf[..len], len as i32, NAMEDATALEN - 1) as usize;
+    let candidate = core::str::from_utf8(&buf[..clipped]).expect("multirange type name UTF-8");
     if syscache_seams::lookup_pg_type_oid_by_name::call(candidate, typeNamespace)? != InvalidOid {
         return Err(multirange_name_taken(candidate, rangeTypeName));
     }
@@ -659,12 +662,14 @@ pub fn RenameTypeInternal<'mcx>(
     let desc = pg_type_rel.descr();
     let mut isnull = false;
     // SAFETY: fixed NOT NULL pg_type column under its descriptor.
-    let arrayOid = unsafe {
-        types_tuple::heap_getattr(tup, Anum_pg_type_typarray, desc, &mut isnull)
-    }
-    .as_oid();
+    let arrayOid =
+        unsafe { types_tuple::heap_getattr(tup, Anum_pg_type_typarray, desc, &mut isnull) }
+            .as_oid();
 
-    assert!(newTypeName.len() < NAMEDATALEN as usize, "type name truncation unported");
+    assert!(
+        newTypeName.len() < NAMEDATALEN as usize,
+        "type name truncation unported"
+    );
     let mut namebuf: mcx::PgVec<'mcx, u8> = mcx::vec_with_capacity_in(mcx, 64)?;
     mcx::vec_append_bytes(&mut namebuf, newTypeName.as_bytes())?;
     mcx::vec_append_bytes(&mut namebuf, &[0u8; 64][..64 - newTypeName.len()])?;
@@ -779,4 +784,3 @@ mod pg_upgrade_oid_tests {
         assert_eq!(take_next_mrng_array_pg_type_oid(), None);
     }
 }
-

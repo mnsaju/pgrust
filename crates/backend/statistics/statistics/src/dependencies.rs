@@ -28,7 +28,11 @@ impl<'mcx> DependencyGenerator<'mcx> {
         let mut current: PgVec<'mcx, u32> = mcx::vec_with_capacity_in(mcx, k)?;
         current.resize(k, 0);
         recurse(&mut dependencies, &mut current, 0, 0, k, n);
-        Ok(DependencyGenerator { k, dependencies, current: 0 })
+        Ok(DependencyGenerator {
+            k,
+            dependencies,
+            current: 0,
+        })
     }
 
     fn next(&mut self) -> Option<&[u32]> {
@@ -41,7 +45,14 @@ impl<'mcx> DependencyGenerator<'mcx> {
     }
 }
 
-fn recurse(out: &mut PgVec<'_, u32>, current: &mut [u32], index: usize, start: usize, k: usize, n: usize) {
+fn recurse(
+    out: &mut PgVec<'_, u32>,
+    current: &mut [u32],
+    index: usize,
+    start: usize,
+    k: usize,
+    n: usize,
+) {
     if index < k - 1 {
         for i in start..n {
             current[index] = i as u32;
@@ -58,11 +69,7 @@ fn recurse(out: &mut PgVec<'_, u32>, current: &mut [u32], index: usize, start: u
     }
 }
 
-fn dependency_degree(
-    mcx: Mcx<'_>,
-    data: &StatsBuildData<'_>,
-    dependency: &[u32],
-) -> PgResult<f64> {
+fn dependency_degree(mcx: Mcx<'_>, data: &StatsBuildData<'_>, dependency: &[u32]) -> PgResult<f64> {
     let k = dependency.len();
     let dims: PgVec<'_, usize> = {
         let mut v = mcx::vec_with_capacity_in(mcx, k)?;
@@ -81,9 +88,7 @@ fn dependency_degree(
     let mut n_violations = 0i64;
     let mut n_supporting_rows = 0i64;
     for i in 1..=nitems {
-        if i == nitems
-            || store.compare_dims(&mut mss, 0, k - 2, items[i - 1], items[i]) != 0
-        {
+        if i == nitems || store.compare_dims(&mut mss, 0, k - 2, items[i - 1], items[i]) != 0 {
             if n_violations == 0 {
                 n_supporting_rows += group_size;
             }

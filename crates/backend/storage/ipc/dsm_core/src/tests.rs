@@ -46,7 +46,7 @@ fn bringup() -> MutexGuard<'static, ()> {
             device: 0,
             inode: 0,
         }));
-        dsm_postmaster_startup(shim).unwrap();
+        unsafe { dsm_postmaster_startup(shim) }.unwrap();
         assert_eq!(REGISTERED_EXITS.load(Ordering::Relaxed), 1);
         assert_ne!(shim.dsm_control, 0);
         assert_eq!(shim.dsm_control & 1, 0);
@@ -174,7 +174,9 @@ fn trace_cb(_seg: DsmSegmentId, arg: usize) -> types_error::PgResult<()> {
 
 fn err_cb(_seg: DsmSegmentId, arg: usize) -> types_error::PgResult<()> {
     CB_TRACE.lock().unwrap().push(arg);
-    Err(Box::new(types_error::PgError::error("detach callback failed")))
+    Err(Box::new(types_error::PgError::error(
+        "detach callback failed",
+    )))
 }
 
 #[test]

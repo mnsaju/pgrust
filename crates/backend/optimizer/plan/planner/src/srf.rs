@@ -45,7 +45,11 @@ impl<'mcx> nodes_core::NodeWalker<'mcx> for SplitContext<'mcx> {
             }
             None => node,
         };
-        if self.input_target_exprs.iter().any(|&e| types_nodes::equal(e, cmp_node)) {
+        if self
+            .input_target_exprs
+            .iter()
+            .any(|&e| types_nodes::equal(e, cmp_node))
+        {
             self.current_input_vars.push((node, self.current_sgref));
             return Ok(false);
         }
@@ -127,14 +131,12 @@ fn split_pathtarget_at_srfs_extended<'mcx>(
     }
     // Crossing the grouping boundary: strip the grouping RT index before
     // matching input_target, as set_upper_references does (tlist.c:1151-1165).
-    let sanitize_group_rtindex = if is_grouping_target
-        && run.parse().hasGroupRTE
-        && !run.parse().groupingSets.is_nil()
-    {
-        Some(run.root.group_rtindex)
-    } else {
-        None
-    };
+    let sanitize_group_rtindex =
+        if is_grouping_target && run.parse().hasGroupRTE && !run.parse().groupingSets.is_nil() {
+            Some(run.root.group_rtindex)
+        } else {
+            None
+        };
     let mut input_target_exprs: PgVec<'mcx, Node<'mcx>> = PgVec::new_in(mcx);
     if let Some(it) = input_target {
         for i in 0..run.root.pathtarget(it).exprs.len() {
@@ -334,8 +336,7 @@ pub fn adjust_paths_for_srfs<'mcx>(
                 run.root.alloc_path(p)
             } else {
                 let safe = crate::is_parallel_safe_exprs(run, target)?;
-                let p =
-                    crate::pathnode::create_projection_path(run, rel_id, newpath, target, safe);
+                let p = crate::pathnode::create_projection_path(run, rel_id, newpath, target, safe);
                 run.root.alloc_path(p)
             };
         }

@@ -24,12 +24,12 @@ const MAXPG_LSNCOMPONENT: usize = 8;
 
 pub fn pg_lsn_in_internal(s: &[u8]) -> Option<XLogRecPtr> {
     let len1 = s.iter().take_while(|b| b.is_ascii_hexdigit()).count();
-    if len1 < 1 || len1 > MAXPG_LSNCOMPONENT || s.get(len1) != Some(&b'/') {
+    if !(1..=MAXPG_LSNCOMPONENT).contains(&len1) || s.get(len1) != Some(&b'/') {
         return None;
     }
     let rest = &s[len1 + 1..];
     let len2 = rest.iter().take_while(|b| b.is_ascii_hexdigit()).count();
-    if len2 < 1 || len2 > MAXPG_LSNCOMPONENT || len2 != rest.len() {
+    if !(1..=MAXPG_LSNCOMPONENT).contains(&len2) || len2 != rest.len() {
         return None;
     }
     let id = u32::from_str_radix(core::str::from_utf8(&s[..len1]).ok()?, 16).ok()?;
@@ -39,8 +39,11 @@ pub fn pg_lsn_in_internal(s: &[u8]) -> Option<XLogRecPtr> {
 
 #[cold]
 fn invalid_lsn(s: &str) -> PgError {
-    PgError::error(format!("invalid input syntax for type {}: \"{s}\"", "pg_lsn"))
-        .with_sqlstate(ERRCODE_INVALID_TEXT_REPRESENTATION)
+    PgError::error(format!(
+        "invalid input syntax for type {}: \"{s}\"",
+        "pg_lsn"
+    ))
+    .with_sqlstate(ERRCODE_INVALID_TEXT_REPRESENTATION)
 }
 
 pub fn pg_lsn_in(s: &str, escontext: Option<&mut SoftErrorContext>) -> PgResult<XLogRecPtr> {
@@ -128,8 +131,11 @@ pub fn pg_lsn_mi(lsn1: XLogRecPtr, lsn2: XLogRecPtr) -> PgResult<NumericImage> {
 #[cold]
 fn nan_arith(op: &str) -> Box<PgError> {
     Box::new(
-        PgError::error(format!("cannot {op} NaN {} pg_lsn", if op == "add" { "to" } else { "from" }))
-            .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED),
+        PgError::error(format!(
+            "cannot {op} NaN {} pg_lsn",
+            if op == "add" { "to" } else { "from" }
+        ))
+        .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED),
     )
 }
 

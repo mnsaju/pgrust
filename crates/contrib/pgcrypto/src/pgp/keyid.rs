@@ -1,4 +1,3 @@
-
 use super::consts::*;
 use super::packet::PktReader;
 
@@ -16,7 +15,7 @@ fn read_mpi(data: &[u8], pos: &mut usize) -> Result<Vec<u8>, ()> {
     }
     let bits = ((data[*pos] as usize) << 8) | data[*pos + 1] as usize;
     *pos += 2;
-    let bytes = (bits + 7) / 8;
+    let bytes = bits.div_ceil(8);
     if *pos + bytes > data.len() {
         return Err(());
     }

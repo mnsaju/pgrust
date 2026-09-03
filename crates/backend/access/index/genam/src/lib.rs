@@ -49,7 +49,14 @@ fn systable_scan_catalog(
     consume: &mut dyn FnMut(&HeapTupleData<'_>) -> PgResult<bool>,
 ) -> PgResult<bool> {
     let scan_cx = MemoryContext::new("systable_scan_catalog");
-    scan_catalog(scan_cx.mcx(), relation.rd_id, index_oid, index_ok, keys, consume)
+    scan_catalog(
+        scan_cx.mcx(),
+        relation.rd_id,
+        index_oid,
+        index_ok,
+        keys,
+        consume,
+    )
 }
 
 fn scan_catalog<'mcx>(
@@ -128,14 +135,12 @@ pub fn systable_beginscan<'mcx>(
     snapshot: Option<Rc<SnapshotData<'mcx>>>,
     key: &[ScanKeyData],
 ) -> PgResult<SysScanDescData<'mcx>> {
-    let irel = if indexOK
-        && !miscinit::IgnoreSystemIndexes()
-        && !reindex_is_processing_index(indexId)
-    {
-        Some(indexam::index_open(mcx, indexId, AccessShareLock)?)
-    } else {
-        None
-    };
+    let irel =
+        if indexOK && !miscinit::IgnoreSystemIndexes() && !reindex_is_processing_index(indexId) {
+            Some(indexam::index_open(mcx, indexId, AccessShareLock)?)
+        } else {
+            None
+        };
 
     let slot = tableam::table_slot_create(mcx, heapRelation)?;
     let (snap, registered) = setup_snapshot(mcx, heapRelation.rd_id, snapshot)?;
@@ -144,8 +149,7 @@ pub fn systable_beginscan<'mcx>(
     let arm = match irel {
         Some(irel) => {
             let idxkey = convert_scan_keys(mcx, &irel, key)?;
-            let mut iscan =
-                indexam::index_beginscan(mcx, heapRelation, &irel, snap, nkeys, 0)?;
+            let mut iscan = indexam::index_beginscan(mcx, heapRelation, &irel, snap, nkeys, 0)?;
             indexam::index_rescan(&mut iscan, Some(&idxkey), None)?;
             SysScanArm::Index { irel, iscan }
         }
@@ -186,8 +190,7 @@ pub fn systable_getnext<'a, 'mcx>(
     let SysScanDescData { arm, slot, .. } = sysscan;
     let found = match arm {
         SysScanArm::Index { iscan, .. } => {
-            let found =
-                indexam::index_getnext_slot(mcx, iscan, ForwardScanDirection, slot)?;
+            let found = indexam::index_getnext_slot(mcx, iscan, ForwardScanDirection, slot)?;
             if found && iscan.xs_recheck {
                 return Err(lossy_sysscan());
             }
@@ -217,11 +220,8 @@ pub fn systable_recheck_tuple<'mcx>(
         snapmgr_seams::get_catalog_snapshot::call(sysscan.heap_rel.rd_id)?,
     )?);
 
-    let result = tableam::table_tuple_satisfies_snapshot(
-        &sysscan.heap_rel,
-        &mut sysscan.slot,
-        &freshsnap,
-    )?;
+    let result =
+        tableam::table_tuple_satisfies_snapshot(&sysscan.heap_rel, &mut sysscan.slot, &freshsnap)?;
 
     snapmgr_seams::unregister_snapshot::call(freshsnap.expect("registered above"));
 
@@ -408,7 +408,10 @@ pub fn systable_inplace_update_begin<'mcx>(
         })?;
         if locked {
             let copy = heaptuple::heap_copytuple(mcx, &oldtup)?;
-            return Ok(Some((copy, scan_opt.take().expect("scan released on success"))));
+            return Ok(Some((
+                copy,
+                scan_opt.take().expect("scan released on success"),
+            )));
         }
     }
 }
@@ -423,10 +426,7 @@ pub fn systable_inplace_update_finish(
     systable_endscan(mcx, state)
 }
 
-pub fn systable_inplace_update_cancel(
-    mcx: Mcx<'_>,
-    state: SysScanDescData<'_>,
-) -> PgResult<()> {
+pub fn systable_inplace_update_cancel(mcx: Mcx<'_>, state: SysScanDescData<'_>) -> PgResult<()> {
     let (oldtup, buffer) = slot_buffer_tuple(&state.slot);
     heapam::heap_inplace_unlock(&state.heap_rel, &oldtup, buffer)?;
     systable_endscan(mcx, state)
@@ -481,10 +481,9 @@ pub fn BuildIndexValueDescription<'mcx>(
             let mut finfo = fmgr_core::fmgr_info(foutoid)?;
             let out = fmgr_core::function_call1_coll_in(&mut finfo, 0, mcx, values[i])?;
             // SAFETY: output fns return a NUL-terminated cstring datum.
-            let s = unsafe {
-                core::ffi::CStr::from_ptr(out.as_usize() as *const core::ffi::c_char)
-            }
-            .to_bytes();
+            let s =
+                unsafe { core::ffi::CStr::from_ptr(out.as_usize() as *const core::ffi::c_char) }
+                    .to_bytes();
             buf.push_str(core::str::from_utf8(s).expect("type output is UTF-8"));
         }
     }
@@ -544,10 +543,7 @@ fn skey_vec<'mcx>(mcx: Mcx<'mcx>, cap: usize) -> PgResult<PgVec<'mcx, ScanKeyDat
     Ok(v)
 }
 
-fn skey_slice_in<'mcx>(
-    mcx: Mcx<'mcx>,
-    key: &[ScanKeyData],
-) -> PgResult<PgVec<'mcx, ScanKeyData>> {
+fn skey_slice_in<'mcx>(mcx: Mcx<'mcx>, key: &[ScanKeyData]) -> PgResult<PgVec<'mcx, ScanKeyData>> {
     let mut v = skey_vec(mcx, key.len())?;
     for k in key {
         v.push(k.clone());

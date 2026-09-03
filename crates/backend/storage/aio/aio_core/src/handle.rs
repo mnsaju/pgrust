@@ -35,19 +35,24 @@ pub(crate) fn loc(funcname: &'static str) -> ErrorLocation {
     ErrorLocation::new(site.file(), site.line() as i32, funcname)
 }
 
-pub fn pgaio_io_acquire(
+/// # Safety
+/// As [`pgaio_io_acquire_nb`].
+pub unsafe fn pgaio_io_acquire(
     resowner: Option<types_resowner::ResourceOwner>,
     ret: *mut PgAioReturn,
 ) -> PgResult<u32> {
     loop {
-        if let Some(h) = pgaio_io_acquire_nb(resowner, ret)? {
+        if let Some(h) = unsafe { pgaio_io_acquire_nb(resowner, ret)? } {
             return Ok(h);
         }
         pgaio_io_wait_for_free()?;
     }
 }
 
-pub fn pgaio_io_acquire_nb(
+/// # Safety
+/// `ret`, if non-null, must be writable for a `PgAioReturn`, live for the
+/// duration of the IO it's handed out for.
+pub unsafe fn pgaio_io_acquire_nb(
     resowner: Option<types_resowner::ResourceOwner>,
     ret: *mut PgAioReturn,
 ) -> PgResult<Option<u32>> {
@@ -154,8 +159,7 @@ pub fn pgaio_io_release_resowner(index: u32, on_error: bool) {
             }
             pgaio_submit_staged().expect("pgaio_io_release_resowner: submit staged");
         }
-        _ => {
-        }
+        _ => {}
     }
 
     // SAFETY: owner thread; reclaim above may have re-entered d, re-borrow.
@@ -258,7 +262,9 @@ pub(crate) fn pgaio_io_needs_synchronous_execution(index: u32) -> bool {
     }
     match crate::pgaio_method_kind() {
         IoMethodKind::Sync => true,
-        IoMethodKind::Worker => crate::method_worker::pgaio_worker_needs_synchronous_execution(index),
+        IoMethodKind::Worker => {
+            crate::method_worker::pgaio_worker_needs_synchronous_execution(index)
+        }
     }
 }
 
@@ -323,7 +329,11 @@ fn pgaio_io_wait(index: u32, ref_generation: u64) -> PgResult<()> {
         )
     {
         // C: elog(PANIC, ...).
-        panic!("waiting for own IO {} in wrong state: {}", index, state_name(state));
+        panic!(
+            "waiting for own IO {} in wrong state: {}",
+            index,
+            state_name(state)
+        );
     }
 
     loop {
@@ -417,7 +427,10 @@ fn pgaio_io_reclaim(index: u32) {
     d.num_callbacks = 0;
     d.handle_data_len = 0;
     d.report_return = std::ptr::null_mut();
-    d.distilled_result = PgAioResult { status: PgAioResultStatus::Unknown, ..Default::default() };
+    d.distilled_result = PgAioResult {
+        status: PgAioResultStatus::Unknown,
+        ..Default::default()
+    };
     h.flags.store(0, Ordering::Relaxed);
     h.result.store(0, Ordering::Relaxed);
 
@@ -434,9 +447,7 @@ fn pgaio_io_wait_for_free() -> PgResult<()> {
     let mut reclaimed = 0;
 
     // SAFETY: owner-thread slot access (copied out, no reference held).
-    let io_handle_off = {
-        crate::backend_slot(my_backend_procno()).io_handle_off
-    };
+    let io_handle_off = { crate::backend_slot(my_backend_procno()).io_handle_off };
     let imc = crate::io_max_concurrency() as u32;
 
     for i in 0..imc {
@@ -464,7 +475,12 @@ fn pgaio_io_wait_for_free() -> PgResult<()> {
     // SAFETY: as above.
     let (in_flight_head, in_flight_count, num_staged, idle_count) = unsafe {
         let mb = my_backend();
-        (mb.in_flight_ios.head, mb.in_flight_ios.count, mb.num_staged_ios, mb.idle_ios.count)
+        (
+            mb.in_flight_ios.head,
+            mb.in_flight_ios.count,
+            mb.num_staged_ios,
+            mb.idle_ios.count,
+        )
     };
 
     if in_flight_count == 0 {
@@ -483,7 +499,10 @@ fn pgaio_io_wait_for_free() -> PgResult<()> {
         let generation = h.generation.load(Ordering::Relaxed);
 
         match h.state() {
-            PGAIO_HS_IDLE | PGAIO_HS_DEFINED | PGAIO_HS_HANDED_OUT | PGAIO_HS_STAGED
+            PGAIO_HS_IDLE
+            | PGAIO_HS_DEFINED
+            | PGAIO_HS_HANDED_OUT
+            | PGAIO_HS_STAGED
             | PGAIO_HS_COMPLETED_LOCAL => {
                 ereport(ERROR)
                     .errmsg_internal(format!(
@@ -524,7 +543,6 @@ fn state_name(s: u8) -> &'static str {
     }
 }
 
-
 fn pgaio_io_from_wref(iow: &PgAioWaitRef) -> (u32, u64) {
     debug_assert!((iow.aio_index as usize) < handle_count());
     let ref_generation = ((iow.generation_upper as u64) << 32) | iow.generation_lower as u64;
@@ -564,7 +582,6 @@ pub fn pgaio_wref_check_done(iow: &PgAioWaitRef) -> bool {
 
     false
 }
-
 
 pub fn pgaio_enter_batchmode() -> PgResult<()> {
     // SAFETY: owner-thread slot access.
@@ -614,9 +631,7 @@ pub fn pgaio_submit_staged() -> PgResult<()> {
                 .finish(loc("pgaio_submit_staged"))?;
             unreachable!("ERROR reported");
         }
-        IoMethodKind::Worker => {
-            crate::method_worker::pgaio_worker_submit(&staged.0[..staged.1])
-        }
+        IoMethodKind::Worker => crate::method_worker::pgaio_worker_submit(&staged.0[..staged.1]),
     };
     g::EndCriticalSection();
     submit_result?;
@@ -625,7 +640,6 @@ pub fn pgaio_submit_staged() -> PgResult<()> {
     unsafe { my_backend() }.num_staged_ios = 0;
     Ok(())
 }
-
 
 pub fn pgaio_error_cleanup() {
     if MY_BACKEND.get().is_none() {
@@ -652,7 +666,10 @@ pub fn AtEOXact_Aio(_is_commit: bool) {
     // SAFETY: owner-thread slot access.
     if unsafe { my_backend() }.in_batchmode {
         pgaio_error_cleanup();
-        let _ = elog::elog(WARNING, "open AIO batch at end of (sub-)transaction".to_string());
+        let _ = elog::elog(
+            WARNING,
+            "open AIO batch at end of (sub-)transaction".to_string(),
+        );
     }
     // SAFETY: as above.
     debug_assert!(unsafe { my_backend() }.num_staged_ios == 0);

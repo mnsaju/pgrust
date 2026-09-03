@@ -194,7 +194,7 @@ mod tests {
         assert!(!xml_is_base_char_q(0xd7)); // ×
         assert!(!xml_is_base_char_q(0xf7)); // ÷
         assert!(xml_is_base_char_q(0xff)); // ÿ
-        // Table arm: boundaries of the first and last ranges.
+                                           // Table arm: boundaries of the first and last ranges.
         assert!(xml_is_base_char_q(0x100));
         assert!(xml_is_base_char_q(0x131));
         assert!(!xml_is_base_char_q(0x132)); // gap before 0x134

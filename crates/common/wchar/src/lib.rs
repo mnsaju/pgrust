@@ -1,5 +1,10 @@
 #![no_std]
 #![allow(non_camel_case_types, non_upper_case_globals, non_snake_case)]
+// The dsplen tables below mirror C's per-encoding display-width functions
+// verbatim: several distinct lead-byte classes legitimately share the same
+// display width, which reads to clippy as duplicate if/else-if bodies even
+// though the conditions test unrelated byte classes.
+#![allow(clippy::if_same_then_else)]
 
 pub type pg_wchar = u32;
 pub type pg_enc = i32;
@@ -940,8 +945,8 @@ fn pg_johab_verifychar(s: &[u8]) -> i32 {
     if !is_highbit_set(s[0]) {
         return mbl;
     }
-    for i in 1..mbl as usize {
-        if !is_euc_range_valid(s[i]) {
+    for &b in s.iter().take(mbl as usize).skip(1) {
+        if !is_euc_range_valid(b) {
             return -1;
         }
     }
@@ -957,8 +962,8 @@ fn pg_mule_verifychar(s: &[u8]) -> i32 {
     if (s.len() as i32) < mbl {
         return -1;
     }
-    for i in 1..mbl as usize {
-        if !is_highbit_set(s[i]) {
+    for &b in s.iter().take(mbl as usize).skip(1) {
+        if !is_highbit_set(b) {
             return -1;
         }
     }
@@ -1011,8 +1016,8 @@ fn pg_big5_verifychar(s: &[u8]) -> i32 {
     if mbl == 2 && nonutf8_invalid_pair(s) {
         return -1;
     }
-    for i in 1..mbl as usize {
-        if s[i] == 0 {
+    for &b in s.iter().take(mbl as usize).skip(1) {
+        if b == 0 {
             return -1;
         }
     }
@@ -1031,8 +1036,8 @@ fn pg_gbk_verifychar(s: &[u8]) -> i32 {
     if mbl == 2 && nonutf8_invalid_pair(s) {
         return -1;
     }
-    for i in 1..mbl as usize {
-        if s[i] == 0 {
+    for &b in s.iter().take(mbl as usize).skip(1) {
+        if b == 0 {
             return -1;
         }
     }
@@ -1051,8 +1056,8 @@ fn pg_uhc_verifychar(s: &[u8]) -> i32 {
     if mbl == 2 && nonutf8_invalid_pair(s) {
         return -1;
     }
-    for i in 1..mbl as usize {
-        if s[i] == 0 {
+    for &b in s.iter().take(mbl as usize).skip(1) {
+        if b == 0 {
             return -1;
         }
     }
@@ -1353,8 +1358,7 @@ pub fn pg_encoding_mblen(encoding: i32, mbstr: &[u8]) -> i32 {
 }
 
 pub fn pg_encoding_mblen_or_incomplete(encoding: i32, mbstr: &[u8]) -> i32 {
-    if mbstr.is_empty() || (encoding == PG_GB18030 && is_highbit_set(mbstr[0]) && mbstr.len() < 2)
-    {
+    if mbstr.is_empty() || (encoding == PG_GB18030 && is_highbit_set(mbstr[0]) && mbstr.len() < 2) {
         return i32::MAX;
     }
     pg_encoding_mblen(encoding, mbstr)

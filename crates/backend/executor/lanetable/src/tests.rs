@@ -16,8 +16,14 @@ fn software_crc32cx_parity() {
     let mut x: u64 = 0x243F_6A88_85A3_08D3;
     let mut crc: u32 = 0;
     for _ in 0..4096 {
-        x = x.wrapping_mul(0x9E37_79B9_7F4A_7C15).wrapping_add(0xB5AD_4ECE_DA1C_E2A9);
-        assert_eq!(crc32cx(crc, x), crc32cx_sw(crc, x), "data={x:#x} crc={crc:#x}");
+        x = x
+            .wrapping_mul(0x9E37_79B9_7F4A_7C15)
+            .wrapping_add(0xB5AD_4ECE_DA1C_E2A9);
+        assert_eq!(
+            crc32cx(crc, x),
+            crc32cx_sw(crc, x),
+            "data={x:#x} crc={crc:#x}"
+        );
         crc = crc32cx(crc, x);
     }
 }
@@ -76,7 +82,11 @@ fn miri_scale_unsafe_paths() {
         .map(|i| ((i as u64 * 48271 % 300).wrapping_mul(0x9E37_79B9_7F4A_7C15)) as i64)
         .collect();
     let mut results: Vec<Vec<(i64, i64)>> = Vec::new();
-    for mode in [PrefetchMode::None, PrefetchMode::PreTouch, PrefetchMode::Adaptive] {
+    for mode in [
+        PrefetchMode::None,
+        PrefetchMode::PreTouch,
+        PrefetchMode::Adaptive,
+    ] {
         let mut tb = LaneAggTable::new(KeyRepr::Int, 16, 64);
         let (mut hashes, mut out, mut new_out) = (Vec::new(), Vec::new(), Vec::new());
         for chunk in keys.chunks(512) {
@@ -90,7 +100,11 @@ fn miri_scale_unsafe_paths() {
         }
         let mut rows: Vec<(i64, i64)> = (0..tb.nrows())
             // SAFETY: live rows.
-            .map(|i| (tb.row_key_int(i).unwrap(), unsafe { *states_i64(tb.row_states(i)) }))
+            .map(|i| {
+                (tb.row_key_int(i).unwrap(), unsafe {
+                    *states_i64(tb.row_states(i))
+                })
+            })
             .collect();
         rows.sort();
         results.push(rows);
@@ -119,8 +133,15 @@ fn miri_scale_unsafe_paths() {
     let mut tby = LaneAggTable::new(KeyRepr::Bytes, 8, 16);
     let corpus: Vec<Vec<u8>> = (0..300)
         .map(|i| {
-            let s =
-                format!("k-{}{}", i % 70, if i % 3 == 0 { "-with-a-long-suffix" } else { "" });
+            let s = format!(
+                "k-{}{}",
+                i % 70,
+                if i % 3 == 0 {
+                    "-with-a-long-suffix"
+                } else {
+                    ""
+                }
+            );
             s.into_bytes()
         })
         .collect();
@@ -231,11 +252,16 @@ fn int_negative_and_extreme_keys() {
     let mut got: Vec<(i64, i64)> = (0..t.nrows())
         .map(|i| {
             // SAFETY: live row.
-            (t.row_key_int(i).unwrap(), unsafe { *states_i64(t.row_states(i)) })
+            (t.row_key_int(i).unwrap(), unsafe {
+                *states_i64(t.row_states(i))
+            })
         })
         .collect();
     got.sort();
-    assert_eq!(got, vec![(i64::MIN, 2), (-1, 1), (0, 2), (1, 1), (i64::MAX, 1)]);
+    assert_eq!(
+        got,
+        vec![(i64::MIN, 2), (-1, 1), (0, 2), (1, 1), (i64::MAX, 1)]
+    );
 }
 
 #[test]
@@ -264,7 +290,11 @@ fn batch_modes_agree() {
         .map(|i| ((i as u64 * 48271 % card).wrapping_mul(0x9E37_79B9_7F4A_7C15)) as i64)
         .collect();
     let mut results: Vec<Vec<(i64, i64, i64)>> = Vec::new();
-    for mode in [PrefetchMode::None, PrefetchMode::PreTouch, PrefetchMode::Adaptive] {
+    for mode in [
+        PrefetchMode::None,
+        PrefetchMode::PreTouch,
+        PrefetchMode::Adaptive,
+    ] {
         let mut t = LaneAggTable::new(KeyRepr::Int, 16, 64);
         let (mut hashes, mut out, mut new_out) = (Vec::new(), Vec::new(), Vec::new());
         for chunk in keys.chunks(1024) {
@@ -333,7 +363,11 @@ fn batch_install_matches_incumbent() {
                 assert_eq!(a.nrows(), b.nrows(), "row count diverged");
                 for i in 0..a.nrows() {
                     // Row INSERTION ORDER must match exactly (unsorted).
-                    assert_eq!(a.row_key_int(i), b.row_key_int(i), "row order diverged at {i}");
+                    assert_eq!(
+                        a.row_key_int(i),
+                        b.row_key_int(i),
+                        "row order diverged at {i}"
+                    );
                     let (sa, sb) = (states_i64(a.row_states(i)), states_i64(b.row_states(i)));
                     // SAFETY: live rows.
                     unsafe {
@@ -350,7 +384,15 @@ fn bytes_short_and_long() {
     let mut t = LaneAggTable::new(KeyRepr::Bytes, 8, 16);
     let corpus: Vec<Vec<u8>> = (0..3000)
         .map(|i| {
-            let s = format!("key-{}{}", i % 700, if i % 3 == 0 { "-with-a-long-suffix" } else { "" });
+            let s = format!(
+                "key-{}{}",
+                i % 700,
+                if i % 3 == 0 {
+                    "-with-a-long-suffix"
+                } else {
+                    ""
+                }
+            );
             s.into_bytes()
         })
         .collect();
@@ -425,7 +467,12 @@ fn bytes_arena_reserve_preserves_contents() {
             let k = t.row_key_bytes(i, &mut scratch).unwrap().to_vec();
             // SAFETY: live row.
             let c = unsafe { *states_i64(t.row_states(i)) };
-            assert_eq!(reference[&k], c, "hint {hint} key {:?}", String::from_utf8_lossy(&k));
+            assert_eq!(
+                reference[&k],
+                c,
+                "hint {hint} key {:?}",
+                String::from_utf8_lossy(&k)
+            );
         }
         // Capacity is accounted (mem_used) and must at least hold the arena.
         assert!(t.mem_used() > 0);
@@ -496,7 +543,15 @@ fn bytes_crc_hash_roundtrip() {
     let mut t = LaneAggTable::with_config(KeyRepr::Bytes, 8, 16, HashKind::Crc, EntryLayout::Salt8);
     let corpus: Vec<Vec<u8>> = (0..3000)
         .map(|i| {
-            let s = format!("key-{}{}", i % 700, if i % 3 == 0 { "-with-a-long-suffix" } else { "" });
+            let s = format!(
+                "key-{}{}",
+                i % 700,
+                if i % 3 == 0 {
+                    "-with-a-long-suffix"
+                } else {
+                    ""
+                }
+            );
             s.into_bytes()
         })
         .collect();
@@ -519,8 +574,7 @@ fn bytes_crc_hash_roundtrip() {
 
 #[test]
 fn inline_layout_reset_reuses() {
-    let mut t =
-        LaneAggTable::with_config(KeyRepr::Int, 8, 4, HashKind::Crc, EntryLayout::Inline16);
+    let mut t = LaneAggTable::with_config(KeyRepr::Int, 8, 4, HashKind::Crc, EntryLayout::Inline16);
     for k in 0..10_000i64 {
         t.probe_int(k, t.hash_key_int(k as u64));
     }
@@ -664,7 +718,9 @@ fn i128_word_boundaries_distinct() {
     let mut got: Vec<([u64; 2], i64)> = (0..t.nrows())
         .map(|i| {
             // SAFETY: live row.
-            (t.row_key_i128(i).unwrap(), unsafe { *states_i64(t.row_states(i)) })
+            (t.row_key_i128(i).unwrap(), unsafe {
+                *states_i64(t.row_states(i))
+            })
         })
         .collect();
     got.sort();
@@ -705,7 +761,8 @@ fn i128_batch_modes_agree_with_per_row() {
             v.sort();
             v
         };
-        let mut per_row = LaneAggTable::with_config(KeyRepr::Int128, 16, 64, hash, EntryLayout::Salt8);
+        let mut per_row =
+            LaneAggTable::with_config(KeyRepr::Int128, 16, 64, hash, EntryLayout::Salt8);
         for &k in &keys {
             let pr = per_row.probe_i128(k, per_row.hash_key_i128(k));
             // SAFETY: zeroed 16-byte states.
@@ -716,7 +773,11 @@ fn i128_batch_modes_agree_with_per_row() {
             }
         }
         assert!(per_row.is_two_level());
-        for mode in [PrefetchMode::None, PrefetchMode::PreTouch, PrefetchMode::Adaptive] {
+        for mode in [
+            PrefetchMode::None,
+            PrefetchMode::PreTouch,
+            PrefetchMode::Adaptive,
+        ] {
             let mut t =
                 LaneAggTable::with_config(KeyRepr::Int128, 16, 64, hash, EntryLayout::Salt8);
             let mut hashes = Vec::new();
@@ -808,5 +869,8 @@ fn ledger_charge_balances_across_lifecycle() {
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
     let after = mcx::global_footprint::bytes();
-    assert!(ok, "ledger did not balance after Drop: base {base}, after {after}");
+    assert!(
+        ok,
+        "ledger did not balance after Drop: base {base}, after {after}"
+    );
 }

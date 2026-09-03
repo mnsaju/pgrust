@@ -66,7 +66,7 @@ fc_uuid2! {
 
 pub fn fc_uuid_recv(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: recv arg0 is the live StringInfo pointer per the recv ABI.
-    let buf = unsafe { fcinfo.arg_stringinfo(0) };
+    let buf = unsafe { &mut *fcinfo.arg_stringinfo(0) };
     let uuid = crate::uuid_recv(buf)?;
     byref_result(fcinfo.result_mcx(), &uuid)
 }
@@ -138,7 +138,14 @@ pub fn fc_uuidv7_interval(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 // pg_proc.dat rows for uuid.c (all proisstrict, none retset), OID-ascending.

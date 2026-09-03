@@ -109,7 +109,9 @@ mod tests {
         let mut st = NetworkAbbrevState::new();
         let mut x: u64 = 3;
         let mut next = |limit: u64| {
-            x = x.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            x = x
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             (x >> 33) % limit
         };
         let mut vals: Vec<Vec<u8>> = Vec::new();

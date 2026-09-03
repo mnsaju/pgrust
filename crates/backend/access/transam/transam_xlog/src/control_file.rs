@@ -109,7 +109,12 @@ pub fn ReadControlFile() -> PgResult<()> {
     };
 
     if cf.catalog_version_no != CATALOG_VERSION_NO {
-        mism("CATALOG_VERSION_NO", cf.catalog_version_no as i64, CATALOG_VERSION_NO as i64, INITDB_HINT)?;
+        mism(
+            "CATALOG_VERSION_NO",
+            cf.catalog_version_no as i64,
+            CATALOG_VERSION_NO as i64,
+            INITDB_HINT,
+        )?;
     }
     if cf.maxAlign != 8 {
         mism("MAXALIGN", cf.maxAlign as i64, 8, INITDB_HINT)?;
@@ -121,25 +126,60 @@ pub fn ReadControlFile() -> PgResult<()> {
         )?;
     }
     if cf.blcksz != types_core::BLCKSZ as u32 {
-        mism("BLCKSZ", cf.blcksz as i64, types_core::BLCKSZ as i64, RECOMPILE_HINT)?;
+        mism(
+            "BLCKSZ",
+            cf.blcksz as i64,
+            types_core::BLCKSZ as i64,
+            RECOMPILE_HINT,
+        )?;
     }
     if cf.relseg_size != types_storage::smgr::RELSEG_SIZE {
-        mism("RELSEG_SIZE", cf.relseg_size as i64, types_storage::smgr::RELSEG_SIZE as i64, RECOMPILE_HINT)?;
+        mism(
+            "RELSEG_SIZE",
+            cf.relseg_size as i64,
+            types_storage::smgr::RELSEG_SIZE as i64,
+            RECOMPILE_HINT,
+        )?;
     }
     if cf.xlog_blcksz != crate::XLOG_BLCKSZ as u32 {
-        mism("XLOG_BLCKSZ", cf.xlog_blcksz as i64, crate::XLOG_BLCKSZ as i64, RECOMPILE_HINT)?;
+        mism(
+            "XLOG_BLCKSZ",
+            cf.xlog_blcksz as i64,
+            crate::XLOG_BLCKSZ as i64,
+            RECOMPILE_HINT,
+        )?;
     }
     if cf.nameDataLen != types_core::NAMEDATALEN as u32 {
-        mism("NAMEDATALEN", cf.nameDataLen as i64, types_core::NAMEDATALEN as i64, RECOMPILE_HINT)?;
+        mism(
+            "NAMEDATALEN",
+            cf.nameDataLen as i64,
+            types_core::NAMEDATALEN as i64,
+            RECOMPILE_HINT,
+        )?;
     }
     if cf.indexMaxKeys != types_core::INDEX_MAX_KEYS as u32 {
-        mism("INDEX_MAX_KEYS", cf.indexMaxKeys as i64, types_core::INDEX_MAX_KEYS as i64, RECOMPILE_HINT)?;
+        mism(
+            "INDEX_MAX_KEYS",
+            cf.indexMaxKeys as i64,
+            types_core::INDEX_MAX_KEYS as i64,
+            RECOMPILE_HINT,
+        )?;
     }
     if cf.toast_max_chunk_size != TOAST_MAX_CHUNK_SIZE {
-        mism("TOAST_MAX_CHUNK_SIZE", cf.toast_max_chunk_size as i64, TOAST_MAX_CHUNK_SIZE as i64, RECOMPILE_HINT)?;
+        mism(
+            "TOAST_MAX_CHUNK_SIZE",
+            cf.toast_max_chunk_size as i64,
+            TOAST_MAX_CHUNK_SIZE as i64,
+            RECOMPILE_HINT,
+        )?;
     }
     if cf.loblksize != types_storage::large_object::LOBLKSIZE as u32 {
-        mism("LOBLKSIZE", cf.loblksize as i64, types_storage::large_object::LOBLKSIZE as i64, RECOMPILE_HINT)?;
+        mism(
+            "LOBLKSIZE",
+            cf.loblksize as i64,
+            types_storage::large_object::LOBLKSIZE as i64,
+            RECOMPILE_HINT,
+        )?;
     }
     if !cf.float8ByVal {
         incompatible(
@@ -152,8 +192,12 @@ pub fn ReadControlFile() -> PgResult<()> {
     if !IsValidWalSegSize(wal_segment_size) {
         return ereport(ERROR)
             .errcode(ERRCODE_INVALID_PARAMETER_VALUE)
-            .errmsg(format!("invalid WAL segment size in control file ({wal_segment_size} bytes)"))
-            .errdetail("The WAL segment size must be a power of two between 1 MB and 1 GB.".to_string())
+            .errmsg(format!(
+                "invalid WAL segment size in control file ({wal_segment_size} bytes)"
+            ))
+            .errdetail(
+                "The WAL segment size must be a power of two between 1 MB and 1 GB.".to_string(),
+            )
             .finish(loc("ReadControlFile"));
     }
     // C: SetConfigOption("wal_segment_size", ..., PGC_INTERNAL,
@@ -243,8 +287,14 @@ pub fn CheckRequiredParameterValues() -> PgResult<()> {
     if archive && cf.wal_level == crate::WAL_LEVEL_MINIMAL {
         return ereport(FATAL)
             .errmsg("WAL was generated with \"wal_level=minimal\", cannot continue recovering")
-            .errdetail("This happens if you temporarily set \"wal_level=minimal\" on the server.".to_string())
-            .errhint("Use a backup taken after setting \"wal_level\" to higher than \"minimal\".".to_string())
+            .errdetail(
+                "This happens if you temporarily set \"wal_level=minimal\" on the server."
+                    .to_string(),
+            )
+            .errhint(
+                "Use a backup taken after setting \"wal_level\" to higher than \"minimal\"."
+                    .to_string(),
+            )
             .finish(loc("CheckRequiredParameterValues"));
     }
     if archive && guc_tables::vars::EnableHotStandby.read() {
@@ -254,11 +304,31 @@ pub fn CheckRequiredParameterValues() -> PgResult<()> {
                 .finish(loc("CheckRequiredParameterValues"));
         }
         let checks: [(&str, i32, i32); 5] = [
-            ("max_connections", cf.MaxConnections, globals::MaxConnections()),
-            ("max_worker_processes", cf.max_worker_processes, globals::max_worker_processes()),
-            ("max_wal_senders", cf.max_wal_senders, guc_tables::vars::max_wal_senders.read()),
-            ("max_prepared_transactions", cf.max_prepared_xacts, guc_tables::vars::max_prepared_xacts.read()),
-            ("max_locks_per_transaction", cf.max_locks_per_xact, guc_tables::vars::max_locks_per_xact.read()),
+            (
+                "max_connections",
+                cf.MaxConnections,
+                globals::MaxConnections(),
+            ),
+            (
+                "max_worker_processes",
+                cf.max_worker_processes,
+                globals::max_worker_processes(),
+            ),
+            (
+                "max_wal_senders",
+                cf.max_wal_senders,
+                guc_tables::vars::max_wal_senders.read(),
+            ),
+            (
+                "max_prepared_transactions",
+                cf.max_prepared_xacts,
+                guc_tables::vars::max_prepared_xacts.read(),
+            ),
+            (
+                "max_locks_per_transaction",
+                cf.max_locks_per_xact,
+                guc_tables::vars::max_locks_per_xact.read(),
+            ),
         ];
         for (name, primary, ours) in checks {
             if ours < primary {

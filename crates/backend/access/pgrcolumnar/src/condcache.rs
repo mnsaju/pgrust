@@ -20,6 +20,7 @@
 //!     oid, commutation, collation, column, const value bytes; see
 //!     translate::fingerprint_prefix). Volatile/param/subplan quals never
 //!     reach it (walker + whitelist refusals), regex dict clauses refuse.
+//!
 //! VALUE: per window slot (fixed window_rows stride within the RG), the
 //! staged prefix's survivor bit words, published by a per-slot `known` bit
 //! (Release; readers Acquire). Slots race only between parallel workers of
@@ -146,7 +147,13 @@ static INSERTIONS: AtomicU64 = AtomicU64::new(0);
 static EVICTIONS: AtomicU64 = AtomicU64::new(0);
 
 fn cache() -> &'static Mutex<Inner> {
-    CACHE.get_or_init(|| Mutex::new(Inner { map: HashMap::new(), bytes: 0, gen: 0 }))
+    CACHE.get_or_init(|| {
+        Mutex::new(Inner {
+            map: HashMap::new(),
+            bytes: 0,
+            gen: 0,
+        })
+    })
 }
 
 pub fn set_capacity(bytes: u64) {
@@ -165,7 +172,8 @@ pub fn count_miss() {
 /// per-window fetch_add on the shared statics (pre-lane behavior).
 fn shared_stats() -> bool {
     static EAGER: OnceLock<bool> = OnceLock::new();
-    *EAGER.get_or_init(|| std::env::var_os("PGRUST_CONDCACHE_SHARED_STATS").is_some_and(|v| v == "1"))
+    *EAGER
+        .get_or_init(|| std::env::var_os("PGRUST_CONDCACHE_SHARED_STATS").is_some_and(|v| v == "1"))
 }
 
 /// Per-scan hit/miss stat cells. The process counters are observational
@@ -242,7 +250,12 @@ pub fn get_or_insert(
     if part.is_null() {
         return RgEntry::new(nrows, window_rows);
     }
-    let key = Key { part, fp, rg, window_rows };
+    let key = Key {
+        part,
+        fp,
+        rg,
+        window_rows,
+    };
     let mut inner = cache().lock().expect("condition cache lock poisoned");
     inner.gen += 1;
     let gen = inner.gen;
@@ -282,7 +295,12 @@ mod tests {
     use super::*;
 
     fn ident(i: u64) -> PartIdent {
-        PartIdent { dev: 1, ino: i, len: 4096, footer_off: 64 }
+        PartIdent {
+            dev: 1,
+            ino: i,
+            len: 4096,
+            footer_off: 64,
+        }
     }
 
     // The capacity knob and counters are process-global: tests that set or
@@ -342,7 +360,10 @@ mod tests {
         assert!(Arc::ptr_eq(&a, &a2));
         let _c = get_or_insert(ident(8001), 1, 2, 256, 8192);
         let a3 = get_or_insert(ident(8001), 1, 0, 256, 8192);
-        assert!(Arc::ptr_eq(&a, &a3), "recently-used entry survived eviction");
+        assert!(
+            Arc::ptr_eq(&a, &a3),
+            "recently-used entry survived eviction"
+        );
         let (_, _, ins_before, _) = stats();
         let b2 = get_or_insert(ident(8001), 1, 1, 256, 8192);
         let (_, _, ins_after, _) = stats();
@@ -384,8 +405,33 @@ mod tests {
         let b = get_or_insert(ident(9001), 5, 0, 256, 8192);
         assert!(!Arc::ptr_eq(&a, &b), "over-budget entries are scan-local");
         set_capacity(100 * 1024 * 1024);
-        let n1 = get_or_insert(PartIdent { dev: 0, ino: 0, len: 0, footer_off: 0 }, 5, 0, 256, 64);
-        let n2 = get_or_insert(PartIdent { dev: 0, ino: 0, len: 0, footer_off: 0 }, 5, 0, 256, 64);
-        assert!(!Arc::ptr_eq(&n1, &n2), "null part identity never keys the cache");
+        let n1 = get_or_insert(
+            PartIdent {
+                dev: 0,
+                ino: 0,
+                len: 0,
+                footer_off: 0,
+            },
+            5,
+            0,
+            256,
+            64,
+        );
+        let n2 = get_or_insert(
+            PartIdent {
+                dev: 0,
+                ino: 0,
+                len: 0,
+                footer_off: 0,
+            },
+            5,
+            0,
+            256,
+            64,
+        );
+        assert!(
+            !Arc::ptr_eq(&n1, &n2),
+            "null part identity never keys the cache"
+        );
     }
 }

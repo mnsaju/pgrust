@@ -13,8 +13,7 @@ use ::types_tuple::itemptr::InvalidOffsetNumber;
 use ::xloginsert_seams::{XLogRegBuf, REGBUF_FORCE_IMAGE, REGBUF_STANDARD};
 
 use crate::{
-    check_for_interrupts, page_bytes, page_mut, page_opaque, page_ref, relation_needs_wal,
-    unported, util::gin_init_page_bytes, util::GinNewBuffer, write_opaque, GinPageIsData,
+    check_for_interrupts, page_mut, page_opaque, page_ref, relation_needs_wal, util::gin_init_page_bytes, util::GinNewBuffer, write_opaque, GinPageIsData,
     GinPageIsIncompleteSplit, GinPageIsLeaf, GinPageRightMost, GIN_EXCLUSIVE, GIN_SHARE,
     GIN_UNLOCK, RM_GIN,
 };
@@ -103,7 +102,14 @@ pub(crate) trait GinBt<'r> {
         update_blkno: BlockNumber,
     ) -> PgResult<Vec<Vec<u8>>>;
     fn prepare_downlink(&mut self, lbuf: Buffer) -> PgResult<()>;
-    fn fill_root(&self, root: &mut [u8], lblkno: BlockNumber, lpage: &[u8], rblkno: BlockNumber, rpage: &[u8]) -> PgResult<()>;
+    fn fill_root(
+        &self,
+        root: &mut [u8],
+        lblkno: BlockNumber,
+        lpage: &[u8],
+        rblkno: BlockNumber,
+        rpage: &[u8],
+    ) -> PgResult<()>;
 }
 
 /// ginTraverseLock.
@@ -193,9 +199,7 @@ pub(crate) fn ginFindLeafPage<'s, 'r, T: GinBt<'r>>(
         let access = ginTraverseLock(buffer, search_mode)?;
 
         // SAFETY: pin + lock held.
-        if !search_mode
-            && GinPageIsIncompleteSplit(&page_opaque(&unsafe { page_ref(buffer) }))
-        {
+        if !search_mode && GinPageIsIncompleteSplit(&page_opaque(&unsafe { page_ref(buffer) })) {
             let top = stack.top;
             ginFinishOldSplitAt(mcx, rel, btree, &mut stack, top, None, access)?;
         }
@@ -221,9 +225,7 @@ pub(crate) fn ginFindLeafPage<'s, 'r, T: GinBt<'r>>(
                 top.blkno = rightlink;
             }
             // SAFETY: pin + lock held.
-            if !search_mode
-                && GinPageIsIncompleteSplit(&page_opaque(&unsafe { page_ref(next) }))
-            {
+            if !search_mode && GinPageIsIncompleteSplit(&page_opaque(&unsafe { page_ref(next) })) {
                 let top = stack.top;
                 ginFinishOldSplitAt(mcx, rel, btree, &mut stack, top, None, access)?;
             }
@@ -272,7 +274,6 @@ fn ginFindParents<'r, T: GinBt<'r>>(
     stack: &mut GinStack<'_>,
     at: u32,
 ) -> PgResult<()> {
-
     // Unwind to the root, releasing intermediate pins (never the root's).
     let mut root_id = stack.frame(at).parent;
     while stack.frame(root_id).parent != NO_PARENT {
@@ -492,7 +493,7 @@ fn ginPlaceToPage<'r, T: GinBt<'r>>(
 
             if is_root {
                 lbuffer = GinNewBuffer(rel)?;
-                if let Some(stats) = buildStats.as_deref_mut() {
+                if let Some(stats) = buildStats {
                     if T::IS_DATA {
                         stats.nDataPages += 1;
                     } else {
@@ -653,7 +654,15 @@ fn ginFinishSplitAt<'r, T: GinBt<'r>>(
         if GinPageIsIncompleteSplit(&page_opaque(&unsafe {
             page_ref(stack.frame(parent).buffer)
         })) {
-            ginFinishOldSplitAt(mcx, rel, btree, stack, parent, buildStats.as_deref_mut(), GIN_EXCLUSIVE)?;
+            ginFinishOldSplitAt(
+                mcx,
+                rel,
+                btree,
+                stack,
+                parent,
+                buildStats.as_deref_mut(),
+                GIN_EXCLUSIVE,
+            )?;
         }
 
         loop {
@@ -685,7 +694,15 @@ fn ginFinishSplitAt<'r, T: GinBt<'r>>(
             }
             // SAFETY: pin + exclusive lock held.
             if GinPageIsIncompleteSplit(&page_opaque(&unsafe { page_ref(next) })) {
-                ginFinishOldSplitAt(mcx, rel, btree, stack, parent, buildStats.as_deref_mut(), GIN_EXCLUSIVE)?;
+                ginFinishOldSplitAt(
+                    mcx,
+                    rel,
+                    btree,
+                    stack,
+                    parent,
+                    buildStats.as_deref_mut(),
+                    GIN_EXCLUSIVE,
+                )?;
             }
         }
 
@@ -764,7 +781,15 @@ pub(crate) fn ginInsertValue<'r, T: GinBt<'r>>(
     // SAFETY: pin + exclusive lock held (ginFindLeafPage !searchMode).
     if GinPageIsIncompleteSplit(&page_opaque(&unsafe { page_ref(buffer) })) {
         let top = stack.top;
-        ginFinishOldSplitAt(mcx, rel, btree, stack, top, buildStats.as_deref_mut(), GIN_EXCLUSIVE)?;
+        ginFinishOldSplitAt(
+            mcx,
+            rel,
+            btree,
+            stack,
+            top,
+            buildStats.as_deref_mut(),
+            GIN_EXCLUSIVE,
+        )?;
     }
 
     let top = stack.top;
@@ -786,5 +811,3 @@ pub(crate) fn ginInsertValue<'r, T: GinBt<'r>>(
     }
     Ok(())
 }
-
-

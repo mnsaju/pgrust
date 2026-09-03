@@ -9,10 +9,10 @@ use parse_expr::{expr_location, expr_type, transformExpr};
 use parser_small1::{ParseExprKind, ParseNamespaceItem, ParseState};
 use types_core::catalog::{RECORDOID, TEXTOID, UNKNOWNOID};
 use types_core::AttrNumber;
-use types_tuple::tupdesc::TupleDescData;
 use types_error::PgResult;
 use types_nodes::rawnodes::{A_Expr_Kind, ColumnRef};
 use types_nodes::{CoercionForm, Node, NodeList, NodeTag, RTEKind, TargetEntry};
+use types_tuple::tupdesc::TupleDescData;
 
 pub fn init_seams() {
     parse_func_seams::expandRecordVariable::set(expandRecordVariable);
@@ -33,17 +33,27 @@ pub fn transformTargetList<'mcx>(
         let res = o_target
             .as_res_target()
             .unwrap_or_else(|| panic!("targetlist element is not a ResTarget: {o_target:?}"));
-        let val = res.val.expect("ResTarget.val is never NULL in a raw targetlist");
+        let val = res
+            .val
+            .expect("ResTarget.val is never NULL in a raw targetlist");
 
         if expand_star {
             if let Some(cref) = val.as_column_ref() {
-                if cref.fields.last().is_some_and(|f| f.node_tag() == NodeTag::T_A_Star) {
+                if cref
+                    .fields
+                    .last()
+                    .is_some_and(|f| f.node_tag() == NodeTag::T_A_Star)
+                {
                     p_target.concat(mcx, &ExpandColumnRefStar(mcx, pstate, cref, true)?)?;
                     continue;
                 }
             } else if let Some(ind) = val.as_a_indirection() {
                 // C expands only when the LAST indirection item is A_Star.
-                if ind.indirection.last().is_some_and(|n| n.node_tag() == NodeTag::T_A_Star) {
+                if ind
+                    .indirection
+                    .last()
+                    .is_some_and(|n| n.node_tag() == NodeTag::T_A_Star)
+                {
                     p_target.concat(
                         mcx,
                         &ExpandIndirectionStar(mcx, pstate, ind, true, exprKind)?,
@@ -115,13 +125,24 @@ pub fn transformExpressionList<'mcx>(
     let mut result = NodeList::nil();
     for e in exprlist {
         if let Some(cref) = e.as_column_ref() {
-            if cref.fields.last().is_some_and(|f| f.node_tag() == NodeTag::T_A_Star) {
+            if cref
+                .fields
+                .last()
+                .is_some_and(|f| f.node_tag() == NodeTag::T_A_Star)
+            {
                 result.concat(mcx, &ExpandColumnRefStar(mcx, pstate, cref, false)?)?;
                 continue;
             }
         } else if let Some(ind) = e.as_a_indirection() {
-            if ind.indirection.last().is_some_and(|n| n.node_tag() == NodeTag::T_A_Star) {
-                result.concat(mcx, &ExpandIndirectionStar(mcx, pstate, ind, false, exprKind)?)?;
+            if ind
+                .indirection
+                .last()
+                .is_some_and(|n| n.node_tag() == NodeTag::T_A_Star)
+            {
+                result.concat(
+                    mcx,
+                    &ExpandIndirectionStar(mcx, pstate, ind, false, exprKind)?,
+                )?;
                 continue;
             }
         }
@@ -155,7 +176,14 @@ pub fn transformAssignedExpr<'mcx>(
     let sv_expr_kind = pstate.p_expr_kind;
     pstate.p_expr_kind = exprKind;
     let r = transformAssignedExprInternal(
-        mcx, pstate, expr, exprKind, colname, attrno, indirection, location,
+        mcx,
+        pstate,
+        expr,
+        exprKind,
+        colname,
+        attrno,
+        indirection,
+        location,
     );
     pstate.p_expr_kind = sv_expr_kind;
     r
@@ -166,7 +194,7 @@ fn transformAssignedExprInternal<'mcx>(
     mcx: Mcx<'mcx>,
     pstate: &mut ParseState<'_, 'mcx>,
     expr: Node<'mcx>,
-    exprKind: ParseExprKind,
+    _exprKind: ParseExprKind,
     colname: Option<&str>,
     attrno: i32,
     indirection: &NodeList<'mcx>,
@@ -205,13 +233,30 @@ fn transformAssignedExprInternal<'mcx>(
     };
     if !indirection.is_nil() {
         let col_var = if pstate.p_is_insert {
-            Node::mk_const(mcx, attrtype, attrtypmod, attrcollation, -2, ::datum::Datum::null(), true, false)?
+            Node::mk_const(
+                mcx,
+                attrtype,
+                attrtypmod,
+                attrcollation,
+                -2,
+                ::datum::Datum::null(),
+                true,
+                false,
+            )?
         } else {
             let rtindex = pstate
                 .p_target_nsitem
                 .expect("UPDATE with no target nsitem")
                 .p_rtindex;
-            Node::mk_var(mcx, rtindex, attrno as i16, attrtype, attrtypmod, attrcollation, 0)?
+            Node::mk_var(
+                mcx,
+                rtindex,
+                attrno as i16,
+                attrtype,
+                attrtypmod,
+                attrcollation,
+                0,
+            )?
         };
         return transformAssignmentIndirection(
             mcx,
@@ -317,7 +362,9 @@ pub fn checkInsertTargets<'mcx>(
         let mut wholecols = types_nodes::Bitmapset::empty();
         let mut partialcols = types_nodes::Bitmapset::empty();
         for col_node in cols {
-            let col = col_node.as_res_target().expect("insert cols are ResTargets");
+            let col = col_node
+                .as_res_target()
+                .expect("insert cols are ResTargets");
             let name = col.name.expect("insert_column_item always has a name");
             let attrno = parse_relation::attnameAttNum(rel, name, false);
             if attrno == 0 {
@@ -365,7 +412,11 @@ fn default_with_indirection(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformAssignedExpr")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformAssignedExpr",
+            )),
     )
 }
 
@@ -379,14 +430,21 @@ fn cannot_assign_to_system_column(
     Box::new(
         elog::ereport(ERROR)
             .errcode(ERRCODE_SYNTAX_ERROR)
-            .errmsg(format!("cannot assign to system column \"{}\"", colname.unwrap_or("?")))
+            .errmsg(format!(
+                "cannot assign to system column \"{}\"",
+                colname.unwrap_or("?")
+            ))
             .errposition(parser_small1::parser_errposition(
                 pstate,
                 location,
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformAssignedExpr")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformAssignedExpr",
+            )),
     )
 }
 
@@ -419,7 +477,11 @@ fn column_type_mismatch(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformAssignedExpr")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformAssignedExpr",
+            )),
     )
 }
 
@@ -434,14 +496,20 @@ fn undefined_insert_column(
     Box::new(
         elog::ereport(ERROR)
             .errcode(ERRCODE_UNDEFINED_COLUMN)
-            .errmsg(format!("column \"{name}\" of relation \"{relname}\" does not exist"))
+            .errmsg(format!(
+                "column \"{name}\" of relation \"{relname}\" does not exist"
+            ))
             .errposition(parser_small1::parser_errposition(
                 pstate,
                 location,
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "checkInsertTargets")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "checkInsertTargets",
+            )),
     )
 }
 
@@ -462,7 +530,11 @@ fn duplicate_insert_column(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "checkInsertTargets")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "checkInsertTargets",
+            )),
     )
 }
 
@@ -617,7 +689,9 @@ pub fn resolveTargetListUnknowns<'mcx>(
             // SAFETY: parse analysis holds exclusive access to the targetlist
             // it just built; the `tle` borrow is not used past this point.
             unsafe {
-                tle_node.with_mut::<TargetEntry, _>(|t| t.expr = coerced).unwrap();
+                tle_node
+                    .with_mut::<TargetEntry, _>(|t| t.expr = coerced)
+                    .unwrap();
             }
         }
     }
@@ -643,7 +717,10 @@ fn ExpandIndirectionStar<'mcx>(
     } else {
         let stripped = Node::mk(
             mcx,
-            types_nodes::rawnodes::A_Indirection { arg: Some(arg), indirection: trimmed },
+            types_nodes::rawnodes::A_Indirection {
+                arg: Some(arg),
+                indirection: trimmed,
+            },
         )?;
         transformExpr(mcx, pstate, stripped, exprKind)?
     };
@@ -662,7 +739,7 @@ fn ExpandRowReference<'mcx>(
         if var.varattno == 0 {
             let nsitem = parse_relation::GetNSItemByRangeTablePosn(
                 pstate,
-                var.varno as i32,
+                var.varno,
                 var.varlevelsup as i32,
             );
             return ExpandSingleTable(
@@ -709,8 +786,7 @@ fn ExpandRowReference<'mcx>(
             let name = core::str::from_utf8(att.attname.name_str()).expect("attname is UTF-8");
             let resno = pstate.p_next_resno as AttrNumber;
             pstate.p_next_resno += 1;
-            let te =
-                Node::mk_target_entry(mcx, fselect, resno, Some(str_in(mcx, name)?), false)?;
+            let te = Node::mk_target_entry(mcx, fselect, resno, Some(str_in(mcx, name)?), false)?;
             result.lappend(mcx, te)?;
         } else {
             result.lappend(mcx, fselect)?;
@@ -787,7 +863,9 @@ pub fn expandRecordVariable<'mcx>(
                 // is the pstate that owns the RTE (C same).
                 let mut p = pstate;
                 for _ in 0..netlevelsup {
-                    p = p.parentParseState.expect("GetRTEByRangeTablePosn validated depth");
+                    p = p
+                        .parentParseState
+                        .expect("GetRTEByRangeTablePosn validated depth");
                 }
                 let mut mypstate = parser_small1::make_parsestate(mcx, Some(p));
                 // C aliases the subquery's rtable pointer; the 16-byte list
@@ -872,18 +950,23 @@ fn ExpandColumnRefStar<'mcx>(
     }
 
     let field_str = |n: Node<'mcx>| {
-        n.as_string().map(|s| s.sval).expect("ColumnRef qualifier is a String")
+        n.as_string()
+            .map(|s| s.sval)
+            .expect("ColumnRef qualifier is a String")
     };
     let (nspname, relname) = match fields.len() {
         2 => (None, field_str(fields[0])),
         3 => (Some(field_str(fields[0])), field_str(fields[1])),
         4 => {
             let catname = field_str(fields[0]);
-            let dbname = dbcommands_seams::get_database_name::call(
-                init_small::globals::MyDatabaseId(),
-            )?;
+            let dbname =
+                dbcommands_seams::get_database_name::call(init_small::globals::MyDatabaseId())?;
             if dbname.as_deref() != Some(catname) {
-                return Err(cross_database_reference(pstate, &cref.fields, cref.location));
+                return Err(cross_database_reference(
+                    pstate,
+                    &cref.fields,
+                    cref.location,
+                ));
             }
             (Some(field_str(fields[1])), field_str(fields[2]))
         }
@@ -946,8 +1029,7 @@ fn ExpandColumnRefStar<'mcx>(
         // The post_columnref leg of C's ExpandColumnRefStar:
         // sql_fn_post_column_ref never overrides a found table (returns NULL
         // when var != NULL), so it only runs on the nsitem-miss path.
-        if let Some(node) =
-            parse_expr::sql_fn_post_column_ref(mcx, pstate, fields, cref.location)?
+        if let Some(node) = parse_expr::sql_fn_post_column_ref(mcx, pstate, fields, cref.location)?
         {
             return ExpandRowReference(mcx, pstate, node, make_target_entry);
         }
@@ -964,7 +1046,14 @@ fn ExpandColumnRefStar<'mcx>(
         return Err(parse_relation::errorMissingRTE(mcx, pstate, rv));
     };
 
-    ExpandSingleTable(mcx, pstate, nsitem, levels_up, cref.location, make_target_entry)
+    ExpandSingleTable(
+        mcx,
+        pstate,
+        nsitem,
+        levels_up,
+        cref.location,
+        make_target_entry,
+    )
 }
 
 // resolve_column_ref's whole-row arms (pl_comp.c): the trailing A_Star maps
@@ -1050,7 +1139,11 @@ fn cross_database_reference(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "ExpandColumnRefStar")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "ExpandColumnRefStar",
+            )),
     )
 }
 
@@ -1074,7 +1167,11 @@ fn too_many_dotted_names(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "ExpandColumnRefStar")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "ExpandColumnRefStar",
+            )),
     )
 }
 
@@ -1152,10 +1249,7 @@ fn str_in<'mcx>(mcx: Mcx<'mcx>, s: &str) -> PgResult<&'mcx str> {
 }
 
 #[cold]
-fn star_with_no_tables(
-    pstate: &ParseState<'_, '_>,
-    location: i32,
-) -> Box<types_error::PgError> {
+fn star_with_no_tables(pstate: &ParseState<'_, '_>, location: i32) -> Box<types_error::PgError> {
     use types_error::{ErrorLocation, ERRCODE_SYNTAX_ERROR, ERROR};
     Box::new(
         elog::ereport(ERROR)
@@ -1167,7 +1261,11 @@ fn star_with_no_tables(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "ExpandAllTables")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "ExpandAllTables",
+            )),
     )
 }
 
@@ -1211,8 +1309,9 @@ fn FigureColnameInternal<'mcx>(node: Node<'mcx>, name: &mut Option<&'mcx str>) -
             let tc = node.as_type_cast().unwrap();
             let strength = tc.arg.map_or(0, |arg| FigureColnameInternal(arg, name));
             if strength <= 1 {
-                if let Some(tn) =
-                    tc.typeName.and_then(|n| n.as_variant::<types_nodes::TypeName>())
+                if let Some(tn) = tc
+                    .typeName
+                    .and_then(|n| n.as_variant::<types_nodes::TypeName>())
                 {
                     if let Some(last) = tn.names.last().and_then(|n| n.as_string()) {
                         *name = Some(last.sval);
@@ -1266,9 +1365,7 @@ fn FigureColnameInternal<'mcx>(node: Node<'mcx>, name: &mut Option<&'mcx str>) -
             *name = Some(match node.as_sql_value_function().unwrap().op {
                 Op::SVFOP_CURRENT_DATE => "current_date",
                 Op::SVFOP_CURRENT_TIME | Op::SVFOP_CURRENT_TIME_N => "current_time",
-                Op::SVFOP_CURRENT_TIMESTAMP | Op::SVFOP_CURRENT_TIMESTAMP_N => {
-                    "current_timestamp"
-                }
+                Op::SVFOP_CURRENT_TIMESTAMP | Op::SVFOP_CURRENT_TIMESTAMP_N => "current_timestamp",
                 Op::SVFOP_LOCALTIME | Op::SVFOP_LOCALTIME_N => "localtime",
                 Op::SVFOP_LOCALTIMESTAMP | Op::SVFOP_LOCALTIMESTAMP_N => "localtimestamp",
                 Op::SVFOP_CURRENT_ROLE => "current_role",
@@ -1320,18 +1417,14 @@ fn FigureColnameInternal<'mcx>(node: Node<'mcx>, name: &mut Option<&'mcx str>) -
                     // raw leg derives the resname transformTargetEntry would
                     // have assigned.
                     if let Some(q) = sl.subselect.as_query() {
-                        if let Some(te) =
-                            q.targetList.first().and_then(|n| n.as_target_entry())
-                        {
+                        if let Some(te) = q.targetList.first().and_then(|n| n.as_target_entry()) {
                             if let Some(resname) = te.resname {
                                 *name = Some(resname);
                                 return 2;
                             }
                         }
                     } else if let Some(ss) = sl.subselect.as_select_stmt() {
-                        if let Some(rt) =
-                            ss.targetList.first().and_then(|n| n.as_res_target())
-                        {
+                        if let Some(rt) = ss.targetList.first().and_then(|n| n.as_res_target()) {
                             if let Some(n) = rt.name {
                                 *name = Some(n);
                                 return 2;

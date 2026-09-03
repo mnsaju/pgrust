@@ -1,19 +1,24 @@
 //! hashovfl.c: overflow-page and bitmap-page management, bucket squeeze.
 
 use ::bufmgr_seams as bm;
-use ::types_core::{BlockNumber, Buffer, ForkNumber, InvalidBlockNumber, InvalidBuffer, OffsetNumber, BLCKSZ};
-use ::types_error::{PgError, PgResult, ERRCODE_INVALID_PARAMETER_VALUE, ERRCODE_PROGRAM_LIMIT_EXCEEDED};
+use ::types_core::{
+    BlockNumber, Buffer, ForkNumber, InvalidBlockNumber, InvalidBuffer, OffsetNumber, BLCKSZ,
+};
+use ::types_error::{
+    PgError, PgResult, ERRCODE_INVALID_PARAMETER_VALUE, ERRCODE_PROGRAM_LIMIT_EXCEEDED,
+};
 use ::types_hash::*;
 use ::types_rel::Relation;
 use ::types_storage::buf::BufferAccessStrategy;
 use ::types_storage::bufpage::{PageMut, PageRef, SizeOfPageHeaderData};
-use ::xloginsert_seams::{XLogRegBuf, REGBUF_NO_CHANGE, REGBUF_NO_IMAGE, REGBUF_STANDARD, REGBUF_WILL_INIT};
+use ::xloginsert_seams::{
+    XLogRegBuf, REGBUF_NO_CHANGE, REGBUF_NO_IMAGE, REGBUF_STANDARD, REGBUF_WILL_INIT,
+};
 
 use crate::insert::_hash_pgaddmultitup;
 use crate::page::{
-    page_mut, page_opaque, page_ref, with_meta, with_meta_mut, write_opaque,
-    _hash_getbuf, _hash_getbuf_with_strategy, _hash_getinitbuf, _hash_getnewbuf,
-    _hash_pageinit, _hash_relbuf,
+    _hash_getbuf, _hash_getbuf_with_strategy, _hash_getinitbuf, _hash_getnewbuf, _hash_pageinit,
+    _hash_relbuf, page_mut, page_opaque, page_ref, with_meta, with_meta_mut, write_opaque,
 };
 use crate::{relation_needs_wal, RM_HASH};
 
@@ -41,10 +46,7 @@ fn bitno_to_blkno(metap: &HashMetaPageData, ovflbitnum: u32) -> BlockNumber {
 }
 
 /// _hash_ovflblkno_to_bitno.
-pub fn _hash_ovflblkno_to_bitno(
-    metap: &HashMetaPageData,
-    ovflblkno: BlockNumber,
-) -> PgResult<u32> {
+pub fn _hash_ovflblkno_to_bitno(metap: &HashMetaPageData, ovflblkno: BlockNumber) -> PgResult<u32> {
     let splitnum = metap.hashm_ovflpoint;
     for i in 1..=splitnum {
         if ovflblkno <= _hash_get_totalbuckets(i) {
@@ -66,7 +68,11 @@ fn bitmap_word(page: &PageRef<'_>, j: usize) -> u32 {
     // SAFETY: bitmap words live in the page contents region (checked bitmap
     // page under the caller's lock).
     unsafe {
-        page.as_ptr().add(SizeOfPageHeaderData).cast::<u32>().add(j).read()
+        page.as_ptr()
+            .add(SizeOfPageHeaderData)
+            .cast::<u32>()
+            .add(j)
+            .read()
     }
 }
 
@@ -75,7 +81,13 @@ fn set_bitmap_bit(page: &mut PageMut<'_>, bit: u32, set: bool) {
     let mask = 1u32 << (bit % BITS_PER_MAP);
     // SAFETY: exclusive lock held; word within the bitmap region.
     unsafe {
-        let p = page.as_ref().as_ptr().cast_mut().add(SizeOfPageHeaderData).cast::<u32>().add(j);
+        let p = page
+            .as_ref()
+            .as_ptr()
+            .cast_mut()
+            .add(SizeOfPageHeaderData)
+            .cast::<u32>()
+            .add(j);
         let w = p.read();
         p.write(if set { w | mask } else { w & !mask });
     }
@@ -162,7 +174,11 @@ pub(crate) fn _hash_addovflpage(
         debug_assert!(i < nmaps);
         let mapblkno = with_meta(metabuf, |m| m.hashm_mapp[i as usize]);
 
-        let last_inpage = if i == last_page { last_bit } else { bmsize_bits - 1 };
+        let last_inpage = if i == last_page {
+            last_bit
+        } else {
+            bmsize_bits - 1
+        };
 
         bm::lock_buffer::call(metabuf, bm::BUFFER_LOCK_UNLOCK)?;
 
@@ -309,7 +325,12 @@ pub(crate) fn _hash_addovflpage(
             flags: REGBUF_WILL_INIT,
             bufdata: &bucket_data,
         });
-        bufs.push(XLogRegBuf { block_id: 1, buffer: buf, flags: REGBUF_STANDARD, bufdata: &[] });
+        bufs.push(XLogRegBuf {
+            block_id: 1,
+            buffer: buf,
+            flags: REGBUF_STANDARD,
+            bufdata: &[],
+        });
         if mapbuf != InvalidBuffer {
             bufs.push(XLogRegBuf {
                 block_id: 2,
@@ -319,7 +340,12 @@ pub(crate) fn _hash_addovflpage(
             });
         }
         if newmapbuf != InvalidBuffer {
-            bufs.push(XLogRegBuf { block_id: 3, buffer: newmapbuf, flags: REGBUF_WILL_INIT, bufdata: &[] });
+            bufs.push(XLogRegBuf {
+                block_id: 3,
+                buffer: newmapbuf,
+                flags: REGBUF_WILL_INIT,
+                bufdata: &[],
+            });
         }
         bufs.push(XLogRegBuf {
             block_id: 4,
@@ -407,13 +433,8 @@ pub(crate) fn _hash_freeovflpage(
         }
     }
     if nextblkno != InvalidBlockNumber {
-        nextbuf = _hash_getbuf_with_strategy(
-            rel,
-            nextblkno,
-            HASH_WRITE,
-            LH_OVERFLOW_PAGE,
-            bstrategy,
-        )?;
+        nextbuf =
+            _hash_getbuf_with_strategy(rel, nextblkno, HASH_WRITE, LH_OVERFLOW_PAGE, bstrategy)?;
     }
 
     let metabuf = _hash_getbuf(rel, HASH_METAPAGE, HASH_READ, LH_META_PAGE)?;
@@ -423,7 +444,10 @@ pub(crate) fn _hash_freeovflpage(
     let bitmapbit = ovflbitno & bmpg_mask(bmshift);
 
     let (nmaps, blkno) = with_meta(metabuf, |m| {
-        (m.hashm_nmaps, m.hashm_mapp.get(bitmappage as usize).copied().unwrap_or(0))
+        (
+            m.hashm_nmaps,
+            m.hashm_mapp.get(bitmappage as usize).copied().unwrap_or(0),
+        )
     });
     if bitmappage >= nmaps {
         panic!("invalid overflow bit number {ovflbitno}");
@@ -541,14 +565,34 @@ pub(crate) fn _hash_freeovflpage(
             } else {
                 mod_wbuf = true;
             }
-            bufs.push(XLogRegBuf { block_id: 1, buffer: wbuf, flags: wbuf_flags, bufdata: &[] });
+            bufs.push(XLogRegBuf {
+                block_id: 1,
+                buffer: wbuf,
+                flags: wbuf_flags,
+                bufdata: &[],
+            });
         }
-        bufs.push(XLogRegBuf { block_id: 2, buffer: ovflbuf, flags: REGBUF_STANDARD, bufdata: &[] });
+        bufs.push(XLogRegBuf {
+            block_id: 2,
+            buffer: ovflbuf,
+            flags: REGBUF_STANDARD,
+            bufdata: &[],
+        });
         if prevbuf != InvalidBuffer && !is_prev_bucket_same_wrt {
-            bufs.push(XLogRegBuf { block_id: 3, buffer: prevbuf, flags: REGBUF_STANDARD, bufdata: &[] });
+            bufs.push(XLogRegBuf {
+                block_id: 3,
+                buffer: prevbuf,
+                flags: REGBUF_STANDARD,
+                bufdata: &[],
+            });
         }
         if nextbuf != InvalidBuffer {
-            bufs.push(XLogRegBuf { block_id: 4, buffer: nextbuf, flags: REGBUF_STANDARD, bufdata: &[] });
+            bufs.push(XLogRegBuf {
+                block_id: 4,
+                buffer: nextbuf,
+                flags: REGBUF_STANDARD,
+                bufdata: &[],
+            });
         }
         let bitmapbit_data: [&[u8]; 1] = [&bitmapbit_bytes];
         let firstfree_data: [&[u8]; 1] = [&firstfree_bytes];

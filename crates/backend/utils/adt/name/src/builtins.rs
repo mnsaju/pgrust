@@ -190,12 +190,15 @@ pub fn fc_hashname(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRes
 pub fn fc_hashnameextended(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let a = arg_name(fcinfo, 0);
     let seed = fcinfo.arg_i64(1) as u64;
-    Ok(Datum::from_u64(::hashfn::hash_bytes_extended(a.name_str(), seed)))
+    Ok(Datum::from_u64(::hashfn::hash_bytes_extended(
+        a.name_str(),
+        seed,
+    )))
 }
 
 pub fn fc_namerecv(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: recv arg0 is the live StringInfo pointer per the recv ABI.
-    let buf = unsafe { fcinfo.arg_stringinfo(0) };
+    let buf = unsafe { &mut *fcinfo.arg_stringinfo(0) };
     let mcx = fcinfo.result_mcx();
     let nd = crate::namerecv(mcx, buf)?;
     byref_result(mcx, &nd.data)

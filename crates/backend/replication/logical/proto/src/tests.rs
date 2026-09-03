@@ -71,7 +71,14 @@ fn truncate_roundtrip() {
 #[test]
 fn message_wire_layout() {
     let mut out = Vec::new();
-    logicalrep_write_message(&mut out, InvalidTransactionId, 0x10, true, "pfx", b"payload");
+    logicalrep_write_message(
+        &mut out,
+        InvalidTransactionId,
+        0x10,
+        true,
+        "pfx",
+        b"payload",
+    );
     assert_eq!(out[0], LOGICAL_REP_MSG_MESSAGE);
     let mut r = Reader::new(&out[1..]);
     assert_eq!(r.get_byte().unwrap(), MESSAGE_TRANSACTIONAL);
@@ -142,7 +149,10 @@ fn update_read_side() {
     let u = logicalrep_read_update(&mut r).unwrap();
     assert_eq!(u.relid, 16391);
     assert!(u.has_oldtuple);
-    assert_eq!(u.oldtup.unwrap().colvalues[0].as_deref(), Some(b"1".as_slice()));
+    assert_eq!(
+        u.oldtup.unwrap().colvalues[0].as_deref(),
+        Some(b"1".as_slice())
+    );
     assert_eq!(u.newtup.colvalues[0].as_deref(), Some(b"2".as_slice()));
 }
 
@@ -228,7 +238,10 @@ fn typ_read_side() {
 #[test]
 fn message_type_names() {
     assert_eq!(logicalrep_message_type(LOGICAL_REP_MSG_INSERT), "INSERT");
-    assert_eq!(logicalrep_message_type(LOGICAL_REP_MSG_STREAM_PREPARE), "STREAM PREPARE");
+    assert_eq!(
+        logicalrep_message_type(LOGICAL_REP_MSG_STREAM_PREPARE),
+        "STREAM PREPARE"
+    );
     assert_eq!(logicalrep_message_type(0xFF), "??? (255)");
 }
 
@@ -246,7 +259,14 @@ fn truncated_message_errors_not_panics() {
 #[test]
 fn begin_prepare_roundtrip_and_layout() {
     let mut out = Vec::new();
-    logicalrep_write_begin_prepare(&mut out, 0x0102030405060708, 0x0102030405060710, 987654321, 42, "gid_1");
+    logicalrep_write_begin_prepare(
+        &mut out,
+        0x0102030405060708,
+        0x0102030405060710,
+        987654321,
+        42,
+        "gid_1",
+    );
     // Byte layout per proto.c logicalrep_write_begin_prepare: type byte,
     // prepare_lsn, end_lsn, prepare_time, xid, gid + NUL.
     assert_eq!(out[0], LOGICAL_REP_MSG_BEGIN_PREPARE);
@@ -420,5 +440,8 @@ fn stream_abort_roundtrip_with_and_without_abort_info() {
     assert_eq!(out2.len(), 1 + 4 + 4 + 16);
     let mut r2 = Reader::new(&out2[1..]);
     let a2 = logicalrep_read_stream_abort(&mut r2, true).unwrap();
-    assert_eq!((a2.xid, a2.subxid, a2.abort_lsn, a2.abort_time), (756, 757, 0x99, 555));
+    assert_eq!(
+        (a2.xid, a2.subxid, a2.abort_lsn, a2.abort_time),
+        (756, 757, 0x99, 555)
+    );
 }

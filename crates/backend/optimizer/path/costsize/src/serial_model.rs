@@ -150,33 +150,81 @@ pub fn topn_class_model(class: TopnKeyClass, qualed: bool) -> TopnClassModel {
     match (class, qualed) {
         (TopnKeyClass::StarWide, true) => TopnClassModel {
             s_gran: 0.0449,
-            legacy: EngineCurve { setup: 3.51, rate: 1.1235e-5, cap: 13.34 },
-            runtime: EngineCurve { setup: 5.85, rate: 5.4943e-6, cap: 14.25 },
+            legacy: EngineCurve {
+                setup: 3.51,
+                rate: 1.1235e-5,
+                cap: 13.34,
+            },
+            runtime: EngineCurve {
+                setup: 5.85,
+                rate: 5.4943e-6,
+                cap: 14.25,
+            },
         },
         (TopnKeyClass::StarWide, false) => TopnClassModel {
             s_gran: 0.0449,
-            legacy: EngineCurve { setup: 3.13, rate: 8.0746e-6, cap: 13.61 },
-            runtime: EngineCurve { setup: 4.76, rate: 8.6386e-8, cap: 6.09 },
+            legacy: EngineCurve {
+                setup: 3.13,
+                rate: 8.0746e-6,
+                cap: 13.61,
+            },
+            runtime: EngineCurve {
+                setup: 4.76,
+                rate: 8.6386e-8,
+                cap: 6.09,
+            },
         },
         (TopnKeyClass::NarrowTs, _) => TopnClassModel {
             s_gran: 0.1943,
-            legacy: EngineCurve { setup: 7.10, rate: 5.1631e-5, cap: 13.67 },
-            runtime: EngineCurve { setup: 4.65, rate: 1.4015e-7, cap: 6.83 },
+            legacy: EngineCurve {
+                setup: 7.10,
+                rate: 5.1631e-5,
+                cap: 13.67,
+            },
+            runtime: EngineCurve {
+                setup: 4.65,
+                rate: 1.4015e-7,
+                cap: 6.83,
+            },
         },
         (TopnKeyClass::MultiKey, _) => TopnClassModel {
             s_gran: 0.4639,
-            legacy: EngineCurve { setup: 7.38, rate: 5.9300e-5, cap: 13.60 },
-            runtime: EngineCurve { setup: 5.56, rate: 1.9453e-7, cap: 8.03 },
+            legacy: EngineCurve {
+                setup: 7.38,
+                rate: 5.9300e-5,
+                cap: 13.60,
+            },
+            runtime: EngineCurve {
+                setup: 5.56,
+                rate: 1.9453e-7,
+                cap: 8.03,
+            },
         },
         (TopnKeyClass::TextLead, _) => TopnClassModel {
             s_gran: 0.3445,
-            legacy: EngineCurve { setup: 4.53, rate: 3.3829e-5, cap: 12.90 },
-            runtime: EngineCurve { setup: 1.76, rate: 5.4498e-6, cap: 14.96 },
+            legacy: EngineCurve {
+                setup: 4.53,
+                rate: 3.3829e-5,
+                cap: 12.90,
+            },
+            runtime: EngineCurve {
+                setup: 1.76,
+                rate: 5.4498e-6,
+                cap: 14.96,
+            },
         },
         (TopnKeyClass::TextDatum, _) => TopnClassModel {
             s_gran: 0.1665,
-            legacy: EngineCurve { setup: 3.39, rate: 1.6108e-5, cap: 12.95 },
-            runtime: EngineCurve { setup: 1.79, rate: 4.6133e-6, cap: 15.54 },
+            legacy: EngineCurve {
+                setup: 3.39,
+                rate: 1.6108e-5,
+                cap: 12.95,
+            },
+            runtime: EngineCurve {
+                setup: 1.79,
+                rate: 4.6133e-6,
+                cap: 15.54,
+            },
         },
     }
 }
@@ -227,15 +275,31 @@ pub fn topn_int_plane(k1000: bool) -> TopnPlaneModel {
         TopnPlaneModel {
             ser_setup: 17.9200,
             ser_row: 2.9518e-6,
-            gm: EngineCurve { setup: 2.4454, rate: 2.4384e-6, cap: 6.33 },
-            arm: EngineCurve { setup: 19.5314, rate: 4.8864e-6, cap: 3.25 },
+            gm: EngineCurve {
+                setup: 2.4454,
+                rate: 2.4384e-6,
+                cap: 6.33,
+            },
+            arm: EngineCurve {
+                setup: 19.5314,
+                rate: 4.8864e-6,
+                cap: 3.25,
+            },
         }
     } else {
         TopnPlaneModel {
             ser_setup: 1.5474,
             ser_row: 1.0213e-7,
-            gm: EngineCurve { setup: 1.3707, rate: 2.2784e-6, cap: 6.37 },
-            arm: EngineCurve { setup: 1.7908, rate: 3.4752e-7, cap: 1.59 },
+            gm: EngineCurve {
+                setup: 1.3707,
+                rate: 2.2784e-6,
+                cap: 6.37,
+            },
+            arm: EngineCurve {
+                setup: 1.7908,
+                rate: 3.4752e-7,
+                cap: 1.59,
+            },
         }
     }
 }
@@ -324,7 +388,11 @@ pub fn topn_granules_read(shape: &TopnShape) -> f64 {
         // Text leads have no zone vocabulary: the walk is scan-linear.
         TopnKeyClass::TextLead | TopnKeyClass::TextDatum => g_total,
         _ => {
-            let g_bf = if shape.zone_friendly { G_BF_FRIENDLY } else { G_BF_HOSTILE };
+            let g_bf = if shape.zone_friendly {
+                G_BF_FRIENDLY
+            } else {
+                G_BF_HOSTILE
+            };
             let q = shape.survival.clamp(MIN_SURVIVAL, 1.0);
             let k_scale = (shape.limit / K_REF).max(1.0);
             (g_bf * k_scale / q).min(g_total)
@@ -437,36 +505,243 @@ mod tests {
     // unqualed).
     const Q_STAR: f64 = 1.0 / 97.0;
     const CELLS: &[(TopnKeyClass, f64, bool, f64, i32, f64, f64, f64)] = &[
-        (TopnKeyClass::StarWide, Q_STAR, false, 1e7, 4, 85.1, 31.8, 23.0),
-        (TopnKeyClass::StarWide, Q_STAR, false, 1e7, 8, 84.3, 18.2, 13.2),
-        (TopnKeyClass::StarWide, Q_STAR, false, 1e7, 16, 84.4, 11.6, 8.7),
-        (TopnKeyClass::StarWide, Q_STAR, false, 1e8, 4, 291.1, 274.6, 124.7),
-        (TopnKeyClass::StarWide, Q_STAR, false, 1e8, 16, 291.4, 89.6, 46.7),
+        (
+            TopnKeyClass::StarWide,
+            Q_STAR,
+            false,
+            1e7,
+            4,
+            85.1,
+            31.8,
+            23.0,
+        ),
+        (
+            TopnKeyClass::StarWide,
+            Q_STAR,
+            false,
+            1e7,
+            8,
+            84.3,
+            18.2,
+            13.2,
+        ),
+        (
+            TopnKeyClass::StarWide,
+            Q_STAR,
+            false,
+            1e7,
+            16,
+            84.4,
+            11.6,
+            8.7,
+        ),
+        (
+            TopnKeyClass::StarWide,
+            Q_STAR,
+            false,
+            1e8,
+            4,
+            291.1,
+            274.6,
+            124.7,
+        ),
+        (
+            TopnKeyClass::StarWide,
+            Q_STAR,
+            false,
+            1e8,
+            16,
+            291.4,
+            89.6,
+            46.7,
+        ),
         (TopnKeyClass::StarWide, 1.0, false, 1e7, 4, 5.1, 23.5, 5.1),
         (TopnKeyClass::StarWide, 1.0, false, 1e7, 8, 5.2, 13.7, 5.0),
         (TopnKeyClass::StarWide, 1.0, false, 1e7, 16, 5.2, 8.8, 4.7),
         (TopnKeyClass::StarWide, 1.0, false, 1e8, 4, 5.6, 198.0, 6.9),
         (TopnKeyClass::StarWide, 1.0, false, 1e8, 16, 5.8, 63.7, 6.2),
-        (TopnKeyClass::NarrowTs, 0.75, false, 1e7, 4, 23.6, 132.9, 5.6),
+        (
+            TopnKeyClass::NarrowTs,
+            0.75,
+            false,
+            1e7,
+            4,
+            23.6,
+            132.9,
+            5.6,
+        ),
         (TopnKeyClass::NarrowTs, 0.75, false, 1e7, 8, 23.4, 75.7, 4.9),
-        (TopnKeyClass::NarrowTs, 0.75, false, 1e7, 16, 23.5, 43.6, 4.3),
-        (TopnKeyClass::NarrowTs, 0.75, false, 1e8, 4, 31.5, 1263.6, 8.0),
-        (TopnKeyClass::NarrowTs, 0.75, false, 1e8, 16, 30.8, 394.2, 6.8),
-        (TopnKeyClass::MultiKey, 0.75, false, 1e7, 4, 53.7, 151.4, 6.9),
+        (
+            TopnKeyClass::NarrowTs,
+            0.75,
+            false,
+            1e7,
+            16,
+            23.5,
+            43.6,
+            4.3,
+        ),
+        (
+            TopnKeyClass::NarrowTs,
+            0.75,
+            false,
+            1e8,
+            4,
+            31.5,
+            1263.6,
+            8.0,
+        ),
+        (
+            TopnKeyClass::NarrowTs,
+            0.75,
+            false,
+            1e8,
+            16,
+            30.8,
+            394.2,
+            6.8,
+        ),
+        (
+            TopnKeyClass::MultiKey,
+            0.75,
+            false,
+            1e7,
+            4,
+            53.7,
+            151.4,
+            6.9,
+        ),
         (TopnKeyClass::MultiKey, 0.75, false, 1e7, 8, 53.9, 85.9, 5.7),
-        (TopnKeyClass::MultiKey, 0.75, false, 1e7, 16, 55.6, 49.7, 5.2),
-        (TopnKeyClass::MultiKey, 0.75, false, 1e8, 4, 74.3, 1458.0, 10.2),
-        (TopnKeyClass::MultiKey, 0.75, false, 1e8, 16, 73.0, 453.5, 8.1),
-        (TopnKeyClass::TextLead, 0.75, false, 1e7, 4, 420.0, 86.5, 15.3),
-        (TopnKeyClass::TextLead, 0.75, false, 1e7, 8, 423.6, 49.0, 8.6),
-        (TopnKeyClass::TextLead, 0.75, false, 1e7, 16, 423.1, 30.1, 5.4),
-        (TopnKeyClass::TextLead, 0.75, false, 1e8, 4, 4199.9, 839.1, 138.3),
-        (TopnKeyClass::TextLead, 0.75, false, 1e8, 16, 4191.4, 271.8, 38.2),
-        (TopnKeyClass::TextDatum, 1.0, false, 1e7, 4, 205.7, 42.7, 13.2),
-        (TopnKeyClass::TextDatum, 1.0, false, 1e7, 8, 201.9, 24.5, 7.5),
-        (TopnKeyClass::TextDatum, 1.0, false, 1e7, 16, 211.4, 15.5, 4.8),
-        (TopnKeyClass::TextDatum, 1.0, false, 1e8, 4, 2003.6, 400.3, 118.8),
-        (TopnKeyClass::TextDatum, 1.0, false, 1e8, 16, 2004.0, 129.9, 31.3),
+        (
+            TopnKeyClass::MultiKey,
+            0.75,
+            false,
+            1e7,
+            16,
+            55.6,
+            49.7,
+            5.2,
+        ),
+        (
+            TopnKeyClass::MultiKey,
+            0.75,
+            false,
+            1e8,
+            4,
+            74.3,
+            1458.0,
+            10.2,
+        ),
+        (
+            TopnKeyClass::MultiKey,
+            0.75,
+            false,
+            1e8,
+            16,
+            73.0,
+            453.5,
+            8.1,
+        ),
+        (
+            TopnKeyClass::TextLead,
+            0.75,
+            false,
+            1e7,
+            4,
+            420.0,
+            86.5,
+            15.3,
+        ),
+        (
+            TopnKeyClass::TextLead,
+            0.75,
+            false,
+            1e7,
+            8,
+            423.6,
+            49.0,
+            8.6,
+        ),
+        (
+            TopnKeyClass::TextLead,
+            0.75,
+            false,
+            1e7,
+            16,
+            423.1,
+            30.1,
+            5.4,
+        ),
+        (
+            TopnKeyClass::TextLead,
+            0.75,
+            false,
+            1e8,
+            4,
+            4199.9,
+            839.1,
+            138.3,
+        ),
+        (
+            TopnKeyClass::TextLead,
+            0.75,
+            false,
+            1e8,
+            16,
+            4191.4,
+            271.8,
+            38.2,
+        ),
+        (
+            TopnKeyClass::TextDatum,
+            1.0,
+            false,
+            1e7,
+            4,
+            205.7,
+            42.7,
+            13.2,
+        ),
+        (
+            TopnKeyClass::TextDatum,
+            1.0,
+            false,
+            1e7,
+            8,
+            201.9,
+            24.5,
+            7.5,
+        ),
+        (
+            TopnKeyClass::TextDatum,
+            1.0,
+            false,
+            1e7,
+            16,
+            211.4,
+            15.5,
+            4.8,
+        ),
+        (
+            TopnKeyClass::TextDatum,
+            1.0,
+            false,
+            1e8,
+            4,
+            2003.6,
+            400.3,
+            118.8,
+        ),
+        (
+            TopnKeyClass::TextDatum,
+            1.0,
+            false,
+            1e8,
+            16,
+            2004.0,
+            129.9,
+            31.3,
+        ),
     ];
 
     fn measured_pick(ser: f64, leg: f64, rt: f64) -> (EnginePick, bool) {
@@ -489,7 +764,14 @@ mod tests {
             if meas_parity {
                 continue; // measured tie — not verdict evidence
             }
-            let shape = TopnShape { class, rows, dop, limit: 10.0, survival: q, zone_friendly: z };
+            let shape = TopnShape {
+                class,
+                rows,
+                dop,
+                limit: 10.0,
+                survival: q,
+                zone_friendly: z,
+            };
             let v = topn_nonint_three_way(&shape).expect("in support");
             assert_eq!(
                 v.pick, meas,
@@ -521,10 +803,20 @@ mod tests {
         assert_eq!(v.pick, EnginePick::Serial, "mid-scale selqual cell: {v:?}");
         assert!(!v.parity, "the mid-scale margin is outside the parity band");
         let v = topn_selqual_starwide_two_way(1e8).unwrap();
-        assert_eq!(v.pick, EnginePick::Serial, "census-scale selqual cell: {v:?}");
+        assert_eq!(
+            v.pick,
+            EnginePick::Serial,
+            "census-scale selqual cell: {v:?}"
+        );
         assert!(!v.parity, "the census margin is outside the parity band");
-        assert!(v.t_gather / v.t_serial > 3.0, "census margin must be decisive: {v:?}");
-        assert!(topn_selqual_starwide_two_way(9e6).is_none(), "below support abstains");
+        assert!(
+            v.t_gather / v.t_serial > 3.0,
+            "census margin must be decisive: {v:?}"
+        );
+        assert!(
+            topn_selqual_starwide_two_way(9e6).is_none(),
+            "below support abstains"
+        );
 
         // The minting-era OBSERVATION record (shadow constants, unchanged):
         // real-bank anchors (friendly proxy, narrow shape, 10M): survival
@@ -539,18 +831,38 @@ mod tests {
             zone_friendly: true,
         };
         let v = topn_nonint_three_way(&losing).unwrap();
-        assert_eq!(v.pick, EnginePick::Gather, "selective friendly anchor: {v:?}");
-        assert!(v.t_runtime.is_none(), "band refusal removes the runtime candidate");
+        assert_eq!(
+            v.pick,
+            EnginePick::Gather,
+            "selective friendly anchor: {v:?}"
+        );
+        assert!(
+            v.t_runtime.is_none(),
+            "band refusal removes the runtime candidate"
+        );
 
-        let winning = TopnShape { survival: 0.75, ..losing };
+        let winning = TopnShape {
+            survival: 0.75,
+            ..losing
+        };
         let v = topn_nonint_three_way(&winning).unwrap();
-        assert_eq!(v.pick, EnginePick::Serial, "survival-0.75 friendly anchor: {v:?}");
+        assert_eq!(
+            v.pick,
+            EnginePick::Serial,
+            "survival-0.75 friendly anchor: {v:?}"
+        );
 
         // The carve threshold (0.10) sits ABOVE the model's own crossover
         // (the conservative direction): just under the threshold the
         // model already prefers the serial walk.
-        let near = TopnShape { survival: 0.09, ..losing };
-        assert_eq!(topn_nonint_three_way(&near).unwrap().pick, EnginePick::Serial);
+        let near = TopnShape {
+            survival: 0.09,
+            ..losing
+        };
+        assert_eq!(
+            topn_nonint_three_way(&near).unwrap().pick,
+            EnginePick::Serial
+        );
 
         // (2) The page fence: serial fold wins at the mid-scale bank,
         // the ordered exchange wins at the full-scale bank — and the
@@ -586,7 +898,11 @@ mod tests {
                 zone_friendly: false,
             };
             let v = topn_nonint_three_way(&shape).unwrap();
-            assert_eq!(v.pick, EnginePick::Serial, "unqualed star residual @dop{dop}: {v:?}");
+            assert_eq!(
+                v.pick,
+                EnginePick::Serial,
+                "unqualed star residual @dop{dop}: {v:?}"
+            );
         }
 
         // (4) NAMED RESIDUAL 2 — the L4 serial-dominance fold cell:
@@ -610,9 +926,20 @@ mod tests {
             if q >= 1.0 || measured_pick(ser, leg, rt).1 {
                 continue;
             }
-            let shape = TopnShape { class, rows, dop, limit: 10.0, survival: q, zone_friendly: false };
+            let shape = TopnShape {
+                class,
+                rows,
+                dop,
+                limit: 10.0,
+                survival: q,
+                zone_friendly: false,
+            };
             let v = topn_nonint_three_way(&shape).unwrap();
-            assert_eq!(v.pick, EnginePick::Runtime, "{class:?} N={rows} D={dop}: {v:?}");
+            assert_eq!(
+                v.pick,
+                EnginePick::Runtime,
+                "{class:?} N={rows} D={dop}: {v:?}"
+            );
         }
     }
 
@@ -651,13 +978,25 @@ mod tests {
         };
         let g = |s: &TopnShape| topn_granules_read(s);
         for w in [0.001, 0.01, 0.1, 0.5, 0.9].windows(2) {
-            let lo = TopnShape { survival: w[0], ..base };
-            let hi = TopnShape { survival: w[1], ..base };
+            let lo = TopnShape {
+                survival: w[0],
+                ..base
+            };
+            let hi = TopnShape {
+                survival: w[1],
+                ..base
+            };
             assert!(g(&lo) >= g(&hi), "granules not nonincreasing in survival");
         }
         for w in [10.0, 100.0, 1000.0, 65536.0].windows(2) {
-            let lo = TopnShape { limit: w[0], ..base };
-            let hi = TopnShape { limit: w[1], ..base };
+            let lo = TopnShape {
+                limit: w[0],
+                ..base
+            };
+            let hi = TopnShape {
+                limit: w[1],
+                ..base
+            };
             assert!(g(&lo) <= g(&hi), "granules not nondecreasing in the bound");
         }
         for w in [1e7, 2.5e7, 1e8, 1e9].windows(2) {
@@ -665,10 +1004,23 @@ mod tests {
             let hi = TopnShape { rows: w[1], ..base };
             assert!(g(&lo) <= g(&hi), "granules not nondecreasing in N");
         }
-        let friendly = TopnShape { zone_friendly: true, ..base };
-        assert!(g(&friendly) <= g(&base), "friendly posture reads more than hostile");
+        let friendly = TopnShape {
+            zone_friendly: true,
+            ..base
+        };
+        assert!(
+            g(&friendly) <= g(&base),
+            "friendly posture reads more than hostile"
+        );
         for &(class, q, z, rows, dop, ..) in CELLS {
-            let shape = TopnShape { class, rows, dop, limit: 10.0, survival: q, zone_friendly: z };
+            let shape = TopnShape {
+                class,
+                rows,
+                dop,
+                limit: 10.0,
+                survival: q,
+                zone_friendly: z,
+            };
             let v = topn_nonint_three_way(&shape).unwrap();
             assert!(v.t_serial.is_finite() && v.t_serial > 0.0);
             let f_skip = 1.0 - topn_granules_read(&shape) / (rows / GRANULE_ROWS);
@@ -680,35 +1032,55 @@ mod tests {
     /// int-bounded family's fit table — provenance in the family doc).
     /// (N, dop, limit, serial_ms, gm_ms, runtime_ms).
     const TOPN4P: &[(f64, i32, f64, f64, f64, f64)] = &[
-        (2.5e5, 1, 10.0, 1.3, 1.4, 1.3), (2.5e5, 2, 10.0, 1.3, 1.5, 1.3),
-        (2.5e5, 4, 10.0, 1.3, 1.5, 1.3), (2.5e5, 8, 10.0, 1.2, 1.5, 1.3),
+        (2.5e5, 1, 10.0, 1.3, 1.4, 1.3),
+        (2.5e5, 2, 10.0, 1.3, 1.5, 1.3),
+        (2.5e5, 4, 10.0, 1.3, 1.5, 1.3),
+        (2.5e5, 8, 10.0, 1.2, 1.5, 1.3),
         (2.5e5, 16, 10.0, 1.3, 1.5, 1.3),
-        (1e6, 1, 10.0, 1.9, 3.1, 2.9), (1e6, 2, 10.0, 1.9, 2.4, 2.9),
-        (1e6, 4, 10.0, 1.9, 1.9, 2.6), (1e6, 8, 10.0, 1.9, 2.0, 2.5),
+        (1e6, 1, 10.0, 1.9, 3.1, 2.9),
+        (1e6, 2, 10.0, 1.9, 2.4, 2.9),
+        (1e6, 4, 10.0, 1.9, 1.9, 2.6),
+        (1e6, 8, 10.0, 1.9, 2.0, 2.5),
         (1e6, 16, 10.0, 1.9, 2.0, 2.5),
-        (2.5e6, 1, 10.0, 2.0, 6.0, 3.4), (2.5e6, 2, 10.0, 2.0, 4.4, 2.9),
-        (2.5e6, 4, 10.0, 2.0, 3.1, 2.7), (2.5e6, 8, 10.0, 1.9, 2.3, 2.6),
+        (2.5e6, 1, 10.0, 2.0, 6.0, 3.4),
+        (2.5e6, 2, 10.0, 2.0, 4.4, 2.9),
+        (2.5e6, 4, 10.0, 2.0, 3.1, 2.7),
+        (2.5e6, 8, 10.0, 1.9, 2.3, 2.6),
         (2.5e6, 16, 10.0, 1.9, 2.2, 2.6),
-        (5e6, 1, 10.0, 2.2, 11.1, 3.8), (5e6, 2, 10.0, 2.2, 7.9, 3.4),
-        (5e6, 4, 10.0, 2.2, 5.3, 3.2), (5e6, 8, 10.0, 2.2, 3.6, 3.0),
+        (5e6, 1, 10.0, 2.2, 11.1, 3.8),
+        (5e6, 2, 10.0, 2.2, 7.9, 3.4),
+        (5e6, 4, 10.0, 2.2, 5.3, 3.2),
+        (5e6, 8, 10.0, 2.2, 3.6, 3.0),
         (5e6, 16, 10.0, 2.2, 2.8, 3.1),
-        (1e7, 1, 10.0, 2.4, 21.0, 4.2), (1e7, 2, 10.0, 2.4, 14.3, 3.7),
-        (1e7, 4, 10.0, 2.3, 9.1, 3.4), (1e7, 8, 10.0, 2.3, 5.6, 3.3),
+        (1e7, 1, 10.0, 2.4, 21.0, 4.2),
+        (1e7, 2, 10.0, 2.4, 14.3, 3.7),
+        (1e7, 4, 10.0, 2.3, 9.1, 3.4),
+        (1e7, 8, 10.0, 2.3, 5.6, 3.3),
         (1e7, 16, 10.0, 2.4, 4.0, 3.2),
-        (2.5e5, 1, 1000.0, 18.2, 2.5, 18.3), (2.5e5, 2, 1000.0, 18.2, 2.5, 18.3),
-        (2.5e5, 4, 1000.0, 18.2, 2.5, 18.1), (2.5e5, 8, 1000.0, 18.2, 2.5, 18.3),
+        (2.5e5, 1, 1000.0, 18.2, 2.5, 18.3),
+        (2.5e5, 2, 1000.0, 18.2, 2.5, 18.3),
+        (2.5e5, 4, 1000.0, 18.2, 2.5, 18.1),
+        (2.5e5, 8, 1000.0, 18.2, 2.5, 18.3),
         (2.5e5, 16, 1000.0, 18.3, 2.5, 18.3),
-        (1e6, 1, 1000.0, 21.0, 4.4, 23.2), (1e6, 2, 1000.0, 21.0, 3.7, 20.7),
-        (1e6, 4, 1000.0, 21.0, 3.0, 20.4), (1e6, 8, 1000.0, 21.0, 3.1, 23.5),
+        (1e6, 1, 1000.0, 21.0, 4.4, 23.2),
+        (1e6, 2, 1000.0, 21.0, 3.7, 20.7),
+        (1e6, 4, 1000.0, 21.0, 3.0, 20.4),
+        (1e6, 8, 1000.0, 21.0, 3.1, 23.5),
         (1e6, 16, 1000.0, 21.0, 3.1, 30.3),
-        (2.5e6, 1, 1000.0, 25.7, 7.4, 31.4), (2.5e6, 2, 1000.0, 25.7, 5.8, 24.7),
-        (2.5e6, 4, 1000.0, 25.7, 4.4, 22.3), (2.5e6, 8, 1000.0, 25.8, 3.6, 23.7),
+        (2.5e6, 1, 1000.0, 25.7, 7.4, 31.4),
+        (2.5e6, 2, 1000.0, 25.7, 5.8, 24.7),
+        (2.5e6, 4, 1000.0, 25.7, 4.4, 22.3),
+        (2.5e6, 8, 1000.0, 25.8, 3.6, 23.7),
         (2.5e6, 16, 1000.0, 25.7, 3.4, 30.6),
-        (5e6, 1, 1000.0, 33.7, 12.7, 45.6), (5e6, 2, 1000.0, 33.7, 9.4, 32.1),
-        (5e6, 4, 1000.0, 33.8, 6.7, 25.6), (5e6, 8, 1000.0, 33.7, 4.8, 25.2),
+        (5e6, 1, 1000.0, 33.7, 12.7, 45.6),
+        (5e6, 2, 1000.0, 33.7, 9.4, 32.1),
+        (5e6, 4, 1000.0, 33.8, 6.7, 25.6),
+        (5e6, 8, 1000.0, 33.7, 4.8, 25.2),
         (5e6, 16, 1000.0, 33.8, 4.0, 32.9),
-        (1e7, 1, 1000.0, 45.9, 22.7, 67.5), (1e7, 2, 1000.0, 45.9, 15.9, 46.0),
-        (1e7, 4, 1000.0, 46.1, 10.7, 32.9), (1e7, 8, 1000.0, 46.0, 7.0, 29.8),
+        (1e7, 1, 1000.0, 45.9, 22.7, 67.5),
+        (1e7, 2, 1000.0, 45.9, 15.9, 46.0),
+        (1e7, 4, 1000.0, 46.1, 10.7, 32.9),
+        (1e7, 8, 1000.0, 46.0, 7.0, 29.8),
         (1e7, 16, 1000.0, 46.1, 5.3, 34.5),
     ];
 
@@ -777,7 +1149,9 @@ mod tests {
                 witness, "witnessed-ab",
                 "serial-term row {class}.{term} must be witnessed-ab"
             );
-            let got: f64 = value.parse().unwrap_or_else(|_| panic!("bad value {value}"));
+            let got: f64 = value
+                .parse()
+                .unwrap_or_else(|_| panic!("bad value {value}"));
             let expect = expected_tsv_value(class, term)
                 .unwrap_or_else(|| panic!("unpinned serial-term row {class}.{term}"));
             assert_eq!(got, expect, "{class}.{term}: TSV {got} != code {expect}");
@@ -807,25 +1181,85 @@ mod tests {
 
     fn all_pinned() -> Vec<(String, String, f64)> {
         let mut rows: Vec<(String, String, f64)> = vec![
-            ("SerialTopnNonInt".into(), "granule_rows".into(), GRANULE_ROWS),
-            ("SerialTopnNonInt".into(), "ser_setup_ms".into(), SER_SETUP_MS),
-            ("SerialTopnNonInt".into(), "g_bf_hostile".into(), G_BF_HOSTILE),
-            ("SerialTopnNonInt".into(), "g_bf_friendly".into(), G_BF_FRIENDLY),
+            (
+                "SerialTopnNonInt".into(),
+                "granule_rows".into(),
+                GRANULE_ROWS,
+            ),
+            (
+                "SerialTopnNonInt".into(),
+                "ser_setup_ms".into(),
+                SER_SETUP_MS,
+            ),
+            (
+                "SerialTopnNonInt".into(),
+                "g_bf_hostile".into(),
+                G_BF_HOSTILE,
+            ),
+            (
+                "SerialTopnNonInt".into(),
+                "g_bf_friendly".into(),
+                G_BF_FRIENDLY,
+            ),
             ("SerialTopnNonInt".into(), "k_ref".into(), K_REF),
             ("SerialTopnNonInt".into(), "n_min_fit".into(), SERIAL_N_MIN),
-            ("SerialTsTruncFold".into(), "s_row_serial".into(), TSTRUNC_S_ROW),
-            ("SerialTsTruncFold".into(), "leg_setup".into(), TSTRUNC_LEG_SETUP),
-            ("SerialTsTruncFold".into(), "leg_rate".into(), TSTRUNC_LEG_ROW),
+            (
+                "SerialTsTruncFold".into(),
+                "s_row_serial".into(),
+                TSTRUNC_S_ROW,
+            ),
+            (
+                "SerialTsTruncFold".into(),
+                "leg_setup".into(),
+                TSTRUNC_LEG_SETUP,
+            ),
+            (
+                "SerialTsTruncFold".into(),
+                "leg_rate".into(),
+                TSTRUNC_LEG_ROW,
+            ),
             ("SerialTsTruncFold".into(), "n_min_fit".into(), SERIAL_N_MIN),
-            ("SerialTopnSelQual".into(), "ser_flat_ms".into(), TOPN_SELQUAL_SER_FLAT),
-            ("SerialTopnSelQual".into(), "gm_setup".into(), TOPN_SELQUAL_GM_SETUP),
-            ("SerialTopnSelQual".into(), "gm_rate".into(), TOPN_SELQUAL_GM_RATE),
+            (
+                "SerialTopnSelQual".into(),
+                "ser_flat_ms".into(),
+                TOPN_SELQUAL_SER_FLAT,
+            ),
+            (
+                "SerialTopnSelQual".into(),
+                "gm_setup".into(),
+                TOPN_SELQUAL_GM_SETUP,
+            ),
+            (
+                "SerialTopnSelQual".into(),
+                "gm_rate".into(),
+                TOPN_SELQUAL_GM_RATE,
+            ),
             ("SerialTopnSelQual".into(), "n_min_fit".into(), SERIAL_N_MIN),
-            ("SerialScanFoldMeta".into(), "s_meta".into(), SCANFOLD_S_META),
-            ("SerialScanFoldMeta".into(), "ser_setup_ms".into(), SCANFOLD_SER_SETUP),
-            ("SerialScanFoldMeta".into(), "par_rate".into(), SCANFOLD_PAR_ROW),
-            ("SerialScanFoldMeta".into(), "par_cap".into(), SCANFOLD_PAR_CAP),
-            ("SerialScanFoldMeta".into(), "n_min_fit".into(), SERIAL_N_MIN),
+            (
+                "SerialScanFoldMeta".into(),
+                "s_meta".into(),
+                SCANFOLD_S_META,
+            ),
+            (
+                "SerialScanFoldMeta".into(),
+                "ser_setup_ms".into(),
+                SCANFOLD_SER_SETUP,
+            ),
+            (
+                "SerialScanFoldMeta".into(),
+                "par_rate".into(),
+                SCANFOLD_PAR_ROW,
+            ),
+            (
+                "SerialScanFoldMeta".into(),
+                "par_cap".into(),
+                SCANFOLD_PAR_CAP,
+            ),
+            (
+                "SerialScanFoldMeta".into(),
+                "n_min_fit".into(),
+                SERIAL_N_MIN,
+            ),
         ];
         for (class, qualed, tag) in [
             (TopnKeyClass::StarWide, true, "star_wide"),
@@ -856,7 +1290,11 @@ mod tests {
         }
         rows.push(("SerialTopnIntBounded".into(), "k_lo".into(), TOPN_INT_K_LO));
         rows.push(("SerialTopnIntBounded".into(), "k_hi".into(), TOPN_INT_K_HI));
-        rows.push(("SerialTopnIntBounded".into(), "n_min_fit".into(), TOPN_INT_N_MIN));
+        rows.push((
+            "SerialTopnIntBounded".into(),
+            "n_min_fit".into(),
+            TOPN_INT_N_MIN,
+        ));
         rows
     }
 
@@ -868,6 +1306,9 @@ mod tests {
     }
 
     fn expected_rows() -> Vec<String> {
-        all_pinned().into_iter().map(|(c, t, _)| format!("{c}.{t}")).collect()
+        all_pinned()
+            .into_iter()
+            .map(|(c, t, _)| format!("{c}.{t}"))
+            .collect()
     }
 }
