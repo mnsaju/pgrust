@@ -220,7 +220,11 @@ unsafe fn slot_value<V: RtValue>(slot: *mut RtSlot) -> *mut V {
 
 fn leaf_layout<V: RtValue>(size: usize) -> Layout {
     // MAXALIGN parity with C's palloc'd leaves.
-    let align = if align_of::<V>() > 8 { align_of::<V>() } else { 8 };
+    let align = if align_of::<V>() > 8 {
+        align_of::<V>()
+    } else {
+        8
+    };
     Layout::from_size_align(size, align).unwrap()
 }
 
@@ -256,7 +260,10 @@ impl LocalStore {
                 CLASS_ALLOC_SIZE[i],
             )
         });
-        LocalStore { leaf_ctx, node_slabs }
+        LocalStore {
+            leaf_ctx,
+            node_slabs,
+        }
     }
 }
 
@@ -497,12 +504,18 @@ impl<V: RtValue, S: RtStore> Tree<V, S> {
                 } else {
                     self.extend_up(key)?;
                     let root_slot: *mut RtSlot = &mut self.root;
-                    slot =
-                        get_slot_recursive(&self.store, root_slot, key, self.start_shift, &mut found)?;
+                    slot = get_slot_recursive(
+                        &self.store,
+                        root_slot,
+                        key,
+                        self.start_shift,
+                        &mut found,
+                    )?;
                 }
             } else {
                 let root_slot: *mut RtSlot = &mut self.root;
-                slot = get_slot_recursive(&self.store, root_slot, key, self.start_shift, &mut found)?;
+                slot =
+                    get_slot_recursive(&self.store, root_slot, key, self.start_shift, &mut found)?;
             }
 
             if value_is_embeddable::<V>(&*value) {
@@ -598,7 +611,10 @@ impl<V: RtValue, S: RtStore> Tree<V, S> {
         let top_level = (self.start_shift / RT_SPAN) as usize;
         let mut iter = TreeIter {
             tree: self,
-            node_iters: [NodeIter { node: null_mut(), idx: 0 }; RT_MAX_LEVEL],
+            node_iters: [NodeIter {
+                node: null_mut(),
+                idx: 0,
+            }; RT_MAX_LEVEL],
             top_level,
             cur_level: top_level as isize,
             key: 0,
@@ -634,8 +650,12 @@ pub struct SharedRadixTree<V: RtValue> {
 
 impl<V: RtValue + Send + Sync> SharedRadixTree<V> {
     pub fn create() -> PgResult<SharedRadixTree<V>> {
-        let tree = Tree::with_store(SharedStore { total: AtomicUsize::new(0) })?;
-        Ok(SharedRadixTree { lock: RwLock::new(tree) })
+        let tree = Tree::with_store(SharedStore {
+            total: AtomicUsize::new(0),
+        })?;
+        Ok(SharedRadixTree {
+            lock: RwLock::new(tree),
+        })
     }
 
     pub fn lock_exclusive(&self) -> RwLockWriteGuard<'_, Tree<V, SharedStore>> {
@@ -777,7 +797,10 @@ unsafe fn free_node<S: RtStore>(store: &S, node: *mut RtNode) {
 
 unsafe fn free_leaf<V: RtValue, S: RtStore>(store: &S, leaf: RtSlot) {
     let size = (*(leaf as *const V)).value_size();
-    store.free_leaf(NonNull::new_unchecked(leaf as *mut u8), leaf_layout::<V>(size));
+    store.free_leaf(
+        NonNull::new_unchecked(leaf as *mut u8),
+        leaf_layout::<V>(size),
+    );
 }
 
 #[inline(always)]
@@ -1089,7 +1112,11 @@ unsafe fn grow_node_16<S: RtStore>(
         for i in 0..RT_FANOUT_16_HI {
             (*new48).slot_idxs[(*n16).chunks[i] as usize] = i as u8;
         }
-        ptr::copy_nonoverlapping(node16_children(n16), node48_children(new48), RT_FANOUT_16_HI);
+        ptr::copy_nonoverlapping(
+            node16_children(n16),
+            node48_children(new48),
+            RT_FANOUT_16_HI,
+        );
         (*new48).isset[0] = (1u64 << RT_FANOUT_16_HI) - 1;
 
         let insertpos = RT_FANOUT_16_HI;

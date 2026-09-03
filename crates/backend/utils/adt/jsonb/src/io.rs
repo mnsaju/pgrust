@@ -10,10 +10,7 @@ use stringinfo::StringInfo;
 use types_error::{ereturn, PgError, PgResult, SoftErrorContext, ERRCODE_PROGRAM_LIMIT_EXCEEDED};
 
 // C: checkStringLen. Ok(false) = soft-failed into escontext.
-fn check_string_len(
-    len: usize,
-    escontext: Option<&mut SoftErrorContext>,
-) -> PgResult<bool> {
+fn check_string_len(len: usize, escontext: Option<&mut SoftErrorContext>) -> PgResult<bool> {
     if len > JENTRY_OFFLENMASK as usize {
         let err = PgError::error("string too long to represent as jsonb string")
             .with_sqlstate(ERRCODE_PROGRAM_LIMIT_EXCEEDED)
@@ -108,7 +105,9 @@ impl<'mcx> JsonSem<'mcx> for JsonbInSink<'_, 'mcx, '_> {
             JsonSemToken::Number(tok) => {
                 let s = core::str::from_utf8(tok).expect("lexer-validated number is ASCII");
                 match adt_numeric::numeric_in(s, -1, self.escontext.as_deref_mut())? {
-                    Some(img) => JsonbValue::Numeric(mcx::slice_in(self.mcx, img.as_bytes())?.leak()),
+                    Some(img) => {
+                        JsonbValue::Numeric(mcx::slice_in(self.mcx, img.as_bytes())?.leak())
+                    }
                     None => return Ok(false),
                 }
             }
@@ -202,10 +201,7 @@ pub fn jsonb_in<'mcx>(
 }
 
 /// C: jsonb_recv (version 1 = text payload).
-pub fn jsonb_recv<'mcx>(
-    mcx: Mcx<'mcx>,
-    buf: &mut StringInfo<'_>,
-) -> PgResult<PgVec<'mcx, u8>> {
+pub fn jsonb_recv<'mcx>(mcx: Mcx<'mcx>, buf: &mut StringInfo<'_>) -> PgResult<PgVec<'mcx, u8>> {
     let version = pqformat::pq_getmsgint(buf, 1)?;
     if version != 1 {
         // C elog(ERROR): XX000, client-reachable via binary input.
@@ -415,6 +411,9 @@ pub fn container_type_name(c: &[u8]) -> &'static str {
         Some(_) => panic!("unexpected jsonb scalar type"),
         None if container_is_array(c) => "array",
         None if container_is_object(c) => "object",
-        None => panic!("invalid jsonb container type: 0x{:08x}", container_header(c)),
+        None => panic!(
+            "invalid jsonb container type: 0x{:08x}",
+            container_header(c)
+        ),
     }
 }

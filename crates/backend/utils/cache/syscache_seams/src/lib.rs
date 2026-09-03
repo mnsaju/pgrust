@@ -152,7 +152,6 @@ use mcx::{Mcx, PgString, PgVec};
 use types_core::AttrNumber;
 use types_tuple::NameData;
 
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PgAmopShape {
     pub amopstrategy: i16,
@@ -540,7 +539,6 @@ seam_core::seam!(
     // SearchSysCache1(TSDICTOID, dictid); None mirrors !HeapTupleIsValid.
     pub fn lookup_pg_ts_dict_row(dictid: Oid) -> PgResult<Option<PgTsObjectRow>>
 );
-
 
 seam_core::seam!(
     pub fn lookup_pg_constraint_shape(conoid: Oid) -> PgResult<Option<PgConstraintShape>>

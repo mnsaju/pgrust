@@ -104,12 +104,20 @@ enum Op {
     // ascii_only means the set can never match a non-ASCII byte, so every
     // position inside the span is a rune boundary; otherwise give-back
     // steps skip UTF-8 continuation bytes to stay on boundaries.
-    Set { set: ByteSet, scan: Scan, min: u32, max: u32, ascii_only: bool },
+    Set {
+        set: ByteSet,
+        scan: Scan,
+        min: u32,
+        max: u32,
+        ascii_only: bool,
+    },
     CapStart,
     CapEnd,
     // Trailing `.*`/`.+`: consume every remaining byte (min_one asserts at
     // least one byte, == at least one rune on valid UTF-8).
-    TailAny { min_one: bool },
+    TailAny {
+        min_one: bool,
+    },
     // `$`: end of subject.
     End,
 }
@@ -349,7 +357,13 @@ impl<'a> Compiler<'a> {
         } else {
             Scan::Table
         };
-        self.push(Op::Set { set, scan, min, max, ascii_only })
+        self.push(Op::Set {
+            set,
+            scan,
+            min,
+            max,
+            ascii_only,
+        })
     }
 
     // Parses a sequence of atoms; in_group parses a capture group body
@@ -455,7 +469,13 @@ impl<'a> Compiler<'a> {
 // UTF-8, NUL-free, ARE-mode) pattern into a Program when it fits the
 // anchored subset; None = run RE2 as before.
 pub fn compile(pattern: &[u8]) -> Option<Program> {
-    let mut c = Compiler { pat: pattern, i: 0, ops: Vec::new(), lit: Vec::new(), ngroups: 0 };
+    let mut c = Compiler {
+        pat: pattern,
+        i: 0,
+        ops: Vec::new(),
+        lit: Vec::new(),
+        ngroups: 0,
+    };
     if c.peek() != Some(b'^') {
         return None;
     }
@@ -465,7 +485,10 @@ pub fn compile(pattern: &[u8]) -> Option<Program> {
     if c.ops.len() > MAX_OPS {
         return None;
     }
-    Some(Program { ops: c.ops, ngroups: c.ngroups })
+    Some(Program {
+        ops: c.ops,
+        ngroups: c.ngroups,
+    })
 }
 
 // ---------------------------------------------------------------------
@@ -513,9 +536,19 @@ impl<'a> Run<'a> {
                 }
                 self.run(ip + 1, pos)
             }
-            Op::Set { set, scan, min, max, ascii_only } => {
+            Op::Set {
+                set,
+                scan,
+                min,
+                max,
+                ascii_only,
+            } => {
                 let rest = &self.hay[pos..];
-                let cap_bytes = if *max == u32::MAX { rest.len() } else { rest.len().min(*max as usize) };
+                let cap_bytes = if *max == u32::MAX {
+                    rest.len()
+                } else {
+                    rest.len().min(*max as usize)
+                };
                 let k = match scan {
                     Scan::Not1(a) => memchr::memchr(*a, &rest[..cap_bytes]).unwrap_or(cap_bytes),
                     Scan::Not2(a, b) => {
@@ -658,7 +691,7 @@ mod tests {
         // No "www." prefix: capture starts right after "://".
         let (_, g1) = m(p, "http://www/").unwrap();
         assert_eq!(g1, (7, 10)); // "www"
-        // Multibyte host bytes ride through the negated span.
+                                 // Multibyte host bytes ride through the negated span.
         let s = "https://пример.рф/страница";
         let (_, g1) = m(p, s).unwrap();
         let host_end = s.find("/страница").unwrap();
@@ -688,22 +721,22 @@ mod tests {
             assert!(compile(p.as_bytes()).is_some(), "should compile {p:?}");
         }
         for p in [
-            "abc",           // unanchored
-            "^a|b",          // alternation
-            "^a.b",          // mid-pattern dot
-            "^.*a",          // dot not trailing
-            "^(a)(b)",       // two captures
-            "^(a)?",         // quantified capture
-            "^((a))",        // nested capture
-            "^[é]+",         // multibyte class member
-            "^[^/]",         // 0-or-1-rune negated class (bare)
-            "^[^/]{2,3}",    // counted negated class
-            "^é+",           // quantified multibyte literal
-            "^a$b",          // interior $
-            "^a^b",          // interior ^
-            "^(?:a[b])?",    // non-literal (?:) body
-            "^(a$)",         // $ inside group
-            r"^\d",          // (never classifier-admitted anyway)
+            "abc",        // unanchored
+            "^a|b",       // alternation
+            "^a.b",       // mid-pattern dot
+            "^.*a",       // dot not trailing
+            "^(a)(b)",    // two captures
+            "^(a)?",      // quantified capture
+            "^((a))",     // nested capture
+            "^[é]+",      // multibyte class member
+            "^[^/]",      // 0-or-1-rune negated class (bare)
+            "^[^/]{2,3}", // counted negated class
+            "^é+",        // quantified multibyte literal
+            "^a$b",       // interior $
+            "^a^b",       // interior ^
+            "^(?:a[b])?", // non-literal (?:) body
+            "^(a$)",      // $ inside group
+            r"^\d",       // (never classifier-admitted anyway)
         ] {
             assert!(compile(p.as_bytes()).is_none(), "should refuse {p:?}");
         }
@@ -718,7 +751,7 @@ mod tests {
         let (_, g1) = m("^([a-z]+)bc$", "abc").unwrap();
         assert_eq!(g1, (0, 1));
         assert!(m("^[a-z]+z$", "z").is_none()); // min 1 then 'z' unmet
-        // Counted bounds.
+                                                // Counted bounds.
         assert!(m("^a{2,3}$", "a").is_none());
         assert!(m("^a{2,3}$", "aa").is_some());
         assert!(m("^a{2,3}$", "aaa").is_some());
@@ -738,9 +771,9 @@ mod tests {
         // boundaries: "xé" + "y", trailing literal "y".
         let (_, g1) = m("^([^a]+)y$", "xéy").unwrap();
         assert_eq!(g1, (0, 3)); // "xé" — never 0..2 (mid-é)
-        // Adversarial shape from the design analysis: ^([^a]+)[^b]+X$ on
-        // x é X — byte give-back would capture mid-rune; rune-stepped
-        // give-back must agree with RE2's "x".
+                                // Adversarial shape from the design analysis: ^([^a]+)[^b]+X$ on
+                                // x é X — byte give-back would capture mid-rune; rune-stepped
+                                // give-back must agree with RE2's "x".
         let (_, g1) = m("^([^a]+)[^b]+X$", "xéX").unwrap();
         assert_eq!(g1, (0, 1));
     }

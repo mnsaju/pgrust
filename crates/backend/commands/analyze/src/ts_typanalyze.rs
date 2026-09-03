@@ -73,8 +73,13 @@ pub(crate) fn compute_tsvector_stats<'mcx>(
                     Some(item) => item.frequency += 1,
                     None => {
                         let key: &[u8] = mcx::slice_borrow_in(col_mcx, lexeme)?;
-                        lexemes_tab
-                            .insert(key, TrackItem { frequency: 1, delta: b_current - 1 });
+                        lexemes_tab.insert(
+                            key,
+                            TrackItem {
+                                frequency: 1,
+                                delta: b_current - 1,
+                            },
+                        );
                     }
                 }
                 lexeme_no += 1;
@@ -123,9 +128,7 @@ pub(crate) fn compute_tsvector_stats<'mcx>(
 
         if num_mcelem > 0 {
             let prefix = &mut sort_table[..num_mcelem as usize];
-            prefix.sort_unstable_by(|a, b| {
-                a.0.len().cmp(&b.0.len()).then_with(|| a.0.cmp(b.0))
-            });
+            prefix.sort_unstable_by(|a, b| a.0.len().cmp(&b.0.len()).then_with(|| a.0.cmp(b.0)));
 
             let mut mcelem_values: PgVec<'mcx, Datum> =
                 mcx::vec_with_capacity_in(anl_mcx, num_mcelem as usize)?;
@@ -162,5 +165,7 @@ fn text_datum_in<'m>(mcx: Mcx<'m>, s: &[u8]) -> PgResult<Datum> {
     let mut img: PgVec<'m, u8> = mcx::vec_with_capacity_in(mcx, s.len() + datum::VARHDRSZ)?;
     mcx::vec_append_bytes(&mut img, &datum::set_varsize_4b(s.len() + datum::VARHDRSZ))?;
     mcx::vec_append_bytes(&mut img, s)?;
-    Ok(Datum::from_usize(adt_multirangetypes::leak_image(img).as_ptr() as usize))
+    Ok(Datum::from_usize(
+        adt_multirangetypes::leak_image(img).as_ptr() as usize,
+    ))
 }

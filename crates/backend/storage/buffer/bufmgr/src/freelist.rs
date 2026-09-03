@@ -186,7 +186,8 @@ pub fn StrategyGetBuffer(strategy: &BufferAccessStrategy) -> PgResult<(Victim, b
                 }
                 let buf = GetBufferDescriptor(head);
                 debug_assert!(buf.free_next() != FREENEXT_NOT_IN_LIST);
-                c.first_free_buffer.store(buf.free_next(), Ordering::Relaxed);
+                c.first_free_buffer
+                    .store(buf.free_next(), Ordering::Relaxed);
                 // SAFETY: strategy spinlock held.
                 unsafe { buf.set_free_next(FREENEXT_NOT_IN_LIST) };
                 head
@@ -362,11 +363,7 @@ fn AddBufferToRing(s: &mut BufferAccessStrategyData, buf: Buffer) {
     s.buffers[s.current as usize] = buf;
 }
 
-pub fn StrategyRejectBuffer(
-    strategy: &BufferAccessStrategy,
-    buf_id: i32,
-    from_ring: bool,
-) -> bool {
+pub fn StrategyRejectBuffer(strategy: &BufferAccessStrategy, buf_id: i32, from_ring: bool) -> bool {
     let Some(s) = strategy else { return false };
     let mut s = s.borrow_mut();
     if s.btype != BufferAccessStrategyType::BasBulkread {

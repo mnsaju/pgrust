@@ -5,13 +5,13 @@ use core::cell::UnsafeCell;
 use core::ops::ControlFlow;
 use core::sync::atomic::{AtomicI32, AtomicU32, AtomicU64, Ordering};
 
+use init_small::globals;
 use lmgr_proc_seams as proc_s;
 use lmgr_proc_seams::{proclist_head, proclist_node};
-use init_small::globals;
+use shmem_seams as shmem;
 use types_core::{ProcNumber, Size, INVALID_PROC_NUMBER, NAMEDATALEN};
 use types_error::{PgError, PgResult, ERROR, FATAL, PANIC};
 use waitevent_seams as waitevent;
-use shmem_seams as shmem;
 
 pub type LWLockMode = u8;
 pub const LW_EXCLUSIVE: LWLockMode = 0;
@@ -61,25 +61,101 @@ pub const LWTRANCHE_FIRST_USER_DEFINED: i32 = LWTRANCHE_XACT_BUFFER + 41;
 pub const LWLOCK_PADDED_SIZE: usize = 128;
 
 const BUILTIN_TRANCHE_NAMES: [&str; LWTRANCHE_FIRST_USER_DEFINED as usize] = [
-    "", "ShmemIndex", "OidGen", "XidGen", "ProcArray", "SInvalRead", "SInvalWrite", "WALBufMapping",
-    "WALWrite", "ControlFile", "", "", "", "MultiXactGen", "", "", "RelCacheInit",
-    "CheckpointerComm", "TwoPhaseState", "TablespaceCreate", "BtreeVacuum", "AddinShmemInit",
-    "Autovacuum", "AutovacuumSchedule", "SyncScan", "RelationMapping", "", "NotifyQueue",
-    "SerializableXactHash", "SerializableFinishedList", "SerializablePredicateList", "", "SyncRep",
-    "BackgroundWorker", "DynamicSharedMemoryControl", "AutoFile", "ReplicationSlotAllocation",
-    "ReplicationSlotControl", "", "CommitTs", "ReplicationOrigin", "MultiXactTruncation", "",
-    "LogicalRepWorker", "XactTruncation", "", "WrapLimitsVacuum", "NotifyQueueTail",
-    "WaitEventCustom", "WALSummarizer", "DSMRegistry", "InjectionPoint", "SerialControl",
-    "AioWorkerSubmissionQueue", "XactBuffer", "CommitTsBuffer", "SubtransBuffer",
-    "MultiXactOffsetBuffer", "MultiXactMemberBuffer", "NotifyBuffer", "SerialBuffer", "WALInsert",
-    "BufferContent", "ReplicationOriginState", "ReplicationSlotIO", "LockFastPath", "BufferMapping",
-    "LockManager", "PredicateLockManager", "ParallelHashJoin", "ParallelBtreeScan",
-    "ParallelQueryDSA", "PerSessionDSA", "PerSessionRecordType", "PerSessionRecordTypmod",
-    "SharedTupleStore", "SharedTidBitmap", "ParallelAppend", "PerXactPredicateList", "PgStatsDSA",
-    "PgStatsHash", "PgStatsData", "LogicalRepLauncherDSA", "LogicalRepLauncherHash",
-    "DSMRegistryDSA", "DSMRegistryHash", "CommitTsSLRU", "MultiXactMemberSLRU",
-    "MultiXactOffsetSLRU", "NotifySLRU", "SerialSLRU", "SubtransSLRU", "XactSLRU",
-    "ParallelVacuumDSA", "AioUringCompletion",
+    "",
+    "ShmemIndex",
+    "OidGen",
+    "XidGen",
+    "ProcArray",
+    "SInvalRead",
+    "SInvalWrite",
+    "WALBufMapping",
+    "WALWrite",
+    "ControlFile",
+    "",
+    "",
+    "",
+    "MultiXactGen",
+    "",
+    "",
+    "RelCacheInit",
+    "CheckpointerComm",
+    "TwoPhaseState",
+    "TablespaceCreate",
+    "BtreeVacuum",
+    "AddinShmemInit",
+    "Autovacuum",
+    "AutovacuumSchedule",
+    "SyncScan",
+    "RelationMapping",
+    "",
+    "NotifyQueue",
+    "SerializableXactHash",
+    "SerializableFinishedList",
+    "SerializablePredicateList",
+    "",
+    "SyncRep",
+    "BackgroundWorker",
+    "DynamicSharedMemoryControl",
+    "AutoFile",
+    "ReplicationSlotAllocation",
+    "ReplicationSlotControl",
+    "",
+    "CommitTs",
+    "ReplicationOrigin",
+    "MultiXactTruncation",
+    "",
+    "LogicalRepWorker",
+    "XactTruncation",
+    "",
+    "WrapLimitsVacuum",
+    "NotifyQueueTail",
+    "WaitEventCustom",
+    "WALSummarizer",
+    "DSMRegistry",
+    "InjectionPoint",
+    "SerialControl",
+    "AioWorkerSubmissionQueue",
+    "XactBuffer",
+    "CommitTsBuffer",
+    "SubtransBuffer",
+    "MultiXactOffsetBuffer",
+    "MultiXactMemberBuffer",
+    "NotifyBuffer",
+    "SerialBuffer",
+    "WALInsert",
+    "BufferContent",
+    "ReplicationOriginState",
+    "ReplicationSlotIO",
+    "LockFastPath",
+    "BufferMapping",
+    "LockManager",
+    "PredicateLockManager",
+    "ParallelHashJoin",
+    "ParallelBtreeScan",
+    "ParallelQueryDSA",
+    "PerSessionDSA",
+    "PerSessionRecordType",
+    "PerSessionRecordTypmod",
+    "SharedTupleStore",
+    "SharedTidBitmap",
+    "ParallelAppend",
+    "PerXactPredicateList",
+    "PgStatsDSA",
+    "PgStatsHash",
+    "PgStatsData",
+    "LogicalRepLauncherDSA",
+    "LogicalRepLauncherHash",
+    "DSMRegistryDSA",
+    "DSMRegistryHash",
+    "CommitTsSLRU",
+    "MultiXactMemberSLRU",
+    "MultiXactOffsetSLRU",
+    "NotifySLRU",
+    "SerialSLRU",
+    "SubtransSLRU",
+    "XactSLRU",
+    "ParallelVacuumDSA",
+    "AioUringCompletion",
 ];
 
 #[repr(C)]
@@ -721,8 +797,7 @@ fn LWLockWakeup(lock: &LWLock) {
     });
 
     debug_assert!(
-        proclist_is_empty(&wakeup)
-            || lock.state.load(Ordering::Relaxed) & LW_FLAG_HAS_WAITERS != 0
+        proclist_is_empty(&wakeup) || lock.state.load(Ordering::Relaxed) & LW_FLAG_HAS_WAITERS != 0
     );
 
     let mut old_state = lock.state.load(Ordering::Relaxed);
@@ -1105,7 +1180,10 @@ fn LWLockReleaseInternal(lock: &LWLock, mode: LWLockMode) {
     } else {
         LW_VAL_SHARED
     };
-    let oldstate = lock.state.fetch_sub(sub, Ordering::Release).wrapping_sub(sub);
+    let oldstate = lock
+        .state
+        .fetch_sub(sub, Ordering::Release)
+        .wrapping_sub(sub);
 
     debug_assert!(oldstate & LW_VAL_EXCLUSIVE == 0);
 
@@ -1145,11 +1223,7 @@ pub fn LWLockReleaseAll() -> PgResult<()> {
     // Re-HOLD balances the RESUME inside LWLockRelease; error recovery owns
     // the holdoff count, exactly as C.
     loop {
-        let last = with_held(|held| {
-            held.num_held
-                .checked_sub(1)
-                .map(|i| held.locks[i].lock)
-        });
+        let last = with_held(|held| held.num_held.checked_sub(1).map(|i| held.locks[i].lock));
         let Some(lock) = last else { break };
         globals::HoldInterrupts();
         // SAFETY: held entries were recorded from live `&LWLock`s that must

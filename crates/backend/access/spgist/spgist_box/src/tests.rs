@@ -2,7 +2,10 @@ use super::*;
 use ::types_core::geo::Point;
 
 fn mkbox(lx: f64, ly: f64, hx: f64, hy: f64) -> BOX {
-    BOX { high: Point { x: hx, y: hy }, low: Point { x: lx, y: ly } }
+    BOX {
+        high: Point { x: hx, y: hy },
+        low: Point { x: lx, y: ly },
+    }
 }
 
 #[test]

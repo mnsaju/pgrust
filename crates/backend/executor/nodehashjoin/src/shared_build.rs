@@ -138,7 +138,10 @@ pub struct JoinBudget {
 
 impl JoinBudget {
     pub fn new(limit: usize) -> Arc<JoinBudget> {
-        Arc::new(JoinBudget { limit, used: AtomicUsize::new(0) })
+        Arc::new(JoinBudget {
+            limit,
+            used: AtomicUsize::new(0),
+        })
     }
 
     pub fn unlimited() -> Arc<JoinBudget> {
@@ -203,7 +206,9 @@ unsafe impl Sync for Chunk {}
 impl Chunk {
     fn new(words: usize) -> Chunk {
         let v: Vec<UnsafeCell<u64>> = (0..words).map(|_| UnsafeCell::new(0)).collect();
-        Chunk { words: v.into_boxed_slice() }
+        Chunk {
+            words: v.into_boxed_slice(),
+        }
     }
 
     #[inline]
@@ -307,7 +312,10 @@ impl JoinBuildLocal {
         budget: Arc<JoinBudget>,
         cap_words: usize,
     ) -> JoinBuildLocal {
-        assert!(ordinal < MAX_ORDINALS, "join build Local ordinal {ordinal} out of ref range");
+        assert!(
+            ordinal < MAX_ORDINALS,
+            "join build Local ordinal {ordinal} out of ref range"
+        );
         JoinBuildLocal {
             ordinal: ordinal as u16,
             chunks: Vec::new(),
@@ -333,7 +341,10 @@ impl JoinBuildLocal {
     /// arming — the runtime forks a Local into exactly one mode.
     pub fn attach_shared_dir(&mut self, dir: Arc<SharedBuildDir>) {
         assert!(self.tuples == 0, "attach_shared_dir after pushes");
-        assert!(self.dense_keys.is_none(), "single-pass is incompatible with the dense seat");
+        assert!(
+            self.dense_keys.is_none(),
+            "single-pass is incompatible with the dense seat"
+        );
         self.shared_dir = Some(dir);
     }
 
@@ -377,7 +388,10 @@ impl JoinBuildLocal {
             return;
         }
         assert!(self.tuples == 0, "dense-key arming after pushes");
-        assert!(self.shared_dir.is_none(), "the dense seat is incompatible with single-pass build");
+        assert!(
+            self.shared_dir.is_none(),
+            "the dense seat is incompatible with single-pass build"
+        );
         self.dense_keys = Some(DenseKeys {
             part_keys: (0..PARTITIONS).map(|_| Vec::new()).collect(),
         });
@@ -412,7 +426,7 @@ impl JoinBuildLocal {
             .as_mut()
             .expect("push_keyed on an unarmed Local")
             .part_keys[partition_of(hashvalue)]
-            .push(key);
+        .push(key);
         Ok(())
     }
 
@@ -513,16 +527,23 @@ impl JoinBuildLocal {
     /// caller decides how the tuple is INDEXED (two-pass: recorded in
     /// `part_refs` for a later COMBINE; single-pass: CAS-linked immediately).
     #[inline]
-    fn materialize(&mut self, hashvalue: u32, payload: &[u8]) -> Result<(usize, usize), BudgetExceeded> {
+    fn materialize(
+        &mut self,
+        hashvalue: u32,
+        payload: &[u8],
+    ) -> Result<(usize, usize), BudgetExceeded> {
         assert!(self.in_run, "push outside a run");
         let payload_words = payload.len().div_ceil(8);
         let need = HDR_WORDS + payload_words;
 
-        if self.chunks.last().map_or(true, |c| c.words.len() - self.cur_used < need) {
-            let mut cap = self
-                .chunks
-                .last()
-                .map_or(CHUNK_MIN_WORDS, |c| (c.words.len() * 2).min(self.chunk_cap_words));
+        if self
+            .chunks
+            .last()
+            .map_or(true, |c| c.words.len() - self.cur_used < need)
+        {
+            let mut cap = self.chunks.last().map_or(CHUNK_MIN_WORDS, |c| {
+                (c.words.len() * 2).min(self.chunk_cap_words)
+            });
             cap = cap.max(need);
             assert!(
                 self.chunks.len() < MAX_CHUNKS_PER_LOCAL,
@@ -575,9 +596,15 @@ impl JoinBuildLocal {
     /// SE-MBSEAT order-free key tracking (`sp_keys`) IS supported: it rides
     /// [`JoinBuildLocal::push_keyed`], never this plain-push path.
     fn push_single_pass(&mut self, hashvalue: u32, payload: &[u8]) -> Result<u64, BudgetExceeded> {
-        debug_assert!(self.dense_keys.is_none(), "dense seat unsupported under single-pass build");
+        debug_assert!(
+            self.dense_keys.is_none(),
+            "dense seat unsupported under single-pass build"
+        );
         let (chunk_idx, off) = self.materialize(hashvalue, payload)?;
-        let dir = self.shared_dir.clone().expect("single-pass push without a shared dir");
+        let dir = self
+            .shared_dir
+            .clone()
+            .expect("single-pass push without a shared dir");
         let r = pack_ref(self.ordinal, chunk_idx, off);
         // SAFETY: `chunk.atomic(off)` views this tuple's next word (W0) as an
         // AtomicU64 — the module's chunk-atomic-view contract.
@@ -622,12 +649,22 @@ impl CombinePlan {
     /// nbuckets — §4), charge the bucket array to the envelope, order the
     /// runs. Every later call must pass the SAME `locals` slice (the sink
     /// plumbing's sealed Arc guarantees it).
-    pub fn plan(locals: &[JoinBuildLocal], budget: &JoinBudget) -> Result<CombinePlan, BudgetExceeded> {
+    pub fn plan(
+        locals: &[JoinBuildLocal],
+        budget: &JoinBudget,
+    ) -> Result<CombinePlan, BudgetExceeded> {
         // Sized to the max PRESENT ordinal, not MAX_ORDINALS (32768):
         // sparse high worker indices (192-core pin-board lanes) cost
         // 2 bytes/index, dense probing stays an array load.
-        let slots = locals.iter().map(|l| l.ordinal as usize + 1).max().unwrap_or(0);
-        assert!(locals.len() < u16::MAX as usize, "Local count exceeds dense-index space");
+        let slots = locals
+            .iter()
+            .map(|l| l.ordinal as usize + 1)
+            .max()
+            .unwrap_or(0);
+        assert!(
+            locals.len() < u16::MAX as usize,
+            "Local count exceeds dense-index space"
+        );
         let mut by_ordinal = vec![u16::MAX; slots].into_boxed_slice();
         let mut total = 0u64;
         let mut run_order = Vec::new();
@@ -649,9 +686,7 @@ impl CombinePlan {
         // keeps the outcome well-defined either way.
         run_order.sort_by_key(|&(start, _, _)| start);
 
-        let nbuckets = total
-            .next_power_of_two()
-            .clamp(MIN_NBUCKETS, MAX_NBUCKETS);
+        let nbuckets = total.next_power_of_two().clamp(MIN_NBUCKETS, MAX_NBUCKETS);
         if !budget.try_charge(nbuckets as usize * 8) {
             return Err(BudgetExceeded);
         }
@@ -704,7 +739,11 @@ impl CombinePlan {
             let l = &locals[li as usize];
             let refs = &l.part_refs[part];
             let ri = ri as usize;
-            let start = if ri == 0 { 0 } else { l.runs[ri - 1].ends[part] as usize };
+            let start = if ri == 0 {
+                0
+            } else {
+                l.runs[ri - 1].ends[part] as usize
+            };
             let end = l.runs[ri].ends[part] as usize;
             for &r in &refs[start..end] {
                 let (chunk, off) = self.chunk(locals, r);
@@ -786,8 +825,13 @@ impl SharedBuildDir {
     /// so single-pass alone never causes a refusal. The back-out is what
     /// makes that true: a multi-MB charge left in place would eat the whole
     /// envelope and turn the fallback's first chunk charge into a refusal.
-    pub fn with_estimate(est_rows: u64, budget: &JoinBudget) -> Result<Arc<SharedBuildDir>, BudgetExceeded> {
-        let nbuckets = est_rows.next_power_of_two().clamp(MIN_NBUCKETS, MAX_NBUCKETS);
+    pub fn with_estimate(
+        est_rows: u64,
+        budget: &JoinBudget,
+    ) -> Result<Arc<SharedBuildDir>, BudgetExceeded> {
+        let nbuckets = est_rows
+            .next_power_of_two()
+            .clamp(MIN_NBUCKETS, MAX_NBUCKETS);
         if !budget.try_charge_optional(nbuckets as usize * 8) {
             return Err(BudgetExceeded);
         }
@@ -832,12 +876,22 @@ pub fn finish_single_pass(
     budget: &JoinBudget,
 ) -> Result<CombinePlan, BudgetExceeded> {
     // by_ordinal (dense index into the sealed Locals) — identical to `plan`.
-    let slots = locals.iter().map(|l| l.ordinal as usize + 1).max().unwrap_or(0);
-    assert!(locals.len() < u16::MAX as usize, "Local count exceeds dense-index space");
+    let slots = locals
+        .iter()
+        .map(|l| l.ordinal as usize + 1)
+        .max()
+        .unwrap_or(0);
+    assert!(
+        locals.len() < u16::MAX as usize,
+        "Local count exceeds dense-index space"
+    );
     let mut by_ordinal = vec![u16::MAX; slots].into_boxed_slice();
     for (li, l) in locals.iter().enumerate() {
         assert!(!l.in_run, "sealed a Local with an open run");
-        assert!(l.shared_dir.is_some() || l.tuples == 0, "two-pass Local in a single-pass seal");
+        assert!(
+            l.shared_dir.is_some() || l.tuples == 0,
+            "two-pass Local in a single-pass seal"
+        );
         assert!(
             by_ordinal[l.ordinal as usize] == u16::MAX,
             "duplicate Local ordinal {}",
@@ -858,8 +912,14 @@ pub fn finish_single_pass(
     // only (the documented §5 mitigation); a good estimate pays nothing.
     let want = total.next_power_of_two().clamp(MIN_NBUCKETS, MAX_NBUCKETS);
     if want > dir.buckets.len() as u64 && total > dir.buckets.len() as u64 * GROW_LOAD_FACTOR {
-        let (buckets, log2_nbuckets) =
-            grow_buckets(&dir.buckets, dir.log2_nbuckets, want, locals, &by_ordinal, budget)?;
+        let (buckets, log2_nbuckets) = grow_buckets(
+            &dir.buckets,
+            dir.log2_nbuckets,
+            want,
+            locals,
+            &by_ordinal,
+            budget,
+        )?;
         Ok(CombinePlan {
             by_ordinal,
             run_order: Vec::new(),
@@ -923,7 +983,10 @@ fn grow_buckets(
             let b = bucket_of(h, new_log2);
             let head = newb[b].load(Ordering::Relaxed);
             chunk.atomic(off).store(head >> 16, Ordering::Relaxed);
-            newb[b].store(((r + 1) << 16) | ((head & 0xFFFF) | tag_bit(h)), Ordering::Relaxed);
+            newb[b].store(
+                ((r + 1) << 16) | ((head & 0xFFFF) | tag_bit(h)),
+                Ordering::Relaxed,
+            );
             cur = old_next;
         }
     }
@@ -1032,9 +1095,15 @@ fn build_seat(plan: &CombinePlan, locals: &[JoinBuildLocal]) -> Option<DenseSeat
     for part in 0..PARTITIONS {
         for &(_, li, ri) in &plan.run_order {
             let l = &locals[li as usize];
-            let Some(dk) = l.dense_keys.as_ref() else { continue };
+            let Some(dk) = l.dense_keys.as_ref() else {
+                continue;
+            };
             let ri = ri as usize;
-            let start = if ri == 0 { 0 } else { l.runs[ri - 1].ends[part] as usize };
+            let start = if ri == 0 {
+                0
+            } else {
+                l.runs[ri - 1].ends[part] as usize
+            };
             let end = l.runs[ri].ends[part] as usize;
             for idx in start..end {
                 let k = dk.part_keys[part][idx];
@@ -1132,10 +1201,16 @@ fn build_seat_single_pass(locals: &[JoinBuildLocal]) -> Option<DenseSeat> {
 /// single-pass pairs), the seat builds here — or silently doesn't
 /// (range/budget gates), leaving the v1 probe.
 pub fn freeze(plan: Arc<CombinePlan>, locals: &[JoinBuildLocal]) -> FrozenJoinTable {
-    let chunk_lists: Vec<Box<[Arc<Chunk>]>> =
-        locals.iter().map(|l| l.chunks.clone().into_boxed_slice()).collect();
+    let chunk_lists: Vec<Box<[Arc<Chunk>]>> = locals
+        .iter()
+        .map(|l| l.chunks.clone().into_boxed_slice())
+        .collect();
     let seat = build_seat(&plan, locals).or_else(|| build_seat_single_pass(locals));
-    FrozenJoinTable { plan, chunk_lists, seat }
+    FrozenJoinTable {
+        plan,
+        chunk_lists,
+        seat,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1182,7 +1257,10 @@ impl FrozenJoinTable {
     #[inline]
     fn chunk(&self, r: u64) -> (&Chunk, usize) {
         let (ord, ci, off) = unpack_ref(r);
-        (&self.chunk_lists[self.plan.by_ordinal[ord] as usize][ci], off)
+        (
+            &self.chunk_lists[self.plan.by_ordinal[ord] as usize][ci],
+            off,
+        )
     }
 
     /// The probe entry: the hash's bucket chain, tag-prefiltered (a tag
@@ -1192,8 +1270,15 @@ impl FrozenJoinTable {
     pub fn chain(&self, hashvalue: u32) -> ChainIter<'_> {
         let word = self.plan.bucket_slice()[bucket_of(hashvalue, self.plan.log2_nbuckets)]
             .load(Ordering::Relaxed);
-        let head = if word & tag_bit(hashvalue) != 0 { word >> 16 } else { 0 };
-        ChainIter { table: self, next_packed: head }
+        let head = if word & tag_bit(hashvalue) != 0 {
+            word >> 16
+        } else {
+            0
+        };
+        ChainIter {
+            table: self,
+            next_packed: head,
+        }
     }
 
     /// Unfiltered bucket walk (fill phase + tests).
@@ -1242,9 +1327,7 @@ impl<'t> TupleRef<'t> {
         let len = (chunk.read(off + 1) >> 32) as usize;
         // SAFETY: payload words are frozen (never written post-seal);
         // the chunk (and thus the bytes) lives as long as the table.
-        unsafe {
-            std::slice::from_raw_parts(chunk.word_mut(off + HDR_WORDS) as *const u8, len)
-        }
+        unsafe { std::slice::from_raw_parts(chunk.word_mut(off + HDR_WORDS) as *const u8, len) }
     }
 
     /// Right-fill match flag: idempotent monotonic set (racy-OK — the C
@@ -1285,7 +1368,10 @@ impl<'t> Iterator for ChainIter<'t> {
         let r = self.next_packed - 1;
         let (chunk, off) = self.table.chunk(r);
         self.next_packed = chunk.atomic(off).load(Ordering::Relaxed);
-        Some(TupleRef { table: self.table, r })
+        Some(TupleRef {
+            table: self.table,
+            r,
+        })
     }
 }
 
@@ -1478,7 +1564,10 @@ mod tests {
             // Pseudo-random per-local order.
             let n = claims.len();
             for i in (1..n).rev() {
-                claims.swap(i, (mix(order_seed ^ (w as u64) << 32 ^ i as u64) as usize) % (i + 1));
+                claims.swap(
+                    i,
+                    (mix(order_seed ^ (w as u64) << 32 ^ i as u64) as usize) % (i + 1),
+                );
             }
         }
         sched
@@ -1516,7 +1605,11 @@ mod tests {
         let ds = ds_default();
         for seed in 0..24u64 {
             let sizes = (0..).map(|i| (mix(seed ^ i) % 7) + 1);
-            let sched = deal(ranges_of_sizes(ds.granules, sizes.take(64)), 1 + (seed as usize % 9), seed);
+            let sched = deal(
+                ranges_of_sizes(ds.granules, sizes.take(64)),
+                1 + (seed as usize % 9),
+                seed,
+            );
             assert_serial_identical(&ds, &sched, seed % 2 == 0);
         }
     }
@@ -1626,7 +1719,13 @@ mod tests {
 
     #[test]
     fn payload_roundtrip_and_tag_no_false_negatives() {
-        let ds = Dataset { granules: 16, rows_per_granule: 11, key_space: 1 << 30, seed: 7, force_partition: None };
+        let ds = Dataset {
+            granules: 16,
+            rows_per_granule: 11,
+            key_space: 1 << 30,
+            seed: 7,
+            force_partition: None,
+        };
         let budget = JoinBudget::unlimited();
         let locals = build_from_schedule(&ds, &vec![vec![0..16]], &budget).unwrap();
         let t = plan_combine_freeze(locals, &budget, false);
@@ -1713,9 +1812,20 @@ mod tests {
 
     #[test]
     fn match_flags_concurrent_probe_then_fill_exact_set() {
-        let ds = Dataset { granules: 32, rows_per_granule: 16, key_space: 64, seed: 99, force_partition: None };
+        let ds = Dataset {
+            granules: 32,
+            rows_per_granule: 16,
+            key_space: 64,
+            seed: 99,
+            force_partition: None,
+        };
         let budget = JoinBudget::unlimited();
-        let locals = build_from_schedule(&ds, &deal(ranges_of_sizes(32, std::iter::repeat(3)), 4, 5), &budget).unwrap();
+        let locals = build_from_schedule(
+            &ds,
+            &deal(ranges_of_sizes(32, std::iter::repeat(3)), 4, 5),
+            &budget,
+        )
+        .unwrap();
         let t = plan_combine_freeze(locals, &budget, true);
 
         // "Probe": 8 threads racily mark every tuple whose payload row
@@ -1771,7 +1881,11 @@ mod tests {
                 });
             }
         });
-        assert_eq!(wins.load(Ordering::Relaxed), 1, "RIGHT_SEMI emit-once violated");
+        assert_eq!(
+            wins.load(Ordering::Relaxed),
+            1,
+            "RIGHT_SEMI emit-once violated"
+        );
     }
 
     // ---- M3.5 batch-spill hooks: drain/reset + chunk cap ----
@@ -1798,7 +1912,10 @@ mod tests {
         let mut expect = ds.all_rows();
         drained.sort();
         expect.sort();
-        assert_eq!(drained, expect, "drain must yield the exact pushed multiset");
+        assert_eq!(
+            drained, expect,
+            "drain must yield the exact pushed multiset"
+        );
         l.reset();
         assert_eq!(l.tuples(), 0);
         assert!(l.chunks.is_empty());
@@ -1830,7 +1947,11 @@ mod tests {
             (191, 3, 17),
             (255, 255, CHUNK_MAX_WORDS - 1), // old layout's ordinal max
             (256, 0, 0),                     // first index past the old assert
-            ((MAX_ORDINALS - 1) as u16, MAX_CHUNKS_PER_LOCAL - 1, CHUNK_MAX_WORDS - 1),
+            (
+                (MAX_ORDINALS - 1) as u16,
+                MAX_CHUNKS_PER_LOCAL - 1,
+                CHUNK_MAX_WORDS - 1,
+            ),
         ] {
             let r = pack_ref(ord, ci, off);
             assert!(r < 1 << 48, "ref must stay in the bucket word's 48 bits");
@@ -1878,7 +1999,12 @@ mod tests {
     /// Keyed dataset row stream: key ∈ 0..key_space, hash = f(key) via the
     /// engine-shaped mix (same key ⇒ same hash, always), payload embeds
     /// the key + global row id so sequences compare exactly.
-    fn keyed_rows_of(seed: u64, key_space: u64, rows_per_granule: u64, g: u64) -> Vec<(i32, u32, Vec<u8>)> {
+    fn keyed_rows_of(
+        seed: u64,
+        key_space: u64,
+        rows_per_granule: u64,
+        g: u64,
+    ) -> Vec<(i32, u32, Vec<u8>)> {
         (0..rows_per_granule)
             .map(|i| {
                 let id = g * rows_per_granule + i;
@@ -1958,8 +2084,7 @@ mod tests {
                 sched_seed,
             );
             let budget = JoinBudget::unlimited();
-            let locals =
-                build_keyed_from_schedule(seed, key_space, rpg, &sched, &budget, None);
+            let locals = build_keyed_from_schedule(seed, key_space, rpg, &sched, &budget, None);
             let t = plan_combine_freeze(locals, &budget, sched_seed % 2 == 0);
             assert!(t.has_seat(), "dense keys over a dense range must seat");
             for key in 0..key_space as i32 {
@@ -1968,7 +2093,10 @@ mod tests {
                     v1_candidates(&t, key),
                     "seat order diverges from the v1 walk (key {key}, sched {sched_seed})"
                 );
-                assert!(!seat_candidates(&t, key).is_empty(), "every key occurs at this scale");
+                assert!(
+                    !seat_candidates(&t, key).is_empty(),
+                    "every key occurs at this scale"
+                );
             }
             // Out-of-range probes answer empty (the v1 walk finds nothing).
             for key in [-1, key_space as i32, i32::MAX, i32::MIN] {
@@ -1984,8 +2112,7 @@ mod tests {
         let sched = deal(ranges_of_sizes(granules, std::iter::repeat(3)), 4, 7);
         let budget = JoinBudget::unlimited();
         // Every 5th row records NULL_KEY (SQL NULL build key).
-        let locals =
-            build_keyed_from_schedule(seed, key_space, rpg, &sched, &budget, Some(5));
+        let locals = build_keyed_from_schedule(seed, key_space, rpg, &sched, &budget, Some(5));
         let t = plan_combine_freeze(locals, &budget, true);
         assert!(t.has_seat());
         let mut seated = 0usize;
@@ -1997,11 +2124,22 @@ mod tests {
                 .into_iter()
                 .filter(|(_, p)| u64::from_le_bytes(p[8..16].try_into().unwrap()) % 5 != 0)
                 .collect();
-            assert_eq!(sc, v1_nonnull, "NULL-keyed rows must be absent, order intact");
+            assert_eq!(
+                sc, v1_nonnull,
+                "NULL-keyed rows must be absent, order intact"
+            );
         }
         let total = (granules * rpg) as usize;
-        assert_eq!(seated, total - total.div_ceil(5), "exactly the non-NULL rows seat");
-        assert_eq!(t.total_tuples(), total as u64, "chains keep every row (fill walk parity)");
+        assert_eq!(
+            seated,
+            total - total.div_ceil(5),
+            "exactly the non-NULL rows seat"
+        );
+        assert_eq!(
+            t.total_tuples(),
+            total as u64,
+            "chains keep every row (fill walk parity)"
+        );
     }
 
     #[test]
@@ -2035,8 +2173,13 @@ mod tests {
         let locals = build_keyed_from_schedule(seed, key_space, rpg, &sched, &budget, None);
         let t = plan_combine_freeze(locals, &budget, false);
         assert!(!t.has_seat(), "seat must yield to the envelope");
-        let total: usize = (0..key_space as i32).map(|k| v1_candidates(&t, k).len()).sum();
-        assert_eq!(total, rows as usize, "build survives seat refusal — every row probeable");
+        let total: usize = (0..key_space as i32)
+            .map(|k| v1_candidates(&t, k).len())
+            .sum();
+        assert_eq!(
+            total, rows as usize,
+            "build survives seat refusal — every row probeable"
+        );
     }
 
     #[test]
@@ -2056,7 +2199,10 @@ mod tests {
         a.end_run();
         let empty = JoinBuildLocal::new(1, Arc::clone(&budget)); // never armed, no tuples
         let t = plan_combine_freeze(vec![a, empty], &budget, false);
-        assert!(t.has_seat(), "an empty unarmed Local must not veto the seat");
+        assert!(
+            t.has_seat(),
+            "an empty unarmed Local must not veto the seat"
+        );
         assert_eq!(seat_candidates(&t, 3), v1_candidates(&t, 3));
         assert_eq!(seat_candidates(&t, 3).len(), 2);
         assert_eq!(seat_candidates(&t, 4).len(), 1);
@@ -2102,11 +2248,18 @@ mod tests {
         let mut l = JoinBuildLocal::new(0, Arc::clone(&budget));
         l.begin_run(0);
         for k in build_keys {
-            l.push(::hashfn::hash_bytes_uint32(k as u32), &k.to_le_bytes()).unwrap();
+            l.push(::hashfn::hash_bytes_uint32(k as u32), &k.to_le_bytes())
+                .unwrap();
         }
         l.end_run();
         let t = plan_combine_freeze(vec![l], &budget, false);
-        let mut c = ProbeCensus { probes: 0, walk_entered: 0, candidates: 0, hash_eq: 0, matches: 0 };
+        let mut c = ProbeCensus {
+            probes: 0,
+            walk_entered: 0,
+            candidates: 0,
+            hash_eq: 0,
+            matches: 0,
+        };
         for k in probe_keys {
             let h = ::hashfn::hash_bytes_uint32(k as u32);
             c.probes += 1;
@@ -2152,18 +2305,36 @@ mod tests {
     fn probe_census_q13_channel_scale() {
         // The CORPUS=hj hj13* fixture exactly (10k dim, 300k fact, 1/3
         // dead keys over 10001..15001, live spread 1..9000).
-        let c = probe_census(1..=10_000i32, q13_probe_keys(300_000, 10_000, 9_000, 5_000, 3));
+        let c = probe_census(
+            1..=10_000i32,
+            q13_probe_keys(300_000, 10_000, 9_000, 5_000, 3),
+        );
         assert_eq!(c.probes, 300_000);
-        assert_eq!(c.matches, 200_000, "every live probe matches its unique dim row");
+        assert_eq!(
+            c.matches, 200_000,
+            "every live probe matches its unique dim row"
+        );
         // Pinned census (deterministic: real hash, fixed streams). The
         // adjudication ratios ride notes/se-hjprobe-v2.md §4:
         //   dead probes = 100_000; dead walks entered = walk_entered -
         //   live_walks; live probes always enter (their match is chained).
         let (dead, dead_walks) = (100_000u64, c.walk_entered - 200_000);
-        assert_eq!(c.walk_entered, 203_540, "pinned: only 3.54% of dead probes survive tag+empty");
-        assert_eq!(c.candidates, 327_180, "pinned: 1.09 candidates/probe — chains are short");
-        assert_eq!(c.hash_eq, 200_000, "pinned: hashvalue prefilter rejects EVERY non-match candidate here");
-        assert!(dead_walks * 20 < dead, "tag word + empty buckets eat >95% of dead probes");
+        assert_eq!(
+            c.walk_entered, 203_540,
+            "pinned: only 3.54% of dead probes survive tag+empty"
+        );
+        assert_eq!(
+            c.candidates, 327_180,
+            "pinned: 1.09 candidates/probe — chains are short"
+        );
+        assert_eq!(
+            c.hash_eq, 200_000,
+            "pinned: hashvalue prefilter rejects EVERY non-match candidate here"
+        );
+        assert!(
+            dead_walks * 20 < dead,
+            "tag word + empty buckets eat >95% of dead probes"
+        );
     }
 
     #[test]
@@ -2176,15 +2347,24 @@ mod tests {
         );
         assert_eq!(c.probes, 500_000);
         assert_eq!(c.matches, 490_000);
-        assert_eq!(c.walk_entered, 490_700, "pinned: dead-probe walks are 7.0% of dead probes");
-        assert_eq!(c.candidates, 956_008, "pinned: 1.91 candidates/probe at 0.954 load factor");
+        assert_eq!(
+            c.walk_entered, 490_700,
+            "pinned: dead-probe walks are 7.0% of dead probes"
+        );
+        assert_eq!(
+            c.candidates, 956_008,
+            "pinned: 1.91 candidates/probe at 0.954 load factor"
+        );
         assert_eq!(c.hash_eq, 490_016, "pinned: 16 full-hash collisions — the exec_qual recheck earns its keep 16 times in 500k probes");
     }
 
     #[test]
     #[ignore = "letter-scale census (3M/5M probes): numbers ride notes/se-hjprobe-v2.md §4"]
     fn probe_census_q13_letter_scale() {
-        let c = probe_census(1..=100_000i32, q13_probe_keys(3_000_000, 100_000, 90_000, 50_000, 3));
+        let c = probe_census(
+            1..=100_000i32,
+            q13_probe_keys(3_000_000, 100_000, 90_000, 50_000, 3),
+        );
         eprintln!(
             "q13 letter census: probes={} walk_entered={} candidates={} hash_eq={} matches={}",
             c.probes, c.walk_entered, c.candidates, c.hash_eq, c.matches
@@ -2273,7 +2453,8 @@ mod tests {
                 run_worker(l, &schedule[w]);
             }
         }
-        let plan = Arc::new(finish_single_pass(&locals, dir, budget).expect("finish within budget"));
+        let plan =
+            Arc::new(finish_single_pass(&locals, dir, budget).expect("finish within budget"));
         let t = freeze(Arc::clone(&plan), &locals);
         drop(locals); // chunk storage survives via Arc adoption
         t
@@ -2303,14 +2484,24 @@ mod tests {
 
     /// Also assert chain() (the tag-prefiltered probe entry) reaches every
     /// tuple — the CAS must never lose a tuple nor hide it behind a stale tag.
-    fn assert_single_pass_multiset(ds: &Dataset, schedule: &Schedule, est_rows: u64, concurrent: bool) {
+    fn assert_single_pass_multiset(
+        ds: &Dataset,
+        schedule: &Schedule,
+        est_rows: u64,
+        concurrent: bool,
+    ) {
         let budget = JoinBudget::unlimited();
         let t = build_single_pass(ds, schedule, est_rows, &budget, concurrent);
         assert_eq!(t.total_tuples(), ds.granules * ds.rows_per_granule);
-        assert_eq!(frozen_multiset(&t), sorted_rows(ds), "single-pass multiset diverges");
+        assert_eq!(
+            frozen_multiset(&t),
+            sorted_rows(ds),
+            "single-pass multiset diverges"
+        );
         for (h, p) in ds.all_rows() {
             assert!(
-                t.chain(h).any(|tr| tr.hashvalue() == h && tr.payload() == &p[..]),
+                t.chain(h)
+                    .any(|tr| tr.hashvalue() == h && tr.payload() == &p[..]),
                 "single-pass lost a tuple on the probe path (hash {h:#x})"
             );
         }
@@ -2319,7 +2510,12 @@ mod tests {
     #[test]
     fn single_pass_serial_matches_oracle_multiset() {
         let ds = ds_default();
-        assert_single_pass_multiset(&ds, &vec![vec![0..ds.granules]], ds.granules * ds.rows_per_granule, false);
+        assert_single_pass_multiset(
+            &ds,
+            &vec![vec![0..ds.granules]],
+            ds.granules * ds.rows_per_granule,
+            false,
+        );
     }
 
     #[test]
@@ -2327,7 +2523,11 @@ mod tests {
         let ds = ds_default();
         for seed in 0..12u64 {
             let sizes = (0..).map(|i| (mix(seed ^ i) % 7) + 1);
-            let sched = deal(ranges_of_sizes(ds.granules, sizes.take(64)), 1 + (seed as usize % 8), seed);
+            let sched = deal(
+                ranges_of_sizes(ds.granules, sizes.take(64)),
+                1 + (seed as usize % 8),
+                seed,
+            );
             // Estimate deliberately spot-on for these (grow untouched).
             assert_single_pass_multiset(&ds, &sched, ds.granules * ds.rows_per_granule, true);
         }
@@ -2343,7 +2543,11 @@ mod tests {
         ds.force_partition = Some(0x7C);
         ds.key_space = 3; // 3 chains take all the traffic
         ds.rows_per_granule = 64;
-        let sched = deal(ranges_of_sizes(ds.granules, std::iter::repeat(2)), 12, 0xC0FFEE);
+        let sched = deal(
+            ranges_of_sizes(ds.granules, std::iter::repeat(2)),
+            12,
+            0xC0FFEE,
+        );
         assert_single_pass_multiset(&ds, &sched, ds.granules * ds.rows_per_granule, true);
     }
 
@@ -2358,7 +2562,11 @@ mod tests {
             seed: 0x515,
             force_partition: Some(0x11),
         };
-        let sched = deal(ranges_of_sizes(ds.granules, std::iter::repeat(1)), 8, 0xA5A5);
+        let sched = deal(
+            ranges_of_sizes(ds.granules, std::iter::repeat(1)),
+            8,
+            0xA5A5,
+        );
         assert_single_pass_multiset(&ds, &sched, 2048, true);
     }
 
@@ -2371,9 +2579,16 @@ mod tests {
         let budget = JoinBudget::unlimited();
         let sched = deal(ranges_of_sizes(ds.granules, std::iter::repeat(3)), 6, 0x9);
         let t = build_single_pass(&ds, &sched, 64, &budget, true);
-        assert!(t.nbuckets() as u64 >= (ds.granules * ds.rows_per_granule) / GROW_LOAD_FACTOR, "grow must have enlarged the table");
+        assert!(
+            t.nbuckets() as u64 >= (ds.granules * ds.rows_per_granule) / GROW_LOAD_FACTOR,
+            "grow must have enlarged the table"
+        );
         assert_eq!(t.total_tuples(), ds.granules * ds.rows_per_granule);
-        assert_eq!(frozen_multiset(&t), sorted_rows(&ds), "grow_buckets dropped/duplicated tuples");
+        assert_eq!(
+            frozen_multiset(&t),
+            sorted_rows(&ds),
+            "grow_buckets dropped/duplicated tuples"
+        );
     }
 
     #[test]
@@ -2407,7 +2622,13 @@ mod tests {
         let ds = ds_default();
         let sched = deal(ranges_of_sizes(ds.granules, std::iter::repeat(4)), 5, 0x33);
         let budget = JoinBudget::unlimited();
-        let t = build_single_pass(&ds, &sched, ds.granules * ds.rows_per_granule, &budget, true);
+        let t = build_single_pass(
+            &ds,
+            &sched,
+            ds.granules * ds.rows_per_granule,
+            &budget,
+            true,
+        );
         assert!(!t.has_seat());
     }
 
@@ -2464,8 +2685,7 @@ mod tests {
         // is order-insensitive); NULL keys sit in no slice; out-of-range
         // probes answer empty.
         let budget = JoinBudget::unlimited();
-        let (t, mut expect) =
-            build_single_pass_keyed(4, 200, 37, 1, -5, 7, &budget);
+        let (t, mut expect) = build_single_pass_keyed(4, 200, 37, 1, -5, 7, &budget);
         let seat = t.seat().expect("armed dense-int build must seat");
         let mut got: Vec<(i64, Vec<u8>)> = Vec::new();
         for k in -5..(-5 + 37) {
@@ -2475,7 +2695,10 @@ mod tests {
         }
         got.sort();
         expect.sort();
-        assert_eq!(got, expect, "seat candidate multiset diverges from the reference");
+        assert_eq!(
+            got, expect,
+            "seat candidate multiset diverges from the reference"
+        );
         assert!(seat.candidates(i32::MIN + 1).is_empty());
         assert!(seat.candidates(1 << 20).is_empty());
     }
@@ -2485,8 +2708,7 @@ mod tests {
         // Sparse keys (range >> 4x rows): the seat is forgone, the build
         // stands, the v1 probe answers — never a refusal.
         let budget = JoinBudget::unlimited();
-        let (t, expect) =
-            build_single_pass_keyed(2, 50, 100, 1 << 14, 0, 0, &budget);
+        let (t, expect) = build_single_pass_keyed(2, 50, 100, 1 << 14, 0, 0, &budget);
         assert!(!t.has_seat(), "sparse keys must forgo the seat");
         assert_eq!(t.total_tuples() as usize, expect.len());
     }
@@ -2561,7 +2783,10 @@ mod tests {
         // Two-pass needs ~one 64KB chunk + 160 ref-words + the 1024-bucket
         // plan array (~73KB); the 1M-row directory (8MB) never fits.
         let budget = JoinBudget::new(CHUNK_MIN_WORDS * 8 + 64 * 1024);
-        assert_eq!(SharedBuildDir::with_estimate(1_000_000, &budget).err(), Some(BudgetExceeded));
+        assert_eq!(
+            SharedBuildDir::with_estimate(1_000_000, &budget).err(),
+            Some(BudgetExceeded)
+        );
         assert_eq!(
             budget.used(),
             0,
@@ -2598,7 +2823,10 @@ mod tests {
         let locals = vec![l];
         let used_before_seal = budget.used();
         let plan = finish_single_pass(&locals, dir, &budget).expect("unlimited");
-        assert!(plan.singledir.is_none(), "underestimate must grow into a plan-owned array");
+        assert!(
+            plan.singledir.is_none(),
+            "underestimate must grow into a plan-owned array"
+        );
         let new_dir_bytes = plan.buckets.len() * 8;
         assert!(new_dir_bytes > old_dir_bytes);
         assert_eq!(
@@ -2636,7 +2864,8 @@ mod tests {
             loop {
                 next_word.store(old >> 16, Ordering::Relaxed);
                 let newv = ((packed_ref + 1) << 16) | ((old & 0xFFFF) | tag);
-                match bucket.compare_exchange_weak(old, newv, Ordering::Release, Ordering::Relaxed) {
+                match bucket.compare_exchange_weak(old, newv, Ordering::Release, Ordering::Relaxed)
+                {
                     Ok(_) => return,
                     Err(cur) => old = cur,
                 }

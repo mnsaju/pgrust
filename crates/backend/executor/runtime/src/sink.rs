@@ -291,7 +291,11 @@ impl<S: ParallelSink> TaskSetWork for SinkCombine<S> {
         self.0.sink.finalize(&locals);
         // All combine tasks have settled (last-worker-out), so this Arc is
         // the last strong reference; the Locals drop here.
-        debug_assert_eq!(Arc::strong_count(&locals), 1, "combine task outlived finalize");
+        debug_assert_eq!(
+            Arc::strong_count(&locals),
+            1,
+            "combine task outlived finalize"
+        );
     }
 }
 
@@ -344,12 +348,17 @@ pub fn sink_tasksets<S: ParallelSink + 'static>(
 ) -> SinkTaskSets {
     assert!(nthreads > 0);
     let parts = sink.partitions();
-    assert!(parts > 0, "a ParallelSink must expose at least one partition");
+    assert!(
+        parts > 0,
+        "a ParallelSink must expose at least one partition"
+    );
     let probe = Arc::new(SinkProbe::default());
     let shared = Arc::new(SinkShared {
         sink,
         bound: Mutex::new(None),
-        locals: (0..nthreads + MAX_EXTERNAL_LANES).map(|_| Mutex::new(None)).collect(),
+        locals: (0..nthreads + MAX_EXTERNAL_LANES)
+            .map(|_| Mutex::new(None))
+            .collect(),
         sealed: Mutex::new(None),
         probe: Arc::clone(&probe),
     });
@@ -363,7 +372,11 @@ pub fn sink_tasksets<S: ParallelSink + 'static>(
         work: Arc::new(SinkCombine(Arc::clone(&shared))),
         deps: vec![accept_index],
     };
-    SinkTaskSets { accept, combine, probe }
+    SinkTaskSets {
+        accept,
+        combine,
+        probe,
+    }
 }
 
 // ===========================================================================
@@ -595,7 +608,10 @@ pub fn sealed_sink_tasksets<S: SealedParallelSink + 'static>(
 ) -> SealedSinkTaskSets {
     assert!(nslots > 0);
     let parts = sink.partitions();
-    assert!(parts > 0, "a SealedParallelSink must expose at least one partition");
+    assert!(
+        parts > 0,
+        "a SealedParallelSink must expose at least one partition"
+    );
     let probe = Arc::new(SinkProbe::default());
     let shared = Arc::new(SealedShared {
         sink,
@@ -611,7 +627,9 @@ pub fn sealed_sink_tasksets<S: SealedParallelSink + 'static>(
         deps: Vec::new(),
     };
     let freeze = TaskSetSpec {
-        source: Arc::new(PartitionSource { parts: nslots as u64 }),
+        source: Arc::new(PartitionSource {
+            parts: nslots as u64,
+        }),
         work: Arc::new(SealedFreeze(Arc::clone(&shared))),
         deps: vec![accept_index],
     };
@@ -620,14 +638,19 @@ pub fn sealed_sink_tasksets<S: SealedParallelSink + 'static>(
         work: Arc::new(SealedCombine(Arc::clone(&shared))),
         deps: vec![accept_index + 1],
     };
-    SealedSinkTaskSets { accept, freeze, combine, probe }
+    SealedSinkTaskSets {
+        accept,
+        freeze,
+        combine,
+        probe,
+    }
 }
 
 #[cfg(all(test, not(loom)))]
 mod tests {
     use super::*;
-    use crate::rg::{QuerySpec, RgOutcome};
     use crate::morsel::SyntheticMorselSource;
+    use crate::rg::{QuerySpec, RgOutcome};
     use crate::sizing::SizingParams;
     use crate::{Runtime, RuntimeConfig, WorkerPool};
     use std::sync::atomic::{AtomicBool, AtomicU64 as StdAtomicU64, Ordering as StdOrdering};
@@ -679,7 +702,10 @@ mod tests {
 
         fn fork(&self, _worker: usize) -> ToyLocal {
             self.forks.fetch_add(1, StdOrdering::SeqCst);
-            ToyLocal { sums: vec![0; self.parts as usize], drops: Arc::clone(&self.drops) }
+            ToyLocal {
+                sums: vec![0; self.parts as usize],
+                drops: Arc::clone(&self.drops),
+            }
         }
 
         fn accept_local(&self, local: &mut ToyLocal, _worker: usize, range: MorselRange) {
@@ -707,9 +733,13 @@ mod tests {
                     "partition {p} not combined exactly once before finalize"
                 );
             }
-            self.locals_seen_at_finalize.store(locals.len() as u64, StdOrdering::SeqCst);
-            let total: u64 =
-                self.combined.iter().map(|c| c.load(StdOrdering::SeqCst)).sum();
+            self.locals_seen_at_finalize
+                .store(locals.len() as u64, StdOrdering::SeqCst);
+            let total: u64 = self
+                .combined
+                .iter()
+                .map(|c| c.load(StdOrdering::SeqCst))
+                .sum();
             self.result.store(total, StdOrdering::SeqCst);
             self.finalizes.fetch_add(1, StdOrdering::SeqCst);
         }
@@ -720,13 +750,20 @@ mod tests {
     }
 
     fn toy_spec(sink: &Arc<ToySink>, total: u64, nthreads: usize) -> (QuerySpec, Arc<SinkProbe>) {
-        let SinkTaskSets { accept, combine, probe } = sink_tasksets(
+        let SinkTaskSets {
+            accept,
+            combine,
+            probe,
+        } = sink_tasksets(
             Arc::clone(sink),
             Arc::new(SyntheticMorselSource::new(total)),
             nthreads,
             0,
         );
-        let spec = QuerySpec { query_id: 42, tasksets: vec![accept, combine] };
+        let spec = QuerySpec {
+            query_id: 42,
+            tasksets: vec![accept, combine],
+        };
         (spec, probe)
     }
 
@@ -752,7 +789,10 @@ mod tests {
         assert_eq!(sink.finalizes.load(StdOrdering::SeqCst), 1);
         let forks = sink.forks.load(StdOrdering::SeqCst);
         assert!(forks >= 1 && forks <= nthreads as u64, "forks={forks}");
-        assert_eq!(sink.locals_seen_at_finalize.load(StdOrdering::SeqCst), forks);
+        assert_eq!(
+            sink.locals_seen_at_finalize.load(StdOrdering::SeqCst),
+            forks
+        );
         // All Locals dropped exactly once, after finalize.
         assert_eq!(sink.drops.load(StdOrdering::SeqCst), forks);
         assert_eq!(probe.stale_locals_dropped(), 0);
@@ -828,7 +868,11 @@ mod tests {
         let sink = ToySink::new(16);
         let total = 100_000u64;
         let nthreads = rt.nthreads();
-        let SinkTaskSets { accept, combine, probe } = sink_tasksets(
+        let SinkTaskSets {
+            accept,
+            combine,
+            probe,
+        } = sink_tasksets(
             Arc::clone(&sink),
             Arc::new(SyntheticMorselSource::new(total)),
             nthreads,
@@ -857,7 +901,10 @@ mod tests {
         assert_eq!(sink.finalizes.load(StdOrdering::SeqCst), 1);
         let forks = sink.forks.load(StdOrdering::SeqCst);
         assert!(forks >= 1 && forks <= helpers as u64, "forks={forks}");
-        assert_eq!(sink.locals_seen_at_finalize.load(StdOrdering::SeqCst), forks);
+        assert_eq!(
+            sink.locals_seen_at_finalize.load(StdOrdering::SeqCst),
+            forks
+        );
         assert_eq!(sink.drops.load(StdOrdering::SeqCst), forks);
         assert_eq!(probe.stale_locals_dropped(), 0);
         assert_eq!(probe.combine_refusals(), 0);
@@ -906,7 +953,11 @@ mod tests {
             inner: Arc::clone(&inner),
             started: AtomicBool::new(false),
         });
-        let SinkTaskSets { accept, combine, probe: _probe } = sink_tasksets(
+        let SinkTaskSets {
+            accept,
+            combine,
+            probe: _probe,
+        } = sink_tasksets(
             Arc::clone(&sink),
             Arc::new(SyntheticMorselSource::new(1 << 24).with_c0(1)),
             rt.nthreads(),
@@ -968,8 +1019,16 @@ mod tests {
         // dropped and re-forked, its partial sums never accepted into.
         accept.bind_generation(Generation(2));
         accept.run_morsel(0, 0..4);
-        assert_eq!(sink.forks.load(StdOrdering::SeqCst), 2, "stale Local must be re-forked");
-        assert_eq!(sink.drops.load(StdOrdering::SeqCst), 1, "stale Local must be dropped");
+        assert_eq!(
+            sink.forks.load(StdOrdering::SeqCst),
+            2,
+            "stale Local must be re-forked"
+        );
+        assert_eq!(
+            sink.drops.load(StdOrdering::SeqCst),
+            1,
+            "stale Local must be dropped"
+        );
         assert_eq!(probe.stale_locals_dropped(), 1);
 
         // SEAL under generation B collects exactly the one B Local; its sums
@@ -1004,7 +1063,10 @@ mod tests {
         }
         combine.finalize();
         assert_eq!(sink.finalizes.load(StdOrdering::SeqCst), 0);
-        assert!(lock(&shared.sealed).is_some(), "mismatched seal must be left in place");
+        assert!(
+            lock(&shared.sealed).is_some(),
+            "mismatched seal must be left in place"
+        );
         assert_eq!(probe.combine_refusals(), 2);
     }
 
@@ -1052,7 +1114,10 @@ mod tests {
 
         fn fork(&self, _worker: usize) -> ToyLocal {
             self.forks.fetch_add(1, StdOrdering::SeqCst);
-            ToyLocal { sums: vec![0; self.parts as usize], drops: Arc::clone(&self.drops) }
+            ToyLocal {
+                sums: vec![0; self.parts as usize],
+                drops: Arc::clone(&self.drops),
+            }
         }
 
         fn accept_local(&self, local: &mut ToyLocal, _worker: usize, range: MorselRange) {
@@ -1063,7 +1128,9 @@ mod tests {
 
         fn seal(&self, _worker: usize, local: ToyLocal) -> ToySealed {
             self.seals.fetch_add(1, StdOrdering::SeqCst);
-            ToySealed { sums: local.sums.clone() }
+            ToySealed {
+                sums: local.sums.clone(),
+            }
         }
 
         fn partitions(&self) -> u64 {
@@ -1085,8 +1152,13 @@ mod tests {
                     "partition {p} not combined exactly once before finalize"
                 );
             }
-            self.sealed_seen_at_finalize.store(sealed.len() as u64, StdOrdering::SeqCst);
-            let total: u64 = self.combined.iter().map(|c| c.load(StdOrdering::SeqCst)).sum();
+            self.sealed_seen_at_finalize
+                .store(sealed.len() as u64, StdOrdering::SeqCst);
+            let total: u64 = self
+                .combined
+                .iter()
+                .map(|c| c.load(StdOrdering::SeqCst))
+                .sum();
             self.result.store(total, StdOrdering::SeqCst);
             self.finalizes.fetch_add(1, StdOrdering::SeqCst);
         }
@@ -1097,13 +1169,21 @@ mod tests {
         total: u64,
         nslots: usize,
     ) -> (QuerySpec, Arc<SinkProbe>) {
-        let SealedSinkTaskSets { accept, freeze, combine, probe } = sealed_sink_tasksets(
+        let SealedSinkTaskSets {
+            accept,
+            freeze,
+            combine,
+            probe,
+        } = sealed_sink_tasksets(
             Arc::clone(sink),
             Arc::new(SyntheticMorselSource::new(total)),
             nslots,
             0,
         );
-        let spec = QuerySpec { query_id: 43, tasksets: vec![accept, freeze, combine] };
+        let spec = QuerySpec {
+            query_id: 43,
+            tasksets: vec![accept, freeze, combine],
+        };
         (spec, probe)
     }
 
@@ -1129,8 +1209,15 @@ mod tests {
         assert_eq!(sink.finalizes.load(StdOrdering::SeqCst), 1);
         let forks = sink.forks.load(StdOrdering::SeqCst);
         assert!(forks >= 1 && forks <= nslots as u64, "forks={forks}");
-        assert_eq!(sink.seals.load(StdOrdering::SeqCst), forks, "seal once per forked Local");
-        assert_eq!(sink.sealed_seen_at_finalize.load(StdOrdering::SeqCst), forks);
+        assert_eq!(
+            sink.seals.load(StdOrdering::SeqCst),
+            forks,
+            "seal once per forked Local"
+        );
+        assert_eq!(
+            sink.sealed_seen_at_finalize.load(StdOrdering::SeqCst),
+            forks
+        );
         // Every Local dropped exactly once (consumed by seal).
         assert_eq!(sink.drops.load(StdOrdering::SeqCst), forks);
         assert_eq!(probe.stale_locals_dropped(), 0);
@@ -1214,7 +1301,11 @@ mod tests {
         // Local un-sealed.
         freeze.bind_generation(Generation(2));
         freeze.run_morsel(0, 0..2);
-        assert_eq!(sink.seals.load(StdOrdering::SeqCst), 0, "stale Local must not seal");
+        assert_eq!(
+            sink.seals.load(StdOrdering::SeqCst),
+            0,
+            "stale Local must not seal"
+        );
         assert_eq!(probe.stale_locals_dropped(), 1);
         freeze.finalize();
         {

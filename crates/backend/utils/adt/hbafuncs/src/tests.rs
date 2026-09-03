@@ -31,15 +31,24 @@ fn addr_mask_ip_cmp_all() {
 
 #[test]
 fn addr_mask_samehost_samenet() {
-    assert_eq!(hba_addr_mask(&line(ipCmpSameHost)), (Some("samehost".to_string()), None));
-    assert_eq!(hba_addr_mask(&line(ipCmpSameNet)), (Some("samenet".to_string()), None));
+    assert_eq!(
+        hba_addr_mask(&line(ipCmpSameHost)),
+        (Some("samehost".to_string()), None)
+    );
+    assert_eq!(
+        hba_addr_mask(&line(ipCmpSameNet)),
+        (Some("samenet".to_string()), None)
+    );
 }
 
 #[test]
 fn addr_mask_hostname_wins_over_numeric() {
     let mut h = line(ipCmpMask);
     h.hostname = Some("db.example.com".to_string());
-    assert_eq!(hba_addr_mask(&h), (Some("db.example.com".to_string()), None));
+    assert_eq!(
+        hba_addr_mask(&h),
+        (Some("db.example.com".to_string()), None)
+    );
 }
 
 #[test]
@@ -100,10 +109,16 @@ fn options_map_and_clientcert() {
     let mut h = HbaLine::new_zeroed();
     h.usermap = Some("mymap".to_string());
     h.clientcert = clientCertCA;
-    assert_eq!(hba_options_strings(&h), vec!["map=mymap", "clientcert=verify-ca"]);
+    assert_eq!(
+        hba_options_strings(&h),
+        vec!["map=mymap", "clientcert=verify-ca"]
+    );
 
     h.clientcert = clientCertFull;
-    assert_eq!(hba_options_strings(&h), vec!["map=mymap", "clientcert=verify-full"]);
+    assert_eq!(
+        hba_options_strings(&h),
+        vec!["map=mymap", "clientcert=verify-full"]
+    );
 
     h.clientcert = clientCertOff;
     assert_eq!(hba_options_strings(&h), vec!["map=mymap"]);
@@ -114,6 +129,10 @@ fn options_map_and_clientcert() {
 fn auth_token_strings_are_not_requoted() {
     // hbafuncs.c:270-286: flattened database/role names are returned as the
     // raw token string, deliberately not re-quoted (e.g. "all" stays "all").
-    let tok = AuthToken { string: "all".to_string(), quoted: true, regex: false };
+    let tok = AuthToken {
+        string: "all".to_string(),
+        quoted: true,
+        regex: false,
+    };
     assert_eq!(tok.string, "all");
 }

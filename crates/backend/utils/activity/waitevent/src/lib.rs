@@ -284,9 +284,9 @@ pub fn pgstat_get_wait_event(wait_event_info: u32) -> Option<&'static str> {
     let event_id = (wait_event_info & WAIT_EVENT_ID_MASK) as usize;
 
     let named = |names: &'static [&'static str]| {
-        *names.get(event_id).unwrap_or_else(|| {
-            panic!("unknown wait event {event_id} in class {class_id:#010x}")
-        })
+        *names
+            .get(event_id)
+            .unwrap_or_else(|| panic!("unknown wait event {event_id} in class {class_id:#010x}"))
     };
     Some(match class_id {
         PG_WAIT_LWLOCK => lwlock::GetLWLockIdentifier(class_id, event_id as u16),

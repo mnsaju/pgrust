@@ -54,15 +54,20 @@ pub fn ExecAlterExtensionContentsStmt<'mcx>(
     )?;
     debug_assert!(ext_rel.is_none());
 
-    if !aclchk::object_ownercheck(EXTENSION_RELATION_ID, extension.objectId, miscinit::GetUserId())?
-    {
+    if !aclchk::object_ownercheck(
+        EXTENSION_RELATION_ID,
+        extension.objectId,
+        miscinit::GetUserId(),
+    )? {
         return Err(Box::new(
             PgError::error(format!("must be owner of extension {extname}"))
                 .with_sqlstate(ERRCODE_INSUFFICIENT_PRIVILEGE),
         ));
     }
 
-    let object_node = stmt.object.expect("grammar always supplies the member object");
+    let object_node = stmt
+        .object
+        .expect("grammar always supplies the member object");
     let (object, relation) = objectaddress_seams::get_object_address::call(
         mcx,
         stmt.objtype,
@@ -81,10 +86,16 @@ pub fn ExecAlterExtensionContentsStmt<'mcx>(
         relation.as_ref(),
     )?;
 
-    let extension =
-        ObjectAddress { classId: extension.classId, objectId: extension.objectId, objectSubId: 0 };
-    let object =
-        ObjectAddress { classId: object.classId, objectId: object.objectId, objectSubId: 0 };
+    let extension = ObjectAddress {
+        classId: extension.classId,
+        objectId: extension.objectId,
+        objectSubId: 0,
+    };
+    let object = ObjectAddress {
+        classId: object.classId,
+        objectId: object.objectId,
+        objectSubId: 0,
+    };
     alter_contents_recurse(mcx, stmt, extname, &extension, &object)?;
 
     // C: InvokeObjectPostAlterHook (no object_access hooks in this port),
@@ -118,8 +129,10 @@ fn alter_contents_recurse<'mcx>(
                 .map(|s| s.to_string())
                 .unwrap_or_default();
             return Err(Box::new(
-                PgError::error(format!("{desc} is already a member of extension \"{owner}\""))
-                    .with_sqlstate(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+                PgError::error(format!(
+                    "{desc} is already a member of extension \"{owner}\""
+                ))
+                .with_sqlstate(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
             ));
         }
         if object.classId == NAMESPACE_RELATION_ID
@@ -171,10 +184,8 @@ fn alter_contents_recurse<'mcx>(
     if object.classId == TYPE_RELATION_ID {
         // unported: ALTER EXTENSION ADD/DROP TYPE dependent-object recursion
         return Err(Box::new(
-            types_error::PgError::error(
-                "ALTER EXTENSION ... ADD/DROP TYPE is not supported yet",
-            )
-            .with_sqlstate(types_error::ERRCODE_FEATURE_NOT_SUPPORTED),
+            types_error::PgError::error("ALTER EXTENSION ... ADD/DROP TYPE is not supported yet")
+                .with_sqlstate(types_error::ERRCODE_FEATURE_NOT_SUPPORTED),
         ));
     }
     Ok(())
@@ -185,9 +196,13 @@ fn alter_contents_recurse<'mcx>(
 /// unported, so a populated array cannot exist yet — the null fast path is
 /// the whole live surface, anything else is loud.
 fn extension_config_remove(ext_oid: Oid) -> PgResult<()> {
-    use cache_syscache::{ReleaseSysCache, SearchSysCache1, SysCacheGetAttr, SysCacheKey, EXTENSIONOID};
-    let Some(tuple) =
-        SearchSysCache1(EXTENSIONOID, SysCacheKey::Value(datum::Datum::from_oid(ext_oid)))?
+    use cache_syscache::{
+        ReleaseSysCache, SearchSysCache1, SysCacheGetAttr, SysCacheKey, EXTENSIONOID,
+    };
+    let Some(tuple) = SearchSysCache1(
+        EXTENSIONOID,
+        SysCacheKey::Value(datum::Datum::from_oid(ext_oid)),
+    )?
     else {
         return Ok(());
     };

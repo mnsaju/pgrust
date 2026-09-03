@@ -1,6 +1,4 @@
-
-const BASE64: &[u8; 64] =
-    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+const BASE64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 const ARMOR_HEADER: &str = "-----BEGIN PGP MESSAGE-----\n";
 const ARMOR_FOOTER: &str = "\n-----END PGP MESSAGE-----\n";

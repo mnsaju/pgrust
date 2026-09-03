@@ -10,9 +10,9 @@ use ::types_core::{
 };
 use ::types_error::{PgError, PgResult, ERRCODE_PROGRAM_LIMIT_EXCEEDED};
 use ::types_rel::Relation;
+use ::types_spgist::state::SpGistState;
 use ::types_spgist::*;
 pub use ::types_spgist::{spgFormDeadTuple, SpGistInitPage};
-use ::types_spgist::state::SpGistState;
 use ::types_storage::bufpage::{PageMut, PageRef, SizeOfPageHeaderData};
 use ::types_tuple::itemptr::ItemPointerData;
 use ::types_tuple::TupleDescData;
@@ -32,8 +32,7 @@ pub fn relation_needs_wal(rel: &Relation<'_>) -> bool {
     rel.is_permanent()
         && (transam_xlog_seams::xlog_standby_info_active::call()
             || (rel.rd_createSubid.get() == ::types_core::InvalidSubTransactionId
-                && rel.rd_firstRelfilelocatorSubid.get()
-                    == ::types_core::InvalidSubTransactionId))
+                && rel.rd_firstRelfilelocatorSubid.get() == ::types_core::InvalidSubTransactionId))
 }
 
 pub fn unlock_release(buffer: Buffer) -> PgResult<()> {
@@ -83,9 +82,7 @@ const SIZEOF_META: usize = 4 + SPGIST_CACHED_PAGES * 8;
 
 pub(crate) fn read_meta(page: &PageRef<'_>) -> SpGistMetaPageData {
     // SAFETY: metapage content area holds SpGistMetaPageData (init contract).
-    let b = unsafe {
-        core::slice::from_raw_parts(page.as_ptr().add(META_OFFSET), SIZEOF_META)
-    };
+    let b = unsafe { core::slice::from_raw_parts(page.as_ptr().add(META_OFFSET), SIZEOF_META) };
     let mut m = SpGistMetaPageData {
         magicNumber: u32::from_ne_bytes([b[0], b[1], b[2], b[3]]),
         ..Default::default()
@@ -161,7 +158,10 @@ fn get_index_input_type(index: &Relation<'_>) -> PgResult<Oid> {
     if !polymorphic {
         return Ok(opcintype);
     }
-    let ind = index.rd_index.as_ref().expect("spgist index without rd_index");
+    let ind = index
+        .rd_index
+        .as_ref()
+        .expect("spgist index without rd_index");
     let heapcol = ind.indkey.first().copied().unwrap_or(0);
     if heapcol != 0 {
         return lsyscache::typ::getBaseType(lsyscache::attribute::get_atttype(
@@ -393,11 +393,7 @@ fn get_lup_index(flags: i32) -> usize {
     (flags as u32 as usize) % SPGIST_CACHED_PAGES
 }
 
-fn allocNewBuffer(
-    index: &Relation<'_>,
-    flags: i32,
-    cache: &mut SpGistCache,
-) -> PgResult<Buffer> {
+fn allocNewBuffer(index: &Relation<'_>, flags: i32, cache: &mut SpGistCache) -> PgResult<Buffer> {
     let mut pageflags: u16 = 0;
     if GBUF_REQ_LEAF(flags) {
         pageflags |= SPGIST_LEAF;
@@ -462,7 +458,9 @@ pub fn SpGistGetBuffer(
         return Ok(buffer);
     }
 
-    debug_assert!(!SpGistBlockIsFixed(cache.lastUsedPages.cachedPage[lup_idx].blkno));
+    debug_assert!(!SpGistBlockIsFixed(
+        cache.lastUsedPages.cachedPage[lup_idx].blkno
+    ));
 
     if cache.lastUsedPages.cachedPage[lup_idx].freeSpace >= need_space {
         let blkno = cache.lastUsedPages.cachedPage[lup_idx].blkno;
@@ -600,9 +598,7 @@ pub fn SpGistGetInnerTypeSize(att: &SpGistTypeDesc, datum: Datum) -> usize {
         att.attlen as usize
     } else {
         // SAFETY: by-ref varlena datum carries a live pointer (caller contract).
-        unsafe {
-            ::types_tuple::varatt::varsize_any(datum.as_usize() as *const u8)
-        }
+        unsafe { ::types_tuple::varatt::varsize_any(datum.as_usize() as *const u8) }
     };
     MAXALIGN(size)
 }
@@ -916,11 +912,7 @@ unsafe fn att_align_pointer_var(tp: *const u8, alignby: u8, off: usize) -> usize
 
 /// spgExtractNodeLabels: labels into `out` (temp mcx scratch); None if all
 /// labels are NULL.
-pub fn spgExtractNodeLabels(
-    state: &SpGistState<'_>,
-    inner: &[u8],
-    out: &mut Vec<Datum>,
-) -> bool {
+pub fn spgExtractNodeLabels(state: &SpGistState<'_>, inner: &[u8], out: &mut Vec<Datum>) -> bool {
     out.clear();
     let hdr = SpGistInnerTupleHeader::decode(inner);
     if hdr.nNodes == 0 {
@@ -984,9 +976,7 @@ pub fn SpGistPageAddNewItem(
     let size = item.len();
     let opaque = page_opaque(&pm.as_ref());
 
-    if opaque.nPlaceholder > 0
-        && pm.as_ref().exact_free_space() + SGDTSIZE >= MAXALIGN(size)
-    {
+    if opaque.nPlaceholder > 0 && pm.as_ref().exact_free_space() + SGDTSIZE >= MAXALIGN(size) {
         let maxoff = pm.as_ref().max_offset_number();
         let mut offnum = InvalidOffsetNumber;
         let mut hint = start_offset.as_ref().map_or(InvalidOffsetNumber, |s| **s);

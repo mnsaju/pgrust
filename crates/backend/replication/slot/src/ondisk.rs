@@ -141,7 +141,9 @@ pub fn deserialize_persistent_data(buf: &[u8]) -> ReplicationSlotPersistentData 
     let mut name = NameData::default();
     name.data.copy_from_slice(&buf[OFF_NAME..OFF_NAME + 64]);
     let mut plugin = NameData::default();
-    plugin.data.copy_from_slice(&buf[OFF_PLUGIN..OFF_PLUGIN + 64]);
+    plugin
+        .data
+        .copy_from_slice(&buf[OFF_PLUGIN..OFF_PLUGIN + 64]);
     ReplicationSlotPersistentData {
         name,
         database: get_u32(buf, OFF_DATABASE),

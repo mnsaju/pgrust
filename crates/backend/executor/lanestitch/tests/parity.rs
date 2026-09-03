@@ -21,7 +21,10 @@ struct Lcg(u64);
 
 impl Lcg {
     fn next(&mut self) -> u64 {
-        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        self.0 = self
+            .0
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         self.0
     }
 
@@ -47,7 +50,18 @@ enum ColTy {
     F64,
 }
 
-const I32_POOL: &[i32] = &[i32::MIN, i32::MIN + 1, -1000, -1, 0, 1, 5, 1000, i32::MAX - 1, i32::MAX];
+const I32_POOL: &[i32] = &[
+    i32::MIN,
+    i32::MIN + 1,
+    -1000,
+    -1,
+    0,
+    1,
+    5,
+    1000,
+    i32::MAX - 1,
+    i32::MAX,
+];
 const I64_POOL: &[i64] = &[i64::MIN, -1, 0, 1, i32::MAX as i64 + 7, i64::MAX];
 const I16_POOL: &[i16] = &[i16::MIN, -3, 0, 2, i16::MAX];
 const OID_POOL: &[u32] = &[0, 1, 42, 0x7FFF_FFFF, 0x8000_0000, u32::MAX];
@@ -62,8 +76,17 @@ const F64_POOL: &[f64] = &[
     f64::NAN,
     f64::MIN_POSITIVE,
 ];
-const F32_POOL: &[f32] =
-    &[f32::NEG_INFINITY, -1.5, -0.0, 0.0, 1.0, 2.5, f32::INFINITY, f32::NAN, f32::EPSILON];
+const F32_POOL: &[f32] = &[
+    f32::NEG_INFINITY,
+    -1.5,
+    -0.0,
+    0.0,
+    1.0,
+    2.5,
+    f32::INFINITY,
+    f32::NAN,
+    f32::EPSILON,
+];
 
 fn canon_oid(v: u32) -> Datum {
     // Canonical SIGN-extension of the u32 image (the laneexec translation
@@ -144,28 +167,163 @@ fn as_batch<'a>(cols: &'a [ColData], nrows: u32) -> Batch<'a> {
         nrows,
         lanes: cols
             .iter()
-            .map(|c| Lane { values: &c.values, isnull: &c.isnull })
+            .map(|c| Lane {
+                values: &c.values,
+                isnull: &c.isnull,
+            })
             .collect(),
     }
 }
 
 // The comparator families grouped by (lane type, const/rhs type).
 const INT_FAMS: &[(ColTy, ColTy, &[CmpOp])] = &[
-    (ColTy::I32, ColTy::I32, &[CmpOp::Int4Eq, CmpOp::Int4Ne, CmpOp::Int4Lt, CmpOp::Int4Le, CmpOp::Int4Gt, CmpOp::Int4Ge]),
-    (ColTy::I64, ColTy::I64, &[CmpOp::Int8Eq, CmpOp::Int8Ne, CmpOp::Int8Lt, CmpOp::Int8Le, CmpOp::Int8Gt, CmpOp::Int8Ge]),
-    (ColTy::I16, ColTy::I16, &[CmpOp::Int2Eq, CmpOp::Int2Ne, CmpOp::Int2Lt, CmpOp::Int2Le, CmpOp::Int2Gt, CmpOp::Int2Ge]),
-    (ColTy::I64, ColTy::I32, &[CmpOp::Int84Eq, CmpOp::Int84Ne, CmpOp::Int84Lt, CmpOp::Int84Le, CmpOp::Int84Gt, CmpOp::Int84Ge]),
-    (ColTy::I32, ColTy::I64, &[CmpOp::Int48Eq, CmpOp::Int48Ne, CmpOp::Int48Lt, CmpOp::Int48Le, CmpOp::Int48Gt, CmpOp::Int48Ge]),
-    (ColTy::I16, ColTy::I32, &[CmpOp::Int24Eq, CmpOp::Int24Ne, CmpOp::Int24Lt, CmpOp::Int24Le, CmpOp::Int24Gt, CmpOp::Int24Ge]),
-    (ColTy::I32, ColTy::I16, &[CmpOp::Int42Eq, CmpOp::Int42Ne, CmpOp::Int42Lt, CmpOp::Int42Le, CmpOp::Int42Gt, CmpOp::Int42Ge]),
-    (ColTy::Oid, ColTy::Oid, &[CmpOp::OidEq, CmpOp::OidNe, CmpOp::OidLt, CmpOp::OidLe, CmpOp::OidGt, CmpOp::OidGe]),
+    (
+        ColTy::I32,
+        ColTy::I32,
+        &[
+            CmpOp::Int4Eq,
+            CmpOp::Int4Ne,
+            CmpOp::Int4Lt,
+            CmpOp::Int4Le,
+            CmpOp::Int4Gt,
+            CmpOp::Int4Ge,
+        ],
+    ),
+    (
+        ColTy::I64,
+        ColTy::I64,
+        &[
+            CmpOp::Int8Eq,
+            CmpOp::Int8Ne,
+            CmpOp::Int8Lt,
+            CmpOp::Int8Le,
+            CmpOp::Int8Gt,
+            CmpOp::Int8Ge,
+        ],
+    ),
+    (
+        ColTy::I16,
+        ColTy::I16,
+        &[
+            CmpOp::Int2Eq,
+            CmpOp::Int2Ne,
+            CmpOp::Int2Lt,
+            CmpOp::Int2Le,
+            CmpOp::Int2Gt,
+            CmpOp::Int2Ge,
+        ],
+    ),
+    (
+        ColTy::I64,
+        ColTy::I32,
+        &[
+            CmpOp::Int84Eq,
+            CmpOp::Int84Ne,
+            CmpOp::Int84Lt,
+            CmpOp::Int84Le,
+            CmpOp::Int84Gt,
+            CmpOp::Int84Ge,
+        ],
+    ),
+    (
+        ColTy::I32,
+        ColTy::I64,
+        &[
+            CmpOp::Int48Eq,
+            CmpOp::Int48Ne,
+            CmpOp::Int48Lt,
+            CmpOp::Int48Le,
+            CmpOp::Int48Gt,
+            CmpOp::Int48Ge,
+        ],
+    ),
+    (
+        ColTy::I16,
+        ColTy::I32,
+        &[
+            CmpOp::Int24Eq,
+            CmpOp::Int24Ne,
+            CmpOp::Int24Lt,
+            CmpOp::Int24Le,
+            CmpOp::Int24Gt,
+            CmpOp::Int24Ge,
+        ],
+    ),
+    (
+        ColTy::I32,
+        ColTy::I16,
+        &[
+            CmpOp::Int42Eq,
+            CmpOp::Int42Ne,
+            CmpOp::Int42Lt,
+            CmpOp::Int42Le,
+            CmpOp::Int42Gt,
+            CmpOp::Int42Ge,
+        ],
+    ),
+    (
+        ColTy::Oid,
+        ColTy::Oid,
+        &[
+            CmpOp::OidEq,
+            CmpOp::OidNe,
+            CmpOp::OidLt,
+            CmpOp::OidLe,
+            CmpOp::OidGt,
+            CmpOp::OidGe,
+        ],
+    ),
 ];
 
 const FLOAT_FAMS: &[(ColTy, ColTy, &[CmpOp])] = &[
-    (ColTy::F32, ColTy::F32, &[CmpOp::Float4Eq, CmpOp::Float4Ne, CmpOp::Float4Lt, CmpOp::Float4Le, CmpOp::Float4Gt, CmpOp::Float4Ge]),
-    (ColTy::F64, ColTy::F64, &[CmpOp::Float8Eq, CmpOp::Float8Ne, CmpOp::Float8Lt, CmpOp::Float8Le, CmpOp::Float8Gt, CmpOp::Float8Ge]),
-    (ColTy::F32, ColTy::F64, &[CmpOp::Float48Eq, CmpOp::Float48Ne, CmpOp::Float48Lt, CmpOp::Float48Le, CmpOp::Float48Gt, CmpOp::Float48Ge]),
-    (ColTy::F64, ColTy::F32, &[CmpOp::Float84Eq, CmpOp::Float84Ne, CmpOp::Float84Lt, CmpOp::Float84Le, CmpOp::Float84Gt, CmpOp::Float84Ge]),
+    (
+        ColTy::F32,
+        ColTy::F32,
+        &[
+            CmpOp::Float4Eq,
+            CmpOp::Float4Ne,
+            CmpOp::Float4Lt,
+            CmpOp::Float4Le,
+            CmpOp::Float4Gt,
+            CmpOp::Float4Ge,
+        ],
+    ),
+    (
+        ColTy::F64,
+        ColTy::F64,
+        &[
+            CmpOp::Float8Eq,
+            CmpOp::Float8Ne,
+            CmpOp::Float8Lt,
+            CmpOp::Float8Le,
+            CmpOp::Float8Gt,
+            CmpOp::Float8Ge,
+        ],
+    ),
+    (
+        ColTy::F32,
+        ColTy::F64,
+        &[
+            CmpOp::Float48Eq,
+            CmpOp::Float48Ne,
+            CmpOp::Float48Lt,
+            CmpOp::Float48Le,
+            CmpOp::Float48Gt,
+            CmpOp::Float48Ge,
+        ],
+    ),
+    (
+        ColTy::F64,
+        ColTy::F32,
+        &[
+            CmpOp::Float84Eq,
+            CmpOp::Float84Ne,
+            CmpOp::Float84Lt,
+            CmpOp::Float84Le,
+            CmpOp::Float84Gt,
+            CmpOp::Float84Ge,
+        ],
+    ),
 ];
 
 /// Random program over `tys`-typed columns: 1..=4 clauses drawn from
@@ -202,41 +360,70 @@ fn gen_program(r: &mut Lcg, tys: &[ColTy], allow_arith: bool) -> Program {
                 prog.steps.extend([
                     Step::LoadLane { col: ca, out: 0 },
                     Step::LoadLane { col: cb, out: 1 },
-                    Step::Cmp { op, a: 0, b: 1, out: 2 },
+                    Step::Cmp {
+                        op,
+                        a: 0,
+                        b: 1,
+                        out: 2,
+                    },
                     Step::Qual { a: 2 },
                 ]);
             }
             0 => {
                 // int/oid cmp-const
                 let (lane_ty, k_ty, ops) = INT_FAMS[r.below(INT_FAMS.len() as u64) as usize];
-                let Some(col) = col_of(tys, lane_ty, r) else { continue };
+                let Some(col) = col_of(tys, lane_ty, r) else {
+                    continue;
+                };
                 let op = ops[r.below(ops.len() as u64) as usize];
-                let k = prog.push_const(NullableDatum { value: gen_value(r, k_ty), isnull: false });
+                let k = prog.push_const(NullableDatum {
+                    value: gen_value(r, k_ty),
+                    isnull: false,
+                });
                 prog.steps.extend([
                     Step::LoadLane { col, out: 0 },
                     Step::LoadConst { k, out: 1 },
-                    Step::Cmp { op, a: 0, b: 1, out: 2 },
+                    Step::Cmp {
+                        op,
+                        a: 0,
+                        b: 1,
+                        out: 2,
+                    },
                     Step::Qual { a: 2 },
                 ]);
             }
             1 => {
                 // float cmp-const (regenerate until non-NaN: NaN consts refuse)
                 let (lane_ty, k_ty, ops) = FLOAT_FAMS[r.below(FLOAT_FAMS.len() as u64) as usize];
-                let Some(col) = col_of(tys, lane_ty, r) else { continue };
+                let Some(col) = col_of(tys, lane_ty, r) else {
+                    continue;
+                };
                 let op = ops[r.below(ops.len() as u64) as usize];
                 let mut kv = gen_value(r, k_ty);
                 for _ in 0..16 {
-                    let f = if k_ty == ColTy::F32 { kv.as_f32() as f64 } else { kv.as_f64() };
+                    let f = if k_ty == ColTy::F32 {
+                        kv.as_f32() as f64
+                    } else {
+                        kv.as_f64()
+                    };
                     if !f.is_nan() {
                         break;
                     }
                     kv = gen_value(r, k_ty);
                 }
-                let k = prog.push_const(NullableDatum { value: kv, isnull: false });
+                let k = prog.push_const(NullableDatum {
+                    value: kv,
+                    isnull: false,
+                });
                 prog.steps.extend([
                     Step::LoadLane { col, out: 0 },
                     Step::LoadConst { k, out: 1 },
-                    Step::Cmp { op, a: 0, b: 1, out: 2 },
+                    Step::Cmp {
+                        op,
+                        a: 0,
+                        b: 1,
+                        out: 2,
+                    },
                     Step::Qual { a: 2 },
                 ]);
             }
@@ -250,13 +437,20 @@ fn gen_program(r: &mut Lcg, tys: &[ColTy], allow_arith: bool) -> Program {
                 prog.steps.extend([
                     Step::LoadLane { col: ca, out: 0 },
                     Step::LoadLane { col: cb, out: 1 },
-                    Step::Cmp { op, a: 0, b: 1, out: 2 },
+                    Step::Cmp {
+                        op,
+                        a: 0,
+                        b: 1,
+                        out: 2,
+                    },
                     Step::Qual { a: 2 },
                 ]);
             }
             _ => {
                 // arith clause: (a OP b|k) CMP k2 — the erroring shape.
-                let Some(ca) = col_of(tys, ColTy::I32, r) else { continue };
+                let Some(ca) = col_of(tys, ColTy::I32, r) else {
+                    continue;
+                };
                 let aop = [ArithOp::Add4, ArithOp::Sub4, ArithOp::Mul4, ArithOp::Div4]
                     [r.below(4) as usize];
                 let op = [CmpOp::Int4Gt, CmpOp::Int4Le, CmpOp::Int4Ne][r.below(3) as usize];
@@ -272,16 +466,30 @@ fn gen_program(r: &mut Lcg, tys: &[ColTy], allow_arith: bool) -> Program {
                         prog.steps.push(Step::LoadConst { k, out: 1 });
                     }
                 } else {
-                    let k = prog
-                        .push_const(NullableDatum { value: gen_value(r, ColTy::I32), isnull: false });
+                    let k = prog.push_const(NullableDatum {
+                        value: gen_value(r, ColTy::I32),
+                        isnull: false,
+                    });
                     prog.steps.push(Step::LoadConst { k, out: 1 });
                 }
-                let k2 =
-                    prog.push_const(NullableDatum { value: gen_value(r, ColTy::I32), isnull: false });
+                let k2 = prog.push_const(NullableDatum {
+                    value: gen_value(r, ColTy::I32),
+                    isnull: false,
+                });
                 prog.steps.extend([
-                    Step::Arith { op: aop, a: 0, b: 1, out: 2 },
+                    Step::Arith {
+                        op: aop,
+                        a: 0,
+                        b: 1,
+                        out: 2,
+                    },
                     Step::LoadConst { k: k2, out: 3 },
-                    Step::Cmp { op, a: 2, b: 3, out: 4 },
+                    Step::Cmp {
+                        op,
+                        a: 2,
+                        b: 3,
+                        out: 4,
+                    },
                     Step::Qual { a: 4 },
                 ]);
             }
@@ -291,11 +499,19 @@ fn gen_program(r: &mut Lcg, tys: &[ColTy], allow_arith: bool) -> Program {
         // Degenerate draw: fall back to a fixed int clause on col 0 if it
         // is int-typed, else a trivially refusable empty program.
         if tys.first() == Some(&ColTy::I32) {
-            let k = prog.push_const(NullableDatum { value: Datum::from_i32(0), isnull: false });
+            let k = prog.push_const(NullableDatum {
+                value: Datum::from_i32(0),
+                isnull: false,
+            });
             prog.steps.extend([
                 Step::LoadLane { col: 0, out: 0 },
                 Step::LoadConst { k, out: 1 },
-                Step::Cmp { op: CmpOp::Int4Ge, a: 0, b: 1, out: 2 },
+                Step::Cmp {
+                    op: CmpOp::Int4Ge,
+                    a: 0,
+                    b: 1,
+                    out: 2,
+                },
                 Step::Qual { a: 2 },
             ]);
         }
@@ -364,7 +580,10 @@ fn stitched_outcome(
 /// assertions (SIMD bodies seen) only apply when the tier isn't pinned off
 /// by the A/B kill switch.
 fn simd_pinned_off() -> bool {
-    matches!(std::env::var("PGRUST_LANESTITCH_SIMD").as_deref(), Ok("0") | Ok("off"))
+    matches!(
+        std::env::var("PGRUST_LANESTITCH_SIMD").as_deref(),
+        Ok("0") | Ok("off")
+    )
 }
 
 /// Randomized programs x batch geometries x NULL densities, stitched vs
@@ -382,7 +601,15 @@ fn fuzz_parity_vs_interpreter() {
         .unwrap_or(0x5EED_1E57);
     let mut r = Lcg(seed);
     let layouts: &[&[ColTy]] = &[
-        &[ColTy::I32, ColTy::I32, ColTy::I64, ColTy::I16, ColTy::Oid, ColTy::F32, ColTy::F64],
+        &[
+            ColTy::I32,
+            ColTy::I32,
+            ColTy::I64,
+            ColTy::I16,
+            ColTy::Oid,
+            ColTy::F32,
+            ColTy::F64,
+        ],
         &[ColTy::I32, ColTy::F64, ColTy::F32, ColTy::I32],
         &[ColTy::I64, ColTy::Oid, ColTy::I16, ColTy::I32],
     ];
@@ -422,8 +649,11 @@ fn fuzz_parity_vs_interpreter() {
                 assert_eq!(we, ge, "error identity/position diverged (case {case})");
                 replays += 1;
             }
-            _ => panic!("one path errored, the other did not (case {case}): want_err={} got_err={}",
-                want.is_err(), got.is_err()),
+            _ => panic!(
+                "one path errored, the other did not (case {case}): want_err={} got_err={}",
+                want.is_err(),
+                got.is_err()
+            ),
         }
         if got.is_ok() {
             stitched_batches += 1;
@@ -431,9 +661,18 @@ fn fuzz_parity_vs_interpreter() {
     }
     // The gauntlet must actually exercise the machinery.
     assert!(compiles >= 300, "too few compiled cases: {compiles}");
-    assert!(stitched_batches >= 200, "too few stitched batches: {stitched_batches}");
-    assert!(simd_pinned_off() || simd_bodies >= 50, "too few SIMD bodies: {simd_bodies}");
-    assert!(replays >= 5, "too few refuse-and-replay error cases: {replays}");
+    assert!(
+        stitched_batches >= 200,
+        "too few stitched batches: {stitched_batches}"
+    );
+    assert!(
+        simd_pinned_off() || simd_bodies >= 50,
+        "too few SIMD bodies: {simd_bodies}"
+    );
+    assert!(
+        replays >= 5,
+        "too few refuse-and-replay error cases: {replays}"
+    );
 }
 
 /// Directed refuse-and-replay: the overflow row is planted at a known
@@ -444,28 +683,57 @@ fn fuzz_parity_vs_interpreter() {
 fn refuse_and_replay_at_cs_row() {
     // Program: a <> 0 AND 100/a > 1  (clause 1 shields a=0 from the div).
     let mut prog = Program::new();
-    let k0 = prog.push_const(NullableDatum { value: Datum::from_i32(0), isnull: false });
-    let k100 = prog.push_const(NullableDatum { value: Datum::from_i32(100), isnull: false });
-    let k1 = prog.push_const(NullableDatum { value: Datum::from_i32(1), isnull: false });
+    let k0 = prog.push_const(NullableDatum {
+        value: Datum::from_i32(0),
+        isnull: false,
+    });
+    let k100 = prog.push_const(NullableDatum {
+        value: Datum::from_i32(100),
+        isnull: false,
+    });
+    let k1 = prog.push_const(NullableDatum {
+        value: Datum::from_i32(1),
+        isnull: false,
+    });
     prog.steps = vec![
         Step::LoadLane { col: 0, out: 0 },
         Step::LoadConst { k: k0, out: 1 },
-        Step::Cmp { op: CmpOp::Int4Ne, a: 0, b: 1, out: 2 },
+        Step::Cmp {
+            op: CmpOp::Int4Ne,
+            a: 0,
+            b: 1,
+            out: 2,
+        },
         Step::Qual { a: 2 },
         Step::LoadConst { k: k100, out: 0 },
         Step::LoadLane { col: 0, out: 1 },
-        Step::Arith { op: ArithOp::Div4, a: 0, b: 1, out: 2 },
+        Step::Arith {
+            op: ArithOp::Div4,
+            a: 0,
+            b: 1,
+            out: 2,
+        },
         Step::LoadConst { k: k1, out: 3 },
-        Step::Cmp { op: CmpOp::Int4Gt, a: 2, b: 3, out: 4 },
+        Step::Cmp {
+            op: CmpOp::Int4Gt,
+            a: 2,
+            b: 3,
+            out: 4,
+        },
         Step::Qual { a: 4 },
     ];
 
     // Case 1: a=0 rows exist but are clause-1-shielded — no error, exact bits.
     let n = 200u32;
-    let mut values: Vec<Datum> = (0..n).map(|i| Datum::from_i32((i as i32 % 7) - 3)).collect();
+    let mut values: Vec<Datum> = (0..n)
+        .map(|i| Datum::from_i32((i as i32 % 7) - 3))
+        .collect();
     let isnull = vec![false; n as usize];
     {
-        let cols = vec![ColData { values: values.clone(), isnull: isnull.clone() }];
+        let cols = vec![ColData {
+            values: values.clone(),
+            isnull: isnull.clone(),
+        }];
         let Some(jit) = StitchedProgram::compile(&prog, 1) else {
             assert!(!lanestitch::available());
             return;
@@ -479,13 +747,26 @@ fn refuse_and_replay_at_cs_row() {
     // is the const 100), so plant a second program where the LANE overflows:
     // a * a > 0 with a = i32::MAX at row C.
     let mut prog2 = Program::new();
-    let kz = prog2.push_const(NullableDatum { value: Datum::from_i32(0), isnull: false });
+    let kz = prog2.push_const(NullableDatum {
+        value: Datum::from_i32(0),
+        isnull: false,
+    });
     prog2.steps = vec![
         Step::LoadLane { col: 0, out: 0 },
         Step::LoadLane { col: 0, out: 1 },
-        Step::Arith { op: ArithOp::Mul4, a: 0, b: 1, out: 2 },
+        Step::Arith {
+            op: ArithOp::Mul4,
+            a: 0,
+            b: 1,
+            out: 2,
+        },
         Step::LoadConst { k: kz, out: 3 },
-        Step::Cmp { op: CmpOp::Int4Gt, a: 2, b: 3, out: 4 },
+        Step::Cmp {
+            op: CmpOp::Int4Gt,
+            a: 2,
+            b: 3,
+            out: 4,
+        },
         Step::Qual { a: 4 },
     ];
     let c_row = 137usize;
@@ -506,7 +787,10 @@ fn refuse_and_replay_at_cs_row() {
     // Sticky refusal: the program replayed once; a clean batch afterwards
     // must interpret (and still be exact).
     let clean: Vec<Datum> = (0..n).map(|i| Datum::from_i32(i as i32 - 100)).collect();
-    let cols_clean = vec![ColData { values: clean, isnull: vec![false; n as usize] }];
+    let cols_clean = vec![ColData {
+        values: clean,
+        isnull: vec![false; n as usize],
+    }];
     let batch = as_batch(&cols_clean, n);
     let mut sel = SelVec::all(n);
     let outcome = jit2.run(&prog2, &batch, &mut sel).unwrap();
@@ -521,20 +805,40 @@ fn refuse_and_replay_at_cs_row() {
 #[test]
 fn div_by_zero_identity() {
     let mut prog = Program::new();
-    let k10 = prog.push_const(NullableDatum { value: Datum::from_i32(10), isnull: false });
-    let k1 = prog.push_const(NullableDatum { value: Datum::from_i32(1), isnull: false });
+    let k10 = prog.push_const(NullableDatum {
+        value: Datum::from_i32(10),
+        isnull: false,
+    });
+    let k1 = prog.push_const(NullableDatum {
+        value: Datum::from_i32(1),
+        isnull: false,
+    });
     prog.steps = vec![
         Step::LoadConst { k: k10, out: 0 },
         Step::LoadLane { col: 0, out: 1 },
-        Step::Arith { op: ArithOp::Div4, a: 0, b: 1, out: 2 },
+        Step::Arith {
+            op: ArithOp::Div4,
+            a: 0,
+            b: 1,
+            out: 2,
+        },
         Step::LoadConst { k: k1, out: 3 },
-        Step::Cmp { op: CmpOp::Int4Ge, a: 2, b: 3, out: 4 },
+        Step::Cmp {
+            op: CmpOp::Int4Ge,
+            a: 2,
+            b: 3,
+            out: 4,
+        },
         Step::Qual { a: 4 },
     ];
     let n = 100u32;
-    let values: Vec<Datum> =
-        (0..n).map(|i| Datum::from_i32(if i == 41 { 0 } else { 3 })).collect();
-    let cols = vec![ColData { values, isnull: vec![false; n as usize] }];
+    let values: Vec<Datum> = (0..n)
+        .map(|i| Datum::from_i32(if i == 41 { 0 } else { 3 }))
+        .collect();
+    let cols = vec![ColData {
+        values,
+        isnull: vec![false; n as usize],
+    }];
     let Some(jit) = StitchedProgram::compile(&prog, 1) else {
         assert!(!lanestitch::available());
         return;
@@ -552,20 +856,40 @@ fn div_by_zero_identity() {
 #[test]
 fn div_min_by_minus_one_overflow() {
     let mut prog = Program::new();
-    let km1 = prog.push_const(NullableDatum { value: Datum::from_i32(-1), isnull: false });
-    let k0 = prog.push_const(NullableDatum { value: Datum::from_i32(0), isnull: false });
+    let km1 = prog.push_const(NullableDatum {
+        value: Datum::from_i32(-1),
+        isnull: false,
+    });
+    let k0 = prog.push_const(NullableDatum {
+        value: Datum::from_i32(0),
+        isnull: false,
+    });
     prog.steps = vec![
         Step::LoadLane { col: 0, out: 0 },
         Step::LoadConst { k: km1, out: 1 },
-        Step::Arith { op: ArithOp::Div4, a: 0, b: 1, out: 2 },
+        Step::Arith {
+            op: ArithOp::Div4,
+            a: 0,
+            b: 1,
+            out: 2,
+        },
         Step::LoadConst { k: k0, out: 3 },
-        Step::Cmp { op: CmpOp::Int4Ne, a: 2, b: 3, out: 4 },
+        Step::Cmp {
+            op: CmpOp::Int4Ne,
+            a: 2,
+            b: 3,
+            out: 4,
+        },
         Step::Qual { a: 4 },
     ];
     let n = 80u32;
-    let values: Vec<Datum> =
-        (0..n).map(|i| Datum::from_i32(if i == 66 { i32::MIN } else { i as i32 })).collect();
-    let cols = vec![ColData { values, isnull: vec![false; n as usize] }];
+    let values: Vec<Datum> = (0..n)
+        .map(|i| Datum::from_i32(if i == 66 { i32::MIN } else { i as i32 }))
+        .collect();
+    let cols = vec![ColData {
+        values,
+        isnull: vec![false; n as usize],
+    }];
     let Some(jit) = StitchedProgram::compile(&prog, 1) else {
         assert!(!lanestitch::available());
         return;
@@ -581,11 +905,19 @@ fn div_min_by_minus_one_overflow() {
 
 fn cmp_const_prog(op: CmpOp, konst: Datum) -> Program {
     let mut prog = Program::new();
-    let k = prog.push_const(NullableDatum { value: konst, isnull: false });
+    let k = prog.push_const(NullableDatum {
+        value: konst,
+        isnull: false,
+    });
     prog.steps = vec![
         Step::LoadLane { col: 0, out: 0 },
         Step::LoadConst { k, out: 1 },
-        Step::Cmp { op, a: 0, b: 1, out: 2 },
+        Step::Cmp {
+            op,
+            a: 0,
+            b: 1,
+            out: 2,
+        },
         Step::Qual { a: 2 },
     ];
     prog
@@ -598,7 +930,10 @@ fn fail_closed_refusals() {
     }
     // NaN const: the fcmp conds are exact only for a non-NaN rhs — refuse.
     let p = cmp_const_prog(CmpOp::Float8Gt, Datum::from_f64(f64::NAN));
-    assert!(StitchedProgram::compile(&p, 1).is_none(), "NaN const must refuse");
+    assert!(
+        StitchedProgram::compile(&p, 1).is_none(),
+        "NaN const must refuse"
+    );
     // Float var-var OUTSIDE the fused window (result feeds a NullTest, not
     // the Qual directly): the generic register-file Cmp stencil still has
     // no NaN-exact cond — refuse. (The fused [load,load,cmp,qual] window
@@ -607,55 +942,114 @@ fn fail_closed_refusals() {
     p.steps = vec![
         Step::LoadLane { col: 0, out: 0 },
         Step::LoadLane { col: 1, out: 1 },
-        Step::Cmp { op: CmpOp::Float8Lt, a: 0, b: 1, out: 2 },
-        Step::NullTest { a: 2, out: 3, kind: NullTestKind::IsNotNull },
+        Step::Cmp {
+            op: CmpOp::Float8Lt,
+            a: 0,
+            b: 1,
+            out: 2,
+        },
+        Step::NullTest {
+            a: 2,
+            out: 3,
+            kind: NullTestKind::IsNotNull,
+        },
         Step::Qual { a: 3 },
     ];
-    assert!(StitchedProgram::compile(&p, 2).is_none(), "generic-window float cmp must refuse");
+    assert!(
+        StitchedProgram::compile(&p, 2).is_none(),
+        "generic-window float cmp must refuse"
+    );
     // Volatile programs refuse.
     let mut p = cmp_const_prog(CmpOp::Int4Gt, Datum::from_i32(5));
     p.volatile = true;
-    assert!(StitchedProgram::compile(&p, 1).is_none(), "volatile must refuse");
+    assert!(
+        StitchedProgram::compile(&p, 1).is_none(),
+        "volatile must refuse"
+    );
     // Column out of range refuses.
     let mut p = Program::new();
-    let k = p.push_const(NullableDatum { value: Datum::from_i32(5), isnull: false });
+    let k = p.push_const(NullableDatum {
+        value: Datum::from_i32(5),
+        isnull: false,
+    });
     p.steps = vec![
         Step::LoadLane { col: 3, out: 0 },
         Step::LoadConst { k, out: 1 },
-        Step::Cmp { op: CmpOp::Int4Gt, a: 0, b: 1, out: 2 },
+        Step::Cmp {
+            op: CmpOp::Int4Gt,
+            a: 0,
+            b: 1,
+            out: 2,
+        },
         Step::Qual { a: 2 },
     ];
-    assert!(StitchedProgram::compile(&p, 2).is_none(), "col out of range must refuse");
+    assert!(
+        StitchedProgram::compile(&p, 2).is_none(),
+        "col out of range must refuse"
+    );
     // Register out of range refuses.
     let mut p = Program::new();
-    let k = p.push_const(NullableDatum { value: Datum::from_i32(5), isnull: false });
+    let k = p.push_const(NullableDatum {
+        value: Datum::from_i32(5),
+        isnull: false,
+    });
     p.steps = vec![
         Step::LoadLane { col: 0, out: 200 },
         Step::LoadConst { k, out: 1 },
-        Step::Cmp { op: CmpOp::Int4Gt, a: 200, b: 1, out: 2 },
+        Step::Cmp {
+            op: CmpOp::Int4Gt,
+            a: 200,
+            b: 1,
+            out: 2,
+        },
         Step::Qual { a: 2 },
     ];
-    assert!(StitchedProgram::compile(&p, 1).is_none(), "reg out of range must refuse");
+    assert!(
+        StitchedProgram::compile(&p, 1).is_none(),
+        "reg out of range must refuse"
+    );
     // Trailing steps after the last Qual refuse.
     let mut p = cmp_const_prog(CmpOp::Int4Gt, Datum::from_i32(5));
     p.steps.push(Step::LoadLane { col: 0, out: 0 });
-    assert!(StitchedProgram::compile(&p, 1).is_none(), "trailing steps must refuse");
+    assert!(
+        StitchedProgram::compile(&p, 1).is_none(),
+        "trailing steps must refuse"
+    );
     // Cross-clause register flow refuses (the SIMD bit-iteration tier runs
     // clauses in separate row loops).
     let mut p = Program::new();
-    let k = p.push_const(NullableDatum { value: Datum::from_i32(5), isnull: false });
-    let k2 = p.push_const(NullableDatum { value: Datum::from_i32(9), isnull: false });
+    let k = p.push_const(NullableDatum {
+        value: Datum::from_i32(5),
+        isnull: false,
+    });
+    let k2 = p.push_const(NullableDatum {
+        value: Datum::from_i32(9),
+        isnull: false,
+    });
     p.steps = vec![
         Step::LoadLane { col: 0, out: 7 },
         Step::LoadConst { k, out: 1 },
-        Step::Cmp { op: CmpOp::Int4Gt, a: 7, b: 1, out: 2 },
+        Step::Cmp {
+            op: CmpOp::Int4Gt,
+            a: 7,
+            b: 1,
+            out: 2,
+        },
         Step::Qual { a: 2 },
         // Reads r7 from the previous clause without rewriting it.
         Step::LoadConst { k: k2, out: 1 },
-        Step::Cmp { op: CmpOp::Int4Lt, a: 7, b: 1, out: 3 },
+        Step::Cmp {
+            op: CmpOp::Int4Lt,
+            a: 7,
+            b: 1,
+            out: 3,
+        },
         Step::Qual { a: 3 },
     ];
-    assert!(StitchedProgram::compile(&p, 1).is_none(), "cross-clause reg flow must refuse");
+    assert!(
+        StitchedProgram::compile(&p, 1).is_none(),
+        "cross-clause reg flow must refuse"
+    );
     // Empty program refuses.
     assert!(StitchedProgram::compile(&Program::new(), 1).is_none());
 }
@@ -673,24 +1067,45 @@ fn drift_fails_open() {
     let mut r = Lcg(7);
     let cols = gen_batch_data(&mut r, &[ColTy::I32, ColTy::I32], n as usize, 10);
     // Missing lane: batch has 1 lane, body compiled for 2.
-    let batch = Batch { nrows: n, lanes: vec![Lane { values: &cols[0].values, isnull: &cols[0].isnull }] };
+    let batch = Batch {
+        nrows: n,
+        lanes: vec![Lane {
+            values: &cols[0].values,
+            isnull: &cols[0].isnull,
+        }],
+    };
     let mut sel = SelVec::all(n);
-    assert_eq!(jit.run(&prog, &batch, &mut sel).unwrap(), lanestitch::RunOutcome::InterpretedDrift);
+    assert_eq!(
+        jit.run(&prog, &batch, &mut sel).unwrap(),
+        lanestitch::RunOutcome::InterpretedDrift
+    );
     let want = interp_outcome(&prog, &cols[..1], n).unwrap();
     let got: Vec<bool> = (0..n).map(|i| sel.contains(i)).collect();
     assert_eq!(want, got);
     // Short lane arrays: values shorter than nrows.
-    let short = ColData { values: cols[0].values[..50].to_vec(), isnull: cols[0].isnull.clone() };
+    let short = ColData {
+        values: cols[0].values[..50].to_vec(),
+        isnull: cols[0].isnull.clone(),
+    };
     let batch = Batch {
         nrows: 50,
         lanes: vec![
-            Lane { values: &short.values, isnull: &short.isnull },
-            Lane { values: &cols[1].values[..40], isnull: &cols[1].isnull },
+            Lane {
+                values: &short.values,
+                isnull: &short.isnull,
+            },
+            Lane {
+                values: &cols[1].values[..40],
+                isnull: &cols[1].isnull,
+            },
         ],
     };
     let mut sel = SelVec::all(50);
     // Lane 1 is short (40 < 50) but unused; used lane 0 is fine -> stitched.
-    assert_eq!(jit.run(&prog, &batch, &mut sel).unwrap(), lanestitch::RunOutcome::Stitched);
+    assert_eq!(
+        jit.run(&prog, &batch, &mut sel).unwrap(),
+        lanestitch::RunOutcome::Stitched
+    );
     // A USED lane shorter than nrows is a caller contract violation, not
     // drift: the length check keeps the stitched body from reading out of
     // bounds (soundness), and the interpreter fallback surfaces the bug as
@@ -699,15 +1114,24 @@ fn drift_fails_open() {
         let batch = Batch {
             nrows: 60,
             lanes: vec![
-                Lane { values: &cols[0].values[..50], isnull: &cols[0].isnull[..60] },
-                Lane { values: &cols[1].values, isnull: &cols[1].isnull },
+                Lane {
+                    values: &cols[0].values[..50],
+                    isnull: &cols[0].isnull[..60],
+                },
+                Lane {
+                    values: &cols[1].values,
+                    isnull: &cols[1].isnull,
+                },
             ],
         };
         let mut sel = SelVec::all(60);
         let _ = jit.run(&prog, &batch, &mut sel);
     }))
     .is_err();
-    assert!(panicked, "a too-short USED lane must bounds-panic, never read OOB");
+    assert!(
+        panicked,
+        "a too-short USED lane must bounds-panic, never read OOB"
+    );
 }
 
 // ---- the stitch-time budget ------------------------------------------------
@@ -744,13 +1168,21 @@ fn stitch_time_budget() {
     }
     // A worst-case-sized SAOP (a full 128-element IN-list) must also budget.
     {
-        let big: Vec<NullableDatum> =
-            (0..128).map(|v| NullableDatum { value: Datum::from_i32(v), isnull: false }).collect();
+        let big: Vec<NullableDatum> = (0..128)
+            .map(|v| NullableDatum {
+                value: Datum::from_i32(v),
+                isnull: false,
+            })
+            .collect();
         if let Some(jit) = StitchedProgram::compile(&saop_prog(CmpOp::Int4Eq, big), 1) {
             nanos.push(jit.stitch_nanos);
         }
     }
-    assert!(nanos.len() >= 32, "budget sample too small: {}", nanos.len());
+    assert!(
+        nanos.len() >= 32,
+        "budget sample too small: {}",
+        nanos.len()
+    );
     nanos.sort_unstable();
     let median = nanos[nanos.len() / 2];
     let worst = *nanos.last().unwrap();
@@ -762,7 +1194,10 @@ fn stitch_time_budget() {
         nanos[nanos.len() * 9 / 10],
         worst
     );
-    assert!(median < 200_000, "median stitch {median}ns blows the µs-class budget");
+    assert!(
+        median < 200_000,
+        "median stitch {median}ns blows the µs-class budget"
+    );
     assert!(worst < 2_000_000, "worst stitch {worst}ns blows the budget");
 }
 
@@ -771,25 +1206,54 @@ fn stitch_time_budget() {
 #[test]
 fn simd_block_boundaries() {
     let mut prog = Program::new();
-    let k = prog.push_const(NullableDatum { value: Datum::from_i32(0), isnull: false });
-    let kf = prog.push_const(NullableDatum { value: Datum::from_f64(0.5), isnull: false });
-    let ko = prog.push_const(NullableDatum { value: canon_oid(0x8000_0001), isnull: false });
+    let k = prog.push_const(NullableDatum {
+        value: Datum::from_i32(0),
+        isnull: false,
+    });
+    let kf = prog.push_const(NullableDatum {
+        value: Datum::from_f64(0.5),
+        isnull: false,
+    });
+    let ko = prog.push_const(NullableDatum {
+        value: canon_oid(0x8000_0001),
+        isnull: false,
+    });
     prog.steps = vec![
         Step::LoadLane { col: 0, out: 0 },
         Step::LoadConst { k, out: 1 },
-        Step::Cmp { op: CmpOp::Int4Ge, a: 0, b: 1, out: 2 },
+        Step::Cmp {
+            op: CmpOp::Int4Ge,
+            a: 0,
+            b: 1,
+            out: 2,
+        },
         Step::Qual { a: 2 },
         Step::LoadLane { col: 1, out: 0 },
         Step::LoadConst { k: kf, out: 1 },
-        Step::Cmp { op: CmpOp::Float8Le, a: 0, b: 1, out: 2 },
+        Step::Cmp {
+            op: CmpOp::Float8Le,
+            a: 0,
+            b: 1,
+            out: 2,
+        },
         Step::Qual { a: 2 },
         Step::LoadLane { col: 2, out: 0 },
         Step::LoadConst { k: ko, out: 1 },
-        Step::Cmp { op: CmpOp::OidLt, a: 0, b: 1, out: 2 },
+        Step::Cmp {
+            op: CmpOp::OidLt,
+            a: 0,
+            b: 1,
+            out: 2,
+        },
         Step::Qual { a: 2 },
         Step::LoadLane { col: 0, out: 0 },
         Step::LoadLane { col: 3, out: 1 },
-        Step::Cmp { op: CmpOp::Int4Ne, a: 0, b: 1, out: 2 },
+        Step::Cmp {
+            op: CmpOp::Int4Ne,
+            a: 0,
+            b: 1,
+            out: 2,
+        },
         Step::Qual { a: 2 },
     ];
     let tys = &[ColTy::I32, ColTy::F64, ColTy::Oid, ColTy::I32];
@@ -834,8 +1298,11 @@ fn check_parity(prog: &Program, cols: &[ColData], nrows: u32) -> Option<bool> {
             assert_eq!(we, ge, "error identity/position divergence");
             Some(true)
         }
-        _ => panic!("one tier errored, the other did not: want_err={} got_err={}",
-            want.is_err(), got.is_err()),
+        _ => panic!(
+            "one tier errored, the other did not: want_err={} got_err={}",
+            want.is_err(),
+            got.is_err()
+        ),
     }
 }
 
@@ -874,9 +1341,9 @@ fn null_and_bool_tests_directed() {
     // A column with a deterministic mix of NULLs and true/false/other values.
     let values: Vec<Datum> = (0..n)
         .map(|i| match i % 4 {
-            0 => Datum::from_i32(0),   // false
-            1 => Datum::from_i32(1),   // true
-            2 => Datum::from_i32(-7),  // true (nonzero)
+            0 => Datum::from_i32(0),  // false
+            1 => Datum::from_i32(1),  // true
+            2 => Datum::from_i32(-7), // true (nonzero)
             _ => Datum::from_i32(0),
         })
         .collect();
@@ -912,14 +1379,26 @@ fn null_and_bool_tests_directed() {
     // A NULL/bool test AND a SIMD comparator: the generic clause rides the
     // bit-iteration tail of a NEON program.
     let mut p = Program::new();
-    let k = p.push_const(NullableDatum { value: Datum::from_i32(0), isnull: false });
+    let k = p.push_const(NullableDatum {
+        value: Datum::from_i32(0),
+        isnull: false,
+    });
     p.steps = vec![
         Step::LoadLane { col: 0, out: 0 },
         Step::LoadConst { k, out: 1 },
-        Step::Cmp { op: CmpOp::Int4Ge, a: 0, b: 1, out: 2 },
+        Step::Cmp {
+            op: CmpOp::Int4Ge,
+            a: 0,
+            b: 1,
+            out: 2,
+        },
         Step::Qual { a: 2 },
         Step::LoadLane { col: 0, out: 0 },
-        Step::NullTest { a: 0, out: 1, kind: NullTestKind::IsNotNull },
+        Step::NullTest {
+            a: 0,
+            out: 1,
+            kind: NullTestKind::IsNotNull,
+        },
         Step::Qual { a: 1 },
     ];
     let c = gen_batch_data(&mut Lcg(9), &[ColTy::I32], 130, 20);
@@ -936,15 +1415,31 @@ fn arith_prog(aop: ArithOp, cmp: CmpOp, rhs: Rhs, k2: Datum) -> Program {
     match rhs {
         Rhs::SelfCol => p.steps.push(Step::LoadLane { col: 0, out: 1 }),
         Rhs::Const(d) => {
-            let k = p.push_const(NullableDatum { value: d, isnull: false });
+            let k = p.push_const(NullableDatum {
+                value: d,
+                isnull: false,
+            });
             p.steps.push(Step::LoadConst { k, out: 1 });
         }
     }
-    let k2i = p.push_const(NullableDatum { value: k2, isnull: false });
+    let k2i = p.push_const(NullableDatum {
+        value: k2,
+        isnull: false,
+    });
     p.steps.extend([
-        Step::Arith { op: aop, a: 0, b: 1, out: 2 },
+        Step::Arith {
+            op: aop,
+            a: 0,
+            b: 1,
+            out: 2,
+        },
         Step::LoadConst { k: k2i, out: 3 },
-        Step::Cmp { op: cmp, a: 2, b: 3, out: 4 },
+        Step::Cmp {
+            op: cmp,
+            a: 2,
+            b: 3,
+            out: 4,
+        },
         Step::Qual { a: 4 },
     ]);
     p
@@ -972,71 +1467,142 @@ fn wider_arith_boundaries() {
 
     // -- int2 (smallint) traps: add/sub/mul overflow + MIN/-1 div. --
     // MAX + 1 overflows -> "smallint out of range" at row c.
-    let p = arith_prog(ArithOp::Add2, CmpOp::Int2Gt, Rhs::Const(Datum::from_i16(1)), Datum::from_i16(0));
+    let p = arith_prog(
+        ArithOp::Add2,
+        CmpOp::Int2Gt,
+        Rhs::Const(Datum::from_i16(1)),
+        Datum::from_i16(0),
+    );
     let cols = plant(n, c, Datum::from_i16(i16::MAX), Datum::from_i16(3));
     assert_eq!(check_parity(&p, &cols, n), Some(true));
-    let (m, _, row) = stitched_outcome(&StitchedProgram::compile(&p, 1).unwrap(), &p, &cols, n).unwrap_err();
+    let (m, _, row) =
+        stitched_outcome(&StitchedProgram::compile(&p, 1).unwrap(), &p, &cols, n).unwrap_err();
     assert_eq!(m, "smallint out of range");
     assert_eq!(row as usize, c);
 
     // MIN - 1 overflows.
-    let p = arith_prog(ArithOp::Sub2, CmpOp::Int2Ne, Rhs::Const(Datum::from_i16(1)), Datum::from_i16(0));
+    let p = arith_prog(
+        ArithOp::Sub2,
+        CmpOp::Int2Ne,
+        Rhs::Const(Datum::from_i16(1)),
+        Datum::from_i16(0),
+    );
     let cols = plant(n, c, Datum::from_i16(i16::MIN), Datum::from_i16(3));
     assert_eq!(check_parity(&p, &cols, n), Some(true));
 
     // 200 * 200 = 40000 > i16::MAX -> overflow (self-mul).
-    let p = arith_prog(ArithOp::Mul2, CmpOp::Int2Gt, Rhs::SelfCol, Datum::from_i16(0));
+    let p = arith_prog(
+        ArithOp::Mul2,
+        CmpOp::Int2Gt,
+        Rhs::SelfCol,
+        Datum::from_i16(0),
+    );
     let cols = plant(n, c, Datum::from_i16(200), Datum::from_i16(2));
     assert_eq!(check_parity(&p, &cols, n), Some(true));
 
     // i16::MIN / -1 overflows (the sneaky div arm).
-    let p = arith_prog(ArithOp::Div2, CmpOp::Int2Ne, Rhs::Const(Datum::from_i16(-1)), Datum::from_i16(0));
+    let p = arith_prog(
+        ArithOp::Div2,
+        CmpOp::Int2Ne,
+        Rhs::Const(Datum::from_i16(-1)),
+        Datum::from_i16(0),
+    );
     let cols = plant(n, c, Datum::from_i16(i16::MIN), Datum::from_i16(6));
     assert_eq!(check_parity(&p, &cols, n), Some(true));
 
     // int2 div-by-zero identity.
-    let p = arith_prog(ArithOp::Div2, CmpOp::Int2Ge, Rhs::Const(Datum::from_i16(0)), Datum::from_i16(0));
+    let p = arith_prog(
+        ArithOp::Div2,
+        CmpOp::Int2Ge,
+        Rhs::Const(Datum::from_i16(0)),
+        Datum::from_i16(0),
+    );
     let cols = plant(n, c, Datum::from_i16(5), Datum::from_i16(5));
-    let (m, _, _) = stitched_outcome(&StitchedProgram::compile(&p, 1).unwrap(), &p, &cols, n).unwrap_err();
+    let (m, _, _) =
+        stitched_outcome(&StitchedProgram::compile(&p, 1).unwrap(), &p, &cols, n).unwrap_err();
     assert_eq!(m, "division by zero");
 
     // Clean int2 (no trap): exact bits.
-    let p = arith_prog(ArithOp::Add2, CmpOp::Int2Gt, Rhs::Const(Datum::from_i16(10)), Datum::from_i16(0));
-    let cols = one_col((0..n).map(|i| Datum::from_i16((i as i16 % 50) - 25)).collect(), vec![false; n as usize]);
+    let p = arith_prog(
+        ArithOp::Add2,
+        CmpOp::Int2Gt,
+        Rhs::Const(Datum::from_i16(10)),
+        Datum::from_i16(0),
+    );
+    let cols = one_col(
+        (0..n)
+            .map(|i| Datum::from_i16((i as i16 % 50) - 25))
+            .collect(),
+        vec![false; n as usize],
+    );
     assert_eq!(check_parity(&p, &cols, n), Some(false));
 
     // -- int8 (bigint) traps. --
     // MAX + 1 overflows -> "bigint out of range".
-    let p = arith_prog(ArithOp::Add8, CmpOp::Int8Gt, Rhs::Const(Datum::from_i64(1)), Datum::from_i64(0));
+    let p = arith_prog(
+        ArithOp::Add8,
+        CmpOp::Int8Gt,
+        Rhs::Const(Datum::from_i64(1)),
+        Datum::from_i64(0),
+    );
     let cols = plant(n, c, Datum::from_i64(i64::MAX), Datum::from_i64(3));
     assert_eq!(check_parity(&p, &cols, n), Some(true));
-    let (m, _, row) = stitched_outcome(&StitchedProgram::compile(&p, 1).unwrap(), &p, &cols, n).unwrap_err();
+    let (m, _, row) =
+        stitched_outcome(&StitchedProgram::compile(&p, 1).unwrap(), &p, &cols, n).unwrap_err();
     assert_eq!(m, "bigint out of range");
     assert_eq!(row as usize, c);
 
     // MIN - 1 overflows.
-    let p = arith_prog(ArithOp::Sub8, CmpOp::Int8Ne, Rhs::Const(Datum::from_i64(1)), Datum::from_i64(0));
+    let p = arith_prog(
+        ArithOp::Sub8,
+        CmpOp::Int8Ne,
+        Rhs::Const(Datum::from_i64(1)),
+        Datum::from_i64(0),
+    );
     let cols = plant(n, c, Datum::from_i64(i64::MIN), Datum::from_i64(3));
     assert_eq!(check_parity(&p, &cols, n), Some(true));
 
     // int8 MIN * -1 overflows (MIN × -1).
-    let p = arith_prog(ArithOp::Mul8, CmpOp::Int8Ne, Rhs::Const(Datum::from_i64(-1)), Datum::from_i64(0));
+    let p = arith_prog(
+        ArithOp::Mul8,
+        CmpOp::Int8Ne,
+        Rhs::Const(Datum::from_i64(-1)),
+        Datum::from_i64(0),
+    );
     let cols = plant(n, c, Datum::from_i64(i64::MIN), Datum::from_i64(3));
     assert_eq!(check_parity(&p, &cols, n), Some(true));
 
     // int8 MIN * MIN overflows (self-mul).
-    let p = arith_prog(ArithOp::Mul8, CmpOp::Int8Gt, Rhs::SelfCol, Datum::from_i64(0));
+    let p = arith_prog(
+        ArithOp::Mul8,
+        CmpOp::Int8Gt,
+        Rhs::SelfCol,
+        Datum::from_i64(0),
+    );
     let cols = plant(n, c, Datum::from_i64(i64::MIN), Datum::from_i64(2));
     assert_eq!(check_parity(&p, &cols, n), Some(true));
 
     // int8 MIN / -1 overflows.
-    let p = arith_prog(ArithOp::Div8, CmpOp::Int8Ne, Rhs::Const(Datum::from_i64(-1)), Datum::from_i64(0));
+    let p = arith_prog(
+        ArithOp::Div8,
+        CmpOp::Int8Ne,
+        Rhs::Const(Datum::from_i64(-1)),
+        Datum::from_i64(0),
+    );
     let cols = plant(n, c, Datum::from_i64(i64::MIN), Datum::from_i64(6));
     assert_eq!(check_parity(&p, &cols, n), Some(true));
 
     // Clean int8 self-mul near the boundary but non-overflowing.
-    let p = arith_prog(ArithOp::Mul8, CmpOp::Int8Ge, Rhs::SelfCol, Datum::from_i64(0));
-    let cols = one_col((0..n).map(|i| Datum::from_i64(i as i64 - 100)).collect(), vec![false; n as usize]);
+    let p = arith_prog(
+        ArithOp::Mul8,
+        CmpOp::Int8Ge,
+        Rhs::SelfCol,
+        Datum::from_i64(0),
+    );
+    let cols = one_col(
+        (0..n).map(|i| Datum::from_i64(i as i64 - 100)).collect(),
+        vec![false; n as usize],
+    );
     assert_eq!(check_parity(&p, &cols, n), Some(false));
 }
 
@@ -1047,14 +1613,22 @@ fn saop_prog(op: CmpOp, elems: Vec<NullableDatum>) -> Program {
     let arr = p.push_array(elems);
     p.steps = vec![
         Step::LoadLane { col: 0, out: 0 },
-        Step::SaopAny { a: 0, out: 1, op, arr },
+        Step::SaopAny {
+            a: 0,
+            out: 1,
+            op,
+            arr,
+        },
         Step::Qual { a: 1 },
     ];
     p
 }
 
 fn nd(d: Datum) -> NullableDatum {
-    NullableDatum { value: d, isnull: false }
+    NullableDatum {
+        value: d,
+        isnull: false,
+    }
 }
 
 #[test]
@@ -1064,47 +1638,79 @@ fn saop_directed() {
     }
     let n = 200u32;
     // Scalar column: mix of the IN-set members, non-members, and NULLs.
-    let values: Vec<Datum> = (0..n).map(|i| Datum::from_i32((i as i32 % 11) - 3)).collect();
+    let values: Vec<Datum> = (0..n)
+        .map(|i| Datum::from_i32((i as i32 % 11) - 3))
+        .collect();
     let isnull: Vec<bool> = (0..n).map(|i| i % 9 == 0).collect();
     let cols = one_col(values, isnull);
 
     // Empty array: ANY is always false (fails every qual), never NULL.
-    assert_eq!(check_parity(&saop_prog(CmpOp::Int4Eq, vec![]), &cols, n), Some(false));
+    assert_eq!(
+        check_parity(&saop_prog(CmpOp::Int4Eq, vec![]), &cols, n),
+        Some(false)
+    );
 
     // 1-element.
     let p = saop_prog(CmpOp::Int4Eq, vec![nd(Datum::from_i32(5))]);
     assert_eq!(check_parity(&p, &cols, n), Some(false));
 
     // Multi-element IN-list, no nulls.
-    let elems: Vec<NullableDatum> = [-3, 0, 5, 7, -1].iter().map(|&v| nd(Datum::from_i32(v))).collect();
-    assert_eq!(check_parity(&saop_prog(CmpOp::Int4Eq, elems.clone()), &cols, n), Some(false));
+    let elems: Vec<NullableDatum> = [-3, 0, 5, 7, -1]
+        .iter()
+        .map(|&v| nd(Datum::from_i32(v)))
+        .collect();
+    assert_eq!(
+        check_parity(&saop_prog(CmpOp::Int4Eq, elems.clone()), &cols, n),
+        Some(false)
+    );
 
     // With a NULL element: rows matching a real element still pass; rows
     // matching none go NULL (fail qual) — three-valued logic.
     let mut with_null = elems.clone();
     with_null.push(NullableDatum::null());
-    assert_eq!(check_parity(&saop_prog(CmpOp::Int4Eq, with_null.clone()), &cols, n), Some(false));
+    assert_eq!(
+        check_parity(&saop_prog(CmpOp::Int4Eq, with_null.clone()), &cols, n),
+        Some(false)
+    );
 
     // All-NULL array: every result NULL -> every row fails.
     let all_null = vec![NullableDatum::null(); 4];
-    assert_eq!(check_parity(&saop_prog(CmpOp::Int4Eq, all_null), &cols, n), Some(false));
+    assert_eq!(
+        check_parity(&saop_prog(CmpOp::Int4Eq, all_null), &cols, n),
+        Some(false)
+    );
 
     // Non-equality ANY (col < ANY {..}) and int8 / oid families.
-    assert_eq!(check_parity(&saop_prog(CmpOp::Int4Lt, elems), &cols, n), Some(false));
+    assert_eq!(
+        check_parity(&saop_prog(CmpOp::Int4Lt, elems), &cols, n),
+        Some(false)
+    );
 
     let i64vals: Vec<Datum> = (0..n).map(|i| Datum::from_i64(i as i64 % 7)).collect();
     let cols8 = one_col(i64vals, vec![false; n as usize]);
-    let e8: Vec<NullableDatum> = [1i64, 3, 5].iter().map(|&v| nd(Datum::from_i64(v))).collect();
-    assert_eq!(check_parity(&saop_prog(CmpOp::Int8Eq, e8), &cols8, n), Some(false));
+    let e8: Vec<NullableDatum> = [1i64, 3, 5]
+        .iter()
+        .map(|&v| nd(Datum::from_i64(v)))
+        .collect();
+    assert_eq!(
+        check_parity(&saop_prog(CmpOp::Int8Eq, e8), &cols8, n),
+        Some(false)
+    );
 
     let oidvals: Vec<Datum> = (0..n).map(|i| canon_oid(i % 5)).collect();
     let colso = one_col(oidvals, vec![false; n as usize]);
     let eo: Vec<NullableDatum> = [0u32, 2, 4].iter().map(|&v| nd(canon_oid(v))).collect();
-    assert_eq!(check_parity(&saop_prog(CmpOp::OidGe, eo), &colso, n), Some(false));
+    assert_eq!(
+        check_parity(&saop_prog(CmpOp::OidGe, eo), &colso, n),
+        Some(false)
+    );
 
     // Density + geometry sweep (straddles the 64-row block boundary).
     let mut r = Lcg(0x5A0F);
-    let elems: Vec<NullableDatum> = [2, -3, 0, 4].iter().map(|&v| nd(Datum::from_i32(v))).collect();
+    let elems: Vec<NullableDatum> = [2, -3, 0, 4]
+        .iter()
+        .map(|&v| nd(Datum::from_i32(v)))
+        .collect();
     for &nrows in &[1u32, 63, 64, 65, 128, 1000] {
         for &np in &[0u64, 30, 100] {
             let c = gen_batch_data(&mut r, &[ColTy::I32], nrows as usize, np);
@@ -1112,24 +1718,41 @@ fn saop_directed() {
             if np == 30 {
                 e.push(NullableDatum::null());
             }
-            assert_eq!(check_parity(&saop_prog(CmpOp::Int4Ne, e), &c, nrows), Some(false));
+            assert_eq!(
+                check_parity(&saop_prog(CmpOp::Int4Ne, e), &c, nrows),
+                Some(false)
+            );
         }
     }
 
     // Fail-closed: float SAOP has no NaN-exact scalar cond -> refuse.
     let pf = saop_prog(CmpOp::Float8Eq, vec![nd(Datum::from_f64(1.0))]);
-    assert!(StitchedProgram::compile(&pf, 1).is_none(), "float SAOP must refuse");
+    assert!(
+        StitchedProgram::compile(&pf, 1).is_none(),
+        "float SAOP must refuse"
+    );
     // Fail-closed: an array index past the table refuses (built by hand).
     let mut pbad = Program::new();
     pbad.steps = vec![
         Step::LoadLane { col: 0, out: 0 },
-        Step::SaopAny { a: 0, out: 1, op: CmpOp::Int4Eq, arr: 3 },
+        Step::SaopAny {
+            a: 0,
+            out: 1,
+            op: CmpOp::Int4Eq,
+            arr: 3,
+        },
         Step::Qual { a: 1 },
     ];
-    assert!(StitchedProgram::compile(&pbad, 1).is_none(), "missing array must refuse");
+    assert!(
+        StitchedProgram::compile(&pbad, 1).is_none(),
+        "missing array must refuse"
+    );
     // Fail-closed: over-long array refuses (code-size bound).
     let big: Vec<NullableDatum> = (0..200).map(|v| nd(Datum::from_i32(v))).collect();
-    assert!(StitchedProgram::compile(&saop_prog(CmpOp::Int4Eq, big), 1).is_none(), "over-long SAOP must refuse");
+    assert!(
+        StitchedProgram::compile(&saop_prog(CmpOp::Int4Eq, big), 1).is_none(),
+        "over-long SAOP must refuse"
+    );
 }
 
 // ---- item 4: date / timestamp comparisons as their int carriers -----------
@@ -1149,8 +1772,9 @@ fn date_timestamp_carrier_ordering() {
     // date column: -infinity (INT_MIN), +infinity (INT_MAX), and ordinary
     // day counts; compare against a fixed date const.
     let dpool = [i32::MIN, i32::MAX, 0, 1, -1, 7305, 20000, -730];
-    let dates: Vec<Datum> =
-        (0..n).map(|i| Datum::from_i32(dpool[i as usize % dpool.len()])).collect();
+    let dates: Vec<Datum> = (0..n)
+        .map(|i| Datum::from_i32(dpool[i as usize % dpool.len()]))
+        .collect();
     let cols = one_col(dates, vec![false; n as usize]);
     for op in [CmpOp::Int4Lt, CmpOp::Int4Ge, CmpOp::Int4Eq, CmpOp::Int4Gt] {
         let p = cmp_const_prog(op, Datum::from_i32(7305));
@@ -1159,8 +1783,19 @@ fn date_timestamp_carrier_ordering() {
 
     // timestamp column: -infinity (INT64_MIN), +infinity (INT64_MAX), epoch,
     // and ordinary microsecond counts.
-    let tpool = [i64::MIN, i64::MAX, 0, 1, -1, 1_000_000, -1_000_000, 987_654_321];
-    let ts: Vec<Datum> = (0..n).map(|i| Datum::from_i64(tpool[i as usize % tpool.len()])).collect();
+    let tpool = [
+        i64::MIN,
+        i64::MAX,
+        0,
+        1,
+        -1,
+        1_000_000,
+        -1_000_000,
+        987_654_321,
+    ];
+    let ts: Vec<Datum> = (0..n)
+        .map(|i| Datum::from_i64(tpool[i as usize % tpool.len()]))
+        .collect();
     let cols8 = one_col(ts, vec![false; n as usize]);
     for op in [CmpOp::Int8Lt, CmpOp::Int8Ge, CmpOp::Int8Le, CmpOp::Int8Ne] {
         let mut p = Program::new();
@@ -1168,7 +1803,12 @@ fn date_timestamp_carrier_ordering() {
         p.steps = vec![
             Step::LoadLane { col: 0, out: 0 },
             Step::LoadConst { k, out: 1 },
-            Step::Cmp { op, a: 0, b: 1, out: 2 },
+            Step::Cmp {
+                op,
+                a: 0,
+                b: 1,
+                out: 2,
+            },
             Step::Qual { a: 2 },
         ];
         assert_eq!(check_parity(&p, &cols8, n), Some(false));
@@ -1197,7 +1837,10 @@ fn fuzz_parity_new_vocab() {
     for case in 0..500u32 {
         let prog = gen_new_vocab_program(&mut r);
         let Some(jit) = StitchedProgram::compile(&prog, tys.len()) else {
-            assert!(!lanestitch::available(), "new-vocab program refused (case {case})");
+            assert!(
+                !lanestitch::available(),
+                "new-vocab program refused (case {case})"
+            );
             return;
         };
         compiles += 1;
@@ -1244,7 +1887,11 @@ fn gen_new_vocab_program(r: &mut Lcg) -> Program {
             0 => {
                 // NULL test on a random column.
                 let col = r.below(4) as u16;
-                let kind = if r.chance(50) { NullTestKind::IsNull } else { NullTestKind::IsNotNull };
+                let kind = if r.chance(50) {
+                    NullTestKind::IsNull
+                } else {
+                    NullTestKind::IsNotNull
+                };
                 p.steps.extend([
                     Step::LoadLane { col, out: 0 },
                     Step::NullTest { a: 0, out: 1, kind },
@@ -1268,7 +1915,8 @@ fn gen_new_vocab_program(r: &mut Lcg) -> Program {
             }
             2 => {
                 // int2 arith clause (col0), overflow-dense pool.
-                let aop = [ArithOp::Add2, ArithOp::Sub2, ArithOp::Mul2, ArithOp::Div2][r.below(4) as usize];
+                let aop = [ArithOp::Add2, ArithOp::Sub2, ArithOp::Mul2, ArithOp::Div2]
+                    [r.below(4) as usize];
                 let cmp = [CmpOp::Int2Gt, CmpOp::Int2Le, CmpOp::Int2Ne][r.below(3) as usize];
                 let k = p.push_const(nd(gen_value(r, ColTy::I16)));
                 let k2 = p.push_const(nd(gen_value(r, ColTy::I16)));
@@ -1279,15 +1927,26 @@ fn gen_new_vocab_program(r: &mut Lcg) -> Program {
                     p.steps.push(Step::LoadConst { k, out: 1 });
                 }
                 p.steps.extend([
-                    Step::Arith { op: aop, a: 0, b: 1, out: 2 },
+                    Step::Arith {
+                        op: aop,
+                        a: 0,
+                        b: 1,
+                        out: 2,
+                    },
                     Step::LoadConst { k: k2, out: 0 },
-                    Step::Cmp { op: cmp, a: 2, b: 0, out: 1 },
+                    Step::Cmp {
+                        op: cmp,
+                        a: 2,
+                        b: 0,
+                        out: 1,
+                    },
                     Step::Qual { a: 1 },
                 ]);
             }
             3 => {
                 // int8 arith clause (col2), overflow-dense pool.
-                let aop = [ArithOp::Add8, ArithOp::Sub8, ArithOp::Mul8, ArithOp::Div8][r.below(4) as usize];
+                let aop = [ArithOp::Add8, ArithOp::Sub8, ArithOp::Mul8, ArithOp::Div8]
+                    [r.below(4) as usize];
                 let cmp = [CmpOp::Int8Gt, CmpOp::Int8Le, CmpOp::Int8Ne][r.below(3) as usize];
                 let k = p.push_const(nd(gen_value(r, ColTy::I64)));
                 let k2 = p.push_const(nd(gen_value(r, ColTy::I64)));
@@ -1298,9 +1957,19 @@ fn gen_new_vocab_program(r: &mut Lcg) -> Program {
                     p.steps.push(Step::LoadConst { k, out: 1 });
                 }
                 p.steps.extend([
-                    Step::Arith { op: aop, a: 0, b: 1, out: 2 },
+                    Step::Arith {
+                        op: aop,
+                        a: 0,
+                        b: 1,
+                        out: 2,
+                    },
                     Step::LoadConst { k: k2, out: 0 },
-                    Step::Cmp { op: cmp, a: 2, b: 0, out: 1 },
+                    Step::Cmp {
+                        op: cmp,
+                        a: 2,
+                        b: 0,
+                        out: 1,
+                    },
                     Step::Qual { a: 1 },
                 ]);
             }
@@ -1324,11 +1993,17 @@ fn gen_new_vocab_program(r: &mut Lcg) -> Program {
                 if r.chance(20) {
                     elems.push(NullableDatum::null());
                 }
-                let op = [CmpOp::Int4Eq, CmpOp::Int4Ne, CmpOp::Int4Lt, CmpOp::Int4Ge][r.below(4) as usize];
+                let op = [CmpOp::Int4Eq, CmpOp::Int4Ne, CmpOp::Int4Lt, CmpOp::Int4Ge]
+                    [r.below(4) as usize];
                 let arr = p.push_array(elems);
                 p.steps.extend([
                     Step::LoadLane { col: 1, out: 0 },
-                    Step::SaopAny { a: 0, out: 1, op, arr },
+                    Step::SaopAny {
+                        a: 0,
+                        out: 1,
+                        op,
+                        arr,
+                    },
                     Step::Qual { a: 1 },
                 ]);
             }
@@ -1348,7 +2023,12 @@ fn gen_new_vocab_program(r: &mut Lcg) -> Program {
                 let arr = p.push_array(elems);
                 p.steps.extend([
                     Step::LoadLane { col: 3, out: 0 },
-                    Step::SaopAny { a: 0, out: 1, op, arr },
+                    Step::SaopAny {
+                        a: 0,
+                        out: 1,
+                        op,
+                        arr,
+                    },
                     Step::Qual { a: 1 },
                 ]);
             }
@@ -1370,7 +2050,12 @@ fn fcmp_var_prog(op: CmpOp) -> Program {
     p.steps = vec![
         Step::LoadLane { col: 0, out: 0 },
         Step::LoadLane { col: 1, out: 1 },
-        Step::Cmp { op, a: 0, b: 1, out: 2 },
+        Step::Cmp {
+            op,
+            a: 0,
+            b: 1,
+            out: 2,
+        },
         Step::Qual { a: 2 },
     ];
     p
@@ -1432,8 +2117,7 @@ fn float_var_var_nan_ordering() {
     for &(a_ty, b_ty, ops) in fams {
         for &op in ops {
             let prog = fcmp_var_prog(op);
-            let jit = StitchedProgram::compile(&prog, 2)
-                .expect("fused float var-var must compile");
+            let jit = StitchedProgram::compile(&prog, 2).expect("fused float var-var must compile");
             assert!(
                 simd_pinned_off() || jit.is_simd(),
                 "float var-var must take the NEON tier ({op:?})"
@@ -1489,8 +2173,10 @@ fn simd_engagement_of_promoted_shapes() {
         progs.push(("booltest", booltest_prog(kind)));
     }
     for op in [CmpOp::Int4Eq, CmpOp::Int4Ne, CmpOp::Int4Lt, CmpOp::Int4Ge] {
-        let elems: Vec<NullableDatum> =
-            [-3, 0, 5, 7, 9].iter().map(|&v| nd(Datum::from_i32(v))).collect();
+        let elems: Vec<NullableDatum> = [-3, 0, 5, 7, 9]
+            .iter()
+            .map(|&v| nd(Datum::from_i32(v)))
+            .collect();
         progs.push(("saop", saop_prog(op, elems)));
     }
     // Empty and full-cap IN-lists, and one with NULL elements.
@@ -1532,9 +2218,19 @@ fn simd_engagement_of_promoted_shapes() {
     p.steps.extend([
         Step::LoadLane { col: 0, out: 0 },
         Step::LoadConst { k, out: 1 },
-        Step::Arith { op: ArithOp::Add4, a: 0, b: 1, out: 2 },
+        Step::Arith {
+            op: ArithOp::Add4,
+            a: 0,
+            b: 1,
+            out: 2,
+        },
         Step::LoadConst { k: k2, out: 3 },
-        Step::Cmp { op: CmpOp::Int4Gt, a: 2, b: 3, out: 4 },
+        Step::Cmp {
+            op: CmpOp::Int4Gt,
+            a: 2,
+            b: 3,
+            out: 4,
+        },
         Step::Qual { a: 4 },
     ]);
     let jit = StitchedProgram::compile(&p, 1).unwrap();
@@ -1550,35 +2246,66 @@ fn simd_all_shapes_one_program() {
     let k = prog.push_const(nd(Datum::from_i32(-100)));
     let kf = prog.push_const(nd(Datum::from_f64(0.25)));
     let arr = prog.push_array(
-        [1i32, 3, 5, 700, -2].iter().map(|&v| nd(Datum::from_i32(v))).collect(),
+        [1i32, 3, 5, 700, -2]
+            .iter()
+            .map(|&v| nd(Datum::from_i32(v)))
+            .collect(),
     );
     prog.steps = vec![
         // int4 cmp-const
         Step::LoadLane { col: 0, out: 0 },
         Step::LoadConst { k, out: 1 },
-        Step::Cmp { op: CmpOp::Int4Ge, a: 0, b: 1, out: 2 },
+        Step::Cmp {
+            op: CmpOp::Int4Ge,
+            a: 0,
+            b: 1,
+            out: 2,
+        },
         Step::Qual { a: 2 },
         // float8 cmp-const
         Step::LoadLane { col: 1, out: 0 },
         Step::LoadConst { k: kf, out: 1 },
-        Step::Cmp { op: CmpOp::Float8Le, a: 0, b: 1, out: 2 },
+        Step::Cmp {
+            op: CmpOp::Float8Le,
+            a: 0,
+            b: 1,
+            out: 2,
+        },
         Step::Qual { a: 2 },
         // float var-var (f64 vs f32)
         Step::LoadLane { col: 1, out: 0 },
         Step::LoadLane { col: 2, out: 1 },
-        Step::Cmp { op: CmpOp::Float84Gt, a: 0, b: 1, out: 2 },
+        Step::Cmp {
+            op: CmpOp::Float84Gt,
+            a: 0,
+            b: 1,
+            out: 2,
+        },
         Step::Qual { a: 2 },
         // NullTest
         Step::LoadLane { col: 3, out: 0 },
-        Step::NullTest { a: 0, out: 1, kind: NullTestKind::IsNotNull },
+        Step::NullTest {
+            a: 0,
+            out: 1,
+            kind: NullTestKind::IsNotNull,
+        },
         Step::Qual { a: 1 },
         // BoolTest
         Step::LoadLane { col: 0, out: 0 },
-        Step::BoolTest { a: 0, out: 1, kind: BoolTestKind::IsNotFalse },
+        Step::BoolTest {
+            a: 0,
+            out: 1,
+            kind: BoolTestKind::IsNotFalse,
+        },
         Step::Qual { a: 1 },
         // SAOP
         Step::LoadLane { col: 0, out: 0 },
-        Step::SaopAny { a: 0, out: 1, op: CmpOp::Int4Ne, arr },
+        Step::SaopAny {
+            a: 0,
+            out: 1,
+            op: CmpOp::Int4Ne,
+            arr,
+        },
         Step::Qual { a: 1 },
     ];
     let tys = &[ColTy::I32, ColTy::F64, ColTy::F32, ColTy::I64];
@@ -1586,7 +2313,10 @@ fn simd_all_shapes_one_program() {
         assert!(!lanestitch::available());
         return;
     };
-    assert!(simd_pinned_off() || jit.is_simd(), "all-vector program must take the NEON tier");
+    assert!(
+        simd_pinned_off() || jit.is_simd(),
+        "all-vector program must take the NEON tier"
+    );
     let mut r = Lcg(0xA11);
     for &nrows in &[63u32, 64, 65, 191, 1024] {
         for &np in &[0u64, 15, 60] {
@@ -1644,7 +2374,10 @@ fn gen_proj_program(r: &mut Lcg, tys: &[ColTy]) -> (Program, usize) {
             0 => {
                 let c = r.below(tys.len() as u64) as u16;
                 prog.steps.push(Step::LoadLane { col: c, out: 0 });
-                prog.steps.push(Step::StoreOut { a: 0, out: j as u16 });
+                prog.steps.push(Step::StoreOut {
+                    a: 0,
+                    out: j as u16,
+                });
             }
             1 => {
                 let (a, ty) = int_col(r, tys);
@@ -1656,17 +2389,36 @@ fn gen_proj_program(r: &mut Lcg, tys: &[ColTy]) -> (Program, usize) {
                 };
                 prog.steps.push(Step::LoadLane { col: a, out: 0 });
                 prog.steps.push(Step::LoadLane { col: b, out: 1 });
-                prog.steps.push(Step::Arith { op: arith_for(r, ty), a: 0, b: 1, out: 2 });
-                prog.steps.push(Step::StoreOut { a: 2, out: j as u16 });
+                prog.steps.push(Step::Arith {
+                    op: arith_for(r, ty),
+                    a: 0,
+                    b: 1,
+                    out: 2,
+                });
+                prog.steps.push(Step::StoreOut {
+                    a: 2,
+                    out: j as u16,
+                });
             }
             _ => {
                 let (a, ty) = int_col(r, tys);
-                let k = prog.push_const(NullableDatum { value: gen_value(r, ty), isnull: false });
+                let k = prog.push_const(NullableDatum {
+                    value: gen_value(r, ty),
+                    isnull: false,
+                });
                 prog.steps.push(Step::LoadLane { col: a, out: 0 });
                 prog.steps.push(Step::LoadConst { k, out: 1 });
                 let (x, y) = if r.chance(50) { (0u8, 1u8) } else { (1u8, 0u8) };
-                prog.steps.push(Step::Arith { op: arith_for(r, ty), a: x, b: y, out: 2 });
-                prog.steps.push(Step::StoreOut { a: 2, out: j as u16 });
+                prog.steps.push(Step::Arith {
+                    op: arith_for(r, ty),
+                    a: x,
+                    b: y,
+                    out: 2,
+                });
+                prog.steps.push(Step::StoreOut {
+                    a: 2,
+                    out: j as u16,
+                });
             }
         }
     }
@@ -1690,7 +2442,10 @@ impl OutBufs {
         self.values
             .iter_mut()
             .zip(self.isnull.iter_mut())
-            .map(|(v, n)| OutLane { values: v, isnull: n })
+            .map(|(v, n)| OutLane {
+                values: v,
+                isnull: n,
+            })
             .collect()
     }
 }
@@ -1783,7 +2538,10 @@ fn proj_fuzz_parity_vs_interpreter() {
     if cfg!(target_arch = "aarch64") && lanestitch::available() {
         // Adversarial pools (MIN/MAX heavy) make traps common; the floor
         // only pins that BOTH arms are exercised.
-        assert!(stitched_seen > 50, "stitched projection engaged {stitched_seen} times only");
+        assert!(
+            stitched_seen > 50,
+            "stitched projection engaged {stitched_seen} times only"
+        );
         assert!(refused_seen > 0, "no refuse-and-replay rounds seen");
     }
 }
@@ -1830,14 +2588,24 @@ fn proj_selected_rows_only() {
     let isnull = vec![false, false];
     let cols = vec![
         ColData { values, isnull },
-        ColData { values: vec![Datum::from_i32(1); 2], isnull: vec![false; 2] },
+        ColData {
+            values: vec![Datum::from_i32(1); 2],
+            isnull: vec![false; 2],
+        },
     ];
     let mut prog = Program::new();
     prog.steps.push(Step::LoadLane { col: 0, out: 0 });
     prog.steps.push(Step::LoadLane { col: 1, out: 1 });
-    prog.steps.push(Step::Arith { op: ArithOp::Add4, a: 0, b: 1, out: 2 });
+    prog.steps.push(Step::Arith {
+        op: ArithOp::Add4,
+        a: 0,
+        b: 1,
+        out: 2,
+    });
     prog.steps.push(Step::StoreOut { a: 2, out: 0 });
-    let Some(body) = StitchedProjection::compile(&prog, 2, 1) else { return };
+    let Some(body) = StitchedProjection::compile(&prog, 2, 1) else {
+        return;
+    };
     let mut sel = SelVec::all(2);
     sel.clear(0); // the overflowing row is not selected
     let batch = as_batch(&cols, 2);
@@ -1881,7 +2649,12 @@ fn proj_null_propagation() {
     let mut prog = Program::new();
     prog.steps.push(Step::LoadLane { col: 0, out: 0 });
     prog.steps.push(Step::LoadLane { col: 1, out: 1 });
-    prog.steps.push(Step::Arith { op: ArithOp::Mul8, a: 0, b: 1, out: 2 });
+    prog.steps.push(Step::Arith {
+        op: ArithOp::Mul8,
+        a: 0,
+        b: 1,
+        out: 2,
+    });
     prog.steps.push(Step::StoreOut { a: 2, out: 0 });
     prog.steps.push(Step::LoadLane { col: 0, out: 3 });
     prog.steps.push(Step::StoreOut { a: 3, out: 1 });
@@ -1891,7 +2664,10 @@ fn proj_null_propagation() {
     eval_project(&prog, &batch, &sel, &mut want.lanes()).unwrap();
     assert_eq!(want.values[0][0].as_i64(), 10);
     assert!(!want.isnull[0][0]);
-    assert!(want.isnull[0][1], "NULL lane must propagate through strict arith");
+    assert!(
+        want.isnull[0][1],
+        "NULL lane must propagate through strict arith"
+    );
     assert!(want.isnull[1][1], "Var passthrough must copy isnull");
     if let Some(body) = StitchedProjection::compile(&prog, 2, 2) {
         let mut got = OutBufs::new(2, 2);
@@ -1918,14 +2694,22 @@ fn proj_drift_fails_open() {
     prog.steps.push(Step::LoadLane { col: 0, out: 0 });
     prog.steps.push(Step::StoreOut { a: 0, out: 0 });
     // Var-only programs classify (economics floors live in the driver).
-    let Some(body) = StitchedProjection::compile(&prog, 1, 1) else { return };
-    let cols = vec![ColData { values: vec![Datum::from_i32(1); 4], isnull: vec![false; 4] }];
+    let Some(body) = StitchedProjection::compile(&prog, 1, 1) else {
+        return;
+    };
+    let cols = vec![ColData {
+        values: vec![Datum::from_i32(1); 4],
+        isnull: vec![false; 4],
+    }];
     let batch = as_batch(&cols, 4);
     let sel = SelVec::all(4);
     // Short output lane: Drift (fail open), outputs untouched.
     let mut short_v = vec![Datum::from_i32(0); 2];
     let mut short_n = vec![false; 2];
-    let mut lanes = [OutLane { values: &mut short_v, isnull: &mut short_n }];
+    let mut lanes = [OutLane {
+        values: &mut short_v,
+        isnull: &mut short_n,
+    }];
     assert_eq!(
         body.run_into(4, &batch.lanes, &sel.words[..1], &mut lanes),
         ProjOutcome::Drift
@@ -1933,7 +2717,10 @@ fn proj_drift_fails_open() {
     // Missing lane: Drift.
     let mut bufs = OutBufs::new(1, 4);
     let mut lanes = bufs.lanes();
-    assert_eq!(body.run_into(4, &[], &sel.words[..1], &mut lanes), ProjOutcome::Drift);
+    assert_eq!(
+        body.run_into(4, &[], &sel.words[..1], &mut lanes),
+        ProjOutcome::Drift
+    );
 }
 
 // ==========================================================================
@@ -1977,8 +2764,10 @@ fn sve2_match_saop_parity() {
         let k = [1usize, 2, 4, 7, 8, 9, 16, 24, 48][r.below(9) as usize];
         let mut prog = Program::new();
         let mut elem_vals: Vec<u64> = (0..k).map(|_| r.below(ceil)).collect();
-        let mut elems: Vec<NullableDatum> =
-            elem_vals.iter().map(|&v| nd(Datum::from_i64(v as i64))).collect();
+        let mut elems: Vec<NullableDatum> = elem_vals
+            .iter()
+            .map(|&v| nd(Datum::from_i64(v as i64)))
+            .collect();
         if r.chance(25) {
             // NULL elements are invisible to a qual'd SAOP — admission
             // counts only non-NULL elements.
@@ -1987,7 +2776,12 @@ fn sve2_match_saop_parity() {
         let arr = prog.push_array(elems);
         prog.steps.extend([
             Step::LoadLane { col, out: 0 },
-            Step::SaopAny { a: 0, out: 1, op, arr },
+            Step::SaopAny {
+                a: 0,
+                out: 1,
+                op,
+                arr,
+            },
             Step::Qual { a: 1 },
         ]);
         if r.chance(40) {
@@ -1997,27 +2791,44 @@ fn sve2_match_saop_parity() {
             prog.steps.extend([
                 Step::LoadLane { col: 1, out: 0 },
                 Step::LoadConst { k: kk, out: 1 },
-                Step::Cmp { op: CmpOp::Int4Le, a: 0, b: 1, out: 2 },
+                Step::Cmp {
+                    op: CmpOp::Int4Le,
+                    a: 0,
+                    b: 1,
+                    out: 2,
+                },
                 Step::Qual { a: 2 },
             ]);
         }
         if r.chance(30) {
             // A second MATCH-eligible clause: multi-clause register budget.
             let k2 = 1 + r.below(16) as usize;
-            let elems2: Vec<NullableDatum> =
-                (0..k2).map(|_| nd(Datum::from_i64(r.below(0x1_0000) as i64))).collect();
+            let elems2: Vec<NullableDatum> = (0..k2)
+                .map(|_| nd(Datum::from_i64(r.below(0x1_0000) as i64)))
+                .collect();
             let arr2 = prog.push_array(elems2);
             prog.steps.extend([
                 Step::LoadLane { col: 1, out: 0 },
-                Step::SaopAny { a: 0, out: 1, op: CmpOp::Int4Eq, arr: arr2 },
+                Step::SaopAny {
+                    a: 0,
+                    out: 1,
+                    op: CmpOp::Int4Eq,
+                    arr: arr2,
+                },
                 Step::Qual { a: 1 },
             ]);
         }
         let Some(jit) = StitchedProgram::compile(&prog, tys.len()) else {
-            assert!(!lanestitch::available(), "MATCH-shape program refused (case {case})");
+            assert!(
+                !lanestitch::available(),
+                "MATCH-shape program refused (case {case})"
+            );
             return;
         };
-        assert!(jit.is_simd(), "SAOP program must classify SIMD (case {case})");
+        assert!(
+            jit.is_simd(),
+            "SAOP program must classify SIMD (case {case})"
+        );
         if jit.sve_match_clauses() > 0 {
             match_bodies += 1;
         }
@@ -2031,12 +2842,12 @@ fn sve2_match_saop_parity() {
         for row in 0..nrows as usize {
             let e = elem_vals[r.below(elem_vals.len() as u64) as usize];
             let v: i64 = match r.below(6) {
-                0 => e as i64,                       // exact hit
-                1 => e as i64 ^ 1,                   // near miss
-                2 => e as i64 | 0x1_0000,            // low16 collision, out of domain
-                3 => -(e as i64) - 1,                // negative (sign-extended)
-                4 => e as i64 | (1i64 << 47),        // high-bit garbage collision
-                _ => r.below(0x1_0000) as i64,       // random in-domain
+                0 => e as i64,                 // exact hit
+                1 => e as i64 ^ 1,             // near miss
+                2 => e as i64 | 0x1_0000,      // low16 collision, out of domain
+                3 => -(e as i64) - 1,          // negative (sign-extended)
+                4 => e as i64 | (1i64 << 47),  // high-bit garbage collision
+                _ => r.below(0x1_0000) as i64, // random in-domain
             };
             // Canonical datum image per lane family (the spec.rs contract —
             // a raw wide word in a narrow lane is NOT a legal batch); the
@@ -2074,13 +2885,25 @@ fn sve2_survivor_extraction_parity() {
     }
     let mut r = Lcg(0x5CE2_0002);
     let tys: &[ColTy] = &[ColTy::I32, ColTy::I32];
-    for &(lo_pct, hi_pct) in &[(0u64, 0u64), (5, 60), (10, 15), (50, 50), (100, 100), (2, 98)] {
+    for &(lo_pct, hi_pct) in &[
+        (0u64, 0u64),
+        (5, 60),
+        (10, 15),
+        (50, 50),
+        (100, 100),
+        (2, 98),
+    ] {
         let mut prog = Program::new();
         let k = prog.push_const(nd(Datum::from_i32(0)));
         prog.steps.extend([
             Step::LoadLane { col: 0, out: 0 },
             Step::LoadConst { k, out: 1 },
-            Step::Cmp { op: CmpOp::Int4Gt, a: 0, b: 1, out: 2 },
+            Step::Cmp {
+                op: CmpOp::Int4Gt,
+                a: 0,
+                b: 1,
+                out: 2,
+            },
             Step::Qual { a: 2 },
         ]);
         // Generic clause (no fused window matches LoadLane->NullTest->
@@ -2089,8 +2912,16 @@ fn sve2_survivor_extraction_parity() {
         // list above the crossover on SVE2.
         prog.steps.extend([
             Step::LoadLane { col: 1, out: 0 },
-            Step::NullTest { a: 0, out: 1, kind: NullTestKind::IsNotNull },
-            Step::BoolTest { a: 1, out: 2, kind: BoolTestKind::IsTrue },
+            Step::NullTest {
+                a: 0,
+                out: 1,
+                kind: NullTestKind::IsNotNull,
+            },
+            Step::BoolTest {
+                a: 1,
+                out: 2,
+                kind: BoolTestKind::IsTrue,
+            },
             Step::Qual { a: 2 },
         ]);
         let Some(jit) = StitchedProgram::compile(&prog, tys.len()) else {
@@ -2110,8 +2941,11 @@ fn sve2_survivor_extraction_parity() {
                 // SVE_SURVIVOR_CROSSOVER so consecutive blocks take
                 // different arms of the adaptive branch.
                 let pct = if (row / 64) % 2 == 0 { lo_pct } else { hi_pct };
-                cols[0].values[row] =
-                    Datum::from_i32(if r.chance(pct) { 1 + r.below(100) as i32 } else { -1 });
+                cols[0].values[row] = Datum::from_i32(if r.chance(pct) {
+                    1 + r.below(100) as i32
+                } else {
+                    -1
+                });
                 cols[0].isnull[row] = r.chance(5);
                 // The generic clause fails NULL and zero rows.
                 cols[1].values[row] = Datum::from_i32(r.below(2) as i32);
@@ -2139,7 +2973,12 @@ fn sve2_match_admission_edges() {
         let arr = p.push_array(vals.iter().map(|&v| nd(Datum::from_i64(v))).collect());
         p.steps.extend([
             Step::LoadLane { col: 1, out: 0 },
-            Step::SaopAny { a: 0, out: 1, op, arr },
+            Step::SaopAny {
+                a: 0,
+                out: 1,
+                op,
+                arr,
+            },
             Step::Qual { a: 1 },
         ]);
         p
@@ -2147,10 +2986,10 @@ fn sve2_match_admission_edges() {
     // (program, MATCH-eligible on SVE2 hardware?)
     let cases: &[(Program, bool)] = &[
         (mk(CmpOp::Int4Eq, &[1, 2, 65535]), true),
-        (mk(CmpOp::Int4Ne, &[1, 2, 3]), false),    // relation
-        (mk(CmpOp::Int4Lt, &[7]), false),          // relation
-        (mk(CmpOp::Int4Eq, &[1, 65536]), false),   // element out of domain
-        (mk(CmpOp::Int4Eq, &[-1, 3]), false),      // negative element
+        (mk(CmpOp::Int4Ne, &[1, 2, 3]), false),  // relation
+        (mk(CmpOp::Int4Lt, &[7]), false),        // relation
+        (mk(CmpOp::Int4Eq, &[1, 65536]), false), // element out of domain
+        (mk(CmpOp::Int4Eq, &[-1, 3]), false),    // negative element
         (mk(CmpOp::Int4Eq, &(0..80i64).collect::<Vec<_>>()), false), // > MAX_MATCH_ELEMS
     ];
     let mut r = Lcg(0x5CE2_0003);
@@ -2329,7 +3168,10 @@ mod rowchain_twin {
     /// Drive the twin to completion (re-entering across pauses), returning
     /// (events, pause count, error message if any).
     fn drive_twin(prog: &Program, host: &mut RecHost) -> (Vec<Ev>, u32, Option<String>) {
-        let batch = Batch { nrows: 0, lanes: Vec::new() };
+        let batch = Batch {
+            nrows: 0,
+            lanes: Vec::new(),
+        };
         let mut cursor = ChainCursor::default();
         let mut pauses = 0;
         loop {
@@ -2359,8 +3201,11 @@ mod rowchain_twin {
             skips_seen |= {
                 // A skipped row = a staged pull whose per-row call count is
                 // short of the program's per-row calls (SkipRow cut it).
-                let per_row_calls =
-                    prog.steps.iter().filter(|s| matches!(s, Step::ProtocolCall { call } if *call < 9000)).count();
+                let per_row_calls = prog
+                    .steps
+                    .iter()
+                    .filter(|s| matches!(s, Step::ProtocolCall { call } if *call < 9000))
+                    .count();
                 (0..nrows).any(|row| {
                     let calls = events
                         .iter()
@@ -2395,7 +3240,11 @@ mod rowchain_twin {
                 _ => None,
             })
             .collect();
-        assert_eq!(staged, vec![0, 1, 2, 3], "prior rows fully consumed, error on C's row");
+        assert_eq!(
+            staged,
+            vec![0, 1, 2, 3],
+            "prior rows fully consumed, error on C's row"
+        );
     }
 
     /// The spec-level fail-closed backstop: RowOp steps in a qual/projection
@@ -2405,9 +3254,16 @@ mod rowchain_twin {
     fn rowop_steps_refuse_outside_chains() {
         let mut p = Program::new();
         p.steps.push(Step::NextRow);
-        let batch = Batch { nrows: 1, lanes: Vec::new() };
+        let batch = Batch {
+            nrows: 1,
+            lanes: Vec::new(),
+        };
         let e = eval_row(&p, &batch, 0).unwrap_err();
-        assert!(e.message().contains("row-chain contract violation"), "{}", e.message());
+        assert!(
+            e.message().contains("row-chain contract violation"),
+            "{}",
+            e.message()
+        );
         assert!(lanestitch::StitchedProgram::compile(&p, 1).is_none());
         // An ill-formed chain program (zero NextRow) errors loudly on the
         // twin too. ([NextRow] alone is a WELL-formed chain: a pull-only
@@ -2419,7 +3275,11 @@ mod rowchain_twin {
         let e = eval_row_chain(&bad, &batch, &mut cursor, &mut host, &mut [])
             .map(|_| ())
             .unwrap_err();
-        assert!(e.message().contains("row-chain contract violation"), "{}", e.message());
+        assert!(
+            e.message().contains("row-chain contract violation"),
+            "{}",
+            e.message()
+        );
     }
 
     /// Twin-only: pure per-row segments (junk-filter shape) — a Qual step
@@ -2451,7 +3311,12 @@ mod rowchain_twin {
                 });
                 p.steps.push(Step::LoadLane { col: 0, out: 0 });
                 p.steps.push(Step::LoadConst { k, out: 1 });
-                p.steps.push(Step::Cmp { op: CmpOp::Int8Gt, a: 0, b: 1, out: 2 });
+                p.steps.push(Step::Cmp {
+                    op: CmpOp::Int8Gt,
+                    a: 0,
+                    b: 1,
+                    out: 2,
+                });
                 p.steps.push(Step::Qual { a: 2 });
                 if chain {
                     p.steps.push(Step::ProtocolCall { call: 100 });
@@ -2462,7 +3327,10 @@ mod rowchain_twin {
             let qual_prog = mk(false);
             let batch = Batch {
                 nrows,
-                lanes: vec![Lane { values: &values, isnull: &isnull }],
+                lanes: vec![Lane {
+                    values: &values,
+                    isnull: &isnull,
+                }],
             };
             let mut host = RecHost::new(nrows, 0, Vec::new());
             host.skip_pct = 0;
@@ -2485,7 +3353,10 @@ mod rowchain_twin {
                     want.push(i);
                 }
             }
-            assert_eq!(called, want, "protocol calls must fire exactly for qual-passing rows");
+            assert_eq!(
+                called, want,
+                "protocol calls must fire exactly for qual-passing rows"
+            );
         }
     }
 
@@ -2499,20 +3370,34 @@ mod rowchain_twin {
         // lane0 / lane1 with a zero divisor on row 3.
         let values0: Vec<Datum> = (0..nrows as i64).map(Datum::from_i64).collect();
         let isnull0 = vec![false; nrows as usize];
-        let values1: Vec<Datum> =
-            [1i64, 2, 3, 0, 5].iter().copied().map(Datum::from_i64).collect();
+        let values1: Vec<Datum> = [1i64, 2, 3, 0, 5]
+            .iter()
+            .copied()
+            .map(Datum::from_i64)
+            .collect();
         let isnull1 = vec![false; nrows as usize];
         let mut p = Program::new();
         p.steps.push(Step::NextRow);
         p.steps.push(Step::LoadLane { col: 0, out: 0 });
         p.steps.push(Step::LoadLane { col: 1, out: 1 });
-        p.steps.push(Step::Arith { op: ArithOp::Div8, a: 0, b: 1, out: 2 });
+        p.steps.push(Step::Arith {
+            op: ArithOp::Div8,
+            a: 0,
+            b: 1,
+            out: 2,
+        });
         p.steps.push(Step::ProtocolCall { call: 100 });
         let batch = Batch {
             nrows,
             lanes: vec![
-                Lane { values: &values0, isnull: &isnull0 },
-                Lane { values: &values1, isnull: &isnull1 },
+                Lane {
+                    values: &values0,
+                    isnull: &isnull0,
+                },
+                Lane {
+                    values: &values1,
+                    isnull: &isnull1,
+                },
             ],
         };
         let mut host = RecHost::new(nrows, 0, Vec::new());
@@ -2531,7 +3416,11 @@ mod rowchain_twin {
                 _ => None,
             })
             .collect();
-        assert_eq!(called, vec![0, 1, 2], "rows before C's erroring row fully consumed");
+        assert_eq!(
+            called,
+            vec![0, 1, 2],
+            "rows before C's erroring row fully consumed"
+        );
     }
 
     /// Loop-top law: a loop-top protocol call answering a row verdict is a
@@ -2551,13 +3440,20 @@ mod rowchain_twin {
         p.steps.push(Step::ProtocolCall { call: 9000 });
         p.steps.push(Step::NextRow);
         p.steps.push(Step::ProtocolCall { call: 100 });
-        let batch = Batch { nrows: 0, lanes: Vec::new() };
+        let batch = Batch {
+            nrows: 0,
+            lanes: Vec::new(),
+        };
         for verdict in [ChainVerdict::SkipRow, ChainVerdict::EmitPause] {
             let mut cursor = ChainCursor::default();
             let e = eval_row_chain(&p, &batch, &mut cursor, &mut BadHost(verdict), &mut [])
                 .map(|_| ())
                 .unwrap_err();
-            assert!(e.message().contains("loop-top protocol call"), "{}", e.message());
+            assert!(
+                e.message().contains("loop-top protocol call"),
+                "{}",
+                e.message()
+            );
         }
     }
 
@@ -2600,9 +3496,19 @@ mod rowchain_twin {
         use datum::Datum;
         let values = vec![Datum::from_i64(1), Datum::from_i64(2)];
         let isnull = vec![false, false];
-        let batch = Batch { nrows: 2, lanes: vec![Lane { values: &values, isnull: &isnull }] };
+        let batch = Batch {
+            nrows: 2,
+            lanes: vec![Lane {
+                values: &values,
+                isnull: &isnull,
+            }],
+        };
         let prog = pure_chain_prog();
-        let mut host = OverrunHost { pulls_available: 4, pulls: 0, calls: Vec::new() };
+        let mut host = OverrunHost {
+            pulls_available: 4,
+            pulls: 0,
+            calls: Vec::new(),
+        };
         let mut cursor = ChainCursor::default();
         let e = eval_row_chain(&prog, &batch, &mut cursor, &mut host, &mut [])
             .map(|_| ())
@@ -2612,16 +3518,34 @@ mod rowchain_twin {
             "{}",
             e.message()
         );
-        assert_eq!(host.calls, vec![0, 1], "in-batch rows fully consumed before the bound");
+        assert_eq!(
+            host.calls,
+            vec![0, 1],
+            "in-batch rows fully consumed before the bound"
+        );
 
         // Zero-row batch: the bound trips on the very first staged row.
-        let batch0 = Batch { nrows: 0, lanes: vec![Lane { values: &values, isnull: &isnull }] };
-        let mut host0 = OverrunHost { pulls_available: 1, pulls: 0, calls: Vec::new() };
+        let batch0 = Batch {
+            nrows: 0,
+            lanes: vec![Lane {
+                values: &values,
+                isnull: &isnull,
+            }],
+        };
+        let mut host0 = OverrunHost {
+            pulls_available: 1,
+            pulls: 0,
+            calls: Vec::new(),
+        };
         let mut cursor0 = ChainCursor::default();
         let e0 = eval_row_chain(&prog, &batch0, &mut cursor0, &mut host0, &mut [])
             .map(|_| ())
             .unwrap_err();
-        assert!(e0.message().contains("chain cursor past the staged batch"), "{}", e0.message());
+        assert!(
+            e0.message().contains("chain cursor past the staged batch"),
+            "{}",
+            e0.message()
+        );
         assert!(host0.calls.is_empty());
     }
 
@@ -2633,8 +3557,15 @@ mod rowchain_twin {
         let mut p = Program::new();
         p.steps.push(Step::NextRow);
         p.steps.push(Step::ProtocolCall { call: 9902 });
-        let batch = Batch { nrows: 0, lanes: Vec::new() };
-        let mut host = OverrunHost { pulls_available: 7, pulls: 0, calls: Vec::new() };
+        let batch = Batch {
+            nrows: 0,
+            lanes: Vec::new(),
+        };
+        let mut host = OverrunHost {
+            pulls_available: 7,
+            pulls: 0,
+            calls: Vec::new(),
+        };
         let mut cursor = ChainCursor::default();
         let out = eval_row_chain(&p, &batch, &mut cursor, &mut host, &mut [])
             .expect("protocol-only chain never trips the lane bound");

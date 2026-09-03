@@ -79,9 +79,7 @@ fn split_qualified_name(s: &str) -> Option<Vec<String>> {
 #[track_caller]
 #[cold]
 fn invalid_name_syntax() -> Box<PgError> {
-    Box::new(
-        PgError::error("invalid name syntax").with_sqlstate(types_error::ERRCODE_INVALID_NAME),
-    )
+    Box::new(PgError::error("invalid name syntax").with_sqlstate(types_error::ERRCODE_INVALID_NAME))
 }
 
 fn make_range_var(names: &[String]) -> PgResult<RangeVar<'_>> {
@@ -231,7 +229,12 @@ fn currtid_for_view<'mcx>(
         if actions.len() != 1 {
             return Err(view_unsupported("only one select rule is allowed in views"));
         }
-        let query = actions.iter().next().unwrap().as_query().expect("rule action is a Query");
+        let query = actions
+            .iter()
+            .next()
+            .unwrap()
+            .as_query()
+            .expect("rule action is a Query");
         let tle = query.targetList.iter().find_map(|n| {
             let te = n.as_target_entry()?;
             (te.resno as usize == tididx + 1).then_some(te)
@@ -283,8 +286,14 @@ mod tests {
     fn split_qualified_name_dotted() {
         assert_eq!(split_qualified_name("t1").unwrap(), vec!["t1"]);
         assert_eq!(split_qualified_name("s1.t1").unwrap(), vec!["s1", "t1"]);
-        assert_eq!(split_qualified_name("DB.S1.T1").unwrap(), vec!["db", "s1", "t1"]);
-        assert_eq!(split_qualified_name("\"Mixed Case\"").unwrap(), vec!["Mixed Case"]);
+        assert_eq!(
+            split_qualified_name("DB.S1.T1").unwrap(),
+            vec!["db", "s1", "t1"]
+        );
+        assert_eq!(
+            split_qualified_name("\"Mixed Case\"").unwrap(),
+            vec!["Mixed Case"]
+        );
         assert_eq!(split_qualified_name("  t1  ").unwrap(), vec!["t1"]);
         assert!(split_qualified_name("\"unterminated").is_none());
         assert!(split_qualified_name("a..b").is_none());
@@ -302,18 +311,34 @@ mod tests {
         assert_eq!(rv.schemaname, Some("s1"));
         assert_eq!(rv.relname, "t1");
 
-        let names =
-            vec!["a".to_string(), "b".to_string(), "c".to_string(), "d".to_string()];
+        let names = vec![
+            "a".to_string(),
+            "b".to_string(),
+            "c".to_string(),
+            "d".to_string(),
+        ];
         assert!(make_range_var(&names).is_err());
     }
 
     #[test]
     fn relkind_objtype_mapping() {
         use types_nodes::parsenodes::ObjectType;
-        assert_eq!(get_relkind_objtype(types_rel::RELKIND_RELATION), ObjectType::OBJECT_TABLE as i32);
-        assert_eq!(get_relkind_objtype(types_rel::RELKIND_VIEW), ObjectType::OBJECT_VIEW as i32);
-        assert_eq!(get_relkind_objtype(types_rel::RELKIND_SEQUENCE), ObjectType::OBJECT_SEQUENCE as i32);
-        assert_eq!(get_relkind_objtype(types_rel::RELKIND_INDEX), ObjectType::OBJECT_INDEX as i32);
+        assert_eq!(
+            get_relkind_objtype(types_rel::RELKIND_RELATION),
+            ObjectType::OBJECT_TABLE as i32
+        );
+        assert_eq!(
+            get_relkind_objtype(types_rel::RELKIND_VIEW),
+            ObjectType::OBJECT_VIEW as i32
+        );
+        assert_eq!(
+            get_relkind_objtype(types_rel::RELKIND_SEQUENCE),
+            ObjectType::OBJECT_SEQUENCE as i32
+        );
+        assert_eq!(
+            get_relkind_objtype(types_rel::RELKIND_INDEX),
+            ObjectType::OBJECT_INDEX as i32
+        );
         assert_eq!(get_relkind_objtype(b'?'), ObjectType::OBJECT_TABLE as i32);
     }
 }

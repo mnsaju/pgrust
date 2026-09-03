@@ -26,8 +26,8 @@
 //! truncation and other exact writes happen under the callers' exclusive
 //! relation locking, exactly like the file operations they mirror.
 
-use std::collections::BTreeMap;
 use pgsync::RwLock;
+use std::collections::BTreeMap;
 
 use ::types_core::primitive::{BlockNumber, ForkNumber};
 use ::types_core::Oid;
@@ -122,7 +122,10 @@ pub fn remove(locator: RelFileLocator, forknum: ForkNumber) {
 
 /// Mark this fork as mutated outside md: never serve it from the cache.
 pub fn poison(locator: RelFileLocator, forknum: ForkNumber) {
-    cache().write().unwrap().insert(key(locator, forknum), POISON);
+    cache()
+        .write()
+        .unwrap()
+        .insert(key(locator, forknum), POISON);
 }
 
 /// DROP/move DATABASE removes file trees with rmtree, not per-rel unlinks.

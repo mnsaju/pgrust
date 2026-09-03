@@ -15,9 +15,9 @@ use types_fmgr::FmgrInfo;
 use types_tuple::TupleDescData;
 
 use execexpr::{exec_eval_expr, exec_init_expr, EvalSlots, ExprState};
+use exectuples;
 use executils::{EStateData, EcxtId};
 use nodeforeignscan::ForeignScanState;
-use exectuples;
 use pgclient::ExecStatus;
 
 use crate::connection;
@@ -104,7 +104,9 @@ impl AttInMeta {
 }
 
 fn fsstate<'a>(node: &'a mut ForeignScanState<'_>) -> Option<&'a mut PgFdwScanState> {
-    node.fdw_state.as_mut().and_then(|s| s.downcast_mut::<PgFdwScanState>())
+    node.fdw_state
+        .as_mut()
+        .and_then(|s| s.downcast_mut::<PgFdwScanState>())
 }
 
 #[track_caller]
@@ -140,7 +142,11 @@ pub(crate) fn begin_foreign_scan<'mcx>(
         miscinit::GetUserId()
     };
 
-    let rel = node.ss.ss_currentRelation.as_ref().expect("base foreign scan has a relation");
+    let rel = node
+        .ss
+        .ss_currentRelation
+        .as_ref()
+        .expect("base foreign scan has a relation");
     let table = foreigncmds::foreign::GetForeignTable(mcx, rel.rd_id)?;
     let user = foreigncmds::foreign::GetUserMapping(mcx, userid, table.serverid)?;
 
@@ -228,11 +234,19 @@ fn process_query_params<'mcx>(
     let r = (|| -> PgResult<Vec<Option<String>>> {
         let mut values: Vec<Option<String>> = Vec::with_capacity(state.param_exprs.len());
         let scratch = mcx::MemoryContext::new_bump("postgres_fdw param output");
-        for (expr, flinfo) in state.param_exprs.iter_mut().zip(state.param_flinfo.iter_mut()) {
+        for (expr, flinfo) in state
+            .param_exprs
+            .iter_mut()
+            .zip(state.param_flinfo.iter_mut())
+        {
             let per_tuple = estate.ecxt(ecxt).per_tuple_mcx();
             // SAFETY: reset-only per-tuple context, outlives the evaluation.
             unsafe { expr.arm_result_mcx_raw(per_tuple) };
-            let mut slots = EvalSlots { scan: None, inner: None, outer: None };
+            let mut slots = EvalSlots {
+                scan: None,
+                inner: None,
+                outer: None,
+            };
             let nd = exec_eval_expr(expr, &mut slots)?;
             if nd.isnull {
                 values.push(None);
@@ -245,9 +259,8 @@ fn process_query_params<'mcx>(
                 )?;
                 // SAFETY: output functions return a NUL-terminated cstring
                 // datum; copied out before the scratch context resets.
-                let s = unsafe {
-                    core::ffi::CStr::from_ptr(d.as_usize() as *const core::ffi::c_char)
-                };
+                let s =
+                    unsafe { core::ffi::CStr::from_ptr(d.as_usize() as *const core::ffi::c_char) };
                 values.push(Some(s.to_string_lossy().into_owned()));
             }
         }
@@ -272,7 +285,10 @@ fn create_cursor<'mcx>(
         process_query_params(state, estate, ecxt)?
     };
     let params: Vec<Option<&str>> = values.iter().map(|v| v.as_deref()).collect();
-    let sql = format!("DECLARE c{} CURSOR FOR\n{}", state.cursor_number, state.query);
+    let sql = format!(
+        "DECLARE c{} CURSOR FOR\n{}",
+        state.cursor_number, state.query
+    );
     let res = connection::exec_query_params(state.conn_key, &sql, &params)?;
     if res.status != ExecStatus::CommandOk {
         return Err(connection::remote_error(&res, Some(state.query)));
@@ -351,12 +367,7 @@ fn make_tuple_from_result_row(
                     // C's heap_form_tuple materialization, done per datum
                     // (fleet r2 find: every retained text datum aliased the
                     // batch's last row; a use-after-free on Linux).
-                    values[idx] = retain_datum(
-                        batch,
-                        d,
-                        attin.typlens[idx],
-                        attin.typbyvals[idx],
-                    )?;
+                    values[idx] = retain_datum(batch, d, attin.typlens[idx], attin.typbyvals[idx])?;
                 }
             }
             Err(e) => return Err(conversion_error(e, &state.attin, i)),
@@ -395,7 +406,9 @@ fn retain_datum(batch: mcx::Mcx<'_>, d: Datum, typlen: i16, typbyval: bool) -> P
             l => core::slice::from_raw_parts(p, l as usize),
         }
     };
-    Ok(Datum::from_usize(mcx::slice_borrow_in(batch, bytes)?.as_ptr() as usize))
+    Ok(Datum::from_usize(
+        mcx::slice_borrow_in(batch, bytes)?.as_ptr() as usize,
+    ))
 }
 
 // conversion_error_callback: C's errcontext line for a failed conversion.
@@ -425,7 +438,10 @@ pub(crate) fn iterate_foreign_scan<'mcx>(
     node: &mut ForeignScanState<'mcx>,
     estate: &mut EStateData<'mcx>,
 ) -> PgResult<bool> {
-    if !fsstate(node).expect("fdw_state set by BeginForeignScan").cursor_exists {
+    if !fsstate(node)
+        .expect("fdw_state set by BeginForeignScan")
+        .cursor_exists
+    {
         create_cursor(node, estate)?;
     }
     let scan_slot = node.ss.ss_ScanTupleSlot;

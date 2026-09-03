@@ -113,7 +113,10 @@ impl DrTstore {
             return Ok(true);
         }
         exectuples::slot_getallattrs(slot);
-        let ctx = self.scratch.as_mut().expect("startup ran before receive_slot");
+        let ctx = self
+            .scratch
+            .as_mut()
+            .expect("startup ran before receive_slot");
         {
             let mcx = ctx.mcx();
             let base = slot.base();

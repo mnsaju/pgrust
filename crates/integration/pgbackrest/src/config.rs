@@ -91,11 +91,14 @@ impl Config {
         };
         let process_max = match values.get("process-max") {
             None => default_process_max(),
-            Some(value) => value.parse::<NonZeroUsize>().map_err(|_| {
-                ConfigError::new(format!(
-                    "option process-max must be a positive integer, found '{value}'"
-                ))
-            })?.get(),
+            Some(value) => value
+                .parse::<NonZeroUsize>()
+                .map_err(|_| {
+                    ConfigError::new(format!(
+                        "option process-max must be a positive integer, found '{value}'"
+                    ))
+                })?
+                .get(),
         };
         let retention_full = match values.get("repo1-retention-full") {
             None => None,

@@ -247,15 +247,33 @@ pub fn initialize_guc_options_from_environment() -> PgResult<()> {
     // governs from there — SET/SET LOCAL/RESET land on this as the reset
     // value, like C's PGDATESTYLE precedent above).
     if let Ok(env) = std::env::var("PGRUST_LANE_V2") {
-        let v = if matches!(env.as_str(), "0" | "off") { "off" } else { "on" };
-        crate::SetConfigOption("pgrust.lane_executor", Some(v), PGC_POSTMASTER, PGC_S_ENV_VAR)?;
+        let v = if matches!(env.as_str(), "0" | "off") {
+            "off"
+        } else {
+            "on"
+        };
+        crate::SetConfigOption(
+            "pgrust.lane_executor",
+            Some(v),
+            PGC_POSTMASTER,
+            PGC_S_ENV_VAR,
+        )?;
     }
     // pgrust-only: pgrust.condition_cache's startup default, same contract
     // as PGRUST_LANE_V2 above (the harness arm switch; the boot default
     // stays OFF without the env var).
     if let Ok(env) = std::env::var("PGRUST_CONDITION_CACHE") {
-        let v = if matches!(env.as_str(), "0" | "off") { "off" } else { "on" };
-        crate::SetConfigOption("pgrust.condition_cache", Some(v), PGC_POSTMASTER, PGC_S_ENV_VAR)?;
+        let v = if matches!(env.as_str(), "0" | "off") {
+            "off"
+        } else {
+            "on"
+        };
+        crate::SetConfigOption(
+            "pgrust.condition_cache",
+            Some(v),
+            PGC_POSTMASTER,
+            PGC_S_ENV_VAR,
+        )?;
     }
     // pgrust-only (env-to-guc train): pgrust.runtime's startup default (the M0
     // runtime-pool master switch). Only the exact value "0" kills, matching the
@@ -272,16 +290,34 @@ pub fn initialize_guc_options_from_environment() -> PgResult<()> {
     // spelling per t35 convention: "0" or "off" disables; any other value /
     // unset = on (the flipped default).
     if let Ok(env) = std::env::var("PGRUST_RUNTIME_VACUUM_POOL") {
-        let v = if matches!(env.trim(), "0" | "off") { "off" } else { "on" };
-        crate::SetConfigOption("pgrust.runtime_vacuum_pool", Some(v), PGC_POSTMASTER, PGC_S_ENV_VAR)?;
+        let v = if matches!(env.trim(), "0" | "off") {
+            "off"
+        } else {
+            "on"
+        };
+        crate::SetConfigOption(
+            "pgrust.runtime_vacuum_pool",
+            Some(v),
+            PGC_POSTMASTER,
+            PGC_S_ENV_VAR,
+        )?;
     }
     // pgrust-only (env-to-guc train): pgrust.mem_autotune's startup default
     // (the boot-time machine-scaled memory/parallel auto-tune gate). Accepts
     // the same truthy set the autotune reader recognized (1/on/true/yes); the
     // default stays OFF without the env var.
     if let Ok(env) = std::env::var("PGRUST_MEM_AUTOTUNE") {
-        let v = if matches!(env.as_str(), "1" | "on" | "true" | "yes") { "on" } else { "off" };
-        crate::SetConfigOption("pgrust.mem_autotune", Some(v), PGC_POSTMASTER, PGC_S_ENV_VAR)?;
+        let v = if matches!(env.as_str(), "1" | "on" | "true" | "yes") {
+            "on"
+        } else {
+            "off"
+        };
+        crate::SetConfigOption(
+            "pgrust.mem_autotune",
+            Some(v),
+            PGC_POSTMASTER,
+            PGC_S_ENV_VAR,
+        )?;
     }
     Ok(())
 }
@@ -344,7 +380,11 @@ pub fn restore_nondefault_variables(vars: &[NondefaultGuc]) -> PgResult<()> {
         }
     }
     if let Some(t0) = t0 {
-        eprintln!("GTRACE guc.restore n={} total_us={}", vars.len(), t0.elapsed().as_micros());
+        eprintln!(
+            "GTRACE guc.restore n={} total_us={}",
+            vars.len(),
+            t0.elapsed().as_micros()
+        );
     }
     Ok(())
 }
@@ -432,7 +472,9 @@ pub fn bind_session_gucs(caps: &[CapturedGuc]) -> PgResult<SessionGucBinding> {
         "bind_session_gucs: thread already carries a session bind"
     );
     SESSION_BOUND.set(true);
-    let binding = SessionGucBinding { _not_send: std::marker::PhantomData };
+    let binding = SessionGucBinding {
+        _not_send: std::marker::PhantomData,
+    };
     apply_captured_session_gucs_impl(caps, false)?;
     Ok(binding)
 }
@@ -453,14 +495,20 @@ fn apply_captured_session_gucs_impl(caps: &[CapturedGuc], exact: bool) -> PgResu
     let t0 = trace.then(std::time::Instant::now);
     for cap in caps {
         let mut deferred_hooks: Vec<DeferredAssignHook> = Vec::new();
-        with_store_mut(|reg| crate::registry::bind_captured_guc(reg, cap, &mut deferred_hooks, exact))
-            .unwrap_or_else(|| store_uninitialized("apply_captured_session_gucs"))?;
+        with_store_mut(|reg| {
+            crate::registry::bind_captured_guc(reg, cap, &mut deferred_hooks, exact)
+        })
+        .unwrap_or_else(|| store_uninitialized("apply_captured_session_gucs"))?;
         for hook in deferred_hooks {
             hook();
         }
     }
     if let Some(t0) = t0 {
-        eprintln!("GTRACE guc.bind n={} total_us={}", caps.len(), t0.elapsed().as_micros());
+        eprintln!(
+            "GTRACE guc.bind n={} total_us={}",
+            caps.len(),
+            t0.elapsed().as_micros()
+        );
     }
     Ok(())
 }

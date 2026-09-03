@@ -36,9 +36,12 @@ fn get_raw_page_internal(
     if !RELKIND_HAS_STORAGE(rel.rd_rel.relkind) {
         let detail = pg_class_seams::errdetail_relkind_not_supported::call(rel.rd_rel.relkind)?;
         return Err(Box::new(
-            PgError::error(format!("cannot get raw page from relation \"{}\"", rel.name()))
-                .with_sqlstate(ERRCODE_WRONG_OBJECT_TYPE)
-                .with_detail(detail),
+            PgError::error(format!(
+                "cannot get raw page from relation \"{}\"",
+                rel.name()
+            ))
+            .with_sqlstate(ERRCODE_WRONG_OBJECT_TYPE)
+            .with_detail(detail),
         ));
     }
 
@@ -132,7 +135,10 @@ pub(crate) fn fc_get_raw_page_fork(
     get_raw_page_internal(fcinfo, 0, forknum, blkno)
 }
 
-pub(crate) fn fc_page_header(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+pub(crate) fn fc_page_header(
+    flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     let flinfo = flinfo.expect("page_header: resolved FmgrInfo required");
     require_superuser("raw page")?;
 
@@ -240,7 +246,7 @@ fn page_checksum_internal(fcinfo: &mut Fcinfo, version: PiVersion) -> PgResult<D
     }
 
     Ok(Datum::from_i16(
-        pg_checksum_page(page.bytes(), blkno as u32) as i16
+        pg_checksum_page(page.bytes(), blkno as u32) as i16,
     ))
 }
 

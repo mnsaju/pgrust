@@ -104,7 +104,10 @@ pub(crate) fn make_auth_token(token: &[u8], quoted: bool) -> AuthToken {
 
 pub(crate) fn copy_auth_token(input: &AuthToken) -> AuthToken {
     // C's copy_auth_token drops the compiled regex (make_auth_token copy).
-    AuthToken { regex: false, ..input.clone() }
+    AuthToken {
+        regex: false,
+        ..input.clone()
+    }
 }
 
 // regcomp_auth_token (hba.c:302): '/'-prefixed tokens compile a regex
@@ -128,7 +131,11 @@ pub(crate) fn regcomp_auth_token(
     let pattern = &token.string.as_bytes()[1..];
     let cx = mcx::MemoryContext::new("regcomp_auth_token");
     let wstr = mbutils_seams::pg_mb2wchar_with_len::call(cx.mcx(), pattern)?;
-    match regex_core_seams::pg_regcomp::call(&wstr, REG_ADVANCED, types_core::catalog::C_COLLATION_OID)? {
+    match regex_core_seams::pg_regcomp::call(
+        &wstr,
+        REG_ADVANCED,
+        types_core::catalog::C_COLLATION_OID,
+    )? {
         RegcompResult::Compiled(re) => {
             // Parsed auth lines are shared across threads; the Rc-based
             // carrier cannot live in them. Validation happened; the executing
@@ -165,8 +172,7 @@ pub(crate) fn regexec_auth_token(
 
     debug_assert!(token.regex && token.string.starts_with('/'));
     let cx = mcx::MemoryContext::new("regexec_auth_token");
-    let wpat =
-        mbutils_seams::pg_mb2wchar_with_len::call(cx.mcx(), &token.string.as_bytes()[1..])?;
+    let wpat = mbutils_seams::pg_mb2wchar_with_len::call(cx.mcx(), &token.string.as_bytes()[1..])?;
     // Recompile of a parse-validated pattern (see regcomp_auth_token).
     let re = match regex_core_seams::pg_regcomp::call(
         &wpat,
@@ -175,7 +181,10 @@ pub(crate) fn regexec_auth_token(
     )? {
         RegcompResult::Compiled(re) => re,
         RegcompResult::Failed(f) => {
-            panic!("regexec_auth_token: parse-validated pattern failed to recompile: {}", f.message)
+            panic!(
+                "regexec_auth_token: parse-validated pattern failed to recompile: {}",
+                f.message
+            )
         }
     };
     let wstr = mbutils_seams::pg_mb2wchar_with_len::call(cx.mcx(), matchstr.as_bytes())?;

@@ -52,7 +52,9 @@ pub struct VarParamState {
 
 impl VarParamState {
     pub fn new() -> Self {
-        VarParamState { param_types: Rc::new(RefCell::new(Vec::new())) }
+        VarParamState {
+            param_types: Rc::new(RefCell::new(Vec::new())),
+        }
     }
 }
 
@@ -154,10 +156,7 @@ impl<'p> ParseRefHookState<'p> {
     }
 }
 
-pub fn setup_parse_fixed_parameters<'p>(
-    pstate: &mut ParseState<'p, '_>,
-    param_types: &'p [Oid],
-) {
+pub fn setup_parse_fixed_parameters<'p>(pstate: &mut ParseState<'p, '_>, param_types: &'p [Oid]) {
     pstate.p_ref_hook_state = ParseRefHookState::FixedParams(FixedParamState { param_types });
 }
 
@@ -298,8 +297,7 @@ pub fn variable_paramref_hook<'mcx>(
     }
     // JDBC hack: a void argument of a CALL is interpreted as unknown (see
     // also ParseFuncOrColumn).
-    if param_types[idx] == VOIDOID && pstate.p_expr_kind == ParseExprKind::EXPR_KIND_CALL_ARGUMENT
-    {
+    if param_types[idx] == VOIDOID && pstate.p_expr_kind == ParseExprKind::EXPR_KIND_CALL_ARGUMENT {
         param_types[idx] = UNKNOWNOID;
     }
     let paramtype = param_types[idx];

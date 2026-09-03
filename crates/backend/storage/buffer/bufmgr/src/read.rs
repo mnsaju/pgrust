@@ -6,19 +6,17 @@ use condition_variable::{
 };
 use datum::Datum;
 use elog::ereport;
-use types_resowner::{ResourceOwnerDesc, RELEASE_PRIO_BUFFER_IOS, RESOURCE_RELEASE_BEFORE_LOCKS};
 use lwlock::{LWLockAcquire, LWLockConditionalAcquire, LWLockRelease, LW_EXCLUSIVE, LW_SHARED};
-use types_core::{
-    BlockNumber, Buffer, BufferIsValid, ForkNumber, InvalidBlockNumber, InvalidBuffer, BLCKSZ,
-    INIT_FORKNUM,
-    INVALID_PROC_NUMBER, RELPERSISTENCE_PERMANENT, RELPERSISTENCE_TEMP, RELPERSISTENCE_UNLOGGED,
-};
-use types_error::{
-    ErrorLocation, PgResult, ERRCODE_DATA_CORRUPTED, ERROR, WARNING,
-};
 use pgstat::io::{
     pgstat_count_io_op, pgstat_count_io_op_time, pgstat_prepare_io_time, IOObject, IOOp,
 };
+use types_core::{
+    BlockNumber, Buffer, BufferIsValid, ForkNumber, InvalidBlockNumber, InvalidBuffer, BLCKSZ,
+    INIT_FORKNUM, INVALID_PROC_NUMBER, RELPERSISTENCE_PERMANENT, RELPERSISTENCE_TEMP,
+    RELPERSISTENCE_UNLOGGED,
+};
+use types_error::{ErrorLocation, PgResult, ERRCODE_DATA_CORRUPTED, ERROR, WARNING};
+use types_resowner::{ResourceOwnerDesc, RELEASE_PRIO_BUFFER_IOS, RESOURCE_RELEASE_BEFORE_LOCKS};
 use types_storage::buf::{
     buftag, BufferAccessStrategy, IOContext, BM_DIRTY, BM_IO_ERROR, BM_IO_IN_PROGRESS,
     BM_PERMANENT, BM_TAG_VALID, BM_VALID, BUF_FLAG_MASK, BUF_USAGECOUNT_MASK, BUF_USAGECOUNT_ONE,
@@ -224,7 +222,11 @@ pub(crate) fn BufferAlloc(
     // M2 swizzling decision site: shared partition LWLock + hash probe + pin
     // CAS on every warm hit — the block a swizzled parent pointer with
     // optimistic version validation removes entirely (strategy.md lever 8).
-    LWLockAcquire(partition_lock, LW_SHARED, init_small::globals::MyProcNumber())?;
+    LWLockAcquire(
+        partition_lock,
+        LW_SHARED,
+        init_small::globals::MyProcNumber(),
+    )?;
     let existing_id = BufTableLookup(&new_tag, new_hash)?;
     if existing_id >= 0 {
         let desc = GetBufferDescriptor(existing_id);
@@ -239,7 +241,11 @@ pub(crate) fn BufferAlloc(
     let victim_buffer = GetVictimBuffer(strategy, io_context)?;
     let victim_desc = GetBufferDescriptor(victim_buffer - 1);
 
-    LWLockAcquire(partition_lock, LW_EXCLUSIVE, init_small::globals::MyProcNumber())?;
+    LWLockAcquire(
+        partition_lock,
+        LW_EXCLUSIVE,
+        init_small::globals::MyProcNumber(),
+    )?;
     let existing_id = BufTableInsert(&new_tag, new_hash, victim_desc.buf_id)?;
     if existing_id >= 0 {
         let existing_desc = GetBufferDescriptor(existing_id);
@@ -254,9 +260,7 @@ pub(crate) fn BufferAlloc(
 
     let mut victim_state = LockBufHdr(victim_desc);
     debug_assert!(buffer_refcount(victim_state) == 1);
-    debug_assert!(
-        victim_state & (BM_TAG_VALID | BM_VALID | BM_DIRTY | BM_IO_IN_PROGRESS) == 0
-    );
+    debug_assert!(victim_state & (BM_TAG_VALID | BM_VALID | BM_DIRTY | BM_IO_IN_PROGRESS) == 0);
     // SAFETY: header lock held, our pin is the only reference (asserted).
     unsafe { victim_desc.set_tag(new_tag) };
     victim_state |= BM_TAG_VALID | BUF_USAGECOUNT_ONE;
@@ -333,7 +337,11 @@ pub(crate) fn InvalidateVictimBuffer(desc: &BufferDesc) -> PgResult<bool> {
     let hash = BufTableHashCode(&tag);
     let partition_lock = BufMappingPartitionLock(hash);
 
-    LWLockAcquire(partition_lock, LW_EXCLUSIVE, init_small::globals::MyProcNumber())?;
+    LWLockAcquire(
+        partition_lock,
+        LW_EXCLUSIVE,
+        init_small::globals::MyProcNumber(),
+    )?;
     let mut buf_state = LockBufHdr(desc);
     if buffer_refcount(buf_state) != 1 || buf_state & BM_DIRTY != 0 {
         UnlockBufHdr(desc, buf_state);
@@ -718,7 +726,11 @@ fn ProcessReadBuffersResult(operation: &mut ReadBuffersOperation) -> PgResult<()
     debug_assert!(aio_core::pgaio_wref_valid(&operation.io_wref));
     debug_assert!(rs != Rs::Unknown);
 
-    let newly_read_blocks = if rs != Rs::Error { operation.io_return.result.result } else { 0 };
+    let newly_read_blocks = if rs != Rs::Error {
+        operation.io_return.result.result
+    } else {
+        0
+    };
 
     if rs == Rs::Error || rs == Rs::Warning {
         aio_core::pgaio_result_report(
@@ -1019,7 +1031,11 @@ pub fn page_is_verified(
     // but only after we've checked for the all-zeroes case.
     if checksum_failure {
         if flags & (PIV_LOG_WARNING | PIV_LOG_LOG) != 0 {
-            let level = if flags & PIV_LOG_WARNING != 0 { WARNING } else { types_error::LOG };
+            let level = if flags & PIV_LOG_WARNING != 0 {
+                WARNING
+            } else {
+                types_error::LOG
+            };
             let _ = ereport(level)
                 .errcode(ERRCODE_DATA_CORRUPTED)
                 .errmsg(format!(
@@ -1195,17 +1211,31 @@ pub fn PrefetchSharedBuffer(
     let hash = BufTableHashCode(&tag);
     let partition_lock = BufMappingPartitionLock(hash);
     let lookup = || -> PgResult<Buffer> {
-        LWLockAcquire(partition_lock, LW_SHARED, init_small::globals::MyProcNumber())?;
+        LWLockAcquire(
+            partition_lock,
+            LW_SHARED,
+            init_small::globals::MyProcNumber(),
+        )?;
         let buf_id = BufTableLookup(&tag, hash)?;
         LWLockRelease(partition_lock)?;
-        Ok(if buf_id >= 0 { buf_id + 1 } else { InvalidBuffer })
+        Ok(if buf_id >= 0 {
+            buf_id + 1
+        } else {
+            InvalidBuffer
+        })
     };
     let recent_buffer = lookup()?;
     if BufferIsValid(recent_buffer) {
-        return Ok(PrefetchBufferResult { recent_buffer, initiated_io: false });
+        return Ok(PrefetchBufferResult {
+            recent_buffer,
+            initiated_io: false,
+        });
     }
     if fd::io_direct_flags() & types_storage::IO_DIRECT_DATA != 0 {
-        return Ok(PrefetchBufferResult { recent_buffer: InvalidBuffer, initiated_io: false });
+        return Ok(PrefetchBufferResult {
+            recent_buffer: InvalidBuffer,
+            initiated_io: false,
+        });
     }
     if aio_seams::uring_available::is_installed() && aio_seams::uring_available::call() {
         match crate::uring::start_read(smgr, relpersistence, forknum, blkno)? {

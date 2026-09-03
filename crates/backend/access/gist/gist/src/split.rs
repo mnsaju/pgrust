@@ -217,7 +217,11 @@ fn supportSecondarySplit(
             leave_on_left = false;
         }
     } else {
-        let entry1 = if sv.spl_ldatum_exists { &entry_l } else { &entry_r };
+        let entry1 = if sv.spl_ldatum_exists {
+            &entry_l
+        } else {
+            &entry_r
+        };
         let entry1 = *entry1;
         let penalty1 = gistpenalty(mcx, giststate, attno, &entry1, false, &entry_sl, false)?;
         let penalty2 = gistpenalty(mcx, giststate, attno, &entry1, false, &entry_sr, false)?;

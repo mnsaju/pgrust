@@ -25,7 +25,8 @@ impl<'mcx> StringInfo<'mcx> {
     pub fn with_capacity_in(mcx: Mcx<'mcx>, initsize: usize) -> PgResult<Self> {
         debug_assert!(initsize >= 1 && initsize <= MAX_ALLOC_SIZE);
         let mut data = PgVec::new_in(mcx);
-        data.try_reserve_exact(initsize).map_err(|_| mcx.oom(initsize))?;
+        data.try_reserve_exact(initsize)
+            .map_err(|_| mcx.oom(initsize))?;
         // SAFETY: capacity >= initsize >= 1.
         unsafe { *data.as_mut_ptr() = 0 };
         Ok(StringInfo { data, cursor: 0 })

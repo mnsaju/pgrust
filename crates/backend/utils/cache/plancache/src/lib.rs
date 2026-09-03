@@ -338,7 +338,13 @@ pub fn CreateCachedPlanForQuery(
     commandTag: CommandTag,
 ) -> PgResult<CachedPlanSourceHandle> {
     let reval = parser_analyze::query_requires_rewrite_plan(analyzed);
-    create_cached_plan_flags(None, Some(analyzed), (reval, reval, false), query_string, commandTag)
+    create_cached_plan_flags(
+        None,
+        Some(analyzed),
+        (reval, reval, false),
+        query_string,
+        commandTag,
+    )
 }
 
 fn create_cached_plan_flags(
@@ -489,7 +495,10 @@ pub fn SaveCachedPlan(h: CachedPlanSourceHandle) -> PgResult<()> {
     ReleaseGenericPlan(h);
     with_cache(|pc| {
         let src = source_mut(pc, h);
-        assert!(src.is_complete && !src.is_saved, "SaveCachedPlan: bad order");
+        assert!(
+            src.is_complete && !src.is_saved,
+            "SaveCachedPlan: bad order"
+        );
         src.is_saved = true;
         pc.saved_plan_list.push(h);
     });
@@ -557,9 +566,11 @@ pub fn ReleaseCachedPlan(cplan: CachedPlanHandle) {
             let mut ctxs = vec![plan.plan_ctx];
             // Last survivor of a dead source reclaims the tombstone.
             let (sidx, sgen) = decode(plan.source.0);
-            let src_dead = pc.sources.get(sidx).and_then(Option::as_ref).is_some_and(|s| {
-                s.handle_gen == sgen && s.dead
-            });
+            let src_dead = pc
+                .sources
+                .get(sidx)
+                .and_then(Option::as_ref)
+                .is_some_and(|s| s.handle_gen == sgen && s.dead);
             if src_dead && !pc.plans.iter().flatten().any(|p| p.source == plan.source) {
                 let src = pc.sources[sidx].take().expect("checked above");
                 pc.source_free.push(sidx as u32);
@@ -696,7 +707,10 @@ pub fn SourceQueryList(h: CachedPlanSourceHandle) -> &'static [Query<'static>] {
 /// Valid while the caller holds a refcount on `cplan` (C: cplan->stmt_list).
 pub fn CachedPlanStmtList(cplan: CachedPlanHandle) -> &'static [PlannedStmt<'static>] {
     with_plan(cplan, |plan| {
-        assert!(plan.refcount > 0, "CachedPlanStmtList: caller holds no refcount");
+        assert!(
+            plan.refcount > 0,
+            "CachedPlanStmtList: caller holds no refcount"
+        );
         plan.stmt_list
     })
 }
@@ -799,7 +813,9 @@ fn RevalidateCachedQuery(
     if is_valid {
         let matches = match matcher.as_mut() {
             Some(m) => catalog_namespace::SearchPathMatchesCurrentEnvironment(m)?,
-            None => panic!("RevalidateCachedQuery: valid revalidatable source lost its search_path"),
+            None => {
+                panic!("RevalidateCachedQuery: valid revalidatable source lost its search_path")
+            }
         };
         with_cache(|pc| {
             let src = source_mut(pc, h);
@@ -832,7 +848,12 @@ fn RevalidateCachedQuery(
     }
 
     let (reanalyze, post_rewrite, raw_parse_tree, analyzed_parse_tree) = with_source(h, |src| {
-        (src.reanalyze, src.post_rewrite, src.raw_parse_tree, src.analyzed_parse_tree)
+        (
+            src.reanalyze,
+            src.post_rewrite,
+            src.raw_parse_tree,
+            src.analyzed_parse_tree,
+        )
     });
 
     // An analysis error below leaves the source invalid with empty lists
@@ -847,7 +868,13 @@ fn RevalidateCachedQuery(
         src.relation_oids = &[];
         src.inval_items = &[];
         src.search_path = None;
-        (src.query_ctx, src.query_string, src.param_types, src.fixed_result, src.source_ctx)
+        (
+            src.query_ctx,
+            src.query_string,
+            src.param_types,
+            src.fixed_result,
+            src.source_ctx,
+        )
     });
 
     // Re-analysis probes catalogs: C pushes a transaction snapshot if none set.
@@ -897,7 +924,13 @@ fn RevalidateCachedQuery(
         let inval_items = mcx::vec_borrow_in(qmcx, items)?;
         let search_path = catalog_namespace::GetSearchPathMatcher(qmcx)?;
         let result_desc = plan_cache_compute_result_desc(ctx_mcx(source_ctx), query_list)?;
-        Ok((query_list, relation_oids, inval_items, search_path, result_desc))
+        Ok((
+            query_list,
+            relation_oids,
+            inval_items,
+            search_path,
+            result_desc,
+        ))
     });
     let (query_list, relation_oids, inval_items, search_path, result_desc) = match rebuilt {
         Ok(r) => r,
@@ -963,7 +996,11 @@ fn copy_raw_stmt_in<'mcx>(mcx: Mcx<'mcx>, raw: &RawStmt<'_>) -> PgResult<&'mcx R
     };
     mcx::alloc_leak_in(
         mcx,
-        RawStmt { stmt, stmt_location: raw.stmt_location, stmt_len: raw.stmt_len },
+        RawStmt {
+            stmt,
+            stmt_location: raw.stmt_location,
+            stmt_len: raw.stmt_len,
+        },
     )
 }
 
@@ -1079,7 +1116,12 @@ fn BuildCachedPlan(
         RevalidateCachedQuery(h, queryEnv, false)?;
     }
     let (query_list, query_string, cursor_options, requires_snapshot) = with_source(h, |src| {
-        (src.query_list, src.query_string, src.cursor_options, src.requires_snapshot)
+        (
+            src.query_list,
+            src.query_string,
+            src.cursor_options,
+            src.requires_snapshot,
+        )
     });
 
     let plan_ctx = leak_ctx("CachedPlan");
@@ -1289,7 +1331,9 @@ fn AcquireExecutorLocks(stmt_list: &[PlannedStmt<'static>], acquire: bool) -> Pg
             continue;
         }
         for rte_node in stmt.rtable.iter() {
-            let rte = rte_node.as_range_tbl_entry().expect("rtable holds RangeTblEntry");
+            let rte = rte_node
+                .as_range_tbl_entry()
+                .expect("rtable holds RangeTblEntry");
             let lockable = rte.rtekind == RTEKind::RTE_RELATION
                 || (rte.rtekind == RTEKind::RTE_SUBQUERY && rte.relid != InvalidOid);
             if !lockable {
@@ -1312,7 +1356,9 @@ fn lock_relation(rte: &RangeTblEntry<'_>, acquire: bool) -> PgResult<()> {
 fn ScanQueryForLocks(query: &Query<'static>, acquire: bool) -> PgResult<()> {
     debug_assert!(query.commandType != CmdType::CMD_UTILITY);
     for rte_node in query.rtable.iter() {
-        let rte = rte_node.as_range_tbl_entry().expect("rtable holds RangeTblEntry");
+        let rte = rte_node
+            .as_range_tbl_entry()
+            .expect("rtable holds RangeTblEntry");
         match rte.rtekind {
             RTEKind::RTE_RELATION => lock_relation(rte, acquire)?,
             RTEKind::RTE_SUBQUERY => {
@@ -1326,7 +1372,10 @@ fn ScanQueryForLocks(query: &Query<'static>, acquire: bool) -> PgResult<()> {
     }
     for cte_node in &query.cteList {
         let cte = cte_node.as_common_table_expr().expect("cteList cell");
-        let ctequery = cte.ctequery.and_then(|n| n.as_query()).expect("analyzed CTE query");
+        let ctequery = cte
+            .ctequery
+            .and_then(|n| n.as_query())
+            .expect("analyzed CTE query");
         ScanQueryForLocks(ctequery, acquire)?;
     }
     if query.hasSubLinks {
@@ -1344,7 +1393,9 @@ where
 {
     walk_query_expr_nodes(query, &mut |node| {
         if let Some(sl) = node.as_sub_link() {
-            f(sl.subselect.as_query().expect("analyzed sublink sub-select"))?;
+            f(sl.subselect
+                .as_query()
+                .expect("analyzed sublink sub-select"))?;
         }
         Ok(())
     })
@@ -1460,7 +1511,10 @@ fn extract_query_deps(
 ) -> PgResult<()> {
     for cte_node in &query.cteList {
         let cte = cte_node.as_common_table_expr().expect("cteList cell");
-        let ctequery = cte.ctequery.and_then(|n| n.as_query()).expect("analyzed CTE query");
+        let ctequery = cte
+            .ctequery
+            .and_then(|n| n.as_query())
+            .expect("analyzed CTE query");
         extract_query_deps(ctequery, out, items)?;
     }
     // extract_query_dependencies_walker runs fix_expr_common on every node:
@@ -1470,15 +1524,15 @@ fn extract_query_deps(
     // one.
     walk_query_expr_nodes(query, &mut |node| {
         if let Some(c) = node.as_const() {
-            if (c.consttype == REGCLASSOID || c.consttype == types_core::OIDOID)
-                && !c.constisnull
-            {
+            if (c.consttype == REGCLASSOID || c.consttype == types_core::OIDOID) && !c.constisnull {
                 out.try_reserve(1).map_err(|_| mcx_oom(out))?;
                 out.push(c.constvalue.as_u32());
             }
         } else if let Some(sl) = node.as_sub_link() {
             extract_query_deps(
-                sl.subselect.as_query().expect("analyzed sublink sub-select"),
+                sl.subselect
+                    .as_query()
+                    .expect("analyzed sublink sub-select"),
                 out,
                 items,
             )?;
@@ -1508,7 +1562,9 @@ fn extract_query_deps(
         Ok(())
     })?;
     for rte_node in query.rtable.iter() {
-        let rte = rte_node.as_range_tbl_entry().expect("rtable holds RangeTblEntry");
+        let rte = rte_node
+            .as_range_tbl_entry()
+            .expect("rtable holds RangeTblEntry");
         match rte.rtekind {
             RTEKind::RTE_RELATION => {
                 out.try_reserve(1).map_err(|_| mcx_oom(out))?;
@@ -1519,11 +1575,7 @@ fn extract_query_deps(
                     out.try_reserve(1).map_err(|_| mcx_oom(out))?;
                     out.push(rte.relid);
                 }
-                extract_query_deps(
-                    rte.subquery.expect("RTE_SUBQUERY has subquery"),
-                    out,
-                    items,
-                )?;
+                extract_query_deps(rte.subquery.expect("RTE_SUBQUERY has subquery"), out, items)?;
             }
             // A transition-table RTE carries the base relation's OID
             // (addRangeTableEntryForENR: rte->relid = enrmd->reliddesc) so
@@ -1559,7 +1611,9 @@ fn choose_portal_strategy_queries(query_list: &[Query<'static>]) -> PortalStrate
                 return PORTAL_ONE_SELECT;
             }
             if query.commandType == CmdType::CMD_UTILITY {
-                let u = query.utilityStmt.expect("CMD_UTILITY query has utilityStmt");
+                let u = query
+                    .utilityStmt
+                    .expect("CMD_UTILITY query has utilityStmt");
                 if utility_seams::utility_returns_tuples::call(u) {
                     return PORTAL_UTIL_SELECT;
                 }
@@ -1601,10 +1655,15 @@ fn plan_cache_compute_result_desc(
                 .iter()
                 .find(|q| q.canSetTag)
                 .expect("ONE_RETURNING has a canSetTag query");
-            Ok(Some(execscan::exec_clean_type_from_tl(mcx, &query.returningList)?))
+            Ok(Some(execscan::exec_clean_type_from_tl(
+                mcx,
+                &query.returningList,
+            )?))
         }
         PORTAL_UTIL_SELECT => {
-            let u = query_list[0].utilityStmt.expect("CMD_UTILITY query has utilityStmt");
+            let u = query_list[0]
+                .utilityStmt
+                .expect("CMD_UTILITY query has utilityStmt");
             utility_seams::utility_tuple_descriptor::call(u)
         }
         PORTAL_MULTI_QUERY => Ok(None),
@@ -1652,7 +1711,9 @@ pub fn CachedPlanGetTargetList<'mcx>(
     out.try_reserve(primary.targetList.len())
         .map_err(|_| mcx.oom(primary.targetList.len()))?;
     for node in primary.targetList.iter() {
-        let tle = node.as_target_entry().expect("targetlist entry is a TargetEntry");
+        let tle = node
+            .as_target_entry()
+            .expect("targetlist entry is a TargetEntry");
         out.push(pquery_seams::TargetEntrySummary {
             resjunk: tle.resjunk,
             resorigtbl: tle.resorigtbl,
@@ -1798,9 +1859,11 @@ pub fn PlanCacheObjectCallback(_arg: Datum, cacheid: i32, hashvalue: u32) {
                 // Source-side invalItems (extract_query_dependencies):
                 // invalidate the querytree, forcing re-analysis of the
                 // retained raw tree (plancache.c PlanCacheObjectCallback).
-                if src.inval_items.iter().any(|&(cid, hv)| {
-                    cid == cacheid && (hashvalue == 0 || hv == hashvalue)
-                }) {
+                if src
+                    .inval_items
+                    .iter()
+                    .any(|&(cid, hv)| cid == cacheid && (hashvalue == 0 || hv == hashvalue))
+                {
                     if let Some(gplan) = invalidate_source_entry(src) {
                         plan_mut(pc, gplan).is_valid = false;
                     }
@@ -1823,8 +1886,9 @@ fn stmt_list_matches_inval(stmt_list: &[PlannedStmt<'_>], cacheid: i32, hashvalu
     stmt_list.iter().any(|stmt| {
         stmt.commandType != CmdType::CMD_UTILITY
             && stmt.invalItems.iter().any(|node| {
-                let item =
-                    node.as_plan_inval_item().expect("invalItems holds PlanInvalItem");
+                let item = node
+                    .as_plan_inval_item()
+                    .expect("invalItems holds PlanInvalItem");
                 item.cacheId == cacheid && (hashvalue == 0 || item.hashValue == hashvalue)
             })
     })

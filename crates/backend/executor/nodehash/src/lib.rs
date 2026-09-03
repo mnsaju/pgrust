@@ -18,7 +18,7 @@ use ::types_core::Oid;
 use ::types_error::{PgError, PgResult};
 use ::types_nodes::plannodes::Hash;
 use ::types_slot::TupleSlotKind;
-use ::types_tuple::{MinimalTupleData, TupleDescData, SizeofMinimalTupleHeader};
+use ::types_tuple::{MinimalTupleData, SizeofMinimalTupleHeader, TupleDescData};
 
 pub fn init_seams() {}
 
@@ -107,12 +107,7 @@ impl<'mcx> ProbeBloom<'mcx> {
     }
 
     /// Hashes match the Hash32Var kernel exactly: a miss proves no match.
-    pub fn sel_hash32_low32(
-        &self,
-        values: &[::datum::Datum],
-        isnull: &[bool],
-        sel: &mut [u64],
-    ) {
+    pub fn sel_hash32_low32(&self, values: &[::datum::Datum], isnull: &[bool], sel: &mut [u64]) {
         debug_assert!(values.len() == isnull.len() && sel.len() >= values.len().div_ceil(64));
         for (w, (vch, nch)) in values.chunks(64).zip(isnull.chunks(64)).enumerate() {
             let mut word = 0u64;
@@ -307,10 +302,18 @@ impl<'mcx> HashJoinTable<'mcx> {
                 let id = chunks.len() as u32;
                 if chunk_head != END {
                     let head_next = chunks[chunk_head as usize].next;
-                    chunks.push(ChunkMeta { next: head_next, used: size, maxlen: size });
+                    chunks.push(ChunkMeta {
+                        next: head_next,
+                        used: size,
+                        maxlen: size,
+                    });
                     chunks[chunk_head as usize].next = id;
                 } else {
-                    chunks.push(ChunkMeta { next: END, used: size, maxlen: size });
+                    chunks.push(ChunkMeta {
+                        next: END,
+                        used: size,
+                        maxlen: size,
+                    });
                     chunk_head = id;
                 }
                 id
@@ -381,7 +384,11 @@ impl<'mcx> HashJoinTable<'mcx> {
                     t.col as i32 + 1,
                     &mut isnull,
                 );
-                if isnull { NULL_KEY } else { v.as_i32() as i64 }
+                if isnull {
+                    NULL_KEY
+                } else {
+                    v.as_i32() as i64
+                }
             }
             None => 0,
         };
@@ -463,8 +470,7 @@ impl<'mcx> HashJoinTable<'mcx> {
             if self.space_used > self.space_peak {
                 self.space_peak = self.space_used;
             }
-            if self.space_used
-                + self.nbuckets_optimal as usize * core::mem::size_of::<usize>()
+            if self.space_used + self.nbuckets_optimal as usize * core::mem::size_of::<usize>()
                 > self.space_allowed
             {
                 self.increase_num_batches(query_mcx)?;
@@ -472,8 +478,7 @@ impl<'mcx> HashJoinTable<'mcx> {
         } else {
             debug_assert!(batchno > self.curbatch);
             let (slot, scratch_mcx) = estate.slot_and_per_tuple_mcx(slot_id, scratch_ecxt);
-            let fetched =
-                exectuples::exec_fetch_slot_minimal_tuple(slot, query_mcx, scratch_mcx)?;
+            let fetched = exectuples::exec_fetch_slot_minimal_tuple(slot, query_mcx, scratch_mcx)?;
             let (ptr, t_len): (*const u8, u32) = match &fetched {
                 exectuples::FetchedMinimalTuple::Slot(m, _) => {
                     // SAFETY: live stored image; header read.
@@ -526,7 +531,8 @@ impl<'mcx> HashJoinTable<'mcx> {
             self.log2_nbuckets = self.log2_nbuckets_optimal;
         }
         self.buckets.clear();
-        self.buckets.resize(self.nbuckets as usize, core::ptr::null_mut());
+        self.buckets
+            .resize(self.nbuckets as usize, core::ptr::null_mut());
 
         let order = self.chunk_walk_order(mcx)?;
         // Relisting kept tuples in walk order reproduces C's re-dense_alloc order.
@@ -583,7 +589,8 @@ impl<'mcx> HashJoinTable<'mcx> {
         self.nbuckets = self.nbuckets_optimal;
         self.log2_nbuckets = self.log2_nbuckets_optimal;
         self.buckets.clear();
-        self.buckets.resize(self.nbuckets as usize, core::ptr::null_mut());
+        self.buckets
+            .resize(self.nbuckets as usize, core::ptr::null_mut());
         let order = self.chunk_walk_order(mcx)?;
         for &ix in order.iter() {
             let hdr = self.tuples[ix as usize];
@@ -629,7 +636,9 @@ impl<'mcx> HashJoinTable<'mcx> {
 
     // Dense arrays are never charged to space_used (EXPLAIN parity).
     fn seat_dense(&mut self, mcx: Mcx<'mcx>) -> PgResult<()> {
-        let Some(t) = self.track.take() else { return Ok(()) };
+        let Some(t) = self.track.take() else {
+            return Ok(());
+        };
         if self.nbatch != 1 || !t.any || self.tuples.is_empty() {
             return Ok(());
         }
@@ -652,7 +661,11 @@ impl<'mcx> HashJoinTable<'mcx> {
             next[i] = heads[idx];
             heads[idx] = i as u32;
         }
-        self.dense = Some(DenseTable { min: t.min, heads, next });
+        self.dense = Some(DenseTable {
+            min: t.min,
+            heads,
+            next,
+        });
         Ok(())
     }
 
@@ -673,7 +686,8 @@ impl<'mcx> HashJoinTable<'mcx> {
         self.dense = None;
         self.tuples.clear();
         self.buckets.clear();
-        self.buckets.resize(self.nbuckets as usize, core::ptr::null_mut());
+        self.buckets
+            .resize(self.nbuckets as usize, core::ptr::null_mut());
         self.space_used = 0;
     }
 
@@ -892,7 +906,11 @@ pub fn exec_init_hash<'mcx>(
     // (nodeHash.c: rows = parallel_aware ? rows_total : plan_rows) — by the
     // PLAN flag, even when the table ends up private because no parallel
     // context materialized at runtime (exec_hash_table_create).
-    let ntuples_est = if node.plan.parallel_aware { node.rows_total } else { child.plan_rows };
+    let ntuples_est = if node.plan.parallel_aware {
+        node.rows_total
+    } else {
+        child.plan_rows
+    };
 
     Ok(HashState {
         hash_expr,
@@ -932,9 +950,20 @@ pub fn exec_hash_table_create<'mcx>(
     let mcx = estate.es_query_cxt;
     let (nbuckets, nbatch, _num_skew_mcvs, space_allowed) =
         exec_choose_hash_table_size_full(hs.ntuples_est, hs.tupwidth, true, false, 0);
-    let form_plan = hs.inner_desc.as_ref().and_then(|d| MinimalFormPlan::try_new(d));
+    let form_plan = hs
+        .inner_desc
+        .as_ref()
+        .and_then(|d| MinimalFormPlan::try_new(d));
     let bloom_est = want_filter.then_some(hs.ntuples_est);
-    HashJoinTable::create(mcx, estate, nbuckets, nbatch, space_allowed, form_plan, bloom_est)
+    HashJoinTable::create(
+        mcx,
+        estate,
+        nbuckets,
+        nbatch,
+        space_allowed,
+        form_plan,
+        bloom_est,
+    )
 }
 
 #[inline(always)]
@@ -976,7 +1005,10 @@ pub fn multi_exec_hash<'mcx, C: HashBuildInput<'mcx>>(
         };
         hash_insert_slot(hs, estate, slot_id)?;
     }
-    hs.table.as_mut().expect("hash table created").finish_build(mcx)?;
+    hs.table
+        .as_mut()
+        .expect("hash table created")
+        .finish_build(mcx)?;
     Ok(())
 }
 
@@ -1007,7 +1039,10 @@ pub fn multi_exec_hash_batched<'mcx, S: HashBuildBatchSource<'mcx>>(
             hash_insert_slot(hs, estate, slot_id)
         })?;
     }
-    hs.table.as_mut().expect("hash table created").finish_build(mcx)?;
+    hs.table
+        .as_mut()
+        .expect("hash table created")
+        .finish_build(mcx)?;
     Ok(())
 }
 
@@ -1038,7 +1073,10 @@ pub fn lane_build_finish<'mcx>(
     estate: &mut EStateData<'mcx>,
 ) -> PgResult<()> {
     let mcx = estate.es_query_cxt;
-    hs.table.as_mut().expect("hash table created").finish_build(mcx)
+    hs.table
+        .as_mut()
+        .expect("hash table created")
+        .finish_build(mcx)
 }
 
 /// Lane-v2 admission, build side: the per-row build hash must be subplan- and
@@ -1136,7 +1174,11 @@ pub fn estimate_runtime_hj_build_peak_bytes(ntuples: f64, tupwidth: i32) -> u64 
     let image = maxalign(SizeofMinimalTupleHeader) + maxalign(tupwidth.max(0) as usize);
     let per_tuple = (3 * 8 + 8 + image) as f64;
     // The arm's seal-precheck bucket arithmetic, verbatim.
-    let n = if ntuples >= (1u64 << 31) as f64 { 1u64 << 31 } else { ntuples as u64 };
+    let n = if ntuples >= (1u64 << 31) as f64 {
+        1u64 << 31
+    } else {
+        ntuples as u64
+    };
     let buckets = 8 * n.max(1).next_power_of_two().clamp(1024, 1 << 31);
     let peak = ntuples * per_tuple * 5.0 / 4.0 + buckets as f64;
     if peak < u64::MAX as f64 {
@@ -1174,7 +1216,8 @@ pub fn exec_choose_hash_table_size_full(
 ) -> (u32, i32, i32, usize) {
     let ntuples = if ntuples <= 0.0 { 1000.0 } else { ntuples };
 
-    let tupsize = HJTUPLE_OVERHEAD + maxalign(SizeofMinimalTupleHeader) + maxalign(tupwidth as usize);
+    let tupsize =
+        HJTUPLE_OVERHEAD + maxalign(SizeofMinimalTupleHeader) + maxalign(tupwidth as usize);
     let inner_rel_bytes = ntuples * tupsize as f64;
 
     let mut hash_table_bytes = get_hash_memory_limit();
@@ -1188,8 +1231,10 @@ pub fn exec_choose_hash_table_size_full(
 
     let mut num_skew_mcvs: i64 = 0;
     if useskew {
-        let bytes_per_mcv =
-            tupsize + (8 * core::mem::size_of::<usize>()) + core::mem::size_of::<i32>() + SKEW_BUCKET_OVERHEAD;
+        let bytes_per_mcv = tupsize
+            + (8 * core::mem::size_of::<usize>())
+            + core::mem::size_of::<i32>()
+            + SKEW_BUCKET_OVERHEAD;
         let mut skew_mcvs = hash_table_bytes / bytes_per_mcv;
         skew_mcvs = (skew_mcvs * SKEW_HASH_MEM_PERCENT) / 100;
         skew_mcvs = skew_mcvs.min(i32::MAX as usize);
@@ -1215,7 +1260,11 @@ pub fn exec_choose_hash_table_size_full(
     if inner_rel_bytes + bucket_bytes as f64 > hash_table_bytes as f64 {
         if try_combined_hash_mem {
             return exec_choose_hash_table_size_full(
-                ntuples, tupwidth, useskew, false, parallel_workers,
+                ntuples,
+                tupwidth,
+                useskew,
+                false,
+                parallel_workers,
             );
         }
         let bucket_size = tupsize * (NTUP_PER_BUCKET as usize) + SIZEOF_HASHJOINTUPLE;
@@ -1250,7 +1299,12 @@ pub fn exec_choose_hash_table_size_full(
         nbatch /= 2;
     }
 
-    (nbuckets as u32, nbatch as i32, num_skew_mcvs as i32, space_allowed)
+    (
+        nbuckets as u32,
+        nbatch as i32,
+        num_skew_mcvs as i32,
+        space_allowed,
+    )
 }
 
 #[inline]

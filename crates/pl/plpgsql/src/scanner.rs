@@ -7,7 +7,7 @@ use scan_fgram::{tokens, CoreVal, CoreYYSTYPE, Scanner, ScannerSettings};
 use types_error::{PgError, PgResult};
 
 pub use tokens::{
-    COLON_EQUALS, EQUALS_GREATER, FCONST, ICONST, IDENT, Op, PARAM, SCONST, TYPECAST, UIDENT,
+    Op, COLON_EQUALS, EQUALS_GREATER, FCONST, ICONST, IDENT, PARAM, SCONST, TYPECAST, UIDENT,
 };
 
 pub const T_WORD: i32 = 275;
@@ -244,7 +244,11 @@ pub fn scan_keyword_lookup(s: &str, keywords: &[(&'static str, i32)]) -> Option<
     }
     let mut buf = [0u8; 20];
     for (i, &b) in s.as_bytes().iter().enumerate() {
-        buf[i] = if b.is_ascii_uppercase() { b + (b'a' - b'A') } else { b };
+        buf[i] = if b.is_ascii_uppercase() {
+            b + (b'a' - b'A')
+        } else {
+            b
+        };
     }
     let lower = &buf[..s.len()];
     keywords
@@ -330,7 +334,8 @@ fn is_identifier_word(s: &str) -> bool {
     let b = s.as_bytes();
     !b.is_empty()
         && (b[0].is_ascii_alphabetic() || b[0] == b'_')
-        && b.iter().all(|&c| c.is_ascii_alphanumeric() || c == b'_' || c == b'$')
+        && b.iter()
+            .all(|&c| c.is_ascii_alphanumeric() || c == b'_' || c == b'$')
 }
 
 pub struct PlScanner<'mcx> {
@@ -447,7 +452,11 @@ impl<'mcx> PlScanner<'mcx> {
         lloc: i32,
         leng: i32,
     ) -> PgResult<()> {
-        let aux = TokenAux { lval: lval.clone(), lloc, leng };
+        let aux = TokenAux {
+            lval: lval.clone(),
+            lloc,
+            leng,
+        };
         self.push_back(token, &aux)
     }
 
@@ -492,10 +501,7 @@ impl<'mcx> PlScanner<'mcx> {
     }
 
     // plpgsql_yylex (pl_scanner.c); returns (token, lval, lloc, leng).
-    pub fn yylex(
-        &mut self,
-        resolver: &mut dyn WordResolver,
-    ) -> PgResult<(i32, Yystype, i32, i32)> {
+    pub fn yylex(&mut self, resolver: &mut dyn WordResolver) -> PgResult<(i32, Yystype, i32, i32)> {
         let mut aux1 = TokenAux::default();
         let mut tok1 = self.internal_yylex(&mut aux1)?;
 
@@ -553,11 +559,8 @@ impl<'mcx> PlScanner<'mcx> {
                     || tok2 == COLON_EQUALS
                     || tok2 == ('[' as i32);
                 let yytxt = self.span_text(aux1.lloc, aux1.lloc + aux1.leng).to_string();
-                let res = resolver.parse_word(
-                    aux1.lval.str_.as_deref().unwrap_or(""),
-                    &yytxt,
-                    lookup,
-                )?;
+                let res =
+                    resolver.parse_word(aux1.lval.str_.as_deref().unwrap_or(""), &yytxt, lookup)?;
                 tok1 = self.finish_word(&mut aux1, res);
             }
         }
@@ -608,11 +611,7 @@ impl<'mcx> PlScanner<'mcx> {
 
     /// plpgsql_scanner_errposition (pl_scanner.c): 1-based char position.
     pub fn errposition(&self, location: i32) -> i32 {
-        parser_small1::parser_errposition_source(
-            Some(self.scanbuf),
-            location,
-            wchar::PG_UTF8,
-        )
+        parser_small1::parser_errposition_source(Some(self.scanbuf), location, wchar::PG_UTF8)
     }
 
     /// plpgsql_yyerror: "syntax error at or near ..." with position.

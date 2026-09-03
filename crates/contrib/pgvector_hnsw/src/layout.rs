@@ -15,7 +15,8 @@ pub const HNSW_MAX_SIZE: usize =
 pub const HNSW_TUPLE_ALLOC_SIZE: usize = BLCKSZ;
 
 // offsetof(HnswElementTupleData, data): 4 flag bytes + 10 heaptids + neighbortid + u16.
-pub const ELEMENT_DATA_OFFSET: usize = 4 + HNSW_HEAPTIDS * SIZE_OF_ITEM_POINTER + SIZE_OF_ITEM_POINTER + 2;
+pub const ELEMENT_DATA_OFFSET: usize =
+    4 + HNSW_HEAPTIDS * SIZE_OF_ITEM_POINTER + SIZE_OF_ITEM_POINTER + 2;
 // offsetof(HnswNeighborTupleData, indextids).
 pub const NEIGHBOR_TIDS_OFFSET: usize = 4;
 
@@ -33,7 +34,10 @@ pub const fn neighbor_tuple_size(level: u8, m: i32) -> usize {
 
 // HnswGetMaxLevel (hnsw.h) — integer division order preserved.
 pub fn hnsw_get_max_level(m: i32) -> i32 {
-    let v = (BLCKSZ - SIZE_OF_PAGE_HEADER - HNSW_PAGE_OPAQUE_SIZE - NEIGHBOR_TIDS_OFFSET
+    let v = (BLCKSZ
+        - SIZE_OF_PAGE_HEADER
+        - HNSW_PAGE_OPAQUE_SIZE
+        - NEIGHBOR_TIDS_OFFSET
         - SIZE_OF_ITEM_ID)
         / SIZE_OF_ITEM_POINTER
         / (m as usize);

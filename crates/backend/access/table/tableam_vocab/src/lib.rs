@@ -197,7 +197,11 @@ pub struct WriteMultiInsertBuffer<'mcx> {
 
 impl<'mcx> WriteMultiInsertBuffer<'mcx> {
     pub fn new() -> Self {
-        WriteMultiInsertBuffer { slots: Vec::new(), nused: 0, bytes: 0 }
+        WriteMultiInsertBuffer {
+            slots: Vec::new(),
+            nused: 0,
+            bytes: 0,
+        }
     }
 }
 

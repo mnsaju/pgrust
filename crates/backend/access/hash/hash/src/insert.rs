@@ -2,7 +2,9 @@
 
 use ::bufmgr_seams as bm;
 use ::types_core::{Buffer, InvalidBlockNumber, OffsetNumber, BLCKSZ};
-use ::types_error::{PgError, PgResult, ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_PROGRAM_LIMIT_EXCEEDED};
+use ::types_error::{
+    PgError, PgResult, ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_PROGRAM_LIMIT_EXCEEDED,
+};
 use ::types_hash::*;
 use ::types_rel::Relation;
 use ::types_storage::bufpage::SizeOfPageHeaderData;
@@ -10,9 +12,9 @@ use ::xloginsert_seams::{XLogRegBuf, REGBUF_STANDARD};
 
 use crate::ovfl::_hash_addovflpage;
 use crate::page::{
-    page_get_free_space_for_multiple_tuples, page_mut, page_opaque, page_ref, with_meta,
-    with_meta_mut, _hash_dropbuf, _hash_expandtable, _hash_finish_split, _hash_getbuf,
-    _hash_getbucketbuf_from_hashkey, _hash_relbuf, with_cached_metap,
+    _hash_dropbuf, _hash_expandtable, _hash_finish_split, _hash_getbucketbuf_from_hashkey,
+    _hash_getbuf, _hash_relbuf, page_get_free_space_for_multiple_tuples, page_mut, page_opaque,
+    page_ref, with_cached_metap, with_meta, with_meta_mut,
 };
 use crate::util::{_hash_binsearch, _hash_checkpage, _hash_get_indextuple_hashkey};
 use crate::{relation_needs_wal, RM_HASH};
@@ -129,8 +131,18 @@ pub fn _hash_doinsert(
                 0,
                 &[&xlrec],
                 &[
-                    XLogRegBuf { block_id: 0, buffer: buf, flags: REGBUF_STANDARD, bufdata: &[itup] },
-                    XLogRegBuf { block_id: 1, buffer: metabuf, flags: REGBUF_STANDARD, bufdata: &[] },
+                    XLogRegBuf {
+                        block_id: 0,
+                        buffer: buf,
+                        flags: REGBUF_STANDARD,
+                        bufdata: &[itup],
+                    },
+                    XLogRegBuf {
+                        block_id: 1,
+                        buffer: metabuf,
+                        flags: REGBUF_STANDARD,
+                        bufdata: &[],
+                    },
                 ],
             )?;
             // SAFETY: pins + exclusive locks held.
@@ -174,7 +186,8 @@ pub(crate) fn _hash_pgaddtup(
                 let r = page.as_ref();
                 let last = r.item_raw(r.item_id(off - 1)).0;
                 debug_assert!(
-                    _hash_get_indextuple_hashkey(last) <= _hash_get_indextuple_hashkey(itup.as_ptr())
+                    _hash_get_indextuple_hashkey(last)
+                        <= _hash_get_indextuple_hashkey(itup.as_ptr())
                 );
             }
         }
@@ -283,8 +296,18 @@ fn _hash_vacuum_one_page(
                 0,
                 &[&xlrec, &offbytes],
                 &[
-                    XLogRegBuf { block_id: 0, buffer: buf, flags: REGBUF_STANDARD, bufdata: &[] },
-                    XLogRegBuf { block_id: 1, buffer: metabuf, flags: REGBUF_STANDARD, bufdata: &[] },
+                    XLogRegBuf {
+                        block_id: 0,
+                        buffer: buf,
+                        flags: REGBUF_STANDARD,
+                        bufdata: &[],
+                    },
+                    XLogRegBuf {
+                        block_id: 1,
+                        buffer: metabuf,
+                        flags: REGBUF_STANDARD,
+                        bufdata: &[],
+                    },
                 ],
             )?;
             // SAFETY: pins + exclusive locks held.

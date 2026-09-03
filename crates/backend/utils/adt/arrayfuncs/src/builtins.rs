@@ -10,8 +10,8 @@ use ::types_fmgr::{
 };
 
 use crate::foundation::varsize_any;
-use ::mcx::vec_with_capacity_in;
 use crate::io::{array_in, array_out, array_recv, array_send, ArrayIoMeta};
+use ::mcx::vec_with_capacity_in;
 
 // Cached in FmgrInfo.fn_extra: resolved element I/O metadata + proc carrier,
 // keyed by element_type (C's ArrayMetaState fn_extra memo).
@@ -83,9 +83,9 @@ pub(crate) fn arg_array_bytes<'mcx>(
 pub fn fc_array_in(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: catalog arg 0 of array_in is a non-null cstring.
     let s = unsafe { fcinfo.arg_cstring(0) };
-    let string = s.to_str().map_err(|_| {
-        Box::new(PgError::error("invalid UTF-8 in array literal"))
-    })?;
+    let string = s
+        .to_str()
+        .map_err(|_| Box::new(PgError::error("invalid UTF-8 in array literal")))?;
     let element_type = fcinfo.arg(1).as_oid();
     let typmod = fcinfo.arg(2).as_i32();
     let mcx = fcinfo.result_mcx();
@@ -117,7 +117,12 @@ pub fn fc_array_recv(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRe
     // SAFETY: arg 0 of a recv function is a live &mut StringInfo pointer.
     let buf = unsafe { &mut *(fcinfo.arg(0).as_usize() as *mut ::stringinfo::StringInfo<'_>) };
     let flinfo = flinfo.expect("array_recv: NULL flinfo");
-    let ams = cached_meta(flinfo, spec_element_type, IOFuncSelector::IOFunc_receive, true)?;
+    let ams = cached_meta(
+        flinfo,
+        spec_element_type,
+        IOFuncSelector::IOFunc_receive,
+        true,
+    )?;
     let img = array_recv(mcx, buf, &ams.meta, &mut ams.proc, typmod)?;
     byref_result(mcx, &img)
 }
@@ -174,8 +179,8 @@ pub fn fc_array_unnest(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> Pg
         let mcx = fcinfo.result_mcx();
         let array = arg_array_bytes(fcinfo, 0, mcx)?;
         let elemtype = crate::foundation::arr_elemtype(&array);
-        let (elmlen, elmbyval, elmalign) = ::lsyscache::get_typlenbyvalalign(elemtype)
-            .map(|(l, b, a)| (l as i32, b, a as u8))?;
+        let (elmlen, elmbyval, elmalign) =
+            ::lsyscache::get_typlenbyvalalign(elemtype).map(|(l, b, a)| (l as i32, b, a as u8))?;
         let ndim = crate::foundation::arr_ndim(&array);
         let mut dims = [0i32; crate::foundation::MAXDIM];
         for i in 0..ndim as usize {
@@ -279,8 +284,8 @@ pub fn fc_array_agg_transfn(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) 
     let stp: *mut ArrayBuildState<'_> = if fcinfo.args[0].isnull {
         let st = crate::build::init_array_result(aggmcx, arg1_typeid, false)?;
         let layout = core::alloc::Layout::new::<ArrayBuildState<'_>>();
-        let raw = ::mcx::Allocator::allocate(&aggmcx, layout)
-            .map_err(|_| aggmcx.oom(layout.size()))?;
+        let raw =
+            ::mcx::Allocator::allocate(&aggmcx, layout).map_err(|_| aggmcx.oom(layout.size()))?;
         let p: *mut ArrayBuildState<'_> = raw.cast().as_ptr();
         // SAFETY: fresh aggcontext allocation of the exact layout; no drop
         // glue runs (PgVec fields are arena-plain — ForgetSafe).
@@ -478,9 +483,7 @@ fn array_to_text_common(
             }
             let v = crate::io::call1_armed(&mut ams.proc, mcx, d)?;
             // SAFETY: out fns return NUL-terminated cstrings.
-            let cs = unsafe {
-                core::ffi::CStr::from_ptr(v.as_usize() as *const core::ffi::c_char)
-            };
+            let cs = unsafe { core::ffi::CStr::from_ptr(v.as_usize() as *const core::ffi::c_char) };
             if printed {
                 out.extend_from_slice(&sep);
             }
@@ -490,7 +493,7 @@ fn array_to_text_common(
     }
     let total = 4 + out.len();
     let mut img: ::mcx::PgVec<'_, u8> = vec_with_capacity_in(mcx, total)?;
-    ::mcx::vec_append_bytes(&mut img, &(((total as u32) << 2)).to_ne_bytes())?;
+    ::mcx::vec_append_bytes(&mut img, &((total as u32) << 2).to_ne_bytes())?;
     ::mcx::vec_append_bytes(&mut img, &out)?;
     byref_result(mcx, &img)
 }
@@ -516,12 +519,18 @@ pub fn fc_array_to_text_null(
 }
 
 const fn srf(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: true, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: true,
+        func,
+    }
 }
 
 const HASH_RECORD_OID: Oid = 6192;
 const HASH_RECORD_EXTENDED_OID: Oid = 6193;
-
 
 // C array_cat (array_userfuncs.c), hosted with the array machinery it
 // consumes; catalog unit backend-utils-adt-array-user.
@@ -672,7 +681,14 @@ const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrB
 }
 
 const fn agg(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: false, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: false,
+        retset: false,
+        func,
+    }
 }
 
 // Cached in FmgrInfo.fn_extra by the comparison family: the element type's
@@ -692,10 +708,18 @@ fn fresh_elem_cmp(element_type: Oid, eq: bool) -> PgResult<ElemCmpState> {
         ::typcache::TYPECACHE_CMP_PROC_FINFO
     };
     let entry = ::typcache::lookup_type_cache(element_type, flags)?;
-    let finfo = if eq { entry.eq_opr_finfo().clone() } else { entry.cmp_proc_finfo().clone() };
+    let finfo = if eq {
+        entry.eq_opr_finfo().clone()
+    } else {
+        entry.cmp_proc_finfo().clone()
+    };
     if finfo.fn_oid == 0 {
         let name = ::format_type::format_type_be(element_type)?;
-        let what = if eq { "an equality operator" } else { "a comparison function" };
+        let what = if eq {
+            "an equality operator"
+        } else {
+            "a comparison function"
+        };
         return Err(Box::new(
             PgError::error(alloc::format!("could not identify {what} for type {name}"))
                 .with_sqlstate(ERRCODE_UNDEFINED_FUNCTION),
@@ -741,10 +765,7 @@ fn elem_type_mismatch() -> PgResult<Datum> {
     ))
 }
 
-fn array_eq_internal(
-    flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<bool> {
+fn array_eq_internal(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<bool> {
     // By-val result; detoast/deconstruct scratch dies with the call (C's
     // AARR_FREE_IF_COPY), so no armed result frame is required.
     let scratch = ::mcx::MemoryContext::new_bump("array_eq scratch");
@@ -766,12 +787,10 @@ fn array_eq_internal(
     }
     let mut shim_scratch = None;
     let st = resolve_elem_cmp(flinfo, &mut shim_scratch, element_type, true)?;
-    let (vals1, nulls1) = crate::construct::deconstruct_array(
-        mcx, &a1, st.typlen, st.typbyval, st.typalign, true,
-    )?;
-    let (vals2, nulls2) = crate::construct::deconstruct_array(
-        mcx, &a2, st.typlen, st.typbyval, st.typalign, true,
-    )?;
+    let (vals1, nulls1) =
+        crate::construct::deconstruct_array(mcx, &a1, st.typlen, st.typbyval, st.typalign, true)?;
+    let (vals2, nulls2) =
+        crate::construct::deconstruct_array(mcx, &a2, st.typlen, st.typbyval, st.typalign, true)?;
     for i in 0..vals1.len() {
         // Two NULLs are equal; NULL vs not-NULL is unequal (C array_eq).
         if nulls1[i] && nulls2[i] {
@@ -794,10 +813,7 @@ fn array_eq_internal(
     Ok(true)
 }
 
-fn array_cmp_internal(
-    flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<i32> {
+fn array_cmp_internal(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<i32> {
     let scratch = ::mcx::MemoryContext::new_bump("array_cmp scratch");
     let mcx = scratch.mcx();
     let a1 = arg_array_bytes(fcinfo, 0, mcx)?;
@@ -813,12 +829,10 @@ fn array_cmp_internal(
     let nitems2 = ::arrayutils::array_get_n_items(nd2, &dims2)? as usize;
     let mut shim_scratch = None;
     let st = resolve_elem_cmp(flinfo, &mut shim_scratch, element_type, false)?;
-    let (vals1, nulls1) = crate::construct::deconstruct_array(
-        mcx, &a1, st.typlen, st.typbyval, st.typalign, true,
-    )?;
-    let (vals2, nulls2) = crate::construct::deconstruct_array(
-        mcx, &a2, st.typlen, st.typbyval, st.typalign, true,
-    )?;
+    let (vals1, nulls1) =
+        crate::construct::deconstruct_array(mcx, &a1, st.typlen, st.typbyval, st.typalign, true)?;
+    let (vals2, nulls2) =
+        crate::construct::deconstruct_array(mcx, &a2, st.typlen, st.typbyval, st.typalign, true)?;
     for i in 0..nitems1.min(nitems2) {
         // Two NULLs are equal; NULL sorts above not-NULL (C array_cmp).
         if nulls1[i] && nulls2[i] {
@@ -981,7 +995,14 @@ pub fn fc_int2vectorsend(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> 
 }
 
 const fn nb(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: false, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: false,
+        retset: false,
+        func,
+    }
 }
 
 // pg_proc.dat rows for the generic array functions.
@@ -1018,17 +1039,47 @@ pub const ARRAYFUNCS_BUILTINS: &[FmgrBuiltin] = &[
     b(748, "array_ndims", 1, crate::ops::fc_array_ndims),
     b(2091, "array_lower", 2, crate::ops::fc_array_lower),
     b(2092, "array_upper", 2, crate::ops::fc_array_upper),
-    b(3179, "array_cardinality", 1, crate::ops::fc_array_cardinality),
+    b(
+        3179,
+        "array_cardinality",
+        1,
+        crate::ops::fc_array_cardinality,
+    ),
     b(626, "hash_array", 1, crate::ops::fc_hash_array),
-    b(782, "hash_array_extended", 2, crate::ops::fc_hash_array_extended),
+    b(
+        782,
+        "hash_array_extended",
+        2,
+        crate::ops::fc_hash_array_extended,
+    ),
     b(2747, "arrayoverlap", 2, crate::ops::fc_arrayoverlap),
     b(2748, "arraycontains", 2, crate::ops::fc_arraycontains),
     b(2749, "arraycontained", 2, crate::ops::fc_arraycontained),
     nb(3167, "array_remove", 2, crate::ops::fc_array_remove),
     nb(3168, "array_replace", 3, crate::ops::fc_array_replace),
     nb(1193, "array_fill", 2, crate::ops::fc_array_fill),
-    nb(1286, "array_fill_with_lower_bounds", 3, crate::ops::fc_array_fill_with_lower_bounds),
-    srf(1191, "generate_subscripts", 3, crate::ops::fc_generate_subscripts),
-    srf(1192, "generate_subscripts_nodir", 2, crate::ops::fc_generate_subscripts),
-    b(3218, "width_bucket_array", 2, crate::ops::fc_width_bucket_array),
+    nb(
+        1286,
+        "array_fill_with_lower_bounds",
+        3,
+        crate::ops::fc_array_fill_with_lower_bounds,
+    ),
+    srf(
+        1191,
+        "generate_subscripts",
+        3,
+        crate::ops::fc_generate_subscripts,
+    ),
+    srf(
+        1192,
+        "generate_subscripts_nodir",
+        2,
+        crate::ops::fc_generate_subscripts,
+    ),
+    b(
+        3218,
+        "width_bucket_array",
+        2,
+        crate::ops::fc_width_bucket_array,
+    ),
 ];

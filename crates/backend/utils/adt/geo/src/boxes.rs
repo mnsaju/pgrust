@@ -1,10 +1,15 @@
-use ::adt_float::{float8_div, float8_gt, float8_max, float8_mi, float8_min, float8_mul, float8_pl};
+use ::adt_float::{
+    float8_div, float8_gt, float8_max, float8_mi, float8_min, float8_mul, float8_pl,
+};
 use ::types_core::geo::{Point, BOX, CIRCLE, LSEG};
 use ::types_error::PgResult;
 
 use crate::lseg::statlseg_construct;
 use crate::point::{point_add_point, point_div_point, point_mul_point, point_sub_point};
-use crate::{box_contain_box, box_contain_point, box_ov, point_dt, point_eq_point, FPeq, FPge, FPgt, FPle, FPlt};
+use crate::{
+    box_contain_box, box_contain_point, box_ov, point_dt, point_eq_point, FPeq, FPge, FPgt, FPle,
+    FPlt,
+};
 
 pub fn box_construct(pt1: &Point, pt2: &Point) -> BOX {
     let mut result = BOX::default();
@@ -197,7 +202,10 @@ pub fn box_div(b: &BOX, p: &Point) -> PgResult<BOX> {
 }
 
 pub fn point_box(pt: &Point) -> BOX {
-    BOX { high: *pt, low: *pt }
+    BOX {
+        high: *pt,
+        low: *pt,
+    }
 }
 
 pub fn boxes_bound_box(box1: &BOX, box2: &BOX) -> BOX {

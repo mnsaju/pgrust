@@ -351,10 +351,9 @@ impl Repository {
         ] {
             let primary = root.join(name);
             let copy = primary.with_extension("info.copy");
-            let primary_ok = fs::read(&primary)
-                .is_ok_and(|contents| self.info_pair_is_valid(&contents));
-            let copy_ok =
-                fs::read(&copy).is_ok_and(|contents| self.info_pair_is_valid(&contents));
+            let primary_ok =
+                fs::read(&primary).is_ok_and(|contents| self.info_pair_is_valid(&contents));
+            let copy_ok = fs::read(&copy).is_ok_and(|contents| self.info_pair_is_valid(&contents));
             // Primary-or-fallback: the redundant copy exists so that a crash
             // between the two writes in write_info_pair leaves the stanza
             // usable, not bricked (PGRA-005). Only fail if BOTH are
@@ -379,7 +378,9 @@ impl Repository {
         let Ok(text) = std::str::from_utf8(contents) else {
             return false;
         };
-        let has_format = text.lines().any(|line| line == format!("format={FORMAT_VERSION}"));
+        let has_format = text
+            .lines()
+            .any(|line| line == format!("format={FORMAT_VERSION}"));
         let has_stanza = text
             .lines()
             .any(|line| line == format!("stanza={}", self.config.stanza));
@@ -657,13 +658,17 @@ fn copy_atomic_compressing(
 
     let max_out = pglz_max_output(raw.len());
     let mut buffer: Vec<u8> = Vec::with_capacity(max_out);
-    let compressed = pglz_compress_into(&raw, &mut buffer.spare_capacity_mut()[..max_out], &PGLZ_STRATEGY_DEFAULT)
-        .map(|len| {
-            // SAFETY: pglz_compress_into initialized exactly `len` bytes at
-            // the front of buffer's spare capacity.
-            unsafe { buffer.set_len(len) };
-        })
-        .is_some();
+    let compressed = pglz_compress_into(
+        &raw,
+        &mut buffer.spare_capacity_mut()[..max_out],
+        &PGLZ_STRATEGY_DEFAULT,
+    )
+    .map(|len| {
+        // SAFETY: pglz_compress_into initialized exactly `len` bytes at
+        // the front of buffer's spare capacity.
+        unsafe { buffer.set_len(len) };
+    })
+    .is_some();
 
     let (stored_destination, stored_bytes): (PathBuf, &[u8]) = if compressed {
         (with_pglz_suffix(destination), buffer.as_slice())
@@ -684,19 +689,19 @@ fn copy_atomic_compressing(
 /// form, verifying the result against `entry.checksum`/`size` — the
 /// backup-repository-corruption check both `check()` and `restore` need,
 /// so decompression has exactly one implementation.
-fn read_verified_entry(entry: &ManifestEntry, backup_data: &Path) -> Result<Vec<u8>, RepositoryError> {
-    let corrupt = || {
-        RepositoryError::new(format!(
-            "backup file {} is corrupt",
-            entry.path.display()
-        ))
-    };
+fn read_verified_entry(
+    entry: &ManifestEntry,
+    backup_data: &Path,
+) -> Result<Vec<u8>, RepositoryError> {
+    let corrupt =
+        || RepositoryError::new(format!("backup file {} is corrupt", entry.path.display()));
     let source = stored_path(backup_data, &entry.path, entry.compressed);
     let stored = fs::read(&source).map_err(|_| corrupt())?;
     let logical = if entry.compressed {
         let size = entry.size as usize;
         let mut out: Vec<u8> = Vec::with_capacity(size);
-        let n = pglz_decompress(&stored, &mut out.spare_capacity_mut()[..size], true).ok_or_else(corrupt)?;
+        let n = pglz_decompress(&stored, &mut out.spare_capacity_mut()[..size], true)
+            .ok_or_else(corrupt)?;
         // SAFETY: pglz_decompress initialized exactly `n` bytes.
         unsafe { out.set_len(n) };
         out
@@ -715,7 +720,11 @@ fn read_verified_entry(entry: &ManifestEntry, backup_data: &Path) -> Result<Vec<
 /// form (`read_verified_entry`), then write it out with the same
 /// write-then-verify discipline every other data-file write in this module
 /// uses.
-fn restore_entry(entry: &ManifestEntry, backup_data: &Path, target: &Path) -> Result<(), RepositoryError> {
+fn restore_entry(
+    entry: &ManifestEntry,
+    backup_data: &Path,
+    target: &Path,
+) -> Result<(), RepositoryError> {
     let logical = read_verified_entry(entry, backup_data)?;
     write_verified_atomic(target, &logical)
 }
@@ -858,7 +867,11 @@ fn list_files(root: &Path) -> Result<Vec<PathBuf>, RepositoryError> {
     Ok(files)
 }
 
-fn list_files_into(root: &Path, relative: &Path, out: &mut Vec<PathBuf>) -> Result<(), RepositoryError> {
+fn list_files_into(
+    root: &Path,
+    relative: &Path,
+    out: &mut Vec<PathBuf>,
+) -> Result<(), RepositoryError> {
     for entry in fs::read_dir(root.join(relative))? {
         let entry = entry?;
         let name = entry.file_name();
@@ -948,7 +961,11 @@ fn read_manifest(path: &Path) -> Result<Vec<ManifestEntry>, RepositoryError> {
         let compressed = match fields.next() {
             Some("0") => false,
             Some("1") => true,
-            _ => return Err(RepositoryError::new("manifest has an invalid compressed flag")),
+            _ => {
+                return Err(RepositoryError::new(
+                    "manifest has an invalid compressed flag",
+                ))
+            }
         };
         if fields.next().is_some() || !safe_relative_path(Path::new(path)) || checksum.len() != 64 {
             return Err(RepositoryError::new("manifest contains an invalid entry"));
@@ -1102,9 +1119,8 @@ mod tests {
         fs::write(&source, b"wal-segment").expect("wal");
         repository.archive_push(&source).expect("push");
 
-        let sidecar = root.join(
-            "repo/archive/demo/wal/0000000100000000/000000010000000000000002.sha256",
-        );
+        let sidecar =
+            root.join("repo/archive/demo/wal/0000000100000000/000000010000000000000002.sha256");
         assert!(sidecar.exists(), "sidecar written on the initial push");
         fs::remove_file(&sidecar).expect("simulate the crash window");
 
@@ -1151,7 +1167,11 @@ mod tests {
         assert_eq!(copied.size, content.len() as u64);
         assert_eq!(fs::read(&destination).expect("destination"), content);
         assert_eq!(
-            fs::metadata(&destination).expect("metadata").permissions().mode() & 0o777,
+            fs::metadata(&destination)
+                .expect("metadata")
+                .permissions()
+                .mode()
+                & 0o777,
             0o600,
             "copied files must not be group/world readable"
         );
@@ -1254,7 +1274,11 @@ mod tests {
             );
         }
         assert_eq!(
-            fs::metadata(&restored).expect("root metadata").permissions().mode() & 0o777,
+            fs::metadata(&restored)
+                .expect("root metadata")
+                .permissions()
+                .mode()
+                & 0o777,
             0o700,
             "PostgreSQL refuses to start unless PGDATA is exactly u=rwx"
         );
@@ -1426,8 +1450,11 @@ mod tests {
         // file was left untouched: every write in this module (including
         // restore's) always creates its temp file at 0o600 before renaming
         // it into place, so a rewrite would reset the mode.
-        fs::set_permissions(restored.join("base/correct"), fs::Permissions::from_mode(0o644))
-            .expect("mark with a distinctive mode");
+        fs::set_permissions(
+            restored.join("base/correct"),
+            fs::Permissions::from_mode(0o644),
+        )
+        .expect("mark with a distinctive mode");
 
         repository
             .restore(Some(&backup.label), &restored, true)
@@ -1438,10 +1465,7 @@ mod tests {
             .permissions()
             .mode()
             & 0o777;
-        assert_eq!(
-            mode, 0o644,
-            "an already-correct file must not be rewritten"
-        );
+        assert_eq!(mode, 0o644, "an already-correct file must not be rewritten");
         assert_eq!(
             fs::read(restored.join("base/wrong")).expect("fixed file"),
             b"right content too",

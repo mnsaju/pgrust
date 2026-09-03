@@ -180,8 +180,9 @@ pub fn consistent_internal(key: GkRef<'_>, query: InetRef<'_>, strategy: u16, le
     let order = bitncmp(key.addr(), query.addr, minbits);
 
     match strategy {
-        INETSTRAT_SUB | INETSTRAT_SUBEQ | INETSTRAT_OVERLAPS | INETSTRAT_SUPEQ
-        | INETSTRAT_SUP => return order == 0,
+        INETSTRAT_SUB | INETSTRAT_SUBEQ | INETSTRAT_OVERLAPS | INETSTRAT_SUPEQ | INETSTRAT_SUP => {
+            return order == 0
+        }
         INETSTRAT_LT | INETSTRAT_LE => {
             if order > 0 {
                 return false;
@@ -320,7 +321,8 @@ fn fc_inet_gist_compress(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRe
     }
     let key = if entry.key.as_usize() != 0 {
         // SAFETY: non-null leaf key is an inet varlena (never external).
-        let pv = unsafe { ::types_fmgr::PackedVarlena::from_ptr(entry.key.as_usize() as *const u8) };
+        let pv =
+            unsafe { ::types_fmgr::PackedVarlena::from_ptr(entry.key.as_usize() as *const u8) };
         let ip = InetRef::from_payload(pv.data());
         let mut img = [0u8; 20];
         let len = GK_ADDR_OFF + ip.addrsize();
@@ -328,8 +330,7 @@ fn fc_inet_gist_compress(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRe
         img[GK_HDR] = ip.family;
         img[GK_HDR + 1] = ip.bits;
         img[GK_HDR + 2] = ip.maxbits();
-        img[GK_ADDR_OFF..GK_ADDR_OFF + ip.addrsize()]
-            .copy_from_slice(&ip.addr[..ip.addrsize()]);
+        img[GK_ADDR_OFF..GK_ADDR_OFF + ip.addrsize()].copy_from_slice(&ip.addr[..ip.addrsize()]);
         byref_result(fcinfo.result_mcx(), &img[..len])?
     } else {
         Datum::null()

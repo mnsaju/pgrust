@@ -9,7 +9,10 @@ use ::types_fmgr::{FmgrBuiltin, FmgrInfo, FunctionCallInfoBaseData as Fcinfo};
 pub(crate) const WAIT_EVENT_FUNCS_DATA: &str = include_str!("wait_event_funcs_data.tsv");
 
 fn text_datum(mcx: mcx::Mcx<'_>, s: &str) -> PgResult<Datum> {
-    Ok(::types_fmgr::varlena_result(varlena::cstring_to_text(mcx, s.as_bytes())?))
+    Ok(::types_fmgr::varlena_result(varlena::cstring_to_text(
+        mcx,
+        s.as_bytes(),
+    )?))
 }
 
 fn static_rows() -> impl Iterator<Item = (&'static str, &'static str, &'static str)> {
@@ -33,22 +36,31 @@ pub fn fc_pg_get_wait_events(
     let mut srf = funcapi::InitMaterializedSRF(mcx, flinfo, fcinfo, 0)?;
 
     for (ty, name, desc) in static_rows() {
-        let values = [text_datum(mcx, ty)?, text_datum(mcx, name)?, text_datum(mcx, desc)?];
+        let values = [
+            text_datum(mcx, ty)?,
+            text_datum(mcx, name)?,
+            text_datum(mcx, desc)?,
+        ];
         srf.putvalues(&values, &[false; 3])?;
     }
 
     for name in crate::custom::GetWaitEventCustomNames(crate::PG_WAIT_EXTENSION) {
-        let desc =
-            format!("Waiting for custom wait event \"{name}\" defined by extension module");
-        let values =
-            [text_datum(mcx, "Extension")?, text_datum(mcx, &name)?, text_datum(mcx, &desc)?];
+        let desc = format!("Waiting for custom wait event \"{name}\" defined by extension module");
+        let values = [
+            text_datum(mcx, "Extension")?,
+            text_datum(mcx, &name)?,
+            text_datum(mcx, &desc)?,
+        ];
         srf.putvalues(&values, &[false; 3])?;
     }
 
     for name in crate::custom::GetWaitEventCustomNames(crate::PG_WAIT_INJECTIONPOINT) {
         let desc = format!("Waiting for injection point \"{name}\"");
-        let values =
-            [text_datum(mcx, "InjectionPoint")?, text_datum(mcx, &name)?, text_datum(mcx, &desc)?];
+        let values = [
+            text_datum(mcx, "InjectionPoint")?,
+            text_datum(mcx, &name)?,
+            text_datum(mcx, &desc)?,
+        ];
         srf.putvalues(&values, &[false; 3])?;
     }
 

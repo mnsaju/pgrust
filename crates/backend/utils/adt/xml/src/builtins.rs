@@ -5,8 +5,7 @@ use ::mcx::Mcx;
 use ::types_core::Oid;
 use ::types_error::PgResult;
 use ::types_fmgr::{
-    varlena_result, FmgrBuiltin, FmgrInfo, FunctionCallInfoBaseData as Fcinfo,
-    PGFunction,
+    varlena_result, FmgrBuiltin, FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFunction,
 };
 
 use crate::XmlStandaloneType;
@@ -104,18 +103,23 @@ pub fn fc_xmltext(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResu
 }
 
 pub fn fc_xmlconcat2(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
-    let a1 = if fcinfo.argisnull(0) { None } else { Some(arg_text(fcinfo, 0)?) };
-    let a2 = if fcinfo.argisnull(1) { None } else { Some(arg_text(fcinfo, 1)?) };
+    let a1 = if fcinfo.argisnull(0) {
+        None
+    } else {
+        Some(arg_text(fcinfo, 0)?)
+    };
+    let a2 = if fcinfo.argisnull(1) {
+        None
+    } else {
+        Some(arg_text(fcinfo, 1)?)
+    };
     match crate::xmlconcat2(a1, a2)? {
         Some(v) => ret_xml(fcinfo.result_mcx(), &v),
         None => Ok(fcinfo.return_null()),
     }
 }
 
-fn wellformed(
-    fcinfo: &mut Fcinfo,
-    f: fn(&[u8]) -> PgResult<bool>,
-) -> PgResult<Datum> {
+fn wellformed(fcinfo: &mut Fcinfo, f: fn(&[u8]) -> PgResult<bool>) -> PgResult<Datum> {
     Ok(Datum::from_bool(f(arg_text(fcinfo, 0)?)?))
 }
 
@@ -197,7 +201,14 @@ pub fn standalone_from_int(v: i32) -> XmlStandaloneType {
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 // pg_proc.dat rows for xml.c (schema-mapping family lives in the xmlmap crate).
@@ -222,7 +233,17 @@ pub const XML_BUILTINS: &[FmgrBuiltin] = &[
     b(2931, "xpath", 3, fc_xpath),
     b(3049, "xpath_exists", 3, fc_xpath_exists),
     b(3051, "xml_is_well_formed", 1, fc_xml_is_well_formed),
-    b(3052, "xml_is_well_formed_document", 1, fc_xml_is_well_formed_document),
-    b(3053, "xml_is_well_formed_content", 1, fc_xml_is_well_formed_content),
+    b(
+        3052,
+        "xml_is_well_formed_document",
+        1,
+        fc_xml_is_well_formed_document,
+    ),
+    b(
+        3053,
+        "xml_is_well_formed_content",
+        1,
+        fc_xml_is_well_formed_content,
+    ),
     b(3813, "xmltext", 1, fc_xmltext),
 ];

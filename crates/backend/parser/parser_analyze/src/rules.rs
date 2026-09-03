@@ -31,16 +31,24 @@ pub fn transformRuleStmt<'mcx>(
     };
     let rel = table::table_openrv(mcx, &rv, AccessExclusiveLock)?;
     if rel.rd_rel.relkind == RELKIND_MATVIEW {
-        return Err(feature_not_supported("rules on materialized views are not supported"));
+        return Err(feature_not_supported(
+            "rules on materialized views are not supported",
+        ));
     }
 
     let old_alias = mcx::alloc_leak_in(
         mcx,
-        Alias { aliasname: Some("old"), colnames: NodeList::nil() },
+        Alias {
+            aliasname: Some("old"),
+            colnames: NodeList::nil(),
+        },
     )?;
     let new_alias = mcx::alloc_leak_in(
         mcx,
-        Alias { aliasname: Some("new"), colnames: NodeList::nil() },
+        Alias {
+            aliasname: Some("new"),
+            colnames: NodeList::nil(),
+        },
     )?;
 
     let src = mcx::slice_borrow_in(mcx, query_string.as_bytes())?;
@@ -111,7 +119,10 @@ pub fn transformRuleStmt<'mcx>(
             rteperminfos: pstate.p_rteperminfos.clone_in(mcx)?,
             jointree: Some(mcx::alloc_leak_in(
                 mcx,
-                FromExpr { fromlist: NodeList::nil(), quals: None },
+                FromExpr {
+                    fromlist: NodeList::nil(),
+                    quals: None,
+                },
             )?),
             ..Default::default()
         };
@@ -195,12 +206,16 @@ pub fn transformRuleStmt<'mcx>(
             if rewrite_manip::rangeTableEntry_used_list(&top_q.cteList, PRS2_OLD_VARNO, 0)?
                 || rewrite_manip::rangeTableEntry_used_list(&sub_qry.cteList, PRS2_OLD_VARNO, 0)?
             {
-                return Err(feature_not_supported("cannot refer to OLD within WITH query"));
+                return Err(feature_not_supported(
+                    "cannot refer to OLD within WITH query",
+                ));
             }
             if rewrite_manip::rangeTableEntry_used_list(&top_q.cteList, PRS2_NEW_VARNO, 0)?
                 || rewrite_manip::rangeTableEntry_used_list(&sub_qry.cteList, PRS2_NEW_VARNO, 0)?
             {
-                return Err(feature_not_supported("cannot refer to NEW within WITH query"));
+                return Err(feature_not_supported(
+                    "cannot refer to NEW within WITH query",
+                ));
             }
 
             // OLD joins the action's FROM only when referenced; NEW rides the
@@ -211,7 +226,12 @@ pub fn transformRuleStmt<'mcx>(
                         "conditional UNION/INTERSECT/EXCEPT statements are not implemented",
                     ));
                 }
-                let rtr = Node::mk(mcx, RangeTblRef { rtindex: sub_old_rtindex })?;
+                let rtr = Node::mk(
+                    mcx,
+                    RangeTblRef {
+                        rtindex: sub_old_rtindex,
+                    },
+                )?;
                 append_to_jointree(mcx, top_node, sub_qry, rtr)?;
             }
 
@@ -235,14 +255,19 @@ fn append_to_jointree<'mcx>(
     let jt = sub_qry.jointree.expect("analyzed query has a jointree");
     let mut fromlist = jt.fromlist.clone_in(mcx)?;
     fromlist.lappend(mcx, rtr)?;
-    let new_jt = mcx::alloc_leak_in(mcx, FromExpr { fromlist, quals: jt.quals })?;
+    let new_jt = mcx::alloc_leak_in(
+        mcx,
+        FromExpr {
+            fromlist,
+            quals: jt.quals,
+        },
+    )?;
 
     let top_q = top_node.as_query().expect("Query");
     match rewrite_manip::getInsertSelectQuery_parts(top_q)? {
         None => {
             // SAFETY: statement-owned tree fresh out of parse analysis.
-            unsafe { top_node.with_mut::<Query, _>(|q| q.jointree = Some(new_jt)) }
-                .expect("Query");
+            unsafe { top_node.with_mut::<Query, _>(|q| q.jointree = Some(new_jt)) }.expect("Query");
         }
         Some((rte_node, sub)) => {
             let mut new_sub = rewrite_manip::flat_copy_query(mcx, sub)?;
@@ -250,10 +275,8 @@ fn append_to_jointree<'mcx>(
             let new_sub_ref = mcx::alloc_leak_in(mcx, new_sub)?;
             debug_assert!(rte_node.node_tag() == NodeTag::T_RangeTblEntry);
             // SAFETY: as above.
-            unsafe {
-                rte_node.with_mut::<RangeTblEntry, _>(|r| r.subquery = Some(new_sub_ref))
-            }
-            .expect("RangeTblEntry");
+            unsafe { rte_node.with_mut::<RangeTblEntry, _>(|r| r.subquery = Some(new_sub_ref)) }
+                .expect("RangeTblEntry");
         }
     }
     Ok(())
@@ -282,17 +305,11 @@ pub(crate) struct VarsOfLevel {
 impl<'mcx> nodes_core::NodeWalker<'mcx> for VarsOfLevel {
     fn visit(&mut self, node: Node<'mcx>) -> PgResult<bool> {
         match node.node_tag() {
-            NodeTag::T_Var => {
-                Ok(node.as_var().expect("Var").varlevelsup == self.sublevels_up)
-            }
+            NodeTag::T_Var => Ok(node.as_var().expect("Var").varlevelsup == self.sublevels_up),
             NodeTag::T_CurrentOfExpr => Ok(self.sublevels_up == 0),
             NodeTag::T_Query => {
                 self.sublevels_up += 1;
-                let r = nodes_core::query_tree_walker(
-                    node.as_query().expect("Query"),
-                    self,
-                    0,
-                )?;
+                let r = nodes_core::query_tree_walker(node.as_query().expect("Query"), self, 0)?;
                 self.sublevels_up -= 1;
                 Ok(r)
             }

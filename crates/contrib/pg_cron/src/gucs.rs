@@ -10,7 +10,12 @@ guc_tables::session_guc_string!(
     Some("postgres")
 );
 
-guc_tables::session_guc_int!(CRON_MAX_RUNNING_JOBS, cron_max_running_jobs, set_cron_max_running_jobs, 32);
+guc_tables::session_guc_int!(
+    CRON_MAX_RUNNING_JOBS,
+    cron_max_running_jobs,
+    set_cron_max_running_jobs,
+    32
+);
 
 guc_tables::session_guc_bool!(CRON_LOG_RUN, cron_log_run, set_cron_log_run, true);
 

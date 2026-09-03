@@ -72,7 +72,12 @@ pub fn identify_opfamily_groups<'mcx>(
         } else {
             (proclist[ip].amproclefttype, proclist[ip].amprocrighttype)
         };
-        result.push(OpFamilyOpFuncGroup { lefttype, righttype, operatorset: 0, functionset: 0 });
+        result.push(OpFamilyOpFuncGroup {
+            lefttype,
+            righttype,
+            operatorset: 0,
+            functionset: 0,
+        });
         this = Some(result.len() - 1);
     }
     Ok(result)
@@ -115,7 +120,12 @@ pub fn check_amoptsproc_signature(funcid: Oid) -> PgResult<bool> {
     check_amproc_signature(funcid, VOIDOID, true, 1, 1, &[INTERNALOID])
 }
 
-pub fn check_amop_signature(opno: Oid, restype: Oid, lefttype: Oid, righttype: Oid) -> PgResult<bool> {
+pub fn check_amop_signature(
+    opno: Oid,
+    restype: Oid,
+    lefttype: Oid,
+    righttype: Oid,
+) -> PgResult<bool> {
     let shape = syscache_seams::lookup_pg_operator_shape::call(opno)?
         .unwrap_or_else(|| panic!("cache lookup failed for operator {opno}"));
     Ok(shape.oprresult == restype
@@ -125,7 +135,11 @@ pub fn check_amop_signature(opno: Oid, restype: Oid, lefttype: Oid, righttype: O
         && shape.oprright != InvalidOid)
 }
 
-pub fn opclass_for_family_datatype(amoid: Oid, opfamilyoid: Oid, datatypeoid: Oid) -> PgResult<Oid> {
+pub fn opclass_for_family_datatype(
+    amoid: Oid,
+    opfamilyoid: Oid,
+    datatypeoid: Oid,
+) -> PgResult<Oid> {
     let scratch = mcx::MemoryContext::new("opclass_for_family_datatype");
     let rows = syscache_seams::lookup_pg_opclass_rows_by_am::call(scratch.mcx(), amoid)?;
     for &(oid, opcfamily, opcintype, _opcdefault, _name) in rows.iter() {

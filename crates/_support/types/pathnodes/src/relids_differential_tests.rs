@@ -20,8 +20,8 @@ use crate::relids::{
     relids_add_member, relids_add_member_mut, relids_copy, relids_del_member, relids_difference,
     relids_empty, relids_equal, relids_from_words, relids_intersect, relids_is_empty,
     relids_is_member, relids_is_subset, relids_is_unset, relids_members, relids_num_members,
-    relids_overlap, relids_singleton, relids_singleton_member, relids_subset_compare,
-    relids_union, relids_word_slice, SubsetCmp,
+    relids_overlap, relids_singleton, relids_singleton_member, relids_subset_compare, relids_union,
+    relids_word_slice, SubsetCmp,
 };
 use crate::Relids;
 
@@ -64,8 +64,13 @@ fn o_singleton<'mcx>(mcx: Mcx<'mcx>, x: u32) -> ORelids<'mcx> {
 }
 
 fn o_overlap(a: &ORelids<'_>, b: &ORelids<'_>) -> bool {
-    let (Some(a), Some(b)) = (a, b) else { return false };
-    a.word_slice().iter().zip(b.word_slice().iter()).any(|(x, y)| x & y != 0)
+    let (Some(a), Some(b)) = (a, b) else {
+        return false;
+    };
+    a.word_slice()
+        .iter()
+        .zip(b.word_slice().iter())
+        .any(|(x, y)| x & y != 0)
 }
 
 fn o_equal(a: &ORelids<'_>, b: &ORelids<'_>) -> bool {
@@ -153,7 +158,9 @@ fn o_union<'mcx>(mcx: Mcx<'mcx>, a: &ORelids<'mcx>, b: &ORelids<'mcx>) -> ORelid
 }
 
 fn o_intersect<'mcx>(mcx: Mcx<'mcx>, a: &ORelids<'mcx>, b: &ORelids<'mcx>) -> ORelids<'mcx> {
-    let (Some(x), Some(y)) = (a, b) else { return None };
+    let (Some(x), Some(y)) = (a, b) else {
+        return None;
+    };
     let (xw, yw) = (x.word_slice(), y.word_slice());
     let n = xw.len().min(yw.len());
     if n == 0 {
@@ -275,22 +282,56 @@ fn o_words<'a>(a: &'a ORelids<'_>) -> &'a [u64] {
 /// The full observable value: unset-ness plus the exact backing words.
 /// Word count and allocated-but-all-zero states are part of the value.
 fn assert_same(tag: &str, s: &Relids<'_>, o: &ORelids<'_>) {
-    assert_eq!(relids_is_unset(s), o.is_none(), "unset-ness diverged: {tag}");
-    assert_eq!(relids_word_slice(s), o_words(o), "word slice diverged: {tag}");
+    assert_eq!(
+        relids_is_unset(s),
+        o.is_none(),
+        "unset-ness diverged: {tag}"
+    );
+    assert_eq!(
+        relids_word_slice(s),
+        o_words(o),
+        "word slice diverged: {tag}"
+    );
 }
 
-fn assert_predicates(tag: &str, s1: &Relids<'_>, o1: &ORelids<'_>, s2: &Relids<'_>, o2: &ORelids<'_>) {
+fn assert_predicates(
+    tag: &str,
+    s1: &Relids<'_>,
+    o1: &ORelids<'_>,
+    s2: &Relids<'_>,
+    o2: &ORelids<'_>,
+) {
     assert_eq!(relids_equal(s1, s2), o_equal(o1, o2), "equal: {tag}");
     assert_eq!(relids_overlap(s1, s2), o_overlap(o1, o2), "overlap: {tag}");
-    assert_eq!(relids_is_subset(s1, s2), o_is_subset(o1, o2), "is_subset: {tag}");
-    assert_eq!(relids_subset_compare(s1, s2), o_subset_compare(o1, o2), "subset_compare: {tag}");
+    assert_eq!(
+        relids_is_subset(s1, s2),
+        o_is_subset(o1, o2),
+        "is_subset: {tag}"
+    );
+    assert_eq!(
+        relids_subset_compare(s1, s2),
+        o_subset_compare(o1, o2),
+        "subset_compare: {tag}"
+    );
     assert_eq!(relids_is_empty(s1), o_is_empty(o1), "is_empty: {tag}");
-    assert_eq!(relids_num_members(s1), o_num_members(o1), "num_members: {tag}");
-    assert_eq!(relids_singleton_member(s1), o_singleton_member(o1), "singleton_member: {tag}");
+    assert_eq!(
+        relids_num_members(s1),
+        o_num_members(o1),
+        "num_members: {tag}"
+    );
+    assert_eq!(
+        relids_singleton_member(s1),
+        o_singleton_member(o1),
+        "singleton_member: {tag}"
+    );
     let sm: Vec<i32> = relids_members(s1).collect();
     assert_eq!(sm, o_members(o1), "members: {tag}");
     for x in [-1i32, 0, 1, 5, 63, 64, 65, 100, 127, 128, 130, 4096] {
-        assert_eq!(relids_is_member(x, s1), o_is_member(x, o1), "is_member({x}): {tag}");
+        assert_eq!(
+            relids_is_member(x, s1),
+            o_is_member(x, o1),
+            "is_member({x}): {tag}"
+        );
     }
 }
 
@@ -324,9 +365,17 @@ fn unset_vs_allocated_zero_are_distinct() {
     assert_eq!(relids_word_slice(&d), &[0u64]);
 
     // Unset in, unset out.
-    assert!(relids_is_unset(&relids_union(mcx, &relids_empty(), &relids_empty())));
+    assert!(relids_is_unset(&relids_union(
+        mcx,
+        &relids_empty(),
+        &relids_empty()
+    )));
     assert!(relids_is_unset(&relids_intersect(mcx, &relids_empty(), &a)));
-    assert!(relids_is_unset(&relids_difference(mcx, &relids_empty(), &a)));
+    assert!(relids_is_unset(&relids_difference(
+        mcx,
+        &relids_empty(),
+        &a
+    )));
     assert!(relids_is_unset(&relids_del_member(mcx, &relids_empty(), 5)));
     assert!(relids_is_unset(&relids_copy(mcx, &relids_empty())));
 }
@@ -370,8 +419,14 @@ fn singleton_and_widening_shapes() {
     assert_eq!(relids_word_slice(&relids_singleton(mcx, 0)), &[1u64]);
     assert_eq!(relids_word_slice(&relids_singleton(mcx, 63)), &[1u64 << 63]);
     assert_eq!(relids_word_slice(&relids_singleton(mcx, 64)), &[0u64, 1]);
-    assert_eq!(relids_word_slice(&relids_singleton(mcx, 127)), &[0u64, 1u64 << 63]);
-    assert_eq!(relids_word_slice(&relids_singleton(mcx, 128)), &[0u64, 0, 1]);
+    assert_eq!(
+        relids_word_slice(&relids_singleton(mcx, 127)),
+        &[0u64, 1u64 << 63]
+    );
+    assert_eq!(
+        relids_word_slice(&relids_singleton(mcx, 128)),
+        &[0u64, 0, 1]
+    );
 
     // add_member on unset == singleton; widening add keeps low words.
     let a = relids_add_member(mcx, &relids_empty(), 5);
@@ -403,8 +458,14 @@ fn from_words_matches_member_loop() {
     assert!(relids_is_unset(&relids_from_words(mcx, &[0, 0, 0])));
     assert_eq!(relids_word_slice(&relids_from_words(mcx, &[5])), &[5u64]);
     assert_eq!(relids_word_slice(&relids_from_words(mcx, &[5, 0])), &[5u64]);
-    assert_eq!(relids_word_slice(&relids_from_words(mcx, &[0, 1])), &[0u64, 1]);
-    assert_eq!(relids_word_slice(&relids_from_words(mcx, &[1, 0, 2, 0, 0])), &[1u64, 0, 2]);
+    assert_eq!(
+        relids_word_slice(&relids_from_words(mcx, &[0, 1])),
+        &[0u64, 1]
+    );
+    assert_eq!(
+        relids_word_slice(&relids_from_words(mcx, &[1, 0, 2, 0, 0])),
+        &[1u64, 0, 2]
+    );
 
     // Differential over randomized word arrays (incl. trailing zeros).
     let mut rng = Rng(0x9e3779b97f4a7c15);
@@ -468,10 +529,22 @@ fn run_sequence(mcx: Mcx<'_>, seed: u64) {
         let x = rng.below(131) as u32;
         let (s, o): (Relids<'_>, ORelids<'_>) = match rng.below(9) {
             0 => (relids_singleton(mcx, x), o_singleton(mcx, x)),
-            1 => (relids_union(mcx, &ss[i], &ss[j]), o_union(mcx, &os[i], &os[j])),
-            2 => (relids_intersect(mcx, &ss[i], &ss[j]), o_intersect(mcx, &os[i], &os[j])),
-            3 => (relids_difference(mcx, &ss[i], &ss[j]), o_difference(mcx, &os[i], &os[j])),
-            4 => (relids_add_member(mcx, &ss[i], x), o_add_member(mcx, &os[i], x)),
+            1 => (
+                relids_union(mcx, &ss[i], &ss[j]),
+                o_union(mcx, &os[i], &os[j]),
+            ),
+            2 => (
+                relids_intersect(mcx, &ss[i], &ss[j]),
+                o_intersect(mcx, &os[i], &os[j]),
+            ),
+            3 => (
+                relids_difference(mcx, &ss[i], &ss[j]),
+                o_difference(mcx, &os[i], &os[j]),
+            ),
+            4 => (
+                relids_add_member(mcx, &ss[i], x),
+                o_add_member(mcx, &os[i], x),
+            ),
             5 => {
                 // In-place add: mutate the pool entry in both worlds.
                 relids_add_member_mut(mcx, &mut ss[i], x);
@@ -482,7 +555,10 @@ fn run_sequence(mcx: Mcx<'_>, seed: u64) {
             6 => {
                 // Deletion domain includes negatives and out-of-range.
                 let dx = rng.below(140) as i32 - 4;
-                (relids_del_member(mcx, &ss[i], dx), o_del_member(mcx, &os[i], dx))
+                (
+                    relids_del_member(mcx, &ss[i], dx),
+                    o_del_member(mcx, &os[i], dx),
+                )
             }
             7 => (relids_copy(mcx, &ss[i]), o_copy(mcx, &os[i])),
             _ => (relids_empty(), None),

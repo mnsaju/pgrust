@@ -49,7 +49,11 @@ pub struct StagedZoneSrc {
 }
 
 enum StagedKind {
-    Int { prog: Program, plan: QualPlan, max_col: u16 },
+    Int {
+        prog: Program,
+        plan: QualPlan,
+        max_col: u16,
+    },
     Dict(usize),
 }
 
@@ -181,14 +185,10 @@ impl LaneQualProg {
             if class != 1 {
                 return None;
             }
-            let b = syscache_seams::lookup_pg_statistic_bundle::call(
-                mcx,
-                relid,
-                col as i16 + 1,
-                false,
-            )
-            .ok()
-            .flatten()?;
+            let b =
+                syscache_seams::lookup_pg_statistic_bundle::call(mcx, relid, col as i16 + 1, false)
+                    .ok()
+                    .flatten()?;
             let d = b.stadistinct as f64;
             if d > 0.0 {
                 Some(((1.0 - b.stanullfrac as f64) / d).clamp(0.0, 1.0))
@@ -222,7 +222,11 @@ impl LaneQualProg {
         let mut sv = SelVec::all(nrows);
         sv.words[..nwords].copy_from_slice(&sel[..nwords]);
         match &mut self.staged[k].kind {
-            StagedKind::Int { prog, plan, max_col } => {
+            StagedKind::Int {
+                prog,
+                plan,
+                max_col,
+            } => {
                 let ncols = *max_col as usize + 1;
                 debug_assert!(ncols <= soa.ncols() as usize && nrows == soa.nrows());
                 let mut lanes = Vec::with_capacity(ncols);
@@ -294,7 +298,8 @@ pub fn translate_scan_qual(
             // SAOP scalars always feed arg0, so the element op is never
             // commuted.
             LaneClause::InList { fn_oid, .. } => lane_cmp_for_fn_oid(*fn_oid, false).is_some(),
-            LaneClause::NullTest { .. } | LaneClause::BoolVar { .. }
+            LaneClause::NullTest { .. }
+            | LaneClause::BoolVar { .. }
             | LaneClause::BoolTest { .. } => true,
         };
         if !ok {
@@ -310,7 +315,8 @@ pub fn translate_scan_qual(
         let tail_nonvolatile = shape.clauses[split..].iter().all(|cl| match cl {
             LaneClause::Cmp(c) => fn_nonvolatile(c.fn_oid),
             LaneClause::InList { fn_oid, .. } => fn_nonvolatile(*fn_oid),
-            LaneClause::NullTest { .. } | LaneClause::BoolVar { .. }
+            LaneClause::NullTest { .. }
+            | LaneClause::BoolVar { .. }
             | LaneClause::BoolTest { .. } => true,
         }) && match &shape.suffix {
             LaneSuffix::None => true,
@@ -352,7 +358,11 @@ pub fn translate_scan_qual(
         let zone = staged_zone_of(cl, &cols);
         staged.push(StagedClause {
             cols,
-            kind: StagedKind::Int { prog: cprog, plan: cplan, max_col: cmax },
+            kind: StagedKind::Int {
+                prog: cprog,
+                plan: cplan,
+                max_col: cmax,
+            },
             class,
             sel: None,
             orig: orig as u16,
@@ -424,10 +434,7 @@ impl Fp {
     }
 }
 
-fn fingerprint_prefix(
-    prefix: &[LaneClause],
-    dict: &[crate::dict::DictClause],
-) -> Option<u128> {
+fn fingerprint_prefix(prefix: &[LaneClause], dict: &[crate::dict::DictClause]) -> Option<u128> {
     let mut h = Fp::new();
     let mut dict_i = 0usize;
     h.u64(prefix.len() as u64);
@@ -464,7 +471,9 @@ fn fingerprint_prefix(
                     if !dc.cache_safe() {
                         return None;
                     }
-                    let LaneCmpRhs::Const(k) = c.rhs else { return None };
+                    let LaneCmpRhs::Const(k) = c.rhs else {
+                        return None;
+                    };
                     h.u64(2);
                     h.u64(c.col as u64);
                     h.u64(c.fn_oid as u64);
@@ -532,11 +541,18 @@ fn is_eq_op(op: LaneCmp) -> bool {
 // driver decides zone-eligibility (op/width) — anything else stays None.
 fn staged_zone_of(cl: &LaneClause, cols: &[u16]) -> Option<StagedZoneSrc> {
     let LaneClause::Cmp(c) = cl else { return None };
-    let LaneCmpRhs::Const(konst) = &c.rhs else { return None };
+    let LaneCmpRhs::Const(konst) = &c.rhs else {
+        return None;
+    };
     if cols.len() != 1 || cols[0] != c.col {
         return None;
     }
-    Some(StagedZoneSrc { col: c.col, fn_oid: c.fn_oid, commuted: c.commuted, konst: *konst })
+    Some(StagedZoneSrc {
+        col: c.col,
+        fn_oid: c.fn_oid,
+        commuted: c.commuted,
+        konst: *konst,
+    })
 }
 
 fn clause_cols(prog: &Program) -> Vec<u16> {
@@ -572,7 +588,10 @@ fn emit_clause(prog: &mut Program, cl: &LaneClause, max_attnum: &mut u16) -> u8 
                 *max_attnum = (*max_attnum).max(cl.col);
                 return CLASS_DICT_ADMITTED;
             };
-            prog.steps.push(BStep::LoadLane { col: cl.col, out: 0 });
+            prog.steps.push(BStep::LoadLane {
+                col: cl.col,
+                out: 0,
+            });
             *max_attnum = (*max_attnum).max(cl.col);
             match cl.rhs {
                 LaneCmpRhs::Const(k) => {
@@ -589,7 +608,10 @@ fn emit_clause(prog: &mut Program, cl: &LaneClause, max_attnum: &mut u16) -> u8 
                     } else {
                         k
                     };
-                    let kix = prog.push_const(NullableDatum { value: k, isnull: false });
+                    let kix = prog.push_const(NullableDatum {
+                        value: k,
+                        isnull: false,
+                    });
                     prog.steps.push(BStep::LoadConst { k: kix, out: 1 });
                 }
                 LaneCmpRhs::Col(c) => {
@@ -597,9 +619,18 @@ fn emit_clause(prog: &mut Program, cl: &LaneClause, max_attnum: &mut u16) -> u8 
                     *max_attnum = (*max_attnum).max(c);
                 }
             }
-            prog.steps.push(BStep::Cmp { op, a: 0, b: 1, out: 2 });
+            prog.steps.push(BStep::Cmp {
+                op,
+                a: 0,
+                b: 1,
+                out: 2,
+            });
             prog.steps.push(BStep::Qual { a: 2 });
-            if is_eq_op(op) { 1 } else { 2 }
+            if is_eq_op(op) {
+                1
+            } else {
+                2
+            }
         }
         LaneClause::NullTest { col, want_null } => {
             prog.steps.push(BStep::LoadLane { col: *col, out: 0 });
@@ -629,7 +660,12 @@ fn emit_clause(prog: &mut Program, cl: &LaneClause, max_attnum: &mut u16) -> u8 
             };
             prog.steps.push(BStep::LoadLane { col: *col, out: 0 });
             *max_attnum = (*max_attnum).max(*col);
-            prog.steps.push(BStep::BoolTest { null_result, negate, a: 0, out: 1 });
+            prog.steps.push(BStep::BoolTest {
+                null_result,
+                negate,
+                a: 0,
+                out: 1,
+            });
             prog.steps.push(BStep::Qual { a: 1 });
             0
         }
@@ -686,7 +722,10 @@ pub fn eval_lane_qual(
     debug_assert!(ncols <= soa.ncols() as usize && nrows == soa.nrows());
     let mut lanes = Vec::with_capacity(ncols);
     for c in 0..ncols {
-        lanes.push(LaneRef::Raw { values: soa.col_values(c), isnull: soa.col_isnull(c) });
+        lanes.push(LaneRef::Raw {
+            values: soa.col_values(c),
+            isnull: soa.col_isnull(c),
+        });
     }
     let batch = Batch { nrows, lanes };
     let mut sv = SelVec::all(nrows);

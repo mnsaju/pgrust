@@ -171,11 +171,17 @@ pub fn fetch_statentries_for_relation<'mcx>(
         let (nkeys, keydata) = array_elems(varlena_body(keys_d));
         let mut columns: PgVec<'mcx, AttrNumber> = mcx::vec_with_capacity_in(mcx, nkeys)?;
         for i in 0..nkeys {
-            columns.push(i16::from_ne_bytes(keydata[i * 2..i * 2 + 2].try_into().unwrap()));
+            columns.push(i16::from_ne_bytes(
+                keydata[i * 2..i * 2 + 2].try_into().unwrap(),
+            ));
         }
 
         let (target_d, target_null) = getattr(tup, Anum_pg_statistic_ext_stxstattarget, desc);
-        let stattarget = if target_null { -1 } else { target_d.as_i16() as i32 };
+        let stattarget = if target_null {
+            -1
+        } else {
+            target_d.as_i16() as i32
+        };
 
         let (kind_d, _) = getattr(tup, Anum_pg_statistic_ext_stxkind, desc);
         let (nkinds, kinddata) = array_elems(varlena_body(kind_d));
@@ -296,7 +302,11 @@ pub fn BuildRelationExtStatistics<'mcx, F: ExprStatsCompute<'mcx>>(
                     nsp,
                     onerel.name(),
                 ))
-                .finish(ErrorLocation { filename: None, lineno: 0, funcname: None })?;
+                .finish(ErrorLocation {
+                    filename: None,
+                    lineno: 0,
+                    funcname: None,
+                })?;
             continue;
         };
         let stattarget = statext_compute_stattarget(stat.stattarget, &stats);
@@ -327,7 +337,8 @@ pub fn BuildRelationExtStatistics<'mcx, F: ExprStatsCompute<'mcx>>(
                     !stat.exprs.is_empty(),
                     "requested expression stats, but there are no expressions"
                 );
-                let rows_stats = expr_compute.compute(mcx, onerel, &stat.exprs, stattarget, rows)?;
+                let rows_stats =
+                    expr_compute.compute(mcx, onerel, &stat.exprs, stattarget, rows)?;
                 exprstats = Some(expression::serialize_expr_stats(bmcx, &rows_stats)?);
             }
         }
@@ -436,10 +447,24 @@ fn make_build_data<'mcx, 'b>(
         statsv.push(expression::expr_col_stats(e, stattarget)?);
     }
     if !stat.exprs.is_empty() {
-        expression::eval_exprs(mcx, bmcx, onerel, &stat.exprs, rows, &mut values, &mut nulls)?;
+        expression::eval_exprs(
+            mcx,
+            bmcx,
+            onerel,
+            &stat.exprs,
+            rows,
+            &mut values,
+            &mut nulls,
+        )?;
     }
 
-    Ok(StatsBuildData { numrows, attnums, stats: statsv, values, nulls })
+    Ok(StatsBuildData {
+        numrows,
+        attnums,
+        stats: statsv,
+        values,
+        nulls,
+    })
 }
 
 // toast_raw_datum_size (detoast.c), for the WIDTH_THRESHOLD test.
@@ -549,7 +574,11 @@ pub fn build_sorted_items<'mcx>(
     for off in 0..nrows {
         items.push(SortItem { off, count: 0 });
     }
-    let store = ItemStore { values, isnull, width };
+    let store = ItemStore {
+        values,
+        isnull,
+        width,
+    };
     sortitem::pg_qsort(&mut items, |a, b| store.compare(mss, *a, *b));
     // Detoasted images ride mcx until teardown; from ANALYZE this is an
     // exact-accounting Aset that is dropped, never reset (reset would trip

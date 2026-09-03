@@ -53,8 +53,10 @@ pub fn DateTimeParseError(
                     "This time zone name appears in the configuration file for time zone abbreviation \"{abbr}\"."
                 ))
         }
-        _ => PgError::error(format!("invalid input syntax for type {datatype}: \"{str_}\""))
-            .with_sqlstate(ERRCODE_INVALID_DATETIME_FORMAT),
+        _ => PgError::error(format!(
+            "invalid input syntax for type {datatype}: \"{str_}\""
+        ))
+        .with_sqlstate(ERRCODE_INVALID_DATETIME_FORMAT),
     };
     ereturn(escontext, (), err)
 }
@@ -71,12 +73,20 @@ pub fn fmt_sec_g02(v: f64) -> String {
         return "NaN".to_string();
     }
     if v.is_infinite() {
-        return if v < 0.0 { "-Infinity".to_string() } else { "Infinity".to_string() };
+        return if v < 0.0 {
+            "-Infinity".to_string()
+        } else {
+            "Infinity".to_string()
+        };
     }
     const P: i32 = 6;
     let s = if v == 0.0 {
         // %g of ±0 prints "0"/"-0".
-        if v.is_sign_negative() { "-0".to_string() } else { "0".to_string() }
+        if v.is_sign_negative() {
+            "-0".to_string()
+        } else {
+            "0".to_string()
+        }
     } else {
         // Decimal exponent of the value after rounding to P significant
         // digits (rounding can carry, e.g. 999999.5 → 1e+06).

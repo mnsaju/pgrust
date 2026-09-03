@@ -3,11 +3,9 @@ use core::sync::atomic::Ordering;
 
 use init_small::globals;
 use lwlock::{LWLockAcquire, LWLockHeldByMe, LWLockRelease, LW_SHARED};
+use pgstat::io::{pgstat_count_io_op_time, pgstat_prepare_io_time, IOObject, IOOp};
 use types_core::{BlockNumber, Buffer, Oid, BLCKSZ, INVALID_PROC_NUMBER};
 use types_error::PgResult;
-use pgstat::io::{
-    pgstat_count_io_op_time, pgstat_prepare_io_time, IOObject, IOOp,
-};
 use types_storage::buf::{
     buftag, IOContext, BM_CHECKPOINT_NEEDED, BM_DIRTY, BM_IO_ERROR, BM_JUST_DIRTIED, BM_PERMANENT,
     BM_VALID,
@@ -59,7 +57,8 @@ thread_local! {
 pub(crate) fn schedule_backend_writeback(io_context: IOContext, tag: &buftag) -> PgResult<()> {
     BACKEND_WB.with(|cell| {
         let mut slot = cell.borrow_mut();
-        let wb = slot.get_or_insert_with(|| WritebackContext::new(crate::gucs::backend_flush_after));
+        let wb =
+            slot.get_or_insert_with(|| WritebackContext::new(crate::gucs::backend_flush_after));
         ScheduleBufferTagForWriteback(wb, io_context, tag)
     })
 }
@@ -272,9 +271,7 @@ pub(crate) fn with_checksummed_page<R>(
     // and every writer of pd_upper holds the content lock EXCLUSIVE, which
     // our SHARE lock excludes.
     // SAFETY: caller holds a pin; the page image is BLCKSZ bytes.
-    let is_new = unsafe {
-        u16::from_ne_bytes([*src.add(14), *src.add(15)]) == 0
-    };
+    let is_new = unsafe { u16::from_ne_bytes([*src.add(14), *src.add(15)]) == 0 };
     if is_new || !transam_xlog_seams::data_checksums_enabled::call() {
         // Straight write of the live shared image, as C does: no copy, no
         // checksum to invalidate, and a hint bit landing mid-write is
@@ -355,7 +352,10 @@ pub(crate) fn FlushBuffer(
 
 /// FlushOneBuffer (bufmgr.c): caller holds pin + content lock.
 pub fn FlushOneBuffer(buffer: Buffer) -> PgResult<()> {
-    assert!(buffer > 0, "FlushOneBuffer: local buffers unsupported in C too");
+    assert!(
+        buffer > 0,
+        "FlushOneBuffer: local buffers unsupported in C too"
+    );
     debug_assert!(BufferIsPinned(buffer));
     let desc = GetBufferDescriptor(buffer - 1);
     debug_assert!(LWLockHeldByMe(&desc.content_lock));
@@ -453,7 +453,11 @@ pub fn FlushRelationsAllBuffers(rels: &[RelFileLocatorBackend]) -> PgResult<()> 
     Ok(())
 }
 
-pub(crate) fn SyncOneBuffer(buf_id: i32, skip_recently_used: bool, wb: &mut WritebackContext) -> PgResult<i32> {
+pub(crate) fn SyncOneBuffer(
+    buf_id: i32,
+    skip_recently_used: bool,
+    wb: &mut WritebackContext,
+) -> PgResult<i32> {
     let desc = GetBufferDescriptor(buf_id);
     let mut result = 0;
 
@@ -530,8 +534,7 @@ pub fn BufferSync(flags: i32) -> PgResult<()> {
     CKPT_SCRATCH.with(|cell| -> PgResult<()> {
         let mut slot = cell.borrow_mut();
         let scratch = slot.get_or_insert_with(|| {
-            let cx: &'static mcx::MemoryContext =
-                mcx::session_root("checkpoint scratch");
+            let cx: &'static mcx::MemoryContext = mcx::session_root("checkpoint scratch");
             // LIFO: empty the droppy TLS slot before its context is freed.
             mcx::register_session_cleanup(Box::new(|| {
                 CKPT_SCRATCH.with(|c| drop(c.borrow_mut().take()));
@@ -544,11 +547,7 @@ pub fn BufferSync(flags: i32) -> PgResult<()> {
 
         let nbuffers = globals::NBuffers();
         scratch.items.clear();
-        if scratch
-            .items
-            .try_reserve(nbuffers.max(0) as usize)
-            .is_err()
-        {
+        if scratch.items.try_reserve(nbuffers.max(0) as usize).is_err() {
             panic!("out of memory allocating CkptBufferIds");
         }
 
@@ -578,8 +577,12 @@ pub fn BufferSync(flags: i32) -> PgResult<()> {
         let mut wb = WritebackContext::for_checkpoint();
 
         scratch.items.sort_unstable_by(|a, b| {
-            (a.tsId, a.relNumber, a.forkNum, a.blockNum)
-                .cmp(&(b.tsId, b.relNumber, b.forkNum, b.blockNum))
+            (a.tsId, a.relNumber, a.forkNum, a.blockNum).cmp(&(
+                b.tsId,
+                b.relNumber,
+                b.forkNum,
+                b.blockNum,
+            ))
         });
 
         scratch.per_ts.clear();

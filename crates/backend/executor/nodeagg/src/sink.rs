@@ -118,7 +118,10 @@ pub fn sink_hash_bytes(b: &[u8]) -> u64 {
 pub fn sink_avgpack_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
-        !matches!(std::env::var("PGRUST_RUNTIME_AGG_AVGPACK").as_deref(), Ok("0") | Ok("off"))
+        !matches!(
+            std::env::var("PGRUST_RUNTIME_AGG_AVGPACK").as_deref(),
+            Ok("0") | Ok("off")
+        )
     })
 }
 
@@ -198,7 +201,10 @@ pub fn sink_spill_canon_enabled() -> bool {
 pub fn sink_gid_merge_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
-        matches!(std::env::var("PGRUST_RUNTIME_AGG_GIDMERGE").as_deref(), Ok("1") | Ok("on"))
+        matches!(
+            std::env::var("PGRUST_RUNTIME_AGG_GIDMERGE").as_deref(),
+            Ok("1") | Ok("on")
+        )
     })
 }
 
@@ -216,7 +222,10 @@ pub fn sink_gid_merge_enabled() -> bool {
 pub fn sink_combine16_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
-        !matches!(std::env::var("PGRUST_RUNTIME_AGG_COMBINE16").as_deref(), Ok("0") | Ok("off"))
+        !matches!(
+            std::env::var("PGRUST_RUNTIME_AGG_COMBINE16").as_deref(),
+            Ok("0") | Ok("off")
+        )
     })
 }
 
@@ -234,7 +243,10 @@ pub fn sink_combine16_enabled() -> bool {
 pub fn sink_flush_steal_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
-        matches!(std::env::var("PGRUST_SINK_FLUSH_STEAL").as_deref(), Ok("1") | Ok("on"))
+        matches!(
+            std::env::var("PGRUST_SINK_FLUSH_STEAL").as_deref(),
+            Ok("1") | Ok("on")
+        )
     })
 }
 
@@ -349,7 +361,9 @@ impl SinkRun {
         if self.key_ends.is_empty() {
             (self.key_offs[hi] - self.key_offs[lo]) as usize
         } else {
-            (lo..hi).map(|i| (self.key_ends[i] - self.key_offs[i]) as usize).sum()
+            (lo..hi)
+                .map(|i| (self.key_ends[i] - self.key_offs[i]) as usize)
+                .sum()
         }
     }
 }
@@ -602,13 +616,23 @@ fn compact_canon_shape(ch: &crate::compact::CompactHash) -> Option<&MkShape> {
 /// return immediately.
 pub(crate) fn compact_extend_canon_hashes(ch: &mut crate::compact::CompactHash) {
     let crate::compact::CompactHash {
-        table, key, intern, canon_hashes, canon_store, canon_offs, ..
+        table,
+        key,
+        intern,
+        canon_hashes,
+        canon_store,
+        canon_offs,
+        ..
     } = ch;
-    let crate::compact::CompactKeySpec::Multi(shape) = key else { return };
+    let crate::compact::CompactKeySpec::Multi(shape) = key else {
+        return;
+    };
     if shape.intern_comp().is_none() {
         return;
     }
-    let Some(intern) = intern.as_ref() else { return };
+    let Some(intern) = intern.as_ref() else {
+        return;
+    };
     let n = table.nrows();
     if canon_hashes.len() >= n {
         debug_assert_eq!(canon_hashes.len(), n, "canon hashes never outrun the table");
@@ -663,9 +687,13 @@ pub(crate) fn compact_extend_canon_hashes(ch: &mut crate::compact::CompactHash) 
 #[inline]
 fn mk_words_of(table: &LaneAggTable, shape: &MkShape, row: usize) -> [u64; 2] {
     if shape.two_words {
-        table.row_key_i128(row).expect("multi-key tables have no NULL row")
+        table
+            .row_key_i128(row)
+            .expect("multi-key tables have no NULL row")
     } else {
-        let k = table.row_key_int(row).expect("multi-key tables have no NULL row");
+        let k = table
+            .row_key_int(row)
+            .expect("multi-key tables have no NULL row");
         [k as u64, 0]
     }
 }
@@ -707,9 +735,15 @@ fn canon_row_bytes_append(
     row: usize,
     out: &mut Vec<u8>,
 ) {
-    debug_assert!(!shape.nullable, "canonical shapes are non-nullable (sink admission)");
+    debug_assert!(
+        !shape.nullable,
+        "canonical shapes are non-nullable (sink admission)"
+    );
     let words = mk_words_of(table, shape, row);
-    debug_assert!(shape.intern_comp().is_some(), "canonical shapes carry an Intern component");
+    debug_assert!(
+        shape.intern_comp().is_some(),
+        "canonical shapes carry an Intern component"
+    );
     let n_intern = shape.n_intern();
     let base = out.len();
     let mut flat = [0u8; 16];
@@ -769,12 +803,20 @@ fn sink_flush_table_canon_impl(
     compact_extend_canon_hashes(ch);
     let gid_gen = ch.intern_gen;
     let crate::compact::CompactHash {
-        table, key, intern, canon_hashes, canon_store, canon_offs, ..
+        table,
+        key,
+        intern,
+        canon_hashes,
+        canon_store,
+        canon_offs,
+        ..
     } = ch;
     let crate::compact::CompactKeySpec::Multi(shape) = key else {
         unreachable!("canonical flush requires a Multi shape")
     };
-    let intern = intern.as_ref().expect("canonical shapes carry the intern table");
+    let intern = intern
+        .as_ref()
+        .expect("canonical shapes carry the intern table");
     let state_words = table.state_bytes() / 8;
     let n = table.nrows();
     debug_assert_eq!(canon_hashes.len(), n, "flush entry extended the hashes");
@@ -838,7 +880,11 @@ fn sink_flush_table_canon_impl(
     let mut bcursor = bstart;
     let mut key_offs: Vec<u32> = vec![0; n + 1];
     let mut key_ends: Vec<u32> = if steal { vec![0; n] } else { Vec::new() };
-    let mut key_bytes: Vec<u8> = if steal { Vec::new() } else { vec![0; total_bytes] };
+    let mut key_bytes: Vec<u8> = if steal {
+        Vec::new()
+    } else {
+        vec![0; total_bytes]
+    };
     let mut states: Vec<u64> = vec![0; n * state_words];
     let mut run_hashes: Vec<u64> = vec![0; n];
     // GID-merge car: carry each row's PACKED key words (per-worker intern
@@ -927,7 +973,11 @@ fn sink_flush_table_canon_impl(
 /// `has_null` is structurally false.
 fn sink_partition_remainder_canon(ch: &mut crate::compact::CompactHash) -> SinkPart {
     compact_extend_canon_hashes(ch);
-    let crate::compact::CompactHash { table, canon_hashes, .. } = ch;
+    let crate::compact::CompactHash {
+        table,
+        canon_hashes,
+        ..
+    } = ch;
     let n = table.nrows();
     debug_assert_eq!(canon_hashes.len(), n, "partition entry extended the hashes");
     let hashes = &*canon_hashes;
@@ -951,7 +1001,12 @@ fn sink_partition_remainder_canon(ch: &mut crate::compact::CompactHash) -> SinkP
         part_hashes[cursor[b] as usize] = h;
         cursor[b] += 1;
     }
-    SinkPart { starts, idx, has_null: false, hashes: part_hashes }
+    SinkPart {
+        starts,
+        idx,
+        has_null: false,
+        hashes: part_hashes,
+    }
 }
 
 /// [`sink_flush_table_canon`]'s DIRECT-arm twin (arena-strings inc-3): the
@@ -1083,7 +1138,12 @@ fn sink_partition_remainder_direct(ch: &crate::compact::CompactHash) -> SinkPart
         part_hashes[cursor[b] as usize] = h;
         cursor[b] += 1;
     }
-    SinkPart { starts, idx, has_null: false, hashes: part_hashes }
+    SinkPart {
+        starts,
+        idx,
+        has_null: false,
+        hashes: part_hashes,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1201,26 +1261,30 @@ impl SinkFreeze {
         // SAFETY: single writer by the CAS election; no reader until the
         // Release store below.
         unsafe { *self.set.get() = entries };
-        self.state.store(FREEZE_FROZEN, core::sync::atomic::Ordering::Release);
+        self.state
+            .store(FREEZE_FROZEN, core::sync::atomic::Ordering::Release);
     }
 
     /// Installer-only: the extraction failed — fail OPEN forever (no drops
     /// ever happen; the engagement drains fully, correct but unoptimized).
     pub fn disable(&self) {
-        self.state.store(FREEZE_DISABLED, core::sync::atomic::Ordering::Release);
+        self.state
+            .store(FREEZE_DISABLED, core::sync::atomic::Ordering::Release);
     }
 
     #[inline]
     pub fn note_dropped(&self, n: u64) {
         if n > 0 {
-            self.dropped.fetch_add(n, core::sync::atomic::Ordering::Relaxed);
+            self.dropped
+                .fetch_add(n, core::sync::atomic::Ordering::Relaxed);
         }
     }
 
     #[inline]
     pub fn note_stragglers(&self, n: u64) {
         if n > 0 {
-            self.stragglers.fetch_add(n, core::sync::atomic::Ordering::Relaxed);
+            self.stragglers
+                .fetch_add(n, core::sync::atomic::Ordering::Relaxed);
         }
     }
 
@@ -1249,7 +1313,9 @@ pub(crate) fn sink_freeze_extract_ch(
     ch: &crate::compact::CompactHash,
     bound: u32,
 ) -> Option<Vec<Vec<u8>>> {
-    let crate::compact::CompactKeySpec::Multi(shape) = &ch.key else { return None };
+    let crate::compact::CompactKeySpec::Multi(shape) = &ch.key else {
+        return None;
+    };
     if shape.nullable || ch.table.nrows() < bound as usize {
         return None;
     }
@@ -1304,13 +1370,13 @@ pub fn sink_freeze_member_rows(
     shape: &MkShape,
     entries: &[Vec<u8>],
 ) -> Vec<u32> {
-    let set: std::collections::HashSet<&[u8]> =
-        entries.iter().map(|e| e.as_slice()).collect();
+    let set: std::collections::HashSet<&[u8]> = entries.iter().map(|e| e.as_slice()).collect();
     let mut out: Vec<u32> = Vec::new();
     let mut scratch = [0u8; 8];
     for i in 0..t.nrows() {
         let member = if key_words == 0 {
-            t.row_key_bytes(i, &mut scratch).is_some_and(|b| set.contains(b))
+            t.row_key_bytes(i, &mut scratch)
+                .is_some_and(|b| set.contains(b))
         } else {
             let words = mk_words_of(t, shape, i);
             let mut flat = [0u8; 16];
@@ -1436,7 +1502,11 @@ fn sink_canon_rec_parse(
     {
         return Err(torn());
     }
-    Ok((rec_len, hash, off + CANON_REC_HDR..off + CANON_REC_HDR + key_len))
+    Ok((
+        rec_len,
+        hash,
+        off + CANON_REC_HDR..off + CANON_REC_HDR + key_len,
+    ))
 }
 
 /// Rebuild a single-bucket BYTES-MODE [`SinkRun`] from canonical spill
@@ -1444,11 +1514,7 @@ fn sink_canon_rec_parse(
 /// (= flush order, the first-seen discipline). No GID words survive the
 /// file (`keys` empty — replayed rows always bytes-probe at combine).
 /// Fail-closed on any torn/malformed record.
-pub fn sink_run_from_spill_bytes(
-    b: usize,
-    state_words: usize,
-    bytes: &[u8],
-) -> PgResult<SinkRun> {
+pub fn sink_run_from_spill_bytes(b: usize, state_words: usize, bytes: &[u8]) -> PgResult<SinkRun> {
     let mut key_offs: Vec<u32> = vec![0];
     let mut key_bytes: Vec<u8> = Vec::new();
     let mut hashes: Vec<u64> = Vec::new();
@@ -1462,7 +1528,9 @@ pub fn sink_run_from_spill_bytes(
         let s0 = off + rec_len - state_words * 8;
         for w in 0..state_words {
             let o = s0 + w * 8;
-            states.push(u64::from_ne_bytes(bytes[o..o + 8].try_into().expect("8 bytes")));
+            states.push(u64::from_ne_bytes(
+                bytes[o..o + 8].try_into().expect("8 bytes"),
+            ));
         }
         off += rec_len;
     }
@@ -1590,7 +1658,9 @@ pub fn sink_remainder_canon_content(rem: &SinkRemainder<'_>, b: usize) -> usize 
             })
             .sum();
     }
-    let Some((shape, intern)) = rem.canon else { return 0 };
+    let Some((shape, intern)) = rem.canon else {
+        return 0;
+    };
     let (t, part) = (rem.table, rem.part);
     let lo = part.starts[b] as usize;
     let hi = part.starts[b + 1] as usize;
@@ -1653,12 +1723,7 @@ pub fn sink_run_from_spill(
 
 /// Serialize bucket-`b`'s REMAINDER rows (via the SEAL partition index)
 /// into the spill record contract.
-pub fn sink_remainder_spill_bucket(
-    t: &LaneAggTable,
-    part: &SinkPart,
-    b: usize,
-    out: &mut Vec<u8>,
-) {
+pub fn sink_remainder_spill_bucket(t: &LaneAggTable, part: &SinkPart, b: usize, out: &mut Vec<u8>) {
     let key_words = table_key_words(t);
     let state_words = t.state_bytes() / 8;
     let lo = part.starts[b] as usize;
@@ -1807,7 +1872,12 @@ pub fn sink_partition_remainder(t: &LaneAggTable) -> SinkPart {
             cursor[b] += 1;
         }
     }
-    SinkPart { starts, idx, has_null, hashes: Vec::new() }
+    SinkPart {
+        starts,
+        idx,
+        has_null,
+        hashes: Vec::new(),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1989,15 +2059,24 @@ fn having_emit_filter(node: &AggStateData<'_>) -> Result<Option<SinkHavingFilter
     if node.plan.plan.qual.len() != 1 {
         return Err(());
     }
-    let Some(op) = node.plan.plan.qual.nth(0).as_op_expr() else { return Err(()) };
+    let Some(op) = node.plan.plan.qual.nth(0).as_op_expr() else {
+        return Err(());
+    };
     if op.opretset || op.args.len() != 2 {
         return Err(());
     }
-    let Some(base) = having_cmp_of(op.opfuncid) else { return Err(()) };
+    let Some(base) = having_cmp_of(op.opfuncid) else {
+        return Err(());
+    };
     let (a, b) = (op.args.nth(0), op.args.nth(1));
-    let (aggside, constside, cmp) =
-        if a.as_aggref().is_some() { (a, b, base) } else { (b, a, base.mirror()) };
-    let Some(ar) = aggside.as_aggref() else { return Err(()) };
+    let (aggside, constside, cmp) = if a.as_aggref().is_some() {
+        (a, b, base)
+    } else {
+        (b, a, base.mirror())
+    };
+    let Some(ar) = aggside.as_aggref() else {
+        return Err(());
+    };
     if ar.aggfnoid != F_COUNT_STAR_SINK
         || !ar.args.is_nil()
         || ar.aggfilter.is_some()
@@ -2021,7 +2100,9 @@ fn having_emit_filter(node: &AggStateData<'_>) -> Result<Option<SinkHavingFilter
     {
         return Err(());
     }
-    let Some(c) = constside.as_const() else { return Err(()) };
+    let Some(c) = constside.as_const() else {
+        return Err(());
+    };
     if c.constisnull {
         return Err(());
     }
@@ -2031,7 +2112,11 @@ fn having_emit_filter(node: &AggStateData<'_>) -> Result<Option<SinkHavingFilter
         HAVING_INT2OID => i64::from(c.constvalue.as_i16()),
         _ => return Err(()),
     };
-    Ok(Some(SinkHavingFilter { transno: pa.transno, cmp, rhs }))
+    Ok(Some(SinkHavingFilter {
+        transno: pa.transno,
+        cmp,
+        rhs,
+    }))
 }
 
 const HAVING_INT8OID: Oid = 20;
@@ -2128,7 +2213,9 @@ pub fn sink_resolve_combines(node: &AggStateData<'_>) -> PgResult<Option<Vec<Sin
             // only (fail-closed on collation weirdness — nondeterministic /
             // libc/ICU collations keep the historical refusal; bpchar never
             // matches, its transtype is BPCHAR).
-            SinkCombineKind::VarlenaMinMax { larger: shape.aggcombinefn == F_TEXT_LARGER_FN }
+            SinkCombineKind::VarlenaMinMax {
+                larger: shape.aggcombinefn == F_TEXT_LARGER_FN,
+            }
         } else {
             return Ok(None);
         };
@@ -2166,7 +2253,10 @@ pub fn sink_combines_byref(combines: &[SinkCombineFn]) -> bool {
         // put the drain on byref accounting. This is the byref-floor kill:
         // pure-packed shapes stop counting the aggcontext subtree against
         // the budget, and flush/spill drain all live pressure.
-        !matches!(c.kind, SinkCombineKind::Byval | SinkCombineKind::AvgInt8Packed)
+        !matches!(
+            c.kind,
+            SinkCombineKind::Byval | SinkCombineKind::AvgInt8Packed
+        )
     })
 }
 
@@ -2248,10 +2338,14 @@ pub unsafe fn sink_combine_states(
         match c.kind {
             SinkCombineKind::Byval => {
                 let mut fcinfo = LocalFcinfo::<2>::fresh(c.collation);
-                fcinfo.args[0] =
-                    NullableDatum { value: d.trans_value, isnull: d.trans_value_is_null };
-                fcinfo.args[1] =
-                    NullableDatum { value: s.trans_value, isnull: s.trans_value_is_null };
+                fcinfo.args[0] = NullableDatum {
+                    value: d.trans_value,
+                    isnull: d.trans_value_is_null,
+                };
+                fcinfo.args[1] = NullableDatum {
+                    value: s.trans_value,
+                    isnull: s.trans_value_is_null,
+                };
                 let value = (c.func)(None, &mut fcinfo)?;
                 d.trans_value = value;
                 d.trans_value_is_null = fcinfo.isnull;
@@ -2389,11 +2483,19 @@ unsafe fn text_trans_payload(d: Datum) -> PgResult<(*const u8, usize)> {
     // SAFETY: caller contract — live varlena image, header readable.
     unsafe {
         if varatt::varatt_is_1b(p) {
-            Ok((p.add(varatt::VARHDRSZ_SHORT), varatt::varsize_1b(p) - varatt::VARHDRSZ_SHORT))
+            Ok((
+                p.add(varatt::VARHDRSZ_SHORT),
+                varatt::varsize_1b(p) - varatt::VARHDRSZ_SHORT,
+            ))
         } else if varatt::varatt_is_4b_u(p) {
-            Ok((p.add(varatt::VARHDRSZ), varatt::varsize_4b(p) - varatt::VARHDRSZ))
+            Ok((
+                p.add(varatt::VARHDRSZ),
+                varatt::varsize_4b(p) - varatt::VARHDRSZ,
+            ))
         } else {
-            Err(sink_shape_error("non-plain text transvalue in a sink combine/emit"))
+            Err(sink_shape_error(
+                "non-plain text transvalue in a sink combine/emit",
+            ))
         }
     }
 }
@@ -2413,10 +2515,14 @@ unsafe fn int8_avg_trans_data_mut(d: Datum) -> PgResult<*mut i64> {
     // SAFETY: caller contract — live varlena image.
     unsafe {
         if !varatt::varatt_is_4b_u(p) || varatt::varsize_4b(p) != INT8_TRANSARRAY_SIZE {
-            return Err(sink_shape_error("malformed int8[2] transarray in a sink combine"));
+            return Err(sink_shape_error(
+                "malformed int8[2] transarray in a sink combine",
+            ));
         }
         if p.add(8).cast::<i32>().read() != 0 {
-            return Err(sink_shape_error("null-bearing int8[2] transarray in a sink combine"));
+            return Err(sink_shape_error(
+                "null-bearing int8[2] transarray in a sink combine",
+            ));
         }
         Ok(p.add(ARR_OVERHEAD_NONULLS_1).cast::<i64>())
     }
@@ -2704,13 +2810,7 @@ fn sink_combine_bucket_impl(
         }
         t
     } else {
-        LaneAggTable::with_config(
-            repr,
-            state_bytes,
-            total.max(4),
-            HashKind::best(),
-            layout,
-        )
+        LaneAggTable::with_config(repr, state_bytes, total.max(4), HashKind::best(), layout)
     };
     let state_words = state_bytes / 8;
     // The destination-owned text store, armed only for min/max(text) shapes
@@ -2724,31 +2824,29 @@ fn sink_combine_bucket_impl(
 
     // Shared merge tail: seed a new group's block or combine into the
     // existing one.
-    let merge_states = |pr: ::lanetable::Probe,
-                        src: *const u64,
-                        sa: &mut Option<StrStateArena>|
-     -> PgResult<()> {
-        if pr.is_new {
-            // SAFETY: fresh zeroed state block of state_words u64s; src is a
-            // live block of the same layout (one worker plan). The copy takes
-            // the source's text POINTERS, so the block is immediately
-            // re-homed into this table's store.
-            unsafe {
-                core::ptr::copy_nonoverlapping(src, pr.states.cast::<u64>(), state_words);
-                return sink_own_new_varlena(combines, sa, pr.states.cast::<AggPerGroup>());
+    let merge_states =
+        |pr: ::lanetable::Probe, src: *const u64, sa: &mut Option<StrStateArena>| -> PgResult<()> {
+            if pr.is_new {
+                // SAFETY: fresh zeroed state block of state_words u64s; src is a
+                // live block of the same layout (one worker plan). The copy takes
+                // the source's text POINTERS, so the block is immediately
+                // re-homed into this table's store.
+                unsafe {
+                    core::ptr::copy_nonoverlapping(src, pr.states.cast::<u64>(), state_words);
+                    return sink_own_new_varlena(combines, sa, pr.states.cast::<AggPerGroup>());
+                }
             }
-        }
-        // SAFETY: both blocks hold numtrans pergroups (combines.len() ==
-        // numtrans); dst is uniquely reachable through this claimed bucket.
-        unsafe {
-            sink_combine_states(
-                combines,
-                pr.states.cast::<AggPerGroup>(),
-                src.cast::<AggPerGroup>(),
-                sa.as_mut(),
-            )
-        }
-    };
+            // SAFETY: both blocks hold numtrans pergroups (combines.len() ==
+            // numtrans); dst is uniquely reachable through this claimed bucket.
+            unsafe {
+                sink_combine_states(
+                    combines,
+                    pr.states.cast::<AggPerGroup>(),
+                    src.cast::<AggPerGroup>(),
+                    sa.as_mut(),
+                )
+            }
+        };
 
     let absorb = |t: &mut LaneAggTable,
                   sa: &mut Option<StrStateArena>,
@@ -2833,15 +2931,18 @@ fn sink_combine_bucket_impl(
                             }
                             continue;
                         }
-                        let dst =
-                            absorb_bytes(&mut t, &mut sa, r.key_slice(i), r.hashes[i], src)?;
+                        let dst = absorb_bytes(&mut t, &mut sa, r.key_slice(i), r.hashes[i], src)?;
                         gmap.insert(w, dst);
                         continue;
                     }
                     absorb_bytes(&mut t, &mut sa, r.key_slice(i), r.hashes[i], src)?;
                 } else {
                     let w0 = r.keys[i * key_words];
-                    let w1 = if key_words == 2 { r.keys[i * key_words + 1] } else { 0 };
+                    let w1 = if key_words == 2 {
+                        r.keys[i * key_words + 1]
+                    } else {
+                        0
+                    };
                     absorb(&mut t, &mut sa, Some([w0, w1]), src)?;
                 }
             }
@@ -2925,8 +3026,7 @@ fn sink_combine_bucket_impl(
                             spk_rows += 1;
                             spk_bytes += img.len() as u64;
                         }
-                        let dst =
-                            absorb_bytes(&mut t, &mut sa, img, part.hashes[lo + slot], src)?;
+                        let dst = absorb_bytes(&mut t, &mut sa, img, part.hashes[lo + slot], src)?;
                         gmap.insert(w, dst);
                         continue;
                     }
@@ -2982,7 +3082,10 @@ fn sink_combine_bucket_impl(
             spankey_lap(&S.combine_rem_ns, spk_t0);
         }
     }
-    Ok(CombinedBucket { table: t, str_store: sa })
+    Ok(CombinedBucket {
+        table: t,
+        str_store: sa,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -2993,7 +3096,9 @@ fn sink_combine_bucket_impl(
 /// the same decide the worker arms run).
 #[derive(Clone, Debug)]
 pub enum SinkKeySpec {
-    Single { width: u8 },
+    Single {
+        width: u8,
+    },
     Reduced(RedShape),
     /// Packed multi-int composite (Mk car): the canonical key words ARE the
     /// packed image, merged across workers verbatim (value-derived — no
@@ -3106,7 +3211,10 @@ impl SinkEmitPlan {
         // numtrans pergroups (bucket-table config = the sink's
         // state_bytes) and f.transno < numtrans by filter compile.
         let pg = unsafe {
-            &*t.row_states(row).cast_const().cast::<AggPerGroup>().add(f.transno as usize)
+            &*t.row_states(row)
+                .cast_const()
+                .cast::<AggPerGroup>()
+                .add(f.transno as usize)
         };
         !pg.trans_value_is_null && f.cmp.eval(pg.trans_value.as_i64(), f.rhs)
     }
@@ -3117,10 +3225,7 @@ impl SinkEmitPlan {
 /// numeric-avg vocabulary — `batch_emit_resolve`'s exact finalfn gates).
 /// `None` = the shape needs the general finalize/project interpreter — the
 /// sink refuses then (the HAVING/non-identity car).
-pub fn sink_build_emit_plan(
-    node: &AggStateData<'_>,
-    key: &SinkKeySpec,
-) -> Option<SinkEmitPlan> {
+pub fn sink_build_emit_plan(node: &AggStateData<'_>, key: &SinkKeySpec) -> Option<SinkEmitPlan> {
     if node.skip_final {
         return None;
     }
@@ -3198,7 +3303,10 @@ pub fn sink_build_emit_plan(
                     }
                     match comp.kind {
                         MkCompKind::Int { width } => {
-                            cols.push(SinkEmitCol::MultiComp { off: comp.off, width });
+                            cols.push(SinkEmitCol::MultiComp {
+                                off: comp.off,
+                                width,
+                            });
                         }
                         MkCompKind::Intern => {
                             // Which canonical tail: the component's ordinal
@@ -3207,11 +3315,15 @@ pub fn sink_build_emit_plan(
                             let nth = shape
                                 .intern_comps()
                                 .position(|(cj, _)| cj == j)
-                                .expect("Intern component is in intern_comps") as u8;
+                                .expect("Intern component is in intern_comps")
+                                as u8;
                             cols.push(SinkEmitCol::MultiText { nth });
                         }
                         MkCompKind::Numeric { width } => {
-                            cols.push(SinkEmitCol::MultiNumeric { off: comp.off, width });
+                            cols.push(SinkEmitCol::MultiNumeric {
+                                off: comp.off,
+                                width,
+                            });
                         }
                     }
                 }
@@ -3226,10 +3338,12 @@ pub fn sink_build_emit_plan(
             let col = match pa.finalfn.as_ref() {
                 // The finalfn-none gate above proved byval-word OR the
                 // knob-gated text min/max class (SE-T2AGG CAR B).
-                None if !node.trans_typ[pa.transno as usize].byval => {
-                    SinkEmitCol::VarlenaTrans { transno: pa.transno }
-                }
-                None => SinkEmitCol::Agg { transno: pa.transno },
+                None if !node.trans_typ[pa.transno as usize].byval => SinkEmitCol::VarlenaTrans {
+                    transno: pa.transno,
+                },
+                None => SinkEmitCol::Agg {
+                    transno: pa.transno,
+                },
                 Some(f) => match f.fn_oid {
                     FINALFN_INT8_AVG => SinkEmitCol::AvgInt8 {
                         transno: pa.transno,
@@ -3237,8 +3351,12 @@ pub fn sink_build_emit_plan(
                         // resolution and the worker table arm read.
                         packed: avgpack_of(node.avgpack_shape_mask, pa.transno),
                     },
-                    FINALFN_POLY_AVG => SinkEmitCol::AvgInt128 { transno: pa.transno },
-                    FINALFN_POLY_SUM => SinkEmitCol::SumInt128 { transno: pa.transno },
+                    FINALFN_POLY_AVG => SinkEmitCol::AvgInt128 {
+                        transno: pa.transno,
+                    },
+                    FINALFN_POLY_SUM => SinkEmitCol::SumInt128 {
+                        transno: pa.transno,
+                    },
                     _ => return None,
                 },
             };
@@ -3254,7 +3372,11 @@ pub fn sink_build_emit_plan(
                 return None;
             }
             cols.push(SinkEmitCol::ConstByval {
-                value: if c.constisnull { Datum::null() } else { c.constvalue },
+                value: if c.constisnull {
+                    Datum::null()
+                } else {
+                    c.constvalue
+                },
                 isnull: c.constisnull,
             });
             continue;
@@ -3267,7 +3389,13 @@ pub fn sink_build_emit_plan(
         }
         _ => (None, 0),
     };
-    Some(SinkEmitPlan { width: key.width(), cols, fixed, ntails, filter })
+    Some(SinkEmitPlan {
+        width: key.width(),
+        cols,
+        fixed,
+        ntails,
+        filter,
+    })
 }
 
 /// One bucket's fully-projected output rows: row-major, stride `cols.len()`.
@@ -3329,7 +3457,15 @@ impl SinkEmitAcc {
             if !plan.row_admits(t, row) {
                 continue;
             }
-            emit_row(plan, t, row, &mut self.values, &mut self.nulls, &mut self.arena, &mut self.fixups)?;
+            emit_row(
+                plan,
+                t,
+                row,
+                &mut self.values,
+                &mut self.nulls,
+                &mut self.arena,
+                &mut self.fixups,
+            )?;
             self.nrows += 1;
         }
         Ok(())
@@ -3339,7 +3475,12 @@ impl SinkEmitAcc {
     /// winners-only compact discipline of [`sink_emit_bucket_rows`]),
     /// appending to the accumulator. Row `rows[i]` becomes accumulator row
     /// `base + i` where `base` was `self.nrows()` before the call.
-    pub fn emit_rows(&mut self, plan: &SinkEmitPlan, t: &LaneAggTable, rows: &[u32]) -> PgResult<()> {
+    pub fn emit_rows(
+        &mut self,
+        plan: &SinkEmitPlan,
+        t: &LaneAggTable,
+        rows: &[u32],
+    ) -> PgResult<()> {
         debug_assert!(rows.windows(2).all(|w| w[0] < w[1]), "rows sorted+unique");
         // Winners-only emission never composes with a post-aggregate filter
         // (the engagement vacates topn on filtered plans); the row gate
@@ -3351,7 +3492,15 @@ impl SinkEmitAcc {
             if !plan.row_admits(t, row as usize) {
                 continue;
             }
-            emit_row(plan, t, row as usize, &mut self.values, &mut self.nulls, &mut self.arena, &mut self.fixups)?;
+            emit_row(
+                plan,
+                t,
+                row as usize,
+                &mut self.values,
+                &mut self.nulls,
+                &mut self.arena,
+                &mut self.fixups,
+            )?;
             self.nrows += 1;
         }
         Ok(())
@@ -3359,11 +3508,22 @@ impl SinkEmitAcc {
 
     /// The arena is final — resolve the byref datums and seal the buf.
     pub fn finish(self) -> SinkEmitBuf {
-        let SinkEmitAcc { mut values, nulls, nrows, arena, fixups } = self;
+        let SinkEmitAcc {
+            mut values,
+            nulls,
+            nrows,
+            arena,
+            fixups,
+        } = self;
         for (i, off) in fixups {
             values[i] = Datum::from_usize(arena[off..].as_ptr() as usize);
         }
-        SinkEmitBuf { values, nulls, nrows, arena }
+        SinkEmitBuf {
+            values,
+            nulls,
+            nrows,
+            arena,
+        }
     }
 }
 
@@ -3375,14 +3535,18 @@ impl SinkEmitAcc {
 fn canon_tail(region: &[u8], ntails: u8, nth: u8) -> PgResult<&[u8]> {
     if ntails <= 1 {
         if nth != 0 {
-            return Err(sink_shape_error("tail ordinal out of range on a single-tail key"));
+            return Err(sink_shape_error(
+                "tail ordinal out of range on a single-tail key",
+            ));
         }
         return Ok(region);
     }
     let mut off = 0usize;
     for i in 0..ntails {
         if region.len() < off + 4 {
-            return Err(sink_shape_error("canonical key tail truncated (len prefix)"));
+            return Err(sink_shape_error(
+                "canonical key tail truncated (len prefix)",
+            ));
         }
         let len = u32::from_le_bytes(region[off..off + 4].try_into().expect("4 bytes")) as usize;
         off += 4;
@@ -3394,7 +3558,9 @@ fn canon_tail(region: &[u8], ntails: u8, nth: u8) -> PgResult<&[u8]> {
         }
         off += len;
     }
-    Err(sink_shape_error("tail ordinal out of range on a multi-tail key"))
+    Err(sink_shape_error(
+        "tail ordinal out of range on a multi-tail key",
+    ))
 }
 
 #[inline]
@@ -3469,7 +3635,9 @@ fn emit_row(
             .row_key_bytes(row, &mut scratch8)
             .ok_or_else(|| sink_shape_error("NULL group row in a canonical bucket table"))?;
         if cb.len() < fixed || fixed > 16 {
-            return Err(sink_shape_error("canonical key shorter than its image prefix"));
+            return Err(sink_shape_error(
+                "canonical key shorter than its image prefix",
+            ));
         }
         let mut flat = [0u8; 16];
         flat[..fixed].copy_from_slice(&cb[..fixed]);
@@ -3513,8 +3681,11 @@ fn emit_row(
                     let image = (w[0] as u128) | ((w[1] as u128) << 64);
                     let bits = (image >> (off as u32 * 8)) as u64;
                     let sh = 64 - width as u32 * 8;
-                    let v =
-                        if sh == 0 { bits as i64 } else { ((bits << sh) as i64) >> sh };
+                    let v = if sh == 0 {
+                        bits as i64
+                    } else {
+                        ((bits << sh) as i64) >> sh
+                    };
                     values.push(key_datum(width, v));
                     nulls.push(false);
                 }
@@ -3529,8 +3700,8 @@ fn emit_row(
             // buf's own arena (equal payload bytes = the serial path's
             // text value; header form is representation, not identity).
             SinkEmitCol::MultiText { nth } => {
-                let region = tail
-                    .ok_or_else(|| sink_shape_error("MultiText emit on a word-keyed table"))?;
+                let region =
+                    tail.ok_or_else(|| sink_shape_error("MultiText emit on a word-keyed table"))?;
                 let tail = canon_tail(region, plan.ntails, nth)?;
                 let head =
                     ::datum::varlena::set_varsize_4b(tail.len() + ::datum::varlena::VARHDRSZ);
@@ -3540,12 +3711,16 @@ fn emit_row(
             // NUMERIC image (byte-identical to the packed first-arrival
             // datum by the keypack canonicality gates).
             SinkEmitCol::MultiNumeric { off, width } => {
-                let w = kw
-                    .ok_or_else(|| sink_shape_error("MultiNumeric emit on a NULL group row"))?;
+                let w =
+                    kw.ok_or_else(|| sink_shape_error("MultiNumeric emit on a NULL group row"))?;
                 let image = (w[0] as u128) | ((w[1] as u128) << 64);
                 let bits = (image >> (off as u32 * 8)) as u64;
                 let wbits = width as u32 * 8;
-                let masked = if wbits == 64 { bits } else { bits & ((1u64 << wbits) - 1) };
+                let masked = if wbits == 64 {
+                    bits
+                } else {
+                    bits & ((1u64 << wbits) - 1)
+                };
                 let img = ::adt_numeric::numeric_key_unpack(
                     crate::compact::mk_numeric_key_decode(masked, width),
                 )?;
@@ -3617,8 +3792,7 @@ fn emit_row(
                         values.push(Datum::null());
                         nulls.push(true);
                     } else {
-                        let (count, sum) =
-                            crate::compact::int8_avg_trans_read(pg.trans_value)?;
+                        let (count, sum) = crate::compact::int8_avg_trans_read(pg.trans_value)?;
                         if count == 0 {
                             values.push(Datum::null());
                             nulls.push(true);
@@ -3746,7 +3920,15 @@ pub fn sink_emit_bucket_passthrough(
         if !plan.row_admits(t, row as usize) {
             continue;
         }
-        emit_row(plan, t, row as usize, &mut values, &mut nulls, &mut arena, &mut fixups)?;
+        emit_row(
+            plan,
+            t,
+            row as usize,
+            &mut values,
+            &mut nulls,
+            &mut arena,
+            &mut fixups,
+        )?;
         emitted += 1;
     }
     if with_null {
@@ -3755,7 +3937,15 @@ pub fn sink_emit_bucket_passthrough(
         for row in 0..t.nrows() {
             if t.row_key_int(row).is_none() {
                 if plan.row_admits(t, row) {
-                    emit_row(plan, t, row, &mut values, &mut nulls, &mut arena, &mut fixups)?;
+                    emit_row(
+                        plan,
+                        t,
+                        row,
+                        &mut values,
+                        &mut nulls,
+                        &mut arena,
+                        &mut fixups,
+                    )?;
                     emitted += 1;
                 }
                 break;
@@ -3766,7 +3956,12 @@ pub fn sink_emit_bucket_passthrough(
     for (i, off) in fixups {
         values[i] = Datum::from_usize(arena[off..].as_ptr() as usize);
     }
-    Ok(SinkEmitBuf { values, nulls, nrows: emitted, arena })
+    Ok(SinkEmitBuf {
+        values,
+        nulls,
+        nrows: emitted,
+        arena,
+    })
 }
 
 /// Sanity error for engagement paths that must never see a non-single-word
@@ -3863,13 +4058,17 @@ pub fn agg_sink_hash_mem_limit(node: &AggStateData<'_>) -> Option<usize> {
 
 /// The grouped state block size (`additionalsize` — numtrans pergroups).
 pub fn agg_sink_state_bytes(node: &AggStateData<'_>) -> Option<usize> {
-    node.perhash.as_ref().map(|ph| ph.hashtable.additionalsize())
+    node.perhash
+        .as_ref()
+        .map(|ph| ph.hashtable.additionalsize())
 }
 
 /// The single staged int grouping key's width (2/4/8), when the shape is the
 /// K2 single-key class.
 pub fn agg_sink_key_width(node: &AggStateData<'_>) -> Option<u8> {
-    node.perhash.as_ref().and_then(|ph| ph.hashtable.staged_probe_int_width())
+    node.perhash
+        .as_ref()
+        .and_then(|ph| ph.hashtable.staged_probe_int_width())
 }
 
 /// The ARMED compact table's sink key spec (worker-side shape re-check).
@@ -4026,8 +4225,7 @@ impl SinkTableHandle {
         });
         // STORE-ONCE face (spankey step 2): published only when the store
         // covers every row (accept-time extension ran with the switch on).
-        let canon_store = (canon.is_some()
-            && self.0.canon_offs.len() == self.0.table.nrows() + 1)
+        let canon_store = (canon.is_some() && self.0.canon_offs.len() == self.0.table.nrows() + 1)
             .then(|| (&self.0.canon_store[..], &self.0.canon_offs[..]));
         SinkRemainder {
             table: &self.0.table,
@@ -4094,10 +4292,7 @@ pub fn agg_sink_put_table(node: &mut AggStateData<'_>, h: SinkTableHandle) {
 /// invalidate any code→intern-id cache it holds (`MkScratch`/
 /// `MultiKeyChain` epoch caches) — a stale id would materialize the wrong
 /// bytes.
-pub fn agg_sink_flush_if_due(
-    node: &mut AggStateData<'_>,
-    cap: u32,
-) -> Option<(SinkRun, bool)> {
+pub fn agg_sink_flush_if_due(node: &mut AggStateData<'_>, cap: u32) -> Option<(SinkRun, bool)> {
     let ph = node.perhash.as_mut()?;
     let hash_mem_limit = ph.hash_mem_limit;
     let ch = ph.compact.as_mut()?;
@@ -4144,7 +4339,11 @@ pub(crate) fn sink_table_live_bytes(t: &LaneAggTable) -> usize {
         KeyRepr::Bytes => 24,
         _ => 8 * table_key_words(t),
     };
-    let arena = if t.repr() == KeyRepr::Bytes { t.arena_len() } else { 0 };
+    let arena = if t.repr() == KeyRepr::Bytes {
+        t.arena_len()
+    } else {
+        0
+    };
     t.nrows() * (16 + key_bytes + t.state_bytes()) + arena
 }
 
@@ -4193,10 +4392,17 @@ pub fn agg_sink_flush_now(node: &mut AggStateData<'_>) -> Option<(SinkRun, bool)
 /// demote = refusal discipline. The headroom covers one batch's worst-case
 /// growth between per-batch checks.
 pub fn agg_sink_budget_pressure(node: &AggStateData<'_>) -> bool {
-    let Some(ph) = node.perhash.as_ref() else { return false };
-    let Some(ch) = ph.compact.as_ref() else { return false };
+    let Some(ph) = node.perhash.as_ref() else {
+        return false;
+    };
+    let Some(ch) = ph.compact.as_ref() else {
+        return false;
+    };
     // SAFETY: read of the once-allocated node; no &mut to it is live.
-    let aggctx = unsafe { node.agg_node.as_ref() }.aggcontext().context().subtree_used();
+    let aggctx = unsafe { node.agg_node.as_ref() }
+        .aggcontext()
+        .context()
+        .subtree_used();
     // Spill-armed sink builds count the table's LIVE rows, not its retained
     // capacity: `LaneAggTable::reset` (the flush) keeps capacity, so
     // capacity-based accounting re-trips permanently after the first
@@ -4253,7 +4459,11 @@ pub fn agg_sink_table_mem(node: &AggStateData<'_>) -> usize {
 pub fn agg_sink_aggctx_mem(node: &AggStateData<'_>) -> usize {
     let arena = agg_sink_str_arena(node).map_or(0, |a| a.borrow().bytes());
     // SAFETY: read of the once-allocated node; no &mut to it is live.
-    unsafe { node.agg_node.as_ref() }.aggcontext().context().subtree_used() + arena
+    unsafe { node.agg_node.as_ref() }
+        .aggcontext()
+        .context()
+        .subtree_used()
+        + arena
 }
 
 /// Arm the TABLE-OWNED by-ref str transvalue store on a sink WORKER build
@@ -4282,11 +4492,16 @@ pub fn agg_sink_aggctx_mem(node: &AggStateData<'_>) -> usize {
 /// release on Drop — no leak on any path. No kill switch: reverting to a
 /// context home reintroduces the unsoundness.
 pub fn agg_sink_arm_str_state(node: &mut AggStateData<'_>) {
-    let Some(ph) = node.perhash.as_mut() else { return };
-    let Some(ch) = ph.compact.as_mut() else { return };
+    let Some(ph) = node.perhash.as_mut() else {
+        return;
+    };
+    let Some(ch) = ph.compact.as_mut() else {
+        return;
+    };
     if ph.sink_cap.is_some() && ch.str_arena.is_none() {
-        ch.str_arena =
-            Some(Box::new(core::cell::RefCell::new(::lanefold::StrStateArena::default())));
+        ch.str_arena = Some(Box::new(core::cell::RefCell::new(
+            ::lanefold::StrStateArena::default(),
+        )));
     }
 }
 
@@ -4397,7 +4612,10 @@ pub fn sink_topn_candidates(
         // AggPerGroup array (combine contract); transno bounds-checked by
         // `topn_emit_resolve` on the leader's node.
         let pg = unsafe {
-            &*t.row_states(row).cast_const().cast::<AggPerGroup>().add(spec.transno as usize)
+            &*t.row_states(row)
+                .cast_const()
+                .cast::<AggPerGroup>()
+                .add(spec.transno as usize)
         };
         if pg.no_trans_value || pg.trans_value_is_null {
             return None;
@@ -4464,7 +4682,9 @@ pub fn sink_topn_merge(lists: &[Vec<SinkTopnCand>], bound: usize) -> Vec<(u16, u
     let mut winners = Vec::with_capacity(bound.min(lists.iter().map(Vec::len).sum()));
     let mut cursor = vec![0usize; lists.len()];
     while winners.len() < bound {
-        let Some(Reverse((c, li))) = heads.pop() else { break };
+        let Some(Reverse((c, li))) = heads.pop() else {
+            break;
+        };
         winners.push((c.bucket, c.row));
         cursor[li] += 1;
         if let Some(next) = lists[li].get(cursor[li]) {
@@ -4487,10 +4707,7 @@ pub fn sink_topn_merge(lists: &[Vec<SinkTopnCand>], bound: usize) -> Vec<(u16, u
 /// finalize truncate-merge like any in-memory partition's list. Fragment
 /// lists are ≤bound each and fragments are few — concat+sort is inside any
 /// envelope that matters.
-pub fn sink_topn_merge_fragments(
-    lists: Vec<Vec<SinkTopnCand>>,
-    bound: usize,
-) -> Vec<SinkTopnCand> {
+pub fn sink_topn_merge_fragments(lists: Vec<Vec<SinkTopnCand>>, bound: usize) -> Vec<SinkTopnCand> {
     let mut all: Vec<SinkTopnCand> = lists.into_iter().flatten().collect();
     all.sort_unstable();
     all.truncate(bound);
@@ -4549,7 +4766,11 @@ fn table_emit_datum(
                 let image = (w[0] as u128) | ((w[1] as u128) << 64);
                 let bits = (image >> (off as u32 * 8)) as u64;
                 let sh = 64 - width as u32 * 8;
-                let v = if sh == 0 { bits as i64 } else { ((bits << sh) as i64) >> sh };
+                let v = if sh == 0 {
+                    bits as i64
+                } else {
+                    ((bits << sh) as i64) >> sh
+                };
                 (key_datum(width, v), false)
             }
             None => (Datum::null(), true),
@@ -4558,8 +4779,11 @@ fn table_emit_datum(
         // table config = the sink's state_bytes); transno < numtrans by
         // plan construction. Byval transvalues only (adoption gate).
         SinkEmitCol::Agg { transno } => unsafe {
-            let pg =
-                &*t.row_states(row).cast_const().cast::<AggPerGroup>().add(transno as usize);
+            let pg = &*t
+                .row_states(row)
+                .cast_const()
+                .cast::<AggPerGroup>()
+                .add(transno as usize);
             (pg.trans_value, pg.trans_value_is_null)
         },
         // Plan-owned byval datum, copied verbatim (admission gate).
@@ -4591,7 +4815,10 @@ enum SinkEmitSrc {
     /// own emit order, including the NULL group row at its insertion
     /// position); buckets 1..255 are empty. No SEAL partition exists and
     /// none is ever built.
-    Table { table: SinkTableHandle, plan: SinkEmitPlan },
+    Table {
+        table: SinkTableHandle,
+        plan: SinkEmitPlan,
+    },
 }
 
 /// The leader's adopted parallel emit state, drained bucket 0..255 in
@@ -4703,7 +4930,10 @@ pub fn agg_sink_adopt_table(
     table: SinkTableHandle,
     plan: SinkEmitPlan,
 ) {
-    debug_assert!(sink_emit_plan_all_byval(&plan), "table adopt over a byref emit plan");
+    debug_assert!(
+        sink_emit_plan_all_byval(&plan),
+        "table adopt over a byref emit plan"
+    );
     let natts = plan.cols.len();
     node.sink_emit = Some(Box::new(SinkEmitState {
         src: SinkEmitSrc::Table { table, plan },
@@ -4770,7 +5000,12 @@ pub fn agg_sink_emit_next<'mcx>(
     ::exectuples::exec_clear_tuple(slot, mcx);
     {
         let sb = slot.base_mut();
-        st.fill_row(bucket, row, &mut sb.tts_values[..natts], &mut sb.tts_isnull[..natts]);
+        st.fill_row(
+            bucket,
+            row,
+            &mut sb.tts_values[..natts],
+            &mut sb.tts_isnull[..natts],
+        );
     }
     ::exectuples::exec_store_virtual_tuple(slot);
     Ok(Some(node.ps_ResultTupleSlot))
@@ -4798,7 +5033,9 @@ pub fn agg_sink_emit_bucket_len(node: &AggStateData<'_>, b: usize) -> Option<usi
 /// starts from row 0 and must never double-emit after a partial per-row
 /// drain (defensive; the lane's consumers never mix the two).
 pub fn agg_sink_emit_unstarted(node: &AggStateData<'_>) -> bool {
-    node.sink_emit.as_ref().is_some_and(|st| st.bucket == 0 && st.pos == 0)
+    node.sink_emit
+        .as_ref()
+        .is_some_and(|st| st.bucket == 0 && st.pos == 0)
 }
 
 /// Take the composed top-N winner list off the adopted emit state (the
@@ -4817,7 +5054,9 @@ pub fn agg_sink_emit_take_winners(node: &mut AggStateData<'_>) -> Option<Vec<(u1
 /// winner list IS the drain in that mode, so block consumers that walk the
 /// buckets must stand down (the cursor and winner-directed drains own it).
 pub fn agg_sink_emit_has_winners(node: &AggStateData<'_>) -> bool {
-    node.sink_emit.as_ref().is_some_and(|st| st.winners.is_some())
+    node.sink_emit
+        .as_ref()
+        .is_some_and(|st| st.winners.is_some())
 }
 
 /// Spend the adopted emit exactly as the cursor drain's EOF does: cursor
@@ -4830,7 +5069,10 @@ pub fn agg_sink_emit_has_winners(node: &AggStateData<'_>) -> bool {
 /// here (block consumers refuse them at admission).
 pub fn agg_sink_emit_consume_all(node: &mut AggStateData<'_>) {
     if let Some(st) = node.sink_emit.as_mut() {
-        debug_assert!(st.winners.is_none(), "block drain over a winner-composed emit");
+        debug_assert!(
+            st.winners.is_none(),
+            "block drain over a winner-composed emit"
+        );
         st.bucket = SINK_NBUCKETS;
         st.pos = 0;
     }
@@ -4852,7 +5094,12 @@ pub fn agg_sink_emit_block_row<'mcx>(
     ::exectuples::exec_clear_tuple(slot, mcx);
     {
         let sb = slot.base_mut();
-        st.fill_row(b, row, &mut sb.tts_values[..natts], &mut sb.tts_isnull[..natts]);
+        st.fill_row(
+            b,
+            row,
+            &mut sb.tts_values[..natts],
+            &mut sb.tts_isnull[..natts],
+        );
     }
     ::exectuples::exec_store_virtual_tuple(slot);
     node.ps_ResultTupleSlot
@@ -4863,7 +5110,12 @@ pub fn agg_sink_emit_block_row<'mcx>(
 /// table-backed drain this reads the raw transvalue straight off the
 /// adopted table).
 #[inline]
-pub fn agg_sink_emit_datum(node: &AggStateData<'_>, b: usize, row: usize, col: usize) -> (Datum, bool) {
+pub fn agg_sink_emit_datum(
+    node: &AggStateData<'_>,
+    b: usize,
+    row: usize,
+    col: usize,
+) -> (Datum, bool) {
     let st = node.sink_emit.as_ref().expect("sink emit state adopted");
     st.row_datum(b, row, col)
 }
@@ -4909,7 +5161,10 @@ pub fn agg_sink_emit_drained(node: &mut AggStateData<'_>) {
 // §4). The experiment gate refuses topn/freeze shapes.
 // ---------------------------------------------------------------------------
 
-use core::sync::atomic::{AtomicBool as ShAtomicBool, AtomicU64 as ShAtomicU64, AtomicUsize as ShAtomicUsize, Ordering as ShOrdering};
+use core::sync::atomic::{
+    AtomicBool as ShAtomicBool, AtomicU64 as ShAtomicU64, AtomicUsize as ShAtomicUsize,
+    Ordering as ShOrdering,
+};
 
 pub struct SharedCountTable {
     /// Slot key words; 0 = EMPTY sentinel (the literal key 0 rides the
@@ -4994,7 +5249,11 @@ impl SharedCountTable {
                 return false;
             }
         }
-        if run.null_states.as_ref().is_some_and(|b| b[1] & FLAG_BYTES != 0) {
+        if run
+            .null_states
+            .as_ref()
+            .is_some_and(|b| b[1] & FLAG_BYTES != 0)
+        {
             return false;
         }
         // Reserve BEFORE touching slots: crossing capacity closes the face
@@ -5150,9 +5409,7 @@ impl Drop for SharedCountTable {
     fn drop(&mut self) {
         // Ledger balance for the construction charge (GL-CONCMEM-1); the
         // slot count is fixed for the table's lifetime.
-        ::mcx::global_footprint::uncharge_engine_estate(Self::slot_estate_bytes(
-            self.keys.len(),
-        ));
+        ::mcx::global_footprint::uncharge_engine_estate(Self::slot_estate_bytes(self.keys.len()));
     }
 }
 
@@ -5251,7 +5508,9 @@ fn scatter_kind_ok(t: &::lanefold::LaneTrans) -> bool {
 /// deleted), all-whitelist, and every transition state byval (single-row
 /// blocks are copied verbatim into runs).
 pub fn sink_scatter_admits(node: &AggStateData<'_>) -> bool {
-    let Some(plan) = crate::agg_lanefold_plan(node) else { return false };
+    let Some(plan) = crate::agg_lanefold_plan(node) else {
+        return false;
+    };
     if plan.guarded || !plan.resid.is_empty() || !plan.vguards.is_empty() {
         return false;
     }
@@ -5299,7 +5558,11 @@ fn scatter_seed_slot(block: &mut [u64], transno: usize, value: Datum, isnull: bo
 #[inline(always)]
 fn sc_xform(t: &::lanefold::LaneTrans, v: i64) -> i64 {
     let v = if t.divk != 1 { v / t.divk as i64 } else { v };
-    let v = if t.mulk != 1 { v.wrapping_mul(t.mulk as i64) } else { v };
+    let v = if t.mulk != 1 {
+        v.wrapping_mul(t.mulk as i64)
+    } else {
+        v
+    };
     v.wrapping_add(t.addend as i64)
 }
 
@@ -5363,7 +5626,11 @@ fn scatter_apply_row(
         LaneKind::Sum => {
             if !isnull[i] {
                 let delta = sc_xform(t, sc_lane_value(values, t.width, i));
-                let old = if pg.trans_value_is_null { 0 } else { pg.trans_value.as_i64() };
+                let old = if pg.trans_value_is_null {
+                    0
+                } else {
+                    pg.trans_value.as_i64()
+                };
                 pg.trans_value = Datum::from_i64(old.wrapping_add(delta));
                 pg.trans_value_is_null = false;
             }
@@ -5377,8 +5644,11 @@ fn scatter_apply_row(
                     pg.no_trans_value = false;
                 } else if !pg.trans_value_is_null {
                     let old = sc_load_res(t, pg);
-                    let next =
-                        if t.kind == LaneKind::Max { old.max(v) } else { old.min(v) };
+                    let next = if t.kind == LaneKind::Max {
+                        old.max(v)
+                    } else {
+                        old.min(v)
+                    };
                     if next != old {
                         pg.trans_value = sc_store_res(t, next);
                     }
@@ -5392,11 +5662,7 @@ fn scatter_apply_row(
 impl SinkScatter {
     /// Shared constructor (the unit tests build descriptor sets directly;
     /// `sink_scatter_new` is the executor's validated path).
-    fn from_parts(
-        trans: Vec<::lanefold::LaneTrans>,
-        init: Vec<u64>,
-        key_width: u8,
-    ) -> SinkScatter {
+    fn from_parts(trans: Vec<::lanefold::LaneTrans>, init: Vec<u64>, key_width: u8) -> SinkScatter {
         SinkScatter {
             trans,
             init,
@@ -5436,11 +5702,23 @@ impl SinkScatter {
     ) {
         debug_assert_eq!(rows.len(), keys.len());
         debug_assert_eq!(rows.len(), knull.len());
-        let SinkScatter { trans, init, key_width, keys: bkeys, states, nrows, null_block } =
-            self;
+        let SinkScatter {
+            trans,
+            init,
+            key_width,
+            keys: bkeys,
+            states,
+            nrows,
+            null_block,
+        } = self;
         let hoisted: Vec<(&[Datum], &[bool])> = trans
             .iter()
-            .map(|t| (cols.col_values(t.col as usize), cols.col_isnull(t.col as usize)))
+            .map(|t| {
+                (
+                    cols.col_values(t.col as usize),
+                    cols.col_isnull(t.col as usize),
+                )
+            })
             .collect();
         let state_words = init.len();
         for (j, &row) in rows.iter().enumerate() {
@@ -5451,8 +5729,13 @@ impl SinkScatter {
                 for (t, (values, isnull)) in trans.iter().zip(hoisted.iter()) {
                     // SAFETY: blk holds numtrans AggPerGroup slots (the
                     // init template's layout).
-                    scatter_apply_row(t, unsafe { &mut *pgs.add(t.transno as usize) },
-                        values, isnull, i);
+                    scatter_apply_row(
+                        t,
+                        unsafe { &mut *pgs.add(t.transno as usize) },
+                        values,
+                        isnull,
+                        i,
+                    );
                 }
                 continue;
             }
@@ -5467,12 +5750,19 @@ impl SinkScatter {
             let st = &mut states[b];
             let base = st.len();
             st.extend_from_slice(init);
-            let pgs = st[base..base + state_words].as_mut_ptr().cast::<AggPerGroup>();
+            let pgs = st[base..base + state_words]
+                .as_mut_ptr()
+                .cast::<AggPerGroup>();
             for (t, (values, isnull)) in trans.iter().zip(hoisted.iter()) {
                 // SAFETY: the freshly appended block holds numtrans
                 // AggPerGroup slots (the init template's layout).
-                scatter_apply_row(t, unsafe { &mut *pgs.add(t.transno as usize) },
-                    values, isnull, i);
+                scatter_apply_row(
+                    t,
+                    unsafe { &mut *pgs.add(t.transno as usize) },
+                    values,
+                    isnull,
+                    i,
+                );
             }
             *nrows += 1;
         }
@@ -5574,7 +5864,11 @@ mod tests {
         assert_eq!(*run.starts.last().unwrap() as usize, run.nrows());
         for b in 0..SINK_NBUCKETS {
             for i in run.starts[b] as usize..run.starts[b + 1] as usize {
-                assert_eq!(bucket_of(sink_hash(run.keys[i], 0)), b, "bucket-major framing");
+                assert_eq!(
+                    bucket_of(sink_hash(run.keys[i], 0)),
+                    b,
+                    "bucket-major framing"
+                );
             }
         }
         let map = run
@@ -5582,7 +5876,11 @@ mod tests {
             .iter()
             .copied()
             .zip(run.states.chunks(2).map(|st| {
-                assert_eq!(st[1] & 0xFFFF, 0, "drained states are valid non-null AggPerGroup blocks");
+                assert_eq!(
+                    st[1] & 0xFFFF,
+                    0,
+                    "drained states are valid non-null AggPerGroup blocks"
+                );
                 st[0]
             }))
             .collect();
@@ -5655,7 +5953,10 @@ mod tests {
         let t = SharedCountTable::new(512);
         let pairs: Vec<(u64, u64)> = (1..=100u64).map(|k| (k, 1)).collect();
         for _ in 0..1000 {
-            assert!(t.merge_run(&count_run(&pairs, None)), "repeat keys must release");
+            assert!(
+                t.merge_run(&count_run(&pairs, None)),
+                "repeat keys must release"
+            );
         }
         assert!(!t.is_closed());
         assert_eq!(t.reserved(), 100, "steady state counts claimed slots only");
@@ -5673,7 +5974,10 @@ mod tests {
         let small: Vec<(u64, u64)> = (1..=40u64).map(|k| (k, 1)).collect();
         assert!(t.merge_run(&count_run(&small, None)));
         let big: Vec<(u64, u64)> = (100..=200u64).map(|k| (k, 2)).collect();
-        assert!(!t.merge_run(&count_run(&big, None)), "over-capacity run refused");
+        assert!(
+            !t.merge_run(&count_run(&big, None)),
+            "over-capacity run refused"
+        );
         assert!(t.is_closed());
         // Closed face refuses everything, even a tiny run.
         assert!(!t.merge_run(&count_run(&[(7, 1)], None)));
@@ -5741,7 +6045,10 @@ mod tests {
                 break;
             }
         }
-        assert!(charged, "construction did not charge the ledger (expect {expect})");
+        assert!(
+            charged,
+            "construction did not charge the ledger (expect {expect})"
+        );
         // Upper bound only: a leak leaves the counter permanently HIGH;
         // concurrent tests whose holdings were inside `base` can leave it
         // legitimately lower (one-sided — the leak direction).
@@ -5755,7 +6062,10 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
         let after = ::mcx::global_footprint::bytes();
-        assert!(ok, "ledger did not balance after Drop: base {base}, after {after}");
+        assert!(
+            ok,
+            "ledger did not balance after Drop: base {base}, after {after}"
+        );
     }
 
     /// FAIL-CLOSED flags pre-pass: a null-marked (or padding-dirty) state
@@ -5859,8 +6169,18 @@ mod tests {
             Ok(Datum::from_i64(a.max(b)))
         }
         vec![
-            SinkCombineFn { func: add, strict: true, collation: Oid::from(0u8), kind: SinkCombineKind::Byval },
-            SinkCombineFn { func: larger, strict: true, collation: Oid::from(0u8), kind: SinkCombineKind::Byval },
+            SinkCombineFn {
+                func: add,
+                strict: true,
+                collation: Oid::from(0u8),
+                kind: SinkCombineKind::Byval,
+            },
+            SinkCombineFn {
+                func: larger,
+                strict: true,
+                collation: Oid::from(0u8),
+                kind: SinkCombineKind::Byval,
+            },
         ]
     }
 
@@ -5869,7 +6189,10 @@ mod tests {
             if t.row_key_int(row) == key {
                 let pg = t.row_states(row).cast_const().cast::<AggPerGroup>();
                 unsafe {
-                    return Some(((*pg).trans_value.as_i64(), (*pg.add(1)).trans_value.as_i64()));
+                    return Some((
+                        (*pg).trans_value.as_i64(),
+                        (*pg.add(1)).trans_value.as_i64(),
+                    ));
                 }
             }
         }
@@ -5904,15 +6227,35 @@ mod tests {
         assert!(!part2.has_null);
 
         let locals = [
-            SinkLocalView { spilled: &[], runs: core::slice::from_ref(&run1), remainder: Some(SinkRemainder { table: &t1, part: &part1, canon: None, canon_store: None, gid_gen: 0, direct: false }) },
-            SinkLocalView { spilled: &[], runs: &[], remainder: Some(SinkRemainder { table: &t2, part: &part2, canon: None, canon_store: None, gid_gen: 0, direct: false }) },
+            SinkLocalView {
+                spilled: &[],
+                runs: core::slice::from_ref(&run1),
+                remainder: Some(SinkRemainder {
+                    table: &t1,
+                    part: &part1,
+                    canon: None,
+                    canon_store: None,
+                    gid_gen: 0,
+                    direct: false,
+                }),
+            },
+            SinkLocalView {
+                spilled: &[],
+                runs: &[],
+                remainder: Some(SinkRemainder {
+                    table: &t2,
+                    part: &part2,
+                    canon: None,
+                    canon_store: None,
+                    gid_gen: 0,
+                    direct: false,
+                }),
+            },
         ];
         let combines = test_combines();
         let mut merged: Vec<CombinedBucket> = Vec::with_capacity(SINK_NBUCKETS);
         for b in 0..SINK_NBUCKETS {
-            merged.push(
-                sink_combine_bucket(b, 1, STATE_BYTES, &locals, &combines).unwrap(),
-            );
+            merged.push(sink_combine_bucket(b, 1, STATE_BYTES, &locals, &combines).unwrap());
         }
         // Every key lands in exactly one bucket; totals add up.
         let mut seen = std::collections::HashMap::new();
@@ -5923,7 +6266,10 @@ mod tests {
                     Some(k) => {
                         let pg = t.row_states(row).cast_const().cast::<AggPerGroup>();
                         let (c, m) = unsafe {
-                            ((*pg).trans_value.as_i64(), (*pg.add(1)).trans_value.as_i64())
+                            (
+                                (*pg).trans_value.as_i64(),
+                                (*pg.add(1)).trans_value.as_i64(),
+                            )
                         };
                         assert!(seen.insert(k, (c, m)).is_none(), "key {k} in two buckets");
                         assert_eq!(b, bucket_of(sink_hash(k as u64, 0)));
@@ -5932,7 +6278,10 @@ mod tests {
                         assert_eq!(b, SINK_NULL_BUCKET);
                         let pg = t.row_states(row).cast_const().cast::<AggPerGroup>();
                         null_seen = Some(unsafe {
-                            ((*pg).trans_value.as_i64(), (*pg.add(1)).trans_value.as_i64())
+                            (
+                                (*pg).trans_value.as_i64(),
+                                (*pg.add(1)).trans_value.as_i64(),
+                            )
                         });
                     }
                 }
@@ -5950,7 +6299,11 @@ mod tests {
                 3 * k
             };
             assert_eq!(c, want_c, "count of key {k}");
-            assert_eq!(m, want_m.max(if k < 1000 { k } else { want_m }), "max of key {k}");
+            assert_eq!(
+                m,
+                want_m.max(if k < 1000 { k } else { want_m }),
+                "max of key {k}"
+            );
         }
         assert_eq!(null_seen, Some((3, 7)));
     }
@@ -5995,10 +6348,16 @@ mod tests {
         let (mut h_b, run_b) = build();
         let flushed = h_b.flush_remainder().expect("non-empty remainder");
         assert_eq!(h_b.table().nrows(), 0, "flush drains the table");
-        assert!(h_b.flush_remainder().is_none(), "empty table flushes nothing");
+        assert!(
+            h_b.flush_remainder().is_none(),
+            "empty table flushes nothing"
+        );
         let runs_b = [run_b, flushed];
-        let locals_b =
-            [SinkLocalView { spilled: &[], runs: &runs_b, remainder: None }];
+        let locals_b = [SinkLocalView {
+            spilled: &[],
+            runs: &runs_b,
+            remainder: None,
+        }];
 
         for b in 0..SINK_NBUCKETS {
             let ta = sink_combine_bucket(b, 1, STATE_BYTES, &locals_a, &combines).unwrap();
@@ -6045,8 +6404,30 @@ mod tests {
         bump(&mut t2, Some(same[0]), 1, 0);
         let part2 = sink_partition_remainder(&t2);
         let locals = [
-            SinkLocalView { spilled: &[], runs: core::slice::from_ref(&run1), remainder: Some(SinkRemainder { table: &t1, part: &part1, canon: None, canon_store: None, gid_gen: 0, direct: false }) },
-            SinkLocalView { spilled: &[], runs: &[], remainder: Some(SinkRemainder { table: &t2, part: &part2, canon: None, canon_store: None, gid_gen: 0, direct: false }) },
+            SinkLocalView {
+                spilled: &[],
+                runs: core::slice::from_ref(&run1),
+                remainder: Some(SinkRemainder {
+                    table: &t1,
+                    part: &part1,
+                    canon: None,
+                    canon_store: None,
+                    gid_gen: 0,
+                    direct: false,
+                }),
+            },
+            SinkLocalView {
+                spilled: &[],
+                runs: &[],
+                remainder: Some(SinkRemainder {
+                    table: &t2,
+                    part: &part2,
+                    canon: None,
+                    canon_store: None,
+                    gid_gen: 0,
+                    direct: false,
+                }),
+            },
         ];
         let combines = test_combines();
         let t = sink_combine_bucket(want_bucket, 1, STATE_BYTES, &locals, &combines).unwrap();
@@ -6061,7 +6442,12 @@ mod tests {
     /// Row (count, max) via the toy AggPerGroup pair.
     fn row_counts(t: &LaneAggTable, row: usize) -> (i64, i64) {
         let pg = t.row_states(row).cast_const().cast::<AggPerGroup>();
-        unsafe { ((*pg).trans_value.as_i64(), (*pg.add(1)).trans_value.as_i64()) }
+        unsafe {
+            (
+                (*pg).trans_value.as_i64(),
+                (*pg.add(1)).trans_value.as_i64(),
+            )
+        }
     }
 
     /// numa-combine item 1, the superset-lemma-style order law: merging
@@ -6105,22 +6491,50 @@ mod tests {
             SinkLocalView {
                 spilled: &[],
                 runs: core::slice::from_ref(&run0),
-                remainder: Some(SinkRemainder { table: &t0, part: &part0, canon: None, canon_store: None, gid_gen: 0, direct: false }),
+                remainder: Some(SinkRemainder {
+                    table: &t0,
+                    part: &part0,
+                    canon: None,
+                    canon_store: None,
+                    gid_gen: 0,
+                    direct: false,
+                }),
             },
             SinkLocalView {
                 spilled: &[],
                 runs: &[],
-                remainder: Some(SinkRemainder { table: &t1, part: &part1, canon: None, canon_store: None, gid_gen: 0, direct: false }),
+                remainder: Some(SinkRemainder {
+                    table: &t1,
+                    part: &part1,
+                    canon: None,
+                    canon_store: None,
+                    gid_gen: 0,
+                    direct: false,
+                }),
             },
             SinkLocalView {
                 spilled: &[],
                 runs: core::slice::from_ref(&run2),
-                remainder: Some(SinkRemainder { table: &t2, part: &part2, canon: None, canon_store: None, gid_gen: 0, direct: false }),
+                remainder: Some(SinkRemainder {
+                    table: &t2,
+                    part: &part2,
+                    canon: None,
+                    canon_store: None,
+                    gid_gen: 0,
+                    direct: false,
+                }),
             },
             SinkLocalView {
                 spilled: &[],
                 runs: &[],
-                remainder: Some(SinkRemainder { table: &t3, part: &part3, canon: None, canon_store: None, gid_gen: 0, direct: false }),
+                remainder: Some(SinkRemainder {
+                    table: &t3,
+                    part: &part3,
+                    canon: None,
+                    canon_store: None,
+                    gid_gen: 0,
+                    direct: false,
+                }),
             },
         ];
         let combines = test_combines();
@@ -6135,11 +6549,18 @@ mod tests {
             assert_eq!(r1.nrows(), m1.nrows());
             // Final: 2-way merge of the partials, socket order.
             let partial_views = [
-                SinkLocalView { spilled: &[], runs: core::slice::from_ref(&r0), remainder: None },
-                SinkLocalView { spilled: &[], runs: core::slice::from_ref(&r1), remainder: None },
+                SinkLocalView {
+                    spilled: &[],
+                    runs: core::slice::from_ref(&r0),
+                    remainder: None,
+                },
+                SinkLocalView {
+                    spilled: &[],
+                    runs: core::slice::from_ref(&r1),
+                    remainder: None,
+                },
             ];
-            let two =
-                sink_combine_bucket(b, 1, STATE_BYTES, &partial_views, &combines).unwrap();
+            let two = sink_combine_bucket(b, 1, STATE_BYTES, &partial_views, &combines).unwrap();
             assert_eq!(two.nrows(), flat.nrows(), "bucket {b} row count");
             for row in 0..flat.nrows() {
                 assert_eq!(
@@ -6202,8 +6623,16 @@ mod tests {
                 runs: core::slice::from_ref(&run1),
                 remainder: Some(h1.remainder_view(&part1)),
             },
-            SinkLocalView { spilled: &[], runs: &[], remainder: Some(h2.remainder_view(&part2)) },
-            SinkLocalView { spilled: &[], runs: &[], remainder: Some(h3.remainder_view(&part3)) },
+            SinkLocalView {
+                spilled: &[],
+                runs: &[],
+                remainder: Some(h2.remainder_view(&part2)),
+            },
+            SinkLocalView {
+                spilled: &[],
+                runs: &[],
+                remainder: Some(h3.remainder_view(&part3)),
+            },
             SinkLocalView {
                 spilled: &[],
                 runs: core::slice::from_ref(&run4),
@@ -6219,13 +6648,24 @@ mod tests {
             let r0 = sink_run_from_bucket_table(b, &m0);
             let r1 = sink_run_from_bucket_table(b, &m1);
             assert_eq!(r0.key_words, 0);
-            assert_eq!(r0.hashes.len(), r0.nrows(), "carried-hash law on the partial run");
+            assert_eq!(
+                r0.hashes.len(),
+                r0.nrows(),
+                "carried-hash law on the partial run"
+            );
             let partial_views = [
-                SinkLocalView { spilled: &[], runs: core::slice::from_ref(&r0), remainder: None },
-                SinkLocalView { spilled: &[], runs: core::slice::from_ref(&r1), remainder: None },
+                SinkLocalView {
+                    spilled: &[],
+                    runs: core::slice::from_ref(&r0),
+                    remainder: None,
+                },
+                SinkLocalView {
+                    spilled: &[],
+                    runs: core::slice::from_ref(&r1),
+                    remainder: None,
+                },
             ];
-            let two =
-                sink_combine_bucket(b, 0, STATE_BYTES, &partial_views, &combines).unwrap();
+            let two = sink_combine_bucket(b, 0, STATE_BYTES, &partial_views, &combines).unwrap();
             assert_eq!(two.nrows(), flat.nrows(), "bucket {b} row count");
             groups += flat.nrows();
             let (mut sa, mut sb) = ([0u8; 8], [0u8; 8]);
@@ -6335,7 +6775,10 @@ mod tests {
     }
 
     fn mk_transarray(count: i64, sum: i64) -> Box<Int8TransArray> {
-        let mut a = Box::new(Int8TransArray { hdr: [0; 24], data: [count, sum] });
+        let mut a = Box::new(Int8TransArray {
+            hdr: [0; 24],
+            data: [count, sum],
+        });
         let size: u32 = 40u32 << 2; // varatt 4B-U header: len << 2
         a.hdr[0..4].copy_from_slice(&size.to_le_bytes());
         a.hdr[4..8].copy_from_slice(&1i32.to_le_bytes()); // ndim
@@ -6363,8 +6806,18 @@ mod tests {
         ];
         assert!(sink_combines_byref(&combines));
 
-        let mut d_poly = Int128AggState { calc_sum_x2: false, n: 3, sum_x: 30, sum_x2: 0 };
-        let s_poly = Int128AggState { calc_sum_x2: false, n: 2, sum_x: 12, sum_x2: 0 };
+        let mut d_poly = Int128AggState {
+            calc_sum_x2: false,
+            n: 3,
+            sum_x: 30,
+            sum_x2: 0,
+        };
+        let s_poly = Int128AggState {
+            calc_sum_x2: false,
+            n: 2,
+            sum_x: 12,
+            sum_x2: 0,
+        };
         let d_arr = mk_transarray(4, 100);
         let s_arr = mk_transarray(6, 44);
 
@@ -6434,18 +6887,23 @@ mod tests {
             cols: vec![
                 SinkEmitCol::Key,
                 SinkEmitCol::AvgInt128 { transno: 0 },
-                SinkEmitCol::AvgInt8 { transno: 1, packed: false },
+                SinkEmitCol::AvgInt8 {
+                    transno: 1,
+                    packed: false,
+                },
             ],
         };
         let buf = sink_emit_bucket(&plan, &t).unwrap();
         assert_eq!(buf.nrows, 1);
         assert_eq!(buf.values[0].as_i64(), 7);
-        let expect_poly =
-            ::adt_numeric::aggregates::numeric_poly_avg(Some(&d_poly)).unwrap().unwrap();
+        let expect_poly = ::adt_numeric::aggregates::numeric_poly_avg(Some(&d_poly))
+            .unwrap()
+            .unwrap();
         let expect_arr = ::adt_numeric::ops::int64_avg_div(144, 10).unwrap();
-        for (v, expect) in
-            [(buf.values[1], expect_poly.as_bytes()), (buf.values[2], expect_arr.as_bytes())]
-        {
+        for (v, expect) in [
+            (buf.values[1], expect_poly.as_bytes()),
+            (buf.values[2], expect_arr.as_bytes()),
+        ] {
             let p = v.as_usize();
             // The datum points into the buf's OWN arena.
             let lo = buf.arena.as_ptr() as usize;
@@ -6520,7 +6978,10 @@ mod tests {
             filter: None,
             cols: vec![SinkEmitCol::Key, SinkEmitCol::VarlenaTrans { transno: 0 }],
         };
-        assert!(!sink_emit_plan_all_byval(&plan), "text survivors never table-adopt");
+        assert!(
+            !sink_emit_plan_all_byval(&plan),
+            "text survivors never table-adopt"
+        );
 
         let apple = mk_text(b"apple");
         let pear = mk_text(b"pear");
@@ -6544,38 +7005,66 @@ mod tests {
         unsafe {
             sink_combine_states(&combines, dst.as_mut_ptr(), src.as_ptr(), Some(&mut sa)).unwrap()
         };
-        assert_eq!(dst[0].trans_value.as_usize(), keep, "min keeps dst, untouched");
+        assert_eq!(
+            dst[0].trans_value.as_usize(),
+            keep,
+            "min keeps dst, untouched"
+        );
         assert_eq!(text_payload(dst[0].trans_value), b"apple");
-        assert_eq!(text_payload(dst[1].trans_value), b"pear", "max takes src's value");
+        assert_eq!(
+            text_payload(dst[1].trans_value),
+            b"pear",
+            "max takes src's value"
+        );
         assert_ne!(
             dst[1].trans_value.as_usize(),
             &*pear as *const _ as usize,
             "the source pointer is never adopted"
         );
-        assert!(sa.owns(dst[1].trans_value.as_usize()), "the winner is store-allocated");
+        assert!(
+            sa.owns(dst[1].trans_value.as_usize()),
+            "the winner is store-allocated"
+        );
 
         // Length tiebreak on a shared prefix: "app" < "apple".
         let mut dst_len = [owned(&mut sa, &apple), owned(&mut sa, &apple)];
         let keep_len = dst_len[1].trans_value.as_usize();
         let src_len = [pg_of(&app), pg_of(&app)];
         unsafe {
-            sink_combine_states(&combines, dst_len.as_mut_ptr(), src_len.as_ptr(), Some(&mut sa))
-                .unwrap()
+            sink_combine_states(
+                &combines,
+                dst_len.as_mut_ptr(),
+                src_len.as_ptr(),
+                Some(&mut sa),
+            )
+            .unwrap()
         };
         assert_eq!(text_payload(dst_len[0].trans_value), b"app", "min: shorter");
         assert!(sa.owns(dst_len[0].trans_value.as_usize()));
-        assert_eq!(dst_len[1].trans_value.as_usize(), keep_len, "max: longer, untouched");
+        assert_eq!(
+            dst_len[1].trans_value.as_usize(),
+            keep_len,
+            "max: longer, untouched"
+        );
 
         // Byte-equal tie: C returns arg1 only on a STRICT win → the src value
         // is copied in (unobservable — the images are byte-identical).
         let mut dst_tie = [owned(&mut sa, &apple), owned(&mut sa, &apple)];
         let src_tie = [pg_of(&apple2), pg_of(&apple2)];
         unsafe {
-            sink_combine_states(&combines, dst_tie.as_mut_ptr(), src_tie.as_ptr(), Some(&mut sa))
-                .unwrap()
+            sink_combine_states(
+                &combines,
+                dst_tie.as_mut_ptr(),
+                src_tie.as_ptr(),
+                Some(&mut sa),
+            )
+            .unwrap()
         };
         assert_eq!(text_payload(dst_tie[0].trans_value), b"apple");
-        assert_ne!(dst_tie[0].trans_value.as_usize(), &*apple2 as *const _ as usize);
+        assert_ne!(
+            dst_tie[0].trans_value.as_usize(),
+            &*apple2 as *const _ as usize
+        );
 
         // Strict NULL handling: a no-value dst COPIES the src (C's
         // noTransValue datumCopy); NULL src is a skip.
@@ -6597,22 +7086,32 @@ mod tests {
             },
         ];
         unsafe {
-            sink_combine_states(&combines, dst_null.as_mut_ptr(), src_null.as_ptr(), Some(&mut sa))
-                .unwrap()
+            sink_combine_states(
+                &combines,
+                dst_null.as_mut_ptr(),
+                src_null.as_ptr(),
+                Some(&mut sa),
+            )
+            .unwrap()
         };
         assert_eq!(text_payload(dst_null[0].trans_value), b"pear");
-        assert_ne!(dst_null[0].trans_value.as_usize(), &*pear as *const _ as usize);
+        assert_ne!(
+            dst_null[0].trans_value.as_usize(),
+            &*pear as *const _ as usize
+        );
         assert!(sa.owns(dst_null[0].trans_value.as_usize()));
         assert!(!dst_null[0].trans_value_is_null);
-        assert_eq!(dst_null[1].trans_value.as_usize(), keep_null, "null src is a skip");
+        assert_eq!(
+            dst_null[1].trans_value.as_usize(),
+            keep_null,
+            "null src is a skip"
+        );
 
         // Fail-closed: a text combine with no destination store never adopts.
         let mut dst_nostore = [owned(&mut sa, &apple), owned(&mut sa, &apple)];
         assert!(
-            unsafe {
-                sink_combine_states(&combines, dst_nostore.as_mut_ptr(), src.as_ptr(), None)
-            }
-            .is_err(),
+            unsafe { sink_combine_states(&combines, dst_nostore.as_mut_ptr(), src.as_ptr(), None) }
+                .is_err(),
             "no store ⇒ error, never a borrowed pointer"
         );
 
@@ -6632,7 +7131,10 @@ mod tests {
         let expect = &apple.buf[..4 + 5];
         let p = buf.values[1].as_usize();
         let lo = buf.arena.as_ptr() as usize;
-        assert!(p >= lo && p + expect.len() <= lo + buf.arena.len(), "datum points into arena");
+        assert!(
+            p >= lo && p + expect.len() <= lo + buf.arena.len(),
+            "datum points into arena"
+        );
         let got = unsafe { core::slice::from_raw_parts(p as *const u8, expect.len()) };
         assert_eq!(got, expect, "survivor image copied verbatim");
         assert!(!buf.nulls[1]);
@@ -6675,7 +7177,11 @@ mod tests {
         let d = Datum::from_usize(&*img as *const TextImage as usize);
         imgs.push(img);
         let pr = t.probe_int(k, t.hash_key_int(k as u64));
-        let pg = AggPerGroup { trans_value: d, trans_value_is_null: false, no_trans_value: false };
+        let pg = AggPerGroup {
+            trans_value: d,
+            trans_value_is_null: false,
+            no_trans_value: false,
+        };
         // SAFETY: a fresh row's block is 2 pergroups (STATE_BYTES).
         unsafe {
             let p = pr.states.cast::<AggPerGroup>();
@@ -6757,8 +7263,16 @@ mod tests {
             for row in 0..buf.nrows {
                 let k = buf.values[row * 3].as_i64();
                 let (lo, hi) = &expect[&k];
-                assert_eq!(&emit_text(buf, buf.values[row * 3 + 1]), lo, "min of key {k}");
-                assert_eq!(&emit_text(buf, buf.values[row * 3 + 2]), hi, "max of key {k}");
+                assert_eq!(
+                    &emit_text(buf, buf.values[row * 3 + 1]),
+                    lo,
+                    "min of key {k}"
+                );
+                assert_eq!(
+                    &emit_text(buf, buf.values[row * 3 + 2]),
+                    hi,
+                    "max of key {k}"
+                );
                 assert!(seen.insert(k, ()).is_none(), "key {k} emitted twice");
             }
         };
@@ -6828,8 +7342,12 @@ mod tests {
                 let run = sink_run_from_bucket_table(b, &m);
                 (run, m.into_str_store())
             };
-            let partials: Vec<((SinkRun, Option<StrStateArena>), (SinkRun, Option<StrStateArena>))> =
-                (0..SINK_NBUCKETS).map(|b| (half(&ta, &pa, b), half(&tb, &pb, b))).collect();
+            let partials: Vec<(
+                (SinkRun, Option<StrStateArena>),
+                (SinkRun, Option<StrStateArena>),
+            )> = (0..SINK_NBUCKETS)
+                .map(|b| (half(&ta, &pa, b), half(&tb, &pb, b)))
+                .collect();
             poison(&mut imgs);
             let mut seen = std::collections::HashMap::new();
             for (b, ((r0, s0), (r1, s1))) in partials.into_iter().enumerate() {
@@ -6871,7 +7389,11 @@ mod tests {
             no_trans_value: false,
         };
         // SAFETY: the slot is 16 repr(C) bytes, 8-aligned.
-        unsafe { (&mut pg as *mut AggPerGroup).cast::<[i64; 2]>().write([count, sum]) };
+        unsafe {
+            (&mut pg as *mut AggPerGroup)
+                .cast::<[i64; 2]>()
+                .write([count, sum])
+        };
         pg
     }
 
@@ -7002,8 +7524,16 @@ mod tests {
             }
         }
         let locals = [
-            SinkLocalView { spilled: &spilled, runs: &[], remainder: None },
-            SinkLocalView { spilled: &[], runs: core::slice::from_ref(&run_b), remainder: None },
+            SinkLocalView {
+                spilled: &spilled,
+                runs: &[],
+                remainder: None,
+            },
+            SinkLocalView {
+                spilled: &[],
+                runs: core::slice::from_ref(&run_b),
+                remainder: None,
+            },
         ];
         let plan = SinkEmitPlan {
             width: 8,
@@ -7013,7 +7543,10 @@ mod tests {
             cols: vec![
                 SinkEmitCol::Key,
                 SinkEmitCol::Agg { transno: 0 },
-                SinkEmitCol::AvgInt8 { transno: 1, packed: true },
+                SinkEmitCol::AvgInt8 {
+                    transno: 1,
+                    packed: true,
+                },
             ],
         };
         let mut rows: Vec<(i64, i64, Option<Vec<u8>>)> = Vec::new();
@@ -7031,9 +7564,7 @@ mod tests {
                     // Compare through the expected image's length below;
                     // capture generously (the arena is self-contained).
                     let len = buf.arena.len() - (p - lo);
-                    Some(
-                        unsafe { core::slice::from_raw_parts(p as *const u8, len) }.to_vec(),
-                    )
+                    Some(unsafe { core::slice::from_raw_parts(p as *const u8, len) }.to_vec())
                 };
                 rows.push((key, count, avg));
             }
@@ -7141,13 +7672,22 @@ mod tests {
                 SinkEmitCol::Agg { transno: 1 },
             ],
         };
-        let locals =
-            [SinkLocalView { spilled: &[], runs: &[], remainder: Some(SinkRemainder { table: &t, part: &part, canon: None, canon_store: None, gid_gen: 0, direct: false }) }];
+        let locals = [SinkLocalView {
+            spilled: &[],
+            runs: &[],
+            remainder: Some(SinkRemainder {
+                table: &t,
+                part: &part,
+                canon: None,
+                canon_store: None,
+                gid_gen: 0,
+                direct: false,
+            }),
+        }];
         let combines = test_combines();
         let mut total_rows = 0usize;
         for b in 0..SINK_NBUCKETS {
-            let merged =
-                sink_combine_bucket(b, 1, STATE_BYTES, &locals, &combines).unwrap();
+            let merged = sink_combine_bucket(b, 1, STATE_BYTES, &locals, &combines).unwrap();
             let want = sink_emit_bucket(&plan, &merged).unwrap();
             let got = sink_emit_bucket_passthrough(&plan, &t, &part, b).unwrap();
             assert_eq!(got.nrows, want.nrows, "bucket {b} row count");
@@ -7196,7 +7736,11 @@ mod tests {
         for row in 0..want.nrows {
             for c in 0..natts {
                 let (v, isnull) = table_emit_datum(&plan, &t, row, c);
-                assert_eq!(isnull, want.nulls[row * natts + c], "row {row} col {c} null");
+                assert_eq!(
+                    isnull,
+                    want.nulls[row * natts + c],
+                    "row {row} col {c} null"
+                );
                 if !isnull {
                     assert_eq!(
                         v.as_i64(),
@@ -7215,8 +7759,16 @@ mod tests {
     fn canon_shape_int8_text() -> MkShape {
         MkShape {
             comps: vec![
-                crate::compact::MkComp { att: 0, off: 0, kind: MkCompKind::Int { width: 8 } },
-                crate::compact::MkComp { att: 1, off: 8, kind: MkCompKind::Intern },
+                crate::compact::MkComp {
+                    att: 0,
+                    off: 0,
+                    kind: MkCompKind::Int { width: 8 },
+                },
+                crate::compact::MkComp {
+                    att: 1,
+                    off: 8,
+                    kind: MkCompKind::Intern,
+                },
             ],
             packed_bytes: 12,
             nullable: false,
@@ -7300,9 +7852,14 @@ mod tests {
     fn emit_text(buf: &SinkEmitBuf, v: Datum) -> Vec<u8> {
         let p = v.as_usize();
         let lo = buf.arena.as_ptr() as usize;
-        assert!(p >= lo && p < lo + buf.arena.len(), "text datum points into the buf arena");
+        assert!(
+            p >= lo && p < lo + buf.arena.len(),
+            "text datum points into the buf arena"
+        );
         // SAFETY: the emit wrote a 4B-header varlena at p.
-        unsafe { ::datum::VarlenaRef::from_ptr(p as *const u8) }.data().to_vec()
+        unsafe { ::datum::VarlenaRef::from_ptr(p as *const u8) }
+            .data()
+            .to_vec()
     }
 
     /// arena-strings inc-1: the STOLEN key-store law must be observationally
@@ -7323,7 +7880,11 @@ mod tests {
             (b"a-rather-long-canonical-key-way-past-eight", 7),
         ];
         for single in [false, true] {
-            let shape = if single { canon_shape_text_only() } else { canon_shape_int8_text() };
+            let shape = if single {
+                canon_shape_text_only()
+            } else {
+                canon_shape_int8_text()
+            };
             let build = |steal: bool| -> (SinkRun, SinkRun) {
                 let mut w = canon_worker(shape.clone());
                 for (i, (text, c)) in corpus.iter().enumerate() {
@@ -7362,7 +7923,11 @@ mod tests {
                 let total: usize = (0..SINK_NBUCKETS).map(|bkt| a.bucket_key_bytes(bkt)).sum();
                 let total_b: usize = (0..SINK_NBUCKETS).map(|bkt| b.bucket_key_bytes(bkt)).sum();
                 assert_eq!(total, total_b);
-                assert_eq!(total, b.key_bytes.len(), "stolen store holds exactly the images");
+                assert_eq!(
+                    total,
+                    b.key_bytes.len(),
+                    "stolen store holds exactly the images"
+                );
             }
         }
     }
@@ -7448,8 +8013,14 @@ mod tests {
         for (a, b) in [(&run_i, &run_d)] {
             assert_eq!(a.key_words, 0);
             assert_eq!(b.key_words, 0);
-            assert!(b.key_ends.is_empty(), "direct flush is the contiguous copy law");
-            assert!(b.keys.is_empty() && b.gid_gen == 0, "no GID words on direct runs");
+            assert!(
+                b.key_ends.is_empty(),
+                "direct flush is the contiguous copy law"
+            );
+            assert!(
+                b.keys.is_empty() && b.gid_gen == 0,
+                "no GID words on direct runs"
+            );
             assert_eq!(a.starts, b.starts);
             assert_eq!(a.hashes, b.hashes);
             assert_eq!(a.states, b.states);
@@ -7514,7 +8085,12 @@ mod tests {
             let run1 = sink_flush_table_canon(&mut w1);
             // Remainder epoch: reused + new texts, NOT flushed.
             bump_canon(&mut w1, None, b"apple", 10);
-            bump_canon(&mut w1, None, b"remainder-only-key-way-past-eight-bytes", 11);
+            bump_canon(
+                &mut w1,
+                None,
+                b"remainder-only-key-way-past-eight-bytes",
+                11,
+            );
             bump_canon(&mut w1, None, b"", 12);
             let mut w2 = canon_worker(canon_shape_text_only());
             bump_canon(&mut w2, None, b"banana", 20);
@@ -7539,7 +8115,10 @@ mod tests {
         let (drun, mut dh1, mut dh2) = build_direct();
         let (ipart1, ipart2) = (ih1.partition_remainder(), ih2.partition_remainder());
         let (dpart1, dpart2) = (dh1.partition_remainder(), dh2.partition_remainder());
-        assert_eq!(ipart1.starts, dpart1.starts, "SEAL partition geometry diverges");
+        assert_eq!(
+            ipart1.starts, dpart1.starts,
+            "SEAL partition geometry diverges"
+        );
         assert_eq!(ipart1.hashes, dpart1.hashes, "SEAL-carried hashes diverge");
         assert!(!dpart1.has_null && !dpart2.has_null);
         let combines = test_combines();
@@ -7584,10 +8163,8 @@ mod tests {
         // (the C2 canonical record — self-describing per-row key_len).
         for b in 0..SINK_NBUCKETS {
             let (mut si, mut sd) = (Vec::new(), Vec::new());
-            sink_remainder_spill_bucket_canon(&ih1.remainder_view(&ipart1), b, &mut si)
-                .unwrap();
-            sink_remainder_spill_bucket_canon(&dh1.remainder_view(&dpart1), b, &mut sd)
-                .unwrap();
+            sink_remainder_spill_bucket_canon(&ih1.remainder_view(&ipart1), b, &mut si).unwrap();
+            sink_remainder_spill_bucket_canon(&dh1.remainder_view(&dpart1), b, &mut sd).unwrap();
             assert_eq!(si, sd, "remainder spill records diverge in bucket {b}");
             assert_eq!(
                 sink_remainder_canon_content(&ih1.remainder_view(&ipart1), b),
@@ -7611,17 +8188,24 @@ mod tests {
         bump_direct(&mut d, b"alpha", 3);
         assert_eq!(d.table.nrows(), 2);
         let run1 = sink_flush_table_direct(&mut d);
-        assert_eq!(d.table.nrows(), 0, "the flush resets the table (vocabulary)");
+        assert_eq!(
+            d.table.nrows(),
+            0,
+            "the flush resets the table (vocabulary)"
+        );
         // Re-feed the SAME texts: fresh probes must create fresh rows.
         bump_direct(&mut d, b"alpha", 10);
         bump_direct(&mut d, b"beta-longer-than-eight-bytes", 20);
-        assert_eq!(d.table.nrows(), 2, "post-flush arrivals re-probe, never dangle");
+        assert_eq!(
+            d.table.nrows(),
+            2,
+            "post-flush arrivals re-probe, never dangle"
+        );
         let run2 = sink_flush_table_direct(&mut d);
         let count_of = |run: &SinkRun, text: &[u8]| -> Option<i64> {
             let img = direct_image(text);
             (0..run.nrows()).find_map(|i| {
-                (run.key_slice(i) == img.as_slice())
-                    .then(|| run.states[i * run.state_words] as i64)
+                (run.key_slice(i) == img.as_slice()).then(|| run.states[i * run.state_words] as i64)
             })
         };
         assert_eq!(count_of(&run1, b"alpha"), Some(4));
@@ -7643,7 +8227,10 @@ mod tests {
         let ei = sink_freeze_extract_ch(&w, 3).expect("intern extractable");
         let ed = sink_freeze_extract_ch(&d, 3).expect("direct extractable");
         assert_eq!(ei, ed);
-        assert!(sink_freeze_extract_ch(&d, 64).is_none(), "bound past nrows declines");
+        assert!(
+            sink_freeze_extract_ch(&d, 64).is_none(),
+            "bound past nrows declines"
+        );
     }
 
     #[test]
@@ -7660,7 +8247,11 @@ mod tests {
         assert_eq!(run1.nrows(), 3);
         assert!(run1.null_states.is_none());
         assert_eq!(w1.table.nrows(), 0, "flush resets the mk table");
-        assert_eq!(w1.intern.as_ref().unwrap().nrows(), 2, "intern survives the flush");
+        assert_eq!(
+            w1.intern.as_ref().unwrap().nrows(),
+            2,
+            "intern survives the flush"
+        );
         // Remainder after the flush: apple's intern id is REUSED (same id,
         // same canonical bytes) + a new text.
         bump_canon(&mut w1, Some(1), b"apple", 10);
@@ -7682,7 +8273,11 @@ mod tests {
                 runs: core::slice::from_ref(&run1),
                 remainder: Some(h1.remainder_view(&part1)),
             },
-            SinkLocalView { spilled: &[], runs: &[], remainder: Some(h2.remainder_view(&part2)) },
+            SinkLocalView {
+                spilled: &[],
+                runs: &[],
+                remainder: Some(h2.remainder_view(&part2)),
+            },
         ];
         let combines = test_combines();
         let plan = SinkEmitPlan {
@@ -7713,7 +8308,11 @@ mod tests {
             }
         }
         assert_eq!(seen.len(), 5);
-        assert_eq!(seen[&(1, b"apple".to_vec())], 41, "1 + 10 + 30 across run/remainders");
+        assert_eq!(
+            seen[&(1, b"apple".to_vec())],
+            41,
+            "1 + 10 + 30 across run/remainders"
+        );
         assert_eq!(seen[&(1, b"banana".to_vec())], 22);
         assert_eq!(seen[&(2, b"apple".to_vec())], 3);
         assert_eq!(seen[&(3, b"cherry".to_vec())], 5);
@@ -7742,7 +8341,10 @@ mod tests {
                 2 => assert_eq!(a.row_key_i128(row), b.row_key_i128(row), "row {row} key"),
                 _ => assert_eq!(a.row_key_int(row), b.row_key_int(row), "row {row} key"),
             }
-            let (pa, pb) = (a.row_states(row).cast_const(), b.row_states(row).cast_const());
+            let (pa, pb) = (
+                a.row_states(row).cast_const(),
+                b.row_states(row).cast_const(),
+            );
             // SAFETY: live rows; state blocks are state_words u64s.
             let (va, vb) = unsafe {
                 (
@@ -7777,17 +8379,38 @@ mod tests {
         }
         let part2 = sink_partition_remainder(&t2);
         let locals = [
-            SinkLocalView { spilled: &[], runs: core::slice::from_ref(&run1), remainder: Some(SinkRemainder { table: &t1, part: &part1, canon: None, canon_store: None, gid_gen: 0, direct: false }) },
-            SinkLocalView { spilled: &[], runs: &[], remainder: Some(SinkRemainder { table: &t2, part: &part2, canon: None, canon_store: None, gid_gen: 0, direct: false }) },
+            SinkLocalView {
+                spilled: &[],
+                runs: core::slice::from_ref(&run1),
+                remainder: Some(SinkRemainder {
+                    table: &t1,
+                    part: &part1,
+                    canon: None,
+                    canon_store: None,
+                    gid_gen: 0,
+                    direct: false,
+                }),
+            },
+            SinkLocalView {
+                spilled: &[],
+                runs: &[],
+                remainder: Some(SinkRemainder {
+                    table: &t2,
+                    part: &part2,
+                    canon: None,
+                    canon_store: None,
+                    gid_gen: 0,
+                    direct: false,
+                }),
+            },
         ];
         let combines = test_combines();
         for b in 0..SINK_NBUCKETS {
             let incumbent =
                 sink_combine_bucket_impl(b, 1, STATE_BYTES, &locals, &combines, false, false)
                     .unwrap();
-            let flat =
-                sink_combine_bucket_impl(b, 1, STATE_BYTES, &locals, &combines, false, true)
-                    .unwrap();
+            let flat = sink_combine_bucket_impl(b, 1, STATE_BYTES, &locals, &combines, false, true)
+                .unwrap();
             assert_eq!(flat.grow_count(), 0, "bucket {b}: presized flat table grew");
             assert_eq!(flat.convert_count(), 0, "bucket {b}: flat table converted");
             assert_merged_identical(&incumbent, &flat, 1);
@@ -7821,7 +8444,11 @@ mod tests {
                 runs: core::slice::from_ref(&run1),
                 remainder: Some(h1.remainder_view(&part1)),
             },
-            SinkLocalView { spilled: &[], runs: &[], remainder: Some(h2.remainder_view(&part2)) },
+            SinkLocalView {
+                spilled: &[],
+                runs: &[],
+                remainder: Some(h2.remainder_view(&part2)),
+            },
         ];
         let combines = test_combines();
         for gid in [false, true] {
@@ -7851,8 +8478,7 @@ mod tests {
         let mk_key = |i: usize| (i as u64).to_le_bytes();
         // Carried-hash discipline: constant top byte, varying low bits —
         // the shape probe_bytes sees from a combine claim's run hashes.
-        let mk_hash =
-            |i: usize| (0xABu64 << 56) | (sink_hash(i as u64, 17) & ((1u64 << 56) - 1));
+        let mk_hash = |i: usize| (0xABu64 << 56) | (sink_hash(i as u64, 17) & ((1u64 << 56) - 1));
         let mut incumbent = LaneAggTable::with_config(
             KeyRepr::Bytes,
             STATE_BYTES,
@@ -7877,7 +8503,10 @@ mod tests {
         // Re-probe: every key hits in both.
         for i in 0..N {
             let (k, h) = (mk_key(i), mk_hash(i));
-            assert!(!incumbent.probe_bytes(&k, h).is_new, "re-probe {i} (incumbent)");
+            assert!(
+                !incumbent.probe_bytes(&k, h).is_new,
+                "re-probe {i} (incumbent)"
+            );
             assert!(!flat.probe_bytes(&k, h).is_new, "re-probe {i} (flat)");
         }
         assert_eq!(flat.grow_count(), 0, "flat presized table must never grow");
@@ -7885,7 +8514,10 @@ mod tests {
         // The incumbent, presized IDENTICALLY, still degrades: the constant
         // top byte defeats its 256-way presize (two-level at birth for this
         // hint), so the one live sub-EntrySet re-grows.
-        assert!(incumbent.is_two_level(), "hint above threshold builds two-level");
+        assert!(
+            incumbent.is_two_level(),
+            "hint above threshold builds two-level"
+        );
         assert!(
             incumbent.grow_count() > 0,
             "constant-top-byte inserts must grow the incumbent's single live sub-set"
@@ -7905,7 +8537,12 @@ mod tests {
     fn passthrough_admission_refuses_intern_armed_canonical() {
         let mut w = canon_worker(canon_shape_int8_text());
         bump_canon(&mut w, Some(1), b"apple", 1);
-        bump_canon(&mut w, Some(2), b"a-rather-long-canonical-key-way-past-eight", 2);
+        bump_canon(
+            &mut w,
+            Some(2),
+            b"a-rather-long-canonical-key-way-past-eight",
+            2,
+        );
         bump_canon(&mut w, Some(1), b"apple", 3);
         let mut h = SinkTableHandle(w);
         let part = h.partition_remainder();
@@ -7929,12 +8566,12 @@ mod tests {
         let mut tripped = false;
         for b in 0..SINK_NBUCKETS {
             if part.starts[b + 1] > part.starts[b] {
-                let Err(err) = sink_emit_bucket_passthrough(&plan, h.table(), &part, b)
-                else {
+                let Err(err) = sink_emit_bucket_passthrough(&plan, h.table(), &part, b) else {
                     panic!("word-keyed table cannot serve a MultiText emit")
                 };
                 assert!(
-                    err.message().contains("MultiText emit on a word-keyed table"),
+                    err.message()
+                        .contains("MultiText emit on a word-keyed table"),
                     "unexpected error: {}",
                     err.message()
                 );
@@ -8081,7 +8718,10 @@ mod tests {
             fixed: Some(4),
             ntails: 1,
             filter: None,
-            cols: vec![SinkEmitCol::MultiText { nth: 0 }, SinkEmitCol::Agg { transno: 0 }],
+            cols: vec![
+                SinkEmitCol::MultiText { nth: 0 },
+                SinkEmitCol::Agg { transno: 0 },
+            ],
         };
         let mut seen: std::collections::HashMap<Vec<u8>, i64> = std::collections::HashMap::new();
         for b in 0..SINK_NBUCKETS {
@@ -8093,7 +8733,11 @@ mod tests {
                 // Bucket routing: the canonical bytes' own hash.
                 let mut canon = vec![0u8; 4];
                 canon.extend_from_slice(&text);
-                assert_eq!(b, bucket_of(sink_hash_bytes(&canon)), "bucket law for {text:?}");
+                assert_eq!(
+                    b,
+                    bucket_of(sink_hash_bytes(&canon)),
+                    "bucket law for {text:?}"
+                );
                 assert!(seen.insert(text, c).is_none());
             }
         }
@@ -8122,8 +8766,13 @@ mod tests {
             two_words: false,
         };
         let mut w = canon_worker(shape);
-        let texts: [&[u8]; 5] =
-            [b"", b"a", b"abcd", b"abcdefghijklmnop", b"zzzzzzzzzzzzzzzzzzzzzzzz"];
+        let texts: [&[u8]; 5] = [
+            b"",
+            b"a",
+            b"abcd",
+            b"abcdefghijklmnop",
+            b"zzzzzzzzzzzzzzzzzzzzzzzz",
+        ];
         for (i, t) in texts.iter().enumerate() {
             bump_canon(&mut w, None, t, (i + 1) as i64);
         }
@@ -8189,7 +8838,11 @@ mod tests {
         let run = sink_flush_table(&mut t);
         assert_eq!(run.nrows(), 2);
         assert_eq!(run.key_words, 2);
-        let locals = [SinkLocalView { spilled: &[], runs: core::slice::from_ref(&run), remainder: None }];
+        let locals = [SinkLocalView {
+            spilled: &[],
+            runs: core::slice::from_ref(&run),
+            remainder: None,
+        }];
         let combines = test_combines();
         let mut found = 0;
         for b in 0..SINK_NBUCKETS {
@@ -8230,7 +8883,11 @@ mod tests {
 
         // Reference: in-memory combine over [run_a, run_b].
         let runs = [run_a, run_b];
-        let locals_mem = [SinkLocalView { spilled: &runs, runs: &[], remainder: None }];
+        let locals_mem = [SinkLocalView {
+            spilled: &runs,
+            runs: &[],
+            remainder: None,
+        }];
         let mut reference: Vec<CombinedBucket> = Vec::with_capacity(SINK_NBUCKETS);
         for b in 0..SINK_NBUCKETS {
             reference.push(sink_combine_bucket(b, 1, STATE_BYTES, &locals_mem, &combines).unwrap());
@@ -8257,7 +8914,11 @@ mod tests {
                     synth.push(sink_null_only_run(1, state_words, nb.clone()));
                 }
             }
-            let locals = [SinkLocalView { spilled: &synth, runs: &[], remainder: None }];
+            let locals = [SinkLocalView {
+                spilled: &synth,
+                runs: &[],
+                remainder: None,
+            }];
             assert_eq!(
                 sink_bucket_row_count(b, &locals),
                 (run_a.starts[b + 1] - run_a.starts[b] + run_b.starts[b + 1] - run_b.starts[b])
@@ -8310,7 +8971,14 @@ mod tests {
             let locals = [SinkLocalView {
                 spilled: core::slice::from_ref(&run1),
                 runs: &[],
-                remainder: Some(SinkRemainder { table: &t1, part: &part1, canon: None, canon_store: None, gid_gen: 0, direct: false }),
+                remainder: Some(SinkRemainder {
+                    table: &t1,
+                    part: &part1,
+                    canon: None,
+                    canon_store: None,
+                    gid_gen: 0,
+                    direct: false,
+                }),
             }];
             let direct = sink_combine_bucket(b, 1, STATE_BYTES, &locals, &combines).unwrap();
 
@@ -8373,7 +9041,10 @@ mod tests {
         let mut all: Vec<(u64, bool, [u64; 2], Option<i64>)> = (0..t.nrows())
             .map(|row| {
                 let pg = unsafe {
-                    &*t.row_states(row).cast_const().cast::<AggPerGroup>().add(spec.transno as usize)
+                    &*t.row_states(row)
+                        .cast_const()
+                        .cast::<AggPerGroup>()
+                        .add(spec.transno as usize)
                 };
                 assert!(!pg.trans_value_is_null && !pg.no_trans_value);
                 let b = crate::compact::topkfin_badness(pg.trans_value.as_i64(), spec.desc);
@@ -8389,7 +9060,10 @@ mod tests {
     }
 
     fn cand_keys(t: &LaneAggTable, cands: &[SinkTopnCand]) -> Vec<Option<i64>> {
-        cands.iter().map(|c| t.row_key_int(c.row as usize)).collect()
+        cands
+            .iter()
+            .map(|c| t.row_key_int(c.row as usize))
+            .collect()
     }
 
     #[test]
@@ -8406,7 +9080,11 @@ mod tests {
         bump(&mut t, None, 3, 0);
         for desc in [false, true] {
             for bound in [1u32, 7, 10, 100, 500] {
-                let spec = SinkTopnSpec { transno: 0, desc, bound };
+                let spec = SinkTopnSpec {
+                    transno: 0,
+                    desc,
+                    bound,
+                };
                 let got = sink_topn_candidates(&t, &spec, 0).expect("no NULL order keys");
                 assert_eq!(got.len(), (bound as usize).min(t.nrows()));
                 assert_eq!(
@@ -8432,10 +9110,18 @@ mod tests {
             let pg = t.row_states(3).cast::<AggPerGroup>().add(1);
             (*pg).trans_value_is_null = true;
         }
-        let spec = SinkTopnSpec { transno: 1, desc: true, bound: 5 };
+        let spec = SinkTopnSpec {
+            transno: 1,
+            desc: true,
+            bound: 5,
+        };
         assert!(sink_topn_candidates(&t, &spec, 0).is_none());
         // The count transition (never NULL) still selects.
-        let spec0 = SinkTopnSpec { transno: 0, desc: true, bound: 5 };
+        let spec0 = SinkTopnSpec {
+            transno: 0,
+            desc: true,
+            bound: 5,
+        };
         assert!(sink_topn_candidates(&t, &spec0, 0).is_some());
     }
 
@@ -8444,7 +9130,11 @@ mod tests {
         // Per-bucket selection + truncate-merge == selection over the union,
         // for an arbitrary 4-way bucket split (partition independence).
         let keys: Vec<i64> = (0..300).collect();
-        let spec = SinkTopnSpec { transno: 0, desc: true, bound: 17 };
+        let spec = SinkTopnSpec {
+            transno: 0,
+            desc: true,
+            bound: 17,
+        };
         let mut union = mk_table(64);
         let mut parts: Vec<LaneAggTable> = (0..4).map(|_| mk_table(64)).collect();
         for &k in &keys {
@@ -8476,7 +9166,11 @@ mod tests {
         for k in 0..3 {
             bump(&mut t, Some(k), k + 1, k);
         }
-        let spec = SinkTopnSpec { transno: 0, desc: true, bound: 100 };
+        let spec = SinkTopnSpec {
+            transno: 0,
+            desc: true,
+            bound: 100,
+        };
         let l = sink_topn_candidates(&t, &spec, 5).unwrap();
         assert_eq!(l.len(), 3);
         let w = sink_topn_merge(&[l.clone()], 100);
@@ -8542,14 +9236,19 @@ mod tests {
             .collect();
         all.sort_unstable();
         all.truncate(k);
-        all.into_iter().map(|(_, nl, kb)| if nl { None } else { Some(kb) }).collect()
+        all.into_iter()
+            .map(|(_, nl, kb)| if nl { None } else { Some(kb) })
+            .collect()
     }
 
     fn cand_keys_bytes(t: &LaneAggTable, cands: &[SinkTopnCand]) -> Vec<Option<Vec<u8>>> {
         let mut scratch = [0u8; 8];
         cands
             .iter()
-            .map(|c| t.row_key_bytes(c.row as usize, &mut scratch).map(<[u8]>::to_vec))
+            .map(|c| {
+                t.row_key_bytes(c.row as usize, &mut scratch)
+                    .map(<[u8]>::to_vec)
+            })
             .collect()
     }
 
@@ -8569,7 +9268,11 @@ mod tests {
         bump_bytes(&mut t, None, 3, 0);
         for desc in [false, true] {
             for bound in [1u32, 5, 10, 100] {
-                let spec = SinkTopnSpec { transno: 0, desc, bound };
+                let spec = SinkTopnSpec {
+                    transno: 0,
+                    desc,
+                    bound,
+                };
                 let got = sink_topn_candidates(&t, &spec, 0).expect("no NULL order keys");
                 assert_eq!(got.len(), (bound as usize).min(t.nrows()));
                 assert_eq!(
@@ -8601,7 +9304,11 @@ mod tests {
         }
         for desc in [false, true] {
             for bound in [1u32, 4, 9, 33] {
-                let spec = SinkTopnSpec { transno: 0, desc, bound };
+                let spec = SinkTopnSpec {
+                    transno: 0,
+                    desc,
+                    bound,
+                };
                 let a = cand_keys_bytes(
                     &fwd,
                     &sink_topn_candidates(&fwd, &spec, 0).expect("selects"),
@@ -8621,7 +9328,11 @@ mod tests {
         // union, for an arbitrary 4-way split of the bytes corpus
         // (partition independence over the bytes image).
         let keys = bytes_corpus();
-        let spec = SinkTopnSpec { transno: 0, desc: true, bound: 13 };
+        let spec = SinkTopnSpec {
+            transno: 0,
+            desc: true,
+            bound: 13,
+        };
         let mut union = mk_bytes_table(64);
         let mut parts: Vec<LaneAggTable> = (0..4).map(|_| mk_bytes_table(64)).collect();
         for (i, key) in keys.iter().enumerate() {
@@ -8639,10 +9350,15 @@ mod tests {
             .iter()
             .map(|&(b, row)| {
                 let mut scratch = [0u8; 8];
-                parts[b as usize].row_key_bytes(row as usize, &mut scratch).map(<[u8]>::to_vec)
+                parts[b as usize]
+                    .row_key_bytes(row as usize, &mut scratch)
+                    .map(<[u8]>::to_vec)
             })
             .collect();
-        assert_eq!(got, topn_reference_bytes(&union, &spec, spec.bound as usize));
+        assert_eq!(
+            got,
+            topn_reference_bytes(&union, &spec, spec.bound as usize)
+        );
     }
 
     // -- winners-only compact materialization (topn-winners-only inc-3) ----
@@ -8660,7 +9376,10 @@ mod tests {
         let natts = plan.cols.len();
         for (c, col) in plan.cols.iter().enumerate() {
             let (fv, fn_) = (full.values[fi * natts + c], full.nulls[fi * natts + c]);
-            let (cv, cn) = (compact.values[ci * natts + c], compact.nulls[ci * natts + c]);
+            let (cv, cn) = (
+                compact.values[ci * natts + c],
+                compact.nulls[ci * natts + c],
+            );
             assert_eq!(fn_, cn, "null flag col {c} (full row {fi} vs compact {ci})");
             match col {
                 SinkEmitCol::MultiText { .. } => {
@@ -8734,7 +9453,10 @@ mod tests {
             fixed: Some(0),
             ntails: 1,
             filter: None,
-            cols: vec![SinkEmitCol::MultiText { nth: 0 }, SinkEmitCol::Agg { transno: 0 }],
+            cols: vec![
+                SinkEmitCol::MultiText { nth: 0 },
+                SinkEmitCol::Agg { transno: 0 },
+            ],
         };
         let full = sink_emit_bucket(&plan, &t).unwrap();
         let n = t.nrows() as u32;
@@ -8781,15 +9503,21 @@ mod tests {
             fixed: Some(0),
             ntails: 1,
             filter: None,
-            cols: vec![SinkEmitCol::MultiText { nth: 0 }, SinkEmitCol::Agg { transno: 0 }],
+            cols: vec![
+                SinkEmitCol::MultiText { nth: 0 },
+                SinkEmitCol::Agg { transno: 0 },
+            ],
         };
         for (t, plan) in [(&tw, &plan_w), (&tb, &plan_b)] {
             let full = sink_emit_bucket(plan, t).unwrap();
             for desc in [false, true] {
                 for bound in [1u32, 7, 10, 100] {
-                    let spec = SinkTopnSpec { transno: 0, desc, bound };
-                    let mut cands =
-                        sink_topn_candidates(t, &spec, 0).expect("no NULL order keys");
+                    let spec = SinkTopnSpec {
+                        transno: 0,
+                        desc,
+                        bound,
+                    };
+                    let mut cands = sink_topn_candidates(t, &spec, 0).expect("no NULL order keys");
                     let mut rows: Vec<u32> = cands.iter().map(|c| c.row).collect();
                     rows.sort_unstable();
                     let orig: Vec<u32> = cands.iter().map(|c| c.row).collect();
@@ -8821,7 +9549,10 @@ mod tests {
             fixed: Some(0),
             ntails: 1,
             filter: None,
-            cols: vec![SinkEmitCol::MultiText { nth: 0 }, SinkEmitCol::Agg { transno: 0 }],
+            cols: vec![
+                SinkEmitCol::MultiText { nth: 0 },
+                SinkEmitCol::Agg { transno: 0 },
+            ],
         };
         let corpus = bytes_corpus();
         let (a, b) = corpus.split_at(corpus.len() / 2);
@@ -8862,7 +9593,12 @@ mod tests {
         let mut frags: Vec<LaneAggTable> = (0..nfrags).map(|_| mk_table(64)).collect();
         for k in 0..150i64 {
             bump(&mut whole, Some(k), k % 7 + 1, k);
-            bump(&mut frags[(k % nfrags as i64) as usize], Some(k), k % 7 + 1, k);
+            bump(
+                &mut frags[(k % nfrags as i64) as usize],
+                Some(k),
+                k % 7 + 1,
+                k,
+            );
         }
         bump(&mut whole, None, 3, 0);
         bump(&mut frags[0], None, 3, 0);
@@ -8880,13 +9616,16 @@ mod tests {
         let (frags, whole) = split_fragments(3);
         for desc in [false, true] {
             for bound in [1u32, 7, 10, 100, 200] {
-                let spec = SinkTopnSpec { transno: 0, desc, bound };
-                let want: Vec<(u64, bool, [u64; 2])> =
-                    sink_topn_candidates(&whole, &spec, 3)
-                        .expect("no NULL order keys")
-                        .iter()
-                        .map(|c| (c.badness, c.null_key, c.kw))
-                        .collect();
+                let spec = SinkTopnSpec {
+                    transno: 0,
+                    desc,
+                    bound,
+                };
+                let want: Vec<(u64, bool, [u64; 2])> = sink_topn_candidates(&whole, &spec, 3)
+                    .expect("no NULL order keys")
+                    .iter()
+                    .map(|c| (c.badness, c.null_key, c.kw))
+                    .collect();
                 let lists: Vec<Vec<SinkTopnCand>> = frags
                     .iter()
                     .map(|t| sink_topn_candidates(t, &spec, 3).expect("no NULL order keys"))
@@ -8930,12 +9669,15 @@ mod tests {
         let natts = plan.cols.len();
         for desc in [false, true] {
             for bound in [1u32, 7, 10, 100] {
-                let spec = SinkTopnSpec { transno: 0, desc, bound };
+                let spec = SinkTopnSpec {
+                    transno: 0,
+                    desc,
+                    bound,
+                };
                 let mut acc = SinkEmitAcc::default();
                 let mut lists: Vec<Vec<SinkTopnCand>> = Vec::new();
                 for t in &frags {
-                    let mut cands =
-                        sink_topn_candidates(t, &spec, 3).expect("no NULL order keys");
+                    let mut cands = sink_topn_candidates(t, &spec, 3).expect("no NULL order keys");
                     let mut rows: Vec<u32> = cands.iter().map(|c| c.row).collect();
                     rows.sort_unstable();
                     let base = acc.nrows() as u32;
@@ -9086,8 +9828,16 @@ mod tests {
     fn freeze_member_filter_word_mode() {
         let shape = MkShape {
             comps: vec![
-                crate::compact::MkComp { att: 0, off: 0, kind: MkCompKind::Int { width: 4 } },
-                crate::compact::MkComp { att: 1, off: 4, kind: MkCompKind::Int { width: 2 } },
+                crate::compact::MkComp {
+                    att: 0,
+                    off: 0,
+                    kind: MkCompKind::Int { width: 4 },
+                },
+                crate::compact::MkComp {
+                    att: 1,
+                    off: 4,
+                    kind: MkCompKind::Int { width: 2 },
+                },
             ],
             packed_bytes: 6,
             nullable: false,
@@ -9109,7 +9859,10 @@ mod tests {
         );
         let entries = sink_freeze_extract_ch(&ch, 2).expect("extractable");
         assert_eq!(entries.len(), 2);
-        assert!(entries.iter().all(|e| e.len() == 6), "6-byte LE image prefix");
+        assert!(
+            entries.iter().all(|e| e.len() == 6),
+            "6-byte LE image prefix"
+        );
         let rows = sink_freeze_member_rows(&ch.table, 1, &shape, &entries);
         assert_eq!(rows, vec![0, 1], "first two insertion rows are the members");
     }
@@ -9121,9 +9874,21 @@ mod tests {
     fn canon_shape_two_text() -> MkShape {
         MkShape {
             comps: vec![
-                crate::compact::MkComp { att: 0, off: 0, kind: MkCompKind::Int { width: 2 } },
-                crate::compact::MkComp { att: 1, off: 2, kind: MkCompKind::Intern },
-                crate::compact::MkComp { att: 2, off: 6, kind: MkCompKind::Intern },
+                crate::compact::MkComp {
+                    att: 0,
+                    off: 0,
+                    kind: MkCompKind::Int { width: 2 },
+                },
+                crate::compact::MkComp {
+                    att: 1,
+                    off: 2,
+                    kind: MkCompKind::Intern,
+                },
+                crate::compact::MkComp {
+                    att: 2,
+                    off: 6,
+                    kind: MkCompKind::Intern,
+                },
             ],
             packed_bytes: 10,
             nullable: false,
@@ -9133,13 +9898,7 @@ mod tests {
 
     /// The feed's intern + pack + probe sequence for one two-text row —
     /// the CaseDict pack arm in miniature (shared intern pool, both ids).
-    fn bump_canon2(
-        ch: &mut crate::compact::CompactHash,
-        k: i16,
-        t1: &[u8],
-        t2: &[u8],
-        count: i64,
-    ) {
+    fn bump_canon2(ch: &mut crate::compact::CompactHash, k: i16, t1: &[u8], t2: &[u8], count: i64) {
         let intern_one = |t: &mut LaneAggTable, text: &[u8]| -> u32 {
             let hash = t.hash_key_bytes(text);
             let pr = t.probe_bytes(text, hash);
@@ -9156,9 +9915,8 @@ mod tests {
         let t = ch.intern.as_mut().unwrap();
         let id1 = intern_one(t, t1);
         let id2 = intern_one(t, t2);
-        let image: u128 = ((k as u16 as u128) & 0xFFFF)
-            | ((id1 as u128) << 16)
-            | ((id2 as u128) << 48);
+        let image: u128 =
+            ((k as u16 as u128) & 0xFFFF) | ((id1 as u128) << 16) | ((id2 as u128) << 48);
         let kw = [image as u64, (image >> 64) as u64];
         let pr = ch.table.probe_i128(kw, ch.table.hash_key_i128(kw));
         bump_probe(pr, count, 0);
@@ -9236,7 +9994,11 @@ mod tests {
                 runs: core::slice::from_ref(&run1),
                 remainder: Some(h1.remainder_view(&part1)),
             },
-            SinkLocalView { spilled: &[], runs: &[], remainder: Some(h2.remainder_view(&part2)) },
+            SinkLocalView {
+                spilled: &[],
+                runs: &[],
+                remainder: Some(h2.remainder_view(&part2)),
+            },
         ];
         let seen = canon_combine_all(&locals, &two_text_plan());
         assert_eq!(seen.len(), 5, "(ab,c) and (a,bc) stay distinct groups");
@@ -9307,8 +10069,7 @@ mod tests {
             for r in &runs {
                 sink_run_spill_bucket(r, b, &mut bytes);
             }
-            sink_remainder_spill_bucket_canon(&h.remainder_view(&part), b, &mut bytes)
-                .unwrap();
+            sink_remainder_spill_bucket_canon(&h.remainder_view(&part), b, &mut bytes).unwrap();
             if !bytes.is_empty() {
                 v.push(sink_run_from_spill_bytes(b, state_words, &bytes).unwrap());
             }
@@ -9348,7 +10109,12 @@ mod tests {
         sink_run_spill_bucket(&run, b, &mut bytes);
         assert!(!bytes.is_empty());
         // Clean parse round-trips.
-        assert_eq!(sink_run_from_spill_bytes(b, state_words, &bytes).unwrap().nrows(), 1);
+        assert_eq!(
+            sink_run_from_spill_bytes(b, state_words, &bytes)
+                .unwrap()
+                .nrows(),
+            1
+        );
         // Truncated tail.
         assert!(sink_run_from_spill_bytes(b, state_words, &bytes[..bytes.len() - 8]).is_err());
         // rec_len unaligned.
@@ -9361,8 +10127,9 @@ mod tests {
         assert!(sink_run_from_spill_bytes(b, state_words, &bad).is_err());
         // Router fail-closed on the same classes.
         let mut out: Vec<Vec<u8>> = vec![Vec::new(); SINK_NBUCKETS];
-        assert!(sink_route_records_bytes(&bytes[..bytes.len() - 8], state_words, 1, &mut out)
-            .is_err());
+        assert!(
+            sink_route_records_bytes(&bytes[..bytes.len() - 8], state_words, 1, &mut out).is_err()
+        );
     }
 
     #[test]
@@ -9425,7 +10192,10 @@ mod tests {
         let part = h.partition_remainder();
 
         let runs = [run1, run2, run3];
-        assert!(runs.iter().all(|r| !r.keys.is_empty()), "flush carries gid words");
+        assert!(
+            runs.iter().all(|r| !r.keys.is_empty()),
+            "flush carries gid words"
+        );
         let plan = SinkEmitPlan {
             width: 8,
             fixed: Some(12),
@@ -9443,9 +10213,8 @@ mod tests {
             for b in 0..SINK_NBUCKETS {
                 // GID lane forced ON (the default is the measured-off
                 // evidence channel; the law under test is byte-invisibility).
-                let t =
-                    sink_combine_bucket_impl(b, 0, STATE_BYTES, locals, &combines, true, true)
-                        .unwrap();
+                let t = sink_combine_bucket_impl(b, 0, STATE_BYTES, locals, &combines, true, true)
+                    .unwrap();
                 let buf = sink_emit_bucket(&plan, &t).unwrap();
                 for row in 0..buf.nrows {
                     let k = buf.values[row * 3].as_i64();
@@ -9593,7 +10362,11 @@ mod tests {
                 let s = &*pg.add(k);
                 (
                     s.trans_value_is_null,
-                    if s.trans_value_is_null { 0 } else { s.trans_value.as_i64() },
+                    if s.trans_value_is_null {
+                        0
+                    } else {
+                        s.trans_value.as_i64()
+                    },
                 )
             })
             .collect()
@@ -9674,8 +10447,13 @@ mod tests {
             for tr in &trans {
                 // SAFETY: live 4-slot state block.
                 let pg = unsafe { &mut *pgs.add(tr.transno as usize) };
-                scatter_apply_row(tr, pg, &cols.vals[tr.col as usize],
-                    &cols.nulls[tr.col as usize], j);
+                scatter_apply_row(
+                    tr,
+                    pg,
+                    &cols.vals[tr.col as usize],
+                    &cols.nulls[tr.col as usize],
+                    j,
+                );
             }
         }
         let part = sink_partition_remainder(&t);
@@ -9698,8 +10476,12 @@ mod tests {
         let mut sc_runs: Vec<SinkRun> = Vec::new();
         for (bi, chunk) in rows.chunks(97).enumerate() {
             let lo = bi * 97;
-            sc.absorb_batch(&cols, chunk, &keys[lo..lo + chunk.len()],
-                &knull[lo..lo + chunk.len()]);
+            sc.absorb_batch(
+                &cols,
+                chunk,
+                &keys[lo..lo + chunk.len()],
+                &knull[lo..lo + chunk.len()],
+            );
             if sc.nrows() >= 700 {
                 sc_runs.extend(sc.take_run());
             }
@@ -9711,8 +10493,11 @@ mod tests {
             n - rows.iter().filter(|&&r| knull[r as usize]).count(),
             "every non-NULL-key row scatters exactly once"
         );
-        let locals_sc =
-            [SinkLocalView { spilled: &[], runs: &sc_runs, remainder: None }];
+        let locals_sc = [SinkLocalView {
+            spilled: &[],
+            runs: &sc_runs,
+            remainder: None,
+        }];
 
         let combines = scatter_combines();
         let state_bytes = 4 * core::mem::size_of::<AggPerGroup>();

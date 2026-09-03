@@ -8,11 +8,13 @@ use types_fmgr::{FmgrInfo, FunctionCallInfoBaseData as Fcinfo};
 use types_gist::{GistEntryVector, GistSplitVec, GISTENTRY};
 
 use crate::boolquery;
-use crate::tool::{inner_int_contains, inner_int_overlap, inner_int_union, internal_size, IntArray};
+use crate::tool::{
+    inner_int_contains, inner_int_overlap, inner_int_union, internal_size, IntArray,
+};
 use crate::{
     detoasted_image, entry_arg, entry_result, image_result, opclass_option_i32,
-    RT_CONTAINED_BY, RT_CONTAINS, RT_OLD_CONTAINED_BY, RT_OLD_CONTAINS, RT_OVERLAP, RT_SAME,
-    BOOLEAN_SEARCH_STRATEGY,
+    BOOLEAN_SEARCH_STRATEGY, RT_CONTAINED_BY, RT_CONTAINS, RT_OLD_CONTAINED_BY, RT_OLD_CONTAINS,
+    RT_OVERLAP, RT_SAME,
 };
 
 pub(crate) const NUMRANGES_DEFAULT: i32 = 100;
@@ -232,11 +234,19 @@ pub(crate) fn fc_g_int_decompress(
     };
 
     if input.is_empty() {
-        return if was_plain { Ok(fcinfo.arg(0)) } else { rebuild_with(fcinfo, input.as_bytes()) };
+        return if was_plain {
+            Ok(fcinfo.arg(0))
+        } else {
+            rebuild_with(fcinfo, input.as_bytes())
+        };
     }
     let lenin = input.nelems() as i32;
     if (lenin as i64) < 2 * num_ranges as i64 {
-        return if was_plain { Ok(fcinfo.arg(0)) } else { rebuild_with(fcinfo, input.as_bytes()) };
+        return if was_plain {
+            Ok(fcinfo.arg(0))
+        } else {
+            rebuild_with(fcinfo, input.as_bytes())
+        };
     }
 
     let din = input.elems();
@@ -304,10 +314,7 @@ fn wish_f(a: i32, b: i32, c: f64) -> f64 {
     -(d * d * d) * c
 }
 
-pub(crate) fn fc_g_int_picksplit(
-    f: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub(crate) fn fc_g_int_picksplit(f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let _ = f;
     // SAFETY: gist fmgr protocol.
     let entryvec = unsafe { &*(fcinfo.arg(0).as_usize() as *const GistEntryVector) };
@@ -324,7 +331,8 @@ pub(crate) fn fc_g_int_picksplit(
         for j in i + 1..=seed_maxoff {
             let datum_beta = key(j);
             let size_union = inner_int_union(&datum_alpha, &datum_beta)?.nelems() as f32;
-            let size_inter = crate::tool::inner_int_inter(&datum_alpha, &datum_beta).nelems() as f32;
+            let size_inter =
+                crate::tool::inner_int_inter(&datum_alpha, &datum_beta).nelems() as f32;
             let size_waste = size_union - size_inter;
             if size_waste > waste || firsttime {
                 waste = size_waste;
@@ -360,7 +368,11 @@ pub(crate) fn fc_g_int_picksplit(
             cost: ((size_alpha - size_l) - (size_beta - size_r)).abs(),
         });
     }
-    costvector.sort_by(|a, b| a.cost.partial_cmp(&b.cost).unwrap_or(core::cmp::Ordering::Equal));
+    costvector.sort_by(|a, b| {
+        a.cost
+            .partial_cmp(&b.cost)
+            .unwrap_or(core::cmp::Ordering::Equal)
+    });
 
     let mut spl_left: Vec<u16> = Vec::with_capacity(maxoff + 1);
     let mut spl_right: Vec<u16> = Vec::with_capacity(maxoff + 1);

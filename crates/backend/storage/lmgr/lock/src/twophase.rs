@@ -290,7 +290,9 @@ pub fn PostPrepare_Locks(xid: TransactionId) -> PgResult<()> {
                 )
                 .expect("PostPrepare_Locks: hash_update_hash_key");
                 if !updated {
-                    panic!("duplicate entry found while reassigning a prepared transaction's locks");
+                    panic!(
+                        "duplicate entry found while reassigning a prepared transaction's locks"
+                    );
                 }
 
                 dlist_push_tail(
@@ -319,7 +321,8 @@ pub fn lock_twophase_recover(xid: TransactionId, _info: u16, recdata: &[u8]) -> 
     lwlock::LWLockAcquire(partition_lock, lwlock::LW_EXCLUSIVE, my_procno())?;
 
     // SAFETY: partition lock held exclusive.
-    let setup = unsafe { SetupLockInTable(lock_method_table, procno, &locktag, hashcode, lockmode) };
+    let setup =
+        unsafe { SetupLockInTable(lock_method_table, procno, &locktag, hashcode, lockmode) };
     let proclock = match setup {
         Ok(p) if p.is_null() => {
             lwlock::LWLockRelease(partition_lock)?;
@@ -338,7 +341,9 @@ pub fn lock_twophase_recover(xid: TransactionId, _info: u16, recdata: &[u8]) -> 
     unsafe { GrantLock(lock_ptr(proclock), proclock, lockmode) };
 
     if ConflictsWithRelationFastPath(&locktag, lockmode) {
-        crate::fastpath::increment_strong_lock_count_partition(FastPathStrongLockHashPartition(hashcode));
+        crate::fastpath::increment_strong_lock_count_partition(FastPathStrongLockHashPartition(
+            hashcode,
+        ));
     }
 
     lwlock::LWLockRelease(partition_lock)?;
@@ -356,11 +361,13 @@ pub fn lock_twophase_postabort(xid: TransactionId, info: u16, recdata: &[u8]) ->
     lock_twophase_postcommit(xid, info, recdata)
 }
 
-pub fn lock_twophase_standby_recover(xid: TransactionId, _info: u16, recdata: &[u8]) -> PgResult<()> {
+pub fn lock_twophase_standby_recover(
+    xid: TransactionId,
+    _info: u16,
+    recdata: &[u8],
+) -> PgResult<()> {
     let (locktag, lockmode) = decode_lock_record(recdata);
-    if lockmode == crate::AccessExclusiveLock
-        && locktag.locktag_type == LOCKTAG_RELATION
-    {
+    if lockmode == crate::AccessExclusiveLock && locktag.locktag_type == LOCKTAG_RELATION {
         standby_seams::standby_acquire_access_exclusive_lock::call(
             xid,
             locktag.locktag_field1,

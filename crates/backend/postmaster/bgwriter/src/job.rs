@@ -131,7 +131,10 @@ impl auxjob::AuxDaemon for BgWriterDaemon {
 
     fn install_signal_handlers(&self) {
         use procsignal::ThreadSignalHandler::{Ignore, Simple};
-        procsignal::pqsignal_thread(procsignal::signums::SIGHUP, Simple(interrupt::SignalHandlerForConfigReload));
+        procsignal::pqsignal_thread(
+            procsignal::signums::SIGHUP,
+            Simple(interrupt::SignalHandlerForConfigReload),
+        );
         procsignal::pqsignal_thread(procsignal::signums::SIGINT, Ignore);
         procsignal::pqsignal_thread(
             procsignal::signums::SIGTERM,

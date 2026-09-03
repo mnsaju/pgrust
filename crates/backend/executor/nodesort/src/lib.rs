@@ -84,10 +84,9 @@ pub fn exec_init_sort<'mcx>(
     outer_desc: &Rc<TupleDescData<'static>>,
     result_desc: Rc<TupleDescData<'static>>,
 ) -> PgResult<SortState<'mcx>> {
-    let randomAccess =
-        eflags & (EXEC_FLAG_REWIND | EXEC_FLAG_BACKWARD | EXEC_FLAG_MARK) != 0;
-    let ps_ResultTupleSlot = estate
-        .exec_init_extra_tuple_slot(Some(result_desc.clone()), TupleSlotKind::MinimalTuple);
+    let randomAccess = eflags & (EXEC_FLAG_REWIND | EXEC_FLAG_BACKWARD | EXEC_FLAG_MARK) != 0;
+    let ps_ResultTupleSlot =
+        estate.exec_init_extra_tuple_slot(Some(result_desc.clone()), TupleSlotKind::MinimalTuple);
     Ok(SortState {
         plan: node,
         ps_ResultTupleDesc: Some(result_desc),
@@ -131,7 +130,6 @@ impl SortState<'_> {
             && self.refsort_out.is_empty()
     }
 }
-
 
 /// `ExecSort`: sort the subplan on first fetch, then feed from tuplesort.
 /// Forward-only (backward-execution wave B6): C nodeSort.c's direction-aware
@@ -222,7 +220,11 @@ where
 
         let id = node.plan.plan.plan_node_id;
         let stats = ts.get_stats();
-        match estate.es_sort_instrumentation.iter_mut().find(|(i, _)| *i == id) {
+        match estate
+            .es_sort_instrumentation
+            .iter_mut()
+            .find(|(i, _)| *i == id)
+        {
             Some((_, s)) => *s = stats,
             None => estate.es_sort_instrumentation.push((id, stats)),
         }
@@ -238,7 +240,10 @@ where
     if node.refsort {
         return Ok(refsort_pop(node, estate));
     }
-    let ts = node.tuplesortstate.as_mut().expect("sort_Done without tuplesortstate");
+    let ts = node
+        .tuplesortstate
+        .as_mut()
+        .expect("sort_Done without tuplesortstate");
     let slot_id = node.ps_ResultTupleSlot;
     let slot = estate.slot_mut(slot_id);
     let got = if node.datumSort {
@@ -359,7 +364,10 @@ pub fn sort_lane_begin_narrowed<'mcx>(
     debug_assert!(!node.sort_Done && node.tuplesortstate.is_none());
     debug_assert!(!node.bounded && !node.randomAccess);
     debug_assert!(nkeys >= 1 && nkeys < node.plan.numCols as usize);
-    debug_assert!(!node.datumSort, "narrowing implies >=2 sort keys => heap sort");
+    debug_assert!(
+        !node.datumSort,
+        "narrowing implies >=2 sort keys => heap sort"
+    );
     let work_mem = init_small::globals::work_mem();
     let ts = Tuplesort::begin_heap(
         outer_desc,
@@ -480,8 +488,10 @@ pub fn sort_lane_put_refsort(
     refval: i64,
 ) -> PgResult<()> {
     debug_assert!(node.refsort);
-    let ts =
-        node.tuplesortstate.as_mut().expect("sort_lane_put_refsort before begin");
+    let ts = node
+        .tuplesortstate
+        .as_mut()
+        .expect("sort_lane_put_refsort before begin");
     ts.putvalues(&[key, Datum::from_i64(refval)], &[isnull, false])
 }
 
@@ -489,8 +499,10 @@ pub fn sort_lane_put_refsort(
 /// decoded (rg, row) ref in sorted output order; `None` = drained.
 pub fn sort_lane_refsort_next_ref(node: &mut SortState<'_>) -> PgResult<Option<(u32, u32)>> {
     debug_assert!(node.refsort && node.sort_Done);
-    let ts =
-        node.tuplesortstate.as_mut().expect("refsort ref read before finish");
+    let ts = node
+        .tuplesortstate
+        .as_mut()
+        .expect("refsort ref read before finish");
     let mut values = [Datum::null(); 2];
     let mut isnull = [false; 2];
     if !ts.getvalues(true, &mut values, &mut isnull)? {
@@ -510,7 +522,10 @@ pub fn sort_lane_refsort_push_winner<'mcx>(
     isnull: &[bool],
 ) -> PgResult<()> {
     debug_assert!(node.refsort);
-    let desc = node.ps_ResultTupleDesc.as_ref().expect("Sort already ended");
+    let desc = node
+        .ps_ResultTupleDesc
+        .as_ref()
+        .expect("Sort already ended");
     let mtup = ::heaptuple::heap_form_minimal_tuple(mcx, desc, values, isnull, 0)?;
     node.refsort_out.push_back(mtup);
     Ok(())
@@ -654,7 +669,10 @@ pub fn sort_lane_put<'mcx>(
     id: ExecSlotId,
 ) -> PgResult<()> {
     let mcx = estate.es_query_cxt;
-    let ts = node.tuplesortstate.as_mut().expect("sort_lane_put before sort_lane_begin");
+    let ts = node
+        .tuplesortstate
+        .as_mut()
+        .expect("sort_lane_put before sort_lane_begin");
     if node.datumSort {
         let slot = estate.slot_mut(id);
         exectuples::slot_getsomeattrs(slot, 1);
@@ -675,7 +693,10 @@ pub fn sort_lane_put_slot<'mcx>(
     slot: &mut ::types_slot::SlotData<'mcx>,
 ) -> PgResult<()> {
     debug_assert!(!node.datumSort);
-    let ts = node.tuplesortstate.as_mut().expect("sort_lane_put_slot before sort_lane_begin");
+    let ts = node
+        .tuplesortstate
+        .as_mut()
+        .expect("sort_lane_put_slot before sort_lane_begin");
     ts.puttupleslot(slot, mcx)
 }
 
@@ -694,11 +715,7 @@ pub fn sort_lane_is_datum(node: &SortState<'_>) -> bool {
 /// legs share the caller's emit state).
 pub trait SortLaneBatchFeed<'mcx> {
     /// Produce staged row `i`'s output slot; `None` = qual-filtered.
-    fn emit(
-        &mut self,
-        i: u32,
-        estate: &mut EStateData<'mcx>,
-    ) -> PgResult<Option<ExecSlotId>>;
+    fn emit(&mut self, i: u32, estate: &mut EStateData<'mcx>) -> PgResult<Option<ExecSlotId>>;
     /// Direct sort-key read for staged row `i` (only consulted when the
     /// caller armed `direct`); `None` = fallback, take the `emit` path.
     fn emit_key(&mut self, _i: u32) -> Option<(Datum, bool)> {
@@ -772,7 +789,10 @@ where
     F: SortLaneBatchFeed<'mcx>,
 {
     let mcx = estate.es_query_cxt;
-    let ts = node.tuplesortstate.as_mut().expect("sort_lane_put_batch before sort_lane_begin");
+    let ts = node
+        .tuplesortstate
+        .as_mut()
+        .expect("sort_lane_put_batch before sort_lane_begin");
     // Skip mask, fetched once per batch: cleared positions yield nothing
     // from `emit`/`emit_key` by the feed's contract, so skipping them puts
     // the identical stream (see `for_each_put`).
@@ -785,7 +805,9 @@ where
                         return ts.putdatum(val, isnull);
                     }
                 }
-                let Some(id) = feed.emit(i, estate)? else { return Ok(()) };
+                let Some(id) = feed.emit(i, estate)? else {
+                    return Ok(());
+                };
                 let slot = estate.slot_mut(id);
                 exectuples::slot_getsomeattrs(slot, 1);
                 let base = slot.base();
@@ -799,7 +821,9 @@ where
                             return p.put(val, isnull);
                         }
                     }
-                    let Some(id) = feed.emit(i, estate)? else { return Ok(()) };
+                    let Some(id) = feed.emit(i, estate)? else {
+                        return Ok(());
+                    };
                     let slot = estate.slot_mut(id);
                     exectuples::slot_getsomeattrs(slot, 1);
                     let base = slot.base();
@@ -809,7 +833,9 @@ where
         }
     } else {
         for_each_put(live.as_ref(), pos, n, |i| {
-            let Some(id) = feed.emit(i, estate)? else { return Ok(()) };
+            let Some(id) = feed.emit(i, estate)? else {
+                return Ok(());
+            };
             match feed.emit_rowref(i) {
                 Some(rr) => ts.puttupleslot_rowref(estate.slot_mut(id), mcx, rr),
                 None => ts.puttupleslot(estate.slot_mut(id), mcx),
@@ -858,10 +884,10 @@ pub fn sort_lane_topk_rowref_arm(node: &mut SortState<'_>) {
 /// order of the emitted top-N depend on feed arrival order, and which
 /// trigger fired? (see `Tuplesort::topk_tie_ambiguity`). `None` when
 /// tracking was never armed or no tie is arrival-sensitive.
-pub fn sort_lane_topk_tie_ambiguity(
-    node: &SortState<'_>,
-) -> Option<::tuplesort::TopkTieAmbiguity> {
-    node.tuplesortstate.as_ref().and_then(|ts| ts.topk_tie_ambiguity())
+pub fn sort_lane_topk_tie_ambiguity(node: &SortState<'_>) -> Option<::tuplesort::TopkTieAmbiguity> {
+    node.tuplesortstate
+        .as_ref()
+        .and_then(|ts| ts.topk_tie_ambiguity())
 }
 
 /// Demotion reset (the zone-adaptive feed observed an ambiguous boundary
@@ -883,13 +909,19 @@ pub fn sort_lane_finish<'mcx>(
     node: &mut SortState<'mcx>,
     estate: &mut EStateData<'mcx>,
 ) -> PgResult<()> {
-    let ts =
-        node.tuplesortstate.as_mut().expect("sort_lane_finish before sort_lane_begin");
+    let ts = node
+        .tuplesortstate
+        .as_mut()
+        .expect("sort_lane_finish before sort_lane_begin");
     ts.performsort()?;
 
     let id = node.plan.plan.plan_node_id;
     let stats = ts.get_stats();
-    match estate.es_sort_instrumentation.iter_mut().find(|(i, _)| *i == id) {
+    match estate
+        .es_sort_instrumentation
+        .iter_mut()
+        .find(|(i, _)| *i == id)
+    {
         Some((_, s)) => *s = stats,
         None => estate.es_sort_instrumentation.push((id, stats)),
     }
@@ -922,7 +954,10 @@ pub fn sort_lane_next<'mcx>(
         return Ok(refsort_pop(node, estate));
     }
     let mcx = estate.es_query_cxt;
-    let ts = node.tuplesortstate.as_mut().expect("sort_lane_next before sort_lane_finish");
+    let ts = node
+        .tuplesortstate
+        .as_mut()
+        .expect("sort_lane_next before sort_lane_finish");
     let slot_id = node.ps_ResultTupleSlot;
     let slot = estate.slot_mut(slot_id);
     let got = if node.datumSort {
@@ -971,10 +1006,7 @@ pub fn exec_sort_restr_pos(node: &mut SortState<'_>) -> PgResult<()> {
 /// the outer child (C's chgParam is always NULL until the Param lanes land).
 /// ExecReScanSort (nodeSort.c), chgParam-nonnull arm: the input changed, so
 /// any finished sort is stale.
-pub fn exec_rescan_sort_chg<'mcx>(
-    node: &mut SortState<'mcx>,
-    estate: &mut EStateData<'mcx>,
-) {
+pub fn exec_rescan_sort_chg<'mcx>(node: &mut SortState<'mcx>, estate: &mut EStateData<'mcx>) {
     if node.sort_Done {
         let mcx = estate.es_query_cxt;
         exectuples::exec_clear_tuple(estate.slot_mut(node.ps_ResultTupleSlot), mcx);
@@ -994,8 +1026,7 @@ pub fn exec_rescan_sort<'mcx>(
     let mcx = estate.es_query_cxt;
     exectuples::exec_clear_tuple(estate.slot_mut(node.ps_ResultTupleSlot), mcx);
 
-    if node.bounded != node.bounded_Done || node.bound != node.bound_Done || !node.randomAccess
-    {
+    if node.bounded != node.bounded_Done || node.bound != node.bound_Done || !node.randomAccess {
         node.sort_Done = false;
         node.tuplesortstate = None;
         // Refsort never arms with randomAccess, so a refsort-fed node always

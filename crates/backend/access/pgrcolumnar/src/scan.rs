@@ -5,8 +5,8 @@ use ::datum::Datum;
 use ::types_error::{PgError, PgResult};
 use ::types_slot::SlotData;
 
-pub use ::tableam_vocab::{ZoneCmp, ZoneQual, ZoneVerdict};
 use ::tableam_vocab::TableScanDescData;
+pub use ::tableam_vocab::{ZoneCmp, ZoneQual, ZoneVerdict};
 
 use std::sync::atomic::Ordering;
 
@@ -89,7 +89,10 @@ fn staged_text_span(ds: &[Datum]) -> Option<::exectuples::SoaTextSpan> {
     // SAFETY: pgrcolumnar text datums point at live complete varlena images
     // (decode contract); `prev` is the window's last (highest) image.
     let end = prev + unsafe { ::types_tuple::varatt::varsize_any(prev as *const u8) };
-    Some(::exectuples::SoaTextSpan { base: first as *const u8, len: end - first })
+    Some(::exectuples::SoaTextSpan {
+        base: first as *const u8,
+        len: end - first,
+    })
 }
 
 // Exact granule fallback for metadata SUM (RGs without valid footer sums):
@@ -189,8 +192,7 @@ fn decode_col(part: &Part, rg: usize, g: usize, c: usize, cd: &mut ColDecode) ->
         // Blob contiguity witness: both text encodings decode the granule's
         // rows into one span (RawText: the chunk's mmap blob; Lz4Text: the
         // per-granule decompress arena) with row-order offsets.
-        cd.contig_text =
-            matches!(chunk.hdr.encoding, Encoding::RawText | Encoding::Lz4Text);
+        cd.contig_text = matches!(chunk.hdr.encoding, Encoding::RawText | Encoding::Lz4Text);
     }
     cd.gkey = (rg as u32, g as u32);
     cd.is_dict && dict_was_empty
@@ -244,7 +246,11 @@ unsafe fn dict_lazy_ensure_all(p: *const ()) {
     unsafe { &*(p as *const crate::reader::DictLazy) }.ensure_all()
 }
 
-type LazySeam = (*const (), Option<unsafe fn(*const (), u32)>, Option<unsafe fn(*const ())>);
+type LazySeam = (
+    *const (),
+    Option<unsafe fn(*const (), u32)>,
+    Option<unsafe fn(*const ())>,
+);
 
 fn lazy_seam(lazy: &Option<Box<crate::reader::DictLazy>>) -> LazySeam {
     match lazy {
@@ -564,7 +570,10 @@ fn env_readahead_serial() -> bool {
 fn next_scan_uid() -> u64 {
     static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     if !*ENABLED.get_or_init(|| {
-        !matches!(std::env::var("PGRUST_LANE_V2_GLOBALDICT").as_deref(), Ok("0") | Ok("off"))
+        !matches!(
+            std::env::var("PGRUST_LANE_V2_GLOBALDICT").as_deref(),
+            Ok("0") | Ok("off")
+        )
     }) {
         return 0;
     }
@@ -671,8 +680,9 @@ impl<'mcx> CbScanDescData<'mcx> {
     pub fn set_needed_attrs(&mut self, needed: &[bool]) {
         debug_assert_eq!(needed.len(), self.needed.len());
         self.needed.copy_from_slice(needed);
-        self.needed_idx =
-            (0..needed.len() as u16).filter(|&c| needed[c as usize]).collect();
+        self.needed_idx = (0..needed.len() as u16)
+            .filter(|&c| needed[c as usize])
+            .collect();
         // Mid-scan need-set changes: stale gather decodes and the slot's
         // once-per-scan null-init must both be redone under the new set.
         self.needed_epoch += 1;
@@ -706,7 +716,8 @@ impl<'mcx> CbScanDescData<'mcx> {
             // bound order so the rescan probes from scratch.
             if ad.reverted {
                 if ad.desc {
-                    ad.entries.sort_unstable_by_key(|e| (std::cmp::Reverse(e.bound), e.rg, e.g));
+                    ad.entries
+                        .sort_unstable_by_key(|e| (std::cmp::Reverse(e.bound), e.rg, e.g));
                 } else {
                     ad.entries.sort_unstable_by_key(|e| (e.bound, e.rg, e.g));
                 }
@@ -728,7 +739,12 @@ impl<'mcx> CbScanDescData<'mcx> {
     /// Drive-scaling observability counters (the runtime WFIN channel):
     /// (rg_switches, dict_builds, granules_scanned, windows_staged).
     pub fn drive_counters(&self) -> (u64, u64, u64, u64) {
-        (self.rg_switches, self.dict_builds, self.granules_scanned, self.windows_staged)
+        (
+            self.rg_switches,
+            self.dict_builds,
+            self.granules_scanned,
+            self.windows_staged,
+        )
     }
 
     /// Position the scan on the absolute-granule range [g0, g1) — a runtime
@@ -744,7 +760,10 @@ impl<'mcx> CbScanDescData<'mcx> {
     /// when successive claims land in the same row group (same-verdict
     /// pure predicates; re-checking would only repeat work).
     pub fn set_granule_range(&mut self, g0: u64, g1: u64) -> PgResult<()> {
-        debug_assert!(self.adaptive.is_none(), "granule-range drive vs adaptive drive");
+        debug_assert!(
+            self.adaptive.is_none(),
+            "granule-range drive vs adaptive drive"
+        );
         // GL-Q4142 — the tripwire's cbstore leg (heapam::heap_set_block_range
         // is the heap one, verbatim in shape). A scan carrying a SHARED
         // parallel descriptor divides its work through `phs_nallocated`
@@ -771,8 +790,7 @@ impl<'mcx> CbScanDescData<'mcx> {
             ))));
         }
         let (rg, g_in_rg) = part.locate_granule(g0);
-        let rg_granules =
-            (part.rgs[rg].nrows as usize).div_ceil(GRANULE_ROWS);
+        let rg_granules = (part.rgs[rg].nrows as usize).div_ceil(GRANULE_ROWS);
         let len = (g1 - g0) as usize;
         if g_in_rg + len > rg_granules {
             return Err(Box::new(PgError::error(format!(
@@ -821,13 +839,18 @@ impl<'mcx> CbScanDescData<'mcx> {
     /// snapshot-visible row). `None` = claim exhausted. `rowref_base` is
     /// `(rg << 32) | first_row_in_rg`, the winner-gather rowref law.
     pub fn topn_direct_next_granule(&mut self) -> PgResult<Option<(u32, u64)>> {
-        debug_assert!(self.adaptive.is_none(), "direct top-N drive vs adaptive drive");
+        debug_assert!(
+            self.adaptive.is_none(),
+            "direct top-N drive vs adaptive drive"
+        );
         let (Some(end), true) = (self.range_end, self.rg_claimed) else {
             return Err(Box::new(PgError::error(
                 "cbstore: direct top-N granule outside a granule-range claim".to_string(),
             )));
         };
-        let Some(part) = self.part.clone() else { return Ok(None) };
+        let Some(part) = self.part.clone() else {
+            return Ok(None);
+        };
         if self.rg >= part.rgs.len() {
             // Beyond the footer horizon: snapshot-invisible (see next_window).
             return Ok(None);
@@ -950,7 +973,9 @@ impl<'mcx> CbScanDescData<'mcx> {
     /// or running MIN/MAX best), widened from the key datum exactly as
     /// decode datums are.
     pub fn set_adaptive_bound(&mut self, key: Datum) {
-        let Some(ad) = self.adaptive.as_deref_mut() else { return };
+        let Some(ad) = self.adaptive.as_deref_mut() else {
+            return;
+        };
         let v = match self.coltypes[ad.col] {
             ColType::I16 => i64::from(key.as_i16()),
             ColType::I32 | ColType::Date => i64::from(key.as_i32()),
@@ -971,8 +996,9 @@ impl<'mcx> CbScanDescData<'mcx> {
     fn claim_next_rg(&mut self) -> usize {
         match self.rs_base.rs_parallel {
             Some(p) => {
-                let r = unsafe { p.as_ref() }.phs_nallocated.fetch_add(1, Ordering::SeqCst)
-                    as usize;
+                let r = unsafe { p.as_ref() }
+                    .phs_nallocated
+                    .fetch_add(1, Ordering::SeqCst) as usize;
                 // Claim-time readahead (parallelism-redesign §2.8): while
                 // this worker computes row group `r`, hint the kernel at the
                 // NEXT unclaimed row group's chunk extents (needed columns
@@ -1021,7 +1047,9 @@ impl<'mcx> CbScanDescData<'mcx> {
     }
 
     fn advise_rg_extents(&mut self, rg: usize) -> bool {
-        let Some(part) = self.part.as_ref() else { return false };
+        let Some(part) = self.part.as_ref() else {
+            return false;
+        };
         if rg >= part.rgs.len() || self.needed_idx.is_empty() || !self.rg_zone_ok(rg) {
             return false;
         }
@@ -1046,7 +1074,9 @@ impl<'mcx> CbScanDescData<'mcx> {
 
     /// ANALYZE row source: visible row groups with row counts, file order.
     pub fn analyze_visible_rgs(&self) -> PgResult<Vec<(u32, u32)>> {
-        let Some(part) = self.part.as_ref() else { return Ok(Vec::new()) };
+        let Some(part) = self.part.as_ref() else {
+            return Ok(Vec::new());
+        };
         let mut rgs = Vec::with_capacity(part.rgs.len());
         for rg in 0..part.rgs.len() {
             if self.rg_visible(rg)? {
@@ -1100,7 +1130,9 @@ impl<'mcx> CbScanDescData<'mcx> {
     /// demotes (fail-open) to the scan drive's per-granule gate and is
     /// counted exactly as next_window would stage it.
     pub fn next_meta_count(&mut self) -> PgResult<u32> {
-        let Some(part) = self.part.as_ref() else { return Ok(0) };
+        let Some(part) = self.part.as_ref() else {
+            return Ok(0);
+        };
         let nrgs = part.rgs.len();
         loop {
             let rg = self.claim_next_rg();
@@ -1163,7 +1195,9 @@ impl<'mcx> CbScanDescData<'mcx> {
             minmax: cols.iter().map(|&c| (c, i64::MAX, i64::MIN)).collect(),
             sums: sum_cols.iter().map(|&c| (c, 0i128)).collect(),
         };
-        let Some(part) = self.part.as_ref() else { return Ok(Some(out)) };
+        let Some(part) = self.part.as_ref() else {
+            return Ok(Some(out));
+        };
         // With a zero-count qual the cbstore zone quals are exactly that
         // conjunct (advisory); the bare arm still requires none.
         debug_assert!(zq.is_some() || self.zone_quals.is_empty());
@@ -1178,7 +1212,11 @@ impl<'mcx> CbScanDescData<'mcx> {
                 None => grows as u64,
                 Some(z) => {
                     let zc = part.granule_zerocnt(rg, g, z.col as usize) as u64;
-                    if z.keep_nonzero { grows as u64 - zc } else { zc }
+                    if z.keep_nonzero {
+                        grows as u64 - zc
+                    } else {
+                        zc
+                    }
                 }
             }
         };
@@ -1314,8 +1352,12 @@ impl<'mcx> CbScanDescData<'mcx> {
     /// short-circuits the window on AllFail. Non-erroring by construction:
     /// pure integer compares over footer metadata, no data touched.
     pub fn staged_granule_verdict(&self, q: &ZoneQual) -> ZoneVerdict {
-        let Some(part) = self.part.as_ref() else { return ZoneVerdict::Mixed };
-        let ge = part.chunk(self.rg, (q.attnum - 1) as usize).granule(self.granule);
+        let Some(part) = self.part.as_ref() else {
+            return ZoneVerdict::Mixed;
+        };
+        let ge = part
+            .chunk(self.rg, (q.attnum - 1) as usize)
+            .granule(self.granule);
         zone_verdict(q, ge.min, ge.max)
     }
 
@@ -1439,9 +1481,13 @@ impl<'mcx> CbScanDescData<'mcx> {
         let part = self.part.as_ref().unwrap();
         let mut built = 0u64;
         for &c in &self.needed_idx {
-            built +=
-                decode_col(part, self.rg, self.granule, c as usize, &mut self.cols[c as usize])
-                    as u64;
+            built += decode_col(
+                part,
+                self.rg,
+                self.granule,
+                c as usize,
+                &mut self.cols[c as usize],
+            ) as u64;
         }
         self.dict_builds += built;
         self.all_ready = key;
@@ -1459,7 +1505,9 @@ impl<'mcx> CbScanDescData<'mcx> {
         if self.adaptive.is_some() {
             return self.next_window_adaptive();
         }
-        let Some(part) = self.part.as_ref() else { return Ok(0) };
+        let Some(part) = self.part.as_ref() else {
+            return Ok(0);
+        };
         let nrgs = part.rgs.len();
         loop {
             if !self.rg_claimed {
@@ -1587,7 +1635,9 @@ impl<'mcx> CbScanDescData<'mcx> {
         {
             return Ok(CbGranuleMetaStep::NotMeta);
         }
-        let Some(part) = self.part.clone() else { return Ok(CbGranuleMetaStep::Exhausted) };
+        let Some(part) = self.part.clone() else {
+            return Ok(CbGranuleMetaStep::Exhausted);
+        };
         if len_cols.iter().any(|&c| !part.has_len_stats(c as usize)) {
             return Ok(CbGranuleMetaStep::NotMeta);
         }
@@ -1670,8 +1720,7 @@ impl<'mcx> CbScanDescData<'mcx> {
                 key_mm[k] = (ge.min, ge.max);
             }
             for (k, &c) in len_cols.iter().enumerate() {
-                let Some(st) = part.granule_len_stats(self.rg, self.granule, c as usize)
-                else {
+                let Some(st) = part.granule_len_stats(self.rg, self.granule, c as usize) else {
                     return Ok(CbGranuleMetaStep::NotMeta);
                 };
                 // pgrcolumnar stores no NULLs; a mismatch means foreign/corrupt
@@ -1728,7 +1777,9 @@ impl<'mcx> CbScanDescData<'mcx> {
         desc: bool,
         bound: u64,
     ) -> PgResult<Option<(Vec<u64>, Option<u64>)>> {
-        let Some(part) = self.part.clone() else { return Ok(None) };
+        let Some(part) = self.part.clone() else {
+            return Ok(None);
+        };
         let fold = |v: i64| -> u64 {
             let asc = (v as u64) ^ (1 << 63);
             if desc {
@@ -1761,7 +1812,11 @@ impl<'mcx> CbScanDescData<'mcx> {
                     continue;
                 }
                 let ge = chunk.granule(g);
-                let (b, w) = if desc { (ge.max, ge.min) } else { (ge.min, ge.max) };
+                let (b, w) = if desc {
+                    (ge.max, ge.min)
+                } else {
+                    (ge.min, ge.max)
+                };
                 best.push(fold(b));
                 if vis {
                     let grows = (rg_rows - g * GRANULE_ROWS).min(GRANULE_ROWS) as u32;
@@ -1795,7 +1850,9 @@ impl<'mcx> CbScanDescData<'mcx> {
     /// counts every visible RG (the no-qual meta posture). `None` = no
     /// columnar part.
     pub fn zone_meta_rg_census(&self, need_sums: bool) -> PgResult<Option<(u64, u64)>> {
-        let Some(part) = self.part.clone() else { return Ok(None) };
+        let Some(part) = self.part.clone() else {
+            return Ok(None);
+        };
         let mut allpass = 0u64;
         let mut total = 0u64;
         for rg in 0..part.rgs.len() {
@@ -1856,13 +1913,13 @@ impl<'mcx> CbScanDescData<'mcx> {
         debug_assert_eq!(mm_cols.len(), mm.len());
         debug_assert_eq!(sum_cols.len(), sums.len());
         debug_assert_eq!(len_cols.len(), lens.len());
-        if self.adaptive.is_some()
-            || self.rs_base.rs_parallel.is_some()
-            || self.range_end.is_some()
+        if self.adaptive.is_some() || self.rs_base.rs_parallel.is_some() || self.range_end.is_some()
         {
             return Ok(CbAggMetaStep::NotMeta);
         }
-        let Some(part) = self.part.clone() else { return Ok(CbAggMetaStep::Exhausted) };
+        let Some(part) = self.part.clone() else {
+            return Ok(CbAggMetaStep::Exhausted);
+        };
         // (min, max) and value sums are int-family only (text zone entries
         // carry byte lengths, text has no footer value sums); length sums
         // need the column flagged in the v7 prelude.
@@ -1943,7 +2000,9 @@ impl<'mcx> CbScanDescData<'mcx> {
                 if !self.rg_len_stats(&part, ngranules, rg_rows, len_cols, lens) {
                     return Ok(CbAggMetaStep::NotMeta);
                 }
-                return Ok(CbAggMetaStep::MetaRg { rows: rg_rows as u64 });
+                return Ok(CbAggMetaStep::MetaRg {
+                    rows: rg_rows as u64,
+                });
             }
             // Granule tier: no granule-altitude value sums exist.
             if !sum_cols.is_empty() {
@@ -1953,14 +2012,10 @@ impl<'mcx> CbScanDescData<'mcx> {
                 return Ok(CbAggMetaStep::NotMeta);
             }
             let g = self.granule;
-            if !self
-                .zone_quals
-                .iter()
-                .all(|q| {
-                    let ge = part.chunk(self.rg, (q.attnum - 1) as usize).granule(g);
-                    zone_verdict(q, ge.min, ge.max) == ZoneVerdict::AllPass
-                })
-            {
+            if !self.zone_quals.iter().all(|q| {
+                let ge = part.chunk(self.rg, (q.attnum - 1) as usize).granule(g);
+                zone_verdict(q, ge.min, ge.max) == ZoneVerdict::AllPass
+            }) {
                 return Ok(CbAggMetaStep::NotMeta);
             }
             let grows = (rg_rows - g * GRANULE_ROWS).min(GRANULE_ROWS);
@@ -2078,7 +2133,9 @@ impl<'mcx> CbScanDescData<'mcx> {
                 self.adaptive_probe_reverts += 1;
             }
             let ad = self.adaptive.as_deref_mut().unwrap();
-            let Some(&e) = ad.entries.get(ad.cursor) else { return Ok(0) };
+            let Some(&e) = ad.entries.get(ad.cursor) else {
+                return Ok(0);
+            };
             if let Some(b) = ad.bound {
                 let dominated = match (ad.desc, ad.strict) {
                     (true, false) => e.bound < b,
@@ -2123,14 +2180,18 @@ impl<'mcx> CbScanDescData<'mcx> {
     }
 
     pub fn nblocks(&self) -> u32 {
-        self.part.as_ref().map_or(0, |p| (p.bytes().len() / 8192) as u32)
+        self.part
+            .as_ref()
+            .map_or(0, |p| (p.bytes().len() / 8192) as u32)
     }
 
     /// Total committed rows across the scan's Part (footer metadata only —
     /// no decode). The lane's tiny-input admission floor reads this before
     /// running any arm cascade.
     pub fn total_rows(&self) -> u64 {
-        self.part.as_ref().map_or(0, |p| p.rgs.iter().map(|rg| rg.nrows as u64).sum())
+        self.part
+            .as_ref()
+            .map_or(0, |p| p.rgs.iter().map(|rg| rg.nrows as u64).sum())
     }
 
     /// Footer value min/max of the staged window's granule for column `c`;
@@ -2478,7 +2539,6 @@ impl<'mcx> CbScanDescData<'mcx> {
         &self.cols[c].datums[self.staged_lo..self.staged_lo + self.staged_rows]
     }
 
-
     /// STABLE DICTIONARY IDENTITY of the staged window's column `c`, when
     /// the chunk is dict-encoded and already decoded (codes-only decode):
     /// per-row u32 codes into the per-row-group dictionary of decoded text
@@ -2648,7 +2708,12 @@ impl<'mcx> CbScanDescData<'mcx> {
     /// reached on the analytics banks (2^16 row groups is > 2^32 rows).
     pub fn window_ref(&self) -> Option<(u32, u32)> {
         (self.rg_claimed && self.decoded && self.staged_rows > 0 && self.rg <= u16::MAX as usize)
-            .then(|| (self.rg as u32, (self.granule * GRANULE_ROWS + self.staged_lo) as u32))
+            .then(|| {
+                (
+                    self.rg as u32,
+                    (self.granule * GRANULE_ROWS + self.staged_lo) as u32,
+                )
+            })
     }
 
     /// Materialize rg-global `row` of row group `rg` into the slot under the
@@ -2660,7 +2725,9 @@ impl<'mcx> CbScanDescData<'mcx> {
     /// by-ref datums live until the next gather decode of a different key
     /// (the per-row store contract store_slot already has).
     pub fn gather_row(&mut self, rg: u32, row: u32, slot: &mut SlotData<'_>) -> bool {
-        let Some(part) = self.part.as_ref() else { return false };
+        let Some(part) = self.part.as_ref() else {
+            return false;
+        };
         let (rg, row) = (rg as usize, row as usize);
         if rg >= part.rgs.len() || row >= part.rgs[rg].nrows as usize {
             debug_assert!(false, "cbstore gather_row: ref out of range");
@@ -2844,8 +2911,10 @@ fn analyze_extract_task(
     }
     let nneed = needed_idx.len();
     let nrows = task.hi - task.lo;
-    let mut out =
-        AnalyzeTaskOut { words: Vec::with_capacity(nrows * nneed), bytes: Vec::new() };
+    let mut out = AnalyzeTaskOut {
+        words: Vec::with_capacity(nrows * nneed),
+        bytes: Vec::new(),
+    };
     for i in task.lo..task.hi {
         debug_assert_eq!(refs[i].0, task.rg);
         let r = refs[i].1 as usize - g * GRANULE_ROWS;
@@ -2861,7 +2930,8 @@ fn analyze_extract_task(
                 // varlena image in this thread's decode buffers.
                 let len = unsafe { ::types_tuple::varatt::varsize_any(p) };
                 // SAFETY: same contract; the image is `len` readable bytes.
-                out.bytes.extend_from_slice(unsafe { core::slice::from_raw_parts(p, len) });
+                out.bytes
+                    .extend_from_slice(unsafe { core::slice::from_raw_parts(p, len) });
                 out.words.push(off);
             } else {
                 // Full Datum word; as_usize() truncates byval 8-byte values on wasm32.
@@ -2894,7 +2964,12 @@ fn analyze_gather_pipeline(
         let g = (row as usize / GRANULE_ROWS) as u32;
         match tasks.last_mut() {
             Some(t) if t.rg == rg && t.g == g => t.hi = i + 1,
-            _ => tasks.push(AnalyzeTask { rg, g, lo: i, hi: i + 1 }),
+            _ => tasks.push(AnalyzeTask {
+                rg,
+                g,
+                lo: i,
+                hi: i + 1,
+            }),
         }
     }
     let ntasks = tasks.len();
@@ -2943,9 +3018,8 @@ fn analyze_gather_pipeline(
                         }
                         std::thread::sleep(std::time::Duration::from_micros(100));
                     }
-                    let out = analyze_extract_task(
-                        part, &tasks[t], refs, needed_idx, coltypes, &mut cds,
-                    );
+                    let out =
+                        analyze_extract_task(part, &tasks[t], refs, needed_idx, coltypes, &mut cds);
                     *results[t].lock().unwrap() = Some(out);
                 }
             });
@@ -3088,8 +3162,11 @@ mod analyze_gather_tests {
     use crate::format::RG_ROWS;
 
     fn tmp(name: &str) -> String {
-        let p = std::env::temp_dir()
-            .join(format!("cbstore-anlz-gather-{}-{}", std::process::id(), name));
+        let p = std::env::temp_dir().join(format!(
+            "cbstore-anlz-gather-{}-{}",
+            std::process::id(),
+            name
+        ));
         let _ = std::fs::remove_file(&p);
         std::fs::write(&p, []).unwrap();
         p.to_str().unwrap().to_string()
@@ -3118,8 +3195,7 @@ mod analyze_gather_tests {
     // 2 full RGs + a partial granule; 4 columns exercising by-val + both
     // text shapes.
     fn build_part(path: &str) -> Part {
-        let coltypes =
-            vec![ColType::I64, ColType::Text, ColType::I32, ColType::Text];
+        let coltypes = vec![ColType::I64, ColType::Text, ColType::I32, ColType::Text];
         let mut w = crate::writer::open_writer_at(path, coltypes).unwrap();
         let n = 2 * RG_ROWS + GRANULE_ROWS + GRANULE_ROWS / 3;
         let mut keep = Vec::new();
@@ -3146,8 +3222,7 @@ mod analyze_gather_tests {
         needed_idx: &[u16],
         coltypes: &[ColType],
     ) -> Vec<Vec<Vec<u8>>> {
-        let mut cds: Vec<ColDecode> =
-            (0..coltypes.len()).map(|_| new_col_decode()).collect();
+        let mut cds: Vec<ColDecode> = (0..coltypes.len()).map(|_| new_col_decode()).collect();
         let mut out = Vec::new();
         for &(rg, row) in refs {
             let g = row as usize / GRANULE_ROWS;
@@ -3215,7 +3290,11 @@ mod analyze_gather_tests {
             }
             rows.sort_unstable();
             rows.dedup();
-            refs.extend(rows.into_iter().filter(|&r| r < n).map(|r| (rg as u32, r as u32)));
+            refs.extend(
+                rows.into_iter()
+                    .filter(|&r| r < n)
+                    .map(|r| (rg as u32, r as u32)),
+            );
         }
         refs
     }
@@ -3224,8 +3303,7 @@ mod analyze_gather_tests {
     fn pipeline_matches_serial_reference_across_pools() {
         let path = tmp("pools");
         let part = build_part(&path);
-        let coltypes =
-            vec![ColType::I64, ColType::Text, ColType::I32, ColType::Text];
+        let coltypes = vec![ColType::I64, ColType::Text, ColType::I32, ColType::Text];
         let needed_idx: Vec<u16> = vec![0, 1, 2, 3];
         for stride in [3_333usize, 8_192, 12_345] {
             let refs = sample_refs(&part, stride);
@@ -3243,8 +3321,7 @@ mod analyze_gather_tests {
     fn pipeline_subset_needed_and_empty_refs() {
         let path = tmp("subset");
         let part = build_part(&path);
-        let coltypes =
-            vec![ColType::I64, ColType::Text, ColType::I32, ColType::Text];
+        let coltypes = vec![ColType::I64, ColType::Text, ColType::I32, ColType::Text];
         // Text-only needed subset (the copy-out path alone).
         let needed_idx: Vec<u16> = vec![1, 3];
         let refs = sample_refs(&part, 5_000);
@@ -3261,8 +3338,7 @@ mod analyze_gather_tests {
     fn pipeline_early_stop_terminates() {
         let path = tmp("stop");
         let part = build_part(&path);
-        let coltypes =
-            vec![ColType::I64, ColType::Text, ColType::I32, ColType::Text];
+        let coltypes = vec![ColType::I64, ColType::Text, ColType::I32, ColType::Text];
         let needed_idx: Vec<u16> = vec![0, 1, 2, 3];
         let refs = sample_refs(&part, 2_000);
         let mut seen = 0usize;

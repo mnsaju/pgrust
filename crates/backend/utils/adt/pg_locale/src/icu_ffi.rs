@@ -209,8 +209,10 @@ const MAJOR_MIN: i32 = 50;
 
 fn load() -> Result<&'static IcuApi, String> {
     let (handle, major_hint) = open_lib()?;
-    let suffix = find_suffix(handle, major_hint)
-        .ok_or_else(|| "libicui18n loaded but no ucol_open symbol found (probed bare and _50.._90 suffixes)".to_string())?;
+    let suffix = find_suffix(handle, major_hint).ok_or_else(|| {
+        "libicui18n loaded but no ucol_open symbol found (probed bare and _50.._90 suffixes)"
+            .to_string()
+    })?;
     let api = resolve_all(handle, suffix)?;
     Ok(Box::leak(Box::new(api)))
 }
@@ -304,7 +306,9 @@ fn find_suffix(handle: *mut c_void, major_hint: Option<i32>) -> Option<i32> {
             return Some(m);
         }
     }
-    (MAJOR_MIN..=MAJOR_MAX).rev().find(|&m| !sym(handle, "ucol_open", m).is_null())
+    (MAJOR_MIN..=MAJOR_MAX)
+        .rev()
+        .find(|&m| !sym(handle, "ucol_open", m).is_null())
 }
 
 fn resolve_all(handle: *mut c_void, suffix: i32) -> Result<IcuApi, String> {

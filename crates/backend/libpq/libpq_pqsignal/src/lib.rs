@@ -4,11 +4,11 @@ use std::mem::MaybeUninit;
 
 use core::ffi::c_int;
 #[cfg(not(target_family = "wasm"))]
+pub use libc::sigset_t;
+#[cfg(not(target_family = "wasm"))]
 use libc::{
     SIGABRT, SIGALRM, SIGBUS, SIGCONT, SIGFPE, SIGILL, SIGQUIT, SIGSEGV, SIGSYS, SIGTERM, SIGTRAP,
 };
-#[cfg(not(target_family = "wasm"))]
-pub use libc::sigset_t;
 
 // wasm32: WASI p1 has no signals and its libc crate exposes neither sigset_t
 // nor SIG* numbers. The mask bookkeeping is kept (callers read the sets);
@@ -63,7 +63,11 @@ impl SignalMasks {
             delete_signal(&mut startup_block_sig, signal);
         }
 
-        Self { unblock_sig, block_sig, startup_block_sig }
+        Self {
+            unblock_sig,
+            block_sig,
+            startup_block_sig,
+        }
     }
 
     pub fn unblock_sig(&self) -> &sigset_t {
@@ -235,7 +239,13 @@ mod tests {
     #[test]
     fn block_sig_blocks_normal_signals() {
         let masks = SignalMasks::new();
-        for signal in [libc::SIGTERM, libc::SIGINT, libc::SIGALRM, libc::SIGQUIT, libc::SIGHUP] {
+        for signal in [
+            libc::SIGTERM,
+            libc::SIGINT,
+            libc::SIGALRM,
+            libc::SIGQUIT,
+            libc::SIGHUP,
+        ] {
             assert!(masks.block_sig_contains(signal), "signal {signal}");
         }
     }

@@ -157,7 +157,10 @@ pub(crate) fn flush_database(key: PgStat_HashKey, pending: &PgStat_StatDBEntry) 
     shared.parallel_workers_launched += pending.parallel_workers_launched;
 }
 
-pub(crate) fn flush_function(key: PgStat_HashKey, pending: &crate::function::PgStat_FunctionCounts) {
+pub(crate) fn flush_function(
+    key: PgStat_HashKey,
+    pending: &crate::function::PgStat_FunctionCounts,
+) {
     let mut store = SHARED_STATS.lock().unwrap();
     // See flush_relation: absent = dropped concurrently, discard.
     let Some(SharedEntry::Function(shared)) = store.get_mut(&key) else {
@@ -330,9 +333,7 @@ pub(crate) fn build_snapshot() {
         let store = SHARED_STATS.lock().unwrap();
         for (&key, &entry) in store.iter() {
             // database stats are accessed_across_databases in C
-            if key.dboid != my_dboid
-                && key.dboid != InvalidOid
-                && key.kind != PGSTAT_KIND_DATABASE
+            if key.dboid != my_dboid && key.dboid != InvalidOid && key.kind != PGSTAT_KIND_DATABASE
             {
                 continue;
             }
@@ -417,8 +418,7 @@ pub fn pgstat_have_entry(kind: u32, dboid: types_core::Oid, objid: u64) -> bool 
     };
     // C creates the shared entry at pending-prep time, so unflushed pending
     // counts already answer true there; here shared entries appear at flush.
-    SHARED_STATS.lock().unwrap().contains_key(&key)
-        || crate::pending::pgstat_have_pending(key)
+    SHARED_STATS.lock().unwrap().contains_key(&key) || crate::pending::pgstat_have_pending(key)
 }
 
 pub(crate) fn export_entries(mut f: impl FnMut(PgStat_HashKey, SharedEntry)) {
@@ -460,9 +460,14 @@ fn reset_entry_contents(entry: &mut SharedEntry, ts: TimestampTz) {
 }
 
 fn reset_database_timestamp(store: &mut Store, dboid: types_core::Oid, ts: TimestampTz) {
-    let key = PgStat_HashKey { kind: PGSTAT_KIND_DATABASE, dboid, objid: 0 };
-    let SharedEntry::Database(d) =
-        store.entry(key).or_insert(SharedEntry::Database(PgStat_StatDBEntry::default()))
+    let key = PgStat_HashKey {
+        kind: PGSTAT_KIND_DATABASE,
+        dboid,
+        objid: 0,
+    };
+    let SharedEntry::Database(d) = store
+        .entry(key)
+        .or_insert(SharedEntry::Database(PgStat_StatDBEntry::default()))
     else {
         unreachable!("database key holds non-database shared entry")
     };
@@ -499,8 +504,12 @@ pub fn pgstat_reset(kind: PgStat_Kind, dboid: types_core::Oid, objid: u64) {
 pub fn pgstat_reset_of_kind(kind: PgStat_Kind) {
     let ts = timestamp_seams::get_current_timestamp::call();
     match kind {
-        PGSTAT_KIND_DATABASE | PGSTAT_KIND_RELATION | PGSTAT_KIND_FUNCTION
-        | PGSTAT_KIND_BACKEND | PGSTAT_KIND_REPLSLOT | PGSTAT_KIND_SUBSCRIPTION => {
+        PGSTAT_KIND_DATABASE
+        | PGSTAT_KIND_RELATION
+        | PGSTAT_KIND_FUNCTION
+        | PGSTAT_KIND_BACKEND
+        | PGSTAT_KIND_REPLSLOT
+        | PGSTAT_KIND_SUBSCRIPTION => {
             let mut store = SHARED_STATS.lock().unwrap();
             for (key, entry) in store.iter_mut() {
                 if key.kind == kind {

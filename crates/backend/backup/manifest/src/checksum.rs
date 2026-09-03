@@ -1,4 +1,3 @@
-
 use crc32c::{fin_crc32c, pg_comp_crc32c, CRC32C_INIT};
 use pg_sha2::{
     PgSha256Ctx, PgSha512Ctx, PG_SHA224_DIGEST_LENGTH, PG_SHA256_DIGEST_LENGTH,

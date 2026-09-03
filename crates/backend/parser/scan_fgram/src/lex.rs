@@ -3,7 +3,9 @@
 
 use crate::dfa::{YY_END_OF_BUFFER, YY_STATE_EOF_BASE};
 use crate::tokens;
-use crate::{CoreYYSTYPE, Scanner, State, Token, BACKSLASH_QUOTE_OFF, BACKSLASH_QUOTE_SAFE_ENCODING};
+use crate::{
+    CoreYYSTYPE, Scanner, State, Token, BACKSLASH_QUOTE_OFF, BACKSLASH_QUOTE_SAFE_ENCODING,
+};
 use elog::ereport;
 use types_error::{
     ErrorLocation, PgResult, SoftErrorContext, ERRCODE_FEATURE_NOT_SUPPORTED,
@@ -29,11 +31,7 @@ impl<'mcx> Scanner<'mcx> {
     // C core_yylex's exact boundary: token code in the return register,
     // value/location written through the parser's own slots (no >16B struct
     // return crossing the per-token call).
-    pub fn core_yylex(
-        &mut self,
-        lvalp: &mut CoreYYSTYPE<'mcx>,
-        llocp: &mut i32,
-    ) -> PgResult<i32> {
+    pub fn core_yylex(&mut self, lvalp: &mut CoreYYSTYPE<'mcx>, llocp: &mut i32) -> PgResult<i32> {
         loop {
             self.tok_start = self.pos;
             let (mut act, mut end) = self.dfa_match();
@@ -459,7 +457,10 @@ impl<'mcx> Scanner<'mcx> {
                 self.set_yylloc();
                 Err(self.yyerr("invalid Unicode surrogate pair"))
             }
-            _ => panic!("scan_fgram: no action for flex rule {act} in state {:?}", self.state),
+            _ => panic!(
+                "scan_fgram: no action for flex rule {act} in state {:?}",
+                self.state
+            ),
         }
     }
 
@@ -515,7 +516,10 @@ impl<'mcx> Scanner<'mcx> {
 
         if nchars > 1 && matches!(yytext[nchars - 1], b'+' | b'-') {
             let qualifying = yytext[..nchars - 1].iter().any(|&c| {
-                matches!(c, b'~' | b'!' | b'@' | b'#' | b'^' | b'&' | b'|' | b'`' | b'?' | b'%')
+                matches!(
+                    c,
+                    b'~' | b'!' | b'@' | b'#' | b'^' | b'&' | b'|' | b'`' | b'?' | b'%'
+                )
             });
             if !qualifying {
                 loop {
@@ -673,8 +677,8 @@ impl<'mcx> Scanner<'mcx> {
             _ if valid == buf.len() => return Ok(()),
             _ => valid,
         };
-        let mblen = (wchar::pg_encoding_mblen(self.encoding, &buf[bad..]) as usize)
-            .min(buf.len() - bad);
+        let mblen =
+            (wchar::pg_encoding_mblen(self.encoding, &buf[bad..]) as usize).min(buf.len() - bad);
         let mut seq = String::new();
         for (i, b) in buf[bad..bad + mblen].iter().enumerate() {
             if i > 0 {
@@ -749,9 +753,9 @@ fn parse_int32(bytes: &[u8]) -> Option<i32> {
 }
 
 fn parse_hex(bytes: &[u8]) -> u32 {
-    bytes.iter().fold(0u32, |v, &b| {
-        v * 16 + (b as char).to_digit(16).unwrap_or(0)
-    })
+    bytes
+        .iter()
+        .fold(0u32, |v, &b| v * 16 + (b as char).to_digit(16).unwrap_or(0))
 }
 
 fn parse_oct(bytes: &[u8]) -> u32 {

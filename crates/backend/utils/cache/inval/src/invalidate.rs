@@ -13,9 +13,7 @@ use types_storage::{
 };
 use types_tuple::HeapTupleData;
 
-use crate::registration::{
-    self, prepare_inplace_invalidation_state, prepare_invalidation_state,
-};
+use crate::registration::{self, prepare_inplace_invalidation_state, prepare_invalidation_state};
 use crate::{
     with_state, RelSyncCallbackFunction, RelcacheCallbackFunction, RelcacheCallbackItem,
     RelsyncCallbackItem, SyscacheCallbackFunction, SyscacheCallbackItem, CALLBACKS,
@@ -94,13 +92,23 @@ fn cache_invalidate_heap_tuple_common(
 
         let rel_target: Option<(Oid, Oid)> = if tuple_rel_id == RELATION_RELATION_ID {
             let classtup = syscache_seams::pg_class_shape::call(tuple);
-            let database_id = if classtup.relisshared { InvalidOid } else { MyDatabaseId() };
+            let database_id = if classtup.relisshared {
+                InvalidOid
+            } else {
+                MyDatabaseId()
+            };
             Some((classtup.oid, database_id))
         } else if tuple_rel_id == ATTRIBUTE_RELATION_ID {
             // KLUGE ALERT (C): always MyDatabaseId, even for shared rels.
-            Some((syscache_seams::pg_attribute_attrelid::call(tuple), MyDatabaseId()))
+            Some((
+                syscache_seams::pg_attribute_attrelid::call(tuple),
+                MyDatabaseId(),
+            ))
         } else if tuple_rel_id == INDEX_RELATION_ID {
-            Some((syscache_seams::pg_index_indexrelid::call(tuple), MyDatabaseId()))
+            Some((
+                syscache_seams::pg_index_indexrelid::call(tuple),
+                MyDatabaseId(),
+            ))
         } else if tuple_rel_id == CONSTRAINT_RELATION_ID {
             syscache_seams::pg_constraint_fk_target::call(tuple)
                 .map(|conrelid| (conrelid, MyDatabaseId()))
@@ -123,19 +131,32 @@ fn cache_invalidate_heap_tuple_common(
                     MyDatabaseId()
                 };
                 registration::register_snapshot_invalidation(
-                    mcx, state, info, database_id, tuple_rel_id,
+                    mcx,
+                    state,
+                    info,
+                    database_id,
+                    tuple_rel_id,
                 )?;
             } else {
                 for req in reqs.iter() {
                     registration::register_catcache_invalidation(
-                        mcx, state, info, req.cache_id, req.hash_value, req.db_id,
+                        mcx,
+                        state,
+                        info,
+                        req.cache_id,
+                        req.hash_value,
+                        req.db_id,
                     )?;
                 }
             }
 
             match rel_target {
                 Some((relation_id, database_id)) => registration::register_relcache_invalidation(
-                    mcx, state, info, database_id, relation_id,
+                    mcx,
+                    state,
+                    info,
+                    database_id,
+                    relation_id,
                 ),
                 None => Ok(()),
             }
@@ -198,7 +219,11 @@ pub fn CacheInvalidateRelcacheAll() -> PgResult<()> {
 pub fn CacheInvalidateRelcacheByTuple(classTuple: &HeapTupleData<'_>) -> PgResult<()> {
     let classtup = syscache_seams::pg_class_shape::call(classTuple);
     let relation_id = classtup.oid;
-    let database_id = if classtup.relisshared { InvalidOid } else { MyDatabaseId() };
+    let database_id = if classtup.relisshared {
+        InvalidOid
+    } else {
+        MyDatabaseId()
+    };
 
     with_state(|state| {
         let mcx = state.mcx;
@@ -213,7 +238,11 @@ pub fn CacheInvalidateRelcacheByRelid(relid: Oid) -> PgResult<()> {
         None => return Err(err_cache_lookup_failed(relid)),
     };
     let relation_id = classtup.oid;
-    let database_id = if classtup.relisshared { InvalidOid } else { MyDatabaseId() };
+    let database_id = if classtup.relisshared {
+        InvalidOid
+    } else {
+        MyDatabaseId()
+    };
 
     with_state(|state| {
         let mcx = state.mcx;
@@ -226,7 +255,9 @@ pub fn CacheInvalidateRelcacheByRelid(relid: Oid) -> PgResult<()> {
 #[cold]
 #[inline(never)]
 fn err_cache_lookup_failed(relid: Oid) -> Box<PgError> {
-    Box::new(PgError::error(format!("cache lookup failed for relation {relid}")))
+    Box::new(PgError::error(format!(
+        "cache lookup failed for relation {relid}"
+    )))
 }
 
 pub fn CacheInvalidateRelSync(relid: Oid) -> PgResult<()> {
@@ -282,7 +313,10 @@ pub fn CacheRegisterSyscacheCallback(
             while t.syscache_list[i].expect("linked slot populated").link > 0 {
                 i = (t.syscache_list[i].expect("linked slot populated").link - 1) as usize;
             }
-            t.syscache_list[i].as_mut().expect("linked slot populated").link = count + 1;
+            t.syscache_list[i]
+                .as_mut()
+                .expect("linked slot populated")
+                .link = count + 1;
         }
 
         t.syscache_list[t.syscache_count] = Some(SyscacheCallbackItem {
@@ -302,7 +336,10 @@ pub fn CacheRegisterRelcacheCallback(func: RelcacheCallbackFunction, arg: Datum)
         if t.relcache_count >= MAX_RELCACHE_CALLBACKS {
             return Err(err_out_of_slots("relcache_callback_list"));
         }
-        t.relcache_list[t.relcache_count] = Some(RelcacheCallbackItem { function: func, arg });
+        t.relcache_list[t.relcache_count] = Some(RelcacheCallbackItem {
+            function: func,
+            arg,
+        });
         t.relcache_count += 1;
         Ok(())
     })
@@ -314,7 +351,10 @@ pub fn CacheRegisterRelSyncCallback(func: RelSyncCallbackFunction, arg: Datum) -
         if t.relsync_count >= MAX_RELSYNC_CALLBACKS {
             return Err(err_out_of_slots("relsync_callback_list"));
         }
-        t.relsync_list[t.relsync_count] = Some(RelsyncCallbackItem { function: func, arg });
+        t.relsync_list[t.relsync_count] = Some(RelsyncCallbackItem {
+            function: func,
+            arg,
+        });
         t.relsync_count += 1;
         Ok(())
     })
@@ -356,7 +396,11 @@ pub fn CallRelSyncCallbacks(relid: Oid) -> PgResult<()> {
     let mut i = 0usize;
     while let Some(ccitem) = CALLBACKS.with(|c| {
         let t = c.borrow();
-        if i < t.relsync_count { t.relsync_list[i] } else { None }
+        if i < t.relsync_count {
+            t.relsync_list[i]
+        } else {
+            None
+        }
     }) {
         (ccitem.function)(ccitem.arg, relid);
         i += 1;

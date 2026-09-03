@@ -76,7 +76,11 @@ pub(crate) fn fc_normal_rand(
             fctx.use_carry = true;
             fctx.mean + fctx.stddev * n1
         };
-        Ok(funcapi::srf_return_next(flinfo, fcinfo, Datum::from_f64(result)))
+        Ok(funcapi::srf_return_next(
+            flinfo,
+            fcinfo,
+            Datum::from_f64(result),
+        ))
     } else {
         Ok(funcapi::srf_return_done(flinfo, fcinfo))
     }

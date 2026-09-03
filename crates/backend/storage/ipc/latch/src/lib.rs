@@ -125,8 +125,13 @@ pub fn InitializeLatchWaitSet() -> PgResult<()> {
     debug_assert_eq!(latch_pos, LatchWaitSetLatchPos);
 
     if IsUnderPostmaster() {
-        let pos =
-            wes::add_wait_event_to_set::call(set, WL_EXIT_ON_PM_DEATH, PGINVALID_SOCKET, None, None)?;
+        let pos = wes::add_wait_event_to_set::call(
+            set,
+            WL_EXIT_ON_PM_DEATH,
+            PGINVALID_SOCKET,
+            None,
+            None,
+        )?;
         debug_assert_eq!(pos, LatchWaitSetPostmasterDeathPos);
     }
 

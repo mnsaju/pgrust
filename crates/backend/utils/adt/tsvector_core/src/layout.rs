@@ -87,7 +87,9 @@ impl<'a> TsVec<'a> {
     #[inline]
     pub fn entry(self, i: usize) -> WordEntry {
         let off = PAYLOAD_ENTRIES_OFF + i * 4;
-        WordEntry(u32::from_ne_bytes(self.payload[off..off + 4].try_into().unwrap()))
+        WordEntry(u32::from_ne_bytes(
+            self.payload[off..off + 4].try_into().unwrap(),
+        ))
     }
 
     #[inline]
@@ -189,7 +191,8 @@ impl<'mcx> TsVecBuilder<'mcx> {
 
     pub fn push(&mut self, word: &[u8], positions: &[WordEntryPos]) -> PgResult<()> {
         let pos = self.data.len();
-        self.entries.push(WordEntry::new(!positions.is_empty(), word.len(), pos));
+        self.entries
+            .push(WordEntry::new(!positions.is_empty(), word.len(), pos));
         vec_append_bytes(&mut self.data, word)?;
         if !positions.is_empty() {
             if self.data.len() & 1 != 0 {
@@ -208,7 +211,8 @@ impl<'mcx> TsVecBuilder<'mcx> {
     // Verbatim lexeme + raw posblock copy (concat/delete paths).
     pub fn push_raw(&mut self, word: &[u8], posblock: &[u8]) -> PgResult<()> {
         let pos = self.data.len();
-        self.entries.push(WordEntry::new(!posblock.is_empty(), word.len(), pos));
+        self.entries
+            .push(WordEntry::new(!posblock.is_empty(), word.len(), pos));
         vec_append_bytes(&mut self.data, word)?;
         if !posblock.is_empty() {
             if self.data.len() & 1 != 0 {

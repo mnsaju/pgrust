@@ -28,11 +28,16 @@ pub(crate) const GinPostingListSegmentTargetSize: usize = 256;
 pub(crate) const GinPostingListSegmentMinSize: usize = 128;
 const MinTuplesPerSegment: usize = (GinPostingListSegmentMaxSize - 2) / 6;
 
-
 #[inline]
 pub fn data_page_right_bound(bytes: &[u8]) -> ItemPointerData {
     // SAFETY: right bound at PageGetContents (offset 24) of a BLCKSZ image.
-    unsafe { bytes.as_ptr().add(24).cast::<ItemPointerData>().read_unaligned() }
+    unsafe {
+        bytes
+            .as_ptr()
+            .add(24)
+            .cast::<ItemPointerData>()
+            .read_unaligned()
+    }
 }
 
 #[inline]
@@ -170,9 +175,12 @@ pub(crate) fn gin_data_leaf_page_get_items_to_tbm(
     if !GinPageIsCompressed(&opaque_of(bytes)) {
         unported("pre-9.4 uncompressed GIN posting-tree leaf");
     }
-    crate::postinglist::ginPostingListDecodeAllSegmentsToTbm(mcx, data_leaf_posting_list(bytes), tbm)
+    crate::postinglist::ginPostingListDecodeAllSegmentsToTbm(
+        mcx,
+        data_leaf_posting_list(bytes),
+        tbm,
+    )
 }
-
 
 #[derive(Clone, Copy)]
 enum SegBytes {
@@ -318,9 +326,7 @@ fn add_items_to_leaf<'s>(
                 }
             };
             let mut n = 0usize;
-            while n < newleft
-                && ginCompareItemPointers(&new_items[nextnew + n], &next_first) < 0
-            {
+            while n < newleft && ginCompareItemPointers(&new_items[nextnew + n], &next_first) < 0 {
                 n += 1;
             }
             n
@@ -361,8 +367,7 @@ fn add_items_to_leaf<'s>(
         let (merged, merged_is_pure_add) = {
             let cur = &leaf.segs[i];
             let old = items_slice(cur.items.as_ref().unwrap(), new_items);
-            let merged =
-                ginMergeItemPointers(mcx, old, &new_items[nextnew..nextnew + nthis])?;
+            let merged = ginMergeItemPointers(mcx, old, &new_items[nextnew..nextnew + nthis])?;
             let pure = merged.len() == old.len() + nthis;
             (merged, pure)
         };
@@ -405,8 +410,7 @@ fn leaf_repack_items<'s>(
     while i < leaf.segs.len() {
         if leaf.segs[i].action != GIN_SEGMENT_DELETE {
             if leaf.segs[i].seg.is_none() {
-                let items_len =
-                    items_slice(leaf.segs[i].items.as_ref().unwrap(), new_items).len();
+                let items_len = items_slice(leaf.segs[i].items.as_ref().unwrap(), new_items).len();
                 let mut npacked = 0usize;
                 // C: nitems > GinPostingListSegmentMaxSize has no chance to
                 // fit (each item is at least one byte).
@@ -668,7 +672,6 @@ fn data_place_to_page_leaf_split(
     set_data_page_data_size(rpage.as_mut_bytes(), rsize);
     set_data_page_right_bound(rpage.as_mut_bytes(), &rbound);
 }
-
 
 pub(crate) enum DataPayload {
     Leaf {
@@ -1013,7 +1016,9 @@ impl<'r> GinBt<'r> for DataBtree<'_, 'r, '_> {
                 Ok(Vec::new())
             }
         } else {
-            let pitem = self.downlink.expect("data internal insert without posting item");
+            let pitem = self
+                .downlink
+                .expect("data internal insert without posting item");
             // SAFETY: pin + exclusive lock held.
             let mut page = unsafe { page_mut(buf) };
             // SAFETY: borrow confined to this block.
@@ -1023,7 +1028,9 @@ impl<'r> GinBt<'r> for DataBtree<'_, 'r, '_> {
             write_posting_item(bytes, off, &existing);
             gin_data_page_add_posting_item(bytes, &pitem, off);
             bm::mark_buffer_dirty::call(buf)?;
-            Ok(vec![crate::wal::ginxlog_insert_data_internal(off, &pitem).to_vec()])
+            Ok(vec![
+                crate::wal::ginxlog_insert_data_internal(off, &pitem).to_vec()
+            ])
         }
     }
 
@@ -1079,7 +1086,9 @@ impl DataBtree<'_, '_, '_> {
         off: OffsetNumber,
         update_blkno: BlockNumber,
     ) -> PgResult<(PageTemp, PageTemp)> {
-        let pitem = self.downlink.expect("data internal split without posting item");
+        let pitem = self
+            .downlink
+            .expect("data internal split without posting item");
         // SAFETY: pin + exclusive lock held.
         let oldbytes = page_bytes(&unsafe { page_ref(origbuf) });
         let old_opaque = opaque_of(oldbytes);
@@ -1211,13 +1220,7 @@ pub(crate) fn createPostingTree<'s>(
     }
 
     if items.len() > nrootitems {
-        ginInsertItemPointers(
-            mcx,
-            rel,
-            blkno,
-            &items[nrootitems..],
-            buildStats,
-        )?;
+        ginInsertItemPointers(mcx, rel, blkno, &items[nrootitems..], buildStats)?;
     }
 
     Ok(blkno)

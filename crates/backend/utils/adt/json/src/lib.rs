@@ -11,9 +11,9 @@ pub mod funcs;
 pub mod getpath;
 pub mod jsonapi;
 pub mod srfs;
-pub mod tojson;
 #[cfg(test)]
 mod tests;
+pub mod tojson;
 
 use datum::{Bytea, Varlena};
 use jsonapi::{JsonError, JsonLex};
@@ -119,7 +119,14 @@ fn escape_json_char(buf: &mut StringInfo<'_>, c: u8) -> PgResult<()> {
         b'\\' => buf.append_bytes(b"\\\\"),
         _ if c < b' ' => {
             const HEX: &[u8; 16] = b"0123456789abcdef";
-            buf.append_bytes(&[b'\\', b'u', b'0', b'0', HEX[(c >> 4) as usize], HEX[(c & 0xf) as usize]])
+            buf.append_bytes(&[
+                b'\\',
+                b'u',
+                b'0',
+                b'0',
+                HEX[(c >> 4) as usize],
+                HEX[(c & 0xf) as usize],
+            ])
         }
         _ => buf.append_byte(c),
     }

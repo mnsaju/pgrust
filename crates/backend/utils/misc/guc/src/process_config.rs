@@ -43,22 +43,54 @@ pub fn process_config_file_internal_list(
     apply_settings: bool,
     elevel: ErrorLevel,
 ) -> PgResult<(bool, Vec<ConfigVariable>)> {
-    let config_file_name = store::get_string("config_file").flatten().unwrap_or_default();
+    let config_file_name = store::get_string("config_file")
+        .flatten()
+        .unwrap_or_default();
 
     let mut conf_file_with_error = config_file_name.clone();
     let mut head: Vec<ConfigVariable> = Vec::new();
 
-    if !ParseConfigFile(&config_file_name, true, None, 0, CONF_FILE_START_DEPTH, elevel, &mut head)? {
-        let ok = bail_out(context, elevel, true, false, apply_settings, &conf_file_with_error)?;
+    if !ParseConfigFile(
+        &config_file_name,
+        true,
+        None,
+        0,
+        CONF_FILE_START_DEPTH,
+        elevel,
+        &mut head,
+    )? {
+        let ok = bail_out(
+            context,
+            elevel,
+            true,
+            false,
+            apply_settings,
+            &conf_file_with_error,
+        )?;
         return Ok((ok, head));
     }
 
     // postgresql.auto.conf lives in the data directory; parse it after the
     // main file (so ALTER SYSTEM overrides) once DataDir is known.
     if init_small::globals::DataDir().is_some() {
-        if !ParseConfigFile(PG_AUTOCONF_FILENAME, false, None, 0, CONF_FILE_START_DEPTH, elevel, &mut head)? {
+        if !ParseConfigFile(
+            PG_AUTOCONF_FILENAME,
+            false,
+            None,
+            0,
+            CONF_FILE_START_DEPTH,
+            elevel,
+            &mut head,
+        )? {
             conf_file_with_error = PG_AUTOCONF_FILENAME.to_string();
-            let ok = bail_out(context, elevel, true, false, apply_settings, &conf_file_with_error)?;
+            let ok = bail_out(
+                context,
+                elevel,
+                true,
+                false,
+                apply_settings,
+                &conf_file_with_error,
+            )?;
             return Ok((ok, head));
         }
     } else {
@@ -76,8 +108,14 @@ pub fn process_config_file_internal_list(
             None => {
                 // No data_directory: quick exit, PgReloadTime is set by the
                 // subsequent full load.
-                let ok =
-                    bail_out(context, elevel, false, false, apply_settings, &conf_file_with_error)?;
+                let ok = bail_out(
+                    context,
+                    elevel,
+                    false,
+                    false,
+                    apply_settings,
+                    &conf_file_with_error,
+                )?;
                 return Ok((ok, head));
             }
         }
@@ -163,7 +201,14 @@ pub fn apply_config_variables(
     }
 
     if error {
-        return bail_out(context, elevel, error, applying, apply_settings, conf_file_with_error);
+        return bail_out(
+            context,
+            elevel,
+            error,
+            applying,
+            apply_settings,
+            conf_file_with_error,
+        );
     }
 
     applying = true;
@@ -185,7 +230,11 @@ pub fn apply_config_variables(
             let name = gen.name.to_string();
             if gen.context < PGC_SIGHUP {
                 reg[idx].gen_mut().status |= GUC_PENDING_RESTART;
-                out.push(Removed { name, needs_restart: true, do_reset: false });
+                out.push(Removed {
+                    name,
+                    needs_restart: true,
+                    do_reset: false,
+                });
                 continue;
             }
             if !apply_settings {
@@ -206,7 +255,11 @@ pub fn apply_config_variables(
                 }
                 stack = s.prev.as_deref_mut();
             }
-            out.push(Removed { name, needs_restart: false, do_reset: true });
+            out.push(Removed {
+                name,
+                needs_restart: false,
+                do_reset: true,
+            });
         }
         out
     })
@@ -337,7 +390,14 @@ pub fn apply_config_variables(
         }
     }
 
-    bail_out(context, elevel, error, applying, apply_settings, conf_file_with_error)
+    bail_out(
+        context,
+        elevel,
+        error,
+        applying,
+        apply_settings,
+        conf_file_with_error,
+    )
 }
 
 fn display_filename(item: &ConfigVariable) -> String {
@@ -361,7 +421,9 @@ fn bail_out(
             // During postmaster startup, any error is fatal.
             return Err(ereport(ERROR)
                 .errcode(ERRCODE_CONFIG_FILE_ERROR)
-                .errmsg(format!("configuration file \"{conf_file_with_error}\" contains errors"))
+                .errmsg(format!(
+                    "configuration file \"{conf_file_with_error}\" contains errors"
+                ))
                 .into_error()
                 .into());
         } else if applying {
@@ -403,9 +465,12 @@ fn report(elevel: ErrorLevel, error: PgError) -> PgResult<()> {
 // GetConfigOption(name, true, false) for the change-report diff; missing or
 // NULL is the empty string.
 fn current_value(name: &str) -> String {
-    with_store(|reg| reg.find_option(name).map(|record| crate::show_guc_option(record, false)))
-        .flatten()
-        .unwrap_or_default()
+    with_store(|reg| {
+        reg.find_option(name)
+            .map(|record| crate::show_guc_option(record, false))
+    })
+    .flatten()
+    .unwrap_or_default()
 }
 
 // set_config_sourcefile (guc.c:4310).

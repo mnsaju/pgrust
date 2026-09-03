@@ -61,7 +61,12 @@ pub fn cmp_var_common(
             return 1;
         }
         return cmp_abs_common(
-            var1digits, var1ndigits, var1weight, var2digits, var2ndigits, var2weight,
+            var1digits,
+            var1ndigits,
+            var1weight,
+            var2digits,
+            var2ndigits,
+            var2weight,
         );
     }
 
@@ -70,7 +75,12 @@ pub fn cmp_var_common(
     }
 
     cmp_abs_common(
-        var2digits, var2ndigits, var2weight, var1digits, var1ndigits, var1weight,
+        var2digits,
+        var2ndigits,
+        var2weight,
+        var1digits,
+        var1ndigits,
+        var1weight,
     )
 }
 

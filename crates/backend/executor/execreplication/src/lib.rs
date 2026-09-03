@@ -275,7 +275,11 @@ pub fn CheckCmdReplicaIdentity<'mcx>(
         return Err(err_invalid_column_reference(rel.name(), update, RF_DETAIL));
     }
     if !cols_valid {
-        return Err(err_invalid_column_reference(rel.name(), update, COLS_DETAIL));
+        return Err(err_invalid_column_reference(
+            rel.name(),
+            update,
+            COLS_DETAIL,
+        ));
     }
     if !gencols_valid {
         return Err(err_invalid_column_reference(

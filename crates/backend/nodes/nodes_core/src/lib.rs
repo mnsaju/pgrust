@@ -148,9 +148,7 @@ pub fn expression_tree_walker_dyn<'mcx>(
         | NodeTag::T_SortGroupClause
         | NodeTag::T_CTESearchClause
         | NodeTag::T_MergeSupportFunc => Ok(false),
-        NodeTag::T_WithCheckOption => {
-            walk_opt(node.as_with_check_option().unwrap().qual, w)
-        }
+        NodeTag::T_WithCheckOption => walk_opt(node.as_with_check_option().unwrap().qual, w),
         NodeTag::T_Aggref => {
             let a = node.as_variant::<Aggref>().unwrap();
             Ok(walk_list(&a.aggdirectargs, w)?
@@ -215,9 +213,7 @@ pub fn expression_tree_walker_dyn<'mcx>(
             let a = node.as_array_coerce_expr().unwrap();
             Ok(w.visit(a.arg)? || walk_opt(a.elemexpr, w)?)
         }
-        NodeTag::T_ConvertRowtypeExpr => {
-            w.visit(node.as_convert_rowtype_expr().unwrap().arg)
-        }
+        NodeTag::T_ConvertRowtypeExpr => w.visit(node.as_convert_rowtype_expr().unwrap().arg),
         NodeTag::T_BooleanTest => walk_opt(node.as_boolean_test().unwrap().arg, w),
         NodeTag::T_DistinctExpr => {
             let d = node.as_distinct_expr().unwrap();
@@ -331,9 +327,7 @@ pub fn expression_tree_walker_dyn<'mcx>(
             Ok(walk_opt(a.qual, w)? || walk_list(&a.targetList, w)?)
         }
         NodeTag::T_List => walk_list(node.as_list().unwrap(), w),
-        NodeTag::T_RangeTblFunction => {
-            walk_opt(node.as_range_tbl_function().unwrap().funcexpr, w)
-        }
+        NodeTag::T_RangeTblFunction => walk_opt(node.as_range_tbl_function().unwrap().funcexpr, w),
         NodeTag::T_TableSampleClause => {
             let tsc = node.as_table_sample_clause().unwrap();
             Ok(walk_list(&tsc.args, w)? || walk_opt(tsc.repeatable, w)?)
@@ -363,14 +357,18 @@ pub fn expression_tree_walker_dyn<'mcx>(
                 || walk_list(&oc.exclRelTlist, w)?)
         }
         NodeTag::T_PartitionBoundSpec => {
-            let pbs = node.as_variant::<types_nodes::rawnodes::PartitionBoundSpec>().unwrap();
+            let pbs = node
+                .as_variant::<types_nodes::rawnodes::PartitionBoundSpec>()
+                .unwrap();
             Ok(walk_list(&pbs.listdatums, w)?
                 || walk_list(&pbs.lowerdatums, w)?
                 || walk_list(&pbs.upperdatums, w)?)
         }
         // Range-bound list elements: MINVALUE/MAXVALUE carry no value node.
         NodeTag::T_PartitionRangeDatum => {
-            let prd = node.as_variant::<types_nodes::rawnodes::PartitionRangeDatum>().unwrap();
+            let prd = node
+                .as_variant::<types_nodes::rawnodes::PartitionRangeDatum>()
+                .unwrap();
             walk_opt(prd.value, w)
         }
         other => deferred("expression_tree_walker", other),
@@ -501,9 +499,7 @@ pub fn range_table_entry_walker_dyn<'mcx>(
         RTEKind::RTE_TABLEFUNC => walk_opt(rte.tablefunc, w)?,
         RTEKind::RTE_VALUES => walk_list(&rte.values_lists, w)?,
         RTEKind::RTE_CTE | RTEKind::RTE_NAMEDTUPLESTORE | RTEKind::RTE_RESULT => false,
-        RTEKind::RTE_GROUP => {
-            flags & QTW_IGNORE_GROUPEXPRS == 0 && walk_list(&rte.groupexprs, w)?
-        }
+        RTEKind::RTE_GROUP => flags & QTW_IGNORE_GROUPEXPRS == 0 && walk_list(&rte.groupexprs, w)?,
     };
     if hit {
         return Ok(true);
@@ -757,9 +753,7 @@ pub fn raw_expression_tree_walker_dyn<'mcx>(
                 || walk_opt(jtc.on_error, w)?
                 || walk_list(&jtc.columns, w)?)
         }
-        NodeTag::T_JsonTablePathSpec => {
-            walk_opt(node.as_json_table_path_spec().unwrap().string, w)
-        }
+        NodeTag::T_JsonTablePathSpec => walk_opt(node.as_json_table_path_spec().unwrap().string, w),
         NodeTag::T_JsonOutput => {
             let o = node.as_json_output().unwrap();
             walk_opt(o.typeName, w)
@@ -927,9 +921,7 @@ pub fn raw_expression_tree_walker_dyn<'mcx>(
         // C: "collation and opclass names are deemed uninteresting".
         NodeTag::T_IndexElem => walk_opt(node.as_index_elem().unwrap().expr, w),
         NodeTag::T_GroupingSet => walk_list(&node.as_grouping_set().unwrap().content, w),
-        NodeTag::T_LockingClause => {
-            walk_list(&node.as_locking_clause().unwrap().lockedRels, w)
-        }
+        NodeTag::T_LockingClause => walk_list(&node.as_locking_clause().unwrap().lockedRels, w),
         NodeTag::T_WithClause => walk_list(&node.as_with_clause().unwrap().ctes, w),
         NodeTag::T_InferClause => {
             let ic = node.as_infer_clause().unwrap();
@@ -942,9 +934,7 @@ pub fn raw_expression_tree_walker_dyn<'mcx>(
                 || walk_opt(oc.whereClause, w)?)
         }
         // C: "search_clause and cycle_clause are not interesting here".
-        NodeTag::T_CommonTableExpr => {
-            walk_opt(node.as_common_table_expr().unwrap().ctequery, w)
-        }
+        NodeTag::T_CommonTableExpr => walk_opt(node.as_common_table_expr().unwrap().ctequery, w),
         other => deferred("raw_expression_tree_walker", other),
     }
 }
@@ -1371,11 +1361,12 @@ pub fn expression_tree_mutator_dyn<'mcx>(
             if upper.is_none() && lower.is_none() && refexpr.is_none() && refassgn.is_none() {
                 return Ok(None);
             }
-            let unchanged = |new: Option<types_nodes::OptNodeList<'mcx>>,
-                             old: &types_nodes::OptNodeList<'mcx>| match new {
-                Some(l) => Ok(l),
-                None => old.clone_in(mcx),
-            };
+            let unchanged =
+                |new: Option<types_nodes::OptNodeList<'mcx>>,
+                 old: &types_nodes::OptNodeList<'mcx>| match new {
+                    Some(l) => Ok(l),
+                    None => old.clone_in(mcx),
+                };
             Ok(Some(Node::mk(
                 mcx,
                 types_nodes::SubscriptingRef {
@@ -1397,7 +1388,11 @@ pub fn expression_tree_mutator_dyn<'mcx>(
                 None => Ok(None),
                 Some(args) => Ok(Some(Node::mk(
                     mcx,
-                    types_nodes::primnodes::BoolExpr { boolop: b.boolop, args, location: b.location },
+                    types_nodes::primnodes::BoolExpr {
+                        boolop: b.boolop,
+                        args,
+                        location: b.location,
+                    },
                 )?)),
             }
         }
@@ -1896,7 +1891,10 @@ pub fn expression_tree_mutator_dyn<'mcx>(
             };
             Ok(Some(Node::mk(
                 mcx,
-                FromExpr { fromlist, quals: quals.unwrap_or(f.quals) },
+                FromExpr {
+                    fromlist,
+                    quals: quals.unwrap_or(f.quals),
+                },
             )?))
         }
         NodeTag::T_JoinExpr => {
@@ -1948,7 +1946,10 @@ pub fn expression_tree_mutator_dyn<'mcx>(
                     rarg: rarg.or(so.rarg),
                     colTypes: types_nodes::OidList::from_slice(mcx, so.colTypes.as_slice())?,
                     colTypmods: types_nodes::IntList::from_slice(mcx, so.colTypmods.as_slice())?,
-                    colCollations: types_nodes::OidList::from_slice(mcx, so.colCollations.as_slice())?,
+                    colCollations: types_nodes::OidList::from_slice(
+                        mcx,
+                        so.colCollations.as_slice(),
+                    )?,
                     groupClauses: match group_clauses {
                         Some(g) => g,
                         None => so.groupClauses.clone_in(mcx)?,
@@ -2212,7 +2213,9 @@ pub fn expression_tree_mutator_dyn<'mcx>(
             }
         }
         NodeTag::T_PartitionBoundSpec => {
-            let pbs = node.as_variant::<types_nodes::rawnodes::PartitionBoundSpec>().unwrap();
+            let pbs = node
+                .as_variant::<types_nodes::rawnodes::PartitionBoundSpec>()
+                .unwrap();
             let listdatums = mutate_list_dyn(mcx, &pbs.listdatums, m)?;
             let lowerdatums = mutate_list_dyn(mcx, &pbs.lowerdatums, m)?;
             let upperdatums = mutate_list_dyn(mcx, &pbs.upperdatums, m)?;
@@ -2239,7 +2242,9 @@ pub fn expression_tree_mutator_dyn<'mcx>(
         }
         // Range-bound list elements: MINVALUE/MAXVALUE carry no value node.
         NodeTag::T_PartitionRangeDatum => {
-            let prd = node.as_variant::<types_nodes::rawnodes::PartitionRangeDatum>().unwrap();
+            let prd = node
+                .as_variant::<types_nodes::rawnodes::PartitionRangeDatum>()
+                .unwrap();
             let Some(value) = mutate_opt_dyn(prd.value, m)? else {
                 return Ok(None);
             };
@@ -2258,10 +2263,7 @@ pub fn expression_tree_mutator_dyn<'mcx>(
 
 /// Mutate an optional child; `None` = unchanged (absent child included).
 /// Generic wrapper over the erased-callback engine (de-mono byte-shell).
-pub fn mutate_opt<'mcx, F>(
-    n: Option<Node<'mcx>>,
-    m: &mut F,
-) -> PgResult<Option<Node<'mcx>>>
+pub fn mutate_opt<'mcx, F>(n: Option<Node<'mcx>>, m: &mut F) -> PgResult<Option<Node<'mcx>>>
 where
     F: FnMut(Node<'mcx>) -> PgResult<Option<Node<'mcx>>>,
 {
@@ -2354,7 +2356,8 @@ pub fn fix_opfuncids(node: Node<'_>) -> PgResult<()> {
                     // SAFETY: fix_opfuncids callers hold the just-read tree
                     // exclusively; the shared borrow above has ended.
                     unsafe {
-                        node.with_mut::<OpExpr, _>(|o| o.opfuncid = opfuncid).unwrap();
+                        node.with_mut::<OpExpr, _>(|o| o.opfuncid = opfuncid)
+                            .unwrap();
                     }
                 }
             }

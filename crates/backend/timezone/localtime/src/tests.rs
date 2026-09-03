@@ -56,7 +56,10 @@ fn load_zone(name: &str) -> PgTz {
 
 fn posix_tz(spec: &str) -> PgTz {
     let mut sp = Box::new(TzState::new());
-    assert!(tzparse(spec.as_bytes(), &mut sp, false), "must parse: {spec}");
+    assert!(
+        tzparse(spec.as_bytes(), &mut sp, false),
+        "must parse: {spec}"
+    );
     PgTz::new(spec.as_bytes(), *sp)
 }
 
@@ -92,14 +95,22 @@ fn new_york_dst_boundaries_match_c_tzcode() {
     let spring_before = pg_localtime(1_710_053_999, &ny).unwrap();
     assert_eq!(ymdhms(&spring_before), (2024, 3, 10, 1, 59, 59));
     assert_eq!(
-        (spring_before.tm_isdst, spring_before.tm_gmtoff, spring_before.tm_zone),
+        (
+            spring_before.tm_isdst,
+            spring_before.tm_gmtoff,
+            spring_before.tm_zone
+        ),
         (0, -18_000, Some("EST"))
     );
 
     let spring_after = pg_localtime(1_710_054_000, &ny).unwrap();
     assert_eq!(ymdhms(&spring_after), (2024, 3, 10, 3, 0, 0));
     assert_eq!(
-        (spring_after.tm_isdst, spring_after.tm_gmtoff, spring_after.tm_zone),
+        (
+            spring_after.tm_isdst,
+            spring_after.tm_gmtoff,
+            spring_after.tm_zone
+        ),
         (1, -14_400, Some("EDT"))
     );
 
@@ -124,7 +135,10 @@ fn new_york_goahead_extrapolation() {
     assert!(ny.state.goahead);
     let tm = pg_localtime(4_102_462_800, &ny).unwrap();
     assert_eq!(ymdhms(&tm), (2100, 1, 1, 0, 0, 0));
-    assert_eq!((tm.tm_isdst, tm.tm_gmtoff, tm.tm_zone), (0, -18_000, Some("EST")));
+    assert_eq!(
+        (tm.tm_isdst, tm.tm_gmtoff, tm.tm_zone),
+        (0, -18_000, Some("EST"))
+    );
 }
 
 #[test]
@@ -142,9 +156,15 @@ fn lord_howe_half_hour_dst() {
     // Lord Howe's DST delta is 30 minutes; transition 2024-04-07 02:00 -> 01:30.
     let lh = load_zone("Australia/Lord_Howe");
     let before = pg_localtime(1_712_412_000, &lh).unwrap();
-    assert_eq!((before.tm_hour, before.tm_min, before.tm_gmtoff), (1, 0, 39_600));
+    assert_eq!(
+        (before.tm_hour, before.tm_min, before.tm_gmtoff),
+        (1, 0, 39_600)
+    );
     let after = pg_localtime(1_712_415_600, &lh).unwrap();
-    assert_eq!((after.tm_hour, after.tm_min, after.tm_gmtoff), (1, 30, 37_800));
+    assert_eq!(
+        (after.tm_hour, after.tm_min, after.tm_gmtoff),
+        (1, 30, 37_800)
+    );
 }
 
 #[test]
@@ -176,10 +196,16 @@ fn posix_zone_applies_us_default_rules() {
     // A bare STD/DST pair takes TZDEFRULESTRING (M3.2.0,M11.1.0): same 2024
     // boundaries as America/New_York.
     let winter = pg_localtime(1_704_085_200, &est).unwrap();
-    assert_eq!((winter.tm_hour, winter.tm_isdst, winter.tm_gmtoff), (0, 0, -18_000));
+    assert_eq!(
+        (winter.tm_hour, winter.tm_isdst, winter.tm_gmtoff),
+        (0, 0, -18_000)
+    );
     assert_eq!(winter.tm_zone, Some("EST"));
     let summer = pg_localtime(1_719_806_400, &est).unwrap();
-    assert_eq!((summer.tm_hour, summer.tm_isdst, summer.tm_gmtoff), (0, 1, -14_400));
+    assert_eq!(
+        (summer.tm_hour, summer.tm_isdst, summer.tm_gmtoff),
+        (0, 1, -14_400)
+    );
     assert_eq!(summer.tm_zone, Some("EDT"));
 }
 
@@ -216,8 +242,14 @@ fn abbrev_lookups() {
 
     let est = posix_tz("EST5EDT,M3.2.0,M11.1.0");
     let mut indx = 0;
-    assert_eq!(pg_get_next_timezone_abbrev(&mut indx, &est), Some(b"EST".as_slice()));
-    assert_eq!(pg_get_next_timezone_abbrev(&mut indx, &est), Some(b"EDT".as_slice()));
+    assert_eq!(
+        pg_get_next_timezone_abbrev(&mut indx, &est),
+        Some(b"EST".as_slice())
+    );
+    assert_eq!(
+        pg_get_next_timezone_abbrev(&mut indx, &est),
+        Some(b"EDT".as_slice())
+    );
     assert_eq!(pg_get_next_timezone_abbrev(&mut indx, &est), None);
 }
 

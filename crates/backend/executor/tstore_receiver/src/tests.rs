@@ -127,11 +127,16 @@ fn required_shape_mismatch_is_rejected() {
     let outer = desc(mcx, 4, true); // int4-shaped: the OUTER portal's row type
     let inner = desc(mcx, -1, false); // text-shaped: a divergent INNER result
 
-    let shape: Vec<(types_core::Oid, bool)> =
-        (0..outer.natts as usize).map(|i| (outer.attr(i).atttypid, outer.attr(i).attisdropped)).collect();
+    let shape: Vec<(types_core::Oid, bool)> = (0..outer.natts as usize)
+        .map(|i| (outer.attr(i).atttypid, outer.attr(i).attisdropped))
+        .collect();
 
     let mut dr = tstore_create_DR();
-    set_params(&mut dr, tuplestore::hold::register(tuplestore::Tuplestore::begin_heap(false, true, 64)), false);
+    set_params(
+        &mut dr,
+        tuplestore::hold::register(tuplestore::Tuplestore::begin_heap(false, true, 64)),
+        false,
+    );
     set_required_shape(&mut dr, shape);
 
     let err = dr.startup(1, &inner).unwrap_err();
@@ -144,14 +149,20 @@ fn required_shape_match_is_accepted() {
     let outer = desc(mcx, 4, true);
     let same_shape = desc(mcx, 4, true);
 
-    let shape: Vec<(types_core::Oid, bool)> =
-        (0..outer.natts as usize).map(|i| (outer.attr(i).atttypid, outer.attr(i).attisdropped)).collect();
+    let shape: Vec<(types_core::Oid, bool)> = (0..outer.natts as usize)
+        .map(|i| (outer.attr(i).atttypid, outer.attr(i).attisdropped))
+        .collect();
 
     let mut dr = tstore_create_DR();
-    set_params(&mut dr, tuplestore::hold::register(tuplestore::Tuplestore::begin_heap(false, true, 64)), false);
+    set_params(
+        &mut dr,
+        tuplestore::hold::register(tuplestore::Tuplestore::begin_heap(false, true, 64)),
+        false,
+    );
     set_required_shape(&mut dr, shape);
 
-    dr.startup(1, &same_shape).expect("identical shape must be accepted");
+    dr.startup(1, &same_shape)
+        .expect("identical shape must be accepted");
 }
 
 #[test]
@@ -162,6 +173,11 @@ fn no_required_shape_is_unaffected() {
     let mcx = leaked_mcx();
     let d = desc(mcx, -1, false);
     let mut dr = tstore_create_DR();
-    set_params(&mut dr, tuplestore::hold::register(tuplestore::Tuplestore::begin_heap(false, true, 64)), false);
-    dr.startup(1, &d).expect("no required_shape armed => no check");
+    set_params(
+        &mut dr,
+        tuplestore::hold::register(tuplestore::Tuplestore::begin_heap(false, true, 64)),
+        false,
+    );
+    dr.startup(1, &d)
+        .expect("no required_shape armed => no check");
 }

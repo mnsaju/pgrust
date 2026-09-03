@@ -43,7 +43,11 @@ fn unpack8_wide(w: usize, src: &[u8], out: &mut [u32; 8]) {
     debug_assert!((17..=32).contains(&w) && src.len() >= w);
     let mut buf = [0u8; 40]; // 32-byte max group + u64 window slack
     buf[..w].copy_from_slice(&src[..w]);
-    let mask: u64 = if w == 32 { u64::from(u32::MAX) } else { (1u64 << w) - 1 };
+    let mask: u64 = if w == 32 {
+        u64::from(u32::MAX)
+    } else {
+        (1u64 << w) - 1
+    };
     for (i, o) in out.iter_mut().enumerate() {
         let bit = i * w;
         let byte = bit >> 3;
@@ -84,7 +88,12 @@ enum Run {
     Rle { value: u32, left: usize },
     /// Bit-packed region: `groups_left` full 8-value groups still unread from
     /// the stream, plus up to 8 already-unpacked values in `buf`.
-    Packed { groups_left: usize, buf: [u32; 8], buf_pos: usize, buf_len: usize },
+    Packed {
+        groups_left: usize,
+        buf: [u32; 8],
+        buf_pos: usize,
+        buf_len: usize,
+    },
 }
 
 /// Decoder state over an RLE/bit-packed hybrid stream. Holds offsets only —
@@ -104,7 +113,12 @@ impl HybridState {
         if width > 32 {
             return Err(corrupt_page("bit width above 32"));
         }
-        Ok(HybridState { pos, end, width, run: Run::None })
+        Ok(HybridState {
+            pos,
+            end,
+            width,
+            run: Run::None,
+        })
     }
 
     /// Fill `out` with exactly `out.len()` values or fail (a page never ends
@@ -126,7 +140,12 @@ impl HybridState {
                         self.run = Run::None;
                     }
                 }
-                Run::Packed { groups_left, buf: gbuf, buf_pos, buf_len } => {
+                Run::Packed {
+                    groups_left,
+                    buf: gbuf,
+                    buf_pos,
+                    buf_len,
+                } => {
                     if buf_pos < buf_len {
                         let take = (*buf_len - *buf_pos).min(out.len() - n);
                         out[n..n + take].copy_from_slice(&gbuf[*buf_pos..*buf_pos + take]);
@@ -179,7 +198,9 @@ impl HybridState {
 
     fn read_header(&mut self, buf: &[u8]) -> PgResult<()> {
         if self.pos >= self.end {
-            return Err(corrupt_page("levels or indices end before the declared count"));
+            return Err(corrupt_page(
+                "levels or indices end before the declared count",
+            ));
         }
         // Capped ULEB128 (u32 range is ample: run lengths are per-page).
         let mut header: u64 = 0;
@@ -217,12 +238,18 @@ impl HybridState {
                 v |= u32::from(buf[self.pos + i]) << (8 * i);
             }
             self.pos += nbytes;
-            let mask: u32 =
-                if self.width == 32 { u32::MAX } else { (1u32 << self.width) - 1 };
+            let mask: u32 = if self.width == 32 {
+                u32::MAX
+            } else {
+                (1u32 << self.width) - 1
+            };
             if v > mask {
                 return Err(corrupt_page("RLE run value exceeds the bit width"));
             }
-            self.run = Run::Rle { value: v, left: len };
+            self.run = Run::Rle {
+                value: v,
+                left: len,
+            };
         } else {
             let groups = usize::try_from(header >> 1)
                 .map_err(|_| corrupt_page("bit-packed group count out of range"))?;
@@ -234,8 +261,12 @@ impl HybridState {
             if groups > (self.end - self.pos) / self.width + 1 {
                 return Err(corrupt_page("bit-packed run larger than page"));
             }
-            self.run =
-                Run::Packed { groups_left: groups, buf: [0u32; 8], buf_pos: 0, buf_len: 0 };
+            self.run = Run::Packed {
+                groups_left: groups,
+                buf: [0u32; 8],
+                buf_pos: 0,
+                buf_len: 0,
+            };
         }
         Ok(())
     }
@@ -330,9 +361,14 @@ mod tests {
     #[test]
     fn bitpacked_roundtrip_all_widths() {
         for width in 1..=32usize {
-            let mask: u64 = if width == 32 { u32::MAX as u64 } else { (1u64 << width) - 1 };
-            let values: Vec<u32> =
-                (0..37u64).map(|i| ((i.wrapping_mul(2654435761)) & mask) as u32).collect();
+            let mask: u64 = if width == 32 {
+                u32::MAX as u64
+            } else {
+                (1u64 << width) - 1
+            };
+            let values: Vec<u32> = (0..37u64)
+                .map(|i| ((i.wrapping_mul(2654435761)) & mask) as u32)
+                .collect();
             let buf = packed_stream(width, &values);
             let mut st = HybridState::new(0, buf.len(), width).unwrap();
             let mut out = vec![0u32; values.len()];

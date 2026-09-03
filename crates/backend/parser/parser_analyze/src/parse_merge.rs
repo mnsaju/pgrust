@@ -36,7 +36,9 @@ pub(crate) fn transformMergeStmt<'mcx>(
     let mut target_perms: types_nodes::parsenodes::AclMode = 0;
     let mut is_terminal = [false; NUM_MERGE_MATCH_KINDS];
     for mwc_node in &stmt.mergeWhenClauses {
-        let mwc = mwc_node.as_merge_when_clause().expect("mergeWhenClauses cell");
+        let mwc = mwc_node
+            .as_merge_when_clause()
+            .expect("mergeWhenClauses cell");
         target_perms |= match mwc.commandType {
             CmdType::CMD_INSERT => ACL_INSERT,
             CmdType::CMD_UPDATE => ACL_UPDATE,
@@ -58,18 +60,15 @@ pub(crate) fn transformMergeStmt<'mcx>(
         .expect("grammar always sets MergeStmt.relation")
         .as_range_var()
         .expect("relation_expr_opt_alias is a RangeVar");
-    qry.resultRelation = parse_clause::setTargetTable(
-        mcx,
-        pstate,
-        relation,
-        relation.inh,
-        false,
-        target_perms,
-    )?;
+    qry.resultRelation =
+        parse_clause::setTargetTable(mcx, pstate, relation, relation.inh, false, target_perms)?;
     qry.mergeTargetRelation = qry.resultRelation;
 
     {
-        let rel = pstate.p_target_relation.as_ref().expect("setTargetTable opened it");
+        let rel = pstate
+            .p_target_relation
+            .as_ref()
+            .expect("setTargetTable opened it");
         let relkind = rel.rd_rel.relkind;
         if relkind != types_rel::RELKIND_RELATION
             && relkind != types_rel::RELKIND_PARTITIONED_TABLE
@@ -79,7 +78,9 @@ pub(crate) fn transformMergeStmt<'mcx>(
         }
     }
 
-    let source = stmt.sourceRelation.expect("grammar always sets sourceRelation");
+    let source = stmt
+        .sourceRelation
+        .expect("grammar always sets sourceRelation");
     parse_clause::transformFromClause(mcx, pstate, &NodeList::make1(mcx, source)?)?;
     let source_rti = pstate.p_rtable.len() as i32;
     let source_nsitem = parse_relation::GetNSItemByRangeTablePosn(pstate, source_rti, 0);
@@ -100,7 +101,8 @@ pub(crate) fn transformMergeStmt<'mcx>(
     qry.mergeJoinCondition = Some(parse_expr::transformExpr(
         mcx,
         pstate,
-        stmt.joinCondition.expect("grammar always sets joinCondition"),
+        stmt.joinCondition
+            .expect("grammar always sets joinCondition"),
         ParseExprKind::EXPR_KIND_JOIN_ON,
     )?);
 
@@ -115,7 +117,9 @@ pub(crate) fn transformMergeStmt<'mcx>(
     let result_relation = qry.resultRelation;
     let mut merge_action_list = NodeList::nil();
     for mwc_node in &stmt.mergeWhenClauses {
-        let mwc = mwc_node.as_merge_when_clause().expect("mergeWhenClauses cell");
+        let mwc = mwc_node
+            .as_merge_when_clause()
+            .expect("mergeWhenClauses cell");
 
         set_namespace_for_merge_when(mcx, pstate, mwc.matchKind, result_relation, source_rti)?;
 
@@ -211,8 +215,14 @@ pub(crate) fn transformMergeStmt<'mcx>(
     // The jointree holds only the source; transform_MERGE_to_join builds the
     // full join against the target.
     qry.jointree = Some(
-        Node::mk_mut(mcx, FromExpr { fromlist: mem::take(&mut pstate.p_joinlist), quals: None })?
-            .seal_ref(),
+        Node::mk_mut(
+            mcx,
+            FromExpr {
+                fromlist: mem::take(&mut pstate.p_joinlist),
+                quals: None,
+            },
+        )?
+        .seal_ref(),
     );
 
     qry.hasTargetSRFs = false;
@@ -278,7 +288,11 @@ fn merge_with_recursive() -> Box<types_error::PgError> {
             .errcode(ERRCODE_SYNTAX_ERROR)
             .errmsg("WITH RECURSIVE is not supported for MERGE statement".to_string())
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformMergeStmt")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformMergeStmt",
+            )),
     )
 }
 
@@ -288,12 +302,13 @@ fn unreachable_when_clause() -> Box<types_error::PgError> {
     Box::new(
         elog::ereport(ERROR)
             .errcode(ERRCODE_SYNTAX_ERROR)
-            .errmsg(
-                "unreachable WHEN clause specified after unconditional WHEN clause"
-                    .to_string(),
-            )
+            .errmsg("unreachable WHEN clause specified after unconditional WHEN clause".to_string())
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformMergeStmt")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformMergeStmt",
+            )),
     )
 }
 
@@ -312,7 +327,11 @@ fn merge_bad_relkind(rel: &types_rel::Relation<'_>) -> Box<types_error::PgError>
                     .unwrap_or_default(),
             )
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformMergeStmt")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformMergeStmt",
+            )),
     )
 }
 
@@ -323,10 +342,12 @@ fn duplicate_source_alias(name: &str) -> Box<types_error::PgError> {
         elog::ereport(ERROR)
             .errcode(ERRCODE_DUPLICATE_ALIAS)
             .errmsg(format!("name \"{name}\" specified more than once"))
-            .errdetail(
-                "The name is used both as MERGE target table and data source.".to_string(),
-            )
+            .errdetail("The name is used both as MERGE target table and data source.".to_string())
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformMergeStmt")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformMergeStmt",
+            )),
     )
 }

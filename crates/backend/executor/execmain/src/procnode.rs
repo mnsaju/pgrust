@@ -10,10 +10,10 @@ use ::types_nodes::NodeTag;
 use ::types_slot::{SlotData, TupleSlotKind};
 use ::types_tuple::TupleDescData;
 
-use crate::noderesult::{exec_end_result, exec_init_result, exec_result, ResultState};
 use crate::nodeprojectset::{
     exec_end_project_set, exec_init_project_set, exec_project_set, ProjectSetState,
 };
+use crate::noderesult::{exec_end_result, exec_init_result, exec_result, ResultState};
 
 pub struct PlanStateBase<'mcx> {
     pub plan: &'mcx Plan<'mcx>,
@@ -123,11 +123,7 @@ impl<'mcx> ::execscan::ScanNode<'mcx> for SubqueryScanNode<'mcx> {
     }
 
     /// `SubqueryRecheck`: nothing to check.
-    fn epq_recheck(
-        &mut self,
-        _estate: &mut EStateData<'mcx>,
-        _slot: ExecSlotId,
-    ) -> PgResult<bool> {
+    fn epq_recheck(&mut self, _estate: &mut EStateData<'mcx>, _slot: ExecSlotId) -> PgResult<bool> {
         Ok(true)
     }
 
@@ -438,10 +434,7 @@ impl<'mcx> PlanStateNode<'mcx> {
     /// `ExecGetResultType` (execUtils.c). Scan nodes don't retain a desc when
     /// projection is elided, so the root type is rebuilt from the targetlist
     /// (C's ExecInitResultTypeTL desc, same content).
-    pub fn exec_get_result_type(
-        &self,
-        plan: &Plan<'mcx>,
-    ) -> PgResult<Rc<TupleDescData<'static>>> {
+    pub fn exec_get_result_type(&self, plan: &Plan<'mcx>) -> PgResult<Rc<TupleDescData<'static>>> {
         match self {
             PlanStateNode::Instrumented(w) => w.inner.exec_get_result_type(plan),
             PlanStateNode::Result(rs) => Ok(rs
@@ -477,26 +470,74 @@ impl<'mcx> PlanStateNode<'mcx> {
             // The tlist is NIL (empty type) without RETURNING, else the first
             // RETURNING list setrefs installed.
             PlanStateNode::ModifyTable(_) => crate::exec_type_from_tl(&plan.targetlist),
-            PlanStateNode::Agg(aps) => Ok(aps.agg.ps_ResultTupleDesc.clone().expect("agg already ended")),
+            PlanStateNode::Agg(aps) => Ok(aps
+                .agg
+                .ps_ResultTupleDesc
+                .clone()
+                .expect("agg already ended")),
             PlanStateNode::Sort(s) => Ok(::nodesort::sort_result_type(&s.state)),
-            PlanStateNode::IncrementalSort(s) => {
-                Ok(s.state.ps_ResultTupleDesc.clone().expect("incremental sort already ended"))
-            }
-            PlanStateNode::Material(m) => Ok(m.state.ps_ResultTupleDesc.clone().expect("material already ended")),
-            PlanStateNode::Unique(u) => Ok(u.state.ps_ResultTupleDesc.clone().expect("unique already ended")),
-            PlanStateNode::Group(g) => Ok(g.state.ps_ResultTupleDesc.clone().expect("group already ended")),
-            PlanStateNode::NestLoop(nl) => Ok(nl.state.ps_ResultTupleDesc.clone().expect("nest loop already ended")),
-            PlanStateNode::HashJoin(hj) => Ok(hj.state.ps_ResultTupleDesc.clone().expect("hash join already ended")),
-            PlanStateNode::MergeJoin(mj) => Ok(mj.state.ps_ResultTupleDesc.clone().expect("merge join already ended")),
-            PlanStateNode::WindowAgg(w) => Ok(w.state.ps_ResultTupleDesc.clone().expect("window agg already ended")),
-            PlanStateNode::SetOp(s) => Ok(s.state.ps_ResultTupleDesc.clone().expect("set op already ended")),
-            PlanStateNode::Gather(g) => {
-                Ok(g.state.ps.ps_ResultTupleDesc.clone().expect("gather already ended"))
-            }
-            PlanStateNode::GatherMerge(gm) => {
-                Ok(gm.state.ps.ps_ResultTupleDesc.clone().expect("gather merge already ended"))
-            }
-            PlanStateNode::Memoize(m) => Ok(m.state.ps_ResultTupleDesc.clone().expect("memoize already ended")),
+            PlanStateNode::IncrementalSort(s) => Ok(s
+                .state
+                .ps_ResultTupleDesc
+                .clone()
+                .expect("incremental sort already ended")),
+            PlanStateNode::Material(m) => Ok(m
+                .state
+                .ps_ResultTupleDesc
+                .clone()
+                .expect("material already ended")),
+            PlanStateNode::Unique(u) => Ok(u
+                .state
+                .ps_ResultTupleDesc
+                .clone()
+                .expect("unique already ended")),
+            PlanStateNode::Group(g) => Ok(g
+                .state
+                .ps_ResultTupleDesc
+                .clone()
+                .expect("group already ended")),
+            PlanStateNode::NestLoop(nl) => Ok(nl
+                .state
+                .ps_ResultTupleDesc
+                .clone()
+                .expect("nest loop already ended")),
+            PlanStateNode::HashJoin(hj) => Ok(hj
+                .state
+                .ps_ResultTupleDesc
+                .clone()
+                .expect("hash join already ended")),
+            PlanStateNode::MergeJoin(mj) => Ok(mj
+                .state
+                .ps_ResultTupleDesc
+                .clone()
+                .expect("merge join already ended")),
+            PlanStateNode::WindowAgg(w) => Ok(w
+                .state
+                .ps_ResultTupleDesc
+                .clone()
+                .expect("window agg already ended")),
+            PlanStateNode::SetOp(s) => Ok(s
+                .state
+                .ps_ResultTupleDesc
+                .clone()
+                .expect("set op already ended")),
+            PlanStateNode::Gather(g) => Ok(g
+                .state
+                .ps
+                .ps_ResultTupleDesc
+                .clone()
+                .expect("gather already ended")),
+            PlanStateNode::GatherMerge(gm) => Ok(gm
+                .state
+                .ps
+                .ps_ResultTupleDesc
+                .clone()
+                .expect("gather merge already ended")),
+            PlanStateNode::Memoize(m) => Ok(m
+                .state
+                .ps_ResultTupleDesc
+                .clone()
+                .expect("memoize already ended")),
             PlanStateNode::BitmapIndexScan(_)
             | PlanStateNode::BitmapAnd(_)
             | PlanStateNode::BitmapOr(_) => {
@@ -535,14 +576,11 @@ pub fn exec_init_node<'mcx>(
         return Ok(None);
     };
     let result = match node.node_tag() {
-        NodeTag::T_Result => PlanStateNode::Result(exec_init_result(
-            node.as_result().unwrap(),
-            estate,
-            eflags,
-        )?),
+        NodeTag::T_Result => {
+            PlanStateNode::Result(exec_init_result(node.as_result().unwrap(), estate, eflags)?)
+        }
         NodeTag::T_ProjectSet => {
-            let state =
-                exec_init_project_set(node.as_project_set().unwrap(), estate, eflags)?;
+            let state = exec_init_project_set(node.as_project_set().unwrap(), estate, eflags)?;
             PlanStateNode::ProjectSet(::mcx::alloc_in(estate.es_query_cxt, state)?)
         }
         NodeTag::T_SeqScan => {
@@ -675,9 +713,8 @@ pub fn exec_init_node<'mcx>(
         NodeTag::T_BitmapHeapScan => {
             let mcx = estate.es_query_cxt;
             let bhs_plan = node.as_bitmap_heap_scan().unwrap();
-            let scan = ::nodebitmapheapscan::exec_init_bitmap_heap_scan(
-                mcx, bhs_plan, estate, eflags,
-            )?;
+            let scan =
+                ::nodebitmapheapscan::exec_init_bitmap_heap_scan(mcx, bhs_plan, estate, eflags)?;
             let bitmapqual = exec_init_node(bhs_plan.scan.plan.lefttree, estate, eflags)?
                 .unwrap_or_else(|| {
                     panic!("ExecInitBitmapHeapScan: BitmapHeapScan without a bitmapqual subplan")
@@ -729,7 +766,10 @@ pub fn exec_init_node<'mcx>(
             let state = ::nodematerial::exec_init_material(mat_plan, estate, eflags, result_desc)?;
             PlanStateNode::Material(::mcx::alloc_in(
                 mcx,
-                MaterialNode { state, outer: ::mcx::alloc_in(mcx, outer)? },
+                MaterialNode {
+                    state,
+                    outer: ::mcx::alloc_in(mcx, outer)?,
+                },
             )?)
         }
         NodeTag::T_Memoize => {
@@ -769,8 +809,8 @@ pub fn exec_init_node<'mcx>(
                 ::nodesort::sort_child_eflags(eflags),
             )?
             .unwrap_or_else(|| panic!("ExecInitSort (nodeSort.c): Sort without an outer plan"));
-            let outer_desc = outer
-                .exec_get_result_type(sort_plan.plan.lefttree.unwrap().as_plan().unwrap())?;
+            let outer_desc =
+                outer.exec_get_result_type(sort_plan.plan.lefttree.unwrap().as_plan().unwrap())?;
             let result_desc = crate::exec_type_from_tl(&sort_plan.plan.targetlist)?;
             let state =
                 ::nodesort::exec_init_sort(sort_plan, estate, eflags, &outer_desc, result_desc)?;
@@ -786,8 +826,8 @@ pub fn exec_init_node<'mcx>(
             let mcx = estate.es_query_cxt;
             let is_plan = node.as_incremental_sort().unwrap();
             // C keeps REWIND for the child; BACKWARD/MARK never reach here.
-            let outer = exec_init_node(is_plan.sort.plan.lefttree, estate, eflags)?
-                .unwrap_or_else(|| {
+            let outer =
+                exec_init_node(is_plan.sort.plan.lefttree, estate, eflags)?.unwrap_or_else(|| {
                     panic!(
                         "ExecInitIncrementalSort (nodeIncrementalSort.c): \
                          IncrementalSort without an outer plan"
@@ -811,8 +851,8 @@ pub fn exec_init_node<'mcx>(
         NodeTag::T_Unique => {
             let mcx = estate.es_query_cxt;
             let uq_plan = node.as_unique().unwrap();
-            let outer = exec_init_node(uq_plan.plan.lefttree, estate, eflags)?
-                .unwrap_or_else(|| {
+            let outer =
+                exec_init_node(uq_plan.plan.lefttree, estate, eflags)?.unwrap_or_else(|| {
                     panic!("ExecInitUnique (nodeUnique.c): Unique without an outer plan")
                 });
             let outer_desc =
@@ -825,26 +865,27 @@ pub fn exec_init_node<'mcx>(
         NodeTag::T_Group => {
             let mcx = estate.es_query_cxt;
             let g_plan = node.as_group().unwrap();
-            let outer = exec_init_node(g_plan.plan.lefttree, estate, eflags)?
-                .unwrap_or_else(|| {
+            let outer =
+                exec_init_node(g_plan.plan.lefttree, estate, eflags)?.unwrap_or_else(|| {
                     panic!("ExecInitGroup (nodeGroup.c): Group without an outer plan")
                 });
             let outer_desc =
                 outer.exec_get_result_type(g_plan.plan.lefttree.unwrap().as_plan().unwrap())?;
             let result_desc = crate::exec_type_from_tl(&g_plan.plan.targetlist)?;
             let params = estate.param_bind();
-            let (qual, proj) = ::executils::with_subplan_compile_env(estate, |env| -> PgResult<_> {
-                let qual =
-                    ::execexpr::exec_init_qual_subplans(mcx, &g_plan.plan.qual, params, env)?;
-                let proj = ::execexpr::exec_build_projection_info_subplans(
-                    mcx,
-                    &g_plan.plan.targetlist,
-                    None,
-                    params,
-                    env,
-                )?;
-                Ok((qual, proj))
-            })?;
+            let (qual, proj) =
+                ::executils::with_subplan_compile_env(estate, |env| -> PgResult<_> {
+                    let qual =
+                        ::execexpr::exec_init_qual_subplans(mcx, &g_plan.plan.qual, params, env)?;
+                    let proj = ::execexpr::exec_build_projection_info_subplans(
+                        mcx,
+                        &g_plan.plan.targetlist,
+                        None,
+                        params,
+                        env,
+                    )?;
+                    Ok((qual, proj))
+                })?;
             let state = ::nodegroup::exec_init_group(
                 g_plan,
                 estate,
@@ -858,21 +899,20 @@ pub fn exec_init_node<'mcx>(
         }
         NodeTag::T_Limit => {
             let limit_plan = node.as_limit().unwrap();
-            let outer = exec_init_node(limit_plan.plan.lefttree, estate, eflags)?
-                .unwrap_or_else(|| {
+            let outer =
+                exec_init_node(limit_plan.plan.lefttree, estate, eflags)?.unwrap_or_else(|| {
                     panic!("ExecInitLimit (nodeLimit.c): Limit without an outer plan")
                 });
             // WITH TIES needs the outer result type for its tie-equality
             // program (C: ExecGetResultType(outerPlanState)).
-            let outer_desc = if limit_plan.limitOption
-                == ::types_nodes::LimitOption::LIMIT_OPTION_WITH_TIES
-            {
-                Some(outer.exec_get_result_type(
-                    limit_plan.plan.lefttree.unwrap().as_plan().unwrap(),
-                )?)
-            } else {
-                None
-            };
+            let outer_desc =
+                if limit_plan.limitOption == ::types_nodes::LimitOption::LIMIT_OPTION_WITH_TIES {
+                    Some(outer.exec_get_result_type(
+                        limit_plan.plan.lefttree.unwrap().as_plan().unwrap(),
+                    )?)
+                } else {
+                    None
+                };
             let state =
                 ::nodelimit::exec_init_limit(limit_plan, estate, eflags, outer_desc.as_ref())?;
             PlanStateNode::Limit(LimitNode {
@@ -917,14 +957,20 @@ pub fn exec_init_node<'mcx>(
             let agg = ::nodeagg::exec_init_agg(agg_plan, estate, eflags, desc, Some(outer_desc))?;
             PlanStateNode::Agg(::mcx::alloc_in(
                 mcx,
-                AggPlanState { agg, outer, lane_choice: None, lane_stage_slot: None, lane_exprkey: None },
+                AggPlanState {
+                    agg,
+                    outer,
+                    lane_choice: None,
+                    lane_stage_slot: None,
+                    lane_exprkey: None,
+                },
             )?)
         }
         NodeTag::T_WindowAgg => {
             let mcx = estate.es_query_cxt;
             let wa_plan = node.as_window_agg().unwrap();
-            let outer = exec_init_node(wa_plan.plan.lefttree, estate, eflags)?
-                .unwrap_or_else(|| {
+            let outer =
+                exec_init_node(wa_plan.plan.lefttree, estate, eflags)?.unwrap_or_else(|| {
                     panic!("ExecInitWindowAgg (nodeWindowAgg.c): WindowAgg without an outer plan")
                 });
             let outer_desc =
@@ -952,8 +998,8 @@ pub fn exec_init_node<'mcx>(
         NodeTag::T_NestLoop => {
             let mcx = estate.es_query_cxt;
             let nl_plan = node.as_nest_loop().unwrap();
-            let outer = exec_init_node(nl_plan.join.plan.lefttree, estate, eflags)?
-                .unwrap_or_else(|| {
+            let outer =
+                exec_init_node(nl_plan.join.plan.lefttree, estate, eflags)?.unwrap_or_else(|| {
                     panic!("ExecInitNestLoop (nodeNestloop.c): NestLoop without an outer plan")
                 });
             // With no nestParams the inner rescans with unchanged params, so
@@ -963,14 +1009,10 @@ pub fn exec_init_node<'mcx>(
             } else {
                 eflags
             };
-            let inner = exec_init_node(
-                nl_plan.join.plan.righttree,
-                estate,
-                inner_eflags,
-            )?
-            .unwrap_or_else(|| {
-                panic!("ExecInitNestLoop (nodeNestloop.c): NestLoop without an inner plan")
-            });
+            let inner = exec_init_node(nl_plan.join.plan.righttree, estate, inner_eflags)?
+                .unwrap_or_else(|| {
+                    panic!("ExecInitNestLoop (nodeNestloop.c): NestLoop without an inner plan")
+                });
             let desc = crate::exec_type_from_tl(&nl_plan.join.plan.targetlist)?;
             let inner_desc = inner
                 .exec_get_result_type(nl_plan.join.plan.righttree.unwrap().as_plan().unwrap())?;
@@ -986,11 +1028,9 @@ pub fn exec_init_node<'mcx>(
         NodeTag::T_HashJoin => {
             let mcx = estate.es_query_cxt;
             let hj_plan = node.as_hash_join().unwrap();
-            let outer_p = hj_plan
-                .join
-                .plan
-                .lefttree
-                .unwrap_or_else(|| panic!("ExecInitHashJoin (nodeHashjoin.c): HashJoin without an outer plan"));
+            let outer_p = hj_plan.join.plan.lefttree.unwrap_or_else(|| {
+                panic!("ExecInitHashJoin (nodeHashjoin.c): HashJoin without an outer plan")
+            });
             let outer = exec_init_node(Some(outer_p), estate, eflags)?
                 .expect("HashJoin outer plan initialized");
             let outer_desc = outer.exec_get_result_type(outer_p.as_plan().unwrap())?;
@@ -1000,9 +1040,13 @@ pub fn exec_init_node<'mcx>(
                 .join
                 .plan
                 .righttree
-                .unwrap_or_else(|| panic!("ExecInitHashJoin (nodeHashjoin.c): HashJoin without a Hash inner plan"))
+                .unwrap_or_else(|| {
+                    panic!("ExecInitHashJoin (nodeHashjoin.c): HashJoin without a Hash inner plan")
+                })
                 .as_hash()
-                .unwrap_or_else(|| panic!("ExecInitHashJoin (nodeHashjoin.c): HashJoin inner is not a Hash node"));
+                .unwrap_or_else(|| {
+                    panic!("ExecInitHashJoin (nodeHashjoin.c): HashJoin inner is not a Hash node")
+                });
             let hash_child_p = hash_plan_node
                 .plan
                 .lefttree
@@ -1030,7 +1074,10 @@ pub fn exec_init_node<'mcx>(
                     outer: ::mcx::alloc_in(mcx, outer)?,
                     hash: ::mcx::alloc_in(
                         mcx,
-                        HashSubNode { state: hash_state, child: ::mcx::alloc_in(mcx, hash_child)? },
+                        HashSubNode {
+                            state: hash_state,
+                            child: ::mcx::alloc_in(mcx, hash_child)?,
+                        },
                     )?,
                     probe_batch: ProbeBatch::new(),
                     lane_fusible: None,
@@ -1095,12 +1142,15 @@ pub fn exec_init_node<'mcx>(
                 }
                 (None, all)
             };
-            let mut substates: ::mcx::PgVec<'mcx, PlanStateNode<'mcx>> =
-                ::mcx::PgVec::new_in(mcx);
+            let mut substates: ::mcx::PgVec<'mcx, PlanStateNode<'mcx>> = ::mcx::PgVec::new_in(mcx);
             let mut subplan_origin: ::mcx::PgVec<'mcx, i32> = ::mcx::PgVec::new_in(mcx);
             let nvalid = valid.num_members() as usize;
-            substates.try_reserve_exact(nvalid).map_err(|_| mcx.oom(nvalid))?;
-            subplan_origin.try_reserve_exact(nvalid).map_err(|_| mcx.oom(nvalid))?;
+            substates
+                .try_reserve_exact(nvalid)
+                .map_err(|_| mcx.oom(nvalid))?;
+            subplan_origin
+                .try_reserve_exact(nvalid)
+                .map_err(|_| mcx.oom(nvalid))?;
             // C ExecInitAppend: as_first_partial_plan is the lowest surviving
             // (post-pruning, compacted-space) subplan index that is partial.
             let mut first_partial = nvalid as i32;
@@ -1126,7 +1176,12 @@ pub fn exec_init_node<'mcx>(
             )?;
             PlanStateNode::Append(::mcx::alloc_in(
                 mcx,
-                AppendNode { state, substates, subplan_origin, lane_fusible: None },
+                AppendNode {
+                    state,
+                    substates,
+                    subplan_origin,
+                    lane_fusible: None,
+                },
             )?)
         }
         NodeTag::T_MergeAppend => {
@@ -1148,12 +1203,15 @@ pub fn exec_init_node<'mcx>(
                 }
                 (None, all)
             };
-            let mut substates: ::mcx::PgVec<'mcx, PlanStateNode<'mcx>> =
-                ::mcx::PgVec::new_in(mcx);
+            let mut substates: ::mcx::PgVec<'mcx, PlanStateNode<'mcx>> = ::mcx::PgVec::new_in(mcx);
             let mut subplan_origin: ::mcx::PgVec<'mcx, i32> = ::mcx::PgVec::new_in(mcx);
             let nvalid = valid.num_members() as usize;
-            substates.try_reserve_exact(nvalid).map_err(|_| mcx.oom(nvalid))?;
-            subplan_origin.try_reserve_exact(nvalid).map_err(|_| mcx.oom(nvalid))?;
+            substates
+                .try_reserve_exact(nvalid)
+                .map_err(|_| mcx.oom(nvalid))?;
+            subplan_origin
+                .try_reserve_exact(nvalid)
+                .map_err(|_| mcx.oom(nvalid))?;
             let mut i = valid.next_member(-1);
             while i >= 0 {
                 let subplan = ma_plan.mergeplans.nth(i as usize);
@@ -1172,7 +1230,11 @@ pub fn exec_init_node<'mcx>(
             )?;
             PlanStateNode::MergeAppend(::mcx::alloc_in(
                 mcx,
-                MergeAppendNode { state, substates, subplan_origin },
+                MergeAppendNode {
+                    state,
+                    substates,
+                    subplan_origin,
+                },
             )?)
         }
         NodeTag::T_SubqueryScan => {
@@ -1211,8 +1273,7 @@ pub fn exec_init_node<'mcx>(
                 &sq_plan.scan.plan.targetlist,
                 Some(sub_tlist),
             )?;
-            ss.qual =
-                {
+            ss.qual = {
                 let pb = estate.param_bind();
                 ::executils::with_subplan_compile_env_parent(estate, Some(sub_tlist), |env| {
                     ::execexpr::exec_init_qual_subplans(mcx, &sq_plan.scan.plan.qual, pb, env)
@@ -1220,7 +1281,10 @@ pub fn exec_init_node<'mcx>(
             };
             PlanStateNode::SubqueryScan(::mcx::alloc_in(
                 mcx,
-                SubqueryScanNode { ss, subplan: ::mcx::alloc_in(mcx, subplan)? },
+                SubqueryScanNode {
+                    ss,
+                    subplan: ::mcx::alloc_in(mcx, subplan)?,
+                },
             )?)
         }
         NodeTag::T_SetOp => {
@@ -1240,7 +1304,14 @@ pub fn exec_init_node<'mcx>(
             let result_desc = crate::exec_type_from_tl(&so_plan.plan.targetlist)?;
             let state =
                 ::nodesetop::exec_init_set_op(so_plan, estate, eflags, &outer_desc, result_desc)?;
-            PlanStateNode::SetOp(::mcx::alloc_in(mcx, SetOpNode { state, outer, inner })?)
+            PlanStateNode::SetOp(::mcx::alloc_in(
+                mcx,
+                SetOpNode {
+                    state,
+                    outer,
+                    inner,
+                },
+            )?)
         }
         NodeTag::T_RecursiveUnion => {
             let mcx = estate.es_query_cxt;
@@ -1248,22 +1319,22 @@ pub fn exec_init_node<'mcx>(
             let result_desc = crate::exec_type_from_tl(&ru_plan.plan.targetlist)?;
             // C order: the wtParam entry is published before child init.
             ::noderecursiveunion::exec_init_recursive_union_shared(ru_plan, estate, result_desc);
-            let outer = exec_init_node(ru_plan.plan.lefttree, estate, eflags)?
-                .unwrap_or_else(|| {
+            let outer =
+                exec_init_node(ru_plan.plan.lefttree, estate, eflags)?.unwrap_or_else(|| {
                     panic!(
                         "ExecInitRecursiveUnion (nodeRecursiveunion.c): RecursiveUnion \
                          without an outer plan"
                     )
                 });
-            let inner = exec_init_node(ru_plan.plan.righttree, estate, eflags)?
-                .unwrap_or_else(|| {
+            let inner =
+                exec_init_node(ru_plan.plan.righttree, estate, eflags)?.unwrap_or_else(|| {
                     panic!(
                         "ExecInitRecursiveUnion (nodeRecursiveunion.c): RecursiveUnion \
                          without an inner plan"
                     )
                 });
-            let outer_desc = outer
-                .exec_get_result_type(ru_plan.plan.lefttree.unwrap().as_plan().unwrap())?;
+            let outer_desc =
+                outer.exec_get_result_type(ru_plan.plan.lefttree.unwrap().as_plan().unwrap())?;
             let state = ::noderecursiveunion::exec_init_recursive_union(
                 ru_plan,
                 estate,
@@ -1272,7 +1343,11 @@ pub fn exec_init_node<'mcx>(
             )?;
             PlanStateNode::RecursiveUnion(::mcx::alloc_in(
                 mcx,
-                RecursiveUnionNode { state, outer, inner },
+                RecursiveUnionNode {
+                    state,
+                    outer,
+                    inner,
+                },
             )?)
         }
         NodeTag::T_WorkTableScan => {
@@ -1305,12 +1380,8 @@ pub fn exec_init_node<'mcx>(
             } else {
                 Some(crate::exec_type_from_tl(&mt_plan.plan.targetlist)?)
             };
-            let mt = ::nodemodifytable::exec_init_modify_table(
-                mt_plan,
-                estate,
-                eflags,
-                returning_desc,
-            )?;
+            let mt =
+                ::nodemodifytable::exec_init_modify_table(mt_plan, estate, eflags, returning_desc)?;
             let subplan = exec_init_node(mt_plan.plan.lefttree, estate, eflags)?
                 .expect("ModifyTable has a subplan");
             // EvalPlanQualInit + EvalPlanQualSetPlan; relsubs alloc deferred
@@ -1330,31 +1401,36 @@ pub fn exec_init_node<'mcx>(
         NodeTag::T_Gather => {
             let mcx = estate.es_query_cxt;
             let g_plan = node.as_gather().unwrap();
-            let outer = exec_init_node(g_plan.plan.lefttree, estate, eflags)?
-                .unwrap_or_else(|| {
+            let outer =
+                exec_init_node(g_plan.plan.lefttree, estate, eflags)?.unwrap_or_else(|| {
                     panic!("ExecInitGather (nodeGather.c): Gather without an outer plan")
                 });
             let state = crate::nodegather::exec_init_gather(g_plan, estate, &outer)?;
             PlanStateNode::Gather(::mcx::alloc_in(
                 mcx,
-                GatherNode { state, outer: ::mcx::alloc_in(mcx, outer)? },
+                GatherNode {
+                    state,
+                    outer: ::mcx::alloc_in(mcx, outer)?,
+                },
             )?)
         }
         NodeTag::T_GatherMerge => {
             let mcx = estate.es_query_cxt;
             let gm_plan = node.as_gather_merge().unwrap();
-            let outer = exec_init_node(gm_plan.plan.lefttree, estate, eflags)?
-                .unwrap_or_else(|| {
+            let outer =
+                exec_init_node(gm_plan.plan.lefttree, estate, eflags)?.unwrap_or_else(|| {
                     panic!(
                         "ExecInitGatherMerge (nodeGatherMerge.c): GatherMerge without \
                          an outer plan"
                     )
                 });
-            let state =
-                crate::nodegathermerge::exec_init_gather_merge(gm_plan, estate, &outer)?;
+            let state = crate::nodegathermerge::exec_init_gather_merge(gm_plan, estate, &outer)?;
             PlanStateNode::GatherMerge(::mcx::alloc_in(
                 mcx,
-                GatherMergeNode { state, outer: ::mcx::alloc_in(mcx, outer)? },
+                GatherMergeNode {
+                    state,
+                    outer: ::mcx::alloc_in(mcx, outer)?,
+                },
             )?)
         }
         tag => unported_nodes!(tag, {
@@ -1391,9 +1467,10 @@ fn instrument_node<'mcx>(
             .es_instrumentation
             .try_reserve(grow)
             .map_err(|_| estate.es_query_cxt.oom(grow))?;
-        estate
-            .es_instrumentation
-            .resize(idx + 1, ::types_core::instrument::Instrumentation::default());
+        estate.es_instrumentation.resize(
+            idx + 1,
+            ::types_core::instrument::Instrumentation::default(),
+        );
     }
     ::instrument::instr_init(&mut estate.es_instrumentation[idx], estate.es_instrument);
     // InstrCountFiltered1/2 target for the scan driver.
@@ -1406,7 +1483,10 @@ fn instrument_node<'mcx>(
     }
     Ok(PlanStateNode::Instrumented(::mcx::alloc_in(
         estate.es_query_cxt,
-        InstrumentedNode { inner, instr_idx: idx as u32 },
+        InstrumentedNode {
+            inner,
+            instr_idx: idx as u32,
+        },
     )?))
 }
 
@@ -1814,7 +1894,13 @@ fn agg_arm<'mcx>(
     estate: &mut EStateData<'mcx>,
 ) -> ProcResult {
     let aps = &mut **aps;
-    let AggPlanState { agg, outer, lane_choice, lane_stage_slot, lane_exprkey } = aps;
+    let AggPlanState {
+        agg,
+        outer,
+        lane_choice,
+        lane_stage_slot,
+        lane_exprkey,
+    } = aps;
     // EA-on-morsels dispatch (docs/design/ea-morsels.md §5): under EXPLAIN
     // ANALYZE every child is an `Instrumented` wrapper, so the concrete-
     // variant arms below cannot match — which is CORRECT for the serial
@@ -1860,16 +1946,14 @@ fn agg_arm<'mcx>(
             // falls through to the UNCHANGED fused/per-tuple agg paths on
             // refuse. Lane logic + refuse-set live in `lanev2`.
             if crate::lanev2::enabled() {
-                if let Some(r) =
-                    crate::lanev2::try_own_agg_over_seq_scan(
-                        agg,
-                        ss,
-                        lane_choice,
-                        lane_stage_slot,
-                        lane_exprkey,
-                        estate,
-                    )?
-                {
+                if let Some(r) = crate::lanev2::try_own_agg_over_seq_scan(
+                    agg,
+                    ss,
+                    lane_choice,
+                    lane_stage_slot,
+                    lane_exprkey,
+                    estate,
+                )? {
                     return Ok(r);
                 }
             }
@@ -1901,8 +1985,7 @@ fn agg_arm<'mcx>(
             // fused/per-tuple paths on refuse. Lane logic + refuse-set live
             // in `lanev2`.
             if crate::lanev2::enabled() {
-                if let Some(r) =
-                    crate::lanev2::try_own_sorted_agg_over_index_scan(agg, is, estate)?
+                if let Some(r) = crate::lanev2::try_own_sorted_agg_over_index_scan(agg, is, estate)?
                 {
                     return Ok(r);
                 }
@@ -1915,9 +1998,7 @@ fn agg_arm<'mcx>(
                 // through to the UNCHANGED fused/per-tuple paths,
                 // byte-identically (the WS-F IndexOnlyScan hook's posture,
                 // one arm up).
-                if let Some(r) =
-                    crate::lanev2::try_own_agg_over_index_source(agg, is, estate)?
-                {
+                if let Some(r) = crate::lanev2::try_own_agg_over_index_source(agg, is, estate)? {
                     return Ok(r);
                 }
                 // --- end WS-AE (wave-8) ---
@@ -1987,9 +2068,7 @@ fn agg_arm<'mcx>(
             // already ran and the fused drive below skips its own. Lane
             // logic + refuse-set live in `lanev2::runtime_bitmap`.
             if crate::lanev2::enabled() {
-                if let Some(r) =
-                    crate::lanev2::try_own_agg_over_bitmap_heap_scan(agg, b, estate)?
-                {
+                if let Some(r) = crate::lanev2::try_own_agg_over_bitmap_heap_scan(agg, b, estate)? {
                     return Ok(r);
                 }
                 // --- SE-AGGBITMAP: AGG_BITMAP arm re-host (deletion-prep
@@ -2000,9 +2079,7 @@ fn agg_arm<'mcx>(
                 // seam). Refuses fall through to the UNCHANGED
                 // fused/per-tuple paths, byte-identically (the WS-AE
                 // agg-over-IndexScan hook's posture, two arms up).
-                if let Some(r) =
-                    crate::lanev2::try_own_agg_over_bitmap_feed(agg, b, estate)?
-                {
+                if let Some(r) = crate::lanev2::try_own_agg_over_bitmap_feed(agg, b, estate)? {
                     return Ok(r);
                 }
                 // --- end SE-AGGBITMAP ---
@@ -2017,7 +2094,10 @@ fn agg_arm<'mcx>(
                     bitmap_table_scan_setup_dispatch(b, estate)?;
                 }
                 let outer_slot = b.scan.ss.ss_ScanTupleSlot;
-                let src = BitmapScanBatchSource { bhs: &mut b.scan, outer_slot };
+                let src = BitmapScanBatchSource {
+                    bhs: &mut b.scan,
+                    outer_slot,
+                };
                 return ::nodeagg::exec_agg_batched(agg, estate, src);
             }
         }
@@ -2054,8 +2134,7 @@ fn agg_arm<'mcx>(
             // dispatch hook (the plain car) fully armed. Lane logic +
             // refuse-set in `lanev2::runtime_mergejoin`.
             if crate::lanev2::enabled() {
-                if let Some(r) =
-                    crate::lanev2::try_own_agg_over_merge_join(agg, &mut **mj, estate)?
+                if let Some(r) = crate::lanev2::try_own_agg_over_merge_join(agg, &mut **mj, estate)?
                 {
                     return Ok(r);
                 }
@@ -2084,11 +2163,9 @@ fn agg_arm<'mcx>(
             // lane arm (the runtime_bitmap precedent). Falls through on
             // refuse — byte-identically, nothing consumed.
             if crate::lanev2::enabled() {
-                if let Some(r) =
-                    crate::lanev2::runtime_nlindex::try_own_plain_agg_runtime_nl_index(
-                        agg, nl, estate,
-                    )?
-                {
+                if let Some(r) = crate::lanev2::runtime_nlindex::try_own_plain_agg_runtime_nl_index(
+                    agg, nl, estate,
+                )? {
                     return Ok(r);
                 }
             }
@@ -2123,9 +2200,7 @@ fn agg_arm<'mcx>(
             // per-tuple agg over exec_scan on refuse. Lane logic + refuse-set
             // in `lanev2`.
             if crate::lanev2::enabled() {
-                if let Some(r) =
-                    crate::lanev2::try_own_agg_over_subquery_scan(agg, sqs, estate)?
-                {
+                if let Some(r) = crate::lanev2::try_own_agg_over_subquery_scan(agg, sqs, estate)? {
                     return Ok(r);
                 }
             }
@@ -2137,9 +2212,7 @@ fn agg_arm<'mcx>(
             // morsel engagement (lanev2/runtime_partwise.rs). Falls through
             // to the UNCHANGED per-tuple agg over exec_append on refuse.
             if crate::lanev2::enabled() {
-                if let Some(r) =
-                    crate::lanev2::try_own_agg_over_append(agg, &mut **apn, estate)?
-                {
+                if let Some(r) = crate::lanev2::try_own_agg_over_append(agg, &mut **apn, estate)? {
                     return Ok(r);
                 }
             }
@@ -2152,11 +2225,9 @@ fn agg_arm<'mcx>(
             // UNCHANGED per-tuple agg over the child's own dispatch on
             // refuse, byte-identically.
             if crate::lanev2::enabled() {
-                if let Some(r) = crate::lanev2::try_own_plain_agg_over_agg_emit(
-                    agg,
-                    &mut **child,
-                    estate,
-                )? {
+                if let Some(r) =
+                    crate::lanev2::try_own_plain_agg_over_agg_emit(agg, &mut **child, estate)?
+                {
                     return Ok(r);
                 }
             }
@@ -2265,11 +2336,7 @@ impl<'mcx> ::nodeagg::AggBatchSource<'mcx> for SeqScanBatchSource<'_, 'mcx> {
     }
 
     #[inline]
-    fn qualifying_count(
-        &mut self,
-        estate: &mut EStateData<'mcx>,
-        n: u32,
-    ) -> PgResult<Option<u32>> {
+    fn qualifying_count(&mut self, estate: &mut EStateData<'mcx>, n: u32) -> PgResult<Option<u32>> {
         ::nodeseqscan::seq_scan_batch_qual_count(self.ss, estate, n)
     }
 
@@ -2316,9 +2383,7 @@ fn hash_build_fusible<'mcx>(
     estate: &EStateData<'mcx>,
 ) -> bool {
     use ::execexpr::{Kernel, SlotSrc};
-    if estate.es_epq_active
-        || !::types_scan::sdir::ScanDirectionIsForward(estate.es_direction)
-    {
+    if estate.es_epq_active || !::types_scan::sdir::ScanDirectionIsForward(estate.es_direction) {
         return false;
     }
     if let Some(p) = ss.ss.ps_ProjInfo.as_ref() {
@@ -2327,8 +2392,7 @@ fn hash_build_fusible<'mcx>(
         }
     }
     match ss.variant() {
-        ::nodeseqscan::SeqScanVariant::Plain
-        | ::nodeseqscan::SeqScanVariant::WithProject => true,
+        ::nodeseqscan::SeqScanVariant::Plain | ::nodeseqscan::SeqScanVariant::WithProject => true,
         ::nodeseqscan::SeqScanVariant::WithQual
         | ::nodeseqscan::SeqScanVariant::WithQualProject => {
             match ss.ss.qual.as_deref().map(|q| q.kernel()) {
@@ -2339,8 +2403,7 @@ fn hash_build_fusible<'mcx>(
                 _ => false,
             }
         }
-        ::nodeseqscan::SeqScanVariant::PlainBloom
-        | ::nodeseqscan::SeqScanVariant::Epq => false,
+        ::nodeseqscan::SeqScanVariant::PlainBloom | ::nodeseqscan::SeqScanVariant::Epq => false,
     }
 }
 
@@ -2382,9 +2445,18 @@ impl<'mcx> ::nodehash::HashBuildBatchSource<'mcx> for SeqScanProjBatchSource<'_,
         let scan_id = self.ss.ss.ss_ScanTupleSlot;
         estate.ecxt_mut(self.ss.ss.ps_ExprContext).ecxt_scantuple = Some(scan_id);
         let mcx = estate.es_query_cxt;
-        let proj = self.ss.ss.ps_ProjInfo.as_mut().expect("projected batch source");
+        let proj = self
+            .ss
+            .ss
+            .ps_ProjInfo
+            .as_mut()
+            .expect("projected batch source");
         let (scan_slot, result_slot) = ::execscan::slot_pair(estate, scan_id, self.result_slot);
-        let mut slots = EvalSlots { scan: Some(scan_slot), inner: None, outer: None };
+        let mut slots = EvalSlots {
+            scan: Some(scan_slot),
+            inner: None,
+            outer: None,
+        };
         ::execexpr::exec_project(&mut proj.pi_state, &mut slots, result_slot, mcx)?;
         Ok(true)
     }
@@ -2499,7 +2571,12 @@ fn sort_arm<'mcx>(s: &mut SortNode<'mcx>, estate: &mut EStateData<'mcx>) -> Proc
     // the lane refuses fall through to the per-tuple drive here —
     // byte-identical by the sortfeed-ra letter (arm C == arm B, −0.04% vs
     // the fused world; notes/se-deletion-prep.md §1 arm #5).
-    let SortNode { state, outer, outer_desc, .. } = s;
+    let SortNode {
+        state,
+        outer,
+        outer_desc,
+        ..
+    } = s;
     let outer_desc = outer_desc.as_ref().expect("Sort already ended").clone();
     ::nodesort::exec_sort(state, estate, outer_desc, |es| exec_proc_node(outer, es))
 }
@@ -2549,7 +2626,11 @@ fn memoize_arm<'mcx>(
     }
     let m = &mut **m;
     let plan = m.state.plan.plan.lefttree.expect("Memoize outer plan");
-    let mut outer = MemoizeOuter { node: &mut m.outer, plan, chg: &mut m.outer_chg };
+    let mut outer = MemoizeOuter {
+        node: &mut m.outer,
+        plan,
+        chg: &mut m.outer_chg,
+    };
     ::nodememoize::exec_memoize(&mut m.state, &mut outer, estate)
 }
 
@@ -2564,10 +2645,7 @@ pub(crate) struct MemoizeOuter<'a, 'mcx> {
 impl<'a, 'mcx> ::nodememoize::MemoizeChild<'mcx> for MemoizeOuter<'a, 'mcx> {
     fn exec_proc(&mut self, estate: &mut EStateData<'mcx>) -> PgResult<Option<ExecSlotId>> {
         if !self.chg.is_empty() {
-            let chg = core::mem::replace(
-                self.chg,
-                ::types_nodes::bitmapset::Bitmapset::empty(),
-            );
+            let chg = core::mem::replace(self.chg, ::types_nodes::bitmapset::Bitmapset::empty());
             crate::execami::exec_re_scan_with_chg(self.node, self.plan, estate, &chg)?;
         }
         exec_proc_node(self.node, estate)
@@ -2634,8 +2712,8 @@ fn lockrows_arm<'mcx>(
     // inside; the RowSource closure boundary is the pinned WS-N inc-2b seam,
     // docs/design/rowmode-tail.md §4): falls through to the UNCHANGED
     // per-tuple path on refuse.
-    let rowmode_admitted = crate::lanev2::rowmode_tail_active()
-        && crate::lanev2::lock_rows_pull_verdict(l, estate);
+    let rowmode_admitted =
+        crate::lanev2::rowmode_tail_active() && crate::lanev2::lock_rows_pull_verdict(l, estate);
     // --- WS-T wave-3 inc-2b (LockRows TupleOp behind PGRUST_LANE_V2_DML;
     // lanev2/dml.rs). Offered only when the rowmode-tail verdict did NOT
     // admit — exactly the pulls the retired delegation hook fell through
@@ -2746,7 +2824,9 @@ fn append_arm<'mcx>(
             return Ok(r);
         }
     }
-    let AppendNode { state, substates, .. } = &mut **a;
+    let AppendNode {
+        state, substates, ..
+    } = &mut **a;
     ::nodeappend::exec_append(state, estate, |e, i| exec_proc_node(&mut substates[i], e))
 }
 
@@ -2762,10 +2842,12 @@ fn merge_append_arm<'mcx>(
         // SH-E ownership verdict (accounting only; single body below).
         crate::lanev2::merge_append_pull_verdict(m, estate);
     }
-    let MergeAppendNode { state, substates, subplan_origin: _ } = &mut **m;
-    ::nodemergeappend::exec_merge_append(state, estate, |e, i| {
-        exec_proc_node(&mut substates[i], e)
-    })
+    let MergeAppendNode {
+        state,
+        substates,
+        subplan_origin: _,
+    } = &mut **m;
+    ::nodemergeappend::exec_merge_append(state, estate, |e, i| exec_proc_node(&mut substates[i], e))
 }
 
 #[inline(never)]
@@ -2796,7 +2878,11 @@ fn set_op_arm<'mcx>(
         // SH-E ownership verdict (accounting only; single body below).
         crate::lanev2::set_op_pull_verdict(s, estate);
     }
-    let SetOpNode { state, outer, inner } = &mut **s;
+    let SetOpNode {
+        state,
+        outer,
+        inner,
+    } = &mut **s;
     ::nodesetop::exec_set_op(
         state,
         estate,
@@ -2818,7 +2904,11 @@ fn recursive_union_arm<'mcx>(
         // SH-E ownership verdict (accounting only; single body below).
         crate::lanev2::recursive_union_pull_verdict(ru, estate);
     }
-    let RecursiveUnionNode { state, outer, inner } = &mut **ru;
+    let RecursiveUnionNode {
+        state,
+        outer,
+        inner,
+    } = &mut **ru;
     ::noderecursiveunion::exec_recursive_union(state, outer, inner, estate)
 }
 
@@ -2866,7 +2956,12 @@ fn nest_loop_arm<'mcx>(nl: &mut NestLoopNode<'mcx>, estate: &mut EStateData<'mcx
             return Ok(r);
         }
     }
-    let NestLoopNode { state, outer, inner, .. } = nl;
+    let NestLoopNode {
+        state,
+        outer,
+        inner,
+        ..
+    } = nl;
     ::nodenestloop::exec_nest_loop(state, &mut **outer, &mut **inner, estate)
 }
 
@@ -2877,7 +2972,13 @@ fn hash_join_arm<'mcx>(
 ) -> ProcResult {
     let hj = &mut **hj;
     if hj.probe_batch.mode == ProbeBatchMode::Unknown {
-        let HashJoinNode { state, outer, hash, probe_batch, .. } = hj;
+        let HashJoinNode {
+            state,
+            outer,
+            hash,
+            probe_batch,
+            ..
+        } = hj;
         let HashSubNode { state: hstate, .. } = &mut **hash;
         probe_batch.mode = if hstate.parallel_state().is_some() {
             ProbeBatchMode::Parallel
@@ -2896,18 +2997,34 @@ fn hash_join_arm<'mcx>(
             return Ok(r);
         }
     }
-    let HashJoinNode { state, outer, hash, probe_batch, .. } = hj;
-    let HashSubNode { state: hstate, child } = &mut **hash;
+    let HashJoinNode {
+        state,
+        outer,
+        hash,
+        probe_batch,
+        ..
+    } = hj;
+    let HashSubNode {
+        state: hstate,
+        child,
+    } = &mut **hash;
     if probe_batch.mode == ProbeBatchMode::On {
         let PlanStateNode::SeqScan(ss) = &mut **outer else {
             unreachable!("probe fusion armed on a non-SeqScan outer")
         };
-        let mut src = SeqScanProbeSource { ss, cur: probe_batch };
+        let mut src = SeqScanProbeSource {
+            ss,
+            cur: probe_batch,
+        };
         return ::nodehashjoin::exec_hash_join(state, &mut src, hstate, &mut **child, estate);
     }
     if probe_batch.mode == ProbeBatchMode::Parallel {
         return ::nodehashjoin::exec_parallel_hash_join(
-            state, &mut **outer, hstate, &mut **child, estate,
+            state,
+            &mut **outer,
+            hstate,
+            &mut **child,
+            estate,
         );
     }
     ::nodehashjoin::exec_hash_join(state, &mut **outer, hstate, &mut **child, estate)
@@ -2925,10 +3042,10 @@ fn probe_batch_probe<'mcx>(
     pb: &mut ProbeBatch<'mcx>,
 ) -> PgResult<ProbeBatchMode> {
     use ::execexpr::{Kernel, SlotSrc};
-    let PlanStateNode::SeqScan(ss) = outer else { return Ok(ProbeBatchMode::Off) };
-    if estate.es_epq_active
-        || !::types_scan::sdir::ScanDirectionIsForward(estate.es_direction)
-    {
+    let PlanStateNode::SeqScan(ss) = outer else {
+        return Ok(ProbeBatchMode::Off);
+    };
+    if estate.es_epq_active || !::types_scan::sdir::ScanDirectionIsForward(estate.es_direction) {
         return Ok(ProbeBatchMode::Off);
     }
     let variant_ok = match ss.variant() {
@@ -2987,9 +3104,7 @@ impl<'mcx> ::nodehashjoin::HashJoinOuter<'mcx> for SeqScanProbeSource<'_, 'mcx> 
                     // Bloom on the staged hash: a miss proves the bucket walk
                     // finds nothing (rows past hashes.len() — the fallback
                     // tail — pass conservatively and re-eval per row).
-                    if let Some(&h) =
-                        self.cur.hashes.as_deref().and_then(|h| h.get(i as usize))
-                    {
+                    if let Some(&h) = self.cur.hashes.as_deref().and_then(|h| h.get(i as usize)) {
                         self.cur.flt_seen += 1;
                         if !f.test(h) {
                             self.cur.flt_drop += 1;
@@ -3107,7 +3222,12 @@ fn merge_join_arm<'mcx>(
     // no arm-level enabled() gate — the MERGEJOIN knob heads the verdict,
     // the GUC rides the fast-admit byte / slow-path head.
     crate::lanev2::merge_join_pull_verdict(mj, estate);
-    let MergeJoinNode { state, outer, inner, .. } = mj;
+    let MergeJoinNode {
+        state,
+        outer,
+        inner,
+        ..
+    } = mj;
     ::nodemergejoin::exec_merge_join(state, &mut **outer, &mut **inner, estate)
 }
 
@@ -3569,11 +3689,11 @@ fn instr_extra_of<'mcx>(
             ios.ioss_ScanDesc.as_deref().map_or(0, |sd| sd.xs_nsearches),
         )),
         PlanStateNode::BitmapIndexScan(biss) => Some(InstrExtra::IndexSearches(
-            biss.biss_ScanDesc.as_deref().map_or(0, |sd| sd.xs_nsearches),
+            biss.biss_ScanDesc
+                .as_deref()
+                .map_or(0, |sd| sd.xs_nsearches),
         )),
-        PlanStateNode::Gather(g) => {
-            Some(InstrExtra::WorkersLaunched(g.state.nworkers_launched))
-        }
+        PlanStateNode::Gather(g) => Some(InstrExtra::WorkersLaunched(g.state.nworkers_launched)),
         PlanStateNode::GatherMerge(gm) => {
             Some(InstrExtra::WorkersLaunched(gm.state.nworkers_launched))
         }
@@ -3626,9 +3746,7 @@ fn exec_end_node_inner<'mcx>(
         PlanStateNode::IndexScan(is) => ::nodeindexscan::exec_end_index_scan(is),
         PlanStateNode::TidScan(ts) => ::nodetidscan::exec_end_tid_scan(ts),
         PlanStateNode::TidRangeScan(ts) => ::nodetidrangescan::exec_end_tid_range_scan(ts),
-        PlanStateNode::IndexOnlyScan(ios) => {
-            ::nodeindexonlyscan::exec_end_index_only_scan(ios)
-        }
+        PlanStateNode::IndexOnlyScan(ios) => ::nodeindexonlyscan::exec_end_index_only_scan(ios),
         PlanStateNode::Agg(aps) => {
             ::nodeagg::exec_end_agg(&mut aps.agg);
             exec_end_node(&mut aps.outer, estate)
@@ -4228,8 +4346,15 @@ mod fused_arm_tests {
         }
         fused_arm_set_for_tests("AGG_BITMAP", false);
         assert!(!fused_arm_enabled(FusedArm::AggBitmap));
-        for arm in [FusedArm::AggSeq, FusedArm::HashBuild, FusedArm::HashBuildProj] {
-            assert!(fused_arm_enabled(arm), "force-off must not leak across arms");
+        for arm in [
+            FusedArm::AggSeq,
+            FusedArm::HashBuild,
+            FusedArm::HashBuildProj,
+        ] {
+            assert!(
+                fused_arm_enabled(arm),
+                "force-off must not leak across arms"
+            );
         }
         fused_arm_set_for_tests("AGG_BITMAP", true);
         assert!(fused_arm_enabled(FusedArm::AggBitmap));

@@ -54,9 +54,11 @@ pub fn rs_is_regis(str: &[u8]) -> PgResult<bool> {
                 return Ok(false);
             }
         } else {
-            return Err(PgError::error(format!("internal error in RS_isRegis: state {state}"))
-                .with_sqlstate(ERRCODE_INTERNAL_ERROR)
-                .into());
+            return Err(
+                PgError::error(format!("internal error in RS_isRegis: state {state}"))
+                    .with_sqlstate(ERRCODE_INTERNAL_ERROR)
+                    .into(),
+            );
         }
         off += pg_mblen(c);
     }
@@ -65,7 +67,11 @@ pub fn rs_is_regis(str: &[u8]) -> PgResult<bool> {
 }
 
 pub fn rs_compile<'mcx>(mcx: Mcx<'mcx>, issuffix: bool, str: &[u8]) -> PgResult<Regis<'mcx>> {
-    let mut r = Regis { issuffix, nchar: 0, nodes: PgVec::new_in(mcx) };
+    let mut r = Regis {
+        issuffix,
+        nchar: 0,
+        nodes: PgVec::new_in(mcx),
+    };
 
     let mut state: i32 = RS_IN_WAIT;
     let mut off = 0usize;
@@ -108,9 +114,11 @@ pub fn rs_compile<'mcx>(mcx: Mcx<'mcx>, issuffix: bool, str: &[u8]) -> PgResult<
                 return Err(invalid_regis_pattern(str).into());
             }
         } else {
-            return Err(PgError::error(format!("internal error in RS_compile: state {state}"))
-                .with_sqlstate(ERRCODE_INTERNAL_ERROR)
-                .into());
+            return Err(
+                PgError::error(format!("internal error in RS_compile: state {state}"))
+                    .with_sqlstate(ERRCODE_INTERNAL_ERROR)
+                    .into(),
+            );
         }
         off += clen;
     }
@@ -133,7 +141,10 @@ fn push_node<'mcx>(
     nodes
         .try_reserve(1)
         .map_err(|_| mcx.oom(core::mem::size_of::<RegisNode>()))?;
-    nodes.push(RegisNode { kind, data: PgVec::new_in(mcx) });
+    nodes.push(RegisNode {
+        kind,
+        data: PgVec::new_in(mcx),
+    });
     *cur = Some(nodes.len() - 1);
     Ok(())
 }

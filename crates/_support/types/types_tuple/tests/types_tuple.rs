@@ -1,7 +1,7 @@
 use core::cell::Cell;
 
 use datum::Datum;
-use mcx::{MemoryContext, Mcx, PgVec};
+use mcx::{Mcx, MemoryContext, PgVec};
 use types_tuple::varatt::{varsize_any, VARTAG_ONDISK};
 use types_tuple::*;
 
@@ -66,8 +66,12 @@ fn constants_match_c_headers() {
 fn infomask_predicates() {
     assert!(HEAP_XMAX_IS_LOCKED_ONLY(HEAP_XMAX_LOCK_ONLY));
     assert!(HEAP_XMAX_IS_LOCKED_ONLY(HEAP_XMAX_EXCL_LOCK));
-    assert!(!HEAP_XMAX_IS_LOCKED_ONLY(HEAP_XMAX_EXCL_LOCK | HEAP_XMAX_IS_MULTI));
-    assert!(HEAP_LOCKED_UPGRADED(HEAP_XMAX_IS_MULTI | HEAP_XMAX_LOCK_ONLY));
+    assert!(!HEAP_XMAX_IS_LOCKED_ONLY(
+        HEAP_XMAX_EXCL_LOCK | HEAP_XMAX_IS_MULTI
+    ));
+    assert!(HEAP_LOCKED_UPGRADED(
+        HEAP_XMAX_IS_MULTI | HEAP_XMAX_LOCK_ONLY
+    ));
     assert!(!HEAP_LOCKED_UPGRADED(
         HEAP_XMAX_IS_MULTI | HEAP_XMAX_LOCK_ONLY | HEAP_XMAX_KEYSHR_LOCK
     ));
@@ -110,7 +114,10 @@ fn item_pointer_ops() {
     );
     let mut s = ItemPointerData::new(8, 0);
     ItemPointerDec(&mut s);
-    assert_eq!((ItemPointerGetBlockNumberNoCheck(&s), s.ip_posid), (7, u16::MAX));
+    assert_eq!(
+        (ItemPointerGetBlockNumberNoCheck(&s), s.ip_posid),
+        (7, u16::MAX)
+    );
     let mut t = ItemPointerData::new(0, 0);
     ItemPointerDec(&mut t);
     assert_eq!((ItemPointerGetBlockNumberNoCheck(&t), t.ip_posid), (0, 0));
@@ -209,7 +216,12 @@ fn deform_fixed_width_and_attcacheoff() {
     let ctx = MemoryContext::new("t");
     let desc = make_desc(
         ctx.mcx(),
-        &[attr(4, true, 4), attr(8, true, 8), attr(2, true, 2), attr(1, true, 1)],
+        &[
+            attr(4, true, 4),
+            attr(8, true, 8),
+            attr(2, true, 2),
+            attr(1, true, 1),
+        ],
     );
 
     let mut data = [0u8; 24];
@@ -231,7 +243,11 @@ fn deform_fixed_width_and_attcacheoff() {
     assert!(values[3].as_bool());
     assert_eq!(nulls, [false; 4]);
 
-    let offs: Vec<i32> = desc.compact_attrs.iter().map(|a| a.attcacheoff.get()).collect();
+    let offs: Vec<i32> = desc
+        .compact_attrs
+        .iter()
+        .map(|a| a.attcacheoff.get())
+        .collect();
     assert_eq!(offs, [0, 8, 16, 18]);
 
     let mut isnull = true;
@@ -245,7 +261,10 @@ fn deform_fixed_width_and_attcacheoff() {
 #[test]
 fn nocachegetattr_fills_leading_fixed_offsets() {
     let ctx = MemoryContext::new("t");
-    let desc = make_desc(ctx.mcx(), &[attr(4, true, 4), attr(4, true, 4), attr(8, true, 8)]);
+    let desc = make_desc(
+        ctx.mcx(),
+        &[attr(4, true, 4), attr(4, true, 4), attr(8, true, 8)],
+    );
     let mut data = [0u8; 16];
     data[0..4].copy_from_slice(&1i32.to_ne_bytes());
     data[4..8].copy_from_slice(&2i32.to_ne_bytes());
@@ -255,7 +274,11 @@ fn nocachegetattr_fills_leading_fixed_offsets() {
     let tup = tuple_from(&image, t_len);
 
     assert_eq!(unsafe { nocachegetattr(&tup, 3, &desc) }.as_i64(), 3);
-    let offs: Vec<i32> = desc.compact_attrs.iter().map(|a| a.attcacheoff.get()).collect();
+    let offs: Vec<i32> = desc
+        .compact_attrs
+        .iter()
+        .map(|a| a.attcacheoff.get())
+        .collect();
     assert_eq!(offs, [0, 4, 8]);
     assert_eq!(unsafe { nocachegetattr(&tup, 2, &desc) }.as_i32(), 2);
 }
@@ -264,7 +287,10 @@ fn nocachegetattr_fills_leading_fixed_offsets() {
 fn deform_varlena_short_and_aligned() {
     let ctx = MemoryContext::new("t");
     // (int4, text, int8): text stored as a 1-byte-header short varlena.
-    let desc = make_desc(ctx.mcx(), &[attr(4, true, 4), attr(-1, false, 4), attr(8, true, 8)]);
+    let desc = make_desc(
+        ctx.mcx(),
+        &[attr(4, true, 4), attr(-1, false, 4), attr(8, true, 8)],
+    );
 
     let payload = b"hello";
     let short_hdr: u8 = (((1 + payload.len()) as u8) << 1) | 0x01;
@@ -298,7 +324,10 @@ fn deform_varlena_short_and_aligned() {
 
     assert_eq!(unsafe { nocachegetattr(&tup, 3, &desc) }.as_i64(), 99);
     let mut isnull = false;
-    assert_eq!(unsafe { fastgetattr(&tup, 1, &desc, &mut isnull) }.as_i32(), 42);
+    assert_eq!(
+        unsafe { fastgetattr(&tup, 1, &desc, &mut isnull) }.as_i32(),
+        42
+    );
 }
 
 #[test]
@@ -317,8 +346,13 @@ fn deform_4b_varlena_with_padding() {
     data[8..8 + payload.len()].copy_from_slice(payload);
 
     let mut image = Image([0; 256]);
-    let (t_len, _) =
-        build_tuple_mask(&mut image, 2, None, &data[..8 + payload.len()], HEAP_HASVARWIDTH);
+    let (t_len, _) = build_tuple_mask(
+        &mut image,
+        2,
+        None,
+        &data[..8 + payload.len()],
+        HEAP_HASVARWIDTH,
+    );
     let tup = tuple_from(&image, t_len);
 
     let mut values = [Datum::null(); 2];
@@ -337,7 +371,10 @@ fn deform_4b_varlena_with_padding() {
 #[test]
 fn deform_with_nulls_and_attisnull() {
     let ctx = MemoryContext::new("t");
-    let desc = make_desc(ctx.mcx(), &[attr(4, true, 4), attr(8, true, 8), attr(4, true, 4)]);
+    let desc = make_desc(
+        ctx.mcx(),
+        &[attr(4, true, 4), attr(8, true, 8), attr(4, true, 4)],
+    );
 
     // Null bitmap: bits 0 and 2 set (non-null), bit 1 clear (null).
     let mut data = [0u8; 16];
@@ -392,8 +429,7 @@ fn deform_cstring_walk() {
     data[12..14].copy_from_slice(&7i16.to_ne_bytes());
 
     let mut image = Image([0; 256]);
-    let (t_len, _) =
-        build_tuple_mask(&mut image, 5, Some(0b11011), &data[..14], HEAP_HASVARWIDTH);
+    let (t_len, _) = build_tuple_mask(&mut image, 5, Some(0b11011), &data[..14], HEAP_HASVARWIDTH);
     let tup = tuple_from(&image, t_len);
 
     let mut values = [Datum::null(); 5];
@@ -413,7 +449,11 @@ fn deform_cstring_walk() {
     assert_eq!(values[4].as_i16(), 7);
     assert_eq!(nulls, [false, false, true, false, false]);
 
-    let offs: Vec<i32> = desc.compact_attrs.iter().map(|a| a.attcacheoff.get()).collect();
+    let offs: Vec<i32> = desc
+        .compact_attrs
+        .iter()
+        .map(|a| a.attcacheoff.get())
+        .collect();
     assert_eq!(offs, [0, 4, -1, -1, -1]);
 }
 
@@ -423,28 +463,41 @@ fn deform_cstring_then_missing_tail() {
     let mcx = ctx.mcx();
     let mut desc = make_desc(
         mcx,
-        &[attr(4, true, 4), attr(-2, false, 1), attr(2, true, 2), attr(4, true, 4)],
+        &[
+            attr(4, true, 4),
+            attr(-2, false, 1),
+            attr(2, true, 2),
+            attr(4, true, 4),
+        ],
     );
     desc.compact_attrs[3].atthasmissing = true;
     let mut missing: PgVec<AttrMissing> = PgVec::new_in(mcx);
     for _ in 0..3 {
-        missing.push(AttrMissing { am_present: false, am_value: Datum::null() });
+        missing.push(AttrMissing {
+            am_present: false,
+            am_value: Datum::null(),
+        });
     }
-    missing.push(AttrMissing { am_present: true, am_value: Datum::from_i32(777) });
-    desc.constr = Some(mcx::alloc_in(
-        mcx,
-        TupleConstr {
-            defval: PgVec::new_in(mcx),
-            check: PgVec::new_in(mcx),
-            missing,
-            num_defval: 0,
-            num_check: 0,
-            has_not_null: false,
-            has_generated_stored: false,
-            has_generated_virtual: false,
-        },
-    )
-    .unwrap());
+    missing.push(AttrMissing {
+        am_present: true,
+        am_value: Datum::from_i32(777),
+    });
+    desc.constr = Some(
+        mcx::alloc_in(
+            mcx,
+            TupleConstr {
+                defval: PgVec::new_in(mcx),
+                check: PgVec::new_in(mcx),
+                missing,
+                num_defval: 0,
+                num_check: 0,
+                has_not_null: false,
+                has_generated_stored: false,
+                has_generated_virtual: false,
+            },
+        )
+        .unwrap(),
+    );
 
     let mut data = [0u8; 8];
     data[0..4].copy_from_slice(&5i32.to_ne_bytes());
@@ -475,23 +528,34 @@ fn missing_and_absent_attributes() {
     let mut desc = make_desc(mcx, &[attr(4, true, 4), attr(4, true, 4), attr(4, true, 4)]);
     desc.compact_attrs[2].atthasmissing = true;
     let mut missing: PgVec<AttrMissing> = PgVec::new_in(mcx);
-    missing.push(AttrMissing { am_present: false, am_value: Datum::null() });
-    missing.push(AttrMissing { am_present: false, am_value: Datum::null() });
-    missing.push(AttrMissing { am_present: true, am_value: Datum::from_i32(777) });
-    desc.constr = Some(mcx::alloc_in(
-        mcx,
-        TupleConstr {
-            defval: PgVec::new_in(mcx),
-            check: PgVec::new_in(mcx),
-            missing,
-            num_defval: 0,
-            num_check: 0,
-            has_not_null: false,
-            has_generated_stored: false,
-            has_generated_virtual: false,
-        },
-    )
-    .unwrap());
+    missing.push(AttrMissing {
+        am_present: false,
+        am_value: Datum::null(),
+    });
+    missing.push(AttrMissing {
+        am_present: false,
+        am_value: Datum::null(),
+    });
+    missing.push(AttrMissing {
+        am_present: true,
+        am_value: Datum::from_i32(777),
+    });
+    desc.constr = Some(
+        mcx::alloc_in(
+            mcx,
+            TupleConstr {
+                defval: PgVec::new_in(mcx),
+                check: PgVec::new_in(mcx),
+                missing,
+                num_defval: 0,
+                num_check: 0,
+                has_not_null: false,
+                has_generated_stored: false,
+                has_generated_virtual: false,
+            },
+        )
+        .unwrap(),
+    );
 
     let mut data = [0u8; 8];
     data[0..4].copy_from_slice(&1i32.to_ne_bytes());
@@ -509,7 +573,10 @@ fn missing_and_absent_attributes() {
     assert!(!nulls[2]);
 
     let mut isnull = false;
-    assert_eq!(unsafe { heap_getattr(&tup, 3, &desc, &mut isnull) }.as_i32(), 777);
+    assert_eq!(
+        unsafe { heap_getattr(&tup, 3, &desc, &mut isnull) }.as_i32(),
+        777
+    );
     assert!(!isnull);
     assert!(!heap_attisnull(&tup, 3, Some(&desc)));
 

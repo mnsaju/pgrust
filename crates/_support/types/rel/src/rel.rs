@@ -2,13 +2,13 @@ use core::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use ::mcx::PgVec;
-use ::types_fmgr::FmgrInfo;
-use ::types_nbtree::BTMetaPageData;
 use ::types_core::{
     InvalidRelFileNumber, Oid, ProcNumber, SubTransactionId, BLCKSZ, RELPERSISTENCE_PERMANENT,
     RELPERSISTENCE_TEMP,
 };
 use ::types_error::PgResult;
+use ::types_fmgr::FmgrInfo;
+use ::types_nbtree::BTMetaPageData;
 use ::types_storage::smgr::SmgrHandle;
 use ::types_storage::RelFileLocator;
 use ::types_tuple::TupleDescData;
@@ -164,8 +164,7 @@ impl<'mcx> RelationData<'mcx> {
 
     #[inline]
     pub fn is_mapped(&self) -> bool {
-        RELKIND_HAS_STORAGE(self.rd_rel.relkind)
-            && self.rd_rel.relfilenode == InvalidRelFileNumber
+        RELKIND_HAS_STORAGE(self.rd_rel.relkind) && self.rd_rel.relfilenode == InvalidRelFileNumber
     }
 
     #[inline]
@@ -360,7 +359,10 @@ mod tests {
             rd_firstRelfilelocatorSubid: Cell::new(0),
             rd_droppedSubid: Cell::new(0),
             rd_lockInfo: LockInfoData {
-                lockRelId: crate::lock::LockRelId { relId: oid, dbId: 5 },
+                lockRelId: crate::lock::LockRelId {
+                    relId: oid,
+                    dbId: 5,
+                },
             },
             rd_rel: form_pg_class(oid),
             rd_att: Rc::new(td),
@@ -381,7 +383,8 @@ mod tests {
             rd_opcoptions: Default::default(),
             rd_indexlist: Default::default(),
             rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+            rd_hastriggers: false,
+            rd_hasrules: false,
         }
     }
 
@@ -449,7 +452,10 @@ mod tests {
         assert_eq!(rel.get_target_page_free_space(HEAP_DEFAULT_FILLFACTOR), 0);
         rel.rd_options = Some(RdOptions::Std(std_options(70)));
         assert_eq!(rel.get_fillfactor(HEAP_DEFAULT_FILLFACTOR), 70);
-        assert_eq!(rel.get_target_page_usage(HEAP_DEFAULT_FILLFACTOR), BLCKSZ * 70 / 100);
+        assert_eq!(
+            rel.get_target_page_usage(HEAP_DEFAULT_FILLFACTOR),
+            BLCKSZ * 70 / 100
+        );
         assert_eq!(
             rel.get_target_page_free_space(HEAP_DEFAULT_FILLFACTOR),
             BLCKSZ * 30 / 100

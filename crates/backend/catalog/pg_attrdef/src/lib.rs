@@ -46,12 +46,8 @@ pub fn StoreAttrDefault<'mcx>(
     let adbin = outfuncs::nodeToString(mcx, expr)?;
     let adrel = table::table_open(mcx, ATTR_DEFAULT_RELATION_ID, RowExclusiveLock)?;
 
-    let attrdef_oid = catalog::GetNewOidWithIndex(
-        mcx,
-        &adrel,
-        ATTR_DEFAULT_OID_INDEX_ID,
-        Anum_pg_attrdef_oid,
-    )?;
+    let attrdef_oid =
+        catalog::GetNewOidWithIndex(mcx, &adrel, ATTR_DEFAULT_OID_INDEX_ID, Anum_pg_attrdef_oid)?;
     let adbin_text = varlena::cstring_to_text(mcx, adbin.as_bytes())?;
     let values = [
         Datum::from_oid(attrdef_oid),
@@ -67,7 +63,11 @@ pub fn StoreAttrDefault<'mcx>(
     // Flip pg_attribute.atthasdef on the column's live row.
     let attrrel = table::table_open(mcx, ATTRIBUTE_RELATION_ID, RowExclusiveLock)?;
     let keys = [
-        eq_key(Anum_pg_attribute_attrelid, F_OIDEQ, Datum::from_oid(rel.rd_id)),
+        eq_key(
+            Anum_pg_attribute_attrelid,
+            F_OIDEQ,
+            Datum::from_oid(rel.rd_id),
+        ),
         eq_key(Anum_pg_attribute_attnum, F_INT2EQ, Datum::from_i16(attnum)),
     ];
     let mut scan =
@@ -105,8 +105,11 @@ pub fn StoreAttrDefault<'mcx>(
         pg_depend::DependencyType::Auto
     };
     let defobject = pg_depend::ObjectAddress::set(ATTR_DEFAULT_RELATION_ID, attrdef_oid);
-    let colobject =
-        pg_depend::ObjectAddress::sub_set(types_core::RELATION_RELATION_ID, rel.rd_id, attnum as i32);
+    let colobject = pg_depend::ObjectAddress::sub_set(
+        types_core::RELATION_RELATION_ID,
+        rel.rd_id,
+        attnum as i32,
+    );
     pg_depend::recordDependencyOn(mcx, &defobject, &colobject, deptype)?;
     pg_depend::recordDependencyOnSingleRelExpr(
         mcx,
@@ -129,8 +132,7 @@ pub fn GetAttrDefaultOid<'mcx>(mcx: Mcx<'mcx>, relid: Oid, attnum: AttrNumber) -
         eq_key(Anum_pg_attrdef_adrelid, F_OIDEQ, Datum::from_oid(relid)),
         eq_key(Anum_pg_attrdef_adnum, F_INT2EQ, Datum::from_i16(attnum)),
     ];
-    let mut scan =
-        genam::systable_beginscan(mcx, &adrel, AttrDefaultIndexId, true, None, &keys)?;
+    let mut scan = genam::systable_beginscan(mcx, &adrel, AttrDefaultIndexId, true, None, &keys)?;
     let mut result = types_core::InvalidOid;
     if let Some(tup) = genam::systable_getnext(mcx, &mut scan)? {
         let mut isnull = false;
@@ -152,7 +154,11 @@ pub fn GetAttrDefaultColumnAddress<'mcx>(
     attrdef_id: Oid,
 ) -> PgResult<(Oid, AttrNumber)> {
     let adrel = table::table_open(mcx, ATTR_DEFAULT_RELATION_ID, types_rel::AccessShareLock)?;
-    let keys = [eq_key(Anum_pg_attrdef_oid, F_OIDEQ, Datum::from_oid(attrdef_id))];
+    let keys = [eq_key(
+        Anum_pg_attrdef_oid,
+        F_OIDEQ,
+        Datum::from_oid(attrdef_id),
+    )];
     let mut scan =
         genam::systable_beginscan(mcx, &adrel, ATTR_DEFAULT_OID_INDEX_ID, true, None, &keys)?;
     let mut result = (types_core::InvalidOid, 0 as AttrNumber);
@@ -177,7 +183,11 @@ pub fn GetAttrDefaultColumnAddress<'mcx>(
 
 pub fn RemoveAttrDefaultById<'mcx>(mcx: Mcx<'mcx>, attrdef_id: Oid) -> PgResult<()> {
     let adrel = table::table_open(mcx, ATTR_DEFAULT_RELATION_ID, RowExclusiveLock)?;
-    let keys = [eq_key(Anum_pg_attrdef_oid, F_OIDEQ, Datum::from_oid(attrdef_id))];
+    let keys = [eq_key(
+        Anum_pg_attrdef_oid,
+        F_OIDEQ,
+        Datum::from_oid(attrdef_id),
+    )];
     let mut scan =
         genam::systable_beginscan(mcx, &adrel, ATTR_DEFAULT_OID_INDEX_ID, true, None, &keys)?;
     let tup = genam::systable_getnext(mcx, &mut scan)?
@@ -202,8 +212,16 @@ pub fn RemoveAttrDefaultById<'mcx>(mcx: Mcx<'mcx>, attrdef_id: Oid) -> PgResult<
 
     let attrrel = table::table_open(mcx, ATTRIBUTE_RELATION_ID, RowExclusiveLock)?;
     let keys = [
-        eq_key(Anum_pg_attribute_attrelid, F_OIDEQ, Datum::from_oid(myrelid)),
-        eq_key(Anum_pg_attribute_attnum, F_INT2EQ, Datum::from_i16(myattnum)),
+        eq_key(
+            Anum_pg_attribute_attrelid,
+            F_OIDEQ,
+            Datum::from_oid(myrelid),
+        ),
+        eq_key(
+            Anum_pg_attribute_attnum,
+            F_INT2EQ,
+            Datum::from_i16(myattnum),
+        ),
     ];
     let mut scan =
         genam::systable_beginscan(mcx, &attrrel, AttributeRelidNumIndexId, true, None, &keys)?;
@@ -257,22 +275,29 @@ pub fn GetAttrDefaultBin<'mcx>(
         eq_key(Anum_pg_attrdef_adrelid, F_OIDEQ, Datum::from_oid(relid)),
         eq_key(Anum_pg_attrdef_adnum, F_INT2EQ, Datum::from_i16(attnum)),
     ];
-    let mut scan =
-        genam::systable_beginscan(mcx, &adrel, AttrDefaultIndexId, true, None, &keys)?;
+    let mut scan = genam::systable_beginscan(mcx, &adrel, AttrDefaultIndexId, true, None, &keys)?;
     let mut result: Option<String> = None;
     if let Some(tup) = genam::systable_getnext(mcx, &mut scan)? {
         let mut isnull = false;
         // SAFETY: adbin under pg_attrdef's descriptor; NOT NULL by catalog contract.
         let d = unsafe {
-            types_tuple::heap_getattr(tup, Anum_pg_attrdef_adbin as i32, adrel.descr(), &mut isnull)
+            types_tuple::heap_getattr(
+                tup,
+                Anum_pg_attrdef_adbin as i32,
+                adrel.descr(),
+                &mut isnull,
+            )
         };
         assert!(!isnull, "null adbin for relation {relid} attnum {attnum}");
         let p = d.as_usize() as *const u8;
         // SAFETY: live varlena text image through its extent.
         let image = unsafe { core::slice::from_raw_parts(p, types_tuple::varatt::varsize_any(p)) };
         let payload = varlena::open_image(mcx, image)?;
-        result =
-            Some(core::str::from_utf8(payload.as_bytes()).expect("adbin UTF-8").to_string());
+        result = Some(
+            core::str::from_utf8(payload.as_bytes())
+                .expect("adbin UTF-8")
+                .to_string(),
+        );
     }
     genam::systable_endscan(mcx, scan)?;
     adrel.close(types_rel::AccessShareLock)?;

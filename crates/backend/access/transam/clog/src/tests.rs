@@ -192,8 +192,13 @@ fn tree_commit_same_page() {
 
     let xid: TransactionId = 200;
     let subxids = [201, 202, 203];
-    TransactionIdSetTreeStatus(xid, &subxids, TRANSACTION_STATUS_COMMITTED, InvalidXLogRecPtr)
-        .unwrap();
+    TransactionIdSetTreeStatus(
+        xid,
+        &subxids,
+        TRANSACTION_STATUS_COMMITTED,
+        InvalidXLogRecPtr,
+    )
+    .unwrap();
 
     assert_eq!(status_of(xid), TRANSACTION_STATUS_COMMITTED);
     for sub in subxids {
@@ -215,8 +220,13 @@ fn tree_commit_across_pages() {
     ];
     extend_through(subxids[3]);
 
-    TransactionIdSetTreeStatus(xid, &subxids, TRANSACTION_STATUS_COMMITTED, InvalidXLogRecPtr)
-        .unwrap();
+    TransactionIdSetTreeStatus(
+        xid,
+        &subxids,
+        TRANSACTION_STATUS_COMMITTED,
+        InvalidXLogRecPtr,
+    )
+    .unwrap();
 
     assert_eq!(status_of(xid), TRANSACTION_STATUS_COMMITTED);
     for sub in subxids {
@@ -225,8 +235,7 @@ fn tree_commit_across_pages() {
 
     let axid: TransactionId = 400;
     let asub = [CLOG_XACTS_PER_PAGE + 100];
-    TransactionIdSetTreeStatus(axid, &asub, TRANSACTION_STATUS_ABORTED, InvalidXLogRecPtr)
-        .unwrap();
+    TransactionIdSetTreeStatus(axid, &asub, TRANSACTION_STATUS_ABORTED, InvalidXLogRecPtr).unwrap();
     assert_eq!(status_of(axid), TRANSACTION_STATUS_ABORTED);
     assert_eq!(status_of(asub[0]), TRANSACTION_STATUS_ABORTED);
 }

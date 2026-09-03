@@ -20,10 +20,12 @@ pub fn get_relname_relid(relname: &str, relnamespace: Oid) -> PgResult<Oid> {
 
 // #ifdef NOT_USED in C.
 pub fn get_relnatts(relid: Oid) -> PgResult<i32> {
-    Ok(match syscache_seams::lookup_pg_class_ls_shape::call(relid)? {
-        Some(reltup) => reltup.relnatts as i32,
-        None => InvalidAttrNumber as i32,
-    })
+    Ok(
+        match syscache_seams::lookup_pg_class_ls_shape::call(relid)? {
+            Some(reltup) => reltup.relnatts as i32,
+            None => InvalidAttrNumber as i32,
+        },
+    )
 }
 
 pub fn get_rel_name<'mcx>(mcx: Mcx<'mcx>, relid: Oid) -> PgResult<Option<PgString<'mcx>>> {
@@ -34,45 +36,57 @@ pub fn get_rel_name<'mcx>(mcx: Mcx<'mcx>, relid: Oid) -> PgResult<Option<PgStrin
 }
 
 pub fn get_rel_namespace(relid: Oid) -> PgResult<Oid> {
-    Ok(match syscache_seams::lookup_pg_class_ls_shape::call(relid)? {
-        Some(reltup) => reltup.relnamespace,
-        None => InvalidOid,
-    })
+    Ok(
+        match syscache_seams::lookup_pg_class_ls_shape::call(relid)? {
+            Some(reltup) => reltup.relnamespace,
+            None => InvalidOid,
+        },
+    )
 }
 
 pub fn get_rel_type_id(relid: Oid) -> PgResult<Oid> {
-    Ok(match syscache_seams::lookup_pg_class_ls_shape::call(relid)? {
-        Some(reltup) => reltup.reltype,
-        None => InvalidOid,
-    })
+    Ok(
+        match syscache_seams::lookup_pg_class_ls_shape::call(relid)? {
+            Some(reltup) => reltup.reltype,
+            None => InvalidOid,
+        },
+    )
 }
 
 pub fn get_rel_relkind(relid: Oid) -> PgResult<i8> {
-    Ok(match syscache_seams::lookup_pg_class_ls_shape::call(relid)? {
-        Some(reltup) => reltup.relkind,
-        None => 0,
-    })
+    Ok(
+        match syscache_seams::lookup_pg_class_ls_shape::call(relid)? {
+            Some(reltup) => reltup.relkind,
+            None => 0,
+        },
+    )
 }
 
 pub fn get_rel_relhassubclass(relid: Oid) -> PgResult<bool> {
-    Ok(match syscache_seams::lookup_pg_class_ls_shape::call(relid)? {
-        Some(reltup) => reltup.relhassubclass,
-        None => false,
-    })
+    Ok(
+        match syscache_seams::lookup_pg_class_ls_shape::call(relid)? {
+            Some(reltup) => reltup.relhassubclass,
+            None => false,
+        },
+    )
 }
 
 pub fn get_rel_relispartition(relid: Oid) -> PgResult<bool> {
-    Ok(match syscache_seams::lookup_pg_class_ls_shape::call(relid)? {
-        Some(reltup) => reltup.relispartition,
-        None => false,
-    })
+    Ok(
+        match syscache_seams::lookup_pg_class_ls_shape::call(relid)? {
+            Some(reltup) => reltup.relispartition,
+            None => false,
+        },
+    )
 }
 
 pub fn get_rel_tablespace(relid: Oid) -> PgResult<Oid> {
-    Ok(match syscache_seams::lookup_pg_class_ls_shape::call(relid)? {
-        Some(reltup) => reltup.reltablespace,
-        None => InvalidOid,
-    })
+    Ok(
+        match syscache_seams::lookup_pg_class_ls_shape::call(relid)? {
+            Some(reltup) => reltup.reltablespace,
+            None => InvalidOid,
+        },
+    )
 }
 
 pub fn get_rel_persistence(relid: Oid) -> PgResult<i8> {
@@ -106,10 +120,12 @@ pub fn get_index_column_opclass(index_oid: Oid, attno: i32) -> PgResult<Oid> {
 }
 
 pub fn get_index_isreplident(index_oid: Oid) -> PgResult<bool> {
-    Ok(match syscache_seams::lookup_pg_index_ls_shape::call(index_oid)? {
-        Some(rd_index) => rd_index.indisreplident,
-        None => false,
-    })
+    Ok(
+        match syscache_seams::lookup_pg_index_ls_shape::call(index_oid)? {
+            Some(rd_index) => rd_index.indisreplident,
+            None => false,
+        },
+    )
 }
 
 pub fn get_index_isvalid(index_oid: Oid) -> PgResult<bool> {

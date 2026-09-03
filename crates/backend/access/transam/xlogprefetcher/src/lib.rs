@@ -239,7 +239,8 @@ pub fn XLogPrefetchShmemResetAfterCrash() {
 
 pub fn XLogPrefetchResetStats() {
     let s = shared_stats();
-    s.reset_time.store(adt_timestamp::GetCurrentTimestamp() as u64, Relaxed);
+    s.reset_time
+        .store(adt_timestamp::GetCurrentTimestamp() as u64, Relaxed);
     s.prefetch.store(0, Relaxed);
     s.hit.store(0, Relaxed);
     s.skip_init.store(0, Relaxed);
@@ -284,18 +285,24 @@ impl<'mcx> XLogPrefetcher<'mcx> {
     }
 
     pub fn XLogPrefetcherComputeStats(&mut self, reader: &XLogReaderState<'_>) {
-        let wal_distance: i64 =
-            match (reader.decode_queue_tail_lsn(), reader.decode_queue_head_lsn()) {
-                (Some(tail), Some(head)) => tail as i64 - head as i64,
-                _ => 0,
-            };
-        let lrq = self.streaming_read.as_ref().expect("streaming_read allocated");
+        let wal_distance: i64 = match (
+            reader.decode_queue_tail_lsn(),
+            reader.decode_queue_head_lsn(),
+        ) {
+            (Some(tail), Some(head)) => tail as i64 - head as i64,
+            _ => 0,
+        };
+        let lrq = self
+            .streaming_read
+            .as_ref()
+            .expect("streaming_read allocated");
         let io_depth = lrq.inflight;
         let completed = lrq.completed;
 
         let s = shared_stats();
         s.io_depth.store(io_depth as i32, Relaxed);
-        s.block_distance.store((io_depth + completed) as i32, Relaxed);
+        s.block_distance
+            .store((io_depth + completed) as i32, Relaxed);
         s.wal_distance.store(wal_distance as i32, Relaxed);
 
         self.next_stats_shm_lsn = reader.v.ReadRecPtr + XLOGPREFETCHER_STATS_DISTANCE;
@@ -328,7 +335,9 @@ impl<'mcx> XLogPrefetcher<'mcx> {
                 if !RecoveryPrefetchEnabled() {
                     return Ok((LsnReadQueueNextStatus::NoIo, InvalidXLogRecPtr));
                 }
-                record = reader.read_ahead_record_info().expect("XLogReadAhead queued a record");
+                record = reader
+                    .read_ahead_record_info()
+                    .expect("XLogReadAhead queued a record");
                 self.record = Some(record);
                 self.next_block_id = 0;
             } else {

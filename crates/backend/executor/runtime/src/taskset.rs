@@ -119,7 +119,9 @@ pub(crate) struct PinBoard {
 impl PinBoard {
     pub(crate) fn new(nworkers: usize) -> PinBoard {
         PinBoard {
-            entries: (0..nworkers).map(|_| CachePadded(AtomicU64::new(PIN_EMPTY))).collect(),
+            entries: (0..nworkers)
+                .map(|_| CachePadded(AtomicU64::new(PIN_EMPTY)))
+                .collect(),
         }
     }
 

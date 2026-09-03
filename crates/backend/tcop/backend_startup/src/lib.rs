@@ -213,14 +213,25 @@ fn backend_initialize(mcx: Mcx<'_>, client_sock: &ClientSocket, cac: CacState) -
 
     let log_hostname = guc_tables::vars::log_hostname.read();
     let raddr = init_small::globals::WithMyProcPort(|p| p.raddr);
-    let flags = (if log_hostname { 0 } else { ip::sys::NI_NUMERICHOST }) | ip::sys::NI_NUMERICSERV;
+    let flags = (if log_hostname {
+        0
+    } else {
+        ip::sys::NI_NUMERICHOST
+    }) | ip::sys::NI_NUMERICSERV;
     let mut remote_host = String::new();
     let mut remote_port = String::new();
-    let ret =
-        ip::pg_getnameinfo_all(&raddr, Some(&mut remote_host), Some(&mut remote_port), flags);
+    let ret = ip::pg_getnameinfo_all(
+        &raddr,
+        Some(&mut remote_host),
+        Some(&mut remote_port),
+        flags,
+    );
     if ret != 0 {
         ereport(WARNING)
-            .errmsg_internal(format!("pg_getnameinfo_all() failed: {}", gai_strerror(ret)))
+            .errmsg_internal(format!(
+                "pg_getnameinfo_all() failed: {}",
+                gai_strerror(ret)
+            ))
             .finish(loc(211, "BackendInitialize"))?;
     }
 
@@ -334,7 +345,9 @@ fn build_ps_title() {
     let ps_data = init_small::globals::WithMyProcPort(|port| {
         let mut s = String::new();
         if walsender_seams::am_walsender() {
-            s.push_str(miscinit::GetBackendTypeDesc(types_core::BackendType::WalSender));
+            s.push_str(miscinit::GetBackendTypeDesc(
+                types_core::BackendType::WalSender,
+            ));
             s.push(' ');
         }
         s.push_str(port.user_name.as_deref().unwrap_or(""));
@@ -463,13 +476,14 @@ fn process_startup_packet(mcx: Mcx<'_>, mut ssl_done: bool, mut gss_done: bool) 
             // we already have a direct SSL connection.
             let (laddr, ssl_in_use) =
                 init_small::globals::WithMyProcPort(|p| (p.laddr, p.ssl_in_use));
-            let ssl_ok =
-                if !loaded_ssl::get() || ip::sockaddr_family(&laddr) == ip::sys::AF_UNIX || ssl_in_use
-                {
-                    b'N'
-                } else {
-                    b'S'
-                };
+            let ssl_ok = if !loaded_ssl::get()
+                || ip::sockaddr_family(&laddr) == ip::sys::AF_UNIX
+                || ssl_in_use
+            {
+                b'N'
+            } else {
+                b'S'
+            };
             if trace_connection_negotiation::get() {
                 ereport(LOG)
                     .errmsg(if ssl_ok == b'S' {
@@ -864,7 +878,10 @@ fn read_be_u32(buf: &[u8], off: usize) -> u32 {
 }
 
 fn cstr_len(buf: &[u8], off: usize) -> usize {
-    buf[off..].iter().position(|&b| b == 0).unwrap_or(buf.len() - off)
+    buf[off..]
+        .iter()
+        .position(|&b| b == 0)
+        .unwrap_or(buf.len() - off)
 }
 
 fn bytes_str(b: &[u8]) -> String {

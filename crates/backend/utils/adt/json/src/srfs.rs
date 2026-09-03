@@ -259,8 +259,9 @@ impl<'mcx> JsonSem<'mcx> for ElementsState<'_, 'mcx> {
             self.next_scalar = false;
             self.rows.push(Some(s.to_vec()));
         } else {
-            self.rows
-                .push(Some(self.input[self.result_start..lex.prev_token_terminator].to_vec()));
+            self.rows.push(Some(
+                self.input[self.result_start..lex.prev_token_terminator].to_vec(),
+            ));
         }
         Ok(true)
     }

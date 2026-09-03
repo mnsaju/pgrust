@@ -131,10 +131,7 @@ impl<'mcx> JsonbValue<'mcx> {
     pub fn is_scalar(&self) -> bool {
         matches!(
             self,
-            JsonbValue::Null
-                | JsonbValue::String(_)
-                | JsonbValue::Numeric(_)
-                | JsonbValue::Bool(_)
+            JsonbValue::Null | JsonbValue::String(_) | JsonbValue::Numeric(_) | JsonbValue::Bool(_)
         )
     }
 
@@ -191,7 +188,10 @@ impl<'mcx> JsonbBuildState<'mcx> {
         for f in self.stack.iter() {
             stack.push(*f);
         }
-        Ok(JsonbBuildState { mcx: self.mcx, stack })
+        Ok(JsonbBuildState {
+            mcx: self.mcx,
+            stack,
+        })
     }
 
     pub fn in_array(&self) -> bool {
@@ -319,11 +319,9 @@ fn uniqueify_object(
     let mut has_non_uniq = false;
     if pairs.len() > 1 {
         // Strict total order (order tiebreak): unstable sort == C qsort_arg.
-        pairs
-            .as_mut_slice()
-            .sort_unstable_by(|a, b| {
-                length_compare_jsonb_string(a.key, b.key).then_with(|| b.order.cmp(&a.order))
-            });
+        pairs.as_mut_slice().sort_unstable_by(|a, b| {
+            length_compare_jsonb_string(a.key, b.key).then_with(|| b.order.cmp(&a.order))
+        });
         for w in pairs.as_slice().windows(2) {
             if length_compare_jsonb_string(w[0].key, w[1].key) == core::cmp::Ordering::Equal {
                 has_non_uniq = true;

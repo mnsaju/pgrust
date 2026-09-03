@@ -447,7 +447,12 @@ mod tests {
 
     #[test]
     fn box_io_roundtrip() {
-        for s in ["((1,2),(3,4))", "(1,2),(3,4)", "1,2,3,4", " ( (1, 2) , (3 ,4) ) "] {
+        for s in [
+            "((1,2),(3,4))",
+            "(1,2),(3,4)",
+            "1,2,3,4",
+            " ( (1, 2) , (3 ,4) ) ",
+        ] {
             let b = box_in(s).unwrap();
             assert_eq!(b.high.x, 3.0);
             assert_eq!(b.high.y, 4.0);
@@ -517,7 +522,10 @@ mod nan_comparator_regression {
     use super::*;
 
     fn bx(lx: f64, ly: f64, hx: f64, hy: f64) -> BOX {
-        BOX { high: Point { x: hx, y: hy }, low: Point { x: lx, y: ly } }
+        BOX {
+            high: Point { x: hx, y: hy },
+            low: Point { x: lx, y: ly },
+        }
     }
 
     /// C (gistproc.c adjustBox, since 1acf757255 / bug #14238) uses the

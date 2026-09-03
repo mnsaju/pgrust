@@ -48,7 +48,8 @@ fn run_lint(tree: Option<&std::path::Path>, allowlist: Option<&std::path::Path>)
 
 /// Scratch dir unique per test (tests run concurrently in one process).
 fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("lint-determinism-{}-{}", std::process::id(), name));
+    let dir =
+        std::env::temp_dir().join(format!("lint-determinism-{}-{}", std::process::id(), name));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).expect("scratch dir");
     dir
@@ -90,7 +91,10 @@ fn new_raw_fs_site_fails_named() {
     fs::write(&allow, "# empty\n").unwrap();
 
     let (ok, report) = run_lint(Some(&dir.join("tree")), Some(&allow));
-    assert!(!ok, "lint must fail on an unallowlisted raw fs site:\n{report}");
+    assert!(
+        !ok,
+        "lint must fail on an unallowlisted raw fs site:\n{report}"
+    );
     assert!(
         report.contains("VIOLATION(new-site): [fs] crates/backend/synthetic/src/lib.rs"),
         "violation must name category and file:\n{report}"
@@ -114,7 +118,10 @@ fn budget_growth_fails_ratchet() {
     fs::write(&allow, "fs\tcrates/backend/synthetic/src/lib.rs\t1\n").unwrap();
 
     let (ok, report) = run_lint(Some(&dir.join("tree")), Some(&allow));
-    assert!(!ok, "lint must fail when sites exceed the budget:\n{report}");
+    assert!(
+        !ok,
+        "lint must fail when sites exceed the budget:\n{report}"
+    );
     assert!(
         report.contains("VIOLATION(ratchet): [fs] crates/backend/synthetic/src/lib.rs"),
         "ratchet violation must name category and file:\n{report}"
@@ -260,7 +267,10 @@ fn comment_tokens_inside_strings_do_not_hide_sites() {
     fs::write(&allow, "# empty\n").unwrap();
 
     let (ok, report) = run_lint(Some(&dir.join("tree")), Some(&allow));
-    assert!(!ok, "fs site after a string-literal // must still be seen:\n{report}");
+    assert!(
+        !ok,
+        "fs site after a string-literal // must still be seen:\n{report}"
+    );
     assert!(
         report.contains("VIOLATION(new-site): [fs] crates/backend/synthetic/src/lib.rs"),
         "string-aware scan must catch the site:\n{report}"
@@ -316,7 +326,10 @@ fn cfg_edges_and_literal_poison_handled() {
         report.contains("VIOLATION(new-site): [fs] crates/backend/synthetic/src/charlit.rs"),
         "literals inside the test mod must not poison the prod tail:\n{report}"
     );
-    assert!(!report.contains("WARN(scan-poison)"), "no poison expected:\n{report}");
+    assert!(
+        !report.contains("WARN(scan-poison)"),
+        "no poison expected:\n{report}"
+    );
     let _ = fs::remove_dir_all(&dir);
 }
 
@@ -328,7 +341,11 @@ fn eof_poison_warns_but_passes() {
     let dir = scratch("poison");
     let src_dir = dir.join("tree/crates/backend/synthetic/src");
     fs::create_dir_all(&src_dir).unwrap();
-    fs::write(src_dir.join("lib.rs"), "pub fn fine() {}\n/* unclosed at EOF\n").unwrap();
+    fs::write(
+        src_dir.join("lib.rs"),
+        "pub fn fine() {}\n/* unclosed at EOF\n",
+    )
+    .unwrap();
     let allow = dir.join("empty.allow");
     fs::write(&allow, "# empty\n").unwrap();
 

@@ -182,8 +182,7 @@ pub fn largeobject_owner_acl<'mcx>(
         None => None,
         Some(tuple) => {
             let desc = pg_lo_meta.descr();
-            let (owner, owner_null) =
-                getattr(tuple, Anum_pg_largeobject_metadata_lomowner, desc);
+            let (owner, owner_null) = getattr(tuple, Anum_pg_largeobject_metadata_lomowner, desc);
             debug_assert!(!owner_null);
             let (acl, acl_null) = getattr(tuple, Anum_pg_largeobject_metadata_lomacl, desc);
             let acl = if acl_null {

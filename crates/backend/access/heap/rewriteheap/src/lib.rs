@@ -17,6 +17,7 @@ use heapam::HeapTupleHeaderGetUpdateXid;
 use heaptuple::{heap_copytuple, HeapTuple};
 use mcx::{Mcx, PgFxHashMap};
 use types_core::xact::{TransactionIdIsNormal, TransactionIdPrecedes};
+use types_core::OffsetNumber;
 use types_core::{BlockNumber, ForkNumber, Oid, TransactionId, XLogRecPtr};
 use types_error::{
     ErrorLocation, PgError, PgResult, DEBUG1, ERRCODE_PROGRAM_LIMIT_EXCEEDED, ERROR,
@@ -28,7 +29,6 @@ use types_tuple::htup::{
     HeapTupleData, HeapTupleHeaderData, HEAP2_XACT_MASK, HEAP_HASEXTERNAL, HEAP_UPDATED,
     HEAP_XACT_MASK, HEAP_XMAX_INVALID,
 };
-use types_core::OffsetNumber;
 use types_tuple::{ItemPointerData, ItemPointerIsValid};
 
 // reorderbuffer.h: PG_LOGICAL_DIR "/mappings".
@@ -150,7 +150,10 @@ pub fn begin_heap_rewrite<'mcx>(
 // logical_begin_heap_rewrite (rewriteheap.c:759): prepare mapping-file
 // logging if the rewritten table can be accessed during logical decoding
 // and any decoding slot holds a catalog xmin.
-fn logical_begin_heap_rewrite(state: &mut RewriteState<'_>, old_heap: &Relation<'_>) -> PgResult<()> {
+fn logical_begin_heap_rewrite(
+    state: &mut RewriteState<'_>,
+    old_heap: &Relation<'_>,
+) -> PgResult<()> {
     state.rs_logical_rewrite = heapam::relation_is_accessible_in_logical_decoding(old_heap);
     if !state.rs_logical_rewrite {
         return Ok(());
@@ -213,7 +216,10 @@ fn logical_heap_rewrite_flush_mappings(state: &mut RewriteState<'_>) -> PgResult
     }
     let _ = elog::elog(
         DEBUG1,
-        format!("flushing {} logical rewrite mapping entries", state.rs_num_rewrite_mappings),
+        format!(
+            "flushing {} logical rewrite mapping entries",
+            state.rs_num_rewrite_mappings
+        ),
     );
 
     let mapped_db = state.rs_mapped_db;
@@ -279,7 +285,10 @@ fn logical_end_heap_rewrite(state: &mut RewriteState<'_>) -> PgResult<()> {
         if let Err(e) = src.file.sync_all() {
             return ereport(ERROR)
                 .errcode_for_file_access()
-                .errmsg(format!("could not fsync file \"{}\": {e}", src.path.display()))
+                .errmsg(format!(
+                    "could not fsync file \"{}\": {e}",
+                    src.path.display()
+                ))
                 .finish(loc(921, "logical_end_heap_rewrite"));
         }
     }
@@ -306,7 +315,11 @@ fn logical_rewrite_log_mapping(
             xact_seams::get_current_transaction_id::call()?,
         );
         let path = mappings_dir().join(name);
-        let file = match std::fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+        let file = match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
             Ok(f) => f,
             Err(e) => {
                 return ereport(ERROR)
@@ -315,9 +328,15 @@ fn logical_rewrite_log_mapping(
                     .finish(loc(977, "logical_rewrite_log_mapping"));
             }
         };
-        state
-            .rs_logical_mappings
-            .insert(xid, RewriteMappingFile { off: 0, path, file, mappings: Vec::new() });
+        state.rs_logical_mappings.insert(
+            xid,
+            RewriteMappingFile {
+                off: 0,
+                path,
+                file,
+                mappings: Vec::new(),
+            },
+        );
     }
     let src = state.rs_logical_mappings.get_mut(&xid).unwrap();
     src.mappings.push(*map);
@@ -432,8 +451,10 @@ pub fn rewrite_heap_tuple<'mcx>(
         && !(old_tuple.t_self == old_hdr.t_ctid);
 
     if updated {
-        let hashkey =
-            TidHashKey { xmin: HeapTupleHeaderGetUpdateXid(old_hdr)?, tid: old_hdr.t_ctid };
+        let hashkey = TidHashKey {
+            xmin: HeapTupleHeaderGetUpdateXid(old_hdr)?,
+            tid: old_hdr.t_ctid,
+        };
         if let Some(new_tid) = state.rs_old_new_tid_map.remove(&hashkey) {
             new_tuple.as_tuple_mut().t_data_mut().t_ctid = new_tid;
         } else {
@@ -463,7 +484,11 @@ pub fn rewrite_heap_tuple<'mcx>(
                 Some(t) => t.as_tuple(),
                 None => new_tuple.as_tuple(),
             };
-            (tup.t_self, tup.t_data().t_infomask & HEAP_UPDATED != 0, tup.t_data().xmin())
+            (
+                tup.t_self,
+                tup.t_data().t_infomask & HEAP_UPDATED != 0,
+                tup.t_data().xmin(),
+            )
         };
 
         {
@@ -495,8 +520,10 @@ pub fn rewrite_heap_dead_tuple(
     state: &mut RewriteState<'_>,
     old_tuple: &HeapTupleData<'_>,
 ) -> bool {
-    let hashkey =
-        TidHashKey { xmin: old_tuple.t_data().xmin(), tid: old_tuple.t_self };
+    let hashkey = TidHashKey {
+        xmin: old_tuple.t_data().xmin(),
+        tid: old_tuple.t_self,
+    };
     state.rs_unresolved_tups.remove(&hashkey).is_some()
 }
 
@@ -564,8 +591,9 @@ fn raw_heap_insert<'mcx>(
     };
     // SAFETY: img_ptr/img_len delimit a live tuple image (HeapTupleData invariant).
     let item = unsafe { core::slice::from_raw_parts(img_ptr, img_len) };
-    let newoff: OffsetNumber =
-        page.add_item(item, 0, PAI_IS_HEAP).unwrap_or_else(|| panic!("failed to add tuple"));
+    let newoff: OffsetNumber = page
+        .add_item(item, 0, PAI_IS_HEAP)
+        .unwrap_or_else(|| panic!("failed to add tuple"));
 
     tup.t_self = ItemPointerData::new(state.rs_blockno, newoff);
 
@@ -585,7 +613,11 @@ fn raw_heap_insert<'mcx>(
 
 fn page_mut_of(buf: &mut bulkwrite::BulkWriteBuffer) -> PageMut<'_> {
     // SAFETY: exclusively owned, aligned build page.
-    unsafe { PageMut::from_raw(core::ptr::NonNull::new_unchecked(buf.page_mut().as_mut_ptr())) }
+    unsafe {
+        PageMut::from_raw(core::ptr::NonNull::new_unchecked(
+            buf.page_mut().as_mut_ptr(),
+        ))
+    }
 }
 
 // CheckPointLogicalRewriteHeap (rewriteheap.c:1155): remove mapping files no
@@ -614,7 +646,10 @@ pub fn CheckPointLogicalRewriteHeap() -> PgResult<()> {
         Err(e) => {
             return ereport(ERROR)
                 .errcode_for_file_access()
-                .errmsg(format!("could not open directory \"{}\": {e}", dir.display()))
+                .errmsg(format!(
+                    "could not open directory \"{}\": {e}",
+                    dir.display()
+                ))
                 .finish(loc(1177, "CheckPointLogicalRewriteHeap"));
         }
     };
@@ -624,7 +659,10 @@ pub fn CheckPointLogicalRewriteHeap() -> PgResult<()> {
             Err(e) => {
                 return ereport(ERROR)
                     .errcode_for_file_access()
-                    .errmsg(format!("could not read directory \"{}\": {e}", dir.display()))
+                    .errmsg(format!(
+                        "could not read directory \"{}\": {e}",
+                        dir.display()
+                    ))
                     .finish(loc(1178, "CheckPointLogicalRewriteHeap"));
             }
         };
@@ -641,8 +679,11 @@ pub fn CheckPointLogicalRewriteHeap() -> PgResult<()> {
 
         // LOGICAL_REWRITE_FORMAT: map-%x-%x-%X_%X-%x-%x.
         let parts: Vec<&str> = name[4..].split('-').collect();
-        let lsn_parts: Vec<&str> =
-            if parts.len() == 5 { parts[2].split('_').collect() } else { Vec::new() };
+        let lsn_parts: Vec<&str> = if parts.len() == 5 {
+            parts[2].split('_').collect()
+        } else {
+            Vec::new()
+        };
         let (Some(Ok(hi)), Some(Ok(lo))) = (
             lsn_parts.first().map(|s| u32::from_str_radix(s, 16)),
             lsn_parts.get(1).map(|s| u32::from_str_radix(s, 16)),
@@ -668,7 +709,11 @@ pub fn CheckPointLogicalRewriteHeap() -> PgResult<()> {
         } else {
             // The file cannot vanish concurrently: this function is the only
             // remover and one checkpoint runs at a time.
-            let f = match std::fs::OpenOptions::new().read(true).write(true).open(&path) {
+            let f = match std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(&path)
+            {
                 Ok(f) => f,
                 Err(e) => {
                     return ereport(ERROR)

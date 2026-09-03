@@ -60,7 +60,11 @@ fn strtoi64(s: &[u8]) -> Strto<i64> {
         let d = (s[i] - b'0') as i64;
         if !erange {
             match acc.checked_mul(10).and_then(|v| {
-                if neg { v.checked_sub(d) } else { v.checked_add(d) }
+                if neg {
+                    v.checked_sub(d)
+                } else {
+                    v.checked_add(d)
+                }
             }) {
                 Some(v) => acc = v,
                 None => {
@@ -73,9 +77,17 @@ fn strtoi64(s: &[u8]) -> Strto<i64> {
     }
     if i == start {
         // no digits: C leaves *endptr = str and returns 0
-        return Strto { val: 0, end: 0, erange: false };
+        return Strto {
+            val: 0,
+            end: 0,
+            erange: false,
+        };
     }
-    Strto { val: acc, end: i, erange }
+    Strto {
+        val: acc,
+        end: i,
+        erange,
+    }
 }
 
 /// C `strtoint(str, &cp, 10)`: i32 with clamp+ERANGE on overflow.
@@ -83,9 +95,17 @@ fn strtoint(s: &[u8]) -> Strto<i32> {
     let r = strtoi64(s);
     if r.erange || r.val < i32::MIN as i64 || r.val > i32::MAX as i64 {
         let clamped = if r.val < 0 { i32::MIN } else { i32::MAX };
-        Strto { val: clamped, end: r.end, erange: true }
+        Strto {
+            val: clamped,
+            end: r.end,
+            erange: true,
+        }
     } else {
-        Strto { val: r.val as i32, end: r.end, erange: false }
+        Strto {
+            val: r.val as i32,
+            end: r.end,
+            erange: false,
+        }
     }
 }
 
@@ -156,8 +176,12 @@ struct TzAbbrevCache {
 }
 
 impl TzAbbrevCache {
-    const EMPTY: TzAbbrevCache =
-        TzAbbrevCache { abbrev: [0; TOKMAXLEN + 1], ftype: 0, offset: 0, tz: None };
+    const EMPTY: TzAbbrevCache = TzAbbrevCache {
+        abbrev: [0; TOKMAXLEN + 1],
+        ftype: 0,
+        offset: 0,
+        tz: None,
+    };
 }
 
 pub fn ClearTimeZoneAbbrevCache() {
@@ -228,8 +252,20 @@ pub fn DecodeTimezoneAbbrev<'a>(
         }
 
         if let Some((isfixed, off, isdst)) = session_tz_abbrev_probe(lowtoken) {
-            *ftype = if isfixed { if isdst != 0 { DTZ } else { TZ } } else { DYNTZ };
-            *tz = if isfixed { None } else { tz::session_timezone() };
+            *ftype = if isfixed {
+                if isdst != 0 {
+                    DTZ
+                } else {
+                    TZ
+                }
+            } else {
+                DYNTZ
+            };
+            *tz = if isfixed {
+                None
+            } else {
+                tz::session_timezone()
+            };
             *offset = -off;
             let mut ent = TzAbbrevCache::EMPTY;
             strlcpy_tok(&mut ent.abbrev, lowtoken);
@@ -334,7 +370,10 @@ pub fn ParseFraction(cp: &[u8], frac: &mut f64) -> i32 {
         return DTERR_BAD_FORMAT;
     }
     // all-ASCII digits + '.', so from_utf8 cannot fail
-    match core::str::from_utf8(cp).ok().and_then(|s| s.parse::<f64>().ok()) {
+    match core::str::from_utf8(cp)
+        .ok()
+        .and_then(|s| s.parse::<f64>().ok())
+    {
         Some(v) => {
             *frac = v;
             0
@@ -377,8 +416,7 @@ pub fn time_overflows(hour: i32, min: i32, sec: i32, fsec: fsec_t) -> bool {
     {
         return true;
     }
-    (((hour * MINS_PER_HOUR + min) * SECS_PER_MINUTE + sec) as i64) * USECS_PER_SEC
-        + fsec as i64
+    (((hour * MINS_PER_HOUR + min) * SECS_PER_MINUTE + sec) as i64) * USECS_PER_SEC + fsec as i64
         > USECS_PER_DAY
 }
 
@@ -426,7 +464,11 @@ pub fn ParseDateTime<'w>(
     }
     macro_rules! peek {
         () => {
-            if cp < len { timestr[cp] } else { 0 }
+            if cp < len {
+                timestr[cp]
+            } else {
+                0
+            }
         };
     }
 
@@ -723,7 +765,13 @@ pub fn ValidateDate(fmask: i32, isjulian: bool, is2digits: bool, bc: bool, tm: &
     0
 }
 
-fn DecodeTimeCommon(str_: &[u8], _fmask: i32, range: i32, tmask: &mut i32, itm: &mut pg_itm) -> i32 {
+fn DecodeTimeCommon(
+    str_: &[u8],
+    _fmask: i32,
+    range: i32,
+    tmask: &mut i32,
+    itm: &mut pg_itm,
+) -> i32 {
     let mut fsec: fsec_t = 0;
 
     *tmask = DTK_TIME_M;
@@ -1204,8 +1252,7 @@ pub fn DecodeDateTime<'a>(
                     }
                     ptype = 0;
                 }
-                let dterr =
-                    DecodeTime(field[i], fmask, INTERVAL_FULL_RANGE, &mut tmask, tm, fsec);
+                let dterr = DecodeTime(field[i], fmask, INTERVAL_FULL_RANGE, &mut tmask, tm, fsec);
                 if dterr != 0 {
                     return dterr;
                 }
@@ -1314,9 +1361,7 @@ pub fn DecodeDateTime<'a>(
                         if dterr < 0 {
                             return dterr;
                         }
-                    } else if flen >= 6
-                        && (fmask & DTK_DATE_M == 0 || fmask & DTK_TIME_M == 0)
-                    {
+                    } else if flen >= 6 && (fmask & DTK_DATE_M == 0 || fmask & DTK_TIME_M == 0) {
                         // YMD/HMS concatenation (6+ digits), or a long year
                         let dterr = DecodeNumberField(
                             flen,
@@ -1570,7 +1615,9 @@ pub fn DecodeDateTime<'a>(
                 return DTERR_BAD_FORMAT;
             }
             let Some(z) = tz::session_timezone() else {
-                panic!("session timezone not initialized (pg_timezone_initialize) — DecodeDateTime");
+                panic!(
+                    "session timezone not initialized (pg_timezone_initialize) — DecodeDateTime"
+                );
             };
             tzv = DetermineTimeZoneOffset(tm, z);
         }
@@ -1769,8 +1816,7 @@ pub fn DecodeTimeOnly<'a>(
                     if let Some(d) = dot {
                         // embedded decimal
                         if i == 0 && nf >= 2 && ftype[nf - 1] == DTK_DATE {
-                            let dterr =
-                                DecodeDate(field[i], fmask, &mut tmask, &mut is2digits, tm);
+                            let dterr = DecodeDate(field[i], fmask, &mut tmask, &mut is2digits, tm);
                             if dterr != 0 {
                                 return dterr;
                             }
@@ -2096,7 +2142,10 @@ fn AdjustDays(val: i64, scale: i32, itm_in: &mut pg_itm_in) -> bool {
     if val < i32::MIN as i64 || val > i32::MAX as i64 {
         return false;
     }
-    match (val as i32).checked_mul(scale).and_then(|days| itm_in.tm_mday.checked_add(days)) {
+    match (val as i32)
+        .checked_mul(scale)
+        .and_then(|days| itm_in.tm_mday.checked_add(days))
+    {
         Some(v) => {
             itm_in.tm_mday = v;
             true
@@ -2122,7 +2171,10 @@ fn AdjustYears(val: i64, scale: i32, itm_in: &mut pg_itm_in) -> bool {
     if val < i32::MIN as i64 || val > i32::MAX as i64 {
         return false;
     }
-    match (val as i32).checked_mul(scale).and_then(|years| itm_in.tm_year.checked_add(years)) {
+    match (val as i32)
+        .checked_mul(scale)
+        .and_then(|years| itm_in.tm_year.checked_add(years))
+    {
         Some(v) => {
             itm_in.tm_year = v;
             true
@@ -2256,7 +2308,9 @@ pub fn DecodeInterval(
                     }
                     r if r == INTERVAL_MASK(MINUTE)
                         || r == INTERVAL_MASK(HOUR) | INTERVAL_MASK(MINUTE)
-                        || r == INTERVAL_MASK(DAY) | INTERVAL_MASK(HOUR) | INTERVAL_MASK(MINUTE) =>
+                        || r == INTERVAL_MASK(DAY)
+                            | INTERVAL_MASK(HOUR)
+                            | INTERVAL_MASK(MINUTE) =>
                     {
                         DTK_MINUTE
                     }
@@ -2338,7 +2392,11 @@ pub fn DecodeInterval(
                     }
                     // if any subseconds were specified, this counts as micro-
                     // and millisecond input too
-                    tmask = if fval == 0.0 { DTK_M(SECOND) } else { DTK_ALL_SECS_M };
+                    tmask = if fval == 0.0 {
+                        DTK_M(SECOND)
+                    } else {
+                        DTK_ALL_SECS_M
+                    };
                 }
                 t if t == DTK_MINUTE => {
                     if !AdjustMicroseconds(val, fval, USECS_PER_MINUTE, itm_in) {
@@ -2547,7 +2605,11 @@ fn ParseISO8601Number(s: &[u8], end: &mut usize, ipart: &mut i64, fpart: &mut f6
         return DTERR_FIELD_OVERFLOW;
     }
     // be very sure we truncate towards zero (cf dtrunc())
-    *ipart = if val >= 0.0 { val.floor() as i64 } else { -((-val).floor() as i64) };
+    *ipart = if val >= 0.0 {
+        val.floor() as i64
+    } else {
+        -((-val).floor() as i64)
+    };
     *fpart = val - *ipart as f64;
     0
 }

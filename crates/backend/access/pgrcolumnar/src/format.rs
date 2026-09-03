@@ -477,10 +477,15 @@ mod crc_tests {
             }
             !crc
         };
-        let data: Vec<u8> =
-            (0..8193u32).map(|i| (i.wrapping_mul(2654435761) >> 13) as u8).collect();
+        let data: Vec<u8> = (0..8193u32)
+            .map(|i| (i.wrapping_mul(2654435761) >> 13) as u8)
+            .collect();
         for len in (0..64).chain([100, 1024, 4096, 8191, 8192, 8193]) {
-            assert_eq!(super::crc32c(&data[..len]), bitwise(&data[..len]), "len {len}");
+            assert_eq!(
+                super::crc32c(&data[..len]),
+                bitwise(&data[..len]),
+                "len {len}"
+            );
         }
     }
 }

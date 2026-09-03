@@ -179,7 +179,11 @@ pub fn elog_node_display(
     elog::ereport(lev)
         .errmsg_internal(format!("{title}:"))
         .errdetail_internal(f.as_str().to_owned())
-        .finish(ErrorLocation::new(file!(), line!() as i32, "elog_node_display"))
+        .finish(ErrorLocation::new(
+            file!(),
+            line!() as i32,
+            "elog_node_display",
+        ))
 }
 
 pub fn print_rt(mcx: Mcx<'_>, rtable: &NodeList<'_>) {
@@ -197,7 +201,11 @@ fn write_rt(buf: &mut PgString<'_>, rtable: &NodeList<'_>) {
         let aliasname = rte.eref.and_then(|e| e.aliasname).unwrap_or("");
         let _ = match rte.rtekind {
             RTEKind::RTE_RELATION => {
-                write!(buf, "{i}\t{aliasname}\t{}\t{}", rte.relid, rte.relkind as char)
+                write!(
+                    buf,
+                    "{i}\t{aliasname}\t{}\t{}",
+                    rte.relid, rte.relkind as char
+                )
             }
             RTEKind::RTE_SUBQUERY => write!(buf, "{i}\t{aliasname}\t[subquery]"),
             RTEKind::RTE_JOIN => write!(buf, "{i}\t{aliasname}\t[join]"),
@@ -236,7 +244,11 @@ fn rte_attribute_name<'mcx>(
     }
     let colname = |alias: &types_nodes::primnodes::Alias<'mcx>| -> Option<&'mcx str> {
         if attnum > 0 && (attnum as usize) <= alias.colnames.len() {
-            alias.colnames.nth(attnum as usize - 1).as_string().map(|s| s.sval)
+            alias
+                .colnames
+                .nth(attnum as usize - 1)
+                .as_string()
+                .map(|s| s.sval)
         } else {
             None
         }
@@ -319,7 +331,10 @@ fn write_expr(
         NodeTag::T_OpExpr => {
             let e = expr.as_op_expr().unwrap();
             let opname = lsyscache::operator::get_opname(mcx, e.opno)?;
-            let opname = opname.as_ref().map(|s| s.as_str()).unwrap_or("(invalid operator)");
+            let opname = opname
+                .as_ref()
+                .map(|s| s.as_str())
+                .unwrap_or("(invalid operator)");
             if e.args.len() > 1 {
                 write_expr(buf, mcx, Some(e.args.nth(0)), rtable)?;
                 let _ = write!(buf, " {opname} ");
@@ -332,7 +347,10 @@ fn write_expr(
         NodeTag::T_FuncExpr => {
             let e = expr.as_func_expr().unwrap();
             let funcname = lsyscache::get_func_name(mcx, e.funcid)?;
-            let funcname = funcname.as_ref().map(|s| s.as_str()).unwrap_or("(invalid function)");
+            let funcname = funcname
+                .as_ref()
+                .map(|s| s.as_str())
+                .unwrap_or("(invalid function)");
             let _ = write!(buf, "{funcname}(");
             for (i, arg) in e.args.iter().enumerate() {
                 write_expr(buf, mcx, Some(arg), rtable)?;
@@ -376,4 +394,3 @@ pub fn print_pathkeys() -> ! {
 pub fn print_slot() -> ! {
     panic!("print.c print_slot unported: debugtup (printtup.c) has no port — printer lane")
 }
-

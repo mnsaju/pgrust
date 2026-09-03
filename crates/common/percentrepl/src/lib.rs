@@ -27,7 +27,9 @@ pub fn replace_percent_placeholders(
             None => {
                 ereport(ERROR)
                     .errcode(ERRCODE_INVALID_PARAMETER_VALUE)
-                    .errmsg(format!("invalid value for parameter \"{param_name}\": \"{instr}\""))
+                    .errmsg(format!(
+                        "invalid value for parameter \"{param_name}\": \"{instr}\""
+                    ))
                     .errdetail("String ends unexpectedly after escape character \"%\".")
                     .finish(loc())?;
                 unreachable!()
@@ -42,9 +44,7 @@ pub fn replace_percent_placeholders(
                             .errmsg(format!(
                                 "invalid value for parameter \"{param_name}\": \"{instr}\""
                             ))
-                            .errdetail(format!(
-                                "String contains unexpected placeholder \"%{p}\"."
-                            ))
+                            .errdetail(format!("String contains unexpected placeholder \"%{p}\"."))
                             .finish(loc())?;
                         unreachable!()
                     }
@@ -61,7 +61,10 @@ mod tests {
 
     #[test]
     fn double_percent_is_literal() {
-        assert_eq!(replace_percent_placeholders("100%%", "p", &[]).unwrap(), "100%");
+        assert_eq!(
+            replace_percent_placeholders("100%%", "p", &[]).unwrap(),
+            "100%"
+        );
     }
 
     #[test]

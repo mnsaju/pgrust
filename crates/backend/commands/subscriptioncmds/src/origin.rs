@@ -22,11 +22,7 @@ pub(crate) fn replorigin_by_name(roname: &str, missing_ok: bool) -> PgResult<Rep
     ::origin::replorigin_by_name(roname, missing_ok)
 }
 
-pub(crate) fn replorigin_drop_by_name(
-    mcx: Mcx<'_>,
-    name: &str,
-    missing_ok: bool,
-) -> PgResult<()> {
+pub(crate) fn replorigin_drop_by_name(mcx: Mcx<'_>, name: &str, missing_ok: bool) -> PgResult<()> {
     // C DropSubscription/AlterSubscription pass nowait=false.
     ::origin::replorigin_drop_by_name(mcx, name, missing_ok, false)
 }

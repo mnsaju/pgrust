@@ -7,14 +7,16 @@ use types_rel::pg_class::RELKIND_SEQUENCE;
 const HEAP_TABLE_AM_OID: types_core::Oid = 2;
 use types_error::{ERRCODE_DATA_CORRUPTED, ERRCODE_FEATURE_NOT_SUPPORTED};
 use types_tuple::htup::{
-    HEAP_COMBOCID, HEAP_HASEXTERNAL, HEAP_HASNULL, HEAP_HASOID_OLD, HEAP_HASVARWIDTH,
+    BITMAPLEN, HEAP_COMBOCID, HEAP_HASEXTERNAL, HEAP_HASNULL, HEAP_HASOID_OLD, HEAP_HASVARWIDTH,
     HEAP_HOT_UPDATED, HEAP_KEYS_UPDATED, HEAP_MOVED, HEAP_MOVED_IN, HEAP_MOVED_OFF,
     HEAP_NATTS_MASK, HEAP_ONLY_TUPLE, HEAP_UPDATED, HEAP_XMAX_COMMITTED, HEAP_XMAX_EXCL_LOCK,
     HEAP_XMAX_INVALID, HEAP_XMAX_IS_MULTI, HEAP_XMAX_KEYSHR_LOCK, HEAP_XMAX_LOCK_ONLY,
-    HEAP_XMAX_SHR_LOCK, HEAP_XMIN_COMMITTED, HEAP_XMIN_FROZEN, HEAP_XMIN_INVALID, BITMAPLEN,
+    HEAP_XMAX_SHR_LOCK, HEAP_XMIN_COMMITTED, HEAP_XMIN_FROZEN, HEAP_XMIN_INVALID,
 };
 use types_tuple::tupmacs::{att_isnull, att_nominal_alignby, att_pointer_alignby};
-use types_tuple::varatt::{varatt_is_1b_e, varsize_any, vartag_external, VARTAG_INDIRECT, VARTAG_ONDISK};
+use types_tuple::varatt::{
+    varatt_is_1b_e, varsize_any, vartag_external, VARTAG_INDIRECT, VARTAG_ONDISK,
+};
 
 const SIZEOF_HEAP_TUPLE_HEADER: usize = 23;
 const MIN_HEAP_TUPLE_SIZE: usize = maxalign(SIZEOF_HEAP_TUPLE_HEADER);
@@ -22,7 +24,11 @@ const MIN_HEAP_TUPLE_SIZE: usize = maxalign(SIZEOF_HEAP_TUPLE_HEADER);
 fn bits_to_text(bits: &[u8], len: usize) -> String {
     let mut s = String::with_capacity(len);
     for i in 0..len {
-        s.push(if bits[i / 8] & (1 << (i % 8)) != 0 { '1' } else { '0' });
+        s.push(if bits[i / 8] & (1 << (i % 8)) != 0 {
+            '1'
+        } else {
+            '0'
+        });
     }
     s
 }
@@ -62,7 +68,10 @@ pub(crate) fn fc_heap_page_items(
         let v = unsafe { fcinfo.arg_varlena_packed(0)? };
         let b = v.data();
         if b.len() < SizeOfPageHeaderData {
-            return Err(param_err(format!("input page too small ({} bytes)", b.len())));
+            return Err(param_err(format!(
+                "input page too small ({} bytes)",
+                b.len()
+            )));
         }
         let tupdesc = composite_tupdesc(mcx, flinfo)?;
         let maxoff = page_max_offset_number(b);
@@ -237,11 +246,10 @@ fn tuple_data_split_internal(
     let nattrs = tupdesc.natts as usize;
 
     // Sequences always use heap AM without showing it in the catalogs.
-    if rel.rd_rel.relkind != RELKIND_SEQUENCE
-        && rel.rd_rel.relam != HEAP_TABLE_AM_OID
-    {
+    if rel.rd_rel.relkind != RELKIND_SEQUENCE && rel.rd_rel.relam != HEAP_TABLE_AM_OID {
         return Err(Box::new(
-            PgError::error("only heap AM is supported").with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED),
+            PgError::error("only heap AM is supported")
+                .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED),
         ));
     }
 
@@ -392,7 +400,10 @@ pub(crate) fn fc_heap_tuple_infomask_flags(
         combined.push(text_datum(mcx, name.as_bytes())?);
     }
 
-    let values = [text_array_datum(mcx, &raw)?, text_array_datum(mcx, &combined)?];
+    let values = [
+        text_array_datum(mcx, &raw)?,
+        text_array_datum(mcx, &combined)?,
+    ];
     composite_result(mcx, &tupdesc, &values, &[false; 2])
 }
 
@@ -466,7 +477,12 @@ mod tests {
         let (raw, combined) = infomask_flag_names(0xC000, 0xC000);
         assert_eq!(
             raw,
-            vec!["HEAP_MOVED_OFF", "HEAP_MOVED_IN", "HEAP_HOT_UPDATED", "HEAP_ONLY_TUPLE"]
+            vec![
+                "HEAP_MOVED_OFF",
+                "HEAP_MOVED_IN",
+                "HEAP_HOT_UPDATED",
+                "HEAP_ONLY_TUPLE"
+            ]
         );
         assert_eq!(combined, vec!["HEAP_MOVED"]);
 

@@ -212,7 +212,10 @@ mod zorder_tests {
         assert_eq!(point_zorder_internal(0.0, 0.0), 0xC000000000000000);
         assert_eq!(point_zorder_internal(1.0, 1.0), 0xCFFFC00000000000);
         assert_eq!(point_zorder_internal(-1.0, 0.0), 0x9000155555555555);
-        assert_eq!(point_zorder_internal(f32::NAN, f32::NAN), 0xFFFFFFFFFFFFFFFF);
+        assert_eq!(
+            point_zorder_internal(f32::NAN, f32::NAN),
+            0xFFFFFFFFFFFFFFFF
+        );
         assert_eq!(part_bits32_by2(0xFFFFFFFF), 0x5555555555555555);
         assert_eq!(part_bits32_by2(0b11), 0b101);
         assert_eq!(ieee_float32_to_uint32(-0.0), 0x7FFFFFFF);
@@ -227,8 +230,14 @@ mod zorder_tests {
         assert_eq!(gist_bbox_zorder_cmp(&pbox(1.0, 1.0), &pbox(0.0, 0.0)), 1);
         assert_eq!(gist_bbox_zorder_cmp(&pbox(-1.0, 0.0), &pbox(0.0, 0.0)), -1);
         // NaNs: float8 equality fails, z-values tie at all-ones.
-        assert_eq!(gist_bbox_zorder_cmp(&pbox(f64::NAN, f64::NAN), &pbox(f64::NAN, f64::NAN)), 0);
-        assert_eq!(gist_bbox_zorder_cmp(&pbox(f64::NAN, f64::NAN), &pbox(1e30, 1e30)), 1);
+        assert_eq!(
+            gist_bbox_zorder_cmp(&pbox(f64::NAN, f64::NAN), &pbox(f64::NAN, f64::NAN)),
+            0
+        );
+        assert_eq!(
+            gist_bbox_zorder_cmp(&pbox(f64::NAN, f64::NAN), &pbox(1e30, 1e30)),
+            1
+        );
         // y's bits interleave above x's: (2,3) carries bit45, (3,2) bit44.
         assert_eq!(gist_bbox_zorder_cmp(&pbox(2.0, 3.0), &pbox(3.0, 2.0)), 1);
     }

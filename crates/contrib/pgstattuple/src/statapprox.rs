@@ -113,7 +113,8 @@ fn statapprox_heap(rel: &types_rel::RelationData<'_>, stat: &mut OutputType) -> 
     stat.table_len = nblocks as u64 * BLCKSZ as u64;
 
     // Extrapolate the live-tuple count the way VACUUM does.
-    let estimated = commands_vacuum::vac_estimate_reltuples(rel, nblocks, scanned, stat.tuple_count as f64);
+    let estimated =
+        commands_vacuum::vac_estimate_reltuples(rel, nblocks, scanned, stat.tuple_count as f64);
     stat.tuple_count = if estimated < 0.0 { 0 } else { estimated as u64 };
 
     if nblocks != 0 {
@@ -136,7 +137,9 @@ fn pgstattuple_approx_internal(
     let mcx = unsafe { fcinfo.result_mcx_detached() };
     let tupdesc = composite_tupdesc(mcx, flinfo)?;
     if tupdesc.natts != 10 {
-        return Err(Box::new(PgError::error("incorrect number of output arguments")));
+        return Err(Box::new(PgError::error(
+            "incorrect number of output arguments",
+        )));
     }
 
     let rel = relation::relation_open(mcx, relid, types_rel::AccessShareLock)?;
@@ -163,7 +166,8 @@ fn pgstattuple_approx_internal(
 
     if rel.rd_rel.relam != tableam::HEAP_TABLE_AM_OID {
         return Err(Box::new(
-            PgError::error("only heap AM is supported").with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED),
+            PgError::error("only heap AM is supported")
+                .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED),
         ));
     }
 

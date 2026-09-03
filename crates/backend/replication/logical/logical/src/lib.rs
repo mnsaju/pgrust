@@ -100,11 +100,10 @@ pub type RollbackPreparedCB = fn(
     &mut OutputPluginContext,
     &mut ReorderBuffer,
     TxnId,
-    XLogRecPtr,   // prepare_end_lsn
-    TimestampTz,  // prepare_time
+    XLogRecPtr,  // prepare_end_lsn
+    TimestampTz, // prepare_time
 ) -> PgResult<()>;
-pub type FilterPrepareCB =
-    fn(&mut OutputPluginContext, TransactionId, &str) -> PgResult<bool>;
+pub type FilterPrepareCB = fn(&mut OutputPluginContext, TransactionId, &str) -> PgResult<bool>;
 // Streaming family (logical.h): start/stop share BeginCB's shape; abort/
 // prepare/commit share CommitCB's (opc, rb, txn, lsn); change/message/
 // truncate mirror their non-stream counterparts.
@@ -601,7 +600,10 @@ pub fn CreateDecodingContext(
     let (receive_rewrites, mark_two_phase) = {
         let opc = ctx.opc();
         opc.twophase &= slot.data.get().two_phase || opc.twophase_opt_given;
-        (opc.options.receive_rewrites, opc.twophase && !slot.data.get().two_phase)
+        (
+            opc.options.receive_rewrites,
+            opc.twophase && !slot.data.get().two_phase,
+        )
     };
     let mut ctx = ctx;
     // Mark slot to allow two_phase decoding if not already marked
@@ -881,7 +883,11 @@ fn missing_stream_cb(which: &str) -> PgResult<()> {
     unreachable!();
 }
 
-fn stream_start_cb_wrapper(rb: &mut ReorderBuffer, txn: TxnId, first_lsn: XLogRecPtr) -> PgResult<()> {
+fn stream_start_cb_wrapper(
+    rb: &mut ReorderBuffer,
+    txn: TxnId,
+    first_lsn: XLogRecPtr,
+) -> PgResult<()> {
     let opc = opc_from_rb(rb);
     debug_assert!(!opc.fast_forward);
     debug_assert!(opc.streaming);
@@ -895,7 +901,11 @@ fn stream_start_cb_wrapper(rb: &mut ReorderBuffer, txn: TxnId, first_lsn: XLogRe
     cb(opc, rb, txn)
 }
 
-fn stream_stop_cb_wrapper(rb: &mut ReorderBuffer, txn: TxnId, last_lsn: XLogRecPtr) -> PgResult<()> {
+fn stream_stop_cb_wrapper(
+    rb: &mut ReorderBuffer,
+    txn: TxnId,
+    last_lsn: XLogRecPtr,
+) -> PgResult<()> {
     let opc = opc_from_rb(rb);
     debug_assert!(!opc.fast_forward);
     debug_assert!(opc.streaming);
@@ -909,7 +919,11 @@ fn stream_stop_cb_wrapper(rb: &mut ReorderBuffer, txn: TxnId, last_lsn: XLogRecP
     cb(opc, rb, txn)
 }
 
-fn stream_abort_cb_wrapper(rb: &mut ReorderBuffer, txn: TxnId, abort_lsn: XLogRecPtr) -> PgResult<()> {
+fn stream_abort_cb_wrapper(
+    rb: &mut ReorderBuffer,
+    txn: TxnId,
+    abort_lsn: XLogRecPtr,
+) -> PgResult<()> {
     let opc = opc_from_rb(rb);
     debug_assert!(!opc.fast_forward);
     debug_assert!(opc.streaming);
@@ -923,7 +937,11 @@ fn stream_abort_cb_wrapper(rb: &mut ReorderBuffer, txn: TxnId, abort_lsn: XLogRe
     cb(opc, rb, txn, abort_lsn)
 }
 
-fn stream_prepare_cb_wrapper(rb: &mut ReorderBuffer, txn: TxnId, prepare_lsn: XLogRecPtr) -> PgResult<()> {
+fn stream_prepare_cb_wrapper(
+    rb: &mut ReorderBuffer,
+    txn: TxnId,
+    prepare_lsn: XLogRecPtr,
+) -> PgResult<()> {
     let opc = opc_from_rb(rb);
     debug_assert!(!opc.fast_forward);
     debug_assert!(opc.streaming);
@@ -942,7 +960,11 @@ fn stream_prepare_cb_wrapper(rb: &mut ReorderBuffer, txn: TxnId, prepare_lsn: XL
     cb(opc, rb, txn, prepare_lsn)
 }
 
-fn stream_commit_cb_wrapper(rb: &mut ReorderBuffer, txn: TxnId, commit_lsn: XLogRecPtr) -> PgResult<()> {
+fn stream_commit_cb_wrapper(
+    rb: &mut ReorderBuffer,
+    txn: TxnId,
+    commit_lsn: XLogRecPtr,
+) -> PgResult<()> {
     let opc = opc_from_rb(rb);
     debug_assert!(!opc.fast_forward);
     debug_assert!(opc.streaming);
@@ -1223,9 +1245,7 @@ pub fn LogicalConfirmReceivedLocation(lsn: XLogRecPtr) -> PgResult<()> {
                 let seg1 = transam_xlog::XLByteToSeg(old_restart_lsn, segsz);
                 let seg2 = transam_xlog::XLByteToSeg(slot.data.get().restart_lsn, segsz);
                 if seg1 != seg2 {
-                    injection_point::injection_point(
-                        "logical-replication-slot-advance-segment",
-                    )?;
+                    injection_point::injection_point("logical-replication-slot-advance-segment")?;
                 }
             }
             ReplicationSlotMarkDirty();

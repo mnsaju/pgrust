@@ -121,7 +121,10 @@ pub fn pg_rotate_left32(word: u32, n: i32) -> u32 {
 #[inline]
 pub fn pg_popcount(buf: &[u8]) -> u64 {
     if buf.len() < 8 {
-        return buf.iter().map(|&b| PG_NUMBER_OF_ONES[b as usize] as u64).sum();
+        return buf
+            .iter()
+            .map(|&b| PG_NUMBER_OF_ONES[b as usize] as u64)
+            .sum();
     }
     popcount_optimized(buf)
 }

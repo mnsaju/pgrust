@@ -21,8 +21,14 @@ pub fn CheckXLogRemoved(segno: XLogSegNo, tli: TimeLineID) -> PgResult<()> {
         let filename = crate::XLogFileName(tli, segno, wal_segment_size());
         return elog::ereport(types_error::ERROR)
             .errcode_for_file_access()
-            .errmsg(format!("requested WAL segment {filename} has already been removed"))
-            .finish(types_error::ErrorLocation::new(file!(), line!() as i32, "CheckXLogRemoved"));
+            .errmsg(format!(
+                "requested WAL segment {filename} has already been removed"
+            ))
+            .finish(types_error::ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "CheckXLogRemoved",
+            ));
     }
     Ok(())
 }
@@ -31,7 +37,11 @@ pub(crate) fn UpdateCheckPointDistanceEstimate(nbytes: u64) {
     let nbytes = nbytes as f64;
     PREV_CHECK_POINT_DISTANCE.set(nbytes);
     let est = CHECK_POINT_DISTANCE_ESTIMATE.get();
-    CHECK_POINT_DISTANCE_ESTIMATE.set(if est < nbytes { nbytes } else { 0.90 * est + 0.10 * nbytes });
+    CHECK_POINT_DISTANCE_ESTIMATE.set(if est < nbytes {
+        nbytes
+    } else {
+        0.90 * est + 0.10 * nbytes
+    });
 }
 
 fn ConvertToXSegs(mb: i32, wal_segsz: i32) -> u64 {
@@ -67,7 +77,9 @@ pub(crate) fn XLOGfileslop(lastredoptr: XLogRecPtr) -> XLogSegNo {
 // forward — C must then invalidate the affected slots.
 pub(crate) fn KeepLogSeg(recptr: XLogRecPtr, log_seg_no: &mut XLogSegNo) -> PgResult<bool> {
     let ctl = XLogCtl();
-    let keep = ctl.info_lck.with(|| ctl.replicationSlotMinLSN.load(Relaxed));
+    let keep = ctl
+        .info_lck
+        .with(|| ctl.replicationSlotMinLSN.load(Relaxed));
     let slot_horizon_capped = keep_log_seg_with(recptr, log_seg_no, keep);
 
     // C applies this clamp between the slot cap and wal_keep_size; all three
@@ -109,7 +121,11 @@ pub(crate) fn keep_log_seg_with(
     if wal_keep_mb > 0 {
         let keep_segs = ConvertToXSegs(wal_keep_mb, wal_segsz);
         if curr_seg_no - segno < keep_segs {
-            segno = if curr_seg_no <= keep_segs { 1 } else { curr_seg_no - keep_segs };
+            segno = if curr_seg_no <= keep_segs {
+                1
+            } else {
+                curr_seg_no - keep_segs
+            };
         }
     }
 
@@ -120,7 +136,10 @@ pub(crate) fn keep_log_seg_with(
 }
 
 pub(crate) fn IsXLogFileName(fname: &str) -> bool {
-    fname.len() == 24 && fname.bytes().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_lowercase())
+    fname.len() == 24
+        && fname
+            .bytes()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_lowercase())
 }
 
 pub(crate) fn IsPartialXLogFileName(fname: &str) -> bool {
@@ -215,10 +234,7 @@ pub(crate) fn RemoveOldXlogFiles(
 }
 
 // After a timeline switch: drop old-timeline segments past the switch point.
-pub fn RemoveNonParentXlogFiles(
-    switchpoint: XLogRecPtr,
-    new_tli: TimeLineID,
-) -> PgResult<()> {
+pub fn RemoveNonParentXlogFiles(switchpoint: XLogRecPtr, new_tli: TimeLineID) -> PgResult<()> {
     let wal_segsz = wal_segment_size();
     let switch_seg_no = XLByteToPrevSeg(switchpoint, wal_segsz);
     let mut endlog_seg_no = XLByteToSeg(switchpoint, wal_segsz);
@@ -276,7 +292,10 @@ fn RemoveXlogFile(
         crate::startup::checkpoint_stats_bump_segs_recycled();
         *endlog_seg_no += 1;
     } else {
-        if fd::durable_unlink(&path, types_error::LOG).map(|rc| rc != 0).unwrap_or(true) {
+        if fd::durable_unlink(&path, types_error::LOG)
+            .map(|rc| rc != 0)
+            .unwrap_or(true)
+        {
             return Ok(());
         }
         crate::startup::checkpoint_stats_bump_segs_removed();

@@ -13,9 +13,7 @@ pub mod parse;
 pub mod repr;
 
 use datum::Datum;
-use types_error::{
-    PgError, PgResult, ERRCODE_ARRAY_ELEMENT_ERROR, ERRCODE_PROGRAM_LIMIT_EXCEEDED,
-};
+use types_error::{PgError, PgResult, ERRCODE_ARRAY_ELEMENT_ERROR, ERRCODE_PROGRAM_LIMIT_EXCEEDED};
 use types_fmgr::{
     byref_result, cstring_result, varlena_result, FmgrInfo, FunctionCallInfoBaseData as Fcinfo,
     PGFunction,
@@ -353,10 +351,7 @@ fn cmp_args(fcinfo: &Fcinfo) -> PgResult<i32> {
     // SAFETY: strict fns, non-null cube args.
     let a = unsafe { arg_cube(fcinfo, 0)? };
     let b = unsafe { arg_cube(fcinfo, 1)? };
-    Ok(ops::cube_cmp_v0(
-        &a,
-        &b,
-    ))
+    Ok(ops::cube_cmp_v0(&a, &b))
 }
 
 fn fc_cube_cmp(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -389,30 +384,21 @@ fn fc_cube_contains(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<
     // SAFETY: strict fns, non-null cube args.
     let a = unsafe { arg_cube(fcinfo, 0)? };
     let b = unsafe { arg_cube(fcinfo, 1)? };
-    Ok(Datum::from_bool(ops::cube_contains_v0(
-        &a,
-        &b,
-    )))
+    Ok(Datum::from_bool(ops::cube_contains_v0(&a, &b)))
 }
 
 fn fc_cube_contained(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: strict fns, non-null cube args.
     let a = unsafe { arg_cube(fcinfo, 0)? };
     let b = unsafe { arg_cube(fcinfo, 1)? };
-    Ok(Datum::from_bool(ops::cube_contains_v0(
-        &b,
-        &a,
-    )))
+    Ok(Datum::from_bool(ops::cube_contains_v0(&b, &a)))
 }
 
 fn fc_cube_overlap(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: strict fns, non-null cube args.
     let a = unsafe { arg_cube(fcinfo, 0)? };
     let b = unsafe { arg_cube(fcinfo, 1)? };
-    Ok(Datum::from_bool(ops::cube_overlap_v0(
-        &a,
-        &b,
-    )))
+    Ok(Datum::from_bool(ops::cube_overlap_v0(&a, &b)))
 }
 
 fn fc_cube_union(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -424,10 +410,7 @@ fn fc_cube_union(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Dat
     // SAFETY: strict fns, non-null cube args.
     let a = unsafe { arg_cube(fcinfo, 0)? };
     let b = unsafe { arg_cube(fcinfo, 1)? };
-    let img = ops::cube_union_v0(
-        &a,
-        &b,
-    );
+    let img = ops::cube_union_v0(&a, &b);
     ret_cube(fcinfo, &img)
 }
 
@@ -435,19 +418,14 @@ fn fc_cube_inter(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Dat
     // SAFETY: strict fns, non-null cube args.
     let a = unsafe { arg_cube(fcinfo, 0)? };
     let b = unsafe { arg_cube(fcinfo, 1)? };
-    let img = ops::cube_inter_v0(
-        &a,
-        &b,
-    );
+    let img = ops::cube_inter_v0(&a, &b);
     ret_cube(fcinfo, &img)
 }
 
 fn fc_cube_size(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: strict fn, non-null cube arg.
     let a = unsafe { arg_cube(fcinfo, 0)? };
-    Ok(Datum::from_f64(ops::rt_cube_size(
-        &a,
-    )))
+    Ok(Datum::from_f64(ops::rt_cube_size(&a)))
 }
 
 // ===========================================================================
@@ -458,30 +436,21 @@ fn fc_cube_distance(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<
     // SAFETY: strict fns, non-null cube args.
     let a = unsafe { arg_cube(fcinfo, 0)? };
     let b = unsafe { arg_cube(fcinfo, 1)? };
-    Ok(Datum::from_f64(ops::cube_distance(
-        &a,
-        &b,
-    )))
+    Ok(Datum::from_f64(ops::cube_distance(&a, &b)))
 }
 
 fn fc_distance_taxicab(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: strict fns, non-null cube args.
     let a = unsafe { arg_cube(fcinfo, 0)? };
     let b = unsafe { arg_cube(fcinfo, 1)? };
-    Ok(Datum::from_f64(ops::distance_taxicab(
-        &a,
-        &b,
-    )))
+    Ok(Datum::from_f64(ops::distance_taxicab(&a, &b)))
 }
 
 fn fc_distance_chebyshev(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: strict fns, non-null cube args.
     let a = unsafe { arg_cube(fcinfo, 0)? };
     let b = unsafe { arg_cube(fcinfo, 1)? };
-    Ok(Datum::from_f64(ops::distance_chebyshev(
-        &a,
-        &b,
-    )))
+    Ok(Datum::from_f64(ops::distance_chebyshev(&a, &b)))
 }
 
 // ===========================================================================
@@ -491,9 +460,7 @@ fn fc_distance_chebyshev(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRe
 fn fc_cube_is_point(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: strict fn, non-null cube arg.
     let a = unsafe { arg_cube(fcinfo, 0)? };
-    Ok(Datum::from_bool(
-        a.is_point_internal(),
-    ))
+    Ok(Datum::from_bool(a.is_point_internal()))
 }
 
 fn fc_cube_dim(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {

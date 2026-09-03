@@ -14,7 +14,9 @@ use ::types_tuple::itemptr::{FirstOffsetNumber, InvalidOffsetNumber};
 
 use gist::insert::gistplacetopage;
 use gist::state::GistState;
-use gist::util::{gistcheckpage, gistchoose, gistgetadjusted, itup_block_number, itup_slice, page_item};
+use gist::util::{
+    gistcheckpage, gistchoose, gistgetadjusted, itup_block_number, itup_slice, page_item,
+};
 
 use crate::buffers::{gistRelocateBuildBuffersOnSplit, GistBuildBuffers};
 
@@ -79,7 +81,11 @@ pub fn gist_init_buffering<'mcx>(
     let mut itup_min_size = SIZEOF_INDEX_TUPLE_DATA_MAXALIGNED;
     for i in 0..index.rd_att.natts as usize {
         let attlen = index.rd_att.compact_attr(i).attlen;
-        itup_min_size += if attlen < 0 { VARHDRSZ } else { attlen as usize };
+        itup_min_size += if attlen < 0 {
+            VARHDRSZ
+        } else {
+            attlen as usize
+        };
     }
 
     let avg_index_tuples_per_page = page_free_space as f64 / itup_avg_size;
@@ -112,7 +118,12 @@ pub fn gist_init_buffering<'mcx>(
 
     let pages_per_buffer =
         calculate_pages_per_buffer(index, freespace, indtuples, indtuples_size, level_step);
-    let gfbb = GistBuildBuffers::new(mcx, pages_per_buffer, level_step, gist_get_max_level(index)?)?;
+    let gfbb = GistBuildBuffers::new(
+        mcx,
+        pages_per_buffer,
+        level_step,
+        gist_get_max_level(index)?,
+    )?;
 
     Ok(Some(BufBuild {
         gfbb,

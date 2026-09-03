@@ -9,7 +9,9 @@ use types_error::{
 };
 
 use crate::ast::*;
-use crate::scanner::{CwordRes, IdentifierLookup, PLcword, PLwdatum, PLword, WordRes, WordResolver};
+use crate::scanner::{
+    CwordRes, IdentifierLookup, PLcword, PLwdatum, PLword, WordRes, WordResolver,
+};
 
 pub const PLPGSQL_RESOLVE_ERROR: i32 = 0;
 pub const PLPGSQL_RESOLVE_VARIABLE: i32 = 1;
@@ -151,9 +153,7 @@ impl CompState {
                 if item.itemtype == NsType::Label {
                     break;
                 }
-                if item.name == name1
-                    && (name2.is_none() || item.itemtype != NsType::Var)
-                {
+                if item.name == name1 && (name2.is_none() || item.itemtype != NsType::Var) {
                     return Some((i, 1));
                 }
                 i = item.prev;
@@ -167,9 +167,7 @@ impl CompState {
                         if item.itemtype == NsType::Label {
                             break;
                         }
-                        if item.name == n2
-                            && (name3.is_none() || item.itemtype != NsType::Var)
-                        {
+                        if item.name == n2 && (name3.is_none() || item.itemtype != NsType::Var) {
                             return Some((j, 2));
                         }
                         j = item.prev;
@@ -250,7 +248,13 @@ impl CompState {
     ) -> PgResult<Dno> {
         if datatype.ttype == TypeKind::Rec {
             let rectypeid = datatype.typoid;
-            return Ok(self.build_rec_typed(refname, lineno, rectypeid, Some(datatype), add2namespace));
+            return Ok(self.build_rec_typed(
+                refname,
+                lineno,
+                rectypeid,
+                Some(datatype),
+                add2namespace,
+            ));
         }
         if datatype.ttype == TypeKind::Pseudo {
             return Err(comp_err(
@@ -439,11 +443,18 @@ impl CompState {
                 }
                 (None, idents[0].as_str(), idents[1].as_str())
             }
-            3 => (Some(idents[0].as_str()), idents[1].as_str(), idents[2].as_str()),
+            3 => (
+                Some(idents[0].as_str()),
+                idents[1].as_str(),
+                idents[2].as_str(),
+            ),
             _ => {
                 return Err(comp_err(
                     types_error::ERRCODE_SYNTAX_ERROR,
-                    format!("improper qualified name (too many dotted names): {}", idents.join(".")),
+                    format!(
+                        "improper qualified name (too many dotted names): {}",
+                        idents.join(".")
+                    ),
                 ));
             }
         };
@@ -472,7 +483,9 @@ impl CompState {
         .as_i16();
         cache_syscache::ReleaseSysCache(atttup);
         let shape = syscache_seams::lookup_pg_attribute_shape::call(class_oid, attnum)?
-            .unwrap_or_else(|| panic!("cache lookup failed for attribute {attnum} of relation {class_oid}"));
+            .unwrap_or_else(|| {
+                panic!("cache lookup failed for attribute {attnum} of relation {class_oid}")
+            });
         Self::build_datatype(shape.atttypid, shape.atttypmod, shape.attcollation)
     }
 }
@@ -485,12 +498,7 @@ impl Default for CompState {
 
 #[cold]
 pub fn comp_err(code: types_error::SqlState, msg: String) -> Box<PgError> {
-    Box::new(
-        elog::ereport(ERROR)
-            .errcode(code)
-            .errmsg(msg)
-            .into_error(),
-    )
+    Box::new(elog::ereport(ERROR).errcode(code).errmsg(msg).into_error())
 }
 
 impl WordResolver for CompState {
@@ -520,7 +528,8 @@ impl WordResolver for CompState {
     fn parse_dblword(&mut self, word1: &str, word2: &str) -> PgResult<CwordRes> {
         let idents = vec![word1.to_string(), word2.to_string()];
         if self.identifier_lookup != IdentifierLookup::Declare {
-            if let Some((idx, nnames)) = self.ns_lookup(self.ns_top, false, word1, Some(word2), None)
+            if let Some((idx, nnames)) =
+                self.ns_lookup(self.ns_top, false, word1, Some(word2), None)
             {
                 let item = &self.ns[idx as usize];
                 match item.itemtype {

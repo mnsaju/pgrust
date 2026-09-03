@@ -378,7 +378,11 @@ pub fn ReplicationSlotCreate(
 
     let mut d = ReplicationSlotPersistentData::default();
     d.name.namestrcpy(name);
-    d.database = if db_specific { g::MyDatabaseId() } else { InvalidOid };
+    d.database = if db_specific {
+        g::MyDatabaseId()
+    } else {
+        InvalidOid
+    };
     d.persistency = persistency;
     d.two_phase = two_phase;
     d.two_phase_at = InvalidXLogRecPtr;
@@ -723,7 +727,9 @@ fn ReplicationSlotDropPtr(slot: &'static ReplicationSlot) -> PgResult<()> {
         ereport(if fail_softly { WARNING } else { ERROR })
             .with_saved_errno(save_errno)
             .errcode_for_file_access()
-            .errmsg(format!("could not rename file \"{path}\" to \"{tmppath}\": %m"))
+            .errmsg(format!(
+                "could not rename file \"{path}\" to \"{tmppath}\": %m"
+            ))
             .finish(loc("ReplicationSlotDropPtr"))?;
     }
 
@@ -827,7 +833,8 @@ pub fn ReplicationSlotsComputeRequiredXmin(already_locked: bool) -> PgResult<()>
 // its only writer and this unit cannot edit xlog.c.
 fn XLogSetReplicationSlotMinimumLSN(lsn: XLogRecPtr) {
     let ctl = transam_xlog::ctl::XLogCtl();
-    ctl.info_lck.with(|| ctl.replicationSlotMinLSN.store(lsn, Relaxed));
+    ctl.info_lck
+        .with(|| ctl.replicationSlotMinLSN.store(lsn, Relaxed));
 }
 
 fn XLogGetLastRemovedSegno() -> XLogSegNo {
@@ -843,15 +850,16 @@ pub fn ReplicationSlotsComputeRequiredLSN() -> PgResult<()> {
         if !s.in_use.get() {
             continue;
         }
-        let (persistency, mut restart_lsn, invalidated, last_saved_restart_lsn) = s.with_mutex(|| {
-            let d = s.data.get();
-            (
-                d.persistency,
-                d.restart_lsn,
-                d.invalidated != RS_INVAL_NONE,
-                s.last_saved_restart_lsn.get(),
-            )
-        });
+        let (persistency, mut restart_lsn, invalidated, last_saved_restart_lsn) =
+            s.with_mutex(|| {
+                let d = s.data.get();
+                (
+                    d.persistency,
+                    d.restart_lsn,
+                    d.invalidated != RS_INVAL_NONE,
+                    s.last_saved_restart_lsn.get(),
+                )
+            });
         if invalidated {
             continue;
         }
@@ -885,15 +893,16 @@ pub fn ReplicationSlotsComputeLogicalRestartLSN() -> PgResult<XLogRecPtr> {
         if !s.in_use.get() || !SlotIsLogical(s) {
             continue;
         }
-        let (persistency, mut restart_lsn, invalidated, last_saved_restart_lsn) = s.with_mutex(|| {
-            let d = s.data.get();
-            (
-                d.persistency,
-                d.restart_lsn,
-                d.invalidated != RS_INVAL_NONE,
-                s.last_saved_restart_lsn.get(),
-            )
-        });
+        let (persistency, mut restart_lsn, invalidated, last_saved_restart_lsn) =
+            s.with_mutex(|| {
+                let d = s.data.get();
+                (
+                    d.persistency,
+                    d.restart_lsn,
+                    d.invalidated != RS_INVAL_NONE,
+                    s.last_saved_restart_lsn.get(),
+                )
+            });
         if invalidated {
             continue;
         }
@@ -1027,8 +1036,10 @@ pub fn ReplicationSlotReserveWal() -> PgResult<()> {
 
     ReplicationSlotsComputeRequiredLSN()?;
 
-    let segno =
-        transam_xlog::XLByteToSeg(slot.data.get().restart_lsn, transam_xlog::wal_segment_size());
+    let segno = transam_xlog::XLByteToSeg(
+        slot.data.get().restart_lsn,
+        transam_xlog::wal_segment_size(),
+    );
     if XLogGetLastRemovedSegno() >= segno {
         return elog(
             ERROR,
@@ -1447,14 +1458,18 @@ pub fn StartupReplicationSlots() -> PgResult<()> {
             return ereport(ERROR)
                 .with_saved_errno(e.raw_os_error().unwrap_or(0))
                 .errcode_for_file_access()
-                .errmsg(format!("could not open directory \"{PG_REPLSLOT_DIR}\": %m"))
+                .errmsg(format!(
+                    "could not open directory \"{PG_REPLSLOT_DIR}\": %m"
+                ))
                 .finish(loc("StartupReplicationSlots"));
         }
     };
     for entry in entries {
         let Ok(entry) = entry else { break };
         let file_name = entry.file_name();
-        let Some(name) = file_name.to_str() else { continue };
+        let Some(name) = file_name.to_str() else {
+            continue;
+        };
         if name == "." || name == ".." {
             continue;
         }
@@ -1510,7 +1525,9 @@ fn CreateSlotOnDisk(slot: &'static ReplicationSlot) -> PgResult<()> {
         return ereport(ERROR)
             .with_saved_errno(errno::current_errno())
             .errcode_for_file_access()
-            .errmsg(format!("could not rename file \"{tmppath}\" to \"{path}\": %m"))
+            .errmsg(format!(
+                "could not rename file \"{tmppath}\" to \"{path}\": %m"
+            ))
             .finish(loc("CreateSlotOnDisk"));
     }
 
@@ -1600,7 +1617,9 @@ fn SaveSlotToPath(slot: &'static ReplicationSlot, dir: &str, elevel: ErrorLevel)
         ereport(elevel)
             .with_saved_errno(save_errno)
             .errcode_for_file_access()
-            .errmsg(format!("could not rename file \"{tmppath}\" to \"{path}\": %m"))
+            .errmsg(format!(
+                "could not rename file \"{tmppath}\" to \"{path}\": %m"
+            ))
             .finish(loc("SaveSlotToPath"))?;
         return Ok(());
     }
@@ -1615,7 +1634,8 @@ fn SaveSlotToPath(slot: &'static ReplicationSlot, dir: &str, elevel: ErrorLevel)
         if !slot.just_dirtied.get() {
             slot.dirty.set(false);
         }
-        slot.last_saved_confirmed_flush.set(slotdata.confirmed_flush);
+        slot.last_saved_confirmed_flush
+            .set(slotdata.confirmed_flush);
         slot.last_saved_restart_lsn.set(slotdata.restart_lsn);
     });
 
@@ -1636,7 +1656,10 @@ fn RestoreSlotFromDisk(name: &str) -> PgResult<()> {
     }
 
     let path = format!("{slotdir}/state");
-    elog(DEBUG1, format!("restoring replication slot from \"{path}\""))?;
+    elog(
+        DEBUG1,
+        format!("restoring replication slot from \"{path}\""),
+    )?;
 
     // On some operating systems fsyncing a file requires O_RDWR.
     let fd_ = fd::OpenTransientFile(&path, libc::O_RDWR)?;
@@ -1713,7 +1736,11 @@ fn RestoreSlotFromDisk(name: &str) -> PgResult<()> {
 
     // SAFETY: buf's tail holds `length` == PERSISTENT_DATA_SIZE bytes.
     let read_bytes = unsafe {
-        libc::read(fd_, buf.as_mut_ptr().add(ON_DISK_CONSTANT_SIZE).cast(), length as usize)
+        libc::read(
+            fd_,
+            buf.as_mut_ptr().add(ON_DISK_CONSTANT_SIZE).cast(),
+            length as usize,
+        )
     } as i64;
     if read_bytes != length as i64 {
         if read_bytes < 0 {
@@ -1810,7 +1837,8 @@ fn RestoreSlotFromDisk(name: &str) -> PgResult<()> {
 
         slot.effective_xmin.set(slotdata.xmin);
         slot.effective_catalog_xmin.set(slotdata.catalog_xmin);
-        slot.last_saved_confirmed_flush.set(slotdata.confirmed_flush);
+        slot.last_saved_confirmed_flush
+            .set(slotdata.confirmed_flush);
         slot.last_saved_restart_lsn.set(slotdata.restart_lsn);
 
         slot.candidate_catalog_xmin.set(InvalidTransactionId);
@@ -1845,11 +1873,26 @@ pub struct SlotInvalidationCauseMap {
 }
 
 pub static SLOT_INVALIDATION_CAUSES: [SlotInvalidationCauseMap; RS_INVAL_MAX_CAUSES + 1] = [
-    SlotInvalidationCauseMap { cause: RS_INVAL_NONE, cause_name: "none" },
-    SlotInvalidationCauseMap { cause: RS_INVAL_WAL_REMOVED, cause_name: "wal_removed" },
-    SlotInvalidationCauseMap { cause: RS_INVAL_HORIZON, cause_name: "rows_removed" },
-    SlotInvalidationCauseMap { cause: RS_INVAL_WAL_LEVEL, cause_name: "wal_level_insufficient" },
-    SlotInvalidationCauseMap { cause: RS_INVAL_IDLE_TIMEOUT, cause_name: "idle_timeout" },
+    SlotInvalidationCauseMap {
+        cause: RS_INVAL_NONE,
+        cause_name: "none",
+    },
+    SlotInvalidationCauseMap {
+        cause: RS_INVAL_WAL_REMOVED,
+        cause_name: "wal_removed",
+    },
+    SlotInvalidationCauseMap {
+        cause: RS_INVAL_HORIZON,
+        cause_name: "rows_removed",
+    },
+    SlotInvalidationCauseMap {
+        cause: RS_INVAL_WAL_LEVEL,
+        cause_name: "wal_level_insufficient",
+    },
+    SlotInvalidationCauseMap {
+        cause: RS_INVAL_IDLE_TIMEOUT,
+        cause_name: "idle_timeout",
+    },
 ];
 
 pub fn GetSlotInvalidationCause(cause_name: &str) -> ReplicationSlotInvalidationCause {

@@ -11,7 +11,11 @@ const CHAROID: types_core::Oid = 18;
 const INT4ARRAYOID: types_core::Oid = 1007;
 const F_ARRAY_SUBSCRIPT_HANDLER: types_core::Oid = 6179;
 
-fn shape(name: &str, typelem: types_core::Oid, typsubscript: types_core::Oid) -> PgTypeTypcacheShape {
+fn shape(
+    name: &str,
+    typelem: types_core::Oid,
+    typsubscript: types_core::Oid,
+) -> PgTypeTypcacheShape {
     let mut typname = NameData::default();
     typname.namestrcpy(name);
     PgTypeTypcacheShape {
@@ -19,7 +23,11 @@ fn shape(name: &str, typelem: types_core::Oid, typsubscript: types_core::Oid) ->
         typlen: 4,
         typbyval: true,
         typalign: b'i' as i8,
-        typstorage: if typelem != InvalidOid { b'x' as i8 } else { b'p' as i8 },
+        typstorage: if typelem != InvalidOid {
+            b'x' as i8
+        } else {
+            b'p' as i8
+        },
         typtype: b'b' as i8,
         typisdefined: true,
         typrelid: InvalidOid,
@@ -55,7 +63,11 @@ fn install_fixture() {
                 typreceive: InvalidOid,
                 typsend: InvalidOid,
                 typmodin: InvalidOid,
-                typmodout: if typid == VARCHAROID { VARCHARTYPMODOUT } else { InvalidOid },
+                typmodout: if typid == VARCHAROID {
+                    VARCHARTYPMODOUT
+                } else {
+                    InvalidOid
+                },
                 typelem: InvalidOid,
                 typlen: 4,
                 typbyval: true,
@@ -147,7 +159,10 @@ fn user_type_renders_via_type_is_visible() {
 #[test]
 fn invisible_initdb_band_type_renders_qualified() {
     install_fixture();
-    assert_eq!(format_type_be(20001).unwrap(), "information_schema.othertype");
+    assert_eq!(
+        format_type_be(20001).unwrap(),
+        "information_schema.othertype"
+    );
 }
 
 #[test]
@@ -155,7 +170,10 @@ fn with_typemod_matches_c() {
     install_fixture();
     assert_eq!(format_type_with_typemod(INT4OID, -1).unwrap(), "integer");
     assert_eq!(format_type_with_typemod(TEXTOID, -1).unwrap(), "text");
-    assert_eq!(format_type_with_typemod(VARCHAROID, 36).unwrap(), "character varying(32)");
+    assert_eq!(
+        format_type_with_typemod(VARCHAROID, 36).unwrap(),
+        "character varying(32)"
+    );
     assert_eq!(format_type_with_typemod(TEXTOID, 5).unwrap(), "text(5)");
     // bpchar with TYPEMOD_GIVEN and typemod -1 renders the raw catalog name.
     assert_eq!(format_type_with_typemod(BPCHAROID, -1).unwrap(), "bpchar");

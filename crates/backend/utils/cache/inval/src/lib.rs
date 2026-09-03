@@ -127,17 +127,16 @@ pub(crate) fn with_state<R>(f: impl for<'mcx> FnOnce(&mut InvalState<'mcx>) -> R
 #[cold]
 #[inline(never)]
 fn init_state(slot: &mut Option<ManuallyDrop<McxOwned<InvalStateTy>>>) {
-    let owned =
-        McxOwned::<InvalStateTy>::try_new(MemoryContext::new("CacheInvalidation"), |mcx| {
-            Ok(InvalState {
-                mcx,
-                msg_arrays: [PgVec::new_in(mcx), PgVec::new_in(mcx)],
-                trans_stack: PgVec::new_in(mcx),
-                inplace_info: None,
-                wal_scratch: [PgVec::new_in(mcx), PgVec::new_in(mcx)],
-            })
+    let owned = McxOwned::<InvalStateTy>::try_new(MemoryContext::new("CacheInvalidation"), |mcx| {
+        Ok(InvalState {
+            mcx,
+            msg_arrays: [PgVec::new_in(mcx), PgVec::new_in(mcx)],
+            trans_stack: PgVec::new_in(mcx),
+            inplace_info: None,
+            wal_scratch: [PgVec::new_in(mcx), PgVec::new_in(mcx)],
         })
-        .expect("CacheInvalidation context allocation");
+    })
+    .expect("CacheInvalidation context allocation");
     *slot = Some(ManuallyDrop::new(owned));
     // Session-memory teardown (FPBUDGET-1): freed at clean task end.
     ::mcx::register_session_cleanup(Box::new(|| {

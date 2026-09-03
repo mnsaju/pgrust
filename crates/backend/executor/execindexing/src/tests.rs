@@ -245,7 +245,10 @@ fn install() {
             HEAP_OID => Ok(Relation::open(heap_relation_data(mcx), None)),
             IDX_OID => {
                 let unique = UNIQUE_IDX.with(Cell::get);
-                Ok(Relation::open(index_relation_data(mcx, unique), noop_closer()))
+                Ok(Relation::open(
+                    index_relation_data(mcx, unique),
+                    noop_closer(),
+                ))
             }
             other => panic!("unknown relation oid {other}"),
         });
@@ -380,9 +383,18 @@ fn heap_relation_data(mcx: Mcx<'_>) -> RelationData<'_> {
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
         rd_lockInfo: LockInfoData {
-            lockRelId: LockRelId { relId: HEAP_OID, dbId: 5 },
+            lockRelId: LockRelId {
+                relId: HEAP_OID,
+                dbId: 5,
+            },
         },
-        rd_rel: pg_class("t", HEAP_OID, ::tableam::HEAP_TABLE_AM_OID, RELKIND_RELATION, true),
+        rd_rel: pg_class(
+            "t",
+            HEAP_OID,
+            ::tableam::HEAP_TABLE_AM_OID,
+            RELKIND_RELATION,
+            true,
+        ),
         rd_att: Rc::new(int4_tupdesc(mcx)),
         rd_index: None,
         rd_opcintype: PgVec::new_in(mcx),
@@ -393,13 +405,16 @@ fn heap_relation_data(mcx: Mcx<'_>) -> RelationData<'_> {
         pgstat_enabled: Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: PgVec::new_in(mcx),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     }
 }
 
@@ -425,9 +440,18 @@ fn index_relation_data(mcx: Mcx<'_>, unique: bool) -> RelationData<'_> {
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
         rd_lockInfo: LockInfoData {
-            lockRelId: LockRelId { relId: IDX_OID, dbId: 5 },
+            lockRelId: LockRelId {
+                relId: IDX_OID,
+                dbId: 5,
+            },
         },
-        rd_rel: pg_class("t_idx", IDX_OID, ::types_core::BTREE_AM_OID, RELKIND_INDEX, false),
+        rd_rel: pg_class(
+            "t_idx",
+            IDX_OID,
+            ::types_core::BTREE_AM_OID,
+            RELKIND_INDEX,
+            false,
+        ),
         rd_att: Rc::new(int4_tupdesc(mcx)),
         rd_index: Some(FormData_pg_index {
             indexrelid: IDX_OID,
@@ -443,8 +467,8 @@ fn index_relation_data(mcx: Mcx<'_>, unique: bool) -> RelationData<'_> {
             indisready: true,
             indkey,
             has_indpred: false,
-        indexprs_src: None,
-        indpred_src: None,
+            indexprs_src: None,
+            indpred_src: None,
         }),
         rd_opcintype: one(INT4OID),
         rd_opfamily: one(INT4_BTREE_OPFAMILY),
@@ -454,13 +478,16 @@ fn index_relation_data(mcx: Mcx<'_>, unique: bool) -> RelationData<'_> {
         pgstat_enabled: Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: PgVec::new_in(mcx),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     }
 }
 
@@ -476,23 +503,24 @@ fn insert_row<'mcx>(
         ::heaptuple::heap_form_tuple(mcx, &heap.rd_att, &[Datum::from_i32(val)], &[false])?;
     ::heapam::heap_insert(heap, tuple.as_tuple_mut(), 0, 0, None)?;
 
-    let mut slot = exectuples::make_tuple_table_slot(
-        mcx,
-        TupleSlotKind::Virtual,
-        Some(heap.rd_att.clone()),
-    );
+    let mut slot =
+        exectuples::make_tuple_table_slot(mcx, TupleSlotKind::Virtual, Some(heap.rd_att.clone()));
     slot.base_mut().tts_values[0] = Datum::from_i32(val);
     slot.base_mut().tts_isnull[0] = false;
     exectuples::exec_store_virtual_tuple(&mut slot);
     slot.base_mut().tts_tid = tuple.as_tuple_mut().t_self;
     slot.base_mut().tts_tableOid = HEAP_OID;
 
-    crate::ExecInsertIndexTuples(mcx, mcx, idxstate, heap, &mut slot, false, None, &[], false).map(|_| ())
+    crate::ExecInsertIndexTuples(mcx, mcx, idxstate, heap, &mut slot, false, None, &[], false)
+        .map(|_| ())
 }
 
 fn static_mvcc_snapshot() -> Rc<SnapshotData<'static>> {
     let ctx: &'static MemoryContext = Box::leak(Box::new(MemoryContext::new("snap-test")));
-    Rc::new(SnapshotData::sentinel(ctx.mcx(), SnapshotType::SNAPSHOT_MVCC))
+    Rc::new(SnapshotData::sentinel(
+        ctx.mcx(),
+        SnapshotType::SNAPSHOT_MVCC,
+    ))
 }
 
 fn matching_tlist<'mcx>(mcx: Mcx<'mcx>) -> NodeList<'mcx> {
@@ -525,7 +553,10 @@ fn indexqual<'mcx>(mcx: Mcx<'mcx>, varno: i32, opno: Oid, opfuncid: Oid, k: i32)
 fn mk_index_scan<'mcx>(mcx: Mcx<'mcx>, opno: Oid, opfuncid: Oid, k: i32) -> IndexScan<'mcx> {
     IndexScan {
         scan: Scan {
-            plan: Plan { targetlist: matching_tlist(mcx), ..Default::default() },
+            plan: Plan {
+                targetlist: matching_tlist(mcx),
+                ..Default::default()
+            },
             scanrelid: 1,
         },
         indexid: IDX_OID,
@@ -582,7 +613,10 @@ fn insert_rows_then_index_scan_finds_them() {
     crate::ExecCloseIndices(idxstate).unwrap();
 
     assert_eq!(scan_values(mcx, OP_INT4EQ, F_INT4EQ, 20), vec![20]);
-    assert_eq!(scan_values(mcx, OP_INT4GT, F_INT4GT, 15), vec![20, 30, 40, 50]);
+    assert_eq!(
+        scan_values(mcx, OP_INT4GT, F_INT4GT, 15),
+        vec![20, 30, 40, 50]
+    );
     quiesced();
 }
 

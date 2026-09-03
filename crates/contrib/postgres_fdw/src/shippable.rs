@@ -60,7 +60,9 @@ pub fn is_shippable(
                 invalidate_shippable_cache_callback,
                 datum::Datum::null(),
             )?;
-            *slot = Some(ManuallyDrop::new(PgHashMap::with_capacity_in(256, cache_mcx)));
+            *slot = Some(ManuallyDrop::new(PgHashMap::with_capacity_in(
+                256, cache_mcx,
+            )));
         }
         Ok(slot.as_ref().unwrap().get(&key).copied())
     })?;

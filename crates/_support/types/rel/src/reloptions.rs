@@ -246,8 +246,12 @@ impl RdOptions {
             RdOptions::Hash(o) => Some(o.fillfactor),
             RdOptions::Gist(o) => Some(o.fillfactor),
             RdOptions::SpGist(o) => Some(o.fillfactor),
-            RdOptions::View(_) | RdOptions::Gin(_) | RdOptions::Brin(_)
-            | RdOptions::Pgrcolumnar(_) | RdOptions::Hnsw(_) | RdOptions::Bloom(_) => None,
+            RdOptions::View(_)
+            | RdOptions::Gin(_)
+            | RdOptions::Brin(_)
+            | RdOptions::Pgrcolumnar(_)
+            | RdOptions::Hnsw(_)
+            | RdOptions::Bloom(_) => None,
         }
     }
 

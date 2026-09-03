@@ -14,26 +14,27 @@ use core::cell::{Cell, RefCell};
 use mcx::{Mcx, MemoryContext, PgHashMap, PgString};
 use types_core::catalog::{C_COLLATION_OID, DEFAULT_COLLATION_OID};
 use types_core::{Oid, OidIsValid};
-use types_error::{PgError, PgResult, ERRCODE_WRONG_OBJECT_TYPE, ErrorLocation, WARNING};
+use types_error::{ErrorLocation, PgError, PgResult, ERRCODE_WRONG_OBJECT_TYPE, WARNING};
 
 mod builtin_case;
 mod chklocale;
 mod icu;
-mod lc;
-mod locale_time;
 mod icu_ffi;
+mod lc;
 mod lconv;
 mod libc_locale;
+mod locale_time;
 mod setup;
 #[cfg(test)]
 mod tests;
 
-pub use icu::{icu_language_tag, icu_validate_locale, icu_wc_isclass, icu_wc_tolower,
-    icu_wc_toupper};
 pub use chklocale::pg_get_encoding_from_locale;
+pub use icu::{
+    icu_language_tag, icu_validate_locale, icu_wc_isclass, icu_wc_tolower, icu_wc_toupper,
+};
 pub use lconv::{pglc_localeconv, PgLconv, CHAR_MAX};
-pub use locale_time::{cache_locale_time, LocalizedTimeNames};
 pub use libc_locale::{pg_tolower, pg_toupper, WcClass};
+pub use locale_time::{cache_locale_time, LocalizedTimeNames};
 pub use setup::{
     assign_locale_messages, assign_locale_monetary, assign_locale_numeric, assign_locale_time,
     check_locale, check_locale_messages, check_locale_monetary, check_locale_numeric,
@@ -118,7 +119,10 @@ impl PgLocale {
     }
 
     pub fn pg_strnxfrm_prefix(&self, dest: &mut [u8], src: &[u8]) -> usize {
-        debug_assert!(self.provider == COLLPROVIDER_ICU, "strnxfrm_prefix is ICU-only");
+        debug_assert!(
+            self.provider == COLLPROVIDER_ICU,
+            "strnxfrm_prefix is ICU-only"
+        );
         icu::strnxfrm_prefix(dest, src, self.icu)
     }
 

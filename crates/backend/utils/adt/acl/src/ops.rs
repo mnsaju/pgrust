@@ -276,7 +276,13 @@ fn recursive_revoke<'mcx>(
 
 // aclmask_direct (acl.c): no membership recursion, no owner special case
 // beyond exact match.
-pub fn aclmask_direct(acl: &[AclItem], roleid: Oid, owner_id: Oid, mask: u64, how: AclMaskHow) -> u64 {
+pub fn aclmask_direct(
+    acl: &[AclItem],
+    roleid: Oid,
+    owner_id: Oid,
+    mask: u64,
+    how: AclMaskHow,
+) -> u64 {
     if mask == 0 {
         return 0;
     }
@@ -346,8 +352,13 @@ pub fn select_best_grantor(
     let mut nrights = 0u32;
 
     for otherrole in roles_list {
-        let otherprivs =
-            aclmask_direct(acl, otherrole, owner_id, needed_goptions, AclMaskHow::AclmaskAll);
+        let otherprivs = aclmask_direct(
+            acl,
+            otherrole,
+            owner_id,
+            needed_goptions,
+            AclMaskHow::AclmaskAll,
+        );
         if otherprivs == needed_goptions {
             return Ok((otherrole, otherprivs));
         }
@@ -372,7 +383,10 @@ pub fn convert_any_priv_string(priv_type: &str, privileges: &[PrivMapEntry]) -> 
     let mut result = 0u64;
     for chunk in priv_type.split(',') {
         let chunk = chunk.trim_matches(|c: char| c.is_ascii_whitespace());
-        match privileges.iter().find(|p| p.name.eq_ignore_ascii_case(chunk)) {
+        match privileges
+            .iter()
+            .find(|p| p.name.eq_ignore_ascii_case(chunk))
+        {
             Some(p) => result |= p.value,
             None => {
                 return Err(Box::new(

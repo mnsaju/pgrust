@@ -41,7 +41,10 @@ pub struct TagSet([u64; 4]);
 
 impl TagSet {
     pub fn add(&mut self, tag: i32) {
-        debug_assert!((0..256).contains(&tag), "CommandTag {tag} out of TagSet range");
+        debug_assert!(
+            (0..256).contains(&tag),
+            "CommandTag {tag} out of TagSet range"
+        );
         self.0[(tag as usize) / 64] |= 1u64 << (tag as usize % 64);
     }
     pub fn is_member(&self, tag: i32) -> bool {
@@ -85,7 +88,8 @@ pub fn EventCacheLookup<'mcx>(
         let cache = c.borrow();
         let list = &cache[event as usize];
         let mut out: PgVec<'mcx, EventTriggerCacheItem> = PgVec::new_in(mcx);
-        out.try_reserve_exact(list.len()).map_err(|_| mcx.oom(list.len()))?;
+        out.try_reserve_exact(list.len())
+            .map_err(|_| mcx.oom(list.len()))?;
         for item in list.iter() {
             out.push(*item);
         }
@@ -147,9 +151,16 @@ fn BuildEventTriggerCache(mcx: Mcx<'_>) -> PgResult<()> {
         };
         let fnoid = get(Anum_pg_event_trigger_evtfoid, &mut isnull).as_oid();
         let evttags = get(Anum_pg_event_trigger_evttags, &mut isnull);
-        let tagset =
-            if isnull { None } else { Some(DecodeTextArrayToTagSet(smcx, evttags)?) };
-        fresh[event as usize].push(EventTriggerCacheItem { fnoid, enabled, tagset });
+        let tagset = if isnull {
+            None
+        } else {
+            Some(DecodeTextArrayToTagSet(smcx, evttags)?)
+        };
+        fresh[event as usize].push(EventTriggerCacheItem {
+            fnoid,
+            enabled,
+            tagset,
+        });
     }
     genam::systable_endscan_ordered(smcx, scan)?;
     irel.close(AccessShareLock)?;

@@ -634,7 +634,11 @@ pub fn AcceptConnection(server_fd: pgsocket, client_sock: &mut ClientSocket) -> 
     let fd = unsafe {
         ip::sys::accept(
             server_fd,
-            client_sock.raddr.addr.as_mut_ptr().cast::<ip::sys::sockaddr>(),
+            client_sock
+                .raddr
+                .addr
+                .as_mut_ptr()
+                .cast::<ip::sys::sockaddr>(),
             &mut client_sock.raddr.salen,
         )
     };
@@ -808,7 +812,14 @@ pub fn pq_setkeepalivesinterval(interval: i32, port: Option<&mut Port>) -> i32 {
         interval = port.default_keepalives_interval;
     }
 
-    if setsockopt_int(port.sock, ip::sys::IPPROTO_TCP, ip::sys::TCP_KEEPINTVL, interval).is_err() {
+    if setsockopt_int(
+        port.sock,
+        ip::sys::IPPROTO_TCP,
+        ip::sys::TCP_KEEPINTVL,
+        interval,
+    )
+    .is_err()
+    {
         log_sockopt_failure("setsockopt", "TCP_KEEPINTVL", "pq_setkeepalivesinterval");
         return STATUS_ERROR;
     }
@@ -1040,8 +1051,11 @@ pub fn init_socket_seams() {
     });
     pqcomm_seams::listen_server_port::set(
         |hostname, port, unix_socket_dir, listen_sockets, max_listen| {
-            let family =
-                if unix_socket_dir.is_some() { ip::sys::AF_UNIX } else { ip::sys::AF_UNSPEC };
+            let family = if unix_socket_dir.is_some() {
+                ip::sys::AF_UNIX
+            } else {
+                ip::sys::AF_UNSPEC
+            };
             let status = ListenServerPort(
                 family,
                 hostname,

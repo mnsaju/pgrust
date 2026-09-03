@@ -39,8 +39,7 @@ const Anum_pg_trigger_tgoldtable: i32 = 18;
 const Anum_pg_trigger_tgnewtable: i32 = 19;
 
 fn trigger_type_matches(tgtype: i16, level: i16, timing: i16, event: i16) -> bool {
-    tgtype & (TRIGGER_TYPE_LEVEL_MASK | TRIGGER_TYPE_TIMING_MASK | event)
-        == level | timing | event
+    tgtype & (TRIGGER_TYPE_LEVEL_MASK | TRIGGER_TYPE_TIMING_MASK | event) == level | timing | event
 }
 
 fn name_datum_str<'a>(d: datum::Datum) -> &'a str {
@@ -81,9 +80,7 @@ pub(crate) fn build_trigger_desc(
             let dim1 = unsafe { core::ptr::read_unaligned(hdr.add(16) as *const i32) };
             let mut v: PgVec<'static, i16> = mcx::vec_with_capacity_in(mcx, dim1 as usize)?;
             for i in 0..dim1 as usize {
-                v.push(unsafe {
-                    core::ptr::read_unaligned(hdr.add(24 + 2 * i) as *const i16)
-                });
+                v.push(unsafe { core::ptr::read_unaligned(hdr.add(24 + 2 * i) as *const i16) });
             }
             (dim1 as i16, v)
         };
@@ -191,34 +188,61 @@ pub(crate) fn build_trigger_desc(
         desc.trig_update_old_table |= t & TRIGGER_TYPE_UPDATE != 0 && has_old;
         desc.trig_update_new_table |= t & TRIGGER_TYPE_UPDATE != 0 && has_new;
         desc.trig_delete_old_table |= t & TRIGGER_TYPE_DELETE != 0 && has_old;
-        desc.trig_insert_before_row |= m(TRIGGER_TYPE_ROW, TRIGGER_TYPE_BEFORE, TRIGGER_TYPE_INSERT);
+        desc.trig_insert_before_row |=
+            m(TRIGGER_TYPE_ROW, TRIGGER_TYPE_BEFORE, TRIGGER_TYPE_INSERT);
         desc.trig_insert_after_row |= m(TRIGGER_TYPE_ROW, TRIGGER_TYPE_AFTER, TRIGGER_TYPE_INSERT);
         desc.trig_insert_instead_row |=
             m(TRIGGER_TYPE_ROW, TRIGGER_TYPE_INSTEAD, TRIGGER_TYPE_INSERT);
-        desc.trig_insert_before_statement |=
-            m(TRIGGER_TYPE_STATEMENT, TRIGGER_TYPE_BEFORE, TRIGGER_TYPE_INSERT);
-        desc.trig_insert_after_statement |=
-            m(TRIGGER_TYPE_STATEMENT, TRIGGER_TYPE_AFTER, TRIGGER_TYPE_INSERT);
-        desc.trig_update_before_row |= m(TRIGGER_TYPE_ROW, TRIGGER_TYPE_BEFORE, TRIGGER_TYPE_UPDATE);
+        desc.trig_insert_before_statement |= m(
+            TRIGGER_TYPE_STATEMENT,
+            TRIGGER_TYPE_BEFORE,
+            TRIGGER_TYPE_INSERT,
+        );
+        desc.trig_insert_after_statement |= m(
+            TRIGGER_TYPE_STATEMENT,
+            TRIGGER_TYPE_AFTER,
+            TRIGGER_TYPE_INSERT,
+        );
+        desc.trig_update_before_row |=
+            m(TRIGGER_TYPE_ROW, TRIGGER_TYPE_BEFORE, TRIGGER_TYPE_UPDATE);
         desc.trig_update_after_row |= m(TRIGGER_TYPE_ROW, TRIGGER_TYPE_AFTER, TRIGGER_TYPE_UPDATE);
         desc.trig_update_instead_row |=
             m(TRIGGER_TYPE_ROW, TRIGGER_TYPE_INSTEAD, TRIGGER_TYPE_UPDATE);
-        desc.trig_update_before_statement |=
-            m(TRIGGER_TYPE_STATEMENT, TRIGGER_TYPE_BEFORE, TRIGGER_TYPE_UPDATE);
-        desc.trig_update_after_statement |=
-            m(TRIGGER_TYPE_STATEMENT, TRIGGER_TYPE_AFTER, TRIGGER_TYPE_UPDATE);
-        desc.trig_delete_before_row |= m(TRIGGER_TYPE_ROW, TRIGGER_TYPE_BEFORE, TRIGGER_TYPE_DELETE);
+        desc.trig_update_before_statement |= m(
+            TRIGGER_TYPE_STATEMENT,
+            TRIGGER_TYPE_BEFORE,
+            TRIGGER_TYPE_UPDATE,
+        );
+        desc.trig_update_after_statement |= m(
+            TRIGGER_TYPE_STATEMENT,
+            TRIGGER_TYPE_AFTER,
+            TRIGGER_TYPE_UPDATE,
+        );
+        desc.trig_delete_before_row |=
+            m(TRIGGER_TYPE_ROW, TRIGGER_TYPE_BEFORE, TRIGGER_TYPE_DELETE);
         desc.trig_delete_after_row |= m(TRIGGER_TYPE_ROW, TRIGGER_TYPE_AFTER, TRIGGER_TYPE_DELETE);
         desc.trig_delete_instead_row |=
             m(TRIGGER_TYPE_ROW, TRIGGER_TYPE_INSTEAD, TRIGGER_TYPE_DELETE);
-        desc.trig_delete_before_statement |=
-            m(TRIGGER_TYPE_STATEMENT, TRIGGER_TYPE_BEFORE, TRIGGER_TYPE_DELETE);
-        desc.trig_delete_after_statement |=
-            m(TRIGGER_TYPE_STATEMENT, TRIGGER_TYPE_AFTER, TRIGGER_TYPE_DELETE);
-        desc.trig_truncate_before_statement |=
-            m(TRIGGER_TYPE_STATEMENT, TRIGGER_TYPE_BEFORE, TRIGGER_TYPE_TRUNCATE);
-        desc.trig_truncate_after_statement |=
-            m(TRIGGER_TYPE_STATEMENT, TRIGGER_TYPE_AFTER, TRIGGER_TYPE_TRUNCATE);
+        desc.trig_delete_before_statement |= m(
+            TRIGGER_TYPE_STATEMENT,
+            TRIGGER_TYPE_BEFORE,
+            TRIGGER_TYPE_DELETE,
+        );
+        desc.trig_delete_after_statement |= m(
+            TRIGGER_TYPE_STATEMENT,
+            TRIGGER_TYPE_AFTER,
+            TRIGGER_TYPE_DELETE,
+        );
+        desc.trig_truncate_before_statement |= m(
+            TRIGGER_TYPE_STATEMENT,
+            TRIGGER_TYPE_BEFORE,
+            TRIGGER_TYPE_TRUNCATE,
+        );
+        desc.trig_truncate_after_statement |= m(
+            TRIGGER_TYPE_STATEMENT,
+            TRIGGER_TYPE_AFTER,
+            TRIGGER_TYPE_TRUNCATE,
+        );
     }
     Ok(Some(desc))
 }
@@ -230,7 +254,10 @@ fn varlena_bytes<'a>(d: datum::Datum) -> &'a [u8] {
     unsafe {
         let b0 = *p;
         if b0 & 0x01 != 0 {
-            assert!(b0 != 0x01, "pg_trigger varlena is external toast — detoast lane");
+            assert!(
+                b0 != 0x01,
+                "pg_trigger varlena is external toast — detoast lane"
+            );
             let len = ((b0 >> 1) & 0x7F) as usize;
             core::slice::from_raw_parts(p.add(1), len - 1)
         } else {
@@ -258,10 +285,16 @@ mod varlena_bytes_tests {
     #[test]
     fn reads_short_and_4b_headers() {
         let short: [u8; 4] = [(4u8 << 1) | 0x01, b'a', b'b', b'c'];
-        assert_eq!(varlena_bytes(datum::Datum::from_usize(short.as_ptr() as usize)), b"abc");
+        assert_eq!(
+            varlena_bytes(datum::Datum::from_usize(short.as_ptr() as usize)),
+            b"abc"
+        );
         let mut long = ((4u32 + 3) << 2).to_ne_bytes().to_vec();
         long.extend_from_slice(b"abc");
-        assert_eq!(varlena_bytes(datum::Datum::from_usize(long.as_ptr() as usize)), b"abc");
+        assert_eq!(
+            varlena_bytes(datum::Datum::from_usize(long.as_ptr() as usize)),
+            b"abc"
+        );
     }
 
     #[test]

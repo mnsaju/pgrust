@@ -208,7 +208,11 @@ pub fn AtEOSubXact_Inval(isCommit: bool) -> PgResult<()> {
 
         if !parent_is_adjacent {
             with_state(|state| {
-                state.trans_stack.last_mut().expect("checked non-empty").my_level -= 1;
+                state
+                    .trans_stack
+                    .last_mut()
+                    .expect("checked non-empty")
+                    .my_level -= 1;
             });
             return Ok(());
         }
@@ -261,7 +265,10 @@ pub fn PreInplace_Inval() -> PgResult<()> {
 
 pub fn AtInplace_Inval() -> PgResult<()> {
     let relcache_init_file_inval = match with_state(|state| {
-        state.inplace_info.as_ref().map(|info| info.relcache_init_file_inval)
+        state
+            .inplace_info
+            .as_ref()
+            .map(|info| info.relcache_init_file_inval)
     }) {
         Some(flag) => flag,
         None => return Ok(()),
@@ -413,7 +420,11 @@ pub fn LogLogicalInvalidations() -> PgResult<()> {
 
         // Reused scratch wire images; xlog_insert never re-enters inval, so
         // the borrow stays held.
-        let InvalState { msg_arrays, wal_scratch, .. } = state;
+        let InvalState {
+            msg_arrays,
+            wal_scratch,
+            ..
+        } = state;
         for subgroup in [CAT_CACHE_MSGS, REL_CACHE_MSGS] {
             let buf = &mut wal_scratch[subgroup];
             buf.clear();

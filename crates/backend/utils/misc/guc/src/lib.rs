@@ -25,10 +25,11 @@ use std::cell::{Cell, RefCell};
 
 use elog::ereport;
 use types_core::{Oid, BOOTSTRAP_SUPERUSERID};
-use types_error::{
-    PgError, PgResult, SqlState, ERRCODE_INVALID_PARAMETER_VALUE, ERROR, WARNING,
+use types_error::{PgError, PgResult, SqlState, ERRCODE_INVALID_PARAMETER_VALUE, ERROR, WARNING};
+use types_guc::{
+    GucContext, GucSource, PGC_INTERNAL, PGC_S_CLIENT, PGC_S_DYNAMIC_DEFAULT, PGC_S_INTERACTIVE,
+    PGC_S_SESSION,
 };
-use types_guc::{GucContext, GucSource, PGC_INTERNAL, PGC_S_CLIENT, PGC_S_DYNAMIC_DEFAULT, PGC_S_INTERACTIVE, PGC_S_SESSION};
 
 pub use enum_lookup::{
     config_enum_get_options, config_enum_lookup_by_name, config_enum_lookup_by_value,
@@ -120,7 +121,10 @@ pub fn guc_nest_level() -> i32 {
 pub fn AtStart_GUC() {
     if GUC_NEST_LEVEL.get() != 0 {
         let e = ereport(WARNING)
-            .errmsg(format!("GUC nest level = {} at transaction start", GUC_NEST_LEVEL.get()))
+            .errmsg(format!(
+                "GUC nest level = {} at transaction start",
+                GUC_NEST_LEVEL.get()
+            ))
             .into_error();
         elog::emit_error_report_for(&e);
     }
@@ -165,9 +169,7 @@ fn at_eoxact_guc_haswork(is_commit: bool, nest_level: i32) {
         }
     }
     // Re-arm the hint from the real list (entries can survive to outer levels).
-    store::set_has_stacked_hint(
-        store::with_store(|reg| reg.has_stacked()).unwrap_or(false),
-    );
+    store::set_has_stacked_hint(store::with_store(|reg| reg.has_stacked()).unwrap_or(false));
 }
 
 // set_config_option (guc.c:3342): srole from the source class.
@@ -187,7 +189,9 @@ pub fn set_config_option(
     } else {
         BOOTSTRAP_SUPERUSERID
     };
-    set_config_option_global(name, value, context, source, srole, action, change_val, elevel, is_reload)
+    set_config_option_global(
+        name, value, context, source, srole, action, change_val, elevel, is_reload,
+    )
 }
 
 // set_config_option_ext (guc.c:3382).
@@ -203,7 +207,9 @@ pub fn set_config_option_ext(
     elevel: types_error::ErrorLevel,
     is_reload: bool,
 ) -> PgResult<i32> {
-    set_config_option_global(name, value, context, source, srole, action, change_val, elevel, is_reload)
+    set_config_option_global(
+        name, value, context, source, srole, action, change_val, elevel, is_reload,
+    )
 }
 
 // SetConfigOption (guc.c:4332).
@@ -277,8 +283,8 @@ const GUC_QUALIFIER_SEPARATOR: char = '.';
 
 // valid_custom_variable_name (guc.c:1076).
 pub use array::{
-    GUCArrayAdd, GUCArrayDelete, GUCArrayReset, ProcessGUCArray, TransformGUCArray,
-    validate_option_array_item,
+    validate_option_array_item, GUCArrayAdd, GUCArrayDelete, GUCArrayReset, ProcessGUCArray,
+    TransformGUCArray,
 };
 
 pub fn valid_custom_variable_name(name: &str) -> bool {
@@ -318,7 +324,10 @@ pub fn assignable_custom_variable_name(name: &str, skip_errors: bool) -> PgResul
             return Ok(false);
         }
         let reserved = RESERVED_CLASS_PREFIX.with(|s| {
-            s.borrow().iter().find(|p| p.len() == class_len && name.starts_with(p.as_str())).cloned()
+            s.borrow()
+                .iter()
+                .find(|p| p.len() == class_len && name.starts_with(p.as_str()))
+                .cloned()
         });
         if let Some(rcprefix) = reserved {
             if !skip_errors {
@@ -343,12 +352,14 @@ pub fn assignable_custom_variable_name(name: &str, skip_errors: bool) -> PgResul
 // MarkGUCPrefixReserved (guc.c:5285): purge existing placeholders under the
 // prefix (WARNING each), then reserve the prefix against future placeholders.
 pub fn MarkGUCPrefixReserved(class_name: &str) {
-    let removed =
-        store::with_store_mut(|reg| reg.remove_reserved_placeholders(class_name)).unwrap_or_default();
+    let removed = store::with_store_mut(|reg| reg.remove_reserved_placeholders(class_name))
+        .unwrap_or_default();
     for name in removed {
         let e = ereport(WARNING)
             .errcode(types_error::ERRCODE_INVALID_NAME)
-            .errmsg(format!("invalid configuration parameter name \"{name}\", removing it"))
+            .errmsg(format!(
+                "invalid configuration parameter name \"{name}\", removing it"
+            ))
             .errdetail(format!("\"{class_name}\" is now a reserved prefix."))
             .into_error();
         elog::emit_error_report_for(&e);

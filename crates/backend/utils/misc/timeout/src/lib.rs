@@ -39,9 +39,18 @@ const N_TIMEOUTS: usize = MAX_TIMEOUTS as usize;
 
 #[derive(Clone, Copy)]
 pub enum EnableTimeoutParams {
-    After { id: TimeoutId, delay_ms: i32 },
-    At { id: TimeoutId, fin_time: TimestampTz },
-    Every { id: TimeoutId, delay_ms: i32 },
+    After {
+        id: TimeoutId,
+        delay_ms: i32,
+    },
+    At {
+        id: TimeoutId,
+        fin_time: TimestampTz,
+    },
+    Every {
+        id: TimeoutId,
+        delay_ms: i32,
+    },
 }
 
 #[derive(Clone, Copy)]
@@ -412,7 +421,10 @@ pub fn ProcessTimeoutInterrupt() {
     // check (the ProcessClientRead/WriteInterrupt SIGALRM rendering), so the
     // no-wake case must not clone the Arc.
     let posted = POSTED.with(|p| {
-        p.borrow().as_ref().filter(|a| a.load(Ordering::SeqCst)).map(Arc::clone)
+        p.borrow()
+            .as_ref()
+            .filter(|a| a.load(Ordering::SeqCst))
+            .map(Arc::clone)
     });
     if let Some(posted) = posted {
         if posted.swap(false, Ordering::SeqCst) {
@@ -583,7 +595,9 @@ pub fn enable_timeouts(timeouts: &[EnableTimeoutParams]) {
 
 pub fn disable_timeout(id: TimeoutId, keep_indicator: bool) {
     debug_assert!(ALL_TIMEOUTS_INITIALIZED.with(|c| c.get()));
-    debug_assert!(DATA.with(|d| d.borrow().all_timeouts[id as usize].timeout_handler.is_some()));
+    debug_assert!(DATA.with(|d| d.borrow().all_timeouts[id as usize]
+        .timeout_handler
+        .is_some()));
 
     disable_alarm();
     DATA.with(|d| {

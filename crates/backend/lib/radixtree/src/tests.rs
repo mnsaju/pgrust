@@ -40,7 +40,13 @@ fn test_basic(nkeys: usize, shift: i32, asc: bool) {
     let mut tree: RadixTree<u64> = RadixTree::create(&ctx).unwrap();
 
     let keys: Vec<u64> = (0..nkeys)
-        .map(|i| if asc { (i as u64) << shift } else { ((nkeys - 1 - i) as u64) << shift })
+        .map(|i| {
+            if asc {
+                (i as u64) << shift
+            } else {
+                ((nkeys - 1 - i) as u64) << shift
+            }
+        })
         .collect();
 
     for &key in &keys {
@@ -285,7 +291,11 @@ struct VarImage {
 impl VarImage {
     fn new(nwords: usize, fill: u64) -> VarImage {
         let mut img = VarImage {
-            hdr: VarHdr { flags: 1, nwords: nwords as i8, fill: [0; 3] },
+            hdr: VarHdr {
+                flags: 1,
+                nwords: nwords as i8,
+                fill: [0; 3],
+            },
             words: [0; 8],
         };
         for w in 0..nwords {
@@ -301,7 +311,10 @@ unsafe fn check_var(tree: &RadixTree<VarHdr>, key: u64, nwords: usize, fill: u64
     assert_eq!((*p).nwords as usize, nwords);
     let words = p.cast::<u8>().add(size_of::<VarHdr>()).cast::<u64>();
     for w in 0..nwords {
-        assert_eq!(ptr::read_unaligned(words.add(w)), fill.wrapping_add(w as u64));
+        assert_eq!(
+            ptr::read_unaligned(words.add(w)),
+            fill.wrapping_add(w as u64)
+        );
     }
 }
 
@@ -336,7 +349,8 @@ fn test_varlen_runtime_embeddable() {
         // Populate a spread of keys with varying sizes; verify via iteration.
         for i in 0..500u64 {
             let img = VarImage::new((i % 8) as usize, i);
-            tree.set_ptr(i * 3, (&img as *const VarImage).cast()).unwrap();
+            tree.set_ptr(i * 3, (&img as *const VarImage).cast())
+                .unwrap();
         }
         let mut iter = tree.begin_iterate();
         let mut seen = 0u64;
@@ -371,7 +385,10 @@ fn test_memory_usage_tracks_growth() {
         tree.set(i, &i).unwrap();
     }
     let grown = tree.memory_usage();
-    assert!(grown > initial, "memory_usage did not grow: {initial} -> {grown}");
+    assert!(
+        grown > initial,
+        "memory_usage did not grow: {initial} -> {grown}"
+    );
 }
 
 #[test]

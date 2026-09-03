@@ -87,9 +87,9 @@ mod real {
 }
 
 #[cfg(not(loom))]
-pub(crate) use real::provider;
-#[cfg(not(loom))]
 pub use real::install;
+#[cfg(not(loom))]
+pub(crate) use real::provider;
 
 /// Deterministic virtual-time provider: `now_ms` is a counter advanced only
 /// by [`virtual_time::VirtualClock::advance`]; timed waits block on the real
@@ -99,9 +99,9 @@ pub use real::install;
 #[cfg(not(loom))]
 pub mod virtual_time {
     use super::*;
+    use pgsync::Mutex;
     #[cfg(not(pgrust_sim))]
     use std::sync::atomic::{AtomicI64, Ordering};
-    use pgsync::Mutex;
 
     pub struct VirtualClock {
         /// Plain test builds drive their own counter (the deterministic test

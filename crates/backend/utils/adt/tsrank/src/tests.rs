@@ -1,20 +1,24 @@
+use ::adt_tsquery_core::io::tsquery_in_core;
 use ::adt_tsvector_core::io::tsvector_in_core;
 use ::adt_tsvector_core::layout::TsVec;
 use ::adt_tsvector_core::query::TsQueryRef;
-use ::adt_tsquery_core::io::tsquery_in_core;
-use ::mcx::{MemoryContext, Mcx};
+use ::mcx::{Mcx, MemoryContext};
 
 use crate::rank::{calc_rank, DEFAULT_WEIGHTS, DEF_NORM_METHOD};
 use crate::rank_cd::calc_rank_cd;
 
 fn v<'a>(mcx: Mcx<'a>, s: &str) -> TsVec<'a> {
     let img = tsvector_in_core(mcx, s.as_bytes(), None).unwrap().unwrap();
-    TsVec { payload: &img.leak()[4..] }
+    TsVec {
+        payload: &img.leak()[4..],
+    }
 }
 
 fn q<'a>(mcx: Mcx<'a>, s: &str) -> TsQueryRef<'a> {
     let img = tsquery_in_core(mcx, s.as_bytes(), None).unwrap().unwrap();
-    TsQueryRef { payload: &img.leak()[4..] }
+    TsQueryRef {
+        payload: &img.leak()[4..],
+    }
 }
 
 fn close(got: f32, want: f32) -> bool {
@@ -36,9 +40,14 @@ fn rank_matrix() {
         (" a:1 s:2B d g", "a & s", 0.198206),
         (" a:1 s:2 d g", "a & s", 0.0991032),
     ] {
-        let got =
-            calc_rank(mcx, &DEFAULT_WEIGHTS, v(mcx, doc), q(mcx, query), DEF_NORM_METHOD)
-                .unwrap();
+        let got = calc_rank(
+            mcx,
+            &DEFAULT_WEIGHTS,
+            v(mcx, doc),
+            q(mcx, query),
+            DEF_NORM_METHOD,
+        )
+        .unwrap();
         assert!(close(got, want), "{doc} @@ {query}: got {got}, want {want}");
     }
 }

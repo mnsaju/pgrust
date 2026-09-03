@@ -37,9 +37,9 @@ fn install_seams() {
         smgr_seams::smgr_destroy_all::set(|| Ok(()));
 
         bufmgr_seams::read_recent_buffer::set(|_, _, _, _| Ok(false));
-        bufmgr_seams::read_buffer_without_relcache::set(|_, _, blkno, _, _, _| {
-            Ok(blkno as i32 + 1)
-        });
+        bufmgr_seams::read_buffer_without_relcache::set(
+            |_, _, blkno, _, _, _| Ok(blkno as i32 + 1),
+        );
         bufmgr_seams::extend_buffered_rel_to::set(|_, _, _, _, extend_to, _| Ok(extend_to as i32));
         bufmgr_seams::release_buffer::set(|_| Ok(()));
         bufmgr_seams::mark_buffer_dirty::set(|_| Ok(()));
@@ -252,7 +252,9 @@ fn determine_timeline_early_returns_and_history_lookup() {
             ws_segno: 1,
             ws_tli: 1,
         },
-        segcxt: xlogreader_seams::WALSegmentContext { ws_segsize: segsize },
+        segcxt: xlogreader_seams::WALSegmentContext {
+            ws_segsize: segsize,
+        },
         segoff: 8192,
         readLen: 8192,
         currTLI: 1,
@@ -268,7 +270,9 @@ fn determine_timeline_early_returns_and_history_lookup() {
 
     // New timeline forces a history lookup (fakes: tli = requested currTLI).
     let mut state = XLogReaderState {
-        segcxt: xlogreader_seams::WALSegmentContext { ws_segsize: segsize },
+        segcxt: xlogreader_seams::WALSegmentContext {
+            ws_segsize: segsize,
+        },
         currTLI: 1,
         ..Default::default()
     };

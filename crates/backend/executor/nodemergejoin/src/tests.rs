@@ -47,7 +47,10 @@ fn install_seams() {
             }))
         });
         syscache_seams::lookup_pg_amproc::set(|opfamily, left, right, procnum| {
-            assert_eq!((opfamily, left, right, procnum), (INTEGER_BTREE_FAM, INT4OID, INT4OID, 2));
+            assert_eq!(
+                (opfamily, left, right, procnum),
+                (INTEGER_BTREE_FAM, INT4OID, INT4OID, 2)
+            );
             Ok(F_BTINT4SORTSUPPORT)
         });
     });
@@ -199,13 +202,25 @@ fn run_join(
     let one_col = int4_desc(mcx, 1);
     let result_desc = int4_desc(mcx, 2);
     let mut estate = EStateData::new_in(mcx);
-    let outer_slot = estate.exec_init_extra_tuple_slot(Some(one_col.clone()), TupleSlotKind::Virtual);
-    let inner_slot = estate.exec_init_extra_tuple_slot(Some(one_col.clone()), TupleSlotKind::Virtual);
+    let outer_slot =
+        estate.exec_init_extra_tuple_slot(Some(one_col.clone()), TupleSlotKind::Virtual);
+    let inner_slot =
+        estate.exec_init_extra_tuple_slot(Some(one_col.clone()), TupleSlotKind::Virtual);
     let plan = mk_join_plan(mcx, jointype);
     let mut node =
         exec_init_merge_join(plan, &mut estate, 0, &one_col, &one_col, result_desc, false).unwrap();
-    let mut outer = Feed { slot: outer_slot, rows: outer_rows, next: 0, marked: 0 };
-    let mut inner = Feed { slot: inner_slot, rows: inner_rows, next: 0, marked: 0 };
+    let mut outer = Feed {
+        slot: outer_slot,
+        rows: outer_rows,
+        next: 0,
+        marked: 0,
+    };
+    let mut inner = Feed {
+        slot: inner_slot,
+        rows: inner_rows,
+        next: 0,
+        marked: 0,
+    };
 
     let mut out = Vec::new();
     while let Some(id) = exec_merge_join(&mut node, &mut outer, &mut inner, &mut estate)? {
@@ -221,10 +236,7 @@ fn run_join(
     Ok(out)
 }
 
-fn run_right_join(
-    outer_rows: Vec<i32>,
-    inner_rows: Vec<i32>,
-) -> Vec<(Option<i32>, Option<i32>)> {
+fn run_right_join(outer_rows: Vec<i32>, inner_rows: Vec<i32>) -> Vec<(Option<i32>, Option<i32>)> {
     run_join(
         JoinType::JOIN_RIGHT,
         outer_rows.into_iter().map(Some).collect(),
@@ -247,7 +259,10 @@ fn right_join_empty_outer_fills_all_inners() {
 #[test]
 fn right_join_fills_unmatched_inners_around_match() {
     let rows = run_right_join(vec![2], vec![1, 2, 3]);
-    assert_eq!(rows, vec![(None, Some(1)), (Some(2), Some(2)), (None, Some(3))]);
+    assert_eq!(
+        rows,
+        vec![(None, Some(1)), (Some(2), Some(2)), (None, Some(3))]
+    );
 }
 
 // ============================================================================
@@ -276,8 +291,7 @@ fn mj99001_nulleqnull_comparator_forces_advance_inner() {
     let mut estate = EStateData::new_in(mcx);
     let plan = mk_join_plan(mcx, JoinType::JOIN_INNER);
     let mut node =
-        exec_init_merge_join(plan, &mut estate, 0, &one_col, &one_col, result_desc, false)
-            .unwrap();
+        exec_init_merge_join(plan, &mut estate, 0, &one_col, &one_col, result_desc, false).unwrap();
 
     // Control: equal non-null keys compare 0.
     node.clauses[0].ldatum = Datum::from_i32(7);
@@ -292,20 +306,31 @@ fn mj99001_nulleqnull_comparator_forces_advance_inner() {
     node.clauses[0].lisnull = true;
     node.clauses[0].rdatum = Datum::null();
     node.clauses[0].risnull = true;
-    assert_eq!(mj_compare(&mut node, &mut estate), 1, "nulleqnull must force +1");
+    assert_eq!(
+        mj_compare(&mut node, &mut estate),
+        1,
+        "nulleqnull must force +1"
+    );
 
     // One-sided NULL is NOT the nulleqnull arm: ApplySortComparator's
     // nulls-last rule decides (NULL sorts after non-NULL here).
     node.clauses[0].lisnull = false;
     node.clauses[0].ldatum = Datum::from_i32(7);
-    assert!(mj_compare(&mut node, &mut estate) < 0, "non-NULL vs NULL, nulls-last");
+    assert!(
+        mj_compare(&mut node, &mut estate) < 0,
+        "non-NULL vs NULL, nulls-last"
+    );
 
     // mj_ConstFalseJoin coupling: equal keys + constant-false joinqual
     // still report unequal (+1).
     node.clauses[0].rdatum = Datum::from_i32(7);
     node.clauses[0].risnull = false;
     node.mj_ConstFalseJoin = true;
-    assert_eq!(mj_compare(&mut node, &mut estate), 1, "const-false joinqual forces +1");
+    assert_eq!(
+        mj_compare(&mut node, &mut estate),
+        1,
+        "const-false joinqual forces +1"
+    );
     node.mj_ConstFalseJoin = false;
     assert_eq!(mj_compare(&mut node, &mut estate), 0);
 }
@@ -322,7 +347,8 @@ fn mj99002_out_of_order_inner_is_error_not_panic() {
     )
     .expect_err("misordered inner must be an ERROR");
     assert!(
-        err.to_string().contains("mergejoin input data is out of order"),
+        err.to_string()
+            .contains("mergejoin input data is out of order"),
         "got: {err}"
     );
 }
@@ -346,9 +372,12 @@ fn mj99003_initialize_inner_endofjoin_matchedouter_asymmetry() {
 /// condition are load-bearing). Outer-side NULL ends the join early.
 #[test]
 fn mj99004_first_key_null_nulls_last_outer_effective_endofjoin() {
-    let rows =
-        run_join(JoinType::JOIN_INNER, vec![Some(1), None, Some(3)], vec![Some(1), Some(3)])
-            .unwrap();
+    let rows = run_join(
+        JoinType::JOIN_INNER,
+        vec![Some(1), None, Some(3)],
+        vec![Some(1), Some(3)],
+    )
+    .unwrap();
     // The NULL-keyed outer ends the join: key 3 is NEVER reached.
     assert_eq!(rows, vec![(Some(1), Some(1))]);
 }
@@ -361,9 +390,12 @@ fn mj99004_first_key_null_nulls_last_outer_effective_endofjoin() {
 /// (forced-null) inner and terminates cleanly instead of replaying it.
 #[test]
 fn mj99005_nextinner_effective_endofjoin_forces_null_inner_slot() {
-    let rows =
-        run_join(JoinType::JOIN_INNER, vec![Some(1), Some(2)], vec![Some(1), None, Some(2)])
-            .unwrap();
+    let rows = run_join(
+        JoinType::JOIN_INNER,
+        vec![Some(1), Some(2)],
+        vec![Some(1), None, Some(2)],
+    )
+    .unwrap();
     // Inner NULL after the key-1 run ends the inner side; outer 2 finds
     // EndOfJoin at TESTOUTER's re-evaluation, emits nothing.
     assert_eq!(rows, vec![(Some(1), Some(1))]);
@@ -374,7 +406,6 @@ fn mj99005_nextinner_effective_endofjoin_forces_null_inner_slot() {
 /// not treated as end of input.
 #[test]
 fn mj99006_first_key_null_still_visited_in_fill_mode() {
-    let rows =
-        run_join(JoinType::JOIN_RIGHT, vec![Some(1)], vec![Some(1), None]).unwrap();
+    let rows = run_join(JoinType::JOIN_RIGHT, vec![Some(1)], vec![Some(1), None]).unwrap();
     assert_eq!(rows, vec![(Some(1), Some(1)), (None, None)]);
 }

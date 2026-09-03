@@ -115,7 +115,9 @@ fn null_identifier() -> Box<PgError> {
 #[cold]
 #[inline(never)]
 fn indeterminate_input(what: &str) -> Box<PgError> {
-    Box::new(PgError::error(format!("could not determine data type of {what} input")))
+    Box::new(PgError::error(format!(
+        "could not determine data type of {what} input"
+    )))
 }
 
 fn output_to_bytes<'a>(finfo: &mut FmgrInfo, mcx: Mcx<'a>, value: Datum) -> PgResult<&'a [u8]> {
@@ -125,11 +127,7 @@ fn output_to_bytes<'a>(finfo: &mut FmgrInfo, mcx: Mcx<'a>, value: Datum) -> PgRe
     Ok(unsafe { CStr::from_ptr(out.as_usize() as *const core::ffi::c_char) }.to_bytes())
 }
 
-fn fetch_array_image<'mcx>(
-    fcinfo: &Fcinfo,
-    i: usize,
-    mcx: Mcx<'mcx>,
-) -> PgResult<PgVec<'mcx, u8>> {
+fn fetch_array_image<'mcx>(fcinfo: &Fcinfo, i: usize, mcx: Mcx<'mcx>) -> PgResult<PgVec<'mcx, u8>> {
     // SAFETY: arg i checked non-null by the caller; live varlena datum.
     let raw = unsafe {
         let p = fcinfo.arg_ptr(i);
@@ -150,7 +148,13 @@ fn array_out_cache<'f>(
         let (typlen, typbyval, typalign) = lsyscache::get_typlenbyvalalign(element_type)?;
         let (outfunc, _) = lsyscache::getTypeOutputInfo(element_type)?;
         let finfo = fmgr_seams::fmgr_info::call(outfunc)?;
-        flinfo.set_fn_extra(ArrayOutCache { element_type, typlen, typbyval, typalign, finfo });
+        flinfo.set_fn_extra(ArrayOutCache {
+            element_type,
+            typlen,
+            typbyval,
+            typalign,
+            finfo,
+        });
     }
     Ok(flinfo.fn_extra_mut::<ArrayOutCache>().unwrap())
 }
@@ -239,7 +243,9 @@ fn concat_internal(
         let s = output_to_bytes(&mut cache.0[i], mcx, fcinfo.arg(i))?;
         mcx::vec_append_bytes(&mut out, s)?;
     }
-    Ok(Some(types_fmgr::varlena_result(cstring_to_text(mcx, &out)?)))
+    Ok(Some(types_fmgr::varlena_result(cstring_to_text(
+        mcx, &out,
+    )?)))
 }
 
 pub fn fc_text_concat(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -306,7 +312,12 @@ fn parse_digits(fmt: &[u8], mut cp: usize) -> PgResult<(usize, bool, i32)> {
 // text_format_parse_format (varlena.c:6224-6296); returns cp at the type char.
 fn parse_format(fmt: &[u8], mut cp: usize) -> PgResult<(usize, FormatSpec)> {
     let end = fmt.len();
-    let mut spec = FormatSpec { argpos: -1, widthpos: -1, flags: 0, width: 0 };
+    let mut spec = FormatSpec {
+        argpos: -1,
+        widthpos: -1,
+        flags: 0,
+        width: 0,
+    };
 
     let (newcp, found, n) = parse_digits(fmt, cp)?;
     cp = newcp;
@@ -422,8 +433,8 @@ fn string_conversion<'mcx>(
     let s = output_to_bytes(finfo, mcx, value)?;
     match conversion {
         b'I' => {
-            let ident = core::str::from_utf8(s)
-                .expect("format %I: output function produced invalid UTF-8");
+            let ident =
+                core::str::from_utf8(s).expect("format %I: output function produced invalid UTF-8");
             let quoted = format_type::quote_identifier(ident);
             append_padded(out, quoted.as_bytes(), flags, width)
         }
@@ -472,7 +483,11 @@ pub fn fc_text_format(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgR
     let args = if fmgr_seams::get_fn_expr_variadic::call(flinfo) {
         debug_assert_eq!(fcinfo.nargs(), 2);
         if fcinfo.argisnull(1) {
-            FormatArgs { elements: None, _array: None, nargs: 1 }
+            FormatArgs {
+                elements: None,
+                _array: None,
+                nargs: 1,
+            }
         } else {
             let array = fetch_array_image(fcinfo, 1, mcx)?;
             let element_type = arrayfuncs::arr_elemtype(&array);
@@ -493,7 +508,11 @@ pub fn fc_text_format(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgR
             }
         }
     } else {
-        FormatArgs { elements: None, _array: None, nargs: fcinfo.nargs() }
+        FormatArgs {
+            elements: None,
+            _array: None,
+            nargs: fcinfo.nargs(),
+        }
     };
 
     // SAFETY: arg 0 checked non-null; live text varlena.

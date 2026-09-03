@@ -19,8 +19,8 @@ pub mod ops;
 pub mod populate;
 pub mod srfs;
 pub mod subs;
-pub mod tojsonb;
 #[cfg(test)]
 mod tests;
+pub mod tojsonb;
 
 pub fn init_seams() {}

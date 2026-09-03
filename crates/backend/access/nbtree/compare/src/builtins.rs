@@ -43,7 +43,9 @@ pub fn fc_btoidvectorcmp(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) ->
     // (ndim 1, no nulls bitmap once check_valid_oidvector passes).
     let (a, a_values) = unsafe { arg_oidvector(fcinfo, 0) }?;
     let (b, b_values) = unsafe { arg_oidvector(fcinfo, 1) }?;
-    Ok(Datum::from_i32(crate::btoidvectorcmp(a, a_values, b, b_values)))
+    Ok(Datum::from_i32(crate::btoidvectorcmp(
+        a, a_values, b, b_values,
+    )))
 }
 
 // btequalimage (nbtutils.c): unconditionally true for these opclasses.

@@ -5,8 +5,10 @@ use ::datum::Datum;
 use ::mcx::{vec_new_in, vec_with_capacity_in, Mcx, PgVec};
 use ::stringinfo::StringInfo;
 use ::types_core::{primitive::InvalidOid, Oid};
-use ::types_error::{PgError, PgResult, ERRCODE_INVALID_BINARY_REPRESENTATION,
-    ERRCODE_INVALID_TEXT_REPRESENTATION, ERRCODE_PROGRAM_LIMIT_EXCEEDED};
+use ::types_error::{
+    PgError, PgResult, ERRCODE_INVALID_BINARY_REPRESENTATION, ERRCODE_INVALID_TEXT_REPRESENTATION,
+    ERRCODE_PROGRAM_LIMIT_EXCEEDED,
+};
 use ::types_fmgr::{
     function_call1_coll_in, input_function_call_safe, receive_function_call, send_function_call,
     ErrorSaveNode, FmgrInfo,
@@ -89,31 +91,58 @@ pub fn array_in<'mcx>(
     let mut lbound = [1i32; MAXDIM];
     let mut pos = 0usize;
 
-    let ndim = match read_array_dimensions(s, &mut pos, &mut dim, &mut lbound, string, escontext.as_deref_mut())? {
+    let ndim = match read_array_dimensions(
+        s,
+        &mut pos,
+        &mut dim,
+        &mut lbound,
+        string,
+        escontext.as_deref_mut(),
+    )? {
         Some(n) => n,
         None => return Ok(None),
     };
 
     if ndim == 0 {
         if s.get(pos) != Some(&b'{') {
-            return soft(escontext, malformed(string, "Array value must start with \"{\" or dimension information."));
+            return soft(
+                escontext,
+                malformed(
+                    string,
+                    "Array value must start with \"{\" or dimension information.",
+                ),
+            );
         }
     } else {
         if !s[pos..].starts_with(ASSGN) {
-            return soft(escontext, malformed(string, "Missing \"=\" after array dimensions."));
+            return soft(
+                escontext,
+                malformed(string, "Missing \"=\" after array dimensions."),
+            );
         }
         pos += ASSGN.len();
         while pos < s.len() && scanner_isspace(s[pos]) {
             pos += 1;
         }
         if s.get(pos) != Some(&b'{') {
-            return soft(escontext, malformed(string, "Array contents must start with \"{\"."));
+            return soft(
+                escontext,
+                malformed(string, "Array contents must start with \"{\"."),
+            );
         }
     }
 
     let mut ndim = ndim;
     let parsed = read_array_str(
-        mcx, s, &mut pos, &mut ndim, &mut dim, meta, proc, typmod, string,
+        mcx,
+        s,
+        &mut pos,
+        &mut ndim,
+        &mut dim,
+        meta,
+        proc,
+        typmod,
+        string,
         escontext.as_deref_mut(),
     )?;
     let (nitems, values, nulls) = match parsed {
@@ -123,7 +152,10 @@ pub fn array_in<'mcx>(
 
     while pos < s.len() {
         if !scanner_isspace(s[pos]) {
-            return soft(escontext, malformed(string, "Junk after closing right brace."));
+            return soft(
+                escontext,
+                malformed(string, "Junk after closing right brace."),
+            );
         }
         pos += 1;
     }
@@ -147,7 +179,11 @@ pub fn array_in<'mcx>(
     Ok(Some(img))
 }
 
-fn read_dimension_int(s: &[u8], pos: &mut usize, escontext: Option<&mut ErrorSaveNode>) -> PgResult<Option<i32>> {
+fn read_dimension_int(
+    s: &[u8],
+    pos: &mut usize,
+    escontext: Option<&mut ErrorSaveNode>,
+) -> PgResult<Option<i32>> {
     let c = s.get(*pos).copied().unwrap_or(0);
     if !c.is_ascii_digit() && c != b'-' && c != b'+' {
         return Ok(Some(0));
@@ -176,7 +212,8 @@ fn read_dimension_int(s: &[u8], pos: &mut usize, escontext: Option<&mut ErrorSav
     if overflow || val > i32::MAX as i64 || val < i32::MIN as i64 {
         return soft(
             escontext,
-            PgError::error("array bound is out of integer range").with_sqlstate(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+            PgError::error("array bound is out of integer range")
+                .with_sqlstate(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
         );
     }
     Ok(Some(val as i32))
@@ -215,7 +252,13 @@ fn read_array_dimensions(
             None => return Ok(None),
         };
         if *pos == before {
-            return soft(escontext, malformed(orig, "\"[\" must introduce explicitly-specified array dimensions."));
+            return soft(
+                escontext,
+                malformed(
+                    orig,
+                    "\"[\" must introduce explicitly-specified array dimensions.",
+                ),
+            );
         }
         let ub;
         if s.get(*pos) == Some(&b':') {
@@ -235,7 +278,10 @@ fn read_array_dimensions(
             ub = i;
         }
         if s.get(*pos) != Some(&b']') {
-            return soft(escontext, malformed(orig, "Missing \"]\" after array dimensions."));
+            return soft(
+                escontext,
+                malformed(orig, "Missing \"]\" after array dimensions."),
+            );
         }
         *pos += 1;
         if ub < lbound[ndim] {
@@ -279,7 +325,11 @@ struct ElemReader<'a, 'mcx> {
 
 impl<'a, 'mcx> ElemReader<'a, 'mcx> {
     // Returns Ok(Some(tok)) / Ok(None) soft-error / Err hard.
-    fn next_token(&mut self, orig: &str, escontext: Option<&mut ErrorSaveNode>) -> PgResult<Option<ArrayTok>> {
+    fn next_token(
+        &mut self,
+        orig: &str,
+        escontext: Option<&mut ErrorSaveNode>,
+    ) -> PgResult<Option<ArrayTok>> {
         self.elembuf.clear();
         // Identify token; skip leading whitespace.
         loop {
@@ -313,7 +363,11 @@ impl<'a, 'mcx> ElemReader<'a, 'mcx> {
         }
     }
 
-    fn quoted_element(&mut self, orig: &str, escontext: Option<&mut ErrorSaveNode>) -> PgResult<Option<ArrayTok>> {
+    fn quoted_element(
+        &mut self,
+        orig: &str,
+        escontext: Option<&mut ErrorSaveNode>,
+    ) -> PgResult<Option<ArrayTok>> {
         loop {
             let c = self.s.get(self.pos).copied().unwrap_or(0);
             match c {
@@ -335,7 +389,10 @@ impl<'a, 'mcx> ElemReader<'a, 'mcx> {
                             return Ok(Some(ArrayTok::Elem));
                         }
                         if !scanner_isspace(d) {
-                            return soft(escontext, malformed(orig, "Incorrectly quoted array element."));
+                            return soft(
+                                escontext,
+                                malformed(orig, "Incorrectly quoted array element."),
+                            );
                         }
                         self.pos += 1;
                     }
@@ -349,7 +406,11 @@ impl<'a, 'mcx> ElemReader<'a, 'mcx> {
         }
     }
 
-    fn unquoted_element(&mut self, orig: &str, escontext: Option<&mut ErrorSaveNode>) -> PgResult<Option<ArrayTok>> {
+    fn unquoted_element(
+        &mut self,
+        orig: &str,
+        escontext: Option<&mut ErrorSaveNode>,
+    ) -> PgResult<Option<ArrayTok>> {
         let mut dstlen = 0usize;
         let mut has_escapes = false;
         loop {
@@ -357,7 +418,12 @@ impl<'a, 'mcx> ElemReader<'a, 'mcx> {
             match c {
                 0 => return soft(escontext, malformed(orig, "Unexpected end of input.")),
                 b'{' => return soft(escontext, malformed(orig, "Unexpected \"{\" character.")),
-                b'"' => return soft(escontext, malformed(orig, "Incorrectly quoted array element.")),
+                b'"' => {
+                    return soft(
+                        escontext,
+                        malformed(orig, "Incorrectly quoted array element."),
+                    )
+                }
                 b'\\' => {
                     self.pos += 1;
                     let n = self.s.get(self.pos).copied().unwrap_or(0);
@@ -475,10 +541,7 @@ fn read_array_str<'mcx>(
                         escontext,
                         malformed(
                             orig,
-                            &alloc::format!(
-                                "Unexpected \"{}\" character.",
-                                meta.typdelim as char
-                            ),
+                            &alloc::format!("Unexpected \"{}\" character.", meta.typdelim as char),
                         ),
                     );
                 }
@@ -556,7 +619,9 @@ fn copy_byref_datum(mcx: Mcx<'_>, d: Datum, typlen: i32) -> PgResult<Datum> {
     let size = match typlen {
         -1 => unsafe { varsize_any(p) },
         // SAFETY (both arms): d is a live by-ref datum of its declared layout.
-        -2 => unsafe { CStr::from_ptr(p.cast()) }.to_bytes_with_nul().len(),
+        -2 => unsafe { CStr::from_ptr(p.cast()) }
+            .to_bytes_with_nul()
+            .len(),
         n if n > 0 => n as usize,
         other => panic!("copy_byref_datum: unexpected typlen {other}"),
     };
@@ -565,7 +630,11 @@ fn copy_byref_datum(mcx: Mcx<'_>, d: Datum, typlen: i32) -> PgResult<Datum> {
     ::types_fmgr::byref_result(mcx, image)
 }
 
-fn dimension_error<T>(escontext: Option<&mut ErrorSaveNode>, orig: &str, specified: bool) -> PgResult<Option<T>> {
+fn dimension_error<T>(
+    escontext: Option<&mut ErrorSaveNode>,
+    orig: &str,
+    specified: bool,
+) -> PgResult<Option<T>> {
     let detail = if specified {
         "Specified array dimensions do not match array contents."
     } else {
@@ -751,7 +820,8 @@ pub fn array_recv<'mcx>(
     let flags = ::pqformat::pq_getmsgint(buf, 4)?;
     if flags != 0 && flags != 1 {
         return Err(Box::new(
-            PgError::error("invalid array flags").with_sqlstate(ERRCODE_INVALID_BINARY_REPRESENTATION),
+            PgError::error("invalid array flags")
+                .with_sqlstate(ERRCODE_INVALID_BINARY_REPRESENTATION),
         ));
     }
     // Element type recorded in the data (we trust the caller's spec type).
@@ -771,7 +841,16 @@ pub fn array_recv<'mcx>(
 
     let mut values: PgVec<Datum> = vec_with_capacity_in(mcx, nitems as usize)?;
     let mut nulls: PgVec<bool> = vec_with_capacity_in(mcx, nitems as usize)?;
-    read_array_binary(mcx, buf, nitems, proc, meta, typmod, &mut values, &mut nulls)?;
+    read_array_binary(
+        mcx,
+        buf,
+        nitems,
+        proc,
+        meta,
+        typmod,
+        &mut values,
+        &mut nulls,
+    )?;
 
     construct_md_array(
         mcx,
@@ -821,8 +900,11 @@ fn read_array_binary<'mcx>(
         let v = receive_function_call(proc, Some(&mut elem_buf), meta.typioparam, typmod, mcx)?;
         if elem_buf.cursor != itemlen as usize {
             return Err(Box::new(
-                PgError::error(alloc::format!("improper binary format in array element {}", i + 1))
-                    .with_sqlstate(ERRCODE_INVALID_BINARY_REPRESENTATION),
+                PgError::error(alloc::format!(
+                    "improper binary format in array element {}",
+                    i + 1
+                ))
+                .with_sqlstate(ERRCODE_INVALID_BINARY_REPRESENTATION),
             ));
         }
         values.push(v);
@@ -859,7 +941,9 @@ pub fn array_send<'mcx>(
             let p = d.as_usize() as *const u8;
             let total = varsize_any(p);
             // SAFETY: send returns a live 4B-header bytea of `total` bytes.
-            let payload = unsafe { core::slice::from_raw_parts(p.add(::datum::VARHDRSZ), total - ::datum::VARHDRSZ) };
+            let payload = unsafe {
+                core::slice::from_raw_parts(p.add(::datum::VARHDRSZ), total - ::datum::VARHDRSZ)
+            };
             ::pqformat::pq_sendint32(&mut buf, (total - ::datum::VARHDRSZ) as u32)?;
             ::pqformat::pq_sendbytes(&mut buf, payload)?;
         }

@@ -141,13 +141,21 @@ pub fn fc_network_cmp(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> Pg
 
 pub fn fc_network_smaller(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let (a, b) = (arg_inet(fcinfo, 0), arg_inet(fcinfo, 1));
-    let i = if crate::network_cmp_internal(a, b) < 0 { 0 } else { 1 };
+    let i = if crate::network_cmp_internal(a, b) < 0 {
+        0
+    } else {
+        1
+    };
     Ok(fcinfo.arg(i))
 }
 
 pub fn fc_network_larger(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let (a, b) = (arg_inet(fcinfo, 0), arg_inet(fcinfo, 1));
-    let i = if crate::network_cmp_internal(a, b) > 0 { 0 } else { 1 };
+    let i = if crate::network_cmp_internal(a, b) > 0 {
+        0
+    } else {
+        1
+    };
     Ok(fcinfo.arg(i))
 }
 
@@ -173,10 +181,7 @@ pub fn fc_hashinet(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRes
     Ok(Datum::from_u32(crate::hashinet_bytes(arg_inet(fcinfo, 0))))
 }
 
-pub fn fc_hashinetextended(
-    _flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_hashinetextended(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let seed = fcinfo.arg(1).as_u64();
     Ok(Datum::from_u64(crate::hashinet_bytes_extended(
         arg_inet(fcinfo, 0),
@@ -233,19 +238,13 @@ pub fn fc_inet_to_cidr(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> P
     inet_result(fcinfo, &v)
 }
 
-pub fn fc_inet_set_masklen(
-    _flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_inet_set_masklen(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let bits = fcinfo.arg_i32(1);
     let v = crate::inet_set_masklen(arg_inet(fcinfo, 0), bits)?;
     inet_result(fcinfo, &v)
 }
 
-pub fn fc_cidr_set_masklen(
-    _flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_cidr_set_masklen(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let bits = fcinfo.arg_i32(1);
     let v = crate::cidr_set_masklen(arg_inet(fcinfo, 0), bits)?;
     inet_result(fcinfo, &v)
@@ -326,12 +325,7 @@ fn session_addr(fcinfo: &mut Fcinfo, local: bool) -> PgResult<Datum> {
         return Ok(fcinfo.return_null());
     };
     let mut host = String::new();
-    let rc = ::ip::pg_getnameinfo_all(
-        &sa,
-        Some(&mut host),
-        None,
-        NI_NUMERICHOST | NI_NUMERICSERV,
-    );
+    let rc = ::ip::pg_getnameinfo_all(&sa, Some(&mut host), None, NI_NUMERICHOST | NI_NUMERICSERV);
     if rc != 0 {
         return Ok(fcinfo.return_null());
     }
@@ -345,12 +339,7 @@ fn session_port(fcinfo: &mut Fcinfo, local: bool) -> PgResult<Datum> {
         return Ok(fcinfo.return_null());
     };
     let mut serv = String::new();
-    let rc = ::ip::pg_getnameinfo_all(
-        &sa,
-        None,
-        Some(&mut serv),
-        NI_NUMERICHOST | NI_NUMERICSERV,
-    );
+    let rc = ::ip::pg_getnameinfo_all(&sa, None, Some(&mut serv), NI_NUMERICHOST | NI_NUMERICSERV);
     if rc != 0 {
         return Ok(fcinfo.return_null());
     }

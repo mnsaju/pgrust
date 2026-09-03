@@ -34,7 +34,9 @@ impl<'a, 'mcx> TriggerData<'a, 'mcx> {
         tg_trigger: &'a Trigger<'mcx>,
     ) -> Self {
         TriggerData {
-            node: FmNode { tag: T_TRIGGER_DATA },
+            node: FmNode {
+                tag: T_TRIGGER_DATA,
+            },
             tg_event,
             tg_relation,
             tg_trigtuple: tg_trigtuple.map(|r| NonNull::from(r).cast()),
@@ -54,7 +56,9 @@ impl<'a, 'mcx> TriggerData<'a, 'mcx> {
         tg_trigger: &'a Trigger<'mcx>,
     ) -> Self {
         TriggerData {
-            node: FmNode { tag: T_TRIGGER_DATA },
+            node: FmNode {
+                tag: T_TRIGGER_DATA,
+            },
             tg_event,
             tg_relation,
             tg_trigtuple,
@@ -69,7 +73,6 @@ impl<'a, 'mcx> TriggerData<'a, 'mcx> {
     pub fn fm_node_ptr(&mut self) -> FmNodePtr {
         Some(NonNull::from(&mut *self).cast::<FmNode>())
     }
-
 }
 
 /// # Safety

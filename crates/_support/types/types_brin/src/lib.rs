@@ -69,7 +69,14 @@ fn page_read_u16(page: &PageRef<'_>, off: usize) -> u16 {
 #[inline]
 fn page_write_u16(page: &mut PageMut<'_>, off: usize, v: u16) {
     // SAFETY: off < BLCKSZ, 2-aligned; caller holds exclusive page access.
-    unsafe { page.as_ref().as_ptr().cast_mut().add(off).cast::<u16>().write(v) }
+    unsafe {
+        page.as_ref()
+            .as_ptr()
+            .cast_mut()
+            .add(off)
+            .cast::<u16>()
+            .write(v)
+    }
 }
 
 #[inline]
@@ -136,7 +143,12 @@ pub fn brin_meta_read(page: &PageRef<'_>) -> BrinMetaPageData {
 pub fn brin_meta_write(page: &mut PageMut<'_>, meta: &BrinMetaPageData) {
     // SAFETY: as brin_meta_read; caller holds exclusive page access.
     unsafe {
-        let p = page.as_ref().as_ptr().cast_mut().add(META_OFF).cast::<u32>();
+        let p = page
+            .as_ref()
+            .as_ptr()
+            .cast_mut()
+            .add(META_OFF)
+            .cast::<u32>();
         p.write(meta.brinMagic);
         p.add(1).write(meta.brinVersion);
         p.add(2).write(meta.pagesPerRange);

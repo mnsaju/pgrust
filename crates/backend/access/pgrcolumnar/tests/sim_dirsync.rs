@@ -90,11 +90,17 @@ const ROWS: usize = 12_000;
 fn committed_multiseg_part_survives_crash() {
     scaffold();
     load(ROWS, 0x5eed).unwrap();
-    assert!(path_exists("/base/5/1000.1"), "engagement: the load must spill a segment");
+    assert!(
+        path_exists("/base/5/1000.1"),
+        "engagement: the load must spill a segment"
+    );
 
     SimVfs::cut(); // power loss, adversarial DropAll floor
 
-    assert!(path_exists("/base/5/1000.1"), "minted segment dirent survives the crash");
+    assert!(
+        path_exists("/base/5/1000.1"),
+        "minted segment dirent survives the crash"
+    );
     assert_eq!(
         committed_rows().expect("committed part must stay readable"),
         Some(ROWS as u64),
@@ -122,7 +128,11 @@ fn dir_fsync_orders_between_data_sync_and_publish() {
         .filter(|(_, l)| is_dir_fsync(l))
         .map(|(i, _)| i)
         .collect();
-    assert_eq!(dir_fsyncs.len(), 1, "one dir fsync per mint-bearing commit: {dir_fsyncs:?}");
+    assert_eq!(
+        dir_fsyncs.len(),
+        1,
+        "one dir fsync per mint-bearing commit: {dir_fsyncs:?}"
+    );
     let dir_fsync = dir_fsyncs[0];
 
     // The publish: the LAST header write (off=0 on seg 0; the path is the
@@ -163,7 +173,10 @@ fn single_segment_commit_pays_no_dir_fsync() {
     SimVfs::set_op_trace(true);
     load(100, 0xabcd).unwrap();
     load(50, 0xd00d).unwrap(); // reopen-append, still within seg 0
-    assert!(!path_exists("/base/5/1000.1"), "engagement: single-segment shape");
+    assert!(
+        !path_exists("/base/5/1000.1"),
+        "engagement: single-segment shape"
+    );
     let dir_fsyncs = SimVfs::op_trace()
         .iter()
         .filter(|l| l.contains("kind=Fsync") && l.ends_with(&format!(" path={PART_DIR}")))
@@ -190,7 +203,10 @@ fn publish_window_crash_sweep() {
     let base_ops = SimVfs::op_seq();
     load(ROWS, 11).unwrap();
     let window = SimVfs::op_seq() - base_ops;
-    assert!(window > 20, "engagement: the append leg must consult real ops, got {window}");
+    assert!(
+        window > 20,
+        "engagement: the append leg must consult real ops, got {window}"
+    );
 
     for k in 1..=window {
         scaffold();

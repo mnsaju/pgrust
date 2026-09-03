@@ -60,10 +60,12 @@ pub(crate) fn spi_printtup(slot: &mut SlotData<'_>) -> PgResult<bool> {
     let slot_mcx = *slot.base().tts_values.allocator();
     SPI_STACK.with(|s| {
         let mut stack = s.borrow_mut();
-        let conn = stack.last_mut().unwrap_or_else(|| {
-            panic!("spi_printtup called while not connected to SPI")
-        });
-        let id = conn.tuptable.unwrap_or_else(|| panic!("improper call to spi_printtup"));
+        let conn = stack
+            .last_mut()
+            .unwrap_or_else(|| panic!("spi_printtup called while not connected to SPI"));
+        let id = conn
+            .tuptable
+            .unwrap_or_else(|| panic!("improper call to spi_printtup"));
         let entry = conn
             .tuptables
             .iter_mut()
@@ -71,15 +73,21 @@ pub(crate) fn spi_printtup(slot: &mut SlotData<'_>) -> PgResult<bool> {
             .expect("current tuptable is registered");
         entry.table.with_mut_mcx(|mcx, data| {
             let tuple = exectuples::exec_copy_slot_heap_tuple(slot, slot_mcx, mcx)?;
-            let (ptr, len, tid, oid) =
-                (tuple.as_tuple().header_ptr(), tuple.t_len, tuple.t_self, tuple.t_tableOid);
+            let (ptr, len, tid, oid) = (
+                tuple.as_tuple().header_ptr(),
+                tuple.t_len,
+                tuple.t_self,
+                tuple.t_tableOid,
+            );
             // C stores bare HeapTuple pointers freed wholesale with tuptabcxt;
             // forget drops the owning wrapper, the image stays in the arena.
             core::mem::forget(tuple);
             // SAFETY: image just copied into this arena, live until the
             // tuptable context drops.
             let tuple = unsafe { HeapTupleData::from_raw_parts(ptr, len, tid, oid) };
-            data.vals.try_reserve(1).map_err(|_| mcx.oom(core::mem::size_of::<usize>()))?;
+            data.vals
+                .try_reserve(1)
+                .map_err(|_| mcx.oom(core::mem::size_of::<usize>()))?;
             data.vals.push(tuple);
             Ok(())
         })?;
@@ -116,7 +124,9 @@ pub fn tuptable_with<R>(h: TuptabHandle, f: impl for<'mcx> FnOnce(&TuptabData<'m
 pub fn SPI_freetuptable(h: TuptabHandle) -> PgResult<()> {
     let removed = SPI_STACK.with(|s| {
         let mut stack = s.borrow_mut();
-        let Some(conn) = stack.last_mut() else { return None };
+        let Some(conn) = stack.last_mut() else {
+            return None;
+        };
         let ti = conn.tuptables.iter().position(|tt| tt.id == h.0)?;
         if conn.tuptable == Some(h.0) {
             conn.tuptable = None;
@@ -132,7 +142,10 @@ pub fn SPI_freetuptable(h: TuptabHandle) -> PgResult<()> {
             Ok(())
         }
         None => ereport(WARNING)
-            .errmsg(format!("attempt to delete invalid SPITupleTable {:#x}", h.0))
+            .errmsg(format!(
+                "attempt to delete invalid SPITupleTable {:#x}",
+                h.0
+            ))
             .finish(loc("SPI_freetuptable")),
     }
 }

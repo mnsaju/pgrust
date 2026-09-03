@@ -30,7 +30,10 @@ struct PaShared {
 impl ParallelAppendState {
     pub fn new(nplans: usize) -> Self {
         ParallelAppendState {
-            shared: Mutex::new(PaShared { pa_next_plan: 0, pa_finished: vec![false; nplans] }),
+            shared: Mutex::new(PaShared {
+                pa_next_plan: 0,
+                pa_finished: vec![false; nplans],
+            }),
         }
     }
     fn lock(&self) -> MutexGuard<'_, PaShared> {
@@ -156,7 +159,11 @@ fn choose_next_subplan_for_leader<'mcx>(
         // Identify before taking the lock: pruning may error.
         identify_valid_subplans(node, estate)?;
     }
-    let pstate = Arc::clone(node.as_pstate.as_ref().expect("parallel append shared state"));
+    let pstate = Arc::clone(
+        node.as_pstate
+            .as_ref()
+            .expect("parallel append shared state"),
+    );
     let mut shared = pstate.lock();
     if !starting {
         shared.pa_finished[node.as_whichplan as usize] = true;
@@ -192,7 +199,11 @@ fn choose_next_subplan_for_worker<'mcx>(
     if newly_identified {
         identify_valid_subplans(node, estate)?;
     }
-    let pstate = Arc::clone(node.as_pstate.as_ref().expect("parallel append shared state"));
+    let pstate = Arc::clone(
+        node.as_pstate
+            .as_ref()
+            .expect("parallel append shared state"),
+    );
     let mut shared = pstate.lock();
     if !starting {
         shared.pa_finished[node.as_whichplan as usize] = true;
@@ -209,9 +220,14 @@ fn choose_next_subplan_for_worker<'mcx>(
             shared.pa_next_plan = nextplan;
         } else if node.as_whichplan > node.as_first_partial_plan {
             // Loop back to the first valid partial plan, if any.
-            let nextplan =
-                node.as_valid_subplans.next_member(node.as_first_partial_plan - 1);
-            shared.pa_next_plan = if nextplan < 0 { node.as_whichplan } else { nextplan };
+            let nextplan = node
+                .as_valid_subplans
+                .next_member(node.as_first_partial_plan - 1);
+            shared.pa_next_plan = if nextplan < 0 {
+                node.as_whichplan
+            } else {
+                nextplan
+            };
         } else {
             shared.pa_next_plan = node.as_whichplan;
         }
@@ -223,8 +239,14 @@ fn choose_next_subplan_for_worker<'mcx>(
     node.as_whichplan = shared.pa_next_plan;
     shared.pa_next_plan = node.as_valid_subplans.next_member(shared.pa_next_plan);
     if shared.pa_next_plan < 0 {
-        let nextplan = node.as_valid_subplans.next_member(node.as_first_partial_plan - 1);
-        shared.pa_next_plan = if nextplan >= 0 { nextplan } else { INVALID_SUBPLAN_INDEX };
+        let nextplan = node
+            .as_valid_subplans
+            .next_member(node.as_first_partial_plan - 1);
+        shared.pa_next_plan = if nextplan >= 0 {
+            nextplan
+        } else {
+            INVALID_SUBPLAN_INDEX
+        };
     }
     if node.as_whichplan < node.as_first_partial_plan {
         shared.pa_finished[node.as_whichplan as usize] = true;
@@ -301,17 +323,18 @@ pub fn exec_append_initialize_dsm(node: &mut AppendState<'_>) -> Arc<ParallelApp
 
 /// `ExecAppendReInitializeDSM`.
 pub fn exec_append_reinitialize_dsm(node: &mut AppendState<'_>) {
-    let ps = Arc::clone(node.as_pstate.as_ref().expect("parallel append shared state"));
+    let ps = Arc::clone(
+        node.as_pstate
+            .as_ref()
+            .expect("parallel append shared state"),
+    );
     let mut shared = ps.lock();
     shared.pa_next_plan = 0;
     shared.pa_finished.iter_mut().for_each(|f| *f = false);
 }
 
 /// `ExecAppendInitializeWorker`.
-pub fn exec_append_initialize_worker(
-    node: &mut AppendState<'_>,
-    pstate: Arc<ParallelAppendState>,
-) {
+pub fn exec_append_initialize_worker(node: &mut AppendState<'_>, pstate: Arc<ParallelAppendState>) {
     node.as_pstate = Some(pstate);
     node.mode = ChooseMode::Worker;
 }

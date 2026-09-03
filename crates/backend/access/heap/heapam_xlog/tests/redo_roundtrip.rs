@@ -16,10 +16,10 @@ use std::sync::Mutex;
 
 use heapam::{heap_delete, heap_insert, heap_update};
 use heapam_xlog::{
-    XLH_UPDATE_PREFIX_FROM_OLD, XLH_UPDATE_SUFFIX_FROM_OLD, XLHL_KEYS_UPDATED,
-    XLHL_XMAX_KEYSHR_LOCK, XLHL_XMAX_LOCK_ONLY, XLOG_HEAP2_LOCK_UPDATED,
-    XLOG_HEAP2_MULTI_INSERT, XLOG_HEAP_CONFIRM, XLOG_HEAP_DELETE, XLOG_HEAP_HOT_UPDATE,
-    XLOG_HEAP_INIT_PAGE, XLOG_HEAP_INSERT, XLOG_HEAP_LOCK, XLOG_HEAP_OPMASK, XLOG_HEAP_UPDATE,
+    XLHL_KEYS_UPDATED, XLHL_XMAX_KEYSHR_LOCK, XLHL_XMAX_LOCK_ONLY, XLH_UPDATE_PREFIX_FROM_OLD,
+    XLH_UPDATE_SUFFIX_FROM_OLD, XLOG_HEAP2_LOCK_UPDATED, XLOG_HEAP2_MULTI_INSERT,
+    XLOG_HEAP_CONFIRM, XLOG_HEAP_DELETE, XLOG_HEAP_HOT_UPDATE, XLOG_HEAP_INIT_PAGE,
+    XLOG_HEAP_INSERT, XLOG_HEAP_LOCK, XLOG_HEAP_OPMASK, XLOG_HEAP_UPDATE,
 };
 use mcx::{Mcx, MemoryContext, PgVec};
 use tableam_vocab::{LockTupleMode, TM_FailureData, TM_Result};
@@ -29,23 +29,21 @@ use transam_xlog::control_file::{
 };
 use transam_xlog::{XLogRecPtrToBytePos, DB_IN_PRODUCTION, RECOVERY_STATE_DONE};
 use types_core::{
-    BackendType, BlockNumber, Buffer, ForkNumber, InvalidBlockNumber, Oid, TimeLineID,
-    XLogRecPtr, XLogSegNo, BLCKSZ, INVALID_PROC_NUMBER, RELPERSISTENCE_PERMANENT,
+    BackendType, BlockNumber, Buffer, ForkNumber, InvalidBlockNumber, Oid, TimeLineID, XLogRecPtr,
+    XLogSegNo, BLCKSZ, INVALID_PROC_NUMBER, RELPERSISTENCE_PERMANENT,
 };
 use types_error::PgResult;
-use types_rel::{
-    FormData_pg_class, LockInfoData, LockRelId, RelationData, RELKIND_RELATION,
-};
+use types_rel::{FormData_pg_class, LockInfoData, LockRelId, RelationData, RELKIND_RELATION};
 use types_storage::bufpage::{PageMut, PageRef, PAI_IS_HEAP, PAI_OVERWRITE};
 use types_storage::RelFileLocator;
 use types_tuple::{
-    CompactAttribute, FormData_pg_attribute, HeapTupleData, HeapTupleHeaderData,
-    ItemPointerData, NameData, TupleDescData, HEAP_KEYS_UPDATED, HEAP_MOVED, HEAP_UPDATED,
-    HEAP_XMAX_BITS, HEAP_XMAX_INVALID, HEAP_XMAX_KEYSHR_LOCK, HEAP_XMAX_LOCK_ONLY,
+    CompactAttribute, FormData_pg_attribute, HeapTupleData, HeapTupleHeaderData, ItemPointerData,
+    NameData, TupleDescData, HEAP_KEYS_UPDATED, HEAP_MOVED, HEAP_UPDATED, HEAP_XMAX_BITS,
+    HEAP_XMAX_INVALID, HEAP_XMAX_KEYSHR_LOCK, HEAP_XMAX_LOCK_ONLY,
 };
+use xloginsert_seams::{XLogRegBuf, REGBUF_STANDARD, REGBUF_WILL_INIT};
 use xlogreader::{XLogReaderRoutine, XLogSegmentRoutine};
 use xlogreader_seams::XLogReaderState as ReaderView;
-use xloginsert_seams::{XLogRegBuf, REGBUF_STANDARD, REGBUF_WILL_INIT};
 
 const SEG: i32 = 16 * 1024 * 1024;
 const SYS_ID: u64 = 0x5544_3322_1100_AAD0;
@@ -270,8 +268,7 @@ fn install_fake_bufmgr() {
     bufmgr_seams::buffer_page_set_lsn::set(|buf, lsn| {
         let addr = with_fake(|f| f.pages[(buf - 1) as usize]);
         // SAFETY: leaked test page; replay is single-threaded.
-        let mut pm =
-            unsafe { PageMut::from_raw(NonNull::new(addr as *mut u8).unwrap()) };
+        let mut pm = unsafe { PageMut::from_raw(NonNull::new(addr as *mut u8).unwrap()) };
         pm.set_lsn(lsn);
     });
     bufmgr_seams::flush_one_buffer::set(|_| Ok(()));
@@ -463,7 +460,10 @@ fn test_relation<'mcx>(mcx: Mcx<'mcx>) -> RelationData<'mcx> {
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
         rd_lockInfo: LockInfoData {
-            lockRelId: LockRelId { relId: REL_OID, dbId: 5 },
+            lockRelId: LockRelId {
+                relId: REL_OID,
+                dbId: 5,
+            },
         },
         rd_rel,
         rd_att: int4_tupdesc(mcx),
@@ -476,13 +476,16 @@ fn test_relation<'mcx>(mcx: Mcx<'mcx>) -> RelationData<'mcx> {
         pgstat_enabled: Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: PgVec::new_in(mcx),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     }
 }
 
@@ -638,8 +641,12 @@ fn heap_redo_rebuilds_pages_byte_exact() {
     let ctl = transam_xlog::ctl::XLogCtl();
     ctl.InsertTimeLineID.store(1, Relaxed);
     ctl.PrevTimeLineID.store(1, Relaxed);
-    ctl.Insert.CurrBytePos.store(XLogRecPtrToBytePos(end_of_log), Relaxed);
-    ctl.Insert.PrevBytePos.store(XLogRecPtrToBytePos(prev_rec), Relaxed);
+    ctl.Insert
+        .CurrBytePos
+        .store(XLogRecPtrToBytePos(end_of_log), Relaxed);
+    ctl.Insert
+        .PrevBytePos
+        .store(XLogRecPtrToBytePos(prev_rec), Relaxed);
     ctl.Insert.fullPageWrites.store(true, Relaxed);
     ctl.Insert.RedoRecPtr.store(prev_rec, Relaxed);
     ctl.RedoRecPtr.store(prev_rec, Relaxed);
@@ -652,9 +659,10 @@ fn heap_redo_rebuilds_pages_byte_exact() {
     ctl.SharedRecoveryState.store(RECOVERY_STATE_DONE, Relaxed);
     ctl.InstallXLogFileSegmentActive.store(true, Relaxed);
     xlogutils::set_in_recovery(false);
-    procarray::TransamVariables()
-        .nextXid
-        .store(types_core::FullTransactionId::from_epoch_and_xid(0, XID).value, Relaxed);
+    procarray::TransamVariables().nextXid.store(
+        types_core::FullTransactionId::from_epoch_and_xid(0, XID).value,
+        Relaxed,
+    );
     subtrans::StartupSUBTRANS(XID).unwrap();
     assert!(transam_xlog::XLogInsertAllowed());
 
@@ -715,8 +723,16 @@ fn heap_redo_rebuilds_pages_byte_exact() {
     assert_eq!(newtup.t_self, ItemPointerData::new(1, 1));
     assert!(!tuple_hdr(0, 1).is_hot_updated());
 
-    let r = heap_delete(&rel, &ItemPointerData::new(0, 3), 3, None, true, &mut tmfd, false)
-        .unwrap();
+    let r = heap_delete(
+        &rel,
+        &ItemPointerData::new(0, 3),
+        3,
+        None,
+        true,
+        &mut tmfd,
+        false,
+    )
+    .unwrap();
     assert_eq!(r, TM_Result::TM_Ok);
 
     // Real row-lock producer (heap_lock_tuple, the SELECT FOR UPDATE shape).
@@ -742,7 +758,14 @@ fn heap_redo_rebuilds_pages_byte_exact() {
     let img = raw_tuple(0, (0, 0), &[0x44; 8]);
     let mut spec1 = make_writable_tuple(&img);
     spec1.t_data_mut().set_speculative_token(4242);
-    heap_insert(&rel, &mut spec1, 0, heapam::hio::HEAP_INSERT_SPECULATIVE, None).unwrap();
+    heap_insert(
+        &rel,
+        &mut spec1,
+        0,
+        heapam::hio::HEAP_INSERT_SPECULATIVE,
+        None,
+    )
+    .unwrap();
     assert_eq!(spec1.t_self, ItemPointerData::new(1, 2));
     assert!(tuple_hdr(1, 2).is_speculative());
     heapam::heap_finish_speculative(&rel, &spec1.t_self).unwrap();
@@ -751,7 +774,14 @@ fn heap_redo_rebuilds_pages_byte_exact() {
     let img = raw_tuple(0, (0, 0), &[0x55; 8]);
     let mut spec2 = make_writable_tuple(&img);
     spec2.t_data_mut().set_speculative_token(4243);
-    heap_insert(&rel, &mut spec2, 0, heapam::hio::HEAP_INSERT_SPECULATIVE, None).unwrap();
+    heap_insert(
+        &rel,
+        &mut spec2,
+        0,
+        heapam::hio::HEAP_INSERT_SPECULATIVE,
+        None,
+    )
+    .unwrap();
     assert_eq!(spec2.t_self, ItemPointerData::new(1, 3));
     heapam::heap_abort_speculative(&rel, &spec2.t_self).unwrap();
     assert_eq!(tuple_hdr(1, 3).xmin_raw(), 0);
@@ -789,7 +819,8 @@ fn heap_redo_rebuilds_pages_byte_exact() {
     {
         let mut pm = page_mut(2);
         for (i, img) in tuples[..3].iter().enumerate() {
-            pm.add_item(img, i as u16 + 1, PAI_OVERWRITE | PAI_IS_HEAP).unwrap();
+            pm.add_item(img, i as u16 + 1, PAI_OVERWRITE | PAI_IS_HEAP)
+                .unwrap();
         }
         let mut main = vec![0u8; 4];
         main[2..4].copy_from_slice(&3u16.to_ne_bytes());
@@ -806,14 +837,22 @@ fn heap_redo_rebuilds_pages_byte_exact() {
     {
         let mut pm = page_mut(2);
         for (i, img) in tuples[3..].iter().enumerate() {
-            pm.add_item(img, i as u16 + 4, PAI_OVERWRITE | PAI_IS_HEAP).unwrap();
+            pm.add_item(img, i as u16 + 4, PAI_OVERWRITE | PAI_IS_HEAP)
+                .unwrap();
         }
         let mut main = vec![0u8; 8];
         main[2..4].copy_from_slice(&2u16.to_ne_bytes());
         main[4..6].copy_from_slice(&4u16.to_ne_bytes());
         main[6..8].copy_from_slice(&5u16.to_ne_bytes());
         let data = encode_multi(&tuples[3..]);
-        insert_wal(RM_HEAP2_ID, XLOG_HEAP2_MULTI_INSERT, &main, 2, REGBUF_STANDARD, &[&data]);
+        insert_wal(
+            RM_HEAP2_ID,
+            XLOG_HEAP2_MULTI_INSERT,
+            &main,
+            2,
+            REGBUF_STANDARD,
+            &[&data],
+        );
     }
 
     // XLOG_HEAP2_LOCK_UPDATED on (2,2): key-share lock an updated version.
@@ -827,7 +866,14 @@ fn heap_redo_rebuilds_pages_byte_exact() {
         main[0..4].copy_from_slice(&77u32.to_ne_bytes());
         main[4..6].copy_from_slice(&2u16.to_ne_bytes());
         main[6] = XLHL_XMAX_LOCK_ONLY | XLHL_XMAX_KEYSHR_LOCK;
-        insert_wal(RM_HEAP2_ID, XLOG_HEAP2_LOCK_UPDATED, &main, 2, REGBUF_STANDARD, &[]);
+        insert_wal(
+            RM_HEAP2_ID,
+            XLOG_HEAP2_LOCK_UPDATED,
+            &main,
+            2,
+            REGBUF_STANDARD,
+            &[],
+        );
     }
 
     // XLOG_HEAP_CONFIRM on (2,3): the write side parked a speculative token
@@ -837,7 +883,14 @@ fn heap_redo_rebuilds_pages_byte_exact() {
         tuple_hdr(2, 3).t_ctid = ItemPointerData::new(2, 3);
         let mut main = [0u8; 2];
         main[0..2].copy_from_slice(&3u16.to_ne_bytes());
-        insert_wal(RM_HEAP_ID, XLOG_HEAP_CONFIRM, &main, 2, REGBUF_STANDARD, &[]);
+        insert_wal(
+            RM_HEAP_ID,
+            XLOG_HEAP_CONFIRM,
+            &main,
+            2,
+            REGBUF_STANDARD,
+            &[],
+        );
     }
 
     // Prefix/suffix-compressed same-page UPDATE (2,1) -> (2,6): data
@@ -856,9 +909,9 @@ fn heap_redo_rebuilds_pages_byte_exact() {
         pm.set_prune_xid(XID);
 
         let mut newimg = raw_tuple(XID, (2, 6), &[1, 2, 9, 9, 5, 6, 7]);
-        newimg[20..22]
-            .copy_from_slice(&(HEAP_XMAX_INVALID | HEAP_UPDATED).to_ne_bytes());
-        pm.add_item(&newimg, 6, PAI_OVERWRITE | PAI_IS_HEAP).unwrap();
+        newimg[20..22].copy_from_slice(&(HEAP_XMAX_INVALID | HEAP_UPDATED).to_ne_bytes());
+        pm.add_item(&newimg, 6, PAI_OVERWRITE | PAI_IS_HEAP)
+            .unwrap();
 
         let mut main = [0u8; 14];
         main[0..4].copy_from_slice(&XID.to_ne_bytes());
@@ -875,12 +928,23 @@ fn heap_redo_rebuilds_pages_byte_exact() {
         data.push(newimg[22]);
         data.push(newimg[23]); // bitmap/padding chunk (hoff - header)
         data.extend_from_slice(&[9, 9]); // the unshared middle
-        insert_wal(RM_HEAP_ID, XLOG_HEAP_UPDATE, &main, 2, REGBUF_STANDARD, &[&data]);
+        insert_wal(
+            RM_HEAP_ID,
+            XLOG_HEAP_UPDATE,
+            &main,
+            2,
+            REGBUF_STANDARD,
+            &[&data],
+        );
     }
 
     with_fake(|f| {
         assert!(f.pins.iter().all(|p| *p == 0), "leaked pins: {:?}", f.pins);
-        assert!(f.locks.iter().all(|l| *l == 0), "leaked locks: {:?}", f.locks);
+        assert!(
+            f.locks.iter().all(|l| *l == 0),
+            "leaked locks: {:?}",
+            f.locks
+        );
     });
 
     let nblocks = with_fake(|f| f.pages.len());
@@ -907,7 +971,9 @@ fn heap_redo_rebuilds_pages_byte_exact() {
     let reader_ctx: &'static MemoryContext = Box::leak(Box::new(MemoryContext::new("reader")));
     let mut reader = xlogreader::XLogReaderState::allocate(reader_ctx.mcx(), SEG).unwrap();
     reader.system_identifier = SYS_ID;
-    let mut routine = SegFileRead { wal_dir: dir.join("pg_wal") };
+    let mut routine = SegFileRead {
+        wal_dir: dir.join("pg_wal"),
+    };
     reader.XLogBeginRead(end_of_log + 40);
 
     let mut heap_seen = [0u32; 8];
@@ -928,19 +994,42 @@ fn heap_redo_rebuilds_pages_byte_exact() {
     assert_eq!(reader.v.EndRecPtr, last_lsn);
 
     assert_eq!(heap_seen[(XLOG_HEAP_INSERT >> 4) as usize], 6, "INSERT x6");
-    assert_eq!(heap_seen[(XLOG_HEAP_HOT_UPDATE >> 4) as usize], 1, "HOT_UPDATE");
+    assert_eq!(
+        heap_seen[(XLOG_HEAP_HOT_UPDATE >> 4) as usize],
+        1,
+        "HOT_UPDATE"
+    );
     assert_eq!(heap_seen[(XLOG_HEAP_LOCK >> 4) as usize], 2, "LOCK x2");
     assert_eq!(heap_seen[(XLOG_HEAP_UPDATE >> 4) as usize], 2, "UPDATE x2");
-    assert_eq!(heap_seen[(XLOG_HEAP_DELETE >> 4) as usize], 2, "DELETE x2 (one super)");
-    assert_eq!(heap_seen[(XLOG_HEAP_CONFIRM >> 4) as usize], 2, "CONFIRM x2");
-    assert_eq!(heap2_seen[(XLOG_HEAP2_MULTI_INSERT >> 4) as usize], 2, "MULTI_INSERT x2");
-    assert_eq!(heap2_seen[(XLOG_HEAP2_LOCK_UPDATED >> 4) as usize], 1, "LOCK_UPDATED");
+    assert_eq!(
+        heap_seen[(XLOG_HEAP_DELETE >> 4) as usize],
+        2,
+        "DELETE x2 (one super)"
+    );
+    assert_eq!(
+        heap_seen[(XLOG_HEAP_CONFIRM >> 4) as usize],
+        2,
+        "CONFIRM x2"
+    );
+    assert_eq!(
+        heap2_seen[(XLOG_HEAP2_MULTI_INSERT >> 4) as usize],
+        2,
+        "MULTI_INSERT x2"
+    );
+    assert_eq!(
+        heap2_seen[(XLOG_HEAP2_LOCK_UPDATED >> 4) as usize],
+        1,
+        "LOCK_UPDATED"
+    );
 
     with_fake(|f| assert!(f.pins.iter().all(|p| *p == 0), "replay leaked pins"));
     assert_eq!(with_fake(|f| f.pages.len()), nblocks);
 
-    let cid_tuples: [&[(usize, u16)]; 3] =
-        [&[(0, 1), (0, 2), (0, 3), (0, 4), (0, 5)], &[(1, 1), (1, 2), (1, 3)], &[]];
+    let cid_tuples: [&[(usize, u16)]; 3] = [
+        &[(0, 1), (0, 2), (0, 3), (0, 4), (0, 5)],
+        &[(1, 1), (1, 2), (1, 3)],
+        &[],
+    ];
     for blk in 0..nblocks {
         let mut got = page_bytes(blk).to_vec();
         let mut want = expected[blk].to_vec();

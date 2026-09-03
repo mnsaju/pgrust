@@ -69,7 +69,10 @@ fn session_set_is_private_and_survives_child_bringup() {
             GucSource::PGC_S_SESSION,
         )
         .unwrap();
-        assert!(!enable_incremental_sort(), "session A does not see its own SET");
+        assert!(
+            !enable_incremental_sort(),
+            "session A does not see its own SET"
+        );
         a_ready_tx.send(()).unwrap();
 
         // Holds across another child's full GUC bring-up (the clobber window).
@@ -89,7 +92,9 @@ fn session_set_is_private_and_survives_child_bringup() {
     );
 
     let snapshot_b = guc::store::capture_nondefault_variables();
-    assert!(!snapshot_b.iter().any(|v| v.name == "enable_incremental_sort"));
+    assert!(!snapshot_b
+        .iter()
+        .any(|v| v.name == "enable_incremental_sort"));
     spawn_session(snapshot_b, || {
         assert!(
             enable_incremental_sort(),

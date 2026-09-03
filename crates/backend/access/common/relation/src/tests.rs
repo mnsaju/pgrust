@@ -5,7 +5,9 @@ use std::sync::Once;
 
 use mcx::{Mcx, MemoryContext, PgVec};
 use rel_vocab::RangeVar;
-use types_core::{InvalidOid, Oid, INVALID_PROC_NUMBER, RELPERSISTENCE_PERMANENT, RELPERSISTENCE_TEMP};
+use types_core::{
+    InvalidOid, Oid, INVALID_PROC_NUMBER, RELPERSISTENCE_PERMANENT, RELPERSISTENCE_TEMP,
+};
 use types_error::{PgError, PgResult, ERRCODE_INTERNAL_ERROR};
 use types_rel::{
     AccessShareLock, FormData_pg_class, LockInfoData, LockRelId, NoLock, RelationData,
@@ -34,10 +36,17 @@ fn take_events() -> Vec<(&'static str, Oid, LOCKMODE)> {
     EVENTS.with_borrow_mut(std::mem::take)
 }
 
-fn make_entry(mcx: Mcx<'static>, oid: Oid, name: &str, relpersistence: u8) -> RelationData<'static> {
+fn make_entry(
+    mcx: Mcx<'static>,
+    oid: Oid,
+    name: &str,
+    relpersistence: u8,
+) -> RelationData<'static> {
     let mut relname = NameData::default();
     relname.namestrcpy(name);
-    RelationData { rd_locator: Default::default(), rd_smgr: Default::default(),
+    RelationData {
+        rd_locator: Default::default(),
+        rd_smgr: Default::default(),
         rd_id: oid,
         rd_backend: INVALID_PROC_NUMBER,
         rd_islocaltemp: false,
@@ -47,7 +56,10 @@ fn make_entry(mcx: Mcx<'static>, oid: Oid, name: &str, relpersistence: u8) -> Re
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
         rd_lockInfo: LockInfoData {
-            lockRelId: LockRelId { relId: oid, dbId: 5 },
+            lockRelId: LockRelId {
+                relId: oid,
+                dbId: 5,
+            },
         },
         rd_rel: FormData_pg_class {
             relname,
@@ -91,13 +103,16 @@ fn make_entry(mcx: Mcx<'static>, oid: Oid, name: &str, relpersistence: u8) -> Re
         pgstat_enabled: Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: PgVec::new_in(mcx),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     }
 }
 
@@ -105,8 +120,14 @@ fn ensure_registry() {
     REGISTRY.with_borrow_mut(|reg| {
         if reg.is_empty() {
             let mcx: Mcx<'static> = Box::leak(Box::new(MemoryContext::new("relcache"))).mcx();
-            reg.insert(TBL, Rc::new(make_entry(mcx, TBL, "tbl", RELPERSISTENCE_PERMANENT)));
-            reg.insert(TMP, Rc::new(make_entry(mcx, TMP, "tmp", RELPERSISTENCE_TEMP)));
+            reg.insert(
+                TBL,
+                Rc::new(make_entry(mcx, TBL, "tbl", RELPERSISTENCE_PERMANENT)),
+            );
+            reg.insert(
+                TMP,
+                Rc::new(make_entry(mcx, TMP, "tmp", RELPERSISTENCE_TEMP)),
+            );
         }
     });
 }
@@ -142,7 +163,12 @@ fn fake_inval() -> PgResult<()> {
     Ok(())
 }
 
-fn fake_rv_get_relid(_: Mcx<'_>, rv: &RangeVar, lockmode: LOCKMODE, missing_ok: bool) -> PgResult<Oid> {
+fn fake_rv_get_relid(
+    _: Mcx<'_>,
+    rv: &RangeVar,
+    lockmode: LOCKMODE,
+    missing_ok: bool,
+) -> PgResult<Oid> {
     log("rvlookup", InvalidOid, lockmode);
     match rv.relname {
         "tbl" => Ok(TBL),
@@ -221,7 +247,9 @@ fn open_missing_errors_and_leaves_lock_for_xact_cleanup() {
 fn try_open_missing_releases_useless_lock() {
     install();
     let ctx = MemoryContext::new("t");
-    assert!(try_relation_open(ctx.mcx(), MISSING, AccessShareLock).unwrap().is_none());
+    assert!(try_relation_open(ctx.mcx(), MISSING, AccessShareLock)
+        .unwrap()
+        .is_none());
     assert_eq!(
         take_events(),
         vec![
@@ -236,7 +264,9 @@ fn try_open_missing_releases_useless_lock() {
 fn try_open_missing_nolock_skips_lock_traffic() {
     install();
     let ctx = MemoryContext::new("t");
-    assert!(try_relation_open(ctx.mcx(), MISSING, NoLock).unwrap().is_none());
+    assert!(try_relation_open(ctx.mcx(), MISSING, NoLock)
+        .unwrap()
+        .is_none());
     assert_eq!(take_events(), vec![("sysprobe", MISSING, NoLock)]);
 }
 
@@ -244,7 +274,9 @@ fn try_open_missing_nolock_skips_lock_traffic() {
 fn try_open_existing_returns_handle() {
     install();
     let ctx = MemoryContext::new("t");
-    let r = try_relation_open(ctx.mcx(), TBL, RowExclusiveLock).unwrap().unwrap();
+    let r = try_relation_open(ctx.mcx(), TBL, RowExclusiveLock)
+        .unwrap()
+        .unwrap();
     assert_eq!(r.rd_id, TBL);
     r.close(RowExclusiveLock).unwrap();
 }
@@ -275,9 +307,11 @@ fn openrv_nolock_skips_inval() {
 fn openrv_extended_missing_ok() {
     install();
     let ctx = MemoryContext::new("t");
-    assert!(relation_openrv_extended(ctx.mcx(), &rv("gone"), AccessShareLock, true)
-        .unwrap()
-        .is_none());
+    assert!(
+        relation_openrv_extended(ctx.mcx(), &rv("gone"), AccessShareLock, true)
+            .unwrap()
+            .is_none()
+    );
     assert!(relation_openrv_extended(ctx.mcx(), &rv("gone"), AccessShareLock, false).is_err());
     let r = relation_openrv_extended(ctx.mcx(), &rv("tbl"), AccessShareLock, true)
         .unwrap()

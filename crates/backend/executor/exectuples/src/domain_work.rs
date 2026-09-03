@@ -41,7 +41,10 @@ pub fn domain_work_tick(bytes: usize, entries: usize) {
 /// Drain the accumulated totals (the SFIN emitter's read; also a test
 /// seam). Draining keeps successive scans' dumps disjoint.
 pub fn domain_work_take() -> (u64, u64) {
-    (DZ_BYTES.swap(0, Ordering::Relaxed), DZ_ENTRIES.swap(0, Ordering::Relaxed))
+    (
+        DZ_BYTES.swap(0, Ordering::Relaxed),
+        DZ_ENTRIES.swap(0, Ordering::Relaxed),
+    )
 }
 
 #[cfg(test)]

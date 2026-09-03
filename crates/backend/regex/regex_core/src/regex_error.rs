@@ -1,4 +1,3 @@
-
 use crate::regex_consts;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -24,7 +23,6 @@ impl From<i32> for RegError {
         RegError(code)
     }
 }
-
 
 #[inline]
 pub const fn err_espace() -> RegError {

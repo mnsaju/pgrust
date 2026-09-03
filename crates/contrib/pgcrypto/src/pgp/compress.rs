@@ -1,6 +1,5 @@
-
-use ::miniz_oxide::deflate::core::{compress, create_comp_flags_from_zip_params, CompressorOxide};
 use ::miniz_oxide::deflate::core::TDEFLStatus;
+use ::miniz_oxide::deflate::core::{compress, create_comp_flags_from_zip_params, CompressorOxide};
 use ::miniz_oxide::inflate::core::{decompress, inflate_flags, DecompressorOxide};
 use ::miniz_oxide::inflate::TINFLStatus;
 

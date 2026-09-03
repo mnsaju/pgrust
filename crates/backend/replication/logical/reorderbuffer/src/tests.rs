@@ -7,9 +7,7 @@ use snapmgr::Snapshot;
 use types_core::{InvalidCommandId, Oid, TransactionId, XLogRecPtr};
 use types_snapshot::{SnapshotData, SnapshotType};
 use types_storage::{SharedInvalCatcacheMsg, SharedInvalidationMessage};
-use types_tuple::{
-    FormData_pg_attribute, NameData, TupleDescData, TYPALIGN_INT, TYPSTORAGE_PLAIN,
-};
+use types_tuple::{FormData_pg_attribute, NameData, TupleDescData, TYPALIGN_INT, TYPSTORAGE_PLAIN};
 
 use crate::*;
 
@@ -39,7 +37,11 @@ fn msg_change(text: &str) -> ReorderBufferChange {
 }
 
 fn inval_msg(hash: u32) -> SharedInvalidationMessage {
-    SharedInvalidationMessage::Catcache(SharedInvalCatcacheMsg { id: 1, dbId: 5, hashValue: hash })
+    SharedInvalidationMessage::Catcache(SharedInvalCatcacheMsg {
+        id: 1,
+        dbId: 5,
+        hashValue: hash,
+    })
 }
 
 #[test]
@@ -187,7 +189,8 @@ fn queue_change_updates_memory_accounting() {
 
     let cid = rb.txn(txn).changes.head;
     let expected = std::mem::size_of::<ReorderBufferChange>()
-        + "test".len() + 1
+        + "test".len()
+        + 1
         + "hello".len()
         + 2 * std::mem::size_of::<usize>();
     assert_eq!(rb.change_size(cid), expected);
@@ -281,7 +284,8 @@ fn invalidations_accumulate_on_toplevel() {
     rb.process_xid(2, 11);
     rb.assign_child(1, 2, 11);
 
-    rb.add_invalidations(2, 12, &[inval_msg(1), inval_msg(2)]).unwrap();
+    rb.add_invalidations(2, 12, &[inval_msg(1), inval_msg(2)])
+        .unwrap();
     rb.add_invalidations(1, 13, &[inval_msg(3)]).unwrap();
 
     let top = rb.txn_by_xid(1, false, 0, false).0.unwrap();
@@ -312,7 +316,8 @@ fn distributed_invalidations_overflow_sets_flag_and_clears() {
     assert!(rb.txn(top).invalidations_distributed.is_empty());
 
     // Further messages are dropped from the distributed store, still queued.
-    rb.add_distributed_invalidations(1, 13, &[inval_msg(9)]).unwrap();
+    rb.add_distributed_invalidations(1, 13, &[inval_msg(9)])
+        .unwrap();
     assert!(rb.txn(top).invalidations_distributed.is_empty());
     assert_eq!(rb.txn(top).nentries, 3);
 }
@@ -377,7 +382,10 @@ fn build_tuplecid_hash_and_resolve() {
     {
         let h = hash.borrow();
         let ent = h
-            .get(&ReorderBufferTupleCidKey { rlocator: locator, tid })
+            .get(&ReorderBufferTupleCidKey {
+                rlocator: locator,
+                tid,
+            })
             .unwrap();
         assert_eq!(ent.cmin, 2);
         assert_eq!(ent.cmax, 5);
@@ -398,7 +406,10 @@ fn build_tuplecid_hash_and_resolve() {
     };
     let got = ResolveCminCmaxDuringDecoding(Some(&any), &s, &htup2, locator).unwrap();
     assert_eq!(got, None);
-    assert_eq!(ResolveCminCmaxDuringDecoding(None, &s, &htup, locator).unwrap(), None);
+    assert_eq!(
+        ResolveCminCmaxDuringDecoding(None, &s, &htup, locator).unwrap(),
+        None
+    );
 }
 
 thread_local! {
@@ -438,7 +449,10 @@ fn non_transactional_message_delivered_with_historic_snapshot() {
     assert!(!snapmgr::HistoricSnapshotActive());
 
     DELIVERED.with(|d| {
-        assert_eq!(d.borrow().as_slice(), ["-1:42:false:pfx:payload".to_string()]);
+        assert_eq!(
+            d.borrow().as_slice(),
+            ["-1:42:false:pfx:payload".to_string()]
+        );
     });
 }
 
@@ -476,11 +490,7 @@ fn attr(name: &str, num: i16, typid: Oid, len: i16, byval: bool) -> FormData_pg_
 
 fn toast_descs() -> (TupleDescData<'static>, TupleDescData<'static>) {
     let mcx = rb_mcx();
-    let main_desc = tupdesc::CreateTupleDesc(
-        mcx,
-        &[attr("payload", 1, 25, -1, false)],
-    )
-    .unwrap();
+    let main_desc = tupdesc::CreateTupleDesc(mcx, &[attr("payload", 1, 25, -1, false)]).unwrap();
     let toast_desc = tupdesc::CreateTupleDesc(
         mcx,
         &[
@@ -556,10 +566,12 @@ fn toast_chunks_reassemble_into_inline_varlena() {
             Datum::from_usize(chunk.as_ptr() as usize),
         ];
         let change = tuple_change(&rb, &toast_desc, &values, &[false, false, false]);
-        rb.queue_change(xid, 100 + seq as u64, change, true).unwrap();
+        rb.queue_change(xid, 100 + seq as u64, change, true)
+            .unwrap();
         let txn = rb.txn_by_xid(xid, false, 0, false).0.unwrap();
         let cid = unlink_tail(&mut rb, txn);
-        rb.toast_append_chunk_with_desc(txn, &toast_desc, cid).unwrap();
+        rb.toast_append_chunk_with_desc(txn, &toast_desc, cid)
+            .unwrap();
     }
 
     let txn = rb.txn_by_xid(xid, false, 0, false).0.unwrap();
@@ -578,11 +590,14 @@ fn toast_chunks_reassemble_into_inline_varlena() {
     let cid = rb.txn(txn).changes.tail;
 
     let size_before = rb.size;
-    rb.toast_replace_with_descs(txn, &main_desc, &toast_desc, cid).unwrap();
+    rb.toast_replace_with_descs(txn, &main_desc, &toast_desc, cid)
+        .unwrap();
     assert_ne!(rb.size, size_before);
 
     match &rb.change(cid).data {
-        ReorderBufferChangeData::Tp { newtuple: Some(t), .. } => {
+        ReorderBufferChangeData::Tp {
+            newtuple: Some(t), ..
+        } => {
             let mut values = [Datum::from_usize(0)];
             let mut isnull = [true];
             types_tuple::heap_deform_tuple(t.as_tuple(), &main_desc, &mut values, &mut isnull);
@@ -614,7 +629,9 @@ fn toast_chunk_sequence_gap_errors() {
     rb.queue_change(31, 10, change, true).unwrap();
     let txn = rb.txn_by_xid(31, false, 0, false).0.unwrap();
     let cid = unlink_tail(&mut rb, txn);
-    let err = rb.toast_append_chunk_with_desc(txn, &toast_desc, cid).unwrap_err();
+    let err = rb
+        .toast_append_chunk_with_desc(txn, &toast_desc, cid)
+        .unwrap_err();
     assert!(err.message().contains("instead of seq 0"), "{err:?}");
 }
 
@@ -670,7 +687,10 @@ fn change_size_formula_matches_shapes() {
 
     rb.add_new_command_id(3, 11, 2).unwrap();
     let cid2 = rb.txn(txn).changes.tail;
-    assert_eq!(rb.change_size(cid2), std::mem::size_of::<ReorderBufferChange>());
+    assert_eq!(
+        rb.change_size(cid2),
+        std::mem::size_of::<ReorderBufferChange>()
+    );
 
     // Tuplecid changes never count toward the memory limit.
     let before = rb.size;
@@ -711,7 +731,8 @@ fn queued_change_to_aborted_txn_is_dropped() {
     rb.process_xid(13, 10);
     let txn = rb.txn_by_xid(13, false, 0, false).0.unwrap();
     rb.txn_mut(txn).txn_flags |= RBTXN_IS_ABORTED;
-    rb.queue_change(13, 11, msg_change("dropped"), false).unwrap();
+    rb.queue_change(13, 11, msg_change("dropped"), false)
+        .unwrap();
     assert_eq!(rb.txn(txn).nentries, 0);
     assert_eq!(rb.size, 0);
 }
@@ -726,7 +747,11 @@ fn twopc_events() -> Vec<String> {
     TWOPC_EVENTS.with(|e| e.borrow().clone())
 }
 
-fn rec_prepare_cb(rb: &mut ReorderBuffer, txn: TxnId, lsn: XLogRecPtr) -> types_error::PgResult<()> {
+fn rec_prepare_cb(
+    rb: &mut ReorderBuffer,
+    txn: TxnId,
+    lsn: XLogRecPtr,
+) -> types_error::PgResult<()> {
     let gid = rb.txn(txn).gid.clone().unwrap_or_default();
     TWOPC_EVENTS.with(|e| e.borrow_mut().push(format!("prepare:{gid}:{lsn}")));
     Ok(())
@@ -750,8 +775,9 @@ fn rec_rollback_prepared_cb(
 ) -> types_error::PgResult<()> {
     let gid = rb.txn(txn).gid.clone().unwrap_or_default();
     TWOPC_EVENTS.with(|e| {
-        e.borrow_mut()
-            .push(format!("rollback_prepared:{gid}:{prepare_end_lsn}:{prepare_time}"))
+        e.borrow_mut().push(format!(
+            "rollback_prepared:{gid}:{prepare_end_lsn}:{prepare_time}"
+        ))
     });
     Ok(())
 }
@@ -901,9 +927,7 @@ thread_local! {
 fn install_did_commit_stub() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
-        transam_seams::transaction_id_did_commit::set(|_| {
-            Ok(DID_COMMIT_ANSWER.with(|c| c.get()))
-        });
+        transam_seams::transaction_id_did_commit::set(|_| Ok(DID_COMMIT_ANSWER.with(|c| c.get())));
     });
 }
 
@@ -1005,7 +1029,10 @@ fn snap_change(xmin: TransactionId, xips: &[TransactionId]) -> ReorderBufferChan
     s.suboverflowed = true;
     s.curcid.set(7);
     s.copied = true;
-    ReorderBufferChange::new(InternalSnapshot, ReorderBufferChangeData::Snapshot(Rc::new(s)))
+    ReorderBufferChange::new(
+        InternalSnapshot,
+        ReorderBufferChangeData::Snapshot(Rc::new(s)),
+    )
 }
 
 fn drain_lsns(rb: &mut ReorderBuffer, txn: TxnId) -> Vec<XLogRecPtr> {
@@ -1028,11 +1055,17 @@ fn spill_roundtrip_preserves_every_change_type() {
     let (main_desc, _) = toast_descs();
 
     // One change of every payload-carrying kind, ascending LSNs.
-    rb.queue_change(xid, 100, msg_change("alpha"), false).unwrap();
+    rb.queue_change(xid, 100, msg_change("alpha"), false)
+        .unwrap();
     let payload = inline_varlena(b"spilled tuple payload");
     let values = [Datum::from_usize(payload.as_ptr() as usize)];
-    rb.queue_change(xid, 110, tuple_change(&rb, &main_desc, &values, &[false]), false)
-        .unwrap();
+    rb.queue_change(
+        xid,
+        110,
+        tuple_change(&rb, &main_desc, &values, &[false]),
+        false,
+    )
+    .unwrap();
     rb.queue_change(
         xid,
         120,
@@ -1049,7 +1082,8 @@ fn spill_roundtrip_preserves_every_change_type() {
         false,
     )
     .unwrap();
-    rb.queue_change(xid, 130, snap_change(500, &[501, 502, 503]), false).unwrap();
+    rb.queue_change(xid, 130, snap_change(500, &[501, 502, 503]), false)
+        .unwrap();
     rb.queue_change(
         xid,
         140,
@@ -1106,8 +1140,19 @@ fn spill_roundtrip_preserves_every_change_type() {
                 assert_eq!(prefix.as_str(), "test");
                 assert_eq!(&message[..], b"alpha");
             }
-            (110, ReorderBufferChangeData::Tp { rlocator, clear_toast_afterwards, oldtuple, newtuple }) => {
-                assert_eq!(*rlocator, types_storage::RelFileLocator::new(1663, 5, 55555));
+            (
+                110,
+                ReorderBufferChangeData::Tp {
+                    rlocator,
+                    clear_toast_afterwards,
+                    oldtuple,
+                    newtuple,
+                },
+            ) => {
+                assert_eq!(
+                    *rlocator,
+                    types_storage::RelFileLocator::new(1663, 5, 55555)
+                );
                 assert!(*clear_toast_afterwards);
                 assert!(oldtuple.is_none());
                 let t = newtuple.as_ref().unwrap();
@@ -1133,7 +1178,14 @@ fn spill_roundtrip_preserves_every_change_type() {
                 assert!(s.copied);
             }
             (140, ReorderBufferChangeData::CommandId(c)) => assert_eq!(*c, 42),
-            (150, ReorderBufferChangeData::Truncate { cascade, restart_seqs, relids }) => {
+            (
+                150,
+                ReorderBufferChangeData::Truncate {
+                    cascade,
+                    restart_seqs,
+                    relids,
+                },
+            ) => {
                 assert!(*cascade);
                 assert!(!*restart_seqs);
                 assert_eq!(&relids[..], &[16384, 16400]);
@@ -1170,7 +1222,8 @@ fn spill_eviction_fires_from_queue_change_and_reports_stats() {
 
     let body = "x".repeat(1024);
     for i in 0..64u64 {
-        rb.queue_change(70, 1000 + i, msg_change(&body), false).unwrap();
+        rb.queue_change(70, 1000 + i, msg_change(&body), false)
+            .unwrap();
     }
 
     let limit = 8 * 1024;
@@ -1206,7 +1259,8 @@ fn spill_restore_runs_in_bounded_batches() {
     let n: u64 = 5000; // crosses the 4096-change restore batch bound
 
     for i in 0..n {
-        rb.queue_change(xid, 10_000 + i, msg_change(&format!("m{i}")), false).unwrap();
+        rb.queue_change(xid, 10_000 + i, msg_change(&format!("m{i}")), false)
+            .unwrap();
     }
     let txn = rb.txn_by_xid(xid, false, 0, false).0.unwrap();
     rb.serialize_txn(txn).unwrap();
@@ -1246,8 +1300,10 @@ fn spill_splits_files_per_wal_segment() {
     let mut rb = spill_rb(slot);
     let xid: TransactionId = 90;
 
-    rb.queue_change(xid, 100, msg_change("seg0"), false).unwrap();
-    rb.queue_change(xid, TEST_SEG_SIZE + 200, msg_change("seg1"), false).unwrap();
+    rb.queue_change(xid, 100, msg_change("seg0"), false)
+        .unwrap();
+    rb.queue_change(xid, TEST_SEG_SIZE + 200, msg_change("seg1"), false)
+        .unwrap();
     let txn = rb.txn_by_xid(xid, false, 0, false).0.unwrap();
     rb.serialize_txn(txn).unwrap();
 
@@ -1272,10 +1328,14 @@ fn spill_iterates_subtxns_merged_by_lsn() {
     let mut rb = spill_rb(slot);
     let (top_xid, sub_xid): (TransactionId, TransactionId) = (100, 101);
 
-    rb.queue_change(top_xid, 10, msg_change("t10"), false).unwrap();
-    rb.queue_change(sub_xid, 20, msg_change("s20"), false).unwrap();
-    rb.queue_change(top_xid, 30, msg_change("t30"), false).unwrap();
-    rb.queue_change(sub_xid, 40, msg_change("s40"), false).unwrap();
+    rb.queue_change(top_xid, 10, msg_change("t10"), false)
+        .unwrap();
+    rb.queue_change(sub_xid, 20, msg_change("s20"), false)
+        .unwrap();
+    rb.queue_change(top_xid, 30, msg_change("t30"), false)
+        .unwrap();
+    rb.queue_change(sub_xid, 40, msg_change("s40"), false)
+        .unwrap();
     rb.assign_child(top_xid, sub_xid, 20);
 
     let top = rb.txn_by_xid(top_xid, false, 0, false).0.unwrap();
@@ -1303,10 +1363,12 @@ fn spill_stats_count_a_txn_once_across_repeat_spills() {
     let mut rb = spill_rb(slot);
     let xid: TransactionId = 110;
 
-    rb.queue_change(xid, 100, msg_change("first"), false).unwrap();
+    rb.queue_change(xid, 100, msg_change("first"), false)
+        .unwrap();
     let txn = rb.txn_by_xid(xid, false, 0, false).0.unwrap();
     rb.serialize_txn(txn).unwrap();
-    rb.queue_change(xid, 200, msg_change("second"), false).unwrap();
+    rb.queue_change(xid, 200, msg_change("second"), false)
+        .unwrap();
     rb.serialize_txn(txn).unwrap();
 
     assert_eq!(rb.spillTxns, 1, "same txn spilled twice counts once");
@@ -1321,9 +1383,9 @@ fn spill_stats_count_a_txn_once_across_repeat_spills() {
 fn spill_immediate_debug_mode_serializes_every_change() {
     let slot = "spill_immediate";
     let mut rb = spill_rb(slot);
-    (guc_tables::vars::debug_logical_replication_streaming.get().set)(
-        guc_tables::consts::DEBUG_LOGICAL_REP_STREAMING_IMMEDIATE,
-    );
+    (guc_tables::vars::debug_logical_replication_streaming
+        .get()
+        .set)(guc_tables::consts::DEBUG_LOGICAL_REP_STREAMING_IMMEDIATE);
     let xid: TransactionId = 120;
 
     rb.queue_change(xid, 100, msg_change("a"), false).unwrap();
@@ -1336,9 +1398,9 @@ fn spill_immediate_debug_mode_serializes_every_change() {
     assert_eq!(rb.txn(txn).nentries, 2);
     assert_eq!(rb.txn(txn).nentries_mem, 0);
 
-    (guc_tables::vars::debug_logical_replication_streaming.get().set)(
-        guc_tables::consts::DEBUG_LOGICAL_REP_STREAMING_BUFFERED,
-    );
+    (guc_tables::vars::debug_logical_replication_streaming
+        .get()
+        .set)(guc_tables::consts::DEBUG_LOGICAL_REP_STREAMING_BUFFERED);
 
     let lsns = drain_lsns(&mut rb, txn);
     assert_eq!(lsns, vec![100, 110]);
@@ -1368,8 +1430,13 @@ fn spill_toast_chunks_reassemble_after_restore() {
     }
     let pointer = ondisk_toast_pointer(valueid, raw_len as i32 + 4, raw_len as u32);
     let values = [Datum::from_usize(pointer.as_ptr() as usize)];
-    rb.queue_change(xid, 110, tuple_change(&rb, &main_desc, &values, &[false]), false)
-        .unwrap();
+    rb.queue_change(
+        xid,
+        110,
+        tuple_change(&rb, &main_desc, &values, &[false]),
+        false,
+    )
+    .unwrap();
 
     let txn = rb.txn_by_xid(xid, false, 0, false).0.unwrap();
     rb.serialize_txn(txn).unwrap();
@@ -1384,15 +1451,19 @@ fn spill_toast_chunks_reassemble_after_restore() {
     while let Some(cid) = rb.iter_txn_next(&mut state).unwrap() {
         if rb.change(cid).lsn < 110 {
             rb.iter_extract_change(&mut state, cid);
-            rb.toast_append_chunk_with_desc(txn, &toast_desc, cid).unwrap();
+            rb.toast_append_chunk_with_desc(txn, &toast_desc, cid)
+                .unwrap();
         } else {
             main_cid = Some(cid);
-            rb.toast_replace_with_descs(txn, &main_desc, &toast_desc, cid).unwrap();
+            rb.toast_replace_with_descs(txn, &main_desc, &toast_desc, cid)
+                .unwrap();
         }
     }
     let main_cid = main_cid.unwrap();
     match &rb.change(main_cid).data {
-        ReorderBufferChangeData::Tp { newtuple: Some(t), .. } => {
+        ReorderBufferChangeData::Tp {
+            newtuple: Some(t), ..
+        } => {
             let mut values = [Datum::from_usize(0)];
             let mut isnull = [true];
             types_tuple::heap_deform_tuple(t.as_tuple(), &main_desc, &mut values, &mut isnull);
@@ -1458,7 +1529,12 @@ fn spill_old_and_new_tuples_roundtrip_identity_fields() {
     let mut state = state.unwrap();
     let cid = rb.iter_txn_next(&mut state).unwrap().unwrap();
     match &rb.change(cid).data {
-        ReorderBufferChangeData::Tp { clear_toast_afterwards, oldtuple, newtuple, .. } => {
+        ReorderBufferChangeData::Tp {
+            clear_toast_afterwards,
+            oldtuple,
+            newtuple,
+            ..
+        } => {
             assert!(!*clear_toast_afterwards);
             let o = oldtuple.as_ref().unwrap();
             assert_eq!(o.image(), &old_image[..], "old tuple image byte-exact");
@@ -1519,7 +1595,12 @@ fn spill_tuplecid_and_speculative_forms_roundtrip() {
     let cid = rb.iter_txn_next(&mut state).unwrap().unwrap();
     assert_eq!(rb.change(cid).action, InternalSpecConfirm);
     match &rb.change(cid).data {
-        ReorderBufferChangeData::Tp { rlocator, clear_toast_afterwards, oldtuple, newtuple } => {
+        ReorderBufferChangeData::Tp {
+            rlocator,
+            clear_toast_afterwards,
+            oldtuple,
+            newtuple,
+        } => {
             assert_eq!(rlocator.relNumber, 88888);
             assert!(*clear_toast_afterwards);
             assert!(oldtuple.is_none() && newtuple.is_none());
@@ -1538,18 +1619,25 @@ fn largest_streamable_top_txn_selection_rules() {
     let mut rb = rb();
 
     // txn 200: streamable, base snapshot, two changes.
-    rb.queue_change(200, 100, msg_change(&"x".repeat(500)), false).unwrap();
-    rb.queue_change(200, 110, msg_change("small"), false).unwrap();
+    rb.queue_change(200, 100, msg_change(&"x".repeat(500)), false)
+        .unwrap();
+    rb.queue_change(200, 110, msg_change("small"), false)
+        .unwrap();
     rb.set_base_snapshot(200, 90, snap(200));
     // txn 201: bigger but no base snapshot -> not a candidate.
-    rb.queue_change(201, 120, msg_change(&"y".repeat(5000)), false).unwrap();
+    rb.queue_change(201, 120, msg_change(&"y".repeat(5000)), false)
+        .unwrap();
     // txn 202: base snapshot but only non-streamable changes.
     rb.add_new_command_id(202, 130, 7).unwrap();
     rb.set_base_snapshot(202, 125, snap(202));
 
     let t200 = rb.txn_by_xid(200, false, 0, false).0.unwrap();
     let picked = rb.largest_streamable_top_txn();
-    assert_eq!(picked, Some(t200), "only the snapshot-bearing streamable txn qualifies");
+    assert_eq!(
+        picked,
+        Some(t200),
+        "only the snapshot-bearing streamable txn qualifies"
+    );
 
     // A partial change disqualifies the toplevel.
     rb.txn_mut(t200).txn_flags |= RBTXN_HAS_PARTIAL_CHANGE;
@@ -1568,18 +1656,17 @@ fn can_start_streaming_needs_callbacks_and_ready_flag() {
     rb.streaming_ready = true;
     assert!(!rb.can_start_streaming(), "no stream callbacks installed");
 
-    fn noop_lsn_cb(
-        _: &mut ReorderBuffer,
-        _: TxnId,
-        _: XLogRecPtr,
-    ) -> types_error::PgResult<()> {
+    fn noop_lsn_cb(_: &mut ReorderBuffer, _: TxnId, _: XLogRecPtr) -> types_error::PgResult<()> {
         Ok(())
     }
     rb.callbacks.stream_start = Some(noop_lsn_cb);
     assert!(rb.can_stream());
     assert!(rb.can_start_streaming());
     rb.streaming_ready = false;
-    assert!(!rb.can_start_streaming(), "decode loop has not reached a consistent point");
+    assert!(
+        !rb.can_start_streaming(),
+        "decode loop has not reached a consistent point"
+    );
 }
 
 #[test]
@@ -1603,5 +1690,8 @@ fn save_txn_snapshot_copies_uncopied_snapshots() {
     let copied = rb.copy_snap(&snap(211), txn, 5);
     rb.save_txn_snapshot(txn, &copied, 5);
     let stored = rb.txn(txn).snapshot_now.as_ref().unwrap();
-    assert!(Rc::ptr_eq(stored, &copied), "copied snapshots are not re-copied");
+    assert!(
+        Rc::ptr_eq(stored, &copied),
+        "copied snapshots are not re-copied"
+    );
 }

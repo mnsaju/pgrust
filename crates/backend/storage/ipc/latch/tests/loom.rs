@@ -247,7 +247,6 @@ fn dialect_guard_relaxed_rmw_reads_do_not_join_causality() {
     );
 }
 
-
 /// Guards model sensitivity for the R2 bug class: the publish-after-arm
 /// lost wake (parked waiter + armed setter reading a stale waker word) must
 /// stay EXPRESSIBLE in the dialect's op vocabulary. If this ever fails, the

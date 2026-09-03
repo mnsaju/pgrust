@@ -24,8 +24,7 @@ pub type FmNodePtr = Option<NonNull<FmNode>>;
 
 // C's PGFunction; `flinfo` travels as a parameter (`None` = C's NULL flinfo);
 // errors return as `Err`, not an ereport longjmp.
-pub type PGFunction =
-    fn(Option<&mut FmgrInfo>, &mut FunctionCallInfoBaseData) -> PgResult<Datum>;
+pub type PGFunction = fn(Option<&mut FmgrInfo>, &mut FunctionCallInfoBaseData) -> PgResult<Datum>;
 
 pub struct FmgrInfo {
     pub fn_addr: PGFunction,
@@ -511,7 +510,13 @@ fn unresolved_function(
 }
 
 impl FmgrInfo {
-    pub fn new(fn_addr: PGFunction, fn_oid: Oid, fn_nargs: i16, fn_strict: bool, fn_retset: bool) -> Self {
+    pub fn new(
+        fn_addr: PGFunction,
+        fn_oid: Oid,
+        fn_nargs: i16,
+        fn_strict: bool,
+        fn_retset: bool,
+    ) -> Self {
         Self {
             fn_addr,
             fn_oid,
@@ -525,7 +530,13 @@ impl FmgrInfo {
     }
 
     pub fn unresolved() -> Self {
-        Self::new(unresolved_function, ::types_core::primitive::InvalidOid, 0, false, false)
+        Self::new(
+            unresolved_function,
+            ::types_core::primitive::InvalidOid,
+            0,
+            false,
+            false,
+        )
     }
 
     #[inline(always)]

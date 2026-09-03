@@ -1,15 +1,15 @@
-use crate::{appendf, append_timestamptz, rec_data, rec_info, Rec};
-use xlogreader_seams::XLogReaderState;
+use crate::{append_timestamptz, appendf, rec_data, rec_info, Rec};
 use stringinfo::StringInfo;
 use types_core::{RepOriginId, TimestampTz, TransactionId, XLogRecPtr, XlXactStatsItem};
 use types_error::PgResult;
 use types_storage::RelFileLocator;
 use xact::{
     parse_abort_record, parse_commit_record, XactCompletionApplyFeedback,
-    XactCompletionForceSyncCommit, XactCompletionRelcacheInitFileInval, XACT_XINFO_HAS_ORIGIN, XLOG_XACT_ABORT, XLOG_XACT_ABORT_PREPARED, XLOG_XACT_ASSIGNMENT,
-    XLOG_XACT_COMMIT, XLOG_XACT_COMMIT_PREPARED, XLOG_XACT_INVALIDATIONS, XLOG_XACT_OPMASK,
-    XLOG_XACT_PREPARE,
+    XactCompletionForceSyncCommit, XactCompletionRelcacheInitFileInval, XACT_XINFO_HAS_ORIGIN,
+    XLOG_XACT_ABORT, XLOG_XACT_ABORT_PREPARED, XLOG_XACT_ASSIGNMENT, XLOG_XACT_COMMIT,
+    XLOG_XACT_COMMIT_PREPARED, XLOG_XACT_INVALIDATIONS, XLOG_XACT_OPMASK, XLOG_XACT_PREPARE,
 };
+use xlogreader_seams::XLogReaderState;
 
 const InvalidRepOriginId: RepOriginId = 0;
 
@@ -58,7 +58,9 @@ fn parse_prepare_record<'a>(data: &'a [u8]) -> PgResult<(ParsedPrepare<'a>, Tran
     let origin_timestamp = r.i64(64, what)?;
 
     let mut off = 72;
-    let gid_full = data.get(off..off + gidlen).ok_or_else(|| crate::record_truncated(what))?;
+    let gid_full = data
+        .get(off..off + gidlen)
+        .ok_or_else(|| crate::record_truncated(what))?;
     let gid = match gid_full.iter().position(|&b| b == 0) {
         Some(n) => &gid_full[..n],
         None => gid_full,
@@ -270,7 +272,12 @@ fn desc_origin(
     lsn: XLogRecPtr,
     timestamp: TimestampTz,
 ) -> PgResult<()> {
-    appendf!(buf, "; origin: node {origin_id}, lsn {:X}/{:X}, at ", (lsn >> 32) as u32, lsn as u32)?;
+    appendf!(
+        buf,
+        "; origin: node {origin_id}, lsn {:X}/{:X}, at ",
+        (lsn >> 32) as u32,
+        lsn as u32
+    )?;
     append_timestamptz(buf, timestamp)
 }
 
@@ -300,7 +307,9 @@ pub fn xact_desc(buf: &mut StringInfo<'_>, record: &XLogReaderState) -> PgResult
         // xl_xact_invals: nmsgs 0, msgs[] 4.
         let r = Rec(data);
         let nmsgs = r.i32(0, "xl_xact_invals")?.max(0) as usize;
-        let raw = data.get(4..4 + nmsgs * 16).ok_or_else(|| crate::record_truncated("xl_xact_invals"))?;
+        let raw = data
+            .get(4..4 + nmsgs * 16)
+            .ok_or_else(|| crate::record_truncated("xl_xact_invals"))?;
         crate::standbydesc::standby_desc_invalidations_raw(buf, nmsgs, raw, 0, 0, false)?;
     }
     Ok(())

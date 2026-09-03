@@ -96,7 +96,11 @@ pub fn gistrescan(
     key: Option<&[ScanKeyData]>,
     orderbys: Option<&[ScanKeyData]>,
 ) -> PgResult<()> {
-    let index_rel = scan.indexRelation.as_ref().expect("index scan parked (skeleton)").alias();
+    let index_rel = scan
+        .indexRelation
+        .as_ref()
+        .expect("index scan parked (skeleton)")
+        .alias();
     let IndexScanOpaque::Gist(so) = &mut scan.opaque else {
         crate::non_gist_opaque()
     };
@@ -136,9 +140,7 @@ pub fn gistrescan(
                     sk_strategy: k.sk_strategy,
                     sk_subtype: k.sk_subtype,
                     sk_collation: k.sk_collation,
-                    sk_func: fmgr_info_copy(
-                        &so.giststate.consistentFn[k.sk_attno as usize - 1],
-                    ),
+                    sk_func: fmgr_info_copy(&so.giststate.consistentFn[k.sk_attno as usize - 1]),
                     sk_argument: k.sk_argument,
                 };
                 let mut skey = skey;

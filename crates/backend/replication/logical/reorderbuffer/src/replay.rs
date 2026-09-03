@@ -16,9 +16,9 @@ use types_tuple::HeapTupleData;
 use crate::iter::IterState;
 use crate::visibility::{ReorderBufferTupleCidEnt, ReorderBufferTupleCidKey, TupleCidHash};
 use crate::{
-    dl_delete, dl_iter, rb_error, ChangeId, ListHead, ReorderBuffer,
-    ReorderBufferChangeData, ReorderBufferChangeType::*, TxnId, RBTXN_IS_SERIALIZED,
-    RBTXN_IS_SERIALIZED_CLEAR, RBTXN_IS_STREAMED, RBTXN_SENT_PREPARE,
+    dl_delete, dl_iter, rb_error, ChangeId, ListHead, ReorderBuffer, ReorderBufferChangeData,
+    ReorderBufferChangeType::*, TxnId, RBTXN_IS_SERIALIZED, RBTXN_IS_SERIALIZED_CLEAR,
+    RBTXN_IS_STREAMED, RBTXN_SENT_PREPARE,
 };
 
 pub(crate) fn relation_is_logically_logged(relation: &RelationData<'static>) -> bool {
@@ -86,7 +86,9 @@ impl ReorderBuffer {
         match (&change.action, &change.data) {
             (
                 Insert | Update | Delete | InternalSpecInsert,
-                ReorderBufferChangeData::Tp { oldtuple, newtuple, .. },
+                ReorderBufferChangeData::Tp {
+                    oldtuple, newtuple, ..
+                },
             ) => {
                 if let Some(t) = oldtuple {
                     sz += std::mem::size_of::<HeapTupleData>() + t.t_len as usize;
@@ -96,7 +98,8 @@ impl ReorderBuffer {
                 }
             }
             (Message, ReorderBufferChangeData::Msg { prefix, message }) => {
-                sz += prefix.len() + 1
+                sz += prefix.len()
+                    + 1
                     + message.len()
                     + std::mem::size_of::<usize>()
                     + std::mem::size_of::<usize>();
@@ -195,33 +198,42 @@ impl ReorderBuffer {
         if !self.txn(txn).has_catalog_changes() || self.txn(txn).tuplecids.is_empty() {
             return;
         }
-        let mut hash: TupleCidHash =
-            mcx::PgFxHashMap::with_hasher_in(Default::default(), self.mcx);
+        let mut hash: TupleCidHash = mcx::PgFxHashMap::with_hasher_in(Default::default(), self.mcx);
         for cid in dl_iter(&self.changes, self.txn(txn).tuplecids, |c| c.node) {
             let change = self.change(cid);
             debug_assert_eq!(change.action, InternalTupleCid);
-            let ReorderBufferChangeData::TupleCid { locator, tid, cmin, cmax, combocid } =
-                &change.data
+            let ReorderBufferChangeData::TupleCid {
+                locator,
+                tid,
+                cmin,
+                cmax,
+                combocid,
+            } = &change.data
             else {
                 unreachable!("tuplecid change carries TupleCid data");
             };
-            let key = ReorderBufferTupleCidKey { rlocator: *locator, tid: *tid };
+            let key = ReorderBufferTupleCidKey {
+                rlocator: *locator,
+                tid: *tid,
+            };
             if let Some(ent) = hash.get_mut(&key) {
                 debug_assert_eq!(ent.cmin, *cmin);
                 debug_assert!(
-                    ent.cmax == InvalidCommandId
-                        || (*cmax != InvalidCommandId && *cmax > ent.cmax)
+                    ent.cmax == InvalidCommandId || (*cmax != InvalidCommandId && *cmax > ent.cmax)
                 );
                 ent.cmax = *cmax;
             } else {
                 hash.insert(
                     key,
-                    ReorderBufferTupleCidEnt { cmin: *cmin, cmax: *cmax, combocid: *combocid },
+                    ReorderBufferTupleCidEnt {
+                        cmin: *cmin,
+                        cmax: *cmax,
+                        combocid: *combocid,
+                    },
                 );
             }
         }
-        self.txn_mut(txn).tuplecid_hash =
-            Some(Rc::new(std::cell::RefCell::new(hash)));
+        self.txn_mut(txn).tuplecid_hash = Some(Rc::new(std::cell::RefCell::new(hash)));
     }
 
     pub(crate) fn cleanup_txn(&mut self, txn: TxnId) -> PgResult<()> {
@@ -255,7 +267,9 @@ impl ReorderBuffer {
         if self.txn(txn).base_snapshot.is_some() {
             self.txn_mut(txn).base_snapshot = None;
             let mut list = self.txns_by_base_snapshot_lsn;
-            dl_delete(&mut self.txns, &mut list, txn, |t| &mut t.base_snapshot_node);
+            dl_delete(&mut self.txns, &mut list, txn, |t| {
+                &mut t.base_snapshot_node
+            });
             self.txns_by_base_snapshot_lsn = list;
         }
 
@@ -539,9 +553,15 @@ impl ReorderBuffer {
         // Only send begin/begin-prepare for non-streamed transactions.
         if !streaming {
             if self.txn(txn).is_prepared() {
-                { let cb = self.callbacks.begin_prepare; cb(self, txn)?; }
+                {
+                    let cb = self.callbacks.begin_prepare;
+                    cb(self, txn)?;
+                }
             } else {
-                { let cb = self.callbacks.begin; cb(self, txn)?; }
+                {
+                    let cb = self.callbacks.begin;
+                    cb(self, txn)?;
+                }
             }
         }
 
@@ -610,7 +630,10 @@ impl ReorderBuffer {
                     if let Some(si) = specinsert.take() {
                         debug_assert!(matches!(
                             self.change(cur).data,
-                            ReorderBufferChangeData::Tp { clear_toast_afterwards: true, .. }
+                            ReorderBufferChangeData::Tp {
+                                clear_toast_afterwards: true,
+                                ..
+                            }
                         ));
                         self.toast_reset(txn);
                         self.free_change(si, true);
@@ -813,24 +836,24 @@ impl ReorderBuffer {
         )?;
 
         // Mapped catalog tuple without data, emitted mid-rewrite: skippable.
-        let relation = if reloid == InvalidOid && !has_new && !has_old {
-            None
-        } else if reloid == InvalidOid {
-            return Err(rb_error(format!(
-                "could not map filenumber \"{}/{}/{}\" to relation OID",
-                rlocator.spcOid, rlocator.dbOid, rlocator.relNumber
-            )));
-        } else {
-            Some(relcache::RelationIdGetRelation(reloid)?.ok_or_else(|| {
-                rb_error(format!("could not open relation with OID {reloid}"))
-            })?)
-        };
+        let relation =
+            if reloid == InvalidOid && !has_new && !has_old {
+                None
+            } else if reloid == InvalidOid {
+                return Err(rb_error(format!(
+                    "could not map filenumber \"{}/{}/{}\" to relation OID",
+                    rlocator.spcOid, rlocator.dbOid, rlocator.relNumber
+                )));
+            } else {
+                Some(relcache::RelationIdGetRelation(reloid)?.ok_or_else(|| {
+                    rb_error(format!("could not open relation with OID {reloid}"))
+                })?)
+            };
 
         if let Some(relation) = &relation {
             // rd_rel.relrewrite is not carried by this build's trimmed form;
             // transient rewrite heaps ride the logical-rewrite path (phase-2).
-            if relation_is_logically_logged(relation)
-                && relation.rd_rel.relkind != RELKIND_SEQUENCE
+            if relation_is_logically_logged(relation) && relation.rd_rel.relkind != RELKIND_SEQUENCE
             {
                 if !catalog::IsToastRelation(relation) {
                     self.toast_replace(txn, relation, work)?;

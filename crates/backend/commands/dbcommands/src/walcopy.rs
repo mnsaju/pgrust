@@ -44,13 +44,23 @@ pub(crate) fn CreateDatabaseUsingWalLog(
     for relinfo in &rlocatorlist {
         let srcrlocator = relinfo.rlocator;
         let dstrlocator = RelFileLocator {
-            spcOid: if srcrlocator.spcOid == src_tsid { dst_tsid } else { srcrlocator.spcOid },
+            spcOid: if srcrlocator.spcOid == src_tsid {
+                dst_tsid
+            } else {
+                srcrlocator.spcOid
+            },
             dbOid: dst_dboid,
             relNumber: srcrlocator.relNumber,
         };
 
-        let srcrelid = LockRelId { relId: relinfo.reloid, dbId: src_dboid };
-        let dstrelid = LockRelId { relId: relinfo.reloid, dbId: dst_dboid };
+        let srcrelid = LockRelId {
+            relId: relinfo.reloid,
+            dbId: src_dboid,
+        };
+        let dstrelid = LockRelId {
+            relId: relinfo.reloid,
+            dbId: dst_dboid,
+        };
         lmgr::LockRelationId(&srcrelid, AccessShareLock)?;
         lmgr::LockRelationId(&dstrelid, AccessShareLock)?;
 
@@ -70,11 +80,21 @@ fn ScanSourceDatabasePgClass(
     let relfilenumber =
         relmapper::RelationMapOidToFilenumberForDatabase(srcpath, RelationRelationId)?;
 
-    let relid = LockRelId { relId: RelationRelationId, dbId: dbid };
+    let relid = LockRelId {
+        relId: RelationRelationId,
+        dbId: dbid,
+    };
     lmgr::LockRelationId(&relid, AccessShareLock)?;
 
-    let rlocator = RelFileLocator { spcOid: tbid, dbOid: dbid, relNumber: relfilenumber };
-    let key = RelFileLocatorBackend { locator: rlocator, backend: INVALID_PROC_NUMBER };
+    let rlocator = RelFileLocator {
+        spcOid: tbid,
+        dbOid: dbid,
+        relNumber: relfilenumber,
+    };
+    let key = RelFileLocatorBackend {
+        locator: rlocator,
+        backend: INVALID_PROC_NUMBER,
+    };
     smgr::smgropen(rlocator, INVALID_PROC_NUMBER)?;
     let nblocks = smgr::smgrnblocks(key, ForkNumber::MAIN_FORKNUM)?;
     smgr::smgrclose(key)?;
@@ -105,7 +125,16 @@ fn ScanSourceDatabasePgClass(
             continue;
         }
 
-        scan_page(page, buf, blkno, tbid, dbid, srcpath, &snapshot, &mut rlocatorlist)?;
+        scan_page(
+            page,
+            buf,
+            blkno,
+            tbid,
+            dbid,
+            srcpath,
+            &snapshot,
+            &mut rlocatorlist,
+        )?;
 
         bufmgr::UnlockReleaseBuffer(buf)?;
     }
@@ -140,9 +169,8 @@ fn scan_page(
         // SAFETY: normal item id on a share-locked page; the item image is a
         // live heap tuple readable for its recorded length.
         let (item_ptr, item_len) = unsafe { page.item_raw_unchecked(itemid) };
-        let mut tuple = unsafe {
-            HeapTupleData::from_raw_parts(item_ptr, item_len, tid, RelationRelationId)
-        };
+        let mut tuple =
+            unsafe { HeapTupleData::from_raw_parts(item_ptr, item_len, tid, RelationRelationId) };
 
         if heapam_visibility_seams::heap_tuple_satisfies_visibility::call(
             &mut tuple,
@@ -171,9 +199,19 @@ fn scan_tuple(
     // offsets mirror FormData_pg_class field order in pg_class.h.
     let (oid, relfilenode, reltablespace, relpersistence, relkind) = unsafe {
         let u32_at = |off: usize| -> u32 {
-            u32::from_ne_bytes(core::slice::from_raw_parts(base.add(off), 4).try_into().unwrap())
+            u32::from_ne_bytes(
+                core::slice::from_raw_parts(base.add(off), 4)
+                    .try_into()
+                    .unwrap(),
+            )
         };
-        (u32_at(0), u32_at(88), u32_at(92), *base.add(118), *base.add(119))
+        (
+            u32_at(0),
+            u32_at(88),
+            u32_at(92),
+            *base.add(118),
+            *base.add(119),
+        )
     };
 
     if reltablespace == crate::GLOBALTABLESPACE_OID
@@ -191,14 +229,20 @@ fn scan_tuple(
 
     if relfilenumber == InvalidOid {
         return Err(ereport(ERROR)
-            .errmsg(format!("relation with OID {oid} does not have a valid relfilenumber"))
+            .errmsg(format!(
+                "relation with OID {oid} does not have a valid relfilenumber"
+            ))
             .into_error()
             .into());
     }
 
     Ok(Some(CreateDBRelInfo {
         rlocator: RelFileLocator {
-            spcOid: if reltablespace != InvalidOid { reltablespace } else { tbid },
+            spcOid: if reltablespace != InvalidOid {
+                reltablespace
+            } else {
+                tbid
+            },
             dbOid: dbid,
             relNumber: relfilenumber,
         },
@@ -248,7 +292,9 @@ pub(crate) fn CreateDirAndVersionFile(
     // SAFETY: fdnum is an open fd owned by the transient-file table.
     let written = unsafe { libc::write(fdnum, buf.as_ptr().cast(), buf.len()) };
     if written != buf.len() as isize {
-        let errno = std::io::Error::last_os_error().raw_os_error().unwrap_or(libc::ENOSPC);
+        let errno = std::io::Error::last_os_error()
+            .raw_os_error()
+            .unwrap_or(libc::ENOSPC);
         return Err(ereport(ERROR)
             .errcode_for_file_access()
             .with_saved_errno(if errno == 0 { libc::ENOSPC } else { errno })

@@ -484,7 +484,9 @@ pub fn get_controlfile_by_exact_path(path: &str) -> PgResult<(ControlFileData, b
 
     if control_file.pg_control_version % 65536 == 0 && control_file.pg_control_version / 65536 != 0
     {
-        ereport(ERROR).errmsg("byte ordering mismatch").finish(loc(F))?;
+        ereport(ERROR)
+            .errmsg("byte ordering mismatch")
+            .finish(loc(F))?;
         unreachable!()
     }
 

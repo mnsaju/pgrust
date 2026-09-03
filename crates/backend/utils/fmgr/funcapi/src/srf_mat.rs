@@ -4,13 +4,13 @@ pub const MAT_SRF_BLESS: u32 = 0x02;
 
 use datum::Datum;
 use fmgr::{
-    FmgrInfo, FunctionCallInfoBaseData, SetFunctionReturnMode, SFRM_Materialize,
-    SFRM_Materialize_Random,
+    FmgrInfo, FunctionCallInfoBaseData, SFRM_Materialize, SFRM_Materialize_Random,
+    SetFunctionReturnMode,
 };
+use funcapi_srf::{no_rsinfo, srf_context_error};
 use mcx::Mcx;
 use types_error::{PgError, PgResult, ERRCODE_FEATURE_NOT_SUPPORTED};
 use types_tuple::TupleDescData;
-use funcapi_srf::{no_rsinfo, srf_context_error};
 
 #[track_caller]
 #[cold]
@@ -82,17 +82,16 @@ pub fn InitMaterializedSRF<'m>(
         if resolved.class != crate::TypeFuncClass::Composite {
             return Err(Box::new(PgError::error("return type must be a row type")));
         }
-        resolved.result_tuple_desc.expect("composite result carries a tupdesc")
+        resolved
+            .result_tuple_desc
+            .expect("composite result carries a tupdesc")
     };
     // MAT_SRF_BLESS is a no-op: C's BlessTupleDesc registers a record typmod
     // for consumers decoding anonymous record datums; here rows only flow
     // through the tuplestore and are read via the scan tupdesc.
 
     let random_access = allowed_modes & SFRM_Materialize_Random != 0;
-    let store = tuplestore::Tuplestore::begin_heap(
-        random_access,
-        false,
-        init_small::globals::work_mem(),
-    );
+    let store =
+        tuplestore::Tuplestore::begin_heap(random_access, false, init_small::globals::work_mem());
     Ok(MaterializedSRF { tupdesc, store })
 }

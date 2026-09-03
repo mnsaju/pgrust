@@ -377,7 +377,11 @@ pub fn double_metaphone(input: &[u8]) -> (Vec<u8>, Vec<u8>) {
                     add!(b"F", b"F");
                     current += 2;
                 } else {
-                    current += if string_at(s, current + 1, 1, &[b"P", b"B"]) { 2 } else { 1 };
+                    current += if string_at(s, current + 1, 1, &[b"P", b"B"]) {
+                        2
+                    } else {
+                        1
+                    };
                     add!(b"P", b"P");
                 }
             }
@@ -423,11 +427,19 @@ pub fn double_metaphone(input: &[u8]) -> (Vec<u8>, Vec<u8>) {
                     || string_at(s, current + 1, 1, &[b"Z"])
                 {
                     add!(b"S", b"X");
-                    current += if string_at(s, current + 1, 1, &[b"Z"]) { 2 } else { 1 };
+                    current += if string_at(s, current + 1, 1, &[b"Z"]) {
+                        2
+                    } else {
+                        1
+                    };
                 } else if string_at(s, current, 2, &[b"SC"]) {
                     if get_at(s, current + 2) == b'H' {
-                        if string_at(s, current + 3, 2, &[b"OO", b"ER", b"EN", b"UY", b"ED", b"EM"])
-                        {
+                        if string_at(
+                            s,
+                            current + 3,
+                            2,
+                            &[b"OO", b"ER", b"EN", b"UY", b"ED", b"EM"],
+                        ) {
                             if string_at(s, current + 3, 2, &[b"ER", b"EN"]) {
                                 add!(b"X", b"SK");
                             } else {
@@ -455,7 +467,11 @@ pub fn double_metaphone(input: &[u8]) -> (Vec<u8>, Vec<u8>) {
                     } else {
                         add!(b"S", b"S");
                     }
-                    current += if string_at(s, current + 1, 1, &[b"S", b"Z"]) { 2 } else { 1 };
+                    current += if string_at(s, current + 1, 1, &[b"S", b"Z"]) {
+                        2
+                    } else {
+                        1
+                    };
                 }
             }
             b'T' => {
@@ -477,7 +493,11 @@ pub fn double_metaphone(input: &[u8]) -> (Vec<u8>, Vec<u8>) {
                     }
                     current += 2;
                 } else {
-                    current += if string_at(s, current + 1, 1, &[b"T", b"D"]) { 2 } else { 1 };
+                    current += if string_at(s, current + 1, 1, &[b"T", b"D"]) {
+                        2
+                    } else {
+                        1
+                    };
                     add!(b"T", b"T");
                 }
             }
@@ -520,7 +540,11 @@ pub fn double_metaphone(input: &[u8]) -> (Vec<u8>, Vec<u8>) {
                 {
                     add!(b"KS", b"KS");
                 }
-                current += if string_at(s, current + 1, 1, &[b"C", b"X"]) { 2 } else { 1 };
+                current += if string_at(s, current + 1, 1, &[b"C", b"X"]) {
+                    2
+                } else {
+                    1
+                };
             }
             b'Z' => {
                 if get_at(s, current + 1) == b'H' {

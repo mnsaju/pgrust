@@ -11,8 +11,8 @@ use ::execindexing::{table_index_build_scan, BuildIndexInfo, IndexInfo};
 use ::mcx::{vec_from_elem_in, Mcx, MemoryContext};
 use ::snapmgr::{GetTransactionSnapshot, RegisterSnapshot, Snapshot, UnregisterSnapshot};
 use ::types_core::{
-    AttrNumber, BlockNumber, ForkNumber, InvalidBlockNumber, Oid, OffsetNumber, XLogRecPtr,
-    BLCKSZ, BTREE_AM_OID, INDEX_MAX_KEYS,
+    AttrNumber, BlockNumber, ForkNumber, InvalidBlockNumber, OffsetNumber, Oid, XLogRecPtr, BLCKSZ,
+    BTREE_AM_OID, INDEX_MAX_KEYS,
 };
 use ::types_error::{
     PgError, PgResult, ERRCODE_DATA_CORRUPTED, ERRCODE_FEATURE_NOT_SUPPORTED,
@@ -25,7 +25,7 @@ use ::types_storage::lock::{AccessShareLock, ShareLock};
 use ::types_storage::relfilelocator::RelFileLocatorBackend;
 use ::types_storage::ReadBufferMode;
 use ::types_tuple::itemptr::{
-    ItemPointerData, ItemPointerCompare, ItemPointerGetBlockNumberNoCheck,
+    ItemPointerCompare, ItemPointerData, ItemPointerGetBlockNumberNoCheck,
     ItemPointerGetOffsetNumberNoCheck, ItemPointerIsValid,
 };
 use ::types_tuple::varatt::{
@@ -35,8 +35,8 @@ use ::types_tuple::varatt::{
 use ::types_tuple::{TYPSTORAGE_EXTENDED, TYPSTORAGE_MAIN};
 
 use ::types_nbtree::{
-    BTMaxItemSize, BTMaxItemSizeNoHeapTid, BTPageOpaqueData, BTREE_MAGIC, BTREE_METAPAGE,
-    BTREE_MIN_VERSION, BTREE_VERSION, MaxTIDsPerBTreePage, INDEX_ALT_TID_MASK, P_FIRSTDATAKEY,
+    BTMaxItemSize, BTMaxItemSizeNoHeapTid, BTPageOpaqueData, MaxTIDsPerBTreePage, BTREE_MAGIC,
+    BTREE_METAPAGE, BTREE_MIN_VERSION, BTREE_VERSION, INDEX_ALT_TID_MASK, P_FIRSTDATAKEY,
     P_HAS_FULLXID, P_HAS_GARBAGE, P_HIKEY, P_IGNORE, P_INCOMPLETE_SPLIT, P_ISDELETED, P_ISHALFDEAD,
     P_ISLEAF, P_ISMETA, P_ISROOT, P_NONE, P_RIGHTMOST,
 };
@@ -49,7 +49,7 @@ use ::nbtree::itup::{
     bt_tuple_get_downlink, bt_tuple_get_heap_tid, bt_tuple_get_max_heap_tid, bt_tuple_get_natts,
     bt_tuple_get_nposting, bt_tuple_get_posting_n, bt_tuple_get_posting_offset, bt_tuple_is_pivot,
     bt_tuple_is_posting, index_form_tuple, index_getattr, index_tuple_size, maxalign, set_t_info,
-    set_t_tid, t_info, t_tid, ItupBuf, ITup, INDEX_SIZE_MASK,
+    set_t_tid, t_info, t_tid, ITup, ItupBuf, INDEX_SIZE_MASK,
 };
 use ::nbtree::{bt_metaversion, bt_mkscankey, BtScanInsert};
 
@@ -80,7 +80,6 @@ fn fmt_tid(tid: &ItemPointerData) -> String {
 fn index_corrupted(msg: String) -> Box<PgError> {
     Box::new(PgError::error(msg).with_sqlstate(ERRCODE_INDEX_CORRUPTED))
 }
-
 
 struct PageImage {
     words: Box<[u64]>,
@@ -129,7 +128,6 @@ impl OwnedTuple {
     }
 }
 
-
 struct BtreeCheckState<'mcx> {
     mcx: Mcx<'mcx>,
     scratch: MemoryContext,
@@ -161,7 +159,10 @@ impl<'mcx> BtreeCheckState<'mcx> {
 
     #[inline]
     fn ii_unique(&self) -> bool {
-        self.indexinfo.as_ref().map(|i| i.ii_Unique).unwrap_or(false)
+        self.indexinfo
+            .as_ref()
+            .map(|i| i.ii_Unique)
+            .unwrap_or(false)
     }
 }
 
@@ -180,7 +181,6 @@ struct BtreeLastVisibleEntry {
     tid: Option<ItemPointerData>,
 }
 
-
 pub(crate) fn bt_index_check_internal(
     mcx: Mcx<'_>,
     indrelid: Oid,
@@ -189,7 +189,11 @@ pub(crate) fn bt_index_check_internal(
     rootdescend: bool,
     checkunique: bool,
 ) -> PgResult<()> {
-    let lockmode = if parentcheck { ShareLock } else { AccessShareLock };
+    let lockmode = if parentcheck {
+        ShareLock
+    } else {
+        AccessShareLock
+    };
     crate::common::amcheck_lock_relation_and_check(
         mcx,
         indrelid,
@@ -306,12 +310,17 @@ fn bt_check_every_level<'mcx>(
     if state.heapallindexed {
         let total_pages =
             RelationGetNumberOfBlocksInFork(&state.rel, ForkNumber::MAIN_FORKNUM)? as i64;
-        let total_elems = (total_pages * (MaxTIDsPerBTreePage as i64 / 3))
-            .max(state.rel.rd_rel.reltuples as i64);
+        let total_elems =
+            (total_pages * (MaxTIDsPerBTreePage as i64 / 3)).max(state.rel.rd_rel.reltuples as i64);
         // C divergence: a fixed seed (C draws pg_prng_uint64); correctness does not depend on the seed within a single add-then-probe pass.
         let seed: u64 = 0;
         let work_mem = ::init_small::globals::maintenance_work_mem();
-        state.filter = Some(BloomFilter::create_in(state.mcx, total_elems, work_mem, seed)?);
+        state.filter = Some(BloomFilter::create_in(
+            state.mcx,
+            total_elems,
+            work_mem,
+            seed,
+        )?);
         state.heaptuplespresent = 0;
 
         let snap = GetTransactionSnapshot()?;
@@ -374,7 +383,10 @@ fn bt_check_every_level<'mcx>(
         indexinfo.ii_Unique = false;
         indexinfo.ii_HasExclusion = false;
 
-        let filter = state.filter.as_mut().expect("filter set for heapallindexed");
+        let filter = state
+            .filter
+            .as_mut()
+            .expect("filter set for heapallindexed");
         let heaptuplespresent = &mut state.heaptuplespresent;
         let scratch = &mut state.scratch;
 
@@ -541,7 +553,6 @@ fn bt_check_level_from_leftmost<'mcx>(
     Ok(nextleveldown)
 }
 
-
 fn bt_target_page_check(state: &mut BtreeCheckState<'_>) -> PgResult<()> {
     let mut frame = OrderProcFrame::new();
     let mut l_vis = BtreeLastVisibleEntry {
@@ -561,7 +572,12 @@ fn bt_target_page_check(state: &mut BtreeCheckState<'_>) -> PgResult<()> {
     if !is_rightmost {
         let _itemid =
             page_get_item_id_careful(state, state.targetblock, &state.target_page(), P_HIKEY)?;
-        if !bt_check_natts(&state.rel, state.heapkeyspace, &state.target_page(), P_HIKEY) {
+        if !bt_check_natts(
+            &state.rel,
+            state.heapkeyspace,
+            &state.target_page(),
+            P_HIKEY,
+        ) {
             let itup = page_item(&state.target_page(), _itemid);
             // SAFETY: high-key item on the alive target copy.
             let natts = unsafe { bt_tuple_get_natts(itup, state.rel.indnatts()) };
@@ -758,7 +774,9 @@ fn bt_target_page_check(state: &mut BtreeCheckState<'_>) -> PgResult<()> {
         }
         skey.scantid = scantid_save;
 
-        if offset + 1 <= max && !invariant_l_offset(state, &mut skey, skey_keysz, offset + 1, &mut frame)? {
+        if offset + 1 <= max
+            && !invariant_l_offset(state, &mut skey, skey_keysz, offset + 1, &mut frame)?
+        {
             let tid = unsafe { btree_tuple_points_to_tid(itup) };
             let itemid2 = page_get_item_id_careful(
                 state,
@@ -803,7 +821,13 @@ fn bt_target_page_check(state: &mut BtreeCheckState<'_>) -> PgResult<()> {
         if state.checkunique && state.ii_unique() && is_leaf && offset + 1 <= max {
             let scantid = skey.scantid;
             skey.scantid = None;
-            let cmp = bt_compare(&state.rel, &mut skey, &state.target_page(), offset + 1, &mut frame)?;
+            let cmp = bt_compare(
+                &state.rel,
+                &mut skey,
+                &state.target_page(),
+                offset + 1,
+                &mut frame,
+            )?;
             if cmp != 0 || skey.anynullkeys {
                 l_vis = BtreeLastVisibleEntry {
                     blkno: InvalidBlockNumber,
@@ -848,11 +872,23 @@ fn bt_target_page_check(state: &mut BtreeCheckState<'_>) -> PgResult<()> {
                 if state.checkunique && state.ii_unique() && is_leaf && !is_rightmost {
                     let rightblock_number = topaque.btpo_next;
                     rightkey.scantid = None;
-                    if bt_compare(&state.rel, &mut rightkey, &state.target_page(), max, &mut frame)? == 0
+                    if bt_compare(
+                        &state.rel,
+                        &mut rightkey,
+                        &state.target_page(),
+                        max,
+                        &mut frame,
+                    )? == 0
                         && !rightkey.anynullkeys
                     {
                         if !unique_checked {
-                            bt_entry_unique_check(state, itup, state.targetblock, offset, &mut l_vis)?;
+                            bt_entry_unique_check(
+                                state,
+                                itup,
+                                state.targetblock,
+                                offset,
+                                &mut l_vis,
+                            )?;
                         }
                         let rightpage2 = palloc_btree_page(state, rightblock_number)?;
                         let ropaque = page_opaque(&rightpage2.page());
@@ -880,7 +916,13 @@ fn bt_target_page_check(state: &mut BtreeCheckState<'_>) -> PgResult<()> {
                             rightfirstoffset,
                         )?;
                         let ritup = page_item(&rightpage2.page(), ritemid);
-                        bt_entry_unique_check(state, ritup, rightblock_number, rightfirstoffset, &mut l_vis)?;
+                        bt_entry_unique_check(
+                            state,
+                            ritup,
+                            rightblock_number,
+                            rightfirstoffset,
+                            &mut l_vis,
+                        )?;
                     }
                 }
                 drop(rightpage);
@@ -1037,7 +1079,6 @@ fn invariant_l_nontarget_offset(
     Ok(cmp < 0)
 }
 
-
 fn bt_child_check(
     state: &mut BtreeCheckState<'_>,
     targetkey: &mut BtScanInsert,
@@ -1045,8 +1086,12 @@ fn bt_child_check(
     downlinkoffnum: OffsetNumber,
     frame: &mut OrderProcFrame,
 ) -> PgResult<()> {
-    let itemid =
-        page_get_item_id_careful(state, state.targetblock, &state.target_page(), downlinkoffnum)?;
+    let itemid = page_get_item_id_careful(
+        state,
+        state.targetblock,
+        &state.target_page(),
+        downlinkoffnum,
+    )?;
     let itup = page_item(&state.target_page(), itemid);
     let childblock = unsafe { bt_tuple_get_downlink(itup) };
 
@@ -1183,7 +1228,8 @@ fn bt_child_highkey_check(
             ));
         }
 
-        if (!P_ISDELETED(&opaque) || P_HAS_FULLXID(&opaque)) && opaque.btpo_level != target_level - 1
+        if (!P_ISDELETED(&opaque) || P_HAS_FULLXID(&opaque))
+            && opaque.btpo_level != target_level - 1
         {
             return Err(Box::new(
                 PgError::error(format!(
@@ -1362,7 +1408,8 @@ fn bt_downlink_missing_check(
             ));
         }
         level = copaque.btpo_level;
-        let itemid = page_get_item_id_careful(state, childblk, &child.page(), P_FIRSTDATAKEY(&copaque))?;
+        let itemid =
+            page_get_item_id_careful(state, childblk, &child.page(), P_FIRSTDATAKEY(&copaque))?;
         let itup = page_item(&child.page(), itemid);
         childblk = unsafe { bt_tuple_get_downlink(itup) };
     }
@@ -1499,7 +1546,6 @@ fn bt_recheck_sibling_links(
         )),
     ))
 }
-
 
 enum NormTuple<'m> {
     Same(ITup),
@@ -1661,7 +1707,6 @@ fn bt_tuple_present_callback(
     Ok(())
 }
 
-
 fn heap_entry_is_visible(state: &BtreeCheckState<'_>, tid: &ItemPointerData) -> PgResult<bool> {
     let mcx = state.mcx;
     let mut slot = ::tableam::table_slot_create(mcx, &state.heaprel)?;
@@ -1778,7 +1823,6 @@ fn bt_report_duplicate(
         )),
     ))
 }
-
 
 fn palloc_btree_page(state: &BtreeCheckState<'_>, blocknum: BlockNumber) -> PgResult<PageImage> {
     let mut img = PageImage::zeroed();
@@ -1977,7 +2021,12 @@ fn btree_tuple_get_heap_tid_careful(
     }
 
     let htid = unsafe { bt_tuple_get_heap_tid(itup) };
-    if htid.as_ref().map(|t| !ItemPointerIsValid(t)).unwrap_or(true) && nonpivot {
+    if htid
+        .as_ref()
+        .map(|t| !ItemPointerIsValid(t))
+        .unwrap_or(true)
+        && nonpivot
+    {
         return Err(index_corrupted(format!(
             "block {} or its right sibling block or child block in index \"{}\" contains non-pivot tuple that lacks a heap TID",
             state.targetblock,
@@ -2005,7 +2054,8 @@ unsafe fn btree_tuple_points_to_tid(itup: ITup) -> ItemPointerData {
 
 /// `BTreeTupleGetNKeyAtts(itup, rel)`. SAFETY: `itup` is a live tuple.
 unsafe fn btree_tuple_get_nkeyatts(itup: ITup, rel: &Relation<'_>) -> i32 {
-    rel.indnkeyatts().min(bt_tuple_get_natts(itup, rel.indnatts()))
+    rel.indnkeyatts()
+        .min(bt_tuple_get_natts(itup, rel.indnatts()))
 }
 
 #[inline]
@@ -2057,6 +2107,8 @@ mod tests {
     fn offset_validity() {
         assert!(!offset_number_is_valid(0));
         assert!(offset_number_is_valid(1));
-        assert!(offset_number_is_valid(::types_storage::bufpage::MaxOffsetNumber));
+        assert!(offset_number_is_valid(
+            ::types_storage::bufpage::MaxOffsetNumber
+        ));
     }
 }

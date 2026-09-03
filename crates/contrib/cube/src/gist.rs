@@ -47,9 +47,7 @@ pub(crate) unsafe fn cube_payload<'a>(d: Datum) -> std::borrow::Cow<'a, [u8]> {
         } else {
             let total = varatt::varsize_any(p);
             let hdr = if varatt::varatt_is_1b(p) { 1 } else { 4 };
-            std::borrow::Cow::Owned(
-                core::slice::from_raw_parts(p.add(hdr), total - hdr).to_vec(),
-            )
+            std::borrow::Cow::Owned(core::slice::from_raw_parts(p.add(hdr), total - hdr).to_vec())
         }
     }
 }

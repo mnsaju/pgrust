@@ -164,7 +164,10 @@ fn read_fatal_decreasing_tlis() {
         let _ = readTimeLineHistory(cx.mcx(), 0xD, false);
     });
     assert_eq!(err.message(), "invalid data in history file: 1\t0/20\ty\n");
-    assert_eq!(err.hint(), Some("Timeline IDs must be in increasing sequence."));
+    assert_eq!(
+        err.hint(),
+        Some("Timeline IDs must be in increasing sequence.")
+    );
 }
 
 #[test]
@@ -203,9 +206,15 @@ fn write_history_file_replaces() {
     setup();
     let _g = WRITE_LOCK.lock().unwrap();
     writeTimeLineHistoryFile(0x40, b"1\t0/AB\tz\n").unwrap();
-    assert_eq!(std::fs::read("pg_wal/00000040.history").unwrap(), b"1\t0/AB\tz\n");
+    assert_eq!(
+        std::fs::read("pg_wal/00000040.history").unwrap(),
+        b"1\t0/AB\tz\n"
+    );
     writeTimeLineHistoryFile(0x40, b"1\t0/CD\tw\n").unwrap();
-    assert_eq!(std::fs::read("pg_wal/00000040.history").unwrap(), b"1\t0/CD\tw\n");
+    assert_eq!(
+        std::fs::read("pg_wal/00000040.history").unwrap(),
+        b"1\t0/CD\tw\n"
+    );
 }
 
 #[test]

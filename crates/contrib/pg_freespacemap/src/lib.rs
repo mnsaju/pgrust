@@ -3,9 +3,7 @@
 
 use datum::Datum;
 use types_core::{BlockNumber, MaxBlockNumber};
-use types_error::{
-    PgError, PgResult, ERRCODE_INVALID_PARAMETER_VALUE, ERRCODE_WRONG_OBJECT_TYPE,
-};
+use types_error::{PgError, PgResult, ERRCODE_INVALID_PARAMETER_VALUE, ERRCODE_WRONG_OBJECT_TYPE};
 use types_fmgr::{FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFunction};
 use types_rel::pg_class::RELKIND_HAS_STORAGE;
 
@@ -29,8 +27,7 @@ fn fc_pg_freespace(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRes
 
     if blkno < 0 || blkno > MaxBlockNumber as i64 {
         return Err(Box::new(
-            PgError::error("invalid block number")
-                .with_sqlstate(ERRCODE_INVALID_PARAMETER_VALUE),
+            PgError::error("invalid block number").with_sqlstate(ERRCODE_INVALID_PARAMETER_VALUE),
         ));
     }
 

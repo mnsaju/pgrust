@@ -20,7 +20,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut token_value = std::collections::HashMap::new();
     let mut tokens_rs = String::new();
     for line in token_src.lines().map(str::trim).filter(|l| !l.is_empty()) {
-        let (name, value) = line.split_once('=').ok_or_else(|| format!("bad line {line}"))?;
+        let (name, value) = line
+            .split_once('=')
+            .ok_or_else(|| format!("bad line {line}"))?;
         let (name, value): (&str, i32) = (name.trim(), value.trim().parse()?);
         token_value.insert(name.to_string(), value);
         let _ = writeln!(tokens_rs, "pub const {name}: i32 = {value};");
@@ -30,7 +32,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let kwlist = fs::read_to_string(dir.join("kwlist.h"))?;
     let mut kw_tokens: Vec<u16> = Vec::new();
     for line in kwlist.lines() {
-        let Some(body) = line.trim().strip_prefix("PG_KEYWORD(") else { continue };
+        let Some(body) = line.trim().strip_prefix("PG_KEYWORD(") else {
+            continue;
+        };
         let body = &body[..body.find(')').ok_or("PG_KEYWORD shape")?];
         let fields: Vec<&str> = body.split(',').map(str::trim).collect();
         let value = *token_value
@@ -55,8 +59,18 @@ fn main() -> Result<(), Box<dyn Error>> {
     assert_eq!(eob, num_rules + 1);
     // Start-condition numbering the Rust State enum hardcodes.
     for (name, val) in [
-        ("INITIAL", 0), ("xb", 1), ("xc", 2), ("xd", 3), ("xh", 4), ("xq", 5),
-        ("xqs", 6), ("xe", 7), ("xdolq", 8), ("xui", 9), ("xus", 10), ("xeu", 11),
+        ("INITIAL", 0),
+        ("xb", 1),
+        ("xc", 2),
+        ("xd", 3),
+        ("xh", 4),
+        ("xq", 5),
+        ("xqs", 6),
+        ("xe", 7),
+        ("xdolq", 8),
+        ("xui", 9),
+        ("xus", 10),
+        ("xeu", 11),
     ] {
         let got: i32 = capture(&scan_c, &format!("#define {name} "))?.parse()?;
         assert_eq!(got, val, "start condition {name}");
@@ -69,7 +83,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let _ = writeln!(dfa, "pub const YY_NUM_RULES: i32 = {num_rules};");
     let _ = writeln!(dfa, "pub const YY_END_OF_BUFFER: i32 = {eob};");
     let _ = writeln!(dfa, "pub static YY_START_STATE: [u32; 25] = {starts:?};");
-    let _ = writeln!(dfa, "pub static YY_TRANSITION: [YyTransInfo; {}] = [", trans.len());
+    let _ = writeln!(
+        dfa,
+        "pub static YY_TRANSITION: [YyTransInfo; {}] = [",
+        trans.len()
+    );
     for chunk in trans.chunks(16) {
         dfa.push_str("    ");
         for &(v, n) in chunk {
@@ -83,9 +101,14 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 fn capture<'a>(src: &'a str, prefix: &str) -> Result<&'a str, String> {
-    let start = src.find(prefix).ok_or_else(|| format!("missing {prefix:?}"))? + prefix.len();
+    let start = src
+        .find(prefix)
+        .ok_or_else(|| format!("missing {prefix:?}"))?
+        + prefix.len();
     let rest = src[start..].trim_start();
-    let end = rest.find(|c: char| !c.is_ascii_digit()).unwrap_or(rest.len());
+    let end = rest
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(rest.len());
     Ok(&rest[..end])
 }
 
@@ -138,7 +161,10 @@ fn validate(trans: &[(i32, i32)], starts: &[u32], eob: i32) {
         reachable += 1;
         assert!(s >= 1 && s + 256 < len, "state {s} out of bounds");
         let act = trans[(s - 1) as usize].1;
-        assert!((0..=eob + 12 + 1).contains(&act), "state {s} bad action {act}");
+        assert!(
+            (0..=eob + 12 + 1).contains(&act),
+            "state {s} bad action {act}"
+        );
         for c in 0..=256i64 {
             let (verify, nxt) = trans[(s + c) as usize];
             if verify as i64 == c {
@@ -146,5 +172,8 @@ fn validate(trans: &[(i32, i32)], starts: &[u32], eob: i32) {
             }
         }
     }
-    assert!(reachable > 200, "suspiciously few reachable states: {reachable}");
+    assert!(
+        reachable > 200,
+        "suspiciously few reachable states: {reachable}"
+    );
 }

@@ -1,4 +1,3 @@
-
 use ::mcx::Mcx;
 
 use crate::regex_error::RegResult;
@@ -8,12 +7,10 @@ use crate::regguts::{
     PLAIN, PSEUDO, RAINBOW,
 };
 
-
 #[inline]
 pub(crate) fn unusedcolor(cd: &ColorDesc) -> bool {
     (cd.flags & FREECOL) != 0
 }
-
 
 pub fn colorchain(nfa: &mut Nfa, cm: &mut ColorMap, a: ArcId) {
     let co = nfa.arc_arena[a.0 as usize].co;
@@ -52,7 +49,6 @@ pub fn uncolorchain(nfa: &mut Nfa, cm: &mut ColorMap, a: ArcId) {
     arc.colorchain = None; // paranoia
     arc.colorchainRev = None;
 }
-
 
 pub fn okcolors<'mcx>(
     mcx: Mcx<'mcx>,
@@ -97,7 +93,6 @@ pub fn okcolors<'mcx>(
     }
     Ok(())
 }
-
 
 #[allow(clippy::too_many_arguments)]
 pub fn rainbow<'mcx>(

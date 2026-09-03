@@ -18,7 +18,10 @@ fn pmstate_order_is_load_bearing() {
     assert!(PMState::PM_RUN < PMState::PM_STOP_BACKENDS);
     assert!(PMState::PM_STOP_BACKENDS < PMState::PM_WAIT_BACKENDS);
     assert!(PMState::PM_WAIT_DEAD_END < PMState::PM_NO_CHILDREN);
-    assert_eq!(pmstate_name(PMState::PM_WAIT_XLOG_SHUTDOWN), "PM_WAIT_XLOG_SHUTDOWN");
+    assert_eq!(
+        pmstate_name(PMState::PM_WAIT_XLOG_SHUTDOWN),
+        "PM_WAIT_XLOG_SHUTDOWN"
+    );
 }
 
 // Both shutdown tests drive the same PENDING_PM_* statics; serialize them.
@@ -27,7 +30,9 @@ static SHUTDOWN_FLAGS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 #[test]
 fn shutdown_signal_handlers_set_most_immediate() {
     use std::sync::atomic::Ordering;
-    let _g = SHUTDOWN_FLAGS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _g = SHUTDOWN_FLAGS_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     handle_pm_shutdown_request_signal(libc::SIGTERM);
     assert!(PENDING_PM_SHUTDOWN_REQUEST.load(Ordering::Acquire));
     assert!(!PENDING_PM_IMMEDIATE_SHUTDOWN_REQUEST.load(Ordering::Acquire));
@@ -52,27 +57,45 @@ fn can_accept_connections_matches_c_gates() {
         pm.fatal_error = false;
         pm.conns_allowed = false;
     });
-    assert_eq!(serverloop::canAcceptConnections(BackendType::Backend), CacState::Startup);
+    assert_eq!(
+        serverloop::canAcceptConnections(BackendType::Backend),
+        CacState::Startup
+    );
 
     with_pm(|pm| pm.pm_state = PMState::PM_RECOVERY);
-    assert_eq!(serverloop::canAcceptConnections(BackendType::Backend), CacState::NotHotStandby);
+    assert_eq!(
+        serverloop::canAcceptConnections(BackendType::Backend),
+        CacState::NotHotStandby
+    );
 
     with_pm(|pm| {
         pm.pm_state = PMState::PM_RUN;
         pm.conns_allowed = true;
     });
-    assert_eq!(serverloop::canAcceptConnections(BackendType::Backend), CacState::Ok);
+    assert_eq!(
+        serverloop::canAcceptConnections(BackendType::Backend),
+        CacState::Ok
+    );
 
     // Smart shutdown gates only client backends.
     with_pm(|pm| pm.conns_allowed = false);
-    assert_eq!(serverloop::canAcceptConnections(BackendType::Backend), CacState::Shutdown);
-    assert_eq!(serverloop::canAcceptConnections(BackendType::AutovacWorker), CacState::Ok);
+    assert_eq!(
+        serverloop::canAcceptConnections(BackendType::Backend),
+        CacState::Shutdown
+    );
+    assert_eq!(
+        serverloop::canAcceptConnections(BackendType::AutovacWorker),
+        CacState::Ok
+    );
 
     with_pm(|pm| {
         pm.pm_state = PMState::PM_STARTUP;
         pm.shutdown = SmartShutdown;
     });
-    assert_eq!(serverloop::canAcceptConnections(BackendType::Backend), CacState::Shutdown);
+    assert_eq!(
+        serverloop::canAcceptConnections(BackendType::Backend),
+        CacState::Shutdown
+    );
 
     with_pm(|pm| *pm = PostmasterState::new_for_tests());
 }
@@ -88,7 +111,9 @@ fn shutdown_request_reaches_named_pmchild_seam() {
     // Boot-readiness probe: a SIGTERM-shaped request must walk the C sequence
     // and stop at a NAMED uninstalled seam (pmchild count_children), not a
     // mystery. PM_RUN + conns_allowed=false drives the smart-shutdown arm.
-    let _g = SHUTDOWN_FLAGS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _g = SHUTDOWN_FLAGS_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let result = std::panic::catch_unwind(|| {
         with_pm(|pm| {
             pm.pm_state = PMState::PM_RUN;
@@ -109,7 +134,11 @@ fn shutdown_request_reaches_named_pmchild_seam() {
         "panic must name pmchild, got: {msg}"
     );
     with_pm(|pm| *pm = PostmasterState::new_for_tests());
-    std::sync::atomic::AtomicBool::store(&PENDING_PM_SHUTDOWN_REQUEST, false, std::sync::atomic::Ordering::Release);
+    std::sync::atomic::AtomicBool::store(
+        &PENDING_PM_SHUTDOWN_REQUEST,
+        false,
+        std::sync::atomic::Ordering::Release,
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -152,7 +181,11 @@ fn stall_watchdog_fires_in_every_shutdown_wait_state() {
             "watchdog must fire in {} — an unbounded wait there is an outage",
             pmstate_name(s)
         );
-        assert!(!due(s, PM_SHUTDOWN_STALL_SECS - 1), "must not fire early in {}", pmstate_name(s));
+        assert!(
+            !due(s, PM_SHUTDOWN_STALL_SECS - 1),
+            "must not fire early in {}",
+            pmstate_name(s)
+        );
     }
 }
 
@@ -161,7 +194,10 @@ fn stall_watchdog_never_bounds_the_shutdown_checkpoint() {
     // A shutdown checkpoint on a large buffer pool legitimately runs for
     // minutes; escalating there would forfeit a checkpoint that was about to
     // succeed.
-    assert!(!due(PMState::PM_WAIT_XLOG_SHUTDOWN, 100 * PM_SHUTDOWN_STALL_SECS));
+    assert!(!due(
+        PMState::PM_WAIT_XLOG_SHUTDOWN,
+        100 * PM_SHUTDOWN_STALL_SECS
+    ));
 }
 
 #[test]
@@ -176,7 +212,11 @@ fn stall_watchdog_ignores_pre_stop_and_terminal_states() {
         PMState::PM_RUN,
         PMState::PM_NO_CHILDREN,
     ] {
-        assert!(!due(s, 100 * PM_SHUTDOWN_STALL_SECS), "must not fire in {}", pmstate_name(s));
+        assert!(
+            !due(s, 100 * PM_SHUTDOWN_STALL_SECS),
+            "must not fire in {}",
+            pmstate_name(s)
+        );
     }
 }
 
@@ -268,7 +308,12 @@ fn stall_early_wake_never_armed_outside_a_shutdown() {
         assert!(armed(FastShutdown, s, 1_000, PM_SHUTDOWN_STALL_SECS));
         assert!(due(s, PM_SHUTDOWN_STALL_SECS));
     }
-    assert!(!armed(NoShutdown, PMState::PM_WAIT_BACKENDS, 1_000, PM_SHUTDOWN_STALL_SECS));
+    assert!(!armed(
+        NoShutdown,
+        PMState::PM_WAIT_BACKENDS,
+        1_000,
+        PM_SHUTDOWN_STALL_SECS
+    ));
     assert!(!due(PMState::PM_RUN, 100 * PM_SHUTDOWN_STALL_SECS));
 }
 

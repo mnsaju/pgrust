@@ -168,18 +168,26 @@ fn check_output_expressions<'mcx>(
     let mut flattened: PgVec<'mcx, Node<'mcx>> = PgVec::new_in(mcx);
     if subquery.hasGroupRTE {
         for tle_node in subquery.targetList.iter() {
-            let tle = tle_node.as_target_entry().expect("tlist cell is a TargetEntry");
+            let tle = tle_node
+                .as_target_entry()
+                .expect("tlist cell is a TargetEntry");
             flattened.push(vars::flatten_group_exprs(mcx, subquery, tle.expr)?);
         }
     }
 
     for (i, tle_node) in subquery.targetList.iter().enumerate() {
-        let tle = tle_node.as_target_entry().expect("tlist cell is a TargetEntry");
+        let tle = tle_node
+            .as_target_entry()
+            .expect("tlist cell is a TargetEntry");
         if tle.resjunk {
             continue;
         }
         let resno = tle.resno as usize;
-        let texpr = if subquery.hasGroupRTE { flattened[i] } else { tle.expr };
+        let texpr = if subquery.hasGroupRTE {
+            flattened[i]
+        } else {
+            tle.expr
+        };
 
         if subquery.hasTargetSRFs
             && safety.unsafe_flags[resno] & UNSAFE_HAS_SET_FUNC == 0
@@ -222,7 +230,9 @@ fn compare_tlist_datatypes<'mcx>(
 ) {
     let mut col_iter = col_types.iter();
     for tle_node in tlist.iter() {
-        let tle = tle_node.as_target_entry().expect("tlist cell is a TargetEntry");
+        let tle = tle_node
+            .as_target_entry()
+            .expect("tlist cell is a TargetEntry");
         if tle.resjunk {
             continue;
         }
@@ -238,7 +248,9 @@ fn compare_tlist_datatypes<'mcx>(
 
 fn target_is_in_all_partition_lists(tle: &TargetEntry<'_>, query: &Query<'_>) -> bool {
     for wc_node in query.windowClause.iter() {
-        let wc = wc_node.as_window_clause().expect("windowClause cell is a WindowClause");
+        let wc = wc_node
+            .as_window_clause()
+            .expect("windowClause cell is a WindowClause");
         if !target_is_in_sort_list(tle, &wc.partitionClause) {
             return false;
         }
@@ -253,7 +265,9 @@ fn target_is_in_sort_list(tle: &TargetEntry<'_>, sort_list: &NodeList<'_>) -> bo
         return false;
     }
     sort_list.iter().any(|n| {
-        n.as_sort_group_clause().expect("sortlist cell is a SortGroupClause").tleSortGroupRef
+        n.as_sort_group_clause()
+            .expect("sortlist cell is a SortGroupClause")
+            .tleSortGroupRef
             == tle_ref
     })
 }
@@ -344,10 +358,7 @@ fn qual_is_pushdown_safe<'mcx>(
 // subquery_column_grouping_eqop (allpaths.c): the eqop the subquery groups the
 // output column under via distinctClause, every window's partitionClause, or
 // a grouping set-op node; InvalidOid when the column is not grouping-relevant.
-fn subquery_column_grouping_eqop(
-    subquery: &Query<'_>,
-    attno: i16,
-) -> PgResult<types_core::Oid> {
+fn subquery_column_grouping_eqop(subquery: &Query<'_>, attno: i16) -> PgResult<types_core::Oid> {
     if attno <= 0 || attno as usize > subquery.targetList.len() {
         return Ok(types_core::InvalidOid);
     }
@@ -433,8 +444,11 @@ fn rinfo_contains_volatile(run: &mut PlannerRun<'_>, rid: RinfoId) -> PgResult<b
         _ => {
             let clause = *run.root.expr_node(run.root.rinfo(rid).clause);
             let volatil = clauses::contain_volatile_functions(clause)?;
-            run.root.rinfo_mut(rid).has_volatile =
-                if volatil { VOLATILITY_VOLATILE } else { VOLATILITY_NOVOLATILE };
+            run.root.rinfo_mut(rid).has_volatile = if volatil {
+                VOLATILITY_VOLATILE
+            } else {
+                VOLATILITY_NOVOLATILE
+            };
             Ok(volatil)
         }
     }
@@ -475,14 +489,20 @@ fn subquery_push_qual<'mcx>(
         || !subquery.groupingSets.is_nil()
         || subquery.havingQual.is_some()
     {
-        subquery.havingQual =
-            Some(rewrite_manip::make_and_qual(mcx, subquery.havingQual, new_qual)?);
+        subquery.havingQual = Some(rewrite_manip::make_and_qual(
+            mcx,
+            subquery.havingQual,
+            new_qual,
+        )?);
     } else {
         let jt = subquery.jointree.expect("subquery has a jointree");
         let quals = rewrite_manip::make_and_qual(mcx, jt.quals, new_qual)?;
         subquery.jointree = Some(mcx::alloc_leak_in(
             mcx,
-            FromExpr { fromlist: jt.fromlist.clone_in(mcx)?, quals: Some(quals) },
+            FromExpr {
+                fromlist: jt.fromlist.clone_in(mcx)?,
+                quals: Some(quals),
+            },
         )?);
     }
     Ok(())
@@ -627,8 +647,7 @@ fn find_window_run_conditions<'mcx>(
 ) -> PgResult<bool> {
     use types_nodes::primnodes::{
         RelabelType, SupportRequestWFuncMonotonic, WindowFunc, WindowFuncRunCondition,
-        MONOTONICFUNC_BOTH, MONOTONICFUNC_DECREASING, MONOTONICFUNC_INCREASING,
-        MONOTONICFUNC_NONE,
+        MONOTONICFUNC_BOTH, MONOTONICFUNC_DECREASING, MONOTONICFUNC_INCREASING, MONOTONICFUNC_NONE,
     };
     let mcx = run.mcx;
     *keep_original = true;

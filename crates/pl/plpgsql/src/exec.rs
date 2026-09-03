@@ -173,7 +173,11 @@ fn reanalyze_plpgsql_expr(
 ) -> PgResult<mcx::PgVec<'static, types_nodes::parsenodes::Query<'static>>> {
     let expr_id = arg as u32;
     let snap = EXPR_PLANS
-        .with(|t| t.borrow().get(&expr_id).map(|e| std::rc::Rc::clone(&e.hooks)))
+        .with(|t| {
+            t.borrow()
+                .get(&expr_id)
+                .map(|e| std::rc::Rc::clone(&e.hooks))
+        })
         .expect("reanalyze_plpgsql_expr: plan entry lives while its source does");
     let used = core::cell::RefCell::new(Vec::new());
     let name_entries: Vec<parser_small1::PlpgsqlNameEntry> = snap
@@ -373,7 +377,11 @@ enum SimpleTake {
     Ready(Box<SimpleExpr>),
     /// Undetermined; caller owns the build. Carries what the build needs so
     /// no second map borrow is required.
-    Build { plan: SpiPlanPtr, paramnos: std::rc::Rc<[Dno]>, argtypes: std::rc::Rc<[Oid]> },
+    Build {
+        plan: SpiPlanPtr,
+        paramnos: std::rc::Rc<[Dno]>,
+        argtypes: std::rc::Rc<[Oid]>,
+    },
 }
 
 fn take_simple(expr_id: u32, take_unknown: bool) -> SimpleTake {
@@ -385,8 +393,7 @@ fn take_simple(expr_id: u32, take_unknown: bool) -> SimpleTake {
         match e.simple {
             SimpleState::NotSimple | SimpleState::InUse => SimpleTake::Skip,
             SimpleState::Ready(_) => {
-                let SimpleState::Ready(se) =
-                    core::mem::replace(&mut e.simple, SimpleState::InUse)
+                let SimpleState::Ready(se) = core::mem::replace(&mut e.simple, SimpleState::InUse)
                 else {
                     unreachable!()
                 };
@@ -567,11 +574,7 @@ fn get_error_context_stack() -> String {
 // otherwise a parse-mode-shaped context line.
 #[track_caller]
 #[cold]
-fn spi_ctx_err(
-    mut e: Box<PgError>,
-    query: &str,
-    mode: parser_seams::RawParseMode,
-) -> Box<PgError> {
+fn spi_ctx_err(mut e: Box<PgError>, query: &str, mode: parser_seams::RawParseMode) -> Box<PgError> {
     if let Some(p) = e.cursor_position.filter(|&p| p > 0) {
         e.cursor_position = None;
         e.internal_position = Some(p);
@@ -584,7 +587,10 @@ fn spi_ctx_err(
         return e;
     }
     let line = spi_context_line(query, mode);
-    if e.context.as_deref().is_some_and(|c| c.contains(line.as_str())) {
+    if e.context
+        .as_deref()
+        .is_some_and(|c| c.contains(line.as_str()))
+    {
         return e;
     }
     match e.context.take() {
@@ -615,10 +621,8 @@ pub(crate) fn exec_err(code: SqlState, msg: String) -> Box<PgError> {
 #[track_caller]
 #[cold]
 fn param_type_mismatch(dno: Dno, current: Oid, planned: Oid) -> Box<PgError> {
-    let cur = format_type::format_type_be(current)
-        .unwrap_or_else(|_| format!("type {current}"));
-    let plan = format_type::format_type_be(planned)
-        .unwrap_or_else(|_| format!("type {planned}"));
+    let cur = format_type::format_type_be(current).unwrap_or_else(|_| format!("type {current}"));
+    let plan = format_type::format_type_be(planned).unwrap_or_else(|_| format!("type {planned}"));
     exec_err(
         types_error::ERRCODE_DATATYPE_MISMATCH,
         format!(
@@ -633,7 +637,10 @@ impl<'a> Estate<'a> {
         let mut datums = Vec::with_capacity(func.datums.len());
         for d in &func.datums {
             datums.push(match d {
-                PlDatum::Var(_) => DatumVal::Var { value: Datum::null(), isnull: true },
+                PlDatum::Var(_) => DatumVal::Var {
+                    value: Datum::null(),
+                    isnull: true,
+                },
                 PlDatum::Rec(_) => DatumVal::Rec(None),
                 _ => DatumVal::None,
             });
@@ -679,7 +686,10 @@ impl<'a> Estate<'a> {
 
     pub fn set_var(&mut self, dno: Dno, value: Datum, isnull: bool) {
         match &mut self.datums[dno as usize] {
-            DatumVal::Var { value: v, isnull: n } => {
+            DatumVal::Var {
+                value: v,
+                isnull: n,
+            } => {
                 *v = value;
                 *n = isnull;
             }
@@ -712,7 +722,13 @@ impl<'a> Estate<'a> {
     }
 
     // datumCopy into the invocation context (by-ref survives statements).
-    pub(crate) fn copy_to_datum_ctx(&self, value: Datum, isnull: bool, typlen: i16, typbyval: bool) -> PgResult<Datum> {
+    pub(crate) fn copy_to_datum_ctx(
+        &self,
+        value: Datum,
+        isnull: bool,
+        typlen: i16,
+        typbyval: bool,
+    ) -> PgResult<Datum> {
         if isnull || typbyval {
             return Ok(value);
         }
@@ -740,8 +756,7 @@ impl<'a> Estate<'a> {
                 {
                     // VarlenaRef is the 4B-only lane; external pointers size
                     // via varsize_any.
-                    let attr =
-                        core::slice::from_raw_parts(p, types_tuple::varatt::varsize_any(p));
+                    let attr = core::slice::from_raw_parts(p, types_tuple::varatt::varsize_any(p));
                     let out = detoast::detoast_external_attr(self.datum_ctx.mcx(), attr)?;
                     let d = Datum::from_usize(out.as_ptr() as usize);
                     core::mem::forget(out);
@@ -783,9 +798,7 @@ impl<'a> Estate<'a> {
                 // invariant is "a Ready state implies its entry is live").
                 // An in-flight evaluation of this expression (InUse) keeps
                 // its own pin and put_simple() orphan-drops it on return.
-                if let Some(e) =
-                    EXPR_PLANS.with(|t| t.borrow_mut().remove(&expr.expr_id))
-                {
+                if let Some(e) = EXPR_PLANS.with(|t| t.borrow_mut().remove(&expr.expr_id)) {
                     let PlanEntry { plan, simple, .. } = e;
                     drop(simple);
                     let _ = spi::SPI_freeplan(plan);
@@ -861,10 +874,20 @@ impl<'a> Estate<'a> {
         let old = EXPR_PLANS.with(|t| {
             t.borrow_mut().insert(
                 expr.expr_id,
-                PlanEntry { plan, paramnos, argtypes, mod_stmt, hooks, simple: SimpleState::Unknown },
+                PlanEntry {
+                    plan,
+                    paramnos,
+                    argtypes,
+                    mod_stmt,
+                    hooks,
+                    simple: SimpleState::Unknown,
+                },
             )
         });
-        debug_assert!(old.is_none(), "ensure_plan: stale path removed the old entry");
+        debug_assert!(
+            old.is_none(),
+            "ensure_plan: stale path removed the old entry"
+        );
         drop(old);
         Ok(())
     }
@@ -887,9 +910,8 @@ impl<'a> Estate<'a> {
         let mut recs: Vec<String> = Vec::new();
         let mut valueless: Vec<String> = Vec::new();
         let mut pending_valueless: Vec<String> = Vec::new();
-        let have = |names: &Vec<(String, Dno, Oid, i32, Oid)>, k: &str| {
-            names.iter().any(|(n, ..)| n == k)
-        };
+        let have =
+            |names: &Vec<(String, Dno, Oid, i32, Oid)>, k: &str| names.iter().any(|(n, ..)| n == k);
 
         let mut params_by_dno: Vec<Option<(Oid, i32, Oid)>> = Vec::new();
         for d in &func.datums {
@@ -937,10 +959,8 @@ impl<'a> Estate<'a> {
                         if let PlDatum::RecField(f) = d {
                             if f.recparentno == recno {
                                 if let Some((t, m, c)) = self.recfield_type(f)? {
-                                    let key = format!(
-                                        "{recname}.{}",
-                                        f.fieldname.to_ascii_lowercase()
-                                    );
+                                    let key =
+                                        format!("{recname}.{}", f.fieldname.to_ascii_lowercase());
                                     let info = (key.clone(), f.dno, t, m, c);
                                     if !have(&names, &key) {
                                         names.push(info.clone());
@@ -1017,7 +1037,10 @@ impl<'a> Estate<'a> {
         if rv.empty {
             return Ok((RECORDOID, -1));
         }
-        let src = rv.src_desc.clone().expect("RecValue carries its source tupdesc");
+        let src = rv
+            .src_desc
+            .clone()
+            .expect("RecValue carries its source tupdesc");
         if src.tdtypeid == RECORDOID && src.tdtypmod >= 0 {
             return Ok((RECORDOID, src.tdtypmod));
         }
@@ -1078,9 +1101,7 @@ impl<'a> Estate<'a> {
                 elog::ereport(ERROR)
                     .errcode(types_error::ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE)
                     .errmsg(format!("record \"{}\" is not assigned yet", rec.refname))
-                    .errdetail(
-                        "The tuple structure of a not-yet-assigned record is indeterminate.",
-                    )
+                    .errdetail("The tuple structure of a not-yet-assigned record is indeterminate.")
                     .into_error(),
             ));
         }
@@ -1125,7 +1146,11 @@ impl<'a> Estate<'a> {
     // setup_param_list: current datum values for the plan's paramnos as
     // (values, nulls) views for SPI. (The compiled simple-expression path
     // keeps its own stable param image instead — SimpleExpr::param_buf.)
-    fn setup_params(&mut self, entry_paramnos: &[Dno], argtypes: &[Oid]) -> PgResult<(Vec<Datum>, Vec<bool>)> {
+    fn setup_params(
+        &mut self,
+        entry_paramnos: &[Dno],
+        argtypes: &[Oid],
+    ) -> PgResult<(Vec<Datum>, Vec<bool>)> {
         let n = argtypes.len();
         let mut values = vec![Datum::null(); n];
         let mut nulls = vec![true; n];
@@ -1196,7 +1221,9 @@ impl<'a> Estate<'a> {
                     elog::ereport(ERROR)
                         .errcode(types_error::ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE)
                         .errmsg(format!("record \"{recname}\" is not assigned yet"))
-                        .errdetail("The tuple structure of a not-yet-assigned record is indeterminate.")
+                        .errdetail(
+                            "The tuple structure of a not-yet-assigned record is indeterminate.",
+                        )
                         .into_error(),
                 ))
             }
@@ -1346,7 +1373,11 @@ impl<'a> Estate<'a> {
                     (e.plan, e.paramnos.clone(), e.argtypes.clone())
                 })
             }
-            SimpleTake::Build { plan, paramnos, argtypes } => (plan, paramnos, argtypes),
+            SimpleTake::Build {
+                plan,
+                paramnos,
+                argtypes,
+            } => (plan, paramnos, argtypes),
         };
         let (plan, paramnos, argtypes) = build;
         let se = match self.build_simple_expr(expr, plan, paramnos, argtypes) {
@@ -1431,9 +1462,7 @@ impl<'a> Estate<'a> {
                     // SAFETY: param_buf is a stable Box'd slice owned by the
                     // SimpleExpr alongside the compiled state; the Box move
                     // into the struct below does not move the heap image.
-                    unsafe {
-                        core::slice::from_raw_parts(param_buf.as_ptr(), param_buf.len())
-                    },
+                    unsafe { core::slice::from_raw_parts(param_buf.as_ptr(), param_buf.len()) },
                 ),
                 exec_vals: None,
                 n_exec: 0,
@@ -1443,8 +1472,7 @@ impl<'a> Estate<'a> {
             // per transaction, pl_exec.c:6172-6180; see SimpleExpr's
             // lifetime note for why no rebuild is needed here).
             let ctx = Ctx::new("PLpgSQL simple expression");
-            let Some(state) = execexpr::exec_init_expr(ctx.mcx(), Some(plan_expr.0), bind)?
-            else {
+            let Some(state) = execexpr::exec_init_expr(ctx.mcx(), Some(plan_expr.0), bind)? else {
                 return Ok(None);
             };
             // C exec_save_simple_expr (pl_exec.c:8349): immutable
@@ -1529,7 +1557,11 @@ impl<'a> Estate<'a> {
             pushed = true;
         }
         let result = (|| {
-            let mut slots = execexpr::EvalSlots { scan: None, inner: None, outer: None };
+            let mut slots = execexpr::EvalSlots {
+                scan: None,
+                inner: None,
+                outer: None,
+            };
             let r = execexpr::exec_eval_expr(&mut se.state, &mut slots)?;
             Ok((r.value, r.isnull, se.rettype, se.rettypmod))
         })();
@@ -1551,8 +1583,14 @@ impl<'a> Estate<'a> {
         });
         let (values, nulls) = self.setup_params(&paramnos, &argtypes)?;
         let _frame = FrameGuard::push_spi(&expr.query, expr.parse_mode);
-        let rc = spi::SPI_execute_plan_with_paramlist(plan, &values, &nulls, self.readonly_func, maxtuples)
-            .map_err(|e| spi_ctx_err(e, &expr.query, expr.parse_mode))?;
+        let rc = spi::SPI_execute_plan_with_paramlist(
+            plan,
+            &values,
+            &nulls,
+            self.readonly_func,
+            maxtuples,
+        )
+        .map_err(|e| spi_ctx_err(e, &expr.query, expr.parse_mode))?;
         self.eval_processed = spi::SPI_processed();
         if let Some(t) = self.eval_tuptable.take() {
             let _ = spi::SPI_freetuptable(t);
@@ -1614,7 +1652,11 @@ impl<'a> Estate<'a> {
         };
         entry.param[0].value = value;
         entry.param[0].isnull = *isnull;
-        let mut slots = execexpr::EvalSlots { scan: None, inner: None, outer: None };
+        let mut slots = execexpr::EvalSlots {
+            scan: None,
+            inner: None,
+            outer: None,
+        };
         let r = execexpr::exec_eval_expr(state, &mut slots)?;
         *isnull = r.isnull;
         Ok(r.value)
@@ -1703,29 +1745,47 @@ impl<'a> Estate<'a> {
         parser_small1::free_parsestate(pstate)?;
 
         let Some(cast_expr) = cast_expr else {
-            return Ok(CastEntry { state: None, param, inval_gen, lxid: current_lxid() });
+            return Ok(CastEntry {
+                state: None,
+                param,
+                inval_gen,
+                lxid: current_lxid(),
+            });
         };
         // No-op relabeling of the bare placeholder: skip evaluation.
         if let Some(r) = cast_expr.as_relabel_type() {
             if r.arg.as_variant::<Param>().is_some() {
-                return Ok(CastEntry { state: None, param, inval_gen, lxid: current_lxid() });
+                return Ok(CastEntry {
+                    state: None,
+                    param,
+                    inval_gen,
+                    lxid: current_lxid(),
+                });
             }
         }
 
         let bind = types_portal::params::ParamBind {
             // SAFETY: `param` is a stable Box living in the cache entry
             // alongside the compiled state.
-            extern_params: Some(unsafe {
-                core::slice::from_raw_parts(param.as_ptr(), 1)
-            }),
+            extern_params: Some(unsafe { core::slice::from_raw_parts(param.as_ptr(), 1) }),
             exec_vals: None,
             n_exec: 0,
         };
         let Some(mut state) = execexpr::exec_init_expr(mcx, Some(cast_expr), bind)? else {
-            return Ok(CastEntry { state: None, param, inval_gen, lxid: current_lxid() });
+            return Ok(CastEntry {
+                state: None,
+                param,
+                inval_gen,
+                lxid: current_lxid(),
+            });
         };
         state.arm_result_mcx(self.eval_ctx.mcx());
-        Ok(CastEntry { state: Some(state), param, inval_gen, lxid: current_lxid() })
+        Ok(CastEntry {
+            state: Some(state),
+            param,
+            inval_gen,
+            lxid: current_lxid(),
+        })
     }
 
     // convert_value_to_string: type output function in eval scratch.
@@ -1739,9 +1799,7 @@ impl<'a> Estate<'a> {
             value,
         )?;
         // SAFETY: type output functions return a NUL-terminated cstring.
-        let s = unsafe {
-            core::ffi::CStr::from_ptr(out.as_usize() as *const core::ffi::c_char)
-        };
+        let s = unsafe { core::ffi::CStr::from_ptr(out.as_usize() as *const core::ffi::c_char) };
         Ok(s.to_string_lossy().into_owned())
     }
 
@@ -1877,7 +1935,9 @@ fn simple_result_expr(
     if tlist.len() != 1 {
         return None;
     }
-    let te = tlist.first()?.as_variant::<types_nodes::primnodes::TargetEntry>()?;
+    let te = tlist
+        .first()?
+        .as_variant::<types_nodes::primnodes::TargetEntry>()?;
     let expr = te.expr;
     let t = nodes_core::node_funcs::expr_type(expr);
     let m = nodes_core::node_funcs::expr_typmod(expr);
@@ -1899,7 +1959,9 @@ impl<'a> Estate<'a> {
     fn exec_stmts(&mut self, stmts: &'a [PlStmt]) -> PgResult<i32> {
         let save = self.frame.stmt.get();
         for s in stmts {
-            self.frame.stmt.set(Some((stmt_lineno(s), stmt_typename(s))));
+            self.frame
+                .stmt
+                .set(Some((stmt_lineno(s), stmt_typename(s))));
             let rc = self.exec_stmt(s)?;
             if rc != RC_OK {
                 self.frame.stmt.set(save);
@@ -1917,7 +1979,13 @@ impl<'a> Estate<'a> {
                 self.exec_assign_expr(*varno, expr)?;
                 Ok(RC_OK)
             }
-            PlStmt::If { cond, then_body, elsifs, else_body, .. } => {
+            PlStmt::If {
+                cond,
+                then_body,
+                elsifs,
+                else_body,
+                ..
+            } => {
                 let (value, isnull) = self.exec_eval_boolean(cond)?;
                 self.exec_eval_cleanup();
                 if !isnull && value {
@@ -1941,7 +2009,9 @@ impl<'a> Estate<'a> {
                     return Ok(rc);
                 }
             },
-            PlStmt::While { label, cond, body, .. } => loop {
+            PlStmt::While {
+                label, cond, body, ..
+            } => loop {
                 let (value, isnull) = self.exec_eval_boolean(cond)?;
                 self.exec_eval_cleanup();
                 if isnull || !value {
@@ -1952,13 +2022,37 @@ impl<'a> Estate<'a> {
                     return Ok(rc);
                 }
             },
-            PlStmt::ForI { label, var, lower, upper, step, reverse, body, .. } => {
-                self.exec_stmt_fori(label.as_deref(), *var, lower, upper, step.as_ref(), *reverse, body)
-            }
-            PlStmt::ForS { label, var, query, body, .. } => {
-                self.exec_stmt_fors(label.as_deref(), *var, query, body)
-            }
-            PlStmt::ExitContinue { is_exit, label, cond, .. } => {
+            PlStmt::ForI {
+                label,
+                var,
+                lower,
+                upper,
+                step,
+                reverse,
+                body,
+                ..
+            } => self.exec_stmt_fori(
+                label.as_deref(),
+                *var,
+                lower,
+                upper,
+                step.as_ref(),
+                *reverse,
+                body,
+            ),
+            PlStmt::ForS {
+                label,
+                var,
+                query,
+                body,
+                ..
+            } => self.exec_stmt_fors(label.as_deref(), *var, query, body),
+            PlStmt::ExitContinue {
+                is_exit,
+                label,
+                cond,
+                ..
+            } => {
                 if let Some(c) = cond {
                     let (value, isnull) = self.exec_eval_boolean(c)?;
                     self.exec_eval_cleanup();
@@ -1975,9 +2069,13 @@ impl<'a> Estate<'a> {
             }
             PlStmt::Raise { .. } => self.exec_stmt_raise(stmt),
             PlStmt::Assert { cond, message, .. } => self.exec_stmt_assert(cond, message.as_ref()),
-            PlStmt::ExecSql { sqlstmt, into, strict, target, .. } => {
-                self.exec_stmt_execsql(sqlstmt, *into, *strict, *target)
-            }
+            PlStmt::ExecSql {
+                sqlstmt,
+                into,
+                strict,
+                target,
+                ..
+            } => self.exec_stmt_execsql(sqlstmt, *into, *strict, *target),
             PlStmt::Perform { expr, .. } => {
                 self.ensure_plan(expr, CURSOR_OPT_PARALLEL_OK)?;
                 let _ = self.exec_run_select(expr, 0)?;
@@ -1989,48 +2087,91 @@ impl<'a> Estate<'a> {
             PlStmt::Call { expr, is_call, .. } => self.exec_stmt_call(expr, *is_call),
             PlStmt::Commit { chain, .. } => self.exec_stmt_commit_rollback(true, *chain),
             PlStmt::Rollback { chain, .. } => self.exec_stmt_commit_rollback(false, *chain),
-            PlStmt::DynExecute { query, into, strict, target, params, .. } => {
-                self.exec_stmt_dynexecute(query, *into, *strict, *target, params)
-            }
-            PlStmt::GetDiag { is_stacked, items, .. } => {
-                self.exec_stmt_getdiag(*is_stacked, items)
-            }
-            PlStmt::Case { t_expr, t_varno, whens, have_else, else_stmts, .. } => self
-                .exec_stmt_case(
-                    t_expr.as_ref(),
-                    *t_varno,
-                    whens,
-                    *have_else,
-                    else_stmts,
-                ),
-            PlStmt::ForEachA { label, varno, slice, expr, body, .. } => {
-                self.exec_stmt_foreach_a(label.as_deref(), *varno, *slice, expr, body)
-            }
+            PlStmt::DynExecute {
+                query,
+                into,
+                strict,
+                target,
+                params,
+                ..
+            } => self.exec_stmt_dynexecute(query, *into, *strict, *target, params),
+            PlStmt::GetDiag {
+                is_stacked, items, ..
+            } => self.exec_stmt_getdiag(*is_stacked, items),
+            PlStmt::Case {
+                t_expr,
+                t_varno,
+                whens,
+                have_else,
+                else_stmts,
+                ..
+            } => self.exec_stmt_case(t_expr.as_ref(), *t_varno, whens, *have_else, else_stmts),
+            PlStmt::ForEachA {
+                label,
+                varno,
+                slice,
+                expr,
+                body,
+                ..
+            } => self.exec_stmt_foreach_a(label.as_deref(), *varno, *slice, expr, body),
             PlStmt::ReturnNext { expr, retvarno, .. } => {
                 self.exec_stmt_return_next(expr.as_ref(), *retvarno)
             }
-            PlStmt::ReturnQuery { query, dynquery, params, .. } => {
-                self.exec_stmt_return_query(query.as_ref(), dynquery.as_ref(), params)
-            }
-            PlStmt::Open { curvar, cursor_options, argquery, query, dynquery, params, .. } => self
-                .exec_stmt_open(
-                    *curvar,
-                    *cursor_options,
-                    argquery.as_ref(),
-                    query.as_ref(),
-                    dynquery.as_ref(),
-                    params,
-                ),
-            PlStmt::Fetch { target, curvar, direction, how_many, expr, is_move, .. } => {
-                self.exec_stmt_fetch(*target, *curvar, *direction, *how_many, expr.as_ref(), *is_move)
-            }
+            PlStmt::ReturnQuery {
+                query,
+                dynquery,
+                params,
+                ..
+            } => self.exec_stmt_return_query(query.as_ref(), dynquery.as_ref(), params),
+            PlStmt::Open {
+                curvar,
+                cursor_options,
+                argquery,
+                query,
+                dynquery,
+                params,
+                ..
+            } => self.exec_stmt_open(
+                *curvar,
+                *cursor_options,
+                argquery.as_ref(),
+                query.as_ref(),
+                dynquery.as_ref(),
+                params,
+            ),
+            PlStmt::Fetch {
+                target,
+                curvar,
+                direction,
+                how_many,
+                expr,
+                is_move,
+                ..
+            } => self.exec_stmt_fetch(
+                *target,
+                *curvar,
+                *direction,
+                *how_many,
+                expr.as_ref(),
+                *is_move,
+            ),
             PlStmt::Close { curvar, .. } => self.exec_stmt_close(*curvar),
-            PlStmt::ForC { label, var, curvar, argquery, body, .. } => {
-                self.exec_stmt_forc(label.as_deref(), *var, *curvar, argquery.as_ref(), body)
-            }
-            PlStmt::DynForS { label, var, query, params, body, .. } => {
-                self.exec_stmt_dynfors(label.as_deref(), *var, query, params, body)
-            }
+            PlStmt::ForC {
+                label,
+                var,
+                curvar,
+                argquery,
+                body,
+                ..
+            } => self.exec_stmt_forc(label.as_deref(), *var, *curvar, argquery.as_ref(), body),
+            PlStmt::DynForS {
+                label,
+                var,
+                query,
+                params,
+                body,
+                ..
+            } => self.exec_stmt_dynfors(label.as_deref(), *var, query, params, body),
         }
     }
 
@@ -2039,8 +2180,7 @@ impl<'a> Estate<'a> {
         if is_stacked && self.cur_error.is_none() {
             return Err(exec_err(
                 types_error::ERRCODE_STACKED_DIAGNOSTICS_ACCESSED_WITHOUT_ACTIVE_HANDLER,
-                "GET STACKED DIAGNOSTICS cannot be used outside an exception handler"
-                    .to_string(),
+                "GET STACKED DIAGNOSTICS cannot be used outside an exception handler".to_string(),
             ));
         }
         const OIDOID: Oid = 26;
@@ -2059,7 +2199,10 @@ impl<'a> Estate<'a> {
                     self.exec_assign_c_string(item.target, Some(&s))?;
                 }
                 _ => {
-                    let e = self.cur_error.as_ref().expect("stacked item without cur_error");
+                    let e = self
+                        .cur_error
+                        .as_ref()
+                        .expect("stacked item without cur_error");
                     let s: Option<String> = match item.kind {
                         GETDIAG_ERROR_CONTEXT => e.context.clone(),
                         GETDIAG_ERROR_DETAIL => e.detail.clone(),
@@ -2305,15 +2448,19 @@ impl<'a> Estate<'a> {
     }
 
     fn exec_stmt_block(&mut self, block: &'a PlBlock) -> PgResult<i32> {
-        self.frame.text.set(Some("during statement block local variable initialization"));
+        self.frame
+            .text
+            .set(Some("during statement block local variable initialization"));
         for &dno in &block.initvarnos {
             // estate->err_var = datum (exec_stmt_block): the context line
             // carries the variable's declaration lineno.
-            self.frame.var_lineno.set(Some(match &self.func.datums[dno as usize] {
-                PlDatum::Var(v) => v.lineno,
-                PlDatum::Rec(r) => r.lineno,
-                _ => 0,
-            }));
+            self.frame
+                .var_lineno
+                .set(Some(match &self.func.datums[dno as usize] {
+                    PlDatum::Var(v) => v.lineno,
+                    PlDatum::Rec(r) => r.lineno,
+                    _ => 0,
+                }));
             match &self.func.datums[dno as usize] {
                 PlDatum::Var(v) => {
                     if let Some(default_val) = &v.default_val {
@@ -2358,9 +2505,7 @@ impl<'a> Estate<'a> {
         match rc {
             RC_OK | RC_RETURN | RC_CONTINUE => Ok(rc),
             RC_EXIT => {
-                if self.exitlabel.is_some()
-                    && block.label.as_deref() == self.exitlabel.as_deref()
-                {
+                if self.exitlabel.is_some() && block.label.as_deref() == self.exitlabel.as_deref() {
                     self.exitlabel = None;
                     Ok(RC_OK)
                 } else {
@@ -2404,7 +2549,9 @@ impl<'a> Estate<'a> {
             self.frame.text.set(Some("during statement block exit"));
             // The return value must survive subxact exit (C datumTransfer
             // out of the subxact eval_econtext).
-            if rc == RC_RETURN && !self.retisnull && self.ret_rec.is_none()
+            if rc == RC_RETURN
+                && !self.retisnull
+                && self.ret_rec.is_none()
                 && OidIsValid(self.rettype)
             {
                 let (typlen, typbyval) = lsyscache::typ::get_typlenbyval(self.rettype)?;
@@ -2522,8 +2669,14 @@ impl<'a> Estate<'a> {
                     v.notnull,
                     v.refname.clone(),
                 );
-                let newvalue =
-                    self.exec_cast_value(value, &mut isnull, valtype, valtypmod, reqtype, reqtypmod)?;
+                let newvalue = self.exec_cast_value(
+                    value,
+                    &mut isnull,
+                    valtype,
+                    valtypmod,
+                    reqtype,
+                    reqtypmod,
+                )?;
                 if isnull && notnull {
                     return Err(exec_err(
                         types_error::ERRCODE_NULL_VALUE_NOT_ALLOWED,
@@ -2550,7 +2703,9 @@ impl<'a> Estate<'a> {
                     self.instantiate_empty_rec(recno)?;
                 }
                 let DatumVal::Rec(Some(rv)) = &self.datums[recno as usize] else {
-                    panic!("plpgsql exec_assign_value: rec \"{recname}\" valueless after instantiate");
+                    panic!(
+                        "plpgsql exec_assign_value: rec \"{recname}\" valueless after instantiate"
+                    );
                 };
                 let mut found: Option<(usize, Oid, i32, i16, bool)> = None;
                 for (i, n) in rv.desc.names.iter().enumerate() {
@@ -2627,7 +2782,12 @@ impl<'a> Estate<'a> {
                         anum += 1;
                     }
                     let (v, vn, vt, vm) = if anum < natts {
-                        let r = (values[anum], nulls[anum], desc.types[anum], desc.typmods[anum]);
+                        let r = (
+                            values[anum],
+                            nulls[anum],
+                            desc.types[anum],
+                            desc.typmods[anum],
+                        );
                         anum += 1;
                         r
                     } else {
@@ -2836,7 +2996,10 @@ impl<'a> Estate<'a> {
         Ok(rc)
     }
 
-    fn rec_desc_of(&self, tuptab: TuptabHandle) -> PgResult<(RecDesc, std::rc::Rc<types_tuple::TupleDescData<'static>>)> {
+    fn rec_desc_of(
+        &self,
+        tuptab: TuptabHandle,
+    ) -> PgResult<(RecDesc, std::rc::Rc<types_tuple::TupleDescData<'static>>)> {
         let td = spi::tuptable_with(tuptab, |t| {
             tupdesc::CreateTupleDescCopy(self.datum_ctx.mcx(), &t.tupdesc)
         })?;
@@ -2899,22 +3062,27 @@ impl<'a> Estate<'a> {
 
     // The strict_multi_assignment report (pl_exec.c:7286-7297); Err only at
     // ERROR level, WARNING is emitted and execution continues.
-    fn strict_multiassignment_report(
-        &self,
-        level: types_error::ErrorLevel,
-    ) -> PgResult<()> {
+    fn strict_multiassignment_report(&self, level: types_error::ErrorLevel) -> PgResult<()> {
         let b = elog::ereport(level)
             .errcode(types_error::ERRCODE_DATATYPE_MISMATCH)
             .errmsg("number of source and target fields in assignment does not match")
             .errdetail(format!(
                 "strict_multi_assignment check of {} is active.",
-                if level == ERROR { "extra_errors" } else { "extra_warnings" }
+                if level == ERROR {
+                    "extra_errors"
+                } else {
+                    "extra_warnings"
+                }
             ))
             .errhint("Make sure the query returns the exact list of columns.");
         if level == ERROR {
             return Err(Box::new(b.into_error()));
         }
-        b.finish(types_error::ErrorLocation::new(file!(), line!() as i32, "exec_move_row_from_fields"))
+        b.finish(types_error::ErrorLocation::new(
+            file!(),
+            line!() as i32,
+            "exec_move_row_from_fields",
+        ))
     }
 
     // exec_move_row_from_fields REC-target arm: a RECORD rec adopts the
@@ -2977,7 +3145,12 @@ impl<'a> Estate<'a> {
                 anum += 1;
             }
             let (value, mut isnull, valtype, valtypmod) = if anum < td_natts {
-                let r = (values[anum], nulls[anum], srcdesc.types[anum], srcdesc.typmods[anum]);
+                let r = (
+                    values[anum],
+                    nulls[anum],
+                    srcdesc.types[anum],
+                    srcdesc.typmods[anum],
+                );
                 anum += 1;
                 r
             } else {
@@ -3070,7 +3243,12 @@ impl<'a> Estate<'a> {
     pub(crate) fn deconstruct_composite(
         &mut self,
         value: Datum,
-    ) -> PgResult<(RecDesc, std::rc::Rc<types_tuple::TupleDescData<'static>>, Vec<Datum>, Vec<bool>)> {
+    ) -> PgResult<(
+        RecDesc,
+        std::rc::Rc<types_tuple::TupleDescData<'static>>,
+        Vec<Datum>,
+        Vec<bool>,
+    )> {
         // SAFETY: non-null composite datum — a live HeapTupleHeader image.
         let td_hdr = unsafe { &*(value.as_usize() as *const types_tuple::HeapTupleHeaderData) };
         let tup_type = td_hdr.type_id();
@@ -3132,8 +3310,11 @@ impl<'a> Estate<'a> {
                         DatumVal::Rec(Some(rv)) if !rv.empty => {
                             self.ret_rec = Some(rv.clone());
                             self.retisnull = false;
-                            self.rettype =
-                                if rectypeid != RECORDOID { rectypeid } else { RECORDOID };
+                            self.rettype = if rectypeid != RECORDOID {
+                                rectypeid
+                            } else {
+                                RECORDOID
+                            };
                         }
                         _ => {
                             self.ret_rec = None;
@@ -3159,10 +3340,7 @@ impl<'a> Estate<'a> {
             self.retval = value;
             self.retisnull = isnull;
             self.rettype = rettype;
-            if self.func.fn_retistuple
-                && !isnull
-                && !lsyscache::typ::type_is_rowtype(rettype)?
-            {
+            if self.func.fn_retistuple && !isnull && !lsyscache::typ::type_is_rowtype(rettype)? {
                 return Err(exec_err(
                     types_error::ERRCODE_DATATYPE_MISMATCH,
                     "cannot return non-composite value from function returning composite type"
@@ -3191,7 +3369,15 @@ impl<'a> Estate<'a> {
     }
 
     fn exec_stmt_raise(&mut self, stmt: &PlStmt) -> PgResult<i32> {
-        let PlStmt::Raise { elog_level, condname, message, params, options, .. } = stmt else {
+        let PlStmt::Raise {
+            elog_level,
+            condname,
+            message,
+            params,
+            options,
+            ..
+        } = stmt
+        else {
             unreachable!()
         };
 
@@ -3202,7 +3388,9 @@ impl<'a> Estate<'a> {
             }
             return Err(Box::new(
                 elog::ereport(ERROR)
-                    .errcode(types_error::ERRCODE_STACKED_DIAGNOSTICS_ACCESSED_WITHOUT_ACTIVE_HANDLER)
+                    .errcode(
+                        types_error::ERRCODE_STACKED_DIAGNOSTICS_ACCESSED_WITHOUT_ACTIVE_HANDLER,
+                    )
                     .errmsg("RAISE without parameters cannot be used outside an exception handler")
                     .into_error(),
             ));
@@ -3388,7 +3576,11 @@ impl<'a> Estate<'a> {
         // pl_exec.c:3909 — the `ereport(stmt->elog_level, ...)` that RAISE
         // lands on (verified against the REL_18_3 source, and against what a
         // stock server reports for the same RAISE).
-        b.finish(types_error::ErrorLocation::new("pl_exec.c", 3909, "exec_stmt_raise"))?;
+        b.finish(types_error::ErrorLocation::new(
+            "pl_exec.c",
+            3909,
+            "exec_stmt_raise",
+        ))?;
         Ok(RC_OK)
     }
 
@@ -3436,9 +3628,8 @@ impl<'a> Estate<'a> {
 
         // too_many_rows extra check reads the GUCs at execution, not compile
         // (pl_exec.c:4217-4220).
-        let too_many_rows_level = crate::handler::extra_checks_level(
-            crate::comp::XCHECK_TOOMANYROWS,
-        )?;
+        let too_many_rows_level =
+            crate::handler::extra_checks_level(crate::comp::XCHECK_TOOMANYROWS)?;
 
         let tcount: i64 = if into {
             if strict || mod_stmt || too_many_rows_level.is_some() {
@@ -3452,8 +3643,9 @@ impl<'a> Estate<'a> {
 
         let (values, nulls) = self.setup_params(&paramnos, &argtypes)?;
         let _frame = FrameGuard::push_spi(&expr.query, expr.parse_mode);
-        let rc = spi::SPI_execute_plan_with_paramlist(plan, &values, &nulls, self.readonly_func, tcount)
-            .map_err(|e| spi_ctx_err(e, &expr.query, expr.parse_mode))?;
+        let rc =
+            spi::SPI_execute_plan_with_paramlist(plan, &values, &nulls, self.readonly_func, tcount)
+                .map_err(|e| spi_ctx_err(e, &expr.query, expr.parse_mode))?;
 
         match rc {
             spi::SPI_OK_SELECT
@@ -3531,7 +3723,11 @@ impl<'a> Estate<'a> {
                         let _ = spi::SPI_freetuptable(tuptab);
                         return Err(Box::new(b.into_error()));
                     }
-                    b.finish(types_error::ErrorLocation::new(file!(), line!() as i32, "exec_stmt_execsql"))?;
+                    b.finish(types_error::ErrorLocation::new(
+                        file!(),
+                        line!() as i32,
+                        "exec_stmt_execsql",
+                    ))?;
                 }
                 self.move_row_from_tuptable(target, tuptab, 0)?;
                 let _ = spi::SPI_freetuptable(tuptab);
@@ -3661,11 +3857,7 @@ impl<'a> Estate<'a> {
 
     // make_callstmt_target (pl_exec.c:2288): OUT-arg Params -> row varnos,
     // cached per expr like C's stmt->target (function lifetime).
-    fn make_callstmt_target(
-        &mut self,
-        expr: &PlExpr,
-        plan: SpiPlanPtr,
-    ) -> PgResult<Vec<Dno>> {
+    fn make_callstmt_target(&mut self, expr: &PlExpr, plan: SpiPlanPtr) -> PgResult<Vec<Dno>> {
         if let Some(v) = CALL_TARGETS.with(|t| t.borrow().get(&expr.expr_id).cloned()) {
             return Ok(v);
         }
@@ -3696,13 +3888,11 @@ impl<'a> Estate<'a> {
                 return Err(not_call_stmt());
             };
             let funcexpr = stmt.funcexpr.expect("analyzed CallStmt has funcexpr");
-            let arrays = syscache_seams::pg_proc_result_arrays::call(
-                self.eval_ctx.mcx(),
-                funcexpr.funcid,
-            )?
-            .unwrap_or_else(|| {
-                panic!("cache lookup failed for function {}", funcexpr.funcid)
-            });
+            let arrays =
+                syscache_seams::pg_proc_result_arrays::call(self.eval_ctx.mcx(), funcexpr.funcid)?
+                    .unwrap_or_else(|| {
+                        panic!("cache lookup failed for function {}", funcexpr.funcid)
+                    });
 
             let mut varnos: Vec<Dno> = Vec::new();
             if let Some(argmodes) = &arrays.proargmodes {
@@ -3867,10 +4057,12 @@ impl<'a> Estate<'a> {
 
         let (ptypes, pvalues, pnulls) = self.exec_eval_using_params(params)?;
 
-        let _frame =
-            FrameGuard::push_spi(&querystr, parser_seams::RawParseMode::RAW_PARSE_DEFAULT);
-        let rc = spi::SPI_execute_extended(&querystr, &ptypes, &pvalues, &pnulls, self.readonly_func)
-            .map_err(|e| spi_ctx_err(e, &querystr, parser_seams::RawParseMode::RAW_PARSE_DEFAULT))?;
+        let _frame = FrameGuard::push_spi(&querystr, parser_seams::RawParseMode::RAW_PARSE_DEFAULT);
+        let rc =
+            spi::SPI_execute_extended(&querystr, &ptypes, &pvalues, &pnulls, self.readonly_func)
+                .map_err(|e| {
+                    spi_ctx_err(e, &querystr, parser_seams::RawParseMode::RAW_PARSE_DEFAULT)
+                })?;
 
         match rc {
             spi::SPI_OK_SELECT
@@ -3908,9 +4100,9 @@ impl<'a> Estate<'a> {
                     "EXECUTE of transaction commands is not implemented".to_string(),
                 ));
             }
-            other => panic!(
-                "SPI_execute_extended failed executing query \"{querystr}\": rc {other}"
-            ),
+            other => {
+                panic!("SPI_execute_extended failed executing query \"{querystr}\": rc {other}")
+            }
         }
 
         self.eval_processed = spi::SPI_processed();
@@ -4092,10 +4284,7 @@ impl<'a> Estate<'a> {
                     )?;
                     self.put_tuple_store_values(&v, &n)?;
                 } else {
-                    self.put_tuple_store_values(
-                        &vec![Datum::null(); natts],
-                        &vec![true; natts],
-                    )?;
+                    self.put_tuple_store_values(&vec![Datum::null(); natts], &vec![true; natts])?;
                 }
             } else {
                 if natts != 1 {
@@ -4125,7 +4314,10 @@ impl<'a> Estate<'a> {
     }
 
     fn put_tuple_store_values(&mut self, values: &[Datum], nulls: &[bool]) -> PgResult<()> {
-        let td = self.tuple_store_desc.as_ref().expect("tuple store initialized");
+        let td = self
+            .tuple_store_desc
+            .as_ref()
+            .expect("tuple store initialized");
         self.tuple_store
             .as_mut()
             .expect("tuple store initialized")
@@ -4510,9 +4702,14 @@ impl<'a> Estate<'a> {
             (e.plan, e.paramnos.clone(), e.argtypes.clone())
         });
         let (values, nulls) = self.setup_params(&paramnos, &argtypes)?;
-        let cursor =
-            spi::SPI_cursor_open(curname.as_deref(), plan, &values, &nulls, self.readonly_func)
-                .map_err(|e| spi_ctx_err(e, &cq.query, cq.parse_mode))?;
+        let cursor = spi::SPI_cursor_open(
+            curname.as_deref(),
+            plan,
+            &values,
+            &nulls,
+            self.readonly_func,
+        )
+        .map_err(|e| spi_ctx_err(e, &cq.query, cq.parse_mode))?;
         if curname.is_none() {
             let name = cursor.portal.borrow().name.as_str().to_string();
             self.assign_text_var(curvar, &name)?;
@@ -4546,8 +4743,7 @@ impl<'a> Estate<'a> {
     ) -> PgResult<i32> {
         // C exec_stmt_dynfors (pl_exec.c:4635) opens the implicit cursor
         // with CURSOR_OPT_NO_SCROLL — same FOR-loop pinning as exec_stmt_fors.
-        let portal =
-            self.exec_dynquery_with_params(query, params, None, CURSOR_OPT_NO_SCROLL)?;
+        let portal = self.exec_dynquery_with_params(query, params, None, CURSOR_OPT_NO_SCROLL)?;
         let cursor = spi::SpiCursor::from_portal(portal);
         let result = self.exec_for_query(label, var, &cursor, body, true);
         match result {

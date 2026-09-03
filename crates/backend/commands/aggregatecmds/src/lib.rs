@@ -124,12 +124,17 @@ pub fn DefineAggregate<'mcx>(
         } else {
             numDirectArgs = 0;
         }
-        arg_list =
-            Some(args.nth(0).as_list().expect("aggr_args pair carries the arg list first"));
+        arg_list = Some(
+            args.nth(0)
+                .as_list()
+                .expect("aggr_args pair carries the arg list first"),
+        );
     }
 
     for n in parameters.iter() {
-        let defel = n.as_def_elem().expect("CREATE AGGREGATE definition: DefElem list");
+        let defel = n
+            .as_def_elem()
+            .expect("CREATE AGGREGATE definition: DefElem list");
         // sfunc1/stype1/initcond1 are accepted as obsolete spellings.
         match defel.defname.unwrap_or("") {
             "sfunc" | "sfunc1" => {
@@ -177,7 +182,11 @@ pub fn DefineAggregate<'mcx>(
                 ereport(WARNING)
                     .errcode(ERRCODE_SYNTAX_ERROR)
                     .errmsg(format!("aggregate attribute \"{other}\" not recognized"))
-                    .finish(ErrorLocation::new(file!(), line!() as i32, "DefineAggregate"))?;
+                    .finish(ErrorLocation::new(
+                        file!(),
+                        line!() as i32,
+                        "DefineAggregate",
+                    ))?;
             }
         }
     }
@@ -192,36 +201,56 @@ pub fn DefineAggregate<'mcx>(
     // mstype requires msfunc+minvfunc; without it no moving-agg option may appear.
     if mtransType.is_some() {
         if mtransfuncName.is_none() {
-            return Err(def_err("aggregate msfunc must be specified when mstype is specified"));
+            return Err(def_err(
+                "aggregate msfunc must be specified when mstype is specified",
+            ));
         }
         if minvtransfuncName.is_none() {
-            return Err(def_err("aggregate minvfunc must be specified when mstype is specified"));
+            return Err(def_err(
+                "aggregate minvfunc must be specified when mstype is specified",
+            ));
         }
     } else {
         if mtransfuncName.is_some() {
-            return Err(def_err("aggregate msfunc must not be specified without mstype"));
+            return Err(def_err(
+                "aggregate msfunc must not be specified without mstype",
+            ));
         }
         if minvtransfuncName.is_some() {
-            return Err(def_err("aggregate minvfunc must not be specified without mstype"));
+            return Err(def_err(
+                "aggregate minvfunc must not be specified without mstype",
+            ));
         }
         if mfinalfuncName.is_some() {
-            return Err(def_err("aggregate mfinalfunc must not be specified without mstype"));
+            return Err(def_err(
+                "aggregate mfinalfunc must not be specified without mstype",
+            ));
         }
         if mtransSpace != 0 {
-            return Err(def_err("aggregate msspace must not be specified without mstype"));
+            return Err(def_err(
+                "aggregate msspace must not be specified without mstype",
+            ));
         }
         if minitval.is_some() {
-            return Err(def_err("aggregate minitcond must not be specified without mstype"));
+            return Err(def_err(
+                "aggregate minitcond must not be specified without mstype",
+            ));
         }
     }
 
     if finalfuncModify == 0 {
-        finalfuncModify =
-            if aggKind == AGGKIND_NORMAL { AGGMODIFY_READ_ONLY } else { AGGMODIFY_READ_WRITE };
+        finalfuncModify = if aggKind == AGGKIND_NORMAL {
+            AGGMODIFY_READ_ONLY
+        } else {
+            AGGMODIFY_READ_WRITE
+        };
     }
     if mfinalfuncModify == 0 {
-        mfinalfuncModify =
-            if aggKind == AGGKIND_NORMAL { AGGMODIFY_READ_ONLY } else { AGGMODIFY_READ_WRITE };
+        mfinalfuncModify = if aggKind == AGGKIND_NORMAL {
+            AGGMODIFY_READ_ONLY
+        } else {
+            AGGMODIFY_READ_WRITE
+        };
     }
 
     let mut oldstyle_types = [InvalidOid; 1];
@@ -249,7 +278,9 @@ pub fn DefineAggregate<'mcx>(
         variadicArgType = InvalidOid;
     } else {
         if baseType.is_some() {
-            return Err(def_err("basetype is redundant with aggregate input type specification"));
+            return Err(def_err(
+                "basetype is redundant with aggregate input type specification",
+            ));
         }
         interpreted = functioncmds::interpret_function_parameter_list(
             mcx,
@@ -269,7 +300,11 @@ pub fn DefineAggregate<'mcx>(
         } else {
             None
         };
-        parameter_names = if interpreted.have_names { Some(&interpreted.names) } else { None };
+        parameter_names = if interpreted.have_names {
+            Some(&interpreted.names)
+        } else {
+            None
+        };
         variadicArgType = interpreted.variadic_arg_type;
         // Parameter defaults and OUT params are grammar-rejected for aggregates.
         debug_assert_eq!(interpreted.required_result_type, InvalidOid);
@@ -411,7 +446,11 @@ fn extractModify(mcx: Mcx<'_>, defel: &DefElem<'_>) -> PgResult<i8> {
 fn name_parts<'a, 'mcx>(names: &NodeList<'mcx>, buf: &'a mut [&'mcx str; 4]) -> &'a [&'mcx str] {
     let n = names.len().min(buf.len());
     for (i, slot) in buf.iter_mut().enumerate().take(n) {
-        *slot = names.nth(i).as_string().expect("name list holds String nodes").sval;
+        *slot = names
+            .nth(i)
+            .as_string()
+            .expect("name list holds String nodes")
+            .sval;
     }
     &buf[..n]
 }
@@ -422,7 +461,9 @@ mod tests {
 
     #[test]
     fn polymorphic_type_oids_match_pg_type_dat() {
-        for oid in [2283, 2277, 2776, 3500, 3831, 4537, 5077, 5078, 5079, 5080, 4538] {
+        for oid in [
+            2283, 2277, 2776, 3500, 3831, 4537, 5077, 5078, 5079, 5080, 4538,
+        ] {
             assert!(IsPolymorphicType(oid), "oid {oid} should be polymorphic");
         }
         assert!(!IsPolymorphicType(INTERNALOID));

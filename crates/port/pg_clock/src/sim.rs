@@ -17,9 +17,7 @@
 //! waiter's `virtual_time::VirtualClock` advance couples its sleeper
 //! re-notify to it (one timeline, §1.1).
 
-use crate::knob_parse::{
-    parse_clock_mode, parse_wall_base, SimClockMode, DEFAULT_WALL_BASE_NS,
-};
+use crate::knob_parse::{parse_clock_mode, parse_wall_base, SimClockMode, DEFAULT_WALL_BASE_NS};
 use crate::ClockSource;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;

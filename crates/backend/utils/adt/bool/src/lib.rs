@@ -60,8 +60,10 @@ pub fn parse_bool_with_len(value: &[u8]) -> Option<bool> {
 #[cold]
 #[inline(never)]
 fn invalid_syntax_err(input: &str) -> PgError {
-    PgError::error(format!("invalid input syntax for type boolean: \"{input}\""))
-        .with_sqlstate(ERRCODE_INVALID_TEXT_REPRESENTATION)
+    PgError::error(format!(
+        "invalid input syntax for type boolean: \"{input}\""
+    ))
+    .with_sqlstate(ERRCODE_INVALID_TEXT_REPRESENTATION)
 }
 
 pub fn boolin(in_str: &str, escontext: Option<&mut SoftErrorContext>) -> PgResult<bool> {

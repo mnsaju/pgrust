@@ -127,15 +127,28 @@ fc_mac8_bin! {
     fc_macaddr8_or: macaddr8_or;
 }
 
-pub fn fc_macaddrtomacaddr8(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+pub fn fc_macaddrtomacaddr8(
+    _flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     // SAFETY: catalog arg 0 is a non-null 6-byte macaddr block (strict fn).
     let b = unsafe { fcinfo.arg_fixed(0, 6) };
-    let a6 = MacAddr { a: b[0], b: b[1], c: b[2], d: b[3], e: b[4], f: b[5] };
+    let a6 = MacAddr {
+        a: b[0],
+        b: b[1],
+        c: b[2],
+        d: b[3],
+        e: b[4],
+        f: b[5],
+    };
     let r = crate::macaddrtomacaddr8(&a6);
     mac8_result(fcinfo, &r)
 }
 
-pub fn fc_macaddr8tomacaddr(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+pub fn fc_macaddr8tomacaddr(
+    _flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     let a = arg_mac8(fcinfo, 0);
     let r = crate::macaddr8tomacaddr(&a)?;
     byref_result(fcinfo.result_mcx(), &r.to_bytes())

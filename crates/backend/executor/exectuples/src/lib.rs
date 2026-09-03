@@ -16,9 +16,9 @@ pub use domain_work::{domain_work_take, domain_work_tick};
 
 pub use batch::{
     for_each_live, for_each_live_onebody, soa_classify_row, soa_deform_columns,
-    soa_deform_columns_set, soa_stage_varkey, soa_store_prefix,
-    SoaBatch, SoaDeformPlan, SoaDictLane, SoaDictTable, SoaTextSpan, SoaVarKeyPlan,
-    LEN_WANT_BYTES, LEN_WANT_CHARS, SOA_BM_WORDS, SOA_MAX_ROWS,
+    soa_deform_columns_set, soa_stage_varkey, soa_store_prefix, SoaBatch, SoaDeformPlan,
+    SoaDictLane, SoaDictTable, SoaTextSpan, SoaVarKeyPlan, LEN_WANT_BYTES, LEN_WANT_CHARS,
+    SOA_BM_WORDS, SOA_MAX_ROWS,
 };
 pub use deform::{
     heap_slot_getattr, minimal_slot_getattr, slot_attisnull, slot_getallattrs, slot_getattr,

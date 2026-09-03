@@ -288,7 +288,13 @@ pub fn build_regexp_match_result<'mcx>(
         if so < 0 || eo < 0 {
             push(None)?;
         } else {
-            push(Some(fetch_chars(mcx, matchctx.orig_str, &matchctx.wide_str, so, eo)?))?;
+            push(Some(fetch_chars(
+                mcx,
+                matchctx.orig_str,
+                &matchctx.wide_str,
+                so,
+                eo,
+            )?))?;
         }
     }
     Ok(())
@@ -311,7 +317,13 @@ pub fn build_regexp_split_result<'mcx>(
         return Err(PgError::error("invalid match starting position").into());
     }
 
-    fetch_chars(splitctx.mcx, splitctx.orig_str, &splitctx.wide_str, startpos, endpos)
+    fetch_chars(
+        splitctx.mcx,
+        splitctx.orig_str,
+        &splitctx.wide_str,
+        startpos,
+        endpos,
+    )
 }
 
 pub fn regexp_count(
@@ -330,8 +342,16 @@ pub fn regexp_count(
     }
     re_flags.glob = true;
 
-    let matchctx =
-        setup_regexp_matches(mcx, str, pattern, &re_flags, start - 1, collation, false, false)?;
+    let matchctx = setup_regexp_matches(
+        mcx,
+        str,
+        pattern,
+        &re_flags,
+        start - 1,
+        collation,
+        false,
+        false,
+    )?;
 
     Ok(matchctx.nmatches)
 }

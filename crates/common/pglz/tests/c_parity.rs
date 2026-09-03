@@ -35,7 +35,9 @@ fn gen_input(kind: &str, n: usize) -> Vec<u8> {
         "zeros" => vec![0u8; n],
         "digits" => {
             let digits = b"0123456789.";
-            (0..n).map(|_| digits[(prng.next_byte() % 11) as usize]).collect()
+            (0..n)
+                .map(|_| digits[(prng.next_byte() % 11) as usize])
+                .collect()
         }
         "high" => (0..n).map(|_| 0x80 | (prng.next_byte() % 7) * 17).collect(),
         "mixed" => {
@@ -67,10 +69,17 @@ fn decompress_matches_c_streams() {
     for case in CASES {
         let input = gen_input(case.kind, case.rawsize as usize);
         let mut dest = vec![MaybeUninit::<u8>::uninit(); case.rawsize as usize];
-        let n = pglz_decompress(case.compressed, &mut dest, true)
-            .unwrap_or_else(|| panic!("{}/{}: corrupt verdict on valid C stream", case.kind, case.rawsize));
+        let n = pglz_decompress(case.compressed, &mut dest, true).unwrap_or_else(|| {
+            panic!(
+                "{}/{}: corrupt verdict on valid C stream",
+                case.kind, case.rawsize
+            )
+        });
         assert_eq!(n, case.rawsize as usize, "{}/{}", case.kind, case.rawsize);
-        let out: Vec<u8> = dest[..n].iter().map(|b| unsafe { b.assume_init() }).collect();
+        let out: Vec<u8> = dest[..n]
+            .iter()
+            .map(|b| unsafe { b.assume_init() })
+            .collect();
         assert_eq!(out, input, "{}/{}", case.kind, case.rawsize);
     }
 }
@@ -84,7 +93,10 @@ fn decompress_prefix_slices_match_input() {
             let mut dest = vec![MaybeUninit::<u8>::uninit(); take];
             let n = pglz_decompress(case.compressed, &mut dest, false).unwrap();
             assert_eq!(n, take, "{}/{}", case.kind, case.rawsize);
-            let out: Vec<u8> = dest[..n].iter().map(|b| unsafe { b.assume_init() }).collect();
+            let out: Vec<u8> = dest[..n]
+                .iter()
+                .map(|b| unsafe { b.assume_init() })
+                .collect();
             assert_eq!(out, &input[..take], "{}/{}", case.kind, case.rawsize);
         }
     }
@@ -98,7 +110,10 @@ fn compress_matches_c_streams() {
         let mut dest = vec![MaybeUninit::<u8>::uninit(); pglz_max_output(input.len())];
         let n = pglz_compress_into(&input, &mut dest, strategy(case.strategy))
             .unwrap_or_else(|| panic!("{}/{}: C compressed this input", case.kind, case.rawsize));
-        let out: Vec<u8> = dest[..n].iter().map(|b| unsafe { b.assume_init() }).collect();
+        let out: Vec<u8> = dest[..n]
+            .iter()
+            .map(|b| unsafe { b.assume_init() })
+            .collect();
         if platform_signed == CHAR_IS_SIGNED {
             assert_eq!(out, case.compressed, "{}/{}", case.kind, case.rawsize);
         } else {
@@ -106,7 +121,10 @@ fn compress_matches_c_streams() {
             // are valid but not byte-identical to the vectors; roundtrip only.
             let mut back = vec![MaybeUninit::<u8>::uninit(); case.rawsize as usize];
             let r = pglz_decompress(&out, &mut back, true).unwrap();
-            let back: Vec<u8> = back[..r].iter().map(|b| unsafe { b.assume_init() }).collect();
+            let back: Vec<u8> = back[..r]
+                .iter()
+                .map(|b| unsafe { b.assume_init() })
+                .collect();
             assert_eq!(back, input, "{}/{}", case.kind, case.rawsize);
         }
     }

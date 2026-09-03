@@ -17,9 +17,9 @@ use types_core::{
 use types_error::{PgError, PgResult, ERRCODE_TOO_MANY_CONNECTIONS, FATAL};
 use types_snapshot::SnapshotData;
 use types_storage::storage::{
-    SyncCell, NUM_AUXILIARY_PROCS, PGPROC, PGPROC_MAX_CACHED_SUBXIDS,
-    PROC_AFFECTS_ALL_HORIZONS, PROC_IN_LOGICAL_DECODING, PROC_IN_VACUUM, PROC_IS_AUTOVACUUM,
-    PROC_VACUUM_FOR_WRAPAROUND, PROC_VACUUM_STATE_MASK, PROC_XMIN_FLAGS,
+    SyncCell, NUM_AUXILIARY_PROCS, PGPROC, PGPROC_MAX_CACHED_SUBXIDS, PROC_AFFECTS_ALL_HORIZONS,
+    PROC_IN_LOGICAL_DECODING, PROC_IN_VACUUM, PROC_IS_AUTOVACUUM, PROC_VACUUM_FOR_WRAPAROUND,
+    PROC_VACUUM_STATE_MASK, PROC_XMIN_FLAGS,
 };
 
 mod known_assigned;
@@ -50,11 +50,11 @@ fn XidGenLock() -> &'static lwlock::LWLock {
 }
 
 pub struct ProcArrayStruct {
-    numProcs: SyncCell<i32>,          // [PAL]
+    numProcs: SyncCell<i32>, // [PAL]
     maxProcs: i32,
     replication_slot_xmin: SyncCell<TransactionId>, // [PAL]
     replication_slot_catalog_xmin: SyncCell<TransactionId>, // [PAL]
-    pgprocnos: &'static [SyncCell<i32>], // [PAL]
+    pgprocnos: &'static [SyncCell<i32>],            // [PAL]
     // KnownAssignedXids ring (startup process is the only writer). Adds
     // publish head with Release, no lock; readers hold PAL shared and load
     // head with Acquire (C's pg_write_barrier/pg_read_barrier pairing).
@@ -369,7 +369,9 @@ pub fn ProcArrayShmemResetAfterCrash() {
     );
     array.numProcs.set(0);
     array.replication_slot_xmin.set(InvalidTransactionId);
-    array.replication_slot_catalog_xmin.set(InvalidTransactionId);
+    array
+        .replication_slot_catalog_xmin
+        .set(InvalidTransactionId);
     for slot in array.pgprocnos.iter() {
         slot.set(-1);
     }
@@ -389,7 +391,11 @@ pub fn ProcArraySetReplicationSlotXmin(
 ) -> PgResult<()> {
     let arrayP = procArray();
     if !already_locked {
-        LWLockAcquire(ProcArrayLock(), LW_EXCLUSIVE, init_small::globals::MyProcNumber())?;
+        LWLockAcquire(
+            ProcArrayLock(),
+            LW_EXCLUSIVE,
+            init_small::globals::MyProcNumber(),
+        )?;
     }
     arrayP.replication_slot_xmin.set(xmin);
     arrayP.replication_slot_catalog_xmin.set(catalog_xmin);
@@ -401,7 +407,11 @@ pub fn ProcArraySetReplicationSlotXmin(
 
 pub fn ProcArrayGetReplicationSlotXmin() -> PgResult<(TransactionId, TransactionId)> {
     let arrayP = procArray();
-    LWLockAcquire(ProcArrayLock(), LW_SHARED, init_small::globals::MyProcNumber())?;
+    LWLockAcquire(
+        ProcArrayLock(),
+        LW_SHARED,
+        init_small::globals::MyProcNumber(),
+    )?;
     let xmin = arrayP.replication_slot_xmin.get();
     let catalog_xmin = arrayP.replication_slot_catalog_xmin.get();
     LWLockRelease(ProcArrayLock())?;
@@ -670,7 +680,9 @@ fn ProcArrayEndTransactionInternal(proc: &PGPROC, latestXid: TransactionId) {
     debug_assert!(TransactionIdIsValid(hdr.xids[pgxactoff].read()));
     debug_assert_eq!(hdr.xids[pgxactoff].read(), proc.xid.read());
 
-    hdr.xids[pgxactoff].value.store(InvalidTransactionId, Relaxed);
+    hdr.xids[pgxactoff]
+        .value
+        .store(InvalidTransactionId, Relaxed);
     proc.xid.value.store(InvalidTransactionId, Relaxed);
     proc.vxid.lxid.store(InvalidLocalTransactionId, Relaxed);
     proc.xmin.value.store(InvalidTransactionId, Relaxed);
@@ -706,7 +718,9 @@ pub fn ProcArrayClearTransaction() -> PgResult<()> {
     let hdr = ProcGlobal();
     let pgxactoff = proc.pgxactoff.load(Relaxed) as usize;
 
-    hdr.xids[pgxactoff].value.store(InvalidTransactionId, Relaxed);
+    hdr.xids[pgxactoff]
+        .value
+        .store(InvalidTransactionId, Relaxed);
     proc.xid.value.store(InvalidTransactionId, Relaxed);
     proc.vxid.lxid.store(InvalidLocalTransactionId, Relaxed);
     proc.xmin.value.store(InvalidTransactionId, Relaxed);
@@ -801,7 +815,9 @@ fn ProcArrayGroupClearXid(procno: ProcNumber, latestXid: TransactionId) -> PgRes
             .value
             .store(INVALID_PROC_NUMBER as u32, Relaxed);
         // pg_write_barrier: all prior writes visible before the follower runs.
-        nextproc.procArrayGroupMember.store(false, Ordering::Release);
+        nextproc
+            .procArrayGroupMember
+            .store(false, Ordering::Release);
         if next_procno != procno {
             lmgr_proc_seams::pg_semaphore_unlock::call(next_procno);
         }
@@ -941,8 +957,7 @@ fn GetSnapshotDataReuse(
         my_proc.xmin.value.store(snapshot.xmin, Relaxed);
         fence(Ordering::SeqCst);
         #[cfg(debug_assertions)]
-        SNAPSHOT_REUSE_SPECULATIVE_PUBLISHES
-            .set(SNAPSHOT_REUSE_SPECULATIVE_PUBLISHES.get() + 1);
+        SNAPSHOT_REUSE_SPECULATIVE_PUBLISHES.set(SNAPSHOT_REUSE_SPECULATIVE_PUBLISHES.get() + 1);
         true
     } else {
         false
@@ -1067,17 +1082,13 @@ pub fn GetSnapshotData<'m>(snapshot: &mut SnapshotData<'m>, mcx: Mcx<'m>) -> PgR
                         let proc = &hdr.allProcs[pgprocno as usize];
 
                         fence(Ordering::Acquire); // pairs with GetNewTransactionId
-                        // SAFETY: the owner only appends subxids (never
-                        // removes under ProcArrayLock), the count was fetched
-                        // once, and subxip has TOTAL_MAX_CACHED_SUBXIDS
-                        // capacity; mirrors C's locked memcpy.
+                                                  // SAFETY: the owner only appends subxids (never
+                                                  // removes under ProcArrayLock), the count was fetched
+                                                  // once, and subxip has TOTAL_MAX_CACHED_SUBXIDS
+                                                  // capacity; mirrors C's locked memcpy.
                         unsafe {
                             let src = (*proc.subxids.ptr()).xids.as_ptr();
-                            core::ptr::copy_nonoverlapping(
-                                src,
-                                subxip_ptr.add(subcount),
-                                nsubxids,
-                            );
+                            core::ptr::copy_nonoverlapping(src, subxip_ptr.add(subcount), nsubxids);
                         }
                         subcount += nsubxids;
                     }
@@ -1185,11 +1196,7 @@ pub fn GetSnapshotData<'m>(snapshot: &mut SnapshotData<'m>, mcx: Mcx<'m>) -> PgR
     Ok(())
 }
 
-fn reserve_exact<'m>(
-    v: &mut PgVec<'m, TransactionId>,
-    n: usize,
-    _mcx: Mcx<'m>,
-) -> PgResult<()> {
+fn reserve_exact<'m>(v: &mut PgVec<'m, TransactionId>, n: usize, _mcx: Mcx<'m>) -> PgResult<()> {
     v.try_reserve_exact(n)
         .map_err(|_| Box::new(_mcx.oom(n * core::mem::size_of::<TransactionId>())))
 }
@@ -1390,14 +1397,12 @@ fn ComputeXidHorizons() -> PgResult<ComputeXidHorizonsResult> {
             continue;
         }
         // Never skip a proc for running-ness (C: vacuum/decoding still run).
-        h.oldest_considered_running =
-            TransactionIdOlder(h.oldest_considered_running, xmin);
+        h.oldest_considered_running = TransactionIdOlder(h.oldest_considered_running, xmin);
         if status_flags & (PROC_IN_VACUUM | PROC_IN_LOGICAL_DECODING) != 0 {
             continue;
         }
 
-        h.shared_oldest_nonremovable =
-            TransactionIdOlder(h.shared_oldest_nonremovable, xmin);
+        h.shared_oldest_nonremovable = TransactionIdOlder(h.shared_oldest_nonremovable, xmin);
         if proc.databaseId.load(Relaxed) == my_database_id
             || my_database_id == types_core::InvalidOid
             || (status_flags & PROC_AFFECTS_ALL_HORIZONS) != 0
@@ -1417,15 +1422,13 @@ fn ComputeXidHorizons() -> PgResult<ComputeXidHorizonsResult> {
 
     if in_recovery {
         h.oldest_considered_running = TransactionIdOlder(h.oldest_considered_running, kaxmin);
-        h.shared_oldest_nonremovable =
-            TransactionIdOlder(h.shared_oldest_nonremovable, kaxmin);
+        h.shared_oldest_nonremovable = TransactionIdOlder(h.shared_oldest_nonremovable, kaxmin);
         h.data_oldest_nonremovable = TransactionIdOlder(h.data_oldest_nonremovable, kaxmin);
     }
 
     h.shared_oldest_nonremovable_raw = h.shared_oldest_nonremovable;
     h.slot_catalog_xmin = slot_catalog_xmin;
-    h.shared_oldest_nonremovable =
-        TransactionIdOlder(h.shared_oldest_nonremovable, slot_xmin);
+    h.shared_oldest_nonremovable = TransactionIdOlder(h.shared_oldest_nonremovable, slot_xmin);
     h.data_oldest_nonremovable = TransactionIdOlder(h.data_oldest_nonremovable, slot_xmin);
     h.shared_oldest_nonremovable =
         TransactionIdOlder(h.shared_oldest_nonremovable, slot_catalog_xmin);
@@ -1475,7 +1478,8 @@ fn GlobalVisHorizonKindForRel(rel: &types_rel::RelationData<'_>) -> GlobalVisHor
     // that predicate is false while wal_level < logical (the only shipped level).
     } else if catalog_seams::is_catalog_relation::call(rel) {
         GlobalVisHorizonKind::Catalog
-    } else if !(rel.rd_islocaltemp || rel.rd_createSubid.get() != types_core::InvalidSubTransactionId)
+    } else if !(rel.rd_islocaltemp
+        || rel.rd_createSubid.get() != types_core::InvalidSubTransactionId)
     {
         GlobalVisHorizonKind::Data
     } else {
@@ -1507,7 +1511,10 @@ pub fn GetOldestNonRemovableTransactionId(
     })
 }
 
-fn vis_state_cell<R>(handle: types_core::GlobalVisStateHandle, f: impl FnOnce(&Cell<GlobalVisState>) -> R) -> R {
+fn vis_state_cell<R>(
+    handle: types_core::GlobalVisStateHandle,
+    f: impl FnOnce(&Cell<GlobalVisState>) -> R,
+) -> R {
     match handle.id {
         1 => GLOBAL_VIS_SHARED_RELS.with(f),
         2 => GLOBAL_VIS_CATALOG_RELS.with(f),
@@ -1673,9 +1680,7 @@ pub fn GetCurrentVirtualXIDs<'mcx>(
             }
             // InvalidTransactionId precedes all other XIDs: a proc that has
             // not set xmin yet is never rejected by this test.
-            if !TransactionIdIsValid(limitXmin)
-                || TransactionIdPrecedesOrEquals(pxmin, limitXmin)
-            {
+            if !TransactionIdIsValid(limitXmin) || TransactionIdPrecedesOrEquals(pxmin, limitXmin) {
                 let vxid = types_core::VirtualTransactionId {
                     procNumber: proc.vxid.procNumber.load(Relaxed),
                     localTransactionId: proc.vxid.lxid.load(Relaxed),
@@ -1891,12 +1896,12 @@ pub fn TerminateOtherDBBackends(databaseId: types_core::Oid) -> PgResult<()> {
 
     let user_id = miscinit_seams::get_user_id::call();
     for &pid in &pids {
-        let Some(proc) = BackendPidGetProc(pid) else { continue };
+        let Some(proc) = BackendPidGetProc(pid) else {
+            continue;
+        };
         let role_id = proc.roleId.load(Relaxed);
 
-        if superuser_seams::superuser_arg::call(role_id)?
-            && !superuser_seams::superuser::call()?
-        {
+        if superuser_seams::superuser_arg::call(role_id)? && !superuser_seams::superuser::call()? {
             return Err(elog::ereport(types_error::ERROR)
                 .errcode(types_error::ERRCODE_INSUFFICIENT_PRIVILEGE)
                 .errmsg("permission denied to terminate process".to_string())
@@ -2022,7 +2027,11 @@ pub fn GetConflictingVirtualXIDs(
     let hdr = ProcGlobal();
     let mut vxids = Vec::with_capacity(arrayP.maxProcs as usize);
 
-    LWLockAcquire(ProcArrayLock(), LW_SHARED, init_small::globals::MyProcNumber())?;
+    LWLockAcquire(
+        ProcArrayLock(),
+        LW_SHARED,
+        init_small::globals::MyProcNumber(),
+    )?;
     for index in 0..arrayP.numProcs.get() as usize {
         let proc = &hdr.allProcs[arrayP.pgprocnos[index].get() as usize];
 
@@ -2068,7 +2077,11 @@ pub fn SignalVirtualTransaction(
     let hdr = ProcGlobal();
     let mut pid = 0;
 
-    LWLockAcquire(ProcArrayLock(), LW_SHARED, init_small::globals::MyProcNumber())?;
+    LWLockAcquire(
+        ProcArrayLock(),
+        LW_SHARED,
+        init_small::globals::MyProcNumber(),
+    )?;
     for index in 0..arrayP.numProcs.get() as usize {
         let proc = &hdr.allProcs[arrayP.pgprocnos[index].get() as usize];
         let procvxid = proc_vxid(proc);
@@ -2096,7 +2109,11 @@ pub fn CountDBBackends(databaseid: types_core::Oid) -> PgResult<i32> {
     let hdr = ProcGlobal();
     let mut count = 0;
 
-    LWLockAcquire(ProcArrayLock(), LW_SHARED, init_small::globals::MyProcNumber())?;
+    LWLockAcquire(
+        ProcArrayLock(),
+        LW_SHARED,
+        init_small::globals::MyProcNumber(),
+    )?;
     for index in 0..arrayP.numProcs.get() as usize {
         let proc = &hdr.allProcs[arrayP.pgprocnos[index].get() as usize];
         // Do not count prepared xacts.
@@ -2120,7 +2137,11 @@ pub fn CancelDBBackends(
     let arrayP = procArray();
     let hdr = ProcGlobal();
 
-    LWLockAcquire(ProcArrayLock(), LW_EXCLUSIVE, init_small::globals::MyProcNumber())?;
+    LWLockAcquire(
+        ProcArrayLock(),
+        LW_EXCLUSIVE,
+        init_small::globals::MyProcNumber(),
+    )?;
     for index in 0..arrayP.numProcs.get() as usize {
         let proc = &hdr.allProcs[arrayP.pgprocnos[index].get() as usize];
         if databaseid == types_core::InvalidOid || proc.databaseId.load(Relaxed) == databaseid {

@@ -32,7 +32,9 @@ fn psql(sql: &str) -> Option<Vec<(usize, String)>> {
         .write_all(sql.as_bytes())
         .ok()?;
     let out = Command::new("psql")
-        .args(["-h", "/tmp", "-p", "5432", "-d", "postgres", "-tAF", "\t", "-f"])
+        .args([
+            "-h", "/tmp", "-p", "5432", "-d", "postgres", "-tAF", "\t", "-f",
+        ])
         .arg(&path)
         .output()
         .ok()?;
@@ -79,20 +81,100 @@ fn pg_batch(func: &str, inputs: &[&str], set_guc: Option<&str>) -> Option<Vec<St
 }
 
 const IDENTS: &[&str] = &[
-    "", "a", "abc", "_abc", "a1", "a_b_c", "_", "x0123456789", "1abc", "Abc", "ABC", "aBc",
-    "a b", "a-b", "a.b", "a\"b", "\"", "\"\"", "a\"\"b", "tab\there", "new\nline",
-    "select", "SELECT", "Select", "table", "from", "where", "order", "group", "limit",
-    "user", "all", "and", "not", "null", "true", "false", "with", "window", "cast",
-    "between", "authorization", "binary", "boolean", "cross", "left", "like", "ilike",
-    "integer", "varchar", "concat", "abort", "zone", "day", "insert", "update", "delete",
-    "é", "Émile", "日本語", "naïve", "識別子", "a日b",
+    "",
+    "a",
+    "abc",
+    "_abc",
+    "a1",
+    "a_b_c",
+    "_",
+    "x0123456789",
+    "1abc",
+    "Abc",
+    "ABC",
+    "aBc",
+    "a b",
+    "a-b",
+    "a.b",
+    "a\"b",
+    "\"",
+    "\"\"",
+    "a\"\"b",
+    "tab\there",
+    "new\nline",
+    "select",
+    "SELECT",
+    "Select",
+    "table",
+    "from",
+    "where",
+    "order",
+    "group",
+    "limit",
+    "user",
+    "all",
+    "and",
+    "not",
+    "null",
+    "true",
+    "false",
+    "with",
+    "window",
+    "cast",
+    "between",
+    "authorization",
+    "binary",
+    "boolean",
+    "cross",
+    "left",
+    "like",
+    "ilike",
+    "integer",
+    "varchar",
+    "concat",
+    "abort",
+    "zone",
+    "day",
+    "insert",
+    "update",
+    "delete",
+    "é",
+    "Émile",
+    "日本語",
+    "naïve",
+    "識別子",
+    "a日b",
 ];
 
 const LITERALS: &[&str] = &[
-    "", "abc", " ", "  spaced  ", "it's", "'", "''", "O'Reilly", "'leading", "trailing'",
-    "\\", "\\\\", "a\\b", "C:\\path\\file", "mix ' and \\ both", "'\\", "\\'",
-    "E", "E'x'", "line1\nline2", "tab\tsep", "100%", "under_score", "NULL",
-    "é", "日本語", "naïve résumé", "日'本\\語",
+    "",
+    "abc",
+    " ",
+    "  spaced  ",
+    "it's",
+    "'",
+    "''",
+    "O'Reilly",
+    "'leading",
+    "trailing'",
+    "\\",
+    "\\\\",
+    "a\\b",
+    "C:\\path\\file",
+    "mix ' and \\ both",
+    "'\\",
+    "\\'",
+    "E",
+    "E'x'",
+    "line1\nline2",
+    "tab\tsep",
+    "100%",
+    "under_score",
+    "NULL",
+    "é",
+    "日本語",
+    "naïve résumé",
+    "日'本\\語",
 ];
 
 fn rust_quote_ident(inputs: &[&str]) -> Vec<String> {
@@ -122,7 +204,10 @@ fn compare(label: &str, inputs: &[&str], pg: &[String], rust: &[String]) -> (usi
         }
         compared += 1;
         if pg[i] != rust[i] {
-            mismatches.push(format!("  {label} input={s:?} pg={} pgrust={}", pg[i], rust[i]));
+            mismatches.push(format!(
+                "  {label} input={s:?} pg={} pgrust={}",
+                pg[i], rust[i]
+            ));
         }
     }
     (compared, mismatches)
@@ -145,7 +230,11 @@ fn differential_vs_live_pg() {
     total += n;
     bad.extend(m);
 
-    if let Some(pg_all) = pg_batch("quote_ident", IDENTS, Some("SET quote_all_identifiers = on;")) {
+    if let Some(pg_all) = pg_batch(
+        "quote_ident",
+        IDENTS,
+        Some("SET quote_all_identifiers = on;"),
+    ) {
         QAI.store(true, Ordering::Relaxed);
         let rust = rust_quote_ident(IDENTS);
         QAI.store(false, Ordering::Relaxed);
@@ -162,16 +251,26 @@ fn differential_vs_live_pg() {
         }
     }
 
-    if let Some(rows) = psql(
-        "SELECT 0, encode(convert_to(quote_nullable(NULL::text), 'UTF8'), 'hex');\n",
-    ) {
+    if let Some(rows) =
+        psql("SELECT 0, encode(convert_to(quote_nullable(NULL::text), 'UTF8'), 'hex');\n")
+    {
         total += 1;
         let expect = hex(b"NULL");
         if rows.first().map(|(_, r)| r.as_str()) != Some(expect.as_str()) {
-            bad.push(format!("  quote_nullable(NULL) pg={rows:?} pgrust={expect}"));
+            bad.push(format!(
+                "  quote_nullable(NULL) pg={rows:?} pgrust={expect}"
+            ));
         }
     }
 
-    eprintln!("differential: {total} cases compared, {} mismatches", bad.len());
-    assert!(bad.is_empty(), "{} mismatches:\n{}", bad.len(), bad.join("\n"));
+    eprintln!(
+        "differential: {total} cases compared, {} mismatches",
+        bad.len()
+    );
+    assert!(
+        bad.is_empty(),
+        "{} mismatches:\n{}",
+        bad.len(),
+        bad.join("\n")
+    );
 }

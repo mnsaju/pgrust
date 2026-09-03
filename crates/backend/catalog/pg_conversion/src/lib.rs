@@ -85,7 +85,9 @@ pub fn ConversionCreate<'mcx>(
         SysCacheKey::Value(Datum::from_oid(connamespace)),
     )? {
         cache_syscache::ReleaseSysCache(tuple);
-        return Err(duplicate(format!("conversion \"{conname}\" already exists")));
+        return Err(duplicate(format!(
+            "conversion \"{conname}\" already exists"
+        )));
     }
 
     if def && FindDefaultConversion(connamespace, conforencoding, contoencoding)? != InvalidOid {

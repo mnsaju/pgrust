@@ -464,8 +464,11 @@ pub fn EncodeInterval(itm: &pg_itm, style: i32, buf: &mut [u8]) -> usize {
                 // force signs on all fields to avoid ambiguity
                 let year_sign = if year < 0 || mon < 0 { b'-' } else { b'+' };
                 let day_sign = if mday < 0 { b'-' } else { b'+' };
-                let sec_sign =
-                    if hour < 0 || min < 0 || sec < 0 || fsec < 0 { b'-' } else { b'+' };
+                let sec_sign = if hour < 0 || min < 0 || sec < 0 || fsec < 0 {
+                    b'-'
+                } else {
+                    b'+'
+                };
 
                 p = put(buf, p, year_sign);
                 p = put_u64(buf, p, year.unsigned_abs() as u64);

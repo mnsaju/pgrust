@@ -381,7 +381,10 @@ const STITCH_MIN_CLAUSES: u8 = 2;
 fn lane_trace(event: &str) {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     if *ON.get_or_init(|| {
-        matches!(std::env::var("PGRUST_LANE_V2_TRACE").as_deref(), Ok("1") | Ok("on"))
+        matches!(
+            std::env::var("PGRUST_LANE_V2_TRACE").as_deref(),
+            Ok("1") | Ok("on")
+        )
     }) {
         eprintln!("[lane-v2] {event}");
     }
@@ -525,11 +528,7 @@ impl<'mcx> ScanNode<'mcx> for SeqScanState<'mcx> {
 
     /// `SeqRecheck`: seqscans have no access-method conditions to re-verify.
     #[inline(always)]
-    fn epq_recheck(
-        &mut self,
-        _estate: &mut EStateData<'mcx>,
-        _slot: ExecSlotId,
-    ) -> PgResult<bool> {
+    fn epq_recheck(&mut self, _estate: &mut EStateData<'mcx>, _slot: ExecSlotId) -> PgResult<bool> {
         Ok(true)
     }
 
@@ -608,7 +607,10 @@ impl<'mcx> SeqScanState<'mcx> {
         let snapshot = estate.es_snapshot.clone();
         self.ss.ss_currentScanDesc = Some(table_beginscan(
             mcx,
-            self.ss.ss_currentRelation.as_ref().expect("seqscan has a relation"),
+            self.ss
+                .ss_currentRelation
+                .as_ref()
+                .expect("seqscan has a relation"),
             snapshot,
             0,
             PgVec::new_in(mcx),
@@ -633,13 +635,27 @@ impl<'mcx> SeqScanState<'mcx> {
     // when absent or shape-unknown), clamped to the fixed prefix; 1-2-column
     // fetches stay on the interpreter (JIT_DEFORM_ROW_MIN_COLS).
     fn arm_slot_jit_deform(&mut self, estate: &mut EStateData<'mcx>) {
-        let scandesc = self.ss.ss_currentScanDesc.as_ref().expect("armed after beginscan");
+        let scandesc = self
+            .ss
+            .ss_currentScanDesc
+            .as_ref()
+            .expect("armed after beginscan");
         let nblocks = ::tableam::table_scan_nblocks(scandesc);
-        let rel = self.ss.ss_currentRelation.as_ref().expect("seqscan has a relation");
+        let rel = self
+            .ss
+            .ss_currentRelation
+            .as_ref()
+            .expect("seqscan has a relation");
         let natts = rel.rd_att.natts;
         let mut need = 0i32;
         match self.ss.ps_ProjInfo.as_ref() {
-            Some(p) => need = need.max(p.pi_state.max_fetch(::execexpr::SlotSrc::Scan).unwrap_or(natts)),
+            Some(p) => {
+                need = need.max(
+                    p.pi_state
+                        .max_fetch(::execexpr::SlotSrc::Scan)
+                        .unwrap_or(natts),
+                )
+            }
             None => need = natts,
         }
         if let Some(q) = self.ss.qual.as_deref() {
@@ -768,8 +784,7 @@ pub fn seq_scan_meta_zero_qual<'mcx>(
         return Ok(None);
     }
     node.ensure_scandesc(estate)?;
-    if !::tableam::table_scan_supports_meta_count(node.ss.ss_currentScanDesc.as_ref().unwrap())
-    {
+    if !::tableam::table_scan_supports_meta_count(node.ss.ss_currentScanDesc.as_ref().unwrap()) {
         return Ok(None);
     }
     Ok(Some(zq))
@@ -825,7 +840,11 @@ pub fn seq_scan_batch_soa_prepare<'mcx>(
         }
     }
     let mcx = estate.es_query_cxt;
-    let rel = node.ss.ss_currentRelation.as_ref().expect("seqscan has a relation");
+    let rel = node
+        .ss
+        .ss_currentRelation
+        .as_ref()
+        .expect("seqscan has a relation");
     let atts: &[_] = &rel.rd_att.compact_attrs;
     let qual = node
         .ss
@@ -834,7 +853,9 @@ pub fn seq_scan_batch_soa_prepare<'mcx>(
         .and_then(|q| q.scan_cmp_const_clauses())
         .filter(|c| {
             (multi || c.n == 1)
-                && c.clauses[..c.n as usize].iter().all(|&(col, _, _)| (col as i32) < prefix)
+                && c.clauses[..c.n as usize]
+                    .iter()
+                    .all(|&(col, _, _)| (col as i32) < prefix)
         });
     // Break-even: at <=2 fixed columns the deform+gather double-copy loses to
     // the per-row walk (distinct +2.3% instr) unless a bitmap qual skips the
@@ -857,62 +878,68 @@ pub fn seq_scan_batch_soa_prepare<'mcx>(
             }
             let p = ::exectuples::SoaDeformPlan::try_new_walk(mcx, atts, prefix as usize);
             if p.is_some() {
-                lane_trace("seqscan varwalk staging armed (prefix crosses varlena; per-row walk tail)");
+                lane_trace(
+                    "seqscan varwalk staging armed (prefix crosses varlena; per-row walk tail)",
+                );
             }
             p
         })
         .map(|plan| {
-        // Rung 2 (dense batch pass): the JIT batch kernel replaces the AOT
-        // column loops on dense full-prefix deforms; col-only passes and
-        // mixed batches keep the AOT/interpreted paths. Walk-tail plans
-        // never arm (the kernel deforms the whole prefix at static offsets).
-        let mut plan = plan;
-        if plan.walk_from().is_none() && plan.ncols() as usize >= JIT_DEFORM_BATCH_MIN_COLS {
-            if let Some(sd) = node.ss.ss_currentScanDesc.as_ref() {
-                let rel = node.ss.ss_currentRelation.as_ref().expect("seqscan has a relation");
-                if let Some(k) = jit_deform_kernel(
-                    rel,
-                    plan.ncols() as usize,
-                    ::tableam::table_scan_nblocks(sd),
-                    JIT_DEFORM_BATCH_MIN_PAGES,
-                ) {
-                    plan.arm_jit(k);
+            // Rung 2 (dense batch pass): the JIT batch kernel replaces the AOT
+            // column loops on dense full-prefix deforms; col-only passes and
+            // mixed batches keep the AOT/interpreted paths. Walk-tail plans
+            // never arm (the kernel deforms the whole prefix at static offsets).
+            let mut plan = plan;
+            if plan.walk_from().is_none() && plan.ncols() as usize >= JIT_DEFORM_BATCH_MIN_COLS {
+                if let Some(sd) = node.ss.ss_currentScanDesc.as_ref() {
+                    let rel = node
+                        .ss
+                        .ss_currentRelation
+                        .as_ref()
+                        .expect("seqscan has a relation");
+                    if let Some(k) = jit_deform_kernel(
+                        rel,
+                        plan.ncols() as usize,
+                        ::tableam::table_scan_nblocks(sd),
+                        JIT_DEFORM_BATCH_MIN_PAGES,
+                    ) {
+                        plan.arm_jit(k);
+                    }
                 }
             }
-        }
-        ::mcx::PgBox::new_in(
-            BatchSoa {
-                soa: ::exectuples::SoaBatch::new_in(mcx, plan.ncols()),
-                plan,
-                qual_armed: qual.is_some(),
-                qual_only: qual_only && qual.is_some(),
-                key_col: None,
-                varkey: None,
-                key_read_col: 0,
-                publish: !(qual_only && qual.is_some()),
-                quals: qual.map_or(
-                    [(0, ::execexpr::CmpOp::Int4Eq, ::datum::Datum::null());
-                        ::execexpr::SCAN_CMP_MAX_CLAUSES],
-                    |c| c.clauses,
-                ),
-                nquals: qual.map_or(0, |c| c.n),
-                contains: None,
-                stitch: None,
-                proj: None,
-                lane: None,
-                lane_requal: false,
-                bits_only: false,
-                dict_group: None,
-                cond_armed: false,
-                stage_cols: None,
-                sel: [0; ::exectuples::SOA_BM_WORDS],
-                nwords: 0,
-                cur_word: 0,
-                cur_bits: 0,
-            },
-            mcx,
-        )
-    });
+            ::mcx::PgBox::new_in(
+                BatchSoa {
+                    soa: ::exectuples::SoaBatch::new_in(mcx, plan.ncols()),
+                    plan,
+                    qual_armed: qual.is_some(),
+                    qual_only: qual_only && qual.is_some(),
+                    key_col: None,
+                    varkey: None,
+                    key_read_col: 0,
+                    publish: !(qual_only && qual.is_some()),
+                    quals: qual.map_or(
+                        [(0, ::execexpr::CmpOp::Int4Eq, ::datum::Datum::null());
+                            ::execexpr::SCAN_CMP_MAX_CLAUSES],
+                        |c| c.clauses,
+                    ),
+                    nquals: qual.map_or(0, |c| c.n),
+                    contains: None,
+                    stitch: None,
+                    proj: None,
+                    lane: None,
+                    lane_requal: false,
+                    bits_only: false,
+                    dict_group: None,
+                    cond_armed: false,
+                    stage_cols: None,
+                    sel: [0; ::exectuples::SOA_BM_WORDS],
+                    nwords: 0,
+                    cur_word: 0,
+                    cur_bits: 0,
+                },
+                mcx,
+            )
+        });
 }
 
 /// `PGRUST_LANE_V2_STAGE_VARWALK` (default OFF; AGGSEQ-STAGE — the heap
@@ -959,7 +986,10 @@ pub(crate) fn stage_varwalk_set_for_tests(on: bool) {
 fn cb_scan_cols_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
-        !matches!(std::env::var("PGRUST_CB_SCANCOLS").as_deref(), Ok("0") | Ok("off"))
+        !matches!(
+            std::env::var("PGRUST_CB_SCANCOLS").as_deref(),
+            Ok("0") | Ok("off")
+        )
     })
 }
 
@@ -969,7 +999,10 @@ fn cb_scan_cols_enabled() -> bool {
 fn prewhere_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
-        !matches!(std::env::var("PGRUST_LANE_V2_PREWHERE").as_deref(), Ok("0") | Ok("off"))
+        !matches!(
+            std::env::var("PGRUST_LANE_V2_PREWHERE").as_deref(),
+            Ok("0") | Ok("off")
+        )
     })
 }
 
@@ -1007,7 +1040,9 @@ pub fn seq_scan_cb_prewhere_arm<'mcx>(
     if node.cb_prewhere_refused {
         return Ok(false);
     }
-    let Some(q) = node.ss.qual.as_deref() else { return Ok(false) };
+    let Some(q) = node.ss.qual.as_deref() else {
+        return Ok(false);
+    };
     let shape = match ::execexpr::lane_scan_qual(q) {
         Ok(s) => s,
         Err(reason) => {
@@ -1030,7 +1065,12 @@ pub fn seq_scan_cb_prewhere_arm<'mcx>(
     // pg_statistic selectivity; a stats-free relation keeps the static
     // order (equality < range < LIKE). Static order only in v1 — the
     // observed-pass-rate re-refinement is deferred (phase4 design §3).
-    let relid = node.ss.ss_currentRelation.as_ref().expect("seqscan has a relation").rd_id;
+    let relid = node
+        .ss
+        .ss_currentRelation
+        .as_ref()
+        .expect("seqscan has a relation")
+        .rd_id;
     lq.order_staged_with_stats(estate.es_query_cxt, relid);
     // Full-prefix deform (qual_only=false, forced): lane quals read several
     // columns and the lane sel skips the gather for non-survivors — the same
@@ -1500,7 +1540,9 @@ pub fn seq_scan_k1_latemat_arm(
     if !seq_scan_is_heap(node) {
         return Err("k1-latemat-shape");
     }
-    let Some(b) = node.batch_soa.as_deref_mut() else { return Err("k1-latemat-shape") };
+    let Some(b) = node.batch_soa.as_deref_mut() else {
+        return Err("k1-latemat-shape");
+    };
     if b.plan.is_virtual()
         || b.key_col.is_some()
         || b.varkey.is_some()
@@ -1526,8 +1568,10 @@ pub fn seq_scan_k1_latemat_arm(
     if key_cols.iter().any(|&c| c >= ncols) {
         return Err("k1-latemat-shape");
     }
-    let mut staged: Vec<u16> =
-        b.quals[..b.nquals as usize].iter().map(|&(c, _, _)| c).collect();
+    let mut staged: Vec<u16> = b.quals[..b.nquals as usize]
+        .iter()
+        .map(|&(c, _, _)| c)
+        .collect();
     for &k in key_cols {
         if !staged.contains(&k) {
             staged.push(k);
@@ -1553,7 +1597,9 @@ pub fn seq_scan_k1_latemat_disarm(node: &mut SeqScanState<'_>) {
 
 /// Whether the K1 late-materialization narrowing is armed (unit pins).
 pub fn seq_scan_k1_latemat_armed(node: &SeqScanState<'_>) -> bool {
-    node.batch_soa.as_deref().is_some_and(|b| b.stage_cols.is_some())
+    node.batch_soa
+        .as_deref()
+        .is_some_and(|b| b.stage_cols.is_some())
 }
 
 /// K1 inc-2 completion (pass B): fill `cols` for `sel`-selected kind-0 rows
@@ -1564,8 +1610,12 @@ pub fn seq_scan_k1_latemat_armed(node: &SeqScanState<'_>) -> bool {
 /// bitmap, are harmless). Value movement only — idempotent per (col, row).
 pub fn seq_scan_batch_complete_deform(node: &mut SeqScanState<'_>, cols: &[u16], sel: &[u64]) {
     let SeqScanState { ss, batch_soa, .. } = node;
-    let Some(b) = batch_soa.as_deref_mut() else { return };
-    let Some(sd) = ss.ss_currentScanDesc.as_mut() else { return };
+    let Some(b) = batch_soa.as_deref_mut() else {
+        return;
+    };
+    let Some(sd) = ss.ss_currentScanDesc.as_mut() else {
+        return;
+    };
     ::tableam::table_scan_batch_complete_deform(sd, &b.plan, &mut b.soa, cols, sel);
 }
 
@@ -1586,7 +1636,11 @@ pub fn seq_scan_key_direct_att<'mcx>(
     if node.ss.qual.is_some() || node.ss.ps_ProjInfo.is_some() {
         return false;
     }
-    let rel = node.ss.ss_currentRelation.as_ref().expect("seqscan has a relation");
+    let rel = node
+        .ss
+        .ss_currentRelation
+        .as_ref()
+        .expect("seqscan has a relation");
     if (attnum as i32) >= i32::from(rel.rd_att.natts) {
         return false;
     }
@@ -1603,7 +1657,11 @@ pub fn seq_scan_sortkey_direct<'mcx>(
     if node.ss.qual.is_some() {
         return false;
     }
-    let rel = node.ss.ss_currentRelation.as_ref().expect("seqscan has a relation");
+    let rel = node
+        .ss
+        .ss_currentRelation
+        .as_ref()
+        .expect("seqscan has a relation");
     let attnum = match node.ss.ps_ProjInfo.as_ref() {
         None if rel.rd_att.natts == 1 => 0u16,
         None => return false,
@@ -1635,35 +1693,39 @@ fn arm_key_soa<'mcx>(
     if let Some(b) = &node.batch_soa {
         return b.key_col == Some(attnum);
     }
-    let rel = node.ss.ss_currentRelation.as_ref().expect("seqscan has a relation");
+    let rel = node
+        .ss
+        .ss_currentRelation
+        .as_ref()
+        .expect("seqscan has a relation");
     let mcx = estate.es_query_cxt;
     let atts: &[_] = &rel.rd_att.compact_attrs;
-    let (plan, varkey) =
-        match ::exectuples::SoaDeformPlan::try_new(mcx, atts, attnum as usize + 1) {
-            Some(plan) => (plan, None),
-            None => match ::exectuples::SoaVarKeyPlan::try_new(atts, attnum as usize) {
-                Some(vk) => (::exectuples::SoaDeformPlan::unused(mcx), Some(vk)),
-                None => {
-                    // pgrcolumnar columnar key staging (the int-key-distinct refusal): a
-                    // FIXED-WIDTH key sitting past a varlena column — the
-                    // heap fixed-width-prefix proof refuses and the varkey
-                    // pass wants a varlena key. The pgrcolumnar window deform
-                    // fills per column with no offset chain (the virtual
-                    // plan, likeband precedent), and a keyed batch stages
-                    // ONLY the key column (`.or(b.key_col)` at
-                    // `seq_scan_next_pagebatch`'s tail) — one decoded key
-                    // lane per window. Heap scans keep the refusal (their
-                    // deform walks the offset chain).
-                    if node.cb_scan.is_none() {
-                        return false;
-                    }
-                    match ::exectuples::SoaDeformPlan::columnar(mcx, attnum as usize + 1) {
-                        Some(plan) => (plan, None),
-                        None => return false,
-                    }
+    let (plan, varkey) = match ::exectuples::SoaDeformPlan::try_new(mcx, atts, attnum as usize + 1)
+    {
+        Some(plan) => (plan, None),
+        None => match ::exectuples::SoaVarKeyPlan::try_new(atts, attnum as usize) {
+            Some(vk) => (::exectuples::SoaDeformPlan::unused(mcx), Some(vk)),
+            None => {
+                // pgrcolumnar columnar key staging (the int-key-distinct refusal): a
+                // FIXED-WIDTH key sitting past a varlena column — the
+                // heap fixed-width-prefix proof refuses and the varkey
+                // pass wants a varlena key. The pgrcolumnar window deform
+                // fills per column with no offset chain (the virtual
+                // plan, likeband precedent), and a keyed batch stages
+                // ONLY the key column (`.or(b.key_col)` at
+                // `seq_scan_next_pagebatch`'s tail) — one decoded key
+                // lane per window. Heap scans keep the refusal (their
+                // deform walks the offset chain).
+                if node.cb_scan.is_none() {
+                    return false;
                 }
-            },
-        };
+                match ::exectuples::SoaDeformPlan::columnar(mcx, attnum as usize + 1) {
+                    Some(plan) => (plan, None),
+                    None => return false,
+                }
+            }
+        },
+    };
     let soa_cols = if varkey.is_some() { 1 } else { plan.ncols() };
     let key_read_col = if varkey.is_some() { 0 } else { attnum };
     node.batch_soa = Some(::mcx::PgBox::new_in(
@@ -1685,7 +1747,7 @@ fn arm_key_soa<'mcx>(
             lane: None,
             lane_requal: false,
             bits_only: false,
-                dict_group: None,
+            dict_group: None,
             cond_armed: false,
             stage_cols: None,
             sel: [0; ::exectuples::SOA_BM_WORDS],
@@ -1739,7 +1801,10 @@ pub fn seq_scan_adaptive_topk_arm<'mcx>(
     desc: bool,
 ) -> PgResult<bool> {
     if node.ss.qual.is_some()
-        && !node.batch_soa.as_deref().is_some_and(|b| b.qual_armed && !b.lane_requal)
+        && !node
+            .batch_soa
+            .as_deref()
+            .is_some_and(|b| b.qual_armed && !b.lane_requal)
     {
         return Ok(false);
     }
@@ -1843,7 +1908,12 @@ pub fn seq_scan_refsort_key_batch<'a, 'mcx>(
     node: &'a SeqScanState<'mcx>,
     col: u16,
     n: u32,
-) -> Option<(&'a [::datum::Datum], &'a [bool], &'a [u64], Option<&'a [u64]>)> {
+) -> Option<(
+    &'a [::datum::Datum],
+    &'a [bool],
+    &'a [u64],
+    Option<&'a [u64]>,
+)> {
     let b = node.batch_soa.as_deref()?;
     let sel = if node.ss.qual.is_some() {
         if !(b.qual_armed && !b.lane_requal && b.nwords > 0) {
@@ -1895,7 +1965,11 @@ pub fn seq_scan_batch_soa_prepare_varlane<'mcx>(
         }
     }
     let mcx = estate.es_query_cxt;
-    let rel = node.ss.ss_currentRelation.as_ref().expect("seqscan has a relation");
+    let rel = node
+        .ss
+        .ss_currentRelation
+        .as_ref()
+        .expect("seqscan has a relation");
     let atts: &[_] = &rel.rd_att.compact_attrs;
     let Some(vk) = ::exectuples::SoaVarKeyPlan::try_new(atts, attnum as usize) else {
         return false;
@@ -1994,7 +2068,12 @@ pub fn seq_scan_batch_soa_prepare_contains<'mcx>(
     node: &mut SeqScanState<'mcx>,
     estate: &mut EStateData<'mcx>,
 ) -> bool {
-    let Some(c) = node.ss.qual.as_deref().and_then(|q| q.scan_contains_clause()) else {
+    let Some(c) = node
+        .ss
+        .qual
+        .as_deref()
+        .and_then(|q| q.scan_contains_clause())
+    else {
         return false;
     };
     if let Some(b) = &node.batch_soa {
@@ -2008,7 +2087,11 @@ pub fn seq_scan_batch_soa_prepare_contains<'mcx>(
         return false;
     }
     let mcx = estate.es_query_cxt;
-    let rel = node.ss.ss_currentRelation.as_ref().expect("seqscan has a relation");
+    let rel = node
+        .ss
+        .ss_currentRelation
+        .as_ref()
+        .expect("seqscan has a relation");
     let atts: &[_] = &rel.rd_att.compact_attrs;
     let Some(vk) = ::exectuples::SoaVarKeyPlan::try_new(atts, c.attnum as usize) else {
         return false;
@@ -2032,7 +2115,7 @@ pub fn seq_scan_batch_soa_prepare_contains<'mcx>(
             lane: None,
             lane_requal: false,
             bits_only: false,
-                dict_group: None,
+            dict_group: None,
             cond_armed: false,
             stage_cols: None,
             sel: [0; ::exectuples::SOA_BM_WORDS],
@@ -2054,7 +2137,9 @@ pub fn seq_scan_batch_soa_prepare_contains<'mcx>(
 /// missing lane as "this window is Raw"). False = no varkey staging armed
 /// (fixed-width key or no batch SoA); nothing changes.
 pub fn seq_scan_key_dict_arm(node: &mut SeqScanState<'_>) -> bool {
-    let Some(b) = node.batch_soa.as_deref_mut() else { return false };
+    let Some(b) = node.batch_soa.as_deref_mut() else {
+        return false;
+    };
     if b.varkey.is_none() {
         return false;
     }
@@ -2068,9 +2153,7 @@ pub fn seq_scan_key_dict_arm(node: &mut SeqScanState<'_>) -> bool {
 /// codes+dict for the whole window and never call `seq_scan_batch_key` on
 /// it.
 #[inline]
-pub fn seq_scan_batch_key_dict_lane(
-    node: &SeqScanState<'_>,
-) -> Option<::exectuples::SoaDictLane> {
+pub fn seq_scan_batch_key_dict_lane(node: &SeqScanState<'_>) -> Option<::exectuples::SoaDictLane> {
     let b = node.batch_soa.as_deref()?;
     if b.varkey.is_none() {
         return None;
@@ -2091,7 +2174,10 @@ pub fn seq_scan_batch_key<'mcx>(
     if b.soa.is_fallback(i) {
         return None;
     }
-    Some((b.soa.col_values(c)[i as usize], b.soa.col_isnull(c)[i as usize]))
+    Some((
+        b.soa.col_values(c)[i as usize],
+        b.soa.col_isnull(c)[i as usize],
+    ))
 }
 
 /// Kernel-qual selection bitmap armed on the batch SoA — the lane-v2
@@ -2107,7 +2193,9 @@ pub fn seq_scan_batch_qual_bitmap_armed(node: &SeqScanState<'_>) -> bool {
 /// must keep the per-row walk for that batch.
 #[inline(always)]
 pub fn seq_scan_batch_qual_bitmap_ready(node: &SeqScanState<'_>) -> bool {
-    node.batch_soa.as_deref().is_some_and(|b| b.qual_armed && b.nwords > 0)
+    node.batch_soa
+        .as_deref()
+        .is_some_and(|b| b.qual_armed && b.nwords > 0)
 }
 
 /// Pop the next selection-bitmap survivor of the staged batch (ascending
@@ -2269,10 +2357,7 @@ pub fn seq_scan_batch_whole_qual_sel<'a>(node: &'a SeqScanState<'_>) -> Option<&
 /// it as a whole-window value proof (guard intervals, constant-key windows) —
 /// it covers all staged rows, so any row subset is covered too.
 #[inline]
-pub fn seq_scan_window_value_minmax(
-    node: &SeqScanState<'_>,
-    col: usize,
-) -> Option<(i64, i64)> {
+pub fn seq_scan_window_value_minmax(node: &SeqScanState<'_>, col: usize) -> Option<(i64, i64)> {
     let sd = node.ss.ss_currentScanDesc.as_ref()?;
     ::tableam::table_scan_window_value_minmax(sd, col)
 }
@@ -2314,7 +2399,11 @@ pub fn seq_scan_granule_meta_peek<'mcx>(
 
 /// Consume the granule the peek just answered (never decoded).
 pub fn seq_scan_granule_meta_consume(node: &mut SeqScanState<'_>) {
-    let sd = node.ss.ss_currentScanDesc.as_mut().expect("peek preceded consume");
+    let sd = node
+        .ss
+        .ss_currentScanDesc
+        .as_mut()
+        .expect("peek preceded consume");
     ::tableam::table_scan_granule_meta_consume(sd);
 }
 
@@ -2329,12 +2418,17 @@ pub fn seq_scan_granule_meta_consume(node: &mut SeqScanState<'_>) {
 /// selection. Call AFTER `arm_scan_staging` (the batch/lane arming decides
 /// `qual_armed`).
 pub fn seq_scan_agg_meta_qual_ok(node: &SeqScanState<'_>) -> bool {
-    let Some(cb) = node.cb_scan.as_deref() else { return false };
+    let Some(cb) = node.cb_scan.as_deref() else {
+        return false;
+    };
     if node.ss.qual.is_none() {
         return cb.zone.is_empty();
     }
     cb.zone_covers_qual
-        && node.batch_soa.as_deref().is_some_and(|b| b.qual_armed && !b.lane_requal)
+        && node
+            .batch_soa
+            .as_deref()
+            .is_some_and(|b| b.qual_armed && !b.lane_requal)
 }
 
 /// Footer-stat aggregate metadata peek (pgrcolumnar; see
@@ -2359,13 +2453,21 @@ pub fn seq_scan_agg_meta_peek<'mcx>(
 
 /// Consume the row group the peek just answered (`MetaRg`; never decoded).
 pub fn seq_scan_agg_meta_consume_rg(node: &mut SeqScanState<'_>) {
-    let sd = node.ss.ss_currentScanDesc.as_mut().expect("peek preceded consume");
+    let sd = node
+        .ss
+        .ss_currentScanDesc
+        .as_mut()
+        .expect("peek preceded consume");
     ::tableam::table_scan_agg_meta_consume_rg(sd);
 }
 
 /// Consume the granule the peek just answered (`MetaGranule`; never decoded).
 pub fn seq_scan_agg_meta_consume_granule(node: &mut SeqScanState<'_>) {
-    let sd = node.ss.ss_currentScanDesc.as_mut().expect("peek preceded consume");
+    let sd = node
+        .ss
+        .ss_currentScanDesc
+        .as_mut()
+        .expect("peek preceded consume");
     ::tableam::table_scan_agg_meta_consume_granule(sd);
 }
 
@@ -2407,9 +2509,7 @@ pub fn seq_scan_next_pagebatch<'mcx>(
                             );
                         }
                         b.soa.mark_fallback_words(&undecided[..nwords]);
-                        for (w, fb) in
-                            b.sel[..nwords].iter_mut().zip(b.soa.fallback_words())
-                        {
+                        for (w, fb) in b.sel[..nwords].iter_mut().zip(b.soa.fallback_words()) {
                             *w |= fb;
                         }
                         b.nwords = nwords as u32;
@@ -2450,8 +2550,8 @@ pub fn seq_scan_next_pagebatch<'mcx>(
                 // no fills — nothing downstream reads an empty selection).
                 // The requal tail is untouched: it re-runs the full original
                 // qual per surviving row at fetch on hit and miss alike.
-                let cond_hit = b.cond_armed
-                    && ::tableam::table_scan_condcache_lookup(scandesc, &mut b.sel);
+                let cond_hit =
+                    b.cond_armed && ::tableam::table_scan_condcache_lookup(scandesc, &mut b.sel);
                 if cond_hit {
                     b.soa.begin(n);
                     if !b.bits_only && b.sel[..nwords].iter().any(|&w| w != 0) {
@@ -2495,8 +2595,7 @@ pub fn seq_scan_next_pagebatch<'mcx>(
                                 cb_zone_from_parts(zs.col + 1, zs.fn_oid, zs.commuted, zs.konst)
                             {
                                 let zq = ::tableam::ZoneQual { attnum, op, val };
-                                match ::tableam::table_scan_staged_granule_verdict(scandesc, &zq)
-                                {
+                                match ::tableam::table_scan_staged_granule_verdict(scandesc, &zq) {
                                     ::tableam::ZoneVerdict::AllPass => continue,
                                     ::tableam::ZoneVerdict::AllFail => {
                                         b.sel[..nwords].fill(0);
@@ -2612,8 +2711,7 @@ pub fn seq_scan_next_pagebatch<'mcx>(
                 // selection bits over the same staged lanes (the lanestitch
                 // equivalence contract + the strict-compare AND identity).
                 if !stitch_qual_bitmap(b, n)? {
-                    for (ci, &(col, cmp, konst)) in
-                        b.quals[..b.nquals as usize].iter().enumerate()
+                    for (ci, &(col, cmp, konst)) in b.quals[..b.nquals as usize].iter().enumerate()
                     {
                         if ci == 0 {
                             ::execexpr::qual_bitmap_cmp_const(
@@ -2675,8 +2773,12 @@ pub fn seq_scan_next_pagebatch<'mcx>(
 fn stitch_qual_bitmap(b: &mut BatchSoa<'_>, n: u32) -> PgResult<bool> {
     // Disjoint field borrows: the body reads `soa` lanes and the runner
     // writes `sel`; `stitch` carries the program + telemetry.
-    let BatchSoa { soa, sel, stitch, .. } = b;
-    let Some(st) = stitch.as_mut() else { return Ok(false) };
+    let BatchSoa {
+        soa, sel, stitch, ..
+    } = b;
+    let Some(st) = stitch.as_mut() else {
+        return Ok(false);
+    };
     let mut ran = false;
     if !st.refused {
         if st.body.is_none() && st.rows_seen >= STITCH_ROW_FLOOR {
@@ -2702,8 +2804,10 @@ fn stitch_qual_bitmap(b: &mut BatchSoa<'_>, n: u32) -> PgResult<bool> {
         if let Some(body) = &st.body {
             // Stack lane views over the staged SoA (zero allocation on the
             // per-batch path — doctrine rule 7).
-            let mut lanes =
-                [::lanestitch::Lane { values: &[], isnull: &[] }; ::lanestitch::MAX_COLS];
+            let mut lanes = [::lanestitch::Lane {
+                values: &[],
+                isnull: &[],
+            }; ::lanestitch::MAX_COLS];
             for (c, lane) in lanes[..st.ncols].iter_mut().enumerate() {
                 *lane = ::lanestitch::Lane {
                     values: soa.col_values(c),
@@ -2781,8 +2885,10 @@ fn stitch_project(b: &mut BatchSoa<'_>, n: u32) -> bool {
             {
                 *d = s & !fb;
             }
-            let mut lanes =
-                [::lanestitch::Lane { values: &[], isnull: &[] }; ::lanestitch::MAX_COLS];
+            let mut lanes = [::lanestitch::Lane {
+                values: &[],
+                isnull: &[],
+            }; ::lanestitch::MAX_COLS];
             for (c, lane) in lanes[..p.ncols].iter_mut().enumerate() {
                 *lane = ::lanestitch::Lane {
                     values: soa.col_values(c),
@@ -2799,13 +2905,20 @@ fn stitch_project(b: &mut BatchSoa<'_>, n: u32) -> bool {
                     isnull: nch.next().map(|c| &mut c[..n as usize]).unwrap_or(&mut []),
                 })
             };
-            match body.run_into(n, &lanes[..p.ncols], &proj_sel[..nwords], &mut outs[..p.nouts as usize]) {
+            match body.run_into(
+                n,
+                &lanes[..p.ncols],
+                &proj_sel[..nwords],
+                &mut outs[..p.nouts as usize],
+            ) {
                 ::lanestitch::ProjOutcome::Stitched => {
                     p.staged = true;
                     p.n_stitched += 1;
                     p.stitched_rows += n as u64;
-                    p.stitched_survivors +=
-                        proj_sel[..nwords].iter().map(|w| w.count_ones() as u64).sum::<u64>();
+                    p.stitched_survivors += proj_sel[..nwords]
+                        .iter()
+                        .map(|w| w.count_ones() as u64)
+                        .sum::<u64>();
                 }
                 ::lanestitch::ProjOutcome::Drift => {
                     p.n_perrow += 1;
@@ -2926,19 +3039,48 @@ fn stitch_cmp(
     };
     // The const operand's own width per comparator family (the b side).
     let k = match cmp {
-        E::Int2Eq | E::Int2Ne | E::Int2Lt | E::Int2Le | E::Int2Gt | E::Int2Ge
-        | E::Int42Eq | E::Int42Ne | E::Int42Lt | E::Int42Le | E::Int42Gt | E::Int42Ge => {
-            ::datum::Datum::from_i16(konst.as_i16())
-        }
-        E::Int4Eq | E::Int4Ne | E::Int4Lt | E::Int4Le | E::Int4Gt | E::Int4Ge
-        | E::Int84Eq | E::Int84Ne | E::Int84Lt | E::Int84Le | E::Int84Gt | E::Int84Ge
-        | E::Int24Eq | E::Int24Ne | E::Int24Lt | E::Int24Le | E::Int24Gt | E::Int24Ge => {
-            ::datum::Datum::from_i32(konst.as_i32())
-        }
-        E::Int8Eq | E::Int8Ne | E::Int8Lt | E::Int8Le | E::Int8Gt | E::Int8Ge
-        | E::Int48Eq | E::Int48Ne | E::Int48Lt | E::Int48Le | E::Int48Gt | E::Int48Ge => {
-            ::datum::Datum::from_i64(konst.as_i64())
-        }
+        E::Int2Eq
+        | E::Int2Ne
+        | E::Int2Lt
+        | E::Int2Le
+        | E::Int2Gt
+        | E::Int2Ge
+        | E::Int42Eq
+        | E::Int42Ne
+        | E::Int42Lt
+        | E::Int42Le
+        | E::Int42Gt
+        | E::Int42Ge => ::datum::Datum::from_i16(konst.as_i16()),
+        E::Int4Eq
+        | E::Int4Ne
+        | E::Int4Lt
+        | E::Int4Le
+        | E::Int4Gt
+        | E::Int4Ge
+        | E::Int84Eq
+        | E::Int84Ne
+        | E::Int84Lt
+        | E::Int84Le
+        | E::Int84Gt
+        | E::Int84Ge
+        | E::Int24Eq
+        | E::Int24Ne
+        | E::Int24Lt
+        | E::Int24Le
+        | E::Int24Gt
+        | E::Int24Ge => ::datum::Datum::from_i32(konst.as_i32()),
+        E::Int8Eq
+        | E::Int8Ne
+        | E::Int8Lt
+        | E::Int8Le
+        | E::Int8Gt
+        | E::Int8Ge
+        | E::Int48Eq
+        | E::Int48Ne
+        | E::Int48Lt
+        | E::Int48Le
+        | E::Int48Gt
+        | E::Int48Ge => ::datum::Datum::from_i64(konst.as_i64()),
         // Oid: sign-extend the u32 image (the stitcher's canonical-datum
         // contract — makes the 2x64 unsigned NEON compares exact).
         E::OidEq | E::OidNe | E::OidLt | E::OidLe | E::OidGt | E::OidGe => {
@@ -2946,11 +3088,29 @@ fn stitch_cmp(
         }
         // Float consts: raw bit patterns at the const's own width (low-word
         // f32 / full-word f64 — the b side of each family).
-        E::Float4Eq | E::Float4Ne | E::Float4Lt | E::Float4Le | E::Float4Gt | E::Float4Ge
-        | E::Float84Eq | E::Float84Ne | E::Float84Lt | E::Float84Le | E::Float84Gt
+        E::Float4Eq
+        | E::Float4Ne
+        | E::Float4Lt
+        | E::Float4Le
+        | E::Float4Gt
+        | E::Float4Ge
+        | E::Float84Eq
+        | E::Float84Ne
+        | E::Float84Lt
+        | E::Float84Le
+        | E::Float84Gt
         | E::Float84Ge => ::datum::Datum::from_f32(konst.as_f32()),
-        E::Float8Eq | E::Float8Ne | E::Float8Lt | E::Float8Le | E::Float8Gt | E::Float8Ge
-        | E::Float48Eq | E::Float48Ne | E::Float48Lt | E::Float48Le | E::Float48Gt
+        E::Float8Eq
+        | E::Float8Ne
+        | E::Float8Lt
+        | E::Float8Le
+        | E::Float8Gt
+        | E::Float8Ge
+        | E::Float48Eq
+        | E::Float48Ne
+        | E::Float48Lt
+        | E::Float48Le
+        | E::Float48Gt
         | E::Float48Ge => ::datum::Datum::from_f64(konst.as_f64()),
     };
     (op, k)
@@ -2964,7 +3124,9 @@ fn stitch_cmp(
 /// deferred past the row floor (`stitch_qual_bitmap`); this only translates
 /// the clause list into the stitch program.
 pub fn seq_scan_stitch_arm(node: &mut SeqScanState<'_>) {
-    let Some(b) = node.batch_soa.as_deref_mut() else { return };
+    let Some(b) = node.batch_soa.as_deref_mut() else {
+        return;
+    };
     // A PREWHERE lane qual owns the bitmap (staged clauses + dict tier +
     // requal); the kernel `quals` it may shadow must not run a second tier.
     if b.lane.is_some() {
@@ -2984,10 +3146,20 @@ pub fn seq_scan_stitch_arm(node: &mut SeqScanState<'_>) {
             return;
         }
         let (op, k) = stitch_cmp(cmp, konst);
-        let kix = prog.push_const(::datum::NullableDatum { value: k, isnull: false });
-        prog.steps.push(::lanestitch::Step::LoadLane { col, out: 0 });
-        prog.steps.push(::lanestitch::Step::LoadConst { k: kix, out: 1 });
-        prog.steps.push(::lanestitch::Step::Cmp { op, a: 0, b: 1, out: 2 });
+        let kix = prog.push_const(::datum::NullableDatum {
+            value: k,
+            isnull: false,
+        });
+        prog.steps
+            .push(::lanestitch::Step::LoadLane { col, out: 0 });
+        prog.steps
+            .push(::lanestitch::Step::LoadConst { k: kix, out: 1 });
+        prog.steps.push(::lanestitch::Step::Cmp {
+            op,
+            a: 0,
+            b: 1,
+            out: 2,
+        });
         prog.steps.push(::lanestitch::Step::Qual { a: 2 });
         ncols = ncols.max(col as usize + 1);
     }
@@ -3030,7 +3202,10 @@ fn stitch_trace_summary(node: &SeqScanState<'_>) {
 fn proj_stitch_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
-        !matches!(std::env::var("PGRUST_LANESTITCH_PROJ").as_deref(), Ok("0") | Ok("off"))
+        !matches!(
+            std::env::var("PGRUST_LANESTITCH_PROJ").as_deref(),
+            Ok("0") | Ok("off")
+        )
     })
 }
 
@@ -3106,11 +3281,19 @@ pub fn seq_scan_proj_stitch_arm<'mcx>(
     node: &mut SeqScanState<'mcx>,
     estate: &mut EStateData<'mcx>,
 ) {
-    let Some(prefix) = seq_scan_proj_stitch_prefix(node) else { return };
-    let Some(proj) = node.ss.ps_ProjInfo.as_ref() else { return };
-    let Some(cols) = proj.pi_state.scan_proj_cols() else { return };
+    let Some(prefix) = seq_scan_proj_stitch_prefix(node) else {
+        return;
+    };
+    let Some(proj) = node.ss.ps_ProjInfo.as_ref() else {
+        return;
+    };
+    let Some(cols) = proj.pi_state.scan_proj_cols() else {
+        return;
+    };
     let result_slot = proj.pi_result_slot;
-    let Some(b) = node.batch_soa.as_deref_mut() else { return };
+    let Some(b) = node.batch_soa.as_deref_mut() else {
+        return;
+    };
     // Never co-arm with a PREWHERE lane qual: its bits may be a requal
     // pre-filter, and the stitched-projection emit fast lane bypasses the
     // per-row qual re-check entirely.
@@ -3130,26 +3313,48 @@ pub fn seq_scan_proj_stitch_arm<'mcx>(
     for (j, col) in cols.cols[..cols.n as usize].iter().enumerate() {
         match *col {
             ::execexpr::ScanProjCol::Var { attnum } => {
-                prog.steps.push(::lanestitch::Step::LoadLane { col: attnum, out: 0 });
-                prog.steps.push(::lanestitch::Step::StoreOut { a: 0, out: j as u16 });
+                prog.steps.push(::lanestitch::Step::LoadLane {
+                    col: attnum,
+                    out: 0,
+                });
+                prog.steps.push(::lanestitch::Step::StoreOut {
+                    a: 0,
+                    out: j as u16,
+                });
             }
             ::execexpr::ScanProjCol::ArithVV { op, a, b: bcol } => {
-                prog.steps.push(::lanestitch::Step::LoadLane { col: a, out: 0 });
-                prog.steps.push(::lanestitch::Step::LoadLane { col: bcol, out: 1 });
+                prog.steps
+                    .push(::lanestitch::Step::LoadLane { col: a, out: 0 });
+                prog.steps
+                    .push(::lanestitch::Step::LoadLane { col: bcol, out: 1 });
                 prog.steps.push(::lanestitch::Step::Arith {
                     op: proj_arith(op),
                     a: 0,
                     b: 1,
                     out: 2,
                 });
-                prog.steps.push(::lanestitch::Step::StoreOut { a: 2, out: j as u16 });
+                prog.steps.push(::lanestitch::Step::StoreOut {
+                    a: 2,
+                    out: j as u16,
+                });
             }
-            ::execexpr::ScanProjCol::ArithVK { op, attnum, konst, var_is_arg0 } => {
+            ::execexpr::ScanProjCol::ArithVK {
+                op,
+                attnum,
+                konst,
+                var_is_arg0,
+            } => {
                 let k = proj_arith_konst(op, konst);
-                let kix = prog
-                    .push_const(::datum::NullableDatum { value: k, isnull: false });
-                prog.steps.push(::lanestitch::Step::LoadLane { col: attnum, out: 0 });
-                prog.steps.push(::lanestitch::Step::LoadConst { k: kix, out: 1 });
+                let kix = prog.push_const(::datum::NullableDatum {
+                    value: k,
+                    isnull: false,
+                });
+                prog.steps.push(::lanestitch::Step::LoadLane {
+                    col: attnum,
+                    out: 0,
+                });
+                prog.steps
+                    .push(::lanestitch::Step::LoadConst { k: kix, out: 1 });
                 let (a, bb) = if var_is_arg0 { (0u8, 1u8) } else { (1u8, 0u8) };
                 prog.steps.push(::lanestitch::Step::Arith {
                     op: proj_arith(op),
@@ -3157,7 +3362,10 @@ pub fn seq_scan_proj_stitch_arm<'mcx>(
                     b: bb,
                     out: 2,
                 });
-                prog.steps.push(::lanestitch::Step::StoreOut { a: 2, out: j as u16 });
+                prog.steps.push(::lanestitch::Step::StoreOut {
+                    a: 2,
+                    out: j as u16,
+                });
             }
         }
     }
@@ -3171,7 +3379,11 @@ pub fn seq_scan_proj_stitch_arm<'mcx>(
     let qual_deform_cols = if b.qual_only && b.nquals == 1 {
         1
     } else {
-        b.quals[..b.nquals as usize].iter().map(|&(c, _, _)| c as usize + 1).max().unwrap_or(0)
+        b.quals[..b.nquals as usize]
+            .iter()
+            .map(|&(c, _, _)| c as usize + 1)
+            .max()
+            .unwrap_or(0)
     };
     b.proj = Some(ProjStitch {
         prog,
@@ -3206,7 +3418,9 @@ pub fn seq_scan_batch_qual_count<'mcx>(
     let mut fallback = [0u64; ::exectuples::SOA_BM_WORDS];
     let mut count = 0u32;
     {
-        let Some(b) = node.batch_soa.as_deref() else { return Ok(None) };
+        let Some(b) = node.batch_soa.as_deref() else {
+            return Ok(None);
+        };
         if !b.qual_armed || b.lane_requal {
             // A hybrid lane qual's bits are a pre-filter, not verdicts; the
             // census cannot count off them.
@@ -3283,8 +3497,11 @@ pub fn seq_scan_batch_store<'mcx>(
     i: u32,
 ) {
     let mcx = estate.es_query_cxt;
-    let scandesc =
-        node.ss.ss_currentScanDesc.as_mut().expect("batch store before batch fetch");
+    let scandesc = node
+        .ss
+        .ss_currentScanDesc
+        .as_mut()
+        .expect("batch store before batch fetch");
     let slot = estate.slot_mut(node.ss.ss_ScanTupleSlot);
     ::tableam::table_scan_batch_store_slot(mcx, scandesc, i, slot);
     if let Some(b) = node.batch_soa.as_ref() {
@@ -3327,8 +3544,10 @@ pub fn seq_scan_batch_emit<'mcx>(
                             return Ok(None);
                         }
                         if !b.soa.is_fallback(i) {
-                            let proj =
-                                ss.ps_ProjInfo.as_ref().expect("proj stitch armed with ProjInfo");
+                            let proj = ss
+                                .ps_ProjInfo
+                                .as_ref()
+                                .expect("proj stitch armed with ProjInfo");
                             let result_id = proj.pi_result_slot;
                             let mcx = estate.es_query_cxt;
                             let slot = estate.slot_mut(result_id);
@@ -3378,7 +3597,13 @@ pub fn seq_scan_batch_emit<'mcx>(
             let per_tuple = estate.ecxt(ecxt).per_tuple_mcx();
             // SAFETY: reset-only context, arena-boxed (address-stable),
             // outlives the plan.
-            unsafe { node.ss.qual.as_deref_mut().unwrap().arm_result_mcx_raw(per_tuple) };
+            unsafe {
+                node.ss
+                    .qual
+                    .as_deref_mut()
+                    .unwrap()
+                    .arm_result_mcx_raw(per_tuple)
+            };
             let mut slots = ::execexpr::EvalSlots {
                 scan: Some(estate.slot_mut(scan_id)),
                 inner: None,
@@ -3401,7 +3626,13 @@ pub fn seq_scan_batch_emit<'mcx>(
     // C reads projection initplan params inside the projection, which never
     // runs on a qual-rejected tuple — mirrors `exec_scan_impl`.
     {
-        let deps = node.ss.ps_ProjInfo.as_ref().unwrap().pi_state.param_exec_deps();
+        let deps = node
+            .ss
+            .ps_ProjInfo
+            .as_ref()
+            .unwrap()
+            .pi_state
+            .param_exec_deps();
         if !deps.is_empty() {
             ::executils::exec_eval_param_exec_params(estate, deps)?;
         }
@@ -3425,7 +3656,11 @@ pub fn seq_scan_batch_emit<'mcx>(
     let mcx = estate.es_query_cxt;
     let result_id = proj.pi_result_slot;
     let (scan_slot, result_slot) = ::execscan::slot_pair(estate, scan_id, result_id);
-    let mut slots = ::execexpr::EvalSlots { scan: Some(scan_slot), inner: None, outer: None };
+    let mut slots = ::execexpr::EvalSlots {
+        scan: Some(scan_slot),
+        inner: None,
+        outer: None,
+    };
     ::execexpr::exec_project_prearmed(&mut proj.pi_state, &mut slots, result_slot, mcx)?;
     Ok(Some(result_id))
 }
@@ -3485,7 +3720,9 @@ fn scan_batch_probe<'mcx>(
             return Ok(false);
         }
     }
-    let Some(q) = node.ss.qual.as_deref() else { return Ok(false) };
+    let Some(q) = node.ss.qual.as_deref() else {
+        return Ok(false);
+    };
     let ::execexpr::Kernel::QualScanVarCmpConst { attnum, .. } = q.kernel() else {
         return Ok(false);
     };
@@ -3507,10 +3744,16 @@ fn exec_seq_scan_batch<'mcx, const PROJ: bool>(
     node: &mut SeqScanState<'mcx>,
     estate: &mut EStateData<'mcx>,
 ) -> PgResult<Option<ExecSlotId>> {
-    debug_assert!(::types_scan::sdir::ScanDirectionIsForward(estate.es_direction));
+    debug_assert!(::types_scan::sdir::ScanDirectionIsForward(
+        estate.es_direction
+    ));
     estate.ecxt_mut(node.ss.ps_ExprContext).reset();
     loop {
-        let next = node.batch_soa.as_deref_mut().expect("batch drive armed").next_selected();
+        let next = node
+            .batch_soa
+            .as_deref_mut()
+            .expect("batch drive armed")
+            .next_selected();
         let Some(i) = next else {
             let n = seq_scan_next_pagebatch(node, estate)?;
             if n == 0 {
@@ -3535,8 +3778,11 @@ fn exec_seq_scan_batch<'mcx, const PROJ: bool>(
         let proj = node.ss.ps_ProjInfo.as_mut().unwrap();
         let result_id = proj.pi_result_slot;
         let (scan_slot, result_slot) = ::execscan::slot_pair(estate, scan_id, result_id);
-        let mut slots =
-            ::execexpr::EvalSlots { scan: Some(scan_slot), inner: None, outer: None };
+        let mut slots = ::execexpr::EvalSlots {
+            scan: Some(scan_slot),
+            inner: None,
+            outer: None,
+        };
         ::execexpr::exec_project(&mut proj.pi_state, &mut slots, result_slot, mcx)?;
         return Ok(Some(result_id));
     }
@@ -3554,7 +3800,9 @@ pub fn seq_scan_set_bloom<'mcx>(
         node.variant = SeqScanVariant::Plain;
         node.bloom = None;
     }
-    let Some((filter, col)) = push else { return Ok(false) };
+    let Some((filter, col)) = push else {
+        return Ok(false);
+    };
     if node.variant != SeqScanVariant::Plain
         || !node.batch_allowed
         || node.ss.instr_idx.is_some()
@@ -3568,7 +3816,11 @@ pub fn seq_scan_set_bloom<'mcx>(
         return Ok(false);
     }
     let mcx = estate.es_query_cxt;
-    let rel = node.ss.ss_currentRelation.as_ref().expect("seqscan has a relation");
+    let rel = node
+        .ss
+        .ss_currentRelation
+        .as_ref()
+        .expect("seqscan has a relation");
     let atts: &[_] = &rel.rd_att.compact_attrs;
     let Some(plan) = ::exectuples::SoaDeformPlan::try_new(mcx, atts, col as usize + 1) else {
         return Ok(false);
@@ -3601,10 +3853,16 @@ fn exec_seq_scan_bloom<'mcx>(
     node: &mut SeqScanState<'mcx>,
     estate: &mut EStateData<'mcx>,
 ) -> PgResult<Option<ExecSlotId>> {
-    debug_assert!(::types_scan::sdir::ScanDirectionIsForward(estate.es_direction));
+    debug_assert!(::types_scan::sdir::ScanDirectionIsForward(
+        estate.es_direction
+    ));
     estate.ecxt_mut(node.ss.ps_ExprContext).reset();
     loop {
-        let next = node.bloom.as_deref_mut().expect("bloom drive armed").next_selected();
+        let next = node
+            .bloom
+            .as_deref_mut()
+            .expect("bloom drive armed")
+            .next_selected();
         let Some(i) = next else {
             // Page boundary: rs_cindex parks at page end, so the per-tuple
             // walk resumes on the NEXT page — disarming here is order-exact.
@@ -3645,8 +3903,11 @@ fn exec_seq_scan_bloom<'mcx>(
             continue;
         };
         let mcx = estate.es_query_cxt;
-        let scandesc =
-            node.ss.ss_currentScanDesc.as_mut().expect("bloom fetch after page stage");
+        let scandesc = node
+            .ss
+            .ss_currentScanDesc
+            .as_mut()
+            .expect("bloom fetch after page stage");
         let slot = estate.slot_mut(node.ss.ss_ScanTupleSlot);
         ::tableam::table_scan_batch_store_slot(mcx, scandesc, i, slot);
         return Ok(Some(node.ss.ss_ScanTupleSlot));
@@ -3673,8 +3934,7 @@ fn exec_open_scan_relation<'mcx>(
     eflags: i32,
 ) -> PgResult<Relation<'mcx>> {
     let rel = estate.exec_get_range_table_relation(node.scan.scanrelid, false)?;
-    if eflags & (EXEC_FLAG_EXPLAIN_ONLY | EXEC_FLAG_WITH_NO_DATA) == 0
-        && !rel.rd_rel.relispopulated
+    if eflags & (EXEC_FLAG_EXPLAIN_ONLY | EXEC_FLAG_WITH_NO_DATA) == 0 && !rel.rd_rel.relispopulated
     {
         return Err(unpopulated_matview(rel));
     }
@@ -3781,7 +4041,9 @@ pub fn seq_scan_cb_total_rows<'mcx>(
     estate: &mut EStateData<'mcx>,
 ) -> PgResult<Option<u64>> {
     node.ensure_scandesc(estate)?;
-    Ok(::tableam::table_scan_cb_total_rows(node.ss.ss_currentScanDesc.as_ref().unwrap()))
+    Ok(::tableam::table_scan_cb_total_rows(
+        node.ss.ss_currentScanDesc.as_ref().unwrap(),
+    ))
 }
 
 /// Part-global granule geometry of a pgrcolumnar scan (runtime morsel source,
@@ -3854,10 +4116,10 @@ pub fn seq_scan_heap_block_geometry<'mcx>(
         return Ok(None);
     }
     node.ensure_scandesc(estate)?;
-    Ok(::tableam::table_scan_heap_block_geometry(
-        node.ss.ss_currentScanDesc.as_ref().unwrap(),
+    Ok(
+        ::tableam::table_scan_heap_block_geometry(node.ss.ss_currentScanDesc.as_ref().unwrap())
+            .filter(|&n| n > 0),
     )
-    .filter(|&n| n > 0))
 }
 
 /// Position a PGRCOLUMNAR scan on the granule claim [g0, g1). Ok(false) = not
@@ -3872,11 +4134,7 @@ pub fn seq_scan_cb_set_granule_range<'mcx>(
     g1: u64,
 ) -> PgResult<bool> {
     node.ensure_scandesc(estate)?;
-    ::tableam::table_scan_cb_set_granule_range(
-        node.ss.ss_currentScanDesc.as_mut().unwrap(),
-        g0,
-        g1,
-    )
+    ::tableam::table_scan_cb_set_granule_range(node.ss.ss_currentScanDesc.as_mut().unwrap(), g0, g1)
 }
 
 /// End-of-claim release seam (single-executor wave 2, WS-O inc-2,
@@ -3942,8 +4200,12 @@ pub fn seq_scan_cursor_settle(node: &mut SeqScanState<'_>) -> bool {
     let Some((b0, b1)) = ::tableam::table_scan_cursor_park_point(scan) else {
         return false;
     };
-    node.lane_park =
-        Some(SeqScanCursorPark { b0, b1, pos: node.lane_pos, n: node.lane_n });
+    node.lane_park = Some(SeqScanCursorPark {
+        b0,
+        b1,
+        pos: node.lane_pos,
+        n: node.lane_n,
+    });
     node.lane_pos = 0;
     node.lane_n = 0;
     ::tableam::table_scan_end_claim_release(scan);
@@ -4036,11 +4298,7 @@ pub fn seq_scan_cursor_resume<'mcx>(
         return Ok(false);
     };
     node.ensure_scandesc(estate)?;
-    ::tableam::table_scan_set_morsel_range(
-        node.ss.ss_currentScanDesc.as_mut().unwrap(),
-        b0,
-        b1,
-    )?;
+    ::tableam::table_scan_set_morsel_range(node.ss.ss_currentScanDesc.as_mut().unwrap(), b0, b1)?;
     let restaged = seq_scan_next_pagebatch(node, estate)?;
     if restaged != n {
         return Err(::types_error::PgError::error(format!(
@@ -4063,11 +4321,7 @@ pub fn seq_scan_set_morsel_range<'mcx>(
     g1: u64,
 ) -> PgResult<()> {
     node.ensure_scandesc(estate)?;
-    ::tableam::table_scan_set_morsel_range(
-        node.ss.ss_currentScanDesc.as_mut().unwrap(),
-        g0,
-        g1,
-    )
+    ::tableam::table_scan_set_morsel_range(node.ss.ss_currentScanDesc.as_mut().unwrap(), g0, g1)
 }
 
 /// Drive-scaling observability counters of a pgrcolumnar scan (runtime WFIN
@@ -4094,7 +4348,10 @@ pub fn seq_scan_topn_direct_next_granule(
     node: &mut SeqScanState<'_>,
 ) -> PgResult<Option<(u32, u64)>> {
     ::tableam::table_scan_topn_direct_next_granule(
-        node.ss.ss_currentScanDesc.as_mut().expect("morsel-positioned scan desc"),
+        node.ss
+            .ss_currentScanDesc
+            .as_mut()
+            .expect("morsel-positioned scan desc"),
     )
 }
 
@@ -4106,7 +4363,10 @@ pub fn seq_scan_topn_direct_lane<'a>(
     col: usize,
 ) -> Option<&'a [::datum::Datum]> {
     ::tableam::table_scan_topn_direct_lane(
-        node.ss.ss_currentScanDesc.as_mut().expect("morsel-positioned scan desc"),
+        node.ss
+            .ss_currentScanDesc
+            .as_mut()
+            .expect("morsel-positioned scan desc"),
         col,
     )
 }
@@ -4144,10 +4404,7 @@ pub fn seq_scan_cb_zone_meta_census(
 }
 
 // Plan-derived need-set + zone-mappable conjuncts for a pgrcolumnar scan.
-fn cb_scan_info<'mcx>(
-    node: &SeqScan<'mcx>,
-    ss: &ScanState<'mcx>,
-) -> PgResult<CbScanInfo> {
+fn cb_scan_info<'mcx>(node: &SeqScan<'mcx>, ss: &ScanState<'mcx>) -> PgResult<CbScanInfo> {
     use ::nodes_core::NodeWalker as _;
     use ::types_nodes::NodeTag;
 
@@ -4179,7 +4436,12 @@ fn cb_scan_info<'mcx>(
             ::nodes_core::expression_tree_walker(n, self)
         }
     }
-    let mut cx = Cx { scanrelid, needed: vec![false; natts], wholerow: false, syscol: false };
+    let mut cx = Cx {
+        scanrelid,
+        needed: vec![false; natts],
+        wholerow: false,
+        syscol: false,
+    };
     for n in node.scan.plan.qual.iter() {
         cx.visit(n)?;
     }
@@ -4236,12 +4498,14 @@ fn cb_scan_info<'mcx>(
     // conjunct lowered to an exact stored-domain zero equality test.
     let zero_qual = match (nquals, zone.as_slice()) {
         (1, [q]) if q.val == 0 => match q.op {
-            ::tableam::ZoneCmp::Ne => {
-                Some(::tableam::MetaZeroQual { col: q.attnum - 1, keep_nonzero: true })
-            }
-            ::tableam::ZoneCmp::Eq => {
-                Some(::tableam::MetaZeroQual { col: q.attnum - 1, keep_nonzero: false })
-            }
+            ::tableam::ZoneCmp::Ne => Some(::tableam::MetaZeroQual {
+                col: q.attnum - 1,
+                keep_nonzero: true,
+            }),
+            ::tableam::ZoneCmp::Eq => Some(::tableam::MetaZeroQual {
+                col: q.attnum - 1,
+                keep_nonzero: false,
+            }),
             _ => None,
         },
         _ => None,
@@ -4268,7 +4532,9 @@ fn cb_scan_info<'mcx>(
 /// desc gets the narrowed set re-pushed (decoders re-derive via the needed
 /// epoch). False = not a pgrcolumnar scan (no-op).
 pub fn seq_scan_cb_narrow_needed(node: &mut SeqScanState<'_>, keep: &[u16]) -> bool {
-    let Some(cb) = node.cb_scan.as_deref_mut() else { return false };
+    let Some(cb) = node.cb_scan.as_deref_mut() else {
+        return false;
+    };
     let mut needed = cb.qual_needed.clone();
     for &a in keep {
         if (a as usize) < needed.len() {
@@ -4298,8 +4564,12 @@ pub fn seq_scan_cb_narrow_needed(node: &mut SeqScanState<'_>, keep: &[u16]) -> b
 /// re-feed (the legacy wide feed reads every tlist column). False = not a
 /// pgrcolumnar scan or not narrowed (no-op).
 pub fn seq_scan_cb_restore_needed(node: &mut SeqScanState<'_>) -> bool {
-    let Some(cb) = node.cb_scan.as_deref_mut() else { return false };
-    let Some(full) = cb.needed_full.take() else { return false };
+    let Some(cb) = node.cb_scan.as_deref_mut() else {
+        return false;
+    };
+    let Some(full) = cb.needed_full.take() else {
+        return false;
+    };
     cb.needed = full;
     if let Some(sd) = node.ss.ss_currentScanDesc.as_mut() {
         ::tableam::table_scan_set_needed_attrs(sd, &cb.needed);
@@ -4487,8 +4757,7 @@ pub fn skeleton_rebind<'mcx>(
     debug_assert!(node.ss.ss_currentScanDesc.is_none());
     let eflags = estate.es_top_eflags;
     let rel = estate.exec_get_range_table_relation(node.ss.scanrelid, false)?;
-    if eflags & (EXEC_FLAG_EXPLAIN_ONLY | EXEC_FLAG_WITH_NO_DATA) == 0
-        && !rel.rd_rel.relispopulated
+    if eflags & (EXEC_FLAG_EXPLAIN_ONLY | EXEC_FLAG_WITH_NO_DATA) == 0 && !rel.rd_rel.relispopulated
     {
         return Err(unpopulated_matview(rel));
     }
@@ -4529,7 +4798,11 @@ pub fn exec_seq_scan_initialize_dsm<'mcx>(
 ) -> PgResult<std::sync::Arc<ParallelTableScanDescShared>> {
     let mcx = estate.es_query_cxt;
     let mut shared = std::sync::Arc::new(ParallelTableScanDescShared::default());
-    let rel = node.ss.ss_currentRelation.as_ref().expect("seqscan has a relation");
+    let rel = node
+        .ss
+        .ss_currentRelation
+        .as_ref()
+        .expect("seqscan has a relation");
     table_parallelscan_initialize(
         rel,
         std::sync::Arc::get_mut(&mut shared).expect("freshly created shared descriptor"),
@@ -4549,8 +4822,15 @@ pub fn exec_seq_scan_initialize_dsm<'mcx>(
 
 /// `ExecSeqScanReInitializeDSM`.
 pub fn exec_seq_scan_reinitialize_dsm(node: &mut SeqScanState<'_>) {
-    let shared = node.parallel.as_ref().expect("parallel seqscan was initialized");
-    let rel = node.ss.ss_currentRelation.as_ref().expect("seqscan has a relation");
+    let shared = node
+        .parallel
+        .as_ref()
+        .expect("parallel seqscan was initialized");
+    let rel = node
+        .ss
+        .ss_currentRelation
+        .as_ref()
+        .expect("seqscan has a relation");
     table_parallelscan_reinitialize(rel, &shared.pscan);
 }
 
@@ -4561,7 +4841,11 @@ pub fn exec_seq_scan_initialize_worker<'mcx>(
     shared: std::sync::Arc<ParallelTableScanDescShared>,
 ) -> PgResult<()> {
     let mcx = estate.es_query_cxt;
-    let rel = node.ss.ss_currentRelation.as_ref().expect("seqscan has a relation");
+    let rel = node
+        .ss
+        .ss_currentRelation
+        .as_ref()
+        .expect("seqscan has a relation");
     debug_assert!(node.ss.ss_currentScanDesc.is_none());
     node.ss.ss_currentScanDesc = Some(table_beginscan_parallel(mcx, rel, &shared)?);
     node.apply_cb_scan_settings();

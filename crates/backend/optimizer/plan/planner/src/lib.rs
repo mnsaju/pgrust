@@ -4,58 +4,58 @@
 
 pub mod allpaths;
 pub mod analyzejoins;
+pub mod array_selfuncs;
 pub mod clausesel;
 pub mod cluster;
-pub mod extended_stats;
 pub mod costsize;
 pub mod createplan;
+pub mod cte;
 pub mod equivclass;
+pub mod extended_stats;
 pub mod fdwplan;
-pub mod geqo;
 pub mod flatten_group;
+pub mod geqo;
 pub mod grouping;
 pub mod groupingsets;
 pub mod indxpath;
-mod tidpath;
 mod inherit;
 pub mod initsplan;
+pub mod intarray_selfuncs;
 pub mod joinpath;
 pub mod joinrels;
-pub mod pathkeys;
-pub mod placeholder;
-pub mod planagg;
-pub mod orclauses;
-pub mod pathnode;
-pub mod plancat;
-pub mod partprune;
 pub mod like_support;
 mod m5_partwise;
 pub mod m5_suppress;
 pub mod multirangetypes_selfuncs;
 pub mod network_selfuncs;
-pub mod array_selfuncs;
-pub mod intarray_selfuncs;
-pub mod rangetypes_selfuncs;
-pub mod selfuncs;
-pub(crate) mod syscache_memo;
-pub mod ts_selfuncs;
+pub mod orclauses;
+pub mod paramassign;
+pub mod partprune;
+pub mod pathkeys;
+pub mod pathnode;
+pub mod placeholder;
+pub mod planagg;
+pub mod plancat;
 pub mod planmain;
-pub mod prep;
-pub mod prepunion;
-pub mod prepqual;
 pub mod predtest;
-pub mod prepjointree;
-mod pushdown;
+pub mod prep;
 pub mod prepagg;
+pub mod prepjointree;
+pub mod prepqual;
+pub mod prepunion;
+mod pushdown;
+pub mod rangetypes_selfuncs;
 pub mod relnode;
 pub mod run;
+pub mod selfuncs;
 pub mod setrefs;
 pub mod srf;
-pub mod cte;
 pub mod subquery;
-pub mod window;
 pub mod subselect;
-pub mod paramassign;
+pub(crate) mod syscache_memo;
+mod tidpath;
+pub mod ts_selfuncs;
+pub mod window;
 
 #[cfg(test)]
 mod tests;
@@ -67,8 +67,8 @@ use types_nodes::nodes_enums::CmdType;
 use types_nodes::parsenodes::Query;
 use types_nodes::plannodes::PlannedStmt;
 use types_nodes::Node;
-use types_portal::{ParamListHandle, CURSOR_OPT_FAST_PLAN, CURSOR_OPT_PARALLEL_OK};
 use types_pathnodes::PtId;
+use types_portal::{ParamListHandle, CURSOR_OPT_FAST_PLAN, CURSOR_OPT_PARALLEL_OK};
 
 use crate::createplan::create_plan;
 use crate::pathnode::get_cheapest_fractional_path;
@@ -114,19 +114,6 @@ pub mod gucs {
     );
 
     pub use ::costsize::gucs::*;
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
 }
 
 pub fn init_seams() {
@@ -216,10 +203,14 @@ pub fn init_seams() {
         get: gucs::max_parallel_workers_per_gather,
         set: gucs::set_max_parallel_workers_per_gather,
     });
-    guc_tables::vars::jit_enabled
-        .install(GucVarAccessors { get: gucs::jit_enabled, set: gucs::set_jit_enabled });
-    guc_tables::vars::jit_above_cost
-        .install(GucVarAccessors { get: gucs::jit_above_cost, set: gucs::set_jit_above_cost });
+    guc_tables::vars::jit_enabled.install(GucVarAccessors {
+        get: gucs::jit_enabled,
+        set: gucs::set_jit_enabled,
+    });
+    guc_tables::vars::jit_above_cost.install(GucVarAccessors {
+        get: gucs::jit_above_cost,
+        set: gucs::set_jit_above_cost,
+    });
     guc_tables::vars::jit_optimize_above_cost.install(GucVarAccessors {
         get: gucs::jit_optimize_above_cost,
         set: gucs::set_jit_optimize_above_cost,
@@ -228,8 +219,10 @@ pub fn init_seams() {
         get: gucs::jit_inline_above_cost,
         set: gucs::set_jit_inline_above_cost,
     });
-    guc_tables::vars::jit_expressions
-        .install(GucVarAccessors { get: gucs::jit_expressions, set: gucs::set_jit_expressions });
+    guc_tables::vars::jit_expressions.install(GucVarAccessors {
+        get: gucs::jit_expressions,
+        set: gucs::set_jit_expressions,
+    });
     guc_tables::vars::from_collapse_limit.install(GucVarAccessors {
         get: gucs::from_collapse_limit,
         set: gucs::set_from_collapse_limit,
@@ -282,7 +275,13 @@ pub fn planner<'mcx>(
     tap_planner_enter::call_if(|f| f(query_id));
     let result = standard_planner(mcx, parse, query_string, cursor_options, bound_params);
     tap_planner_leave::call_if(|f| {
-        f(result.is_ok(), query_id, stmt_location, stmt_len, query_string)
+        f(
+            result.is_ok(),
+            query_id,
+            stmt_location,
+            stmt_len,
+            query_string,
+        )
     });
     let result = result?;
     backend_status_seams::pgstat_report_plan_id::call(result.planId, false);
@@ -438,10 +437,7 @@ pub fn standard_planner<'mcx>(
     let parse = run.parse();
     let total_cost = top_plan.as_plan().expect("plan node").total_cost;
     let mut jit_flags = 0;
-    if gucs::jit_enabled()
-        && gucs::jit_above_cost() >= 0.0
-        && total_cost > gucs::jit_above_cost()
-    {
+    if gucs::jit_enabled() && gucs::jit_above_cost() >= 0.0 && total_cost > gucs::jit_above_cost() {
         jit_flags |= PGJIT_PERFORM;
         if gucs::jit_optimize_above_cost() >= 0.0 && total_cost > gucs::jit_optimize_above_cost() {
             jit_flags |= PGJIT_OPT3;

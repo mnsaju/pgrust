@@ -1,9 +1,9 @@
 // InvalidateBuffer / FindAndDropRelationBuffers / DropRelationsAllBuffers
 // (bufmgr.c); temp-relation arms divert to localbuf.
+use crate::pin::buffer_refcount;
 use types_core::{BlockNumber, ForkNumber, InvalidBlockNumber, MAX_FORKNUM};
 use types_error::PgResult;
 use types_storage::buf::{BM_TAG_VALID, BUF_FLAG_MASK, BUF_USAGECOUNT_MASK};
-use crate::pin::buffer_refcount;
 use types_storage::{RelFileLocator, RelFileLocatorBackend};
 
 use crate::buf_hdr::{
@@ -101,7 +101,11 @@ fn InvalidateBuffer(desc: &BufferDesc, buf_state_in: u32) -> PgResult<()> {
     let old_partition_lock = BufMappingPartitionLock(old_hash);
 
     loop {
-        LWLockAcquire(old_partition_lock, LW_EXCLUSIVE, init_small::globals::MyProcNumber())?;
+        LWLockAcquire(
+            old_partition_lock,
+            LW_EXCLUSIVE,
+            init_small::globals::MyProcNumber(),
+        )?;
         let mut buf_state = LockBufHdr(desc);
 
         if desc.tag() != old_tag {
@@ -181,7 +185,11 @@ fn FindAndDropRelationBuffers(
         };
         let hash = BufTableHashCode(&tag);
         let partition_lock = BufMappingPartitionLock(hash);
-        LWLockAcquire(partition_lock, LW_SHARED, init_small::globals::MyProcNumber())?;
+        LWLockAcquire(
+            partition_lock,
+            LW_SHARED,
+            init_small::globals::MyProcNumber(),
+        )?;
         let buf_id = BufTableLookup(&tag, hash)?;
         LWLockRelease(partition_lock)?;
         if buf_id < 0 {

@@ -21,12 +21,18 @@ pub fn init_seams() {
         get: gucs::cron_database_name_string,
         set: gucs::set_cron_database_name_string,
     });
-    guc_tables::vars::cron_max_running_jobs
-        .install(GucVarAccessors { get: gucs::cron_max_running_jobs, set: gucs::set_cron_max_running_jobs });
-    guc_tables::vars::cron_log_run
-        .install(GucVarAccessors { get: gucs::cron_log_run, set: gucs::set_cron_log_run });
-    guc_tables::vars::cron_log_statement
-        .install(GucVarAccessors { get: gucs::cron_log_statement, set: gucs::set_cron_log_statement });
+    guc_tables::vars::cron_max_running_jobs.install(GucVarAccessors {
+        get: gucs::cron_max_running_jobs,
+        set: gucs::set_cron_max_running_jobs,
+    });
+    guc_tables::vars::cron_log_run.install(GucVarAccessors {
+        get: gucs::cron_log_run,
+        set: gucs::set_cron_log_run,
+    });
+    guc_tables::vars::cron_log_statement.install(GucVarAccessors {
+        get: gucs::cron_log_statement,
+        set: gucs::set_cron_log_statement,
+    });
 
     dfmgr::register_builtin_library(dfmgr::BuiltinLibraryEntry {
         name: LIBRARY,

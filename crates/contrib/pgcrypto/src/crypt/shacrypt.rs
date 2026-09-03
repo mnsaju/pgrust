@@ -10,7 +10,11 @@ fn notice(msg: &str) {
     let _ = elog::ereport(types_error::NOTICE)
         .errcode(types_error::ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE)
         .errmsg(msg.to_string())
-        .finish(types_error::ErrorLocation { filename: None, lineno: 0, funcname: None });
+        .finish(types_error::ErrorLocation {
+            filename: None,
+            lineno: 0,
+            funcname: None,
+        });
 }
 
 pub fn crypt_sha(pw: &str, setting: &str) -> Result<String, String> {

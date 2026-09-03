@@ -6,13 +6,13 @@ use core::ptr::NonNull;
 use mcx::{Mcx, PgBox};
 use types_error::{PgError, PgResult, ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED};
 use types_fmgr::{FmgrInfo, LocalFcinfo, TRACK_FUNC_ALL};
-use types_nodes::Bitmapset;
 use types_nodes::primnodes::{INNER_VAR, OUTER_VAR};
+use types_nodes::Bitmapset;
 use types_rel::Relation;
 use types_slot::SlotData;
 use types_trigger::{
-    Trigger, TRIGGER_DISABLED, TRIGGER_EVENT_OPMASK, TRIGGER_EVENT_UPDATE,
-    TRIGGER_FIRES_ON_ORIGIN, TRIGGER_FIRES_ON_REPLICA,
+    Trigger, TRIGGER_DISABLED, TRIGGER_EVENT_OPMASK, TRIGGER_EVENT_UPDATE, TRIGGER_FIRES_ON_ORIGIN,
+    TRIGGER_FIRES_ON_REPLICA,
 };
 use types_trigger_call::TriggerData;
 use types_tuple::htup::FirstLowInvalidHeapAttributeNumber;
@@ -96,7 +96,12 @@ fn expand_generated_columns_in_expr<'mcx>(
     varno: i32,
 ) -> PgResult<Option<types_nodes::Node<'mcx>>> {
     const VIRTUAL_GEN: i8 = types_core::catalog::ATTRIBUTE_GENERATED_VIRTUAL as i8;
-    if !rel.rd_att.constr.as_deref().is_some_and(|c| c.has_generated_virtual) {
+    if !rel
+        .rd_att
+        .constr
+        .as_deref()
+        .is_some_and(|c| c.has_generated_virtual)
+    {
         return Ok(None);
     }
     if let Some(v) = node.as_var() {
@@ -238,7 +243,11 @@ impl<'a, 'mcx> TriggerWhenEval<'a, 'mcx> {
             return Ok(true);
         }
         self.compile(idx, trigger, rel)?;
-        let mut slots = execexpr::EvalSlots { scan: None, inner: old_slot, outer: new_slot };
+        let mut slots = execexpr::EvalSlots {
+            scan: None,
+            inner: old_slot,
+            outer: new_slot,
+        };
         execexpr::exec_qual(self.cache.states[idx].as_deref_mut(), &mut slots)
     }
 
@@ -262,7 +271,9 @@ impl<'a, 'mcx> TriggerWhenEval<'a, 'mcx> {
         self.compile(idx, trigger, rel)?;
         let mcx = self.mcx;
         let stage = |slot: &mut Option<SlotData<'mcx>>, tup: Option<&HeapTupleData<'_>>| {
-            let Some(tup) = tup else { return Ok::<_, Box<PgError>>(None) };
+            let Some(tup) = tup else {
+                return Ok::<_, Box<PgError>>(None);
+            };
             let s = slot.get_or_insert_with(|| {
                 exectuples::make_tuple_table_slot(
                     mcx,
@@ -283,13 +294,25 @@ impl<'a, 'mcx> TriggerWhenEval<'a, 'mcx> {
             exectuples::exec_store_heap_tuple(s, mcx, staged);
             Ok(Some(()))
         };
-        let TriggerWhenCache { states, scratch_old, scratch_new } = &mut *self.cache;
+        let TriggerWhenCache {
+            states,
+            scratch_old,
+            scratch_new,
+        } = &mut *self.cache;
         stage(scratch_old, old_tup)?;
         stage(scratch_new, new_tup)?;
         let mut slots = execexpr::EvalSlots {
             scan: None,
-            inner: if old_tup.is_some() { scratch_old.as_mut() } else { None },
-            outer: if new_tup.is_some() { scratch_new.as_mut() } else { None },
+            inner: if old_tup.is_some() {
+                scratch_old.as_mut()
+            } else {
+                None
+            },
+            outer: if new_tup.is_some() {
+                scratch_new.as_mut()
+            } else {
+                None
+            },
         };
         let ok = execexpr::exec_qual(states[idx].as_deref_mut(), &mut slots)?;
         if let Some(s) = scratch_old.as_mut() {
@@ -320,7 +343,8 @@ pub fn ExecBSInsertTriggers<'mcx>(
     }
     let tg_event = TRIGGER_EVENT_INSERT | TRIGGER_EVENT_BEFORE;
     for (i, trigger) in trigdesc.triggers.iter().enumerate() {
-        if trigger.tgtype & (TRIGGER_TYPE_LEVEL_MASK | TRIGGER_TYPE_TIMING_MASK | TRIGGER_TYPE_INSERT)
+        if trigger.tgtype
+            & (TRIGGER_TYPE_LEVEL_MASK | TRIGGER_TYPE_TIMING_MASK | TRIGGER_TYPE_INSERT)
             != TRIGGER_TYPE_STATEMENT | TRIGGER_TYPE_BEFORE | TRIGGER_TYPE_INSERT
         {
             continue;
@@ -352,9 +376,8 @@ pub fn ExecBSTruncateTriggers<'mcx>(
     when: &mut TriggerWhenEval<'_, 'mcx>,
 ) -> PgResult<()> {
     use types_trigger::{
-        TRIGGER_EVENT_BEFORE, TRIGGER_EVENT_TRUNCATE, TRIGGER_TYPE_BEFORE,
-        TRIGGER_TYPE_LEVEL_MASK, TRIGGER_TYPE_STATEMENT, TRIGGER_TYPE_TIMING_MASK,
-        TRIGGER_TYPE_TRUNCATE,
+        TRIGGER_EVENT_BEFORE, TRIGGER_EVENT_TRUNCATE, TRIGGER_TYPE_BEFORE, TRIGGER_TYPE_LEVEL_MASK,
+        TRIGGER_TYPE_STATEMENT, TRIGGER_TYPE_TIMING_MASK, TRIGGER_TYPE_TRUNCATE,
     };
     if !trigdesc.trig_truncate_before_statement {
         return Ok(());
@@ -433,7 +456,8 @@ fn insert_row_triggers<'mcx>(
     };
     let tg_event = TRIGGER_EVENT_INSERT | TRIGGER_EVENT_ROW | event_timing;
     for (i, trigger) in trigdesc.triggers.iter().enumerate() {
-        if trigger.tgtype & (TRIGGER_TYPE_LEVEL_MASK | TRIGGER_TYPE_TIMING_MASK | TRIGGER_TYPE_INSERT)
+        if trigger.tgtype
+            & (TRIGGER_TYPE_LEVEL_MASK | TRIGGER_TYPE_TIMING_MASK | TRIGGER_TYPE_INSERT)
             != TRIGGER_TYPE_ROW | type_timing | TRIGGER_TYPE_INSERT
         {
             continue;
@@ -508,7 +532,11 @@ fn check_modified_virtual_generated<'mcx>(
 ) -> PgResult<Option<heaptuple::HeapTuple<'mcx>>> {
     const VIRTUAL_GEN: i8 = types_core::catalog::ATTRIBUTE_GENERATED_VIRTUAL as i8;
     let tupdesc = &*rel.rd_att;
-    if !tupdesc.constr.as_deref().is_some_and(|c| c.has_generated_virtual) {
+    if !tupdesc
+        .constr
+        .as_deref()
+        .is_some_and(|c| c.has_generated_virtual)
+    {
         return Ok(None);
     }
     let mut cols: mcx::PgVec<'_, i32> = mcx::PgVec::new_in(mcx);
@@ -576,7 +604,9 @@ pub fn ExecCallTriggerFunc<'a, 'mcx>(
     let fcu = if finfo.fn_stats < TRACK_FUNC_ALL
         && ::pgstat::function::pgstat_track_functions() > finfo.fn_stats as i32
     {
-        Some(::pgstat::function::pgstat_init_function_usage(finfo.fn_oid)?)
+        Some(::pgstat::function::pgstat_init_function_usage(
+            finfo.fn_oid,
+        )?)
     } else {
         None
     };

@@ -8,8 +8,8 @@ use types_storage::{PG_TBLSPC_DIR, TABLESPACE_VERSION_DIRECTORY};
 
 use crate::copydir::copy_file;
 use crate::desc::{AllocateDir, FreeDir, ReadDir};
-use crate::vfd::get_errno;
 use crate::sync::fsync_fname;
+use crate::vfd::get_errno;
 
 pub const UNLOGGED_RELATION_CLEANUP: i32 = 1 << 0;
 pub const UNLOGGED_RELATION_INIT: i32 = 1 << 1;
@@ -37,8 +37,10 @@ pub fn ResetUnloggedRelations(op: i32) -> PgResult<()> {
         if de.d_name == "." || de.d_name == ".." {
             continue;
         }
-        let temp_path =
-            format!("{PG_TBLSPC_DIR}/{}/{TABLESPACE_VERSION_DIRECTORY}", de.d_name);
+        let temp_path = format!(
+            "{PG_TBLSPC_DIR}/{}/{TABLESPACE_VERSION_DIRECTORY}",
+            de.d_name
+        );
         ResetUnloggedRelationsInTablespaceDir(&temp_path, op)?;
     }
     FreeDir(spc_dir)?;
@@ -81,8 +83,7 @@ fn ResetUnloggedRelationsInDbspaceDir(dbspacedirname: &str, op: i32) -> PgResult
 
         let dbspace_dir = AllocateDir(dbspacedirname)?;
         while let Some(de) = ReadDir(dbspace_dir, dbspacedirname)? {
-            let Some((relnumber, fork, _segno)) =
-                parse_filename_for_nontemp_relation(&de.d_name)
+            let Some((relnumber, fork, _segno)) = parse_filename_for_nontemp_relation(&de.d_name)
             else {
                 continue;
             };
@@ -99,8 +100,7 @@ fn ResetUnloggedRelationsInDbspaceDir(dbspacedirname: &str, op: i32) -> PgResult
 
         let dbspace_dir = AllocateDir(dbspacedirname)?;
         while let Some(de) = ReadDir(dbspace_dir, dbspacedirname)? {
-            let Some((relnumber, fork, _segno)) =
-                parse_filename_for_nontemp_relation(&de.d_name)
+            let Some((relnumber, fork, _segno)) = parse_filename_for_nontemp_relation(&de.d_name)
             else {
                 continue;
             };
@@ -125,8 +125,7 @@ fn ResetUnloggedRelationsInDbspaceDir(dbspacedirname: &str, op: i32) -> PgResult
     if op & UNLOGGED_RELATION_INIT != 0 {
         let dbspace_dir = AllocateDir(dbspacedirname)?;
         while let Some(de) = ReadDir(dbspace_dir, dbspacedirname)? {
-            let Some((relnumber, fork, segno)) =
-                parse_filename_for_nontemp_relation(&de.d_name)
+            let Some((relnumber, fork, segno)) = parse_filename_for_nontemp_relation(&de.d_name)
             else {
                 continue;
             };
@@ -143,8 +142,7 @@ fn ResetUnloggedRelationsInDbspaceDir(dbspacedirname: &str, op: i32) -> PgResult
         // will do it during recovery), then the directory itself.
         let dbspace_dir = AllocateDir(dbspacedirname)?;
         while let Some(de) = ReadDir(dbspace_dir, dbspacedirname)? {
-            let Some((relnumber, fork, segno)) =
-                parse_filename_for_nontemp_relation(&de.d_name)
+            let Some((relnumber, fork, segno)) = parse_filename_for_nontemp_relation(&de.d_name)
             else {
                 continue;
             };

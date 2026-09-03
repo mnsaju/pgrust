@@ -331,7 +331,11 @@ fn ean2isbn_short(buf: &mut [u8]) {
                 break;
             }
         }
-        buf[aux] = if check == 10 { b'X' } else { b'0' + check as u8 };
+        buf[aux] = if check == 10 {
+            b'X'
+        } else {
+            b'0' + check as u8
+        };
     }
 }
 
@@ -343,7 +347,11 @@ fn ean2ismn_short(buf: &mut [u8]) {
 fn ean2issn_short(buf: &mut [u8]) {
     hyphenate(buf, 0, 4, None);
     let check = weight_checkdig(buf, 8);
-    buf[8] = if check == 10 { b'X' } else { b'0' + check as u8 };
+    buf[8] = if check == 10 {
+        b'X'
+    } else {
+        b'0' + check as u8
+    };
     buf[9] = 0;
 }
 

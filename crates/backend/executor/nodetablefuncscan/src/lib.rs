@@ -18,6 +18,7 @@ use ::execexpr::{
 use ::execscan::{exec_scan_epq, exec_scan_extended, ScanNode, ScanState};
 use ::executils::{EStateData, EcxtId, ExecSlotId};
 use ::mcx::{Mcx, PgBox, PgVec};
+use ::tuplestore::Tuplestore;
 use ::types_core::Oid;
 use ::types_error::{PgError, PgResult, ERRCODE_NULL_VALUE_NOT_ALLOWED};
 use ::types_fmgr::{input_function_call, FmgrInfo};
@@ -25,7 +26,6 @@ use ::types_nodes::plannodes::TableFuncScan;
 use ::types_nodes::primnodes::{TableFunc, TableFuncType};
 use ::types_slot::TupleSlotKind;
 use ::types_tuple::{varatt, TupleDescData};
-use ::tuplestore::Tuplestore;
 
 pub fn init_seams() {}
 
@@ -54,11 +54,7 @@ impl<'mcx> ScanNode<'mcx> for TableFuncScanState<'mcx> {
     }
 
     // C TableFuncRecheck: nothing to check.
-    fn epq_recheck(
-        &mut self,
-        _estate: &mut EStateData<'mcx>,
-        _slot: ExecSlotId,
-    ) -> PgResult<bool> {
+    fn epq_recheck(&mut self, _estate: &mut EStateData<'mcx>, _slot: ExecSlotId) -> PgResult<bool> {
         Ok(true)
     }
 
@@ -68,7 +64,10 @@ impl<'mcx> ScanNode<'mcx> for TableFuncScanState<'mcx> {
         }
         let mcx = estate.es_query_cxt;
         let slot = estate.slot_mut(self.ss.ss_ScanTupleSlot);
-        self.tstore.as_mut().unwrap().gettupleslot(true, false, slot, mcx)
+        self.tstore
+            .as_mut()
+            .unwrap()
+            .gettupleslot(true, false, slot, mcx)
     }
 }
 
@@ -244,7 +243,11 @@ impl<'mcx> TableFuncScanState<'mcx> {
             // PASSING values are read on every row-pattern reset; results go
             // to the scan-lifetime context (C: perTableCxt).
             expr.arm_result_mcx(mcx);
-            let mut slots = EvalSlots { scan: None, inner: None, outer: None };
+            let mut slots = EvalSlots {
+                scan: None,
+                inner: None,
+                outer: None,
+            };
             let NullableDatum { value, isnull } = exec_eval_expr(expr, &mut slots)?;
             args.push(JsonPathVariable {
                 name: name.as_bytes(),
@@ -255,8 +258,7 @@ impl<'mcx> TableFuncScanState<'mcx> {
             });
         }
         let plan = self.tf.plan.expect("JSON_TABLE TableFunc.plan");
-        let mut jt =
-            JsonTableExecContext::init(mcx, plan, args, self.tf.colvalexprs.len())?;
+        let mut jt = JsonTableExecContext::init(mcx, plan, args, self.tf.colvalexprs.len())?;
 
         let NullableDatum { value: doc, isnull } = self.eval(&EvalPick::Doc, estate, ecxt)?;
         if isnull {
@@ -281,11 +283,12 @@ impl<'mcx> TableFuncScanState<'mcx> {
                             // SAFETY: the per-tuple context outlives this
                             // evaluation; results are copied into the
                             // tuplestore before its reset.
-                            unsafe {
-                                expr.arm_result_mcx_raw(estate.ecxt(ecxt).per_tuple_mcx())
+                            unsafe { expr.arm_result_mcx_raw(estate.ecxt(ecxt).per_tuple_mcx()) };
+                            let mut slots = EvalSlots {
+                                scan: None,
+                                inner: None,
+                                outer: None,
                             };
-                            let mut slots =
-                                EvalSlots { scan: None, inner: None, outer: None };
                             let nd = exec_eval_expr(expr, &mut slots)?;
                             (nd.value, nd.isnull)
                         }
@@ -425,8 +428,10 @@ impl<'mcx> TableFuncScanState<'mcx> {
                         per_tuple,
                     )?;
                 } else if self.coldefexprs[colno].is_some() {
-                    let NullableDatum { value, isnull: dnull } =
-                        self.eval(&EvalPick::Def(colno), estate, ecxt)?;
+                    let NullableDatum {
+                        value,
+                        isnull: dnull,
+                    } = self.eval(&EvalPick::Def(colno), estate, ecxt)?;
                     values[colno] = value;
                     isnull = dnull;
                 }
@@ -462,7 +467,11 @@ impl<'mcx> TableFuncScanState<'mcx> {
         // SAFETY: the per-tuple context outlives this evaluation; results are
         // consumed (copied into libxml / the tuplestore) before its reset.
         unsafe { expr.arm_result_mcx_raw(estate.ecxt(ecxt).per_tuple_mcx()) };
-        let mut slots = EvalSlots { scan: None, inner: None, outer: None };
+        let mut slots = EvalSlots {
+            scan: None,
+            inner: None,
+            outer: None,
+        };
         exec_eval_expr(expr, &mut slots)
     }
 }
@@ -484,7 +493,9 @@ fn varlena_payload<'m>(mcx: Mcx<'m>, d: Datum) -> PgResult<&'m [u8]> {
             || (!varatt::varatt_is_1b(p) && !varatt::varatt_is_4b_u(p))
         {
             let image = core::slice::from_raw_parts(p, varatt::varsize_any(p));
-            detoast_seams::detoast_attr::call(mcx, image)?.leak().as_ptr()
+            detoast_seams::detoast_attr::call(mcx, image)?
+                .leak()
+                .as_ptr()
         } else {
             p
         };

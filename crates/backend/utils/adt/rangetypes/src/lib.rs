@@ -87,7 +87,9 @@ pub struct RangeInfo {
 #[track_caller]
 #[cold]
 fn not_a_range_type(rngtypid: Oid) -> Box<PgError> {
-    Box::new(PgError::error(format!("type {rngtypid} is not a range type")))
+    Box::new(PgError::error(format!(
+        "type {rngtypid} is not a range type"
+    )))
 }
 
 impl RangeInfo {
@@ -172,10 +174,18 @@ pub fn range_types_do_not_match() -> Box<PgError> {
 /// the caller's own slots and field reads match store widths (C's shape).
 #[inline]
 pub fn range_deserialize(elem: &ElemInfo, range: &[u8]) -> (RangeBound, RangeBound, bool) {
-    let mut lower =
-        RangeBound { val: Datum::from_usize(0), infinite: false, inclusive: false, lower: true };
-    let mut upper =
-        RangeBound { val: Datum::from_usize(0), infinite: false, inclusive: false, lower: false };
+    let mut lower = RangeBound {
+        val: Datum::from_usize(0),
+        infinite: false,
+        inclusive: false,
+        lower: true,
+    };
+    let mut upper = RangeBound {
+        val: Datum::from_usize(0),
+        infinite: false,
+        inclusive: false,
+        lower: false,
+    };
     let empty = range_deserialize_into(elem, range, &mut lower, &mut upper);
     (lower, upper, empty)
 }
@@ -189,8 +199,18 @@ pub fn range_deserialize(elem: &ElemInfo, range: &[u8]) -> (RangeBound, RangeBou
 #[inline(always)]
 pub fn range_bound_slots() -> (RangeBound, RangeBound) {
     (
-        RangeBound { val: Datum::from_usize(0), infinite: false, inclusive: false, lower: true },
-        RangeBound { val: Datum::from_usize(0), infinite: false, inclusive: false, lower: false },
+        RangeBound {
+            val: Datum::from_usize(0),
+            infinite: false,
+            inclusive: false,
+            lower: true,
+        },
+        RangeBound {
+            val: Datum::from_usize(0),
+            infinite: false,
+            inclusive: false,
+            lower: false,
+        },
     )
 }
 
@@ -412,9 +432,7 @@ fn detoast_bound_packed<'m>(mcx: Mcx<'m>, val: Datum) -> PgResult<Datum> {
     let is_compressed = unsafe { *p & 0x03 == 0x02 };
     if varatt_is_1b_e(p) || is_compressed {
         // SAFETY: live varlena image; varsize_any reads only header bytes.
-        let raw = unsafe {
-            core::slice::from_raw_parts(p, ::types_tuple::varatt::varsize_any(p))
-        };
+        let raw = unsafe { core::slice::from_raw_parts(p, ::types_tuple::varatt::varsize_any(p)) };
         let flat = ::detoast_seams::detoast_attr::call(mcx, raw)?;
         Ok(Datum::from_usize(flat.leak().as_ptr() as usize))
     } else {
@@ -458,7 +476,12 @@ pub fn range_serialize<'m>(
         }
     }
 
-    let ElemInfo { typlen, typbyval, typalign, typstorage } = ri.elem;
+    let ElemInfo {
+        typlen,
+        typbyval,
+        typalign,
+        typstorage,
+    } = ri.elem;
     let mut msize = RANGE_HDRSZ;
     if range_has_lbound(flags) {
         if typlen == -1 {
@@ -480,10 +503,14 @@ pub fn range_serialize<'m>(
     img[4..8].copy_from_slice(&ri.rngtypid.to_ne_bytes());
     let mut off = RANGE_HDRSZ;
     if range_has_lbound(flags) {
-        off = datum_write(&mut img, off, lower.val, typbyval, typalign, typlen, typstorage);
+        off = datum_write(
+            &mut img, off, lower.val, typbyval, typalign, typlen, typstorage,
+        );
     }
     if range_has_ubound(flags) {
-        off = datum_write(&mut img, off, upper.val, typbyval, typalign, typlen, typstorage);
+        off = datum_write(
+            &mut img, off, upper.val, typbyval, typalign, typlen, typstorage,
+        );
     }
     img[msize - 1] = flags;
     debug_assert_eq!(off + 1, msize);
@@ -555,10 +582,8 @@ fn canonicalize<'m>(
             // so holding the RefMut across invoke double-borrows. The
             // placeholder's InvalidOid fn_oid only reaches the callee's
             // fn_extra memo, whose canonical fc consumers never read it.
-            let mut finfo = core::mem::replace(
-                &mut *pin.rng_canonical_finfo(),
-                FmgrInfo::unresolved(),
-            );
+            let mut finfo =
+                core::mem::replace(&mut *pin.rng_canonical_finfo(), FmgrInfo::unresolved());
             let r = finfo.invoke(&mut lfc);
             *pin.rng_canonical_finfo() = finfo;
             let r = r?;
@@ -671,10 +696,18 @@ pub(crate) fn canonical_adjust_date(
 }
 
 pub fn make_empty_range<'m>(mcx: Mcx<'m>, ri: &mut RangeInfo) -> PgResult<PgVec<'m, u8>> {
-    let mut lower =
-        RangeBound { val: Datum::from_usize(0), infinite: false, inclusive: false, lower: true };
-    let mut upper =
-        RangeBound { val: Datum::from_usize(0), infinite: false, inclusive: false, lower: false };
+    let mut lower = RangeBound {
+        val: Datum::from_usize(0),
+        infinite: false,
+        inclusive: false,
+        lower: true,
+    };
+    let mut upper = RangeBound {
+        val: Datum::from_usize(0),
+        infinite: false,
+        inclusive: false,
+        lower: false,
+    };
     Ok(make_range(mcx, ri, &mut lower, &mut upper, true, None)?
         .expect("empty range never soft-fails"))
 }

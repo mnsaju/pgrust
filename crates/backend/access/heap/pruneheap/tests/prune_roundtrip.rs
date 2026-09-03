@@ -21,8 +21,8 @@ use transam_xlog::control_file::{
 };
 use transam_xlog::{XLogRecPtrToBytePos, DB_IN_PRODUCTION, RECOVERY_STATE_DONE};
 use types_core::{
-    BackendType, BlockNumber, Buffer, ForkNumber, InvalidBlockNumber, Oid, TimeLineID,
-    XLogRecPtr, XLogSegNo, BLCKSZ, INVALID_PROC_NUMBER, RELPERSISTENCE_PERMANENT,
+    BackendType, BlockNumber, Buffer, ForkNumber, InvalidBlockNumber, Oid, TimeLineID, XLogRecPtr,
+    XLogSegNo, BLCKSZ, INVALID_PROC_NUMBER, RELPERSISTENCE_PERMANENT,
 };
 use types_error::PgResult;
 use types_rel::{FormData_pg_class, LockInfoData, LockRelId, RelationData, RELKIND_RELATION};
@@ -114,7 +114,11 @@ fn install_seams() {
     });
     smgr_seams::smgr_set_cached_nblocks::set(|_rloc, _fork, _v| Ok(()));
     bufmgr_seams::buffer_get_block_number::set(|buf| {
-        if buf >= VM_BUF_BASE { (buf - VM_BUF_BASE) as BlockNumber } else { (buf - 1) as BlockNumber }
+        if buf >= VM_BUF_BASE {
+            (buf - VM_BUF_BASE) as BlockNumber
+        } else {
+            (buf - 1) as BlockNumber
+        }
     });
     bufmgr_seams::buffer_get_page::set(|buf| {
         let addr = with_fake(|f| fake_page_addr(f, buf));
@@ -200,7 +204,9 @@ fn install_seams() {
     xact_seams::mark_current_transaction_id_logged_if_any::set(|| {});
     xact_seams::get_current_sub_transaction_id::set(|| 1);
 
-    transam_seams::transaction_id_did_commit::set(|xid| Ok(xid == COMMITTED_XID || xid == UPDATER_XID));
+    transam_seams::transaction_id_did_commit::set(|xid| {
+        Ok(xid == COMMITTED_XID || xid == UPDATER_XID)
+    });
     transam_seams::transaction_id_get_commit_lsn::set(|_| Ok(0));
     subtrans_seams::sub_trans_get_topmost_transaction::set(Ok);
     combocid_seams::heap_tuple_header_adjust_cmax::set(|_hdr, cid| Ok((cid, false)));
@@ -226,7 +232,10 @@ fn install_seams() {
     // updates the GlobalVis horizons alongside it).
     procarray_seams::global_vis_test_for::set(|_rel| types_core::GlobalVisStateHandle::new(3));
     procarray_seams::global_vis_test_is_removable_xid::set(|_vistest, xid| {
-        Ok(types_core::xact::TransactionIdPrecedes(xid, procarray::RecentXmin()))
+        Ok(types_core::xact::TransactionIdPrecedes(
+            xid,
+            procarray::RecentXmin(),
+        ))
     });
 
     // xloginsert marshal for fake buffers (wal_roundtrip precedent).
@@ -365,7 +374,10 @@ fn test_relation<'mcx>(mcx: Mcx<'mcx>) -> RelationData<'mcx> {
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
         rd_lockInfo: LockInfoData {
-            lockRelId: LockRelId { relId: REL_OID, dbId: 5 },
+            lockRelId: LockRelId {
+                relId: REL_OID,
+                dbId: 5,
+            },
         },
         rd_rel,
         rd_att: int4_tupdesc(mcx),
@@ -378,13 +390,16 @@ fn test_relation<'mcx>(mcx: Mcx<'mcx>) -> RelationData<'mcx> {
         pgstat_enabled: Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: PgVec::new_in(mcx),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     }
 }
 
@@ -515,9 +530,14 @@ fn prune_dead_hot_chain_wal_and_page_parity() {
     {
         use std::sync::atomic::Ordering::Relaxed as R;
         let tv = procarray::TransamVariables();
-        tv.nextXid.store(types_core::FullTransactionId::from_epoch_and_xid(0, 6).value, R);
-        tv.latestCompletedXid
-            .store(types_core::FullTransactionId::from_epoch_and_xid(0, 5).value, R);
+        tv.nextXid.store(
+            types_core::FullTransactionId::from_epoch_and_xid(0, 6).value,
+            R,
+        );
+        tv.latestCompletedXid.store(
+            types_core::FullTransactionId::from_epoch_and_xid(0, 5).value,
+            R,
+        );
     }
     procarray::ProcArrayShmemInit();
     lmgr_proc::InitProcess(BackendType::Backend).unwrap();
@@ -532,8 +552,12 @@ fn prune_dead_hot_chain_wal_and_page_parity() {
     let ctl = transam_xlog::ctl::XLogCtl();
     ctl.InsertTimeLineID.store(1, Relaxed);
     ctl.PrevTimeLineID.store(1, Relaxed);
-    ctl.Insert.CurrBytePos.store(XLogRecPtrToBytePos(end_of_log), Relaxed);
-    ctl.Insert.PrevBytePos.store(XLogRecPtrToBytePos(prev_rec), Relaxed);
+    ctl.Insert
+        .CurrBytePos
+        .store(XLogRecPtrToBytePos(end_of_log), Relaxed);
+    ctl.Insert
+        .PrevBytePos
+        .store(XLogRecPtrToBytePos(prev_rec), Relaxed);
     ctl.Insert.fullPageWrites.store(true, Relaxed);
     ctl.Insert.RedoRecPtr.store(prev_rec, Relaxed);
     ctl.RedoRecPtr.store(prev_rec, Relaxed);
@@ -558,7 +582,10 @@ fn prune_dead_hot_chain_wal_and_page_parity() {
         let mut tup =
             heap_form_tuple(mcx, &tupdesc, &[::datum::Datum::from_i32(*val)], &[false]).unwrap();
         heap_insert(&rel, tup.as_tuple_mut(), 7, 0, None).unwrap();
-        assert_eq!(tup.as_tuple().t_self, ItemPointerData::new(0, (i + 1) as u16));
+        assert_eq!(
+            tup.as_tuple().t_self,
+            ItemPointerData::new(0, (i + 1) as u16)
+        );
     }
 
     // Dead HOT chain: (0,1) -> (0,5) -> (0,6); versions 1 and 5 die. The
@@ -585,24 +612,42 @@ fn prune_dead_hot_chain_wal_and_page_parity() {
         .unwrap();
         assert_eq!(r, TM_Result::TM_Ok);
         assert_eq!(update_indexes, TU_UpdateIndexes::TU_None); // HOT
-        assert_eq!(newtup.as_tuple().t_self, ItemPointerData::new(0, 5 + cid as u16));
+        assert_eq!(
+            newtup.as_tuple().t_self,
+            ItemPointerData::new(0, 5 + cid as u16)
+        );
     }
     assert!(page0_header(1).is_hot_updated());
     assert!(page0_header(5).is_heap_only());
     assert!(page0_header(6).is_heap_only());
 
-    let r = heap_delete(&rel, &ItemPointerData::new(0, 2), 10, None, true, &mut tmfd, false)
-        .unwrap();
+    let r = heap_delete(
+        &rel,
+        &ItemPointerData::new(0, 2),
+        10,
+        None,
+        true,
+        &mut tmfd,
+        false,
+    )
+    .unwrap();
     assert_eq!(r, TM_Result::TM_Ok);
 
     with_fake(|f| {
         assert!(f.pins.iter().all(|p| *p == 0), "leaked pins: {:?}", f.pins);
-        assert!(f.locks.iter().all(|l| *l == 0), "leaked locks: {:?}", f.locks);
+        assert!(
+            f.locks.iter().all(|l| *l == 0),
+            "leaked locks: {:?}",
+            f.locks
+        );
     });
 
     // Register the updater xid as running in the real procarray: the horizon
     // stays behind it and the guard chain must refuse to prune.
-    lmgr_proc::GetPGProcByNumber(myproc).xid.value.store(UPDATER_XID, Relaxed);
+    lmgr_proc::GetPGProcByNumber(myproc)
+        .xid
+        .value
+        .store(UPDATER_XID, Relaxed);
     procarray::ProcArrayAdd(myproc).unwrap();
     let buf: Buffer = bufmgr_seams::read_buffer::call(&rel, 0).unwrap();
     {
@@ -616,7 +661,11 @@ fn prune_dead_hot_chain_wal_and_page_parity() {
     }
     assert_eq!(procarray::RecentXmin(), UPDATER_XID); // xid 5 still running
     pruneheap::heap_page_prune_opt(&rel, buf).unwrap();
-    assert_eq!(page0_ref().item_id(1).lp_flags(), LP_NORMAL, "pruned too early");
+    assert_eq!(
+        page0_ref().item_id(1).lp_flags(),
+        LP_NORMAL,
+        "pruned too early"
+    );
 
     // Commit xid 5 (latestCompletedXid then covers 3, 4 and 5), then advance
     // the horizon by taking a fresh snapshot (RecentXmin moves past them).
@@ -661,7 +710,11 @@ fn prune_dead_hot_chain_wal_and_page_parity() {
     });
     got[0..8].fill(0);
     // Ground-truth dump for regenerating bench/cref/prune_page_ref.c.
-    std::fs::write(std::env::temp_dir().join("pgrust_prune_page_rust.bin"), &got).unwrap();
+    std::fs::write(
+        std::env::temp_dir().join("pgrust_prune_page_rust.bin"),
+        &got,
+    )
+    .unwrap();
     let want: &[u8] = include_bytes!("fixtures/prune_page_c.bin");
     assert_eq!(want.len(), BLCKSZ);
     if got != want {
@@ -678,7 +731,9 @@ fn prune_dead_hot_chain_wal_and_page_parity() {
     let reader_ctx: &'static MemoryContext = Box::leak(Box::new(MemoryContext::new("reader")));
     let mut reader = xlogreader::XLogReaderState::allocate(reader_ctx.mcx(), SEG).unwrap();
     reader.system_identifier = SYS_ID;
-    let mut routine = SegFileRead { wal_dir: dir.join("pg_wal") };
+    let mut routine = SegFileRead {
+        wal_dir: dir.join("pg_wal"),
+    };
     reader.XLogBeginRead(end_of_log + 40);
     for _ in 0..7 {
         reader.XLogReadRecord(&mut routine).unwrap().unwrap();
@@ -776,7 +831,10 @@ fn prune_dead_hot_chain_wal_and_page_parity() {
         visibilitymap::VISIBILITYMAP_VALID_BITS
     )
     .unwrap());
-    assert_eq!(visibilitymap::visibilitymap_get_status(&rel, 0, &mut vmbuf).unwrap(), 0);
+    assert_eq!(
+        visibilitymap::visibilitymap_get_status(&rel, 0, &mut vmbuf).unwrap(),
+        0
+    );
     vmbuf.release();
 
     bufmgr_seams::release_buffer::call(buf).unwrap();

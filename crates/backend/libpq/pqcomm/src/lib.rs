@@ -74,7 +74,8 @@ fn loc(funcname: &'static str) -> ErrorLocation {
 fn grow_zeroed(buf: &mut PgVec<'_, u8>, new_len: usize) -> PgResult<()> {
     let mcx = *buf.allocator();
     let old = buf.len();
-    buf.try_reserve_exact(new_len - old).map_err(|_| mcx.oom(new_len))?;
+    buf.try_reserve_exact(new_len - old)
+        .map_err(|_| mcx.oom(new_len))?;
     // SAFETY: capacity >= new_len after the reserve; the tail is fully
     // initialized before set_len.
     unsafe {
@@ -137,9 +138,7 @@ fn register_send_teardown() {
     }
 }
 
-fn with_send<R>(
-    f: impl for<'mcx> FnOnce(&mut SendBuf<'mcx>) -> PgResult<R>,
-) -> PgResult<R> {
+fn with_send<R>(f: impl for<'mcx> FnOnce(&mut SendBuf<'mcx>) -> PgResult<R>) -> PgResult<R> {
     #[cfg(debug_assertions)]
     let _active = send_active_guard();
     SEND.with(|cell| -> PgResult<R> {

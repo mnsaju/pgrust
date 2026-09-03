@@ -40,7 +40,13 @@ impl AttInMeta {
             typioparams.push(typioparam);
             typmods.push(att.atttypmod);
         }
-        Ok(AttInMeta { natts, dropped, in_funcs, typioparams, typmods })
+        Ok(AttInMeta {
+            natts,
+            dropped,
+            in_funcs,
+            typioparams,
+            typmods,
+        })
     }
 }
 
@@ -70,8 +76,8 @@ impl RemoteIoGucs {
             let Some(remote) = remote else {
                 continue;
             };
-            let local = guc::GetConfigOption(name, false, false)?
-                .expect("IO GUCs always have a value");
+            let local =
+                guc::GetConfigOption(name, false, false)?.expect("IO GUCs always have a value");
             if *remote == local {
                 continue;
             }
@@ -226,7 +232,11 @@ pub fn materialize_result(
     if res.nfields != attinmeta.natts {
         return Err(rowtype_mismatch());
     }
-    let nestlevel = if res.rows.is_empty() { -1 } else { gucs.apply()? };
+    let nestlevel = if res.rows.is_empty() {
+        -1
+    } else {
+        gucs.apply()?
+    };
     let mut scratch = mcx::MemoryContext::new_bump("dblink temporary context");
     let mut cols: Vec<Option<&[u8]>> = Vec::with_capacity(res.nfields);
     for row in &res.rows {

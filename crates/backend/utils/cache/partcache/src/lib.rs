@@ -124,7 +124,11 @@ fn vector_values(d: Datum, elmlen: usize) -> (usize, *const u8) {
     unsafe {
         let vl = u32::from_ne_bytes(core::slice::from_raw_parts(p, 4).try_into().unwrap());
         debug_assert_eq!(vl & 0x03, 0);
-        let dim = i32::from_ne_bytes(core::slice::from_raw_parts(p.add(16), 4).try_into().unwrap());
+        let dim = i32::from_ne_bytes(
+            core::slice::from_raw_parts(p.add(16), 4)
+                .try_into()
+                .unwrap(),
+        );
         let _ = elmlen;
         (dim as usize, p.add(24))
     }
@@ -210,7 +214,9 @@ fn RelationBuildPartitionKey(rel: &Relation<'_>) -> PgResult<Rc<PartitionKeyData
             // SAFETY: int2vector carries n aligned i16 values at data start.
             partattrs.push(unsafe {
                 i16::from_ne_bytes(
-                    core::slice::from_raw_parts(ap.add(2 * i), 2).try_into().unwrap(),
+                    core::slice::from_raw_parts(ap.add(2 * i), 2)
+                        .try_into()
+                        .unwrap(),
                 )
             });
         }
@@ -234,10 +240,14 @@ fn RelationBuildPartitionKey(rel: &Relation<'_>) -> PgResult<Rc<PartitionKeyData
             // SAFETY: oidvector carries n aligned u32 values at data start.
             unsafe {
                 partclass.push(u32::from_ne_bytes(
-                    core::slice::from_raw_parts(cp.add(4 * i), 4).try_into().unwrap(),
+                    core::slice::from_raw_parts(cp.add(4 * i), 4)
+                        .try_into()
+                        .unwrap(),
                 ));
                 partcollation.push(u32::from_ne_bytes(
-                    core::slice::from_raw_parts(colp.add(4 * i), 4).try_into().unwrap(),
+                    core::slice::from_raw_parts(colp.add(4 * i), 4)
+                        .try_into()
+                        .unwrap(),
                 ));
             }
         }
@@ -267,8 +277,11 @@ fn RelationBuildPartitionKey(rel: &Relation<'_>) -> PgResult<Rc<PartitionKeyData
     {
         panic!("invalid partition strategy \"{}\"", strategy as u8 as char);
     }
-    let procnum =
-        if strategy == PARTITION_STRATEGY_HASH { HASHEXTENDED_PROC } else { BTORDER_PROC };
+    let procnum = if strategy == PARTITION_STRATEGY_HASH {
+        HASHEXTENDED_PROC
+    } else {
+        BTORDER_PROC
+    };
 
     let n = partnatts as usize;
     let mut key = PartitionKeyData {
@@ -298,22 +311,21 @@ fn RelationBuildPartitionKey(rel: &Relation<'_>) -> PgResult<Rc<PartitionKeyData
         // pg_opclass: opcname attnum 3, opcfamily attnum 6, opcintype attnum 7.
         let opcname_d = cache_syscache::SysCacheGetAttrNotNull(CLAOID, &opclasstup, 3)?;
         // SAFETY: NAME attribute datum points at a NUL-terminated NameData.
-        let opcname = unsafe {
-            core::ffi::CStr::from_ptr(opcname_d.as_usize() as *const core::ffi::c_char)
-        }
-        .to_string_lossy()
-        .into_owned();
-        let opcfamily =
-            cache_syscache::SysCacheGetAttrNotNull(CLAOID, &opclasstup, 6)?.as_oid();
-        let opcintype =
-            cache_syscache::SysCacheGetAttrNotNull(CLAOID, &opclasstup, 7)?.as_oid();
+        let opcname =
+            unsafe { core::ffi::CStr::from_ptr(opcname_d.as_usize() as *const core::ffi::c_char) }
+                .to_string_lossy()
+                .into_owned();
+        let opcfamily = cache_syscache::SysCacheGetAttrNotNull(CLAOID, &opclasstup, 6)?.as_oid();
+        let opcintype = cache_syscache::SysCacheGetAttrNotNull(CLAOID, &opclasstup, 7)?.as_oid();
         cache_syscache::ReleaseSysCache(opclasstup);
         key.partopfamily.push(opcfamily);
         key.partopcintype.push(opcintype);
 
         let funcid = lsyscache::get_opfamily_proc(opcfamily, opcintype, opcintype, procnum)?;
         if funcid == InvalidOid {
-            return Err(missing_support_function(&opcname, strategy, procnum, opcintype));
+            return Err(missing_support_function(
+                &opcname, strategy, procnum, opcintype,
+            ));
         }
         key.partsupfunc.push(RefCell::new(
             fmgr_seams::fmgr_info::call(funcid)
@@ -355,9 +367,12 @@ fn missing_support_function(
     procnum: i16,
     opcintype: Oid,
 ) -> Box<PgError> {
-    let am = if strategy == PARTITION_STRATEGY_HASH { "hash" } else { "btree" };
-    let tn = format_type::format_type_be(opcintype)
-        .unwrap_or_else(|_| format!("type {opcintype}"));
+    let am = if strategy == PARTITION_STRATEGY_HASH {
+        "hash"
+    } else {
+        "btree"
+    };
+    let tn = format_type::format_type_be(opcintype).unwrap_or_else(|_| format!("type {opcintype}"));
     Box::new(
         PgError::new(
             ERROR,

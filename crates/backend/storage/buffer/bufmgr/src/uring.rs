@@ -3,9 +3,9 @@
 //! to its ring slot; completion (any thread) verifies + terminates; only the
 //! issuer unpins, via collect/drain.
 
+use pgstat::io::{pgstat_count_io_op_time, pgstat_prepare_io_time, IOObject, IOOp};
 use types_core::{BlockNumber, Buffer, ForkNumber, BLCKSZ};
 use types_error::PgResult;
-use pgstat::io::{pgstat_count_io_op_time, pgstat_prepare_io_time, IOObject, IOOp};
 use types_storage::buf::{IOContext, PgAioWaitRef, BM_IO_ERROR, BM_VALID};
 use types_storage::RelFileLocatorBackend;
 
@@ -23,8 +23,14 @@ pub fn start_read(
     blkno: BlockNumber,
 ) -> PgResult<Option<PrefetchOutcome>> {
     collect_done();
-    let (buffer, found) =
-        BufferAlloc(smgr, relpersistence, forknum, blkno, &None, IOContext::IOCONTEXT_NORMAL)?;
+    let (buffer, found) = BufferAlloc(
+        smgr,
+        relpersistence,
+        forknum,
+        blkno,
+        &None,
+        IOContext::IOCONTEXT_NORMAL,
+    )?;
     let desc = GetBufferDescriptor(buffer - 1);
     if found {
         UnpinBuffer(desc);
@@ -131,5 +137,11 @@ pub fn uring_read_complete(buffer: Buffer, res: i32) {
     let desc = GetBufferDescriptor(buffer - 1);
     let blkno = desc.tag().blockNum;
     let ok = res == BLCKSZ as i32 && page_is_verified(BufferGetBlockPtr(buffer), blkno, 0, None);
-    TerminateBufferIO(desc, false, if ok { BM_VALID } else { BM_IO_ERROR }, false, false);
+    TerminateBufferIO(
+        desc,
+        false,
+        if ok { BM_VALID } else { BM_IO_ERROR },
+        false,
+        false,
+    );
 }

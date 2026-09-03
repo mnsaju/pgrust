@@ -3,18 +3,18 @@
 mod array_typanalyze;
 mod qsort;
 mod range_typanalyze;
-mod ts_typanalyze;
 pub mod sampling;
+mod ts_typanalyze;
 
 use backend_progress::progress::*;
 use backend_progress::{
-    pgstat_progress_end_command, pgstat_progress_start_command,
-    pgstat_progress_update_multi_param, pgstat_progress_update_param, PROGRESS_COMMAND_ANALYZE,
+    pgstat_progress_end_command, pgstat_progress_start_command, pgstat_progress_update_multi_param,
+    pgstat_progress_update_param, PROGRESS_COMMAND_ANALYZE,
 };
 use datum::Datum;
 use mcx::{Mcx, MemoryContext, PgVec};
-use types_core::{AttrNumber, BlockNumber, ForkNumber, InvalidOid, InvalidTransactionId, Oid};
 use types_core::fmgr::{F_BOOLEQ, F_INT2EQ, F_OIDEQ};
+use types_core::{AttrNumber, BlockNumber, ForkNumber, InvalidOid, InvalidTransactionId, Oid};
 use types_error::{PgError, PgResult};
 use types_nodes::parsenodes::{VacuumRelation, VacuumStmt};
 use types_rel::{
@@ -84,7 +84,8 @@ pub struct FdwAnalyzeRoutine {
 }
 
 static FDW_ANALYZE_ROUTINES: [std::sync::OnceLock<&'static FdwAnalyzeRoutine>;
-    types_nodes::NUM_FDW_KINDS] = [const { std::sync::OnceLock::new() }; types_nodes::NUM_FDW_KINDS];
+    types_nodes::NUM_FDW_KINDS] =
+    [const { std::sync::OnceLock::new() }; types_nodes::NUM_FDW_KINDS];
 
 pub fn install_fdw_analyze_routine(kind: types_nodes::FdwKind, r: &'static FdwAnalyzeRoutine) {
     if FDW_ANALYZE_ROUTINES[kind.index()].set(r).is_err() {
@@ -200,7 +201,9 @@ fn analyze_rel_seam<'a, 'mcx>(
         relid,
         relname,
         va_cols,
-        &VacuumParams { options: options as i32 },
+        &VacuumParams {
+            options: options as i32,
+        },
         in_outer_xact,
     )
 }
@@ -212,9 +215,11 @@ fn vacuum<'mcx>(
     is_top_level: bool,
 ) -> PgResult<()> {
     if commands_vacuum::in_vacuum() {
-        return Err(PgError::error("ANALYZE cannot be executed from VACUUM or ANALYZE")
-            .with_sqlstate(types_error::ERRCODE_FEATURE_NOT_SUPPORTED)
-            .into());
+        return Err(
+            PgError::error("ANALYZE cannot be executed from VACUUM or ANALYZE")
+                .with_sqlstate(types_error::ERRCODE_FEATURE_NOT_SUPPORTED)
+                .into(),
+        );
     }
     let in_outer_xact = xact::IsInTransactionBlock(is_top_level);
 
@@ -247,7 +252,14 @@ fn vacuum<'mcx>(
                 let snapshot = snapmgr::GetTransactionSnapshot()?;
                 snapmgr::PushActiveSnapshot(&snapshot)?;
             }
-            analyze_rel(mcx, vrel.oid, vrel.relname, vrel.va_cols, params, in_outer_xact)?;
+            analyze_rel(
+                mcx,
+                vrel.oid,
+                vrel.relname,
+                vrel.va_cols,
+                params,
+                in_outer_xact,
+            )?;
             if use_own_xacts {
                 snapmgr::PopActiveSnapshot()?;
                 xact::CommandCounterIncrement()?;
@@ -305,10 +317,12 @@ pub fn analyze_rel(
     let relkind = onerel.rd_rel.relkind;
     let mut acquirefunc: Option<AcquireSampleRowsFn> = None;
     let relpages = match relkind {
-        RELKIND_RELATION | RELKIND_MATVIEW => bufmgr_seams::relation_get_number_of_blocks_in_fork::call(
-            &onerel,
-            ForkNumber::MAIN_FORKNUM,
-        )?,
+        RELKIND_RELATION | RELKIND_MATVIEW => {
+            bufmgr_seams::relation_get_number_of_blocks_in_fork::call(
+                &onerel,
+                ForkNumber::MAIN_FORKNUM,
+            )?
+        }
         RELKIND_PARTITIONED_TABLE => 0,
         RELKIND_FOREIGN_TABLE => {
             let kind = foreigncmds_seams::get_fdw_routine_by_rel_id::call(mcx, onerel.rd_id)?;
@@ -327,7 +341,11 @@ pub fn analyze_rel(
                             "skipping \"{}\" --- cannot analyze this foreign table",
                             onerel.name()
                         ))
-                        .finish(types_error::ErrorLocation::new(file!(), line!() as i32, "analyze_rel"))?;
+                        .finish(types_error::ErrorLocation::new(
+                            file!(),
+                            line!() as i32,
+                            "analyze_rel",
+                        ))?;
                     onerel.close(SHARE_UPDATE_EXCLUSIVE_LOCK)?;
                     return Ok(());
                 }
@@ -340,7 +358,11 @@ pub fn analyze_rel(
                         "skipping \"{}\" --- cannot analyze non-tables or special system tables",
                         onerel.name()
                     ))
-                    .finish(types_error::ErrorLocation::new(file!(), line!() as i32, "analyze_rel"))?;
+                    .finish(types_error::ErrorLocation::new(
+                        file!(),
+                        line!() as i32,
+                        "analyze_rel",
+                    ))?;
             }
             onerel.close(SHARE_UPDATE_EXCLUSIVE_LOCK)?;
             return Ok(());
@@ -351,12 +373,28 @@ pub fn analyze_rel(
 
     if relkind != RELKIND_PARTITIONED_TABLE {
         do_analyze_rel(
-            mcx, &onerel, va_cols, params, acquirefunc, relpages, false, in_outer_xact, None,
+            mcx,
+            &onerel,
+            va_cols,
+            params,
+            acquirefunc,
+            relpages,
+            false,
+            in_outer_xact,
+            None,
         )?;
     }
     if onerel.rd_rel.relhassubclass {
         do_analyze_rel(
-            mcx, &onerel, va_cols, params, acquirefunc, relpages, true, in_outer_xact, None,
+            mcx,
+            &onerel,
+            va_cols,
+            params,
+            acquirefunc,
+            relpages,
+            true,
+            in_outer_xact,
+            None,
         )?;
     }
 
@@ -442,7 +480,9 @@ pub fn analyze_rel_inline_sample<'mcx>(
         &onerel,
         ForkNumber::MAIN_FORKNUM,
     )?;
-    let params = VacuumParams { options: VACOPT_ANALYZE };
+    let params = VacuumParams {
+        options: VACOPT_ANALYZE,
+    };
     let nil = types_nodes::NodeList::nil();
     do_analyze_rel(
         mcx,
@@ -646,7 +686,15 @@ fn do_analyze_rel<'mcx>(
         } else {
             types_error::DEBUG2
         };
-        f(anl_mcx, onerel, elevel, &mut rows, targrows, &mut totalrows, &mut totaldeadrows)?
+        f(
+            anl_mcx,
+            onerel,
+            elevel,
+            &mut rows,
+            targrows,
+            &mut totalrows,
+            &mut totaldeadrows,
+        )?
     } else {
         acquire_sample_rows(
             anl_mcx,
@@ -672,7 +720,10 @@ fn do_analyze_rel<'mcx>(
         // Bump: armed cmp frames detoast packed by-ref args here per comparison,
         // freed wholesale at the per-column reset (C pfrees per call).
         let mut col_cx = anl.new_child_bump("Analyze Column");
-        let src = FetchSource::Heap { tupdesc, rows: &rows[..numrows as usize] };
+        let src = FetchSource::Heap {
+            tupdesc,
+            rows: &rows[..numrows as usize],
+        };
         // Ingest-time footer NDV (whole-stream HLL): sampled Duj1 underestimates
         // heavy-tailed text NDV 100-1500x, so a present footer count wins.
         // The inherited pass unions the children's v8 REGISTER sketches
@@ -696,20 +747,25 @@ fn do_analyze_rel<'mcx>(
                 ComputeStats::Distinct => {
                     compute_distinct_stats(anl_mcx, col_cx.mcx(), s, &src, numrows, totalrows)?
                 }
-                ComputeStats::Trivial => {
-                    compute_trivial_stats(s, &src, numrows)?
-                }
-                ComputeStats::Range { is_multirange } => {
-                    range_typanalyze::compute_range_stats(
-                        anl_mcx, s, is_multirange, &src, numrows, totalrows,
-                    )?
-                }
-                ComputeStats::Array { std, elem_typeid } => {
-                    array_typanalyze::compute_array_stats(
-                        anl_mcx, col_cx.mcx(), s, std, elem_typeid, &src, numrows,
-                        totalrows,
-                    )?
-                }
+                ComputeStats::Trivial => compute_trivial_stats(s, &src, numrows)?,
+                ComputeStats::Range { is_multirange } => range_typanalyze::compute_range_stats(
+                    anl_mcx,
+                    s,
+                    is_multirange,
+                    &src,
+                    numrows,
+                    totalrows,
+                )?,
+                ComputeStats::Array { std, elem_typeid } => array_typanalyze::compute_array_stats(
+                    anl_mcx,
+                    col_cx.mcx(),
+                    s,
+                    std,
+                    elem_typeid,
+                    &src,
+                    numrows,
+                    totalrows,
+                )?,
                 ComputeStats::TsVector => {
                     ts_typanalyze::compute_tsvector_stats(anl_mcx, col_cx.mcx(), s, &src, numrows)?
                 }
@@ -733,7 +789,11 @@ fn do_analyze_rel<'mcx>(
             if let Some(aopt) =
                 attoptcache::get_attribute_options(anl_mcx, onerel.rd_id, s.tupattnum as i16)?
             {
-                let n_distinct = if inh { aopt.n_distinct_inherited } else { aopt.n_distinct };
+                let n_distinct = if inh {
+                    aopt.n_distinct_inherited
+                } else {
+                    aopt.n_distinct
+                };
                 if n_distinct != 0.0 {
                     s.stadistinct = n_distinct as f32;
                 }
@@ -1071,11 +1131,9 @@ fn examine_attribute<'mcx>(
     if attr.attgenerated == b'v' as i8 {
         return Ok(None);
     }
-    let attstattarget = syscache_seams::lookup_pg_attribute_stattarget::call(
-        onerel.rd_id,
-        attnum as AttrNumber,
-    )?
-    .map_or(-1, |t| t as i32);
+    let attstattarget =
+        syscache_seams::lookup_pg_attribute_stattarget::call(onerel.rd_id, attnum as AttrNumber)?
+            .map_or(-1, |t| t as i32);
     if attstattarget == 0 {
         return Ok(None);
     }
@@ -1092,8 +1150,7 @@ fn examine_attribute<'mcx>(
         None => (attr.atttypid, attr.attcollation),
     };
     let typanalyze = syscache_seams::pg_type_typanalyze::call(atttypid)?;
-    let ty = syscache_seams::lookup_pg_type_shape::call(atttypid)?
-        .expect("attribute type row");
+    let ty = syscache_seams::lookup_pg_type_shape::call(atttypid)?.expect("attribute type row");
 
     let mut stats = VacAttrStats {
         tupattnum: attnum,
@@ -1104,7 +1161,10 @@ fn examine_attribute<'mcx>(
         typbyval: ty.typbyval,
         typalign: ty.typalign as u8,
         compute: ComputeStats::Trivial,
-        extra: StdAnalyzeData { eqopr: InvalidOid, ltopr: InvalidOid },
+        extra: StdAnalyzeData {
+            eqopr: InvalidOid,
+            ltopr: InvalidOid,
+        },
         minrows: 0,
         stats_valid: false,
         stanullfrac: 0.0,
@@ -1141,11 +1201,15 @@ fn examine_attribute<'mcx>(
         3816 => array_typanalyze::setup(&mut stats)?,
         3688 => ts_typanalyze::setup(&mut stats)?,
         3916 => {
-            stats.compute = ComputeStats::Range { is_multirange: false };
+            stats.compute = ComputeStats::Range {
+                is_multirange: false,
+            };
             range_typanalyze::setup(&mut stats)?
         }
         4242 => {
-            stats.compute = ComputeStats::Range { is_multirange: true };
+            stats.compute = ComputeStats::Range {
+                is_multirange: true,
+            };
             range_typanalyze::setup(&mut stats)?
         }
         other => {
@@ -1180,7 +1244,10 @@ fn examine_expression<'mcx>(
         typbyval: ty.typbyval,
         typalign: ty.typalign as u8,
         compute: ComputeStats::Trivial,
-        extra: StdAnalyzeData { eqopr: InvalidOid, ltopr: InvalidOid },
+        extra: StdAnalyzeData {
+            eqopr: InvalidOid,
+            ltopr: InvalidOid,
+        },
         minrows: 0,
         stats_valid: false,
         stanullfrac: 0.0,
@@ -1214,11 +1281,15 @@ fn examine_expression<'mcx>(
         3816 => array_typanalyze::setup(&mut stats)?,
         3688 => ts_typanalyze::setup(&mut stats)?,
         3916 => {
-            stats.compute = ComputeStats::Range { is_multirange: false };
+            stats.compute = ComputeStats::Range {
+                is_multirange: false,
+            };
             range_typanalyze::setup(&mut stats)?
         }
         4242 => {
-            stats.compute = ComputeStats::Range { is_multirange: true };
+            stats.compute = ComputeStats::Range {
+                is_multirange: true,
+            };
             range_typanalyze::setup(&mut stats)?
         }
         other => {
@@ -1280,8 +1351,11 @@ impl<'mcx> statistics::ExprStatsCompute<'mcx> for ExtStatsExprCompute {
                 };
                 exectuples::exec_store_heap_tuple(&mut slot, mcx, tuple);
                 let nd = {
-                    let mut slots =
-                        execexpr::EvalSlots { scan: Some(&mut slot), inner: None, outer: None };
+                    let mut slots = execexpr::EvalSlots {
+                        scan: Some(&mut slot),
+                        inner: None,
+                        outer: None,
+                    };
                     execexpr::exec_eval_expr(&mut *state, &mut slots)?
                 };
                 if nd.isnull {
@@ -1294,8 +1368,12 @@ impl<'mcx> statistics::ExprStatsCompute<'mcx> for ExtStatsExprCompute {
             }
             let tcnt = rows.len() as i32;
             if tcnt > 0 {
-                let src =
-                    FetchSource::Expr { vals: &exprvals, nulls: &exprnulls, stride: 1, off: 0 };
+                let src = FetchSource::Expr {
+                    vals: &exprvals,
+                    nulls: &exprnulls,
+                    stride: 1,
+                    off: 0,
+                };
                 match stats.compute {
                     ComputeStats::Scalar => compute_scalar_stats(
                         mcx,
@@ -1314,16 +1392,14 @@ impl<'mcx> statistics::ExprStatsCompute<'mcx> for ExtStatsExprCompute {
                         tcnt as f64,
                     )?,
                     ComputeStats::Trivial => compute_trivial_stats(&mut stats, &src, tcnt)?,
-                    ComputeStats::Range { is_multirange } => {
-                        range_typanalyze::compute_range_stats(
-                            mcx,
-                            &mut stats,
-                            is_multirange,
-                            &src,
-                            tcnt,
-                            tcnt as f64,
-                        )?
-                    }
+                    ComputeStats::Range { is_multirange } => range_typanalyze::compute_range_stats(
+                        mcx,
+                        &mut stats,
+                        is_multirange,
+                        &src,
+                        tcnt,
+                        tcnt as f64,
+                    )?,
                     ComputeStats::Array { std, elem_typeid } => {
                         array_typanalyze::compute_array_stats(
                             mcx,
@@ -1388,8 +1464,10 @@ fn expr_stats_row<'b>(
                 stats.statypalign[k],
             )?);
         } else if stats.stavalues_set[k] {
-            row.stavalues[k] =
-                Some(datum::array_build::construct_empty_array_image(mcx, stats.statypid[k])?);
+            row.stavalues[k] = Some(datum::array_build::construct_empty_array_image(
+                mcx,
+                stats.statypid[k],
+            )?);
         }
     }
     Ok(Some(row))
@@ -1431,7 +1509,14 @@ fn acquire_sample_rows<'mcx>(
 ) -> PgResult<i32> {
     debug_assert!(targrows > 0);
     if tableam::TableAm::of(onerel) == Some(tableam::TableAm::Pgrcolumnar) {
-        return pgrcolumnar_acquire_sample_rows(mcx, onerel, rows, targrows, totalrows, totaldeadrows);
+        return pgrcolumnar_acquire_sample_rows(
+            mcx,
+            onerel,
+            rows,
+            targrows,
+            totalrows,
+            totaldeadrows,
+        );
     }
     let base = rows.len();
     let mut numrows: i32 = 0;
@@ -1440,8 +1525,10 @@ fn acquire_sample_rows<'mcx>(
     let mut deadrows = 0.0f64;
     let mut rowstoskip = -1.0f64;
 
-    let totalblocks =
-        bufmgr_seams::relation_get_number_of_blocks_in_fork::call(onerel, ForkNumber::MAIN_FORKNUM)?;
+    let totalblocks = bufmgr_seams::relation_get_number_of_blocks_in_fork::call(
+        onerel,
+        ForkNumber::MAIN_FORKNUM,
+    )?;
     let oldest_xmin = procarray::GetOldestNonRemovableTransactionId(onerel)?;
 
     let randseed = pg_prng::global_prng(|p| p.next_u32());
@@ -1449,8 +1536,10 @@ fn acquire_sample_rows<'mcx>(
 
     pgstat_progress_update_param(PROGRESS_ANALYZE_BLOCKS_TOTAL, nblocks as i64);
 
-    let mut rstate =
-        sampling::reservoir_init_selection_state(pg_prng::global_prng(|p| p.next_u64()), targrows as u32);
+    let mut rstate = sampling::reservoir_init_selection_state(
+        pg_prng::global_prng(|p| p.next_u64()),
+        targrows as u32,
+    );
 
     let mut scan = tableam::table_beginscan_analyze(mcx, onerel)?;
     let mut slot = tableam::table_slot_create(mcx, onerel)?;
@@ -1481,10 +1570,12 @@ fn acquire_sample_rows<'mcx>(
                 numrows += 1;
             } else {
                 if rowstoskip < 0.0 {
-                    rowstoskip = sampling::reservoir_get_next_s(&mut rstate, samplerows, targrows as u32);
+                    rowstoskip =
+                        sampling::reservoir_get_next_s(&mut rstate, samplerows, targrows as u32);
                 }
                 if rowstoskip <= 0.0 {
-                    let k = (targrows as f64 * sampling::sampler_random_fract(&mut rstate.randstate))
+                    let k = (targrows as f64
+                        * sampling::sampler_random_fract(&mut rstate.randstate))
                         as usize;
                     debug_assert!(k < targrows as usize);
                     // C heap_freetuple's the replaced copy; here it stays in
@@ -1540,7 +1631,10 @@ fn analyze_sample_pool() -> usize {
 // update walls) to stderr — the load-lane postmaster.log harvest channel.
 fn analyze_trace() -> bool {
     matches!(
-        std::env::var("PGRUST_ANALYZE_TRACE").ok().as_deref().map(str::trim),
+        std::env::var("PGRUST_ANALYZE_TRACE")
+            .ok()
+            .as_deref()
+            .map(str::trim),
         Some("1") | Some("on") | Some("true")
     )
 }
@@ -1656,16 +1750,14 @@ fn pgrcolumnar_acquire_sample_rows<'mcx>(
     let t0 = std::time::Instant::now();
     if pool >= 1 {
         let positions = pgrcolumnar_sample_positions(&rgs, targrows, &mut rstate);
-        let refs: Vec<(u32, u32)> =
-            positions.iter().map(|&(_, rg, row)| (rg, row)).collect();
+        let refs: Vec<(u32, u32)> = positions.iter().map(|&(_, rg, row)| (rg, row)).collect();
         let mut formed: i32 = 0;
         let tasks = {
             let rows = &mut *rows;
             let formed = &mut formed;
             let mut per_row = |slot: &mut SlotData<'_>| -> PgResult<()> {
                 let b = slot.base();
-                let owned =
-                    heaptuple::heap_form_tuple(mcx, tupdesc, &b.tts_values, &b.tts_isnull)?;
+                let owned = heaptuple::heap_form_tuple(mcx, tupdesc, &b.tts_values, &b.tts_isnull)?;
                 let (ptr, len, tid, oid) = (
                     owned.image().as_ptr(),
                     owned.as_tuple().t_len,
@@ -1680,7 +1772,13 @@ fn pgrcolumnar_acquire_sample_rows<'mcx>(
                 *formed += 1;
                 Ok(())
             };
-            tableam::pgrcolumnar_analyze_gather_rows(&mut scan, &refs, pool, &mut slot, &mut per_row)?
+            tableam::pgrcolumnar_analyze_gather_rows(
+                &mut scan,
+                &refs,
+                pool,
+                &mut slot,
+                &mut per_row,
+            )?
         };
         drop(slot);
         tableam::table_endscan(scan)?;
@@ -1859,8 +1957,7 @@ fn acquire_inherited_sample_rows<'mcx>(
     *totalrows = 0.0;
     *totaldeadrows = 0.0;
 
-    let table_oids =
-        pg_inherits::find_all_inheritors(mcx, onerel.rd_id, ACCESS_SHARE_LOCK)?;
+    let table_oids = pg_inherits::find_all_inheritors(mcx, onerel.rd_id, ACCESS_SHARE_LOCK)?;
     if table_oids.len() < 2 {
         // A child existed when relhassubclass was set but is gone; clear the
         // flag so the inh pass stops firing (safe under our SUE lock).
@@ -1883,12 +1980,16 @@ fn acquire_inherited_sample_rows<'mcx>(
                 totalblocks += relpages as f64;
                 children.push((childrel, relpages as f64));
             }
-            RELKIND_FOREIGN_TABLE => panic!(
-                "acquire_inherited_sample_rows (analyze.c): foreign-table child (FDW lane)"
-            ),
+            RELKIND_FOREIGN_TABLE => {
+                panic!("acquire_inherited_sample_rows (analyze.c): foreign-table child (FDW lane)")
+            }
             _ => {
                 debug_assert!(childrel.rd_rel.relkind == RELKIND_PARTITIONED_TABLE);
-                let lmode = if child_oid == onerel.rd_id { NO_LOCK } else { ACCESS_SHARE_LOCK };
+                let lmode = if child_oid == onerel.rd_id {
+                    NO_LOCK
+                } else {
+                    ACCESS_SHARE_LOCK
+                };
                 table::table_close(childrel, lmode)?;
             }
         }
@@ -1912,8 +2013,7 @@ fn acquire_inherited_sample_rows<'mcx>(
         );
 
         if childblocks > 0.0 {
-            let mut childtargrows =
-                (targrows as f64 * childblocks / totalblocks).round() as i32;
+            let mut childtargrows = (targrows as f64 * childblocks / totalblocks).round() as i32;
             childtargrows = childtargrows.min(targrows - numrows);
             if childtargrows > 0 {
                 let base = rows.len();
@@ -1949,9 +2049,7 @@ fn acquire_inherited_sample_rows<'mcx>(
                             core::mem::forget(newtup);
                             // SAFETY: the converted image lives in `mcx`
                             // (Analyze arena) until context teardown.
-                            *row = unsafe {
-                                HeapTupleData::from_raw_parts(ptr, len, tid, oid)
-                            };
+                            *row = unsafe { HeapTupleData::from_raw_parts(ptr, len, tid, oid) };
                         }
                     }
                 }
@@ -1972,8 +2070,12 @@ fn copy_slot_tuple<'mcx>(mcx: Mcx<'mcx>, slot: &SlotData<'mcx>) -> PgResult<Heap
     };
     let src = s.base.tuple.as_ref().expect("stored sample tuple");
     let owned = heaptuple::heap_copytuple(mcx, src)?;
-    let (ptr, len, tid, oid) =
-        (owned.image().as_ptr(), owned.as_tuple().t_len, owned.as_tuple().t_self, owned.as_tuple().t_tableOid);
+    let (ptr, len, tid, oid) = (
+        owned.image().as_ptr(),
+        owned.as_tuple().t_len,
+        owned.as_tuple().t_self,
+        owned.as_tuple().t_tableOid,
+    );
     core::mem::forget(owned);
     // SAFETY: the image was just copied into `mcx` and, forgotten, lives until
     // that context's teardown; nothing else writes it.
@@ -2007,14 +2109,20 @@ fn varlena_image<'a>(d: Datum) -> &'a [u8] {
 // its per-column reset, C's col_context cadence.
 fn detoast_sample_value<'m>(mcx: Mcx<'m>, raw: &[u8]) -> PgResult<Datum> {
     let img = detoast_seams::detoast_attr::call(mcx, raw)?;
-    Ok(Datum::from_usize(adt_multirangetypes::leak_image(img).as_ptr() as usize))
+    Ok(Datum::from_usize(
+        adt_multirangetypes::leak_image(img).as_ptr() as usize,
+    ))
 }
 
 fn datum_copy_in<'mcx>(mcx: Mcx<'mcx>, d: Datum, typbyval: bool, typlen: i16) -> PgResult<Datum> {
     if typbyval {
         return Ok(d);
     }
-    let len = if typlen > 0 { typlen as usize } else { varlena_stored_size(d) };
+    let len = if typlen > 0 {
+        typlen as usize
+    } else {
+        varlena_stored_size(d)
+    };
     let p = d.as_usize() as *const u8;
     // SAFETY: byref datum addresses `len` live bytes.
     let src = unsafe { core::slice::from_raw_parts(p, len) };
@@ -2282,7 +2390,12 @@ impl FetchSource<'_, '_> {
     pub(crate) fn fetch(&self, rowno: usize, attnum: i32) -> (Datum, bool) {
         match self {
             FetchSource::Heap { tupdesc, rows } => fetch_attr(&rows[rowno], attnum, tupdesc),
-            FetchSource::Expr { vals, nulls, stride, off } => {
+            FetchSource::Expr {
+                vals,
+                nulls,
+                stride,
+                off,
+            } => {
                 let i = rowno * stride + off;
                 (vals[i], nulls[i])
             }
@@ -2307,7 +2420,8 @@ fn compute_scalar_stats<'mcx>(
     let num_mcv0 = stats.attstattarget;
     let num_bins = stats.attstattarget;
 
-    let mut values: PgVec<'_, (Datum, i32)> = mcx::vec_with_capacity_in(col_mcx, samplerows as usize)?;
+    let mut values: PgVec<'_, (Datum, i32)> =
+        mcx::vec_with_capacity_in(col_mcx, samplerows as usize)?;
     for rowno in 0..samplerows as usize {
         let (mut value, isnull) = src.fetch(rowno, stats.tupattnum);
         if isnull {
@@ -2334,7 +2448,8 @@ fn compute_scalar_stats<'mcx>(
     let values_cnt = values.len() as i32;
 
     if values_cnt > 0 {
-        let entry = typcache::lookup_type_cache(stats.attrtypid, typcache::TYPECACHE_CMP_PROC_FINFO)?;
+        let entry =
+            typcache::lookup_type_cache(stats.attrtypid, typcache::TYPECACHE_CMP_PROC_FINFO)?;
         let collation = stats.attrcollid;
         // Finfo copy: comparators may re-enter typcache (range_cmp fn_extra
         // fill), so the entry's RefCell must stay unborrowed across the call.
@@ -2355,32 +2470,30 @@ fn compute_scalar_stats<'mcx>(
         // be intransitive (contrib cube's cube_cmp over mixed-dimension
         // values is) — C produces an arbitrary-but-safe order where std's
         // driver panics with "does not correctly implement a total order".
-        qsort::pg_qsort(&mut values, |a, b| {
-            match cmp(a.0, b.0) {
-                core::cmp::Ordering::Less => -1,
-                core::cmp::Ordering::Greater => 1,
-                core::cmp::Ordering::Equal => a.1 - b.1,
-            }
+        qsort::pg_qsort(&mut values, |a, b| match cmp(a.0, b.0) {
+            core::cmp::Ordering::Less => -1,
+            core::cmp::Ordering::Greater => 1,
+            core::cmp::Ordering::Equal => a.1 - b.1,
         });
 
         let mut corr_xysum = 0.0f64;
         let mut ndistinct = 0i32;
         let mut nmultiple = 0i32;
         let mut dups_cnt = 0i32;
-        let mut track: PgVec<'_, ScalarMCVItem> = mcx::vec_with_capacity_in(col_mcx, num_mcv0 as usize)?;
+        let mut track: PgVec<'_, ScalarMCVItem> =
+            mcx::vec_with_capacity_in(col_mcx, num_mcv0 as usize)?;
         let mut num_mcv = num_mcv0;
         for i in 0..values_cnt {
             corr_xysum += i as f64 * values[i as usize].1 as f64;
             dups_cnt += 1;
             let group_end = i == values_cnt - 1
-                || cmp(values[i as usize].0, values[i as usize + 1].0) != core::cmp::Ordering::Equal;
+                || cmp(values[i as usize].0, values[i as usize + 1].0)
+                    != core::cmp::Ordering::Equal;
             if group_end {
                 ndistinct += 1;
                 if dups_cnt > 1 {
                     nmultiple += 1;
-                    if (track.len() as i32) < num_mcv
-                        || dups_cnt > track[track.len() - 1].count
-                    {
+                    if (track.len() as i32) < num_mcv || dups_cnt > track[track.len() - 1].count {
                         if (track.len() as i32) < num_mcv {
                             track.push(ScalarMCVItem { first: 0, count: 0 });
                         }
@@ -2389,10 +2502,16 @@ fn compute_scalar_stats<'mcx>(
                             if dups_cnt <= track[j - 1].count {
                                 break;
                             }
-                            track[j] = ScalarMCVItem { first: track[j - 1].first, count: track[j - 1].count };
+                            track[j] = ScalarMCVItem {
+                                first: track[j - 1].first,
+                                count: track[j - 1].count,
+                            };
                             j -= 1;
                         }
-                        track[j] = ScalarMCVItem { first: i + 1 - dups_cnt, count: dups_cnt };
+                        track[j] = ScalarMCVItem {
+                            first: i + 1 - dups_cnt,
+                            count: dups_cnt,
+                        };
                     }
                 }
                 dups_cnt = 0;
@@ -2447,7 +2566,8 @@ fn compute_scalar_stats<'mcx>(
                 num_mcv = track_cnt;
             }
             if num_mcv > 0 {
-                let mut mcv_counts: PgVec<'_, i32> = mcx::vec_with_capacity_in(col_mcx, num_mcv as usize)?;
+                let mut mcv_counts: PgVec<'_, i32> =
+                    mcx::vec_with_capacity_in(col_mcx, num_mcv as usize)?;
                 for item in track.iter().take(num_mcv as usize) {
                     mcv_counts.push(item.count);
                 }
@@ -2466,8 +2586,10 @@ fn compute_scalar_stats<'mcx>(
 
         let mut slot_idx = 0usize;
         if num_mcv > 0 {
-            let mut mcv_values: PgVec<'mcx, Datum> = mcx::vec_with_capacity_in(anl_mcx, num_mcv as usize)?;
-            let mut mcv_freqs: PgVec<'mcx, f32> = mcx::vec_with_capacity_in(anl_mcx, num_mcv as usize)?;
+            let mut mcv_values: PgVec<'mcx, Datum> =
+                mcx::vec_with_capacity_in(anl_mcx, num_mcv as usize)?;
+            let mut mcv_freqs: PgVec<'mcx, f32> =
+                mcx::vec_with_capacity_in(anl_mcx, num_mcv as usize)?;
             for item in track.iter().take(num_mcv as usize) {
                 mcv_values.push(datum_copy_in(
                     anl_mcx,
@@ -2611,7 +2733,8 @@ fn analyze_mcv_list(
         let n_total = totalrows;
         let n = samplerows as f64;
         let k = n_total * mcv_counts[num_mcv as usize - 1] as f64 / n;
-        let variance = n * k * (n_total - k) * (n_total - n) / (n_total * n_total * (n_total - 1.0));
+        let variance =
+            n * k * (n_total - k) * (n_total - n) / (n_total * n_total * (n_total - 1.0));
         let stddev = variance.sqrt();
         if mcv_counts[num_mcv as usize - 1] as f64 > selec * n + 2.0 * stddev + 0.5 {
             break;
@@ -2658,7 +2781,8 @@ fn update_attstats(relid: Oid, inh: bool, vacattrstats: &[VacAttrStats<'_>]) -> 
                 let mut dat: PgVec<'_, Datum> =
                     mcx::vec_with_capacity_in(mcx, stats.stanumbers[k].len())?;
                 dat.extend(stats.stanumbers[k].iter().map(|&f| Datum::from_f32(f)));
-                let img = datum::array_build::construct_array_image(mcx, &dat, FLOAT4OID, 4, true, b'i')?;
+                let img =
+                    datum::array_build::construct_array_image(mcx, &dat, FLOAT4OID, 4, true, b'i')?;
                 values[i] = Datum::from_usize(img.as_ptr() as usize);
                 images.push(img);
             } else {
@@ -2679,8 +2803,7 @@ fn update_attstats(relid: Oid, inh: bool, vacattrstats: &[VacAttrStats<'_>]) -> 
                 values[i] = Datum::from_usize(img.as_ptr() as usize);
                 images.push(img);
             } else if stats.stavalues_set[k] {
-                let img =
-                    datum::array_build::construct_empty_array_image(mcx, stats.statypid[k])?;
+                let img = datum::array_build::construct_empty_array_image(mcx, stats.statypid[k])?;
                 values[i] = Datum::from_usize(img.as_ptr() as usize);
                 images.push(img);
             } else {
@@ -2729,9 +2852,21 @@ fn find_stats_tuple<'mcx>(
     inh: bool,
 ) -> PgResult<Option<FoundStats<'mcx>>> {
     let keys = [
-        stat_key(ANUM_PG_STATISTIC_STARELID as i32, F_OIDEQ, Datum::from_oid(relid)),
-        stat_key(ANUM_PG_STATISTIC_STAATTNUM as i32, F_INT2EQ, Datum::from_i16(attnum)),
-        stat_key(ANUM_PG_STATISTIC_STAINHERIT as i32, F_BOOLEQ, Datum::from_bool(inh)),
+        stat_key(
+            ANUM_PG_STATISTIC_STARELID as i32,
+            F_OIDEQ,
+            Datum::from_oid(relid),
+        ),
+        stat_key(
+            ANUM_PG_STATISTIC_STAATTNUM as i32,
+            F_INT2EQ,
+            Datum::from_i16(attnum),
+        ),
+        stat_key(
+            ANUM_PG_STATISTIC_STAINHERIT as i32,
+            F_BOOLEQ,
+            Datum::from_bool(inh),
+        ),
     ];
     let mut scan = genam::systable_beginscan(mcx, sd, InvalidOid, false, None, &keys)?;
     let found = match genam::systable_getnext(mcx, &mut scan)? {
@@ -2758,7 +2893,11 @@ fn def_get_boolean(def: &types_nodes::parsenodes::DefElem<'_>) -> PgResult<bool>
         let sval = match arg.node_tag() {
             NodeTag::T_Float => arg.as_float().unwrap().fval,
             NodeTag::T_Boolean => {
-                if arg.as_boolean().unwrap().boolval { "true" } else { "false" }
+                if arg.as_boolean().unwrap().boolval {
+                    "true"
+                } else {
+                    "false"
+                }
             }
             NodeTag::T_String => arg.as_string().unwrap().sval,
             t => panic!("defGetBoolean (define.c): {t:?} arg unported (define lane)"),
@@ -2837,7 +2976,10 @@ mod tests {
             typbyval: false,
             typalign: b'i',
             compute: ComputeStats::Trivial,
-            extra: StdAnalyzeData { eqopr: 98, ltopr: 664 },
+            extra: StdAnalyzeData {
+                eqopr: 98,
+                ltopr: 664,
+            },
             minrows: 30000,
             stats_valid: false,
             stanullfrac: 0.0,
@@ -2880,7 +3022,12 @@ mod tests {
         let ondisk = ondisk_image(8000, 5000);
         let vals = [as_datum(&compressed), as_datum(&ondisk)];
         let nulls = [false, false];
-        let src = FetchSource::Expr { vals: &vals, nulls: &nulls, stride: 1, off: 0 };
+        let src = FetchSource::Expr {
+            vals: &vals,
+            nulls: &nulls,
+            stride: 1,
+            off: 0,
+        };
         compute_trivial_stats(&mut stats, &src, 2).unwrap();
         assert!(stats.stats_valid);
         assert_eq!(stats.stawidth, (100 + 18) / 2);
@@ -2893,9 +3040,19 @@ mod tests {
         let mut stats = text_stats(anl.mcx());
         stats.compute = ComputeStats::Scalar;
         let wide = ondisk_image(5000, 3000);
-        let vals = [as_datum(&wide), as_datum(&wide), Datum::null(), as_datum(&wide)];
+        let vals = [
+            as_datum(&wide),
+            as_datum(&wide),
+            Datum::null(),
+            as_datum(&wide),
+        ];
         let nulls = [false, false, true, false];
-        let src = FetchSource::Expr { vals: &vals, nulls: &nulls, stride: 1, off: 0 };
+        let src = FetchSource::Expr {
+            vals: &vals,
+            nulls: &nulls,
+            stride: 1,
+            off: 0,
+        };
         compute_scalar_stats(anl.mcx(), col.mcx(), &mut stats, &src, 4, 4.0).unwrap();
         assert!(stats.stats_valid);
         assert_eq!(stats.stanullfrac, 0.25);
@@ -2949,13 +3106,19 @@ mod tests {
         // 100 distinct, uniform-ish tail: a value seen twice in 30000 of 1e6
         // rows is not significantly above the non-MCV estimate.
         let counts = [900, 2];
-        assert_eq!(analyze_mcv_list(&counts, 2, -0.0001 * 1_000_000.0, 0.0, 30000, 1_000_000.0), 1);
+        assert_eq!(
+            analyze_mcv_list(&counts, 2, -0.0001 * 1_000_000.0, 0.0, 30000, 1_000_000.0),
+            1
+        );
     }
 
     #[test]
     fn mcv_list_keeps_significant_values() {
         let counts = [15000, 9000, 6000];
-        assert_eq!(analyze_mcv_list(&counts, 3, 103.0, 0.0, 30000, 1_000_000.0), 3);
+        assert_eq!(
+            analyze_mcv_list(&counts, 3, 103.0, 0.0, 30000, 1_000_000.0),
+            3
+        );
     }
 }
 
@@ -2998,11 +3161,8 @@ mod sample_positions_tests {
                     sample.push((ord, rg, row));
                 } else {
                     if rowstoskip < 0.0 {
-                        rowstoskip = sampling::reservoir_get_next_s(
-                            rstate,
-                            samplerows,
-                            targrows as u32,
-                        );
+                        rowstoskip =
+                            sampling::reservoir_get_next_s(rstate, samplerows, targrows as u32);
                     }
                     let skip = rowstoskip.ceil();
                     let span = (nrows - row) as f64;
@@ -3057,11 +3217,28 @@ mod sample_positions_tests {
         check(&[(0, 101)], 100, 3);
         check(&[(0, 1), (1, 1), (2, 1)], 2, 4);
         check(&[(0, 65_536), (1, 65_536), (2, 40_000)], 300, 5);
-        check(&[(0, 9), (1, 65_536), (2, 1), (3, 12_345), (4, 65_536)], 150, 6);
+        check(
+            &[(0, 9), (1, 65_536), (2, 1), (3, 12_345), (4, 65_536)],
+            150,
+            6,
+        );
         for seed in [11u64, 22, 33, 44] {
-            check(&[(0, 65_536), (1, 65_536), (2, 65_536), (3, 21_111)], 1000, seed);
+            check(
+                &[(0, 65_536), (1, 65_536), (2, 65_536), (3, 21_111)],
+                1000,
+                seed,
+            );
         }
         // Large-N shape: skips are long relative to RGs.
-        check(&[(0, 65_536); 32].iter().enumerate().map(|(i, &(_, n))| (i as u32, n)).collect::<Vec<_>>().as_slice(), 100, 12);
+        check(
+            &[(0, 65_536); 32]
+                .iter()
+                .enumerate()
+                .map(|(i, &(_, n))| (i as u32, n))
+                .collect::<Vec<_>>()
+                .as_slice(),
+            100,
+            12,
+        );
     }
 }

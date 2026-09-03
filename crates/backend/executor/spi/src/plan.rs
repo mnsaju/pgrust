@@ -7,7 +7,7 @@ use types_nodes::nodes_enums::CmdType;
 use types_nodes::parsenodes::Query;
 
 use crate::{
-    current_exec_mcx, set_spi_result, with_current, _SPI_begin_call, _SPI_end_call,
+    _SPI_begin_call, _SPI_end_call, current_exec_mcx, set_spi_result, with_current,
     SPI_ERROR_ARGUMENT,
 };
 
@@ -44,7 +44,12 @@ fn with_plan<R>(ptr: SpiPlanPtr, f: impl FnOnce(&mut SpiPlanState) -> R) -> Opti
     if ptr.is_null() {
         return None;
     }
-    PLANS.with(|p| p.borrow_mut().get_mut(ptr.0 as usize - 1).and_then(|s| s.as_mut()).map(f))
+    PLANS.with(|p| {
+        p.borrow_mut()
+            .get_mut(ptr.0 as usize - 1)
+            .and_then(|s| s.as_mut())
+            .map(f)
+    })
 }
 
 fn analyze_and_rewrite(
@@ -54,13 +59,8 @@ fn analyze_and_rewrite(
     argtypes: &[Oid],
     query_env: types_portal::QueryEnvHandle,
 ) -> PgResult<PgVec<'static, Query<'static>>> {
-    let query = analyze_seams::parse_analyze_fixedparams::call(
-        qmcx,
-        raw,
-        src,
-        argtypes,
-        query_env,
-    )?;
+    let query =
+        analyze_seams::parse_analyze_fixedparams::call(qmcx, raw, src, argtypes, query_env)?;
     if query.commandType == CmdType::CMD_UTILITY {
         let mut v = PgVec::new_in(qmcx);
         v.try_reserve_exact(1).map_err(|_| qmcx.oom(1))?;
@@ -106,7 +106,6 @@ fn reanalyze_spi_source(
     analyze_and_rewrite(qmcx, raw, query_string, param_types, query_env)
         .map_err(|e| spi_error_transpose(query_string, e))
 }
-
 
 // _SPI_error_callback (spi.c): a parse-phase syntax error position converts
 // to an internal error against the SPI query text; otherwise the query rides
@@ -194,7 +193,11 @@ pub fn SPI_prepare(src: &str, argtypes: &[Oid]) -> PgResult<SpiPlanPtr> {
     SPI_prepare_cursor(src, argtypes, 0)
 }
 
-pub fn SPI_prepare_cursor(src: &str, argtypes: &[Oid], cursor_options: i32) -> PgResult<SpiPlanPtr> {
+pub fn SPI_prepare_cursor(
+    src: &str,
+    argtypes: &[Oid],
+    cursor_options: i32,
+) -> PgResult<SpiPlanPtr> {
     // C rejects only src == NULL; an empty string is a legal empty plan.
     let res = _SPI_begin_call(true);
     if res < 0 {
@@ -392,7 +395,9 @@ pub fn SPI_freeplan(ptr: SpiPlanPtr) -> i32 {
         return SPI_ERROR_ARGUMENT;
     }
     let taken = PLANS.with(|p| {
-        p.borrow_mut().get_mut(ptr.0 as usize - 1).and_then(Option::take)
+        p.borrow_mut()
+            .get_mut(ptr.0 as usize - 1)
+            .and_then(Option::take)
     });
     match taken {
         Some(mut state) => {
@@ -407,7 +412,9 @@ pub fn SPI_freeplan(ptr: SpiPlanPtr) -> i32 {
 pub(crate) fn free_connection_plans(plans: &[SpiPlanPtr]) {
     for &ptr in plans {
         let taken = PLANS.with(|p| {
-            p.borrow_mut().get_mut(ptr.0 as usize - 1).and_then(Option::take)
+            p.borrow_mut()
+                .get_mut(ptr.0 as usize - 1)
+                .and_then(Option::take)
         });
         if let Some(mut state) = taken {
             debug_assert!(!state.saved, "saved plan still on a connection plan list");
@@ -419,7 +426,10 @@ pub(crate) fn free_connection_plans(plans: &[SpiPlanPtr]) {
 /// Command tags of the plan's sources (plpgsql mod_stmt detection).
 pub fn SPI_plan_command_tags(ptr: SpiPlanPtr) -> Vec<types_core::CommandTag> {
     with_plan(ptr, |p| {
-        p.sources.iter().map(|&(s, _)| plancache::CachedPlanCommandTag(s)).collect()
+        p.sources
+            .iter()
+            .map(|&(s, _)| plancache::CachedPlanCommandTag(s))
+            .collect()
     })
     .unwrap_or_default()
 }
@@ -446,8 +456,12 @@ pub fn SPI_getargtypeid(ptr: SpiPlanPtr, arg_index: i32) -> Oid {
 }
 
 pub fn SPI_plan_is_valid(ptr: SpiPlanPtr) -> bool {
-    with_plan(ptr, |p| p.sources.iter().all(|&(s, _)| plancache::CachedPlanIsValid(s)))
-        .unwrap_or(false)
+    with_plan(ptr, |p| {
+        p.sources
+            .iter()
+            .all(|&(s, _)| plancache::CachedPlanIsValid(s))
+    })
+    .unwrap_or(false)
 }
 
 pub(crate) fn debug_live_plans() -> usize {

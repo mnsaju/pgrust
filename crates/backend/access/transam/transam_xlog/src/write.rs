@@ -2,7 +2,10 @@ use std::cell::Cell;
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 
 use elog::ereport;
-use lwlock::{LWLockAcquire, LWLockAcquireOrWait, LWLockConditionalAcquire, LWLockRelease, LW_EXCLUSIVE, LW_SHARED};
+use lwlock::{
+    LWLockAcquire, LWLockAcquireOrWait, LWLockConditionalAcquire, LWLockRelease, LW_EXCLUSIVE,
+    LW_SHARED,
+};
 use types_core::{TimeLineID, XLogRecPtr, XLogSegNo};
 use types_error::{ErrorLocation, PgError, PgResult, ERROR, LOG, PANIC};
 
@@ -75,7 +78,11 @@ pub(crate) fn assign_wal_sync_method(new_val: i32, _extra: Option<&guc_tables::G
         if fd::pg_fsync(OPEN_LOG_FILE.get()) != 0 {
             panic!(
                 "could not fsync file \"{}\"",
-                XLogFileName(OPEN_LOG_TLI.get(), OPEN_LOG_SEG_NO.get(), wal_segment_size())
+                XLogFileName(
+                    OPEN_LOG_TLI.get(),
+                    OPEN_LOG_SEG_NO.get(),
+                    wal_segment_size()
+                )
             );
         }
         let _ = XLogFileClose();
@@ -100,8 +107,20 @@ fn wal_io_start() -> i64 {
     pgstat::io::pgstat_prepare_io_time(guc_tables::vars::track_wal_io_timing.read())
 }
 
-fn count_wal_io(io_context: pgstat::io::IOContext, io_op: pgstat::io::IOOp, start_ns: i64, bytes: u64) {
-    pgstat::io::pgstat_count_io_op_time(pgstat::io::IOObject::Wal, io_context, io_op, start_ns, 1, bytes);
+fn count_wal_io(
+    io_context: pgstat::io::IOContext,
+    io_op: pgstat::io::IOOp,
+    start_ns: i64,
+    bytes: u64,
+) {
+    pgstat::io::pgstat_count_io_op_time(
+        pgstat::io::IOObject::Wal,
+        io_context,
+        io_op,
+        start_ns,
+        1,
+        bytes,
+    );
 }
 
 fn get_sync_bit(method: i32) -> i32 {
@@ -137,7 +156,12 @@ pub fn issue_xlog_fsync(fd: i32, segno: XLogSegNo, tli: TimeLineID) -> PgResult<
             .errmsg(format!("could not fsync file \"{fname}\""))
             .finish(loc("issue_xlog_fsync"));
     }
-    count_wal_io(pgstat::io::IOContext::IOCONTEXT_NORMAL, pgstat::io::IOOp::Fsync, start_ns, 0);
+    count_wal_io(
+        pgstat::io::IOContext::IOCONTEXT_NORMAL,
+        pgstat::io::IOOp::Fsync,
+        start_ns,
+        0,
+    );
     Ok(())
 }
 
@@ -151,7 +175,11 @@ pub(crate) fn InstallXLogFileSegment(
     debug_assert!(tli != 0);
     let mut path = XLogFilePath(tli, *segno, wal_segment_size());
 
-    LWLockAcquire(ControlFileLock(), LW_EXCLUSIVE, init_small::globals::MyProcNumber())?;
+    LWLockAcquire(
+        ControlFileLock(),
+        LW_EXCLUSIVE,
+        init_small::globals::MyProcNumber(),
+    )?;
     if !XLogCtl().InstallXLogFileSegmentActive.load(Relaxed) {
         LWLockRelease(ControlFileLock())?;
         return Ok(false);
@@ -172,7 +200,10 @@ pub(crate) fn InstallXLogFileSegment(
         }
     }
 
-    if fd::durable_rename(tmppath, &path, LOG).map(|rc| rc != 0).unwrap_or(true) {
+    if fd::durable_rename(tmppath, &path, LOG)
+        .map(|rc| rc != 0)
+        .unwrap_or(true)
+    {
         LWLockRelease(ControlFileLock())?;
         return Ok(false);
     }
@@ -259,7 +290,12 @@ fn XLogFileInitInternal(
             .finish(loc("XLogFileInitInternal"))
             .map(|_| -1);
     }
-    count_wal_io(pgstat::io::IOContext::IOCONTEXT_INIT, pgstat::io::IOOp::Fsync, io_start, 0);
+    count_wal_io(
+        pgstat::io::IOContext::IOCONTEXT_INIT,
+        pgstat::io::IOOp::Fsync,
+        io_start,
+        0,
+    );
     // fd owned here.
     if fd::pg_close(f) != 0 {
         return ereport(ERROR)
@@ -403,8 +439,10 @@ pub(crate) fn XLogFileCopy(
 
 pub fn XLogFileOpen(segno: XLogSegNo, tli: TimeLineID) -> PgResult<i32> {
     let path = XLogFilePath(tli, segno, wal_segment_size());
-    match fd::BasicOpenFile(&path, libc::O_RDWR | libc::O_CLOEXEC | get_sync_bit(wal_sync_method()))
-    {
+    match fd::BasicOpenFile(
+        &path,
+        libc::O_RDWR | libc::O_CLOEXEC | get_sync_bit(wal_sync_method()),
+    ) {
         Ok(f) if f >= 0 => Ok(f),
         _ => ereport(PANIC)
             .errmsg(format!("could not open file \"{path}\""))
@@ -418,7 +456,11 @@ fn XLogFileClose() -> PgResult<()> {
     debug_assert!(f >= 0);
     // fd tracked by OPEN_LOG_FILE.
     if fd::pg_close(f) != 0 {
-        let fname = XLogFileName(OPEN_LOG_TLI.get(), OPEN_LOG_SEG_NO.get(), wal_segment_size());
+        let fname = XLogFileName(
+            OPEN_LOG_TLI.get(),
+            OPEN_LOG_SEG_NO.get(),
+            wal_segment_size(),
+        );
         return ereport(PANIC)
             .errmsg(format!("could not close file \"{fname}\""))
             .finish(loc("XLogFileClose"));
@@ -452,7 +494,11 @@ pub(crate) fn PreallocXlogFiles(endptr: XLogRecPtr, tli: TimeLineID) -> PgResult
 }
 
 // (Write, Flush) request pair.
-pub(crate) fn XLogWrite(write_rqst: (XLogRecPtr, XLogRecPtr), tli: TimeLineID, flexible: bool) -> PgResult<()> {
+pub(crate) fn XLogWrite(
+    write_rqst: (XLogRecPtr, XLogRecPtr),
+    tli: TimeLineID,
+    flexible: bool,
+) -> PgResult<()> {
     let ctl = XLogCtl();
     debug_assert!(init_small::globals::CritSectionCount() > 0);
 
@@ -473,7 +519,10 @@ pub(crate) fn XLogWrite(write_rqst: (XLogRecPtr, XLogRecPtr), tli: TimeLineID, f
             return ereport(PANIC)
                 .errmsg(format!(
                     "xlog write request {:X}/{:X} is past end of log {:X}/{:X}",
-                    lw_write >> 32, lw_write & 0xFFFF_FFFF, end_ptr >> 32, end_ptr & 0xFFFF_FFFF
+                    lw_write >> 32,
+                    lw_write & 0xFFFF_FFFF,
+                    end_ptr >> 32,
+                    end_ptr & 0xFFFF_FFFF
                 ))
                 .finish(loc("XLogWrite"));
         }
@@ -559,10 +608,7 @@ pub(crate) fn XLogWrite(write_rqst: (XLogRecPtr, XLogRecPtr), tli: TimeLineID, f
                 LOGWRT_RESULT.set((lw_write, lw_write));
 
                 if XLogArchivingActive() {
-                    xlogarchive_seams::xlog_archive_notify_seg::call(
-                        OPEN_LOG_SEG_NO.get(),
-                        tli,
-                    )?;
+                    xlogarchive_seams::xlog_archive_notify_seg::call(OPEN_LOG_SEG_NO.get(), tli)?;
                 }
 
                 ctl.lastSegSwitchTime.store(crate::now_pg_time(), Relaxed);
@@ -649,7 +695,11 @@ pub(crate) fn UpdateMinRecoveryPoint(lsn: XLogRecPtr, force: bool) -> PgResult<(
         return Ok(());
     }
 
-    LWLockAcquire(ControlFileLock(), LW_EXCLUSIVE, init_small::globals::MyProcNumber())?;
+    LWLockAcquire(
+        ControlFileLock(),
+        LW_EXCLUSIVE,
+        init_small::globals::MyProcNumber(),
+    )?;
     let cf = control_file::control_file();
     LOCAL_MIN_RECOVERY_POINT.set(cf.minRecoveryPoint);
     LOCAL_MIN_RECOVERY_POINT_TLI.set(cf.minRecoveryPointTLI);
@@ -663,7 +713,10 @@ pub(crate) fn UpdateMinRecoveryPoint(lsn: XLogRecPtr, force: bool) -> PgResult<(
                 types_error::WARNING,
                 format!(
                     "xlog min recovery request {:X}/{:X} is past current point {:X}/{:X}",
-                    lsn >> 32, lsn & 0xFFFF_FFFF, new_mrp >> 32, new_mrp & 0xFFFF_FFFF
+                    lsn >> 32,
+                    lsn & 0xFFFF_FFFF,
+                    new_mrp >> 32,
+                    new_mrp & 0xFFFF_FFFF
                 ),
             );
         }
@@ -816,8 +869,8 @@ pub fn XLogSetAsyncXactLSN(async_xact_lsn: XLogRecPtr) {
         true
     } else {
         RefreshXLogWriteResult();
-        let flushblocks =
-            async_xact_lsn as i64 / XLOG_BLCKSZ as i64 - LOGWRT_RESULT.get().1 as i64 / XLOG_BLCKSZ as i64;
+        let flushblocks = async_xact_lsn as i64 / XLOG_BLCKSZ as i64
+            - LOGWRT_RESULT.get().1 as i64 / XLOG_BLCKSZ as i64;
         let flush_after = guc_tables::vars::WalWriterFlushAfter.read();
         flush_after == 0 || flushblocks >= flush_after as i64
     };
@@ -883,7 +936,10 @@ pub fn XLogBackgroundFlush(pacing: &mut WalFlushPacing) -> PgResult<bool> {
     let insert_tli = ctl.InsertTimeLineID.load(Relaxed);
 
     let (mut write_rqst_write, mut write_rqst_flush) = ctl.info_lck.with(|| {
-        (ctl.LogwrtRqstWrite.load(Relaxed), ctl.LogwrtRqstFlush.load(Relaxed))
+        (
+            ctl.LogwrtRqstWrite.load(Relaxed),
+            ctl.LogwrtRqstFlush.load(Relaxed),
+        )
     });
     let _ = write_rqst_flush;
     let mut flexible = true;
@@ -898,7 +954,11 @@ pub fn XLogBackgroundFlush(pacing: &mut WalFlushPacing) -> PgResult<bool> {
 
     if write_rqst_write <= LOGWRT_RESULT.get().1 {
         if OPEN_LOG_FILE.get() >= 0
-            && !XLByteInPrevSeg(LOGWRT_RESULT.get().0, OPEN_LOG_SEG_NO.get(), wal_segment_size())
+            && !XLByteInPrevSeg(
+                LOGWRT_RESULT.get().0,
+                OPEN_LOG_SEG_NO.get(),
+                wal_segment_size(),
+            )
         {
             XLogFileClose()?;
         }
@@ -906,8 +966,8 @@ pub fn XLogBackgroundFlush(pacing: &mut WalFlushPacing) -> PgResult<bool> {
     }
 
     let now = timestamp_seams::get_current_timestamp::call();
-    let flushblocks =
-        write_rqst_write as i64 / XLOG_BLCKSZ as i64 - LOGWRT_RESULT.get().1 as i64 / XLOG_BLCKSZ as i64;
+    let flushblocks = write_rqst_write as i64 / XLOG_BLCKSZ as i64
+        - LOGWRT_RESULT.get().1 as i64 / XLOG_BLCKSZ as i64;
     let flush_after = guc_tables::vars::WalWriterFlushAfter.read();
     let delay_us = guc_tables::vars::WalWriterDelay.read() as i64 * 1000;
 
@@ -920,7 +980,11 @@ pub fn XLogBackgroundFlush(pacing: &mut WalFlushPacing) -> PgResult<bool> {
     init_small::globals::StartCriticalSection();
 
     WaitXLogInsertionsToFinish(write_rqst_write);
-    LWLockAcquire(WALWriteLock(), LW_EXCLUSIVE, init_small::globals::MyProcNumber())?;
+    LWLockAcquire(
+        WALWriteLock(),
+        LW_EXCLUSIVE,
+        init_small::globals::MyProcNumber(),
+    )?;
     RefreshXLogWriteResult();
     if write_rqst_write > LOGWRT_RESULT.get().0 || write_rqst_flush > LOGWRT_RESULT.get().1 {
         XLogWrite((write_rqst_write, write_rqst_flush), insert_tli, flexible)?;
@@ -939,14 +1003,22 @@ pub fn XLogBackgroundFlush(pacing: &mut WalFlushPacing) -> PgResult<bool> {
 
 pub fn SetWalWriterSleeping(sleeping: bool) {
     let ctl = XLogCtl();
-    ctl.info_lck.with(|| ctl.WalWriterSleeping.store(sleeping, Relaxed));
+    ctl.info_lck
+        .with(|| ctl.WalWriterSleeping.store(sleeping, Relaxed));
 }
 
 pub fn GetLastSegSwitchData() -> (i64, XLogRecPtr) {
     let ctl = XLogCtl();
-    LWLockAcquire(WALWriteLock(), LW_SHARED, init_small::globals::MyProcNumber())
-        .expect("GetLastSegSwitchData");
-    let result = (ctl.lastSegSwitchTime.load(Relaxed), ctl.lastSegSwitchLSN.load(Relaxed));
+    LWLockAcquire(
+        WALWriteLock(),
+        LW_SHARED,
+        init_small::globals::MyProcNumber(),
+    )
+    .expect("GetLastSegSwitchData");
+    let result = (
+        ctl.lastSegSwitchTime.load(Relaxed),
+        ctl.lastSegSwitchLSN.load(Relaxed),
+    );
     LWLockRelease(WALWriteLock()).expect("GetLastSegSwitchData");
     result
 }
@@ -977,4 +1049,3 @@ pub(crate) fn open_log_file_close_if_open() -> PgResult<()> {
     }
     Ok(())
 }
-

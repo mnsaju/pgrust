@@ -9,10 +9,7 @@ use types_error::{PgResult, ERRCODE_SYNTAX_ERROR, ERROR};
 use types_nodes::parsenodes::DefElem;
 use types_nodes::NodeTag;
 
-pub fn defGetString<'r, 'mcx: 'r, 'a: 'r>(
-    mcx: Mcx<'mcx>,
-    def: &DefElem<'a>,
-) -> PgResult<&'r str> {
+pub fn defGetString<'r, 'mcx: 'r, 'a: 'r>(mcx: Mcx<'mcx>, def: &DefElem<'a>) -> PgResult<&'r str> {
     let defname = def.defname.unwrap_or("");
     let Some(arg) = def.arg else {
         return Err(ereport(ERROR)
@@ -28,7 +25,11 @@ pub fn defGetString<'r, 'mcx: 'r, 'a: 'r>(
             Ok(str_in(mcx, s.as_str())?)
         }
         NodeTag::T_Float => Ok(arg.as_float().unwrap().fval),
-        NodeTag::T_Boolean => Ok(if arg.as_boolean().unwrap().boolval { "true" } else { "false" }),
+        NodeTag::T_Boolean => Ok(if arg.as_boolean().unwrap().boolval {
+            "true"
+        } else {
+            "false"
+        }),
         NodeTag::T_String => Ok(arg.as_string().unwrap().sval),
         NodeTag::T_TypeName => {
             // TypeNameToString: gram's def_arg func_type wraps any simple
@@ -52,9 +53,9 @@ pub fn defGetString<'r, 'mcx: 'r, 'a: 'r>(
             }
             Ok(str_in(mcx, s.as_str())?)
         }
-        t @ (NodeTag::T_List | NodeTag::T_A_Star) => panic!(
-            "defGetString (define.c): {t:?} arg needs NameListToString (define lane)"
-        ),
+        t @ (NodeTag::T_List | NodeTag::T_A_Star) => {
+            panic!("defGetString (define.c): {t:?} arg needs NameListToString (define lane)")
+        }
         t => panic!("unrecognized node type: {t:?}"),
     }
 }
@@ -93,7 +94,10 @@ pub fn defGetBoolean(def: &DefElem<'_>) -> PgResult<bool> {
     }
     Err(ereport(ERROR)
         .errcode(ERRCODE_SYNTAX_ERROR)
-        .errmsg(format!("{} requires a Boolean value", def.defname.unwrap_or("")))
+        .errmsg(format!(
+            "{} requires a Boolean value",
+            def.defname.unwrap_or("")
+        ))
         .into_error()
         .into())
 }

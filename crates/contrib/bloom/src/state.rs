@@ -19,10 +19,7 @@ const BLOOM_AMSUPPORT: usize = BLOOM_NPROC as usize; // rd_support row width
 pub fn buf_page_bytes<'a>(buffer: Buffer) -> &'a [u8] {
     // SAFETY: caller holds at least a share lock on `buffer`.
     unsafe {
-        core::slice::from_raw_parts(
-            bufmgr_seams::buffer_get_page::call(buffer).as_ptr(),
-            BLCKSZ,
-        )
+        core::slice::from_raw_parts(bufmgr_seams::buffer_get_page::call(buffer).as_ptr(), BLCKSZ)
     }
 }
 
@@ -90,8 +87,8 @@ pub fn sign_value(
     attno: usize,
 ) -> PgResult<()> {
     let collation = state.collations[attno];
-    let hash_val = types_fmgr::function_call1_coll(&mut state.hash_fn[attno], collation, value)?.as_i32()
-        as u32;
+    let hash_val = types_fmgr::function_call1_coll(&mut state.hash_fn[attno], collation, value)?
+        .as_i32() as u32;
     add_value_bits(
         sign,
         attno,
@@ -172,7 +169,10 @@ pub fn bloom_init_metapage<'mcx>(
         1,
     )?;
     debug_assert_eq!(extended_by, 1);
-    debug_assert_eq!(bufmgr::BufferGetBlockNumber(meta_buffer), BLOOM_METAPAGE_BLKNO);
+    debug_assert_eq!(
+        bufmgr::BufferGetBlockNumber(meta_buffer),
+        BLOOM_METAPAGE_BLKNO
+    );
 
     let opts = index_options_or_default(index);
 

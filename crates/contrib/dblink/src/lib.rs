@@ -17,10 +17,10 @@ use elog::ereport;
 use pgclient::{ExecStatus, PgConn, QueryResult};
 use registry::RemoteConn;
 use types_error::{
-    make_sqlstate, ErrorLevel, ErrorLocation, PgError, PgResult, ERROR, NOTICE,
-    ERRCODE_CONNECTION_FAILURE, ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_INVALID_CURSOR_NAME,
-    ERRCODE_S_R_E_PROHIBITED_SQL_STATEMENT_ATTEMPTED,
+    make_sqlstate, ErrorLevel, ErrorLocation, PgError, PgResult, ERRCODE_CONNECTION_FAILURE,
+    ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_INVALID_CURSOR_NAME,
     ERRCODE_SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION,
+    ERRCODE_S_R_E_PROHIBITED_SQL_STATEMENT_ATTEMPTED, ERROR, NOTICE,
 };
 use types_fmgr::{FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFunction};
 use types_tuple::TupleDescData;
@@ -47,7 +47,10 @@ fn pchomp(s: &str) -> String {
 }
 
 pub(crate) fn text_result(mcx: mcx::Mcx<'_>, s: &str) -> PgResult<Datum> {
-    Ok(types_fmgr::varlena_result(varlena::cstring_to_text(mcx, s.as_bytes())?))
+    Ok(types_fmgr::varlena_result(varlena::cstring_to_text(
+        mcx,
+        s.as_bytes(),
+    )?))
 }
 
 // C's `PG_GETARG_TEXT_PP` + text_to_cstring, as an owned String.
@@ -87,7 +90,10 @@ fn prep_tuplestore_result(fcinfo: &mut Fcinfo) -> PgResult<()> {
     Ok(())
 }
 
-pub(crate) fn single_text_tupdesc<'m>(mcx: mcx::Mcx<'m>, name: &str) -> PgResult<TupleDescData<'m>> {
+pub(crate) fn single_text_tupdesc<'m>(
+    mcx: mcx::Mcx<'m>,
+    name: &str,
+) -> PgResult<TupleDescData<'m>> {
     let mut td = tupdesc::CreateTemplateTupleDesc(mcx, 1)?;
     tupdesc::TupleDescInitEntry(&mut td, 1, Some(name), types_core::TEXTOID, -1, 0)?;
     Ok(td)
@@ -159,7 +165,10 @@ enum ConnTarget {
     Transient(PgConn),
 }
 
-fn dblink_get_conn(mcx: mcx::Mcx<'_>, conname_or_str: &str) -> PgResult<(ConnTarget, Option<String>)> {
+fn dblink_get_conn(
+    mcx: mcx::Mcx<'_>,
+    conname_or_str: &str,
+) -> PgResult<(ConnTarget, Option<String>)> {
     if registry::named_present(conname_or_str)? {
         let n = conname_or_str.to_string();
         return Ok((ConnTarget::Named(n.clone()), Some(n)));
@@ -263,7 +272,10 @@ fn fc_dblink_disconnect(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> 
     text_result(mcx, "OK")
 }
 
-fn fc_dblink_get_connections(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+fn fc_dblink_get_connections(
+    _flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     let mcx = fcinfo.result_mcx();
     let names = registry::all_named_names();
     if names.is_empty() {
@@ -277,7 +289,10 @@ fn fc_dblink_get_connections(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo
     }
     let mut elems = Vec::with_capacity(names.len());
     for n in &names {
-        elems.push(types_fmgr::varlena_result(varlena::cstring_to_text(mcx, n.as_bytes())?));
+        elems.push(types_fmgr::varlena_result(varlena::cstring_to_text(
+            mcx,
+            n.as_bytes(),
+        )?));
     }
     let image = arrayfuncs::construct_array(mcx, &elems, types_core::TEXTOID, -1, false, b'i')?;
     let ptr = image.as_ptr() as usize;
@@ -331,7 +346,14 @@ fn fc_dblink_send_query(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> 
     let (ok, errmsg) = registry::with_named(&name, |rc| {
         let rc = rc.expect("present");
         let ok = rc.conn.send_query(&sql);
-        (ok, if ok { String::new() } else { rc.conn.error_message() })
+        (
+            ok,
+            if ok {
+                String::new()
+            } else {
+                rc.conn.error_message()
+            },
+        )
     })?;
     if !ok {
         ereport(NOTICE)
@@ -346,7 +368,7 @@ fn fc_dblink_send_query(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> 
 fn fc_dblink_record(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let flinfo = flinfo.expect("dblink: resolved FmgrInfo required");
     prep_tuplestore_result(fcinfo)?; // C: dblink_record_internal's first act
-    // SAFETY: executor arms es_query_cxt pre-call; outlives this frame.
+                                     // SAFETY: executor arms es_query_cxt pre-call; outlives this frame.
     let mcx = unsafe { fcinfo.result_mcx_detached() };
     let (sql, mut target, conname, fail) = parse_conn_sql_args(mcx, fcinfo, Some(flinfo))?;
 
@@ -367,7 +389,9 @@ fn fc_dblink_record(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRes
 
     let out = if res.status != ExecStatus::CommandOk && res.status != ExecStatus::TuplesOk {
         with_target(&mut target, |c| c.drain())?;
-        with_target_ref(&target, |c| res_error(c, conname.as_deref(), &res, fail, "while executing query"))??;
+        with_target_ref(&target, |c| {
+            res_error(c, conname.as_deref(), &res, fail, "while executing query")
+        })??;
         // fail=false: return the (empty) result the sink already holds.
         Ok(sink.finish(unsafe { &mut *fcinfo_ptr }))
     } else if res.status == ExecStatus::CommandOk {
@@ -417,7 +441,11 @@ fn fc_dblink_get_result(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> P
     // C: `bool fail = true;` then overridden only when PG_NARGS() == 2 —
     // the one-arg form ERRORS on a failed result (r2's cancel leg raised
     // NOTICE where C raises ERROR).
-    let fail = if fcinfo.nargs() == 2 { fcinfo.arg_bool(1) } else { true };
+    let fail = if fcinfo.nargs() == 2 {
+        fcinfo.arg_bool(1)
+    } else {
+        true
+    };
     if !registry::named_present(&name)? {
         return Err(registry::conn_not_avail(Some(&name)));
     }
@@ -432,7 +460,13 @@ fn fc_dblink_get_result(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> P
     };
     if res.status != ExecStatus::CommandOk && res.status != ExecStatus::TuplesOk {
         registry::with_named(&name, |rc| {
-            res_error(&rc.expect("present").conn, Some(&name), &res, fail, "while executing query")
+            res_error(
+                &rc.expect("present").conn,
+                Some(&name),
+                &res,
+                fail,
+                "while executing query",
+            )
         })??;
         return Ok(Datum::from_usize(0));
     }
@@ -446,11 +480,24 @@ fn fc_dblink_open(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResul
     let flinfo_ref = flinfo.map(|f| &*f);
     let (conname, curname, sql, fail) = match fcinfo.nargs() {
         2 => (None, arg_text(fcinfo, 0)?, arg_text(fcinfo, 1)?, true),
-        3 if arg_is_bool(flinfo_ref, 2) => {
-            (None, arg_text(fcinfo, 0)?, arg_text(fcinfo, 1)?, fcinfo.arg_bool(2))
-        }
-        3 => (Some(arg_text(fcinfo, 0)?), arg_text(fcinfo, 1)?, arg_text(fcinfo, 2)?, true),
-        _ => (Some(arg_text(fcinfo, 0)?), arg_text(fcinfo, 1)?, arg_text(fcinfo, 2)?, fcinfo.arg_bool(3)),
+        3 if arg_is_bool(flinfo_ref, 2) => (
+            None,
+            arg_text(fcinfo, 0)?,
+            arg_text(fcinfo, 1)?,
+            fcinfo.arg_bool(2),
+        ),
+        3 => (
+            Some(arg_text(fcinfo, 0)?),
+            arg_text(fcinfo, 1)?,
+            arg_text(fcinfo, 2)?,
+            true,
+        ),
+        _ => (
+            Some(arg_text(fcinfo, 0)?),
+            arg_text(fcinfo, 1)?,
+            arg_text(fcinfo, 2)?,
+            fcinfo.arg_bool(3),
+        ),
     };
     let ok = cursor_op(&conname, |rc| {
         // C: `if (PQtransactionStatus(conn) == PQTRANS_IDLE)` — the REMOTE
@@ -471,9 +518,17 @@ fn fc_dblink_open(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResul
         if rc.new_xact_for_cursor {
             rc.open_cursor_count += 1;
         }
-        let res = rc.conn.exec(&format!("DECLARE {curname} CURSOR FOR {sql}"))?;
+        let res = rc
+            .conn
+            .exec(&format!("DECLARE {curname} CURSOR FOR {sql}"))?;
         if res.status != ExecStatus::CommandOk {
-            res_error(&rc.conn, conname.as_deref(), &res, fail, &format!("while opening cursor \"{curname}\""))?;
+            res_error(
+                &rc.conn,
+                conname.as_deref(),
+                &res,
+                fail,
+                &format!("while opening cursor \"{curname}\""),
+            )?;
             return Ok(false);
         }
         Ok(true)
@@ -488,12 +543,22 @@ fn fc_dblink_close(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResu
         1 => (None, arg_text(fcinfo, 0)?, true),
         2 if arg_is_bool(flinfo_ref, 1) => (None, arg_text(fcinfo, 0)?, fcinfo.arg_bool(1)),
         2 => (Some(arg_text(fcinfo, 0)?), arg_text(fcinfo, 1)?, true),
-        _ => (Some(arg_text(fcinfo, 0)?), arg_text(fcinfo, 1)?, fcinfo.arg_bool(2)),
+        _ => (
+            Some(arg_text(fcinfo, 0)?),
+            arg_text(fcinfo, 1)?,
+            fcinfo.arg_bool(2),
+        ),
     };
     let ok = cursor_op(&conname, |rc| {
         let res = rc.conn.exec(&format!("CLOSE {curname}"))?;
         if res.status != ExecStatus::CommandOk {
-            res_error(&rc.conn, conname.as_deref(), &res, fail, &format!("while closing cursor \"{curname}\""))?;
+            res_error(
+                &rc.conn,
+                conname.as_deref(),
+                &res,
+                fail,
+                &format!("while closing cursor \"{curname}\""),
+            )?;
             return Ok(false);
         }
         if rc.new_xact_for_cursor {
@@ -517,11 +582,24 @@ fn fc_dblink_fetch(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResu
     let mcx = unsafe { fcinfo.result_mcx_detached() };
     let flinfo_ref = Some(&*flinfo);
     let (conname, curname, howmany, fail) = match fcinfo.nargs() {
-        4 => (Some(arg_text(fcinfo, 0)?), arg_text(fcinfo, 1)?, fcinfo.arg_i32(2), fcinfo.arg_bool(3)),
-        3 if arg_is_bool(flinfo_ref, 2) => {
-            (None, arg_text(fcinfo, 0)?, fcinfo.arg_i32(1), fcinfo.arg_bool(2))
-        }
-        3 => (Some(arg_text(fcinfo, 0)?), arg_text(fcinfo, 1)?, fcinfo.arg_i32(2), true),
+        4 => (
+            Some(arg_text(fcinfo, 0)?),
+            arg_text(fcinfo, 1)?,
+            fcinfo.arg_i32(2),
+            fcinfo.arg_bool(3),
+        ),
+        3 if arg_is_bool(flinfo_ref, 2) => (
+            None,
+            arg_text(fcinfo, 0)?,
+            fcinfo.arg_i32(1),
+            fcinfo.arg_bool(2),
+        ),
+        3 => (
+            Some(arg_text(fcinfo, 0)?),
+            arg_text(fcinfo, 1)?,
+            fcinfo.arg_i32(2),
+            true,
+        ),
         _ => (None, arg_text(fcinfo, 0)?, fcinfo.arg_i32(1), true),
     };
     if !conn_present(&conname)? {
@@ -536,15 +614,23 @@ fn fc_dblink_fetch(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResu
     let res = res?;
     if res.status != ExecStatus::CommandOk && res.status != ExecStatus::TuplesOk {
         on_conn(&conname, |rc| {
-            res_error(&rc.conn, conname.as_deref(), &res, fail, &format!("while fetching from cursor \"{curname}\""))
+            res_error(
+                &rc.conn,
+                conname.as_deref(),
+                &res,
+                fail,
+                &format!("while fetching from cursor \"{curname}\""),
+            )
         })??;
         return Ok(Datum::from_usize(0));
     }
     if res.status == ExecStatus::CommandOk {
-        return throw(ereport(ERROR)
-            .errcode(ERRCODE_INVALID_CURSOR_NAME)
-            .errmsg(format!("cursor \"{curname}\" does not exist"))
-            .finish(loc("dblink_fetch")));
+        return throw(
+            ereport(ERROR)
+                .errcode(ERRCODE_INVALID_CURSOR_NAME)
+                .errmsg(format!("cursor \"{curname}\" does not exist"))
+                .finish(loc("dblink_fetch")),
+        );
     }
     materialize::materialize_result(mcx, flinfo, fcinfo, &gucs, &res)
 }
@@ -552,7 +638,11 @@ fn fc_dblink_fetch(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResu
 fn fc_dblink_get_notify(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let flinfo = flinfo.expect("dblink_get_notify: resolved FmgrInfo required");
     let mcx = unsafe { fcinfo.result_mcx_detached() };
-    let conname = if fcinfo.nargs() == 1 { Some(arg_text(fcinfo, 0)?) } else { None };
+    let conname = if fcinfo.nargs() == 1 {
+        Some(arg_text(fcinfo, 0)?)
+    } else {
+        None
+    };
     if !conn_present(&conname)? {
         return Err(registry::conn_not_avail(conname.as_deref()));
     }
@@ -595,9 +685,12 @@ fn parse_conn_sql_args(
             let (t, cn) = dblink_get_conn(mcx, &conname)?;
             Ok((sql, t, cn, fail))
         }
-        2 if arg_is_bool(flinfo, 1) => {
-            Ok((arg_text(fcinfo, 0)?, ConnTarget::Unnamed, None, fcinfo.arg_bool(1)))
-        }
+        2 if arg_is_bool(flinfo, 1) => Ok((
+            arg_text(fcinfo, 0)?,
+            ConnTarget::Unnamed,
+            None,
+            fcinfo.arg_bool(1),
+        )),
         2 => {
             let conname = arg_text(fcinfo, 0)?;
             let sql = arg_text(fcinfo, 1)?;
@@ -637,9 +730,11 @@ fn cursor_op(
 
 #[cold]
 fn internal_err(conn: &PgConn, what: &str) -> PgResult<bool> {
-    throw(ereport(ERROR)
-        .errmsg(format!("{what}: {}", pchomp(&conn.error_message())))
-        .finish(loc("dblink")))
+    throw(
+        ereport(ERROR)
+            .errmsg(format!("{what}: {}", pchomp(&conn.error_message())))
+            .finish(loc("dblink")),
+    )
 }
 
 // --- fmgr registration ---

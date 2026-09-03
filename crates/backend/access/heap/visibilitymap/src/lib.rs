@@ -6,14 +6,14 @@
 
 use ::bufmgr_seams::{BufferPin, ContentLockGuard};
 use ::types_core::{
-    BLCKSZ, BlockNumber, Buffer, BufferIsValid, ForkNumber, InvalidBlockNumber, InvalidXLogRecPtr,
-    TransactionId, XLogRecPtr,
+    BlockNumber, Buffer, BufferIsValid, ForkNumber, InvalidBlockNumber, InvalidXLogRecPtr,
+    TransactionId, XLogRecPtr, BLCKSZ,
 };
 use ::types_error::PgResult;
 use ::types_rel::RelationData;
-use ::types_storage::ReadBufferMode;
 use ::types_storage::bufpage::{PageMut, PageRef, SizeOfPageHeaderData};
-use ::xloginsert_seams::{REGBUF_NO_IMAGE, REGBUF_STANDARD, XLogRegBuf};
+use ::types_storage::ReadBufferMode;
+use ::xloginsert_seams::{XLogRegBuf, REGBUF_NO_IMAGE, REGBUF_STANDARD};
 
 pub const VISIBILITYMAP_ALL_VISIBLE: u8 = 0x01;
 pub const VISIBILITYMAP_ALL_FROZEN: u8 = 0x02;

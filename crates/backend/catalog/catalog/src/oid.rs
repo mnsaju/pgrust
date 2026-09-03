@@ -44,8 +44,14 @@ pub fn GetNewOidWithIndex<'mcx>(
     loop {
         let new_oid = varsup::GetNewObjectId()?;
         let key = [oid_eq_key(oidcolumn, new_oid)];
-        let mut scan =
-            genam::systable_beginscan(mcx, relation, indexId, true, Some(Rc::clone(&snapshot)), &key)?;
+        let mut scan = genam::systable_beginscan(
+            mcx,
+            relation,
+            indexId,
+            true,
+            Some(Rc::clone(&snapshot)),
+            &key,
+        )?;
         let collides = genam::systable_getnext(mcx, &mut scan)?.is_some();
         genam::systable_endscan(mcx, scan)?;
         if !collides {

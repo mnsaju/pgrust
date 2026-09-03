@@ -16,13 +16,12 @@ use crate::bulk::BuildAccumulator;
 use crate::entrypage::gintuple_get_key;
 use crate::insert::ginEntryInsert;
 use crate::util::{
-    gin_pending_list_cleanup_size, ginExtractEntries, set_meta_pd_lower, GinInitBuffer,
+    ginExtractEntries, gin_pending_list_cleanup_size, set_meta_pd_lower, GinInitBuffer,
     GinNewBuffer,
 };
 use crate::{
     meta_of, page_bytes, page_bytes_mut, page_mut, page_opaque, page_ref, relation_needs_wal,
-    write_meta_to, write_opaque, GinPageIsDeleted, GIN_EXCLUSIVE, GIN_SHARE, GIN_UNLOCK,
-    RM_GIN,
+    write_meta_to, write_opaque, GinPageIsDeleted, GIN_EXCLUSIVE, GIN_SHARE, GIN_UNLOCK, RM_GIN,
 };
 
 const GIN_PAGE_FREESIZE: usize =
@@ -193,8 +192,8 @@ fn make_sublist(
     }
 
     res.tail = bm::buffer_get_block_number::call(cur_buffer);
-    res.tailFreeSize = write_list_page(rel, cur_buffer, &tuples[start_tuple..], InvalidBlockNumber)?
-        as u32;
+    res.tailFreeSize =
+        write_list_page(rel, cur_buffer, &tuples[start_tuple..], InvalidBlockNumber)? as u32;
     res.nPendingPages += 1;
     res.nPendingHeapTuples = 1;
     Ok(())
@@ -244,11 +243,7 @@ pub(crate) fn ginHeapTupleFastInsert<'s>(
 
         bm::lock_buffer::call(metabuffer, GIN_EXCLUSIVE)?;
         meta_locked = true;
-        predicate_seams::check_for_serializable_conflict_in::call(
-            rel,
-            None,
-            GIN_METAPAGE_BLKNO,
-        )?;
+        predicate_seams::check_for_serializable_conflict_in::call(rel, None, GIN_METAPAGE_BLKNO)?;
 
         // SAFETY: pin + exclusive lock held.
         let mut metadata = { meta_of(page_bytes(&unsafe { page_ref(metabuffer) })) };
@@ -286,11 +281,7 @@ pub(crate) fn ginHeapTupleFastInsert<'s>(
         write_meta_to(bytes, &metadata);
     } else {
         // Insert into the tail page; metapage stays locked.
-        predicate_seams::check_for_serializable_conflict_in::call(
-            rel,
-            None,
-            GIN_METAPAGE_BLKNO,
-        )?;
+        predicate_seams::check_for_serializable_conflict_in::call(rel, None, GIN_METAPAGE_BLKNO)?;
         // SAFETY: pin + exclusive lock held.
         let mut metadata = { meta_of(page_bytes(&unsafe { page_ref(metabuffer) })) };
 
@@ -625,13 +616,23 @@ pub fn ginInsertCleanup<'s>(
 
     loop {
         // SAFETY: pin + share lock held.
-        debug_assert!(!GinPageIsDeleted(&page_opaque(&unsafe { page_ref(buffer) })));
+        debug_assert!(!GinPageIsDeleted(&page_opaque(&unsafe {
+            page_ref(buffer)
+        })));
 
         if blkno == blkno_finish && !full_clean {
             cleanup_finish = true;
         }
 
-        process_pending_page(op_ctx.mcx(), rel, state, &mut accum, &mut ka, buffer, FirstOffsetNumber)?;
+        process_pending_page(
+            op_ctx.mcx(),
+            rel,
+            state,
+            &mut accum,
+            &mut ka,
+            buffer,
+            FirstOffsetNumber,
+        )?;
 
         // SAFETY: pin + share lock held.
         let opaque = page_opaque(&unsafe { page_ref(buffer) });
@@ -649,13 +650,24 @@ pub fn ginInsertCleanup<'s>(
                     break;
                 };
                 let dump_ctx = MemoryContext::new_bump("gin cleanup dump scratch");
-                ginEntryInsert(dump_ctx.mcx(), rel, state, attnum, key, category, list, None)?;
+                ginEntryInsert(
+                    dump_ctx.mcx(),
+                    rel,
+                    state,
+                    attnum,
+                    key,
+                    category,
+                    list,
+                    None,
+                )?;
             }
 
             bm::lock_buffer::call(metabuffer, GIN_EXCLUSIVE)?;
             bm::lock_buffer::call(buffer, GIN_SHARE)?;
             // SAFETY: pin + share lock held.
-            debug_assert!(!GinPageIsDeleted(&page_opaque(&unsafe { page_ref(buffer) })));
+            debug_assert!(!GinPageIsDeleted(&page_opaque(&unsafe {
+                page_ref(buffer)
+            })));
 
             // SAFETY: pin + share lock held.
             let new_maxoff = { unsafe { page_ref(buffer) }.max_offset_number() };
@@ -663,14 +675,31 @@ pub fn ginInsertCleanup<'s>(
                 drop(accum);
                 op_ctx.reset();
                 accum = unsafe { erase(BuildAccumulator::new(op_ctx.mcx(), *state)) };
-                process_pending_page(op_ctx.mcx(), rel, state, &mut accum, &mut ka, buffer, maxoff + 1)?;
+                process_pending_page(
+                    op_ctx.mcx(),
+                    rel,
+                    state,
+                    &mut accum,
+                    &mut ka,
+                    buffer,
+                    maxoff + 1,
+                )?;
                 accum.begin_scan()?;
                 loop {
                     let Some((attnum, key, category, list)) = accum.next_entry() else {
                         break;
                     };
                     let dump_ctx = MemoryContext::new_bump("gin cleanup dump scratch");
-                    ginEntryInsert(dump_ctx.mcx(), rel, state, attnum, key, category, list, None)?;
+                    ginEntryInsert(
+                        dump_ctx.mcx(),
+                        rel,
+                        state,
+                        attnum,
+                        key,
+                        category,
+                        list,
+                        None,
+                    )?;
                 }
             }
 

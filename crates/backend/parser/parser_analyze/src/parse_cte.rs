@@ -6,10 +6,10 @@ use mcx::{Mcx, PgVec};
 use types_core::catalog::{DEFAULT_COLLATION_OID, TEXTOID, UNKNOWNOID};
 use types_core::{InvalidOid, Oid, ParseLoc};
 use types_error::{
-    ERRCODE_COLLATION_MISMATCH, ERRCODE_DATATYPE_MISMATCH, ERRCODE_DUPLICATE_ALIAS,
-    ERRCODE_DUPLICATE_COLUMN, ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_INVALID_COLUMN_REFERENCE,
-    ERRCODE_INVALID_RECURSION, ERRCODE_SYNTAX_ERROR, ERRCODE_UNDEFINED_FUNCTION, ErrorLocation,
-    PgError, PgResult, ERROR,
+    ErrorLocation, PgError, PgResult, ERRCODE_COLLATION_MISMATCH, ERRCODE_DATATYPE_MISMATCH,
+    ERRCODE_DUPLICATE_ALIAS, ERRCODE_DUPLICATE_COLUMN, ERRCODE_FEATURE_NOT_SUPPORTED,
+    ERRCODE_INVALID_COLUMN_REFERENCE, ERRCODE_INVALID_RECURSION, ERRCODE_SYNTAX_ERROR,
+    ERRCODE_UNDEFINED_FUNCTION, ERROR,
 };
 use types_nodes::nodes_enums::CmdType;
 use types_nodes::parsenodes::{CommonTableExpr, SetOperation, WithClause};
@@ -64,10 +64,13 @@ pub fn transformWithClause<'mcx>(
     }
 
     if wc.recursive {
-        let mut items: PgVec<'mcx, CteItem<'mcx>> =
-            mcx::vec_with_capacity_in(mcx, wc.ctes.len())?;
+        let mut items: PgVec<'mcx, CteItem<'mcx>> = mcx::vec_with_capacity_in(mcx, wc.ctes.len())?;
         for (i, cte_node) in wc.ctes.iter().enumerate() {
-            items.push(CteItem { cte: cte_node, id: i as i32, depends_on: Bitmapset::empty() });
+            items.push(CteItem {
+                cte: cte_node,
+                id: i as i32,
+                depends_on: Bitmapset::empty(),
+            });
         }
 
         makeDependencyGraph(mcx, pstate, &mut items)?;
@@ -193,8 +196,7 @@ fn analyzeCTE<'mcx>(
             }
             if parse_expr::expr_collation(texpr) != colcoll {
                 let expected = collation_name_or_null(mcx, colcoll)?;
-                let actual =
-                    collation_name_or_null(mcx, parse_expr::expr_collation(texpr))?;
+                let actual = collation_name_or_null(mcx, parse_expr::expr_collation(texpr))?;
                 return Err(recursive_collation_mismatch(
                     pstate, ctename, varattno, &expected, &actual, texpr,
                 ));
@@ -208,7 +210,11 @@ fn analyzeCTE<'mcx>(
 
     if search_clause.is_some() || cycle_clause.is_some() {
         if !cterecursive {
-            return Err(syntax_err(pstate, "WITH query is not recursive".to_string(), location));
+            return Err(syntax_err(
+                pstate,
+                "WITH query is not recursive".to_string(),
+                location,
+            ));
         }
         let sos = query_node
             .as_query()
@@ -243,7 +249,10 @@ fn analyzeCTE<'mcx>(
         }
     }
 
-    let ctecolnames = &cte_node.as_common_table_expr().expect("WITH list cell").ctecolnames;
+    let ctecolnames = &cte_node
+        .as_common_table_expr()
+        .expect("WITH list cell")
+        .ctecolnames;
 
     if let Some(sc) = search_clause.map(|n| n.as_cte_search_clause().expect("search clause")) {
         checkColumnList(
@@ -345,13 +354,22 @@ fn transformCycleMark<'mcx>(
     };
     let value =
         parse_expr::transformExpr(mcx, pstate, raw_value, ParseExprKind::EXPR_KIND_CYCLE_MARK)?;
-    let default =
-        parse_expr::transformExpr(mcx, pstate, raw_default, ParseExprKind::EXPR_KIND_CYCLE_MARK)?;
+    let default = parse_expr::transformExpr(
+        mcx,
+        pstate,
+        raw_default,
+        ParseExprKind::EXPR_KIND_CYCLE_MARK,
+    )?;
 
-    let (vt, vloc) = (parse_expr::expr_type(value), nodes_core::expr_location(value));
-    let (dt, dloc) = (parse_expr::expr_type(default), nodes_core::expr_location(default));
-    let mark_type =
-        coerce::select_common_type(pstate, &[(vt, vloc), (dt, dloc)], Some("CYCLE"))?;
+    let (vt, vloc) = (
+        parse_expr::expr_type(value),
+        nodes_core::expr_location(value),
+    );
+    let (dt, dloc) = (
+        parse_expr::expr_type(default),
+        nodes_core::expr_location(default),
+    );
+    let mark_type = coerce::select_common_type(pstate, &[(vt, vloc), (dt, dloc)], Some("CYCLE"))?;
     let value =
         coerce::coerce_to_common_type(mcx, pstate, value, vt, vloc, mark_type, "CYCLE/SET/TO")?;
     let default = coerce::coerce_to_common_type(
@@ -367,7 +385,10 @@ fn transformCycleMark<'mcx>(
     let mark_typmod = coerce::select_common_typmod(
         &[
             (parse_expr::expr_type(value), parse_expr::expr_typmod(value)),
-            (parse_expr::expr_type(default), parse_expr::expr_typmod(default)),
+            (
+                parse_expr::expr_type(default),
+                parse_expr::expr_typmod(default),
+            ),
         ],
         mark_type,
     );
@@ -426,7 +447,11 @@ fn checkColumnList<'mcx>(
                             mbutils::GetDatabaseEncoding(),
                         ))
                         .into_error()
-                        .with_error_location(ErrorLocation::new(file!(), line!() as i32, "analyzeCTE")),
+                        .with_error_location(ErrorLocation::new(
+                            file!(),
+                            line!() as i32,
+                            "analyzeCTE",
+                        )),
                 ));
             }
         }
@@ -435,7 +460,9 @@ fn checkColumnList<'mcx>(
 }
 
 fn colname_member(colnames: &NodeList<'_>, name: &str) -> bool {
-    colnames.iter().any(|n| n.as_string().is_some_and(|s| s.sval == name))
+    colnames
+        .iter()
+        .any(|n| n.as_string().is_some_and(|s| s.sval == name))
 }
 
 #[track_caller]
@@ -446,7 +473,11 @@ fn syntax_err(pstate: &ParseState<'_, '_>, msg: String, location: ParseLoc) -> B
         elog::ereport(ERROR)
             .errcode(ERRCODE_SYNTAX_ERROR)
             .errmsg(msg)
-            .errposition(parser_errposition(pstate, location, mbutils::GetDatabaseEncoding()))
+            .errposition(parser_errposition(
+                pstate,
+                location,
+                mbutils::GetDatabaseEncoding(),
+            ))
             .into_error()
             .with_error_location(ErrorLocation::new(file!(), line!() as i32, "analyzeCTE")),
     )
@@ -476,7 +507,12 @@ pub(crate) fn analyzeCTETargetList<'mcx>(
     let (aliascolnames, cterecursive, ctename, location) = {
         let cte = cte_node.as_common_table_expr().expect("WITH list cell");
         debug_assert!(cte.ctecolnames.is_nil());
-        (cte.aliascolnames.clone_in(mcx)?, cte.cterecursive, cte.ctename.unwrap_or(""), cte.location)
+        (
+            cte.aliascolnames.clone_in(mcx)?,
+            cte.cterecursive,
+            cte.ctename.unwrap_or(""),
+            cte.location,
+        )
     };
 
     let numaliases = aliascolnames.len() as i32;
@@ -526,7 +562,11 @@ pub(crate) fn analyzeCTETargetList<'mcx>(
                     mbutils::GetDatabaseEncoding(),
                 ))
                 .into_error()
-                .with_error_location(ErrorLocation::new(file!(), line!() as i32, "analyzeCTETargetList")),
+                .with_error_location(ErrorLocation::new(
+                    file!(),
+                    line!() as i32,
+                    "analyzeCTETargetList",
+                )),
         ));
     }
 
@@ -689,7 +729,12 @@ impl<'a, 'mcx> NodeWalker<'mcx> for DependencyGraphWalker<'a, 'mcx> {
 fn name_captured(innerwiths: &PgVec<'_, NodeList<'_>>, relname: &str) -> bool {
     for frame in innerwiths.iter() {
         for cte_node in frame {
-            if cte_node.as_common_table_expr().expect("WITH list cell").ctename == Some(relname) {
+            if cte_node
+                .as_common_table_expr()
+                .expect("WITH list cell")
+                .ctename
+                == Some(relname)
+            {
                 return true;
             }
         }
@@ -720,8 +765,11 @@ fn TopologicalSort<'mcx>(
         }
 
         if j >= numitems {
-            let location =
-                items[i].cte.as_common_table_expr().expect("WITH list cell").location;
+            let location = items[i]
+                .cte
+                .as_common_table_expr()
+                .expect("WITH list cell")
+                .location;
             return Err(mutual_recursion(pstate, location));
         }
 
@@ -816,7 +864,9 @@ fn checkWellFormedRecursion<'mcx>(
         // C: a top-level WITH is tolerated, but must not self-reference; test
         // it before the UNION arms to avoid confusing errors.
         if let Some(wc_node) = stmt.withClause {
-            let wc = wc_node.as_with_clause().expect("withClause is a WithClause");
+            let wc = wc_node
+                .as_with_clause()
+                .expect("withClause is a WithClause");
             let mut w = WellFormedWalker {
                 mcx,
                 pstate,
@@ -1077,9 +1127,11 @@ impl<'a, 'p, 'mcx> NodeWalker<'mcx> for WellFormedWalker<'a, 'p, 'mcx> {
 // analyzed-expr tags go through the shared port.
 fn raw_expr_location(node: Node<'_>) -> ParseLoc {
     match node.node_tag() {
-        NodeTag::T_SortBy => {
-            node.as_sort_by().expect("tag checked").node.map_or(-1, raw_expr_location)
-        }
+        NodeTag::T_SortBy => node
+            .as_sort_by()
+            .expect("tag checked")
+            .node
+            .map_or(-1, raw_expr_location),
         NodeTag::T_LockingClause => -1,
         _ => parse_expr::expr_location(node),
     }
@@ -1102,14 +1154,20 @@ fn duplicate_cte_name(pstate: &ParseState<'_, '_>, name: &str, location: i32) ->
     Box::new(
         elog::ereport(ERROR)
             .errcode(ERRCODE_DUPLICATE_ALIAS)
-            .errmsg(format!("WITH query name \"{name}\" specified more than once"))
+            .errmsg(format!(
+                "WITH query name \"{name}\" specified more than once"
+            ))
             .errposition(parser_errposition(
                 pstate,
                 location,
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformWithClause")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformWithClause",
+            )),
     )
 }
 
@@ -1131,7 +1189,11 @@ fn invalid_recursion(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "checkWellFormedRecursion")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "checkWellFormedRecursion",
+            )),
     )
 }
 
@@ -1149,7 +1211,11 @@ fn mutual_recursion(pstate: &ParseState<'_, '_>, location: ParseLoc) -> Box<PgEr
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "TopologicalSort")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "TopologicalSort",
+            )),
     )
 }
 
@@ -1171,7 +1237,11 @@ fn recursive_decoration(
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "checkWellFormedRecursion")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "checkWellFormedRecursion",
+            )),
     )
 }
 

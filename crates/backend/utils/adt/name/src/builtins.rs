@@ -190,7 +190,10 @@ pub fn fc_hashname(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRes
 pub fn fc_hashnameextended(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let a = arg_name(fcinfo, 0);
     let seed = fcinfo.arg_i64(1) as u64;
-    Ok(Datum::from_u64(::hashfn::hash_bytes_extended(a.name_str(), seed)))
+    Ok(Datum::from_u64(::hashfn::hash_bytes_extended(
+        a.name_str(),
+        seed,
+    )))
 }
 
 pub fn fc_namerecv(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {

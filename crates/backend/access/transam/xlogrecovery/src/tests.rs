@@ -105,14 +105,26 @@ fn install_timeline_seams() {
 #[test]
 fn timeline_history_helpers() {
     install_timeline_seams();
-    let tles = vec![Tle { tli: 3, begin: 0, end: 0 }];
+    let tles = vec![Tle {
+        tli: 3,
+        begin: 0,
+        end: 0,
+    }];
     assert!(tli_in_history(3, &tles));
     assert!(!tli_in_history(2, &tles));
     assert!(tli_in_history(9, &[]));
     assert_eq!(tli_of_point_in_history(0x12345, &tles).unwrap(), 3);
     let split = vec![
-        Tle { tli: 2, begin: 0x8000, end: 0 },
-        Tle { tli: 1, begin: 0, end: 0x8000 },
+        Tle {
+            tli: 2,
+            begin: 0x8000,
+            end: 0,
+        },
+        Tle {
+            tli: 1,
+            begin: 0,
+            end: 0x8000,
+        },
     ];
     assert_eq!(tli_of_point_in_history(0x7FFF, &split).unwrap(), 1);
     assert_eq!(tli_of_point_in_history(0x8000, &split).unwrap(), 2);
@@ -139,8 +151,10 @@ fn clean_shutdown_boot_path() {
     transam_xlog::init_seams();
     xlogprefetcher::init_seams();
     xlogprefetcher::XLogPrefetchShmemInit();
-    guc_tables::vars::maintenance_io_concurrency
-        .install_if_absent(guc_tables::GucVarAccessors { get: || 10, set: |_| {} });
+    guc_tables::vars::maintenance_io_concurrency.install_if_absent(guc_tables::GucVarAccessors {
+        get: || 10,
+        set: |_| {},
+    });
     init_seams();
     install_timeline_seams();
 

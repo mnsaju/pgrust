@@ -104,8 +104,7 @@ pub fn ginbuild<'mcx>(
                 }
             }
 
-            if accum.allocated_memory
-                >= init_small::globals::maintenance_work_mem() as usize * 1024
+            if accum.allocated_memory >= init_small::globals::maintenance_work_mem() as usize * 1024
             {
                 accum.begin_scan()?;
                 loop {
@@ -174,5 +173,3 @@ pub fn ginbuild<'mcx>(
         index_tuples: indtuples,
     })
 }
-
-

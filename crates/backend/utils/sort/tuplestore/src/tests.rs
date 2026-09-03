@@ -354,8 +354,13 @@ fn putvalues_packs_varlena_short_form() {
     compact.push(CompactAttribute::populate_from(&att));
     attrs.push(att);
     let desc = Rc::new(TupleDescData {
-        natts: 1, tdtypeid: 2249, tdtypmod: -1, tdrefcount: -1,
-        constr: None, compact_attrs: compact, attrs,
+        natts: 1,
+        tdtypeid: 2249,
+        tdtypmod: -1,
+        tdrefcount: -1,
+        constr: None,
+        compact_attrs: compact,
+        attrs,
     });
 
     let mut image: Vec<u8> = vec![];
@@ -425,7 +430,8 @@ fn get_stats_tracks_chunk_space_maximum_across_clear() {
     assert_eq!(s0.space_type.name(), "Memory");
     assert_eq!(s0.max_space, 2048 * 8 + 8);
     for i in 0..10 {
-        ts.putvalues(&desc, &[Datum::from_i32(i)], &[false]).unwrap();
+        ts.putvalues(&desc, &[Datum::from_i32(i)], &[false])
+            .unwrap();
     }
     let s1 = ts.get_stats();
     // int4 minimal tuple: MAXALIGN(t_len) + 8-byte generation chunk header.
@@ -447,7 +453,9 @@ mod spill {
     static CWD: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     fn enter_datadir(tag: &str) -> (std::sync::MutexGuard<'static, ()>, String) {
-        let guard = CWD.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let guard = CWD
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let dir = format!(
             "{}/pgrust-tstorespill-{}-{}",
             std::env::temp_dir().display(),

@@ -190,8 +190,8 @@ pub fn exec_init_memoize<'mcx>(
     debug_assert!(nkeys > 0 && nkeys == node.param_exprs.len());
 
     let ps_ExprContext = estate.exec_assign_expr_context();
-    let ps_ResultTupleSlot = estate
-        .exec_init_extra_tuple_slot(Some(result_desc.clone()), TupleSlotKind::MinimalTuple);
+    let ps_ResultTupleSlot =
+        estate.exec_init_extra_tuple_slot(Some(result_desc.clone()), TupleSlotKind::MinimalTuple);
 
     let tableslot = exectuples::make_tuple_table_slot(
         mcx,
@@ -208,7 +208,10 @@ pub fn exec_init_memoize<'mcx>(
     // slot directly instead of an interpreter round trip per probe.
     let mut param_exprs: PgVec<'mcx, KeyExpr<'mcx>> = PgVec::new_in(mcx);
     for expr in &node.param_exprs {
-        match expr.as_param().filter(|p| p.paramkind == ParamKind::PARAM_EXEC) {
+        match expr
+            .as_param()
+            .filter(|p| p.paramkind == ParamKind::PARAM_EXEC)
+        {
             Some(p) => param_exprs.push(KeyExpr::Param(p.paramid as u32)),
             None => param_exprs.push(KeyExpr::Expr(
                 execexpr::exec_init_expr(mcx, Some(expr), params)?.expect("cache key expr"),
@@ -219,7 +222,10 @@ pub fn exec_init_memoize<'mcx>(
     let mut key_attrs: PgVec<'mcx, KeyAttr> = ::mcx::vec_with_capacity_in(mcx, nkeys)?;
     for i in 0..nkeys {
         let att = hashkeydesc.attr(i);
-        key_attrs.push(KeyAttr { byval: att.attbyval, len: att.attlen });
+        key_attrs.push(KeyAttr {
+            byval: att.attbyval,
+            len: att.attlen,
+        });
     }
 
     let mut kernel = ProbeKernel::Expr;
@@ -314,11 +320,21 @@ impl<'mcx> MemoizeState<'mcx> {
         };
         match prev {
             INVALID => self.lru_head = next,
-            p => self.entries[p as usize].as_mut().expect("live entry").lru_next = next,
+            p => {
+                self.entries[p as usize]
+                    .as_mut()
+                    .expect("live entry")
+                    .lru_next = next
+            }
         }
         match next {
             INVALID => self.lru_tail = prev,
-            n => self.entries[n as usize].as_mut().expect("live entry").lru_prev = prev,
+            n => {
+                self.entries[n as usize]
+                    .as_mut()
+                    .expect("live entry")
+                    .lru_prev = prev
+            }
         }
     }
 
@@ -331,7 +347,12 @@ impl<'mcx> MemoizeState<'mcx> {
         }
         match old_tail {
             INVALID => self.lru_head = ix,
-            t => self.entries[t as usize].as_mut().expect("live entry").lru_next = ix,
+            t => {
+                self.entries[t as usize]
+                    .as_mut()
+                    .expect("live entry")
+                    .lru_next = ix
+            }
         }
         self.lru_tail = ix;
     }
@@ -414,9 +435,7 @@ fn datum_image_eq(mcx: Mcx<'_>, a: Datum, b: Datum, byval: bool, len: i16) -> Pg
     }
     debug_assert!(len == -2);
     // SAFETY: by-ref cstring datums, NUL-terminated.
-    unsafe {
-        Ok(core::ffi::CStr::from_ptr(pa.cast()) == core::ffi::CStr::from_ptr(pb.cast()))
-    }
+    unsafe { Ok(core::ffi::CStr::from_ptr(pa.cast()) == core::ffi::CStr::from_ptr(pb.cast())) }
 }
 
 // Sign-truncation to attlen width, then zero-extended back to a word so both
@@ -436,9 +455,13 @@ fn truncate_byval(v: Datum, len: i16) -> usize {
 fn varlena_data<'m>(mcx: Mcx<'m>, p: *const u8) -> PgResult<&'m [u8]> {
     // SAFETY: by-ref varlena datum readable through its header.
     unsafe {
-        let flat = if varatt::varatt_is_1b_e(p) || (!varatt::varatt_is_1b(p) && !varatt::varatt_is_4b_u(p)) {
+        let flat = if varatt::varatt_is_1b_e(p)
+            || (!varatt::varatt_is_1b(p) && !varatt::varatt_is_4b_u(p))
+        {
             let image = core::slice::from_raw_parts(p, varatt::varsize_any(p));
-            detoast_seams::detoast_attr::call(mcx, image)?.leak().as_ptr()
+            detoast_seams::detoast_attr::call(mcx, image)?
+                .leak()
+                .as_ptr()
         } else {
             p
         };
@@ -472,7 +495,11 @@ fn eval_key<'mcx>(
             let per_tuple = estate.ecxt(ecxt).per_tuple_mcx();
             // SAFETY: the per-tuple context outlives this eval (reset-only).
             unsafe { expr.arm_result_mcx_raw(per_tuple) };
-            let mut slots = EvalSlots { scan: None, inner: None, outer: None };
+            let mut slots = EvalSlots {
+                scan: None,
+                inner: None,
+                outer: None,
+            };
             let r = exec_eval_expr(expr, &mut slots)?;
             Ok((r.value, r.isnull))
         }
@@ -494,10 +521,7 @@ fn prepare_probe_slot<'mcx>(
     Ok(())
 }
 
-fn probe_hash<'mcx>(
-    node: &mut MemoizeState<'mcx>,
-    estate: &mut EStateData<'mcx>,
-) -> PgResult<u32> {
+fn probe_hash<'mcx>(node: &mut MemoizeState<'mcx>, estate: &mut EStateData<'mcx>) -> PgResult<u32> {
     let per_tuple = estate.ecxt(node.ps_ExprContext).per_tuple_mcx();
     if node.binary_mode {
         let mut hashkey: u32 = 0;
@@ -513,8 +537,11 @@ fn probe_hash<'mcx>(
         let hash_expr = node.hash_expr.as_mut().expect("logical-mode hash expr");
         // SAFETY: the per-tuple context outlives this eval (reset-only).
         unsafe { hash_expr.arm_result_mcx_raw(per_tuple) };
-        let mut slots =
-            EvalSlots { scan: None, inner: Some(&mut node.probeslot), outer: None };
+        let mut slots = EvalSlots {
+            scan: None,
+            inner: Some(&mut node.probeslot),
+            outer: None,
+        };
         let r = exec_eval_expr(hash_expr, &mut slots)?;
         debug_assert!(!r.isnull);
         Ok(hashfn::murmurhash32(r.value.as_u32()))
@@ -554,8 +581,11 @@ fn probe_equal<'mcx>(
         let eq = eq_expr.expect("logical-mode eq expr");
         // SAFETY: the per-tuple context outlives this eval (reset-only).
         unsafe { eq.arm_result_mcx_raw(per_tuple) };
-        let mut slots =
-            EvalSlots { scan: None, inner: Some(tableslot), outer: Some(probeslot) };
+        let mut slots = EvalSlots {
+            scan: None,
+            inner: Some(tableslot),
+            outer: Some(probeslot),
+        };
         exec_qual(Some(eq), &mut slots)
     }
 }
@@ -565,7 +595,8 @@ fn build_hash_table(node: &mut MemoizeState<'_>) {
     if size == 0 {
         size = 1024;
     }
-    node.hashtab.reserve(size as usize, |_| unreachable!("empty table rehash"));
+    node.hashtab
+        .reserve(size as usize, |_| unreachable!("empty table rehash"));
     node.built = true;
 }
 
@@ -610,7 +641,13 @@ fn remove_cache_entry(node: &mut MemoizeState<'_>, ix: u32) {
         Err(_) => panic!("could not find memoization table entry"),
     }
     // SAFETY: the key image is owned by this entry.
-    unsafe { free_image(mcx, entry.params.cast(), entry.params.as_ref().t_len as usize) };
+    unsafe {
+        free_image(
+            mcx,
+            entry.params.cast(),
+            entry.params.as_ref().t_len as usize,
+        )
+    };
     node.free_slots.push(ix);
 }
 
@@ -629,7 +666,13 @@ fn cache_free_all(node: &mut MemoizeState<'_>) {
             entry_purge_tuples(node, i as u32);
             let entry = node.entries[i].take().expect("live entry");
             // SAFETY: the key image is owned by this entry.
-            unsafe { free_image(mcx, entry.params.cast(), entry.params.as_ref().t_len as usize) };
+            unsafe {
+                free_image(
+                    mcx,
+                    entry.params.cast(),
+                    entry.params.as_ref().t_len as usize,
+                )
+            };
         }
     }
     // SAFETY: sole reference; every allocation was just freed.
@@ -654,7 +697,10 @@ fn cache_reduce_memory(node: &mut MemoizeState<'_>, specialkey: u32) -> bool {
     debug_assert!(node.mem_used > node.mem_limit);
     let mut ix = node.lru_head;
     while ix != INVALID {
-        let next = node.entries[ix as usize].as_ref().expect("live entry").lru_next;
+        let next = node.entries[ix as usize]
+            .as_ref()
+            .expect("live entry")
+            .lru_next;
         if ix == specialkey {
             specialkey_intact = false;
         }
@@ -685,7 +731,14 @@ fn cache_lookup<'mcx>(
         let slot_mcx = estate.es_query_cxt;
 
         let MemoizeState {
-            entries, hashtab, tableslot, probeslot, eq_expr, key_attrs, binary_mode, ..
+            entries,
+            hashtab,
+            tableslot,
+            probeslot,
+            eq_expr,
+            key_attrs,
+            binary_mode,
+            ..
         } = node;
         let mut eq_err: Option<Box<PgError>> = None;
         let existing = hashtab
@@ -727,7 +780,9 @@ fn cache_lookup<'mcx>(
             _ => hashfn::hash_bytes(&key.as_usize().to_ne_bytes()),
         };
         hash = hashfn::murmurhash32(h32);
-        let MemoizeState { entries, hashtab, .. } = node;
+        let MemoizeState {
+            entries, hashtab, ..
+        } = node;
         // NOT DISTINCT over the entry's cached key word: grouping-equal fold
         // in logical mode, the binary probe_equal isnull fold for ByvalImage
         // (identical shape); byval datum_image_eq is the full-word compare.
@@ -820,9 +875,7 @@ fn cache_store_tuple<'mcx>(
     )?;
     let t_len = tup.t_len();
     // SAFETY: prefix sits TUPLE_PREFIX bytes before the image.
-    let tnode = unsafe {
-        NonNull::new_unchecked(tup.as_ptr().cast_mut().sub(TUPLE_PREFIX))
-    };
+    let tnode = unsafe { NonNull::new_unchecked(tup.as_ptr().cast_mut().sub(TUPLE_PREFIX)) };
     core::mem::forget(tup);
     // SAFETY: fresh chain node.
     unsafe { set_next(tnode, None) };
@@ -864,10 +917,16 @@ pub fn exec_memoize<'mcx, C: MemoizeChild<'mcx>>(
 
                 if found {
                     let ix = entry.expect("found entries are never None");
-                    if node.entries[ix as usize].as_ref().expect("live entry").complete {
+                    if node.entries[ix as usize]
+                        .as_ref()
+                        .expect("live entry")
+                        .complete
+                    {
                         node.stats.cache_hits += 1;
-                        let head =
-                            node.entries[ix as usize].as_ref().expect("live entry").tuplehead;
+                        let head = node.entries[ix as usize]
+                            .as_ref()
+                            .expect("live entry")
+                            .tuplehead;
                         node.last_tuple = head;
                         node.entry = ix;
                         let Some(t) = head else {
@@ -898,7 +957,10 @@ pub fn exec_memoize<'mcx, C: MemoizeChild<'mcx>>(
 
                 let Some(outerslot) = outer.exec_proc(estate)? else {
                     if let Some(ix) = entry {
-                        node.entries[ix as usize].as_mut().expect("live entry").complete = true;
+                        node.entries[ix as usize]
+                            .as_mut()
+                            .expect("live entry")
+                            .complete = true;
                     }
                     node.mstatus = MemoStatus::EndOfScan;
                     return Ok(None);
@@ -910,8 +972,10 @@ pub fn exec_memoize<'mcx, C: MemoizeChild<'mcx>>(
                     node.mstatus = MemoStatus::BypassMode;
                 } else {
                     let ix = node.entry;
-                    node.entries[ix as usize].as_mut().expect("live entry").complete =
-                        node.singlerow;
+                    node.entries[ix as usize]
+                        .as_mut()
+                        .expect("live entry")
+                        .complete = node.singlerow;
                     node.mstatus = MemoStatus::FillingCache;
                 }
                 return copy_to_result(node, estate, outerslot);
@@ -941,11 +1005,18 @@ pub fn exec_memoize<'mcx, C: MemoizeChild<'mcx>>(
                 let ix = node.entry;
                 debug_assert!(ix != INVALID);
                 let Some(outerslot) = outer.exec_proc(estate)? else {
-                    node.entries[ix as usize].as_mut().expect("live entry").complete = true;
+                    node.entries[ix as usize]
+                        .as_mut()
+                        .expect("live entry")
+                        .complete = true;
                     node.mstatus = MemoStatus::EndOfScan;
                     return Ok(None);
                 };
-                if node.entries[ix as usize].as_ref().expect("live entry").complete {
+                if node.entries[ix as usize]
+                    .as_ref()
+                    .expect("live entry")
+                    .complete
+                {
                     return Err(Box::new(PgError::error(
                         "cache entry already complete".to_string(),
                     )));

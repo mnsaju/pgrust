@@ -48,7 +48,15 @@ pub(crate) fn next_field_expand(
         // Is this referencing a file?
         if !initial_quote && buf.len() > 1 && buf[0] == b'@' {
             let inc = String::from_utf8_lossy(&buf[1..]).into_owned();
-            tokenize_expand_file(&mut tokens, filename, &inc, elevel, depth + 1, err_msg, tok_lines)?;
+            tokenize_expand_file(
+                &mut tokens,
+                filename,
+                &inc,
+                elevel,
+                depth + 1,
+                err_msg,
+                tok_lines,
+            )?;
         } else {
             tokens.push(make_auth_token(&buf, initial_quote));
         }
@@ -162,8 +170,15 @@ pub fn tokenize_auth_file(
 
         let mut lineptr: usize = 0;
         while lineptr < buf.len() && err_msg.is_none() {
-            let current_field =
-                next_field_expand(filename, &buf, &mut lineptr, elevel, depth, &mut err_msg, tok_lines)?;
+            let current_field = next_field_expand(
+                filename,
+                &buf,
+                &mut lineptr,
+                elevel,
+                depth,
+                &mut err_msg,
+                tok_lines,
+            )?;
             if !current_field.is_empty() {
                 current_line.push(current_field);
             }
@@ -177,7 +192,15 @@ pub fn tokenize_auth_file(
             let second = current_line[1][0].string.clone();
 
             if first == "include" {
-                tokenize_include_file(filename, &second, tok_lines, elevel, depth + 1, false, &mut err_msg)?;
+                tokenize_include_file(
+                    filename,
+                    &second,
+                    tok_lines,
+                    elevel,
+                    depth + 1,
+                    false,
+                    &mut err_msg,
+                )?;
                 if err_msg.is_none() {
                     goto_next_line = true;
                 }
@@ -194,7 +217,13 @@ pub fn tokenize_auth_file(
                     for fname in &res.filenames {
                         let fname_s = fname.to_string_lossy().into_owned();
                         tokenize_include_file(
-                            filename, &fname_s, tok_lines, elevel, depth + 1, false, &mut err_msg,
+                            filename,
+                            &fname_s,
+                            tok_lines,
+                            elevel,
+                            depth + 1,
+                            false,
+                            &mut err_msg,
                         )?;
                         if let Some(e) = &err_msg {
                             if !err_buf.is_empty() {
@@ -210,7 +239,15 @@ pub fn tokenize_auth_file(
                     }
                 }
             } else if first == "include_if_exists" {
-                tokenize_include_file(filename, &second, tok_lines, elevel, depth + 1, true, &mut err_msg)?;
+                tokenize_include_file(
+                    filename,
+                    &second,
+                    tok_lines,
+                    elevel,
+                    depth + 1,
+                    true,
+                    &mut err_msg,
+                )?;
                 if err_msg.is_none() {
                     goto_next_line = true;
                 }

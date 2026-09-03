@@ -177,7 +177,17 @@ fn call<'mcx>(
     let fc = fc_node.as_func_call().unwrap();
     pstate.p_expr_kind = ParseExprKind::EXPR_KIND_SELECT_TARGET;
     ParseFuncOrColumn(
-        mcx, pstate, &fc.funcname, fargs, arg_types, fc, None, None, false, false, fc.location,
+        mcx,
+        pstate,
+        &fc.funcname,
+        fargs,
+        arg_types,
+        fc,
+        None,
+        None,
+        false,
+        false,
+        fc.location,
     )
 }
 
@@ -220,8 +230,17 @@ fn void_const_is_not_discarded() {
     let mut pstate = make_parsestate(mcx, None);
 
     let fc = func_call(mcx, "foo", false, false);
-    let c = Node::mk_const(mcx, VOIDOID, -1, InvalidOid, 4, datum::Datum::null(), true, true)
-        .unwrap();
+    let c = Node::mk_const(
+        mcx,
+        VOIDOID,
+        -1,
+        InvalidOid,
+        4,
+        datum::Datum::null(),
+        true,
+        true,
+    )
+    .unwrap();
     let fargs = NodeList::make1(mcx, c).unwrap();
     let err = call(mcx, &mut pstate, fc, fargs, &[VOIDOID]).unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_UNDEFINED_FUNCTION);
@@ -239,7 +258,16 @@ fn void_param_kept_for_column_syntax_leg() {
     let fargs = NodeList::make1(mcx, void_param(mcx)).unwrap();
     pstate.p_expr_kind = ParseExprKind::EXPR_KIND_SELECT_TARGET;
     let err = ParseFuncOrColumn(
-        mcx, &mut pstate, &fc.funcname, fargs, &[VOIDOID], fc, None, None, false, true,
+        mcx,
+        &mut pstate,
+        &fc.funcname,
+        fargs,
+        &[VOIDOID],
+        fc,
+        None,
+        None,
+        false,
+        true,
         fc.location,
     )
     .unwrap_err();
@@ -312,7 +340,17 @@ fn count_of_int4_resolves_through_any() {
     assert_eq!(agg.aggfnoid, 2147);
     assert_eq!(agg.aggtype, INT8OID);
     // ANY-target coercion passes the arg through; aggargtypes keeps int4.
-    assert_eq!(agg.args.nth(0).as_target_entry().unwrap().expr.as_var().unwrap().vartype, INT4OID);
+    assert_eq!(
+        agg.args
+            .nth(0)
+            .as_target_entry()
+            .unwrap()
+            .expr
+            .as_var()
+            .unwrap()
+            .vartype,
+        INT4OID
+    );
     assert_eq!(agg.aggargtypes.len(), 1);
     assert_eq!(agg.aggargtypes.nth(0), INT4OID);
 }
@@ -328,7 +366,9 @@ fn internal_returning_function_is_rejected() {
     let mut pstate = make_parsestate(mcx, None);
 
     let fc = func_call(mcx, "leaky_internal", false, false);
-    let err = call(mcx, &mut pstate, fc, NodeList::nil(), &[]).map(|_| ()).unwrap_err();
+    let err = call(mcx, &mut pstate, fc, NodeList::nil(), &[])
+        .map(|_| ())
+        .unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_UNDEFINED_FUNCTION);
     assert!(
         err.message().contains("internal"),
@@ -345,9 +385,16 @@ fn unknown_function_is_42883() {
     let mut pstate = make_parsestate(mcx, None);
 
     let fc = func_call(mcx, "nosuchfunc", false, false);
-    let err = call(mcx, &mut pstate, fc, NodeList::nil(), &[]).map(|_| ()).unwrap_err();
+    let err = call(mcx, &mut pstate, fc, NodeList::nil(), &[])
+        .map(|_| ())
+        .unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_UNDEFINED_FUNCTION);
-    assert!(err.message().contains("function nosuchfunc() does not exist"), "{}", err.message());
+    assert!(
+        err.message()
+            .contains("function nosuchfunc() does not exist"),
+        "{}",
+        err.message()
+    );
 }
 
 #[test]
@@ -358,7 +405,9 @@ fn parameterless_aggregate_without_star_is_42809() {
     let mut pstate = make_parsestate(mcx, None);
 
     let fc = func_call(mcx, "count", false, false);
-    let err = call(mcx, &mut pstate, fc, NodeList::nil(), &[]).map(|_| ()).unwrap_err();
+    let err = call(mcx, &mut pstate, fc, NodeList::nil(), &[])
+        .map(|_| ())
+        .unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_WRONG_OBJECT_TYPE);
     assert!(
         err.message()
@@ -376,10 +425,13 @@ fn star_on_normal_function_is_42809() {
     let mut pstate = make_parsestate(mcx, None);
 
     let fc = func_call(mcx, "foo", true, false);
-    let err = call(mcx, &mut pstate, fc, NodeList::nil(), &[]).map(|_| ()).unwrap_err();
+    let err = call(mcx, &mut pstate, fc, NodeList::nil(), &[])
+        .map(|_| ())
+        .unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_WRONG_OBJECT_TYPE);
     assert!(
-        err.message().contains("foo(*) specified, but foo is not an aggregate function"),
+        err.message()
+            .contains("foo(*) specified, but foo is not an aggregate function"),
         "{}",
         err.message()
     );
@@ -409,13 +461,25 @@ fn aggregate_in_where_kind_is_42803() {
 
     let fc_node = func_call(mcx, "count", true, false);
     let fc = fc_node.as_func_call().unwrap();
-    let err =
-        ParseFuncOrColumn(mcx, &mut pstate, &fc.funcname, NodeList::nil(), &[], fc, None, None, false, false, 7)
-            .map(|_| ())
-            .unwrap_err();
+    let err = ParseFuncOrColumn(
+        mcx,
+        &mut pstate,
+        &fc.funcname,
+        NodeList::nil(),
+        &[],
+        fc,
+        None,
+        None,
+        false,
+        false,
+        7,
+    )
+    .map(|_| ())
+    .unwrap_err();
     assert_eq!(err.sqlstate(), types_error::ERRCODE_GROUPING_ERROR);
     assert!(
-        err.message().contains("aggregate functions are not allowed in WHERE"),
+        err.message()
+            .contains("aggregate functions are not allowed in WHERE"),
         "{}",
         err.message()
     );
@@ -469,7 +533,11 @@ fn install_selection_fixture() {
                 typbyval: true,
                 typalign: b'i' as i8,
                 typstorage: b'p' as i8,
-                typtype: if typid == VOIDOID { b'p' as i8 } else { b'b' as i8 },
+                typtype: if typid == VOIDOID {
+                    b'p' as i8
+                } else {
+                    b'b' as i8
+                },
                 typisdefined: true,
                 typrelid: InvalidOid,
                 typsubscript: InvalidOid,
@@ -481,14 +549,12 @@ fn install_selection_fixture() {
         namespace_seams::type_is_visible::set(|_| Ok(true));
         syscache_seams::lookup_pg_cast_shape::set(|src, tgt| {
             Ok(match (src, tgt) {
-                (INT4OID, FLOAT8OID) | (INT4OID, NUMERICOID) => {
-                    Some(syscache_seams::PgCastShape {
-                        oid: 1,
-                        castfunc: 2,
-                        castcontext: b'i' as i8,
-                        castmethod: b'f' as i8,
-                    })
-                }
+                (INT4OID, FLOAT8OID) | (INT4OID, NUMERICOID) => Some(syscache_seams::PgCastShape {
+                    oid: 1,
+                    castfunc: 2,
+                    castcontext: b'i' as i8,
+                    castmethod: b'f' as i8,
+                }),
                 _ => None,
             })
         });
@@ -503,13 +569,21 @@ fn power_int4_int4_selects_preferred_float8() {
     let mcx = ctx.mcx();
 
     let cands = [
-        catalog_namespace::OperCandidate { oid: 1038, args: [NUMERICOID, NUMERICOID] },
-        catalog_namespace::OperCandidate { oid: 965, args: [FLOAT8OID, FLOAT8OID] },
+        catalog_namespace::OperCandidate {
+            oid: 1038,
+            args: [NUMERICOID, NUMERICOID],
+        },
+        catalog_namespace::OperCandidate {
+            oid: 965,
+            args: [FLOAT8OID, FLOAT8OID],
+        },
     ];
     let input = [INT4OID, INT4OID];
     let matched = crate::func_match_argtypes(mcx, &input, &cands).unwrap();
     assert_eq!(matched.len(), 2);
-    let winner = crate::func_select_candidate(&input, matched).unwrap().unwrap();
+    let winner = crate::func_select_candidate(&input, matched)
+        .unwrap()
+        .unwrap();
     assert_eq!(winner.oid, 965);
 }
 
@@ -526,13 +600,21 @@ fn concat_unknown_unknown_selects_textcat() {
             oid: 349,
             args: [ANYCOMPATIBLEARRAYOID, ANYCOMPATIBLEOID],
         },
-        catalog_namespace::OperCandidate { oid: 1797, args: [VARBITOID, VARBITOID] },
-        catalog_namespace::OperCandidate { oid: 654, args: [TEXTOID, TEXTOID] },
+        catalog_namespace::OperCandidate {
+            oid: 1797,
+            args: [VARBITOID, VARBITOID],
+        },
+        catalog_namespace::OperCandidate {
+            oid: 654,
+            args: [TEXTOID, TEXTOID],
+        },
     ];
     let input = [UNKNOWNOID, UNKNOWNOID];
     let matched = crate::func_match_argtypes(mcx, &input, &cands).unwrap();
     assert_eq!(matched.len(), 3);
-    let winner = crate::func_select_candidate(&input, matched).unwrap().unwrap();
+    let winner = crate::func_select_candidate(&input, matched)
+        .unwrap()
+        .unwrap();
     assert_eq!(winner.oid, 654);
 }
 
@@ -545,19 +627,32 @@ fn all_unknown_same_category_nonpreferred_is_ambiguous() {
     let mcx = ctx.mcx();
 
     let cands = [
-        catalog_namespace::OperCandidate { oid: 11, args: [INT8OID, INT8OID] },
-        catalog_namespace::OperCandidate { oid: 12, args: [INT4OID, INT4OID] },
+        catalog_namespace::OperCandidate {
+            oid: 11,
+            args: [INT8OID, INT8OID],
+        },
+        catalog_namespace::OperCandidate {
+            oid: 12,
+            args: [INT4OID, INT4OID],
+        },
     ];
     let input = [UNKNOWNOID, UNKNOWNOID];
     let matched = crate::func_match_argtypes(mcx, &input, &cands).unwrap();
     assert_eq!(matched.len(), 2);
-    assert!(crate::func_select_candidate(&input, matched).unwrap().is_none());
+    assert!(crate::func_select_candidate(&input, matched)
+        .unwrap()
+        .is_none());
 }
 
 fn named_arg<'mcx>(mcx: Mcx<'mcx>, name: &'static str, arg: Node<'mcx>, loc: i32) -> Node<'mcx> {
     Node::mk(
         mcx,
-        types_nodes::NamedArgExpr { arg: Some(arg), name: Some(name), argnumber: -1, location: loc },
+        types_nodes::NamedArgExpr {
+            arg: Some(arg),
+            name: Some(name),
+            argnumber: -1,
+            location: loc,
+        },
     )
     .unwrap()
 }
@@ -582,7 +677,14 @@ fn named_argument_resolves_and_numbers() {
     assert_eq!(na.name, Some("x"));
     assert_eq!(na.argnumber, 0);
     assert_eq!(na.location, 13);
-    assert_eq!(na.arg.expect("NamedArgExpr has an arg").as_var().unwrap().vartype, INT4OID);
+    assert_eq!(
+        na.arg
+            .expect("NamedArgExpr has an arg")
+            .as_var()
+            .unwrap()
+            .vartype,
+        INT4OID
+    );
 }
 
 #[test]
@@ -597,11 +699,13 @@ fn duplicate_argument_name_is_42601() {
     let mut fargs = NodeList::make1(mcx, named_arg(mcx, "x", v1, 13)).unwrap();
     fargs.lappend(mcx, named_arg(mcx, "x", v2, 21)).unwrap();
     let fc = func_call(mcx, "nfunc", false, false);
-    let err =
-        call(mcx, &mut pstate, fc, fargs, &[INT4OID, INT4OID]).map(|_| ()).unwrap_err();
+    let err = call(mcx, &mut pstate, fc, fargs, &[INT4OID, INT4OID])
+        .map(|_| ())
+        .unwrap_err();
     assert_eq!(err.sqlstate(), types_error::ERRCODE_SYNTAX_ERROR);
     assert!(
-        err.message().contains("argument name \"x\" used more than once"),
+        err.message()
+            .contains("argument name \"x\" used more than once"),
         "{}",
         err.message()
     );
@@ -619,11 +723,13 @@ fn positional_after_named_is_42601() {
     let mut fargs = NodeList::make1(mcx, named_arg(mcx, "x", v1, 13)).unwrap();
     fargs.lappend(mcx, v2).unwrap();
     let fc = func_call(mcx, "nfunc", false, false);
-    let err =
-        call(mcx, &mut pstate, fc, fargs, &[INT4OID, INT4OID]).map(|_| ()).unwrap_err();
+    let err = call(mcx, &mut pstate, fc, fargs, &[INT4OID, INT4OID])
+        .map(|_| ())
+        .unwrap_err();
     assert_eq!(err.sqlstate(), types_error::ERRCODE_SYNTAX_ERROR);
     assert!(
-        err.message().contains("positional argument cannot follow named argument"),
+        err.message()
+            .contains("positional argument cannot follow named argument"),
         "{}",
         err.message()
     );
@@ -647,7 +753,11 @@ mod complex_projection_record {
                     typbyval: typid != TEXTOID,
                     typalign: b'i' as i8,
                     typstorage: b'p' as i8,
-                    typcollation: if typid == TEXTOID { DEFAULT_COLLATION_OID } else { InvalidOid },
+                    typcollation: if typid == TEXTOID {
+                        DEFAULT_COLLATION_OID
+                    } else {
+                        InvalidOid
+                    },
                 }))
             });
         });
@@ -683,13 +793,23 @@ mod complex_projection_record {
         let q = mcx::leak_in(
             mcx::alloc_in(
                 mcx,
-                types_nodes::parsenodes::Query { targetList: tlist, rtable, ..Default::default() },
+                types_nodes::parsenodes::Query {
+                    targetList: tlist,
+                    rtable,
+                    ..Default::default()
+                },
             )
             .unwrap(),
         );
-        let eref = Node::mk_mut(mcx, types_nodes::Alias { aliasname: Some(aliasname), colnames })
-            .unwrap()
-            .seal_ref();
+        let eref = Node::mk_mut(
+            mcx,
+            types_nodes::Alias {
+                aliasname: Some(aliasname),
+                colnames,
+            },
+        )
+        .unwrap()
+        .seal_ref();
         Node::mk(
             mcx,
             types_nodes::RangeTblEntry {
@@ -709,9 +829,17 @@ mod complex_projection_record {
         let mcx = ctx.mcx();
         let mut pstate = make_parsestate(mcx, None);
 
-        let c1 =
-            Node::mk_const(mcx, INT4OID, -1, InvalidOid, 4, datum::Datum::null(), true, true)
-                .unwrap();
+        let c1 = Node::mk_const(
+            mcx,
+            INT4OID,
+            -1,
+            InvalidOid,
+            4,
+            datum::Datum::null(),
+            true,
+            true,
+        )
+        .unwrap();
         let c2 = Node::mk_const(
             mcx,
             TEXTOID,
@@ -753,8 +881,7 @@ mod complex_projection_record {
         pstate.p_rtable.lappend(mcx, outer).unwrap();
 
         let first_arg = record_var(mcx, 1, 1);
-        let got =
-            crate::ParseComplexProjection(mcx, &mut pstate, "b", first_arg, -1).unwrap();
+        let got = crate::ParseComplexProjection(mcx, &mut pstate, "b", first_arg, -1).unwrap();
         let fs = got.expect("column b resolves").as_field_select().unwrap();
         assert_eq!(fs.fieldnum, 2);
         assert_eq!(fs.resulttype, TEXTOID);
@@ -775,9 +902,17 @@ mod complex_projection_record {
         let mcx = ctx.mcx();
         let mut pstate = make_parsestate(mcx, None);
 
-        let c1 =
-            Node::mk_const(mcx, INT4OID, -1, InvalidOid, 4, datum::Datum::null(), true, true)
-                .unwrap();
+        let c1 = Node::mk_const(
+            mcx,
+            INT4OID,
+            -1,
+            InvalidOid,
+            4,
+            datum::Datum::null(),
+            true,
+            true,
+        )
+        .unwrap();
         let c2 = Node::mk_const(
             mcx,
             TEXTOID,

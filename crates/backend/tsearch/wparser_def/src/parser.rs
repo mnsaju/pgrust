@@ -317,10 +317,7 @@ fn char2wchar_default(head: &[u8]) -> PgResult<Vec<u32>> {
     };
     if n == usize::MAX {
         ::mbutils::pg_verifymbstr(head, false)?;
-        return Err(::types_error::PgError::error(
-            "invalid multibyte character for locale",
-        )
-        .into());
+        return Err(::types_error::PgError::error("invalid multibyte character for locale").into());
     }
     out.truncate(n);
     Ok(out.into_iter().map(|w| w as u32).collect())

@@ -162,9 +162,10 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
-fn pre_identity_targets()
--> pgsync::MutexGuard<'static, Vec<std::sync::Arc<PreIdentityTarget>>> {
-    PRE_IDENTITY_TARGETS.lock().unwrap_or_else(|e| e.into_inner())
+fn pre_identity_targets() -> pgsync::MutexGuard<'static, Vec<std::sync::Arc<PreIdentityTarget>>> {
+    PRE_IDENTITY_TARGETS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
 }
 
 /// Launcher side: make `pid` deliverable before the child thread runs (or,
@@ -420,7 +421,8 @@ fn proc_signal_init_internal(cancel_key: &[u8], register_cleanup: bool) -> PgRes
     );
     slot.pss_barrierCheckMask.store(0, Relaxed);
     let barrier_generation = header.psh_barrierGeneration.load(Relaxed);
-    slot.pss_barrierGeneration.store(barrier_generation, Relaxed);
+    slot.pss_barrierGeneration
+        .store(barrier_generation, Relaxed);
     if !cancel_key.is_empty() {
         let mut key = slot.pss_cancel_key.get();
         key[..cancel_key.len()].copy_from_slice(cancel_key);
@@ -437,7 +439,8 @@ fn proc_signal_init_internal(cancel_key: &[u8], register_cleanup: bool) -> PgRes
     // by OR; a lost signal cannot happen).
     let pre_identity_pending = take_pre_identity_registration();
     if pre_identity_pending != 0 {
-        slot.pss_pendingThreadSignals.fetch_or(pre_identity_pending, SeqCst);
+        slot.pss_pendingThreadSignals
+            .fetch_or(pre_identity_pending, SeqCst);
     }
 
     if old_pss_pid != 0 {
@@ -457,8 +460,7 @@ fn proc_signal_init_internal(cancel_key: &[u8], register_cleanup: bool) -> PgRes
     THREAD_SIGNAL_HANDLERS.with(|t| {
         let mut handlers = t.get();
         if matches!(handlers[SIGUSR1 as usize], ThreadSignalHandler::Unset) {
-            handlers[SIGUSR1 as usize] =
-                ThreadSignalHandler::Simple(procsignal_sigusr1_handler);
+            handlers[SIGUSR1 as usize] = ThreadSignalHandler::Simple(procsignal_sigusr1_handler);
             t.set(handlers);
         }
     });
@@ -1064,7 +1066,9 @@ pub fn SendCancelRequest(backend_pid: i32, cancel_key: &[u8]) {
         } else {
             log_never_raises(
                 ereport(LOG)
-                    .errmsg(format!("wrong key in cancel request for process {backend_pid}"))
+                    .errmsg(format!(
+                        "wrong key in cancel request for process {backend_pid}"
+                    ))
                     .finish(loc("SendCancelRequest")),
             );
         }

@@ -4,8 +4,8 @@
 
 use mcx::Mcx;
 use types_core::primitive::OidIsValid;
-use types_core::InvalidOid;
 use types_core::xact::XACT_FLAGS_ACCESSEDTEMPNAMESPACE;
+use types_core::InvalidOid;
 use types_error::{PgResult, NOTICE};
 use types_nodes::parsenodes::{DropStmt, ObjectType, ObjectWithArgs};
 use types_nodes::rawnodes::TypeName;
@@ -34,7 +34,9 @@ fn schema_does_not_exist_skipping_parts(parts: &[&str]) -> PgResult<Option<Strin
     if parts.len() >= 2 {
         let schemaname = parts[parts.len() - 2];
         if catalog_namespace::LookupNamespaceNoError(schemaname)? == types_core::InvalidOid {
-            return Ok(Some(format!("schema \"{schemaname}\" does not exist, skipping")));
+            return Ok(Some(format!(
+                "schema \"{schemaname}\" does not exist, skipping"
+            )));
         }
     }
     Ok(None)
@@ -44,7 +46,11 @@ fn string_parts<'mcx>(names: &NodeList<'mcx>, upto: usize) -> Vec<&'mcx str> {
     names
         .iter()
         .take(upto)
-        .map(|n| n.as_string().expect("qualified name component is a String node").sval)
+        .map(|n| {
+            n.as_string()
+                .expect("qualified name component is a String node")
+                .sval
+        })
         .collect()
 }
 
@@ -54,7 +60,11 @@ fn owningrel_does_not_exist_skipping(names: &NodeList<'_>) -> PgResult<Option<St
         return Ok(Some(msg));
     }
     let rv = catalog_objectaddress::makeRangeVarFromParts(&parent)?;
-    if !OidIsValid(catalog_namespace::RangeVarGetRelid(&rv, types_rel::NoLock, true)?) {
+    if !OidIsValid(catalog_namespace::RangeVarGetRelid(
+        &rv,
+        types_rel::NoLock,
+        true,
+    )?) {
         return Ok(Some(format!(
             "relation \"{}\" does not exist, skipping",
             parent.join(".")
@@ -82,7 +92,9 @@ fn type_in_list_does_not_exist_skipping(
 ) -> PgResult<Option<String>> {
     for n in typenames.iter() {
         let Some(n) = n else { continue };
-        let tn = n.as_variant::<TypeName>().expect("objargs holds TypeName nodes");
+        let tn = n
+            .as_variant::<TypeName>()
+            .expect("objargs holds TypeName nodes");
         if let Some(msg) = type_does_not_exist_skipping(tn)? {
             return Ok(Some(msg));
         }
@@ -103,7 +115,10 @@ fn does_not_exist_skipping(objtype: ObjectType, object: Node<'_>) -> PgResult<()
             }
         }
         ObjectType::OBJECT_SCHEMA => {
-            let name = object.as_string().expect("schema name is a String node").sval;
+            let name = object
+                .as_string()
+                .expect("schema name is a String node")
+                .sval;
             format!("schema \"{name}\" does not exist, skipping")
         }
         ObjectType::OBJECT_CONVERSION => {
@@ -112,32 +127,53 @@ fn does_not_exist_skipping(objtype: ObjectType, object: Node<'_>) -> PgResult<()
                 Some(msg) => msg,
                 None => {
                     let parts = string_parts(names, names.len());
-                    format!("conversion \"{}\" does not exist, skipping", parts.join("."))
+                    format!(
+                        "conversion \"{}\" does not exist, skipping",
+                        parts.join(".")
+                    )
                 }
             }
         }
         ObjectType::OBJECT_LANGUAGE => {
-            let name = object.as_string().expect("language name is a String node").sval;
+            let name = object
+                .as_string()
+                .expect("language name is a String node")
+                .sval;
             format!("language \"{name}\" does not exist, skipping")
         }
         ObjectType::OBJECT_EXTENSION => {
-            let name = object.as_string().expect("extension name is a String node").sval;
+            let name = object
+                .as_string()
+                .expect("extension name is a String node")
+                .sval;
             format!("extension \"{name}\" does not exist, skipping")
         }
         ObjectType::OBJECT_EVENT_TRIGGER => {
-            let name = object.as_string().expect("event trigger name is a String node").sval;
+            let name = object
+                .as_string()
+                .expect("event trigger name is a String node")
+                .sval;
             format!("event trigger \"{name}\" does not exist, skipping")
         }
         ObjectType::OBJECT_ACCESS_METHOD => {
-            let name = object.as_string().expect("access method name is a String node").sval;
+            let name = object
+                .as_string()
+                .expect("access method name is a String node")
+                .sval;
             format!("access method \"{name}\" does not exist, skipping")
         }
         ObjectType::OBJECT_PUBLICATION => {
-            let name = object.as_string().expect("publication name is a String node").sval;
+            let name = object
+                .as_string()
+                .expect("publication name is a String node")
+                .sval;
             format!("publication \"{name}\" does not exist, skipping")
         }
         ObjectType::OBJECT_SUBSCRIPTION => {
-            let name = object.as_string().expect("subscription name is a String node").sval;
+            let name = object
+                .as_string()
+                .expect("subscription name is a String node")
+                .sval;
             format!("subscription \"{name}\" does not exist, skipping")
         }
         ObjectType::OBJECT_COLLATION
@@ -206,7 +242,9 @@ fn does_not_exist_skipping(objtype: ObjectType, object: Node<'_>) -> PgResult<()
             }
         }
         ObjectType::OBJECT_POLICY => {
-            let names = object.as_list().expect("relation-attached object is a name list");
+            let names = object
+                .as_list()
+                .expect("relation-attached object is a name list");
             match owningrel_does_not_exist_skipping(names)? {
                 Some(msg) => msg,
                 None => {
@@ -224,7 +262,9 @@ fn does_not_exist_skipping(objtype: ObjectType, object: Node<'_>) -> PgResult<()
             }
         }
         ObjectType::OBJECT_RULE | ObjectType::OBJECT_TRIGGER => {
-            let names = object.as_list().expect("relation-attached object is a name list");
+            let names = object
+                .as_list()
+                .expect("relation-attached object is a name list");
             match owningrel_does_not_exist_skipping(names)? {
                 Some(msg) => msg,
                 None => {
@@ -233,7 +273,11 @@ fn does_not_exist_skipping(objtype: ObjectType, object: Node<'_>) -> PgResult<()
                         .and_then(|n| n.as_string())
                         .expect("dependent object name is a String node")
                         .sval;
-                    let noun = if objtype == ObjectType::OBJECT_RULE { "rule" } else { "trigger" };
+                    let noun = if objtype == ObjectType::OBJECT_RULE {
+                        "rule"
+                    } else {
+                        "trigger"
+                    };
                     let parent = string_parts(names, names.len() - 1);
                     format!(
                         "{noun} \"{depname}\" for relation \"{}\" does not exist, skipping",
@@ -331,7 +375,10 @@ fn does_not_exist_skipping(objtype: ObjectType, object: Node<'_>) -> PgResult<()
 }
 
 pub fn RemoveObjects<'mcx>(mcx: Mcx<'mcx>, stmt: &DropStmt<'mcx>) -> PgResult<()> {
-    if matches!(stmt.removeType, ObjectType::OBJECT_FDW | ObjectType::OBJECT_FOREIGN_SERVER) {
+    if matches!(
+        stmt.removeType,
+        ObjectType::OBJECT_FDW | ObjectType::OBJECT_FOREIGN_SERVER
+    ) {
         return remove_foreign_objects(mcx, stmt);
     }
     let mut objects = catalog_dependency::ObjectAddresses::new();
@@ -406,7 +453,10 @@ fn remove_foreign_objects<'mcx>(mcx: Mcx<'mcx>, stmt: &DropStmt<'mcx>) -> PgResu
     let is_fdw = stmt.removeType == ObjectType::OBJECT_FDW;
     let mut objects = catalog_dependency::ObjectAddresses::new();
     for cell in stmt.objects.iter() {
-        let name = cell.as_string().expect("DROP FDW/SERVER object is a String").sval;
+        let name = cell
+            .as_string()
+            .expect("DROP FDW/SERVER object is a String")
+            .sval;
         let (class_id, oid, owner) = if is_fdw {
             let oid = foreigncmds::foreign::get_foreign_data_wrapper_oid(name, stmt.missing_ok)?;
             if oid == InvalidOid {

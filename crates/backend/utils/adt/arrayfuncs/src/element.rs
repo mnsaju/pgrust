@@ -172,8 +172,7 @@ fn wrong_subscripts() -> Box<PgError> {
 #[cold]
 fn subscript_out_of_range() -> Box<PgError> {
     Box::new(
-        PgError::error("array subscript out of range")
-            .with_sqlstate(ERRCODE_ARRAY_SUBSCRIPT_ERROR),
+        PgError::error("array subscript out of range").with_sqlstate(ERRCODE_ARRAY_SUBSCRIPT_ERROR),
     )
 }
 
@@ -271,7 +270,9 @@ fn slice_size(
     loop {
         let ju = j as usize;
         if dist[ju] != 0 {
-            pos = seek(array, pos, src_offset, bitmap_off, dist[ju], elmlen, elmalign);
+            pos = seek(
+                array, pos, src_offset, bitmap_off, dist[ju], elmlen, elmalign,
+            );
             src_offset += dist[ju];
         }
         if !get_isnull(array, bitmap_off, src_offset) {
@@ -408,7 +409,9 @@ fn extract_slice(
     loop {
         let ju = j as usize;
         if dist[ju] != 0 {
-            src_pos = seek(array, src_pos, src_offset, bitmap_off, dist[ju], elmlen, elmalign);
+            src_pos = seek(
+                array, src_pos, src_offset, bitmap_off, dist[ju], elmlen, elmalign,
+            );
             src_offset += dist[ju];
         }
         let inc = nelems_size(array, src_pos, src_offset, bitmap_off, 1, elmlen, elmalign);
@@ -460,9 +463,7 @@ fn slice_bounds_missing() -> Box<PgError> {
 #[track_caller]
 #[cold]
 fn source_array_too_small() -> Box<PgError> {
-    Box::new(
-        PgError::error("source array too small").with_sqlstate(ERRCODE_ARRAY_SUBSCRIPT_ERROR),
-    )
+    Box::new(PgError::error("source array too small").with_sqlstate(ERRCODE_ARRAY_SUBSCRIPT_ERROR))
 }
 
 #[track_caller]
@@ -622,7 +623,13 @@ pub fn array_set_slice<'mcx>(
         arr_overhead_nonulls(ndim)
     };
     let newitemsize = nelems_size(
-        src_array, src_data_off, 0, src_bitmap_off, nsrcitems, elmlen, elmalign,
+        src_array,
+        src_data_off,
+        0,
+        src_bitmap_off,
+        nsrcitems,
+        elmlen,
+        elmalign,
     );
     let oldoverheadlen = arr_data_offset(array);
     let olddatasize = arr_size(array) - oldoverheadlen;
@@ -655,7 +662,13 @@ pub fn array_set_slice<'mcx>(
         let sliceub = oldub.min(upper[0]);
         itemsbefore = slicelb.min(oldub + 1) - oldlb;
         lenbefore = nelems_size(
-            array, oldoverheadlen, 0, bitmap_off, itemsbefore, elmlen, elmalign,
+            array,
+            oldoverheadlen,
+            0,
+            bitmap_off,
+            itemsbefore,
+            elmlen,
+            elmalign,
         );
         if slicelb > sliceub {
             nolditems = 0;
@@ -769,12 +782,27 @@ fn insert_slice(
     let mut src_pos = src_data_off;
 
     let mut dest_offset = array_get_offset(ndim, dims, lbs, st);
-    let mut inc = nelems_size(orig, orig_pos, 0, orig_bitmap_off, dest_offset, elmlen, elmalign);
+    let mut inc = nelems_size(
+        orig,
+        orig_pos,
+        0,
+        orig_bitmap_off,
+        dest_offset,
+        elmlen,
+        elmalign,
+    );
     dest[dest_pos..dest_pos + inc].copy_from_slice(&orig[orig_pos..orig_pos + inc]);
     dest_pos += inc;
     orig_pos += inc;
     if let Some(dbo) = dest_bitmap_off {
-        array_bitmap_copy(dest, dbo, 0, orig_bitmap_off.map(|bo| (orig, bo)), 0, dest_offset);
+        array_bitmap_copy(
+            dest,
+            dbo,
+            0,
+            orig_bitmap_off.map(|bo| (orig, bo)),
+            0,
+            dest_offset,
+        );
     }
     let mut orig_offset = dest_offset;
 
@@ -790,7 +818,15 @@ fn insert_slice(
     loop {
         let ju = j as usize;
         if dist[ju] != 0 {
-            inc = nelems_size(orig, orig_pos, orig_offset, orig_bitmap_off, dist[ju], elmlen, elmalign);
+            inc = nelems_size(
+                orig,
+                orig_pos,
+                orig_offset,
+                orig_bitmap_off,
+                dist[ju],
+                elmlen,
+                elmalign,
+            );
             dest[dest_pos..dest_pos + inc].copy_from_slice(&orig[orig_pos..orig_pos + inc]);
             dest_pos += inc;
             orig_pos += inc;
@@ -807,7 +843,15 @@ fn insert_slice(
             dest_offset += dist[ju];
             orig_offset += dist[ju];
         }
-        inc = nelems_size(src, src_pos, src_offset, src_bitmap_off, 1, elmlen, elmalign);
+        inc = nelems_size(
+            src,
+            src_pos,
+            src_offset,
+            src_bitmap_off,
+            1,
+            elmlen,
+            elmalign,
+        );
         dest[dest_pos..dest_pos + inc].copy_from_slice(&src[src_pos..src_pos + inc]);
         if let Some(dbo) = dest_bitmap_off {
             array_bitmap_copy(
@@ -823,7 +867,15 @@ fn insert_slice(
         src_pos += inc;
         dest_offset += 1;
         src_offset += 1;
-        orig_pos = seek(orig, orig_pos, orig_offset, orig_bitmap_off, 1, elmlen, elmalign);
+        orig_pos = seek(
+            orig,
+            orig_pos,
+            orig_offset,
+            orig_bitmap_off,
+            1,
+            elmlen,
+            elmalign,
+        );
         orig_offset += 1;
         j = mda_next_tuple(ndim, &mut indx, &span);
         if j == -1 {
@@ -832,7 +884,13 @@ fn insert_slice(
     }
 
     inc = nelems_size(
-        orig, orig_pos, orig_offset, orig_bitmap_off, orignitems - orig_offset, elmlen, elmalign,
+        orig,
+        orig_pos,
+        orig_offset,
+        orig_bitmap_off,
+        orignitems - orig_offset,
+        elmlen,
+        elmalign,
     );
     dest[dest_pos..dest_pos + inc].copy_from_slice(&orig[orig_pos..orig_pos + inc]);
     if let Some(dbo) = dest_bitmap_off {

@@ -107,7 +107,8 @@ fn reset_after_crash_restores_boot_image() {
     register(2, 1002, &[1, 2, 3]);
     let s = slot(2);
     s.pss_signalFlags[ProcSignalReason::PROCSIG_BARRIER as usize].store(true, Release);
-    s.pss_pendingThreadSignals.store(1u32 << libc::SIGQUIT as u32, SeqCst);
+    s.pss_pendingThreadSignals
+        .store(1u32 << libc::SIGQUIT as u32, SeqCst);
     proc_signal().psh_barrierGeneration.store(5, Relaxed);
     s.pss_barrierCheckMask.store(3, Relaxed);
 
@@ -168,8 +169,9 @@ fn send_proc_signal_by_procno_sets_flag_and_latch() {
         SendProcSignal(1004, ProcSignalReason::PROCSIG_CATCHUP_INTERRUPT, 4),
         0
     );
-    assert!(slot(4).pss_signalFlags[ProcSignalReason::PROCSIG_CATCHUP_INTERRUPT as usize]
-        .load(Acquire));
+    assert!(
+        slot(4).pss_signalFlags[ProcSignalReason::PROCSIG_CATCHUP_INTERRUPT as usize].load(Acquire)
+    );
     assert_eq!(target_latch.is_set.load(SeqCst), 1);
 
     assert_eq!(
@@ -197,7 +199,11 @@ fn send_proc_signal_searches_by_pid() {
     assert!(flag.load(Acquire));
     flag.store(false, Relaxed);
     assert_eq!(
-        SendProcSignal(4242, ProcSignalReason::PROCSIG_NOTIFY_INTERRUPT, INVALID_PROC_NUMBER),
+        SendProcSignal(
+            4242,
+            ProcSignalReason::PROCSIG_NOTIFY_INTERRUPT,
+            INVALID_PROC_NUMBER
+        ),
         -1
     );
     cleanup_current();
@@ -219,7 +225,10 @@ fn barrier_roundtrip_emit_handle_process_wait() {
     g::SetProcSignalBarrierPending(false);
 
     let generation = EmitProcSignalBarrier(ProcSignalBarrierType::PROCSIGNAL_BARRIER_SMGRRELEASE);
-    assert_eq!(proc_signal().psh_barrierGeneration.load(Relaxed), generation);
+    assert_eq!(
+        proc_signal().psh_barrierGeneration.load(Relaxed),
+        generation
+    );
     let s = slot(6);
     assert_eq!(s.pss_barrierCheckMask.load(Relaxed), 1);
     assert!(s.pss_signalFlags[ProcSignalReason::PROCSIG_BARRIER as usize].load(Acquire));
@@ -345,7 +354,10 @@ fn send_proc_signal_pends_sigusr1_and_drain_reaches_cfi_flags() {
     g::SetInterruptPending(false);
     g::SetProcSignalBarrierPending(false);
 
-    assert_eq!(SendProcSignal(1011, ProcSignalReason::PROCSIG_BARRIER, 11), 0);
+    assert_eq!(
+        SendProcSignal(1011, ProcSignalReason::PROCSIG_BARRIER, 11),
+        0
+    );
     assert_eq!(
         slot(11).pss_pendingThreadSignals.load(Relaxed),
         1 << libc::SIGUSR1 as u32

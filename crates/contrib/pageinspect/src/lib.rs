@@ -273,7 +273,9 @@ pub(crate) fn composite_tupdesc<'m>(
     if resolved.class != funcapi::TypeFuncClass::Composite {
         return Err(Box::new(PgError::error("return type must be a row type")));
     }
-    Ok(resolved.result_tuple_desc.expect("composite result has tupdesc"))
+    Ok(resolved
+        .result_tuple_desc
+        .expect("composite result has tupdesc"))
 }
 
 pub(crate) fn tuple_image(
@@ -541,7 +543,10 @@ mod tests {
         let raw: u32 = 0x1f40 | (LP_NORMAL << 15) | (60 << 17);
         b.0[24..28].copy_from_slice(&raw.to_ne_bytes());
         let id = ItemIdData::new(0x1f40, LP_NORMAL, 60);
-        assert_eq!((id.lp_off(), id.lp_flags(), id.lp_len()), (0x1f40, LP_NORMAL, 60));
+        assert_eq!(
+            (id.lp_off(), id.lp_flags(), id.lp_len()),
+            (0x1f40, LP_NORMAL, 60)
+        );
         b
     }
 

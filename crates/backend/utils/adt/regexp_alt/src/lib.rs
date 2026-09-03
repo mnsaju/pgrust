@@ -52,12 +52,10 @@ pub fn install() {
         get: regex_engine,
         set: set_regex_engine,
     });
-    guc_tables::vars::pgrust_regex_pattern_program.install_if_absent(
-        guc_tables::GucVarAccessors {
-            get: regex_pattern_program,
-            set: set_regex_pattern_program,
-        },
-    );
+    guc_tables::vars::pgrust_regex_pattern_program.install_if_absent(guc_tables::GucVarAccessors {
+        get: regex_pattern_program,
+        set: set_regex_pattern_program,
+    });
     guc_tables::vars::pgrust_regex_re2_linked.install_if_absent(guc_tables::GucVarAccessors {
         get: re2_available,
         set: set_re2_linked_noop,
@@ -310,7 +308,11 @@ fn compile_auto(
     } else {
         None
     };
-    Ok(Re2Pattern { inner, capture_safe, program })
+    Ok(Re2Pattern {
+        inner,
+        capture_safe,
+        program,
+    })
 }
 
 // The forced path (regex_engine=re2): no classifier; ICASE/NLSTOP/NLANCH map
@@ -319,10 +321,10 @@ fn compile_forced(pattern: &[u8], cflags: i32) -> PgResult<Re2Pattern> {
     #[cfg(not(have_re2))]
     {
         let _ = (pattern, cflags);
-        Err(re2_error(
-            "engine not built in (libre2 development files were absent at compile time)",
+        Err(
+            re2_error("engine not built in (libre2 development files were absent at compile time)")
+                .into(),
         )
-        .into())
     }
     #[cfg(have_re2)]
     {
@@ -407,7 +409,15 @@ fn cache_put(pattern: &[u8], cflags: i32, forced: bool, verdict: Option<Re2Patte
         if cache.len() >= MAX_CACHED {
             cache.pop();
         }
-        cache.insert(0, CachedDispatch { pat: pattern.to_vec(), cflags, forced, verdict });
+        cache.insert(
+            0,
+            CachedDispatch {
+                pat: pattern.to_vec(),
+                cflags,
+                forced,
+                verdict,
+            },
+        );
     });
 }
 
@@ -442,7 +452,10 @@ pub fn dispatch(pattern: &[u8], cflags: i32, subject: &[u8]) -> PgResult<Option<
                 Some(compile_forced(pattern, cflags)?)
             } else {
                 match classify_pattern(pattern, cflags) {
-                    Classification { tier: Compat::Incompatible, .. } => None,
+                    Classification {
+                        tier: Compat::Incompatible,
+                        ..
+                    } => None,
                     #[cfg(have_re2)]
                     c => compile_auto(
                         pattern,

@@ -513,7 +513,9 @@ fn copy_slot_buffer_to_buffer_shares_pin() {
     assert_eq!(INCRS.load(Ordering::Relaxed), 2);
     assert_eq!(RELEASES.load(Ordering::Relaxed), 0);
     assert!(!dst.base().should_free());
-    let SlotData::BufferHeap(b) = &dst else { unreachable!() };
+    let SlotData::BufferHeap(b) = &dst else {
+        unreachable!()
+    };
     assert_eq!(b.buffer, 5);
     let mut n = false;
     assert_eq!(slot_getattr(&mut dst, 1, &mut n).as_i32(), 9);
@@ -594,21 +596,41 @@ fn soa_batch_deform_matches_lazy_deform() {
     let mut soa = SoaBatch::new_in(mcx, plan.ncols());
     let txt = text_varlena("tail");
 
-    let rows: [( [Datum; 4], [bool; 4] ); 4] = [
+    let rows: [([Datum; 4], [bool; 4]); 4] = [
         (
-            [Datum::from_i32(7), Datum::from_i16(-3), Datum::from_i64(1_234_567), text_datum(&txt)],
+            [
+                Datum::from_i32(7),
+                Datum::from_i16(-3),
+                Datum::from_i64(1_234_567),
+                text_datum(&txt),
+            ],
             [false, false, false, false],
         ),
         (
-            [Datum::from_i32(0), Datum::null(), Datum::from_i64(-1), text_datum(&txt)],
+            [
+                Datum::from_i32(0),
+                Datum::null(),
+                Datum::from_i64(-1),
+                text_datum(&txt),
+            ],
             [false, true, false, false],
         ),
         (
-            [Datum::null(), Datum::from_i16(9), Datum::null(), text_datum(&txt)],
+            [
+                Datum::null(),
+                Datum::from_i16(9),
+                Datum::null(),
+                text_datum(&txt),
+            ],
             [true, false, true, false],
         ),
         (
-            [Datum::from_i32(i32::MAX), Datum::from_i16(1), Datum::from_i64(i64::MIN), Datum::null()],
+            [
+                Datum::from_i32(i32::MAX),
+                Datum::from_i16(1),
+                Datum::from_i64(i64::MIN),
+                Datum::null(),
+            ],
             [false, false, false, true],
         ),
     ];
@@ -640,7 +662,11 @@ fn soa_batch_deform_matches_lazy_deform() {
             assert_eq!(gb.tts_flags, wb.tts_flags, "row {i}");
             for c in 0..ncols {
                 assert_eq!(gb.tts_isnull[c], wb.tts_isnull[c], "row {i} col {c}");
-                assert_eq!(gb.tts_values[c].as_i64(), wb.tts_values[c].as_i64(), "row {i} col {c}");
+                assert_eq!(
+                    gb.tts_values[c].as_i64(),
+                    wb.tts_values[c].as_i64(),
+                    "row {i} col {c}"
+                );
             }
             let (SlotData::Heap(gh), SlotData::Heap(wh)) = (&got, &want) else {
                 unreachable!()
@@ -671,7 +697,11 @@ fn soa_batch_deform_matches_lazy_deform() {
     for i in 0..tuples.len() {
         assert_eq!(qsoa.col_isnull(2)[i], soa.col_isnull(2)[i], "qrow {i}");
         if !qsoa.col_isnull(2)[i] {
-            assert_eq!(qsoa.col_values(2)[i].as_i64(), soa.col_values(2)[i].as_i64(), "qrow {i}");
+            assert_eq!(
+                qsoa.col_values(2)[i].as_i64(),
+                soa.col_values(2)[i].as_i64(),
+                "qrow {i}"
+            );
         }
     }
 
@@ -709,29 +739,65 @@ fn soa_stage_varkey_matches_slot_getattr() {
             col(5, -1, false, TYPALIGN_INT, TYPSTORAGE_EXTENDED),
         ],
     );
-    assert!(SoaVarKeyPlan::try_new(&desc.compact_attrs, 0).is_none(), "fixed key col");
-    assert!(SoaVarKeyPlan::try_new(&desc.compact_attrs, 5).is_none(), "out of range");
+    assert!(
+        SoaVarKeyPlan::try_new(&desc.compact_attrs, 0).is_none(),
+        "fixed key col"
+    );
+    assert!(
+        SoaVarKeyPlan::try_new(&desc.compact_attrs, 5).is_none(),
+        "out of range"
+    );
     let short = text_varlena("k");
     let long = text_varlena(&"x".repeat(200));
     let rows: [([Datum; 5], [bool; 5]); 5] = [
         (
-            [Datum::from_i32(7), Datum::from_i16(-3), Datum::from_i64(1), text_datum(&short), text_datum(&long)],
+            [
+                Datum::from_i32(7),
+                Datum::from_i16(-3),
+                Datum::from_i64(1),
+                text_datum(&short),
+                text_datum(&long),
+            ],
             [false, false, false, false, false],
         ),
         (
-            [Datum::from_i32(1), Datum::from_i16(2), Datum::from_i64(3), text_datum(&long), text_datum(&short)],
+            [
+                Datum::from_i32(1),
+                Datum::from_i16(2),
+                Datum::from_i64(3),
+                text_datum(&long),
+                text_datum(&short),
+            ],
             [false, false, false, false, false],
         ),
         (
-            [Datum::from_i32(0), Datum::null(), Datum::from_i64(-1), text_datum(&short), text_datum(&short)],
+            [
+                Datum::from_i32(0),
+                Datum::null(),
+                Datum::from_i64(-1),
+                text_datum(&short),
+                text_datum(&short),
+            ],
             [false, true, false, false, false],
         ),
         (
-            [Datum::from_i32(5), Datum::from_i16(6), Datum::from_i64(7), Datum::null(), text_datum(&long)],
+            [
+                Datum::from_i32(5),
+                Datum::from_i16(6),
+                Datum::from_i64(7),
+                Datum::null(),
+                text_datum(&long),
+            ],
             [false, false, false, true, false],
         ),
         (
-            [Datum::null(), Datum::from_i16(8), Datum::null(), text_datum(&long), Datum::null()],
+            [
+                Datum::null(),
+                Datum::from_i16(8),
+                Datum::null(),
+                text_datum(&long),
+                Datum::null(),
+            ],
             [true, false, true, false, true],
         ),
     ];
@@ -800,19 +866,43 @@ fn jit_deform_matches_aot_and_interpreter() {
 
     let rows: [([Datum; 5], [bool; 5]); 4] = [
         (
-            [Datum::from_char(-7), Datum::from_i16(-3), Datum::from_i32(9), Datum::from_i64(1_234_567), text_datum(&txt)],
+            [
+                Datum::from_char(-7),
+                Datum::from_i16(-3),
+                Datum::from_i32(9),
+                Datum::from_i64(1_234_567),
+                text_datum(&txt),
+            ],
             [false, false, false, false, false],
         ),
         (
-            [Datum::from_char(1), Datum::from_i16(i16::MIN), Datum::from_i32(i32::MAX), Datum::from_i64(i64::MIN), Datum::null()],
+            [
+                Datum::from_char(1),
+                Datum::from_i16(i16::MIN),
+                Datum::from_i32(i32::MAX),
+                Datum::from_i64(i64::MIN),
+                Datum::null(),
+            ],
             [false, false, false, false, true],
         ),
         (
-            [Datum::from_char(0), Datum::null(), Datum::from_i32(-1), Datum::null(), text_datum(&txt)],
+            [
+                Datum::from_char(0),
+                Datum::null(),
+                Datum::from_i32(-1),
+                Datum::null(),
+                text_datum(&txt),
+            ],
             [false, true, false, true, false],
         ),
         (
-            [Datum::from_char(66), Datum::from_i16(2), Datum::from_i32(3), Datum::from_i64(4), text_datum(&txt)],
+            [
+                Datum::from_char(66),
+                Datum::from_i16(2),
+                Datum::from_i32(3),
+                Datum::from_i64(4),
+                text_datum(&txt),
+            ],
             [false, false, false, false, false],
         ),
     ];
@@ -842,7 +932,11 @@ fn jit_deform_matches_aot_and_interpreter() {
         soa_deform_columns(&mut j, &plan_jit, &desc.compact_attrs, None);
         for c in 0..ncols {
             for i in 0..stage.len() {
-                assert_eq!(a.col_isnull(c)[i], j.col_isnull(c)[i], "batch col {c} row {i}");
+                assert_eq!(
+                    a.col_isnull(c)[i],
+                    j.col_isnull(c)[i],
+                    "batch col {c} row {i}"
+                );
                 if !a.col_isnull(c)[i] {
                     assert_eq!(
                         a.col_values(c)[i].as_i64(),
@@ -876,7 +970,11 @@ fn jit_deform_matches_aot_and_interpreter() {
                 assert_eq!(gb.tts_isnull[c], wb.tts_isnull[c], "row {i} col {c}");
                 if !gb.tts_isnull[c] {
                     if desc.compact_attrs[c].attbyval {
-                        assert_eq!(gb.tts_values[c].as_i64(), wb.tts_values[c].as_i64(), "row {i} col {c}");
+                        assert_eq!(
+                            gb.tts_values[c].as_i64(),
+                            wb.tts_values[c].as_i64(),
+                            "row {i} col {c}"
+                        );
                     } else {
                         assert_eq!(
                             datum_text_bytes(gb.tts_values[c]),
@@ -886,7 +984,9 @@ fn jit_deform_matches_aot_and_interpreter() {
                     }
                 }
             }
-            let (SlotData::Heap(gh), SlotData::Heap(wh)) = (&got, &want) else { unreachable!() };
+            let (SlotData::Heap(gh), SlotData::Heap(wh)) = (&got, &want) else {
+                unreachable!()
+            };
             assert_eq!(gh.off, wh.off, "row {i} attnum {attnum}");
         }
         exec_clear_tuple(&mut got, mcx);
@@ -942,10 +1042,32 @@ fn dict_lane_negotiation_round_trip() {
     // AM answers col 1 with a dict lane for this window: its Datum cells are
     // stale by contract, every other column is unaffected.
     let codes: [u32; 4] = [1, 0, 2, 1];
-    let dict: [Datum; 3] = [Datum::from_i64(10), Datum::from_i64(20), Datum::from_i64(30)];
-    let table = SoaDictTable { dict: dict.as_ptr(), ndict: 3, epoch: 7, sorted: true, stitch: core::ptr::null(), gndv: 0, gepoch: 0, lazy: core::ptr::null(), lazy_ensure: None, lazy_ensure_all: None, contig: false };
+    let dict: [Datum; 3] = [
+        Datum::from_i64(10),
+        Datum::from_i64(20),
+        Datum::from_i64(30),
+    ];
+    let table = SoaDictTable {
+        dict: dict.as_ptr(),
+        ndict: 3,
+        epoch: 7,
+        sorted: true,
+        stitch: core::ptr::null(),
+        gndv: 0,
+        gepoch: 0,
+        lazy: core::ptr::null(),
+        lazy_ensure: None,
+        lazy_ensure_all: None,
+        contig: false,
+    };
     soa.begin(codes.len() as u32);
-    soa.set_dict_lane(1, SoaDictLane { codes: codes.as_ptr(), table });
+    soa.set_dict_lane(
+        1,
+        SoaDictLane {
+            codes: codes.as_ptr(),
+            table,
+        },
+    );
     let lane = soa.dict_lane(1).expect("answered");
     assert_eq!(lane.table.epoch, 7);
     assert!(lane.table.sorted);
@@ -953,7 +1075,10 @@ fn dict_lane_negotiation_round_trip() {
         assert_eq!(lane.code(i), code);
         assert_eq!(lane.datum(i).as_i64(), dict[code as usize].as_i64());
     }
-    assert!(!soa.col_datum_ready(1), "dict answer means stale Datum cells");
+    assert!(
+        !soa.col_datum_ready(1),
+        "dict answer means stale Datum cells"
+    );
     assert!(soa.col_datum_ready(2));
     assert!(!soa.col_datum_ready(0), "fill-skipped col is not ready");
 
@@ -961,7 +1086,10 @@ fn dict_lane_negotiation_round_trip() {
     // structural — a stale codes pointer can never leak into the next window.
     soa.begin(2);
     assert!(soa.dict_lane(1).is_none(), "begin clears dict answers");
-    assert!(soa.col_datum_ready(1), "cleared lane re-enables the Raw fill");
+    assert!(
+        soa.col_datum_ready(1),
+        "cleared lane re-enables the Raw fill"
+    );
     assert!(soa.dict_want(1), "the arm itself persists across windows");
 }
 
@@ -983,21 +1111,43 @@ fn dict_gather_matches_full_decode_raw() {
         Datum::from_i64(42),
     ];
     let codes: [u32; 6] = [3, 3, 0, 2, 1, 0];
-    let table = SoaDictTable { dict: dict.as_ptr(), ndict: 4, epoch: 0, sorted: false, stitch: core::ptr::null(), gndv: 0, gepoch: 0, lazy: core::ptr::null(), lazy_ensure: None, lazy_ensure_all: None, contig: false };
+    let table = SoaDictTable {
+        dict: dict.as_ptr(),
+        ndict: 4,
+        epoch: 0,
+        sorted: false,
+        stitch: core::ptr::null(),
+        gndv: 0,
+        gepoch: 0,
+        lazy: core::ptr::null(),
+        lazy_ensure: None,
+        lazy_ensure_all: None,
+        contig: false,
+    };
 
     soa.begin(codes.len() as u32);
     // Poison the target cells: garbage values, isnull = true. The gather
     // must overwrite both (it may not assume pre-cleared nulls).
     soa.col_values_mut(0).fill(Datum::from_i64(-777));
     soa.col_isnull_mut(0).fill(true);
-    soa.set_dict_lane(0, SoaDictLane { codes: codes.as_ptr(), table });
+    soa.set_dict_lane(
+        0,
+        SoaDictLane {
+            codes: codes.as_ptr(),
+            table,
+        },
+    );
 
     soa.gather_dict_lane(0);
     assert!(soa.dict_lane(0).is_none(), "gather consumes the answer");
     assert!(soa.col_datum_ready(0));
     // Full decode reference: dict[codes[i]] per row.
     for (i, &code) in codes.iter().enumerate() {
-        assert_eq!(soa.col_values(0)[i].as_i64(), dict[code as usize].as_i64(), "row {i}");
+        assert_eq!(
+            soa.col_values(0)[i].as_i64(),
+            dict[code as usize].as_i64(),
+            "row {i}"
+        );
         assert!(!soa.col_isnull(0)[i], "row {i} NULL-free proof");
     }
 
@@ -1012,11 +1162,50 @@ fn dict_gather_matches_full_decode_raw() {
 #[test]
 fn dict_table_epoch_identity() {
     let dict: [Datum; 2] = [Datum::from_i64(1), Datum::from_i64(2)];
-    let rg0 = SoaDictTable { dict: dict.as_ptr(), ndict: 2, epoch: 0, sorted: false, stitch: core::ptr::null(), gndv: 0, gepoch: 0, lazy: core::ptr::null(), lazy_ensure: None, lazy_ensure_all: None, contig: false };
-    let rg0b = SoaDictTable { dict: dict.as_ptr(), ndict: 2, epoch: 0, sorted: false, stitch: core::ptr::null(), gndv: 0, gepoch: 0, lazy: core::ptr::null(), lazy_ensure: None, lazy_ensure_all: None, contig: false };
-    let rg1 = SoaDictTable { dict: dict.as_ptr(), ndict: 2, epoch: 1, sorted: false, stitch: core::ptr::null(), gndv: 0, gepoch: 0, lazy: core::ptr::null(), lazy_ensure: None, lazy_ensure_all: None, contig: false };
+    let rg0 = SoaDictTable {
+        dict: dict.as_ptr(),
+        ndict: 2,
+        epoch: 0,
+        sorted: false,
+        stitch: core::ptr::null(),
+        gndv: 0,
+        gepoch: 0,
+        lazy: core::ptr::null(),
+        lazy_ensure: None,
+        lazy_ensure_all: None,
+        contig: false,
+    };
+    let rg0b = SoaDictTable {
+        dict: dict.as_ptr(),
+        ndict: 2,
+        epoch: 0,
+        sorted: false,
+        stitch: core::ptr::null(),
+        gndv: 0,
+        gepoch: 0,
+        lazy: core::ptr::null(),
+        lazy_ensure: None,
+        lazy_ensure_all: None,
+        contig: false,
+    };
+    let rg1 = SoaDictTable {
+        dict: dict.as_ptr(),
+        ndict: 2,
+        epoch: 1,
+        sorted: false,
+        stitch: core::ptr::null(),
+        gndv: 0,
+        gepoch: 0,
+        lazy: core::ptr::null(),
+        lazy_ensure: None,
+        lazy_ensure_all: None,
+        contig: false,
+    };
     assert!(rg0.same_identity(&rg0b));
-    assert!(!rg0.same_identity(&rg1), "same arena address, new row group: memo must clear");
+    assert!(
+        !rg0.same_identity(&rg1),
+        "same arena address, new row group: memo must clear"
+    );
     assert_eq!(rg1.datum(0).as_i64(), 1);
     assert_eq!(rg1.datum(1).as_i64(), 2);
 }
@@ -1092,7 +1281,11 @@ fn for_each_live_matches_plain_loop_on_set_bits() {
             assert_eq!(r, Err(stop_at));
             assert_eq!(
                 seen,
-                expected.iter().copied().take_while(|&i| i != stop_at).collect::<Vec<_>>()
+                expected
+                    .iter()
+                    .copied()
+                    .take_while(|&i| i != stop_at)
+                    .collect::<Vec<_>>()
             );
         }
     }
@@ -1171,9 +1364,8 @@ fn k1_latemat_deform_split_matches_full_deform() {
     let mut tuples = Vec::new();
     for i in 0..n {
         if i == narrow_row {
-            tuples.push(
-                heap_form_tuple(mcx, &narrow, &[Datum::from_i32(91001)], &[false]).unwrap(),
-            );
+            tuples
+                .push(heap_form_tuple(mcx, &narrow, &[Datum::from_i32(91001)], &[false]).unwrap());
             continue;
         }
         let values = [
@@ -1207,7 +1399,11 @@ fn k1_latemat_deform_split_matches_full_deform() {
         if lm.is_fallback(i as u32) {
             continue;
         }
-        assert_eq!(lm.col_isnull(0)[i], full.col_isnull(0)[i], "col0 isnull row {i}");
+        assert_eq!(
+            lm.col_isnull(0)[i],
+            full.col_isnull(0)[i],
+            "col0 isnull row {i}"
+        );
         assert_eq!(
             lm.col_values(0)[i].as_i64(),
             full.col_values(0)[i].as_i64(),
@@ -1221,7 +1417,11 @@ fn k1_latemat_deform_split_matches_full_deform() {
     }
     // Deferred kind-0 cells are untouched (the fresh batch's null Datum).
     for i in [0usize, 64, 129] {
-        assert_eq!(lm.col_values(2)[i].as_i64(), 0, "deferred col2 stale row {i}");
+        assert_eq!(
+            lm.col_values(2)[i].as_i64(),
+            0,
+            "deferred col2 stale row {i}"
+        );
     }
     // Pass B: complete cols {1,2} for a selection with a partial word, an
     // all-zero word (word-skip), and the tail-masked full word.
@@ -1297,9 +1497,8 @@ fn k1_latemat_dense_cutover_matches_full_deform() {
     let mut tuples = Vec::new();
     for i in 0..n {
         if i == narrow_row {
-            tuples.push(
-                heap_form_tuple(mcx, &narrow, &[Datum::from_i32(91001)], &[false]).unwrap(),
-            );
+            tuples
+                .push(heap_form_tuple(mcx, &narrow, &[Datum::from_i32(91001)], &[false]).unwrap());
             continue;
         }
         let values = [
@@ -1324,7 +1523,8 @@ fn k1_latemat_dense_cutover_matches_full_deform() {
     soa_deform_columns_set(&mut lm, &plan, &desc.compact_attrs, &[0], None);
     // Word 0: 58 set bits (>= the 48 cutover — dense row loop; 6 holes).
     // Word 1: 3 set bits (bit-walk control).
-    let dense_word: u64 = !0u64 & !(1 << 3) & !(1 << 21) & !(1 << 33) & !(1 << 40) & !(1 << 55) & !(1 << 63);
+    let dense_word: u64 =
+        !0u64 & !(1 << 3) & !(1 << 21) & !(1 << 33) & !(1 << 40) & !(1 << 55) & !(1 << 63);
     assert!(dense_word.count_ones() >= 48 && dense_word != u64::MAX);
     let sel = [dense_word, (1u64 << 2) | (1u64 << 40) | (1u64 << 63)];
     soa_deform_columns_set(&mut lm, &plan, &desc.compact_attrs, &[1, 2], Some(&sel));
@@ -1337,7 +1537,11 @@ fn k1_latemat_dense_cutover_matches_full_deform() {
         let selected = sel[i / 64] & (1u64 << (i % 64)) != 0;
         if selected || i == null_row {
             for c in [1usize, 2] {
-                assert_eq!(lm.col_isnull(c)[i], full.col_isnull(c)[i], "col{c} isnull row {i}");
+                assert_eq!(
+                    lm.col_isnull(c)[i],
+                    full.col_isnull(c)[i],
+                    "col{c} isnull row {i}"
+                );
                 if !full.col_isnull(c)[i] {
                     assert_eq!(
                         lm.col_values(c)[i].as_i64(),
@@ -1348,7 +1552,11 @@ fn k1_latemat_dense_cutover_matches_full_deform() {
             }
         } else if i >= 64 {
             // The sparse control word keeps the bit-walk's skip discipline.
-            assert_eq!(lm.col_values(2)[i].as_i64(), 0, "sparse word over-fill row {i}");
+            assert_eq!(
+                lm.col_values(2)[i].as_i64(),
+                0,
+                "sparse word over-fill row {i}"
+            );
         }
         // Dense-word holes (i < 64, unselected): over-fill is PERMITTED —
         // no assertion either way (the cells are unread by contract).
@@ -1470,15 +1678,18 @@ fn varwalk_deform_matches_per_row_oracle() {
         // Varying lengths (0..=10) so every row's post-varlena offsets
         // differ — the load-bearing property the static chain cannot host.
         let short = "x".repeat(i % 11);
-        texts.push(text_varlena(if i == long_row { &long_text } else { &short }));
+        texts.push(text_varlena(if i == long_row {
+            &long_text
+        } else {
+            &short
+        }));
     }
     let tail_txt = text_varlena("past-prefix");
     let mut tuples = Vec::new();
     for i in 0..n {
         if i == narrow_row {
-            tuples.push(
-                heap_form_tuple(mcx, &narrow, &[Datum::from_i32(91001)], &[false]).unwrap(),
-            );
+            tuples
+                .push(heap_form_tuple(mcx, &narrow, &[Datum::from_i32(91001)], &[false]).unwrap());
             continue;
         }
         let values = [
@@ -1520,7 +1731,10 @@ fn varwalk_deform_matches_per_row_oracle() {
                 HeapTupleData::from_raw_parts(t.header_ptr(), t.t_len, t.t_self, t.t_tableOid)
             };
             exec_store_heap_tuple(&mut published, mcx, alias);
-            assert!(!soa_store_prefix(&mut published, &soa, i as u32), "kind-2 must not publish");
+            assert!(
+                !soa_store_prefix(&mut published, &soa, i as u32),
+                "kind-2 must not publish"
+            );
             continue;
         }
         // SAFETY: as above — both slots alias the same live image, so text
@@ -1555,7 +1769,10 @@ fn varwalk_deform_matches_per_row_oracle() {
         if !soa.col_isnull(1)[i] {
             let p = soa.col_values(1)[i].as_usize();
             let base = t.getstruct() as usize;
-            assert!(p >= base && p < base + t.t_len as usize, "text cell outside image row {i}");
+            assert!(
+                p >= base && p < base + t.t_len as usize,
+                "text cell outside image row {i}"
+            );
         }
         // Publish parity: store_prefix == slot_getsomeattrs(ncols) state.
         exec_clear_tuple(&mut published, mcx);
@@ -1580,7 +1797,10 @@ fn varwalk_deform_matches_per_row_oracle() {
         slot_getsomeattrs(&mut published, 7);
         let (ob, pb) = (oracle.base(), published.base());
         for c in ncols..7 {
-            assert_eq!(pb.tts_isnull[c], ob.tts_isnull[c], "resumed isnull col {c} row {i}");
+            assert_eq!(
+                pb.tts_isnull[c], ob.tts_isnull[c],
+                "resumed isnull col {c} row {i}"
+            );
             if !ob.tts_isnull[c] {
                 assert_eq!(
                     pb.tts_values[c].as_i64(),
@@ -1617,8 +1837,11 @@ fn varwalk_qual_col_only_split() {
     let n = 5usize;
     let mut tuples = Vec::new();
     for i in 0..n {
-        let values =
-            [Datum::from_i32(91001 + i as i32), text_datum(&txt), Datum::from_i16(i as i16)];
+        let values = [
+            Datum::from_i32(91001 + i as i32),
+            text_datum(&txt),
+            Datum::from_i16(i as i16),
+        ];
         tuples.push(heap_form_tuple(mcx, &desc, &values, &[false, false, false]).unwrap());
     }
     // Head ask: col 0 filled, tail untouched.
@@ -1630,7 +1853,11 @@ fn varwalk_qual_col_only_split() {
     soa_deform_columns(&mut head, &plan, &desc.compact_attrs, Some(0));
     for i in 0..n {
         assert_eq!(head.col_values(0)[i].as_i64(), 91001 + i as i64);
-        assert_eq!(head.col_values(2)[i].as_i64(), 0, "tail filled under a head ask");
+        assert_eq!(
+            head.col_values(2)[i].as_i64(),
+            0,
+            "tail filled under a head ask"
+        );
     }
     // Tail ask: the walk fills the whole tail; head col stays stale.
     let mut tail = SoaBatch::new_in(mcx, plan.ncols());
@@ -1641,8 +1868,16 @@ fn varwalk_qual_col_only_split() {
     soa_deform_columns(&mut tail, &plan, &desc.compact_attrs, Some(2));
     for i in 0..n {
         assert_eq!(tail.col_values(2)[i].as_i64(), i as i64, "tail ask row {i}");
-        assert_eq!(tail.col_values(0)[i].as_i64(), 0, "head filled under a tail ask");
-        assert_eq!(datum_text_bytes(tail.col_values(1)[i]), b"walk", "varlena in the walked tail");
+        assert_eq!(
+            tail.col_values(0)[i].as_i64(),
+            0,
+            "head filled under a tail ask"
+        );
+        assert_eq!(
+            datum_text_bytes(tail.col_values(1)[i]),
+            b"walk",
+            "varlena in the walked tail"
+        );
     }
 }
 

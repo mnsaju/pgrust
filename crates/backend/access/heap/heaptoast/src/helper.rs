@@ -229,8 +229,14 @@ pub fn toast_tuple_externalize<'mcx>(
     let old_value = unsafe { va_slice(ttc.ttc_values[attribute]) };
     attr.tai_colflags |= TOASTCOL_IGNORE;
     let oldexternal = attr.tai_oldexternal.map(|d| unsafe { va_slice(d) });
-    let pointer =
-        toast_save_datum(mcx, ttc.ttc_rel, old_value, oldexternal, ttc.ttc_toastoid, options)?;
+    let pointer = toast_save_datum(
+        mcx,
+        ttc.ttc_rel,
+        old_value,
+        oldexternal,
+        ttc.ttc_toastoid,
+        options,
+    )?;
     let mut img = ::mcx::vec_with_capacity_in(mcx, pointer.len())?;
     ::mcx::vec_append_bytes(&mut img, &pointer)?;
     ttc.ttc_values[attribute] = leak_datum(img);
@@ -248,7 +254,9 @@ pub fn toast_tuple_cleanup<'mcx>(
     let num_attrs = ttc.ttc_rel.rd_att.natts as usize;
 
     if (ttc.ttc_flags & TOAST_NEEDS_DELETE_OLD) != 0 {
-        let oldvalues = ttc.ttc_oldvalues.expect("delete-old flagged without old values");
+        let oldvalues = ttc
+            .ttc_oldvalues
+            .expect("delete-old flagged without old values");
         for i in 0..num_attrs {
             if (ttc.ttc_attr[i].tai_colflags & TOASTCOL_NEEDS_DELETE_OLD) != 0 {
                 // SAFETY: flagged columns hold live on-disk external pointers.

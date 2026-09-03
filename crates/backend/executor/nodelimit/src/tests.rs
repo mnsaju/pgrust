@@ -69,7 +69,12 @@ fn setup(
         count.map(|v| mk_i64_const(mcx, v)),
     );
     let node = exec_init_limit(plan, &mut estate, 0, None).unwrap();
-    let child = Counter { n, pos: 0, slot: ExecSlotId(0), bound: None };
+    let child = Counter {
+        n,
+        pos: 0,
+        slot: ExecSlotId(0),
+        bound: None,
+    };
     (node, child, estate)
 }
 
@@ -93,7 +98,9 @@ fn limit_and_offset_window() {
     assert_eq!(child.bound, Some(5));
     assert_eq!(node.lstate, LimitStateCond::LIMIT_WINDOWEND);
     // Still EOF on further pulls.
-    assert!(exec_limit(&mut node, &mut child, &mut estate).unwrap().is_none());
+    assert!(exec_limit(&mut node, &mut child, &mut estate)
+        .unwrap()
+        .is_none());
 }
 
 #[test]
@@ -108,7 +115,9 @@ fn no_count_returns_all_after_offset() {
 #[test]
 fn zero_count_is_empty_without_touching_subplan() {
     let (mut node, mut child, mut estate) = setup(None, Some(0), 10);
-    assert!(exec_limit(&mut node, &mut child, &mut estate).unwrap().is_none());
+    assert!(exec_limit(&mut node, &mut child, &mut estate)
+        .unwrap()
+        .is_none());
     assert_eq!(node.lstate, LimitStateCond::LIMIT_EMPTY);
     assert_eq!(child.pos, 0);
 }
@@ -116,7 +125,9 @@ fn zero_count_is_empty_without_touching_subplan() {
 #[test]
 fn subplan_shorter_than_offset_is_empty() {
     let (mut node, mut child, mut estate) = setup(Some(5), Some(2), 3);
-    assert!(exec_limit(&mut node, &mut child, &mut estate).unwrap().is_none());
+    assert!(exec_limit(&mut node, &mut child, &mut estate)
+        .unwrap()
+        .is_none());
     assert_eq!(node.lstate, LimitStateCond::LIMIT_EMPTY);
 }
 
@@ -126,7 +137,12 @@ fn null_count_means_limit_all() {
     let mut estate = EStateData::new_in(mcx);
     let plan = mk_limit_plan(mcx, None, Some(mk_null_i64_const(mcx)));
     let mut node = exec_init_limit(plan, &mut estate, 0, None).unwrap();
-    let mut child = Counter { n: 4, pos: 0, slot: ExecSlotId(0), bound: None };
+    let mut child = Counter {
+        n: 4,
+        pos: 0,
+        slot: ExecSlotId(0),
+        bound: None,
+    };
     let out = drain(&mut node, &mut child, &mut estate);
     assert_eq!(out, vec![1, 2, 3, 4]);
     assert_eq!(child.bound, Some(-1));
@@ -200,19 +216,21 @@ mod with_ties {
                 }))
             });
             syscache_seams::lookup_pg_operator_shape::set(|opno| {
-                Ok((opno == INT4_EQ).then_some(syscache_seams::PgOperatorShape {
-                    oprnamespace: 11,
-                    oprleft: INT4OID,
-                    oprright: INT4OID,
-                    oprresult: 16,
-                    oprcom: INT4_EQ,
-                    oprnegate: 518,
-                    oprcode: F_INT4EQ,
-                    oprrest: 101,
-                    oprjoin: 105,
-                    oprcanmerge: true,
-                    oprcanhash: true,
-                }))
+                Ok(
+                    (opno == INT4_EQ).then_some(syscache_seams::PgOperatorShape {
+                        oprnamespace: 11,
+                        oprleft: INT4OID,
+                        oprright: INT4OID,
+                        oprresult: 16,
+                        oprcom: INT4_EQ,
+                        oprnegate: 518,
+                        oprcode: F_INT4EQ,
+                        oprrest: 101,
+                        oprjoin: 105,
+                        oprcanmerge: true,
+                        oprcanhash: true,
+                    }),
+                )
             });
         });
     }
@@ -303,11 +321,16 @@ mod with_ties {
             // SAFETY: plan is leaked ('static) and read-only.
             let plan = unsafe { shorten(plan) };
             let outer_desc = one_col_desc(leaked_mcx());
-            let outer_id = estate
-                .exec_init_extra_tuple_slot(Some(outer_desc.clone()), TupleSlotKind::Virtual);
+            let outer_id =
+                estate.exec_init_extra_tuple_slot(Some(outer_desc.clone()), TupleSlotKind::Virtual);
             let mut state: LimitState<'_> =
                 exec_init_limit(plan, estate, 0, Some(&outer_desc)).unwrap();
-            let mut child = RowFeeder { rows, pos: 0, slot: outer_id, bound: None };
+            let mut child = RowFeeder {
+                rows,
+                pos: 0,
+                slot: outer_id,
+                bound: None,
+            };
             let mut got = Vec::new();
             while let Some(slot_id) = exec_limit(&mut state, &mut child, estate).unwrap() {
                 let slot = estate.slot_mut(slot_id);

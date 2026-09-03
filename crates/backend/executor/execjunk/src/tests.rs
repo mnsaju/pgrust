@@ -1,8 +1,8 @@
 use alloc::rc::Rc;
 
 use ::datum::Datum;
-use ::executils::EStateData;
 use ::exectuples::exec_store_virtual_tuple;
+use ::executils::EStateData;
 use ::mcx::{Mcx, MemoryContext, PgVec};
 use ::types_nodes::list::NodeList;
 use ::types_nodes::Node;
@@ -55,8 +55,8 @@ fn filter_drops_junk_columns_per_tuple() {
     let mcx = cx.mcx();
     let mut estate = EStateData::new_in(mcx);
 
-    let input =
-        estate.exec_init_extra_tuple_slot(Some(int4_desc(mcx, 3)), types_slot::TupleSlotKind::Virtual);
+    let input = estate
+        .exec_init_extra_tuple_slot(Some(int4_desc(mcx, 3)), types_slot::TupleSlotKind::Virtual);
     let result = estate.exec_init_extra_tuple_slot(None, types_slot::TupleSlotKind::Virtual);
 
     let tlist = junk_tlist(mcx);

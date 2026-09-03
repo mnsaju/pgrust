@@ -107,7 +107,8 @@ fn KnownAssignedXidsCompress(reason: KAXCompressReason, have_lock: bool) -> PgRe
     debug_assert_eq!(compress_index as i32, pa.numKnownAssignedXids.load(Relaxed));
 
     pa.tailKnownAssignedXids.store(0, Relaxed);
-    pa.headKnownAssignedXids.store(compress_index as i32, Release);
+    pa.headKnownAssignedXids
+        .store(compress_index as i32, Release);
 
     if !have_lock {
         LWLockRelease(ProcArrayLock())?;
@@ -362,7 +363,11 @@ fn KnownAssignedXidsDisplay(trace_level: ErrorLevel) {
     for i in tail as usize..head as usize {
         if pa.knownAssignedXidsValid[i].load(Relaxed) {
             nxids += 1;
-            buf.push_str(&format!("[{}]={} ", i, pa.knownAssignedXids[i].load(Relaxed)));
+            buf.push_str(&format!(
+                "[{}]={} ",
+                i,
+                pa.knownAssignedXids[i].load(Relaxed)
+            ));
         }
     }
 
@@ -390,9 +395,7 @@ fn MaintainLatestCompletedXidRecovery(latest_xid: TransactionId) {
     // read without XidGenLock from the startup process.
     let rel = FullTransactionId::from_u64(tv.nextXid.load(Relaxed));
     debug_assert!(rel.is_valid());
-    if !cur_latest.is_valid()
-        || TransactionIdPrecedes(cur_latest.xid(), latest_xid)
-    {
+    if !cur_latest.is_valid() || TransactionIdPrecedes(cur_latest.xid(), latest_xid) {
         tv.latestCompletedXid
             .store(FullXidRelativeTo(rel, latest_xid).value, Relaxed);
     }

@@ -45,12 +45,8 @@ pub(crate) fn fc_reset(_flinfo: Option<&mut FmgrInfo>, _fcinfo: &mut Fcinfo) -> 
     Ok(Datum::from_usize(0))
 }
 
-pub(crate) fn fc_reset_1_7(
-    _flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
-    let (userid, dbid, queryid) =
-        (fcinfo.arg_oid(0), fcinfo.arg_oid(1), fcinfo.arg_i64(2));
+pub(crate) fn fc_reset_1_7(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+    let (userid, dbid, queryid) = (fcinfo.arg_oid(0), fcinfo.arg_oid(1), fcinfo.arg_i64(2));
     entry_reset(userid, dbid, queryid, false)?;
     Ok(Datum::from_usize(0))
 }
@@ -59,20 +55,25 @@ pub(crate) fn fc_reset_1_11(
     _flinfo: Option<&mut FmgrInfo>,
     fcinfo: &mut Fcinfo,
 ) -> PgResult<Datum> {
-    let (userid, dbid, queryid, minmax_only) =
-        (fcinfo.arg_oid(0), fcinfo.arg_oid(1), fcinfo.arg_i64(2), fcinfo.arg_bool(3));
+    let (userid, dbid, queryid, minmax_only) = (
+        fcinfo.arg_oid(0),
+        fcinfo.arg_oid(1),
+        fcinfo.arg_i64(2),
+        fcinfo.arg_bool(3),
+    );
     let ts = entry_reset(userid, dbid, queryid, minmax_only)?;
     Ok(Datum::from_i64(ts))
 }
 
 macro_rules! pgss_fc {
     ($name:ident, $ver:expr, $showtext_from_arg:expr) => {
-        pub(crate) fn $name(
-            flinfo: Option<&mut FmgrInfo>,
-            fcinfo: &mut Fcinfo,
-        ) -> PgResult<Datum> {
+        pub(crate) fn $name(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
             let flinfo = resolved_flinfo(flinfo, stringify!($name));
-            let showtext = if $showtext_from_arg { fcinfo.arg_bool(0) } else { true };
+            let showtext = if $showtext_from_arg {
+                fcinfo.arg_bool(0)
+            } else {
+                true
+            };
             pg_stat_statements_internal(flinfo, fcinfo, $ver, showtext)
         }
     };
@@ -92,8 +93,7 @@ fn numeric_datum(fcinfo: &Fcinfo, v: u64) -> PgResult<Datum> {
         .expect("u64 decimal string is valid numeric");
     let mcx = fcinfo.result_mcx();
     let mut buf: mcx::PgVec<'_, u8> = mcx::PgVec::new_in(mcx);
-    mcx::vec_append_bytes(&mut buf, img.as_bytes())
-        .map_err(|_| mcx.oom(img.as_bytes().len()))?;
+    mcx::vec_append_bytes(&mut buf, img.as_bytes()).map_err(|_| mcx.oom(img.as_bytes().len()))?;
     Ok(types_fmgr::varlena_result(datum::Varlena::from_image(buf)))
 }
 
@@ -160,7 +160,11 @@ fn pg_stat_statements_internal(
             if showtext {
                 // Inline texts are always the database encoding: C's
                 // pg_any_to_server is the identity conversion here.
-                push(&mut values, &mut nulls, text_datum(fcinfo, &entry.query_text)?);
+                push(
+                    &mut values,
+                    &mut nulls,
+                    text_datum(fcinfo, &entry.query_text)?,
+                );
             } else {
                 push_null(&mut values, &mut nulls);
             }
@@ -169,7 +173,11 @@ fn pg_stat_statements_internal(
                 push_null(&mut values, &mut nulls);
             }
             if showtext {
-                push(&mut values, &mut nulls, text_datum(fcinfo, "<insufficient privilege>")?);
+                push(
+                    &mut values,
+                    &mut nulls,
+                    text_datum(fcinfo, "<insufficient privilege>")?,
+                );
             } else {
                 push_null(&mut values, &mut nulls);
             }
@@ -179,12 +187,20 @@ fn pg_stat_statements_internal(
         for kind in 0..PGSS_NUMKIND {
             if kind == PGSS_EXEC || api_version >= V1_8 {
                 push(&mut values, &mut nulls, Datum::from_i64(tmp.calls[kind]));
-                push(&mut values, &mut nulls, Datum::from_f64(tmp.total_time[kind]));
+                push(
+                    &mut values,
+                    &mut nulls,
+                    Datum::from_f64(tmp.total_time[kind]),
+                );
             }
             if (kind == PGSS_EXEC && api_version >= V1_3) || api_version >= V1_8 {
                 push(&mut values, &mut nulls, Datum::from_f64(tmp.min_time[kind]));
                 push(&mut values, &mut nulls, Datum::from_f64(tmp.max_time[kind]));
-                push(&mut values, &mut nulls, Datum::from_f64(tmp.mean_time[kind]));
+                push(
+                    &mut values,
+                    &mut nulls,
+                    Datum::from_f64(tmp.mean_time[kind]),
+                );
                 // Population stddev (no Bessel correction), as in C.
                 let stddev = if tmp.calls[kind] > 1 {
                     (tmp.sum_var_time[kind] / tmp.calls[kind] as f64).sqrt()
@@ -195,61 +211,173 @@ fn pg_stat_statements_internal(
             }
         }
         push(&mut values, &mut nulls, Datum::from_i64(tmp.rows));
-        push(&mut values, &mut nulls, Datum::from_i64(tmp.shared_blks_hit));
-        push(&mut values, &mut nulls, Datum::from_i64(tmp.shared_blks_read));
+        push(
+            &mut values,
+            &mut nulls,
+            Datum::from_i64(tmp.shared_blks_hit),
+        );
+        push(
+            &mut values,
+            &mut nulls,
+            Datum::from_i64(tmp.shared_blks_read),
+        );
         if api_version >= V1_1 {
-            push(&mut values, &mut nulls, Datum::from_i64(tmp.shared_blks_dirtied));
+            push(
+                &mut values,
+                &mut nulls,
+                Datum::from_i64(tmp.shared_blks_dirtied),
+            );
         }
-        push(&mut values, &mut nulls, Datum::from_i64(tmp.shared_blks_written));
+        push(
+            &mut values,
+            &mut nulls,
+            Datum::from_i64(tmp.shared_blks_written),
+        );
         push(&mut values, &mut nulls, Datum::from_i64(tmp.local_blks_hit));
-        push(&mut values, &mut nulls, Datum::from_i64(tmp.local_blks_read));
+        push(
+            &mut values,
+            &mut nulls,
+            Datum::from_i64(tmp.local_blks_read),
+        );
         if api_version >= V1_1 {
-            push(&mut values, &mut nulls, Datum::from_i64(tmp.local_blks_dirtied));
+            push(
+                &mut values,
+                &mut nulls,
+                Datum::from_i64(tmp.local_blks_dirtied),
+            );
         }
-        push(&mut values, &mut nulls, Datum::from_i64(tmp.local_blks_written));
+        push(
+            &mut values,
+            &mut nulls,
+            Datum::from_i64(tmp.local_blks_written),
+        );
         push(&mut values, &mut nulls, Datum::from_i64(tmp.temp_blks_read));
-        push(&mut values, &mut nulls, Datum::from_i64(tmp.temp_blks_written));
+        push(
+            &mut values,
+            &mut nulls,
+            Datum::from_i64(tmp.temp_blks_written),
+        );
         if api_version >= V1_1 {
-            push(&mut values, &mut nulls, Datum::from_f64(tmp.shared_blk_read_time));
-            push(&mut values, &mut nulls, Datum::from_f64(tmp.shared_blk_write_time));
+            push(
+                &mut values,
+                &mut nulls,
+                Datum::from_f64(tmp.shared_blk_read_time),
+            );
+            push(
+                &mut values,
+                &mut nulls,
+                Datum::from_f64(tmp.shared_blk_write_time),
+            );
         }
         if api_version >= V1_11 {
-            push(&mut values, &mut nulls, Datum::from_f64(tmp.local_blk_read_time));
-            push(&mut values, &mut nulls, Datum::from_f64(tmp.local_blk_write_time));
+            push(
+                &mut values,
+                &mut nulls,
+                Datum::from_f64(tmp.local_blk_read_time),
+            );
+            push(
+                &mut values,
+                &mut nulls,
+                Datum::from_f64(tmp.local_blk_write_time),
+            );
         }
         if api_version >= V1_10 {
-            push(&mut values, &mut nulls, Datum::from_f64(tmp.temp_blk_read_time));
-            push(&mut values, &mut nulls, Datum::from_f64(tmp.temp_blk_write_time));
+            push(
+                &mut values,
+                &mut nulls,
+                Datum::from_f64(tmp.temp_blk_read_time),
+            );
+            push(
+                &mut values,
+                &mut nulls,
+                Datum::from_f64(tmp.temp_blk_write_time),
+            );
         }
         if api_version >= V1_8 {
             push(&mut values, &mut nulls, Datum::from_i64(tmp.wal_records));
             push(&mut values, &mut nulls, Datum::from_i64(tmp.wal_fpi));
-            push(&mut values, &mut nulls, numeric_datum(fcinfo, tmp.wal_bytes)?);
+            push(
+                &mut values,
+                &mut nulls,
+                numeric_datum(fcinfo, tmp.wal_bytes)?,
+            );
         }
         if api_version >= V1_12 {
-            push(&mut values, &mut nulls, Datum::from_i64(tmp.wal_buffers_full));
+            push(
+                &mut values,
+                &mut nulls,
+                Datum::from_i64(tmp.wal_buffers_full),
+            );
         }
         if api_version >= V1_10 {
             push(&mut values, &mut nulls, Datum::from_i64(tmp.jit_functions));
-            push(&mut values, &mut nulls, Datum::from_f64(tmp.jit_generation_time));
-            push(&mut values, &mut nulls, Datum::from_i64(tmp.jit_inlining_count));
-            push(&mut values, &mut nulls, Datum::from_f64(tmp.jit_inlining_time));
-            push(&mut values, &mut nulls, Datum::from_i64(tmp.jit_optimization_count));
-            push(&mut values, &mut nulls, Datum::from_f64(tmp.jit_optimization_time));
-            push(&mut values, &mut nulls, Datum::from_i64(tmp.jit_emission_count));
-            push(&mut values, &mut nulls, Datum::from_f64(tmp.jit_emission_time));
+            push(
+                &mut values,
+                &mut nulls,
+                Datum::from_f64(tmp.jit_generation_time),
+            );
+            push(
+                &mut values,
+                &mut nulls,
+                Datum::from_i64(tmp.jit_inlining_count),
+            );
+            push(
+                &mut values,
+                &mut nulls,
+                Datum::from_f64(tmp.jit_inlining_time),
+            );
+            push(
+                &mut values,
+                &mut nulls,
+                Datum::from_i64(tmp.jit_optimization_count),
+            );
+            push(
+                &mut values,
+                &mut nulls,
+                Datum::from_f64(tmp.jit_optimization_time),
+            );
+            push(
+                &mut values,
+                &mut nulls,
+                Datum::from_i64(tmp.jit_emission_count),
+            );
+            push(
+                &mut values,
+                &mut nulls,
+                Datum::from_f64(tmp.jit_emission_time),
+            );
         }
         if api_version >= V1_11 {
-            push(&mut values, &mut nulls, Datum::from_i64(tmp.jit_deform_count));
-            push(&mut values, &mut nulls, Datum::from_f64(tmp.jit_deform_time));
+            push(
+                &mut values,
+                &mut nulls,
+                Datum::from_i64(tmp.jit_deform_count),
+            );
+            push(
+                &mut values,
+                &mut nulls,
+                Datum::from_f64(tmp.jit_deform_time),
+            );
         }
         if api_version >= V1_12 {
-            push(&mut values, &mut nulls, Datum::from_i64(tmp.parallel_workers_to_launch));
-            push(&mut values, &mut nulls, Datum::from_i64(tmp.parallel_workers_launched));
+            push(
+                &mut values,
+                &mut nulls,
+                Datum::from_i64(tmp.parallel_workers_to_launch),
+            );
+            push(
+                &mut values,
+                &mut nulls,
+                Datum::from_i64(tmp.parallel_workers_launched),
+            );
         }
         if api_version >= V1_11 {
             push(&mut values, &mut nulls, Datum::from_i64(entry.stats_since));
-            push(&mut values, &mut nulls, Datum::from_i64(entry.minmax_stats_since));
+            push(
+                &mut values,
+                &mut nulls,
+                Datum::from_i64(entry.minmax_stats_since),
+            );
         }
 
         debug_assert_eq!(values.len() as i32, expected_cols(api_version));
@@ -261,24 +389,30 @@ fn pg_stat_statements_internal(
 }
 
 /// `pg_stat_statements_info`.
-pub(crate) fn fc_pgss_info(
-    flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub(crate) fn fc_pgss_info(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let flinfo = resolved_flinfo(flinfo, "pg_stat_statements_info");
     let stats = {
         let guard = PGSS.lock().unwrap();
-        let Some(shared) = guard.as_ref() else { return Err(not_loaded_error()) };
+        let Some(shared) = guard.as_ref() else {
+            return Err(not_loaded_error());
+        };
         shared.stats
     };
 
     let mcx = fcinfo.result_mcx();
     let resolved = funcapi::get_call_result_type(mcx, flinfo, None)?;
     if resolved.class != funcapi::TypeFuncClass::Composite {
-        return Err(Box::new(types_error::PgError::error("return type must be a row type")));
+        return Err(Box::new(types_error::PgError::error(
+            "return type must be a row type",
+        )));
     }
-    let tupdesc = resolved.result_tuple_desc.expect("composite result carries a tupdesc");
-    let values = [Datum::from_i64(stats.dealloc), Datum::from_i64(stats.stats_reset)];
+    let tupdesc = resolved
+        .result_tuple_desc
+        .expect("composite result carries a tupdesc");
+    let values = [
+        Datum::from_i64(stats.dealloc),
+        Datum::from_i64(stats.stats_reset),
+    ];
     let nulls = [false, false];
     let tup = heaptuple::heap_form_tuple(mcx, &tupdesc, &values, &nulls)?;
     let d = Datum::from_usize(tup.header_ptr() as usize);

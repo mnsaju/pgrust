@@ -7,9 +7,7 @@ use types_error::PgResult;
 use types_rel::RelationData;
 use types_tuple::heap_deform_tuple;
 
-use crate::{
-    dl_iter, rb_error, ChangeId, ListHead, ReorderBuffer, ReorderBufferChangeData, TxnId,
-};
+use crate::{dl_iter, rb_error, ChangeId, ListHead, ReorderBuffer, ReorderBufferChangeData, TxnId};
 
 pub struct ReorderBufferToastEnt {
     pub chunk_id: Oid,
@@ -104,7 +102,11 @@ impl ReorderBuffer {
         let mut isnull = vec![false; natts];
         {
             let change = self.change(cid);
-            let ReorderBufferChangeData::Tp { newtuple: Some(newtup), .. } = &change.data else {
+            let ReorderBufferChangeData::Tp {
+                newtuple: Some(newtup),
+                ..
+            } = &change.data
+            else {
                 unreachable!("toast chunk change carries a new tuple");
             };
             heap_deform_tuple(newtup.as_tuple(), desc, &mut values, &mut isnull);
@@ -213,7 +215,11 @@ impl ReorderBuffer {
         let mut isnull = vec![false; natts];
         let (t_self, t_table_oid) = {
             let change = self.change(cid);
-            let ReorderBufferChangeData::Tp { newtuple: Some(newtup), .. } = &change.data else {
+            let ReorderBufferChangeData::Tp {
+                newtuple: Some(newtup),
+                ..
+            } = &change.data
+            else {
                 unreachable!("toast replace requires a new tuple");
             };
             heap_deform_tuple(newtup.as_tuple(), desc, &mut values, &mut isnull);
@@ -248,7 +254,10 @@ impl ReorderBuffer {
                 let mut cvalues = vec![Datum::from_usize(0); toast_natts];
                 let mut cisnull = vec![false; toast_natts];
                 let cchange = self.change(chunk_cid);
-                let ReorderBufferChangeData::Tp { newtuple: Some(ctup), .. } = &cchange.data
+                let ReorderBufferChangeData::Tp {
+                    newtuple: Some(ctup),
+                    ..
+                } = &cchange.data
                 else {
                     unreachable!("toast chunk change carries a new tuple");
                 };
@@ -266,9 +275,8 @@ impl ReorderBuffer {
             reconstructed[..VARHDRSZ].copy_from_slice(&header);
 
             ent.reconstructed = Some(reconstructed);
-            values[natt] = Datum::from_usize(
-                ent.reconstructed.as_ref().expect("just set").as_ptr() as usize,
-            );
+            values[natt] =
+                Datum::from_usize(ent.reconstructed.as_ref().expect("just set").as_ptr() as usize);
             replaced_any = true;
         }
 
@@ -296,8 +304,7 @@ impl ReorderBuffer {
         };
         for (_, mut ent) in hash {
             ent.reconstructed = None;
-            let chunks: Vec<ChangeId> =
-                dl_iter(&self.changes, ent.chunks, |c| c.node).collect();
+            let chunks: Vec<ChangeId> = dl_iter(&self.changes, ent.chunks, |c| c.node).collect();
             let mut list = ent.chunks;
             for chunk_cid in chunks {
                 crate::dl_delete(&mut self.changes, &mut list, chunk_cid, |c| &mut c.node);

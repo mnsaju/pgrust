@@ -2,7 +2,11 @@ use super::*;
 
 #[test]
 fn wal_summary_filename_roundtrip() {
-    let ws = WalSummaryFile { tli: 1, start_lsn: 0x0000_0001_0428_0048, end_lsn: 0x0000_0001_0500_0000 };
+    let ws = WalSummaryFile {
+        tli: 1,
+        start_lsn: 0x0000_0001_0428_0048,
+        end_lsn: 0x0000_0001_0500_0000,
+    };
     let name = format!(
         "{:08X}{:08X}{:08X}{:08X}{:08X}.summary",
         ws.tli,
@@ -19,9 +23,16 @@ fn wal_summary_filename_roundtrip() {
 #[test]
 fn wal_summary_filename_rejects_noise() {
     assert!(parse_wal_summary_filename("temp.summary").is_none());
-    assert!(parse_wal_summary_filename("0000000100000001042800480000000105000000.partial").is_none());
-    assert!(parse_wal_summary_filename("000000010000000104280048000000010500000g.summary").is_none());
-    assert!(parse_wal_summary_filename("0000000100000001042800480000000105000000.summary.tmp").is_none());
+    assert!(
+        parse_wal_summary_filename("0000000100000001042800480000000105000000.partial").is_none()
+    );
+    assert!(
+        parse_wal_summary_filename("000000010000000104280048000000010500000g.summary").is_none()
+    );
+    assert!(
+        parse_wal_summary_filename("0000000100000001042800480000000105000000.summary.tmp")
+            .is_none()
+    );
 }
 
 #[test]

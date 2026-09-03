@@ -42,7 +42,10 @@ pub fn fc_pg_snapshot_out(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -
 pub fn fc_pg_snapshot_recv(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: recv arg0 is the live StringInfo pointer per the recv ABI.
     let buf = unsafe { fcinfo.arg_stringinfo(0) };
-    Ok(varlena_result(crate::snapshot_recv(fcinfo.result_mcx(), buf)?))
+    Ok(varlena_result(crate::snapshot_recv(
+        fcinfo.result_mcx(),
+        buf,
+    )?))
 }
 
 pub fn fc_pg_snapshot_send(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -79,7 +82,9 @@ pub fn fc_pg_current_snapshot(
     _flinfo: Option<&mut FmgrInfo>,
     fcinfo: &mut Fcinfo,
 ) -> PgResult<Datum> {
-    Ok(varlena_result(crate::pg_current_snapshot(fcinfo.result_mcx())?))
+    Ok(varlena_result(crate::pg_current_snapshot(
+        fcinfo.result_mcx(),
+    )?))
 }
 
 pub fn fc_pg_visible_in_snapshot(
@@ -123,7 +128,11 @@ pub fn fc_pg_snapshot_xip(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) ->
         .get(idx)
         .copied();
     match next {
-        Some(v) => Ok(::funcapi::srf_return_next(flinfo, fcinfo, Datum::from_u64(v))),
+        Some(v) => Ok(::funcapi::srf_return_next(
+            flinfo,
+            fcinfo,
+            Datum::from_u64(v),
+        )),
         None => Ok(::funcapi::srf_return_done(flinfo, fcinfo)),
     }
 }
@@ -143,16 +152,33 @@ pub fn fc_pg_xact_status(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) ->
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 const fn srf(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: true, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: true,
+        func,
+    }
 }
 
 // pg_export_snapshot (snapmgr.c): hosted with the snapshot builtins (the
 // crate already owns the snapmgr dep).
-pub fn fc_pg_export_snapshot(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+pub fn fc_pg_export_snapshot(
+    _flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     let name = snapmgr::ExportSnapshot(&snapmgr::GetActiveSnapshot())?;
     let mcx = fcinfo.result_mcx();
     let mut image = ::mcx::vec_with_capacity_in(mcx, 4 + name.len())?;
@@ -174,7 +200,12 @@ pub const XID8FUNCS_BUILTINS: &[FmgrBuiltin] = &[
     b(2946, "pg_snapshot_xmax", 1, fc_pg_snapshot_xmax),
     srf(2947, "pg_snapshot_xip", 1, fc_pg_snapshot_xip),
     b(2948, "pg_visible_in_snapshot", 2, fc_pg_visible_in_snapshot),
-    b(3348, "pg_current_xact_id_if_assigned", 0, fc_pg_current_xact_id_if_assigned),
+    b(
+        3348,
+        "pg_current_xact_id_if_assigned",
+        0,
+        fc_pg_current_xact_id_if_assigned,
+    ),
     b(3360, "pg_xact_status", 1, fc_pg_xact_status),
     b(3809, "pg_export_snapshot", 0, fc_pg_export_snapshot),
     b(5055, "pg_snapshot_in", 1, fc_pg_snapshot_in),
@@ -182,7 +213,12 @@ pub const XID8FUNCS_BUILTINS: &[FmgrBuiltin] = &[
     b(5057, "pg_snapshot_recv", 1, fc_pg_snapshot_recv),
     b(5058, "pg_snapshot_send", 1, fc_pg_snapshot_send),
     b(5059, "pg_current_xact_id", 0, fc_pg_current_xact_id),
-    b(5060, "pg_current_xact_id_if_assigned", 0, fc_pg_current_xact_id_if_assigned),
+    b(
+        5060,
+        "pg_current_xact_id_if_assigned",
+        0,
+        fc_pg_current_xact_id_if_assigned,
+    ),
     b(5061, "pg_current_snapshot", 0, fc_pg_current_snapshot),
     b(5062, "pg_snapshot_xmin", 1, fc_pg_snapshot_xmin),
     b(5063, "pg_snapshot_xmax", 1, fc_pg_snapshot_xmax),

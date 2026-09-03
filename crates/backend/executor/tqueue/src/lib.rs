@@ -4,9 +4,7 @@ use elog::ereport;
 use latch::SetLatch;
 use mcx::MemoryContext;
 use shm_mq::{ShmMqHandle, ShmMqRecv, ShmMqResult};
-use types_error::{
-    ErrorLocation, PgResult, ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE, ERROR,
-};
+use types_error::{ErrorLocation, PgResult, ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE, ERROR};
 use types_slot::SlotData;
 use types_storage::latch::LatchHandle;
 
@@ -79,7 +77,10 @@ impl TupleChunk {
             let p = self.base().add(cursor);
             let len = p.cast::<usize>().read();
             debug_assert!(cursor + ALIGN + len <= self.used);
-            (core::slice::from_raw_parts(p.add(ALIGN), len), cursor + ALIGN + maxalign(len))
+            (
+                core::slice::from_raw_parts(p.add(ALIGN), len),
+                cursor + ALIGN + maxalign(len),
+            )
         }
     }
 }
@@ -95,7 +96,9 @@ pub struct ChunkLedger {
 
 impl ChunkLedger {
     pub fn new() -> Self {
-        ChunkLedger { slots: Mutex::new((0..LEDGER_NSLOTS).map(|_| None).collect()) }
+        ChunkLedger {
+            slots: Mutex::new((0..LEDGER_NSLOTS).map(|_| None).collect()),
+        }
     }
 
     fn try_install(&self, chunk: Box<TupleChunk>) -> Result<usize, Box<TupleChunk>> {
@@ -176,7 +179,13 @@ impl DrTqueue {
 
     /// `tqueueReceiveSlot`: false = queue detached, stop early.
     pub fn receive_slot(&mut self, slot: &mut SlotData<'_>) -> PgResult<bool> {
-        let DrTqueue { queue, ledger, chunk, scratch, stats } = self;
+        let DrTqueue {
+            queue,
+            ledger,
+            chunk,
+            scratch,
+            stats,
+        } = self;
         let queue = queue.as_mut().expect("tqueueReceiveSlot after shutdown");
         // ExecFetchSlotMinimalTuple's no-copy arm.
         if let SlotData::Minimal(m) = &*slot {
@@ -207,8 +216,7 @@ impl DrTqueue {
                 0,
             )?;
             // SAFETY: a formed minimal tuple is a live flat image of t_len bytes.
-            let bytes =
-                unsafe { core::slice::from_raw_parts(tup.as_ptr(), tup.t_len() as usize) };
+            let bytes = unsafe { core::slice::from_raw_parts(tup.as_ptr(), tup.t_len() as usize) };
             push_bytes(queue, ledger, chunk, stats, bytes)?
         };
         ctx.reset();
@@ -217,7 +225,13 @@ impl DrTqueue {
 
     /// One tuple image into the transport; false = queue detached.
     pub fn push_tuple_bytes(&mut self, tuple: &[u8]) -> PgResult<bool> {
-        let DrTqueue { queue, ledger, chunk, stats, .. } = self;
+        let DrTqueue {
+            queue,
+            ledger,
+            chunk,
+            stats,
+            ..
+        } = self;
         push_bytes(
             queue.as_mut().expect("tqueueReceiveSlot after shutdown"),
             ledger,
@@ -229,9 +243,22 @@ impl DrTqueue {
 
     /// Hand the pending chunk to the leader; false = queue detached.
     pub fn flush(&mut self) -> PgResult<bool> {
-        let DrTqueue { queue, ledger, chunk, stats, .. } = self;
-        let Some(ledger) = ledger else { return Ok(true) };
-        flush_chunk(queue.as_mut().expect("tqueue flush after shutdown"), ledger, chunk, stats)
+        let DrTqueue {
+            queue,
+            ledger,
+            chunk,
+            stats,
+            ..
+        } = self;
+        let Some(ledger) = ledger else {
+            return Ok(true);
+        };
+        flush_chunk(
+            queue.as_mut().expect("tqueue flush after shutdown"),
+            ledger,
+            chunk,
+            stats,
+        )
     }
 
     /// `tqueueShutdownReceiver`: flush the pending chunk, detach the queue.
@@ -282,7 +309,9 @@ fn flush_chunk(
     pending: &mut Option<Box<TupleChunk>>,
     stats: &mut TqueueStats,
 ) -> PgResult<bool> {
-    let Some(mut chunk) = pending.take() else { return Ok(true) };
+    let Some(mut chunk) = pending.take() else {
+        return Ok(true);
+    };
     stats.chunks += 1;
 
     // Stall self-report clock for the ledger-full wait; installing a chunk
@@ -332,7 +361,6 @@ fn flush_chunk(
     }
 }
 
-
 // tqueueReceiveSlot's queue-facing core (per-tuple path); false = detached.
 pub fn tqueue_send_bytes(queue: &mut ShmMqHandle, tuple: &[u8]) -> PgResult<bool> {
     let result = queue.send(tuple, false, false)?;
@@ -359,12 +387,22 @@ pub struct TupleQueueReader {
 impl TupleQueueReader {
     /// Per-tuple copy path (matched to `tqueue_create_DR`).
     pub fn new(queue: ShmMqHandle) -> Self {
-        Self { queue, ledger: None, current: None, cursor: 0 }
+        Self {
+            queue,
+            ledger: None,
+            current: None,
+            cursor: 0,
+        }
     }
 
     /// Batched path (matched to `tqueue_create_DR_batched` on the same queue).
     pub fn new_batched(queue: ShmMqHandle, ledger: Arc<ChunkLedger>) -> Self {
-        Self { queue, ledger: Some(ledger), current: None, cursor: 0 }
+        Self {
+            queue,
+            ledger: Some(ledger),
+            current: None,
+            cursor: 0,
+        }
     }
 
     /// Diagnostics (Gather leader stall self-report): this reader's queue.

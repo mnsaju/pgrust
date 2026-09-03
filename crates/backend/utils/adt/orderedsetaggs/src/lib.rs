@@ -27,23 +27,80 @@ const INT4_LESS_OPERATOR: Oid = 97;
 const INT4_EQUAL_OPERATOR: Oid = 96;
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: false, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: false,
+        retset: false,
+        func,
+    }
 }
 
 pub const ORDEREDSETAGGS_BUILTINS: &[FmgrBuiltin] = &[
     b(3970, "ordered_set_transition", 2, fc_ordered_set_transition),
-    b(3971, "ordered_set_transition_multi", 2, fc_ordered_set_transition_multi),
+    b(
+        3971,
+        "ordered_set_transition_multi",
+        2,
+        fc_ordered_set_transition_multi,
+    ),
     b(3973, "percentile_disc_final", 3, fc_percentile_disc_final),
-    b(3975, "percentile_cont_float8_final", 2, fc_percentile_cont_float8_final),
-    b(3977, "percentile_cont_interval_final", 2, fc_percentile_cont_interval_final),
-    b(3979, "percentile_disc_multi_final", 3, fc_percentile_disc_multi_final),
-    b(3981, "percentile_cont_float8_multi_final", 2, fc_percentile_cont_float8_multi_final),
-    b(3983, "percentile_cont_interval_multi_final", 2, fc_percentile_cont_interval_multi_final),
+    b(
+        3975,
+        "percentile_cont_float8_final",
+        2,
+        fc_percentile_cont_float8_final,
+    ),
+    b(
+        3977,
+        "percentile_cont_interval_final",
+        2,
+        fc_percentile_cont_interval_final,
+    ),
+    b(
+        3979,
+        "percentile_disc_multi_final",
+        3,
+        fc_percentile_disc_multi_final,
+    ),
+    b(
+        3981,
+        "percentile_cont_float8_multi_final",
+        2,
+        fc_percentile_cont_float8_multi_final,
+    ),
+    b(
+        3983,
+        "percentile_cont_interval_multi_final",
+        2,
+        fc_percentile_cont_interval_multi_final,
+    ),
     b(3985, "mode_final", 2, fc_mode_final),
-    b(3987, "hypothetical_rank_final", 2, fc_hypothetical_rank_final),
-    b(3989, "hypothetical_percent_rank_final", 2, fc_hypothetical_percent_rank_final),
-    b(3991, "hypothetical_cume_dist_final", 2, fc_hypothetical_cume_dist_final),
-    b(3993, "hypothetical_dense_rank_final", 2, fc_hypothetical_dense_rank_final),
+    b(
+        3987,
+        "hypothetical_rank_final",
+        2,
+        fc_hypothetical_rank_final,
+    ),
+    b(
+        3989,
+        "hypothetical_percent_rank_final",
+        2,
+        fc_hypothetical_percent_rank_final,
+    ),
+    b(
+        3991,
+        "hypothetical_cume_dist_final",
+        2,
+        fc_hypothetical_cume_dist_final,
+    ),
+    b(
+        3993,
+        "hypothetical_dense_rank_final",
+        2,
+        fc_hypothetical_dense_rank_final,
+    ),
 ];
 
 // OSAPerQueryState's allocator-free slice, cached in the transfn's fn_extra
@@ -95,7 +152,9 @@ unsafe fn osa_shutdown(arg: *mut ()) {
 #[cold]
 #[inline(never)]
 fn non_agg_context() -> Box<PgError> {
-    Box::new(PgError::error("ordered-set aggregate called in non-aggregate context"))
+    Box::new(PgError::error(
+        "ordered-set aggregate called in non-aggregate context",
+    ))
 }
 
 #[track_caller]
@@ -155,7 +214,10 @@ fn build_qmeta(fcinfo: &Fcinfo, use_tuples: bool) -> PgResult<QMeta> {
         for sc_node in &aggref.aggorder {
             let scl = sc_node.as_sort_group_clause().expect("aggorder cell");
             let tle = sortgroupclause_tle(aggref, scl.tleSortGroupRef);
-            assert!(scl.sortop != 0, "sortless SortGroupClause survived the parser");
+            assert!(
+                scl.sortop != 0,
+                "sortless SortGroupClause survived the parser"
+            );
             q.sort_col_idx.push(tle.resno);
             q.sort_ops.push(scl.sortop);
             q.eq_ops.push(scl.eqop);
@@ -193,7 +255,10 @@ fn build_qmeta(fcinfo: &Fcinfo, use_tuples: bool) -> PgResult<QMeta> {
             .as_sort_group_clause()
             .expect("aggorder cell");
         let tle = sortgroupclause_tle(aggref, scl.tleSortGroupRef);
-        assert!(scl.sortop != 0, "sortless SortGroupClause survived the parser");
+        assert!(
+            scl.sortop != 0,
+            "sortless SortGroupClause survived the parser"
+        );
         q.sort_col_type = nodes_core::expr_type(tle.expr);
         q.sort_operator = scl.sortop;
         q.eq_operator = scl.eqop;
@@ -243,8 +308,11 @@ fn ordered_set_startup(
     // resets (AggStateNode::reset contract).
     let gcx: Mcx<'static> = unsafe { core::mem::transmute(gcx) };
     let work_mem = init_small::globals::work_mem();
-    let sortopt =
-        if q.rescan_needed { TUPLESORT_NONE | TUPLESORT_RANDOMACCESS } else { TUPLESORT_NONE };
+    let sortopt = if q.rescan_needed {
+        TUPLESORT_NONE | TUPLESORT_RANDOMACCESS
+    } else {
+        TUPLESORT_NONE
+    };
 
     let mut st = OsaGroupState {
         q,
@@ -294,8 +362,7 @@ fn ordered_set_startup(
 
     let ptr = Box::into_raw(Box::new(st));
     // SAFETY: ptr stays valid until the callback fires exactly once.
-    if let Err(e) = unsafe { ::nodeagg::agg_register_callback(fcinfo, osa_shutdown, ptr.cast()) }
-    {
+    if let Err(e) = unsafe { ::nodeagg::agg_register_callback(fcinfo, osa_shutdown, ptr.cast()) } {
         // SAFETY: registration failed, so this frame is still the sole owner.
         drop(unsafe { Box::from_raw(ptr) });
         return Err(e);
@@ -323,7 +390,10 @@ pub fn fc_ordered_set_transition(
     // SAFETY: startup's Box, live until the group shutdown callback.
     let st = unsafe { &mut *st };
     if !fcinfo.argisnull(1) {
-        st.sort.as_mut().expect("live sortstate").putdatum(fcinfo.arg(1), false)?;
+        st.sort
+            .as_mut()
+            .expect("live sortstate")
+            .putdatum(fcinfo.arg(1), false)?;
         st.number_of_rows += 1;
     }
     Ok(Datum::from_usize(st as *mut OsaGroupState as usize))
@@ -360,8 +430,15 @@ pub fn fc_ordered_set_transition_multi(
         exectuples::exec_store_virtual_tuple(slot);
     }
     {
-        let OsaGroupState { sort, insert_slot, gcx, .. } = st;
-        sort.as_mut().unwrap().puttupleslot(insert_slot.as_mut().unwrap(), *gcx)?;
+        let OsaGroupState {
+            sort,
+            insert_slot,
+            gcx,
+            ..
+        } = st;
+        sort.as_mut()
+            .unwrap()
+            .puttupleslot(insert_slot.as_mut().unwrap(), *gcx)?;
     }
     st.number_of_rows += 1;
     Ok(Datum::from_usize(st as *mut OsaGroupState as usize))
@@ -375,10 +452,16 @@ fn null_result(fcinfo: &mut Fcinfo) -> PgResult<Datum> {
 // C errmsg uses %g; the values a query can produce render identically under
 // {} except NaN (C prints "nan").
 fn percentile_range_error(p: f64) -> Box<PgError> {
-    let rendered = if p.is_nan() { "nan".to_string() } else { format!("{p}") };
+    let rendered = if p.is_nan() {
+        "nan".to_string()
+    } else {
+        format!("{p}")
+    };
     Box::new(
-        PgError::error(format!("percentile value {rendered} is not between 0 and 1"))
-            .with_sqlstate(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+        PgError::error(format!(
+            "percentile value {rendered} is not between 0 and 1"
+        ))
+        .with_sqlstate(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
     )
 }
 
@@ -404,7 +487,10 @@ fn getdatum_copied(st: &mut OsaGroupState, mcx: Mcx<'_>) -> PgResult<Option<Null
     }
     // SAFETY: non-null by-ref datum in live sort memory.
     let copied = unsafe { ::execexpr::agg_datum_copy(mcx, nd.value, st.q.typ_len)? };
-    Ok(Some(NullableDatum { value: copied, isnull: false }))
+    Ok(Some(NullableDatum {
+        value: copied,
+        isnull: false,
+    }))
 }
 
 pub fn fc_percentile_disc_final(
@@ -568,7 +654,12 @@ fn setup_pct_info<'mcx>(
     let mut out: PgVec<'mcx, PctInfo> = mcx::vec_with_capacity_in(mcx, percentiles.len())?;
     for (i, (&d, &isnull)) in percentiles.iter().zip(nulls.iter()).enumerate() {
         if isnull {
-            out.push(PctInfo { first_row: 0, second_row: 0, proportion: 0.0, idx: i });
+            out.push(PctInfo {
+                first_row: 0,
+                second_row: 0,
+                proportion: 0.0,
+                idx: i,
+            });
             continue;
         }
         let p = d.as_f64();
@@ -586,7 +677,12 @@ fn setup_pct_info<'mcx>(
         } else {
             // Smallest K with K/N >= percentile, but not less than 1.
             let row = ((p * rowcount as f64).ceil() as i64).max(1);
-            out.push(PctInfo { first_row: row, second_row: row, proportion: 0.0, idx: i });
+            out.push(PctInfo {
+                first_row: row,
+                second_row: row,
+                proportion: 0.0,
+                idx: i,
+            });
         }
     }
     out.sort_unstable_by(|a, b| (a.first_row, a.second_row).cmp(&(b.first_row, b.second_row)));
@@ -664,7 +760,12 @@ pub fn fc_percentile_disc_multi_final(
             let target_row = pct[i].first_row;
             let idx = pct[i].idx;
             if target_row > rownum {
-                if !st.sort.as_mut().unwrap().skiptuples(target_row - rownum - 1, true)? {
+                if !st
+                    .sort
+                    .as_mut()
+                    .unwrap()
+                    .skiptuples(target_row - rownum - 1, true)?
+                {
                     return Err(elog_error("missing row in percentile_disc"));
                 }
                 let Some(nd) = getdatum_copied(st, mcx)? else {
@@ -739,9 +840,19 @@ fn percentile_cont_multi_final_common(
         let mut first_val = Datum::null();
         let mut second_val = Datum::null();
         while i < num {
-            let PctInfo { first_row, second_row, proportion, idx } = pct[i];
+            let PctInfo {
+                first_row,
+                second_row,
+                proportion,
+                idx,
+            } = pct[i];
             if first_row > rownum {
-                if !st.sort.as_mut().unwrap().skiptuples(first_row - rownum - 1, true)? {
+                if !st
+                    .sort
+                    .as_mut()
+                    .unwrap()
+                    .skiptuples(first_row - rownum - 1, true)?
+                {
                     return Err(elog_error("missing row in percentile_cont"));
                 }
                 match getdatum_copied(st, mcx)? {
@@ -810,7 +921,9 @@ pub fn fc_mode_final(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgR
         return null_result(fcinfo);
     }
     if st.equalfn.is_none() {
-        st.equalfn = Some(fmgr_core::fmgr_info(lsyscache::get_opcode(st.q.eq_operator)?)?);
+        st.equalfn = Some(fmgr_core::fmgr_info(lsyscache::get_opcode(
+            st.q.eq_operator,
+        )?)?);
     }
     start_scan(st)?;
 
@@ -852,8 +965,11 @@ pub fn fc_mode_final(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgR
     }
 
     loop {
-        let Some((nd, abbrev)) =
-            st.sort.as_mut().expect("live sortstate").getdatum_abbrev(true)?
+        let Some((nd, abbrev)) = st
+            .sort
+            .as_mut()
+            .expect("live sortstate")
+            .getdatum_abbrev(true)?
         else {
             break;
         };
@@ -879,8 +995,14 @@ pub fn fc_mode_final(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgR
                 let mut fc2 = LocalFcinfo::<2>::fresh(collation);
                 // SAFETY: the per-tuple context outlives the call.
                 unsafe { fc2.set_result_mcx(mcx) };
-                fc2.args[0] = NullableDatum { value: val, isnull: false };
-                fc2.args[1] = NullableDatum { value: last_val, isnull: false };
+                fc2.args[0] = NullableDatum {
+                    value: val,
+                    isnull: false,
+                };
+                fc2.args[1] = NullableDatum {
+                    value: last_val,
+                    isnull: false,
+                };
                 eq.invoke(&mut fc2)?.as_bool()
             };
             if equal {
@@ -899,7 +1021,11 @@ pub fn fc_mode_final(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgR
                     }
                 }
             } else {
-                last_val = if copy_held { held(&mut last_buf, val, typ_len) } else { val };
+                last_val = if copy_held {
+                    held(&mut last_buf, val, typ_len)
+                } else {
+                    val
+                };
                 // Reusing abbreviated keys avoids equality calls (C ditto).
                 last_abbrev = abbrev;
                 last_val_freq = 1;
@@ -953,8 +1079,15 @@ fn insert_hypothetical_row(
         base.tts_isnull[nargs] = false;
         exectuples::exec_store_virtual_tuple(slot);
     }
-    let OsaGroupState { sort, insert_slot, gcx, .. } = st;
-    sort.as_mut().unwrap().puttupleslot(insert_slot.as_mut().unwrap(), *gcx)
+    let OsaGroupState {
+        sort,
+        insert_slot,
+        gcx,
+        ..
+    } = st;
+    sort.as_mut()
+        .unwrap()
+        .puttupleslot(insert_slot.as_mut().unwrap(), *gcx)
 }
 
 // hypothetical_rank_common (orderedsetaggs.c): (rank, number_of_rows).
@@ -971,11 +1104,16 @@ fn hypothetical_rank_common(
     let st = unsafe { group_state(fcinfo) };
     let number_of_rows = st.number_of_rows;
     if nargs % 2 != 0 {
-        return Err(elog_error("wrong number of arguments in hypothetical-set function"));
+        return Err(elog_error(
+            "wrong number of arguments in hypothetical-set function",
+        ));
     }
     let nargs = nargs / 2;
     hypothetical_check_argtypes(flinfo, nargs, st)?;
-    assert!(!st.sort_done, "hypothetical-set aggregate cannot share transition state");
+    assert!(
+        !st.sort_done,
+        "hypothetical-set aggregate cannot share transition state"
+    );
 
     insert_hypothetical_row(st, fcinfo, nargs, flag)?;
     st.sort.as_mut().unwrap().performsort()?;
@@ -983,9 +1121,18 @@ fn hypothetical_rank_common(
 
     let mut rank: i64 = 1;
     loop {
-        let OsaGroupState { sort, fetch_slot, gcx, .. } = st;
+        let OsaGroupState {
+            sort,
+            fetch_slot,
+            gcx,
+            ..
+        } = st;
         let slot = fetch_slot.as_mut().expect("tuple-path fetch slot");
-        if !sort.as_mut().unwrap().gettupleslot(true, false, slot, *gcx)? {
+        if !sort
+            .as_mut()
+            .unwrap()
+            .gettupleslot(true, false, slot, *gcx)?
+        {
             break;
         }
         exectuples::slot_getsomeattrs(slot, nargs as i32 + 1);
@@ -999,7 +1146,9 @@ fn hypothetical_rank_common(
         rank += 1;
     }
     {
-        let OsaGroupState { fetch_slot, gcx, .. } = st;
+        let OsaGroupState {
+            fetch_slot, gcx, ..
+        } = st;
         exectuples::exec_clear_tuple(fetch_slot.as_mut().unwrap(), *gcx);
     }
     Ok((rank, number_of_rows))
@@ -1047,7 +1196,9 @@ pub fn fc_hypothetical_dense_rank_final(
     // SAFETY: final-arg contract (group_state).
     let st = unsafe { group_state(fcinfo) };
     if nargs % 2 != 0 {
-        return Err(elog_error("wrong number of arguments in hypothetical-set function"));
+        return Err(elog_error(
+            "wrong number of arguments in hypothetical-set function",
+        ));
     }
     let nargs = nargs / 2;
     hypothetical_check_argtypes(flinfo, nargs, st)?;
@@ -1055,8 +1206,7 @@ pub fn fc_hypothetical_dense_rank_final(
     // Flag column omitted from the comparison: only flag == 0 rows compare.
     let num_distinct_cols = st.q.sort_col_idx.len() - 1;
     if st.compare_tuple.is_none() {
-        let mut eqfuncoids: PgVec<'_, Oid> =
-            mcx::vec_with_capacity_in(st.gcx, num_distinct_cols)?;
+        let mut eqfuncoids: PgVec<'_, Oid> = mcx::vec_with_capacity_in(st.gcx, num_distinct_cols)?;
         for &op in st.q.eq_ops.iter().take(num_distinct_cols) {
             eqfuncoids.push(lsyscache::get_opcode(op)?);
         }
@@ -1077,7 +1227,10 @@ pub fn fc_hypothetical_dense_rank_final(
             ));
         }
     }
-    assert!(!st.sort_done, "hypothetical-set aggregate cannot share transition state");
+    assert!(
+        !st.sort_done,
+        "hypothetical-set aggregate cannot share transition state"
+    );
 
     insert_hypothetical_row(st, fcinfo, nargs, -1)?;
     st.sort.as_mut().unwrap().performsort()?;
@@ -1092,13 +1245,24 @@ pub fn fc_hypothetical_dense_rank_final(
     // row needs an owned copy (C passes copy=true here unconditionally).
     let spilled = st.sort.as_ref().unwrap().spilled();
     loop {
-        let OsaGroupState { sort, fetch_slot, extra_slot, compare_tuple, gcx, .. } = st;
+        let OsaGroupState {
+            sort,
+            fetch_slot,
+            extra_slot,
+            compare_tuple,
+            gcx,
+            ..
+        } = st;
         let (cur, prev) = if use_extra {
             (extra_slot.as_mut().unwrap(), fetch_slot.as_mut().unwrap())
         } else {
             (fetch_slot.as_mut().unwrap(), extra_slot.as_mut().unwrap())
         };
-        if !sort.as_mut().unwrap().gettupleslot(true, spilled, cur, *gcx)? {
+        if !sort
+            .as_mut()
+            .unwrap()
+            .gettupleslot(true, spilled, cur, *gcx)?
+        {
             break;
         }
         exectuples::slot_getsomeattrs(cur, nargs as i32 + 1);
@@ -1124,7 +1288,12 @@ pub fn fc_hypothetical_dense_rank_final(
         rank += 1;
     }
     {
-        let OsaGroupState { fetch_slot, extra_slot, gcx, .. } = st;
+        let OsaGroupState {
+            fetch_slot,
+            extra_slot,
+            gcx,
+            ..
+        } = st;
         exectuples::exec_clear_tuple(fetch_slot.as_mut().unwrap(), *gcx);
         if let Some(es) = extra_slot.as_mut() {
             exectuples::exec_clear_tuple(es, *gcx);

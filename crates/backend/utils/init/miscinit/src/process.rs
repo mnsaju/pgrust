@@ -101,8 +101,13 @@ pub fn InitStandaloneProcess(argv0: &str) -> PgResult<()> {
 }
 
 fn c_str_of(buf: &[u8]) -> String {
-    String::from_utf8_lossy(&buf.iter().copied().take_while(|b| *b != 0).collect::<Vec<u8>>())
-        .into_owned()
+    String::from_utf8_lossy(
+        &buf.iter()
+            .copied()
+            .take_while(|b| *b != 0)
+            .collect::<Vec<u8>>(),
+    )
+    .into_owned()
 }
 
 // C's child-init order; process-wide arms are postmaster-signal design.
@@ -282,7 +287,9 @@ pub(crate) fn leading_i64(s: &str) -> i64 {
     }
     let mut val = 0i64;
     while i < bytes.len() && bytes[i].is_ascii_digit() {
-        val = val.saturating_mul(10).saturating_add((bytes[i] - b'0') as i64);
+        val = val
+            .saturating_mul(10)
+            .saturating_add((bytes[i] - b'0') as i64);
         i += 1;
     }
     sign.saturating_mul(val)

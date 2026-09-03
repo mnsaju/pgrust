@@ -36,7 +36,9 @@ pub fn guc_name_hash(name: &str) -> u32 {
 }
 
 pub fn fold_name(name: &str) -> String {
-    name.bytes().map(|b| b.to_ascii_lowercase() as char).collect()
+    name.bytes()
+        .map(|b| b.to_ascii_lowercase() as char)
+        .collect()
 }
 
 pub fn convert_guc_name_for_parameter_acl(name: &str) -> String {

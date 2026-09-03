@@ -18,7 +18,10 @@ const InvalidOffsetNumber: OffsetNumber = 0;
 const InvalidBuffer: Buffer = 0;
 
 fn main_data<'a>(record: &'a XLogReaderState) -> &'a [u8] {
-    let rec = record.record.as_ref().expect("spg redo with no decoded record");
+    let rec = record
+        .record
+        .as_ref()
+        .expect("spg redo with no decoded record");
     // SAFETY: points into the reader's decode buffer, valid for the redo
     // callback's duration.
     unsafe { rec.main_data_bytes() }
@@ -80,7 +83,10 @@ fn add_or_replace_tuple(pm: &mut PageMut<'_>, tuple: &[u8], offset: OffsetNumber
     }
     debug_assert!(offset <= pm.as_ref().max_offset_number() + 1);
     if pm.add_item(tuple, offset, 0) != Some(offset) {
-        panic!("failed to add item of size {} to SPGiST index page", tuple.len());
+        panic!(
+            "failed to add item of size {} to SPGiST index page",
+            tuple.len()
+        );
     }
 }
 
@@ -160,7 +166,11 @@ fn spgRedoMoveLeafs(record: &XLogReaderState) -> PgResult<()> {
     let xldata = spgxlogMoveLeafs::decode(md);
     let blkno_dst = block_blkno(record, 1);
 
-    let n_insert = if xldata.replaceDead { 1 } else { xldata.nMoves as usize + 1 };
+    let n_insert = if xldata.replaceDead {
+        1
+    } else {
+        xldata.nMoves as usize + 1
+    };
     let mut ptr = SizeOfSpgxlogMoveLeafs;
     let to_delete = u16s_at(md, ptr, xldata.nMoves as usize);
     ptr += 2 * xldata.nMoves as usize;
@@ -205,7 +215,11 @@ fn spgRedoMoveLeafs(record: &XLogReaderState) -> PgResult<()> {
             xldata.stateSrc.redirectXid,
             &mut pm,
             &to_delete,
-            if xldata.stateSrc.isBuild { SPGIST_PLACEHOLDER } else { SPGIST_REDIRECT },
+            if xldata.stateSrc.isBuild {
+                SPGIST_PLACEHOLDER
+            } else {
+                SPGIST_REDIRECT
+            },
             SPGIST_PLACEHOLDER,
             blkno_dst,
             to_insert[n_insert - 1],
@@ -223,7 +237,12 @@ fn spgRedoMoveLeafs(record: &XLogReaderState) -> PgResult<()> {
         // SAFETY: redo pin+lock contract.
         let mut pm = unsafe { page_mut(buffer) };
         let tuple = item_slice_mut(&mut pm, xldata.offnumParent);
-        spgUpdateNodeLink(tuple, xldata.nodeI as i32, blkno_dst, to_insert[n_insert - 1]);
+        spgUpdateNodeLink(
+            tuple,
+            xldata.nodeI as i32,
+            blkno_dst,
+            to_insert[n_insert - 1],
+        );
         pm.set_lsn(lsn);
         bufmgr_seams::mark_buffer_dirty::call(buffer)?;
     }
@@ -247,8 +266,7 @@ fn spgRedoAddNode(record: &XLogReaderState) -> PgResult<()> {
             // SAFETY: redo pin+lock contract.
             let mut pm = unsafe { page_mut(buffer) };
             pm.index_tuple_delete(xldata.offnum);
-            if pm.add_item(&inner_tuple[..inner_size], xldata.offnum, 0) != Some(xldata.offnum)
-            {
+            if pm.add_item(&inner_tuple[..inner_size], xldata.offnum, 0) != Some(xldata.offnum) {
                 panic!("failed to add item of size {inner_size} to SPGiST index page");
             }
             pm.set_lsn(lsn);
@@ -364,7 +382,11 @@ fn spgRedoSplitTuple(record: &XLogReaderState) -> PgResult<()> {
         if action == BLK_NEEDS_REDO {
             // SAFETY: redo pin+lock contract.
             let mut pm = unsafe { page_mut(buffer) };
-            add_or_replace_tuple(&mut pm, &postfix_tuple[..postfix_size], xldata.offnumPostfix);
+            add_or_replace_tuple(
+                &mut pm,
+                &postfix_tuple[..postfix_size],
+                xldata.offnumPostfix,
+            );
             pm.set_lsn(lsn);
             bufmgr_seams::mark_buffer_dirty::call(buffer)?;
         }
@@ -385,7 +407,11 @@ fn spgRedoSplitTuple(record: &XLogReaderState) -> PgResult<()> {
             panic!("failed to add item of size {prefix_size} to SPGiST index page");
         }
         if xldata.postfixBlkSame {
-            add_or_replace_tuple(&mut pm, &postfix_tuple[..postfix_size], xldata.offnumPostfix);
+            add_or_replace_tuple(
+                &mut pm,
+                &postfix_tuple[..postfix_size],
+                xldata.offnumPostfix,
+            );
         }
         pm.set_lsn(lsn);
         bufmgr_seams::mark_buffer_dirty::call(buffer)?;
@@ -656,11 +682,16 @@ fn spgRedoVacuumRedirect(record: &XLogReaderState) -> PgResult<()> {
     let lsn = record.EndRecPtr;
     let md = main_data(record);
     let xldata = spgxlogVacuumRedirect::decode(md);
-    let item_to_placeholder = u16s_at(md, SizeOfSpgxlogVacuumRedirect, xldata.nToPlaceholder as usize);
+    let item_to_placeholder = u16s_at(
+        md,
+        SizeOfSpgxlogVacuumRedirect,
+        xldata.nToPlaceholder as usize,
+    );
 
     if xlogutils::InHotStandby() {
-        let (rlocator, _, _, _) =
-            record.block_tag_extended(0).expect("spgRedoVacuumRedirect: no block 0");
+        let (rlocator, _, _, _) = record
+            .block_tag_extended(0)
+            .expect("spgRedoVacuumRedirect: no block 0");
         standby::ResolveRecoveryConflictWithSnapshot(
             xldata.snapshotConflictHorizon,
             xldata.isCatalogRel,
@@ -691,8 +722,7 @@ fn spgRedoVacuumRedirect(record: &XLogReaderState) -> PgResult<()> {
         if xldata.firstPlaceholder != InvalidOffsetNumber {
             let max = pm.as_ref().max_offset_number();
             let n = (max - xldata.firstPlaceholder + 1) as usize;
-            let to_delete: Vec<OffsetNumber> =
-                (xldata.firstPlaceholder..=max).collect();
+            let to_delete: Vec<OffsetNumber> = (xldata.firstPlaceholder..=max).collect();
             page_opaque_update(&mut pm, |op| {
                 debug_assert!(op.nPlaceholder as usize >= n);
                 op.nPlaceholder -= n as u16;
@@ -738,4 +768,3 @@ pub fn spg_mask(pagedata: &mut [u8], _blkno: BlockNumber) -> PgResult<()> {
     }
     Ok(())
 }
-

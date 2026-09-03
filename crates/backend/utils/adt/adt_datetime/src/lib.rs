@@ -23,8 +23,7 @@ pub use decode::{
     ClearTimeZoneAbbrevCache, DecodeDate, DecodeDateTime, DecodeISO8601Interval, DecodeInterval,
     DecodeNumber, DecodeNumberField, DecodeSpecial, DecodeTime, DecodeTimeOnly, DecodeTimezone,
     DecodeTimezoneAbbrev, DecodeTimezoneAbbrevPrefix, DecodeUnits, ParseDateTime, ParseFraction,
-    ParseFractionalSecond,
-    ValidateDate,
+    ParseFractionalSecond, ValidateDate,
 };
 pub use encode::{
     AppendSeconds, EncodeDateOnly, EncodeDateTime, EncodeInterval, EncodeTimeOnly, EncodeTimezone,

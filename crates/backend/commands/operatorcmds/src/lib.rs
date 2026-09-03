@@ -65,8 +65,7 @@ pub fn DefineOperator<'mcx>(
 ) -> PgResult<ObjectAddress> {
     let mut buf = [""; 4];
     let parts = name_parts(names, &mut buf);
-    let (oprNamespace, oprName) =
-        catalog_namespace::QualifiedNameGetCreationNamespace(mcx, parts)?;
+    let (oprNamespace, oprName) = catalog_namespace::QualifiedNameGetCreationNamespace(mcx, parts)?;
 
     let aclresult = aclchk::object_aclcheck(
         NAMESPACE_RELATION_ID,
@@ -94,7 +93,9 @@ pub fn DefineOperator<'mcx>(
     let mut joinName: Option<&NodeList<'mcx>> = None;
 
     for n in parameters.iter() {
-        let defel = n.as_def_elem().expect("CREATE OPERATOR definition: DefElem list");
+        let defel = n
+            .as_def_elem()
+            .expect("CREATE OPERATOR definition: DefElem list");
         match defel.defname.unwrap_or("") {
             "leftarg" => {
                 let tn = commands_define::defGetTypeName(mcx, defel)?;
@@ -123,9 +124,7 @@ pub fn DefineOperator<'mcx>(
                 commutatorName = Some(commands_define::defGetQualifiedName(mcx, defel)?)
             }
             "negator" => negatorName = Some(commands_define::defGetQualifiedName(mcx, defel)?),
-            "restrict" => {
-                restrictionName = Some(commands_define::defGetQualifiedName(mcx, defel)?)
-            }
+            "restrict" => restrictionName = Some(commands_define::defGetQualifiedName(mcx, defel)?),
             "join" => joinName = Some(commands_define::defGetQualifiedName(mcx, defel)?),
             "hashes" => canHash = commands_define::defGetBoolean(defel)?,
             "merges" => canMerge = commands_define::defGetBoolean(defel)?,
@@ -136,7 +135,11 @@ pub fn DefineOperator<'mcx>(
                 ereport(WARNING)
                     .errcode(ERRCODE_SYNTAX_ERROR)
                     .errmsg(format!("operator attribute \"{other}\" not recognized"))
-                    .finish(ErrorLocation::new(file!(), line!() as i32, "DefineOperator"))?;
+                    .finish(ErrorLocation::new(
+                        file!(),
+                        line!() as i32,
+                        "DefineOperator",
+                    ))?;
             }
         }
     }
@@ -282,7 +285,10 @@ fn ValidateJoinEstimator(mcx: Mcx<'_>, joinName: &NodeList<'_>) -> PgResult<Oid>
             let s = commands_define::NameListToString(mcx, joinName)?;
             return Err(err(
                 ERRCODE_AMBIGUOUS_FUNCTION,
-                format!("join estimator function {} has multiple matches", s.as_str()),
+                format!(
+                    "join estimator function {} has multiple matches",
+                    s.as_str()
+                ),
             ));
         }
     } else {
@@ -297,7 +303,11 @@ fn ValidateJoinEstimator(mcx: Mcx<'_>, joinName: &NodeList<'_>) -> PgResult<Oid>
         let s = commands_define::NameListToString(mcx, joinName)?;
         return Err(err(
             ERRCODE_INVALID_OBJECT_DEFINITION,
-            format!("join estimator function {} must return type {}", s.as_str(), "float8"),
+            format!(
+                "join estimator function {} must return type {}",
+                s.as_str(),
+                "float8"
+            ),
         ));
     }
 
@@ -348,15 +358,17 @@ pub fn RemoveOperatorById(mcx: Mcx<'_>, operOid: Oid) -> PgResult<()> {
     let rel = table::table_open(mcx, OPERATOR_RELATION_ID, RowExclusiveLock)?;
 
     let fetch = || {
-        Ok::<_, Box<types_error::PgError>>(SearchSysCacheCopy(
-            mcx,
-            OPEROID,
-            SysCacheKey::Value(Datum::from_oid(operOid)),
-            SysCacheKey::UNUSED,
-            SysCacheKey::UNUSED,
-            SysCacheKey::UNUSED,
-        )?
-        .unwrap_or_else(|| panic!("cache lookup failed for operator {operOid}")))
+        Ok::<_, Box<types_error::PgError>>(
+            SearchSysCacheCopy(
+                mcx,
+                OPEROID,
+                SysCacheKey::Value(Datum::from_oid(operOid)),
+                SysCacheKey::UNUSED,
+                SysCacheKey::UNUSED,
+                SysCacheKey::UNUSED,
+            )?
+            .unwrap_or_else(|| panic!("cache lookup failed for operator {operOid}")),
+        )
     };
 
     let mut tup = fetch()?;
@@ -412,7 +424,9 @@ pub fn AlterOperator<'mcx>(
     let mut updateHashes = false;
 
     for n in stmt.options.iter() {
-        let defel = n.as_def_elem().expect("ALTER OPERATOR options: DefElem list");
+        let defel = n
+            .as_def_elem()
+            .expect("ALTER OPERATOR options: DefElem list");
         let param = match defel.arg {
             None => None, // NONE removes the function
             Some(_) => Some(commands_define::defGetQualifiedName(mcx, defel)?),
@@ -577,7 +591,11 @@ pub fn AlterOperator<'mcx>(
 fn name_parts<'a, 'mcx>(names: &NodeList<'mcx>, buf: &'a mut [&'mcx str; 4]) -> &'a [&'mcx str] {
     let n = names.len().min(buf.len());
     for (i, slot) in buf.iter_mut().enumerate().take(n) {
-        *slot = names.nth(i).as_string().expect("name list holds String nodes").sval;
+        *slot = names
+            .nth(i)
+            .as_string()
+            .expect("name list holds String nodes")
+            .sval;
     }
     &buf[..n]
 }

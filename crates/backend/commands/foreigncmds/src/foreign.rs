@@ -3,7 +3,9 @@
 use datum::Datum;
 use mcx::{Mcx, PgVec};
 use types_core::{InvalidOid, Oid};
-use types_error::{PgResult, ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE, ERRCODE_UNDEFINED_OBJECT, ERROR};
+use types_error::{
+    PgResult, ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE, ERRCODE_UNDEFINED_OBJECT, ERROR,
+};
 use types_nodes::{FdwKind, FdwRoutine, NodeTag};
 
 use crate::options::{text_body, untransform_options, varlena_image, OptionPair};
@@ -129,18 +131,32 @@ pub fn get_foreign_server_oid(servername: &str, missing_ok: bool) -> PgResult<Oi
     Ok(oid)
 }
 
-pub fn GetForeignDataWrapper<'mcx>(mcx: Mcx<'mcx>, fdwid: Oid) -> PgResult<ForeignDataWrapper<'mcx>> {
-    let Some(tp) = SearchSysCache1(FOREIGNDATAWRAPPEROID, SysCacheKey::Value(Datum::from_oid(fdwid)))?
+pub fn GetForeignDataWrapper<'mcx>(
+    mcx: Mcx<'mcx>,
+    fdwid: Oid,
+) -> PgResult<ForeignDataWrapper<'mcx>> {
+    let Some(tp) = SearchSysCache1(
+        FOREIGNDATAWRAPPEROID,
+        SysCacheKey::Value(Datum::from_oid(fdwid)),
+    )?
     else {
         panic!("cache lookup failed for foreign-data wrapper {fdwid}");
     };
     let fdw = ForeignDataWrapper {
         fdwid,
-        owner: SysCacheGetAttrNotNull(FOREIGNDATAWRAPPEROID, &tp, Anum_pg_foreign_data_wrapper_fdwowner)?
-            .as_oid(),
+        owner: SysCacheGetAttrNotNull(
+            FOREIGNDATAWRAPPEROID,
+            &tp,
+            Anum_pg_foreign_data_wrapper_fdwowner,
+        )?
+        .as_oid(),
         fdwname: name_attr(
             mcx,
-            SysCacheGetAttrNotNull(FOREIGNDATAWRAPPEROID, &tp, Anum_pg_foreign_data_wrapper_fdwname)?,
+            SysCacheGetAttrNotNull(
+                FOREIGNDATAWRAPPEROID,
+                &tp,
+                Anum_pg_foreign_data_wrapper_fdwname,
+            )?,
         )?,
         fdwhandler: SysCacheGetAttrNotNull(
             FOREIGNDATAWRAPPEROID,
@@ -156,7 +172,11 @@ pub fn GetForeignDataWrapper<'mcx>(mcx: Mcx<'mcx>, fdwid: Oid) -> PgResult<Forei
         .as_oid(),
         options: untransform_options(
             mcx,
-            attr_option_datum(FOREIGNDATAWRAPPEROID, &tp, Anum_pg_foreign_data_wrapper_fdwoptions)?,
+            attr_option_datum(
+                FOREIGNDATAWRAPPEROID,
+                &tp,
+                Anum_pg_foreign_data_wrapper_fdwoptions,
+            )?,
         )?,
     };
     ReleaseSysCache(tp);
@@ -191,7 +211,10 @@ pub fn GetForeignDataWrapperByName<'mcx>(
 }
 
 pub fn GetForeignServer<'mcx>(mcx: Mcx<'mcx>, serverid: Oid) -> PgResult<ForeignServer<'mcx>> {
-    let Some(tp) = SearchSysCache1(FOREIGNSERVEROID, SysCacheKey::Value(Datum::from_oid(serverid)))?
+    let Some(tp) = SearchSysCache1(
+        FOREIGNSERVEROID,
+        SysCacheKey::Value(Datum::from_oid(serverid)),
+    )?
     else {
         panic!("cache lookup failed for foreign server {serverid}");
     };
@@ -201,10 +224,17 @@ pub fn GetForeignServer<'mcx>(mcx: Mcx<'mcx>, serverid: Oid) -> PgResult<Foreign
             mcx,
             SysCacheGetAttrNotNull(FOREIGNSERVEROID, &tp, Anum_pg_foreign_server_srvname)?,
         )?,
-        owner: SysCacheGetAttrNotNull(FOREIGNSERVEROID, &tp, Anum_pg_foreign_server_srvowner)?.as_oid(),
-        fdwid: SysCacheGetAttrNotNull(FOREIGNSERVEROID, &tp, Anum_pg_foreign_server_srvfdw)?.as_oid(),
+        owner: SysCacheGetAttrNotNull(FOREIGNSERVEROID, &tp, Anum_pg_foreign_server_srvowner)?
+            .as_oid(),
+        fdwid: SysCacheGetAttrNotNull(FOREIGNSERVEROID, &tp, Anum_pg_foreign_server_srvfdw)?
+            .as_oid(),
         servertype: text_attr(mcx, FOREIGNSERVEROID, &tp, Anum_pg_foreign_server_srvtype)?,
-        serverversion: text_attr(mcx, FOREIGNSERVEROID, &tp, Anum_pg_foreign_server_srvversion)?,
+        serverversion: text_attr(
+            mcx,
+            FOREIGNSERVEROID,
+            &tp,
+            Anum_pg_foreign_server_srvversion,
+        )?,
         options: untransform_options(
             mcx,
             attr_option_datum(FOREIGNSERVEROID, &tp, Anum_pg_foreign_server_srvoptions)?,
@@ -250,14 +280,22 @@ pub fn GetForeignColumnOptions<'mcx>(
     };
     let options = untransform_options(
         mcx,
-        attr_option_datum(cache_syscache::cacheinfo::ATTNUM, &tp, Anum_pg_attribute_attfdwoptions)?,
+        attr_option_datum(
+            cache_syscache::cacheinfo::ATTNUM,
+            &tp,
+            Anum_pg_attribute_attfdwoptions,
+        )?,
     )?;
     ReleaseSysCache(tp);
     Ok(options)
 }
 
 /// GetUserMapping (foreign.c) — falls back to the PUBLIC mapping.
-pub fn GetUserMapping<'mcx>(mcx: Mcx<'mcx>, userid: Oid, serverid: Oid) -> PgResult<UserMapping<'mcx>> {
+pub fn GetUserMapping<'mcx>(
+    mcx: Mcx<'mcx>,
+    userid: Oid,
+    serverid: Oid,
+) -> PgResult<UserMapping<'mcx>> {
     let mut tp = user_mapping_lookup(userid, serverid)?;
     if tp.is_none() {
         tp = user_mapping_lookup(InvalidOid, serverid)?;
@@ -275,7 +313,8 @@ pub fn GetUserMapping<'mcx>(mcx: Mcx<'mcx>, userid: Oid, serverid: Oid) -> PgRes
             .into());
     };
     let um = UserMapping {
-        umid: SysCacheGetAttrNotNull(USERMAPPINGUSERSERVER, &tp, Anum_pg_user_mapping_oid)?.as_oid(),
+        umid: SysCacheGetAttrNotNull(USERMAPPINGUSERSERVER, &tp, Anum_pg_user_mapping_oid)?
+            .as_oid(),
         userid,
         serverid,
         options: untransform_options(
@@ -347,18 +386,25 @@ pub fn GetFdwRoutine(fdwhandler: Oid) -> PgResult<FdwKind> {
 /// GetFdwRoutineByServerId (foreign.c): the no-handler error surface plus the
 /// handler invocation.
 pub fn GetFdwRoutineByServerId<'mcx>(mcx: Mcx<'mcx>, serverid: Oid) -> PgResult<FdwKind> {
-    let Some(tp) = SearchSysCache1(FOREIGNSERVEROID, SysCacheKey::Value(Datum::from_oid(serverid)))?
+    let Some(tp) = SearchSysCache1(
+        FOREIGNSERVEROID,
+        SysCacheKey::Value(Datum::from_oid(serverid)),
+    )?
     else {
         panic!("cache lookup failed for foreign server {serverid}");
     };
-    let fdwid = SysCacheGetAttrNotNull(FOREIGNSERVEROID, &tp, Anum_pg_foreign_server_srvfdw)?.as_oid();
+    let fdwid =
+        SysCacheGetAttrNotNull(FOREIGNSERVEROID, &tp, Anum_pg_foreign_server_srvfdw)?.as_oid();
     ReleaseSysCache(tp);
 
     let fdw = GetForeignDataWrapper(mcx, fdwid)?;
     if fdw.fdwhandler == InvalidOid {
         return Err(::elog::ereport(ERROR)
             .errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE)
-            .errmsg(format!("foreign-data wrapper \"{}\" has no handler", fdw.fdwname))
+            .errmsg(format!(
+                "foreign-data wrapper \"{}\" has no handler",
+                fdw.fdwname
+            ))
             .into_error()
             .into());
     }

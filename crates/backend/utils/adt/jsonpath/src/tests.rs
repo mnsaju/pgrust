@@ -42,7 +42,11 @@ fn regress_ok_vectors_round_trip() {
         let image2 = jsonpath_in(cx2.mcx(), out.as_bytes(), None)
             .unwrap_or_else(|e| panic!("re-parse {out:?}: {}", e.message()))
             .expect("hard path returns Some");
-        assert_eq!(out_text(&image2), out, "idempotent canonical form of {input:?}");
+        assert_eq!(
+            out_text(&image2),
+            out,
+            "idempotent canonical form of {input:?}"
+        );
     }
 }
 
@@ -75,7 +79,11 @@ fn soft_errors_are_recorded_not_raised() {
             .unwrap_or_else(|e| panic!("soft parse of {input:?} raised: {}", e.message()));
         assert!(res.is_none(), "soft error for {input:?}");
         assert!(esc.error_occurred(), "escontext set for {input:?}");
-        assert_eq!(esc.error().expect("saved error").message(), *msg, "{input:?}");
+        assert_eq!(
+            esc.error().expect("saved error").message(),
+            *msg,
+            "{input:?}"
+        );
     }
 }
 
@@ -95,18 +103,42 @@ static EXTRA_ERR: &[(&str, &str)] = &[
     ("1 && 2", "syntax error at or near \"&&\" of jsonpath input"),
     ("$ ? (@)", "syntax error at or near \")\" of jsonpath input"),
     ("$?(1)", "syntax error at or near \")\" of jsonpath input"),
-    ("exists(1 == 2)", "syntax error at or near \"==\" of jsonpath input"),
+    (
+        "exists(1 == 2)",
+        "syntax error at or near \"==\" of jsonpath input",
+    ),
     ("!(1)", "syntax error at or near \")\" of jsonpath input"),
     // yytext for a keyword token emitted by the xnq {blank}+ rule is the
     // blank run (flex), hence " " not "is".
-    ("(1) is unknown", "syntax error at or near \" \" of jsonpath input"),
-    ("$[1 == 1]", "syntax error at or near \"==\" of jsonpath input"),
-    ("(1 == 1) + 2", "syntax error at or near \"+\" of jsonpath input"),
-    ("exists($.a) + 1", "syntax error at or near \"+\" of jsonpath input"),
+    (
+        "(1) is unknown",
+        "syntax error at or near \" \" of jsonpath input",
+    ),
+    (
+        "$[1 == 1]",
+        "syntax error at or near \"==\" of jsonpath input",
+    ),
+    (
+        "(1 == 1) + 2",
+        "syntax error at or near \"+\" of jsonpath input",
+    ),
+    (
+        "exists($.a) + 1",
+        "syntax error at or near \"+\" of jsonpath input",
+    ),
     ("-(1 == 1)", "syntax error at end of jsonpath input"),
-    ("1 == !(true)", "syntax error at or near \"!\" of jsonpath input"),
-    ("\"abc\\", "unexpected end after backslash at or near \"\\\" of jsonpath input"),
-    ("\"a\\\nb\"", "unexpected end after backslash at or near \"\\\" of jsonpath input"),
+    (
+        "1 == !(true)",
+        "syntax error at or near \"!\" of jsonpath input",
+    ),
+    (
+        "\"abc\\",
+        "unexpected end after backslash at or near \"\\\" of jsonpath input",
+    ),
+    (
+        "\"a\\\nb\"",
+        "unexpected end after backslash at or near \"\\\" of jsonpath input",
+    ),
     ("1 2 \"x", "syntax error at or near \"2\" of jsonpath input"),
 ];
 

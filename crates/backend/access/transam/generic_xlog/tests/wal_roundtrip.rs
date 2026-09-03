@@ -45,7 +45,10 @@ struct Fake {
     dirty: Vec<Buffer>,
 }
 
-static FAKE: Mutex<Fake> = Mutex::new(Fake { pages: Vec::new(), dirty: Vec::new() });
+static FAKE: Mutex<Fake> = Mutex::new(Fake {
+    pages: Vec::new(),
+    dirty: Vec::new(),
+});
 
 fn with_fake<R>(f: impl FnOnce(&mut Fake) -> R) -> R {
     f(&mut FAKE.lock().unwrap_or_else(|e| e.into_inner()))
@@ -175,7 +178,10 @@ fn plain_rel(mcx: Mcx<'_>) -> Relation<'_> {
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
         rd_lockInfo: LockInfoData {
-            lockRelId: LockRelId { relId: REL_OID, dbId: 5 },
+            lockRelId: LockRelId {
+                relId: REL_OID,
+                dbId: 5,
+            },
         },
         rd_rel: FormData_pg_class {
             relname,
@@ -345,8 +351,12 @@ fn generic_wal_roundtrip() {
     let ctl = transam_xlog::ctl::XLogCtl();
     ctl.InsertTimeLineID.store(1, Relaxed);
     ctl.PrevTimeLineID.store(1, Relaxed);
-    ctl.Insert.CurrBytePos.store(XLogRecPtrToBytePos(end_of_log), Relaxed);
-    ctl.Insert.PrevBytePos.store(XLogRecPtrToBytePos(prev_rec), Relaxed);
+    ctl.Insert
+        .CurrBytePos
+        .store(XLogRecPtrToBytePos(end_of_log), Relaxed);
+    ctl.Insert
+        .PrevBytePos
+        .store(XLogRecPtrToBytePos(prev_rec), Relaxed);
     ctl.Insert.fullPageWrites.store(true, Relaxed);
     ctl.Insert.RedoRecPtr.store(prev_rec, Relaxed);
     ctl.RedoRecPtr.store(prev_rec, Relaxed);
@@ -362,8 +372,13 @@ fn generic_wal_roundtrip() {
     assert!(transam_xlog::XLogInsertAllowed());
 
     with_fake(|f| {
-        f.pages.push(Box::leak(fixture_page(end_of_log, 0x5A, 256)).0.as_mut_ptr() as usize);
-        f.pages.push(Box::leak(fixture_page(end_of_log, 0x6B, 64)).0.as_mut_ptr() as usize);
+        f.pages.push(
+            Box::leak(fixture_page(end_of_log, 0x5A, 256))
+                .0
+                .as_mut_ptr() as usize,
+        );
+        f.pages
+            .push(Box::leak(fixture_page(end_of_log, 0x6B, 64)).0.as_mut_ptr() as usize);
     });
     let pristine0 = page_bytes(0);
 
@@ -408,7 +423,9 @@ fn generic_wal_roundtrip() {
     let reader_ctx: &'static MemoryContext = Box::leak(Box::new(MemoryContext::new("reader")));
     let mut reader = xlogreader::XLogReaderState::allocate(reader_ctx.mcx(), SEG).unwrap();
     reader.system_identifier = SYS_ID;
-    let mut routine = SegFileRead { wal_dir: dir.join("pg_wal") };
+    let mut routine = SegFileRead {
+        wal_dir: dir.join("pg_wal"),
+    };
     reader.XLogBeginRead(end_of_log + 40);
 
     reader.XLogReadRecord(&mut routine).unwrap().unwrap();
@@ -422,14 +439,22 @@ fn generic_wal_roundtrip() {
     let delta = reader.XLogRecGetBlockData(0).unwrap().to_vec();
     let mut replayed = pristine0.0;
     generic_xlog::redo_page_transform(&mut replayed, &delta, lsn);
-    assert_eq!(replayed[..], live0.0[..], "replayed delta page differs from live page");
+    assert_eq!(
+        replayed[..],
+        live0.0[..],
+        "replayed delta page differs from live page"
+    );
 
     // block 1: forced image (pd_lsn is stamped after the image is taken, so
     // compare past it; redo stamps it via BLK_RESTORED).
     assert!(reader.XLogRecHasBlockImage(1));
     let mut restored = Box::new(TestPage([0u8; BLCKSZ]));
     assert!(reader.RestoreBlockImage(1, &mut restored.0));
-    assert_eq!(restored.0[8..], live1.0[8..], "restored full image differs from live page");
+    assert_eq!(
+        restored.0[8..],
+        live1.0[8..],
+        "restored full image differs from live page"
+    );
     assert_eq!(restored.0[SizeOfPageHeaderData], 0x99);
 
     // xlogstats buckets the same decoded record.
@@ -438,8 +463,14 @@ fn generic_wal_roundtrip() {
     let (rec_len, fpi_len) = xlogstats::XLogRecGetLen(&reader.v);
     assert_eq!(stats.count, 1);
     assert_eq!(stats.rmgr_stats[RM_GENERIC_ID as usize].count, 1);
-    assert_eq!(stats.rmgr_stats[RM_GENERIC_ID as usize].fpi_len, fpi_len as u64);
-    assert_eq!(stats.record_stats[RM_GENERIC_ID as usize][0].rec_len, rec_len as u64);
+    assert_eq!(
+        stats.rmgr_stats[RM_GENERIC_ID as usize].fpi_len,
+        fpi_len as u64
+    );
+    assert_eq!(
+        stats.record_stats[RM_GENERIC_ID as usize][0].rec_len,
+        rec_len as u64
+    );
     assert!(fpi_len > 0);
     assert!(rec_len as usize > delta.len());
 

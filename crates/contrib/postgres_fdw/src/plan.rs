@@ -1,9 +1,7 @@
 use datum::Datum;
 use mcx::{Mcx, PgVec};
 use types_core::{Oid, BLCKSZ};
-use types_error::{
-    PgError, PgResult, ERRCODE_FEATURE_NOT_SUPPORTED,
-};
+use types_error::{PgError, PgResult, ERRCODE_FEATURE_NOT_SUPPORTED};
 use types_fmgr::{FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFunction};
 use types_nodes::list::{IntList, NodeList};
 use types_nodes::{FdwKind, FdwRoutine, Node};
@@ -23,7 +21,10 @@ const DEFAULT_FDW_TUPLE_COST: f64 = 0.2;
 
 // ---------- handler ----------
 
-fn fc_postgres_fdw_handler(_flinfo: Option<&mut FmgrInfo>, _fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+fn fc_postgres_fdw_handler(
+    _flinfo: Option<&mut FmgrInfo>,
+    _fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     static ROUTINE: FdwRoutine = FdwRoutine::new(FdwKind::PostgresFdw);
     Ok(Datum::from_usize(&ROUTINE as *const FdwRoutine as usize))
 }
@@ -67,7 +68,8 @@ fn apply_server_options<'mcx>(
                 }
             }
             "extensions" => {
-                fp.shippable_extensions = crate::option::extract_extension_list(mcx, &value, false)?;
+                fp.shippable_extensions =
+                    crate::option::extract_extension_list(mcx, &value, false)?;
             }
             "fetch_size" => {
                 if let guc::units::ParseNum::Ok(v) = guc::units::parse_int(&value, 0) {
@@ -141,18 +143,33 @@ fn postgres_get_foreign_rel_size<'mcx>(
     }
 
     // classifyConditions over baserestrictinfo.
-    let baserestrict: Vec<RinfoId> =
-        run.root.rel(rel_id).baserestrictinfo.iter().copied().collect();
+    let baserestrict: Vec<RinfoId> = run
+        .root
+        .rel(rel_id)
+        .baserestrictinfo
+        .iter()
+        .copied()
+        .collect();
     let mut remote_conds = PgVec::new_in(mcx);
     let mut local_conds = PgVec::new_in(mcx);
     attach_fpinfo(mcx, run.root.rel_mut(rel_id), fp)?;
-    deparse::classify_conditions(run, rel_id, &baserestrict, &mut remote_conds, &mut local_conds)?;
+    deparse::classify_conditions(
+        run,
+        rel_id,
+        &baserestrict,
+        &mut remote_conds,
+        &mut local_conds,
+    )?;
 
     // attrs_used: reltarget exprs + local_conds clauses.
     let varno = run.root.rel(rel_id).relid as i32;
     let mut attrs_used = types_nodes::Bitmapset::empty();
-    let expr_ids: Vec<types_pathnodes::NodeId> =
-        run.pathtarget(run.rel_reltarget_id(rel_id)).exprs.iter().copied().collect();
+    let expr_ids: Vec<types_pathnodes::NodeId> = run
+        .pathtarget(run.rel_reltarget_id(rel_id))
+        .exprs
+        .iter()
+        .copied()
+        .collect();
     for id in expr_ids {
         vars::pull_varattnos(mcx, *run.root.expr_node(id), varno, &mut attrs_used)?;
     }
@@ -197,8 +214,13 @@ fn postgres_get_foreign_rel_size<'mcx>(
         let fp = fpinfo(run.root.rel(rel_id)).borrow();
         (fp.fdw_startup_cost, fp.fdw_tuple_cost)
     };
-    let (rows, width, startup_cost, total_cost) =
-        estimate_base_cost_size(run, rel_id, local_conds_sel, fdw_startup_cost, fdw_tuple_cost);
+    let (rows, width, startup_cost, total_cost) = estimate_base_cost_size(
+        run,
+        rel_id,
+        local_conds_sel,
+        fdw_startup_cost,
+        fdw_tuple_cost,
+    );
 
     {
         let fpc = fpinfo(run.root.rel(rel_id));
@@ -238,8 +260,7 @@ fn estimate_base_cost_size(
     let baserestrict_startup = r.baserestrictcost.startup;
     let baserestrict_per_tuple = r.baserestrictcost.per_tuple;
 
-    let mut retrieved_rows =
-        planner::costsize::clamp_row_est(rows / local_conds_sel.max(1e-9));
+    let mut retrieved_rows = planner::costsize::clamp_row_est(rows / local_conds_sel.max(1e-9));
     if retrieved_rows > tuples {
         retrieved_rows = tuples;
     }
@@ -276,8 +297,7 @@ fn postgres_get_foreign_paths<'mcx>(
         let fp = fpinfo(run.root.rel(rel_id)).borrow();
         (fp.rows, fp.disabled_nodes, fp.startup_cost, fp.total_cost)
     };
-    let required_outer =
-        planner::relnode::relids_copy(mcx, &run.root.rel(rel_id).lateral_relids);
+    let required_outer = planner::relnode::relids_copy(mcx, &run.root.rel(rel_id).lateral_relids);
     let path = planner::pathnode::create_foreignscan_path(
         run,
         rel_id,
@@ -321,7 +341,10 @@ fn postgres_get_foreign_plan<'mcx>(
     // plus the remote/local decision).
     let (remote_set, local_set): (Vec<RinfoId>, Vec<RinfoId>) = {
         let fp = fpinfo(run.root.rel(rel_id)).borrow();
-        (fp.remote_conds.iter().copied().collect(), fp.local_conds.iter().copied().collect())
+        (
+            fp.remote_conds.iter().copied().collect(),
+            fp.local_conds.iter().copied().collect(),
+        )
     };
     let mut remote_rinfos: PgVec<'mcx, RinfoId> = PgVec::new_in(mcx);
     let mut local_exprs: NodeList<'mcx> = NodeList::nil();
@@ -417,7 +440,13 @@ fn explain_foreign_scan<'mcx>(
         return Ok(());
     }
     // fdw_private[FdwScanPrivateSelectSql] = the remote SELECT.
-    if let Some(sql) = node.plan.fdw_private.iter().next().and_then(|n| n.as_string()) {
+    if let Some(sql) = node
+        .plan
+        .fdw_private
+        .iter()
+        .next()
+        .and_then(|n| n.as_string())
+    {
         emit("Remote SQL", types_nodes::FdwExplainProp::Text(sql.sval))?;
     }
     Ok(())

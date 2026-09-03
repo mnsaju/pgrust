@@ -47,7 +47,9 @@ fn mk_values_plan(mcx: Mcx<'static>, rows: &[&[Option<i32>]]) -> &'static Values
             };
             cells.lappend(mcx, n).unwrap();
         }
-        values_lists.lappend(mcx, Node::mk_list(mcx, cells).unwrap()).unwrap();
+        values_lists
+            .lappend(mcx, Node::mk_list(mcx, cells).unwrap())
+            .unwrap();
     }
     let ncols = rows[0].len();
     let mut plan = Node::build::<ValuesScan>(mcx).unwrap();
@@ -66,7 +68,15 @@ fn mk_values_plan(mcx: Mcx<'static>, rows: &[&[Option<i32>]]) -> &'static Values
         .unwrap();
         let te = Node::mk(
             mcx,
-            TargetEntry { expr: var, resno: (j + 1) as i16, resname: None, ressortgroupref: 0, resorigtbl: 0, resorigcol: 0, resjunk: false },
+            TargetEntry {
+                expr: var,
+                resno: (j + 1) as i16,
+                resname: None,
+                ressortgroupref: 0,
+                resorigtbl: 0,
+                resorigcol: 0,
+                resjunk: false,
+            },
         )
         .unwrap();
         tlist.lappend(mcx, te).unwrap();
@@ -120,7 +130,10 @@ fn multi_column_and_null() {
     let r1 = pull_row(&mut state, &mut estate).unwrap();
     assert_eq!(r1[0], (2, false));
     assert!(r1[1].1);
-    assert_eq!(pull_row(&mut state, &mut estate).unwrap(), vec![(1, false), (7, false)]);
+    assert_eq!(
+        pull_row(&mut state, &mut estate).unwrap(),
+        vec![(1, false), (7, false)]
+    );
     assert!(pull_row(&mut state, &mut estate).is_none());
 }
 
@@ -132,14 +145,26 @@ fn rescan_and_backward() {
     let mut estate = EStateData::new_in(mcx);
     let mut state = exec_init_values_scan(mcx, plan, &mut estate).unwrap();
 
-    assert_eq!(pull_row(&mut state, &mut estate).unwrap(), vec![(10, false)]);
-    assert_eq!(pull_row(&mut state, &mut estate).unwrap(), vec![(20, false)]);
+    assert_eq!(
+        pull_row(&mut state, &mut estate).unwrap(),
+        vec![(10, false)]
+    );
+    assert_eq!(
+        pull_row(&mut state, &mut estate).unwrap(),
+        vec![(20, false)]
+    );
 
     estate.es_direction = ScanDirection::BackwardScanDirection;
-    assert_eq!(pull_row(&mut state, &mut estate).unwrap(), vec![(10, false)]);
+    assert_eq!(
+        pull_row(&mut state, &mut estate).unwrap(),
+        vec![(10, false)]
+    );
     assert!(pull_row(&mut state, &mut estate).is_none());
 
     estate.es_direction = ScanDirection::ForwardScanDirection;
     exec_rescan_values_scan(&mut state, &mut estate).unwrap();
-    assert_eq!(pull_row(&mut state, &mut estate).unwrap(), vec![(10, false)]);
+    assert_eq!(
+        pull_row(&mut state, &mut estate).unwrap(),
+        vec![(10, false)]
+    );
 }

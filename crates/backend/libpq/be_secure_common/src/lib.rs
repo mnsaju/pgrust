@@ -23,11 +23,7 @@ fn errno() -> i32 {
 
 // replace_percent_placeholders (common/percentrepl.c), "p"-only instance;
 // homed here until common-percentrepl lands.
-fn replace_percent_placeholder(
-    string: &str,
-    guc_name: &str,
-    prompt: &str,
-) -> PgResult<String> {
+fn replace_percent_placeholder(string: &str, guc_name: &str, prompt: &str) -> PgResult<String> {
     let mut result = String::with_capacity(string.len() + prompt.len());
     let mut it = string.chars();
     while let Some(c) = it.next() {
@@ -44,7 +40,9 @@ fn replace_percent_placeholder(
                     .errmsg(format!(
                         "invalid value for parameter \"{guc_name}\": \"{string}\""
                     ))
-                    .errdetail(format!("String contains unexpected placeholder \"%{other}\"."))
+                    .errdetail(format!(
+                        "String contains unexpected placeholder \"%{other}\"."
+                    ))
                     .finish(loc("replace_percent_placeholders"))
                     .map(|()| String::new());
             }
@@ -219,7 +217,9 @@ pub fn check_ssl_key_file_permissions(ssl_key_file: &str, is_server_start: bool)
         ereport(loglevel)
             .with_saved_errno(errno())
             .errcode_for_file_access()
-            .errmsg(format!("could not access private key file \"{ssl_key_file}\": %m"))
+            .errmsg(format!(
+                "could not access private key file \"{ssl_key_file}\": %m"
+            ))
             .finish(loc("check_ssl_key_file_permissions"))?;
         return Ok(false);
     }
@@ -227,7 +227,9 @@ pub fn check_ssl_key_file_permissions(ssl_key_file: &str, is_server_start: bool)
     if st.st_mode & libc::S_IFMT != libc::S_IFREG {
         ereport(loglevel)
             .errcode(ERRCODE_CONFIG_FILE_ERROR)
-            .errmsg(format!("private key file \"{ssl_key_file}\" is not a regular file"))
+            .errmsg(format!(
+                "private key file \"{ssl_key_file}\" is not a regular file"
+            ))
             .finish(loc("check_ssl_key_file_permissions"))?;
         return Ok(false);
     }

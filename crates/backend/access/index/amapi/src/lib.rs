@@ -191,8 +191,7 @@ fn gisttranslatecmptype(cmptype: CompareType, opfamily: Oid) -> PgResult<Strateg
     if funcid == InvalidOid {
         return Ok(InvalidStrategy);
     }
-    let result =
-        fmgr_core::oid_function_call1_coll(funcid, InvalidOid, Datum::from_i32(cmptype))?;
+    let result = fmgr_core::oid_function_call1_coll(funcid, InvalidOid, Datum::from_i32(cmptype))?;
     Ok(result.as_u16())
 }
 
@@ -402,8 +401,11 @@ fn am_lookup_failed(amoid: Oid) -> Box<PgError> {
 #[inline(never)]
 fn not_index_am(name: String) -> Box<PgError> {
     Box::new(
-        PgError::error(format!("access method \"{name}\" is not of type {}", "INDEX"))
-            .with_sqlstate(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+        PgError::error(format!(
+            "access method \"{name}\" is not of type {}",
+            "INDEX"
+        ))
+        .with_sqlstate(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
     )
 }
 

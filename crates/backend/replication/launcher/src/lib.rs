@@ -7,10 +7,10 @@
 // releases/reacquires per iteration — mirrored here.
 #![allow(non_snake_case)]
 
+use pgsync::Mutex;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicI32, Ordering};
-use pgsync::Mutex;
 
 use elog::{elog as log_report, ereport};
 use guc_tables::{vars, GucVarAccessors};
@@ -199,7 +199,10 @@ fn logicalrep_worker_bgw_main(main_arg: u64) -> PgResult<()> {
     if logical_worker_seams::apply_worker_main::is_installed() {
         logical_worker_seams::apply_worker_main::call(main_arg)
     } else {
-        let _ = log_report(LOG, "logical replication apply worker unported; exiting".to_string());
+        let _ = log_report(
+            LOG,
+            "logical replication apply worker unported; exiting".to_string(),
+        );
         Ok(())
     }
 }
@@ -301,8 +304,11 @@ pub fn logicalrep_worker_launch(
     let picked = with_ctx(|ctx| {
         loop {
             let free = ctx.workers.iter().position(|w| !w.in_use);
-            let nsyncworkers =
-                ctx.workers.iter().filter(|w| w.is_tablesync() && w.subid == subid).count() as i32;
+            let nsyncworkers = ctx
+                .workers
+                .iter()
+                .filter(|w| w.is_tablesync() && w.subid == subid)
+                .count() as i32;
 
             // Garbage-collect workers that never managed to attach.
             if free.is_none() || nsyncworkers >= max_sync_workers_per_subscription() {
@@ -383,8 +389,7 @@ pub fn logicalrep_worker_launch(
         TableSync => (
             format!(
                 "logical replication tablesync worker for subscription {} sync {}",
-                subid,
-                relid
+                subid, relid
             ),
             "logical replication tablesync worker",
         ),
@@ -743,7 +748,13 @@ fn ApplyLauncherWakeup() {
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_ref()
-        .and_then(|ctx| if ctx.launcher_pid != 0 { ctx.launcher_proc } else { None });
+        .and_then(|ctx| {
+            if ctx.launcher_pid != 0 {
+                ctx.launcher_proc
+            } else {
+                None
+            }
+        });
     if let Some(p) = proc_no {
         latch::SetLatch(LatchHandle::proc(p));
     }

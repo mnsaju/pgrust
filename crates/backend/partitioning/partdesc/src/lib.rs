@@ -87,9 +87,11 @@ pub fn RelationGetPartitionDesc(
         }
     }
     if omit_detached && snapmgr::ActiveSnapshotSet() {
-        if let Some((d, xmin)) =
-            with_state(|st| st.descs_nodetached.get(&relid).map(|(d, x)| (Rc::clone(d), *x)))
-        {
+        if let Some((d, xmin)) = with_state(|st| {
+            st.descs_nodetached
+                .get(&relid)
+                .map(|(d, x)| (Rc::clone(d), *x))
+        }) {
             debug_assert!(xmin != InvalidTransactionId);
             let snap = snapmgr::GetActiveSnapshot();
             if !snapmgr::XidInMVCCSnapshot(xmin, &snap)? {
@@ -116,8 +118,8 @@ fn text_to_str<'mcx>(mcx: ::mcx::Mcx<'mcx>, d: Datum) -> &'mcx str {
             if w & 0x02 != 0 {
                 let total = ::types_tuple::varatt::varsize_any(p);
                 let raw = core::slice::from_raw_parts(p, total);
-                let flat = ::detoast_seams::detoast_attr::call(mcx, raw)
-                    .expect("detoast relpartbound");
+                let flat =
+                    ::detoast_seams::detoast_attr::call(mcx, raw).expect("detoast relpartbound");
                 let (ptr, len) = (flat.as_ptr(), flat.len());
                 core::mem::forget(flat);
                 // detoast_attr returns the full 4-byte-header image; the
@@ -228,7 +230,10 @@ fn RelationBuildPartitionDesc(
     // Snapshot-dependent (a pending row omitted by xmin visibility) => only
     // the nodetached slot, keyed by that xmin (partdesc.c:363-402).
     if omit_detached && detached_exist && detached_xmin != InvalidTransactionId {
-        with_state(|st| st.descs_nodetached.insert(relid, (Rc::clone(&desc), detached_xmin)));
+        with_state(|st| {
+            st.descs_nodetached
+                .insert(relid, (Rc::clone(&desc), detached_xmin))
+        });
     } else {
         with_state(|st| st.descs.insert(relid, Rc::clone(&desc)));
     }

@@ -35,19 +35,21 @@ fn install_seams() {
             }))
         });
         syscache_seams::lookup_pg_operator_shape::set(|opno| {
-            Ok((opno == INT4_EQ).then_some(syscache_seams::PgOperatorShape {
-                oprnamespace: 11,
-                oprleft: INT4OID,
-                oprright: INT4OID,
-                oprresult: 16,
-                oprcom: INT4_EQ,
-                oprnegate: 518,
-                oprcode: F_INT4EQ,
-                oprrest: 101,
-                oprjoin: 105,
-                oprcanmerge: true,
-                oprcanhash: true,
-            }))
+            Ok(
+                (opno == INT4_EQ).then_some(syscache_seams::PgOperatorShape {
+                    oprnamespace: 11,
+                    oprleft: INT4OID,
+                    oprright: INT4OID,
+                    oprresult: 16,
+                    oprcom: INT4_EQ,
+                    oprnegate: 518,
+                    oprcode: F_INT4EQ,
+                    oprrest: 101,
+                    oprjoin: 105,
+                    oprcanmerge: true,
+                    oprcanhash: true,
+                }),
+            )
         });
     });
 }
@@ -88,8 +90,16 @@ fn one_col_desc(mcx: Mcx<'_>) -> Rc<TupleDescData<'_>> {
 }
 
 fn mk_group(mcx: Mcx<'_>) -> &Group<'_> {
-    let var =
-        Node::mk_var(mcx, ::types_nodes::primnodes::OUTER_VAR, 1, INT4OID, -1, 0, 0).unwrap();
+    let var = Node::mk_var(
+        mcx,
+        ::types_nodes::primnodes::OUTER_VAR,
+        1,
+        INT4OID,
+        -1,
+        0,
+        0,
+    )
+    .unwrap();
     let tle = Node::mk_target_entry(mcx, var, 1, Some("a"), false).unwrap();
     let mut g = Node::build::<Group>(mcx).unwrap();
     g.plan.targetlist = NodeList::make1(mcx, tle).unwrap();
@@ -141,18 +151,10 @@ fn run_group(rows: &'static [Option<i32>]) -> Vec<Option<i32>> {
         let gp = unsafe { shorten(gp) };
         let result_desc = one_col_desc(leaked_mcx());
         let params = estate.param_bind();
-        let proj = ::execexpr::exec_build_projection_info(mcx, &gp.plan.targetlist, None, params)
-            .unwrap();
-        let mut state = exec_init_group(
-            gp,
-            estate,
-            0,
-            &result_desc.clone(),
-            result_desc,
-            None,
-            proj,
-        )
-        .unwrap();
+        let proj =
+            ::execexpr::exec_build_projection_info(mcx, &gp.plan.targetlist, None, params).unwrap();
+        let mut state =
+            exec_init_group(gp, estate, 0, &result_desc.clone(), result_desc, None, proj).unwrap();
 
         let mut got: Vec<Option<i32>> = Vec::new();
         {
@@ -196,5 +198,8 @@ fn empty_input_returns_nothing() {
 // Grouping equality is NOT DISTINCT: adjacent NULL keys form one group.
 #[test]
 fn null_keys_form_one_group() {
-    assert_eq!(run_group(&[None, None, Some(5), Some(5)]), vec![None, Some(5)]);
+    assert_eq!(
+        run_group(&[None, None, Some(5), Some(5)]),
+        vec![None, Some(5)]
+    );
 }

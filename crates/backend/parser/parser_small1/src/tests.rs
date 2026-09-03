@@ -2,8 +2,8 @@ use mcx::MemoryContext;
 use wchar::{PG_LATIN1, PG_UTF8};
 
 use crate::{
-    downcase_identifier, downcase_truncate_identifier, parser_errposition_source,
-    scanner_isspace, truncate_identifier, NAMEDATALEN,
+    downcase_identifier, downcase_truncate_identifier, parser_errposition_source, scanner_isspace,
+    truncate_identifier, NAMEDATALEN,
 };
 
 #[test]
@@ -25,7 +25,8 @@ fn downcase_leaves_high_bit_in_multibyte_encoding() {
 fn downcase_high_bit_single_byte_c_locale() {
     // C locale: isupper never true for high-bit bytes, so 0xC9 passes through.
     let ctx = MemoryContext::new("t");
-    let out = downcase_truncate_identifier(ctx.mcx(), &[b'A', 0xC9, b'Z'], false, PG_LATIN1).unwrap();
+    let out =
+        downcase_truncate_identifier(ctx.mcx(), &[b'A', 0xC9, b'Z'], false, PG_LATIN1).unwrap();
     assert_eq!(&out[..], &[b'a', 0xC9, b'z']);
 }
 
@@ -197,7 +198,10 @@ fn parsestate_defaults_and_inheritance() {
     assert_eq!(child.p_sourcetext, Some(b"select $1".as_slice()));
     let child_carrier = child.p_ref_hook_state.as_var_params().unwrap();
     // C aliases p_ref_hook_state into the child: same shared array.
-    assert!(alloc::rc::Rc::ptr_eq(&carrier.param_types, &child_carrier.param_types));
+    assert!(alloc::rc::Rc::ptr_eq(
+        &carrier.param_types,
+        &child_carrier.param_types
+    ));
 }
 
 #[test]
@@ -228,49 +232,81 @@ fn make_const_natural_types() {
     let mcx = ctx.mcx();
     let pstate = make_parsestate(mcx, None);
 
-    let null = A_Const { val: None, location: 5 };
+    let null = A_Const {
+        val: None,
+        location: 5,
+    };
     let con = make_const(mcx, &pstate, &null).unwrap();
     let con = con.as_const().unwrap();
     assert!(con.constisnull);
     assert_eq!(
-        (con.consttype, con.consttypmod, con.constlen, con.constbyval, con.location),
+        (
+            con.consttype,
+            con.consttypmod,
+            con.constlen,
+            con.constbyval,
+            con.location
+        ),
         (UNKNOWNOID, -1, -2, false, 5)
     );
 
-    let int = A_Const { val: Some(ValUnion::Integer(Integer { ival: -42 })), location: 1 };
+    let int = A_Const {
+        val: Some(ValUnion::Integer(Integer { ival: -42 })),
+        location: 1,
+    };
     let con = make_const(mcx, &pstate, &int).unwrap();
     let con = con.as_const().unwrap();
-    assert_eq!((con.consttype, con.constlen, con.constbyval), (INT4OID, 4, true));
+    assert_eq!(
+        (con.consttype, con.constlen, con.constbyval),
+        (INT4OID, 4, true)
+    );
     assert_eq!(con.constvalue.as_i32(), -42);
 
     // "Float" that is an oversize integer fitting int32 / int64.
-    let f32fit =
-        A_Const { val: Some(ValUnion::Float(Float { fval: "2147483647" })), location: 2 };
+    let f32fit = A_Const {
+        val: Some(ValUnion::Float(Float { fval: "2147483647" })),
+        location: 2,
+    };
     let con = make_const(mcx, &pstate, &f32fit).unwrap();
     assert_eq!(con.as_const().unwrap().consttype, INT4OID);
 
-    let f64fit =
-        A_Const { val: Some(ValUnion::Float(Float { fval: "3000000000" })), location: 2 };
+    let f64fit = A_Const {
+        val: Some(ValUnion::Float(Float { fval: "3000000000" })),
+        location: 2,
+    };
     let con = make_const(mcx, &pstate, &f64fit).unwrap();
     let con = con.as_const().unwrap();
-    assert_eq!((con.consttype, con.constlen, con.constbyval), (INT8OID, 8, true));
+    assert_eq!(
+        (con.consttype, con.constlen, con.constbyval),
+        (INT8OID, 8, true)
+    );
     assert_eq!(con.constvalue.as_i64(), 3_000_000_000);
 
-    let b = A_Const { val: Some(ValUnion::Boolean(Boolean { boolval: true })), location: 3 };
+    let b = A_Const {
+        val: Some(ValUnion::Boolean(Boolean { boolval: true })),
+        location: 3,
+    };
     let con = make_const(mcx, &pstate, &b).unwrap();
     let con = con.as_const().unwrap();
-    assert_eq!((con.consttype, con.constlen, con.constbyval), (BOOLOID, 1, true));
+    assert_eq!(
+        (con.consttype, con.constlen, con.constbyval),
+        (BOOLOID, 1, true)
+    );
     assert!(con.constvalue.as_bool());
 
     let s = A_Const {
-        val: Some(ValUnion::String(types_nodes::node_tree::String { sval: "abc" })),
+        val: Some(ValUnion::String(types_nodes::node_tree::String {
+            sval: "abc",
+        })),
         location: 4,
     };
     let con = make_const(mcx, &pstate, &s).unwrap();
     let con = con.as_const().unwrap();
-    assert_eq!((con.consttype, con.constlen, con.constbyval), (UNKNOWNOID, -2, false));
-    let bytes =
-        unsafe { core::slice::from_raw_parts(con.constvalue.as_usize() as *const u8, 4) };
+    assert_eq!(
+        (con.consttype, con.constlen, con.constbyval),
+        (UNKNOWNOID, -2, false)
+    );
+    let bytes = unsafe { core::slice::from_raw_parts(con.constvalue.as_usize() as *const u8, 4) };
     assert_eq!(bytes, b"abc\0");
 }
 
@@ -278,18 +314,22 @@ fn make_const_natural_types() {
 fn make_const_numeric_literal_uses_numeric_in() {
     let ctx = MemoryContext::new("t");
     let pstate = make_parsestate(ctx.mcx(), None);
-    let f = A_Const { val: Some(ValUnion::Float(Float { fval: "1.5" })), location: 0 };
+    let f = A_Const {
+        val: Some(ValUnion::Float(Float { fval: "1.5" })),
+        location: 0,
+    };
     let node = make_const(ctx.mcx(), &pstate, &f).unwrap();
     let c = node.as_const().unwrap();
     assert_eq!(c.consttype, types_core::catalog::NUMERICOID);
     assert_eq!(c.constlen, -1);
     assert!(!c.constbyval && !c.constisnull);
-    let expect = adt_numeric::io::numeric_in("1.5", -1, None).unwrap().unwrap();
+    let expect = adt_numeric::io::numeric_in("1.5", -1, None)
+        .unwrap()
+        .unwrap();
     let img = expect.as_bytes();
     // SAFETY: the const datum points at a live numeric varlena of img.len() bytes.
-    let got = unsafe {
-        core::slice::from_raw_parts(c.constvalue.as_usize() as *const u8, img.len())
-    };
+    let got =
+        unsafe { core::slice::from_raw_parts(c.constvalue.as_usize() as *const u8, img.len()) };
     assert_eq!(got, img);
 }
 
@@ -298,12 +338,17 @@ fn make_const_bitstring_literal() {
     let ctx = MemoryContext::new("t");
     let pstate = make_parsestate(ctx.mcx(), None);
     let b = A_Const {
-        val: Some(ValUnion::BitString(types_nodes::node_tree::BitString { bsval: "b101" })),
+        val: Some(ValUnion::BitString(types_nodes::node_tree::BitString {
+            bsval: "b101",
+        })),
         location: 0,
     };
     let con = make_const(ctx.mcx(), &pstate, &b).unwrap();
     let con = con.as_const().unwrap();
-    assert_eq!((con.consttype, con.constlen, con.constbyval), (1560, -1, false));
+    assert_eq!(
+        (con.consttype, con.constlen, con.constbyval),
+        (1560, -1, false)
+    );
     assert!(!con.constisnull);
 }
 
@@ -316,12 +361,26 @@ fn fixed_paramref_hook_resolves_and_rejects() {
     let types = [TEXTOID, InvalidOid];
     setup_parse_fixed_parameters(&mut pstate, &types);
 
-    let node =
-        fixed_paramref_hook(mcx, &pstate, &ParamRef { number: 1, location: 7 }, PG_UTF8).unwrap();
+    let node = fixed_paramref_hook(
+        mcx,
+        &pstate,
+        &ParamRef {
+            number: 1,
+            location: 7,
+        },
+        PG_UTF8,
+    )
+    .unwrap();
     let param = node.as_param().unwrap();
     assert_eq!(param.paramkind, ParamKind::PARAM_EXTERN);
     assert_eq!(
-        (param.paramid, param.paramtype, param.paramtypmod, param.paramcollid, param.location),
+        (
+            param.paramid,
+            param.paramtype,
+            param.paramtypmod,
+            param.paramcollid,
+            param.location
+        ),
         (1, TEXTOID, -1, 100, 7)
     );
 
@@ -329,7 +388,10 @@ fn fixed_paramref_hook_resolves_and_rejects() {
         let err = fixed_paramref_hook(
             mcx,
             &pstate,
-            &ParamRef { number, location: -1 },
+            &ParamRef {
+                number,
+                location: -1,
+            },
             PG_UTF8,
         )
         .unwrap_err();
@@ -346,23 +408,48 @@ fn variable_paramref_hook_grows_shared_array() {
     let carrier = VarParamState::new();
     setup_parse_variable_parameters(&mut pstate, carrier.clone());
 
-    let node =
-        variable_paramref_hook(mcx, &pstate, &ParamRef { number: 3, location: 2 }, PG_UTF8)
-            .unwrap();
+    let node = variable_paramref_hook(
+        mcx,
+        &pstate,
+        &ParamRef {
+            number: 3,
+            location: 2,
+        },
+        PG_UTF8,
+    )
+    .unwrap();
     let param = node.as_param().unwrap();
     assert_eq!((param.paramid, param.paramtype), (3, UNKNOWNOID));
-    assert_eq!(&*carrier.param_types.borrow(), &[InvalidOid, InvalidOid, UNKNOWNOID]);
+    assert_eq!(
+        &*carrier.param_types.borrow(),
+        &[InvalidOid, InvalidOid, UNKNOWNOID]
+    );
 
-    let err = variable_paramref_hook(mcx, &pstate, &ParamRef { number: 0, location: -1 }, PG_UTF8)
-        .unwrap_err();
+    let err = variable_paramref_hook(
+        mcx,
+        &pstate,
+        &ParamRef {
+            number: 0,
+            location: -1,
+        },
+        PG_UTF8,
+    )
+    .unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_UNDEFINED_PARAMETER);
 
     // JDBC hack: VOID param in a CALL argument reads as unknown.
     carrier.param_types.borrow_mut()[0] = VOIDOID;
     pstate.p_expr_kind = ParseExprKind::EXPR_KIND_CALL_ARGUMENT;
-    let node =
-        variable_paramref_hook(mcx, &pstate, &ParamRef { number: 1, location: 0 }, PG_UTF8)
-            .unwrap();
+    let node = variable_paramref_hook(
+        mcx,
+        &pstate,
+        &ParamRef {
+            number: 1,
+            location: 0,
+        },
+        PG_UTF8,
+    )
+    .unwrap();
     assert_eq!(node.as_param().unwrap().paramtype, UNKNOWNOID);
     assert_eq!(carrier.param_types.borrow()[0], UNKNOWNOID);
 }
@@ -373,7 +460,10 @@ fn variable_coerce_param_hook_backwrites_type() {
     let ctx = MemoryContext::new("t");
     let mut pstate = make_parsestate(ctx.mcx(), None);
     let carrier = VarParamState::new();
-    carrier.param_types.borrow_mut().extend_from_slice(&[UNKNOWNOID]);
+    carrier
+        .param_types
+        .borrow_mut()
+        .extend_from_slice(&[UNKNOWNOID]);
     setup_parse_variable_parameters(&mut pstate, carrier.clone());
 
     let mut param = types_nodes::Param {
@@ -386,7 +476,10 @@ fn variable_coerce_param_hook_backwrites_type() {
     };
     assert!(variable_coerce_param_hook(&pstate, &mut param, TEXTOID, 44, 4, PG_UTF8).unwrap());
     assert_eq!(carrier.param_types.borrow()[0], TEXTOID);
-    assert_eq!((param.paramtype, param.paramtypmod, param.paramcollid), (TEXTOID, -1, 100));
+    assert_eq!(
+        (param.paramtype, param.paramtypmod, param.paramcollid),
+        (TEXTOID, -1, 100)
+    );
     // Leftmost of the param's and coercion's locations.
     assert_eq!(param.location, 4);
 
@@ -446,7 +539,10 @@ fn enr_lookup_through_pstate() {
     pstate.p_queryEnv = Some(&env);
     assert!(name_matches_visible_ENR(&pstate, "new_rows"));
     assert!(!name_matches_visible_ENR(&pstate, "old_rows"));
-    assert_eq!(get_visible_ENR(&pstate, "new_rows").unwrap().reliddesc, 1234);
+    assert_eq!(
+        get_visible_ENR(&pstate, "new_rows").unwrap().reliddesc,
+        1234
+    );
 }
 
 fn query_with_param<'mcx>(
@@ -499,7 +595,6 @@ fn check_variable_parameters_passes_and_flags_mismatch() {
 
 #[test]
 fn check_variable_parameters_rejects_unknown_paramno() {
-
     let ctx = MemoryContext::new("t");
     let mcx = ctx.mcx();
     let mut pstate = make_parsestate(mcx, None);

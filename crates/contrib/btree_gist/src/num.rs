@@ -42,7 +42,10 @@ pub trait NumOps {
 }
 
 pub fn read_pair<T: NumOps>(key: &[u8]) -> (T::V, T::V) {
-    (T::read(&key[..T::SIZE]), T::read(&key[T::SIZE..2 * T::SIZE]))
+    (
+        T::read(&key[..T::SIZE]),
+        T::read(&key[T::SIZE..2 * T::SIZE]),
+    )
 }
 
 pub fn make_key<T: NumOps>(lower: T::V, upper: T::V) -> Vec<u8> {
@@ -179,7 +182,12 @@ pub fn picksplit<T: NumOps>(
     }
     let (ll, lu) = left.expect("picksplit left group nonempty");
     let (rl, ru) = right.expect("picksplit right group nonempty");
-    Ok((spl_left, spl_right, make_key::<T>(ll, lu), make_key::<T>(rl, ru)))
+    Ok((
+        spl_left,
+        spl_right,
+        make_key::<T>(ll, lu),
+        make_key::<T>(rl, ru),
+    ))
 }
 
 // penalty_num: C float arithmetic transcribed exactly (0.49F, FLT_MIN,

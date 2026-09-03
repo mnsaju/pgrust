@@ -367,8 +367,7 @@ pub fn RetainedSlotIsCurrent() -> bool {
         return false;
     }
     let seg = current_seg();
-    (my as usize) < seg.slots
-        && seg.proc_states()[my as usize].procPid.load(Relaxed) == MyProcPid()
+    (my as usize) < seg.slots && seg.proc_states()[my as usize].procPid.load(Relaxed) == MyProcPid()
 }
 
 pub fn CleanupInvalidationState() -> PgResult<()> {
@@ -524,7 +523,10 @@ pub fn ReceiveSharedInvalidMessages(
         if st.nextmsg.get() >= st.nummsgs.get() && !st.catchup_pending.get() {
             let procno = st.my_procno.get();
             if procno >= 0 {
-                let seg = st.seg.get().expect("shared invalidation memory is not attached");
+                let seg = st
+                    .seg
+                    .get()
+                    .expect("shared invalidation memory is not attached");
                 if !seg.proc_states()[procno as usize].hasMessages.load(Acquire) {
                     return Ok(());
                 }
@@ -556,7 +558,10 @@ fn receive_impl(
         st.nummsgs.set(0);
 
         let get_result = {
-            let seg = st.seg.get().expect("shared invalidation memory is not attached");
+            let seg = st
+                .seg
+                .get()
+                .expect("shared invalidation memory is not attached");
             let mut buf = st.messages.borrow_mut();
             SIGetDataEntries(seg, &mut buf[..])?
         };

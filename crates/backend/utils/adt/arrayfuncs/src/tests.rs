@@ -3,8 +3,8 @@ use ::datum::Datum;
 use ::mcx::{vec_append_bytes, vec_with_capacity_in, Mcx, MemoryContext, PgVec};
 use ::stringinfo::StringInfo;
 use ::types_core::{FLOAT8OID, INT4OID, TEXTOID};
-use ::types_fmgr::{FmgrInfo, FunctionCallInfoBaseData as Fcinfo, LocalFcinfo};
 use ::types_error::PgResult;
+use ::types_fmgr::{FmgrInfo, FunctionCallInfoBaseData as Fcinfo, LocalFcinfo};
 
 use crate::build::{accum_array_result, make_array_result};
 use crate::construct::{construct_array, construct_md_array, deconstruct_array};
@@ -62,16 +62,38 @@ fn fc_mytextsend(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Dat
 }
 
 fn meta_int4() -> ArrayIoMeta {
-    ArrayIoMeta { element_type: INT4OID, typlen: 4, typbyval: true, typalign: b'i', typdelim: b',', typioparam: INT4OID }
+    ArrayIoMeta {
+        element_type: INT4OID,
+        typlen: 4,
+        typbyval: true,
+        typalign: b'i',
+        typdelim: b',',
+        typioparam: INT4OID,
+    }
 }
 fn meta_text() -> ArrayIoMeta {
-    ArrayIoMeta { element_type: TEXTOID, typlen: -1, typbyval: false, typalign: b'i', typdelim: b',', typioparam: TEXTOID }
+    ArrayIoMeta {
+        element_type: TEXTOID,
+        typlen: -1,
+        typbyval: false,
+        typalign: b'i',
+        typdelim: b',',
+        typioparam: TEXTOID,
+    }
 }
 
-fn int4_in() -> FmgrInfo { FmgrInfo::new(adt_int::builtins::fc_int4in, 42, 1, true, false) }
-fn int4_out() -> FmgrInfo { FmgrInfo::new(adt_int::builtins::fc_int4out, 43, 1, true, false) }
-fn text_in() -> FmgrInfo { FmgrInfo::new(fc_mytextin, 46, 1, true, false) }
-fn text_out() -> FmgrInfo { FmgrInfo::new(fc_mytextout, 47, 1, true, false) }
+fn int4_in() -> FmgrInfo {
+    FmgrInfo::new(adt_int::builtins::fc_int4in, 42, 1, true, false)
+}
+fn int4_out() -> FmgrInfo {
+    FmgrInfo::new(adt_int::builtins::fc_int4out, 43, 1, true, false)
+}
+fn text_in() -> FmgrInfo {
+    FmgrInfo::new(fc_mytextin, 46, 1, true, false)
+}
+fn text_out() -> FmgrInfo {
+    FmgrInfo::new(fc_mytextout, 47, 1, true, false)
+}
 
 fn as_str(v: &[u8]) -> &str {
     core::str::from_utf8(&v[..v.len() - 1]).unwrap()
@@ -108,7 +130,10 @@ fn int4_multidim_and_nulls() {
     let ctx = MemoryContext::new_bump("t");
     let mcx = ctx.mcx();
     assert_eq!(rt_int4(mcx, "{{1,2},{3,4}}"), "{{1,2},{3,4}}");
-    assert_eq!(rt_int4(mcx, "{{{1},{2}},{{3},{4}}}"), "{{{1},{2}},{{3},{4}}}");
+    assert_eq!(
+        rt_int4(mcx, "{{{1},{2}},{{3},{4}}}"),
+        "{{{1},{2}},{{3},{4}}}"
+    );
     assert_eq!(rt_int4(mcx, "{1,NULL,3}"), "{1,NULL,3}");
     assert_eq!(rt_int4(mcx, "{NULL}"), "{NULL}");
 }
@@ -145,7 +170,11 @@ fn text_multidim() {
 fn construct_deconstruct_int4() {
     let ctx = MemoryContext::new_bump("t");
     let mcx = ctx.mcx();
-    let elems = [Datum::from_i32(10), Datum::from_i32(20), Datum::from_i32(30)];
+    let elems = [
+        Datum::from_i32(10),
+        Datum::from_i32(20),
+        Datum::from_i32(30),
+    ];
     let img = construct_md_array(mcx, &elems, None, 1, &[3], &[1], INT4OID, 4, true, b'i').unwrap();
     let (out, nulls) = deconstruct_array(mcx, &img, 4, true, b'i', true).unwrap();
     assert_eq!(out.len(), 3);
@@ -165,12 +194,17 @@ fn builder_accumulates_int4() {
     st.typalign = b'i';
     let mut astate = Some(st);
     for v in [5i32, 6, 7] {
-        astate = Some(accum_array_result(mcx, astate.take(), Datum::from_i32(v), false, INT4OID).unwrap());
+        astate = Some(
+            accum_array_result(mcx, astate.take(), Datum::from_i32(v), false, INT4OID).unwrap(),
+        );
     }
     let img = make_array_result(mcx, astate.as_ref().unwrap()).unwrap();
     let m = meta_int4();
     let mut op = int4_out();
-    assert_eq!(as_str(&array_out(mcx, &img, &m, &mut op).unwrap()), "{5,6,7}");
+    assert_eq!(
+        as_str(&array_out(mcx, &img, &m, &mut op).unwrap()),
+        "{5,6,7}"
+    );
 }
 
 #[test]
@@ -179,7 +213,9 @@ fn text_send_recv_roundtrip() {
     let mcx = ctx.mcx();
     let m = meta_text();
     let mut ip = text_in();
-    let img = array_in(mcx, r#"{a,"b,c",d}"#, &m, &mut ip, -1, None).unwrap().unwrap();
+    let img = array_in(mcx, r#"{a,"b,c",d}"#, &m, &mut ip, -1, None)
+        .unwrap()
+        .unwrap();
     let mut sp = FmgrInfo::new(fc_mytextsend, 47, 1, true, false);
     let sent = array_send(mcx, &img, &m, &mut sp).unwrap();
     let payload = sent.data().to_vec();
@@ -188,7 +224,10 @@ fn text_send_recv_roundtrip() {
     let mut rp = FmgrInfo::new(fc_mytextrecv, 46, 1, true, false);
     let img2 = array_recv(mcx, &mut buf, &m, &mut rp, -1).unwrap();
     let mut op = text_out();
-    assert_eq!(as_str(&array_out(mcx, &img2, &m, &mut op).unwrap()), r#"{a,"b,c",d}"#);
+    assert_eq!(
+        as_str(&array_out(mcx, &img2, &m, &mut op).unwrap()),
+        r#"{a,"b,c",d}"#
+    );
 }
 
 #[test]
@@ -197,7 +236,9 @@ fn element_fetch_and_slice() {
     let mcx = ctx.mcx();
     let m = meta_int4();
     let mut ip = int4_in();
-    let img = array_in(mcx, "{10,20,NULL,40}", &m, &mut ip, -1, None).unwrap().unwrap();
+    let img = array_in(mcx, "{10,20,NULL,40}", &m, &mut ip, -1, None)
+        .unwrap()
+        .unwrap();
 
     let (d, isnull) = crate::element::array_get_element(&img, &[2], -1, 4, true, b'i');
     assert!(!isnull);
@@ -216,7 +257,10 @@ fn element_fetch_and_slice() {
     )
     .unwrap();
     let mut op = int4_out();
-    assert_eq!(as_str(&array_out(mcx, &slice, &m, &mut op).unwrap()), "{20,NULL,40}");
+    assert_eq!(
+        as_str(&array_out(mcx, &slice, &m, &mut op).unwrap()),
+        "{20,NULL,40}"
+    );
 }
 
 #[test]
@@ -225,28 +269,63 @@ fn element_set_replaces_and_extends() {
     let mcx = ctx.mcx();
     let m = meta_int4();
     let mut ip = int4_in();
-    let img = array_in(mcx, "{1,2,3}", &m, &mut ip, -1, None).unwrap().unwrap();
+    let img = array_in(mcx, "{1,2,3}", &m, &mut ip, -1, None)
+        .unwrap()
+        .unwrap();
     let mut op = int4_out();
 
     let set = crate::element::array_set_element(
-        mcx, &img, &[2], Datum::from_i32(99), false, -1, 4, true, b'i',
+        mcx,
+        &img,
+        &[2],
+        Datum::from_i32(99),
+        false,
+        -1,
+        4,
+        true,
+        b'i',
     )
     .unwrap();
-    assert_eq!(as_str(&array_out(mcx, &set, &m, &mut op).unwrap()), "{1,99,3}");
+    assert_eq!(
+        as_str(&array_out(mcx, &set, &m, &mut op).unwrap()),
+        "{1,99,3}"
+    );
 
     // 1-D extension past the end inserts intervening NULLs (C shape).
     let ext = crate::element::array_set_element(
-        mcx, &img, &[5], Datum::from_i32(7), false, -1, 4, true, b'i',
+        mcx,
+        &img,
+        &[5],
+        Datum::from_i32(7),
+        false,
+        -1,
+        4,
+        true,
+        b'i',
     )
     .unwrap();
-    assert_eq!(as_str(&array_out(mcx, &ext, &m, &mut op).unwrap()), "{1,2,3,NULL,7}");
+    assert_eq!(
+        as_str(&array_out(mcx, &ext, &m, &mut op).unwrap()),
+        "{1,2,3,NULL,7}"
+    );
 
     // Extension below the lower bound shifts it (renders with explicit dims).
     let low = crate::element::array_set_element(
-        mcx, &img, &[-1], Datum::from_i32(0), false, -1, 4, true, b'i',
+        mcx,
+        &img,
+        &[-1],
+        Datum::from_i32(0),
+        false,
+        -1,
+        4,
+        true,
+        b'i',
     )
     .unwrap();
-    assert_eq!(as_str(&array_out(mcx, &low, &m, &mut op).unwrap()), "[-1:3]={0,NULL,1,2,3}");
+    assert_eq!(
+        as_str(&array_out(mcx, &low, &m, &mut op).unwrap()),
+        "[-1:3]={0,NULL,1,2,3}"
+    );
 }
 
 #[test]
@@ -256,21 +335,30 @@ fn slice_set_replaces_extends_and_nulls() {
     let m = meta_int4();
     let mut ip = int4_in();
     let mut op = int4_out();
-    let img = array_in(mcx, "{1,2,3,4,5}", &m, &mut ip, -1, None).unwrap().unwrap();
+    let img = array_in(mcx, "{1,2,3,4,5}", &m, &mut ip, -1, None)
+        .unwrap()
+        .unwrap();
     let one = [true, false, false, false, false, false];
 
     // Replace [2:4].
-    let src = array_in(mcx, "{20,30,40}", &m, &mut ip, -1, None).unwrap().unwrap();
+    let src = array_in(mcx, "{20,30,40}", &m, &mut ip, -1, None)
+        .unwrap()
+        .unwrap();
     let mut upper = [4i32, 0, 0, 0, 0, 0];
     let mut lower = [2i32, 0, 0, 0, 0, 0];
     let set = crate::element::array_set_slice(
         mcx, &img, 1, &mut upper, &mut lower, &one, &one, &src, -1, 4, true, b'i',
     )
     .unwrap();
-    assert_eq!(as_str(&array_out(mcx, &set, &m, &mut op).unwrap()), "{1,20,30,40,5}");
+    assert_eq!(
+        as_str(&array_out(mcx, &set, &m, &mut op).unwrap()),
+        "{1,20,30,40,5}"
+    );
 
     // Extension past the end with a NULL gap.
-    let src = array_in(mcx, "{80,90}", &m, &mut ip, -1, None).unwrap().unwrap();
+    let src = array_in(mcx, "{80,90}", &m, &mut ip, -1, None)
+        .unwrap()
+        .unwrap();
     let mut upper = [9i32, 0, 0, 0, 0, 0];
     let mut lower = [8i32, 0, 0, 0, 0, 0];
     let ext = crate::element::array_set_slice(
@@ -283,26 +371,36 @@ fn slice_set_replaces_extends_and_nulls() {
     );
 
     // NULL-carrying source keeps its bitmap.
-    let src = array_in(mcx, "{NULL,99}", &m, &mut ip, -1, None).unwrap().unwrap();
+    let src = array_in(mcx, "{NULL,99}", &m, &mut ip, -1, None)
+        .unwrap()
+        .unwrap();
     let mut upper = [2i32, 0, 0, 0, 0, 0];
     let mut lower = [1i32, 0, 0, 0, 0, 0];
     let n = crate::element::array_set_slice(
         mcx, &img, 1, &mut upper, &mut lower, &one, &one, &src, -1, 4, true, b'i',
     )
     .unwrap();
-    assert_eq!(as_str(&array_out(mcx, &n, &m, &mut op).unwrap()), "{NULL,99,3,4,5}");
+    assert_eq!(
+        as_str(&array_out(mcx, &n, &m, &mut op).unwrap()),
+        "{NULL,99,3,4,5}"
+    );
 
     // ndim == 0: empty target needs both bounds; builds from the source.
     let all = [true, true, false, false, false, false];
     let empty = crate::construct::construct_empty_array(mcx, INT4OID).unwrap();
-    let src = array_in(mcx, "{7,8}", &m, &mut ip, -1, None).unwrap().unwrap();
+    let src = array_in(mcx, "{7,8}", &m, &mut ip, -1, None)
+        .unwrap()
+        .unwrap();
     let mut upper = [2i32, 0, 0, 0, 0, 0];
     let mut lower = [1i32, 0, 0, 0, 0, 0];
     let built = crate::element::array_set_slice(
         mcx, &empty, 1, &mut upper, &mut lower, &all, &all, &src, -1, 4, true, b'i',
     )
     .unwrap();
-    assert_eq!(as_str(&array_out(mcx, &built, &m, &mut op).unwrap()), "{7,8}");
+    assert_eq!(
+        as_str(&array_out(mcx, &built, &m, &mut op).unwrap()),
+        "{7,8}"
+    );
     let nope = [false, false, false, false, false, false];
     let mut upper = [2i32, 0, 0, 0, 0, 0];
     let mut lower = [1i32, 0, 0, 0, 0, 0];
@@ -334,7 +432,9 @@ fn slice_set_multidim_insert() {
         .unwrap();
     let two = [true, true, false, false, false, false];
 
-    let src = array_in(mcx, "{{50,60},{80,90}}", &m, &mut ip, -1, None).unwrap().unwrap();
+    let src = array_in(mcx, "{{50,60},{80,90}}", &m, &mut ip, -1, None)
+        .unwrap()
+        .unwrap();
     let mut upper = [3i32, 3, 0, 0, 0, 0];
     let mut lower = [2i32, 2, 0, 0, 0, 0];
     let set = crate::element::array_set_slice(
@@ -347,8 +447,12 @@ fn slice_set_multidim_insert() {
     );
 
     // NULLs riding through the multidim insert path.
-    let imgn = array_in(mcx, "{{1,NULL},{3,4}}", &m, &mut ip, -1, None).unwrap().unwrap();
-    let src = array_in(mcx, "{NULL}", &m, &mut ip, -1, None).unwrap().unwrap();
+    let imgn = array_in(mcx, "{{1,NULL},{3,4}}", &m, &mut ip, -1, None)
+        .unwrap()
+        .unwrap();
+    let src = array_in(mcx, "{NULL}", &m, &mut ip, -1, None)
+        .unwrap()
+        .unwrap();
     let mut upper = [2i32, 1, 0, 0, 0, 0];
     let mut lower = [2i32, 1, 0, 0, 0, 0];
     let set = crate::element::array_set_slice(
@@ -373,13 +477,27 @@ mod expanded {
     };
 
     fn int4_meta() -> ArrayMetaState {
-        ArrayMetaState { element_type: INT4OID, typlen: 4, typbyval: true, typalign: b'i' }
+        ArrayMetaState {
+            element_type: INT4OID,
+            typlen: 4,
+            typbyval: true,
+            typalign: b'i',
+        }
     }
 
     fn int4_array<'m>(mcx: Mcx<'m>, vals: &[i32], nulls: Option<&[bool]>) -> ::mcx::PgVec<'m, u8> {
         let elems: std::vec::Vec<Datum> = vals.iter().map(|v| Datum::from_i32(*v)).collect();
         construct_md_array(
-            mcx, &elems, nulls, 1, &[vals.len() as i32], &[1], INT4OID, 4, true, b'i',
+            mcx,
+            &elems,
+            nulls,
+            1,
+            &[vals.len() as i32],
+            &[1],
+            INT4OID,
+            4,
+            true,
+            b'i',
         )
         .unwrap()
     }
@@ -389,8 +507,12 @@ mod expanded {
         let parent = MemoryContext::new("t");
         let img = int4_array(parent.mcx(), &[7, 8, 9], None);
         let mut meta = int4_meta();
-        let d = expand_array(Datum::from_usize(img.as_ptr() as usize), &parent, Some(&mut meta))
-            .unwrap();
+        let d = expand_array(
+            Datum::from_usize(img.as_ptr() as usize),
+            &parent,
+            Some(&mut meta),
+        )
+        .unwrap();
         unsafe {
             assert!(datum_is_external_expanded_rw(d));
             let eah = &*(datum_get_eohp(d) as *const crate::expanded::ExpandedArrayHeader);
@@ -433,7 +555,9 @@ mod expanded {
                 let (vals, nulls) = eah.dvalues().unwrap();
                 assert!(nulls.is_none());
                 assert_eq!(
-                    vals.iter().map(|v| v.as_i32()).collect::<std::vec::Vec<_>>(),
+                    vals.iter()
+                        .map(|v| v.as_i32())
+                        .collect::<std::vec::Vec<_>>(),
                     [1, 2, 3, 4]
                 );
                 assert_eq!(eah.nelems, 4);
@@ -448,7 +572,10 @@ mod expanded {
                 assert!(eah2.fvalue().is_none());
                 let (vals2, _) = eah2.dvalues().unwrap();
                 assert_eq!(
-                    vals2.iter().map(|v| v.as_i32()).collect::<std::vec::Vec<_>>(),
+                    vals2
+                        .iter()
+                        .map(|v| v.as_i32())
+                        .collect::<std::vec::Vec<_>>(),
                     [1, 2, 3, 4]
                 );
             }
@@ -548,13 +675,21 @@ mod ops_tests {
     };
     use ::mcx::PgVec;
 
-    const INT4_META: ElemMeta = ElemMeta { typlen: 4, typbyval: true, typalign: b'i' };
+    const INT4_META: ElemMeta = ElemMeta {
+        typlen: 4,
+        typbyval: true,
+        typalign: b'i',
+    };
 
     fn fc_i4eq(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
-        Ok(Datum::from_bool(fcinfo.arg(0).as_i32() == fcinfo.arg(1).as_i32()))
+        Ok(Datum::from_bool(
+            fcinfo.arg(0).as_i32() == fcinfo.arg(1).as_i32(),
+        ))
     }
     fn fc_i4cmp(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
-        Ok(Datum::from_i32(fcinfo.arg(0).as_i32().cmp(&fcinfo.arg(1).as_i32()) as i32))
+        Ok(Datum::from_i32(
+            fcinfo.arg(0).as_i32().cmp(&fcinfo.arg(1).as_i32()) as i32,
+        ))
     }
     fn fc_i4hash(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
         Ok(Datum::from_u64(fcinfo.arg(0).as_i32() as u32 as u64))
@@ -575,11 +710,24 @@ mod ops_tests {
         dims: &[i32],
         lbs: &[i32],
     ) -> PgVec<'m, u8> {
-        let elems: std::vec::Vec<Datum> =
-            vals.iter().map(|v| Datum::from_i32(v.unwrap_or(0))).collect();
+        let elems: std::vec::Vec<Datum> = vals
+            .iter()
+            .map(|v| Datum::from_i32(v.unwrap_or(0)))
+            .collect();
         let nulls: std::vec::Vec<bool> = vals.iter().map(|v| v.is_none()).collect();
-        construct_md_array(mcx, &elems, Some(&nulls), ndims, dims, lbs, INT4OID, 4, true, b'i')
-            .unwrap()
+        construct_md_array(
+            mcx,
+            &elems,
+            Some(&nulls),
+            ndims,
+            dims,
+            lbs,
+            INT4OID,
+            4,
+            true,
+            b'i',
+        )
+        .unwrap()
     }
 
     fn int4_arr_vals(img: &[u8]) -> std::vec::Vec<Option<i32>> {
@@ -589,7 +737,11 @@ mod ops_tests {
         (0..n)
             .map(|_| {
                 let (d, isnull) = it.next(4, true, b'i');
-                if isnull { None } else { Some(d.as_i32()) }
+                if isnull {
+                    None
+                } else {
+                    Some(d.as_i32())
+                }
             })
             .collect()
     }
@@ -606,14 +758,26 @@ mod ops_tests {
         assert!(!array_eq_loop(mcx, &a, &c, 0, INT4_META, &mut eq).unwrap());
 
         let mut cmp = finfo(fc_i4cmp);
-        assert_eq!(array_cmp_core(mcx, &a, &b, 0, INT4_META, &mut cmp).unwrap(), 0);
+        assert_eq!(
+            array_cmp_core(mcx, &a, &b, 0, INT4_META, &mut cmp).unwrap(),
+            0
+        );
         // NULL sorts greater than any value
-        assert_eq!(array_cmp_core(mcx, &a, &c, 0, INT4_META, &mut cmp).unwrap(), 1);
+        assert_eq!(
+            array_cmp_core(mcx, &a, &c, 0, INT4_META, &mut cmp).unwrap(),
+            1
+        );
         let short = int4_arr(mcx, &[Some(1)]);
-        assert_eq!(array_cmp_core(mcx, &short, &c, 0, INT4_META, &mut cmp).unwrap(), -1);
+        assert_eq!(
+            array_cmp_core(mcx, &short, &c, 0, INT4_META, &mut cmp).unwrap(),
+            -1
+        );
         // same data, different lower bounds
         let lb2 = int4_arr_md(mcx, &[Some(1), Some(2), Some(3)], 1, &[3], &[2]);
-        assert_eq!(array_cmp_core(mcx, &c, &lb2, 0, INT4_META, &mut cmp).unwrap(), -1);
+        assert_eq!(
+            array_cmp_core(mcx, &c, &lb2, 0, INT4_META, &mut cmp).unwrap(),
+            -1
+        );
     }
 
     #[test]
@@ -622,10 +786,16 @@ mod ops_tests {
         let mcx = ctx.mcx();
         let a = int4_arr(mcx, &[None]);
         let mut h = finfo(fc_i4hash);
-        assert_eq!(hash_array_core(mcx, &a, 0, INT4_META, &mut h, None).unwrap(), 31);
+        assert_eq!(
+            hash_array_core(mcx, &a, 0, INT4_META, &mut h, None).unwrap(),
+            31
+        );
         let b = int4_arr(mcx, &[Some(7), Some(9)]);
         // ((1*31 + 7) * 31) + 9 = 1187
-        assert_eq!(hash_array_core(mcx, &b, 0, INT4_META, &mut h, None).unwrap(), 1187);
+        assert_eq!(
+            hash_array_core(mcx, &b, 0, INT4_META, &mut h, None).unwrap(),
+            1187
+        );
         let seeded =
             hash_array_core(mcx, &b, 0, INT4_META, &mut h, Some(Datum::from_i64(0))).unwrap();
         assert_eq!(seeded, 1187);
@@ -657,7 +827,15 @@ mod ops_tests {
 
         let a = int4_arr(mcx, &[Some(1), Some(2), None, Some(2)]);
         let out = replace_core(
-            mcx, a, Datum::from_i32(2), false, Datum::from_i32(9), false, false, 0, INT4_META,
+            mcx,
+            a,
+            Datum::from_i32(2),
+            false,
+            Datum::from_i32(9),
+            false,
+            false,
+            0,
+            INT4_META,
             &mut eq,
         )
         .unwrap();
@@ -666,7 +844,16 @@ mod ops_tests {
         // replace NULLs with a value
         let a = int4_arr(mcx, &[Some(1), None]);
         let out = replace_core(
-            mcx, a, Datum::null(), true, Datum::from_i32(0), false, false, 0, INT4_META, &mut eq,
+            mcx,
+            a,
+            Datum::null(),
+            true,
+            Datum::from_i32(0),
+            false,
+            false,
+            0,
+            INT4_META,
+            &mut eq,
         )
         .unwrap();
         assert_eq!(int4_arr_vals(&out), vec![Some(1), Some(0)]);
@@ -674,7 +861,16 @@ mod ops_tests {
         // remove matches and NULL search removes NULLs
         let a = int4_arr(mcx, &[Some(1), Some(2), None, Some(2)]);
         let out = replace_core(
-            mcx, a, Datum::from_i32(2), false, Datum::null(), true, true, 0, INT4_META, &mut eq,
+            mcx,
+            a,
+            Datum::from_i32(2),
+            false,
+            Datum::null(),
+            true,
+            true,
+            0,
+            INT4_META,
+            &mut eq,
         )
         .unwrap();
         assert_eq!(int4_arr_vals(&out), vec![Some(1), None]);
@@ -682,7 +878,16 @@ mod ops_tests {
         // unchanged input returned as-is
         let a = int4_arr(mcx, &[Some(1)]);
         let out = replace_core(
-            mcx, a, Datum::from_i32(5), false, Datum::null(), true, true, 0, INT4_META, &mut eq,
+            mcx,
+            a,
+            Datum::from_i32(5),
+            false,
+            Datum::null(),
+            true,
+            true,
+            0,
+            INT4_META,
+            &mut eq,
         )
         .unwrap();
         assert_eq!(int4_arr_vals(&out), vec![Some(1)]);
@@ -690,7 +895,16 @@ mod ops_tests {
         // removing everything yields an empty array
         let a = int4_arr(mcx, &[Some(5), Some(5)]);
         let out = replace_core(
-            mcx, a, Datum::from_i32(5), false, Datum::null(), true, true, 0, INT4_META, &mut eq,
+            mcx,
+            a,
+            Datum::from_i32(5),
+            false,
+            Datum::null(),
+            true,
+            true,
+            0,
+            INT4_META,
+            &mut eq,
         )
         .unwrap();
         assert_eq!(crate::foundation::arr_ndim(&out), 0);
@@ -703,7 +917,13 @@ mod ops_tests {
         let dims = int4_arr(mcx, &[Some(2), Some(3)]);
         let lbs = int4_arr(mcx, &[Some(0), Some(-1)]);
         let out = array_fill_core(
-            mcx, &dims, Some(&lbs), Datum::from_i32(7), false, INT4OID, INT4_META,
+            mcx,
+            &dims,
+            Some(&lbs),
+            Datum::from_i32(7),
+            false,
+            INT4OID,
+            INT4_META,
         )
         .unwrap();
         let (ndim, dv, lv) = crate::foundation::read_dims_lbounds(&out);
@@ -719,25 +939,51 @@ mod ops_tests {
         // empty dims → empty array
         let nodims = int4_arr(mcx, &[]);
         let out = array_fill_core(
-            mcx, &nodims, None, Datum::from_i32(7), false, INT4OID, INT4_META,
+            mcx,
+            &nodims,
+            None,
+            Datum::from_i32(7),
+            false,
+            INT4OID,
+            INT4_META,
         )
         .unwrap();
         assert_eq!(crate::foundation::arr_ndim(&out), 0);
 
         // error arms
         let md = int4_arr_md(mcx, &[Some(1), Some(2)], 2, &[1, 2], &[1, 1]);
-        let e = array_fill_core(mcx, &md, None, Datum::from_i32(7), false, INT4OID, INT4_META)
-            .unwrap_err();
+        let e = array_fill_core(
+            mcx,
+            &md,
+            None,
+            Datum::from_i32(7),
+            false,
+            INT4OID,
+            INT4_META,
+        )
+        .unwrap_err();
         assert_eq!(e.message(), "wrong number of array subscripts");
         let withnull = int4_arr(mcx, &[Some(1), None]);
         let e = array_fill_core(
-            mcx, &withnull, None, Datum::from_i32(7), false, INT4OID, INT4_META,
+            mcx,
+            &withnull,
+            None,
+            Datum::from_i32(7),
+            false,
+            INT4OID,
+            INT4_META,
         )
         .unwrap_err();
         assert_eq!(e.message(), "dimension values cannot be null");
         let lbs1 = int4_arr(mcx, &[Some(1)]);
         let e = array_fill_core(
-            mcx, &dims, Some(&lbs1), Datum::from_i32(7), false, INT4OID, INT4_META,
+            mcx,
+            &dims,
+            Some(&lbs1),
+            Datum::from_i32(7),
+            false,
+            INT4OID,
+            INT4_META,
         )
         .unwrap_err();
         assert_eq!(e.message(), "wrong number of array subscripts");
@@ -753,8 +999,10 @@ mod ops_tests {
     }
 
     fn text_arr<'m>(mcx: Mcx<'m>, vals: &[&str]) -> PgVec<'m, u8> {
-        let elems: std::vec::Vec<Datum> =
-            vals.iter().map(|v| build_varlena(mcx, v.as_bytes()).unwrap()).collect();
+        let elems: std::vec::Vec<Datum> = vals
+            .iter()
+            .map(|v| build_varlena(mcx, v.as_bytes()).unwrap())
+            .collect();
         construct_array(mcx, &elems, TEXTOID, -1, false, TYPALIGN_INT).unwrap()
     }
 
@@ -769,12 +1017,27 @@ mod ops_tests {
         let ctx = MemoryContext::new_bump("t");
         let mcx = ctx.mcx();
         let thresholds = float8_arr(mcx, &[1.0, 5.0, 10.0]);
-        assert_eq!(width_bucket_array_float8(Datum::from_f64(0.5), &thresholds, 3), 0);
-        assert_eq!(width_bucket_array_float8(Datum::from_f64(1.0), &thresholds, 3), 1);
-        assert_eq!(width_bucket_array_float8(Datum::from_f64(7.0), &thresholds, 3), 2);
-        assert_eq!(width_bucket_array_float8(Datum::from_f64(11.0), &thresholds, 3), 3);
+        assert_eq!(
+            width_bucket_array_float8(Datum::from_f64(0.5), &thresholds, 3),
+            0
+        );
+        assert_eq!(
+            width_bucket_array_float8(Datum::from_f64(1.0), &thresholds, 3),
+            1
+        );
+        assert_eq!(
+            width_bucket_array_float8(Datum::from_f64(7.0), &thresholds, 3),
+            2
+        );
+        assert_eq!(
+            width_bucket_array_float8(Datum::from_f64(11.0), &thresholds, 3),
+            3
+        );
         // NaN sorts as greater than every threshold, so it needs no search.
-        assert_eq!(width_bucket_array_float8(Datum::from_f64(f64::NAN), &thresholds, 3), 3);
+        assert_eq!(
+            width_bucket_array_float8(Datum::from_f64(f64::NAN), &thresholds, 3),
+            3
+        );
     }
 
     #[test]
@@ -784,8 +1047,16 @@ mod ops_tests {
         let thresholds = int4_arr(mcx, &[Some(1), Some(5), Some(10)]);
         let mut cmp = finfo(fc_i4cmp);
         let mut r = |op: i32| {
-            width_bucket_array_fixed(mcx, Datum::from_i32(op), &thresholds, 0, INT4_META, &mut cmp, 3)
-                .unwrap()
+            width_bucket_array_fixed(
+                mcx,
+                Datum::from_i32(op),
+                &thresholds,
+                0,
+                INT4_META,
+                &mut cmp,
+                3,
+            )
+            .unwrap()
         };
         assert_eq!(r(0), 0);
         assert_eq!(r(5), 2);
@@ -797,7 +1068,11 @@ mod ops_tests {
         let ctx = MemoryContext::new_bump("t");
         let mcx = ctx.mcx();
         let thresholds = text_arr(mcx, &["b", "m", "t"]);
-        let meta = ElemMeta { typlen: -1, typbyval: false, typalign: TYPALIGN_INT };
+        let meta = ElemMeta {
+            typlen: -1,
+            typbyval: false,
+            typalign: TYPALIGN_INT,
+        };
         let mut cmp = finfo(fc_text_cmp);
         let mut r = |op: &str| {
             let operand = build_varlena(mcx, op.as_bytes()).unwrap();
@@ -867,8 +1142,12 @@ mod agg_serial {
         array_agg_serialize_state,
     };
 
-    fn text_send() -> FmgrInfo { FmgrInfo::new(fc_mytextsend, 48, 1, true, false) }
-    fn text_recv() -> FmgrInfo { FmgrInfo::new(fc_mytextrecv, 49, 1, true, false) }
+    fn text_send() -> FmgrInfo {
+        FmgrInfo::new(fc_mytextsend, 48, 1, true, false)
+    }
+    fn text_recv() -> FmgrInfo {
+        FmgrInfo::new(fc_mytextrecv, 49, 1, true, false)
+    }
 
     fn int4_state<'m>(mcx: Mcx<'m>, elems: &[Option<i32>]) -> ArrayBuildState<'m> {
         let mut st = ArrayBuildState::new(mcx, INT4OID, false).unwrap();
@@ -943,7 +1222,10 @@ mod agg_serial {
         assert_eq!(back.element_type, INT4OID);
         assert_eq!(back.nelems, 4);
         assert_eq!((back.typlen, back.typbyval, back.typalign), (4, true, b'i'));
-        assert_eq!(int4_result(mcx, &back), vec![Some(7), None, Some(-1), Some(0)]);
+        assert_eq!(
+            int4_result(mcx, &back),
+            vec![Some(7), None, Some(-1), Some(0)]
+        );
     }
 
     #[test]
@@ -1159,10 +1441,13 @@ pub(crate) mod detoast_construct {
         let mcx = ctx.mcx();
         let a = b"plain element".to_vec();
         let b = b"short header element".to_vec();
-        let c: std::vec::Vec<u8> =
-            b"compressible ".iter().copied().cycle().take(300).collect();
-        let d: std::vec::Vec<u8> =
-            b"external payload ".iter().copied().cycle().take(2900).collect();
+        let c: std::vec::Vec<u8> = b"compressible ".iter().copied().cycle().take(300).collect();
+        let d: std::vec::Vec<u8> = b"external payload "
+            .iter()
+            .copied()
+            .cycle()
+            .take(2900)
+            .collect();
 
         let toasted = [
             build_varlena(mcx, &a).unwrap(),
@@ -1179,7 +1464,11 @@ pub(crate) mod detoast_construct {
 
         let got = construct_array(mcx, &toasted, TEXTOID, -1, false, TYPALIGN_INT).unwrap();
         let want = construct_array(mcx, &flats, TEXTOID, -1, false, TYPALIGN_INT).unwrap();
-        assert_eq!(&got[..], &want[..], "toasted-element build must equal all-flat build");
+        assert_eq!(
+            &got[..],
+            &want[..],
+            "toasted-element build must equal all-flat build"
+        );
 
         // Every element in the image is a plain 4B header now.
         let (elems, _nulls) = deconstruct_array(mcx, &got, -1, false, TYPALIGN_INT, true).unwrap();
@@ -1197,7 +1486,12 @@ pub(crate) mod detoast_construct {
         install_test_detoast();
         let ctx = MemoryContext::new_bump("t");
         let mcx = ctx.mcx();
-        let c: std::vec::Vec<u8> = b"md compressible ".iter().copied().cycle().take(400).collect();
+        let c: std::vec::Vec<u8> = b"md compressible "
+            .iter()
+            .copied()
+            .cycle()
+            .take(400)
+            .collect();
         let d: std::vec::Vec<u8> = b"md external ".iter().copied().cycle().take(1500).collect();
 
         let toasted = [
@@ -1217,14 +1511,36 @@ pub(crate) mod detoast_construct {
         let lbs = [1, 1];
 
         let got = construct_md_array(
-            mcx, &toasted, Some(&nulls), 2, &dims, &lbs, TEXTOID, -1, false, TYPALIGN_INT,
+            mcx,
+            &toasted,
+            Some(&nulls),
+            2,
+            &dims,
+            &lbs,
+            TEXTOID,
+            -1,
+            false,
+            TYPALIGN_INT,
         )
         .unwrap();
         let want = construct_md_array(
-            mcx, &flats, Some(&nulls), 2, &dims, &lbs, TEXTOID, -1, false, TYPALIGN_INT,
+            mcx,
+            &flats,
+            Some(&nulls),
+            2,
+            &dims,
+            &lbs,
+            TEXTOID,
+            -1,
+            false,
+            TYPALIGN_INT,
         )
         .unwrap();
-        assert_eq!(&got[..], &want[..], "toasted md build must equal all-flat md build");
+        assert_eq!(
+            &got[..],
+            &want[..],
+            "toasted md build must equal all-flat md build"
+        );
     }
 }
 

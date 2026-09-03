@@ -5,8 +5,8 @@ use ::mcx::{Mcx, MemoryContext, PgVec};
 use ::stringinfo::StringInfo;
 use ::types_dest::CommandDest;
 use ::types_error::{
-    ERRCODE_CONNECTION_FAILURE, ERRCODE_PROTOCOL_VIOLATION, ERROR, ErrorLocation, FATAL, LOG,
-    PgError, PgResult,
+    ErrorLocation, PgError, PgResult, ERRCODE_CONNECTION_FAILURE, ERRCODE_PROTOCOL_VIOLATION,
+    ERROR, FATAL, LOG,
 };
 
 use crate::{

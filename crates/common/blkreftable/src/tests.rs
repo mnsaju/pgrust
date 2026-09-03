@@ -37,7 +37,9 @@ fn reader_over<'a>(
     )
 }
 
-fn drain_all(reader: &mut BlockRefTableReader<'_, '_, impl FnMut(&mut [u8]) -> PgResult<usize>>) -> Vec<BlockNumber> {
+fn drain_all(
+    reader: &mut BlockRefTableReader<'_, '_, impl FnMut(&mut [u8]) -> PgResult<usize>>,
+) -> Vec<BlockNumber> {
     let mut got = Vec::new();
     let mut buf = [0u32; 3];
     loop {
@@ -195,7 +197,9 @@ fn set_limit_block_clears_bitmap_and_higher_chunks() {
     for off in 0..MAX_ENTRIES_PER_CHUNK {
         entry.mark_block_modified(cx.mcx(), off).unwrap();
     }
-    entry.mark_block_modified(cx.mcx(), BLOCKS_PER_CHUNK + 3).unwrap();
+    entry
+        .mark_block_modified(cx.mcx(), BLOCKS_PER_CHUNK + 3)
+        .unwrap();
     entry.set_limit_block(100);
     let mut buf = [0u32; 8192];
     let n = entry.get_blocks(0, InvalidBlockNumber, &mut buf);
@@ -229,7 +233,9 @@ fn table_limit_block_on_missing_and_existing_entries() {
     let loc = rl(1, 2, 3);
 
     brtab.set_limit_block(loc, ForkNumber::MAIN_FORKNUM, 7);
-    let e = brtab.get_entry(loc, ForkNumber::MAIN_FORKNUM).expect("entry");
+    let e = brtab
+        .get_entry(loc, ForkNumber::MAIN_FORKNUM)
+        .expect("entry");
     assert_eq!(e.limit_block(), 7);
 
     brtab
@@ -239,11 +245,15 @@ fn table_limit_block_on_missing_and_existing_entries() {
         .mark_block_modified(loc, ForkNumber::MAIN_FORKNUM, 9)
         .unwrap();
     brtab.set_limit_block(loc, ForkNumber::MAIN_FORKNUM, 5);
-    let e = brtab.get_entry(loc, ForkNumber::MAIN_FORKNUM).expect("entry");
+    let e = brtab
+        .get_entry(loc, ForkNumber::MAIN_FORKNUM)
+        .expect("entry");
     let mut buf = [0u32; 10];
     let n = e.get_blocks(0, InvalidBlockNumber, &mut buf);
     assert_eq!(&buf[..n], &[3]);
-    assert!(brtab.get_entry(rl(9, 9, 9), ForkNumber::MAIN_FORKNUM).is_none());
+    assert!(brtab
+        .get_entry(rl(9, 9, 9), ForkNumber::MAIN_FORKNUM)
+        .is_none());
 }
 
 #[test]

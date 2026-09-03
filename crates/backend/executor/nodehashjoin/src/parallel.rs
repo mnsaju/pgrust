@@ -14,9 +14,8 @@ use ::types_error::PgResult;
 use ::types_nodes::JoinType;
 
 use crate::{
-    cfi, eval_probe_qual, HashJoinOuter, HashJoinState, HJ_BUILD_HASHTABLE,
-    HJ_FILL_INNER_TUPLES, HJ_FILL_OUTER_TUPLE, HJ_NEED_NEW_BATCH, HJ_NEED_NEW_OUTER,
-    HJ_SCAN_BUCKET,
+    cfi, eval_probe_qual, HashJoinOuter, HashJoinState, HJ_BUILD_HASHTABLE, HJ_FILL_INNER_TUPLES,
+    HJ_FILL_OUTER_TUPLE, HJ_NEED_NEW_BATCH, HJ_NEED_NEW_OUTER, HJ_SCAN_BUCKET,
 };
 
 // Body-duplicate of lib.rs's project_result: sharing it would add callsites
@@ -41,9 +40,17 @@ fn project_result<'mcx>(
     let result_id = node.ps_ResultTupleSlot;
     let table = &mut estate.es_tupleTable[..];
     let [inner, outer, result] = table
-        .get_disjoint_mut([inner_id.0 as usize, outer_id.0 as usize, result_id.0 as usize])
+        .get_disjoint_mut([
+            inner_id.0 as usize,
+            outer_id.0 as usize,
+            result_id.0 as usize,
+        ])
         .expect("distinct in-range hashjoin slot ids");
-    let mut slots = EvalSlots { scan: None, inner: Some(inner), outer: Some(outer) };
+    let mut slots = EvalSlots {
+        scan: None,
+        inner: Some(inner),
+        outer: Some(outer),
+    };
     ::execexpr::exec_project(&mut node.proj, &mut slots, result, mcx)?;
     Ok(result_id)
 }
@@ -85,11 +92,8 @@ where
                             break;
                         };
                         let hashvalue = hash_state.eval_build_hash(estate, slot_id)?;
-                        let (ptr, len) = phj::slot_min_tuple_image(
-                            estate,
-                            slot_id,
-                            hash_state.ps_ExprContext,
-                        )?;
+                        let (ptr, len) =
+                            phj::slot_min_tuple_image(estate, slot_id, hash_state.ps_ExprContext)?;
                         // SAFETY: per-tuple image, copied out by the insert
                         // before the next fetch.
                         let image = unsafe { core::slice::from_raw_parts(ptr, len) };
@@ -231,8 +235,7 @@ where
                 estate.ecxt_mut(node.ps_ExprContext).ecxt_outertuple = Some(null_outer);
                 let ecxt = node.ps_ExprContext;
                 let inner_id = hash_state.hash_tuple_slot;
-                let pass =
-                    eval_probe_qual(node.otherqual.as_deref_mut(), ecxt, inner_id, estate)?;
+                let pass = eval_probe_qual(node.otherqual.as_deref_mut(), ecxt, inner_id, estate)?;
                 if pass {
                     return Ok(Some(project_result(node, inner_id, estate)?));
                 }
@@ -281,8 +284,14 @@ fn parallel_outer_get_tuple<'mcx, O: HashJoinOuter<'mcx>>(
                 }
                 None => {
                     let slot = &mut estate.es_tupleTable[slot_id.0 as usize];
-                    let mut slots = EvalSlots { scan: None, inner: Some(slot), outer: None };
-                    exec_eval_expr(&mut node.outer_hash_expr, &mut slots)?.value.as_u32()
+                    let mut slots = EvalSlots {
+                        scan: None,
+                        inner: Some(slot),
+                        outer: None,
+                    };
+                    exec_eval_expr(&mut node.outer_hash_expr, &mut slots)?
+                        .value
+                        .as_u32()
                 }
             };
             node.hj_OuterNotEmpty = true;
@@ -342,8 +351,14 @@ fn partition_outer<'mcx, O: HashJoinOuter<'mcx>>(
             }
             None => {
                 let slot = &mut estate.es_tupleTable[slot_id.0 as usize];
-                let mut slots = EvalSlots { scan: None, inner: Some(slot), outer: None };
-                exec_eval_expr(&mut node.outer_hash_expr, &mut slots)?.value.as_u32()
+                let mut slots = EvalSlots {
+                    scan: None,
+                    inner: Some(slot),
+                    outer: None,
+                };
+                exec_eval_expr(&mut node.outer_hash_expr, &mut slots)?
+                    .value
+                    .as_u32()
             }
         };
         let (ptr, len) = phj::slot_min_tuple_image(estate, slot_id, ecxt)?;
@@ -418,7 +433,11 @@ fn parallel_scan_hash_bucket<'mcx>(
     let [inner, outer] = tbl
         .get_disjoint_mut([hslot.0 as usize, outer_id.0 as usize])
         .expect("distinct in-range hashjoin slot ids");
-    let mut slots = EvalSlots { scan: None, inner: Some(inner), outer: Some(outer) };
+    let mut slots = EvalSlots {
+        scan: None,
+        inner: Some(inner),
+        outer: Some(outer),
+    };
 
     while !cur.is_null() {
         // SAFETY: chain entries live in the shared arena for the batch.
@@ -447,7 +466,10 @@ fn parallel_prep_unmatched<'mcx>(
     let table = hash_state.ptable.as_mut().expect("shared table built");
     let curbatch = table.curbatch;
     debug_assert!(table.batch_barrier(curbatch).phase() == PHJ_BATCH_PROBE);
-    if !table.batch_barrier(curbatch).arrive_and_detach_except_last() {
+    if !table
+        .batch_barrier(curbatch)
+        .arrive_and_detach_except_last()
+    {
         phj::parallel_prep_unmatched_lose(table)?;
         return Ok(false);
     }

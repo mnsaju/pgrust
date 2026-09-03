@@ -41,7 +41,10 @@
 fn runtime_scan_env_ok() -> bool {
     static KILLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     let killed = *KILLED.get_or_init(|| {
-        matches!(std::env::var("PGRUST_RUNTIME_SCAN").as_deref(), Ok("0") | Ok("off"))
+        matches!(
+            std::env::var("PGRUST_RUNTIME_SCAN").as_deref(),
+            Ok("0") | Ok("off")
+        )
     });
     !killed && crate::backing::pgrust_lane_executor()
 }
@@ -105,7 +108,10 @@ pub fn runtime_scan_pool_armed() -> bool {
 fn runtime_agg_env_ok() -> bool {
     static KILLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     let killed = *KILLED.get_or_init(|| {
-        matches!(std::env::var("PGRUST_RUNTIME_AGG").as_deref(), Ok("0") | Ok("off"))
+        matches!(
+            std::env::var("PGRUST_RUNTIME_AGG").as_deref(),
+            Ok("0") | Ok("off")
+        )
     });
     !killed && crate::backing::pgrust_lane_executor()
 }
@@ -154,7 +160,10 @@ pub fn runtime_agg_sorted_env_ok() -> bool {
 fn runtime_distinct_env_ok() -> bool {
     static KILLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     let killed = *KILLED.get_or_init(|| {
-        matches!(std::env::var("PGRUST_RUNTIME_DISTINCT").as_deref(), Ok("0") | Ok("off"))
+        matches!(
+            std::env::var("PGRUST_RUNTIME_DISTINCT").as_deref(),
+            Ok("0") | Ok("off")
+        )
     });
     !killed && crate::backing::pgrust_lane_executor()
 }
@@ -186,7 +195,10 @@ pub fn runtime_distinct_pool_dop() -> i32 {
 fn runtime_hashjoin_env_ok() -> bool {
     static KILLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     let killed = *KILLED.get_or_init(|| {
-        matches!(std::env::var("PGRUST_RUNTIME_HASHJOIN").as_deref(), Ok("0") | Ok("off"))
+        matches!(
+            std::env::var("PGRUST_RUNTIME_HASHJOIN").as_deref(),
+            Ok("0") | Ok("off")
+        )
     });
     !killed && crate::backing::pgrust_lane_executor()
 }
@@ -252,8 +264,7 @@ pub fn parallel_engine_is_runtime() -> bool {
 // (launch_backend::rtpool::start) after the workers spawn. guc_tables cannot
 // see the pool object itself (layering), so the pool exports its liveness
 // here — the plan-time twin of the router's `runtime::global().is_some()`.
-static RUNTIME_POOL_LIVE: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
+static RUNTIME_POOL_LIVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Postmaster-side publication: the runtime worker pool spawned. Called
 /// exactly once by `launch_backend::rtpool::start`; process-lifetime (the
@@ -307,8 +318,8 @@ pub fn runtime_nlindex_arm_enabled() -> bool {
 /// getters above never read it, and it never reads them.
 pub fn runtime_dop() -> i32 {
     static CORES: std::sync::OnceLock<i32> = std::sync::OnceLock::new();
-    let cores = *CORES
-        .get_or_init(|| std::thread::available_parallelism().map_or(1, |n| n.get() as i32));
+    let cores =
+        *CORES.get_or_init(|| std::thread::available_parallelism().map_or(1, |n| n.get() as i32));
     let v = crate::backing::pgrust_runtime_dop();
     if v <= 0 {
         cores
@@ -337,7 +348,10 @@ pub fn runtime_dop() -> i32 {
 fn runtime_bitmap_env_ok() -> bool {
     static KILLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     let killed = *KILLED.get_or_init(|| {
-        matches!(std::env::var("PGRUST_RUNTIME_BITMAP").as_deref(), Ok("0") | Ok("off"))
+        matches!(
+            std::env::var("PGRUST_RUNTIME_BITMAP").as_deref(),
+            Ok("0") | Ok("off")
+        )
     });
     !killed && crate::backing::pgrust_lane_executor()
 }
@@ -372,7 +386,10 @@ pub fn runtime_bitmap_pool_dop() -> i32 {
 fn runtime_nlindex_env_ok() -> bool {
     static KILLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     let killed = *KILLED.get_or_init(|| {
-        matches!(std::env::var("PGRUST_RUNTIME_NLINDEX").as_deref(), Ok("0") | Ok("off"))
+        matches!(
+            std::env::var("PGRUST_RUNTIME_NLINDEX").as_deref(),
+            Ok("0") | Ok("off")
+        )
     });
     !killed && crate::backing::pgrust_lane_executor()
 }

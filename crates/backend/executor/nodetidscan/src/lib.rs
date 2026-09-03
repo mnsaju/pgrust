@@ -27,7 +27,10 @@ const SELF_ITEM_POINTER_ATTR: i16 = -1;
 enum TidExprKind<'mcx> {
     Single,
     Array,
-    CurrentOf { cursor_name: Option<&'mcx str>, cursor_param: i32 },
+    CurrentOf {
+        cursor_name: Option<&'mcx str>,
+        cursor_param: i32,
+    },
 }
 
 pub struct TidExpr<'mcx> {
@@ -44,7 +47,8 @@ pub struct TidScanState<'mcx> {
 }
 
 fn is_ctid_var(node: Node<'_>) -> bool {
-    node.as_var().is_some_and(|v| v.varattno == SELF_ITEM_POINTER_ATTR)
+    node.as_var()
+        .is_some_and(|v| v.varattno == SELF_ITEM_POINTER_ATTR)
 }
 
 #[track_caller]
@@ -111,7 +115,10 @@ fn datum_array_bytes<'m>(mcx: Mcx<'m>, v: ::datum::Datum) -> PgResult<&'m [u8]> 
     // header-declared size.
     unsafe {
         if (*p) & 0x03 == 0 {
-            return Ok(core::slice::from_raw_parts(p, ::types_tuple::varatt::varsize_any(p)));
+            return Ok(core::slice::from_raw_parts(
+                p,
+                ::types_tuple::varatt::varsize_any(p),
+            ));
         }
         let image = core::slice::from_raw_parts(p, ::types_tuple::varatt::varsize_any(p));
         let flat = ::detoast::detoast_attr(mcx, image)?;
@@ -161,7 +168,10 @@ impl<'mcx> TidScanState<'mcx> {
             let snapshot = estate.es_snapshot.clone();
             self.ss.ss_currentScanDesc = Some(table_beginscan_tid(
                 mcx,
-                self.ss.ss_currentRelation.as_ref().expect("tidscan has a relation"),
+                self.ss
+                    .ss_currentRelation
+                    .as_ref()
+                    .expect("tidscan has a relation"),
                 snapshot,
             )?);
         }
@@ -182,8 +192,10 @@ impl<'mcx> TidScanState<'mcx> {
             let kind = self.tss_tidexprs[i].kind;
             match kind {
                 TidExprKind::Single | TidExprKind::Array => {
-                    let state =
-                        self.tss_tidexprs[i].exprstate.as_deref_mut().expect("exprstate");
+                    let state = self.tss_tidexprs[i]
+                        .exprstate
+                        .as_deref_mut()
+                        .expect("exprstate");
                     let deps = state.param_exec_deps();
                     if !deps.is_empty() {
                         ::executils::exec_eval_param_exec_params(estate, deps)?;
@@ -191,15 +203,18 @@ impl<'mcx> TidScanState<'mcx> {
                     let state = self.tss_tidexprs[i].exprstate.as_deref_mut().unwrap();
                     // SAFETY: the per-tuple context object outlives the plan.
                     unsafe { state.arm_result_mcx_raw(estate.ecxt(ecxt).per_tuple_mcx()) };
-                    let mut slots = EvalSlots { scan: None, inner: None, outer: None };
+                    let mut slots = EvalSlots {
+                        scan: None,
+                        inner: None,
+                        outer: None,
+                    };
                     let nd = exec_eval_expr(state, &mut slots)?;
                     if nd.isnull {
                         continue;
                     }
                     if matches!(kind, TidExprKind::Single) {
                         // SAFETY: non-null tid datum points at an ItemPointerData.
-                        let itemptr =
-                            unsafe { *(nd.value.as_usize() as *const ItemPointerData) };
+                        let itemptr = unsafe { *(nd.value.as_usize() as *const ItemPointerData) };
                         let scan = self.ss.ss_currentScanDesc.as_mut().unwrap();
                         // AM-invalid TIDs are silently discarded (C contract).
                         if table_tuple_tid_valid(scan, &itemptr) {
@@ -217,8 +232,7 @@ impl<'mcx> TidScanState<'mcx> {
                                 continue;
                             }
                             // SAFETY: non-null tid array element datum.
-                            let itemptr =
-                                unsafe { *(d.as_usize() as *const ItemPointerData) };
+                            let itemptr = unsafe { *(d.as_usize() as *const ItemPointerData) };
                             let scan = self.ss.ss_currentScanDesc.as_mut().unwrap();
                             if table_tuple_tid_valid(scan, &itemptr) {
                                 tid_list.push(itemptr);
@@ -226,7 +240,10 @@ impl<'mcx> TidScanState<'mcx> {
                         }
                     }
                 }
-                TidExprKind::CurrentOf { cursor_name, cursor_param } => {
+                TidExprKind::CurrentOf {
+                    cursor_name,
+                    cursor_param,
+                } => {
                     let table_name = self.ss.ss_currentRelation.as_ref().unwrap().name();
                     let name = match cursor_name {
                         Some(n) => n,
@@ -319,7 +336,12 @@ impl<'mcx> ScanNode<'mcx> for TidScanState<'mcx> {
                 table_tuple_get_latest_tid(mcx, scan, &mut tid)?;
             }
 
-            let EStateData { es_tupleTable, es_snapshot, es_query_cxt, .. } = estate;
+            let EStateData {
+                es_tupleTable,
+                es_snapshot,
+                es_query_cxt,
+                ..
+            } = estate;
             let found = table_tuple_fetch_row_version(
                 *es_query_cxt,
                 self.ss.ss_currentRelation.as_ref().expect("relation"),
@@ -360,7 +382,9 @@ pub fn exec_init_tid_scan<'mcx>(
 ) -> PgResult<TidScanState<'mcx>> {
     debug_assert!(node.scan.plan.lefttree.is_none() && node.scan.plan.righttree.is_none());
 
-    let rel = estate.exec_get_range_table_relation(node.scan.scanrelid, false)?.alias();
+    let rel = estate
+        .exec_get_range_table_relation(node.scan.scanrelid, false)?
+        .alias();
     let ps_ExprContext = estate.exec_assign_expr_context();
     let kind = table_slot_callbacks(&rel);
     let ss_ScanTupleSlot = estate.exec_init_extra_tuple_slot(Some(rel.rd_att.clone()), kind);

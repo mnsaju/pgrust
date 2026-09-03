@@ -32,7 +32,10 @@ pub struct SizingParams {
 
 impl Default for SizingParams {
     fn default() -> Self {
-        SizingParams { t_max_ns: DEFAULT_T_MAX_NS, t_min_ns: DEFAULT_T_MIN_NS }
+        SizingParams {
+            t_max_ns: DEFAULT_T_MAX_NS,
+            t_min_ns: DEFAULT_T_MIN_NS,
+        }
     }
 }
 
@@ -65,9 +68,7 @@ pub const DOPSCALE_MAX_X: f64 = 2.5; // t_max multiplier at W1
 
 pub fn dopscale_enabled() -> bool {
     static ON: crate::sync::OnceLock<bool> = crate::sync::OnceLock::new();
-    *ON.get_or_init(|| {
-        std::env::var("PGRUST_RUNTIME_TMAX_DOPSCALE").is_ok_and(|v| v.trim() == "1")
-    })
+    *ON.get_or_init(|| std::env::var("PGRUST_RUNTIME_TMAX_DOPSCALE").is_ok_and(|v| v.trim() == "1"))
 }
 
 /// The pure width→params ramp (unit-tested independent of the env gate).
@@ -77,7 +78,10 @@ pub fn dopscale_ramp(params: SizingParams, w: u64) -> SizingParams {
     }
     let frac = ((w - DOPSCALE_W0) as f64 / (DOPSCALE_W1 - DOPSCALE_W0) as f64).min(1.0);
     let x = 1.0 + (DOPSCALE_MAX_X - 1.0) * frac;
-    SizingParams { t_max_ns: ((params.t_max_ns as f64) * x) as u64, t_min_ns: params.t_min_ns }
+    SizingParams {
+        t_max_ns: ((params.t_max_ns as f64) * x) as u64,
+        t_min_ns: params.t_min_ns,
+    }
 }
 
 impl SizingParams {
@@ -124,7 +128,12 @@ struct SizerInner {
 
 impl SizerShared {
     pub fn new() -> Self {
-        SizerShared { inner: Mutex::new(SizerInner { phase: Phase::Startup, tput: 0.0 }) }
+        SizerShared {
+            inner: Mutex::new(SizerInner {
+                phase: Phase::Startup,
+                tput: 0.0,
+            }),
+        }
     }
 
     pub fn phase(&self) -> Phase {
@@ -145,7 +154,11 @@ impl Default for SizerShared {
 
 enum TaskMode {
     /// Startup ramp in progress inside this task; next morsel size.
-    Ramp { next: u64, spent_ns: u64, last_ns: u64 },
+    Ramp {
+        next: u64,
+        spent_ns: u64,
+        last_ns: u64,
+    },
     /// Default/Shutdown: single right-sized morsel, then the task ends.
     Single,
 }
@@ -163,7 +176,11 @@ impl TaskSizer {
     pub fn new(params: SizingParams, c0: u64) -> Self {
         TaskSizer {
             params,
-            mode: TaskMode::Ramp { next: c0.max(1), spent_ns: 0, last_ns: 0 },
+            mode: TaskMode::Ramp {
+                next: c0.max(1),
+                spent_ns: 0,
+                last_ns: 0,
+            },
             done: false,
         }
     }
@@ -227,7 +244,11 @@ impl TaskSizer {
         let dt = dt_ns.max(1);
         let measured = granules as f64 / dt as f64;
         match &mut self.mode {
-            TaskMode::Ramp { next, spent_ns, last_ns } => {
+            TaskMode::Ramp {
+                next,
+                spent_ns,
+                last_ns,
+            } => {
                 *spent_ns += dt;
                 *last_ns = dt;
                 // Next doubling only if predicted to fit the remaining budget.

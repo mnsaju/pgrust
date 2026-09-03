@@ -43,7 +43,10 @@
 fn lane_pool_env_ok() -> bool {
     static KILLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     let killed = *KILLED.get_or_init(|| {
-        matches!(std::env::var("PGRUST_LANE_V2_POOL").as_deref(), Ok("0") | Ok("off"))
+        matches!(
+            std::env::var("PGRUST_LANE_V2_POOL").as_deref(),
+            Ok("0") | Ok("off")
+        )
     });
     !killed && crate::backing::pgrust_lane_executor()
 }

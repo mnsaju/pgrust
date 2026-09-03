@@ -3,7 +3,7 @@
 //! forwarding order this crate owns, via a recording leaf sink.
 
 use super::*;
-use ::mcx::{MemoryContext, Mcx};
+use ::mcx::{Mcx, MemoryContext};
 use ::sink::{
     bbsink_archive_contents, bbsink_begin_archive, bbsink_begin_backup, bbsink_begin_manifest,
     bbsink_cleanup, bbsink_end_archive, bbsink_end_backup, bbsink_end_manifest,
@@ -45,7 +45,9 @@ impl<'a, 'mcx> BbsinkOps<'mcx> for RecordingOps<'a, 'mcx> {
         _state: &mut BbsinkState,
         name: &str,
     ) -> PgResult<()> {
-        self.log.borrow_mut().push(Event::BeginArchive(name.to_string()));
+        self.log
+            .borrow_mut()
+            .push(Event::BeginArchive(name.to_string()));
         Ok(())
     }
     fn archive_contents(
@@ -61,7 +63,11 @@ impl<'a, 'mcx> BbsinkOps<'mcx> for RecordingOps<'a, 'mcx> {
         self.log.borrow_mut().push(Event::EndArchive);
         Ok(())
     }
-    fn begin_manifest(&mut self, _sink: &mut Bbsink<'mcx>, _state: &mut BbsinkState) -> PgResult<()> {
+    fn begin_manifest(
+        &mut self,
+        _sink: &mut Bbsink<'mcx>,
+        _state: &mut BbsinkState,
+    ) -> PgResult<()> {
         self.log.borrow_mut().push(Event::BeginManifest);
         Ok(())
     }

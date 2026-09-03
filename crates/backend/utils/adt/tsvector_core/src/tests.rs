@@ -46,7 +46,10 @@ fn tsvector_io_matrix() {
         roundtrip("base:7 hidden:6 rebel:1 spaceship:2,33A,34B,35C,36D strike:3"),
         "'base':7 'hidden':6 'rebel':1 'spaceship':2,33A,34B,35C,36 'strike':3"
     );
-    assert_eq!(parse_err("'' '1' '2'"), "syntax error in tsvector: \"'' '1' '2'\"");
+    assert_eq!(
+        parse_err("'' '1' '2'"),
+        "syntax error in tsvector: \"'' '1' '2'\""
+    );
     assert_eq!(roundtrip("foo"), "'foo'");
 }
 
@@ -66,7 +69,9 @@ fn tsvector_soft_error() {
 
 fn tsv<'a>(mcx: ::mcx::Mcx<'a>, s: &str) -> TsVec<'a> {
     let img = tsvector_in_core(mcx, s.as_bytes(), None).unwrap().unwrap();
-    TsVec { payload: &img.leak()[4..] }
+    TsVec {
+        payload: &img.leak()[4..],
+    }
 }
 
 #[test]
@@ -82,13 +87,22 @@ fn tsvector_ops() {
 
     let v = tsv(mcx, "w:12B w:13* w:12,5,6 a:1,3* a:3 w asd:1dc asd");
     let stripped = tsvector_strip_core(mcx, v).unwrap();
-    let s = tsvector_out_core(mcx, TsVec { payload: &stripped[4..] }).unwrap();
+    let s = tsvector_out_core(
+        mcx,
+        TsVec {
+            payload: &stripped[4..],
+        },
+    )
+    .unwrap();
     assert_eq!(&s[..s.len() - 1], b"'a' 'asd' 'w'");
 
     let v = tsv(mcx, "a:1,3A asd:1C w:5,6,12B,13A zxc:81,222A,567");
     let out = tsvector_setweight_core(mcx, v, 1).unwrap();
     let s = tsvector_out_core(mcx, TsVec { payload: &out[4..] }).unwrap();
-    assert_eq!(&s[..s.len() - 1], b"'a':1C,3C 'asd':1C 'w':5C,6C,12C,13C 'zxc':81C,222C,567C");
+    assert_eq!(
+        &s[..s.len() - 1],
+        b"'a':1C,3C 'asd':1C 'w':5C,6C,12C,13C 'zxc':81C,222C,567C"
+    );
 
     assert_eq!(silly_cmp_tsvector(a, a), 0);
     assert_ne!(silly_cmp_tsvector(a, b), 0);

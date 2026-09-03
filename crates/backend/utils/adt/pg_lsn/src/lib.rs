@@ -39,8 +39,11 @@ pub fn pg_lsn_in_internal(s: &[u8]) -> Option<XLogRecPtr> {
 
 #[cold]
 fn invalid_lsn(s: &str) -> PgError {
-    PgError::error(format!("invalid input syntax for type {}: \"{s}\"", "pg_lsn"))
-        .with_sqlstate(ERRCODE_INVALID_TEXT_REPRESENTATION)
+    PgError::error(format!(
+        "invalid input syntax for type {}: \"{s}\"",
+        "pg_lsn"
+    ))
+    .with_sqlstate(ERRCODE_INVALID_TEXT_REPRESENTATION)
 }
 
 pub fn pg_lsn_in(s: &str, escontext: Option<&mut SoftErrorContext>) -> PgResult<XLogRecPtr> {
@@ -128,8 +131,11 @@ pub fn pg_lsn_mi(lsn1: XLogRecPtr, lsn2: XLogRecPtr) -> PgResult<NumericImage> {
 #[cold]
 fn nan_arith(op: &str) -> Box<PgError> {
     Box::new(
-        PgError::error(format!("cannot {op} NaN {} pg_lsn", if op == "add" { "to" } else { "from" }))
-            .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED),
+        PgError::error(format!(
+            "cannot {op} NaN {} pg_lsn",
+            if op == "add" { "to" } else { "from" }
+        ))
+        .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED),
     )
 }
 

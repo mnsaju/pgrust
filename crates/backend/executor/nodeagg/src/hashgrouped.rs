@@ -136,7 +136,10 @@ fn pack_span(off: usize, len: usize) -> i64 {
 
 #[inline]
 fn unpack_span(word: i64) -> (usize, usize) {
-    ((word as u64 >> 32) as usize, (word as u64 & 0xffff_ffff) as usize)
+    (
+        (word as u64 >> 32) as usize,
+        (word as u64 & 0xffff_ffff) as usize,
+    )
 }
 
 enum HgPhase {
@@ -329,8 +332,12 @@ fn smap_shape(node: &AggStateData<'_>) -> bool {
     if !stringhash_enabled() || node.plan.grpColIdx.len() != 1 {
         return false;
     }
-    let Some(ps) = node.persort.as_ref() else { return false };
-    let Some(desc) = ps.first_slot.base().tts_tupleDescriptor.as_ref() else { return false };
+    let Some(ps) = node.persort.as_ref() else {
+        return false;
+    };
+    let Some(desc) = ps.first_slot.base().tts_tupleDescriptor.as_ref() else {
+        return false;
+    };
     let col = node.plan.grpColIdx[0];
     col >= 1
         && (col as i32) <= desc.natts
@@ -383,13 +390,16 @@ pub fn agg_hashgroup_economical(node: &AggStateData<'_>, force: bool, input_rows
     // cost. The stringhash-admissible shape (single text key, switch on)
     // reads its own threshold — re-priced by the near-unique A/B; the env override
     // is the measurement channel (PGRUST_LANE_V2_STRINGHASH_MINRPG).
-    let min_rpg = if smap_shape(node) { stringhash_min_rpg() } else { MIN_ROWS_PER_GROUP };
+    let min_rpg = if smap_shape(node) {
+        stringhash_min_rpg()
+    } else {
+        MIN_ROWS_PER_GROUP
+    };
     let est_groups = (node.plan.numGroups as f64).max(1.0);
     if input_rows > 0.0 && input_rows < min_rpg * est_groups {
         return false;
     }
-    let per_group =
-        PER_GROUP_EST + PER_TEXT_KEY_EST * agg_hashgroup_text_key_count(node) as f64;
+    let per_group = PER_GROUP_EST + PER_TEXT_KEY_EST * agg_hashgroup_text_key_count(node) as f64;
     est_groups * per_group * 2.0 <= hashgroup_budget() as f64
 }
 
@@ -464,13 +474,16 @@ pub fn agg_hashgroup_economical_sink(
                 .unwrap_or(1.0)
         })
     }
-    let min_rpg = if paremit { paremit_min_rpg() } else { sink_min_rpg() };
+    let min_rpg = if paremit {
+        paremit_min_rpg()
+    } else {
+        sink_min_rpg()
+    };
     let est_groups = (node.plan.numGroups as f64).max(1.0);
     if input_rows > 0.0 && input_rows < min_rpg * est_groups {
         return false;
     }
-    let per_group =
-        PER_GROUP_EST + PER_TEXT_KEY_EST * agg_hashgroup_text_key_count(node) as f64;
+    let per_group = PER_GROUP_EST + PER_TEXT_KEY_EST * agg_hashgroup_text_key_count(node) as f64;
     let fit_budget = match dop_budget {
         Some((envelope, dop)) => (envelope as f64) * f64::from(dop.max(1)),
         None => hashgroup_budget() as f64,
@@ -483,7 +496,10 @@ pub fn agg_hashgroup_economical_sink(
 pub fn agg_hashgroup_emitting(node: &AggStateData<'_>) -> bool {
     matches!(
         node.hashgroup.as_deref(),
-        Some(HashGroupedState { phase: HgPhase::Emit { .. }, .. })
+        Some(HashGroupedState {
+            phase: HgPhase::Emit { .. },
+            ..
+        })
     )
 }
 
@@ -497,7 +513,13 @@ pub fn agg_hashgroup_state_active(node: &AggStateData<'_>) -> bool {
 /// Whether degraded residual state exists (the narrow-sort emit chain's
 /// group begins preload from it via `residual_preload`).
 pub fn agg_hashgroup_residual_active(node: &AggStateData<'_>) -> bool {
-    matches!(node.hashgroup.as_deref(), Some(HashGroupedState { phase: HgPhase::Residual, .. }))
+    matches!(
+        node.hashgroup.as_deref(),
+        Some(HashGroupedState {
+            phase: HgPhase::Residual,
+            ..
+        })
+    )
 }
 
 /// Rescan/teardown: drop the whole arm state (sets release their memory via
@@ -568,8 +590,7 @@ pub fn agg_hashgroup_begin<'mcx>(
     debug_assert_eq!(order_spec.len(), key_atts.len());
     debug_assert!(order_spec.iter().all(|k| k.key_idx < key_atts.len()));
     let nkeys = key_atts.len();
-    let rep_slot =
-        exectuples::make_tuple_table_slot(mcx, TupleSlotKind::MinimalTuple, Some(desc));
+    let rep_slot = exectuples::make_tuple_table_slot(mcx, TupleSlotKind::MinimalTuple, Some(desc));
     let engage_smap = nkeys == 1 && key_kinds[0] == HgKeyKind::Text && stringhash_enabled();
     node.hashgroup = Some(Box::new(HashGroupedState {
         phase: HgPhase::Building,
@@ -693,10 +714,7 @@ impl HashGroupedState<'_> {
             // SAFETY: non-null live text/varchar varlena — the admission
             // proved the column type.
             let v = unsafe {
-                ::types_fmgr::datum_varlena_packed(
-                    text_datums[i],
-                    estate.ecxt(tmp).per_tuple_mcx(),
-                )
+                ::types_fmgr::datum_varlena_packed(text_datums[i], estate.ecxt(tmp).per_tuple_mcx())
             }?;
             let b = v.data();
             let off = self.probe_buf.len();
@@ -795,8 +813,16 @@ impl HashGroupedState<'_> {
 /// Swap the CURRENT group's live state (node pergroup array + pertrans set
 /// slots) back into storage.
 fn switch_out(node: &mut AggStateData<'_>) {
-    let AggStateData { hashgroup, pergroup_base, pertrans_sort, numtrans, .. } = node;
-    let Some(hg) = hashgroup.as_deref_mut() else { return };
+    let AggStateData {
+        hashgroup,
+        pergroup_base,
+        pertrans_sort,
+        numtrans,
+        ..
+    } = node;
+    let Some(hg) = hashgroup.as_deref_mut() else {
+        return;
+    };
     let Some(c) = hg.cur.take() else { return };
     let c = c as usize;
     // SAFETY: both sides are once-allocated arrays of numtrans elements; the
@@ -824,11 +850,21 @@ fn switch_out(node: &mut AggStateData<'_>) {
 /// Load group `g`'s state into the node (pergroup array + pertrans set
 /// slots). The previous current group, if any, swaps out first.
 fn switch_to(node: &mut AggStateData<'_>, g: u32) {
-    if node.hashgroup.as_deref().is_some_and(|hg| hg.cur == Some(g)) {
+    if node
+        .hashgroup
+        .as_deref()
+        .is_some_and(|hg| hg.cur == Some(g))
+    {
         return;
     }
     switch_out(node);
-    let AggStateData { hashgroup, pergroup_base, pertrans_sort, numtrans, .. } = node;
+    let AggStateData {
+        hashgroup,
+        pergroup_base,
+        pertrans_sort,
+        numtrans,
+        ..
+    } = node;
     let hg = hashgroup.as_deref_mut().expect("hashgroup state");
     let gi = g as usize;
     // SAFETY: as switch_out.
@@ -957,18 +993,31 @@ fn run_row<'mcx>(
     outer: RowSlot,
 ) -> PgResult<()> {
     {
-        let AggStateData { hashgroup, evaltrans, .. } = node;
-        let et = evaltrans.as_mut().expect("lane admission requires evaltrans");
+        let AggStateData {
+            hashgroup,
+            evaltrans,
+            ..
+        } = node;
+        let et = evaltrans
+            .as_mut()
+            .expect("lane admission requires evaltrans");
         match outer {
             RowSlot::Estate(id) => {
                 let outer_slot = estate.slot_mut(id);
-                let mut slots = EvalSlots { scan: None, inner: None, outer: Some(outer_slot) };
+                let mut slots = EvalSlots {
+                    scan: None,
+                    inner: None,
+                    outer: Some(outer_slot),
+                };
                 exec_eval_expr(et, &mut slots)?;
             }
             RowSlot::Rep => {
                 let hg = hashgroup.as_deref_mut().expect("hashgroup state");
-                let mut slots =
-                    EvalSlots { scan: None, inner: None, outer: Some(&mut hg.rep_slot) };
+                let mut slots = EvalSlots {
+                    scan: None,
+                    inner: None,
+                    outer: Some(&mut hg.rep_slot),
+                };
                 exec_eval_expr(et, &mut slots)?;
             }
         }
@@ -1010,7 +1059,10 @@ pub fn agg_hashgroup_accept<'mcx>(
 ) -> PgResult<bool> {
     debug_assert!(matches!(
         node.hashgroup.as_deref(),
-        Some(HashGroupedState { phase: HgPhase::Building, .. })
+        Some(HashGroupedState {
+            phase: HgPhase::Building,
+            ..
+        })
     ));
     let tmp = node.tmpcontext;
     let mut words = [0i64; 32];
@@ -1034,7 +1086,14 @@ pub fn agg_hashgroup_accept<'mcx>(
             // stringhash mode: single text key. NULL rows key `null_group`;
             // non-NULL rows insert-or-get on the map, which appends new key
             // bytes to the arena and reports the span for the key word.
-            let HashGroupedState { smap, null_group, arena, probe_buf, probe_spans, .. } = hg;
+            let HashGroupedState {
+                smap,
+                null_group,
+                arena,
+                probe_buf,
+                probe_spans,
+                ..
+            } = hg;
             let smap = smap.as_mut().expect("checked");
             let (found, span) = if nulls != 0 {
                 (*null_group, None)
@@ -1103,7 +1162,16 @@ pub fn agg_hashgroup_accept<'mcx>(
             hg.set_mem[c] = sets;
         }
         None => {
-            create_group(node, estate, id, &mut words[..nkeys], nulls, h, Some(slot_idx), None)?;
+            create_group(
+                node,
+                estate,
+                id,
+                &mut words[..nkeys],
+                nulls,
+                h,
+                Some(slot_idx),
+                None,
+            )?;
             // The existing-group arm resets per-tuple memory inside run_row;
             // the create arm defers the row (no run_row), so any text-key
             // detoast copies reset here instead.
@@ -1188,7 +1256,12 @@ pub fn agg_hashgroup_batch_shape(
     } else {
         hg_fold_vocab(node)?
     };
-    Some(HgBatchShape { key_atts: hg.key_atts.clone(), set_args: args, fold_atts, vocab })
+    Some(HgBatchShape {
+        key_atts: hg.key_atts.clone(),
+        set_args: args,
+        fold_atts,
+        vocab,
+    })
 }
 
 /// Classify the node's NON-distinct transitions into the exact-integer fold
@@ -1199,11 +1272,15 @@ pub fn agg_hashgroup_batch_shape(
 /// first-peragg order) plus the staged-cell atts of its arg-bearing entries
 /// (same order — the accept's `folds` contract). `None` refuses the whole
 /// mixed admission (the per-row program path stands).
-fn hg_fold_vocab(
-    node: &AggStateData<'_>,
-) -> Option<(Vec<crate::pardistinct::PdVocab>, Vec<u16>)> {
+fn hg_fold_vocab(node: &AggStateData<'_>) -> Option<(Vec<crate::pardistinct::PdVocab>, Vec<u16>)> {
     use crate::pardistinct::{PdInt, PdVocab};
-    let desc = node.persort.as_ref()?.first_slot.base().tts_tupleDescriptor.as_ref()?;
+    let desc = node
+        .persort
+        .as_ref()?
+        .first_slot
+        .base()
+        .tts_tupleDescriptor
+        .as_ref()?;
     let int_kind = |t: ::types_core::Oid| match t {
         INT2OID => Some(PdInt::I16),
         INT4OID => Some(PdInt::I32),
@@ -1251,7 +1328,10 @@ fn hg_fold_vocab(
         if let Some((a, _)) = att {
             fold_atts.push(a);
         }
-        vocab.push(PdVocab { transno: transno as u32, kind });
+        vocab.push(PdVocab {
+            transno: transno as u32,
+            kind,
+        });
     }
     if !seen.iter().all(|&s| s) {
         // A transition no peragg names (shared/invisible): refuse.
@@ -1394,13 +1474,15 @@ pub fn agg_hashgroup_accept_batch_row(
 ) -> HgBatchRow {
     debug_assert!(matches!(
         node.hashgroup.as_deref(),
-        Some(HashGroupedState { phase: HgPhase::Building, .. })
+        Some(HashGroupedState {
+            phase: HgPhase::Building,
+            ..
+        })
     ));
     let found = {
         let hg = node.hashgroup.as_deref_mut().expect("hashgroup state");
         debug_assert_eq!(key_datums.len(), hg.nkeys);
-        let Some((words, nulls)) =
-            hg_stage_batch_keys(hg, |i| (key_datums[i], key_nulls[i]))
+        let Some((words, nulls)) = hg_stage_batch_keys(hg, |i| (key_datums[i], key_nulls[i]))
         else {
             // Non-inline text image: the per-row path detoasts it.
             return HgBatchRow::NeedSlot;
@@ -1517,11 +1599,18 @@ pub unsafe fn agg_hashgroup_accept_batch_span(
 ) -> HgSpanStop {
     debug_assert!(matches!(
         node.hashgroup.as_deref(),
-        Some(HashGroupedState { phase: HgPhase::Building, .. })
+        Some(HashGroupedState {
+            phase: HgPhase::Building,
+            ..
+        })
     ));
     // Establish the storage invariant: no group's state loaded in the node.
     switch_out(node);
-    let AggStateData { hashgroup, pertrans_sort, .. } = node;
+    let AggStateData {
+        hashgroup,
+        pertrans_sort,
+        ..
+    } = node;
     let hg = hashgroup.as_deref_mut().expect("hashgroup state");
     let nkeys = hg.nkeys;
     let nsort = hg.nsort;
@@ -1647,7 +1736,12 @@ pub fn hg_fold_cells(vocab: &[crate::pardistinct::PdVocab]) -> usize {
 /// Fold words zero after the merge (double-apply guard).
 fn hg_fold_combine(node: &mut AggStateData<'_>) -> PgResult<()> {
     use crate::pardistinct::PdVocabKind;
-    let AggStateData { hashgroup, agg_node, trans_typ, .. } = node;
+    let AggStateData {
+        hashgroup,
+        agg_node,
+        trans_typ,
+        ..
+    } = node;
     let Some(hg) = hashgroup.as_deref_mut() else {
         return Ok(());
     };
@@ -1707,28 +1801,19 @@ fn hg_fold_combine(node: &mut AggStateData<'_>) -> PgResult<()> {
                             )));
                         }
                         let hdr = unsafe {
-                            core::slice::from_raw_parts(
-                                pg.trans_value.as_usize() as *const u8,
-                                4,
-                            )
+                            core::slice::from_raw_parts(pg.trans_value.as_usize() as *const u8, 4)
                         };
                         let word = u32::from_ne_bytes(hdr.try_into().expect("4 bytes"));
                         if word != ::types_tuple::varatt::set_varsize_4b_word(40) {
                             return Err(Box::new(::types_error::PgError::error(
-                                "hashgroup fold: unexpected avg transition state image"
-                                    .to_string(),
+                                "hashgroup fold: unexpected avg transition state image".to_string(),
                             )));
                         }
                         let full = unsafe {
-                            core::slice::from_raw_parts(
-                                pg.trans_value.as_usize() as *const u8,
-                                40,
-                            )
+                            core::slice::from_raw_parts(pg.trans_value.as_usize() as *const u8, 40)
                         };
-                        let ocnt =
-                            i64::from_ne_bytes(full[24..32].try_into().expect("8 bytes"));
-                        let osum =
-                            i64::from_ne_bytes(full[32..40].try_into().expect("8 bytes"));
+                        let ocnt = i64::from_ne_bytes(full[24..32].try_into().expect("8 bytes"));
+                        let osum = i64::from_ne_bytes(full[32..40].try_into().expect("8 bytes"));
                         let mut img = [0u8; 40];
                         img[0..4].copy_from_slice(
                             &::types_tuple::varatt::set_varsize_4b_word(40).to_ne_bytes(),
@@ -1774,13 +1859,22 @@ pub fn agg_hashgroup_finish_build<'mcx>(
 ) -> PgResult<()> {
     debug_assert!(matches!(
         node.hashgroup.as_deref(),
-        Some(HashGroupedState { phase: HgPhase::Building, .. })
+        Some(HashGroupedState {
+            phase: HgPhase::Building,
+            ..
+        })
     ));
-    let n = node.hashgroup.as_deref().expect("hashgroup state").ngroups();
+    let n = node
+        .hashgroup
+        .as_deref()
+        .expect("hashgroup state")
+        .ngroups();
     for g in 0..n {
         {
             let hg = node.hashgroup.as_deref_mut().expect("hashgroup state");
-            let rep = hg.reps[g].as_ref().expect("unconsumed deferred representative");
+            let rep = hg.reps[g]
+                .as_ref()
+                .expect("unconsumed deferred representative");
             let mcx = hg.mcx;
             // SAFETY: the rep image is a live owned minimal tuple, borrowed
             // by the slot only for this replay (overwritten next iteration,
@@ -1803,8 +1897,15 @@ pub fn agg_hashgroup_finish_build<'mcx>(
     let hg = node.hashgroup.as_deref_mut().expect("hashgroup state");
     let mcx = hg.mcx;
     exectuples::exec_clear_tuple(&mut hg.rep_slot, mcx);
-    let order =
-        order_groups(&hg.keys, &hg.keynulls, &hg.order_spec, hg.nkeys, &hg.key_kinds, &hg.arena, n)?;
+    let order = order_groups(
+        &hg.keys,
+        &hg.keynulls,
+        &hg.order_spec,
+        hg.nkeys,
+        &hg.key_kinds,
+        &hg.arena,
+        n,
+    )?;
     hg.phase = HgPhase::Emit { order, pos: 0 };
     Ok(())
 }
@@ -1848,8 +1949,7 @@ pub(crate) fn cmp_group_rows(
                 }
             }
             (false, false) => {
-                let (wa, wb) =
-                    (akeys[ai * nkeys + k.key_idx], bkeys[bi * nkeys + k.key_idx]);
+                let (wa, wb) = (akeys[ai * nkeys + k.key_idx], bkeys[bi * nkeys + k.key_idx]);
                 let ord = if kinds[k.key_idx] == HgKeyKind::Text {
                     // C's text btree order: varstr_cmp under the plan
                     // Sort's collation (module doc — deterministic
@@ -1857,12 +1957,8 @@ pub(crate) fn cmp_group_rows(
                     // keys never compare equal).
                     let (oa, la) = unpack_span(wa);
                     let (ob, lb) = unpack_span(wb);
-                    ::varlena::varstr_cmp(
-                        &aarena[oa..oa + la],
-                        &barena[ob..ob + lb],
-                        k.collation,
-                    )?
-                    .cmp(&0)
+                    ::varlena::varstr_cmp(&aarena[oa..oa + la], &barena[ob..ob + lb], k.collation)?
+                        .cmp(&0)
                 } else {
                     wa.cmp(&wb)
                 };
@@ -1936,7 +2032,10 @@ pub fn agg_hashgroup_emit_next<'mcx>(
     estate: &mut EStateData<'mcx>,
 ) -> PgResult<Option<Option<ExecSlotId>>> {
     let g = {
-        let hg = node.hashgroup.as_deref_mut().expect("hashgroup emit without state");
+        let hg = node
+            .hashgroup
+            .as_deref_mut()
+            .expect("hashgroup emit without state");
         let HgPhase::Emit { order, pos } = &mut hg.phase else {
             unreachable!("hashgroup emit outside the emit phase")
         };
@@ -1964,10 +2063,14 @@ pub fn agg_hashgroup_emit_next<'mcx>(
     estate.reset_expr_context(node.ps_ExprContext);
     switch_to(node, g);
     {
-        let AggStateData { hashgroup, persort, .. } = node;
+        let AggStateData {
+            hashgroup, persort, ..
+        } = node;
         let hg = hashgroup.as_deref_mut().expect("hashgroup state");
         let ps = persort.as_mut().expect("sorted Agg has persort");
-        let rep = hg.reps[g as usize].as_ref().expect("unconsumed representative");
+        let rep = hg.reps[g as usize]
+            .as_ref()
+            .expect("unconsumed representative");
         let mcx = hg.mcx;
         // SAFETY: the rep image outlives the slot's use of it (the state —
         // and its reps — outlives this emit call; the end-of-stream arm
@@ -2027,7 +2130,11 @@ pub fn agg_hashgroup_set_residual(node: &mut AggStateData<'_>) -> PgResult<()> {
     hg_fold_combine(node)?;
     let hg = node.hashgroup.as_deref_mut().expect("hashgroup state");
     debug_assert!(matches!(hg.phase, HgPhase::Building));
-    debug_assert_eq!(hg.rep_cursor, hg.ngroups(), "every representative rides the sort");
+    debug_assert_eq!(
+        hg.rep_cursor,
+        hg.ngroups(),
+        "every representative rides the sort"
+    );
     hg.phase = HgPhase::Residual;
     Ok(())
 }
@@ -2140,7 +2247,12 @@ pub fn agg_hashgroup_adopt_merged<'mcx>(
                 }
             }
             exectuples::exec_store_virtual_tuple(&mut scratch);
-            reps.push(Some(exectuples::exec_copy_slot_minimal_tuple(&mut scratch, mcx, mcx, 0)?));
+            reps.push(Some(exectuples::exec_copy_slot_minimal_tuple(
+                &mut scratch,
+                mcx,
+                mcx,
+                0,
+            )?));
         }
     }
     // Per-group trans states: init values, then the vocab overrides.
@@ -2216,7 +2328,12 @@ pub fn agg_hashgroup_adopt_merged<'mcx>(
         }
     }
     let hashes: Vec<u64> = (0..n)
-        .map(|g| crate::pardistinct::key_hash(&merged.keys[g * nkeys..(g + 1) * nkeys], merged.keynulls[g]))
+        .map(|g| {
+            crate::pardistinct::key_hash(
+                &merged.keys[g * nkeys..(g + 1) * nkeys],
+                merged.keynulls[g],
+            )
+        })
         .collect();
     let set_mem: Vec<usize> = (0..n)
         .map(|g| {
@@ -2236,8 +2353,7 @@ pub fn agg_hashgroup_adopt_merged<'mcx>(
         &merged.key_arena,
         n,
     )?;
-    let rep_slot =
-        exectuples::make_tuple_table_slot(mcx, TupleSlotKind::MinimalTuple, Some(desc));
+    let rep_slot = exectuples::make_tuple_table_slot(mcx, TupleSlotKind::MinimalTuple, Some(desc));
     node.hashgroup = Some(Box::new(HashGroupedState {
         phase: HgPhase::Emit { order, pos: 0 },
         key_atts,
@@ -2307,7 +2423,9 @@ pub(crate) fn residual_preload<'mcx>(
     let mut words = [0i64; 32];
     let mut text_datums = [Datum::null(); 32];
     let hit = {
-        let AggStateData { hashgroup, persort, .. } = node;
+        let AggStateData {
+            hashgroup, persort, ..
+        } = node;
         let hg = hashgroup.as_deref_mut().expect("residual state");
         let ps = persort.as_mut().expect("sorted Agg has persort");
         let nkeys = hg.nkeys;
@@ -2337,7 +2455,13 @@ pub(crate) fn residual_preload<'mcx>(
         found.filter(|&g| !hg.consumed[g as usize])
     };
     if let Some(g) = hit {
-        let AggStateData { hashgroup, pergroup_base, pertrans_sort, numtrans, .. } = node;
+        let AggStateData {
+            hashgroup,
+            pergroup_base,
+            pertrans_sort,
+            numtrans,
+            ..
+        } = node;
         let hg = hashgroup.as_deref_mut().expect("residual state");
         let gi = g as usize;
         hg.consumed[gi] = true;
@@ -2353,11 +2477,18 @@ pub(crate) fn residual_preload<'mcx>(
         for (j, ps) in pertrans_sort.iter_mut().enumerate() {
             // restart_pertrans_sortstates just cleared the slot's set; the
             // saved one replaces it.
-            debug_assert!(ps.dset.as_ref().is_none_or(|d| d.len() == 0 && !d.seen_null));
+            debug_assert!(ps
+                .dset
+                .as_ref()
+                .is_none_or(|d| d.len() == 0 && !d.seen_null));
             ps.dset = hg.dsets[gi * hg.nsort + j].take();
         }
     }
-    if node.hashgroup.as_deref().is_some_and(|hg| hg.remaining == 0) {
+    if node
+        .hashgroup
+        .as_deref()
+        .is_some_and(|hg| hg.remaining == 0)
+    {
         agg_hashgroup_reset(node);
     }
     Ok(())
@@ -2369,9 +2500,12 @@ mod tests {
 
     #[test]
     fn span_pack_roundtrip() {
-        for &(off, len) in
-            &[(0usize, 0usize), (1, 1), (0xdead_beef, 0x7fff_ffff), (u32::MAX as usize, 0)]
-        {
+        for &(off, len) in &[
+            (0usize, 0usize),
+            (1, 1),
+            (0xdead_beef, 0x7fff_ffff),
+            (u32::MAX as usize, 0),
+        ] {
             assert_eq!(unpack_span(pack_span(off, len)), (off, len));
         }
     }

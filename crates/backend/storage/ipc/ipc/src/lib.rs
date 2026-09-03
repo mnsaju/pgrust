@@ -8,7 +8,7 @@
 use std::cell::Cell;
 
 use datum::Datum;
-use types_error::{ERRCODE_PROGRAM_LIMIT_EXCEEDED, ErrorLocation, FATAL, PgError, PgResult};
+use types_error::{ErrorLocation, PgError, PgResult, ERRCODE_PROGRAM_LIMIT_EXCEEDED, FATAL};
 
 #[cfg(test)]
 mod tests;

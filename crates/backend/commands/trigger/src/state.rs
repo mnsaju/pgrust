@@ -7,9 +7,7 @@ use types_core::{
     AttrNumber, Oid, RegProcedure, CONSTRAINT_NAME_NSP_INDEX_ID, CONSTRAINT_RELATION_ID,
     NAMEDATALEN,
 };
-use types_error::{
-    PgError, PgResult, ERRCODE_UNDEFINED_OBJECT, ERRCODE_WRONG_OBJECT_TYPE, ERROR,
-};
+use types_error::{PgError, PgResult, ERRCODE_UNDEFINED_OBJECT, ERRCODE_WRONG_OBJECT_TYPE, ERROR};
 use types_nodes::rawnodes::ConstraintsSetStmt;
 use types_rel::AccessShareLock;
 use types_scan::scankey::{BTEqualStrategyNumber, ScanKeyData};
@@ -49,7 +47,10 @@ fn mk_key(attno: AttrNumber, func: RegProcedure, arg: Datum) -> ScanKeyData {
 
 fn name_arg<'mcx>(mcx: Mcx<'mcx>, name: &str) -> PgResult<mcx::PgVec<'mcx, u8>> {
     let n = NAMEDATALEN as usize;
-    assert!(name.len() < n, "constraint name overflows NAMEDATALEN: {name:?}");
+    assert!(
+        name.len() < n,
+        "constraint name overflows NAMEDATALEN: {name:?}"
+    );
     let mut buf: mcx::PgVec<'mcx, u8> = mcx::vec_with_capacity_in(mcx, n)?;
     mcx::vec_append_bytes(&mut buf, name.as_bytes())?;
     mcx::vec_append_bytes(&mut buf, &[0u8; 64][..n - name.len()])?;
@@ -67,7 +68,9 @@ pub fn AfterTriggerSetState<'mcx>(mcx: Mcx<'mcx>, stmt: &ConstraintsSetStmt<'_>)
         let mut conoidlist: Vec<Oid> = Vec::new();
         let conrel = table::table_open(mcx, CONSTRAINT_RELATION_ID, AccessShareLock)?;
         for lc in stmt.constraints.iter() {
-            let constraint = lc.as_range_var().expect("SET CONSTRAINTS name is a RangeVar");
+            let constraint = lc
+                .as_range_var()
+                .expect("SET CONSTRAINTS name is a RangeVar");
             let conname = constraint.relname.expect("RangeVar.relname");
             if constraint.catalogname.is_some() {
                 panic!("AfterTriggerSetState (trigger.c): catalog-qualified constraint name");
@@ -152,8 +155,11 @@ pub fn AfterTriggerSetState<'mcx>(mcx: Mcx<'mcx>, stmt: &ConstraintsSetStmt<'_>)
         let mut i = 0;
         while i < conoidlist.len() {
             let parent = conoidlist[i];
-            let keys =
-                [mk_key(Anum_pg_constraint_conparentid, F_OIDEQ, Datum::from_oid(parent))];
+            let keys = [mk_key(
+                Anum_pg_constraint_conparentid,
+                F_OIDEQ,
+                Datum::from_oid(parent),
+            )];
             let mut scan = genam::systable_beginscan(
                 mcx,
                 &conrel,
@@ -180,7 +186,11 @@ pub fn AfterTriggerSetState<'mcx>(mcx: Mcx<'mcx>, stmt: &ConstraintsSetStmt<'_>)
         let mut tgoidlist: Vec<Oid> = Vec::new();
         let tgrel = table::table_open(mcx, TRIGGER_RELATION_ID, AccessShareLock)?;
         for &conoid in &conoidlist {
-            let keys = [mk_key(Anum_pg_trigger_tgconstraint, F_OIDEQ, Datum::from_oid(conoid))];
+            let keys = [mk_key(
+                Anum_pg_trigger_tgconstraint,
+                F_OIDEQ,
+                Datum::from_oid(conoid),
+            )];
             let mut scan = genam::systable_beginscan(
                 mcx,
                 &tgrel,

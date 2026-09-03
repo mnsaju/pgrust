@@ -86,7 +86,10 @@ pub fn for_each_live_onebody<E>(
         return Ok(());
     }
     let last = ((n - 1) / 64) as usize;
-    debug_assert!(live.is_none_or(|w| w.len() > last), "live words must cover bit n-1");
+    debug_assert!(
+        live.is_none_or(|w| w.len() > last),
+        "live words must cover bit n-1"
+    );
     #[inline(always)]
     fn word_at(live: Option<&[u64]>, w: usize) -> u64 {
         match live {
@@ -186,7 +189,10 @@ impl<'mcx> SoaDeformPlan<'mcx> {
             return None;
         }
         let wf = atts[..ncols].iter().position(|a| a.attlen <= 0)?;
-        if atts[wf..ncols].iter().any(|a| a.attlen <= 0 && a.attlen != -1) {
+        if atts[wf..ncols]
+            .iter()
+            .any(|a| a.attlen <= 0 && a.attlen != -1)
+        {
             return None; // cstring (or unknown non-varlena) inside the prefix
         }
         let mut offs = ::mcx::vec_with_capacity_in_infallible(mcx, wf);
@@ -222,14 +228,23 @@ impl<'mcx> SoaDeformPlan<'mcx> {
     /// Walk-tail plans never arm (the kernel deforms the WHOLE prefix at
     /// static offsets; a walk tail has none).
     pub fn arm_jit(&mut self, k: alloc::rc::Rc<jit_deform::DeformKernel>) {
-        debug_assert!(self.walk_from.is_none(), "walk-tail plans never arm the JIT kernel");
+        debug_assert!(
+            self.walk_from.is_none(),
+            "walk-tail plans never arm the JIT kernel"
+        );
         debug_assert!(k.ncols() == self.ncols && k.end_off() == self.end_off);
         self.jit = Some(k);
     }
 
     /// Placeholder for varkey-mode batches; the varkey pass never reads it.
     pub fn unused(mcx: Mcx<'mcx>) -> SoaDeformPlan<'mcx> {
-        SoaDeformPlan { ncols: 0, end_off: 0, offs: PgVec::new_in(mcx), walk_from: None, jit: None }
+        SoaDeformPlan {
+            ncols: 0,
+            end_off: 0,
+            offs: PgVec::new_in(mcx),
+            walk_from: None,
+            jit: None,
+        }
     }
 
     /// Columnar-AM plan: `ncols` only, NO offset chain — usable exclusively
@@ -506,7 +521,6 @@ pub struct SoaBatch<'mcx> {
 pub const LEN_WANT_BYTES: u8 = 1;
 pub const LEN_WANT_CHARS: u8 = 2;
 
-
 impl<'mcx> SoaBatch<'mcx> {
     pub fn new_in(mcx: Mcx<'mcx>, ncols: u16) -> SoaBatch<'mcx> {
         let cells = ncols as usize * SOA_MAX_ROWS;
@@ -608,7 +622,9 @@ impl<'mcx> SoaBatch<'mcx> {
     /// dictionary index of the decoded Datum). isnull is written explicitly:
     /// NULL-free is this window's proof, not a structural assumption.
     pub fn gather_dict_lane(&mut self, c: usize) {
-        let Some(lane) = self.dict_lane(c) else { return };
+        let Some(lane) = self.dict_lane(c) else {
+            return;
+        };
         let n = self.nrows as usize;
         let values = &mut self.values[c * SOA_MAX_ROWS..c * SOA_MAX_ROWS + n];
         let isnull = &mut self.isnull[c * SOA_MAX_ROWS..c * SOA_MAX_ROWS + n];
@@ -625,7 +641,9 @@ impl<'mcx> SoaBatch<'mcx> {
     /// codes — unselected cells hold valid POINTERS whose bytes may stay
     /// unmaterialized. Bit i of `sel` = staged row i selected.
     pub fn gather_dict_lane_sel(&mut self, c: usize, sel: &[u64]) {
-        let Some(lane) = self.dict_lane(c) else { return };
+        let Some(lane) = self.dict_lane(c) else {
+            return;
+        };
         if lane.table.lazy_ensure.is_none() {
             return self.gather_dict_lane(c);
         }
@@ -818,8 +836,12 @@ pub fn soa_stage_varkey(
             // SAFETY: null-free tuple with natts > key: the fixed prefix ends
             // at `start` and the key varlena's first byte is readable there.
             unsafe {
-                let off =
-                    att_pointer_alignby(start as usize, plan.key_alignby, -1, tp.add(start as usize));
+                let off = att_pointer_alignby(
+                    start as usize,
+                    plan.key_alignby,
+                    -1,
+                    tp.add(start as usize),
+                );
                 *soa.values.get_unchecked_mut(idx) = Datum::from_usize(tp.add(off) as usize);
                 *soa.isnull.get_unchecked_mut(idx) = false;
             }
@@ -923,7 +945,10 @@ pub fn soa_deform_columns(
     atts: &[CompactAttribute],
     qual_col_only: Option<u16>,
 ) {
-    debug_assert!(!plan.is_virtual(), "virtual prefix plans are cbstore-only (no offset chain)");
+    debug_assert!(
+        !plan.is_virtual(),
+        "virtual prefix plans are cbstore-only (no offset chain)"
+    );
     let n = soa.nrows as usize;
     let ncols = plan.ncols as usize;
     // Walk-tail plans (AGGSEQ-STAGE): the static column-major pass covers
@@ -1117,7 +1142,10 @@ pub fn soa_deform_columns_set(
     cols: &[u16],
     sel: Option<&[u64]>,
 ) {
-    debug_assert!(!plan.is_virtual(), "virtual prefix plans are cbstore-only (no offset chain)");
+    debug_assert!(
+        !plan.is_virtual(),
+        "virtual prefix plans are cbstore-only (no offset chain)"
+    );
     // AGGSEQ-STAGE: the K1-latemat split never arms over a walk-tail plan
     // (`seq_scan_k1_latemat_arm` refuses NAMED `k1-latemat-varwalk`) — this
     // pass indexes the static offset chain, which covers the head only.
@@ -1132,7 +1160,11 @@ pub fn soa_deform_columns_set(
     let ncols = plan.ncols as usize;
     let dense = soa.kinds_or == 0;
     let nwords = n.div_ceil(64);
-    let tail_mask = if n % 64 == 0 { u64::MAX } else { (1u64 << (n % 64)) - 1 };
+    let tail_mask = if n % 64 == 0 {
+        u64::MAX
+    } else {
+        (1u64 << (n % 64)) - 1
+    };
     for &c in cols {
         let c = c as usize;
         debug_assert!(c < ncols && ncols <= atts.len());
@@ -1255,8 +1287,7 @@ fn soa_deform_tuple_nulls_walk(
             } else {
                 off = att_nominal_alignby(off, att.attalignby);
             }
-            soa.values[c * SOA_MAX_ROWS + idx] =
-                fetch_att(tp.add(off), att.attbyval, attlen);
+            soa.values[c * SOA_MAX_ROWS + idx] = fetch_att(tp.add(off), att.attbyval, attlen);
             soa.isnull[c * SOA_MAX_ROWS + idx] = false;
             off = att_addlength_pointer(off, attlen, tp.add(off));
             if attlen <= 0 {
@@ -1326,8 +1357,10 @@ pub fn soa_store_prefix<'mcx>(slot: &mut SlotData<'mcx>, soa: &SoaBatch<'_>, i: 
         let slow = *soa.slow.get_unchecked(idx);
         let base = &mut h.base;
         for c in 0..ncols {
-            *base.tts_values.get_unchecked_mut(c) = *soa.values.get_unchecked(c * SOA_MAX_ROWS + idx);
-            *base.tts_isnull.get_unchecked_mut(c) = *soa.isnull.get_unchecked(c * SOA_MAX_ROWS + idx);
+            *base.tts_values.get_unchecked_mut(c) =
+                *soa.values.get_unchecked(c * SOA_MAX_ROWS + idx);
+            *base.tts_isnull.get_unchecked_mut(c) =
+                *soa.isnull.get_unchecked(c * SOA_MAX_ROWS + idx);
         }
         base.tts_nvalid = ncols as AttrNumber;
         if slow {

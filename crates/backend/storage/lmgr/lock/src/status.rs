@@ -4,11 +4,10 @@ use types_core::{TimestampTz, INVALID_PROC_NUMBER};
 use types_error::PgResult;
 use types_hash::hsearch::HASH_SEQ_STATUS;
 use types_storage::lock::{
-    ExclusiveLock, LockInstanceData, LOCKBIT_ON, LOCKMASK, LOCKTAG, NoLock, PROCLOCK,
+    ExclusiveLock, LockInstanceData, NoLock, LOCKBIT_ON, LOCKMASK, LOCKTAG, PROCLOCK,
 };
 use types_storage::storage::{
-    VirtualTransactionId, NUM_LOCK_PARTITIONS, PGPROC, PROC_ARRAY_LOCK,
-    FP_LOCK_SLOTS_PER_GROUP,
+    VirtualTransactionId, FP_LOCK_SLOTS_PER_GROUP, NUM_LOCK_PARTITIONS, PGPROC, PROC_ARRAY_LOCK,
 };
 
 use crate::fastpath::{fp_groups_per_backend, fp_info_lock, fp_view, FAST_PATH_LOCKNUMBER_OFFSET};

@@ -7,8 +7,18 @@ use guc_tables::session_guc_int as int_guc;
 // the scan size at which parallelism pays by ~10x, so parallelism engages on
 // smaller analytical scans. compute_parallel_worker's log3 rule then also
 // assigns more workers per size. docs/design/jit-parallel-defaults.md.
-int_guc!(MIN_PARALLEL_TABLE_SCAN_SIZE, min_parallel_table_scan_size, set_min_parallel_table_scan_size, (1024 * 1024) / guc_tables::consts::BLCKSZ);
-int_guc!(MIN_PARALLEL_INDEX_SCAN_SIZE, min_parallel_index_scan_size, set_min_parallel_index_scan_size, (64 * 1024) / guc_tables::consts::BLCKSZ);
+int_guc!(
+    MIN_PARALLEL_TABLE_SCAN_SIZE,
+    min_parallel_table_scan_size,
+    set_min_parallel_table_scan_size,
+    (1024 * 1024) / guc_tables::consts::BLCKSZ
+);
+int_guc!(
+    MIN_PARALLEL_INDEX_SCAN_SIZE,
+    min_parallel_index_scan_size,
+    set_min_parallel_index_scan_size,
+    (64 * 1024) / guc_tables::consts::BLCKSZ
+);
 
 pub fn install() {
     use guc_tables::GucVarAccessors;

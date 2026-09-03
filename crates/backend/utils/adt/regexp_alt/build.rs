@@ -31,15 +31,23 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn probe_pkgconfig(statik: bool) -> Option<pkg_config::Library> {
-    pkg_config::Config::new().statik(statik).cargo_metadata(false).probe("re2").ok()
+    pkg_config::Config::new()
+        .statik(statik)
+        .cargo_metadata(false)
+        .probe("re2")
+        .ok()
 }
 
 fn header_dirs() -> Vec<PathBuf> {
-    ["/usr/include", "/usr/local/include", "/opt/homebrew/include"]
-        .iter()
-        .map(PathBuf::from)
-        .filter(|d| d.join("re2/re2.h").exists())
-        .collect()
+    [
+        "/usr/include",
+        "/usr/local/include",
+        "/opt/homebrew/include",
+    ]
+    .iter()
+    .map(PathBuf::from)
+    .filter(|d| d.join("re2/re2.h").exists())
+    .collect()
 }
 
 fn try_apt_install() -> bool {
@@ -137,7 +145,10 @@ fn main() {
     }
 
     let mut build = cc::Build::new();
-    build.cpp(true).file("src/re2_shim.cc").flag_if_supported("-std=c++17");
+    build
+        .cpp(true)
+        .file("src/re2_shim.cc")
+        .flag_if_supported("-std=c++17");
     let mut lib_dirs: Vec<PathBuf> = Vec::new();
     if let Some(lib) = &pkg {
         for p in &lib.include_paths {
@@ -151,7 +162,12 @@ fn main() {
     build.compile("pgr_re2_shim");
 
     let triplet_dir = format!("/usr/lib/{}-linux-gnu", std::env::consts::ARCH);
-    for d in ["/usr/lib", "/usr/local/lib", "/opt/homebrew/lib", triplet_dir.as_str()] {
+    for d in [
+        "/usr/lib",
+        "/usr/local/lib",
+        "/opt/homebrew/lib",
+        triplet_dir.as_str(),
+    ] {
         lib_dirs.push(PathBuf::from(d));
     }
     // Static linking serves shipped binaries on every OS (no runtime .so/.dylib

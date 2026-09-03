@@ -53,9 +53,7 @@ fn block_switch(scan: &mut IndexScanDescData<'_>, blk: BlockNumber) -> PgResult<
         pf.switches = pf.switches.saturating_add(1);
         // Arm only once the scan has done a real read (warm scans stay here)
         // and the block-switch count clears the start rule.
-        if pf.switches < ACTIVATE_SWITCHES
-            || bufmgr::counters::shared_blks_read() == pf.read_base
-        {
+        if pf.switches < ACTIVATE_SWITCHES || bufmgr::counters::shared_blks_read() == pf.read_base {
             return Ok(());
         }
         if eff_io_concurrency() <= 0 {

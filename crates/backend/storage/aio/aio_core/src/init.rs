@@ -9,8 +9,8 @@ use types_storage::storage::NUM_AUXILIARY_PROCS;
 
 use crate::{
     backend_slot, dclist_push_tail, ioh, AioCell, BackendData, Dclist, HandleData, ListNode,
-    PgAioBackend, PgAioHandle, BACKENDS, BACKEND_COUNT, HANDLES, HANDLE_COUNT, HANDLE_DATA,
-    IOVECS, MY_BACKEND, NO_HANDLE, PGAIO_HS_IDLE,
+    PgAioBackend, PgAioHandle, BACKENDS, BACKEND_COUNT, HANDLES, HANDLE_COUNT, HANDLE_DATA, IOVECS,
+    MY_BACKEND, NO_HANDLE, PGAIO_HS_IDLE,
 };
 
 fn AioProcs() -> usize {
@@ -39,7 +39,10 @@ pub fn AioShmemSize() -> PgResult<usize> {
 
     let mut sz = shmem::add_size(0, std::mem::size_of::<PgAioBackend>() * procs)?;
     sz = shmem::add_size(sz, std::mem::size_of::<PgAioHandle>() * procs * imc)?;
-    sz = shmem::add_size(sz, std::mem::size_of::<libc::iovec>() * procs * per_backend_iovecs)?;
+    sz = shmem::add_size(
+        sz,
+        std::mem::size_of::<libc::iovec>() * procs * per_backend_iovecs,
+    )?;
     sz = shmem::add_size(sz, std::mem::size_of::<u64>() * procs * per_backend_iovecs)?;
     sz = shmem::add_size(sz, crate::method_worker::pgaio_worker_shmem_size())?;
     Ok(sz)
@@ -48,14 +51,19 @@ pub fn AioShmemSize() -> PgResult<usize> {
 pub fn AioShmemInit() -> PgResult<()> {
     let procs = AioProcs();
     let imc = crate::io_max_concurrency() as usize;
-    debug_assert!(imc > 0, "AioShmemSize must run first (io_max_concurrency auto-tune)");
+    debug_assert!(
+        imc > 0,
+        "AioShmemSize must run first (io_max_concurrency auto-tune)"
+    );
     let combine = guc_tables::vars::io_max_combine_limit.read() as usize;
     let per_backend_iovecs = imc * combine;
 
     let (backends_raw, found_b) =
         shmem::ShmemInitStruct("AioBackend", std::mem::size_of::<PgAioBackend>() * procs)?;
-    let (handles_raw, _) =
-        shmem::ShmemInitStruct("AioHandle", std::mem::size_of::<PgAioHandle>() * procs * imc)?;
+    let (handles_raw, _) = shmem::ShmemInitStruct(
+        "AioHandle",
+        std::mem::size_of::<PgAioHandle>() * procs * imc,
+    )?;
     let (iovecs_raw, _) = shmem::ShmemInitStruct(
         "AioHandleIOV",
         std::mem::size_of::<libc::iovec>() * procs * per_backend_iovecs,
@@ -115,7 +123,10 @@ pub fn AioShmemInit() -> PgResult<()> {
                             op_data: Default::default(),
                             target_data: Default::default(),
                         }),
-                        node: AioCell::new(ListNode { prev: NO_HANDLE, next: NO_HANDLE }),
+                        node: AioCell::new(ListNode {
+                            prev: NO_HANDLE,
+                            next: NO_HANDLE,
+                        }),
                     });
                 }
                 iovec_off += combine as u32;
@@ -188,8 +199,10 @@ pub fn AioShmemResetAfterCrash() -> PgResult<()> {
             d.handle_data_len = 0;
             d.resowner = None;
             d.report_return = std::ptr::null_mut();
-            d.distilled_result =
-                PgAioResult { status: PgAioResultStatus::Unknown, ..Default::default() };
+            d.distilled_result = PgAioResult {
+                status: PgAioResultStatus::Unknown,
+                ..Default::default()
+            };
             dclist_push_tail(&mut b.idle_ios, index);
         }
     }

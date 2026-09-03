@@ -9,7 +9,7 @@ use types_error::{
 };
 use types_fmgr::{FmgrInfo, FunctionCallInfoBaseData as Fcinfo};
 use types_rel::{AccessShareLock, Relation};
-use types_scan::scankey::{ScanKeyData, BTEqualStrategyNumber};
+use types_scan::scankey::{BTEqualStrategyNumber, ScanKeyData};
 
 const INDEX_INDRELID_INDEX_ID: types_core::Oid = 2678;
 const ANUM_PG_INDEX_INDRELID: i32 = 2;
@@ -31,8 +31,10 @@ fn get_rel_from_relname<'mcx>(
         [c, s, r] => (Some(*c), Some(*s), *r),
         _ => {
             return Err(Box::new(
-                PgError::error(format!("improper relation name (too many dotted names): {rawname}"))
-                    .with_sqlstate(types_error::ERRCODE_SYNTAX_ERROR),
+                PgError::error(format!(
+                    "improper relation name (too many dotted names): {rawname}"
+                ))
+                .with_sqlstate(types_error::ERRCODE_SYNTAX_ERROR),
             ))
         }
     };
@@ -129,7 +131,10 @@ fn generate_relation_name<'mcx>(mcx: Mcx<'mcx>, rel: &Relation<'mcx>) -> PgResul
     } else {
         get_namespace_name(mcx, rel.namespace())?
     };
-    Ok(ruleutils::quote_qualified_identifier(nspname.as_deref(), rel.name()))
+    Ok(ruleutils::quote_qualified_identifier(
+        nspname.as_deref(),
+        rel.name(),
+    ))
 }
 
 fn get_namespace_name(mcx: Mcx<'_>, nspid: types_core::Oid) -> PgResult<Option<String>> {
@@ -262,7 +267,10 @@ fn get_tuple_of_interest<'mcx>(
         if i > 0 {
             sql.push_str(" AND ");
         }
-        sql.push_str(&quote_ident_str(mcx, tupdesc.attr(pkidx).attname.name_str())?);
+        sql.push_str(&quote_ident_str(
+            mcx,
+            tupdesc.attr(pkidx).attname.name_str(),
+        )?);
         match &src_pkattvals[i] {
             Some(v) => sql.push_str(&format!(" = {}", quote_literal_str(v))),
             None => sql.push_str(" IS NULL"),
@@ -280,7 +288,11 @@ fn get_tuple_of_interest<'mcx>(
     }
     let copied = if ret == spi::SPI_OK_SELECT && processed == 1 {
         spi::SPI_tuptable().and_then(|h| {
-            spi::tuptable_with(h, |d| d.vals.first().and_then(|t| heaptuple::heap_copytuple(mcx, t).ok()))
+            spi::tuptable_with(h, |d| {
+                d.vals
+                    .first()
+                    .and_then(|t| heaptuple::heap_copytuple(mcx, t).ok())
+            })
         })
     } else {
         None
@@ -309,8 +321,8 @@ fn get_sql_insert(
     let relname = generate_relation_name(mcx, rel)?;
     let tupdesc = rel.descr();
     let natts = tupdesc.natts as usize;
-    let tuple = get_tuple_of_interest(mcx, rel, pkattnums, src_pkattvals)?
-        .ok_or_else(source_not_found)?;
+    let tuple =
+        get_tuple_of_interest(mcx, rel, pkattnums, src_pkattvals)?.ok_or_else(source_not_found)?;
 
     let mut buf = format!("INSERT INTO {relname}(");
     let mut need_comma = false;
@@ -361,7 +373,10 @@ fn get_sql_delete(
         if i > 0 {
             buf.push_str(" AND ");
         }
-        buf.push_str(&quote_ident_str(mcx, tupdesc.attr(pkidx).attname.name_str())?);
+        buf.push_str(&quote_ident_str(
+            mcx,
+            tupdesc.attr(pkidx).attname.name_str(),
+        )?);
         match &tgt_pkattvals[i] {
             Some(v) => buf.push_str(&format!(" = {}", quote_literal_str(v))),
             None => buf.push_str(" IS NULL"),
@@ -380,8 +395,8 @@ fn get_sql_update(
     let relname = generate_relation_name(mcx, rel)?;
     let tupdesc = rel.descr();
     let natts = tupdesc.natts as usize;
-    let tuple = get_tuple_of_interest(mcx, rel, pkattnums, src_pkattvals)?
-        .ok_or_else(source_not_found)?;
+    let tuple =
+        get_tuple_of_interest(mcx, rel, pkattnums, src_pkattvals)?.ok_or_else(source_not_found)?;
 
     let mut buf = format!("UPDATE {relname} SET ");
     let mut need_comma = false;
@@ -393,7 +408,10 @@ fn get_sql_update(
         if need_comma {
             buf.push_str(", ");
         }
-        buf.push_str(&format!("{} = ", quote_ident_str(mcx, att.attname.name_str())?));
+        buf.push_str(&format!(
+            "{} = ",
+            quote_ident_str(mcx, att.attname.name_str())?
+        ));
         let val = match get_attnum_pk_pos(pkattnums, i) {
             Some(k) => tgt_pkattvals[k].clone(),
             None => tuple_value(mcx, &tuple, tupdesc, i as i32 + 1)?,
@@ -409,7 +427,10 @@ fn get_sql_update(
         if i > 0 {
             buf.push_str(" AND ");
         }
-        buf.push_str(&quote_ident_str(mcx, tupdesc.attr(pkidx).attname.name_str())?);
+        buf.push_str(&quote_ident_str(
+            mcx,
+            tupdesc.attr(pkidx).attname.name_str(),
+        )?);
         match &tgt_pkattvals[i] {
             Some(v) => buf.push_str(&format!(" = {}", quote_literal_str(v))),
             None => buf.push_str(" IS NULL"),
@@ -421,15 +442,15 @@ fn get_sql_update(
 #[track_caller]
 #[cold]
 fn source_not_found() -> Box<PgError> {
-    Box::new(
-        PgError::error("source row not found").with_sqlstate(ERRCODE_CARDINALITY_VIOLATION),
-    )
+    Box::new(PgError::error("source row not found").with_sqlstate(ERRCODE_CARDINALITY_VIOLATION))
 }
 
 fn array_len_mismatch(which: &str) -> Box<PgError> {
     Box::new(
-        PgError::error(format!("{which} key array length must match number of key attributes"))
-            .with_sqlstate(ERRCODE_ARRAY_SUBSCRIPT_ERROR),
+        PgError::error(format!(
+            "{which} key array length must match number of key attributes"
+        ))
+        .with_sqlstate(ERRCODE_ARRAY_SUBSCRIPT_ERROR),
     )
 }
 
@@ -441,7 +462,12 @@ pub fn fc_dblink_get_pkey(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) ->
     let mcx = unsafe { fcinfo.result_mcx_detached() };
     // SAFETY: strict text arg.
     let relname = unsafe { fcinfo.arg_varlena_packed(0)? };
-    let rel = get_rel_from_relname(mcx, &String::from_utf8_lossy(relname.data()), AccessShareLock, adt_acl::ACL_SELECT)?;
+    let rel = get_rel_from_relname(
+        mcx,
+        &String::from_utf8_lossy(relname.data()),
+        AccessShareLock,
+        adt_acl::ACL_SELECT,
+    )?;
     let (nkeyatts, names) = get_pkey_attnames(mcx, &rel)?;
     table::table_close(rel, AccessShareLock)?;
 
@@ -470,7 +496,12 @@ pub fn fc_dblink_build_sql_insert(
     let mcx = fcinfo.result_mcx();
     // SAFETY: strict text arg 0; text[] args 3,4.
     let relname = unsafe { fcinfo.arg_varlena_packed(0)? };
-    let rel = get_rel_from_relname(mcx, &String::from_utf8_lossy(relname.data()), AccessShareLock, adt_acl::ACL_SELECT)?;
+    let rel = get_rel_from_relname(
+        mcx,
+        &String::from_utf8_lossy(relname.data()),
+        AccessShareLock,
+        adt_acl::ACL_SELECT,
+    )?;
     let (pkattnums, pknumatts) = build_args(fcinfo, &rel)?;
     let src = get_text_array_contents(mcx, unsafe { fcinfo.arg_varlena_packed(3)? }.image())?;
     if src.len() as i32 != pknumatts {
@@ -494,7 +525,12 @@ pub fn fc_dblink_build_sql_delete(
     let mcx = fcinfo.result_mcx();
     // SAFETY: strict text arg 0; text[] arg 3.
     let relname = unsafe { fcinfo.arg_varlena_packed(0)? };
-    let rel = get_rel_from_relname(mcx, &String::from_utf8_lossy(relname.data()), AccessShareLock, adt_acl::ACL_SELECT)?;
+    let rel = get_rel_from_relname(
+        mcx,
+        &String::from_utf8_lossy(relname.data()),
+        AccessShareLock,
+        adt_acl::ACL_SELECT,
+    )?;
     let (pkattnums, pknumatts) = build_args(fcinfo, &rel)?;
     let tgt = get_text_array_contents(mcx, unsafe { fcinfo.arg_varlena_packed(3)? }.image())?;
     if tgt.len() as i32 != pknumatts {
@@ -513,7 +549,12 @@ pub fn fc_dblink_build_sql_update(
     let mcx = fcinfo.result_mcx();
     // SAFETY: strict text arg 0; text[] args 3,4.
     let relname = unsafe { fcinfo.arg_varlena_packed(0)? };
-    let rel = get_rel_from_relname(mcx, &String::from_utf8_lossy(relname.data()), AccessShareLock, adt_acl::ACL_SELECT)?;
+    let rel = get_rel_from_relname(
+        mcx,
+        &String::from_utf8_lossy(relname.data()),
+        AccessShareLock,
+        adt_acl::ACL_SELECT,
+    )?;
     let (pkattnums, pknumatts) = build_args(fcinfo, &rel)?;
     let src = get_text_array_contents(mcx, unsafe { fcinfo.arg_varlena_packed(3)? }.image())?;
     if src.len() as i32 != pknumatts {

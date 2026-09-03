@@ -92,9 +92,7 @@ fn item_bytes(items: &[AclItem]) -> &[u8] {
         assert!(cfg!(target_endian = "little"));
     }
     // SAFETY: AclItem is repr(C) {u32,u32,u64}, padding-free, LE == on-disk form.
-    unsafe {
-        core::slice::from_raw_parts(items.as_ptr().cast::<u8>(), items.len() * ACL_ITEM_SIZE)
-    }
+    unsafe { core::slice::from_raw_parts(items.as_ptr().cast::<u8>(), items.len() * ACL_ITEM_SIZE) }
 }
 
 // allocacl's image (acl.c): 4B-header 1-D no-nulls aclitem[] varlena.

@@ -125,7 +125,10 @@ impl<'mcx> IntegerSet<'mcx> {
         self.leaf_nodes.push(LeafNode {
             num_items: 0,
             next: NIL,
-            items: [LeafItem { first: 0, codeword: 0 }; MAX_LEAF_ITEMS],
+            items: [LeafItem {
+                first: 0,
+                codeword: 0,
+            }; MAX_LEAF_ITEMS],
         });
         self.mem_used += core::mem::size_of::<LeafNode>() as u64;
         Ok((self.leaf_nodes.len() - 1) as u32)
@@ -366,7 +369,11 @@ fn binsrch_uint64(item: u64, arr: &[u64], nextkey: bool) -> usize {
     let mut high = arr.len();
     while high > low {
         let mid = low + (high - low) / 2;
-        let go_right = if nextkey { item >= arr[mid] } else { item > arr[mid] };
+        let go_right = if nextkey {
+            item >= arr[mid]
+        } else {
+            item > arr[mid]
+        };
         if go_right {
             low = mid + 1;
         } else {
@@ -381,7 +388,11 @@ fn binsrch_leaf(item: u64, arr: &[LeafItem], nextkey: bool) -> usize {
     let mut high = arr.len();
     while high > low {
         let mid = low + (high - low) / 2;
-        let go_right = if nextkey { item >= arr[mid].first } else { item > arr[mid].first };
+        let go_right = if nextkey {
+            item >= arr[mid].first
+        } else {
+            item > arr[mid].first
+        };
         if go_right {
             low = mid + 1;
         } else {
@@ -397,23 +408,74 @@ struct Simple8bMode {
 }
 
 const SIMPLE8B_MODES: [Simple8bMode; 17] = [
-    Simple8bMode { bits_per_int: 0, num_ints: 240 },
-    Simple8bMode { bits_per_int: 0, num_ints: 120 },
-    Simple8bMode { bits_per_int: 1, num_ints: 60 },
-    Simple8bMode { bits_per_int: 2, num_ints: 30 },
-    Simple8bMode { bits_per_int: 3, num_ints: 20 },
-    Simple8bMode { bits_per_int: 4, num_ints: 15 },
-    Simple8bMode { bits_per_int: 5, num_ints: 12 },
-    Simple8bMode { bits_per_int: 6, num_ints: 10 },
-    Simple8bMode { bits_per_int: 7, num_ints: 8 },
-    Simple8bMode { bits_per_int: 8, num_ints: 7 },
-    Simple8bMode { bits_per_int: 10, num_ints: 6 },
-    Simple8bMode { bits_per_int: 12, num_ints: 5 },
-    Simple8bMode { bits_per_int: 15, num_ints: 4 },
-    Simple8bMode { bits_per_int: 20, num_ints: 3 },
-    Simple8bMode { bits_per_int: 30, num_ints: 2 },
-    Simple8bMode { bits_per_int: 60, num_ints: 1 },
-    Simple8bMode { bits_per_int: 0, num_ints: 0 },
+    Simple8bMode {
+        bits_per_int: 0,
+        num_ints: 240,
+    },
+    Simple8bMode {
+        bits_per_int: 0,
+        num_ints: 120,
+    },
+    Simple8bMode {
+        bits_per_int: 1,
+        num_ints: 60,
+    },
+    Simple8bMode {
+        bits_per_int: 2,
+        num_ints: 30,
+    },
+    Simple8bMode {
+        bits_per_int: 3,
+        num_ints: 20,
+    },
+    Simple8bMode {
+        bits_per_int: 4,
+        num_ints: 15,
+    },
+    Simple8bMode {
+        bits_per_int: 5,
+        num_ints: 12,
+    },
+    Simple8bMode {
+        bits_per_int: 6,
+        num_ints: 10,
+    },
+    Simple8bMode {
+        bits_per_int: 7,
+        num_ints: 8,
+    },
+    Simple8bMode {
+        bits_per_int: 8,
+        num_ints: 7,
+    },
+    Simple8bMode {
+        bits_per_int: 10,
+        num_ints: 6,
+    },
+    Simple8bMode {
+        bits_per_int: 12,
+        num_ints: 5,
+    },
+    Simple8bMode {
+        bits_per_int: 15,
+        num_ints: 4,
+    },
+    Simple8bMode {
+        bits_per_int: 20,
+        num_ints: 3,
+    },
+    Simple8bMode {
+        bits_per_int: 30,
+        num_ints: 2,
+    },
+    Simple8bMode {
+        bits_per_int: 60,
+        num_ints: 1,
+    },
+    Simple8bMode {
+        bits_per_int: 0,
+        num_ints: 0,
+    },
 ];
 
 // Looks like a mode-0 codeword, but a real mode-0 codeword has zeroes in the

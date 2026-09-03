@@ -123,7 +123,12 @@ pub fn crypt_bf(pw: &[u8], setting: &[u8]) -> Result<String, String> {
 
     // Encrypt the magic "OrpheanBeholderScryDoubt" (6 words) 64 times.
     let mut magic: [u32; 6] = [
-        0x4F72_7068, 0x6561_6E42, 0x6568_6F6C, 0x6465_7253, 0x6372_7944, 0x6F75_6274,
+        0x4F72_7068,
+        0x6561_6E42,
+        0x6568_6F6C,
+        0x6465_7253,
+        0x6372_7944,
+        0x6F75_6274,
     ];
     for i in (0..6).step_by(2) {
         let mut lr = [magic[i], magic[i + 1]];

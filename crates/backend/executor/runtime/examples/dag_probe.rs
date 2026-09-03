@@ -57,7 +57,9 @@ fn spec(qid: u64, shape: &Shape) -> QuerySpec {
             .iter()
             .map(|(granules, ns, deps)| TaskSetSpec {
                 source: Arc::new(SyntheticMorselSource::new(*granules)),
-                work: Arc::new(Spin { ns_per_granule: *ns }),
+                work: Arc::new(Spin {
+                    ns_per_granule: *ns,
+                }),
                 deps: deps.clone(),
             })
             .collect(),

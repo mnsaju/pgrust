@@ -55,12 +55,7 @@ pub fn c_format_g(val: f64) -> String {
                 m.pop();
             }
         }
-        format!(
-            "{}e{}{:02}",
-            m,
-            if exp < 0 { '-' } else { '+' },
-            exp.abs()
-        )
+        format!("{}e{}{:02}", m, if exp < 0 { '-' } else { '+' }, exp.abs())
     } else {
         // %f style with PREC-1-exp fraction digits, trailing zeros stripped
         let frac = (PREC - 1 - exp).max(0) as usize;
@@ -82,7 +77,11 @@ pub fn c_format_g(val: f64) -> String {
 /// would leave in `result`.
 pub fn restore(val: f32, n_in: i32) -> Vec<u8> {
     // cap the digit count (n <= 0 protects against corrupted data)
-    let n = if n_in <= 0 { FLT_DIG } else { n_in.min(FLT_DIG) };
+    let n = if n_in <= 0 {
+        FLT_DIG
+    } else {
+        n_in.min(FLT_DIG)
+    };
     let sign = val < 0.0;
 
     // print in %e style to start with (float promoted to double)

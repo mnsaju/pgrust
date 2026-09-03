@@ -8,7 +8,7 @@ use core::ffi::c_char;
 
 use mcx::Mcx;
 use types_error::{
-    PgError, PgResult, ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_INVALID_PARAMETER_VALUE, ErrorLevel,
+    ErrorLevel, PgError, PgResult, ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_INVALID_PARAMETER_VALUE,
 };
 
 use crate::icu_ffi::{self as ffi, IcuApi, UChar, UCharIterator, UErrorCode};
@@ -35,7 +35,9 @@ impl IcuLocale {
     }
 
     fn loc_ptr(self) -> *const c_char {
-        self.loc.expect("ICU case op without locale string").as_ptr() as *const c_char
+        self.loc
+            .expect("ICU case op without locale string")
+            .as_ptr() as *const c_char
     }
 }
 
@@ -213,8 +215,7 @@ fn make_icu_collator(iculocstr: &str, icurules: Option<&str>) -> PgResult<*mut f
     let mut std_len: i32 = 0;
     // SAFETY: live collator; getRules returns a collator-owned buffer.
     let std_rules = unsafe { (api.ucol_getRules)(collator_std_rules, &mut std_len) };
-    let mut all_rules: Vec<UChar> =
-        Vec::with_capacity(std_len as usize + my_len as usize + 1);
+    let mut all_rules: Vec<UChar> = Vec::with_capacity(std_len as usize + my_len as usize + 1);
     // SAFETY: std_rules points at std_len UChars.
     all_rules
         .extend_from_slice(unsafe { core::slice::from_raw_parts(std_rules, std_len as usize) });
@@ -406,16 +407,29 @@ fn convert_case(
         unsafe {
             match kind {
                 CASE_LOWER => (api.u_strToLower)(
-                    dest.as_mut_ptr(), cap, src.as_ptr(), src.len() as i32,
-                    locale.loc_ptr(), status,
+                    dest.as_mut_ptr(),
+                    cap,
+                    src.as_ptr(),
+                    src.len() as i32,
+                    locale.loc_ptr(),
+                    status,
                 ),
                 CASE_UPPER => (api.u_strToUpper)(
-                    dest.as_mut_ptr(), cap, src.as_ptr(), src.len() as i32,
-                    locale.loc_ptr(), status,
+                    dest.as_mut_ptr(),
+                    cap,
+                    src.as_ptr(),
+                    src.len() as i32,
+                    locale.loc_ptr(),
+                    status,
                 ),
                 CASE_TITLE => (api.u_strToTitle)(
-                    dest.as_mut_ptr(), cap, src.as_ptr(), src.len() as i32,
-                    core::ptr::null_mut(), locale.loc_ptr(), status,
+                    dest.as_mut_ptr(),
+                    cap,
+                    src.as_ptr(),
+                    src.len() as i32,
+                    core::ptr::null_mut(),
+                    locale.loc_ptr(),
+                    status,
                 ),
                 _ => {
                     // u_strFoldCase has no locale; Turkic 'tr'/'az' get the
@@ -431,7 +445,12 @@ fn convert_case(
                         options = ffi::U_FOLD_CASE_EXCLUDE_SPECIAL_I;
                     }
                     (api.u_strFoldCase)(
-                        dest.as_mut_ptr(), cap, src.as_ptr(), src.len() as i32, options, status,
+                        dest.as_mut_ptr(),
+                        cap,
+                        src.as_ptr(),
+                        src.len() as i32,
+                        options,
+                        status,
                     )
                 }
             }
@@ -584,7 +603,10 @@ pub fn icu_language_tag(loc_str: &str, elevel: ErrorLevel) -> PgResult<Option<St
         }
         return Ok(None);
     }
-    let len = langtag.iter().position(|&b| b == 0).unwrap_or(langtag.len());
+    let len = langtag
+        .iter()
+        .position(|&b| b == 0)
+        .unwrap_or(langtag.len());
     Ok(Some(String::from_utf8_lossy(&langtag[..len]).into_owned()))
 }
 

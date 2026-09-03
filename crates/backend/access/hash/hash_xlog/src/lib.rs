@@ -22,7 +22,10 @@ const XLR_INFO_MASK: u8 = 0x0F;
 const SIZEOF_OPAQUE: usize = core::mem::size_of::<HashPageOpaqueData>();
 
 fn main_data<'a>(record: &'a XLogReaderState) -> &'a [u8] {
-    let rec = record.record.as_ref().expect("hash redo with no decoded record");
+    let rec = record
+        .record
+        .as_ref()
+        .expect("hash redo with no decoded record");
     // SAFETY: points into the reader's decode buffer, valid for the redo
     // callback's duration.
     unsafe { rec.main_data_bytes() }
@@ -66,7 +69,12 @@ fn write_opaque(page: &mut PageMut<'_>, opaque: &HashPageOpaqueData) {
     debug_assert!(off == BLCKSZ - SIZEOF_OPAQUE);
     // SAFETY: in-bounds 4-aligned special area; exclusive page access.
     unsafe {
-        page.as_ref().as_ptr().cast_mut().add(off).cast::<HashPageOpaqueData>().write(*opaque)
+        page.as_ref()
+            .as_ptr()
+            .cast_mut()
+            .add(off)
+            .cast::<HashPageOpaqueData>()
+            .write(*opaque)
     }
 }
 
@@ -78,7 +86,10 @@ fn hash_pageinit(page: &mut PageMut<'_>) {
 // SAFETY: caller follows the module's pin+lock contract.
 unsafe fn meta_ptr(buffer: Buffer) -> *mut HashMetaPageData {
     unsafe {
-        bufmgr_seams::buffer_get_page::call(buffer).as_ptr().add(SizeOfPageHeaderData).cast()
+        bufmgr_seams::buffer_get_page::call(buffer)
+            .as_ptr()
+            .add(SizeOfPageHeaderData)
+            .cast()
     }
 }
 
@@ -261,10 +272,12 @@ fn hash_xlog_add_ovfl_page(record: &mut XLogReaderState) -> PgResult<()> {
     let bmsize = u16_at(xlrec, 0);
     let bmpage_found = xlrec[2] != 0;
 
-    let (_, _, rightblk, _) =
-        record.block_tag_extended(0).expect("hash_xlog_add_ovfl_page: no block 0");
-    let (_, _, leftblk, _) =
-        record.block_tag_extended(1).expect("hash_xlog_add_ovfl_page: no block 1");
+    let (_, _, rightblk, _) = record
+        .block_tag_extended(0)
+        .expect("hash_xlog_add_ovfl_page: no block 0");
+    let (_, _, leftblk, _) = record
+        .block_tag_extended(1)
+        .expect("hash_xlog_add_ovfl_page: no block 1");
 
     let ovflbuf = XLogInitBufferForRedo(record, 0)?;
     let data = block_data(record, 0);
@@ -375,8 +388,7 @@ fn hash_xlog_split_allocate_page(record: &mut XLogReaderState) -> PgResult<()> {
     let new_bucket_flag = u16_at(xlrec, 6);
     let flags = xlrec[8];
 
-    let (action, oldbuf) =
-        XLogReadBufferForRedoExtended(record, 0, ReadBufferMode::Normal, true)?;
+    let (action, oldbuf) = XLogReadBufferForRedoExtended(record, 0, ReadBufferMode::Normal, true)?;
     // The special space is not included in the image: update either way.
     if action == BLK_NEEDS_REDO || action == BLK_RESTORED {
         // SAFETY: redo pin+cleanup-lock contract.
@@ -448,7 +460,9 @@ fn hash_xlog_split_allocate_page(record: &mut XLogReaderState) -> PgResult<()> {
 fn hash_xlog_split_page(record: &mut XLogReaderState) -> PgResult<()> {
     let (action, buf) = XLogReadBufferForRedo(record, 0)?;
     if action != BLK_RESTORED {
-        return Err(panic_err("Hash split record did not contain a full-page image".into()));
+        return Err(panic_err(
+            "Hash split record did not contain a full-page image".into(),
+        ));
     }
     unlock_release(buf)
 }
@@ -486,9 +500,8 @@ fn replay_add_tuples(buffer: Buffer, ntups: u16, data: &[u8]) -> PgResult<()> {
     // SAFETY: redo pin+lock contract.
     let mut pm = unsafe { page_mut(buffer) };
     while off < data.len() {
-        let itemsz = maxalign(
-            (u16::from_ne_bytes([data[off + 6], data[off + 7]]) & 0x1FFF) as usize,
-        );
+        let itemsz =
+            maxalign((u16::from_ne_bytes([data[off + 6], data[off + 7]]) & 0x1FFF) as usize);
         let item = &data[off..off + itemsz];
         let target = u16_at(towrite, ninserted * 2);
         if pm.add_item(item, target, 0).is_none() {
@@ -851,7 +864,11 @@ fn hash_xlog_vacuum_one_page(record: &mut XLogReaderState) -> PgResult<()> {
 }
 
 pub fn hash_redo(record: &mut XLogReaderState) -> PgResult<()> {
-    let info = record.record.as_ref().expect("hash_redo with no decoded record").xl_info
+    let info = record
+        .record
+        .as_ref()
+        .expect("hash_redo with no decoded record")
+        .xl_info
         & !XLR_INFO_MASK;
     match info {
         XLOG_HASH_INIT_META_PAGE => hash_xlog_init_meta_page(record),

@@ -14,8 +14,8 @@ use ::types_core::primitive::{
 };
 use ::types_core::{Oid, BLCKSZ};
 use ::types_error::{
-    ErrorLocation, PgResult, DEBUG1, ERROR, ERRCODE_DATA_CORRUPTED, ERRCODE_DISK_FULL,
-    ERRCODE_PROGRAM_LIMIT_EXCEEDED, FATAL, WARNING,
+    ErrorLocation, PgResult, DEBUG1, ERRCODE_DATA_CORRUPTED, ERRCODE_DISK_FULL,
+    ERRCODE_PROGRAM_LIMIT_EXCEEDED, ERROR, FATAL, WARNING,
 };
 use ::types_storage::file::{File, FILE_EXTEND_METHOD_WRITE_ZEROS, IO_DIRECT_DATA};
 use ::types_storage::smgr::{
@@ -195,7 +195,10 @@ pub fn mdcreate(
     }
 
     _fdvec_resize(st, forknum, 1);
-    st.md_seg_fds[fk][0] = MdfdVec { mdfd_vfd: file, mdfd_segno: 0 };
+    st.md_seg_fds[fk][0] = MdfdVec {
+        mdfd_vfd: file,
+        mdfd_segno: 0,
+    };
 
     if !is_temp(rlocator) {
         // Fresh file identity: drop any stale size-cache entry (including a
@@ -347,15 +350,24 @@ fn mdextend_inner(
     if blocknum == InvalidBlockNumber {
         let path = relpath(rlocator, forknum);
         return throw(
-            ereport(ERROR).errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED).errmsg(format!(
-                "cannot extend file \"{path}\" beyond {InvalidBlockNumber} blocks"
-            )),
+            ereport(ERROR)
+                .errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED)
+                .errmsg(format!(
+                    "cannot extend file \"{path}\" beyond {InvalidBlockNumber} blocks"
+                )),
             "mdextend",
         );
     }
 
-    let v = _mdfd_getseg(rlocator, st, forknum, blocknum, skip_fsync, EXTENSION_CREATE)?
-        .expect("EXTENSION_CREATE never returns None");
+    let v = _mdfd_getseg(
+        rlocator,
+        st,
+        forknum,
+        blocknum,
+        skip_fsync,
+        EXTENSION_CREATE,
+    )?
+    .expect("EXTENSION_CREATE never returns None");
 
     let seekpos = BLCKSZ_I64 * (blocknum % RELSEG_SIZE) as i64;
     debug_assert!(seekpos < BLCKSZ_I64 * RELSEG_SIZE as i64);
@@ -478,9 +490,11 @@ fn mdzeroextend_inner(
     if blocknum as u64 + nblocks as u64 >= InvalidBlockNumber as u64 {
         let path = relpath(rlocator, forknum);
         return throw(
-            ereport(ERROR).errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED).errmsg(format!(
-                "cannot extend file \"{path}\" beyond {InvalidBlockNumber} blocks"
-            )),
+            ereport(ERROR)
+                .errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED)
+                .errmsg(format!(
+                    "cannot extend file \"{path}\" beyond {InvalidBlockNumber} blocks"
+                )),
             "mdzeroextend",
         );
     }
@@ -494,8 +508,15 @@ fn mdzeroextend_inner(
             remblocks
         };
 
-        let v = _mdfd_getseg(rlocator, st, forknum, curblocknum, skip_fsync, EXTENSION_CREATE)?
-            .expect("EXTENSION_CREATE never returns None");
+        let v = _mdfd_getseg(
+            rlocator,
+            st,
+            forknum,
+            curblocknum,
+            skip_fsync,
+            EXTENSION_CREATE,
+        )?
+        .expect("EXTENSION_CREATE never returns None");
 
         debug_assert!(segstartblock < RELSEG_SIZE);
         debug_assert!(segstartblock + numblocks as BlockNumber <= RELSEG_SIZE);
@@ -583,7 +604,10 @@ fn mdopenfork(
     }
 
     _fdvec_resize(st, forknum, 1);
-    st.md_seg_fds[fk][0] = MdfdVec { mdfd_vfd: file, mdfd_segno: 0 };
+    st.md_seg_fds[fk][0] = MdfdVec {
+        mdfd_vfd: file,
+        mdfd_segno: 0,
+    };
 
     let mdfd = st.md_seg_fds[fk][0];
     debug_assert!(_mdnblocks(&mdfd)? <= RELSEG_SIZE);
@@ -620,7 +644,11 @@ pub fn mdprefetch(
     let mut blocknum = blocknum;
     let mut nblocks = nblocks;
     while nblocks > 0 {
-        let behavior = if in_recovery() { EXTENSION_RETURN_NULL } else { EXTENSION_FAIL };
+        let behavior = if in_recovery() {
+            EXTENSION_RETURN_NULL
+        } else {
+            EXTENSION_FAIL
+        };
         let v = match _mdfd_getseg(rlocator, st, forknum, blocknum, false, behavior)? {
             Some(v) => v,
             None => return Ok(false),
@@ -629,8 +657,10 @@ pub fn mdprefetch(
         let seekpos = BLCKSZ_I64 * (blocknum % RELSEG_SIZE) as i64;
         debug_assert!(seekpos < BLCKSZ_I64 * RELSEG_SIZE as i64);
 
-        let nblocks_this_segment =
-            core::cmp::min(nblocks as i64, (RELSEG_SIZE - (blocknum % RELSEG_SIZE)) as i64) as i32;
+        let nblocks_this_segment = core::cmp::min(
+            nblocks as i64,
+            (RELSEG_SIZE - (blocknum % RELSEG_SIZE)) as i64,
+        ) as i32;
 
         let _ = fd::FilePrefetch(
             v.mdfd_vfd,
@@ -652,7 +682,11 @@ pub fn mdstartbufread(
     blocknum: BlockNumber,
     buffer: i32,
 ) -> PgResult<bool> {
-    let behavior = if in_recovery() { EXTENSION_RETURN_NULL } else { EXTENSION_FAIL };
+    let behavior = if in_recovery() {
+        EXTENSION_RETURN_NULL
+    } else {
+        EXTENSION_FAIL
+    };
     let v = match _mdfd_getseg(rlocator, st, forknum, blocknum, false, behavior)? {
         Some(v) => v,
         None => return Ok(false),
@@ -720,8 +754,7 @@ fn with_iov<'a, R>(
         n += 1;
     }
     // SAFETY: the first n entries were just initialized; WriteChunk has no Drop.
-    let iov_init =
-        unsafe { core::slice::from_raw_parts(iov.as_ptr().cast::<WriteChunk<'a>>(), n) };
+    let iov_init = unsafe { core::slice::from_raw_parts(iov.as_ptr().cast::<WriteChunk<'a>>(), n) };
     Some(f(iov_init))
 }
 
@@ -750,9 +783,10 @@ pub fn mdreadv(
         let mut seekpos = BLCKSZ_I64 * (blocknum % RELSEG_SIZE) as i64;
         debug_assert!(seekpos < BLCKSZ_I64 * RELSEG_SIZE as i64);
 
-        let mut nblocks_this_segment =
-            core::cmp::min(nblocks as i64, (RELSEG_SIZE - (blocknum % RELSEG_SIZE)) as i64)
-                as BlockNumber;
+        let mut nblocks_this_segment = core::cmp::min(
+            nblocks as i64,
+            (RELSEG_SIZE - (blocknum % RELSEG_SIZE)) as i64,
+        ) as BlockNumber;
         nblocks_this_segment = core::cmp::min(nblocks_this_segment, PG_IOV_MAX as BlockNumber);
 
         if nblocks_this_segment != nblocks {
@@ -798,14 +832,16 @@ pub fn mdreadv(
                     break;
                 }
                 return throw(
-                    ereport(ERROR).errcode(ERRCODE_DATA_CORRUPTED).errmsg(format!(
-                        "could not read blocks {}..{} in file \"{}\": read only {} of {} bytes",
-                        blocknum,
-                        blocknum + nblocks_this_segment - 1,
-                        fd::FilePathName(v.mdfd_vfd),
-                        transferred_this_segment,
-                        size_this_segment
-                    )),
+                    ereport(ERROR)
+                        .errcode(ERRCODE_DATA_CORRUPTED)
+                        .errmsg(format!(
+                            "could not read blocks {}..{} in file \"{}\": read only {} of {} bytes",
+                            blocknum,
+                            blocknum + nblocks_this_segment - 1,
+                            fd::FilePathName(v.mdfd_vfd),
+                            transferred_this_segment,
+                            size_this_segment
+                        )),
                     "mdreadv",
                 );
             }
@@ -851,9 +887,10 @@ pub fn mdwritev(
         let mut seekpos = BLCKSZ_I64 * (blocknum % RELSEG_SIZE) as i64;
         debug_assert!(seekpos < BLCKSZ_I64 * RELSEG_SIZE as i64);
 
-        let mut nblocks_this_segment =
-            core::cmp::min(nblocks as i64, (RELSEG_SIZE - (blocknum % RELSEG_SIZE)) as i64)
-                as BlockNumber;
+        let mut nblocks_this_segment = core::cmp::min(
+            nblocks as i64,
+            (RELSEG_SIZE - (blocknum % RELSEG_SIZE)) as i64,
+        ) as BlockNumber;
         nblocks_this_segment = core::cmp::min(nblocks_this_segment, PG_IOV_MAX as BlockNumber);
 
         if nblocks_this_segment != nblocks {
@@ -948,7 +985,12 @@ pub fn mdwriteback(
         debug_assert!(nflush <= nblocks);
 
         let seekpos = BLCKSZ_I64 * (blocknum % RELSEG_SIZE) as i64;
-        fd::FileWriteback(v.mdfd_vfd, seekpos, BLCKSZ_I64 * nflush as i64, WAIT_EVENT_DATA_FILE_FLUSH)?;
+        fd::FileWriteback(
+            v.mdfd_vfd,
+            seekpos,
+            BLCKSZ_I64 * nflush as i64,
+            WAIT_EVENT_DATA_FILE_FLUSH,
+        )?;
 
         nblocks -= nflush;
         blocknum += nflush;
@@ -1033,7 +1075,10 @@ fn mdnblocks_walk(
     let total = loop {
         let nblocks = _mdnblocks(&v)?;
         if nblocks > RELSEG_SIZE {
-            return throw(ereport(FATAL).errmsg_internal("segment too big"), "mdnblocks");
+            return throw(
+                ereport(FATAL).errmsg_internal("segment too big"),
+                "mdnblocks",
+            );
         }
         if nblocks < RELSEG_SIZE {
             break segno * RELSEG_SIZE + nblocks;
@@ -1333,7 +1378,11 @@ fn register_forget_request(
 }
 
 pub fn ForgetDatabaseSyncRequests(dbid: Oid) -> PgResult<()> {
-    let rlocator = RelFileLocator { spcOid: 0, dbOid: dbid, relNumber: 0 };
+    let rlocator = RelFileLocator {
+        spcOid: 0,
+        dbOid: dbid,
+        relNumber: 0,
+    };
     let tag = FileTag::new(
         SyncRequestHandler::SYNC_HANDLER_MD,
         ForkNumber::InvalidForkNumber,
@@ -1353,7 +1402,11 @@ pub fn mdunlinkfiletag(ftag: FileTag) -> PgResult<FileTagOpResult> {
     nblocks_cache::remove(ftag.rlocator, ForkNumber::MAIN_FORKNUM);
     let path = relpath_seams::relpathperm::call(ftag.rlocator, ForkNumber::MAIN_FORKNUM);
     let ret = unlink_raw(&path);
-    Ok(FileTagOpResult { result: ret, errno: last_errno(), path })
+    Ok(FileTagOpResult {
+        result: ret,
+        errno: last_errno(),
+        path,
+    })
 }
 
 pub fn mdfiletagmatches(ftag: FileTag, candidate: FileTag) -> bool {
@@ -1373,7 +1426,11 @@ fn _fdvec_resize(st: &mut MdRelnState, forknum: ForkNumber, nseg: i32) {
     st.md_num_open_segs[fk] = nseg;
 }
 
-pub fn mdsegpath(rlocator: RelFileLocatorBackend, forknum: ForkNumber, segno: BlockNumber) -> String {
+pub fn mdsegpath(
+    rlocator: RelFileLocatorBackend,
+    forknum: ForkNumber,
+    segno: BlockNumber,
+) -> String {
     let path = relpath(rlocator, forknum);
     if segno > 0 {
         format!("{path}.{segno}")
@@ -1400,7 +1457,10 @@ fn _mdfd_openseg(
     // Segments open strictly in order; the new one lands at the end.
     debug_assert!(segno == st.md_num_open_segs[fk] as BlockNumber);
     _fdvec_resize(st, forknum, segno as i32 + 1);
-    st.md_seg_fds[fk][segno as usize] = MdfdVec { mdfd_vfd: file, mdfd_segno: segno };
+    st.md_seg_fds[fk][segno as usize] = MdfdVec {
+        mdfd_vfd: file,
+        mdfd_segno: segno,
+    };
 
     let v = st.md_seg_fds[fk][segno as usize];
     debug_assert!(_mdnblocks(&v)? <= RELSEG_SIZE);
@@ -1418,7 +1478,8 @@ fn _mdfd_getseg(
     let fk = fork_idx(forknum);
 
     debug_assert!(
-        behavior & (EXTENSION_FAIL | EXTENSION_CREATE | EXTENSION_RETURN_NULL | EXTENSION_DONT_OPEN)
+        behavior
+            & (EXTENSION_FAIL | EXTENSION_CREATE | EXTENSION_RETURN_NULL | EXTENSION_DONT_OPEN)
             != 0
     );
 
@@ -1450,7 +1511,10 @@ fn _mdfd_getseg(
         debug_assert!(nextsegno == v.mdfd_segno + 1);
 
         if nblocks > RELSEG_SIZE {
-            return throw(ereport(FATAL).errmsg_internal("segment too big"), "_mdfd_getseg");
+            return throw(
+                ereport(FATAL).errmsg_internal("segment too big"),
+                "_mdfd_getseg",
+            );
         }
 
         if (behavior & EXTENSION_CREATE != 0)
@@ -1570,7 +1634,11 @@ mod tests {
     use super::*;
 
     fn rl(db: Oid) -> RelFileLocator {
-        RelFileLocator { spcOid: 1, dbOid: db, relNumber: 16384 }
+        RelFileLocator {
+            spcOid: 1,
+            dbOid: db,
+            relNumber: 16384,
+        }
     }
 
     #[test]
@@ -1583,11 +1651,18 @@ mod tests {
         // Seams are install-once per process: this is the ONLY md unit test
         // that installs relpathbackend, so both arms are covered here.
         relpath_seams::relpathbackend::set(|l, b, f| {
-            format!("{}|{}|{}|{}|{}", l.spcOid, l.dbOid, l.relNumber, b, f as i32)
+            format!(
+                "{}|{}|{}|{}|{}",
+                l.spcOid, l.dbOid, l.relNumber, b, f as i32
+            )
         });
         let shared = types_storage::aio::PgAioTargetData {
             smgr: types_storage::aio::PgAioTargetSmgr {
-                rlocator: RelFileLocator { spcOid: 1664, dbOid: 0, relNumber: 1260 },
+                rlocator: RelFileLocator {
+                    spcOid: 1664,
+                    dbOid: 0,
+                    relNumber: 1260,
+                },
                 blockNum: 0,
                 nblocks: 1,
                 forkNum: ForkNumber::MAIN_FORKNUM,
@@ -1595,11 +1670,18 @@ mod tests {
                 ..Default::default()
             },
         };
-        assert_eq!(md_relpath(&shared), format!("1664|0|1260|{INVALID_PROC_NUMBER}|0"));
+        assert_eq!(
+            md_relpath(&shared),
+            format!("1664|0|1260|{INVALID_PROC_NUMBER}|0")
+        );
 
         let temp = types_storage::aio::PgAioTargetData {
             smgr: types_storage::aio::PgAioTargetSmgr {
-                rlocator: RelFileLocator { spcOid: 1663, dbOid: 5, relNumber: 16384 },
+                rlocator: RelFileLocator {
+                    spcOid: 1663,
+                    dbOid: 5,
+                    relNumber: 16384,
+                },
                 blockNum: 0,
                 nblocks: 1,
                 forkNum: ForkNumber::FSM_FORKNUM,
@@ -1631,14 +1713,24 @@ mod tests {
 
         // Out of contract => no cached size is published at all, so the caller
         // invalidates and the next read measures the real file.
-        for (b, n) in [(0u32, -1i32), (0, -64), (5, -10), (1000, -1), (0, 0), (7, 0)] {
+        for (b, n) in [
+            (0u32, -1i32),
+            (0, -64),
+            (5, -10),
+            (1000, -1),
+            (0, 0),
+            (7, 0),
+        ] {
             assert_eq!(cache_extent_after(b, n), None, "blocknum={b} nblocks={n}");
         }
 
         // Representability ceiling (mdzeroextend_inner errors in this range, so
         // the cache must not be handed a value from either arm).
         assert_eq!(cache_extent_after(InvalidBlockNumber - 1, 1), None);
-        assert_eq!(cache_extent_after(InvalidBlockNumber - 2, 1), Some(InvalidBlockNumber - 1));
+        assert_eq!(
+            cache_extent_after(InvalidBlockNumber - 2, 1),
+            Some(InvalidBlockNumber - 1)
+        );
 
         // What the shipped profiles computed BEFORE the fix, written with
         // wrapping_add so it denotes the same value at every profile. Two of
@@ -1694,17 +1786,38 @@ mod tests {
 
     #[test]
     fn mdfiletagmatches_compares_dboid() {
-        let a = FileTag::new(SyncRequestHandler::SYNC_HANDLER_MD, ForkNumber::MAIN_FORKNUM, rl(10), 0);
-        let same = FileTag::new(SyncRequestHandler::SYNC_HANDLER_MD, ForkNumber::FSM_FORKNUM, rl(10), 7);
-        let diff = FileTag::new(SyncRequestHandler::SYNC_HANDLER_MD, ForkNumber::MAIN_FORKNUM, rl(11), 0);
+        let a = FileTag::new(
+            SyncRequestHandler::SYNC_HANDLER_MD,
+            ForkNumber::MAIN_FORKNUM,
+            rl(10),
+            0,
+        );
+        let same = FileTag::new(
+            SyncRequestHandler::SYNC_HANDLER_MD,
+            ForkNumber::FSM_FORKNUM,
+            rl(10),
+            7,
+        );
+        let diff = FileTag::new(
+            SyncRequestHandler::SYNC_HANDLER_MD,
+            ForkNumber::MAIN_FORKNUM,
+            rl(11),
+            0,
+        );
         assert!(mdfiletagmatches(a, same));
         assert!(!mdfiletagmatches(a, diff));
     }
 
     #[test]
     fn is_temp_follows_backend_field() {
-        assert!(!is_temp(RelFileLocatorBackend { locator: rl(1), backend: INVALID_PROC_NUMBER }));
-        assert!(is_temp(RelFileLocatorBackend { locator: rl(1), backend: 3 }));
+        assert!(!is_temp(RelFileLocatorBackend {
+            locator: rl(1),
+            backend: INVALID_PROC_NUMBER
+        }));
+        assert!(is_temp(RelFileLocatorBackend {
+            locator: rl(1),
+            backend: 3
+        }));
     }
 
     #[test]
@@ -1722,8 +1835,7 @@ mod tests {
 
         let ra = [1u8; 4];
         let rb = [2u8; 4];
-        let rbufs: [WriteChunk<'_>; 2] =
-            [WriteChunk::from_slice(&ra), WriteChunk::from_slice(&rb)];
+        let rbufs: [WriteChunk<'_>; 2] = [WriteChunk::from_slice(&ra), WriteChunk::from_slice(&rb)];
         let n = with_iov(&rbufs, 3, |iov| {
             assert_eq!(iov.len(), 2);
             assert_eq!(iov[0].len(), 1);
@@ -1760,9 +1872,10 @@ pub fn mdstartreadv(
     let seekpos = BLCKSZ_I64 * (blocknum % RELSEG_SIZE) as i64;
     debug_assert!(seekpos < BLCKSZ_I64 * RELSEG_SIZE as i64);
 
-    let nblocks_this_segment =
-        core::cmp::min(nblocks as i64, (RELSEG_SIZE - (blocknum % RELSEG_SIZE)) as i64)
-            as BlockNumber;
+    let nblocks_this_segment = core::cmp::min(
+        nblocks as i64,
+        (RELSEG_SIZE - (blocknum % RELSEG_SIZE)) as i64,
+    ) as BlockNumber;
     if nblocks_this_segment != nblocks {
         return throw(
             ereport(ERROR).errmsg_internal("read crossing segment boundary"),
@@ -1774,7 +1887,10 @@ pub fn mdstartreadv(
     debug_assert!(iovcnt <= nblocks_this_segment as i32);
 
     if fd::io_direct_flags() & IO_DIRECT_DATA == 0 {
-        aio_core::pgaio_io_set_flag(aio_core::pgaio_io_current(), types_storage::aio::PGAIO_HF_BUFFERED);
+        aio_core::pgaio_io_set_flag(
+            aio_core::pgaio_io_current(),
+            types_storage::aio::PGAIO_HF_BUFFERED,
+        );
     }
 
     let ioh = aio_core::pgaio_io_current();
@@ -1920,7 +2036,9 @@ pub fn md_readv_report(
         ereport(elevel)
             .with_saved_errno(result.error_data as i32)
             .errcode_for_file_access()
-            .errmsg(format!("could not read blocks {first}..{last} in file \"{path}\": %m"))
+            .errmsg(format!(
+                "could not read blocks {first}..{last} in file \"{path}\": %m"
+            ))
             .finish(loc("md_readv_report"))
     } else {
         ereport(elevel)

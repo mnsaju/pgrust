@@ -74,8 +74,7 @@ pub(crate) fn relation_init_index_access_info(
     relid: Oid,
     form: &FormData_pg_class,
 ) -> PgResult<IndexAccessInfo> {
-    let Some(tup) = SearchSysCache1(INDEXRELID, SysCacheKey::Value(Datum::from_oid(relid)))?
-    else {
+    let Some(tup) = SearchSysCache1(INDEXRELID, SysCacheKey::Value(Datum::from_oid(relid)))? else {
         return Err(cache_lookup_failed(relid));
     };
     let get = |attno: i32| -> PgResult<Datum> {
@@ -90,8 +89,7 @@ pub(crate) fn relation_init_index_access_info(
     let indnkeyatts = get(Anum_pg_index_indnkeyatts)?.as_i16();
     let nkey = indnkeyatts as usize;
 
-    let mut indkey: PgVec<'static, AttrNumber> =
-        mcx::vec_with_capacity_in(mcx, indnatts as usize)?;
+    let mut indkey: PgVec<'static, AttrNumber> = mcx::vec_with_capacity_in(mcx, indnatts as usize)?;
     // SAFETY: not-null plain-storage vector columns of the held syscache tuple.
     let (keyvals, collvals, classvals, optvals) = unsafe {
         (
@@ -174,16 +172,32 @@ pub(crate) fn relation_init_index_access_info(
         has_indpred: !SysCacheGetAttr(INDEXRELID, &tup, Anum_pg_index_indpred)?.1,
         indexprs_src: {
             let (d, isnull) = SysCacheGetAttr(INDEXRELID, &tup, Anum_pg_index_indexprs)?;
-            if isnull { None } else { Some(crate::attrs::text_str(mcx, mcx, d)?) }
+            if isnull {
+                None
+            } else {
+                Some(crate::attrs::text_str(mcx, mcx, d)?)
+            }
         },
         indpred_src: {
             let (d, isnull) = SysCacheGetAttr(INDEXRELID, &tup, Anum_pg_index_indpred)?;
-            if isnull { None } else { Some(crate::attrs::text_str(mcx, mcx, d)?) }
+            if isnull {
+                None
+            } else {
+                Some(crate::attrs::text_str(mcx, mcx, d)?)
+            }
         },
     };
     ReleaseSysCache(tup);
 
-    Ok(IndexAccessInfo { index, opcintype, opfamily, indoption, indcollation, supportinfo, support })
+    Ok(IndexAccessInfo {
+        index,
+        opcintype,
+        opfamily,
+        indoption,
+        indcollation,
+        supportinfo,
+        support,
+    })
 }
 
 #[derive(Clone, Copy)]
@@ -423,8 +437,7 @@ pub(crate) fn scan_exclusion_ops<'mcx>(
         assert!(!isnull, "null conexclop for rel {index_relid}");
         let p = d.as_usize() as *const u8;
         // SAFETY: live oid[] varlena image through its extent.
-        let image =
-            unsafe { core::slice::from_raw_parts(p, types_tuple::varatt::varsize_any(p)) };
+        let image = unsafe { core::slice::from_raw_parts(p, types_tuple::varatt::varsize_any(p)) };
         let payload = varlena::open_image(smcx, image)?;
         let body = payload.as_bytes();
         let total = body.len() + 4;
@@ -440,6 +453,5 @@ pub(crate) fn scan_exclusion_ops<'mcx>(
     }
     genam::systable_endscan(smcx, scan)?;
     rel.close(AccessShareLock)?;
-    Ok(out
-        .unwrap_or_else(|| panic!("exclusion constraint record missing for rel {index_relid}")))
+    Ok(out.unwrap_or_else(|| panic!("exclusion constraint record missing for rel {index_relid}")))
 }

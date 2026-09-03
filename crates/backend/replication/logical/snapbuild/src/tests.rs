@@ -117,7 +117,13 @@ fn start_building_full_consistent_transitions() {
     // slot xmin advanced on every record's cleanup pass
     assert_eq!(
         XMIN_CALLS.with(|c| c.borrow().clone()),
-        vec![(0x100, 5), (0x200, 7), (0x300, 10), (0x400, 12), (0x500, 15)]
+        vec![
+            (0x100, 5),
+            (0x200, 7),
+            (0x300, 10),
+            (0x400, 12),
+            (0x500, 15)
+        ]
     );
     // nothing serialized yet: restart-decoding advance has no target
     assert!(RESTART_CALLS.with(|c| c.borrow().is_empty()));
@@ -373,8 +379,14 @@ fn ondisk_known_answer() {
 
     let image = ondisk::build_image(&b, &[12]);
     assert_eq!(image.len(), 156);
-    assert_eq!(u32::from_ne_bytes(image[0..4].try_into().unwrap()), SNAPBUILD_MAGIC);
-    assert_eq!(u32::from_ne_bytes(image[8..12].try_into().unwrap()), SNAPBUILD_VERSION);
+    assert_eq!(
+        u32::from_ne_bytes(image[0..4].try_into().unwrap()),
+        SNAPBUILD_MAGIC
+    );
+    assert_eq!(
+        u32::from_ne_bytes(image[8..12].try_into().unwrap()),
+        SNAPBUILD_VERSION
+    );
     assert_eq!(u32::from_ne_bytes(image[12..16].try_into().unwrap()), 156);
     // CRC-32C known answer computed independently over bytes [8..156].
     assert_eq!(
@@ -482,10 +494,7 @@ fn xact_needs_skip_uses_start_decoding_at() {
 #[test]
 fn parse_snap_name_matches_sscanf() {
     assert_eq!(ondisk::parse_snap_name("A-B.snap"), Some((0xA, 0xB)));
-    assert_eq!(
-        ondisk::parse_snap_name("1-2.snap.123.tmp"),
-        Some((1, 2))
-    );
+    assert_eq!(ondisk::parse_snap_name("1-2.snap.123.tmp"), Some((1, 2)));
     // sscanf counts both conversions before the literal mismatch
     assert_eq!(ondisk::parse_snap_name("A-B-C.snap"), Some((0xA, 0xB)));
     assert_eq!(ondisk::parse_snap_name("12X-3.snap"), None);

@@ -288,9 +288,7 @@ pub fn pgstat_relation_link_counts(relid: Oid, relisshared: bool) -> *mut () {
     pending::with_state(|st| {
         pgstat_prep_relation_pending(st, relid, relisshared);
         match st.pending.get_mut(&key) {
-            Some(PendingData::Relation(rp)) => {
-                unsafe { &raw mut (*rp.as_ptr()).counts }.cast()
-            }
+            Some(PendingData::Relation(rp)) => unsafe { &raw mut (*rp.as_ptr()).counts }.cast(),
             _ => unreachable!("relation pending entry vanished"),
         }
     })

@@ -36,13 +36,21 @@ fn bpchar_input_typmod_minus_one_passthrough() {
 fn bpchar_input_truncates_trailing_spaces_only() {
     let ctx = MemoryContext::new("t");
     let mcx = ctx.mcx();
-    let v = bpchar_input(mcx, b"abc   ", typmod(3), None).unwrap().unwrap();
+    let v = bpchar_input(mcx, b"abc   ", typmod(3), None)
+        .unwrap()
+        .unwrap();
     assert_eq!(v.data(), b"abc");
     let err = bpchar_input(mcx, b"abcd", typmod(3), None).unwrap_err();
     assert_eq!(err.message(), "value too long for type character(3)");
-    assert_eq!(err.sqlstate(), types_error::ERRCODE_STRING_DATA_RIGHT_TRUNCATION);
+    assert_eq!(
+        err.sqlstate(),
+        types_error::ERRCODE_STRING_DATA_RIGHT_TRUNCATION
+    );
     let err = bpchar_input(mcx, b"abc d", typmod(3), None).unwrap_err();
-    assert_eq!(err.sqlstate(), types_error::ERRCODE_STRING_DATA_RIGHT_TRUNCATION);
+    assert_eq!(
+        err.sqlstate(),
+        types_error::ERRCODE_STRING_DATA_RIGHT_TRUNCATION
+    );
 }
 
 #[test]
@@ -65,11 +73,15 @@ fn bpchar_input_multibyte_counts_characters() {
     let ctx = MemoryContext::new("t");
     let mcx = ctx.mcx();
     // "é" is 2 bytes, 1 character.
-    let v = bpchar_input(mcx, "éé".as_bytes(), typmod(3), None).unwrap().unwrap();
+    let v = bpchar_input(mcx, "éé".as_bytes(), typmod(3), None)
+        .unwrap()
+        .unwrap();
     assert_eq!(v.data(), "éé ".as_bytes());
     let err = bpchar_input(mcx, "ééé".as_bytes(), typmod(2), None).unwrap_err();
     assert_eq!(err.message(), "value too long for type character(2)");
-    let v = bpchar_input(mcx, "ééé".as_bytes(), typmod(4), None).unwrap().unwrap();
+    let v = bpchar_input(mcx, "ééé".as_bytes(), typmod(4), None)
+        .unwrap()
+        .unwrap();
     assert_eq!(v.data(), "ééé ".as_bytes());
 }
 
@@ -77,9 +89,13 @@ fn bpchar_input_multibyte_counts_characters() {
 fn varchar_input_clips_and_errors() {
     let ctx = MemoryContext::new("t");
     let mcx = ctx.mcx();
-    let v = varchar_input(mcx, b"abc", typmod(5), None).unwrap().unwrap();
+    let v = varchar_input(mcx, b"abc", typmod(5), None)
+        .unwrap()
+        .unwrap();
     assert_eq!(v.data(), b"abc");
-    let v = varchar_input(mcx, b"abc   ", typmod(3), None).unwrap().unwrap();
+    let v = varchar_input(mcx, b"abc   ", typmod(3), None)
+        .unwrap()
+        .unwrap();
     assert_eq!(v.data(), b"abc");
     let v = varchar_input(mcx, b"abc", -1, None).unwrap().unwrap();
     assert_eq!(v.data(), b"abc");
@@ -88,7 +104,10 @@ fn varchar_input_clips_and_errors() {
         err.message(),
         "value too long for type character varying(3)"
     );
-    assert_eq!(err.sqlstate(), types_error::ERRCODE_STRING_DATA_RIGHT_TRUNCATION);
+    assert_eq!(
+        err.sqlstate(),
+        types_error::ERRCODE_STRING_DATA_RIGHT_TRUNCATION
+    );
 }
 
 #[test]
@@ -96,7 +115,9 @@ fn varchar_input_multibyte() {
     mbutils::SetDatabaseEncoding(wchar::PG_UTF8).unwrap();
     let ctx = MemoryContext::new("t");
     let mcx = ctx.mcx();
-    let v = varchar_input(mcx, "ééé".as_bytes(), typmod(3), None).unwrap().unwrap();
+    let v = varchar_input(mcx, "ééé".as_bytes(), typmod(3), None)
+        .unwrap()
+        .unwrap();
     assert_eq!(v.data(), "ééé".as_bytes());
     let err = varchar_input(mcx, "ééé".as_bytes(), typmod(2), None).unwrap_err();
     assert_eq!(
@@ -145,8 +166,12 @@ fn varchar_cast_coercion() {
 fn varchar_int_min_typmod_returns_source() {
     let ctx = MemoryContext::new("t");
     let mcx = ctx.mcx();
-    assert!(varchar(mcx, "é".as_bytes(), i32::MIN, true).unwrap().is_none());
-    assert!(varchar(mcx, "é".as_bytes(), i32::MIN, false).unwrap().is_none());
+    assert!(varchar(mcx, "é".as_bytes(), i32::MIN, true)
+        .unwrap()
+        .is_none());
+    assert!(varchar(mcx, "é".as_bytes(), i32::MIN, false)
+        .unwrap()
+        .is_none());
     // The whole invalid range behaves alike in C (maxlen < 0 or wrapped huge).
     assert!(varchar(mcx, b"abc", i32::MIN + 1, true).unwrap().is_none());
 }
@@ -370,6 +395,13 @@ fn bpchar_tie_law_fails_without_typmod() {
     let mcx = ctx.mcx();
     let a = bpchar_input(mcx, b"AIR", -1, None).unwrap().unwrap();
     let b = bpchar_input(mcx, b"AIR  ", -1, None).unwrap().unwrap();
-    assert!(bpchareq(a.data(), b.data(), C).unwrap(), "bpchareq strips trailing blanks");
-    assert_ne!(a.data(), b.data(), "but the unpadded images differ — no tie law");
+    assert!(
+        bpchareq(a.data(), b.data(), C).unwrap(),
+        "bpchareq strips trailing blanks"
+    );
+    assert_ne!(
+        a.data(),
+        b.data(),
+        "but the unpadded images differ — no tie law"
+    );
 }

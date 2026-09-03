@@ -52,7 +52,9 @@ struct PgArchData {
 static PGARCH_SHMEM: OnceLock<PgArchData> = OnceLock::new();
 
 fn shmem() -> &'static PgArchData {
-    PGARCH_SHMEM.get().expect("PgArch shmem accessed before PgArchShmemInit")
+    PGARCH_SHMEM
+        .get()
+        .expect("PgArch shmem accessed before PgArchShmemInit")
 }
 
 pub fn PgArchShmemSize() -> usize {
@@ -96,7 +98,9 @@ pub fn PgArchWakeup() {
 }
 
 pub fn PgArchForceDirScan() {
-    shmem().force_dir_scan.store(1, std::sync::atomic::Ordering::SeqCst);
+    shmem()
+        .force_dir_scan
+        .store(1, std::sync::atomic::Ordering::SeqCst);
 }
 
 // C volatile sig_atomic_t ready_to_stop; per-thread signal delivery may run
@@ -120,11 +124,16 @@ fn time_now() -> i64 {
 }
 
 fn archive_library() -> String {
-    guc_tables::vars::XLogArchiveLibrary.read().unwrap_or_default()
+    guc_tables::vars::XLogArchiveLibrary
+        .read()
+        .unwrap_or_default()
 }
 
 fn archive_command_set() -> bool {
-    !guc_tables::vars::XLogArchiveCommand.read().unwrap_or_default().is_empty()
+    !guc_tables::vars::XLogArchiveCommand
+        .read()
+        .unwrap_or_default()
+        .is_empty()
 }
 
 enum ArchiveModule {
@@ -209,7 +218,10 @@ pub fn PgArchiverMain(startup_data: &StartupData) -> ! {
 
     {
         use procsignal::ThreadSignalHandler::{Ignore, Simple};
-        procsignal::pqsignal_thread(procsignal::signums::SIGHUP, Simple(interrupt::SignalHandlerForConfigReload));
+        procsignal::pqsignal_thread(
+            procsignal::signums::SIGHUP,
+            Simple(interrupt::SignalHandlerForConfigReload),
+        );
         procsignal::pqsignal_thread(procsignal::signums::SIGINT, Ignore);
         procsignal::pqsignal_thread(
             procsignal::signums::SIGTERM,
@@ -318,7 +330,9 @@ fn pgarch_ArchiverCopyLoop(af: &mut ArchFilesState, module: &ArchiveModule) -> P
                 let xlogready = StatusFilePath(&xlog, ".ready");
                 if std::fs::remove_file(&xlogready).is_ok() {
                     ereport(WARNING)
-                        .errmsg(format!("removed orphan archive status file \"{xlogready}\""))
+                        .errmsg(format!(
+                            "removed orphan archive status file \"{xlogready}\""
+                        ))
                         .finish(loc("pgarch_ArchiverCopyLoop"))?;
                     break;
                 }
@@ -376,8 +390,11 @@ fn pgarch_archiveXlog(xlog: &str, module: &ArchiveModule) -> PgResult<bool> {
     };
 
     if ps_status_seams::set_ps_display::is_installed() {
-        let msg =
-            if ret { format!("last was {xlog}") } else { format!("failed on {xlog}") };
+        let msg = if ret {
+            format!("last was {xlog}")
+        } else {
+            format!("failed on {xlog}")
+        };
         ps_status_seams::set_ps_display::call(&msg);
     }
     Ok(ret)
@@ -448,14 +465,10 @@ impl ArchFilesState {
             let l = 2 * i + 1;
             let r = 2 * i + 2;
             let mut largest = i;
-            if l < self.heap_size
-                && self.cmp_slots(self.heap[l], self.heap[largest]).is_gt()
-            {
+            if l < self.heap_size && self.cmp_slots(self.heap[l], self.heap[largest]).is_gt() {
                 largest = l;
             }
-            if r < self.heap_size
-                && self.cmp_slots(self.heap[r], self.heap[largest]).is_gt()
-            {
+            if r < self.heap_size && self.cmp_slots(self.heap[r], self.heap[largest]).is_gt() {
                 largest = r;
             }
             if largest == i {
@@ -503,13 +516,21 @@ fn ready_file_cmp(a: &str, b: &str) -> std::cmp::Ordering {
     let a_history = IsTLHistoryFileName(a);
     let b_history = IsTLHistoryFileName(b);
     if a_history != b_history {
-        return if a_history { std::cmp::Ordering::Less } else { std::cmp::Ordering::Greater };
+        return if a_history {
+            std::cmp::Ordering::Less
+        } else {
+            std::cmp::Ordering::Greater
+        };
     }
     a.cmp(b)
 }
 
 fn pgarch_readyXlog(af: &mut ArchFilesState) -> PgResult<Option<String>> {
-    if shmem().force_dir_scan.swap(0, std::sync::atomic::Ordering::SeqCst) == 1 {
+    if shmem()
+        .force_dir_scan
+        .swap(0, std::sync::atomic::Ordering::SeqCst)
+        == 1
+    {
         af.files_size = 0;
     }
 
@@ -536,11 +557,16 @@ fn pgarch_readyXlog(af: &mut ArchFilesState) -> PgResult<Option<String>> {
     let rldir = fd::AllocateDir(&status_dir)?;
     while let Some(rlde) = fd::ReadDir(rldir, &status_dir)? {
         let d_name = &rlde.d_name;
-        let Some(basenamelen) = d_name.len().checked_sub(".ready".len()) else { continue };
+        let Some(basenamelen) = d_name.len().checked_sub(".ready".len()) else {
+            continue;
+        };
         if !(MIN_XFN_CHARS..=MAX_XFN_CHARS).contains(&basenamelen) {
             continue;
         }
-        if !d_name[..basenamelen].bytes().all(|c| VALID_XFN_CHARS.as_bytes().contains(&c)) {
+        if !d_name[..basenamelen]
+            .bytes()
+            .all(|c| VALID_XFN_CHARS.as_bytes().contains(&c))
+        {
             continue;
         }
         if &d_name[basenamelen..] != ".ready" {
@@ -590,7 +616,9 @@ fn pgarch_archiveDone(xlog: &str) -> PgResult<()> {
         ereport(WARNING)
             .with_saved_errno(e.raw_os_error().unwrap_or(0))
             .errcode_for_file_access()
-            .errmsg(format!("could not rename file \"{rlogready}\" to \"{rlogdone}\": %m"))
+            .errmsg(format!(
+                "could not rename file \"{rlogready}\" to \"{rlogdone}\": %m"
+            ))
             .finish(loc("pgarch_archiveDone"))?;
     }
     Ok(())

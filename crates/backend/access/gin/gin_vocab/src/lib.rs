@@ -7,7 +7,7 @@
 
 use ::datum::Datum;
 use ::mcx::{Mcx, PgBox, PgVec};
-use ::tidbitmap::{TbmPrivateIterator, TIDBitmap, TBM_MAX_TUPLES_PER_PAGE};
+use ::tidbitmap::{TIDBitmap, TbmPrivateIterator, TBM_MAX_TUPLES_PER_PAGE};
 use ::types_core::{
     uint16, uint32, BlockNumber, Buffer, InvalidBlockNumber, InvalidBuffer, OffsetNumber, Oid,
     BLCKSZ,

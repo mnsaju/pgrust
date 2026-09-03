@@ -9,8 +9,10 @@ use types_error::{PgError, PgResult, ERRCODE_INSUFFICIENT_PRIVILEGE};
 #[inline(never)]
 fn cannot_set_role(mcx: Mcx<'_>, save_userid: Oid, userid: Oid) -> Box<PgError> {
     let name = |roleid| -> Result<_, Box<PgError>> {
-        Ok(miscinit_seams::get_user_name_from_id::call(mcx, roleid, false)?
-            .expect("GetUserNameFromId(noerr = false) returns a name"))
+        Ok(
+            miscinit_seams::get_user_name_from_id::call(mcx, roleid, false)?
+                .expect("GetUserNameFromId(noerr = false) returns a name"),
+        )
     };
     let (save_name, target_name) = match (name(save_userid), name(userid)) {
         (Ok(s), Ok(t)) => (s, t),
@@ -54,6 +56,9 @@ pub fn RestoreUserContext(context: &UserContext) -> PgResult<()> {
     if context.save_nestlevel != USER_CONTEXT_NO_NEST_LEVEL {
         guc_seams::at_eoxact_guc::call(false, context.save_nestlevel)?;
     }
-    miscinit_seams::set_user_id_and_sec_context::call(context.save_userid, context.save_sec_context);
+    miscinit_seams::set_user_id_and_sec_context::call(
+        context.save_userid,
+        context.save_sec_context,
+    );
     Ok(())
 }

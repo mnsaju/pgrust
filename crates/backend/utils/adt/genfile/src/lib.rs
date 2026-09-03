@@ -25,7 +25,12 @@ pub(crate) fn io_error(e: &std::io::Error, message: String) -> Box<PgError> {
     if let Some(errno) = e.raw_os_error() {
         builder = builder.with_saved_errno(errno);
     }
-    Box::new(builder.errcode_for_file_access().errmsg(message).into_error())
+    Box::new(
+        builder
+            .errcode_for_file_access()
+            .errmsg(message)
+            .into_error(),
+    )
 }
 
 fn path_is_prefix_of_path(path1: &str, path2: &str) -> bool {
@@ -120,7 +125,10 @@ fn read_binary_file(
         SeekFrom::End(seek_offset)
     };
     if let Err(e) = file.seek(whence) {
-        return Err(io_error(&e, format!("could not seek in file \"{filename}\": %m")));
+        return Err(io_error(
+            &e,
+            format!("could not seek in file \"{filename}\": %m"),
+        ));
     }
 
     let buf = if bytes_to_read >= 0 {
@@ -132,7 +140,10 @@ fn read_binary_file(
                 Ok(n) => nbytes += n,
                 Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
                 Err(e) => {
-                    return Err(io_error(&e, format!("could not read file \"{filename}\": %m")))
+                    return Err(io_error(
+                        &e,
+                        format!("could not read file \"{filename}\": %m"),
+                    ))
                 }
             }
         }
@@ -144,7 +155,10 @@ fn read_binary_file(
         let limit = MAX_ALLOC_SIZE - 1 - VARHDRSZ;
         let mut buf = Vec::new();
         if let Err(e) = file.by_ref().take(limit as u64 + 1).read_to_end(&mut buf) {
-            return Err(io_error(&e, format!("could not read file \"{filename}\": %m")));
+            return Err(io_error(
+                &e,
+                format!("could not read file \"{filename}\": %m"),
+            ));
         }
         if buf.len() > limit {
             return Err(ereport(ERROR)
@@ -193,7 +207,12 @@ pub(crate) fn pg_read_file_common(
     } else if bytes_to_read < 0 {
         return Err(negative_length());
     }
-    read_text_file(&convert_and_check_filename(filename)?, seek_offset, bytes_to_read, missing_ok)
+    read_text_file(
+        &convert_and_check_filename(filename)?,
+        seek_offset,
+        bytes_to_read,
+        missing_ok,
+    )
 }
 
 pub(crate) fn pg_read_binary_file_common(
@@ -208,7 +227,12 @@ pub(crate) fn pg_read_binary_file_common(
     } else if bytes_to_read < 0 {
         return Err(negative_length());
     }
-    read_binary_file(&convert_and_check_filename(filename)?, seek_offset, bytes_to_read, missing_ok)
+    read_binary_file(
+        &convert_and_check_filename(filename)?,
+        seek_offset,
+        bytes_to_read,
+        missing_ok,
+    )
 }
 
 // pg_ls_tmpdir (genfile.c:649): TABLESPACEOID existence check + TempTablespacePath.

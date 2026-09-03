@@ -261,7 +261,11 @@ pub(crate) fn send_feedback(
     if !force
         && writepos == LAST_WRITEPOS.get()
         && flushpos == LAST_FLUSHPOS.get()
-        && !adt_timestamp::TimestampDifferenceExceeds(FEEDBACK_SEND_TIME.get(), now, interval * 1000)
+        && !adt_timestamp::TimestampDifferenceExceeds(
+            FEEDBACK_SEND_TIME.get(),
+            now,
+            interval * 1000,
+        )
     {
         return Ok(());
     }
@@ -323,7 +327,10 @@ pub(crate) fn apply_loop(conn: &mut PgConn, mut last_received: XLogRecPtr) -> Pg
         let msg = match conn.get_copy_data() {
             Ok(m) => m,
             Err(e) => {
-                return elog::elog(ERROR, format!("could not receive data from WAL stream: {e}"))
+                return elog::elog(
+                    ERROR,
+                    format!("could not receive data from WAL stream: {e}"),
+                )
             }
         };
 
@@ -478,14 +485,8 @@ fn start_logical_streaming_opts(
     two_phase: bool,
 ) -> PgResult<()> {
     let slot = slotname.to_string();
-    let (publications, binary, origin_opt, stream_mode) = my_sub(|s| {
-        (
-            s.publications.clone(),
-            s.binary,
-            s.origin.clone(),
-            s.stream,
-        )
-    });
+    let (publications, binary, origin_opt, stream_mode) =
+        my_sub(|s| (s.publications.clone(), s.binary, s.origin.clone(), s.stream));
 
     // set_stream_options (worker.c:4429): streaming!=off requests the serial
     // streamed-apply path. streaming=parallel — CREATE SUBSCRIPTION's DEFAULT
@@ -751,7 +752,9 @@ fn apply_worker_body(slot: usize) -> PgResult<()> {
         let name = my_sub(|s| s.name.clone());
         let _ = elog::elog(
             LOG,
-            format!("logical replication apply worker for subscription \"{name}\" two_phase is ENABLED"),
+            format!(
+                "logical replication apply worker for subscription \"{name}\" two_phase is ENABLED"
+            ),
         );
     }
 

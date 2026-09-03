@@ -67,14 +67,14 @@ pub const JSP_REGEX_QUOTE: u32 = 0x10;
 type Item<'mcx> = &'mcx ParseItem<'mcx>;
 type POut<T> = PgResult<Option<T>>;
 
-fn make_item<'mcx>(
-    mcx: Mcx<'mcx>,
-    typ: ItemType,
-    value: ParseValue<'mcx>,
-) -> PgResult<Item<'mcx>> {
+fn make_item<'mcx>(mcx: Mcx<'mcx>, typ: ItemType, value: ParseValue<'mcx>) -> PgResult<Item<'mcx>> {
     Ok(leak_in(alloc_in(
         mcx,
-        ParseItem { typ, next: Cell::new(None), value },
+        ParseItem {
+            typ,
+            next: Cell::new(None),
+            value,
+        },
     )?))
 }
 
@@ -117,7 +117,14 @@ fn make_item_binary<'mcx>(
     la: Option<Item<'mcx>>,
     ra: Option<Item<'mcx>>,
 ) -> PgResult<Item<'mcx>> {
-    make_item(mcx, typ, ParseValue::Args { left: la, right: ra })
+    make_item(
+        mcx,
+        typ,
+        ParseValue::Args {
+            left: la,
+            right: ra,
+        },
+    )
 }
 
 /// C: makeItemUnary — folds +/- over a lone numeric literal.
@@ -177,7 +184,11 @@ fn make_index_array<'mcx>(mcx: Mcx<'mcx>, list: PgVec<'mcx, Item<'mcx>>) -> PgRe
 fn make_any<'mcx>(mcx: Mcx<'mcx>, first: i32, last: i32) -> PgResult<Item<'mcx>> {
     let f = if first >= 0 { first as u32 } else { u32::MAX };
     let l = if last >= 0 { last as u32 } else { u32::MAX };
-    make_item(mcx, ItemType::Any, ParseValue::AnyBounds { first: f, last: l })
+    make_item(
+        mcx,
+        ItemType::Any,
+        ParseValue::AnyBounds { first: f, last: l },
+    )
 }
 
 /// One server-encoding character starting the unrecognized flag text
@@ -248,15 +259,16 @@ fn make_item_like_regex<'mcx>(
     Ok(Some(make_item(
         mcx,
         ItemType::LikeRegex,
-        ParseValue::LikeRegex { expr, pattern, flags: xflags },
+        ParseValue::LikeRegex {
+            expr,
+            pattern,
+            flags: xflags,
+        },
     )?))
 }
 
 /// C: jspConvertRegexFlags (jsonpath_gram.y) — XQuery flag bits to REG_* cflags.
-pub fn jsp_convert_regex_flags(
-    xflags: u32,
-    escontext: Option<&mut SoftErrorContext>,
-) -> POut<i32> {
+pub fn jsp_convert_regex_flags(xflags: u32, escontext: Option<&mut SoftErrorContext>) -> POut<i32> {
     use regex_core::regex_consts::{REG_ADVANCED, REG_ICASE, REG_NLANCH, REG_NLSTOP, REG_QUOTE};
 
     let mut cflags: i32 = REG_ADVANCED;
@@ -976,7 +988,12 @@ impl<'a, 'e, 's, 'mcx> Parser<'a, 'e, 's, 'mcx> {
                 Some(to),
             )?));
         }
-        Ok(Some(make_item_binary(self.mcx, ItemType::Subscript, Some(from), None)?))
+        Ok(Some(make_item_binary(
+            self.mcx,
+            ItemType::Subscript,
+            Some(from),
+            None,
+        )?))
     }
 
     fn parse_any_path(&mut self) -> POut<Item<'mcx>> {
@@ -1047,10 +1064,20 @@ impl<'a, 'e, 's, 'mcx> Parser<'a, 'e, 's, 'mcx> {
         }
 
         match list.len() {
-            0 => Ok(Some(make_item_binary(self.mcx, ItemType::Decimal, None, None)?)),
+            0 => Ok(Some(make_item_binary(
+                self.mcx,
+                ItemType::Decimal,
+                None,
+                None,
+            )?)),
             1 => {
                 let a = list.pop();
-                Ok(Some(make_item_binary(self.mcx, ItemType::Decimal, a, None)?))
+                Ok(Some(make_item_binary(
+                    self.mcx,
+                    ItemType::Decimal,
+                    a,
+                    None,
+                )?))
             }
             2 => {
                 let b = list.pop();

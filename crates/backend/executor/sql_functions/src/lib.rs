@@ -17,6 +17,10 @@ use std::rc::Rc;
 
 use datum::Datum;
 use elog::ereport;
+use fmgr::rsinfo::{
+    ExprDoneCond, SFRM_Materialize, SFRM_Materialize_Preferred, SFRM_Materialize_Random,
+    SFRM_ValuePerCall, SetFunctionReturnMode,
+};
 use fmgr::{FmgrBuiltin, FmgrInfo, FunctionCallInfoBaseData};
 use mcx::{bind, Mcx, McxOwned, MemoryContext, PgString, PgVec};
 use types_core::catalog::VOIDOID;
@@ -25,10 +29,6 @@ use types_dest::CommandDest;
 use types_error::{
     PgError, PgResult, SqlState, ERRCODE_FEATURE_NOT_SUPPORTED,
     ERRCODE_INVALID_FUNCTION_DEFINITION, ERRCODE_UNDEFINED_FUNCTION, ERROR,
-};
-use fmgr::rsinfo::{
-    ExprDoneCond, SetFunctionReturnMode, SFRM_Materialize, SFRM_Materialize_Preferred,
-    SFRM_Materialize_Random, SFRM_ValuePerCall,
 };
 use types_nodes::nodes_enums::CmdType;
 use types_nodes::parsenodes::Query;
@@ -67,7 +67,14 @@ pub fn init_seams() {
 }
 
 const fn vb(foid: Oid, name: &'static str, func: fmgr::PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs: 1, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs: 1,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 static FUNCTIONS_BUILTINS: &[FmgrBuiltin] = &[
@@ -82,7 +89,9 @@ pub(crate) fn efn(code: SqlState, msg: String) -> Box<PgError> {
 
 #[cold]
 pub(crate) fn lookup_failed(fn_oid: Oid) -> Box<PgError> {
-    Box::new(PgError::error(format!("cache lookup failed for function {fn_oid}")))
+    Box::new(PgError::error(format!(
+        "cache lookup failed for function {fn_oid}"
+    )))
 }
 
 pub(crate) fn name_str<'mcx>(mcx: Mcx<'mcx>, d: Datum) -> PgResult<PgString<'mcx>> {
@@ -132,9 +141,9 @@ pub(crate) fn read_oidvector_attr<'mcx>(mcx: Mcx<'mcx>, d: Datum) -> PgResult<Pg
 
 pub(crate) fn is_polymorphic(typid: Oid) -> bool {
     use types_core::catalog::{
-        ANYARRAYOID, ANYCOMPATIBLEARRAYOID, ANYCOMPATIBLEMULTIRANGEOID,
-        ANYCOMPATIBLENONARRAYOID, ANYCOMPATIBLEOID, ANYCOMPATIBLERANGEOID, ANYELEMENTOID,
-        ANYENUMOID, ANYMULTIRANGEOID, ANYNONARRAYOID, ANYOID, ANYRANGEOID,
+        ANYARRAYOID, ANYCOMPATIBLEARRAYOID, ANYCOMPATIBLEMULTIRANGEOID, ANYCOMPATIBLENONARRAYOID,
+        ANYCOMPATIBLEOID, ANYCOMPATIBLERANGEOID, ANYELEMENTOID, ANYENUMOID, ANYMULTIRANGEOID,
+        ANYNONARRAYOID, ANYOID, ANYRANGEOID,
     };
     matches!(
         typid,
@@ -203,7 +212,9 @@ fn exec_error_context(
 ) -> Box<PgError> {
     let mut err = transpose_position(*e, src);
     if error_query_index > 0 {
-        err.add_context_line(format!("SQL function \"{fname}\" statement {error_query_index}"));
+        err.add_context_line(format!(
+            "SQL function \"{fname}\" statement {error_query_index}"
+        ));
     } else {
         err.add_context_line(format!("SQL function \"{fname}\" during startup"));
     }
@@ -358,15 +369,20 @@ pub fn shutdown_sql_srf(flinfo: &mut FmgrInfo) -> PgResult<()> {
 // ShutdownSQLFunction (functions.c:1967): clean teardown of a suspended
 // lazy-eval execution. Drop stays the abort path (release_query_desc).
 fn shutdown_sql_function(s: &mut SqlFcacheState<'_>) -> PgResult<()> {
-    let readonly =
-        s.entry.as_ref().map_or(true, |e| e.owned.with(|es| es.readonly_func));
+    let readonly = s
+        .entry
+        .as_ref()
+        .map_or(true, |e| e.owned.with(|es| es.readonly_func));
     for i in 0..s.eslist.len() {
         if s.eslist[i].status != ExecStatus::Run {
             continue;
         }
         let mut pushed = false;
         if !readonly {
-            let snap = s.eslist[i].snapshot.clone().expect("running es has a snapshot");
+            let snap = s.eslist[i]
+                .snapshot
+                .clone()
+                .expect("running es has a snapshot");
             snapmgr::PushActiveSnapshot(&snap)?;
             pushed = true;
         }
@@ -429,7 +445,12 @@ fn sqlfunction_receive<'mcx>(
             state.isnull.push(b.tts_isnull[(src - 1) as usize]);
         }
     }
-    tuplestore::hold::putvalues(state.tstore, &state.clean_desc, &state.values, &state.isnull)?;
+    tuplestore::hold::putvalues(
+        state.tstore,
+        &state.clean_desc,
+        &state.values,
+        &state.isnull,
+    )?;
     state.received = true;
     Ok(true)
 }
@@ -484,10 +505,16 @@ pub fn fmgr_sql(
 
     let fncollation = fcinfo.fncollation;
     let nargs = fcinfo.nargs();
-    assert!(nargs <= cache::MAX_SQL_FN_ARGS, "fmgr_sql: >FUNC_MAX_ARGS arguments");
+    assert!(
+        nargs <= cache::MAX_SQL_FN_ARGS,
+        "fmgr_sql: >FUNC_MAX_ARGS arguments"
+    );
     let mut arg_vals = [datum::NullableDatum::null(); cache::MAX_SQL_FN_ARGS];
     for i in 0..nargs {
-        arg_vals[i] = datum::NullableDatum { value: fcinfo.arg(i), isnull: fcinfo.argisnull(i) };
+        arg_vals[i] = datum::NullableDatum {
+            value: fcinfo.arg(i),
+            isnull: fcinfo.argisnull(i),
+        };
     }
 
     // init_sql_fcache (functions.c:535): reset error debris, resume a
@@ -523,14 +550,20 @@ pub fn fmgr_sql(
             }
             s.entry = Some(e.clone());
             e.owned.with(|es| -> PgResult<()> {
-                assert_eq!(nargs, es.argtypes.len(), "fmgr_sql: argument count mismatch");
+                assert_eq!(
+                    nargs,
+                    es.argtypes.len(),
+                    "fmgr_sql: argument count mismatch"
+                );
                 if s.params_buf.len() != nargs {
                     if !s.params_h.is_null() {
                         types_portal::params::free(s.params_h);
                         s.params_h = ParamListHandle::NULL;
                     }
                     s.params_buf.clear();
-                    s.params_buf.try_reserve_exact(nargs.max(1)).map_err(|_| mcx.oom(nargs))?;
+                    s.params_buf
+                        .try_reserve_exact(nargs.max(1))
+                        .map_err(|_| mcx.oom(nargs))?;
                     for (i, &t) in es.argtypes.iter().enumerate() {
                         s.params_buf.push(ParamExternData {
                             value: arg_vals[i].value,
@@ -565,7 +598,10 @@ pub fn fmgr_sql(
     }
 
     let guard = flinfo.fn_extra_ref::<SqlFcacheGuard>().expect("set above");
-    let entry = guard.0.with(|s| s.entry.clone()).expect("entry bound above");
+    let entry = guard
+        .0
+        .with(|s| s.entry.clone())
+        .expect("entry bound above");
     let facts = entry.owned.with(|es| EntryFacts {
         rettype: es.rettype,
         typlen: es.typlen,
@@ -591,7 +627,9 @@ pub fn fmgr_sql(
     let outcome = match run {
         Ok(o) => o,
         Err(e) => {
-            let (fname, src) = entry.owned.with(|es| (es.fname.to_string(), es.src.to_string()));
+            let (fname, src) = entry
+                .owned
+                .with(|es| (es.fname.to_string(), es.src.to_string()));
             let eqi = guard.0.with(|s| s.error_query_index);
             return Err(exec_error_context(e, &fname, &src, eqi));
         }
@@ -670,7 +708,11 @@ fn execute_function<'mcx>(
 ) -> PgResult<FnOutcome> {
     let mut es_idx: Option<usize> = None;
     loop {
-        if let Some(i) = state.eslist.iter().position(|e| e.status != ExecStatus::Done) {
+        if let Some(i) = state
+            .eslist
+            .iter()
+            .position(|e| e.status != ExecStatus::Done)
+        {
             es_idx = Some(i);
             break;
         }
@@ -680,7 +722,10 @@ fn execute_function<'mcx>(
     }
     // returnsTuple settles once the last query is prepared.
     let returns_tuple = entry.owned.with(|s| s.returns_tuple.get());
-    let facts = EntryFacts { returns_tuple, ..facts };
+    let facts = EntryFacts {
+        returns_tuple,
+        ..facts
+    };
 
     let mut pushed_snapshot = false;
     let run = (|| -> PgResult<Option<usize>> {
@@ -699,7 +744,10 @@ fn execute_function<'mcx>(
                 }
                 postquel_start(mcx, state, i, facts)?;
             } else if !facts.readonly_func && !pushed_snapshot {
-                let snap = state.eslist[i].snapshot.clone().expect("running es has a snapshot");
+                let snap = state.eslist[i]
+                    .snapshot
+                    .clone()
+                    .expect("running es has a snapshot");
                 snapmgr::PushActiveSnapshot(&snap)?;
                 pushed_snapshot = true;
             }
@@ -751,7 +799,10 @@ fn execute_function<'mcx>(
     // pre-loop snapshot can be stale (record result took the scalar
     // copy-out path and dereferenced a by-value datum).
     let returns_tuple = entry.owned.with(|s| s.returns_tuple.get());
-    let facts = EntryFacts { returns_tuple, ..facts };
+    let facts = EntryFacts {
+        returns_tuple,
+        ..facts
+    };
 
     if facts.returns_set {
         if let Some(i) = suspended {
@@ -804,7 +855,10 @@ fn take_single_result<'mcx>(
     if row_store.is_null() {
         return Ok((Datum::null(), true));
     }
-    let junk = state.junk.as_mut().expect("result extraction requires a junkfilter");
+    let junk = state
+        .junk
+        .as_mut()
+        .expect("result extraction requires a junkfilter");
     let got = tuplestore::hold::with_store(row_store, |st| {
         st.gettupleslot(true, false, &mut junk.slot, mcx)
     })?;
@@ -812,7 +866,10 @@ fn take_single_result<'mcx>(
         return Ok((Datum::null(), true));
     }
     let result = if facts.returns_tuple {
-        (exectuples::exec_fetch_slot_heap_tuple_datum(&mut junk.slot, mcx, result_mcx)?, false)
+        (
+            exectuples::exec_fetch_slot_heap_tuple_datum(&mut junk.slot, mcx, result_mcx)?,
+            false,
+        )
     } else {
         let mut isnull = false;
         let v = exectuples::slot_getattr(&mut junk.slot, 1, &mut isnull);
@@ -975,9 +1032,11 @@ fn build_junk_state<'mcx>(
         if returns_tuple && rettupdesc.is_some() {
             let rd = rettupdesc.expect("checked");
             let mut map: PgVec<'mcx, i16> = PgVec::new_in(mcx);
-            map.try_reserve_exact(rd.natts as usize).map_err(|_| mcx.oom(rd.natts as usize))?;
-            let mut nonjunk =
-                tlist.iter().filter(|n| n.as_target_entry().is_some_and(|t| !t.resjunk));
+            map.try_reserve_exact(rd.natts as usize)
+                .map_err(|_| mcx.oom(rd.natts as usize))?;
+            let mut nonjunk = tlist
+                .iter()
+                .filter(|n| n.as_target_entry().is_some_and(|t| !t.resjunk));
             for a in rd.attrs.iter() {
                 if a.attisdropped {
                     map.push(0);
@@ -1000,7 +1059,9 @@ fn build_junk_state<'mcx>(
             let n = src_desc.natts as usize;
             map.try_reserve_exact(n).map_err(|_| mcx.oom(n))?;
             for tle_node in tlist.iter() {
-                let tle = tle_node.as_target_entry().expect("tlist holds TargetEntries");
+                let tle = tle_node
+                    .as_target_entry()
+                    .expect("tlist holds TargetEntries");
                 if !tle.resjunk {
                     map.push(tle.resno);
                 }
@@ -1021,16 +1082,24 @@ fn build_junk_state<'mcx>(
             (desc, map)
         };
 
-    let slot =
-        exectuples::make_tuple_table_slot(mcx, TupleSlotKind::MinimalTuple, Some(clean_desc.clone()));
-    state.junk =
-        Some(JunkState { clean_desc, clean_map: mcx::vec_borrow_in(mcx, clean_map)?, slot });
+    let slot = exectuples::make_tuple_table_slot(
+        mcx,
+        TupleSlotKind::MinimalTuple,
+        Some(clean_desc.clone()),
+    );
+    state.junk = Some(JunkState {
+        clean_desc,
+        clean_map: mcx::vec_borrow_in(mcx, clean_map)?,
+        slot,
+    });
     Ok(())
 }
 
 fn current_query_string(state: &SqlFcacheState<'_>) -> &'static str {
     let e = state.entry.as_ref().expect("bound");
-    let psrc = e.owned.with(|s| s.plansources.borrow()[state.next_query_index - 1]);
+    let psrc = e
+        .owned
+        .with(|s| s.plansources.borrow()[state.next_query_index - 1]);
     plancache::CachedPlanQueryString(psrc)
 }
 
@@ -1188,7 +1257,10 @@ fn fc_fmgr_internal_validator(
     if fmgr_core::fmgr_internal_function(&prosrc) == types_core::InvalidOid {
         return Err(efn(
             ERRCODE_UNDEFINED_FUNCTION,
-            format!("there is no built-in function named \"{}\"", prosrc.as_str()),
+            format!(
+                "there is no built-in function named \"{}\"",
+                prosrc.as_str()
+            ),
         ));
     }
     Ok(Datum::null())
@@ -1218,13 +1290,23 @@ fn fc_fmgr_sql_validator(
     let (prosrc_d, prosrc_null) = SysCacheGetAttr(PROCOID, &tup, ANUM_PG_PROC_PROSRC)?;
     assert!(!prosrc_null, "null prosrc for function {funcoid}");
     let prosrc = varlena_str(mcx, prosrc_d)?;
-    let prosqlbody = if sqlbody_null { None } else { Some(varlena_str(mcx, sqlbody_d)?) };
+    let prosqlbody = if sqlbody_null {
+        None
+    } else {
+        Some(varlena_str(mcx, sqlbody_d)?)
+    };
     let (proname_d, _) = SysCacheGetAttr(PROCOID, &tup, ANUM_PG_PROC_PRONAME)?;
     let proname = name_str(mcx, proname_d)?;
     let (names_d, names_null) = SysCacheGetAttr(PROCOID, &tup, ANUM_PG_PROC_PROARGNAMES)?;
     let (modes_d, modes_null) = SysCacheGetAttr(PROCOID, &tup, ANUM_PG_PROC_PROARGMODES)?;
-    let argnames =
-        cache::read_input_argnames(mcx, names_d, names_null, modes_d, modes_null, argtypes.len())?;
+    let argnames = cache::read_input_argnames(
+        mcx,
+        names_d,
+        names_null,
+        modes_d,
+        modes_null,
+        argtypes.len(),
+    )?;
     ReleaseSysCache(tup);
 
     if lsyscache::typ::get_typtype(rettype)? == b'p' as i8
@@ -1234,7 +1316,10 @@ fn fc_fmgr_sql_validator(
     {
         return Err(efn(
             ERRCODE_INVALID_FUNCTION_DEFINITION,
-            format!("SQL functions cannot return type {}", format_type::format_type_be(rettype)?),
+            format!(
+                "SQL functions cannot return type {}",
+                format_type::format_type_be(rettype)?
+            ),
         ));
     }
     let mut haspolyarg = false;
@@ -1306,7 +1391,9 @@ fn fc_fmgr_sql_validator(
                 return Ok(());
             }
             let mut name_refs: PgVec<'_, &str> = PgVec::new_in(mcx);
-            name_refs.try_reserve_exact(argnames.len()).map_err(|_| mcx.oom(argnames.len()))?;
+            name_refs
+                .try_reserve_exact(argnames.len())
+                .map_err(|_| mcx.oom(argnames.len()))?;
             for n in argnames.iter() {
                 name_refs.push(n.as_str());
             }

@@ -18,7 +18,10 @@ fn create_and_test_bloom(ctx: &MemoryContext, seed: u64) -> (i64, f64) {
         filter.add_element(dummy('i', i).as_bytes());
     }
     for i in 0..NELEMENTS {
-        assert!(!filter.lacks_element(dummy('i', i).as_bytes()), "false negative at i{i}");
+        assert!(
+            !filter.lacks_element(dummy('i', i).as_bytes()),
+            "false negative at i{i}"
+        );
     }
     let mut nfalsepos = 0i64;
     for i in 0..NELEMENTS {
@@ -38,7 +41,10 @@ fn false_positive_rate_within_band() {
             nfalsepos as f64 <= NELEMENTS as f64 * 0.01,
             "seed {seed}: {nfalsepos} false positives over {NELEMENTS}"
         );
-        assert!((0.3..0.7).contains(&prop), "seed {seed}: prop_bits_set {prop}");
+        assert!(
+            (0.3..0.7).contains(&prop),
+            "seed {seed}: prop_bits_set {prop}"
+        );
     }
 }
 
@@ -133,7 +139,9 @@ fn model_property_no_false_negatives() {
 
     let mut state: u64 = 0x9e37_79b9_7f4a_7c15;
     let mut next = || {
-        state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        state = state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         state
     };
     for _ in 0..50_000 {

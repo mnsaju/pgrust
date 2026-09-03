@@ -8,8 +8,8 @@ use ::fmgr::FmgrInfo;
 use ::hashfn::hash_bytes_uint32_extended;
 use ::mcx::Mcx;
 use ::types_brin::{
-    BloomOpaque, BrinColInfo, BrinDesc, BrinOpcKind, BrinValues, MinmaxOpaque,
-    PG_BRIN_BLOOM_SUMMARYOID, SizeOfBrinTuple,
+    BloomOpaque, BrinColInfo, BrinDesc, BrinOpcKind, BrinValues, MinmaxOpaque, SizeOfBrinTuple,
+    PG_BRIN_BLOOM_SUMMARYOID,
 };
 use ::types_core::Oid;
 use ::types_error::{PgError, PgResult, ERRCODE_INVALID_OBJECT_DEFINITION};
@@ -64,7 +64,11 @@ fn bloom_filter_size(ndistinct: i32, false_positive_rate: f64) -> (usize, u32, u
     let nbytes = ((nbits + 7) / 8) as usize;
     nbits = (nbytes * 8) as i64;
     let k = 2.0f64.ln() * nbits as f64 / ndistinct as f64;
-    let k = if k - k.floor() >= 0.5 { k.ceil() } else { k.floor() };
+    let k = if k - k.floor() >= 0.5 {
+        k.ceil()
+    } else {
+        k.floor()
+    };
     (nbytes, nbits as u32, k as u8)
 }
 
@@ -213,7 +217,9 @@ pub fn brin_bloom_add_value(
     debug_assert!(!isnull);
     let attno = column.bv_attno;
 
-    let opts = bdesc.bd_info[attno as usize - 1].oi_opclass_options.as_deref();
+    let opts = bdesc.bd_info[attno as usize - 1]
+        .oi_opclass_options
+        .as_deref();
     let mut updated = false;
     if column.bv_allnulls {
         column.bv_values[0] = bloom_init(
@@ -308,8 +314,7 @@ fn bloom_get_procinfo(bdesc: &BrinDesc<'_>, attno: u16) -> PgResult<FmgrInfo> {
     }
     let opfamily = bdesc.bd_opfamily[attno as usize - 1];
     let opcintype = bdesc.bd_opcintype[attno as usize - 1];
-    let proc =
-        lsyscache::get_opfamily_proc(opfamily, opcintype, opcintype, PROCNUM_HASH as i16)?;
+    let proc = lsyscache::get_opfamily_proc(opfamily, opcintype, opcintype, PROCNUM_HASH as i16)?;
     if proc == 0 {
         return Err(invalid_opclass(PROCNUM_HASH, attno));
     }

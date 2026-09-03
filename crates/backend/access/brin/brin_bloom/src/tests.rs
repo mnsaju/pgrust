@@ -33,7 +33,10 @@ fn add_then_contains() {
             misses += 1;
         }
     }
-    assert!(misses > 90, "false positive rate implausibly high: {misses}");
+    assert!(
+        misses > 90,
+        "false positive rate implausibly high: {misses}"
+    );
 }
 
 #[test]

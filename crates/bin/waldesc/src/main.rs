@@ -25,7 +25,12 @@ struct WalDirSource {
 impl WalDirSource {
     fn seg_file_name(&self, segno: XLogSegNo) -> String {
         let per_id = 0x1_0000_0000u64 / self.segsize;
-        format!("{:08X}{:08X}{:08X}", self.tli, segno / per_id, segno % per_id)
+        format!(
+            "{:08X}{:08X}{:08X}",
+            self.tli,
+            segno / per_id,
+            segno % per_id
+        )
     }
 
     fn close_file(&mut self) {
@@ -79,7 +84,12 @@ impl XLogReaderRoutine for WalDirSource {
         let off = (target_page_ptr % self.segsize) as libc::off_t;
         // SAFETY: cur_page is the reader's XLOG_BLCKSZ buffer.
         let r = unsafe {
-            libc::pread(self.file, cur_page.as_mut_ptr() as *mut libc::c_void, XLOG_BLCKSZ, off)
+            libc::pread(
+                self.file,
+                cur_page.as_mut_ptr() as *mut libc::c_void,
+                XLOG_BLCKSZ,
+                off,
+            )
         };
         if r != XLOG_BLCKSZ as isize {
             return Ok(xlogreader::XLREAD_FAIL);
@@ -180,7 +190,13 @@ fn main() {
     let ctx = Box::leak(Box::new(mcx::MemoryContext::new("waldesc")));
     let mcx = ctx.mcx();
 
-    let mut src = WalDirSource { dir: format!("{dir}"), segsize, tli, file: -1, open_segno: 0 };
+    let mut src = WalDirSource {
+        dir: format!("{dir}"),
+        segsize,
+        tli,
+        file: -1,
+        open_segno: 0,
+    };
     let mut reader = XLogReaderState::allocate(mcx, segsize as i32).expect("allocate reader");
 
     let start = reader
@@ -243,7 +259,11 @@ fn main() {
 
         buf.reset();
         if let Err(e) = (desc.rm_desc)(&mut buf, &reader.v) {
-            eprintln!("waldesc: rm_desc failed at {:X}/{:X}: {e:?}", (lsn >> 32) as u32, lsn as u32);
+            eprintln!(
+                "waldesc: rm_desc failed at {:X}/{:X}: {e:?}",
+                (lsn >> 32) as u32,
+                lsn as u32
+            );
         }
         let _ = out.write_all(buf.as_bytes());
 

@@ -2,15 +2,15 @@
 
 use std::boxed::Box;
 
+use ::latch_seams::{reset_latch_my_latch, wait_latch_my_latch};
+use ::mcx::Mcx;
+use ::postgres_seams::check_for_interrupts;
 use ::sink::{
     bbsink_forward_archive_contents, bbsink_forward_begin_archive, bbsink_forward_begin_backup,
     bbsink_forward_begin_manifest, bbsink_forward_cleanup, bbsink_forward_end_archive,
     bbsink_forward_end_backup, bbsink_forward_end_manifest, bbsink_forward_manifest_contents,
     Bbsink, BbsinkOps, BbsinkState,
 };
-use ::latch_seams::{reset_latch_my_latch, wait_latch_my_latch};
-use ::mcx::Mcx;
-use ::postgres_seams::check_for_interrupts;
 use ::timestamp_seams::get_current_timestamp;
 use ::types_core::{Size, TimeLineID, TimestampTz, XLogRecPtr};
 use ::types_error::PgResult;

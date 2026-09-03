@@ -22,7 +22,13 @@ fn seed(entries: &[(Oid, RelFileNumber, Oid)]) {
         let map = slot.as_mut().unwrap();
         map.hash.clear();
         for &(reltablespace, relfilenumber, relid) in entries {
-            map.hash.insert(RelfilenumberMapKey { reltablespace, relfilenumber }, relid);
+            map.hash.insert(
+                RelfilenumberMapKey {
+                    reltablespace,
+                    relfilenumber,
+                },
+                relid,
+            );
         }
     });
 }
@@ -58,7 +64,10 @@ fn invalidate_specific_relid_and_negative_entries() {
             .as_ref()
             .unwrap()
             .hash
-            .get(&RelfilenumberMapKey { reltablespace: 0, relfilenumber: 101 })
+            .get(&RelfilenumberMapKey {
+                reltablespace: 0,
+                relfilenumber: 101,
+            })
             .copied()
     });
     assert_eq!(survivor, Some(16385));

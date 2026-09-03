@@ -181,16 +181,27 @@ fn parse_local_trust() {
 
 #[test]
 fn parse_methods() {
-    assert_eq!(parse_one("local all all reject").unwrap().auth_method, uaReject);
-    assert_eq!(parse_one("local all all password").unwrap().auth_method, uaPassword);
+    assert_eq!(
+        parse_one("local all all reject").unwrap().auth_method,
+        uaReject
+    );
+    assert_eq!(
+        parse_one("local all all password").unwrap().auth_method,
+        uaPassword
+    );
     assert_eq!(parse_one("local all all md5").unwrap().auth_method, uaMD5);
     assert_eq!(
-        parse_one("local all all scram-sha-256").unwrap().auth_method,
+        parse_one("local all all scram-sha-256")
+            .unwrap()
+            .auth_method,
         uaSCRAM
     );
     assert_eq!(parse_one("local all all peer").unwrap().auth_method, uaPeer);
     // ident on local is changed to peer.
-    assert_eq!(parse_one("local all all ident").unwrap().auth_method, uaPeer);
+    assert_eq!(
+        parse_one("local all all ident").unwrap().auth_method,
+        uaPeer
+    );
     assert_eq!(
         parse_one("local all all frobnicate").unwrap_err(),
         "invalid authentication method \"frobnicate\""
@@ -551,7 +562,10 @@ fn authname_table() {
 fn regex_tokens_compile_and_match() {
     setup();
     let line = parse_one("local all /^ali.*$ trust").expect("parses");
-    assert!(line.roles[0].regex, "regex marker set by regcomp_auth_token");
+    assert!(
+        line.roles[0].regex,
+        "regex marker set by regcomp_auth_token"
+    );
     assert!(crate::check::check_role("alice", 101, &line.roles, false).unwrap());
     assert!(!crate::check::check_role("bob", 102, &line.roles, false).unwrap());
 }

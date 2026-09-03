@@ -47,7 +47,11 @@ fn local_execute_other(msg: &SharedInvalidationMessage) -> PgResult<()> {
                 let mut i = 0usize;
                 while let Some(ccitem) = CALLBACKS.with(|c| {
                     let t = c.borrow();
-                    if i < t.relcache_count { t.relcache_list[i] } else { None }
+                    if i < t.relcache_count {
+                        t.relcache_list[i]
+                    } else {
+                        None
+                    }
                 }) {
                     (ccitem.function)(ccitem.arg, m.relId);
                     i += 1;
@@ -90,7 +94,11 @@ pub fn InvalidateSystemCachesExtended(debug_discard: bool) -> PgResult<()> {
     let mut i = 0usize;
     while let Some(ccitem) = CALLBACKS.with(|c| {
         let t = c.borrow();
-        if i < t.syscache_count { t.syscache_list[i] } else { None }
+        if i < t.syscache_count {
+            t.syscache_list[i]
+        } else {
+            None
+        }
     }) {
         (ccitem.function)(ccitem.arg, ccitem.id as i32, 0);
         i += 1;
@@ -99,7 +107,11 @@ pub fn InvalidateSystemCachesExtended(debug_discard: bool) -> PgResult<()> {
     let mut i = 0usize;
     while let Some(ccitem) = CALLBACKS.with(|c| {
         let t = c.borrow();
-        if i < t.relcache_count { t.relcache_list[i] } else { None }
+        if i < t.relcache_count {
+            t.relcache_list[i]
+        } else {
+            None
+        }
     }) {
         (ccitem.function)(ccitem.arg, InvalidOid);
         i += 1;
@@ -108,7 +120,11 @@ pub fn InvalidateSystemCachesExtended(debug_discard: bool) -> PgResult<()> {
     let mut i = 0usize;
     while let Some(ccitem) = CALLBACKS.with(|c| {
         let t = c.borrow();
-        if i < t.relsync_count { t.relsync_list[i] } else { None }
+        if i < t.relsync_count {
+            t.relsync_list[i]
+        } else {
+            None
+        }
     }) {
         (ccitem.function)(ccitem.arg, InvalidOid);
         i += 1;

@@ -7,9 +7,8 @@ use ::types_core::Oid;
 use ::types_error::PgResult;
 use ::types_fmgr::{FmgrInfo, LocalFcinfo};
 use ::types_gist::{
-    GISTNProcs, GIST_COMPRESS_PROC, GIST_CONSISTENT_PROC, GIST_DECOMPRESS_PROC,
-    GIST_DISTANCE_PROC, GIST_EQUAL_PROC, GIST_FETCH_PROC, GIST_PENALTY_PROC, GIST_PICKSPLIT_PROC,
-    GIST_UNION_PROC,
+    GISTNProcs, GIST_COMPRESS_PROC, GIST_CONSISTENT_PROC, GIST_DECOMPRESS_PROC, GIST_DISTANCE_PROC,
+    GIST_EQUAL_PROC, GIST_FETCH_PROC, GIST_PENALTY_PROC, GIST_PICKSPLIT_PROC, GIST_UNION_PROC,
 };
 use ::types_rel::Relation;
 
@@ -49,8 +48,6 @@ pub fn index_getprocid(index: &Relation<'_>, attno_0based: usize, procnum: u16) 
         .copied()
         .unwrap_or(InvalidOid)
 }
-
-
 
 /// initGISTstate; scan-lifetime data lives with the returned owner value.
 /// `mcx` must outlive the state (holds the truncated nonLeafTupdesc when the
@@ -112,17 +109,29 @@ pub fn initGISTstate<'mcx>(mcx: Mcx<'mcx>, index: &Relation<'mcx>) -> PgResult<G
         };
         st.consistentFn.push(mandatory(GIST_CONSISTENT_PROC)?);
         st.unionFn.push(mandatory(GIST_UNION_PROC)?);
-        st.compressFn
-            .push(resolve_optional(index_getprocid(index, i, GIST_COMPRESS_PROC))?);
-        st.decompressFn
-            .push(resolve_optional(index_getprocid(index, i, GIST_DECOMPRESS_PROC))?);
+        st.compressFn.push(resolve_optional(index_getprocid(
+            index,
+            i,
+            GIST_COMPRESS_PROC,
+        ))?);
+        st.decompressFn.push(resolve_optional(index_getprocid(
+            index,
+            i,
+            GIST_DECOMPRESS_PROC,
+        ))?);
         st.penaltyFn.push(mandatory(GIST_PENALTY_PROC)?);
         st.picksplitFn.push(mandatory(GIST_PICKSPLIT_PROC)?);
         st.equalFn.push(mandatory(GIST_EQUAL_PROC)?);
-        st.distanceFn
-            .push(resolve_optional(index_getprocid(index, i, GIST_DISTANCE_PROC))?);
-        st.fetchFn
-            .push(resolve_optional(index_getprocid(index, i, GIST_FETCH_PROC))?);
+        st.distanceFn.push(resolve_optional(index_getprocid(
+            index,
+            i,
+            GIST_DISTANCE_PROC,
+        ))?);
+        st.fetchFn.push(resolve_optional(index_getprocid(
+            index,
+            i,
+            GIST_FETCH_PROC,
+        ))?);
 
         let collation = index.rd_indcollation.get(i).copied().unwrap_or(InvalidOid);
         st.supportCollation.push(if collation != InvalidOid {

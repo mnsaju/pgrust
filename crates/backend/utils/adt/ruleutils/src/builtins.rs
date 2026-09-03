@@ -18,7 +18,9 @@ fn no_flinfo(name: &str) -> ! {
 struct OutBuf(Vec<u8>);
 
 fn out_scratch<'a>(flinfo: Option<&'a mut FmgrInfo>, name: &'static str) -> &'a mut Vec<u8> {
-    let Some(flinfo) = flinfo else { no_flinfo(name) };
+    let Some(flinfo) = flinfo else {
+        no_flinfo(name)
+    };
     if !flinfo.has_fn_extra() {
         flinfo.set_fn_extra(OutBuf(Vec::new()));
     }
@@ -29,7 +31,9 @@ fn text_result(flinfo: Option<&mut FmgrInfo>, name: &'static str, s: &str) -> Da
     let buf = out_scratch(flinfo, name);
     buf.clear();
     buf.reserve(datum::varlena::VARHDRSZ + s.len());
-    buf.extend_from_slice(&datum::varlena::set_varsize_4b(datum::varlena::VARHDRSZ + s.len()));
+    buf.extend_from_slice(&datum::varlena::set_varsize_4b(
+        datum::varlena::VARHDRSZ + s.len(),
+    ));
     buf.extend_from_slice(s.as_bytes());
     Datum::from_usize(buf.as_ptr() as usize)
 }
@@ -86,8 +90,7 @@ fn constraintdef(
     pretty_flags: i32,
 ) -> PgResult<Datum> {
     let ctx = MemoryContext::new("pg_get_constraintdef");
-    let res =
-        crate::pg_get_constraintdef_worker(ctx.mcx(), fcinfo.arg_oid(0), pretty_flags, true)?;
+    let res = crate::pg_get_constraintdef_worker(ctx.mcx(), fcinfo.arg_oid(0), pretty_flags, true)?;
     Ok(match res {
         Some(s) => text_result(flinfo, "pg_get_constraintdef", &s),
         None => fcinfo.return_null(),
@@ -112,7 +115,9 @@ pub fn fc_pg_get_constraintdef_ext(
 fn expr(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo, pretty_flags: i32) -> PgResult<Datum> {
     // SAFETY: arg 0 of strict pg_get_expr is a non-null pg_node_tree (text).
     let raw = unsafe { fcinfo.arg_varlena_packed(0) }?;
-    let text = core::str::from_utf8(raw.data()).expect("non-UTF-8 pg_node_tree").to_owned();
+    let text = core::str::from_utf8(raw.data())
+        .expect("non-UTF-8 pg_node_tree")
+        .to_owned();
     let relid = fcinfo.arg_oid(1);
     let ctx = MemoryContext::new("pg_get_expr");
     let res = crate::pg_get_expr_worker(ctx.mcx(), &text, relid, pretty_flags)?;
@@ -166,8 +171,7 @@ fn statisticsobjdef(
     columns_only: bool,
 ) -> PgResult<Datum> {
     let ctx = MemoryContext::new("pg_get_statisticsobjdef");
-    let res =
-        crate::pg_get_statisticsobj_worker(ctx.mcx(), fcinfo.arg_oid(0), columns_only, true)?;
+    let res = crate::pg_get_statisticsobj_worker(ctx.mcx(), fcinfo.arg_oid(0), columns_only, true)?;
     Ok(match res {
         Some(s) => text_result(flinfo, "pg_get_statisticsobjdef", &s),
         None => fcinfo.return_null(),
@@ -206,14 +210,22 @@ fn viewdef(
 fn viewdef_name_arg(fcinfo: &mut Fcinfo) -> PgResult<Oid> {
     // SAFETY: arg 0 of the strict by-name pg_get_viewdef forms is text.
     let raw = unsafe { fcinfo.arg_varlena_packed(0) }?;
-    let name = core::str::from_utf8(raw.data()).expect("non-UTF-8 view name").to_owned();
+    let name = core::str::from_utf8(raw.data())
+        .expect("non-UTF-8 view name")
+        .to_owned();
     let ctx = MemoryContext::new("pg_get_viewdef_name");
     crate::viewdef::view_name_to_oid(ctx.mcx(), &name)
 }
 
 pub fn fc_pg_get_viewdef(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let viewoid = fcinfo.arg_oid(0);
-    viewdef(flinfo, fcinfo, viewoid, PRETTYFLAG_INDENT, crate::viewdef::WRAP_COLUMN_DEFAULT)
+    viewdef(
+        flinfo,
+        fcinfo,
+        viewoid,
+        PRETTYFLAG_INDENT,
+        crate::viewdef::WRAP_COLUMN_DEFAULT,
+    )
 }
 
 pub fn fc_pg_get_viewdef_ext(
@@ -222,7 +234,13 @@ pub fn fc_pg_get_viewdef_ext(
 ) -> PgResult<Datum> {
     let viewoid = fcinfo.arg_oid(0);
     let pretty = fcinfo.arg_bool(1);
-    viewdef(flinfo, fcinfo, viewoid, get_pretty_flags(pretty), crate::viewdef::WRAP_COLUMN_DEFAULT)
+    viewdef(
+        flinfo,
+        fcinfo,
+        viewoid,
+        get_pretty_flags(pretty),
+        crate::viewdef::WRAP_COLUMN_DEFAULT,
+    )
 }
 
 pub fn fc_pg_get_viewdef_wrap(
@@ -239,7 +257,13 @@ pub fn fc_pg_get_viewdef_name(
     fcinfo: &mut Fcinfo,
 ) -> PgResult<Datum> {
     let viewoid = viewdef_name_arg(fcinfo)?;
-    viewdef(flinfo, fcinfo, viewoid, PRETTYFLAG_INDENT, crate::viewdef::WRAP_COLUMN_DEFAULT)
+    viewdef(
+        flinfo,
+        fcinfo,
+        viewoid,
+        PRETTYFLAG_INDENT,
+        crate::viewdef::WRAP_COLUMN_DEFAULT,
+    )
 }
 
 pub fn fc_pg_get_viewdef_name_ext(
@@ -248,7 +272,13 @@ pub fn fc_pg_get_viewdef_name_ext(
 ) -> PgResult<Datum> {
     let viewoid = viewdef_name_arg(fcinfo)?;
     let pretty = fcinfo.arg_bool(1);
-    viewdef(flinfo, fcinfo, viewoid, get_pretty_flags(pretty), crate::viewdef::WRAP_COLUMN_DEFAULT)
+    viewdef(
+        flinfo,
+        fcinfo,
+        viewoid,
+        get_pretty_flags(pretty),
+        crate::viewdef::WRAP_COLUMN_DEFAULT,
+    )
 }
 
 fn ruledef(
@@ -276,11 +306,7 @@ pub fn fc_pg_get_ruledef_ext(
     ruledef(flinfo, fcinfo, get_pretty_flags(pretty))
 }
 
-fn triggerdef(
-    flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-    pretty: bool,
-) -> PgResult<Datum> {
+fn triggerdef(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo, pretty: bool) -> PgResult<Datum> {
     let ctx = MemoryContext::new("pg_get_triggerdef");
     let res = crate::pg_get_triggerdef_worker(ctx.mcx(), fcinfo.arg_oid(0), pretty)?;
     Ok(match res {
@@ -410,8 +436,10 @@ pub fn fc_pg_get_statisticsobjdef_expressions(
     for e in &exprs {
         texts.push(varlena::cstring_to_text(mcx, e.as_bytes())?);
     }
-    let elems: Vec<Datum> =
-        texts.iter().map(|t| Datum::from_usize(t.as_bytes().as_ptr() as usize)).collect();
+    let elems: Vec<Datum> = texts
+        .iter()
+        .map(|t| Datum::from_usize(t.as_bytes().as_ptr() as usize))
+        .collect();
     let img = arrayfuncs::construct_array(mcx, &elems, TEXTOID, -1, false, b'i')?;
     let buf = out_scratch(flinfo, "pg_get_statisticsobjdef_expressions");
     buf.clear();
@@ -420,7 +448,14 @@ pub fn fc_pg_get_statisticsobjdef_expressions(
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 // pg_proc.dat rows (all proisstrict, none retset), OID-ascending.
@@ -435,22 +470,72 @@ pub const RULEUTILS_BUILTINS: &[FmgrBuiltin] = &[
     b(1665, "pg_get_serial_sequence", 2, fc_pg_get_serial_sequence),
     b(1716, "pg_get_expr", 2, fc_pg_get_expr),
     b(2098, "pg_get_functiondef", 1, fc_pg_get_functiondef),
-    b(2162, "pg_get_function_arguments", 1, fc_pg_get_function_arguments),
+    b(
+        2162,
+        "pg_get_function_arguments",
+        1,
+        fc_pg_get_function_arguments,
+    ),
     b(2165, "pg_get_function_result", 1, fc_pg_get_function_result),
-    b(2232, "pg_get_function_identity_arguments", 1, fc_pg_get_function_identity_arguments),
+    b(
+        2232,
+        "pg_get_function_identity_arguments",
+        1,
+        fc_pg_get_function_identity_arguments,
+    ),
     b(2504, "pg_get_ruledef_ext", 2, fc_pg_get_ruledef_ext),
-    b(2505, "pg_get_viewdef_name_ext", 2, fc_pg_get_viewdef_name_ext),
+    b(
+        2505,
+        "pg_get_viewdef_name_ext",
+        2,
+        fc_pg_get_viewdef_name_ext,
+    ),
     b(2506, "pg_get_viewdef_ext", 2, fc_pg_get_viewdef_ext),
     b(2507, "pg_get_indexdef_ext", 3, fc_pg_get_indexdef_ext),
-    b(2508, "pg_get_constraintdef_ext", 2, fc_pg_get_constraintdef_ext),
+    b(
+        2508,
+        "pg_get_constraintdef_ext",
+        2,
+        fc_pg_get_constraintdef_ext,
+    ),
     b(2509, "pg_get_expr_ext", 3, fc_pg_get_expr_ext),
     b(2730, "pg_get_triggerdef_ext", 2, fc_pg_get_triggerdef_ext),
     b(3159, "pg_get_viewdef_wrap", 2, fc_pg_get_viewdef_wrap),
     b(3352, "pg_get_partkeydef", 1, fc_pg_get_partkeydef),
-    b(3408, "pg_get_partition_constraintdef", 1, fc_pg_get_partition_constraintdef),
-    b(3415, "pg_get_statisticsobjdef", 1, fc_pg_get_statisticsobjdef),
-    b(3808, "pg_get_function_arg_default", 2, fc_pg_get_function_arg_default),
-    b(6173, "pg_get_statisticsobjdef_expressions", 1, fc_pg_get_statisticsobjdef_expressions),
-    b(6174, "pg_get_statisticsobjdef_columns", 1, fc_pg_get_statisticsobjdef_columns),
-    b(6197, "pg_get_function_sqlbody", 1, fc_pg_get_function_sqlbody),
+    b(
+        3408,
+        "pg_get_partition_constraintdef",
+        1,
+        fc_pg_get_partition_constraintdef,
+    ),
+    b(
+        3415,
+        "pg_get_statisticsobjdef",
+        1,
+        fc_pg_get_statisticsobjdef,
+    ),
+    b(
+        3808,
+        "pg_get_function_arg_default",
+        2,
+        fc_pg_get_function_arg_default,
+    ),
+    b(
+        6173,
+        "pg_get_statisticsobjdef_expressions",
+        1,
+        fc_pg_get_statisticsobjdef_expressions,
+    ),
+    b(
+        6174,
+        "pg_get_statisticsobjdef_columns",
+        1,
+        fc_pg_get_statisticsobjdef_columns,
+    ),
+    b(
+        6197,
+        "pg_get_function_sqlbody",
+        1,
+        fc_pg_get_function_sqlbody,
+    ),
 ];

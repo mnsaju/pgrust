@@ -44,15 +44,16 @@ fn setup_process() {
 fn setup_thread() {
     fd::vfd::InitFileAccess();
     fd::vfd::InitTemporaryFileAccess().unwrap();
-    let owner =
-        resowner::ResourceOwnerCreate(types_resowner::ResourceOwner::NULL, "spillset-test")
-            .unwrap();
+    let owner = resowner::ResourceOwnerCreate(types_resowner::ResourceOwner::NULL, "spillset-test")
+        .unwrap();
     resowner_seams::set_current_resource_owner::call(owner);
 }
 
 fn scratch_datadir(tag: &str) -> (String, std::sync::MutexGuard<'static, ()>) {
     static COUNTER: AtomicU32 = AtomicU32::new(0);
-    let guard = CWD.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let guard = CWD
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let n = COUNTER.fetch_add(1, Ordering::Relaxed);
     let dir = std::env::temp_dir().join(format!(
         "pgrust_spillset_test_{}_{tag}_{n}",
@@ -147,7 +148,11 @@ fn abandoned_epoch_is_not_committed_and_tail_is_overwritten() {
         w.write_part(0, &pattern(9, 9, 20_000)).unwrap();
         // dropped un-finished
     }
-    assert_eq!(f.spilled_bytes(), committed, "abandoned epoch commits nothing");
+    assert_eq!(
+        f.spilled_bytes(),
+        committed,
+        "abandoned epoch commits nothing"
+    );
     assert_eq!(f.epochs(), 1);
 
     // The next epoch lands at the committed offset, overwriting the tail.
@@ -185,8 +190,7 @@ fn cross_thread_write_then_read_by_name() {
             handles.push(s.spawn(move || {
                 setup_thread(); // each thread arms its own fd substrate
                 let ctx = mcx::MemoryContext::new("spillset-writer");
-                let mut f =
-                    SpillFile::new(set, SpillSet::file_name("dst", 7, worker), 4);
+                let mut f = SpillFile::new(set, SpillSet::file_name("dst", 7, worker), 4);
                 for e in 0..2u32 {
                     let mut w = f.begin_epoch(ctx.mcx()).unwrap();
                     for part in 0..4u32 {
@@ -240,7 +244,10 @@ fn spillset_drop_deletes_files() {
 
     let tmpdir = format!("{dir}/base/pgsql_tmp");
     let count_entries = || std::fs::read_dir(&tmpdir).map(|d| d.count()).unwrap_or(0);
-    assert!(count_entries() > 0, "fileset dir exists while the set lives");
+    assert!(
+        count_entries() > 0,
+        "fileset dir exists while the set lives"
+    );
 
     drop(f);
     drop(set); // last Arc: FileSet::drop → delete_all
@@ -279,7 +286,10 @@ fn extent_claims_roundtrip() {
     }
     let mut expect = pattern(2, 0, 12_000);
     expect.extend(pattern(2, 2, 12_000));
-    assert_eq!(got, expect, "extent claims concatenate to the partition image");
+    assert_eq!(
+        got, expect,
+        "extent claims concatenate to the partition image"
+    );
     // And they agree with the whole-partition reader.
     let mut r = f.read_part(ctx.mcx(), 2).unwrap().unwrap();
     assert_eq!(r.read_to_end().unwrap(), expect);

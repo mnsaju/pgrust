@@ -179,15 +179,27 @@ pub fn replace_text_regexp<'mcx>(
         }
 
         if pmatch[0].rm_so - data_pos as i64 > 0 {
-            let chunk_len =
-                charlen_to_bytelen(&src_text[start_off..], (pmatch[0].rm_so - data_pos as i64) as i32)?;
-            vec_append_bytes(&mut buf, &src_text[start_off..start_off + chunk_len as usize])?;
+            let chunk_len = charlen_to_bytelen(
+                &src_text[start_off..],
+                (pmatch[0].rm_so - data_pos as i64) as i32,
+            )?;
+            vec_append_bytes(
+                &mut buf,
+                &src_text[start_off..start_off + chunk_len as usize],
+            )?;
             start_off += chunk_len as usize;
             data_pos = pmatch[0].rm_so as i32;
         }
 
         if escape_status > 0 {
-            append_regexp_substr(&mut buf, replace_text, &pmatch, src_text, start_off, data_pos)?;
+            append_regexp_substr(
+                &mut buf,
+                replace_text,
+                &pmatch,
+                src_text,
+                start_off,
+                data_pos,
+            )?;
         } else {
             vec_append_bytes(&mut buf, replace_text)?;
         }

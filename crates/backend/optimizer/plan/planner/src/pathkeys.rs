@@ -169,7 +169,12 @@ pub(crate) fn group_keys_reorder_by_pathkeys<'mcx>(
             break;
         };
         debug_assert!(
-            run.root.expr_node(sgc).as_sort_group_clause().expect("group clause cell").sortop != 0
+            run.root
+                .expr_node(sgc)
+                .as_sort_group_clause()
+                .expect("group clause cell")
+                .sortop
+                != 0
         );
         new_pathkeys.push(*pk);
         new_clauses.push(sgc);
@@ -338,9 +343,12 @@ pub fn make_pathkey_from_sortinfo_existing<'mcx>(
     expr: Node<'mcx>,
     rel: &types_pathnodes::Relids<'mcx>,
 ) -> PgResult<Option<PathKey>> {
-    let Some(v) = expr.as_var() else { return Ok(None) };
-    use types_core::catalog::{DATEOID, INT2OID, INT4OID, INT8OID, TEXTOID, TIMESTAMPOID,
-        VARCHAROID};
+    let Some(v) = expr.as_var() else {
+        return Ok(None);
+    };
+    use types_core::catalog::{
+        DATEOID, INT2OID, INT4OID, INT8OID, TEXTOID, TIMESTAMPOID, VARCHAROID,
+    };
     // Default btree "<" operators (fixed catalog oids).
     let lt_op: u32 = match v.vartype {
         INT2OID => 95,
@@ -351,8 +359,7 @@ pub fn make_pathkey_from_sortinfo_existing<'mcx>(
         TEXTOID | VARCHAROID => 664,
         _ => return Ok(None),
     };
-    let Some((opfamily, opcintype, _cmptype)) =
-        lsyscache::amop::get_ordering_op_properties(lt_op)?
+    let Some((opfamily, opcintype, _cmptype)) = lsyscache::amop::get_ordering_op_properties(lt_op)?
     else {
         return Ok(None);
     };
@@ -454,7 +461,15 @@ pub fn build_partition_pathkeys<'mcx>(
         let part_relids =
             types_pathnodes::relids::relids_copy(run.mcx, &run.root.rel(partrel).relids);
         let cpathkey = make_pathkey_from_sortinfo(
-            run, key_col, opfamily, opcintype, collation, backward, backward, 0, &part_relids,
+            run,
+            key_col,
+            opfamily,
+            opcintype,
+            collation,
+            backward,
+            backward,
+            0,
+            &part_relids,
             false,
         )?;
         match cpathkey {
@@ -624,7 +639,10 @@ pub fn convert_subquery_pathkeys<'mcx>(
     for desc in sub_pathkeys {
         let mut best_pathkey: Option<PathKey> = None;
         if desc.has_volatile {
-            assert!(desc.sortref != 0, "volatile EquivalenceClass has no sortref");
+            assert!(
+                desc.sortref != 0,
+                "volatile EquivalenceClass has no sortref"
+            );
             let tle = subquery_tlist
                 .iter()
                 .find(|t| t.sortgroupref == desc.sortref)
@@ -740,7 +758,11 @@ pub fn make_canonical_pathkey(
     pk
 }
 
-pub fn pathkey_is_redundant(run: &PlannerRun<'_>, new_pathkey: PathKey, pathkeys: &[PathKey]) -> bool {
+pub fn pathkey_is_redundant(
+    run: &PlannerRun<'_>,
+    new_pathkey: PathKey,
+    pathkeys: &[PathKey],
+) -> bool {
     // EC_MUST_BE_REDUNDANT: a const EC admits only one key value.
     if run.root.ec(new_pathkey.pk_eclass.unwrap()).ec_has_const {
         return true;
@@ -1236,9 +1258,7 @@ pub fn expr_collation(node: Node<'_>) -> u32 {
                     let tent = sl
                         .subselect
                         .as_query()
-                        .unwrap_or_else(|| {
-                            panic!("cannot get collation for untransformed sublink")
-                        })
+                        .unwrap_or_else(|| panic!("cannot get collation for untransformed sublink"))
                         .targetList
                         .first()
                         .expect("sublink tlist")
@@ -1259,7 +1279,10 @@ pub fn expr_collation(node: Node<'_>) -> u32 {
 }
 
 // has_useful_pathkeys (pathkeys.c).
-pub(crate) fn has_useful_pathkeys(run: &crate::run::PlannerRun<'_>, rel: types_pathnodes::RelId) -> bool {
+pub(crate) fn has_useful_pathkeys(
+    run: &crate::run::PlannerRun<'_>,
+    rel: types_pathnodes::RelId,
+) -> bool {
     if !run.root.rel(rel).joininfo.is_empty() || run.root.rel(rel).has_eclass_joins {
         return true;
     }

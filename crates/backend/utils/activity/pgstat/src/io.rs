@@ -386,7 +386,10 @@ pub fn pgstat_tracks_io_object(
         return false;
     }
     if matches!(bktype, B::Checkpointer | B::BgWriter)
-        && matches!(io_context, C::IOCONTEXT_BULKREAD | C::IOCONTEXT_BULKWRITE | C::IOCONTEXT_VACUUM)
+        && matches!(
+            io_context,
+            C::IOCONTEXT_BULKREAD | C::IOCONTEXT_BULKWRITE | C::IOCONTEXT_VACUUM
+        )
     {
         return false;
     }

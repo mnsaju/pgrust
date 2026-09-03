@@ -12,8 +12,7 @@
 use std::num::Wrapping as W;
 use std::sync::OnceLock;
 
-const CRYPT_A64: &[u8; 64] =
-    b"./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+const CRYPT_A64: &[u8; 64] = b"./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
 const IP: [u8; 64] = [
     58, 50, 42, 34, 26, 18, 10, 2, 60, 52, 44, 36, 28, 20, 12, 4, 62, 54, 46, 38, 30, 22, 14, 6,
@@ -644,7 +643,10 @@ mod tests {
 
     #[test]
     fn cryptdes_xdes_adversarial_bang_salt() {
-        assert_eq!(xdes(b"password", b"_/!!!!!!!").unwrap(), "_/!!!!!!!zqM49hRzxko");
+        assert_eq!(
+            xdes(b"password", b"_/!!!!!!!").unwrap(),
+            "_/!!!!!!!zqM49hRzxko"
+        );
     }
 
     #[test]

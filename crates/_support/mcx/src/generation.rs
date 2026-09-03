@@ -96,7 +96,10 @@ impl GenArena {
                 let p = hdr.add(GEN_CHUNKHDRSZ);
                 self.cur_ptr = p.add(csize);
                 block_mut(self.cur_block).nchunks += 1;
-                return Ok(NonNull::slice_from_raw_parts(NonNull::new_unchecked(p), csize));
+                return Ok(NonNull::slice_from_raw_parts(
+                    NonNull::new_unchecked(p),
+                    csize,
+                ));
             }
         }
         self.alloc_slow(csize, acct)
@@ -358,7 +361,11 @@ impl GenArena {
         self.next_block_size = INIT_BLOCK_SIZE;
         debug_assert_eq!(
             self.mem_allocated,
-            if keeper != 0 { block_mut(keeper).blksize } else { 0 }
+            if keeper != 0 {
+                block_mut(keeper).blksize
+            } else {
+                0
+            }
         );
     }
 }
@@ -410,7 +417,8 @@ mod tests {
     fn fifo_cycle_stays_within_two_blocks() {
         let mut a = GenArena::new();
         let acct = acct();
-        let mut ring: alloc::collections::VecDeque<NonNull<u8>> = alloc::collections::VecDeque::new();
+        let mut ring: alloc::collections::VecDeque<NonNull<u8>> =
+            alloc::collections::VecDeque::new();
         for _ in 0..64 {
             ring.push_back(a.alloc(l(64), &acct).unwrap().cast());
         }
@@ -420,7 +428,11 @@ mod tests {
             // SAFETY: `old` is live from this arena with the same layout.
             unsafe { a.dealloc(old, l(64), &acct) };
         }
-        assert!(a.nblocks() <= 3, "FIFO churn must recycle, got {} blocks", a.nblocks());
+        assert!(
+            a.nblocks() <= 3,
+            "FIFO churn must recycle, got {} blocks",
+            a.nblocks()
+        );
         assert!(a.footprint() <= 4 * INIT_BLOCK_SIZE);
         while let Some(p) = ring.pop_front() {
             unsafe { a.dealloc(p, l(64), &acct) };
@@ -435,7 +447,11 @@ mod tests {
         // SAFETY: p live from alloc.
         unsafe { a.dealloc(p, l(32), &acct) };
         let q = a.alloc(l(32), &acct).unwrap().cast::<u8>();
-        assert_eq!(p.as_ptr(), q.as_ptr(), "emptied current block reused in place");
+        assert_eq!(
+            p.as_ptr(),
+            q.as_ptr(),
+            "emptied current block reused in place"
+        );
         unsafe { a.dealloc(q, l(32), &acct) };
     }
 
@@ -456,8 +472,15 @@ mod tests {
             unsafe { a.dealloc(p, l(64), &acct) };
         }
         // keeper + current + one parked freeblock survive at most.
-        assert!(a.nblocks() <= 3, "drained arena kept {} blocks", a.nblocks());
-        assert!(acct.self_used.get() < peak_used, "block frees must uncharge");
+        assert!(
+            a.nblocks() <= 3,
+            "drained arena kept {} blocks",
+            a.nblocks()
+        );
+        assert!(
+            acct.self_used.get() < peak_used,
+            "block frees must uncharge"
+        );
         assert_eq!(acct.arena_footprint.get(), a.footprint());
     }
 
@@ -477,7 +500,10 @@ mod tests {
             a.dealloc(p.cast(), big, &acct);
             a.dealloc(q.cast(), al, &acct);
         }
-        assert!(a.footprint() < before, "dedicated block freed on last chunk free");
+        assert!(
+            a.footprint() < before,
+            "dedicated block freed on last chunk free"
+        );
     }
 
     #[test]
@@ -487,13 +513,20 @@ mod tests {
         let p = a.alloc(l(32), &acct).unwrap().cast::<u8>();
         // SAFETY: p live with l(32).
         let q = unsafe { a.grow(p, l(32), l(64), &acct) }.unwrap();
-        assert_eq!(q.cast::<u8>().as_ptr(), p.as_ptr(), "in-place tail extension");
+        assert_eq!(
+            q.cast::<u8>().as_ptr(),
+            p.as_ptr(),
+            "in-place tail extension"
+        );
         let _hole = a.alloc(l(32), &acct).unwrap();
         // SAFETY: q live with l(64).
         let r = unsafe { a.grow(q.cast(), l(64), l(128), &acct) }.unwrap();
         assert_ne!(r.cast::<u8>().as_ptr(), p.as_ptr(), "non-tail grow moves");
         let nchunks = block_mut(a.cur_block).nchunks;
-        assert_eq!(nchunks, 3, "moved grow frees the old chunk (alloc,hole,moved)");
+        assert_eq!(
+            nchunks, 3,
+            "moved grow frees the old chunk (alloc,hole,moved)"
+        );
     }
 
     #[test]
@@ -510,8 +543,16 @@ mod tests {
         assert_eq!(a.footprint(), block_mut(a.keeper).blksize);
         let keeper_data = a.keeper + GEN_BLKHDRSZ + GEN_CHUNKHDRSZ;
         let p = a.alloc(l(4096), &acct).unwrap().cast::<u8>().as_ptr();
-        assert_eq!(p.addr(), keeper_data, "first post-reset chunk starts the keeper");
-        assert_eq!(acct.self_used.get(), a.footprint(), "keeper re-charged on claim");
+        assert_eq!(
+            p.addr(),
+            keeper_data,
+            "first post-reset chunk starts the keeper"
+        );
+        assert_eq!(
+            acct.self_used.get(),
+            a.footprint(),
+            "keeper re-charged on claim"
+        );
     }
 
     #[test]
@@ -545,4 +586,3 @@ mod tests {
         }
     }
 }
-

@@ -6,6 +6,7 @@
 // hold registry; events reference them by index (C ats_table).
 use std::cell::{Cell, RefCell};
 
+use heaptuple::HeapTuple;
 use mcx::Mcx;
 use ri_triggers_seams::RiTriggerData;
 use types_core::{CommandId, Oid};
@@ -18,11 +19,10 @@ use types_trigger::{
     Trigger, TriggerDesc, AFTER_TRIGGER_DEFERRABLE, AFTER_TRIGGER_INITDEFERRED, RI_TRIGGER_FK,
     RI_TRIGGER_NONE, RI_TRIGGER_PK, TRIGGER_EVENT_DELETE, TRIGGER_EVENT_INSERT,
     TRIGGER_EVENT_OPMASK, TRIGGER_EVENT_ROW, TRIGGER_EVENT_TRUNCATE, TRIGGER_EVENT_UPDATE,
-    TRIGGER_TYPE_AFTER, TRIGGER_TYPE_DELETE, TRIGGER_TYPE_INSERT,
-    TRIGGER_TYPE_LEVEL_MASK, TRIGGER_TYPE_ROW, TRIGGER_TYPE_STATEMENT, TRIGGER_TYPE_TIMING_MASK,
-    TRIGGER_TYPE_TRUNCATE, TRIGGER_TYPE_UPDATE,
+    TRIGGER_TYPE_AFTER, TRIGGER_TYPE_DELETE, TRIGGER_TYPE_INSERT, TRIGGER_TYPE_LEVEL_MASK,
+    TRIGGER_TYPE_ROW, TRIGGER_TYPE_STATEMENT, TRIGGER_TYPE_TIMING_MASK, TRIGGER_TYPE_TRUNCATE,
+    TRIGGER_TYPE_UPDATE,
 };
-use heaptuple::HeapTuple;
 use types_tuple::{HeapTupleData, ItemPointerData, TupleDescData};
 
 use crate::exec::TriggerWhenEval;
@@ -305,7 +305,11 @@ pub(crate) struct SetConstraintState {
 
 impl SetConstraintState {
     pub(crate) fn create() -> Self {
-        SetConstraintState { all_isset: false, all_isdeferred: false, trigstates: Vec::new() }
+        SetConstraintState {
+            all_isset: false,
+            all_isdeferred: false,
+            trigstates: Vec::new(),
+        }
     }
     fn copy(&self) -> Self {
         SetConstraintState {
@@ -375,7 +379,9 @@ pub(crate) fn firing_counter() -> CommandId {
 // rolled back by subxact abort rolls the TRUNCATE/etc back too.
 pub fn AfterTriggerPendingOnRel(relid: Oid) -> bool {
     let hit = XACT_EVENTS.with(|s| {
-        s.borrow().iter().any(|ev| ev.flags & AFTER_TRIGGER_DONE == 0 && ev.relid == relid)
+        s.borrow()
+            .iter()
+            .any(|ev| ev.flags & AFTER_TRIGGER_DONE == 0 && ev.relid == relid)
     });
     if hit {
         return true;
@@ -511,8 +517,15 @@ fn invoke_events(sel: EvList, firing_id: CommandId, delete_ok: bool) -> PgResult
                 let ev = &evs[i];
                 if ev.flags & AFTER_TRIGGER_IN_PROGRESS != 0 && ev.firing_id == firing_id {
                     return Some((
-                        ev.ctid1, ev.ctid2, ev.event, ev.tgoid, ev.relid, ev.table_idx,
-                        ev.src_part, ev.dst_part, ev.rolid,
+                        ev.ctid1,
+                        ev.ctid2,
+                        ev.event,
+                        ev.tgoid,
+                        ev.relid,
+                        ev.table_idx,
+                        ev.src_part,
+                        ev.dst_part,
+                        ev.rolid,
                         ev.modifiedcols.clone(),
                     ));
                 }
@@ -521,13 +534,31 @@ fn invoke_events(sel: EvList, firing_id: CommandId, delete_ok: bool) -> PgResult
             None
         });
         let Some((
-            ctid1, ctid2, event, tgoid, relid, table_idx, src_part, dst_part, rolid, modifiedcols,
+            ctid1,
+            ctid2,
+            event,
+            tgoid,
+            relid,
+            table_idx,
+            src_part,
+            dst_part,
+            rolid,
+            modifiedcols,
         )) = next
         else {
             break;
         };
         AfterTriggerExecute(
-            mcx, ctid1, ctid2, event, tgoid, relid, table_idx, src_part, dst_part, rolid,
+            mcx,
+            ctid1,
+            ctid2,
+            event,
+            tgoid,
+            relid,
+            table_idx,
+            src_part,
+            dst_part,
+            rolid,
             modifiedcols.as_deref(),
         )?;
         with_list(sel, |evs| {
@@ -537,8 +568,9 @@ fn invoke_events(sel: EvList, firing_id: CommandId, delete_ok: bool) -> PgResult
         });
         i += 1;
     }
-    let all_fired =
-        with_list(sel, |evs| evs.iter().all(|ev| ev.flags & AFTER_TRIGGER_DONE != 0));
+    let all_fired = with_list(sel, |evs| {
+        evs.iter().all(|ev| ev.flags & AFTER_TRIGGER_DONE != 0)
+    });
     if delete_ok && all_fired {
         with_list(sel, |evs| evs.clear());
     }
@@ -809,14 +841,12 @@ fn AfterTriggerExecute<'mcx>(
     if event & TRIGGER_EVENT_ROW == 0 {
         let tg_event = event & TRIGGER_EVENT_OPMASK;
         let mut finfo = fmgr_seams::fmgr_info::call(trigger.tgfoid)?;
-        let mut tdata =
-            types_trigger_call::TriggerData::new(tg_event, &rel, None, None, trigger);
+        let mut tdata = types_trigger_call::TriggerData::new(tg_event, &rel, None, None, trigger);
         tdata.tg_oldtable = tg_oldtable.0;
         tdata.tg_newtable = tg_newtable.0;
         // AFTER triggers: any returned tuple is discarded (C L4559-4567).
         let restore = become_queuing_role(rolid);
-        let result =
-            crate::exec::ExecCallTriggerFunc(mcx, &mut tdata, &mut finfo).map(|_| ());
+        let result = crate::exec::ExecCallTriggerFunc(mcx, &mut tdata, &mut finfo).map(|_| ());
         restore_role(restore);
         rel.close(NoLock)?;
         return result;
@@ -827,7 +857,10 @@ fn AfterTriggerExecute<'mcx>(
     // vetted the leaves as attno-identical to the root, so the tuples are
     // already in the root's format (C converts via ExecGetChildToRootMap).
     let cp_rels = if src_part != Oid::default() {
-        Some((table::table_open(mcx, src_part, NoLock)?, table::table_open(mcx, dst_part, NoLock)?))
+        Some((
+            table::table_open(mcx, src_part, NoLock)?,
+            table::table_open(mcx, dst_part, NoLock)?,
+        ))
     } else {
         None
     };
@@ -864,15 +897,24 @@ fn AfterTriggerExecute<'mcx>(
         if let Some(map) =
             tupdesc::build_attrmap_by_name_if_req(mcx, &s.rd_att, &rel.rd_att, false)?
         {
-            t1_conv =
-                Some(heaptuple::execute_attr_map_tuple(mcx, &t1, &s.rd_att, &rel.rd_att, &map)?);
+            t1_conv = Some(heaptuple::execute_attr_map_tuple(
+                mcx,
+                &t1,
+                &s.rd_att,
+                &rel.rd_att,
+                &map,
+            )?);
         }
         if let Some(t2v) = &t2 {
             if let Some(map) =
                 tupdesc::build_attrmap_by_name_if_req(mcx, &d.rd_att, &rel.rd_att, false)?
             {
                 t2_conv = Some(heaptuple::execute_attr_map_tuple(
-                    mcx, t2v, &d.rd_att, &rel.rd_att, &map,
+                    mcx,
+                    t2v,
+                    &d.rd_att,
+                    &rel.rd_att,
+                    &map,
                 )?);
             }
         }
@@ -1041,8 +1083,16 @@ fn after_trigger_save_event<'mcx>(
         }
         let ats_event = (event & TRIGGER_EVENT_OPMASK)
             | TRIGGER_EVENT_ROW
-            | if trigger.tgdeferrable { AFTER_TRIGGER_DEFERRABLE } else { 0 }
-            | if trigger.tginitdeferred { AFTER_TRIGGER_INITDEFERRED } else { 0 };
+            | if trigger.tgdeferrable {
+                AFTER_TRIGGER_DEFERRABLE
+            } else {
+                0
+            }
+            | if trigger.tginitdeferred {
+                AFTER_TRIGGER_INITDEFERRED
+            } else {
+                0
+            };
         let table_idx = if trigger.tgoldtable.is_some() || trigger.tgnewtable.is_some() {
             transition_capture
                 .map(|tc| tc.table_for(event & TRIGGER_EVENT_OPMASK))
@@ -1132,8 +1182,7 @@ fn save_stmt_event<'mcx>(
         cancel_prior_stmt_triggers(rel.rd_id, event & TRIGGER_EVENT_OPMASK);
     }
     for (tgindx, trigger) in trigdesc.triggers.iter().enumerate() {
-        if trigger.tgtype
-            & (TRIGGER_TYPE_LEVEL_MASK | TRIGGER_TYPE_TIMING_MASK | tgtype_event)
+        if trigger.tgtype & (TRIGGER_TYPE_LEVEL_MASK | TRIGGER_TYPE_TIMING_MASK | tgtype_event)
             != TRIGGER_TYPE_STATEMENT | TRIGGER_TYPE_AFTER | tgtype_event
         {
             continue;
@@ -1154,8 +1203,16 @@ fn save_stmt_event<'mcx>(
             }
         }
         let ats_event = (event & TRIGGER_EVENT_OPMASK)
-            | if trigger.tgdeferrable { AFTER_TRIGGER_DEFERRABLE } else { 0 }
-            | if trigger.tginitdeferred { AFTER_TRIGGER_INITDEFERRED } else { 0 };
+            | if trigger.tgdeferrable {
+                AFTER_TRIGGER_DEFERRABLE
+            } else {
+                0
+            }
+            | if trigger.tginitdeferred {
+                AFTER_TRIGGER_INITDEFERRED
+            } else {
+                0
+            };
         let table_idx = if trigger.tgoldtable.is_some() || trigger.tgnewtable.is_some() {
             transition_capture
                 .map(|tc| tc.table_for(event & TRIGGER_EVENT_OPMASK))
@@ -1193,7 +1250,14 @@ pub fn ExecASInsertTriggers<'mcx>(
     if !trigdesc.trig_insert_after_statement {
         return Ok(());
     }
-    save_stmt_event(rel, trigdesc, TRIGGER_EVENT_INSERT, TRIGGER_TYPE_INSERT, transition_capture, when)
+    save_stmt_event(
+        rel,
+        trigdesc,
+        TRIGGER_EVENT_INSERT,
+        TRIGGER_TYPE_INSERT,
+        transition_capture,
+        when,
+    )
 }
 
 pub fn ExecASDeleteTriggers<'mcx>(
@@ -1205,7 +1269,14 @@ pub fn ExecASDeleteTriggers<'mcx>(
     if !trigdesc.trig_delete_after_statement {
         return Ok(());
     }
-    save_stmt_event(rel, trigdesc, TRIGGER_EVENT_DELETE, TRIGGER_TYPE_DELETE, transition_capture, when)
+    save_stmt_event(
+        rel,
+        trigdesc,
+        TRIGGER_EVENT_DELETE,
+        TRIGGER_TYPE_DELETE,
+        transition_capture,
+        when,
+    )
 }
 
 pub fn ExecASUpdateTriggers<'mcx>(
@@ -1217,7 +1288,14 @@ pub fn ExecASUpdateTriggers<'mcx>(
     if !trigdesc.trig_update_after_statement {
         return Ok(());
     }
-    save_stmt_event(rel, trigdesc, TRIGGER_EVENT_UPDATE, TRIGGER_TYPE_UPDATE, transition_capture, when)
+    save_stmt_event(
+        rel,
+        trigdesc,
+        TRIGGER_EVENT_UPDATE,
+        TRIGGER_TYPE_UPDATE,
+        transition_capture,
+        when,
+    )
 }
 
 // ExecASTruncateTriggers (trigger.c).
@@ -1229,7 +1307,14 @@ pub fn ExecASTruncateTriggers<'mcx>(
     if !trigdesc.trig_truncate_after_statement {
         return Ok(());
     }
-    save_stmt_event(rel, trigdesc, TRIGGER_EVENT_TRUNCATE, TRIGGER_TYPE_TRUNCATE, None, when)
+    save_stmt_event(
+        rel,
+        trigdesc,
+        TRIGGER_EVENT_TRUNCATE,
+        TRIGGER_TYPE_TRUNCATE,
+        None,
+        when,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1263,7 +1348,9 @@ pub fn ExecARInsertTriggers<'mcx>(
         }
         r_new = Some(r);
     }
-    let new_t = r_new.as_ref().map(|r| r.tuple().expect("found fetch has a tuple"));
+    let new_t = r_new
+        .as_ref()
+        .map(|r| r.tuple().expect("found fetch has a tuple"));
     if let Some(tc) = capture {
         capture_transition_tuples(
             mcx,
@@ -1325,7 +1412,9 @@ pub fn ExecARDeleteTriggers<'mcx>(
         }
         r_old = Some(r);
     }
-    let old_t = r_old.as_ref().map(|r| r.tuple().expect("found fetch has a tuple"));
+    let old_t = r_old
+        .as_ref()
+        .map(|r| r.tuple().expect("found fetch has a tuple"));
     if let Some(tc) = capture {
         capture_transition_tuples(
             mcx,
@@ -1387,8 +1476,8 @@ pub fn ExecARUpdateTriggers<'mcx>(
     modified_cols: Option<&types_nodes::Bitmapset<'mcx>>,
 ) -> PgResult<()> {
     let after_row = trigdesc.is_some_and(|td| td.trig_update_after_row);
-    let capture = transition_capture
-        .filter(|tc| tc.tcs_update_old_table || tc.tcs_update_new_table);
+    let capture =
+        transition_capture.filter(|tc| tc.tcs_update_old_table || tc.tcs_update_new_table);
     if !after_row && capture.is_none() {
         return Ok(());
     }
@@ -1414,11 +1503,21 @@ pub fn ExecARUpdateTriggers<'mcx>(
         }
         None => None,
     };
-    let old_t = r_old.as_ref().map(|r| r.tuple().expect("found fetch has a tuple"));
-    let new_t = r_new.as_ref().map(|r| r.tuple().expect("found fetch has a tuple"));
+    let old_t = r_old
+        .as_ref()
+        .map(|r| r.tuple().expect("found fetch has a tuple"));
+    let new_t = r_new
+        .as_ref()
+        .map(|r| r.tuple().expect("found fetch has a tuple"));
     if let Some(tc) = capture {
         capture_transition_tuples(
-            mcx, tc, TRIGGER_EVENT_UPDATE, old_t.as_ref(), new_t.as_ref(), src_conv, dst_conv,
+            mcx,
+            tc,
+            TRIGGER_EVENT_UPDATE,
+            old_t.as_ref(),
+            new_t.as_ref(),
+            src_conv,
+            dst_conv,
         )?;
     }
     if !after_row || old_t.is_some() != new_t.is_some() {
@@ -1535,7 +1634,10 @@ mod tests {
         });
         AfterTriggerEndQuery().unwrap();
         let carried = XACT_EVENTS.with(|s| {
-            s.borrow().iter().find(|e| e.tgoid == TGOID).map(|e| e.modifiedcols.clone())
+            s.borrow()
+                .iter()
+                .find(|e| e.tgoid == TGOID)
+                .map(|e| e.modifiedcols.clone())
         });
         assert_eq!(carried, Some(Some(vec![9, 11].into_boxed_slice())));
         XACT_EVENTS.with(|s| s.borrow_mut().retain(|e| e.tgoid != TGOID));

@@ -31,7 +31,8 @@ pub fn begin_reporting_guc_options() {
     if transam_xlog_seams::recovery_in_progress::is_installed()
         && transam_xlog_seams::recovery_in_progress::call()
     {
-        let _ = crate::SetConfigOption("in_hot_standby", Some("true"), PGC_INTERNAL, PGC_S_OVERRIDE);
+        let _ =
+            crate::SetConfigOption("in_hot_standby", Some("true"), PGC_INTERNAL, PGC_S_OVERRIDE);
     }
 
     let pending: Vec<(String, String)> = with_store(|reg| {
@@ -63,8 +64,12 @@ pub fn report_changed_guc_options() {
         && transam_xlog_seams::recovery_in_progress::is_installed()
         && !transam_xlog_seams::recovery_in_progress::call()
     {
-        let _ =
-            crate::SetConfigOption("in_hot_standby", Some("false"), PGC_INTERNAL, PGC_S_OVERRIDE);
+        let _ = crate::SetConfigOption(
+            "in_hot_standby",
+            Some("false"),
+            PGC_INTERNAL,
+            PGC_S_OVERRIDE,
+        );
     }
 
     // Nothing noted since the last drain: one Cell load, C's empty

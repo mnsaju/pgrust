@@ -116,7 +116,9 @@ mod tests {
         let mcx = ctx.mcx();
         SCANS.with(|c| c.set(0));
 
-        let r = super::RelationGetRules(mcx, 21000).unwrap().expect("view has a rule");
+        let r = super::RelationGetRules(mcx, 21000)
+            .unwrap()
+            .expect("view has a rule");
         assert_eq!(r.rules.len(), 1);
         let rule = &r.rules[0];
         assert_eq!(rule.rule_id, 31000);

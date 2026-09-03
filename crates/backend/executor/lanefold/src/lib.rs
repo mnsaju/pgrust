@@ -82,19 +82,19 @@
 
 use core::ptr::NonNull;
 
-use ::adt_numeric::aggregates::{do_int128_accum, Int128AggState, NumericAggState};
 use ::adt_float::aggregates::{
     check_float8_array, float8_accum, float8_regr_accum, write_float8_transarray,
     FLOAT8_ARRAY_HDRSZ,
 };
 use ::adt_float::{float4_pl, float8_pl};
+use ::adt_numeric::aggregates::{do_int128_accum, Int128AggState, NumericAggState};
 use ::datum::Datum;
 use ::execexpr::{AggPerGroup, AggTransSpec, OUTER_VAR};
 use ::exectuples::{SoaBatch, SoaDictLane};
 use ::mcx::{Mcx, PgVec};
 use ::types_core::catalog::{
-    BOOLOID, BPCHAROID, C_COLLATION_OID, DATEOID, FLOAT4OID, FLOAT8OID, INT2OID, INT4OID,
-    DEFAULT_COLLATION_OID, INT8OID, NUMERICOID, POSIX_COLLATION_OID, TEXTOID, TIMESTAMPOID,
+    BOOLOID, BPCHAROID, C_COLLATION_OID, DATEOID, DEFAULT_COLLATION_OID, FLOAT4OID, FLOAT8OID,
+    INT2OID, INT4OID, INT8OID, NUMERICOID, POSIX_COLLATION_OID, TEXTOID, TIMESTAMPOID,
     TIMESTAMPTZOID, VARCHAROID,
 };
 use ::types_core::Oid;
@@ -269,7 +269,10 @@ pub fn fold_trans_enabled() -> bool {
 
 /// Test-only override (any caller may flip it; production code never does).
 pub fn fold_trans_set_for_tests(on: bool) {
-    FOLD_TRANS.store(if on { 2 } else { 1 }, core::sync::atomic::Ordering::Relaxed);
+    FOLD_TRANS.store(
+        if on { 2 } else { 1 },
+        core::sync::atomic::Ordering::Relaxed,
+    );
 }
 
 // 0 = unresolved (read env on first use), 1 = off, 2 = on.
@@ -686,7 +689,11 @@ pub struct FilterEntry {
 #[inline(always)]
 fn xform(t: &LaneTrans, v: i64) -> i64 {
     let v = if t.divk != 1 { v / t.divk as i64 } else { v };
-    let v = if t.mulk != 1 { v.wrapping_mul(t.mulk as i64) } else { v };
+    let v = if t.mulk != 1 {
+        v.wrapping_mul(t.mulk as i64)
+    } else {
+        v
+    };
     v.wrapping_add(t.addend as i64)
 }
 
@@ -1056,7 +1063,12 @@ pub fn classify_filter(expr: Node<'_>) -> Option<FilterEntry> {
         LaneWidth::I32 => konst.constvalue.as_i32() as i64,
         _ => konst.constvalue.as_i64(),
     };
-    Some(FilterEntry { pred: FilterPred::Cmp(fop), col, width, konst: k })
+    Some(FilterEntry {
+        pred: FilterPred::Cmp(fop),
+        col,
+        width,
+        konst: k,
+    })
 }
 
 /// One row's FILTER verdict (C ExecEvalAggFilter semantics: run the
@@ -1089,13 +1101,11 @@ fn filter_passes(f: &FilterEntry, values: &[Datum], isnull: &[bool], i: usize) -
 // fold the MASKED rows in row order — "mask first, then fold", which is
 // bit-equal to C's per-row filter-then-transition sequence because the
 // admitted predicates are pure per-row reads.
-fn build_filter_mask(
-    f: &FilterEntry,
-    cols: &impl LaneCols,
-    rows: &[u64],
-    out: &mut Vec<u64>,
-) {
-    let (values, isnull) = (cols.col_values(f.col as usize), cols.col_isnull(f.col as usize));
+fn build_filter_mask(f: &FilterEntry, cols: &impl LaneCols, rows: &[u64], out: &mut Vec<u64>) {
+    let (values, isnull) = (
+        cols.col_values(f.col as usize),
+        cols.col_isnull(f.col as usize),
+    );
     out.clear();
     out.reserve(rows.len());
     for (w, &word) in rows.iter().enumerate() {
@@ -1114,7 +1124,14 @@ fn build_filter_mask(
 
 fn classify_arg(expr: Node<'_>, expected: Oid) -> Option<LaneArg> {
     if let Some((col, width)) = classify_var(expr, expected) {
-        return Some(LaneArg { col, width, addend: 0, mulk: 1, divk: 1, guard: None });
+        return Some(LaneArg {
+            col,
+            width,
+            addend: 0,
+            mulk: 1,
+            divk: 1,
+            guard: None,
+        });
     }
     if expected != INT4OID {
         return None;
@@ -1124,7 +1141,14 @@ fn classify_arg(expr: Node<'_>, expected: Oid) -> Option<LaneArg> {
     // data-level obligation is the vguard/uguard pair attached per column
     // in classify()).
     if let Some((col, width)) = classify_len_arg(expr) {
-        return Some(LaneArg { col, width, addend: 0, mulk: 1, divk: 1, guard: None });
+        return Some(LaneArg {
+            col,
+            width,
+            addend: 0,
+            mulk: 1,
+            divk: 1,
+            guard: None,
+        });
     }
     let op = expr.as_op_expr()?;
     if op.opretset || op.args.len() != 2 {
@@ -1168,7 +1192,14 @@ fn classify_arg(expr: Node<'_>, expected: Oid) -> Option<LaneArg> {
         }
         Some(Guard { lo, hi })
     };
-    Some(LaneArg { col, width, addend, mulk, divk, guard })
+    Some(LaneArg {
+        col,
+        width,
+        addend,
+        mulk,
+        divk,
+        guard,
+    })
 }
 
 /// NULL-ness of an admitted arg equals the Var's NULL-ness (strict operators
@@ -1211,12 +1242,25 @@ pub fn classify_trans(
         let tle = spec.args.iter().next()?.as_target_entry()?;
         let (col, width) = classify_str_var(tle.expr, expected)?;
         let (addend, mulk, divk) = PLAIN;
-        Some((LaneArg { col, width, addend, mulk, divk, guard: None }, LaneWidth::Var))
+        Some((
+            LaneArg {
+                col,
+                width,
+                addend,
+                mulk,
+                divk,
+                guard: None,
+            },
+            LaneWidth::Var,
+        ))
     };
     let mk = |kind, (a, res_width): (LaneArg, LaneWidth)| {
-        let guard = a
-            .guard
-            .map(|g| GuardEntry { col: a.col, width: a.width, lo: g.lo, hi: g.hi });
+        let guard = a.guard.map(|g| GuardEntry {
+            col: a.col,
+            width: a.width,
+            lo: g.lo,
+            hi: g.hi,
+        });
         Some((
             LaneTrans {
                 kind,
@@ -1277,7 +1321,17 @@ pub fn classify_trans(
     };
     let plain = |col, width| {
         let (addend, mulk, divk) = PLAIN;
-        (LaneArg { col, width, addend, mulk, divk, guard: None }, width)
+        (
+            LaneArg {
+                col,
+                width,
+                addend,
+                mulk,
+                divk,
+                guard: None,
+            },
+            width,
+        )
     };
     let out = match spec.transfn_oid {
         F_INT8INC if spec.args.is_nil() && !spec.init_value_is_null => {
@@ -1292,7 +1346,10 @@ pub fn classify_trans(
             if v.varno != OUTER_VAR || v.varlevelsup != 0 || v.varattno < 1 {
                 return None;
             }
-            mk(LaneKind::CountAny, plain(v.varattno as u16 - 1, LaneWidth::I64))
+            mk(
+                LaneKind::CountAny,
+                plain(v.varattno as u16 - 1, LaneWidth::I64),
+            )
         }
         F_INT2_SUM if spec.init_value_is_null => mk(LaneKind::Sum, arg(INT2OID)?),
         F_INT4_SUM if spec.init_value_is_null => mk(LaneKind::Sum, arg(INT4OID)?),
@@ -1306,9 +1363,7 @@ pub fn classify_trans(
         // reach the rails for any feasible rowcount (2^63-max terms need
         // > 2^64 rows to leave i128), so the fold can never raise an error
         // C's per-row evaluation wouldn't.
-        F_INT8_AVG_ACCUM if spec.init_value_is_null => {
-            mk(LaneKind::Int128AvgAccum, arg(INT8OID)?)
-        }
+        F_INT8_AVG_ACCUM if spec.init_value_is_null => mk(LaneKind::Int128AvgAccum, arg(INT8OID)?),
         F_INT2LARGER => mk(LaneKind::Max, arg(INT2OID)?),
         F_INT2SMALLER => mk(LaneKind::Min, arg(INT2OID)?),
         F_INT4LARGER => mk(LaneKind::Max, arg(INT4OID)?),
@@ -1358,7 +1413,15 @@ pub fn classify_trans(
         }
         F_FLOAT8PL if fold_trans_enabled() && spec.init_value_is_null => {
             let (col, width, conv) = f64arg()?;
-            mk2(LaneKind::FSum, col, col, width, LaneWidth::F64, conv, FloatConv::None)
+            mk2(
+                LaneKind::FSum,
+                col,
+                col,
+                width,
+                LaneWidth::F64,
+                conv,
+                FloatConv::None,
+            )
         }
         F_FLOAT4_ACCUM if fold_trans_enabled() && !spec.init_value_is_null => {
             // Bare float4 Var; the kernel widens f32→f64 exactly as C's
@@ -1376,7 +1439,15 @@ pub fn classify_trans(
         }
         F_FLOAT8_ACCUM if fold_trans_enabled() && !spec.init_value_is_null => {
             let (col, width, conv) = f64arg()?;
-            mk2(LaneKind::FAccum, col, col, width, LaneWidth::F64, conv, FloatConv::None)
+            mk2(
+                LaneKind::FAccum,
+                col,
+                col,
+                width,
+                LaneWidth::F64,
+                conv,
+                FloatConv::None,
+            )
         }
         // Fold-trans increment 2: numeric sum/avg — NOT strict, NULL initval,
         // INTERNAL NumericAggState (lazily aggcontext-allocated by the fold,
@@ -1523,10 +1594,7 @@ pub fn classify_meta<'mcx>(
 ///
 /// Returns None when no transition admits (the caller keeps its whole
 /// per-row program); otherwise `resid` carries the refused transnos.
-pub fn classify<'mcx>(
-    mcx: Mcx<'mcx>,
-    specs: &[AggTransSpec<'_, 'mcx>],
-) -> Option<LanePlan<'mcx>> {
+pub fn classify<'mcx>(mcx: Mcx<'mcx>, specs: &[AggTransSpec<'_, 'mcx>]) -> Option<LanePlan<'mcx>> {
     let mut trans: PgVec<'mcx, LaneTrans> = PgVec::new_in(mcx);
     let mut guards: PgVec<'mcx, GuardEntry> = PgVec::new_in(mcx);
     let mut filters: PgVec<'mcx, FilterEntry> = PgVec::new_in(mcx);
@@ -1586,8 +1654,10 @@ pub fn classify<'mcx>(
     let mut vguards: PgVec<'mcx, u16> = PgVec::new_in(mcx);
     let mut uguards: PgVec<'mcx, u16> = PgVec::new_in(mcx);
     for t in trans.iter() {
-        if matches!(t.width, LaneWidth::Var | LaneWidth::VarLenBytes | LaneWidth::VarLenChars)
-            && !vguards.contains(&t.col)
+        if matches!(
+            t.width,
+            LaneWidth::Var | LaneWidth::VarLenBytes | LaneWidth::VarLenChars
+        ) && !vguards.contains(&t.col)
         {
             vguards.push(t.col);
         }
@@ -1658,8 +1728,14 @@ pub fn build_cse<'mcx>(
         // width is part of Sum/MinMax structural identity: one text column
         // can host lanes of different reads (VarLenChars for length() vs
         // VarLenBytes for octet_length()) — same col, different values.
-        Sum { col: u16, width: LaneWidth, divk: i32 },
-        Count { col: u16 },
+        Sum {
+            col: u16,
+            width: LaneWidth,
+            divk: i32,
+        },
+        Count {
+            col: u16,
+        },
         // res_width is part of MinMax structural identity: a bare int2 Var
         // and an int2+0 OpExpr share coefficients but store transvalues at
         // different widths.
@@ -1687,9 +1763,14 @@ pub fn build_cse<'mcx>(
             continue;
         }
         match t.kind {
-            LaneKind::Sum | LaneKind::AvgAccum => {
-                join(Key::Sum { col: t.col, width: t.width, divk: t.divk }, ti)
-            }
+            LaneKind::Sum | LaneKind::AvgAccum => join(
+                Key::Sum {
+                    col: t.col,
+                    width: t.width,
+                    divk: t.divk,
+                },
+                ti,
+            ),
             LaneKind::Min | LaneKind::Max => join(
                 Key::MinMax {
                     max: t.kind == LaneKind::Max,
@@ -1742,7 +1823,11 @@ pub fn build_cse<'mcx>(
             skip[ti as usize] = true;
             members.push(ti);
         }
-        groups.push(CseGroup { kind, start, len: members.len() as u16 - start });
+        groups.push(CseGroup {
+            kind,
+            start,
+            len: members.len() as u16 - start,
+        });
     }
     (groups, members, skip)
 }
@@ -1820,7 +1905,11 @@ fn count_apply(pg: &mut AggPerGroup, c: i64) {
 
 #[inline(always)]
 fn sum_apply(pg: &mut AggPerGroup, delta: i64) {
-    let old = if pg.trans_value_is_null { 0 } else { pg.trans_value.as_i64() };
+    let old = if pg.trans_value_is_null {
+        0
+    } else {
+        pg.trans_value.as_i64()
+    };
     pg.trans_value = Datum::from_i64(old.wrapping_add(delta));
     pg.trans_value_is_null = false;
 }
@@ -1891,8 +1980,7 @@ fn int128_state(pg: &mut AggPerGroup, aggcxt: Mcx<'_>) -> PgResult<*mut Int128Ag
     }
     const { assert!(!core::mem::needs_drop::<Int128AggState>()) }
     let layout = core::alloc::Layout::new::<Int128AggState>();
-    let raw =
-        ::mcx::Allocator::allocate(&aggcxt, layout).map_err(|_| aggcxt.oom(layout.size()))?;
+    let raw = ::mcx::Allocator::allocate(&aggcxt, layout).map_err(|_| aggcxt.oom(layout.size()))?;
     let p = raw.cast::<Int128AggState>().as_ptr();
     // SAFETY: fresh allocation of the exact layout.
     unsafe { p.write(Int128AggState::new(false)) };
@@ -1916,7 +2004,11 @@ fn sum128_selected(
     isnull: &[bool],
     rows: &[u64],
 ) -> (i64, i128) {
-    debug_assert_eq!((t.addend, t.mulk, t.divk), (0, 1, 1), "bare-Var admission only");
+    debug_assert_eq!(
+        (t.addend, t.mulk, t.divk),
+        (0, 1, 1),
+        "bare-Var admission only"
+    );
     let mut c = 0i64;
     let mut s = 0i128;
     for_each_row(rows, |i| {
@@ -2023,8 +2115,7 @@ fn numeric_state(pg: &mut AggPerGroup, aggcxt: Mcx<'_>) -> PgResult<*mut Numeric
     }
     const { assert!(!core::mem::needs_drop::<NumericAggState>()) }
     let layout = core::alloc::Layout::new::<NumericAggState>();
-    let raw =
-        ::mcx::Allocator::allocate(&aggcxt, layout).map_err(|_| aggcxt.oom(layout.size()))?;
+    let raw = ::mcx::Allocator::allocate(&aggcxt, layout).map_err(|_| aggcxt.oom(layout.size()))?;
     let p = raw.cast::<NumericAggState>().as_ptr();
     // SAFETY: fresh allocation of the exact layout.
     unsafe { p.write(NumericAggState::new(false)) };
@@ -2048,11 +2139,7 @@ fn numeric_state(pg: &mut AggPerGroup, aggcxt: Mcx<'_>) -> PgResult<*mut Numeric
 // aggcontext-lived state with no other live reference; `aggcxt` is that
 // aggcontext (C `state->agg_context`, the digit buffers' home).
 #[inline]
-unsafe fn num_accum_row(
-    st: &mut NumericAggState,
-    d: Datum,
-    aggcxt: Mcx<'_>,
-) -> PgResult<()> {
+unsafe fn num_accum_row(st: &mut NumericAggState, d: Datum, aggcxt: Mcx<'_>) -> PgResult<()> {
     use ::adt_numeric::aggregates::do_numeric_accum;
     // SAFETY: caller contract (inline varlena).
     let payload = unsafe { str_payload(d) };
@@ -2066,9 +2153,8 @@ unsafe fn num_accum_row(
         if payload.len() <= 126 {
             let mut buf = [0u16; 63];
             // SAFETY: 126 writable bytes, 2-aligned by construction.
-            let dst = unsafe {
-                core::slice::from_raw_parts_mut(buf.as_mut_ptr().cast::<u8>(), 126)
-            };
+            let dst =
+                unsafe { core::slice::from_raw_parts_mut(buf.as_mut_ptr().cast::<u8>(), 126) };
             dst[..payload.len()].copy_from_slice(payload);
             let num = ::adt_numeric::Num::from_payload(&dst[..payload.len()]);
             return do_numeric_accum(st, aggcxt, num);
@@ -2112,7 +2198,11 @@ fn base_sum(
 // per-row Σ(v'*mulk + addend) in mod-2^64 ring arithmetic (see CseGroup).
 #[inline(always)]
 fn cse_delta(t: &LaneTrans, c: i64, s: i64) -> i64 {
-    let s = if t.mulk != 1 { s.wrapping_mul(t.mulk as i64) } else { s };
+    let s = if t.mulk != 1 {
+        s.wrapping_mul(t.mulk as i64)
+    } else {
+        s
+    };
     s.wrapping_add(c.wrapping_mul(t.addend as i64))
 }
 
@@ -2135,8 +2225,7 @@ pub fn granule_meta_len_cols(plan: &LanePlan<'_>) -> Option<Vec<u16>> {
         match t.kind {
             LaneKind::CountStar | LaneKind::CountAny => {}
             LaneKind::Sum | LaneKind::AvgAccum
-                if t.width == LaneWidth::VarLenBytes
-                    && (t.addend, t.mulk, t.divk) == (0, 1, 1) =>
+                if t.width == LaneWidth::VarLenBytes && (t.addend, t.mulk, t.divk) == (0, 1, 1) =>
             {
                 if !cols.contains(&t.col) {
                     cols.push(t.col);
@@ -2228,8 +2317,11 @@ pub fn agg_meta_cols(plan: &LanePlan<'_>) -> Option<AggMetaCols> {
     if !plan.resid.is_empty() || !plan.filters.is_empty() {
         return None;
     }
-    let mut out =
-        AggMetaCols { mm_cols: Vec::new(), sum_cols: Vec::new(), len_cols: Vec::new() };
+    let mut out = AggMetaCols {
+        mm_cols: Vec::new(),
+        sum_cols: Vec::new(),
+        len_cols: Vec::new(),
+    };
     let push = |v: &mut Vec<u16>, c: u16| {
         if !v.contains(&c) {
             v.push(c);
@@ -2241,20 +2333,14 @@ pub fn agg_meta_cols(plan: &LanePlan<'_>) -> Option<AggMetaCols> {
         let int_width = matches!(t.width, LaneWidth::I16 | LaneWidth::I32 | LaneWidth::I64);
         match t.kind {
             LaneKind::CountStar | LaneKind::CountAny => {}
-            LaneKind::Min | LaneKind::Max if plain && int_width => {
-                push(&mut out.mm_cols, t.col)
-            }
+            LaneKind::Min | LaneKind::Max if plain && int_width => push(&mut out.mm_cols, t.col),
             LaneKind::Sum | LaneKind::AvgAccum if affine && int_width => {
                 push(&mut out.sum_cols, t.col)
             }
-            LaneKind::Sum | LaneKind::AvgAccum
-                if plain && t.width == LaneWidth::VarLenBytes =>
-            {
+            LaneKind::Sum | LaneKind::AvgAccum if plain && t.width == LaneWidth::VarLenBytes => {
                 push(&mut out.len_cols, t.col)
             }
-            LaneKind::Int128AvgAccum if plain && int_width => {
-                push(&mut out.sum_cols, t.col)
-            }
+            LaneKind::Int128AvgAccum if plain && int_width => push(&mut out.sum_cols, t.col),
             _ => return None,
         }
     }
@@ -2301,9 +2387,7 @@ pub unsafe fn fold_agg_meta(
         let pg = unsafe { &mut *pergroup_base.as_ptr().add(t.transno as usize) };
         match t.kind {
             LaneKind::CountStar | LaneKind::CountAny => count_apply(pg, rows),
-            LaneKind::Sum if t.width == LaneWidth::VarLenBytes => {
-                sum_apply(pg, len_of(t.col))
-            }
+            LaneKind::Sum if t.width == LaneWidth::VarLenBytes => sum_apply(pg, len_of(t.col)),
             LaneKind::AvgAccum if t.width == LaneWidth::VarLenBytes => {
                 avg_apply(pg, rows, len_of(t.col))
             }
@@ -2382,9 +2466,17 @@ pub unsafe fn fold_batch(
                     .find(|t| t.kind != LaneKind::CountAny);
                 let (c, s) = match lane {
                     Some(l) => {
-                        let (values, isnull) =
-                            (cols.col_values(l.col as usize), cols.col_isnull(l.col as usize));
-                        base_sum(read_width(cols, l.col, l.width), l.divk as i64, values, isnull, rows)
+                        let (values, isnull) = (
+                            cols.col_values(l.col as usize),
+                            cols.col_isnull(l.col as usize),
+                        );
+                        base_sum(
+                            read_width(cols, l.col, l.width),
+                            l.divk as i64,
+                            values,
+                            isnull,
+                            rows,
+                        )
                     }
                     None => {
                         let isnull = cols.col_isnull(t0.col as usize);
@@ -2406,8 +2498,10 @@ pub unsafe fn fold_batch(
                 }
             }
             CseGroupKind::MinMax => {
-                let (values, isnull) =
-                    (cols.col_values(t0.col as usize), cols.col_isnull(t0.col as usize));
+                let (values, isnull) = (
+                    cols.col_values(t0.col as usize),
+                    cols.col_isnull(t0.col as usize),
+                );
                 let w0 = read_width(cols, t0.col, t0.width);
                 let mut m: Option<i64> = None;
                 let want_max = t0.kind == LaneKind::Max;
@@ -2463,8 +2557,10 @@ pub unsafe fn fold_batch(
             count_apply(pg, tnsel as i64);
             continue;
         }
-        let (values, isnull) =
-            (cols.col_values(t.col as usize), cols.col_isnull(t.col as usize));
+        let (values, isnull) = (
+            cols.col_values(t.col as usize),
+            cols.col_isnull(t.col as usize),
+        );
         let w = read_width(cols, t.col, t.width);
         debug_assert!(values.len() >= nrows && isnull.len() >= nrows);
         match t.kind {
@@ -2528,8 +2624,10 @@ pub unsafe fn fold_batch(
             // Strict two-arg bivariate accum: a row participates iff BOTH
             // inputs are non-null; row-order walk (order-sensitive).
             LaneKind::FRegrAccum => {
-                let (values2, isnull2) =
-                    (cols.col_values(t.col2 as usize), cols.col_isnull(t.col2 as usize));
+                let (values2, isnull2) = (
+                    cols.col_values(t.col2 as usize),
+                    cols.col_isnull(t.col2 as usize),
+                );
                 try_for_each_row(trows, |i| {
                     if !isnull[i] && !isnull2[i] {
                         let y = conv_f64(t.fconv, values, i);
@@ -3248,7 +3346,8 @@ impl StrStateArena {
                 if self.slabs.is_empty()
                     || self.cursor + words > self.slabs.last().expect("checked").len()
                 {
-                    self.slabs.push(vec![0u64; STR_ARENA_SLAB_WORDS].into_boxed_slice());
+                    self.slabs
+                        .push(vec![0u64; STR_ARENA_SLAB_WORDS].into_boxed_slice());
                     self.cursor = 0;
                     self.bytes += STR_ARENA_SLAB_WORDS * 8;
                 }
@@ -3477,7 +3576,10 @@ impl core::hash::Hasher for PtrHash {
 
 impl Default for StrMmScratch {
     fn default() -> Self {
-        StrMmScratch { map: Default::default(), gen: 0 }
+        StrMmScratch {
+            map: Default::default(),
+            gen: 0,
+        }
     }
 }
 
@@ -3543,9 +3645,7 @@ unsafe fn str_advance_coded(
                 // SAFETY: forwarded caller contract.
                 Some(a) => unsafe { a.replace(pg.trans_value, d) },
                 // SAFETY: forwarded caller contract.
-                None => unsafe {
-                    ::execexpr::agg_datum_replace(aggcxt, pg.trans_value, d, -1)?
-                },
+                None => unsafe { ::execexpr::agg_datum_replace(aggcxt, pg.trans_value, d, -1)? },
             }
         };
     }
@@ -3553,7 +3653,11 @@ unsafe fn str_advance_coded(
     let gen = mm.gen;
     if let Some(m) = mm.map.get_mut(&key) {
         if m.gen == gen && m.epoch == epoch && !pg.no_trans_value && !pg.trans_value_is_null {
-            let better = if want_max { code > m.code } else { code < m.code };
+            let better = if want_max {
+                code > m.code
+            } else {
+                code < m.code
+            };
             if !better {
                 if code == m.code && m.tv_code {
                     // Tie against the code-valued transvalue: text's
@@ -3607,7 +3711,15 @@ unsafe fn str_advance_coded(
             return Ok(());
         }
     }
-    mm.map.insert(key, MmMemo { gen, epoch, code, tv_code });
+    mm.map.insert(
+        key,
+        MmMemo {
+            gen,
+            epoch,
+            code,
+            tv_code,
+        },
+    );
     Ok(())
 }
 
@@ -3679,7 +3791,11 @@ pub unsafe fn fold_rows_grouped_mm(
         // skipped exactly where C's per-row program skips them.
         let filt = (t.filter != NO_FILTER).then(|| {
             let f = &plan.filters[t.filter as usize];
-            (f, cols.col_values(f.col as usize), cols.col_isnull(f.col as usize))
+            (
+                f,
+                cols.col_values(f.col as usize),
+                cols.col_isnull(f.col as usize),
+            )
         });
         let passes = |i: usize| match &filt {
             None => true,
@@ -3708,8 +3824,10 @@ pub unsafe fn fold_rows_grouped_mm(
             }
             continue;
         }
-        let (values, isnull) =
-            (cols.col_values(t.col as usize), cols.col_isnull(t.col as usize));
+        let (values, isnull) = (
+            cols.col_values(t.col as usize),
+            cols.col_isnull(t.col as usize),
+        );
         let w = read_width(cols, t.col, t.width);
         // Dict-code memo route for this transition (str kinds only, sorted
         // dict view up, scratch provided) — resolved once per transition.
@@ -3724,7 +3842,11 @@ pub unsafe fn fold_rows_grouped_mm(
             // inputs too (state alloc on the group's first filter-passing
             // row of any nullness — C parity), so this kind must not take
             // the shared skip-null path below.
-            debug_assert_eq!((t.addend, t.mulk, t.divk), (0, 1, 1), "bare-Var admission only");
+            debug_assert_eq!(
+                (t.addend, t.mulk, t.divk),
+                (0, 1, 1),
+                "bare-Var admission only"
+            );
             for (&i, &g) in idxs.iter().zip(groups.iter()) {
                 let i = i as usize;
                 if !passes(i) {
@@ -3738,9 +3860,7 @@ pub unsafe fn fold_rows_grouped_mm(
                     // the per-row transfn chain; sole reference here —
                     // bit-identical by construction (the per-row path's own
                     // transition body).
-                    unsafe {
-                        do_int128_accum(&mut *st, lane_value(values, w, i) as i128)
-                    };
+                    unsafe { do_int128_accum(&mut *st, lane_value(values, w, i) as i128) };
                 }
             }
             continue;
@@ -3769,8 +3889,10 @@ pub unsafe fn fold_rows_grouped_mm(
             // the shared single-column skip-null path cannot express. Row
             // order per group is batch order — the ordering discipline the
             // bivariate Youngs-Cramer updates need.
-            let (values2, isnull2) =
-                (cols.col_values(t.col2 as usize), cols.col_isnull(t.col2 as usize));
+            let (values2, isnull2) = (
+                cols.col_values(t.col2 as usize),
+                cols.col_isnull(t.col2 as usize),
+            );
             for (&i, &g) in idxs.iter().zip(groups.iter()) {
                 let i = i as usize;
                 if !passes(i) || isnull[i] || isnull2[i] {
@@ -3852,9 +3974,7 @@ pub unsafe fn fold_rows_grouped_mm(
                         }
                         // SAFETY: vguard-passed batch + live aggcxt (caller
                         // contract); sa owns prior copies (fn contract).
-                        _ => unsafe {
-                            str_advance(t, pg, values[i], aggcxt, sa.as_deref_mut())?
-                        },
+                        _ => unsafe { str_advance(t, pg, values[i], aggcxt, sa.as_deref_mut())? },
                     }
                 }
                 // Fold-trans tier: per-row ORDER-PRESERVING float advances.

@@ -4,12 +4,12 @@
 mod attrs;
 mod domain;
 mod index;
-mod triggers;
 mod pg_class;
 mod policies;
 mod rules;
 #[cfg(test)]
 mod tests;
+mod triggers;
 
 use core::slice;
 
@@ -38,7 +38,12 @@ pub fn init_seams() {
     relcache_build_seams::scan_pg_constraint_fkeys::set(attrs::scan_pg_constraint_fkeys);
 }
 
-pub(crate) fn scan_key(attno: i32, strategy: StrategyNumber, func: RegProcedure, arg: Datum) -> ScanKeyData {
+pub(crate) fn scan_key(
+    attno: i32,
+    strategy: StrategyNumber,
+    func: RegProcedure,
+    arg: Datum,
+) -> ScanKeyData {
     let mut key = ScanKeyData::empty();
     key.sk_attno = attno as AttrNumber;
     key.sk_strategy = strategy;
@@ -53,7 +58,11 @@ pub(crate) fn oid_key(attno: i32, oid: Oid) -> ScanKeyData {
     scan_key(attno, BTEqualStrategyNumber, F_OIDEQ, Datum::from_oid(oid))
 }
 
-pub(crate) fn getattr(td: &TupleDescData<'_>, tup: &HeapTupleData<'_>, attno: i32) -> (Datum, bool) {
+pub(crate) fn getattr(
+    td: &TupleDescData<'_>,
+    tup: &HeapTupleData<'_>,
+    attno: i32,
+) -> (Datum, bool) {
     let mut isnull = false;
     // SAFETY: tup is a catalog row read under its relation's descriptor;
     // attno is a declared column of that catalog.
@@ -82,8 +91,7 @@ fn unexpected_null(attno: i32) -> Box<PgError> {
 fn name_from(d: Datum) -> NameData {
     let mut n = NameData::default();
     // SAFETY: d comes off a NameData column: NAMEDATALEN readable bytes.
-    let bytes =
-        unsafe { slice::from_raw_parts(d.as_usize() as *const u8, NAMEDATALEN as usize) };
+    let bytes = unsafe { slice::from_raw_parts(d.as_usize() as *const u8, NAMEDATALEN as usize) };
     n.data.copy_from_slice(bytes);
     n
 }

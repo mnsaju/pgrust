@@ -106,15 +106,25 @@ pub fn fc_window_dense_rank_support(
     window_support(fcinfo, true)
 }
 
-const fn b(foid: Oid, name: &'static str, nargs: i16, strict: bool, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict, retset: false, func }
+const fn b(
+    foid: Oid,
+    name: &'static str,
+    nargs: i16,
+    strict: bool,
+    func: PGFunction,
+) -> FmgrBuiltin {
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict,
+        retset: false,
+        func,
+    }
 }
 
 // int8inc_support (int8.c) handles only WFuncMonotonic; NULL otherwise.
-pub fn fc_int8inc_support(
-    _flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_int8inc_support(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     window_support(fcinfo, false)
 }
 
@@ -140,11 +150,41 @@ pub fn fc_window_ntile_support(
 }
 
 pub const WINDOWFUNCS_BUILTINS: &[FmgrBuiltin] = &[
-    b(6233, "window_row_number_support", 1, true, fc_window_row_number_support),
+    b(
+        6233,
+        "window_row_number_support",
+        1,
+        true,
+        fc_window_row_number_support,
+    ),
     b(6234, "window_rank_support", 1, true, fc_window_rank_support),
-    b(6235, "window_dense_rank_support", 1, true, fc_window_dense_rank_support),
+    b(
+        6235,
+        "window_dense_rank_support",
+        1,
+        true,
+        fc_window_dense_rank_support,
+    ),
     b(6236, "int8inc_support", 1, true, fc_int8inc_support),
-    b(6306, "window_percent_rank_support", 1, true, fc_window_percent_rank_support),
-    b(6307, "window_cume_dist_support", 1, true, fc_window_cume_dist_support),
-    b(6308, "window_ntile_support", 1, true, fc_window_ntile_support),
+    b(
+        6306,
+        "window_percent_rank_support",
+        1,
+        true,
+        fc_window_percent_rank_support,
+    ),
+    b(
+        6307,
+        "window_cume_dist_support",
+        1,
+        true,
+        fc_window_cume_dist_support,
+    ),
+    b(
+        6308,
+        "window_ntile_support",
+        1,
+        true,
+        fc_window_ntile_support,
+    ),
 ];

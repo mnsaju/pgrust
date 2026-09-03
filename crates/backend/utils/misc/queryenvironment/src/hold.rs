@@ -33,7 +33,10 @@ pub fn register(env: QueryEnvironment<'static>) -> QueryEnvHandle {
         g.set(v);
         v
     });
-    let entry = Entry { generation, env: Box::new(env) };
+    let entry = Entry {
+        generation,
+        env: Box::new(env),
+    };
     let idx = match FREE.with(|f| f.borrow_mut().pop()) {
         Some(i) => {
             ENTRIES.with(|e| e.borrow_mut()[i as usize] = Some(entry));

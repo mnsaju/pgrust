@@ -103,23 +103,19 @@ fn FreezeMultiXactId(
         pagefrz.freeze_required = true;
         return Ok(InvalidTransactionId);
     } else if MultiXactIdPrecedes(multi, cutoffs.relminmxid) {
-        data_corrupted(
-            format!(
-                "found multixact {multi} from before relminmxid {}",
-                cutoffs.relminmxid
-            ),
-        )?;
+        data_corrupted(format!(
+            "found multixact {multi} from before relminmxid {}",
+            cutoffs.relminmxid
+        ))?;
     } else if MultiXactIdPrecedes(multi, cutoffs.OldestMxact) {
         if multixact_seams::multi_xact_id_is_running::call(
             multi,
             HEAP_XMAX_IS_LOCKED_ONLY(t_infomask),
         )? {
-            data_corrupted(
-                format!(
-                    "multixact {multi} from before multi freeze cutoff {} found to be still running",
-                    cutoffs.OldestMxact
-                ),
-            )?;
+            data_corrupted(format!(
+                "multixact {multi} from before multi freeze cutoff {} found to be still running",
+                cutoffs.OldestMxact
+            ))?;
         }
 
         if HEAP_XMAX_IS_LOCKED_ONLY(t_infomask) {
@@ -130,12 +126,10 @@ fn FreezeMultiXactId(
 
         let update_xact = crate::MultiXactIdGetUpdateXid(multi, t_infomask)?;
         if TransactionIdPrecedes(update_xact, cutoffs.relfrozenxid) {
-            data_corrupted(
-                format!(
-                    "multixact {multi} contains update XID {update_xact} from before relfrozenxid {}",
-                    cutoffs.relfrozenxid
-                ),
-            )?;
+            data_corrupted(format!(
+                "multixact {multi} contains update XID {update_xact} from before relfrozenxid {}",
+                cutoffs.relfrozenxid
+            ))?;
         } else if TransactionIdPrecedes(update_xact, cutoffs.OldestXmin) {
             if transam_seams::transaction_id_did_commit::call(update_xact)? {
                 data_corrupted(
@@ -245,9 +239,9 @@ fn freeze_multixact_replace(
         }
 
         if TransactionIdIsValid(update_xid) {
-            data_corrupted(
-                format!("multixact {multi} has two or more updating members"),
-            )?;
+            data_corrupted(format!(
+                "multixact {multi} has two or more updating members"
+            ))?;
         }
 
         // In-progress must be tested before did-commit (heapam_visibility.c races).
@@ -285,16 +279,13 @@ fn freeze_multixact_replace(
         }
         newxmax = update_xid;
     } else {
-        newxmax = multixact_seams::multi_xact_id_create_from_members::call(
-            &mut newmembers[..],
-        )?;
+        newxmax = multixact_seams::multi_xact_id_create_from_members::call(&mut newmembers[..])?;
         *flags |= FRM_RETURN_IS_MULTI;
     }
 
     pagefrz.freeze_required = true;
     Ok(newxmax)
 }
-
 
 pub(crate) fn GetMultiXactIdHintBits(multi: MultiXactId) -> PgResult<(u16, u16)> {
     let mut bits: u16 = HEAP_XMAX_IS_MULTI;
@@ -367,12 +358,10 @@ pub fn heap_prepare_freeze_tuple(
         xmin_already_frozen = true;
     } else {
         if TransactionIdPrecedes(xid, cutoffs.relfrozenxid) {
-            data_corrupted(
-                format!(
-                    "found xmin {xid} from before relfrozenxid {}",
-                    cutoffs.relfrozenxid
-                ),
-            )?;
+            data_corrupted(format!(
+                "found xmin {xid} from before relfrozenxid {}",
+                cutoffs.relfrozenxid
+            ))?;
         }
         freeze_xmin = TransactionIdPrecedes(xid, cutoffs.OldestXmin);
         if freeze_xmin {
@@ -421,12 +410,10 @@ pub fn heap_prepare_freeze_tuple(
         debug_assert!(pagefrz.freeze_required || (!freeze_xmax && !replace_xmax));
     } else if TransactionIdIsNormal(xid) {
         if TransactionIdPrecedes(xid, cutoffs.relfrozenxid) {
-            data_corrupted(
-                format!(
-                    "found xmax {xid} from before relfrozenxid {}",
-                    cutoffs.relfrozenxid
-                ),
-            )?;
+            data_corrupted(format!(
+                "found xmax {xid} from before relfrozenxid {}",
+                cutoffs.relfrozenxid
+            ))?;
         }
         freeze_xmax = TransactionIdPrecedes(xid, cutoffs.OldestXmin);
         if freeze_xmax && !HEAP_XMAX_IS_LOCKED_ONLY(tuple.t_infomask) {
@@ -436,12 +423,10 @@ pub fn heap_prepare_freeze_tuple(
         debug_assert!(tuple.t_infomask & HEAP_XMAX_IS_MULTI == 0);
         xmax_already_frozen = true;
     } else {
-        data_corrupted(
-            format!(
-                "found raw xmax {xid} (infomask 0x{:04x}) not invalid and not multi",
-                tuple.t_infomask
-            ),
-        )?;
+        data_corrupted(format!(
+            "found raw xmax {xid} (infomask 0x{:04x}) not invalid and not multi",
+            tuple.t_infomask
+        ))?;
     }
 
     if freeze_xmin {
@@ -525,9 +510,7 @@ pub fn heap_pre_freeze_checks(buffer: Buffer, tuples: &[HeapTupleFreeze]) -> PgR
             let xmin = htup.xmin_raw();
             debug_assert!(!htup.xmin_frozen());
             if !transam_seams::transaction_id_did_commit::call(xmin)? {
-                data_corrupted(
-                    format!("uncommitted xmin {xmin} needs to be frozen"),
-                )?;
+                data_corrupted(format!("uncommitted xmin {xmin} needs to be frozen"))?;
             }
         }
         // TransactionIdDidAbort is unreliable for crashed xacts; only check
@@ -536,9 +519,7 @@ pub fn heap_pre_freeze_checks(buffer: Buffer, tuples: &[HeapTupleFreeze]) -> PgR
             let xmax = htup.xmax_raw();
             debug_assert!(TransactionIdIsNormal(xmax));
             if transam_seams::transaction_id_did_commit::call(xmax)? {
-                data_corrupted(
-                    format!("cannot freeze committed xmax {xmax}"),
-                )?;
+                data_corrupted(format!("cannot freeze committed xmax {xmax}"))?;
             }
         }
     }

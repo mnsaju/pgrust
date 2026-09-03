@@ -25,7 +25,10 @@ fn absolute_location_forms() {
         PathBuf::from("/etc/pg/conf.d")
     );
     assert_eq!(
-        absolute_config_location("../shared/extra.conf", Some(Path::new("/etc/pg/postgresql.conf"))),
+        absolute_config_location(
+            "../shared/extra.conf",
+            Some(Path::new("/etc/pg/postgresql.conf"))
+        ),
         PathBuf::from("/etc/shared/extra.conf")
     );
 
@@ -55,7 +58,13 @@ fn tempdir(tag: &str) -> PathBuf {
 fn conf_files_filtered_and_sorted() {
     setup();
     let dir = tempdir("filter");
-    for f in ["b.conf", "a.conf", "notes.txt", ".hidden.conf", "x.conf.bak"] {
+    for f in [
+        "b.conf",
+        "a.conf",
+        "notes.txt",
+        ".hidden.conf",
+        "x.conf.bak",
+    ] {
         std::fs::write(dir.join(f), "").unwrap();
     }
     // A 5-byte name (bare ".conf" is dot-rejected; "1.cnf" wrong suffix) and a
@@ -65,10 +74,7 @@ fn conf_files_filtered_and_sorted() {
 
     let out = get_conf_files_in_dir(dir.to_str().unwrap(), None, ERROR).unwrap();
     assert_eq!(out.err_msg, None);
-    assert_eq!(
-        out.filenames,
-        vec![dir.join("a.conf"), dir.join("b.conf")]
-    );
+    assert_eq!(out.filenames, vec![dir.join("a.conf"), dir.join("b.conf")]);
 
     let out = conffiles_seams::get_conf_files_in_dir::call(
         dir.to_str().unwrap().to_string(),
@@ -100,10 +106,7 @@ fn error_surface_matches_c() {
     setup();
     let err = get_conf_files_in_dir("   ", None, ERROR).unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_INVALID_PARAMETER_VALUE);
-    assert_eq!(
-        err.message(),
-        "empty configuration directory name: \"   \""
-    );
+    assert_eq!(err.message(), "empty configuration directory name: \"   \"");
 
     let out = get_conf_files_in_dir("\t\r\n", None, LOG).unwrap();
     assert!(out.filenames.is_empty());

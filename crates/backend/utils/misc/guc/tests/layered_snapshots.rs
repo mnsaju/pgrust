@@ -119,7 +119,10 @@ fn reload_diff_hazard_is_fixed_by_layered_bases() {
     )
     .unwrap();
     let base_boot = guc::layers::ensure_base_current();
-    assert_eq!(captured_string(&base_boot, "archive_library"), Some("walarch-v1".into()));
+    assert_eq!(
+        captured_string(&base_boot, "archive_library"),
+        Some("walarch-v1".into())
+    );
     let boot_epoch = base_boot.epoch();
 
     // Re-publish with no store change: same base, same epoch (cache hit).
@@ -179,7 +182,10 @@ fn reload_diff_hazard_is_fixed_by_layered_bases() {
 
         // The layered diff sees exactly the true transition, exactly once.
         assert!(adopted.epoch() > started_with.epoch());
-        assert_eq!(captured_string(&adopted, "archive_library"), Some("walarch-v2".into()));
+        assert_eq!(
+            captured_string(&adopted, "archive_library"),
+            Some("walarch-v2".into())
+        );
         assert_ne!(
             captured_string(&started_with, "archive_library"),
             captured_string(&adopted, "archive_library"),
@@ -205,9 +211,15 @@ fn reload_diff_hazard_is_fixed_by_layered_bases() {
     .unwrap();
     let base_reloaded = guc::layers::ensure_base_current();
     assert_eq!(base_reloaded.epoch(), boot_epoch + 1);
-    assert_eq!(captured_string(&base_reloaded, "archive_library"), Some("walarch-v2".into()));
+    assert_eq!(
+        captured_string(&base_reloaded, "archive_library"),
+        Some("walarch-v2".into())
+    );
     // Immutability: the boot base still says v1.
-    assert_eq!(captured_string(&base_boot, "archive_library"), Some("walarch-v1".into()));
+    assert_eq!(
+        captured_string(&base_boot, "archive_library"),
+        Some("walarch-v1".into())
+    );
     reloaded_tx.send(()).unwrap();
 
     done_rx.recv().unwrap();
@@ -224,7 +236,10 @@ fn query_pin_caches_per_statement_window_and_ignores_republish() {
 
     let pin1 = guc::layers::current_query_pin();
     let pin2 = guc::layers::current_query_pin();
-    assert!(std::sync::Arc::ptr_eq(&pin1, &pin2), "clean window must reuse the pin");
+    assert!(
+        std::sync::Arc::ptr_eq(&pin1, &pin2),
+        "clean window must reuse the pin"
+    );
 
     // The session's own SET invalidates the cache and lands in the new pin.
     guc::SetConfigOption(
@@ -235,9 +250,14 @@ fn query_pin_caches_per_statement_window_and_ignores_republish() {
     )
     .unwrap();
     let pin3 = guc::layers::current_query_pin();
-    assert!(!std::sync::Arc::ptr_eq(&pin2, &pin3), "SET must invalidate the pin cache");
     assert!(
-        pin3.session_vars().iter().any(|v| v.name() == "enable_incremental_sort"),
+        !std::sync::Arc::ptr_eq(&pin2, &pin3),
+        "SET must invalidate the pin cache"
+    );
+    assert!(
+        pin3.session_vars()
+            .iter()
+            .any(|v| v.name() == "enable_incremental_sort"),
         "the SET must be captured in the new pin"
     );
 
@@ -269,7 +289,10 @@ fn query_pin_caches_per_statement_window_and_ignores_republish() {
     // Adoption (the session's own reload point) refreshes pin + base.
     let adopted = guc::layers::adopt_current_base();
     let pin5 = guc::layers::current_query_pin();
-    assert!(!std::sync::Arc::ptr_eq(&pin4, &pin5), "adoption must invalidate the pin cache");
+    assert!(
+        !std::sync::Arc::ptr_eq(&pin4, &pin5),
+        "adoption must invalidate the pin cache"
+    );
     assert_eq!(pin5.base().epoch(), adopted.epoch());
 }
 
@@ -316,7 +339,10 @@ fn query_pin_remint_dedup_preserves_identity_on_content_equal_state() {
     )
     .unwrap();
     let pin3 = guc::layers::current_query_pin();
-    assert!(!std::sync::Arc::ptr_eq(&pin2, &pin3), "content change must mint a new pin");
+    assert!(
+        !std::sync::Arc::ptr_eq(&pin2, &pin3),
+        "content change must mint a new pin"
+    );
     assert!(
         pin3.session_vars()
             .iter()
@@ -347,9 +373,15 @@ fn worker_pin_bind_reproduces_leader_state_and_base() {
     std::thread::spawn(move || {
         miscinit::SetUserIdAndSecContext(10, 0);
         guc::store::initialize_guc_options().unwrap();
-        assert!(enable_incremental_sort(), "fresh worker starts at boot default");
+        assert!(
+            enable_incremental_sort(),
+            "fresh worker starts at boot default"
+        );
         let binding = guc::layers::bind_query_pin(&worker_pin).unwrap();
-        assert!(!enable_incremental_sort(), "bind must reproduce the leader's SET");
+        assert!(
+            !enable_incremental_sort(),
+            "bind must reproduce the leader's SET"
+        );
         assert_eq!(
             guc::store::get_bool("enable_incremental_sort"),
             Some(false),

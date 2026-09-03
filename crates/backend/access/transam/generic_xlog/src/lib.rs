@@ -102,7 +102,9 @@ impl GenericXLogState {
                 pd.buffer = buffer;
                 pd.flags = flags;
                 // SAFETY: contract at buffer_page.
-                self.images[block_id].0.copy_from_slice(unsafe { buffer_page(buffer) });
+                self.images[block_id]
+                    .0
+                    .copy_from_slice(unsafe { buffer_page(buffer) });
                 return Ok(&mut self.images[block_id].0);
             } else if pd.buffer == buffer {
                 return Ok(&mut self.images[block_id].0);

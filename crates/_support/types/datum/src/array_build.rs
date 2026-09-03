@@ -86,7 +86,10 @@ fn varsize_any(p: *const u8) -> usize {
     unsafe {
         let b0 = *p;
         if b0 & 0x01 != 0 {
-            assert!(b0 != 0x01, "array varlena is an external toast pointer — detoast lane");
+            assert!(
+                b0 != 0x01,
+                "array varlena is an external toast pointer — detoast lane"
+            );
             (b0 as usize >> 1) & 0x7F
         } else {
             let w = u32::from_ne_bytes(core::slice::from_raw_parts(p, 4).try_into().unwrap());
@@ -153,7 +156,11 @@ pub fn construct_array_image<'mcx>(
             let p = v.as_usize() as *const u8;
             let raw = varsize_any(p);
             // SAFETY: v is a live varlena datum.
-            if unsafe { *p } & 0x01 != 0 { raw - 1 + crate::VARHDRSZ } else { raw }
+            if unsafe { *p } & 0x01 != 0 {
+                raw - 1 + crate::VARHDRSZ
+            } else {
+                raw
+            }
         } else if elmlen == -2 {
             // SAFETY: v is a live NUL-terminated cstring datum.
             unsafe { cstring_len(v.as_usize() as *const u8) + 1 }
@@ -339,7 +346,11 @@ mod tests {
     fn array_image_roundtrip_int4() {
         let ctx = MemoryContext::new_bump("arr-int4");
         let mcx = ctx.mcx();
-        let vals: [Datum; 3] = [Datum::from_i32(1), Datum::from_i32(-7), Datum::from_i32(500)];
+        let vals: [Datum; 3] = [
+            Datum::from_i32(1),
+            Datum::from_i32(-7),
+            Datum::from_i32(500),
+        ];
         let img = construct_array_image(mcx, &vals, 23, 4, true, b'i').unwrap();
         assert_eq!(img.len(), 24 + 12);
         assert_eq!(array_image_elemtype(&img), 23);
@@ -437,8 +448,11 @@ mod tests {
         let ctx = MemoryContext::new_bump("arr-widths");
         let mcx = ctx.mcx();
         // width 2 (int2, align 's')
-        let v2: [Datum; 3] =
-            [Datum::from_i16(-1), Datum::from_i16(0x7F0F), Datum::from_i16(i16::MIN)];
+        let v2: [Datum; 3] = [
+            Datum::from_i16(-1),
+            Datum::from_i16(0x7F0F),
+            Datum::from_i16(i16::MIN),
+        ];
         let img = construct_array_image(mcx, &v2, 21, 2, true, b's').unwrap();
         let out = deconstruct_array_image(mcx, &img, 2, true, b's').unwrap();
         assert_eq!(

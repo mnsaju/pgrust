@@ -5,7 +5,6 @@
 //! _bt_split + parent insertion + root split, dedup trigger (dedup.rs).
 //! Loud: !heapkeyspace.
 
-
 use ::bufmgr_seams::{self as bufmgr, BufferPin};
 use ::datum::Datum;
 use ::mcx::Mcx;
@@ -14,6 +13,7 @@ use ::types_core::{
     AttrNumber, BlockNumber, InvalidBlockNumber, OffsetNumber, TransactionId, INDEX_MAX_KEYS,
 };
 use ::types_error::{PgError, PgResult, ERRCODE_UNIQUE_VIOLATION};
+use ::types_nbtree::genam::IndexUniqueCheck;
 use ::types_nbtree::{
     BTMetaPageData, BTPageOpaqueData, BTP_HAS_GARBAGE, BTP_INCOMPLETE_SPLIT, BTP_ROOT,
     BTP_SPLIT_END, BTREE_METAPAGE, BTREE_NOVAC_VERSION, BT_READ, BT_WRITE, P_FIRSTDATAKEY,
@@ -21,7 +21,6 @@ use ::types_nbtree::{
     P_RIGHTMOST, XLOG_BTREE_INSERT_LEAF, XLOG_BTREE_INSERT_META, XLOG_BTREE_INSERT_POST,
     XLOG_BTREE_INSERT_UPPER, XLOG_BTREE_NEWROOT, XLOG_BTREE_SPLIT_L, XLOG_BTREE_SPLIT_R,
 };
-use ::types_nbtree::genam::IndexUniqueCheck;
 use ::types_rel::Relation;
 use ::types_snapshot::{SnapshotData, SnapshotType};
 use ::types_storage::bufpage::{PageMut, PageRef, SizeOfPageHeaderData};
@@ -73,7 +72,10 @@ fn set_target_block(rel: &Relation<'_>, blk: BlockNumber) {
     if locator.relNumber == 0 {
         return;
     }
-    let key = ::types_storage::RelFileLocatorBackend { locator, backend: rel.rd_backend };
+    let key = ::types_storage::RelFileLocatorBackend {
+        locator,
+        backend: rel.rd_backend,
+    };
     if smgr::smgropen(key.locator, key.backend).is_ok() {
         smgr::smgrsettargblock(key, blk);
     }
@@ -104,7 +106,14 @@ pub fn btinsert<'mcx>(
     let mut itup = index_form_tuple(mcx, &rel.rd_att, values, isnull)?;
     // SAFETY: freshly built owned image.
     unsafe { set_t_tid(itup.as_mut_ptr(), *ht_ctid) };
-    bt_doinsert(mcx, rel, itup.as_ptr(), check_unique, index_unchanged, heap_rel)
+    bt_doinsert(
+        mcx,
+        rel,
+        itup.as_ptr(),
+        check_unique,
+        index_unchanged,
+        heap_rel,
+    )
 }
 
 /// _bt_doinsert.
@@ -128,7 +137,10 @@ fn bt_doinsert<'mcx>(
         } else {
             // NULL keys can't conflict; the recheck path never sees them
             // because a NULL-keyed row was never queued as a conflict.
-            debug_assert!(!matches!(check_unique, IndexUniqueCheck::UNIQUE_CHECK_EXISTING));
+            debug_assert!(!matches!(
+                check_unique,
+                IndexUniqueCheck::UNIQUE_CHECK_EXISTING
+            ));
             checkingunique = false;
             is_unique = true;
         }
@@ -217,8 +229,19 @@ fn bt_doinsert<'mcx>(
             let itemsz = insertstate.itemsz;
             let postingoff = insertstate.postingoff;
             bt_insertonpg(
-                mcx, rel, heap_rel, Some(insertstate.itup_key), &mut frame, buf, None, &mut stack,
-                itup, itemsz, newitemoff, postingoff, false,
+                mcx,
+                rel,
+                heap_rel,
+                Some(insertstate.itup_key),
+                &mut frame,
+                buf,
+                None,
+                &mut stack,
+                itup,
+                itemsz,
+                newitemoff,
+                postingoff,
+                false,
             )?;
         }
     } else {
@@ -268,7 +291,13 @@ fn bt_search_insert<'mcx>(
         set_target_block(rel, InvalidBlockNumber);
     }
 
-    insertstate.buf = Some(bt_search_write(rel, heaprel, insertstate.itup_key, frame, stack)?);
+    insertstate.buf = Some(bt_search_write(
+        rel,
+        heaprel,
+        insertstate.itup_key,
+        frame,
+        stack,
+    )?);
     Ok(())
 }
 
@@ -282,7 +311,8 @@ fn bt_search_write<'mcx>(
 ) -> PgResult<BufferPin> {
     let mut page_access = BT_READ;
 
-    let mut pin = bt_getroot(rel, Some(heaprel), BT_WRITE)?.expect("BT_WRITE getroot creates the root");
+    let mut pin =
+        bt_getroot(rel, Some(heaprel), BT_WRITE)?.expect("BT_WRITE getroot creates the root");
 
     loop {
         pin = bt_moveright_for_update(rel, heaprel, key, pin, stack, page_access, frame)?;
@@ -441,7 +471,13 @@ unsafe fn bt_binsrch_insert(
 
         if result == 0 && key.scantid.is_some() {
             if insertstate.postingoff != 0 {
-                return Err(no_insert_offset(rel, key, low, stricthigh, pin.block_number()));
+                return Err(no_insert_offset(
+                    rel,
+                    key,
+                    low,
+                    stricthigh,
+                    pin.block_number(),
+                ));
             }
             insertstate.postingoff = bt_binsrch_posting(key, &page, mid);
         }
@@ -457,11 +493,7 @@ unsafe fn bt_binsrch_insert(
 ///
 /// # Safety
 /// `page` pinned + locked; `offnum` a live offset on it.
-unsafe fn bt_binsrch_posting(
-    key: &BtScanInsert,
-    page: &PageRef<'_>,
-    offnum: OffsetNumber,
-) -> i32 {
+unsafe fn bt_binsrch_posting(key: &BtScanInsert, page: &PageRef<'_>, offnum: OffsetNumber) -> i32 {
     let itemid = page.item_id(offnum);
     let itup = page_item(page, itemid);
     if !bt_tuple_is_posting(itup) {
@@ -473,7 +505,10 @@ unsafe fn bt_binsrch_posting(
         return -1;
     }
 
-    let scantid = key.scantid.as_ref().expect("posting binsrch requires scantid");
+    let scantid = key
+        .scantid
+        .as_ref()
+        .expect("posting binsrch requires scantid");
     let mut low: i32 = 0;
     let mut high: i32 = bt_tuple_get_nposting(itup) as i32;
     debug_assert!(high >= 2);
@@ -513,18 +548,25 @@ unsafe fn bt_swap_posting<'mcx>(
 
     let mut nposting = copy_index_tuple(mcx, oposting)?;
     let postoff = bt_tuple_get_posting_offset(nposting.as_ptr());
-    let replacepos = nposting.as_mut_ptr().add(postoff + postingoff as usize * IPD_SIZE);
+    let replacepos = nposting
+        .as_mut_ptr()
+        .add(postoff + postingoff as usize * IPD_SIZE);
     let replaceposright = replacepos.add(IPD_SIZE);
     let nmovebytes = (nhtids - postingoff - 1) as usize * IPD_SIZE;
     core::ptr::copy(replacepos, replaceposright, nmovebytes);
 
     debug_assert!(!bt_tuple_is_pivot(newitem) && !bt_tuple_is_posting(newitem));
-    replacepos.cast::<ItemPointerData>().write_unaligned(t_tid(newitem));
+    replacepos
+        .cast::<ItemPointerData>()
+        .write_unaligned(t_tid(newitem));
 
     set_t_tid(newitem, bt_tuple_get_max_heap_tid(oposting));
 
     debug_assert!(
-        ItemPointerCompare(&bt_tuple_get_max_heap_tid(nposting.as_ptr()), &t_tid(newitem)) < 0
+        ItemPointerCompare(
+            &bt_tuple_get_max_heap_tid(nposting.as_ptr()),
+            &t_tid(newitem)
+        ) < 0
     );
     Ok(nposting)
 }
@@ -539,7 +581,10 @@ fn no_insert_offset(
     stricthigh: OffsetNumber,
     blkno: BlockNumber,
 ) -> Box<PgError> {
-    let scantid = key.scantid.as_ref().expect("posting corruption check has scantid");
+    let scantid = key
+        .scantid
+        .as_ref()
+        .expect("posting corruption check has scantid");
     Box::new(
         PgError::error(format!(
             "table tid from new index tuple ({},{}) cannot find insert offset between offsets {low} and {stricthigh} of block {blkno} in index \"{}\"",
@@ -889,8 +934,8 @@ unsafe fn mark_item_dead(page: &PageRef<'_>, offnum: OffsetNumber) {
 }
 
 unsafe fn set_page_has_garbage(page: &PageRef<'_>) {
-    let off = crate::page::page_special_off(page)
-        + core::mem::offset_of!(BTPageOpaqueData, btpo_flags);
+    let off =
+        crate::page::page_special_off(page) + core::mem::offset_of!(BTPageOpaqueData, btpo_flags);
     let p = page.as_ptr().add(off).cast::<u16>().cast_mut();
     p.write(p.read() | BTP_HAS_GARBAGE);
 }
@@ -962,7 +1007,13 @@ unsafe fn bt_findinsertloc<'mcx>(
         let pin = insertstate.buf.as_ref().expect("pinned");
         if pin.page().free_space() < insertstate.itemsz {
             bt_delete_or_dedup_one_page(
-                mcx, rel, heap_rel, insertstate, false, checkingunique, uniquedup,
+                mcx,
+                rel,
+                heap_rel,
+                insertstate,
+                false,
+                checkingunique,
+                uniquedup,
             )?;
         }
     }
@@ -1147,12 +1198,8 @@ unsafe fn bt_insertonpg<'mcx>(
     };
 
     debug_assert!(isleaf == cbuf.is_none());
-    debug_assert!(
-        !isleaf || bt_tuple_get_natts(itup, rel.indnatts()) == rel.indnatts()
-    );
-    debug_assert!(
-        isleaf || bt_tuple_get_natts(itup, rel.indnatts()) <= rel.indnkeyatts()
-    );
+    debug_assert!(!isleaf || bt_tuple_get_natts(itup, rel.indnatts()) == rel.indnatts());
+    debug_assert!(isleaf || bt_tuple_get_natts(itup, rel.indnatts()) <= rel.indnkeyatts());
     debug_assert!(!bt_tuple_is_posting(itup));
     debug_assert!(maxalign(index_tuple_size(itup)) == itemsz);
     debug_assert!(!P_INCOMPLETE_SPLIT(&page_opaque(&buf.page())));
@@ -1195,8 +1242,19 @@ unsafe fn bt_insertonpg<'mcx>(
             None => (core::ptr::null(), core::ptr::null()),
         };
         let rbuf = bt_split(
-            mcx, rel, heaprel, itup_key, frame, &buf, cbuf, newitemoff, itemsz, itup,
-            orignewitem, npostingp, postingoff as u16,
+            mcx,
+            rel,
+            heaprel,
+            itup_key,
+            frame,
+            &buf,
+            cbuf,
+            newitemoff,
+            itemsz,
+            itup,
+            orignewitem,
+            npostingp,
+            postingoff as u16,
         )?;
         predicate_seams::predicate_lock_page_split::call(
             rel,
@@ -1225,7 +1283,11 @@ unsafe fn bt_insertonpg<'mcx>(
             if let Some((_, nposting, _)) = swapped.as_ref() {
                 // overwrite oposting in place (same size — nposting is its copy)
                 let itemid = page.as_ref().item_id(newitemoff - 1);
-                let dst = page.as_ref().as_ptr().cast_mut().add(itemid.lp_off() as usize);
+                let dst = page
+                    .as_ref()
+                    .as_ptr()
+                    .cast_mut()
+                    .add(itemid.lp_off() as usize);
                 core::ptr::copy_nonoverlapping(
                     nposting.as_ptr(),
                     dst,
@@ -1523,7 +1585,11 @@ unsafe fn bt_split<'mcx>(
         afterrightoff += 1;
     }
 
-    let minusinfoff: OffsetNumber = if !isleaf { afterrightoff } else { InvalidOffsetNumber };
+    let minusinfoff: OffsetNumber = if !isleaf {
+        afterrightoff
+    } else {
+        InvalidOffsetNumber
+    };
 
     let mut i = P_FIRSTDATAKEY(&page_opaque(&origpage));
     while i <= maxoff {
@@ -1656,8 +1722,12 @@ unsafe fn bt_split<'mcx>(
         } else {
             0
         };
-        let xlrec =
-            crate::wal::xl_btree_split(ropaque.btpo_level, firstrightoff, newitemoff, xl_postingoff);
+        let xlrec = crate::wal::xl_btree_split(
+            ropaque.btpo_level,
+            firstrightoff,
+            newitemoff,
+            xl_postingoff,
+        );
 
         let newitem_bytes = core::slice::from_raw_parts(newitem, newitemsz);
         // the left high key is re-read from the restored origpage (C reads it
@@ -1685,8 +1755,7 @@ unsafe fn bt_split<'mcx>(
         let rpage = rbuf.page();
         let rupper = rpage.pd_upper() as usize;
         let rspecial = rpage.pd_special() as usize;
-        let rcontents =
-            core::slice::from_raw_parts(rpage.as_ptr().add(rupper), rspecial - rupper);
+        let rcontents = core::slice::from_raw_parts(rpage.as_ptr().add(rupper), rspecial - rupper);
         let rfrags: [&[u8]; 1] = [rcontents];
 
         let mut regbufs: [XLogRegBuf<'_>; 4] = [
@@ -1702,8 +1771,18 @@ unsafe fn bt_split<'mcx>(
                 flags: REGBUF_WILL_INIT,
                 bufdata: &rfrags,
             },
-            XLogRegBuf { block_id: 0, buffer: 0, flags: 0, bufdata: &[] },
-            XLogRegBuf { block_id: 0, buffer: 0, flags: 0, bufdata: &[] },
+            XLogRegBuf {
+                block_id: 0,
+                buffer: 0,
+                flags: 0,
+                bufdata: &[],
+            },
+            XLogRegBuf {
+                block_id: 0,
+                buffer: 0,
+                flags: 0,
+                bufdata: &[],
+            },
         ];
         let mut n = 2;
         if let Some(spin) = sbuf.as_ref() {
@@ -1761,9 +1840,7 @@ unsafe fn bt_split<'mcx>(
 fn zero_page(pin: &BufferPin) {
     let mut page = page_of_mut(pin);
     // SAFETY: rightpage error path — never leave a half-built page behind.
-    unsafe {
-        core::ptr::write_bytes(page.as_ref().as_ptr().cast_mut(), 0, ::types_core::BLCKSZ)
-    };
+    unsafe { core::ptr::write_bytes(page.as_ref().as_ptr().cast_mut(), 0, ::types_core::BLCKSZ) };
     let _ = &mut page;
 }
 
@@ -1816,7 +1893,10 @@ unsafe fn bt_insert_parent<'mcx>(
     // No descent stack (concurrent root split, or _bt_finish_split with a
     // stackless caller): phony entry at the leftmost page one level up;
     // bt_getstackbuf corrects blkno/offset. C's elog(DEBUG2) elided.
-    let mut fakestack = StackEntry { blkno: InvalidBlockNumber, offset: InvalidOffsetNumber };
+    let mut fakestack = StackEntry {
+        blkno: InvalidBlockNumber,
+        offset: InvalidOffsetNumber,
+    };
     let mut empty: [StackEntry; 0] = [];
     let (top, parent_stack) = if stack.is_empty() {
         let opaque = page_opaque(&buf.page());
@@ -1894,7 +1974,17 @@ pub(crate) unsafe fn bt_finish_split<'mcx>(
 
     // no bump allocations outlive this call: scratch context suffices
     let cx = ::mcx::MemoryContext::new("bt_finish_split");
-    bt_insert_parent(cx.mcx(), rel, heaprel, frame, lbuf, rbuf, stack, wasroot, wasonly)
+    bt_insert_parent(
+        cx.mcx(),
+        rel,
+        heaprel,
+        frame,
+        lbuf,
+        rbuf,
+        stack,
+        wasroot,
+        wasonly,
+    )
 }
 
 /// _bt_getstackbuf.
@@ -2133,12 +2223,8 @@ unsafe fn bt_pgaddtup(
         bt_tuple_set_natts(trunc.0.as_mut_ptr(), 0, false);
         return page.add_item(&trunc.0, itup_off, 0).is_some();
     }
-    page.add_item(
-        core::slice::from_raw_parts(itup, itemsize),
-        itup_off,
-        0,
-    )
-    .is_some()
+    page.add_item(core::slice::from_raw_parts(itup, itemsize), itup_off, 0)
+        .is_some()
 }
 
 /// amcheck bt_rootdescend (verify_nbtree.c): search for `itup` (a non-pivot
@@ -2147,10 +2233,7 @@ unsafe fn bt_pgaddtup(
 ///
 /// # Safety
 /// `itup` points at a valid on-page non-pivot IndexTuple for `rel`.
-pub unsafe fn bt_rootdescend<'mcx>(
-    rel: &Relation<'mcx>,
-    itup: ITup,
-) -> PgResult<bool> {
+pub unsafe fn bt_rootdescend<'mcx>(rel: &Relation<'mcx>, itup: ITup) -> PgResult<bool> {
     let mut key = crate::utils::bt_mkscankey(rel, Some(itup))?;
     debug_assert!(key.heapkeyspace && key.scantid.is_some());
 

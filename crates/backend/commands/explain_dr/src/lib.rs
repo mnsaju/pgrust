@@ -90,9 +90,10 @@ impl<'mcx> SerializeDestReceiver<'mcx> {
         }
 
         let mut finfos: PgVec<'mcx, FmgrInfo> = PgVec::new_in(self.mcx);
-        finfos
-            .try_reserve_exact(nattrs as usize)
-            .map_err(|_| self.mcx.oom(nattrs as usize * core::mem::size_of::<FmgrInfo>()))?;
+        finfos.try_reserve_exact(nattrs as usize).map_err(|_| {
+            self.mcx
+                .oom(nattrs as usize * core::mem::size_of::<FmgrInfo>())
+        })?;
         for i in 0..nattrs as usize {
             let attr = typeinfo.attr(i);
             let fn_oid = match self.format {

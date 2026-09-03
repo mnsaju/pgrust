@@ -64,8 +64,10 @@ pub struct Classification {
     pub needs_longest: bool,
 }
 
-const INCOMPATIBLE: Classification =
-    Classification { tier: Compat::Incompatible, needs_longest: false };
+const INCOMPATIBLE: Classification = Classification {
+    tier: Compat::Incompatible,
+    needs_longest: false,
+};
 
 pub fn classify(pattern: &[u8], cflags: i32) -> Classification {
     if pattern.len() > MAX_PATTERN_BYTES {
@@ -87,7 +89,10 @@ pub fn classify(pattern: &[u8], cflags: i32) -> Classification {
         return INCOMPATIBLE;
     }
     if quoted {
-        return Classification { tier: Compat::CaptureSafe, needs_longest: false };
+        return Classification {
+            tier: Compat::CaptureSafe,
+            needs_longest: false,
+        };
     }
     scan_are(pattern)
 }
@@ -175,9 +180,7 @@ fn parse_bracket(pat: &[u8], mut i: usize) -> Option<usize> {
             b']' if any_member => return Some(i + 1),
             b']' => return None,
             b'\\' => return None,
-            b'[' if i + 1 < pat.len() && matches!(pat[i + 1], b':' | b'.' | b'=') => {
-                return None
-            }
+            b'[' if i + 1 < pat.len() && matches!(pat[i + 1], b':' | b'.' | b'=') => return None,
             b'-' => {
                 // Literal at start or end; otherwise a range: both endpoints
                 // must be ASCII (code-point ranges match; wider left closed).
@@ -358,7 +361,10 @@ fn scan_are(pat: &[u8]) -> Classification {
     } else {
         Compat::WholeMatch
     };
-    Classification { tier, needs_longest: has_alternation }
+    Classification {
+        tier,
+        needs_longest: has_alternation,
+    }
 }
 
 #[cfg(test)]
@@ -406,34 +412,34 @@ mod tests {
     #[test]
     fn rejects_incompatible_class() {
         for p in [
-            r"(a)\1",       // backref
-            r"\d+",         // ctype escape
+            r"(a)\1", // backref
+            r"\d+",   // ctype escape
             r"\w",
             r"\bword\b",
             r"\Aabc",
-            r"a*?",         // non-greedy
+            r"a*?", // non-greedy
             r"a{1,2}?",
-            r"(?=x)",       // lookaround
+            r"(?=x)", // lookaround
             r"(?!x)",
             r"(?<=x)",
-            r"(?i)abc",     // inline options
-            "[[:alpha:]]",  // named class
+            r"(?i)abc",    // inline options
+            "[[:alpha:]]", // named class
             "[[=a=]]",
             "[[.a.]]",
-            r"[\d]",        // escape inside bracket
-            "[]a]",         // POSIX leading-]: RE2 errors
-            "[é-z]",        // non-ASCII range endpoint
+            r"[\d]", // escape inside bracket
+            "[]a]",  // POSIX leading-]: RE2 errors
+            "[é-z]", // non-ASCII range endpoint
             "[a-é]",
-            "a{256}",       // beyond Spencer DUPMAX
-            "a{2,1}",       // malformed bound
+            "a{256}", // beyond Spencer DUPMAX
+            "a{2,1}", // malformed bound
             "a{}",
             "a{,2}",
-            "{2}",          // nothing to repeat
+            "{2}", // nothing to repeat
             "*a",
             "a**",
-            "(a",           // unbalanced
+            "(a", // unbalanced
             "a)",
-            r"a\",          // trailing backslash
+            r"a\", // trailing backslash
         ] {
             assert!(!ok(p), "should reject {p:?}");
         }
@@ -480,7 +486,10 @@ mod tests {
         setup_utf8();
         let tier = |p: &str| classify(p.as_bytes(), REG_ADVANCED).tier;
         // Unquantified captures (the anchored URL-capture shape) stay capture-safe.
-        assert_eq!(tier(r"^https?://(?:www\.)?([^/]+)/.*$"), Compat::CaptureSafe);
+        assert_eq!(
+            tier(r"^https?://(?:www\.)?([^/]+)/.*$"),
+            Compat::CaptureSafe
+        );
         assert_eq!(tier("(a)(b)(c)"), Compat::CaptureSafe);
         // Quantified non-capturing subtrees stay capture-safe.
         assert_eq!(tier("(?:ab)+(c)"), Compat::CaptureSafe);
@@ -526,7 +535,10 @@ mod tests {
         // scale with literal length).
         assert!(!ok(&"a".repeat(MAX_PATTERN_BYTES + 1)));
         assert!(ok(&"a".repeat(MAX_PATTERN_BYTES)));
-        assert!(!re2_compatible("a".repeat(MAX_PATTERN_BYTES + 1).as_bytes(), REG_QUOTE));
+        assert!(!re2_compatible(
+            "a".repeat(MAX_PATTERN_BYTES + 1).as_bytes(),
+            REG_QUOTE
+        ));
         // Quantifier budget.
         assert!(!ok(&"x*".repeat(MAX_QUANTIFIERS as usize + 1)));
         assert!(ok(&"x*".repeat(MAX_QUANTIFIERS as usize)));

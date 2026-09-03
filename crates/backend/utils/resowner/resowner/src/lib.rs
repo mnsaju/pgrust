@@ -431,7 +431,11 @@ fn resource_owner_release_all(
             debug_assert!(d.releasing);
             debug_assert!(d.sorted);
             let in_hash = d.nhash != 0;
-            let mut nitems = if in_hash { d.nhash as usize } else { d.narr as usize };
+            let mut nitems = if in_hash {
+                d.nhash as usize
+            } else {
+                d.narr as usize
+            };
             let mut n = 0;
             while nitems > 0 && n < CHUNK {
                 let elem = if in_hash {
@@ -663,11 +667,7 @@ fn resource_owner_release_internal(
             return None;
         }
         let d = a.data_mut(owner);
-        if d.firstchild.is_null()
-            && d.narr == 0
-            && d.nhash == 0
-            && d.aio_handles.is_empty()
-        {
+        if d.firstchild.is_null() && d.narr == 0 && d.nhash == 0 && d.aio_handles.is_empty() {
             // The phase bookkeeping the slow path would have done (sorting
             // zero items is a flag store).
             d.releasing = true;

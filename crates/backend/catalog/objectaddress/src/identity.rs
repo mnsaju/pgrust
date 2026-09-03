@@ -59,7 +59,9 @@ fn lookup_err(msg: String) -> Box<PgError> {
 #[cold]
 #[inline(never)]
 fn cache_lookup_failed(relid: Oid) -> Box<PgError> {
-    Box::new(PgError::error(format!("cache lookup failed for relation {relid}")))
+    Box::new(PgError::error(format!(
+        "cache lookup failed for relation {relid}"
+    )))
 }
 
 fn quote_qualified(schema: &str, name: &str) -> String {
@@ -154,13 +156,19 @@ fn getRelationTypeDescription<'mcx>(
 }
 
 fn constraint_row<'mcx>(mcx: Mcx<'mcx>, constroid: Oid) -> PgResult<Option<(String, Oid, Oid)>> {
-    scan_one_row(mcx, CONSTRAINT_RELATION_ID, CONSTRAINT_OID_INDEX_ID, constroid, |tup, desc| {
-        (
-            name_from_datum(getattr(tup, Anum_pg_constraint_conname, desc)),
-            getattr(tup, Anum_pg_constraint_conrelid, desc).as_oid(),
-            getattr(tup, Anum_pg_constraint_contypid, desc).as_oid(),
-        )
-    })
+    scan_one_row(
+        mcx,
+        CONSTRAINT_RELATION_ID,
+        CONSTRAINT_OID_INDEX_ID,
+        constroid,
+        |tup, desc| {
+            (
+                name_from_datum(getattr(tup, Anum_pg_constraint_conname, desc)),
+                getattr(tup, Anum_pg_constraint_conrelid, desc).as_oid(),
+                getattr(tup, Anum_pg_constraint_contypid, desc).as_oid(),
+            )
+        },
+    )
 }
 
 fn getConstraintTypeDescription<'mcx>(
@@ -170,7 +178,9 @@ fn getConstraintTypeDescription<'mcx>(
 ) -> PgResult<String> {
     let Some((_, conrelid, contypid)) = constraint_row(mcx, constroid)? else {
         if !missing_ok {
-            return Err(lookup_err(format!("cache lookup failed for constraint {constroid}")));
+            return Err(lookup_err(format!(
+                "cache lookup failed for constraint {constroid}"
+            )));
         }
         return Ok("constraint".into());
     };
@@ -258,8 +268,7 @@ pub fn getObjectIdentityParts<'mcx>(
             }))
         }
         ConstraintRelationId => {
-            let Some((conname, conrelid, contypid)) = constraint_row(mcx, object.objectId)?
-            else {
+            let Some((conname, conrelid, contypid)) = constraint_row(mcx, object.objectId)? else {
                 if !missing_ok {
                     return Err(lookup_err(format!(
                         "cache lookup failed for constraint {}",
@@ -273,7 +282,11 @@ pub fn getObjectIdentityParts<'mcx>(
                 let identity = format!("{} on {}", quote_identifier(&conname), rel.identity);
                 let mut objname = rel.objname;
                 objname.push(conname);
-                Ok(Some(ObjectIdentity { identity, objname, objargs: vec![] }))
+                Ok(Some(ObjectIdentity {
+                    identity,
+                    objname,
+                    objargs: vec![],
+                }))
             } else {
                 debug_assert!(contypid != InvalidOid);
                 let domain = ObjectAddress::set(TYPE_RELATION_ID, contypid);
@@ -305,12 +318,18 @@ pub fn getObjectIdentityParts<'mcx>(
             }))
         }
         RewriteRelationId => {
-            let row = scan_one_row(mcx, RewriteRelationId, RewriteOidIndexId, object.objectId, |tup, desc| {
-                (
-                    name_from_datum(getattr(tup, Anum_pg_rewrite_rulename, desc)),
-                    getattr(tup, Anum_pg_rewrite_ev_class, desc).as_oid(),
-                )
-            })?;
+            let row = scan_one_row(
+                mcx,
+                RewriteRelationId,
+                RewriteOidIndexId,
+                object.objectId,
+                |tup, desc| {
+                    (
+                        name_from_datum(getattr(tup, Anum_pg_rewrite_rulename, desc)),
+                        getattr(tup, Anum_pg_rewrite_ev_class, desc).as_oid(),
+                    )
+                },
+            )?;
             let Some((rulename, ev_class)) = row else {
                 if !missing_ok {
                     return Err(lookup_err(format!(
@@ -324,15 +343,25 @@ pub fn getObjectIdentityParts<'mcx>(
             let identity = format!("{} on {}", quote_identifier(&rulename), rel.identity);
             let mut objname = rel.objname;
             objname.push(rulename);
-            Ok(Some(ObjectIdentity { identity, objname, objargs: vec![] }))
+            Ok(Some(ObjectIdentity {
+                identity,
+                objname,
+                objargs: vec![],
+            }))
         }
         TriggerRelationId => {
-            let row = scan_one_row(mcx, TriggerRelationId, TriggerOidIndexId, object.objectId, |tup, desc| {
-                (
-                    name_from_datum(getattr(tup, Anum_pg_trigger_tgname, desc)),
-                    getattr(tup, Anum_pg_trigger_tgrelid, desc).as_oid(),
-                )
-            })?;
+            let row = scan_one_row(
+                mcx,
+                TriggerRelationId,
+                TriggerOidIndexId,
+                object.objectId,
+                |tup, desc| {
+                    (
+                        name_from_datum(getattr(tup, Anum_pg_trigger_tgname, desc)),
+                        getattr(tup, Anum_pg_trigger_tgrelid, desc).as_oid(),
+                    )
+                },
+            )?;
             let Some((tgname, tgrelid)) = row else {
                 if !missing_ok {
                     return Err(lookup_err(format!(
@@ -346,7 +375,11 @@ pub fn getObjectIdentityParts<'mcx>(
             let identity = format!("{} on {}", quote_identifier(&tgname), rel.identity);
             let mut objname = rel.objname;
             objname.push(tgname);
-            Ok(Some(ObjectIdentity { identity, objname, objargs: vec![] }))
+            Ok(Some(ObjectIdentity {
+                identity,
+                objname,
+                objargs: vec![],
+            }))
         }
         StatisticExtRelationId => {
             let row = scan_one_row(
@@ -426,7 +459,11 @@ pub fn getObjectIdentityParts<'mcx>(
                 objargs.push(tn);
             }
             let identity = format!("{}({})", quote_qualified(&schema, &row.name), args);
-            Ok(Some(ObjectIdentity { identity, objname: vec![schema, row.name], objargs }))
+            Ok(Some(ObjectIdentity {
+                identity,
+                objname: vec![schema, row.name],
+                objargs,
+            }))
         }
         crate::CastRelationId => {
             let row = crate::description::scan_one_row(
@@ -458,12 +495,24 @@ pub fn getObjectIdentityParts<'mcx>(
                 objargs: vec![tgt],
             }))
         }
-        crate::CollationRelationId => {
-            named_nsp_identity(mcx, object, missing_ok, cache_syscache::cacheinfo::COLLOID, 2, 3, "collation")
-        }
-        pg_conversion::ConversionRelationId => {
-            named_nsp_identity(mcx, object, missing_ok, cache_syscache::cacheinfo::CONVOID, 2, 3, "conversion")
-        }
+        crate::CollationRelationId => named_nsp_identity(
+            mcx,
+            object,
+            missing_ok,
+            cache_syscache::cacheinfo::COLLOID,
+            2,
+            3,
+            "collation",
+        ),
+        pg_conversion::ConversionRelationId => named_nsp_identity(
+            mcx,
+            object,
+            missing_ok,
+            cache_syscache::cacheinfo::CONVOID,
+            2,
+            3,
+            "conversion",
+        ),
         proclang::LanguageRelationId => {
             let Some(lanname) =
                 syscache_name_att(cache_syscache::cacheinfo::LANGOID, object.objectId, 2)?
@@ -487,7 +536,11 @@ pub fn getObjectIdentityParts<'mcx>(
                 return Ok(None);
             }
             let s = object.objectId.to_string();
-            Ok(Some(ObjectIdentity { identity: s.clone(), objname: vec![s], objargs: vec![] }))
+            Ok(Some(ObjectIdentity {
+                identity: s.clone(),
+                objname: vec![s],
+                objargs: vec![],
+            }))
         }
         types_core::OPERATOR_RELATION_ID => {
             // FORMAT_OPERATOR_FORCE_QUALIFY | FORMAT_OPERATOR_INVALID_AS_NULL.
@@ -519,7 +572,11 @@ pub fn getObjectIdentityParts<'mcx>(
                 identity.push_str("NONE");
             }
             identity.push(')');
-            Ok(Some(ObjectIdentity { identity, objname: vec![schema, op.name], objargs }))
+            Ok(Some(ObjectIdentity {
+                identity,
+                objname: vec![schema, op.name],
+                objargs,
+            }))
         }
         types_core::OPERATOR_CLASS_RELATION_ID => {
             let Some((opcmethod, opcname, opcnamespace)) =
@@ -924,11 +981,14 @@ pub fn getObjectIdentityParts<'mcx>(
             let identity = format!("{} on {}", quote_identifier(&polname), rel.identity);
             let mut objname = rel.objname;
             objname.push(polname);
-            Ok(Some(ObjectIdentity { identity, objname, objargs: vec![] }))
+            Ok(Some(ObjectIdentity {
+                identity,
+                objname,
+                objargs: vec![],
+            }))
         }
         crate::PublicationRelationId => {
-            let Some(pubname) =
-                lsyscache::get_publication_name(mcx, object.objectId, missing_ok)?
+            let Some(pubname) = lsyscache::get_publication_name(mcx, object.objectId, missing_ok)?
             else {
                 return Ok(None);
             };
@@ -981,8 +1041,7 @@ pub fn getObjectIdentityParts<'mcx>(
             }))
         }
         crate::SubscriptionRelationId => {
-            let Some(subname) =
-                lsyscache::get_subscription_name(mcx, object.objectId, missing_ok)?
+            let Some(subname) = lsyscache::get_subscription_name(mcx, object.objectId, missing_ok)?
             else {
                 return Ok(None);
             };
@@ -1012,27 +1071,50 @@ pub fn getObjectIdentityParts<'mcx>(
             let trflang = cache_syscache::SysCacheGetAttrNotNull(cacheid, &tup, 3)?.as_oid();
             cache_syscache::ReleaseSysCache(tup);
             let transform_type = format_type::format_type_be_qualified(trftype)?;
-            let transform_lang =
-                syscache_name_att(cache_syscache::cacheinfo::LANGOID, trflang, 2)?
-                    .unwrap_or_else(|| panic!("cache lookup failed for language {trflang}"));
+            let transform_lang = syscache_name_att(cache_syscache::cacheinfo::LANGOID, trflang, 2)?
+                .unwrap_or_else(|| panic!("cache lookup failed for language {trflang}"));
             Ok(Some(ObjectIdentity {
                 identity: format!("for {transform_type} language {transform_lang}"),
                 objname: vec![transform_type],
                 objargs: vec![transform_lang],
             }))
         }
-        crate::TSParserRelationId => {
-            named_nsp_identity(mcx, object, missing_ok, cache_syscache::cacheinfo::TSPARSEROID, 2, 3, "text search parser")
-        }
-        crate::TSDictionaryRelationId => {
-            named_nsp_identity(mcx, object, missing_ok, cache_syscache::cacheinfo::TSDICTOID, 2, 3, "text search dictionary")
-        }
-        crate::TSTemplateRelationId => {
-            named_nsp_identity(mcx, object, missing_ok, cache_syscache::cacheinfo::TSTEMPLATEOID, 2, 3, "text search template")
-        }
-        crate::TSConfigRelationId => {
-            named_nsp_identity(mcx, object, missing_ok, cache_syscache::cacheinfo::TSCONFIGOID, 2, 3, "text search configuration")
-        }
+        crate::TSParserRelationId => named_nsp_identity(
+            mcx,
+            object,
+            missing_ok,
+            cache_syscache::cacheinfo::TSPARSEROID,
+            2,
+            3,
+            "text search parser",
+        ),
+        crate::TSDictionaryRelationId => named_nsp_identity(
+            mcx,
+            object,
+            missing_ok,
+            cache_syscache::cacheinfo::TSDICTOID,
+            2,
+            3,
+            "text search dictionary",
+        ),
+        crate::TSTemplateRelationId => named_nsp_identity(
+            mcx,
+            object,
+            missing_ok,
+            cache_syscache::cacheinfo::TSTEMPLATEOID,
+            2,
+            3,
+            "text search template",
+        ),
+        crate::TSConfigRelationId => named_nsp_identity(
+            mcx,
+            object,
+            missing_ok,
+            cache_syscache::cacheinfo::TSCONFIGOID,
+            2,
+            3,
+            "text search configuration",
+        ),
         other => panic!("unported: objectaddress.c getObjectIdentityParts class {other}"),
     }
 }
@@ -1061,8 +1143,11 @@ fn named_nsp_identity<'mcx>(
         }
         return Ok(None);
     };
-    let name =
-        name_from_datum(cache_syscache::SysCacheGetAttrNotNull(cacheid, &tup, name_attnum)?);
+    let name = name_from_datum(cache_syscache::SysCacheGetAttrNotNull(
+        cacheid,
+        &tup,
+        name_attnum,
+    )?);
     let nsp = cache_syscache::SysCacheGetAttrNotNull(cacheid, &tup, nsp_attnum)?.as_oid();
     cache_syscache::ReleaseSysCache(tup);
     let schema = namespace_name_or_temp(mcx, nsp)?;
@@ -1080,13 +1165,13 @@ fn getOpFamilyIdentity<'mcx>(
     opfid: Oid,
     missing_ok: bool,
 ) -> PgResult<Option<ObjectIdentity>> {
-    let Some((opfmethod, opfname, opfnamespace)) = crate::description::opclass_or_opfamily_row(
-        cache_syscache::cacheinfo::OPFAMILYOID,
-        opfid,
-    )?
+    let Some((opfmethod, opfname, opfnamespace)) =
+        crate::description::opclass_or_opfamily_row(cache_syscache::cacheinfo::OPFAMILYOID, opfid)?
     else {
         if !missing_ok {
-            return Err(lookup_err(format!("cache lookup failed for opfamily {opfid}")));
+            return Err(lookup_err(format!(
+                "cache lookup failed for opfamily {opfid}"
+            )));
         }
         return Ok(None);
     };
@@ -1120,7 +1205,12 @@ fn operator_row(oprid: Oid) -> PgResult<Option<OperatorRow>> {
     let left = cache_syscache::SysCacheGetAttrNotNull(cacheid, &tup, 8)?.as_oid();
     let right = cache_syscache::SysCacheGetAttrNotNull(cacheid, &tup, 9)?.as_oid();
     cache_syscache::ReleaseSysCache(tup);
-    Ok(Some(OperatorRow { name, namespace, left, right }))
+    Ok(Some(OperatorRow {
+        name,
+        namespace,
+        left,
+        right,
+    }))
 }
 
 pub(crate) fn language_name(langid: Oid) -> PgResult<Option<String>> {
@@ -1135,7 +1225,9 @@ fn syscache_name_att(cacheid: i32, oid: Oid, attnum: i32) -> PgResult<Option<Str
     else {
         return Ok(None);
     };
-    let name = name_from_datum(cache_syscache::SysCacheGetAttrNotNull(cacheid, &tup, attnum)?);
+    let name = name_from_datum(cache_syscache::SysCacheGetAttrNotNull(
+        cacheid, &tup, attnum,
+    )?);
     cache_syscache::ReleaseSysCache(tup);
     Ok(Some(name))
 }
@@ -1196,7 +1288,12 @@ fn proc_row(oid: Oid) -> PgResult<Option<ProcNaming>> {
             .collect::<Vec<Oid>>()
     };
     cache_syscache::ReleaseSysCache(ht);
-    Ok(Some(ProcNaming { name, namespace, kind, argtypes }))
+    Ok(Some(ProcNaming {
+        name,
+        namespace,
+        kind,
+        argtypes,
+    }))
 }
 
 fn getProcedureTypeDescription(oid: Oid, missing_ok: bool) -> PgResult<String> {
@@ -1208,7 +1305,9 @@ fn getProcedureTypeDescription(oid: Oid, missing_ok: bool) -> PgResult<String> {
         }),
         None => {
             if !missing_ok {
-                return Err(lookup_err(format!("cache lookup failed for procedure {oid}")));
+                return Err(lookup_err(format!(
+                    "cache lookup failed for procedure {oid}"
+                )));
             }
             Ok("routine".into())
         }

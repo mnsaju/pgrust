@@ -7,9 +7,9 @@
 use std::cell::Cell;
 
 use explain::{
-    defGetBoolean, ExplainCloseGroup, ExplainIndentText, ExplainOpenGroup,
-    ExplainPropertyBool, ExplainPropertyFloat, ExplainPropertyInteger, ExplainPropertyText,
-    ExplainPropertyUInteger, ExplainState, EXPLAIN_FORMAT_TEXT,
+    defGetBoolean, ExplainCloseGroup, ExplainIndentText, ExplainOpenGroup, ExplainPropertyBool,
+    ExplainPropertyFloat, ExplainPropertyInteger, ExplainPropertyText, ExplainPropertyUInteger,
+    ExplainState, EXPLAIN_FORMAT_TEXT,
 };
 use mcx::Mcx;
 use types_error::PgResult;
@@ -147,7 +147,11 @@ fn overexplain_per_node_hook<'mcx>(
                 ExplainPropertyInteger("Exclude Relation RTI", None, mt.exclRelRTI as i64, es);
             }
             NodeTag::T_Append => {
-                overexplain_bitmapset("Append RTIs", &node.as_append().expect("Append").apprelids, es);
+                overexplain_bitmapset(
+                    "Append RTIs",
+                    &node.as_append().expect("Append").apprelids,
+                    es,
+                );
             }
             NodeTag::T_MergeAppend => {
                 overexplain_bitmapset(
@@ -287,8 +291,9 @@ fn overexplain_range_table<'mcx>(
 
     for (i, rte_node) in plannedstmt.rtable.iter().enumerate() {
         let rti = (i + 1) as u32;
-        let rte: &RangeTblEntry<'mcx> =
-            rte_node.as_range_tbl_entry().expect("rtable holds RangeTblEntry");
+        let rte: &RangeTblEntry<'mcx> = rte_node
+            .as_range_tbl_entry()
+            .expect("rtable holds RangeTblEntry");
 
         let kind = match rte.rtekind {
             RTEKind::RTE_RELATION => "relation",
@@ -326,13 +331,13 @@ fn overexplain_range_table<'mcx>(
         overexplain_alias("Eref", rte.eref.expect("eref is required"), es)?;
 
         if rte.relid != 0 {
-            let relname = lsyscache::get_rel_name(mcx, rte.relid)?
-                .expect("relation in plan rtable exists");
+            let relname =
+                lsyscache::get_rel_name(mcx, rte.relid)?.expect("relation in plan rtable exists");
             let relname = format_type::quote_identifier(&relname).into_owned();
             let qualname = if es.verbose {
                 let nspoid = lsyscache::get_rel_namespace(rte.relid)?;
-                let nspname = lsyscache::get_namespace_name_or_temp(mcx, nspoid)?
-                    .expect("namespace exists");
+                let nspname =
+                    lsyscache::get_namespace_name_or_temp(mcx, nspoid)?.expect("namespace exists");
                 format!("{}.{relname}", format_type::quote_identifier(&nspname))
             } else {
                 relname
@@ -428,11 +433,7 @@ fn overexplain_range_table<'mcx>(
     Ok(())
 }
 
-fn overexplain_alias(
-    qlabel: &str,
-    alias: &Alias<'_>,
-    es: &mut ExplainState<'_>,
-) -> PgResult<()> {
+fn overexplain_alias(qlabel: &str, alias: &Alias<'_>, es: &mut ExplainState<'_>) -> PgResult<()> {
     let name = alias.aliasname.unwrap_or("");
     let mut buf = format!("{} (", format_type::quote_identifier(name));
     let mut first = true;

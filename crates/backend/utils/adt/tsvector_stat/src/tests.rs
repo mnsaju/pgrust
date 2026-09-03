@@ -65,5 +65,8 @@ fn output_order_is_descending_tscompare() {
     ];
     rows.sort_unstable_by(|a, b| ts_compare_string(&b.0, &a.0, false).cmp(&0));
     let words: Vec<&[u8]> = rows.iter().map(|r| r.0.as_slice()).collect();
-    assert_eq!(words, vec![b"b".as_slice(), b"ab".as_slice(), b"a".as_slice()]);
+    assert_eq!(
+        words,
+        vec![b"b".as_slice(), b"ab".as_slice(), b"a".as_slice()]
+    );
 }

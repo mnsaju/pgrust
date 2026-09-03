@@ -184,7 +184,10 @@ impl WorkerPool {
         let mut handles = Vec::with_capacity(n);
         for ordinal in 0..n {
             let rt2 = Arc::clone(&rt);
-            handles.push(spawn(ordinal, Box::new(move || worker_loop(&rt2, ordinal)))?);
+            handles.push(spawn(
+                ordinal,
+                Box::new(move || worker_loop(&rt2, ordinal)),
+            )?);
         }
         Ok(WorkerPool { rt, handles })
     }

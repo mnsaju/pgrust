@@ -174,7 +174,9 @@ fn trace_cb(_seg: DsmSegmentId, arg: usize) -> types_error::PgResult<()> {
 
 fn err_cb(_seg: DsmSegmentId, arg: usize) -> types_error::PgResult<()> {
     CB_TRACE.lock().unwrap().push(arg);
-    Err(Box::new(types_error::PgError::error("detach callback failed")))
+    Err(Box::new(types_error::PgError::error(
+        "detach callback failed",
+    )))
 }
 
 #[test]

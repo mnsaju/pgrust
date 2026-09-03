@@ -2,9 +2,7 @@
 
 extern crate alloc;
 
-use types_error::{
-    ereturn, PgError, PgResult, SoftErrorContext, ERRCODE_PROGRAM_LIMIT_EXCEEDED,
-};
+use types_error::{ereturn, PgError, PgResult, SoftErrorContext, ERRCODE_PROGRAM_LIMIT_EXCEEDED};
 
 pub const MAXDIM: i32 = 6;
 pub const MAX_ALLOC_SIZE: usize = 0x3FFF_FFFF;

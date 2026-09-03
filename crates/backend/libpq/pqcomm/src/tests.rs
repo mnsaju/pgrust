@@ -144,7 +144,10 @@ fn partial_writes_complete_on_flush() {
     WRITE_CHUNK.with(|c| c.set(3));
     assert_eq!(pq_putmessage(b'N', b"abcdef").unwrap(), 0);
     assert_eq!(pq_flush().unwrap(), 0);
-    assert_eq!(wire(), vec![b'N', 0, 0, 0, 10, b'a', b'b', b'c', b'd', b'e', b'f']);
+    assert_eq!(
+        wire(),
+        vec![b'N', 0, 0, 0, 10, b'a', b'b', b'c', b'd', b'e', b'f']
+    );
 }
 
 #[test]
@@ -325,7 +328,9 @@ fn getmessage_incomplete_body() {
 #[test]
 fn getmessage_body_larger_than_recv_buffer() {
     setup();
-    let body: Vec<u8> = (0..PQ_RECV_BUFFER_SIZE * 2 + 33).map(|i| (i % 251) as u8).collect();
+    let body: Vec<u8> = (0..PQ_RECV_BUFFER_SIZE * 2 + 33)
+        .map(|i| (i % 251) as u8)
+        .collect();
     let mut msg = ((body.len() + 4) as u32).to_be_bytes().to_vec();
     msg.extend_from_slice(&body);
     feed(&msg);

@@ -154,7 +154,12 @@ pub fn fc_lo_put(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Dat
     Ok(Datum::null())
 }
 
-const fn b(foid: types_core::Oid, name: &'static str, nargs: i16, func: types_fmgr::PGFunction) -> FmgrBuiltin {
+const fn b(
+    foid: types_core::Oid,
+    name: &'static str,
+    nargs: i16,
+    func: types_fmgr::PGFunction,
+) -> FmgrBuiltin {
     FmgrBuiltin {
         foid,
         name,

@@ -27,7 +27,8 @@ pub fn copy_for_cluster<'mcx>(
     let old_tup_desc = old_heap.descr();
     let new_tup_desc = new_heap.descr();
     let natts = new_tup_desc.natts as usize;
-    let mut values: mcx::PgVec<'_, datum::Datum> = mcx::vec_from_elem_in(mcx, datum::Datum::null(), natts);
+    let mut values: mcx::PgVec<'_, datum::Datum> =
+        mcx::vec_from_elem_in(mcx, datum::Datum::null(), natts);
     let mut isnull: mcx::PgVec<'_, bool> = mcx::vec_from_elem_in(mcx, false, natts);
 
     let mut rwstate = rewriteheap::begin_heap_rewrite(
@@ -124,8 +125,12 @@ pub fn copy_for_cluster<'mcx>(
 
         let fetched = match &mut arm {
             ScanArm::Index(scan) => {
-                let found =
-                    indexam::index_getnext_slot(mcx, scan, ScanDirection::ForwardScanDirection, &mut slot)?;
+                let found = indexam::index_getnext_slot(
+                    mcx,
+                    scan,
+                    ScanDirection::ForwardScanDirection,
+                    &mut slot,
+                )?;
                 if found && scan.xs_recheck {
                     panic!("CLUSTER does not support lossy index conditions");
                 }
@@ -146,7 +151,11 @@ pub fn copy_for_cluster<'mcx>(
             panic!("heap copy_for_cluster requires a BufferHeapTuple slot");
         };
         let buf = bslot.buffer;
-        let tuple = bslot.base.tuple.as_mut().expect("buffer slot holds a tuple");
+        let tuple = bslot
+            .base
+            .tuple
+            .as_mut()
+            .expect("buffer slot holds a tuple");
 
         bufmgr_seams::lock_buffer::call(buf, bufmgr_seams::BUFFER_LOCK_SHARE)?;
         let htsv = heapam_visibility::HeapTupleSatisfiesVacuum(tuple, oldest_xmin, buf)?;
@@ -195,7 +204,10 @@ pub fn copy_for_cluster<'mcx>(
                     )?;
                     Some(nbtree::itup::index_form_tuple(
                         per_tuple.mcx(),
-                        old_index.expect("expr_sort implies an index").rd_att.as_ref(),
+                        old_index
+                            .expect("expr_sort implies an index")
+                            .rd_att
+                            .as_ref(),
                         &kvalues,
                         &kisnull,
                     )?)
@@ -205,12 +217,19 @@ pub fn copy_for_cluster<'mcx>(
             let SlotData::BufferHeap(bslot) = &mut slot else {
                 panic!("heap copy_for_cluster requires a BufferHeapTuple slot");
             };
-            let tuple = bslot.base.tuple.as_ref().expect("buffer slot holds a tuple");
+            let tuple = bslot
+                .base
+                .tuple
+                .as_ref()
+                .expect("buffer slot holds a tuple");
             // SAFETY: live maxaligned itup image formed above.
             let itup_bytes = itup_buf
                 .as_ref()
                 .map(|b| unsafe { core::slice::from_raw_parts(b.as_ptr().cast::<u8>(), b.size()) });
-            tuplesort.as_mut().expect("checked").putheaptuple(tuple, itup_bytes)?;
+            tuplesort
+                .as_mut()
+                .expect("checked")
+                .putheaptuple(tuple, itup_bytes)?;
         } else {
             reform_and_rewrite_tuple(
                 mcx,

@@ -2,8 +2,7 @@ use super::*;
 use ::datum::Datum;
 use ::mcx::{Mcx, MemoryContext, PgVec};
 use ::types_core::{
-    BlockNumber, Buffer, Oid, BLCKSZ, BTREE_AM_OID, INVALID_PROC_NUMBER,
-    RELPERSISTENCE_PERMANENT,
+    BlockNumber, Buffer, Oid, BLCKSZ, BTREE_AM_OID, INVALID_PROC_NUMBER, RELPERSISTENCE_PERMANENT,
 };
 use ::types_fmgr::FmgrInfo;
 use ::types_nbtree::{
@@ -20,8 +19,8 @@ use ::types_tuple::itemptr::ItemPointerData;
 use ::types_tuple::varatt::{set_varsize_4b_word, VARHDRSZ};
 use ::types_tuple::{
     heap_deform_tuple, CompactAttribute, FormData_pg_attribute, HeapTupleData, NameData,
-    TupleDescData, TYPALIGN_INT, TYPSTORAGE_EXTENDED, TYPSTORAGE_EXTERNAL, TYPSTORAGE_PLAIN,
-    HEAP_XMAX_INVALID,
+    TupleDescData, HEAP_XMAX_INVALID, TYPALIGN_INT, TYPSTORAGE_EXTENDED, TYPSTORAGE_EXTERNAL,
+    TYPSTORAGE_PLAIN,
 };
 use std::cell::Cell;
 use std::collections::HashMap;
@@ -157,13 +156,11 @@ fn install_seams() {
         heapam_visibility_seams::heap_tuple_is_surely_dead::set(|_, _| Ok(false));
         heapam_visibility_seams::heap_tuple_header_is_only_locked::set(|_| Ok(false));
         heapam_visibility_seams::heap_tuple_satisfies_update::set(|htup, _cid, _buf| {
-            Ok(
-                if (htup.t_data().t_infomask & HEAP_XMAX_INVALID) != 0 {
-                    ::tableam_vocab::TM_Result::TM_Ok
-                } else {
-                    ::tableam_vocab::TM_Result::TM_SelfModified
-                },
-            )
+            Ok(if (htup.t_data().t_infomask & HEAP_XMAX_INVALID) != 0 {
+                ::tableam_vocab::TM_Result::TM_Ok
+            } else {
+                ::tableam_vocab::TM_Result::TM_SelfModified
+            })
         });
         heapam_visibility_seams::heap_tuple_set_hint_bits::set(|hdr, _buf, infomask, _xid| {
             hdr.t_infomask |= infomask;
@@ -200,7 +197,6 @@ fn install_seams() {
             Ok(v)
         });
         relation_seams::relation_open::set(|mcx, relid, _lockmode| Ok(fixture_rel(mcx, relid)));
-
     });
     test_boot::boot_wal("heaptoast");
     ensure_active_snapshot();
@@ -214,8 +210,7 @@ fn ensure_active_snapshot() {
     }
     ARMED.with(|armed| {
         if !armed.get() {
-            let leaked: &'static MemoryContext =
-                Box::leak(Box::new(MemoryContext::new("snap")));
+            let leaked: &'static MemoryContext = Box::leak(Box::new(MemoryContext::new("snap")));
             snapmgr::PushActiveSnapshot(&Rc::new(SnapshotData::sentinel(
                 leaked.mcx(),
                 SnapshotType::SNAPSHOT_MVCC,
@@ -317,7 +312,10 @@ fn rel_from<'mcx>(
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
         rd_lockInfo: LockInfoData {
-            lockRelId: LockRelId { relId: oid, dbId: 5 },
+            lockRelId: LockRelId {
+                relId: oid,
+                dbId: 5,
+            },
         },
         rd_rel,
         rd_att,
@@ -330,13 +328,16 @@ fn rel_from<'mcx>(
         pgstat_enabled: Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: vec_of(&vec![0; opcintype.len()]),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     };
     Relation::open(data, Some(noop_close))
 }
@@ -346,7 +347,12 @@ fn fixture_rel<'mcx>(mcx: Mcx<'mcx>, oid: Oid) -> Relation<'mcx> {
         MAIN_REL => rel_from(
             mcx,
             oid,
-            base_class(oid, RELKIND_RELATION, ::tableam_vocab::HEAP_TABLE_AM_OID, TOAST_REL),
+            base_class(
+                oid,
+                RELKIND_RELATION,
+                ::tableam_vocab::HEAP_TABLE_AM_OID,
+                TOAST_REL,
+            ),
             tupdesc(mcx, &[att(1, -1, false, TYPSTORAGE_EXTENDED)]),
             None,
             &[],
@@ -354,7 +360,12 @@ fn fixture_rel<'mcx>(mcx: Mcx<'mcx>, oid: Oid) -> Relation<'mcx> {
         MAIN3_REL => rel_from(
             mcx,
             oid,
-            base_class(oid, RELKIND_RELATION, ::tableam_vocab::HEAP_TABLE_AM_OID, TOAST_REL),
+            base_class(
+                oid,
+                RELKIND_RELATION,
+                ::tableam_vocab::HEAP_TABLE_AM_OID,
+                TOAST_REL,
+            ),
             tupdesc(
                 mcx,
                 &[
@@ -369,7 +380,12 @@ fn fixture_rel<'mcx>(mcx: Mcx<'mcx>, oid: Oid) -> Relation<'mcx> {
         TOAST_REL => rel_from(
             mcx,
             oid,
-            base_class(oid, RELKIND_TOASTVALUE, ::tableam_vocab::HEAP_TABLE_AM_OID, 0),
+            base_class(
+                oid,
+                RELKIND_TOASTVALUE,
+                ::tableam_vocab::HEAP_TABLE_AM_OID,
+                0,
+            ),
             tupdesc(
                 mcx,
                 &[
@@ -393,7 +409,10 @@ fn fixture_rel<'mcx>(mcx: Mcx<'mcx>, oid: Oid) -> Relation<'mcx> {
                 base_class(oid, RELKIND_INDEX, BTREE_AM_OID, 0),
                 tupdesc(
                     mcx,
-                    &[att(1, 4, true, TYPSTORAGE_PLAIN), att(2, 4, true, TYPSTORAGE_PLAIN)],
+                    &[
+                        att(1, 4, true, TYPSTORAGE_PLAIN),
+                        att(2, 4, true, TYPSTORAGE_PLAIN),
+                    ],
                 ),
                 Some(FormData_pg_index {
                     indexrelid: oid,
@@ -409,14 +428,26 @@ fn fixture_rel<'mcx>(mcx: Mcx<'mcx>, oid: Oid) -> Relation<'mcx> {
                     indisready: false,
                     indkey,
                     has_indpred: false,
-        indexprs_src: None,
-        indpred_src: None,
+                    indexprs_src: None,
+                    indpred_src: None,
                 }),
                 &[26, 23],
             );
             idx.rd_supportinfo.borrow_mut().extend([
-                Some(FmgrInfo::new(nbt_compare::builtins::fc_btoidcmp, 356, 2, true, false)),
-                Some(FmgrInfo::new(nbt_compare::builtins::fc_btint4cmp, 351, 2, true, false)),
+                Some(FmgrInfo::new(
+                    nbt_compare::builtins::fc_btoidcmp,
+                    356,
+                    2,
+                    true,
+                    false,
+                )),
+                Some(FmgrInfo::new(
+                    nbt_compare::builtins::fc_btint4cmp,
+                    351,
+                    2,
+                    true,
+                    false,
+                )),
             ]);
             idx
         }
@@ -444,7 +475,12 @@ fn new_btpage(flags: u16, level: u32) -> Box<TestPage> {
         btpo_cycleid: 0,
     };
     // SAFETY: in-bounds aligned special-area write on an owned page.
-    unsafe { p.0.as_mut_ptr().add(special).cast::<BTPageOpaqueData>().write(opaque) };
+    unsafe {
+        p.0.as_mut_ptr()
+            .add(special)
+            .cast::<BTPageOpaqueData>()
+            .write(opaque)
+    };
     p
 }
 
@@ -462,7 +498,12 @@ fn bt_meta() -> Box<TestPage> {
         btm_allequalimage: true,
     };
     // SAFETY: metapage payload write on an owned page.
-    unsafe { p.0.as_mut_ptr().add(24).cast::<BTMetaPageData>().write(metad) };
+    unsafe {
+        p.0.as_mut_ptr()
+            .add(24)
+            .cast::<BTMetaPageData>()
+            .write(metad)
+    };
     p
 }
 
@@ -472,7 +513,12 @@ fn bt_add_tuple(p: &mut TestPage, tid: ItemPointerData, valueid: Oid, seq: i32) 
     let pd_upper = u16::from_ne_bytes([p.0[14], p.0[15]]) as usize;
     let off = pd_upper - itupsz;
     // SAFETY: owned page bytes; ItemPointerData is a 6B POD.
-    unsafe { p.0.as_mut_ptr().add(off).cast::<ItemPointerData>().write_unaligned(tid) };
+    unsafe {
+        p.0.as_mut_ptr()
+            .add(off)
+            .cast::<ItemPointerData>()
+            .write_unaligned(tid)
+    };
     p.0[off + 6..off + 8].copy_from_slice(&(itupsz as u16).to_ne_bytes());
     p.0[off + 8..off + 12].copy_from_slice(&valueid.to_ne_bytes());
     p.0[off + 12..off + 16].copy_from_slice(&seq.to_ne_bytes());
@@ -507,8 +553,7 @@ fn toast_heap_entries(mcx: Mcx<'_>) -> Vec<(Oid, i32, ItemPointerData)> {
             let (ptr, len) = page.item_raw(id);
             let tid = ItemPointerData::new(blk as u32, off);
             // SAFETY: in-page tuple image.
-            let tup =
-                unsafe { HeapTupleData::from_raw_parts(ptr.cast_mut(), len, tid, TOAST_REL) };
+            let tup = unsafe { HeapTupleData::from_raw_parts(ptr.cast_mut(), len, tid, TOAST_REL) };
             if (tup.t_data().t_infomask & HEAP_XMAX_INVALID) == 0 {
                 continue;
             }
@@ -516,8 +561,8 @@ fn toast_heap_entries(mcx: Mcx<'_>) -> Vec<(Oid, i32, ItemPointerData)> {
             // SAFETY: chunk tuples match the toast descriptor.
             let valueid =
                 unsafe { ::types_tuple::heap_getattr(&tup, 1, &desc, &mut isnull) }.as_oid();
-            let seq = unsafe { ::types_tuple::heap_getattr(&tup, 2, &desc, &mut isnull) }
-                .as_usize() as i32;
+            let seq = unsafe { ::types_tuple::heap_getattr(&tup, 2, &desc, &mut isnull) }.as_usize()
+                as i32;
             out.push((valueid, seq, tid));
         }
     }
@@ -587,7 +632,10 @@ fn insert_row(mcx: Mcx<'_>, rel: &Relation<'_>, payloads: &[&[u8]]) -> ItemPoint
 }
 
 fn stored_attrs(mcx: Mcx<'_>, rel: &Relation<'_>, tid: ItemPointerData) -> Vec<Vec<u8>> {
-    let buf = with_fake(|f| f.tables[&rel.rd_id][::types_tuple::itemptr::ItemPointerGetBlockNumberNoCheck(&tid) as usize]);
+    let buf = with_fake(|f| {
+        f.tables[&rel.rd_id]
+            [::types_tuple::itemptr::ItemPointerGetBlockNumberNoCheck(&tid) as usize]
+    });
     let addr = with_fake(|f| f.pages[(buf - 1) as usize]);
     // SAFETY: leaked test page, always live.
     let page = unsafe { PageRef::from_raw(NonNull::new(addr as *mut u8).unwrap()) };
@@ -652,10 +700,16 @@ fn compress_datum_lz4_round_trips() {
     // unlike pglz -- it always tries, then the outer >2-bytes-saved check
     // in toast_compress_datum rejects the non-shrinking result).
     let rand = text_value(mcx, &prng_bytes(1000));
-    assert!(toast_compress_datum(mcx, &rand, toastdesc::TOAST_LZ4_COMPRESSION as i8).unwrap().is_none());
+    assert!(
+        toast_compress_datum(mcx, &rand, toastdesc::TOAST_LZ4_COMPRESSION as i8)
+            .unwrap()
+            .is_none()
+    );
 
     let comp = text_value(mcx, &[b'a'; 1000]);
-    let out = toast_compress_datum(mcx, &comp, toastdesc::TOAST_LZ4_COMPRESSION as i8).unwrap().unwrap();
+    let out = toast_compress_datum(mcx, &comp, toastdesc::TOAST_LZ4_COMPRESSION as i8)
+        .unwrap()
+        .unwrap();
     assert!(out.len() < 1000 - 2);
     assert_eq!(toastdesc::toast_compress_extsize(&out).unwrap(), 1000);
     assert_eq!(

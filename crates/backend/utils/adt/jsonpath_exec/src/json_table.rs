@@ -83,7 +83,12 @@ fn reset_row_pattern<'mcx>(
     st: &mut JsonTablePlanState<'mcx>,
     doc_payload: &[u8],
 ) -> PgResult<()> {
-    let PlanKind::PathScan { path, error_on_error, .. } = st.kind else {
+    let PlanKind::PathScan {
+        path,
+        error_on_error,
+        ..
+    } = st.kind
+    else {
         panic!("JsonTableResetRowPattern on a non-PathScan plan");
     };
     st.found.clear();
@@ -197,7 +202,12 @@ impl<'mcx> JsonTableExecContext<'mcx> {
     /// document's jsonb container payload.
     pub fn set_document(&mut self, doc_payload: &[u8]) -> PgResult<()> {
         let root = self.root;
-        reset_row_pattern(self.mcx, &self.args, &mut self.states[root as usize], doc_payload)
+        reset_row_pattern(
+            self.mcx,
+            &self.args,
+            &mut self.states[root as usize],
+            doc_payload,
+        )
     }
 
     /// C `JsonTableFetchRow`.

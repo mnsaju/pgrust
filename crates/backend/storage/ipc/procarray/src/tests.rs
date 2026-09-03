@@ -222,8 +222,16 @@ fn reuse_fastpath_fires_and_invalidates_on_xact_completion() {
 
     // Same struct, no transaction completed since: the reuse path must fire.
     take_snapshot(&mut snap, mcx);
-    assert_eq!(snapshot_full_builds(), builds0 + 1, "full rebuild instead of reuse");
-    assert_eq!(snapshot_reuse_hits(), hits0 + 1, "reuse fastpath was not CALLED");
+    assert_eq!(
+        snapshot_full_builds(),
+        builds0 + 1,
+        "full rebuild instead of reuse"
+    );
+    assert_eq!(
+        snapshot_reuse_hits(),
+        hits0 + 1,
+        "reuse fastpath was not CALLED"
+    );
     assert_eq!(snap.snapXactCompletionCount, first_count);
 
     // A write transaction ends: xactCompletionCount moves, reuse must miss.
@@ -319,10 +327,11 @@ fn in_progress_finds_cached_subxids() {
         let mut cache = proc.subxids.get();
         cache.xids[0] = sub;
         proc.subxids.set(cache);
-        proc.subxidStatus.set(types_storage::storage::XidCacheStatus {
-            count: 1,
-            overflowed: false,
-        });
+        proc.subxidStatus
+            .set(types_storage::storage::XidCacheStatus {
+                count: 1,
+                overflowed: false,
+            });
     }
     ProcArrayAdd(other).unwrap();
     TransamVariables()
@@ -395,10 +404,11 @@ fn proc_number_transaction_ids_and_pid_lookup() {
     other_proc_running(other, 700);
     let proc = GetPGProcByNumber(other);
     proc.xmin.value.store(695, Relaxed);
-    proc.subxidStatus.set(types_storage::storage::XidCacheStatus {
-        count: 2,
-        overflowed: true,
-    });
+    proc.subxidStatus
+        .set(types_storage::storage::XidCacheStatus {
+            count: 2,
+            overflowed: true,
+        });
 
     // pid == 0: dummy PGPROC, ids withheld and PID lookup never matches.
     assert_eq!(
@@ -469,7 +479,11 @@ fn lock_free_reuse_keeps_older_valid_xmin() {
 
     // A registered older snapshot still pins a lower xmin: reuse must not
     // raise it (C: only set when invalid).
-    let older = if snap.xmin > 2 { snap.xmin - 1 } else { snap.xmin };
+    let older = if snap.xmin > 2 {
+        snap.xmin - 1
+    } else {
+        snap.xmin
+    };
     proc.xmin.value.store(older, Relaxed);
     set_transaction_xmin(older);
 
@@ -521,8 +535,16 @@ fn doomed_reuse_does_not_speculatively_publish_xmin() {
     take_snapshot(&mut snap, mcx);
 
     // The reuse really did miss (otherwise the assertion below is vacuous).
-    assert_eq!(snapshot_reuse_hits(), hits0, "reuse hit; the miss was not armed");
-    assert_eq!(snapshot_full_builds(), builds0 + 1, "no full build happened");
+    assert_eq!(
+        snapshot_reuse_hits(),
+        hits0,
+        "reuse hit; the miss was not armed"
+    );
+    assert_eq!(
+        snapshot_full_builds(),
+        builds0 + 1,
+        "no full build happened"
+    );
     assert_eq!(
         snapshot_reuse_speculative_publishes(),
         pubs0,
@@ -674,7 +696,11 @@ fn kax_get_and_set_xmin_filters_at_xmax() {
 
     let mut out = Vec::new();
     let mut xmin = 7;
-    known_assigned::KnownAssignedXidsGetAndSetXmin(|_, x| out.push(x), &mut xmin, InvalidTransactionId);
+    known_assigned::KnownAssignedXidsGetAndSetXmin(
+        |_, x| out.push(x),
+        &mut xmin,
+        InvalidTransactionId,
+    );
     assert_eq!(out, vec![50, 52, 53, 54]);
     assert_eq!(xmin, 7);
 }
@@ -707,10 +733,16 @@ fn kax_add_and_search_across_wraparound() {
 
     kax_add(u32::MAX - 1, 3);
     assert_eq!(kax::kax_counts().0, 3);
-    assert_eq!(kax::get_all(InvalidTransactionId), vec![u32::MAX - 1, u32::MAX, 3]);
+    assert_eq!(
+        kax::get_all(InvalidTransactionId),
+        vec![u32::MAX - 1, u32::MAX, 3]
+    );
     assert!(known_assigned::KnownAssignedXidExists(u32::MAX));
     assert!(known_assigned::KnownAssignedXidExists(3));
-    assert_eq!(known_assigned::KnownAssignedXidsGetOldestXmin(), u32::MAX - 1);
+    assert_eq!(
+        known_assigned::KnownAssignedXidsGetOldestXmin(),
+        u32::MAX - 1
+    );
 
     let mut out = Vec::new();
     let mut xmin = 10;
@@ -728,7 +760,10 @@ fn record_known_assigned_transaction_ids_fills_gaps() {
     kax::set_latest_observed_xid(200);
 
     RecordKnownAssignedTransactionIds(205).unwrap();
-    assert_eq!(kax::get_all(InvalidTransactionId), vec![201, 202, 203, 204, 205]);
+    assert_eq!(
+        kax::get_all(InvalidTransactionId),
+        vec![201, 202, 203, 204, 205]
+    );
     assert_eq!(kax::latest_observed_xid(), 205);
     let next = FullTransactionId::from_u64(TransamVariables().nextXid.load(Relaxed));
     assert!(!TransactionIdPrecedes(next.xid(), 206));
@@ -751,14 +786,19 @@ fn expire_tree_removes_and_maintains_latest_completed() {
     xlogutils::set_standby_state(xlogutils::STANDBY_SNAPSHOT_READY);
 
     let tv = TransamVariables();
-    tv.nextXid.store(FullTransactionId::from_epoch_and_xid(0, 400).value, Relaxed);
-    tv.latestCompletedXid.store(FullTransactionId::from_epoch_and_xid(0, 300).value, Relaxed);
+    tv.nextXid
+        .store(FullTransactionId::from_epoch_and_xid(0, 400).value, Relaxed);
+    tv.latestCompletedXid
+        .store(FullTransactionId::from_epoch_and_xid(0, 300).value, Relaxed);
     let completions = tv.xactCompletionCount.load(Relaxed);
 
     kax_add(310, 314);
     ExpireTreeKnownAssignedTransactionIds(311, &[313, 314], 314).unwrap();
     assert_eq!(kax::get_all(InvalidTransactionId), vec![310, 312]);
-    assert_eq!(FullTransactionId::from_u64(tv.latestCompletedXid.load(Relaxed)).xid(), 314);
+    assert_eq!(
+        FullTransactionId::from_u64(tv.latestCompletedXid.load(Relaxed)).xid(),
+        314
+    );
     assert_eq!(tv.xactCompletionCount.load(Relaxed), completions + 1);
     xlogutils::set_standby_state(xlogutils::STANDBY_DISABLED);
 }
@@ -770,8 +810,10 @@ fn expire_all_and_old_reset_overflow_state() {
     kax::kax_reset();
 
     let tv = TransamVariables();
-    tv.nextXid.store(FullTransactionId::from_epoch_and_xid(0, 600).value, Relaxed);
-    tv.latestCompletedXid.store(FullTransactionId::from_epoch_and_xid(0, 500).value, Relaxed);
+    tv.nextXid
+        .store(FullTransactionId::from_epoch_and_xid(0, 600).value, Relaxed);
+    tv.latestCompletedXid
+        .store(FullTransactionId::from_epoch_and_xid(0, 500).value, Relaxed);
 
     kax_add(510, 514);
     kax::set_last_overflowed_xid(513);
@@ -786,7 +828,10 @@ fn expire_all_and_old_reset_overflow_state() {
     ExpireAllKnownAssignedTransactionIds().unwrap();
     assert_eq!(kax::kax_counts(), (0, 0, 0));
     assert_eq!(kax::last_overflowed_xid(), InvalidTransactionId);
-    assert_eq!(FullTransactionId::from_u64(tv.latestCompletedXid.load(Relaxed)).xid(), 599);
+    assert_eq!(
+        FullTransactionId::from_u64(tv.latestCompletedXid.load(Relaxed)).xid(),
+        599
+    );
 }
 
 #[test]
@@ -797,8 +842,10 @@ fn apply_recovery_info_builds_ready_snapshot() {
     xlogutils::set_standby_state(xlogutils::STANDBY_INITIALIZED);
 
     let tv = TransamVariables();
-    tv.nextXid.store(FullTransactionId::from_epoch_and_xid(0, 700).value, Relaxed);
-    tv.latestCompletedXid.store(FullTransactionId::from_epoch_and_xid(0, 699).value, Relaxed);
+    tv.nextXid
+        .store(FullTransactionId::from_epoch_and_xid(0, 700).value, Relaxed);
+    tv.latestCompletedXid
+        .store(FullTransactionId::from_epoch_and_xid(0, 699).value, Relaxed);
 
     ProcArrayInitRecovery(700);
     assert_eq!(kax::latest_observed_xid(), 699);
@@ -820,11 +867,17 @@ fn apply_recovery_info_builds_ready_snapshot() {
     };
     ProcArrayApplyRecoveryInfo(&running).unwrap();
 
-    assert_eq!(xlogutils::standby_state(), xlogutils::STANDBY_SNAPSHOT_READY);
+    assert_eq!(
+        xlogutils::standby_state(),
+        xlogutils::STANDBY_SNAPSHOT_READY
+    );
     assert_eq!(kax::get_all(InvalidTransactionId), vec![701, 705]);
     assert_eq!(kax::last_overflowed_xid(), InvalidTransactionId);
     assert_eq!(kax::latest_observed_xid(), 709);
-    assert_eq!(FullTransactionId::from_u64(tv.latestCompletedXid.load(Relaxed)).xid(), 706);
+    assert_eq!(
+        FullTransactionId::from_u64(tv.latestCompletedXid.load(Relaxed)).xid(),
+        706
+    );
 
     let mut xids = mcx::vec_with_capacity_in(mcx, 0).unwrap();
     xids.clear();
@@ -851,8 +904,10 @@ fn apply_recovery_info_overflowed_snapshot_goes_pending() {
     xlogutils::set_standby_state(xlogutils::STANDBY_INITIALIZED);
 
     let tv = TransamVariables();
-    tv.nextXid.store(FullTransactionId::from_epoch_and_xid(0, 800).value, Relaxed);
-    tv.latestCompletedXid.store(FullTransactionId::from_epoch_and_xid(0, 799).value, Relaxed);
+    tv.nextXid
+        .store(FullTransactionId::from_epoch_and_xid(0, 800).value, Relaxed);
+    tv.latestCompletedXid
+        .store(FullTransactionId::from_epoch_and_xid(0, 799).value, Relaxed);
 
     ProcArrayInitRecovery(800);
     let mcx = leaked_mcx();
@@ -870,7 +925,10 @@ fn apply_recovery_info_overflowed_snapshot_goes_pending() {
     };
     ProcArrayApplyRecoveryInfo(&running).unwrap();
 
-    assert_eq!(xlogutils::standby_state(), xlogutils::STANDBY_SNAPSHOT_PENDING);
+    assert_eq!(
+        xlogutils::standby_state(),
+        xlogutils::STANDBY_SNAPSHOT_PENDING
+    );
     assert_eq!(kax::standby_snapshot_pending_xmin(), 804);
     assert_eq!(kax::last_overflowed_xid(), 804);
 
@@ -887,7 +945,10 @@ fn apply_recovery_info_overflowed_snapshot_goes_pending() {
         xids,
     };
     ProcArrayApplyRecoveryInfo(&running).unwrap();
-    assert_eq!(xlogutils::standby_state(), xlogutils::STANDBY_SNAPSHOT_READY);
+    assert_eq!(
+        xlogutils::standby_state(),
+        xlogutils::STANDBY_SNAPSHOT_READY
+    );
     xlogutils::set_standby_state(xlogutils::STANDBY_DISABLED);
 }
 
@@ -914,8 +975,14 @@ fn snapshot_in_recovery_uses_known_assigned_xids() {
     kax::kax_reset();
 
     let tv = TransamVariables();
-    tv.nextXid.store(FullTransactionId::from_epoch_and_xid(0, 2000).value, Relaxed);
-    tv.latestCompletedXid.store(FullTransactionId::from_epoch_and_xid(0, 1000).value, Relaxed);
+    tv.nextXid.store(
+        FullTransactionId::from_epoch_and_xid(0, 2000).value,
+        Relaxed,
+    );
+    tv.latestCompletedXid.store(
+        FullTransactionId::from_epoch_and_xid(0, 1000).value,
+        Relaxed,
+    );
 
     kax_add(950, 954);
     kax::remove(951);
@@ -955,7 +1022,10 @@ fn xid_in_progress_in_recovery_consults_known_assigned() {
     kax::kax_reset();
 
     let tv = TransamVariables();
-    tv.latestCompletedXid.store(FullTransactionId::from_epoch_and_xid(0, 3000).value, Relaxed);
+    tv.latestCompletedXid.store(
+        FullTransactionId::from_epoch_and_xid(0, 3000).value,
+        Relaxed,
+    );
 
     kax_add(2900, 2903);
     let _r = RecoveryOn::new();
@@ -980,7 +1050,10 @@ fn horizons_in_recovery_fold_in_known_assigned_oldest() {
     set_transaction_xmin(InvalidTransactionId);
 
     let tv = TransamVariables();
-    tv.latestCompletedXid.store(FullTransactionId::from_epoch_and_xid(0, 4000).value, Relaxed);
+    tv.latestCompletedXid.store(
+        FullTransactionId::from_epoch_and_xid(0, 4000).value,
+        Relaxed,
+    );
 
     kax_add(3900, 3901);
     let _r = RecoveryOn::new();

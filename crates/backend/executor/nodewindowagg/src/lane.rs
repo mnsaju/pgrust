@@ -54,8 +54,7 @@ use ::executils::{EStateData, ExecSlotId};
 use ::tuplestore::Tuplestore;
 use ::types_error::{PgError, PgResult};
 use ::types_nodes::rawnodes::{
-    FRAMEOPTION_DEFAULTS, FRAMEOPTION_EXCLUDE_GROUP, FRAMEOPTION_EXCLUDE_TIES,
-    FRAMEOPTION_GROUPS,
+    FRAMEOPTION_DEFAULTS, FRAMEOPTION_EXCLUDE_GROUP, FRAMEOPTION_EXCLUDE_TIES, FRAMEOPTION_GROUPS,
 };
 
 use crate::{WaStatus, WfKind, WindowAggStateData};
@@ -185,7 +184,10 @@ pub fn lane_window_accept<'mcx>(
     estate: &mut EStateData<'mcx>,
     tuple: ExecSlotId,
 ) -> PgResult<LaneAccept> {
-    debug_assert!(!lane_window_emit_pending(drive), "accept while rows pend emission");
+    debug_assert!(
+        !lane_window_emit_pending(drive),
+        "accept while rows pend emission"
+    );
     let mcx = estate.es_query_cxt;
     // `partition_done` = the open partition's groups are all final (its
     // boundary row is parked); the next accept must begin the NEW partition.
@@ -206,10 +208,17 @@ pub fn lane_window_accept<'mcx>(
     // Partition boundary check — spool_tuples' own compare + reset cadence.
     if state.plan.partNumCols > 0 {
         let same = {
-            let WindowAggStateData { ref mut part_eq, ref mut first_part_slot, .. } = *state;
+            let WindowAggStateData {
+                ref mut part_eq,
+                ref mut first_part_slot,
+                ..
+            } = *state;
             let outer_slot = estate.slot_mut(tuple);
-            let mut slots =
-                EvalSlots { scan: None, inner: Some(first_part_slot), outer: Some(outer_slot) };
+            let mut slots = EvalSlots {
+                scan: None,
+                inner: Some(first_part_slot),
+                outer: Some(outer_slot),
+            };
             exec_qual(part_eq.as_deref_mut(), &mut slots)?
         };
         estate.reset_expr_context(state.tmpcontext);
@@ -235,10 +244,17 @@ pub fn lane_window_accept<'mcx>(
         true
     } else {
         let r = {
-            let WindowAggStateData { ref mut ord_eq, ref mut agg_row_slot, .. } = *state;
+            let WindowAggStateData {
+                ref mut ord_eq,
+                ref mut agg_row_slot,
+                ..
+            } = *state;
             let outer_slot = estate.slot_mut(tuple);
-            let mut slots =
-                EvalSlots { scan: None, inner: Some(agg_row_slot), outer: Some(outer_slot) };
+            let mut slots = EvalSlots {
+                scan: None,
+                inner: Some(agg_row_slot),
+                outer: Some(outer_slot),
+            };
             exec_qual(ord_eq.as_deref_mut(), &mut slots)?
         };
         estate.reset_expr_context(state.tmpcontext);
@@ -256,7 +272,10 @@ pub fn lane_window_accept<'mcx>(
     close_open_group(state, drive, estate)?;
     spool_and_transition(state, drive, estate, tuple)?;
     {
-        let WindowAggStateData { ref mut agg_row_slot, .. } = *state;
+        let WindowAggStateData {
+            ref mut agg_row_slot,
+            ..
+        } = *state;
         let outer_slot = estate.slot_mut(tuple);
         exectuples::exec_copy_slot(agg_row_slot, outer_slot, mcx, mcx)?;
     }
@@ -344,11 +363,19 @@ pub fn lane_window_emit_next<'mcx>(
     if state.proj.has_subplan() {
         let ecxt = state.ps_ExprContext;
         let result = state.ps_ResultTupleSlot;
-        let WindowAggStateData { ref mut proj, ref mut scan_slot, .. } = *state;
+        let WindowAggStateData {
+            ref mut proj,
+            ref mut scan_slot,
+            ..
+        } = *state;
         ::executils::exec_project_with_subplans_outer(proj, scan_slot, estate, ecxt, result)?;
     } else {
         let result_slot = estate.slot_mut(state.ps_ResultTupleSlot);
-        let mut slots = EvalSlots { scan: None, inner: None, outer: Some(&mut state.scan_slot) };
+        let mut slots = EvalSlots {
+            scan: None,
+            inner: None,
+            outer: Some(&mut state.scan_slot),
+        };
         exec_project(&mut state.proj, &mut slots, result_slot, mcx)?;
     }
     Ok(Some(state.ps_ResultTupleSlot))
@@ -434,7 +461,11 @@ fn begin_partition<'mcx>(
     transition_first_part_row(state, estate)?;
     if state.ord_eq.is_some() {
         // Row 0 heads the open peer group.
-        let WindowAggStateData { ref mut agg_row_slot, ref mut first_part_slot, .. } = *state;
+        let WindowAggStateData {
+            ref mut agg_row_slot,
+            ref mut first_part_slot,
+            ..
+        } = *state;
         exectuples::exec_copy_slot(agg_row_slot, first_part_slot, mcx, mcx)?;
     }
     Ok(())
@@ -448,7 +479,10 @@ fn close_open_group<'mcx>(
     estate: &mut EStateData<'mcx>,
 ) -> PgResult<()> {
     debug_assert!(drive.spooled > drive.group_start, "empty peer group");
-    debug_assert!(drive.emit_pos == drive.emit_end, "close while rows pend emission");
+    debug_assert!(
+        drive.emit_pos == drive.emit_end,
+        "close while rows pend emission"
+    );
     if state.numaggs > 0 {
         state.default_agg_finalize_save(estate)?;
     }
@@ -469,14 +503,20 @@ fn spool_and_transition<'mcx>(
 ) -> PgResult<()> {
     let mcx = estate.es_query_cxt;
     {
-        let store = drive.store.as_mut().expect("partition open implies a store");
+        let store = drive
+            .store
+            .as_mut()
+            .expect("partition open implies a store");
         let outer_slot = estate.slot_mut(tuple);
         store.puttupleslot(outer_slot, mcx)?;
     }
     drive.spooled += 1;
     if state.numaggs > 0 {
         {
-            let et = state.evaltrans.as_mut().expect("numaggs > 0 implies evaltrans");
+            let et = state
+                .evaltrans
+                .as_mut()
+                .expect("numaggs > 0 implies evaltrans");
             if et.has_subplan() {
                 ::executils::exec_eval_expr_with_subplans_outer_slot(
                     et,
@@ -486,8 +526,11 @@ fn spool_and_transition<'mcx>(
                 )?;
             } else {
                 let outer_slot = estate.slot_mut(tuple);
-                let mut slots =
-                    EvalSlots { scan: None, inner: None, outer: Some(outer_slot) };
+                let mut slots = EvalSlots {
+                    scan: None,
+                    inner: None,
+                    outer: Some(outer_slot),
+                };
                 exec_eval_expr(et, &mut slots)?;
             }
         }
@@ -506,8 +549,12 @@ fn transition_first_part_row<'mcx>(
         return Ok(());
     }
     {
-        let WindowAggStateData { ref mut evaltrans, ref mut first_part_slot, tmpcontext, .. } =
-            *state;
+        let WindowAggStateData {
+            ref mut evaltrans,
+            ref mut first_part_slot,
+            tmpcontext,
+            ..
+        } = *state;
         let et = evaltrans.as_mut().expect("numaggs > 0 implies evaltrans");
         if et.has_subplan() {
             ::executils::exec_eval_expr_with_subplans_outer(
@@ -517,8 +564,11 @@ fn transition_first_part_row<'mcx>(
                 tmpcontext,
             )?;
         } else {
-            let mut slots =
-                EvalSlots { scan: None, inner: None, outer: Some(&mut *first_part_slot) };
+            let mut slots = EvalSlots {
+                scan: None,
+                inner: None,
+                outer: Some(&mut *first_part_slot),
+            };
             exec_eval_expr(et, &mut slots)?;
         }
     }
@@ -579,7 +629,10 @@ pub struct LaneFramedDrive {
 
 impl LaneFramedDrive {
     pub fn new() -> Self {
-        LaneFramedDrive { emitting: false, advance: false }
+        LaneFramedDrive {
+            emitting: false,
+            advance: false,
+        }
     }
 }
 
@@ -603,8 +656,7 @@ fn framed_fetch_tripwire() -> Box<PgError> {
 /// The never-called fetch closure: every node fetch path short-circuits on
 /// `partition_spooled` before pulling (module section doc); reaching this is
 /// a loud invariant failure, never a silent wrong result.
-fn framed_no_fetch<'mcx>(
-) -> impl FnMut(&mut EStateData<'mcx>) -> PgResult<Option<ExecSlotId>> {
+fn framed_no_fetch<'mcx>() -> impl FnMut(&mut EStateData<'mcx>) -> PgResult<Option<ExecSlotId>> {
     |_| Err(framed_fetch_tripwire())
 }
 
@@ -657,10 +709,17 @@ pub fn lane_framed_accept<'mcx>(
     // first row, its reset cadence, then the buffer append).
     if state.plan.partNumCols > 0 {
         let same = {
-            let WindowAggStateData { ref mut part_eq, ref mut first_part_slot, .. } = *state;
+            let WindowAggStateData {
+                ref mut part_eq,
+                ref mut first_part_slot,
+                ..
+            } = *state;
             let outer_slot = estate.slot_mut(tuple);
-            let mut slots =
-                EvalSlots { scan: None, inner: Some(first_part_slot), outer: Some(outer_slot) };
+            let mut slots = EvalSlots {
+                scan: None,
+                inner: Some(first_part_slot),
+                outer: Some(outer_slot),
+            };
             exec_qual(part_eq.as_deref_mut(), &mut slots)?
         };
         estate.reset_expr_context(state.tmpcontext);
@@ -680,9 +739,11 @@ pub fn lane_framed_accept<'mcx>(
     }
     {
         let outer_slot = estate.slot_mut(tuple);
-        state.buffer.as_mut().expect("open partition implies a buffer").puttupleslot(
-            outer_slot, mcx,
-        )?;
+        state
+            .buffer
+            .as_mut()
+            .expect("open partition implies a buffer")
+            .puttupleslot(outer_slot, mcx)?;
     }
     state.spooled_rows += 1;
     Ok(LaneFramedAccept::NeedMore)
@@ -712,7 +773,10 @@ pub fn lane_framed_input_done<'mcx>(
     if state.more_partitions {
         // The parked boundary row is a final one-row partition (no rows
         // followed it before the stream ended).
-        debug_assert!(state.first_part_valid, "parked partition without a parked row");
+        debug_assert!(
+            state.first_part_valid,
+            "parked partition without a parked row"
+        );
         let mut fetch = framed_no_fetch();
         state.begin_partition(estate, &mut fetch)?;
         state.partition_spooled = true;
@@ -750,8 +814,14 @@ pub fn lane_framed_emit_next<'mcx>(
     if !drive.emitting {
         return Ok(None);
     }
-    debug_assert!(state.partition_spooled, "framed emission over an unspooled partition");
-    debug_assert!(state.status == WaStatus::Run, "sealed admission: no pass-through states");
+    debug_assert!(
+        state.partition_spooled,
+        "framed emission over an unspooled partition"
+    );
+    debug_assert!(
+        state.status == WaStatus::Run,
+        "sealed admission: no pass-through states"
+    );
     if drive.advance {
         state.currentpos += 1;
         state.framehead_valid = false;
@@ -782,7 +852,11 @@ pub fn lane_framed_emit_next<'mcx>(
             && state.currentpos > 0
         {
             {
-                let WindowAggStateData { ref mut temp_slot_2, ref mut scan_slot, .. } = *state;
+                let WindowAggStateData {
+                    ref mut temp_slot_2,
+                    ref mut scan_slot,
+                    ..
+                } = *state;
                 exectuples::exec_copy_slot(temp_slot_2, scan_slot, mcx, mcx)?;
             }
             {
@@ -837,12 +911,20 @@ pub fn lane_framed_emit_next<'mcx>(
     if state.proj.has_subplan() {
         let ecxt = state.ps_ExprContext;
         let result = state.ps_ResultTupleSlot;
-        let WindowAggStateData { ref mut proj, ref mut scan_slot, .. } = *state;
+        let WindowAggStateData {
+            ref mut proj,
+            ref mut scan_slot,
+            ..
+        } = *state;
         ::executils::exec_project_with_subplans_outer(proj, scan_slot, estate, ecxt, result)?;
     } else {
         let mcx = estate.es_query_cxt;
         let result_slot = estate.slot_mut(state.ps_ResultTupleSlot);
-        let mut slots = EvalSlots { scan: None, inner: None, outer: Some(&mut state.scan_slot) };
+        let mut slots = EvalSlots {
+            scan: None,
+            inner: None,
+            outer: Some(&mut state.scan_slot),
+        };
         exec_project(&mut state.proj, &mut slots, result_slot, mcx)?;
     }
     Ok(Some(state.ps_ResultTupleSlot))

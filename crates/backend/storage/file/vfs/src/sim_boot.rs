@@ -82,16 +82,26 @@ fn parse_manifest(text: &str) -> Result<Manifest, String> {
             }
             let item = line.trim_end_matches(',').trim();
             let Some(name) = item.strip_prefix('"').and_then(|s| s.strip_suffix('"')) else {
-                return Err(format!("manifest line {}: expected \"root\" entry", lineno + 1));
+                return Err(format!(
+                    "manifest line {}: expected \"root\" entry",
+                    lineno + 1
+                ));
             };
             if name.is_empty() || name.starts_with('/') || name.contains("..") {
-                return Err(format!("manifest line {}: invalid root {name:?}", lineno + 1));
+                return Err(format!(
+                    "manifest line {}: invalid root {name:?}",
+                    lineno + 1
+                ));
             }
             share_roots.push(name.to_string());
             continue;
         }
         if let Some(v) = line.strip_prefix("version") {
-            let v = v.trim_start().strip_prefix('=').map(str::trim).unwrap_or("");
+            let v = v
+                .trim_start()
+                .strip_prefix('=')
+                .map(str::trim)
+                .unwrap_or("");
             version = Some(
                 v.parse::<u32>()
                     .map_err(|_| format!("manifest line {}: bad version", lineno + 1))?,
@@ -109,7 +119,10 @@ fn parse_manifest(text: &str) -> Result<Manifest, String> {
             }
             return Err(format!("manifest line {}: expected roots = [", lineno + 1));
         }
-        return Err(format!("manifest line {}: unrecognized: {line:?}", lineno + 1));
+        return Err(format!(
+            "manifest line {}: unrecognized: {line:?}",
+            lineno + 1
+        ));
     }
     if version != Some(MANIFEST_VERSION) {
         return Err(format!(
@@ -201,7 +214,10 @@ fn ingest_tree(
     let meta = std::fs::metadata(host_root)
         .map_err(|e| format!("{root_tag} root {}: {e}", host_root.display()))?;
     if !meta.is_dir() {
-        return Err(format!("{root_tag} root {} is not a directory", host_root.display()));
+        return Err(format!(
+            "{root_tag} root {} is not a directory",
+            host_root.display()
+        ));
     }
     let root_c = cpath(sim_root)?;
     SimVfs::ingest_dir(&root_c, host_mode(&meta))
@@ -242,11 +258,12 @@ fn walk(
             .into_string()
             .map_err(|n| format!("non-UTF-8 entry {n:?} under {}", host_dir.display()))?;
         let host_path = e.path();
-        let rel = if rel_dir.is_empty() { name.clone() } else { format!("{rel_dir}/{name}") };
-        let sim_path = format!(
-            "{}/{name}",
-            if sim_root == "/" { "" } else { sim_root }
-        );
+        let rel = if rel_dir.is_empty() {
+            name.clone()
+        } else {
+            format!("{rel_dir}/{name}")
+        };
+        let sim_path = format!("{}/{name}", if sim_root == "/" { "" } else { sim_root });
         // std::fs::metadata follows symlinks: cp -RL.
         let meta = std::fs::metadata(&host_path)
             .map_err(|e| format!("stat {}: {e}", host_path.display()))?;

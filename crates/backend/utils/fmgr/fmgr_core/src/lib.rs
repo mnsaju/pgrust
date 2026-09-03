@@ -17,16 +17,16 @@ use ::types_core::{primitive::InvalidOid, Oid};
 use ::types_error::PgResult;
 
 pub use ::fmgr::{
-    direct_input_function_call_safe, input_function_call, input_function_call_safe,
-    receive_function_call, send_function_call, ErrorSaveNode,
-};
-pub use ::fmgr::{
     direct_function_call1_coll, direct_function_call1_coll_in, direct_function_call2_coll,
     direct_function_call2_coll_in, direct_function_call3_coll, direct_function_call3_coll_in,
     function_call0_coll, function_call1_coll, function_call1_coll_in, function_call2_coll,
     function_call2_coll_in, function_call3_coll, function_call3_coll_in, function_call4_coll,
     function_call5_coll, function_call6_coll, function_call7_coll, function_call8_coll,
     function_call9_coll,
+};
+pub use ::fmgr::{
+    direct_input_function_call_safe, input_function_call, input_function_call_safe,
+    receive_function_call, send_function_call, ErrorSaveNode,
 };
 pub use canonical::{CANONICAL, CANONICAL_LAST_BUILTIN_OID};
 
@@ -52,7 +52,10 @@ impl<const N: usize> BuiltinOidIndex<N> {
         let mut prev = 0u32;
         while i < entries.len() {
             let oid = entries[i].foid;
-            assert!(i == 0 || oid > prev, "entries must be strictly OID-ascending");
+            assert!(
+                i == 0 || oid > prev,
+                "entries must be strictly OID-ascending"
+            );
             assert!((oid as usize) < N, "entry OID exceeds index span");
             prev = oid;
             map[oid as usize] = i as u16;
@@ -176,7 +179,10 @@ const fn build_builtins() -> [FmgrBuiltin; FMGR_NBUILTINS] {
     let mut prev = 0u32;
     while p < ported::PORTED.len() {
         let (oid, func) = ported::PORTED[p];
-        assert!(p == 0 || oid > prev, "PORTED must be strictly OID-ascending");
+        assert!(
+            p == 0 || oid > prev,
+            "PORTED must be strictly OID-ascending"
+        );
         prev = oid;
         let mut lo = 0;
         let mut hi = FMGR_NBUILTINS;
@@ -242,20 +248,14 @@ fn extra_builtin(id: Oid) -> Option<&'static FmgrBuiltin> {
     }
     let len = EXTRA_LEN.load(core::sync::atomic::Ordering::Relaxed);
     // SAFETY: set-once invariant above — (ptr,len) is the installed slice.
-    let tables = unsafe {
-        core::slice::from_raw_parts(ptr as *const &'static [FmgrBuiltin], len)
-    };
-    tables
-        .iter()
-        .find_map(|t| t.iter().find(|b| b.foid == id))
+    let tables = unsafe { core::slice::from_raw_parts(ptr as *const &'static [FmgrBuiltin], len) };
+    tables.iter().find_map(|t| t.iter().find(|b| b.foid == id))
 }
 
 #[inline]
 pub fn fmgr_isbuiltin(id: Oid) -> Option<&'static FmgrBuiltin> {
     match FMGR_BUILTIN_OID_INDEX.lookup(&FMGR_BUILTINS, id) {
-        Some(b) if b.func as usize == builtin_not_ported as usize => {
-            extra_builtin(id).or(Some(b))
-        }
+        Some(b) if b.func as usize == builtin_not_ported as usize => extra_builtin(id).or(Some(b)),
         Some(b) => Some(b),
         None => extra_builtin(id),
     }
@@ -304,9 +304,7 @@ fn extra_builtin_by_name(name: &str) -> Option<&'static FmgrBuiltin> {
     let len = EXTRA_LEN.load(core::sync::atomic::Ordering::Relaxed);
     // SAFETY: set-once invariant (install_extra_builtins) — (ptr,len) is the
     // installed slice.
-    let tables = unsafe {
-        core::slice::from_raw_parts(ptr as *const &'static [FmgrBuiltin], len)
-    };
+    let tables = unsafe { core::slice::from_raw_parts(ptr as *const &'static [FmgrBuiltin], len) };
     tables
         .iter()
         .find_map(|t| t.iter().find(|b| b.name == name))
@@ -399,8 +397,7 @@ static PLPGSQL_CALL_HANDLER: core::sync::atomic::AtomicUsize =
     core::sync::atomic::AtomicUsize::new(0);
 static PLPGSQL_INLINE_HANDLER: core::sync::atomic::AtomicUsize =
     core::sync::atomic::AtomicUsize::new(0);
-static PLPGSQL_VALIDATOR: core::sync::atomic::AtomicUsize =
-    core::sync::atomic::AtomicUsize::new(0);
+static PLPGSQL_VALIDATOR: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(0);
 
 pub fn register_plpgsql_handlers(
     call_handler: ::fmgr::PGFunction,
@@ -408,7 +405,10 @@ pub fn register_plpgsql_handlers(
     validator: ::fmgr::PGFunction,
 ) {
     PLPGSQL_CALL_HANDLER.store(call_handler as usize, core::sync::atomic::Ordering::Release);
-    PLPGSQL_INLINE_HANDLER.store(inline_handler as usize, core::sync::atomic::Ordering::Release);
+    PLPGSQL_INLINE_HANDLER.store(
+        inline_handler as usize,
+        core::sync::atomic::Ordering::Release,
+    );
     PLPGSQL_VALIDATOR.store(validator as usize, core::sync::atomic::Ordering::Release);
 }
 
@@ -578,7 +578,11 @@ pub fn fmgr_security_definer(
         inner.fn_expr = flinfo.fn_expr;
         let row = syscache_seams::lookup_pg_proc_secdef::call(flinfo.fn_oid)?
             .unwrap_or_else(|| panic!("cache lookup failed for function {}", flinfo.fn_oid));
-        let userid = if row.prosecdef { row.proowner } else { InvalidOid };
+        let userid = if row.prosecdef {
+            row.proowner
+        } else {
+            InvalidOid
+        };
         flinfo.fn_extra = Some(::fmgr::FnExtra::new(SecurityDefinerCache {
             flinfo: inner,
             userid,

@@ -55,9 +55,7 @@ impl<'mcx> JsonbPush<'mcx> {
         self.st.in_array()
     }
 
-    pub(crate) fn parts(
-        &mut self,
-    ) -> (&mut JsonbBuildState<'mcx>, &mut Option<JsonbValue<'mcx>>) {
+    pub(crate) fn parts(&mut self) -> (&mut JsonbBuildState<'mcx>, &mut Option<JsonbValue<'mcx>>) {
         (&mut self.st, &mut self.res)
     }
 
@@ -167,11 +165,7 @@ fn input_image<'mcx>(mcx: Mcx<'mcx>, payload: &[u8]) -> PgResult<PgVec<'mcx, u8>
 }
 
 /// C: jsonb_concat + IteratorConcat.
-pub fn concat<'mcx>(
-    mcx: Mcx<'mcx>,
-    jb1: &'mcx [u8],
-    jb2: &'mcx [u8],
-) -> PgResult<PgVec<'mcx, u8>> {
+pub fn concat<'mcx>(mcx: Mcx<'mcx>, jb1: &'mcx [u8], jb2: &'mcx [u8]) -> PgResult<PgVec<'mcx, u8>> {
     if container_is_object(jb1) == container_is_object(jb2) {
         if container_size(jb1) == 0 && !container_is_scalar(jb2) {
             return input_image(mcx, jb2);
@@ -280,8 +274,7 @@ pub fn concat<'mcx>(
 }
 
 fn item_matches_key(tok: WjbToken, v: &JsonbItem<'_>, key: &[u8]) -> bool {
-    matches!(tok, WjbToken::Elem | WjbToken::Key)
-        && matches!(v, JsonbItem::String(s) if *s == key)
+    matches!(tok, WjbToken::Elem | WjbToken::Key) && matches!(v, JsonbItem::String(s) if *s == key)
 }
 
 /// C: jsonb_delete (jsonb, text).
@@ -364,7 +357,9 @@ pub fn delete_idx<'mcx>(
         return Err(invalid_param("cannot delete from scalar"));
     }
     if container_is_object(payload) {
-        return Err(invalid_param("cannot delete from object using integer index"));
+        return Err(invalid_param(
+            "cannot delete from object using integer index",
+        ));
     }
     if container_size(payload) == 0 {
         return input_image(mcx, payload);
@@ -488,8 +483,7 @@ fn set_path_rec<'mcx>(
             else {
                 unreachable!()
             };
-            if args.op_type & JB_PATH_FILL_GAPS != 0 && level <= args.path.len() - 1 && raw_scalar
-            {
+            if args.op_type & JB_PATH_FILL_GAPS != 0 && level <= args.path.len() - 1 && raw_scalar {
                 return Err(cannot_replace_scalar());
             }
             ps.push(r, v)?;
@@ -565,10 +559,7 @@ fn set_path_object<'mcx>(
         args.path[level]
     };
 
-    if npairs == 0
-        && args.op_type & JB_PATH_CREATE_OR_INSERT != 0
-        && level == path_len - 1
-        && !done
+    if npairs == 0 && args.op_type & JB_PATH_CREATE_OR_INSERT != 0 && level == path_len - 1 && !done
     {
         let key = pathelem.expect("checked non-null above");
         ps.push(WjbToken::Key, JsonbItem::String(key))?;

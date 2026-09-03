@@ -22,7 +22,12 @@ fn int4_ri() -> RangeInfo {
         rngtypid: INT4RANGE,
         collation: InvalidOid,
         elem_typid: 23,
-        elem: ElemInfo { typlen: 4, typbyval: true, typalign: b'i', typstorage: b'p' },
+        elem: ElemInfo {
+            typlen: 4,
+            typbyval: true,
+            typalign: b'i',
+            typstorage: b'p',
+        },
         cmp: FmgrInfo::new(fc_i32_cmp, 351, 2, true, false),
         canonical_oid: F_INT4RANGE_CANONICAL,
         elem_hash: None,
@@ -41,18 +46,30 @@ fn cache(subdiff: bool) -> RangeGistCache {
 }
 
 fn bound(val: i32, inclusive: bool, lower: bool) -> RangeBound {
-    RangeBound { val: Datum::from_i32(val), infinite: false, inclusive, lower }
+    RangeBound {
+        val: Datum::from_i32(val),
+        infinite: false,
+        inclusive,
+        lower,
+    }
 }
 
 fn inf_bound(lower: bool) -> RangeBound {
-    RangeBound { val: Datum::from_usize(0), infinite: true, inclusive: false, lower }
+    RangeBound {
+        val: Datum::from_usize(0),
+        infinite: true,
+        inclusive: false,
+        lower,
+    }
 }
 
 fn mk<'m>(mcx: Mcx<'m>, cache: &mut RangeGistCache, lo: RangeBound, up: RangeBound) -> &'m [u8] {
     let mut lo = lo;
     let mut up = up;
     leak_image(
-        range_serialize(mcx, &mut cache.ri, &mut lo, &mut up, false, None).unwrap().unwrap(),
+        range_serialize(mcx, &mut cache.ri, &mut lo, &mut up, false, None)
+            .unwrap()
+            .unwrap(),
     )
 }
 
@@ -60,7 +77,9 @@ fn mk_empty<'m>(mcx: Mcx<'m>, cache: &mut RangeGistCache) -> &'m [u8] {
     let mut lo = bound(0, true, true);
     let mut up = bound(0, false, false);
     leak_image(
-        range_serialize(mcx, &mut cache.ri, &mut lo, &mut up, true, None).unwrap().unwrap(),
+        range_serialize(mcx, &mut cache.ri, &mut lo, &mut up, true, None)
+            .unwrap()
+            .unwrap(),
     )
 }
 
@@ -69,12 +88,33 @@ fn gist_range_class_bits() {
     let cx = MemoryContext::new("t");
     let mcx = cx.mcx();
     let mut c = cache(false);
-    assert_eq!(get_gist_range_class(mk(mcx, &mut c, bound(1, true, true), bound(5, false, false))), CLS_NORMAL);
-    assert_eq!(get_gist_range_class(mk(mcx, &mut c, inf_bound(true), bound(5, false, false))), CLS_LOWER_INF);
-    assert_eq!(get_gist_range_class(mk(mcx, &mut c, bound(1, true, true), inf_bound(false))), CLS_UPPER_INF);
-    assert_eq!(get_gist_range_class(mk(mcx, &mut c, inf_bound(true), inf_bound(false))), CLS_LOWER_INF | CLS_UPPER_INF);
+    assert_eq!(
+        get_gist_range_class(mk(
+            mcx,
+            &mut c,
+            bound(1, true, true),
+            bound(5, false, false)
+        )),
+        CLS_NORMAL
+    );
+    assert_eq!(
+        get_gist_range_class(mk(mcx, &mut c, inf_bound(true), bound(5, false, false))),
+        CLS_LOWER_INF
+    );
+    assert_eq!(
+        get_gist_range_class(mk(mcx, &mut c, bound(1, true, true), inf_bound(false))),
+        CLS_UPPER_INF
+    );
+    assert_eq!(
+        get_gist_range_class(mk(mcx, &mut c, inf_bound(true), inf_bound(false))),
+        CLS_LOWER_INF | CLS_UPPER_INF
+    );
     assert_eq!(get_gist_range_class(mk_empty(mcx, &mut c)), CLS_EMPTY);
-    let ce = set_contain_empty_copy(mcx, mk(mcx, &mut c, bound(1, true, true), bound(5, false, false))).unwrap();
+    let ce = set_contain_empty_copy(
+        mcx,
+        mk(mcx, &mut c, bound(1, true, true), bound(5, false, false)),
+    )
+    .unwrap();
     assert_eq!(get_gist_range_class(ce), CLS_CONTAIN_EMPTY);
 }
 
@@ -99,7 +139,10 @@ fn super_union_identity_and_absorb() {
     let e = mk_empty(mcx, &mut c);
     let u3 = range_super_union(mcx, &mut c, e, a).unwrap();
     assert_ne!(u3.as_ptr(), a.as_ptr());
-    assert_eq!(range_get_flags(u3) & RANGE_CONTAIN_EMPTY, RANGE_CONTAIN_EMPTY);
+    assert_eq!(
+        range_get_flags(u3) & RANGE_CONTAIN_EMPTY,
+        RANGE_CONTAIN_EMPTY
+    );
     // already-contain-empty operand returns as-is.
     let u4 = range_super_union(mcx, &mut c, e, u3).unwrap();
     assert_eq!(u4.as_ptr(), u3.as_ptr());
@@ -148,7 +191,10 @@ fn penalty_classes_match_c() {
     // normal into empty original: infinity.
     assert_eq!(call_penalty(mcx, cache(true), empty, normal), f32::INFINITY);
     // (-inf,x) into normal: infinity.
-    assert_eq!(call_penalty(mcx, cache(true), normal, lower_inf), f32::INFINITY);
+    assert_eq!(
+        call_penalty(mcx, cache(true), normal, lower_inf),
+        f32::INFINITY
+    );
     // (-inf,25) into (-inf,20): upper extension via subdiff = 5.
     let lower_inf25 = mk(mcx, &mut c, inf_bound(true), bound(25, false, false));
     assert_eq!(call_penalty(mcx, cache(true), lower_inf, lower_inf25), 5.0);
@@ -162,7 +208,12 @@ fn picksplit_assigns_every_offset_once() {
     // 1-based picksplit vector: overlapping normal ranges.
     let mut ranges: Vec<&[u8]> = vec![&[]];
     for i in 0..8 {
-        ranges.push(mk(mcx, &mut c, bound(i * 2, true, true), bound(i * 2 + 3, false, false)));
+        ranges.push(mk(
+            mcx,
+            &mut c,
+            bound(i * 2, true, true),
+            bound(i * 2 + 3, false, false),
+        ));
     }
     let mut v = GistSplitVec {
         spl_left: Vec::new(),
@@ -173,7 +224,12 @@ fn picksplit_assigns_every_offset_once() {
         spl_rdatum_exists: false,
     };
     double_sorting_split(mcx, &mut c, &ranges, &mut v).unwrap();
-    let mut seen: Vec<u16> = v.spl_left.iter().chain(v.spl_right.iter()).copied().collect();
+    let mut seen: Vec<u16> = v
+        .spl_left
+        .iter()
+        .chain(v.spl_right.iter())
+        .copied()
+        .collect();
     seen.sort_unstable();
     assert_eq!(seen, (1..=8).collect::<Vec<u16>>());
     assert!(!v.spl_left.is_empty() && !v.spl_right.is_empty());
@@ -221,8 +277,22 @@ fn leaf_consistent_strategies() {
     assert!(consistent_leaf_range(mcx, &mut c.ri, RANGESTRAT_BEFORE, key, q).unwrap());
     assert!(consistent_leaf_range(mcx, &mut c.ri, RANGESTRAT_ADJACENT, key, q).unwrap());
     assert!(!consistent_leaf_range(mcx, &mut c.ri, RANGESTRAT_OVERLAPS, key, q).unwrap());
-    assert!(consistent_leaf_element(mcx, &mut c.ri, RANGESTRAT_CONTAINS_ELEM, key, Datum::from_i32(5)).unwrap());
-    assert!(!consistent_leaf_element(mcx, &mut c.ri, RANGESTRAT_CONTAINS_ELEM, key, Datum::from_i32(10)).unwrap());
+    assert!(consistent_leaf_element(
+        mcx,
+        &mut c.ri,
+        RANGESTRAT_CONTAINS_ELEM,
+        key,
+        Datum::from_i32(5)
+    )
+    .unwrap());
+    assert!(!consistent_leaf_element(
+        mcx,
+        &mut c.ri,
+        RANGESTRAT_CONTAINS_ELEM,
+        key,
+        Datum::from_i32(10)
+    )
+    .unwrap());
     // int page: contained_by descends when key contains empties.
     let ce = set_contain_empty_copy(mcx, key).unwrap();
     assert!(consistent_int_range(mcx, &mut c.ri, RANGESTRAT_CONTAINED_BY, ce, q).unwrap());

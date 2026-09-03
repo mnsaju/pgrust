@@ -46,8 +46,7 @@ thread_local! {
 }
 
 fn current_wal_usage() -> Option<WalUsage> {
-    transam_xlog_seams::wal_usage::is_installed()
-        .then(transam_xlog_seams::wal_usage::call)
+    transam_xlog_seams::wal_usage::is_installed().then(transam_xlog_seams::wal_usage::call)
 }
 
 pub fn pgstat_report_wal(force: bool) {
@@ -102,7 +101,9 @@ pub(crate) fn pgstat_wal_flush_cb(_nowait: bool) -> bool {
         let w = &mut shared.wal_counters;
         w.wal_records += usage.wal_records - prev.wal_records;
         w.wal_fpi += usage.wal_fpi - prev.wal_fpi;
-        w.wal_bytes = w.wal_bytes.wrapping_add(usage.wal_bytes.wrapping_sub(prev.wal_bytes));
+        w.wal_bytes = w
+            .wal_bytes
+            .wrapping_add(usage.wal_bytes.wrapping_sub(prev.wal_bytes));
         w.wal_buffers_full += usage.wal_buffers_full - prev.wal_buffers_full;
     }
     PREV_WAL_USAGE.with(|c| c.set(usage));

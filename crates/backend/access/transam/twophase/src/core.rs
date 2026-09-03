@@ -11,9 +11,7 @@ use types_error::{
     ERRCODE_INVALID_PARAMETER_VALUE, ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE,
     ERRCODE_OUT_OF_MEMORY, ERRCODE_PROGRAM_LIMIT_EXCEEDED, ERROR,
 };
-use types_storage::storage::{
-    XidCacheStatus, NUM_LOCK_PARTITIONS, PGPROC_MAX_CACHED_SUBXIDS,
-};
+use types_storage::storage::{XidCacheStatus, NUM_LOCK_PARTITIONS, PGPROC_MAX_CACHED_SUBXIDS};
 
 use crate::codec::{
     maxalign, TwoPhaseFileHeader, TwoPhaseRecordOnDisk, MAX_ALLOC_SIZE,
@@ -156,12 +154,16 @@ pub(crate) fn mark_as_preparing_guts(
     let g: &GXact = st.gxact(idx);
     let proc = lmgr_proc::GetPGProcByNumber(g.pgprocno.get());
 
-    proc.links.set(types_storage::storage::proclist_node::detached());
+    proc.links
+        .set(types_storage::storage::proclist_node::detached());
     proc.waitStatus
         .store(types_storage::storage::PROC_WAIT_STATUS_OK, Relaxed);
     let my_procno = init_small::globals::MyProcNumber();
     let my_lxid = if my_procno >= 0 {
-        lmgr_proc::GetPGProcByNumber(my_procno).vxid.lxid.load(Relaxed)
+        lmgr_proc::GetPGProcByNumber(my_procno)
+            .vxid
+            .lxid
+            .load(Relaxed)
     } else {
         0
     };
@@ -285,7 +287,9 @@ pub(crate) fn lock_gxact(gid: &str, user: Oid) -> PgResult<i32> {
                 return Err(ereport(ERROR)
                     .errcode(types_error::ERRCODE_FEATURE_NOT_SUPPORTED)
                     .errmsg("prepared transaction belongs to another database")
-                    .errhint("Connect to the database where the transaction was prepared to finish it.")
+                    .errhint(
+                        "Connect to the database where the transaction was prepared to finish it.",
+                    )
                     .finish(here("LockGXact"))
                     .unwrap_err());
             }
@@ -655,7 +659,10 @@ pub fn StandbyTransactionIdIsPrepared(xid: TransactionId) -> PgResult<bool> {
     let Some(buf) = crate::files::read_twophase_file(xid, true)? else {
         return Ok(false);
     };
-    let hdr = corrupt_guard(TwoPhaseFileHeader::from_bytes(&buf), "StandbyTransactionIdIsPrepared")?;
+    let hdr = corrupt_guard(
+        TwoPhaseFileHeader::from_bytes(&buf),
+        "StandbyTransactionIdIsPrepared",
+    )?;
     Ok(hdr.xid == xid)
 }
 
@@ -680,8 +687,8 @@ pub(crate) fn process_records(
     callbacks: &[Option<twophase_rmgr::TwoPhaseCallback>; twophase_rmgr::NUM_TWOPHASE_RM],
 ) -> PgResult<()> {
     loop {
-        let record = TwoPhaseRecordOnDisk::from_bytes(&buf[off..])
-            .expect("truncated two-phase record");
+        let record =
+            TwoPhaseRecordOnDisk::from_bytes(&buf[off..]).expect("truncated two-phase record");
         debug_assert!(record.rmid <= twophase_rmgr::TWOPHASE_RM_MAX_ID);
         if record.rmid == twophase_rmgr::TWOPHASE_RM_END_ID {
             break;

@@ -10,9 +10,8 @@ use alloc::boxed::Box;
 
 use ::numutils::{pg_lltoa, pg_strtoint64_safe};
 use ::types_error::{
-    PgError, PgResult, SoftErrorContext, ERRCODE_DIVISION_BY_ZERO,
-    ERRCODE_INVALID_PARAMETER_VALUE, ERRCODE_INVALID_PRECEDING_OR_FOLLOWING_SIZE,
-    ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE,
+    PgError, PgResult, SoftErrorContext, ERRCODE_DIVISION_BY_ZERO, ERRCODE_INVALID_PARAMETER_VALUE,
+    ERRCODE_INVALID_PRECEDING_OR_FOLLOWING_SIZE, ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE,
 };
 
 pub use ::numutils::MAXINT8LEN as MAX_INT8_LEN;
@@ -47,7 +46,12 @@ macro_rules! overflow_fns {
     };
 }
 
-overflow_fns!(pg_add_s64_overflow, pg_sub_s64_overflow, pg_mul_s64_overflow, i64);
+overflow_fns!(
+    pg_add_s64_overflow,
+    pg_sub_s64_overflow,
+    pg_mul_s64_overflow,
+    i64
+);
 
 #[track_caller]
 #[cold]
@@ -349,12 +353,20 @@ pub fn int8dec_any(arg: i64) -> PgResult<i64> {
 
 #[inline]
 pub fn int8larger(arg1: i64, arg2: i64) -> i64 {
-    if arg1 > arg2 { arg1 } else { arg2 }
+    if arg1 > arg2 {
+        arg1
+    } else {
+        arg2
+    }
 }
 
 #[inline]
 pub fn int8smaller(arg1: i64, arg2: i64) -> i64 {
-    if arg1 < arg2 { arg1 } else { arg2 }
+    if arg1 < arg2 {
+        arg1
+    } else {
+        arg2
+    }
 }
 
 #[inline]

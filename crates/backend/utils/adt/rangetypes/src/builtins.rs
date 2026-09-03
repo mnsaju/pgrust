@@ -42,9 +42,13 @@ pub fn arg_range<'m>(fcinfo: &Fcinfo, i: usize, mcx: Mcx<'m>) -> PgResult<RangeA
     let raw = unsafe { core::slice::from_raw_parts(p, total) };
     if raw[0] & 0x03 == 0 {
         // SAFETY: the borrow lives as long as the argument datum (the call).
-        Ok(RangeArg::Borrowed(unsafe { core::slice::from_raw_parts(p, total) }))
+        Ok(RangeArg::Borrowed(unsafe {
+            core::slice::from_raw_parts(p, total)
+        }))
     } else {
-        Ok(RangeArg::Owned(::detoast_seams::detoast_attr::call(mcx, raw)?))
+        Ok(RangeArg::Owned(::detoast_seams::detoast_attr::call(
+            mcx, raw,
+        )?))
     }
 }
 
@@ -55,10 +59,7 @@ std::thread_local! {
         const { core::cell::UnsafeCell::new(None) };
 }
 
-fn flinfo_ri<'f>(
-    flinfo: Option<&'f mut FmgrInfo>,
-    rngtypid: Oid,
-) -> PgResult<&'f mut RangeInfo> {
+fn flinfo_ri<'f>(flinfo: Option<&'f mut FmgrInfo>, rngtypid: Oid) -> PgResult<&'f mut RangeInfo> {
     if let Some(fl) = flinfo {
         return cached_range_info(fl, rngtypid);
     }
@@ -114,7 +115,9 @@ pub fn fc_range_out(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRes
         range_type_oid(&r),
         IOFuncSelector::IOFunc_output,
     )?;
-    Ok(::types_fmgr::cstring_result(crate::io::range_out(mcx, cache, &r)?))
+    Ok(::types_fmgr::cstring_result(crate::io::range_out(
+        mcx, cache, &r,
+    )?))
 }
 
 pub fn fc_range_recv(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -152,13 +155,21 @@ pub fn fc_range_constructor2(
     let mcx = fcinfo.result_mcx();
     let ri = cached_range_info(flinfo, rngtypid)?;
     let mut lower = RangeBound {
-        val: if fcinfo.argisnull(0) { Datum::from_usize(0) } else { fcinfo.arg(0) },
+        val: if fcinfo.argisnull(0) {
+            Datum::from_usize(0)
+        } else {
+            fcinfo.arg(0)
+        },
         infinite: fcinfo.argisnull(0),
         inclusive: true,
         lower: true,
     };
     let mut upper = RangeBound {
-        val: if fcinfo.argisnull(1) { Datum::from_usize(0) } else { fcinfo.arg(1) },
+        val: if fcinfo.argisnull(1) {
+            Datum::from_usize(0)
+        } else {
+            fcinfo.arg(1)
+        },
         infinite: fcinfo.argisnull(1),
         inclusive: false,
         lower: false,
@@ -192,13 +203,21 @@ pub fn fc_range_constructor3(
     let flags_text = unsafe { fcinfo.arg_varlena_packed(2) }?;
     let flags = range_parse_flags(flags_text.data())?;
     let mut lower = RangeBound {
-        val: if fcinfo.argisnull(0) { Datum::from_usize(0) } else { fcinfo.arg(0) },
+        val: if fcinfo.argisnull(0) {
+            Datum::from_usize(0)
+        } else {
+            fcinfo.arg(0)
+        },
         infinite: fcinfo.argisnull(0),
         inclusive: flags & RANGE_LB_INC != 0,
         lower: true,
     };
     let mut upper = RangeBound {
-        val: if fcinfo.argisnull(1) { Datum::from_usize(0) } else { fcinfo.arg(1) },
+        val: if fcinfo.argisnull(1) {
+            Datum::from_usize(0)
+        } else {
+            fcinfo.arg(1)
+        },
         infinite: fcinfo.argisnull(1),
         inclusive: flags & RANGE_UB_INC != 0,
         lower: false,
@@ -252,7 +271,9 @@ fn bound_datum_result(fcinfo: &Fcinfo, ri: &RangeInfo, val: Datum) -> PgResult<D
         ri.elem.typlen as usize
     };
     // SAFETY: live bound value of n bytes inside the argument image.
-    byref_result(fcinfo.result_mcx(), unsafe { core::slice::from_raw_parts(p, n) })
+    byref_result(fcinfo.result_mcx(), unsafe {
+        core::slice::from_raw_parts(p, n)
+    })
 }
 
 macro_rules! fc_flag {
@@ -281,7 +302,9 @@ pub fn fc_range_contains_elem(
     let r = arg_range(fcinfo, 0, mcx)?;
     let val = fcinfo.arg(1);
     let ri = flinfo_ri(flinfo, range_type_oid(&r))?;
-    Ok(Datum::from_bool(ops::range_contains_elem_internal(mcx, ri, &r, val)?))
+    Ok(Datum::from_bool(ops::range_contains_elem_internal(
+        mcx, ri, &r, val,
+    )?))
 }
 
 pub fn fc_elem_contained_by_range(
@@ -292,7 +315,9 @@ pub fn fc_elem_contained_by_range(
     let val = fcinfo.arg(0);
     let r = arg_range(fcinfo, 1, mcx)?;
     let ri = flinfo_ri(flinfo, range_type_oid(&r))?;
-    Ok(Datum::from_bool(ops::range_contains_elem_internal(mcx, ri, &r, val)?))
+    Ok(Datum::from_bool(ops::range_contains_elem_internal(
+        mcx, ri, &r, val,
+    )?))
 }
 
 macro_rules! fc_rr_bool {
@@ -324,7 +349,9 @@ pub fn fc_range_adjacent(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> 
     let r1 = arg_range(fcinfo, 0, mcx)?;
     let r2 = arg_range(fcinfo, 1, mcx)?;
     let ri = flinfo_ri(flinfo, range_type_oid(&r1))?;
-    Ok(Datum::from_bool(ops::range_adjacent_internal(mcx, ri, &r1, &r2)?))
+    Ok(Datum::from_bool(ops::range_adjacent_internal(
+        mcx, ri, &r1, &r2,
+    )?))
 }
 
 pub fn fc_range_minus(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -380,7 +407,9 @@ pub fn fc_range_intersect(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) ->
 #[track_caller]
 #[cold]
 fn non_aggregate_context(what: &str) -> Box<PgError> {
-    Box::new(PgError::error(format!("{what} called in non-aggregate context")))
+    Box::new(PgError::error(format!(
+        "{what} called in non-aggregate context"
+    )))
 }
 
 pub fn fc_range_intersect_agg_transfn(
@@ -394,7 +423,9 @@ pub fn fc_range_intersect_agg_transfn(
     let flinfo = flinfo.expect("range_intersect_agg_transfn: NULL flinfo");
     let rngtypoid = ::funcapi::get_fn_expr_argtype(Some(flinfo), 1);
     if ::lsyscache::get_range_subtype(rngtypoid)? == InvalidOid {
-        return Err(Box::new(PgError::error("range_intersect_agg must be called with a range")));
+        return Err(Box::new(PgError::error(
+            "range_intersect_agg must be called with a range",
+        )));
     }
     let mcx = fcinfo.result_mcx();
     let r1 = arg_range(fcinfo, 0, mcx)?;
@@ -435,7 +466,9 @@ pub fn fc_hash_range(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRe
     let mcx = fcinfo.result_mcx();
     let r = arg_range(fcinfo, 0, mcx)?;
     let ri = flinfo_ri(flinfo, range_type_oid(&r))?;
-    Ok(Datum::from_i32(ops::hash_range_internal(mcx, ri, &r)? as i32))
+    Ok(Datum::from_i32(
+        ops::hash_range_internal(mcx, ri, &r)? as i32
+    ))
 }
 
 pub fn fc_hash_range_extended(
@@ -446,7 +479,9 @@ pub fn fc_hash_range_extended(
     let r = arg_range(fcinfo, 0, mcx)?;
     let seed = fcinfo.arg(1);
     let ri = flinfo_ri(flinfo, range_type_oid(&r))?;
-    Ok(Datum::from_u64(ops::hash_range_extended_internal(mcx, ri, &r, seed)?))
+    Ok(Datum::from_u64(ops::hash_range_extended_internal(
+        mcx, ri, &r, seed,
+    )?))
 }
 
 // The canonical pg_proc entry points (make_range dispatches to the adjusters
@@ -482,15 +517,21 @@ fc_canonical! {
 }
 
 pub fn fc_int4range_subdiff(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
-    Ok(Datum::from_f64(fcinfo.arg_i32(0) as f64 - fcinfo.arg_i32(1) as f64))
+    Ok(Datum::from_f64(
+        fcinfo.arg_i32(0) as f64 - fcinfo.arg_i32(1) as f64,
+    ))
 }
 
 pub fn fc_int8range_subdiff(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
-    Ok(Datum::from_f64(fcinfo.arg_i64(0) as f64 - fcinfo.arg_i64(1) as f64))
+    Ok(Datum::from_f64(
+        fcinfo.arg_i64(0) as f64 - fcinfo.arg_i64(1) as f64,
+    ))
 }
 
 pub fn fc_daterange_subdiff(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
-    Ok(Datum::from_f64(fcinfo.arg_i32(0) as f64 - fcinfo.arg_i32(1) as f64))
+    Ok(Datum::from_f64(
+        fcinfo.arg_i32(0) as f64 - fcinfo.arg_i32(1) as f64,
+    ))
 }
 
 const USECS_PER_SEC: f64 = 1_000_000.0;
@@ -549,7 +590,9 @@ fn range_elem_support(fcinfo: &mut Fcinfo, range_is_left: bool, name: &str) -> P
     let elem_expr = fexpr.args.nth(if range_is_left { 1 } else { 0 });
     match range_arg.as_const() {
         Some(c) if !c.constisnull => {
-            let mcx = req.mcx.unwrap_or_else(|| panic!("{name}: request carries an mcx"));
+            let mcx = req
+                .mcx
+                .unwrap_or_else(|| panic!("{name}: request carries an mcx"));
             match find_simplified_clause(mcx, c.constvalue, elem_expr)? {
                 Some(node) => Ok(Datum::from_usize(node.as_raw().as_ptr() as usize)),
                 None => Ok(Datum::from_usize(0)),
@@ -581,7 +624,8 @@ fn find_simplified_clause<'mcx>(
         ::detoast_seams::detoast_attr::call(mcx, raw)?.leak()
     };
 
-    let entry = ::typcache::lookup_type_cache(range_type_oid(range), ::typcache::TYPECACHE_RANGE_INFO)?;
+    let entry =
+        ::typcache::lookup_type_cache(range_type_oid(range), ::typcache::TYPECACHE_RANGE_INFO)?;
     let Some(elem_entry) = entry.rngelemtype() else {
         return Err(crate::not_a_range_type(range_type_oid(range)));
     };
@@ -615,8 +659,16 @@ fn find_simplified_clause<'mcx>(
     let mut lower_expr = None;
     let mut upper_expr = None;
     if !lower.infinite {
-        lower_expr =
-            build_bound_expr(mcx, elem_expr, lower.val, true, lower.inclusive, &elem_entry, opfamily, rng_collation)?;
+        lower_expr = build_bound_expr(
+            mcx,
+            elem_expr,
+            lower.val,
+            true,
+            lower.inclusive,
+            &elem_entry,
+            opfamily,
+            rng_collation,
+        )?;
         if lower_expr.is_none() {
             return Ok(None);
         }
@@ -624,8 +676,16 @@ fn find_simplified_clause<'mcx>(
     if !upper.infinite {
         // C copies the elemExpr for the second comparison; nodes here are
         // immutable arena shares, so the same node serves both OpExprs.
-        upper_expr =
-            build_bound_expr(mcx, elem_expr, upper.val, false, upper.inclusive, &elem_entry, opfamily, rng_collation)?;
+        upper_expr = build_bound_expr(
+            mcx,
+            elem_expr,
+            upper.val,
+            false,
+            upper.inclusive,
+            &elem_entry,
+            opfamily,
+            rng_collation,
+        )?;
         if upper_expr.is_none() {
             return Ok(None);
         }
@@ -665,7 +725,11 @@ fn build_bound_expr<'mcx>(
     const BTGreaterEqualStrategyNumber: i16 = 4;
     let elem_type = elem_entry.type_id;
     let strategy = if is_lower_bound {
-        if is_inclusive { BTGreaterEqualStrategyNumber } else { BTGreaterStrategyNumber }
+        if is_inclusive {
+            BTGreaterEqualStrategyNumber
+        } else {
+            BTGreaterStrategyNumber
+        }
     } else if is_inclusive {
         BTLessEqualStrategyNumber
     } else {
@@ -734,8 +798,21 @@ pub fn fc_elem_contained_by_range_support(
     range_elem_support(fcinfo, false, "elem_contained_by_range_support")
 }
 
-const fn b(foid: Oid, name: &'static str, nargs: i16, strict: bool, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict, retset: false, func }
+const fn b(
+    foid: Oid,
+    name: &'static str,
+    nargs: i16,
+    strict: bool,
+    func: PGFunction,
+) -> FmgrBuiltin {
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict,
+        retset: false,
+        func,
+    }
 }
 
 // pg_proc.dat rows for rangetypes.c, OID-ascending.
@@ -763,7 +840,13 @@ pub const RANGETYPES_BUILTINS: &[FmgrBuiltin] = &[
     b(3857, "range_overlaps", 2, true, fc_range_overlaps),
     b(3858, "range_contains_elem", 2, true, fc_range_contains_elem),
     b(3859, "range_contains", 2, true, fc_range_contains),
-    b(3860, "elem_contained_by_range", 2, true, fc_elem_contained_by_range),
+    b(
+        3860,
+        "elem_contained_by_range",
+        2,
+        true,
+        fc_elem_contained_by_range,
+    ),
     b(3861, "range_contained_by", 2, true, fc_range_contained_by),
     b(3862, "range_adjacent", 2, true, fc_range_adjacent),
     b(3863, "range_before", 2, true, fc_range_before),
@@ -797,8 +880,26 @@ pub const RANGETYPES_BUILTINS: &[FmgrBuiltin] = &[
     b(3945, "int8range", 2, false, fc_range_constructor2),
     b(3946, "int8range", 3, false, fc_range_constructor3),
     b(4057, "range_merge", 2, true, fc_range_merge),
-    b(4401, "range_intersect_agg_transfn", 2, true, fc_range_intersect_agg_transfn),
-    b(6345, "range_contains_elem_support", 1, true, fc_range_contains_elem_support),
-    b(6346, "elem_contained_by_range_support", 1, true, fc_elem_contained_by_range_support),
+    b(
+        4401,
+        "range_intersect_agg_transfn",
+        2,
+        true,
+        fc_range_intersect_agg_transfn,
+    ),
+    b(
+        6345,
+        "range_contains_elem_support",
+        1,
+        true,
+        fc_range_contains_elem_support,
+    ),
+    b(
+        6346,
+        "elem_contained_by_range_support",
+        1,
+        true,
+        fc_elem_contained_by_range_support,
+    ),
     b(6391, "range_sortsupport", 1, true, fc_range_sortsupport),
 ];

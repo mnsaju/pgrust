@@ -132,7 +132,9 @@ pub(crate) fn composite_tupdesc<'m>(
     if resolved.class != funcapi::TypeFuncClass::Composite {
         return Err(Box::new(PgError::error("return type must be a row type")));
     }
-    Ok(resolved.result_tuple_desc.expect("composite result has tupdesc"))
+    Ok(resolved
+        .result_tuple_desc
+        .expect("composite result has tupdesc"))
 }
 
 pub(crate) fn composite_result(

@@ -81,7 +81,10 @@ impl BumpArena {
             // SAFETY: csize <= avail keeps the bump inside the active block; p non-null there.
             unsafe {
                 self.cur_ptr = p.add(csize);
-                return Ok(NonNull::slice_from_raw_parts(NonNull::new_unchecked(p), csize));
+                return Ok(NonNull::slice_from_raw_parts(
+                    NonNull::new_unchecked(p),
+                    csize,
+                ));
             }
         }
         self.alloc_from_new_block(csize, acct)
@@ -226,7 +229,10 @@ impl BumpArena {
             }
         }
         self.next_block_size = INIT_BLOCK_SIZE;
-        debug_assert_eq!(self.mem_allocated, self.blocks.first().map_or(0, |b| b.size));
+        debug_assert_eq!(
+            self.mem_allocated,
+            self.blocks.first().map_or(0, |b| b.size)
+        );
     }
 
     #[cold]
@@ -309,7 +315,10 @@ mod tests {
             last = Some(p);
         }
         assert!(a.footprint() >= 1000 * 24);
-        assert!(acct.self_used.get() >= 1000 * 24, "block charges cover the chunks");
+        assert!(
+            acct.self_used.get() >= 1000 * 24,
+            "block charges cover the chunks"
+        );
         assert_eq!(acct.self_used.get() % 8, 0);
     }
 
@@ -320,13 +329,23 @@ mod tests {
         let l = Layout::from_size_align(64, 8).unwrap();
         let _ = a.alloc(l, &acct).unwrap();
         let after_first = acct.self_used.get();
-        assert_eq!(after_first, INIT_BLOCK_SIZE, "first alloc charges the whole keeper");
+        assert_eq!(
+            after_first, INIT_BLOCK_SIZE,
+            "first alloc charges the whole keeper"
+        );
         for _ in 0..(INIT_BLOCK_SIZE / 64 - 1) {
             let _ = a.alloc(l, &acct).unwrap();
         }
-        assert_eq!(acct.self_used.get(), after_first, "in-block allocs charge nothing");
+        assert_eq!(
+            acct.self_used.get(),
+            after_first,
+            "in-block allocs charge nothing"
+        );
         let _ = a.alloc(l, &acct).unwrap();
-        assert!(acct.self_used.get() > after_first, "block transition charges");
+        assert!(
+            acct.self_used.get() > after_first,
+            "block transition charges"
+        );
         assert_eq!(acct.arena_footprint.get(), a.footprint());
         assert_eq!(acct.arena_nblocks.get(), a.nblocks());
     }
@@ -347,11 +366,18 @@ mod tests {
         assert_eq!(a.blocks.len(), 1);
         assert_eq!(a.footprint(), a.blocks[0].size);
         let keeper_base = a.blocks[0].ptr.as_ptr();
-        assert_eq!(a.cur_ptr, keeper_base, "window re-opens on the keeper at reset");
+        assert_eq!(
+            a.cur_ptr, keeper_base,
+            "window re-opens on the keeper at reset"
+        );
         let charged = acct.self_used.get();
         let p = a.alloc(l, &acct).unwrap().cast::<u8>().as_ptr();
         assert_eq!(p, keeper_base, "first post-reset chunk starts the keeper");
-        assert_eq!(acct.self_used.get(), charged, "no re-charge on the fast path");
+        assert_eq!(
+            acct.self_used.get(),
+            charged,
+            "no re-charge on the fast path"
+        );
     }
 
     #[test]

@@ -114,10 +114,9 @@ const fn maxalign_down(len: usize) -> usize {
 const _: () = assert!(BTMaxItemSize == 2704);
 const _: () = assert!(BTMaxItemSizeNoHeapTid == 2712);
 
-pub const MaxTIDsPerBTreePage: usize = (BLCKSZ
-    - SizeOfPageHeaderData
-    - core::mem::size_of::<BTPageOpaqueData>())
-    / core::mem::size_of::<ItemPointerData>();
+pub const MaxTIDsPerBTreePage: usize =
+    (BLCKSZ - SizeOfPageHeaderData - core::mem::size_of::<BTPageOpaqueData>())
+        / core::mem::size_of::<ItemPointerData>();
 
 const _: () = assert!(MaxTIDsPerBTreePage == 1358);
 

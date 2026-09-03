@@ -43,7 +43,10 @@ pub fn inline_const_ok(d: datum::Datum) -> bool {
 /// authority). None = unresolvable (seam missing / not in pg_proc) — the
 /// caller refuses, exactly as dicteval's own compile would.
 pub fn func_catalog_rettype(fn_oid: types_core::Oid) -> Option<types_core::Oid> {
-    syscache_seams::lookup_pg_proc_shape::call(fn_oid).ok().flatten().map(|s| s.prorettype)
+    syscache_seams::lookup_pg_proc_shape::call(fn_oid)
+        .ok()
+        .flatten()
+        .map(|s| s.prorettype)
 }
 pub use dict::{collation_usable, inline_varlena_payload, non_inline_lane_datum};
 pub use translate::{
@@ -65,7 +68,9 @@ pub fn log_refused(reason: &str) {
 }
 
 pub fn log_staged_qual(nclauses: usize) {
-    log(format!("lane_executor: prewhere staged qual ({nclauses} clauses)"));
+    log(format!(
+        "lane_executor: prewhere staged qual ({nclauses} clauses)"
+    ));
 }
 
 // Arm-time marker: the condition cache engaged on this scan's staged prefix.
@@ -90,13 +95,17 @@ pub fn log_dict_clauses(n: u32) {
 // First DictCoded window for a clause: the memo tier actually engaged
 // (windows the AM answers Raw run the per-row fallback and never log this).
 pub(crate) fn log_dict_memo(col: u16, ndict: u32) {
-    log(format!("lane_executor: dict-memo engaged (col {col}, {ndict} entries)"));
+    log(format!(
+        "lane_executor: dict-memo engaged (col {col}, {ndict} entries)"
+    ));
 }
 
 // First sorted-dict window for a prefix clause: the code-range tier engaged
 // (two boundary binary searches per RG replace the per-entry memo fill).
 pub(crate) fn log_dict_range(col: u16, ndict: u32) {
-    log(format!("lane_executor: dict-range engaged (col {col}, {ndict} entries)"));
+    log(format!(
+        "lane_executor: dict-range engaged (col {col}, {ndict} entries)"
+    ));
 }
 
 // Translate-time marker: a LIKE/eq clause classified into a byte kernel
@@ -104,28 +113,38 @@ pub(crate) fn log_dict_range(col: u16, ndict: u32) {
 // the Raw-window pass run the kernel instead of the scalar predicate.
 pub(crate) fn log_dict_regex(col: u16, icase: bool) {
     let tag = if icase { "~*" } else { "~" };
-    log(format!("lane_executor: dict regex clause armed (col {col}, {tag}, lazy memo)"));
+    log(format!(
+        "lane_executor: dict regex clause armed (col {col}, {tag}, lazy memo)"
+    ));
 }
 
 pub(crate) fn log_dict_kernel(col: u16, shape: &str) {
-    log(format!("lane_executor: dict kernel compiled (col {col}, {shape})"));
+    log(format!(
+        "lane_executor: dict kernel compiled (col {col}, {shape})"
+    ));
 }
 
 // First-engagement marker: the contains kernel ran blob-wide over a
 // contiguous text-span window (likeband; once per clause per scan).
 pub(crate) fn log_blob_kernel(col: u16) {
-    log(format!("lane_executor: blob contains kernel engaged (col {col})"));
+    log(format!(
+        "lane_executor: blob contains kernel engaged (col {col})"
+    ));
 }
 
 // First-engagement marker: the per-epoch dict memo was filled by ONE
 // arena-wide contains sweep instead of per-entry finder calls (q22fix2).
 pub(crate) fn log_dict_sweep(col: u16, ndict: u32) {
-    log(format!("lane_executor: dict arena sweep engaged (col {col}, {ndict} entries)"));
+    log(format!(
+        "lane_executor: dict arena sweep engaged (col {col}, {ndict} entries)"
+    ));
 }
 
 // Arm-time marker: DictEval progs admitted onto a surface (dict-pushdown §7).
 pub fn log_dicteval_armed(surface: &str, n: u32, nfallible: u32) {
-    log(format!("lane_executor: dicteval armed ({surface}, {n} progs, {nfallible} lazy-fallible)"));
+    log(format!(
+        "lane_executor: dicteval armed ({surface}, {n} progs, {nfallible} lazy-fallible)"
+    ));
 }
 
 pub fn log_dicteval_refused(reason: &str) {
@@ -135,7 +154,9 @@ pub fn log_dicteval_refused(reason: &str) {
 // First DictCoded window for a prog: the memo tier actually engaged.
 pub(crate) fn log_dicteval_engaged(col: u16, ndict: u32, eager: bool) {
     let mode = if eager { "eager" } else { "lazy" };
-    log(format!("lane_executor: dicteval memo engaged (col {col}, {ndict} entries, {mode})"));
+    log(format!(
+        "lane_executor: dicteval memo engaged (col {col}, {ndict} entries, {mode})"
+    ));
 }
 
 pub fn log_dicteval_demoted(reason: &str) {

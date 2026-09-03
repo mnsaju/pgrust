@@ -93,9 +93,8 @@ fn inner_distances_row(
     rect_box: &RectBox,
 ) -> PgResult<*const f64> {
     // SAFETY: norderbys orderby scankeys per protocol.
-    let orderbys = unsafe {
-        core::slice::from_raw_parts(input.orderbys, input.norderbys.max(0) as usize)
-    };
+    let orderbys =
+        unsafe { core::slice::from_raw_parts(input.orderbys, input.norderbys.max(0) as usize) };
     let mut row: ::mcx::PgVec<'_, f64> = ::mcx::vec_with_capacity_in(mcx, orderbys.len())?;
     for sk in orderbys {
         // SAFETY: point-typed orderby argument.
@@ -138,18 +137,33 @@ pub fn getQuadrant(centroid: &BOX, inBox: &BOX) -> u8 {
 
 pub fn getRangeBox(b: &BOX) -> RangeBox {
     RangeBox {
-        left: Range { low: b.low.x, high: b.high.x },
-        right: Range { low: b.low.y, high: b.high.y },
+        left: Range {
+            low: b.low.x,
+            high: b.high.x,
+        },
+        right: Range {
+            low: b.low.y,
+            high: b.high.y,
+        },
     }
 }
 
 pub fn initRectBox() -> RectBox {
     let inf = f64::INFINITY;
     let full = RangeBox {
-        left: Range { low: -inf, high: inf },
-        right: Range { low: -inf, high: inf },
+        left: Range {
+            low: -inf,
+            high: inf,
+        },
+        right: Range {
+            low: -inf,
+            high: inf,
+        },
     };
-    RectBox { range_box_x: full, range_box_y: full }
+    RectBox {
+        range_box_x: full,
+        range_box_y: full,
+    }
 }
 
 pub fn nextRectBox(rect_box: &RectBox, centroid: &RangeBox, quadrant: u8) -> RectBox {
@@ -277,7 +291,11 @@ fn fc_spg_box_quad_choose(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgR
         let (centroid, b) = unsafe { (box_at(input.prefixDatum), box_at(input.leafDatum)) };
         getQuadrant(&centroid, &b) as i32
     };
-    *out = spgChooseOut::MatchNode { nodeN, levelAdd: 0, restDatum: input.leafDatum };
+    *out = spgChooseOut::MatchNode {
+        nodeN,
+        levelAdd: 0,
+        restDatum: input.leafDatum,
+    };
     Ok(Datum::null())
 }
 
@@ -314,8 +332,14 @@ fn fc_spg_box_quad_picksplit(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> 
 
     let median = n / 2;
     let centroid = BOX {
-        high: ::types_core::geo::Point { x: highXs[median], y: highYs[median] },
-        low: ::types_core::geo::Point { x: lowXs[median], y: lowYs[median] },
+        high: ::types_core::geo::Point {
+            x: highXs[median],
+            y: highYs[median],
+        },
+        low: ::types_core::geo::Point {
+            x: lowXs[median],
+            y: lowYs[median],
+        },
     };
 
     out.hasPrefix = true;
@@ -415,8 +439,7 @@ fn fc_spg_box_quad_inner_consistent(
     let scankeys =
         // SAFETY: nkeys scankeys per protocol.
         unsafe { core::slice::from_raw_parts(input.scankeys, input.nkeys.max(0) as usize) };
-    let mut queries: ::mcx::PgVec<'_, RangeBox> =
-        ::mcx::vec_with_capacity_in(mcx, scankeys.len())?;
+    let mut queries: ::mcx::PgVec<'_, RangeBox> = ::mcx::vec_with_capacity_in(mcx, scankeys.len())?;
     for sk in scankeys {
         queries.push(getRangeBox(&scankey_bbox(mcx, sk, None)?));
     }
@@ -529,12 +552,10 @@ fn fc_spg_box_quad_leaf_consistent(
 
     if flag && input.norderbys > 0 {
         // SAFETY: norderbys orderby scankeys per protocol.
-        let orderbys = unsafe {
-            core::slice::from_raw_parts(input.orderbys, input.norderbys.max(0) as usize)
-        };
+        let orderbys =
+            unsafe { core::slice::from_raw_parts(input.orderbys, input.norderbys.max(0) as usize) };
         // The leaf key is a box even for the polygon opclass, hence is_leaf=false.
-        let row =
-            ::spgist_proc::spg_key_orderbys_distances(mcx, input.leafDatum, false, orderbys)?;
+        let row = ::spgist_proc::spg_key_orderbys_distances(mcx, input.leafDatum, false, orderbys)?;
         out.distances = row.as_ptr();
         core::mem::forget(row);
         // Recheck is necessary when computing distance to a polygon (F_DIST_POLYP).
@@ -562,8 +583,20 @@ fn fc_spg_poly_quad_compress(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> 
     form_box_datum(fcinfo.result_mcx(), &boundbox)
 }
 
-const fn b(foid: Oid, name: &'static str, nargs: i16, func: ::types_fmgr::PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+const fn b(
+    foid: Oid,
+    name: &'static str,
+    nargs: i16,
+    func: ::types_fmgr::PGFunction,
+) -> FmgrBuiltin {
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 pub const SPGIST_BOX_BUILTINS: &[FmgrBuiltin] = &[
@@ -572,8 +605,18 @@ pub const SPGIST_BOX_BUILTINS: &[FmgrBuiltin] = &[
     b(5012, "spg_box_quad_config", 2, fc_spg_box_quad_config),
     b(5013, "spg_box_quad_choose", 2, fc_spg_box_quad_choose),
     b(5014, "spg_box_quad_picksplit", 2, fc_spg_box_quad_picksplit),
-    b(5015, "spg_box_quad_inner_consistent", 2, fc_spg_box_quad_inner_consistent),
-    b(5016, "spg_box_quad_leaf_consistent", 2, fc_spg_box_quad_leaf_consistent),
+    b(
+        5015,
+        "spg_box_quad_inner_consistent",
+        2,
+        fc_spg_box_quad_inner_consistent,
+    ),
+    b(
+        5016,
+        "spg_box_quad_leaf_consistent",
+        2,
+        fc_spg_box_quad_leaf_consistent,
+    ),
 ];
 
 #[cfg(test)]

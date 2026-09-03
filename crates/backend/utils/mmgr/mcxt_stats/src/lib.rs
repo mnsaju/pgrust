@@ -63,7 +63,13 @@ fn process_log_memory_context_interrupt() -> PgResult<()> {
     let mut grand_total = 0usize;
     let mut grand_used = 0usize;
     for root in backend_context_forest() {
-        log_tree(&root, 1, MAX_CHILDREN_PER_LEVEL, &mut grand_total, &mut grand_used)?;
+        log_tree(
+            &root,
+            1,
+            MAX_CHILDREN_PER_LEVEL,
+            &mut grand_total,
+            &mut grand_used,
+        )?;
     }
     ereport(LOG_SERVER_ONLY)
         .errmsg(format!(
@@ -196,7 +202,14 @@ pub fn session_cleanup_count() -> usize {
 // Reentry-guarded: the dump's own formatting failing must not recurse.
 // ---------------------------------------------------------------------------
 
-fn fmt_tree(out: &mut String, t: &TreeStats, level: usize, max_children: usize, gt: &mut usize, gu: &mut usize) {
+fn fmt_tree(
+    out: &mut String,
+    t: &TreeStats,
+    level: usize,
+    max_children: usize,
+    gt: &mut usize,
+    gu: &mut usize,
+) {
     use std::fmt::Write as _;
     let total = t.arena_footprint.max(t.used);
     let used = t.used;
@@ -273,8 +286,7 @@ mod tests {
         let _kid = a.new_child("kid");
         {
             let _b = mcx::MemoryContext::new_bump("root-b");
-            let names: Vec<_> =
-                backend_context_forest().iter().map(|t| t.name).collect();
+            let names: Vec<_> = backend_context_forest().iter().map(|t| t.name).collect();
             assert!(names.contains(&"root-a") && names.contains(&"root-b"));
         }
         let forest = backend_context_forest();

@@ -102,7 +102,9 @@ struct Cand {
 
 fn cand(image: &[u8]) -> Cand {
     let lz4 = lz4_flex::compress(image).len();
-    let zstd = zstd::bulk::compress(image, 1).map(|v| v.len()).unwrap_or(usize::MAX);
+    let zstd = zstd::bulk::compress(image, 1)
+        .map(|v| v.len())
+        .unwrap_or(usize::MAX);
     Cand {
         plain: (image.len() + PLAIN_META) as u64,
         lz4: (lz4.min(image.len()) + FRAME_HDR + PLAIN_META) as u64,
@@ -112,8 +114,14 @@ fn cand(image: &[u8]) -> Cand {
 
 fn main() {
     let mut args = std::env::args().skip(1);
-    let path = args.next().expect("usage: cb_intcodec_survey <part> <ncols> [names] [col ...]");
-    let ncols: usize = args.next().expect("ncols required").parse().expect("bad ncols");
+    let path = args
+        .next()
+        .expect("usage: cb_intcodec_survey <part> <ncols> [names] [col ...]");
+    let ncols: usize = args
+        .next()
+        .expect("ncols required")
+        .parse()
+        .expect("bad ncols");
     let names: Vec<String> = args
         .next()
         .map(|f| {
@@ -127,7 +135,9 @@ fn main() {
         .unwrap_or_default();
     let only: Vec<usize> = args.map(|a| a.parse().expect("bad col index")).collect();
 
-    let part = Part::open(&path, ncols).expect("open failed").expect("no committed footer");
+    let part = Part::open(&path, ncols)
+        .expect("open failed")
+        .expect("no committed footer");
     println!(
         "part {path}: {} rows, {} RGs, {} cols",
         part.total_rows(),
@@ -172,7 +182,11 @@ fn main() {
             let enc = format!(
                 "{:?}:{}",
                 cv.hdr.encoding,
-                if cv.hdr.encoding == Encoding::Const { 0 } else { cv.hdr.width }
+                if cv.hdr.encoding == Encoding::Const {
+                    0
+                } else {
+                    cv.hdr.width
+                }
             );
             *enc_hist.entry(enc).or_default() += 1;
             *codec_hist

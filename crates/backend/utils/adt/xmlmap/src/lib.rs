@@ -17,8 +17,7 @@ use types_core::catalog::{
 };
 use types_core::{InvalidOid, Oid};
 use types_error::{
-    PgResult, ERRCODE_DATA_EXCEPTION, ERRCODE_INVALID_CURSOR_STATE, ERRCODE_UNDEFINED_CURSOR,
-    ERROR,
+    PgResult, ERRCODE_DATA_EXCEPTION, ERRCODE_INVALID_CURSOR_STATE, ERRCODE_UNDEFINED_CURSOR, ERROR,
 };
 use types_storage::lock::{AccessShareLock, NoLock};
 use types_tuple::TupleDescData;
@@ -232,7 +231,14 @@ fn query_to_xml_internal(
             spi::tuptable_with(h, |t| -> PgResult<()> {
                 for i in 0..n {
                     spi_sql_row_to_xmlelement(
-                        t, i, &mut result, tablename, nulls, tableforest, targetns, top_level,
+                        t,
+                        i,
+                        &mut result,
+                        tablename,
+                        nulls,
+                        tableforest,
+                        targetns,
+                        top_level,
                         resmcx,
                     )?;
                 }
@@ -262,7 +268,9 @@ fn table_to_xml_internal(
         let name = adt_regproc::regclassout(mcx, relid)?;
         Ok(format!(
             "SELECT * FROM {}",
-            core::str::from_utf8(&name).expect("regclassout is UTF-8").trim_end_matches('\0')
+            core::str::from_utf8(&name)
+                .expect("regclassout is UTF-8")
+                .trim_end_matches('\0')
         ))
     })?;
     let tablename = rel_name_opt(relid)?;
@@ -277,11 +285,21 @@ fn table_to_xml_internal(
     )
 }
 
-pub fn table_to_xml(relid: Oid, nulls: bool, tableforest: bool, targetns: &str) -> PgResult<String> {
+pub fn table_to_xml(
+    relid: Oid,
+    nulls: bool,
+    tableforest: bool,
+    targetns: &str,
+) -> PgResult<String> {
     table_to_xml_internal(relid, None, nulls, tableforest, targetns, true)
 }
 
-pub fn query_to_xml(query: &str, nulls: bool, tableforest: bool, targetns: &str) -> PgResult<String> {
+pub fn query_to_xml(
+    query: &str,
+    nulls: bool,
+    tableforest: bool,
+    targetns: &str,
+) -> PgResult<String> {
     query_to_xml_internal(query, None, None, nulls, tableforest, targetns, true)
 }
 
@@ -317,7 +335,15 @@ pub fn cursor_to_xml(
             spi::tuptable_with(h, |t| -> PgResult<()> {
                 for i in 0..n {
                     spi_sql_row_to_xmlelement(
-                        t, i, &mut result, None, nulls, tableforest, targetns, true, resmcx,
+                        t,
+                        i,
+                        &mut result,
+                        None,
+                        nulls,
+                        tableforest,
+                        targetns,
+                        true,
+                        resmcx,
                     )?;
                 }
                 Ok(())
@@ -410,7 +436,15 @@ pub fn query_to_xml_and_xmlschema(
     targetns: &str,
 ) -> PgResult<String> {
     let xmlschema = query_to_xmlschema(query, nulls, tableforest, targetns)?;
-    query_to_xml_internal(query, None, Some(&xmlschema), nulls, tableforest, targetns, true)
+    query_to_xml_internal(
+        query,
+        None,
+        Some(&xmlschema),
+        nulls,
+        tableforest,
+        targetns,
+        true,
+    )
 }
 
 fn schema_to_xml_internal(
@@ -495,7 +529,11 @@ fn schema_to_xmlschema_internal(
         let refs: Vec<&TupleDescData<'_>> = tupdescs.iter().collect();
         result.push_str(&map_sql_typecoll_to_xmlschema_types(&refs)?);
         result.push_str(&map_sql_schema_to_xmlschema_types(
-            nspid, &relid_list, nulls, tableforest, targetns,
+            nspid,
+            &relid_list,
+            nulls,
+            tableforest,
+            targetns,
         )?);
         Ok(())
     });
@@ -657,7 +695,10 @@ fn map_sql_table_to_xmlschema(
 
     result.push_str(&map_sql_typecoll_to_xmlschema_types(&[tupdesc])?);
 
-    let _ = write!(result, "<xsd:complexType name=\"{rowtypename}\">\n  <xsd:sequence>\n");
+    let _ = write!(
+        result,
+        "<xsd:complexType name=\"{rowtypename}\">\n  <xsd:sequence>\n"
+    );
 
     for i in 0..tupdesc.natts as usize {
         let att = tupdesc.attr(i);
@@ -669,7 +710,11 @@ fn map_sql_table_to_xmlschema(
             "    <xsd:element name=\"{}\" type=\"{}\"{}></xsd:element>\n",
             xml_name(att.attname.name_str(), true, false)?,
             map_sql_type_to_xml_name(att.atttypid, -1)?,
-            if nulls { " nillable=\"true\"" } else { " minOccurs=\"0\"" }
+            if nulls {
+                " nillable=\"true\""
+            } else {
+                " minOccurs=\"0\""
+            }
         );
     }
 
@@ -682,9 +727,15 @@ fn map_sql_table_to_xmlschema(
              <xsd:element name=\"row\" type=\"{rowtypename}\" minOccurs=\"0\" maxOccurs=\"unbounded\"/>\n  \
              </xsd:sequence>\n</xsd:complexType>\n\n"
         );
-        let _ = write!(result, "<xsd:element name=\"{xmltn}\" type=\"{tabletypename}\"/>\n\n");
+        let _ = write!(
+            result,
+            "<xsd:element name=\"{xmltn}\" type=\"{tabletypename}\"/>\n\n"
+        );
     } else {
-        let _ = write!(result, "<xsd:element name=\"{xmltn}\" type=\"{rowtypename}\"/>\n\n");
+        let _ = write!(
+            result,
+            "<xsd:element name=\"{xmltn}\" type=\"{rowtypename}\"/>\n\n"
+        );
     }
 
     xsd_schema_element_end(&mut result);
@@ -710,7 +761,11 @@ fn map_sql_schema_to_xmlschema_types(
 
     let mut result = String::new();
     let _ = write!(result, "<xsd:complexType name=\"{schematypename}\">\n");
-    result.push_str(if !tableforest { "  <xsd:all>\n" } else { "  <xsd:sequence>\n" });
+    result.push_str(if !tableforest {
+        "  <xsd:all>\n"
+    } else {
+        "  <xsd:sequence>\n"
+    });
 
     for relid in relid_list {
         let relname = rel_name(*relid)?;
@@ -722,7 +777,10 @@ fn map_sql_schema_to_xmlschema_types(
             Some(&relname),
         )?;
         if !tableforest {
-            let _ = write!(result, "    <xsd:element name=\"{xmltn}\" type=\"{tabletypename}\"/>\n");
+            let _ = write!(
+                result,
+                "    <xsd:element name=\"{xmltn}\" type=\"{tabletypename}\"/>\n"
+            );
         } else {
             let _ = write!(
                 result,
@@ -731,9 +789,16 @@ fn map_sql_schema_to_xmlschema_types(
         }
     }
 
-    result.push_str(if !tableforest { "  </xsd:all>\n" } else { "  </xsd:sequence>\n" });
+    result.push_str(if !tableforest {
+        "  </xsd:all>\n"
+    } else {
+        "  </xsd:sequence>\n"
+    });
     result.push_str("</xsd:complexType>\n\n");
-    let _ = write!(result, "<xsd:element name=\"{xmlsn}\" type=\"{schematypename}\"/>\n\n");
+    let _ = write!(
+        result,
+        "<xsd:element name=\"{xmlsn}\" type=\"{schematypename}\"/>\n\n"
+    );
     Ok(result)
 }
 
@@ -756,12 +821,18 @@ fn map_sql_catalog_to_xmlschema_types(nspid_list: &[Oid], _targetns: &str) -> Pg
             Some(&nspname),
             None,
         )?;
-        let _ = write!(result, "    <xsd:element name=\"{xmlsn}\" type=\"{schematypename}\"/>\n");
+        let _ = write!(
+            result,
+            "    <xsd:element name=\"{xmlsn}\" type=\"{schematypename}\"/>\n"
+        );
     }
 
     result.push_str("  </xsd:all>\n");
     result.push_str("</xsd:complexType>\n\n");
-    let _ = write!(result, "<xsd:element name=\"{xmlcn}\" type=\"{catalogtypename}\"/>\n\n");
+    let _ = write!(
+        result,
+        "<xsd:element name=\"{xmlcn}\" type=\"{catalogtypename}\"/>\n\n"
+    );
     Ok(result)
 }
 
@@ -840,7 +911,11 @@ fn map_sql_type_to_xml_name(typeoid: Oid, typmod: i32) -> PgResult<String> {
             let nspname = namespace_name(typnamespace)?;
             let dbname = database_name()?;
             result.push_str(&map_multipart_sql_identifier_to_xml_name(
-                Some(if typtype == TYPTYPE_DOMAIN { "Domain" } else { "UDT" }),
+                Some(if typtype == TYPTYPE_DOMAIN {
+                    "Domain"
+                } else {
+                    "UDT"
+                }),
                 Some(&dbname),
                 Some(&nspname),
                 Some(&name),
@@ -901,7 +976,11 @@ fn map_sql_type_to_xmlschema_type(typeoid: Oid, typmod: i32) -> PgResult<String>
         BPCHAROID | VARCHAROID | TEXTOID => {
             result.push_str("  <xsd:restriction base=\"xsd:string\">\n");
             if typmod != -1 {
-                let _ = write!(result, "    <xsd:maxLength value=\"{}\"/>\n", typmod - VARHDRSZ);
+                let _ = write!(
+                    result,
+                    "    <xsd:maxLength value=\"{}\"/>\n",
+                    typmod - VARHDRSZ
+                );
             }
             result.push_str("  </xsd:restriction>\n");
         }
@@ -968,7 +1047,11 @@ fn map_sql_type_to_xmlschema_type(typeoid: Oid, typmod: i32) -> PgResult<String>
             result.push_str("  <xsd:restriction base=\"xsd:boolean\"></xsd:restriction>\n");
         }
         TIMEOID | TIMETZOID => {
-            let tz = if typeoid == TIMETZOID { "(\\+|-)\\p{Nd}{2}:\\p{Nd}{2}" } else { "" };
+            let tz = if typeoid == TIMETZOID {
+                "(\\+|-)\\p{Nd}{2}:\\p{Nd}{2}"
+            } else {
+                ""
+            };
             if typmod == -1 {
                 let _ = write!(
                     result,
@@ -994,7 +1077,11 @@ fn map_sql_type_to_xmlschema_type(typeoid: Oid, typmod: i32) -> PgResult<String>
             }
         }
         TIMESTAMPOID | TIMESTAMPTZOID => {
-            let tz = if typeoid == TIMESTAMPTZOID { "(\\+|-)\\p{Nd}{2}:\\p{Nd}{2}" } else { "" };
+            let tz = if typeoid == TIMESTAMPTZOID {
+                "(\\+|-)\\p{Nd}{2}:\\p{Nd}{2}"
+            } else {
+                ""
+            };
             if typmod == -1 {
                 let _ = write!(
                     result,

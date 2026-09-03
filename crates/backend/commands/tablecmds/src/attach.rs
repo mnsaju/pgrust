@@ -5,18 +5,18 @@
 // DetachAddConstraintIfNeeded + DetachPartitionFinalize + FINALIZE verb.
 use datum::Datum;
 use mcx::{Mcx, PgVec};
+use types_core::catalog::RELPERSISTENCE_TEMP;
 use types_core::{AttrNumber, InvalidOid, Oid, RELATION_RELATION_ID};
 use types_error::{
-    PgError, PgResult, DEBUG1, ERROR, ERRCODE_COLLATION_MISMATCH, ERRCODE_DATATYPE_MISMATCH,
+    PgError, PgResult, DEBUG1, ERRCODE_COLLATION_MISMATCH, ERRCODE_DATATYPE_MISMATCH,
     ERRCODE_DUPLICATE_TABLE, ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_INVALID_OBJECT_DEFINITION,
     ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE, ERRCODE_PROGRAM_LIMIT_EXCEEDED,
-    ERRCODE_UNDEFINED_TABLE, ERRCODE_WRONG_OBJECT_TYPE,
+    ERRCODE_UNDEFINED_TABLE, ERRCODE_WRONG_OBJECT_TYPE, ERROR,
 };
 use types_nodes::list::NodeList;
 use types_nodes::primnodes::{NullTest, NullTestType, Var};
 use types_nodes::rawnodes::{PartitionBoundSpec, PartitionCmd};
 use types_nodes::Node;
-use types_core::catalog::RELPERSISTENCE_TEMP;
 use types_rel::{
     AccessExclusiveLock, AccessShareLock, NoLock, Relation, RowExclusiveLock,
     RELKIND_PARTITIONED_TABLE, RELKIND_RELATION,
@@ -48,7 +48,11 @@ const Anum_pg_class_relispartition: usize = 28;
 const AttributeRelidNumIndexId: Oid = 2659;
 const F_PG_GET_EXPR: Oid = 1716;
 
-fn name_at<'a>(tup: &'a types_tuple::HeapTupleData<'_>, desc: &types_tuple::TupleDescData<'_>, attno: i32) -> &'a str {
+fn name_at<'a>(
+    tup: &'a types_tuple::HeapTupleData<'_>,
+    desc: &types_tuple::TupleDescData<'_>,
+    attno: i32,
+) -> &'a str {
     let mut isnull = false;
     // SAFETY: caller passes a NOT NULL name column of the scanned catalog.
     let d = unsafe { types_tuple::heap_getattr(tup, attno, desc, &mut isnull) };
@@ -69,15 +73,14 @@ fn getattr(
     (d, isnull)
 }
 
-
 fn text_datum_str<'mcx>(mcx: Mcx<'mcx>, d: Datum) -> PgResult<mcx::PgString<'mcx>> {
     let p = d.as_usize() as *const u8;
     // SAFETY: d comes off a not-null text column: a live varlena image
     // readable through its varsize_any extent.
     let image = unsafe { std::slice::from_raw_parts(p, types_tuple::varatt::varsize_any(p)) };
     let payload = varlena::open_image(mcx, image)?;
-    let st = core::str::from_utf8(payload.as_bytes())
-        .unwrap_or_else(|_| panic!("non-UTF-8 text datum"));
+    let st =
+        core::str::from_utf8(payload.as_bytes()).unwrap_or_else(|_| panic!("non-UTF-8 text datum"));
     mcx::PgString::from_str_in(st, mcx)
 }
 
@@ -116,7 +119,11 @@ pub(crate) fn ATExecAttachPartition<'mcx>(
         lmgr::LockRelationOid(default_part_oid, AccessExclusiveLock)?;
     }
 
-    let attachrel = open_by_rangevar(mcx, cmd.name.expect("PartitionCmd.name"), AccessExclusiveLock)?;
+    let attachrel = open_by_rangevar(
+        mcx,
+        cmd.name.expect("PartitionCmd.name"),
+        AccessExclusiveLock,
+    )?;
 
     match attachrel.rd_rel.relkind {
         RELKIND_RELATION | RELKIND_PARTITIONED_TABLE | types_rel::RELKIND_FOREIGN_TABLE => {}
@@ -156,14 +163,8 @@ pub(crate) fn ATExecAttachPartition<'mcx>(
     let catalog = table::table_open(mcx, InheritsRelationId, AccessShareLock)?;
     {
         let keys = [oid_scankey(1, attachrel.rd_id)];
-        let mut scan = genam::systable_beginscan(
-            mcx,
-            &catalog,
-            InheritsRelidSeqnoIndexId,
-            true,
-            None,
-            &keys,
-        )?;
+        let mut scan =
+            genam::systable_beginscan(mcx, &catalog, InheritsRelidSeqnoIndexId, true, None, &keys)?;
         let child_row = genam::systable_getnext(mcx, &mut scan)?.is_some();
         genam::systable_endscan(mcx, scan)?;
         if child_row {
@@ -269,8 +270,7 @@ pub(crate) fn ATExecAttachPartition<'mcx>(
                 )
                 .with_sqlstate(ERRCODE_DATATYPE_MISMATCH)
                 .with_detail(
-                    "The new partition may contain only the columns present in parent."
-                        .to_string(),
+                    "The new partition may contain only the columns present in parent.".to_string(),
                 ),
             ));
         }
@@ -312,8 +312,14 @@ pub(crate) fn ATExecAttachPartition<'mcx>(
 
     crate::fk::CloneForeignKeyConstraints(mcx, Some(wqueue), rel, &attachrel)?;
 
-    let part_bound_constraint =
-        partbounds::get_qual_from_partbound(mcx, &key, rel.rd_id, pdesc.boundinfo.as_ref(), &pdesc.oids, spec)?;
+    let part_bound_constraint = partbounds::get_qual_from_partbound(
+        mcx,
+        &key,
+        rel.rd_id,
+        pdesc.boundinfo.as_ref(),
+        &pdesc.oids,
+        spec,
+    )?;
 
     let mut part_constraint = NodeList::nil();
     for q in part_bound_constraint.iter() {
@@ -386,10 +392,7 @@ pub(crate) fn find_transition_table_trigger<'mcx>(
 }
 
 // Row triggers with transition tables block ATTACH (tablecmds.c:20430).
-fn check_no_transition_table_triggers<'mcx>(
-    mcx: Mcx<'mcx>,
-    rel: &Relation<'mcx>,
-) -> PgResult<()> {
+fn check_no_transition_table_triggers<'mcx>(mcx: Mcx<'mcx>, rel: &Relation<'mcx>) -> PgResult<()> {
     if let Some(trigger_name) = find_transition_table_trigger(mcx, rel)? {
         return Err(Box::new(
             PgError::new(
@@ -408,7 +411,6 @@ fn check_no_transition_table_triggers<'mcx>(
     Ok(())
 }
 
-
 // CreateInheritance (tablecmds.c:17374), ATTACH form: the caller has already
 // proven attachrel has no pg_inherits rows, so inhseqno is always 1.
 fn CreateInheritance<'mcx>(
@@ -426,8 +428,7 @@ fn MergeAttributesIntoExisting<'mcx>(
     child_rel: &Relation<'mcx>,
     parent_rel: &Relation<'mcx>,
 ) -> PgResult<()> {
-    let attrrel =
-        table::table_open(mcx, types_core::ATTRIBUTE_RELATION_ID, RowExclusiveLock)?;
+    let attrrel = table::table_open(mcx, types_core::ATTRIBUTE_RELATION_ID, RowExclusiveLock)?;
     let parent_desc = parent_rel.descr();
     for i in 0..parent_desc.natts as usize {
         let parent_att = parent_desc.attr(i);
@@ -438,14 +439,8 @@ fn MergeAttributesIntoExisting<'mcx>(
             core::str::from_utf8(parent_att.attname.name_str()).expect("attname UTF-8");
 
         let keys = [oid_scankey(1, child_rel.rd_id)];
-        let mut scan = genam::systable_beginscan(
-            mcx,
-            &attrrel,
-            AttributeRelidNumIndexId,
-            true,
-            None,
-            &keys,
-        )?;
+        let mut scan =
+            genam::systable_beginscan(mcx, &attrrel, AttributeRelidNumIndexId, true, None, &keys)?;
         let desc = attrrel.descr();
         let mut matched = false;
         while let Some(tup) = genam::systable_getnext(mcx, &mut scan)? {
@@ -555,8 +550,7 @@ fn MergeAttributesIntoExisting<'mcx>(
             replace[Anum_pg_attribute_attislocal - 1] = true;
             // tablecmds.c:17579-17583: partitions inherit the parent's
             // identity property.
-            values[Anum_pg_attribute_attidentity - 1] =
-                Datum::from_i8(parent_att.attidentity);
+            values[Anum_pg_attribute_attidentity - 1] = Datum::from_i8(parent_att.attidentity);
             replace[Anum_pg_attribute_attidentity - 1] = true;
             let mut newtup =
                 heaptuple::heap_modify_tuple(mcx, tup, desc, &values, &nulls, &replace)?;
@@ -623,7 +617,11 @@ fn scan_constraints<'mcx>(
             0
         };
         let (conbin_d, conbin_null) = getattr(tup, desc, Anum_pg_constraint_conbin as usize);
-        let conbin = if conbin_null { None } else { Some(text_datum_str(mcx, conbin_d)?) };
+        let conbin = if conbin_null {
+            None
+        } else {
+            Some(text_datum_str(mcx, conbin_d)?)
+        };
         rows.push(ConRow {
             oid: oid.as_oid(),
             name: mcx::PgString::from_str_in(name_at(tup, desc, 2), mcx)?,
@@ -759,7 +757,10 @@ fn MergeConstraintsIntoExisting<'mcx>(
                     ERRCODE_PROGRAM_LIMIT_EXCEEDED,
                 ));
             }
-            debug_assert!(ccon.coninhcount + 1 == 1, "partition coninhcount must become 1");
+            debug_assert!(
+                ccon.coninhcount + 1 == 1,
+                "partition coninhcount must become 1"
+            );
             let natts = desc.natts as usize;
             let mut values: PgVec<'_, Datum> = mcx::vec_with_capacity_in(mcx, natts)?;
             let mut nulls: PgVec<'_, bool> = mcx::vec_with_capacity_in(mcx, natts)?;
@@ -775,7 +776,10 @@ fn MergeConstraintsIntoExisting<'mcx>(
             replace[pg_constraint::Anum_pg_constraint_conislocal as usize - 1] = true;
             // Re-fetch the row image by tid to modify: reuse the scan tuple's
             // tid captured above.
-            let keys = [oid_scankey(pg_constraint::Anum_pg_constraint_conrelid as usize, child_rel.rd_id)];
+            let keys = [oid_scankey(
+                pg_constraint::Anum_pg_constraint_conrelid as usize,
+                child_rel.rd_id,
+            )];
             let mut scan = genam::systable_beginscan(
                 mcx,
                 &conrel,
@@ -801,8 +805,9 @@ fn MergeConstraintsIntoExisting<'mcx>(
         }
         if !found {
             if pcon.contype == CONSTRAINT_NOTNULL {
-                let colname = lsyscache::attribute::get_attname(mcx, parent_rel.rd_id, pcon.nn_attno, false)?
-                    .expect("attname");
+                let colname =
+                    lsyscache::attribute::get_attname(mcx, parent_rel.rd_id, pcon.nn_attno, false)?
+                        .expect("attname");
                 return Err(err(
                     format!(
                         "column \"{colname}\" in child table \"{}\" must be marked NOT NULL",
@@ -812,7 +817,10 @@ fn MergeConstraintsIntoExisting<'mcx>(
                 ));
             }
             return Err(err(
-                format!("child table is missing constraint \"{}\"", pcon.name.as_str()),
+                format!(
+                    "child table is missing constraint \"{}\"",
+                    pcon.name.as_str()
+                ),
                 ERRCODE_DATATYPE_MISMATCH,
             ));
         }
@@ -875,8 +883,7 @@ fn AttachPartitionEnsureIndexes<'mcx>(
         }
         let info = execindexing::BuildIndexInfo(mcx, &idx_rel)?;
         let attmap = tupdesc::build_attrmap_by_name(mcx, attachrel.descr(), rel.descr())?;
-        let constraint_oid =
-            pg_constraint::get_relation_idx_constraint_oid(mcx, rel.rd_id, idx)?;
+        let constraint_oid = pg_constraint::get_relation_idx_constraint_oid(mcx, rel.rd_id, idx)?;
         let mut found = false;
         for (i, cld_rel) in attachrel_idx_rels.iter().enumerate() {
             let cld_idx_id = cld_rel.rd_id;
@@ -995,10 +1002,7 @@ pub(crate) fn PartConstraintImpliedByRelConstraint<'mcx>(
                 continue;
             }
             debug_assert!(chk.ccenforced);
-            let cexpr = readfuncs::stringToNode(
-                mcx,
-                chk.ccbin.as_ref().expect("ccbin").as_str(),
-            )?;
+            let cexpr = readfuncs::stringToNode(mcx, chk.ccbin.as_ref().expect("ccbin").as_str())?;
             let cexpr = clauses::eval_const_expressions(mcx, cexpr)?;
             let cexpr = planner::prepqual::canonicalize_qual(mcx, cexpr, true)?;
             for n in clauses::make_ands_implicit(mcx, Some(cexpr))?.iter() {
@@ -1096,8 +1100,7 @@ pub(crate) fn ATExecDetachPartition<'mcx>(
     if default_part_oid != InvalidOid {
         if concurrent {
             return Err(err(
-                "cannot detach partitions concurrently when a default partition exists"
-                    .to_string(),
+                "cannot detach partitions concurrently when a default partition exists".to_string(),
                 ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE,
             ));
         }
@@ -1107,7 +1110,11 @@ pub(crate) fn ATExecDetachPartition<'mcx>(
     let mut part_rel = open_by_rangevar(
         mcx,
         cmd.name.expect("PartitionCmd.name"),
-        if concurrent { types_rel::ShareUpdateExclusiveLock } else { AccessExclusiveLock },
+        if concurrent {
+            types_rel::ShareUpdateExclusiveLock
+        } else {
+            AccessExclusiveLock
+        },
     )?;
 
     if !concurrent {
@@ -1219,18 +1226,19 @@ fn MarkInheritDetached<'mcx>(
     let mut found = false;
     let mut update: Option<types_tuple::ItemPointerData> = None;
     while let Some(tup) = genam::systable_getnext(mcx, &mut scan)? {
-        let (pending, _) =
-            getattr(tup, desc, pg_inherits::Anum_pg_inherits_inhdetachpending as usize);
-        let (inhrelid, _) =
-            getattr(tup, desc, pg_inherits::Anum_pg_inherits_inhrelid as usize);
+        let (pending, _) = getattr(
+            tup,
+            desc,
+            pg_inherits::Anum_pg_inherits_inhdetachpending as usize,
+        );
+        let (inhrelid, _) = getattr(tup, desc, pg_inherits::Anum_pg_inherits_inhrelid as usize);
         if pending.as_bool() {
             let relname = lsyscache::get_rel_name(mcx, inhrelid.as_oid())?
                 .map(|n| n.to_string())
                 .unwrap_or_default();
-            let nspname =
-                lsyscache::get_namespace_name(mcx, parent_rel.rd_rel.relnamespace)?
-                    .map(|n| n.to_string())
-                    .unwrap_or_default();
+            let nspname = lsyscache::get_namespace_name(mcx, parent_rel.rd_rel.relnamespace)?
+                .map(|n| n.to_string())
+                .unwrap_or_default();
             return Err(Box::new(
                 PgError::new(
                     ERROR,
@@ -1362,18 +1370,11 @@ fn RemoveInheritance<'mcx>(
         ));
     }
 
-    let attrrel =
-        table::table_open(mcx, types_core::ATTRIBUTE_RELATION_ID, RowExclusiveLock)?;
+    let attrrel = table::table_open(mcx, types_core::ATTRIBUTE_RELATION_ID, RowExclusiveLock)?;
     {
         let keys = [oid_scankey(1, child_rel.rd_id)];
-        let mut scan = genam::systable_beginscan(
-            mcx,
-            &attrrel,
-            AttributeRelidNumIndexId,
-            true,
-            None,
-            &keys,
-        )?;
+        let mut scan =
+            genam::systable_beginscan(mcx, &attrrel, AttributeRelidNumIndexId, true, None, &keys)?;
         let desc = attrrel.descr();
         struct Upd {
             tid: types_tuple::ItemPointerData,
@@ -1397,7 +1398,10 @@ fn RemoveInheritance<'mcx>(
             if attname_lookup(mcx, parent_rel.rd_id, &colname, false)?.is_none() {
                 continue;
             }
-            upds.push(Upd { tid: tup.t_self, inhcount: inhcount.as_i16() });
+            upds.push(Upd {
+                tid: tup.t_self,
+                inhcount: inhcount.as_i16(),
+            });
         }
         genam::systable_endscan(mcx, scan)?;
         let desc = attrrel.descr();
@@ -1491,7 +1495,10 @@ fn RemoveInheritance<'mcx>(
                     ccon.name.as_str()
                 );
             }
-            let keys = [oid_scankey(pg_constraint::Anum_pg_constraint_conrelid as usize, child_rel.rd_id)];
+            let keys = [oid_scankey(
+                pg_constraint::Anum_pg_constraint_conrelid as usize,
+                child_rel.rd_id,
+            )];
             let mut scan = genam::systable_beginscan(
                 mcx,
                 &conrel,
@@ -1583,7 +1590,10 @@ fn GetParentedForeignKeyRefs<'mcx>(
 ) -> PgResult<PgVec<'mcx, Oid>> {
     use pg_constraint::*;
     let conrel = table::table_open(mcx, types_core::CONSTRAINT_RELATION_ID, AccessShareLock)?;
-    let keys = [oid_scankey(Anum_pg_constraint_confrelid as usize, partition.rd_id)];
+    let keys = [oid_scankey(
+        Anum_pg_constraint_confrelid as usize,
+        partition.rd_id,
+    )];
     let mut scan = genam::systable_beginscan(mcx, &conrel, InvalidOid, false, None, &keys)?;
     let desc = conrel.descr();
     let mut out: PgVec<'mcx, Oid> = PgVec::new_in(mcx);
@@ -1715,15 +1725,13 @@ fn DetachPartitionFinalize<'mcx>(
     inval::invalidate::CacheInvalidateRelcache(rel)?;
 
     if part_rel.rd_rel.relkind == RELKIND_PARTITIONED_TABLE {
-        let children =
-            pg_inherits::find_all_inheritors(mcx, part_rel.rd_id, AccessExclusiveLock)?;
+        let children = pg_inherits::find_all_inheritors(mcx, part_rel.rd_id, AccessExclusiveLock)?;
         for &c in children.iter() {
             inval::invalidate::CacheInvalidateRelcacheByRelid(c)?;
         }
     }
     Ok(())
 }
-
 
 // DropClonedTriggersFromPartition (tablecmds.c:21506).
 fn DropClonedTriggersFromPartition<'mcx>(mcx: Mcx<'mcx>, partition_id: Oid) -> PgResult<()> {
@@ -1819,9 +1827,7 @@ pub(crate) fn ATExecAttachPartitionIdx<'mcx>(
         if relkind == 0 {
             return Ok(());
         }
-        if relkind != types_rel::RELKIND_PARTITIONED_INDEX
-            && relkind != types_rel::RELKIND_INDEX
-        {
+        if relkind != types_rel::RELKIND_PARTITIONED_INDEX && relkind != types_rel::RELKIND_INDEX {
             return Err(err(
                 format!("\"{}\" is not an index", rv.relname),
                 ERRCODE_INVALID_OBJECT_DEFINITION,
@@ -1922,8 +1928,11 @@ pub(crate) fn ATExecAttachPartitionIdx<'mcx>(
         }
 
         // A constraint in the parent requires one in the child too.
-        let constraint_oid =
-            pg_constraint::get_relation_idx_constraint_oid(mcx, parent_tbl.rd_id, parent_idx.rd_id)?;
+        let constraint_oid = pg_constraint::get_relation_idx_constraint_oid(
+            mcx,
+            parent_tbl.rd_id,
+            parent_idx.rd_id,
+        )?;
         let mut cld_constr_id = InvalidOid;
         if constraint_oid != InvalidOid {
             cld_constr_id =
@@ -2027,8 +2036,9 @@ fn validate_partitioned_index<'mcx>(
         )?;
         let desc = inherits_rel.descr();
         while let Some(tup) = genam::systable_getnext(mcx, &mut scan)? {
-            let inhrelid =
-                getattr(tup, desc, pg_inherits::Anum_pg_inherits_inhrelid as usize).0.as_oid();
+            let inhrelid = getattr(tup, desc, pg_inherits::Anum_pg_inherits_inhrelid as usize)
+                .0
+                .as_oid();
             if lsyscache::relation::get_index_isvalid(inhrelid)? {
                 tuples += 1;
             }
@@ -2085,10 +2095,11 @@ fn verify_partition_index_not_null<'mcx>(
     partition: &Relation<'mcx>,
 ) -> PgResult<()> {
     for i in 0..iinfo.ii_NumIndexKeyAttrs as usize {
-        let att = partition.descr().attr(iinfo.ii_IndexAttrNumbers[i] as usize - 1);
+        let att = partition
+            .descr()
+            .attr(iinfo.ii_IndexAttrNumbers[i] as usize - 1);
         if !att.attnotnull {
-            let colname =
-                core::str::from_utf8(att.attname.name_str()).expect("attname UTF-8");
+            let colname = core::str::from_utf8(att.attname.name_str()).expect("attname UTF-8");
             return Err(Box::new(
                 (*err(
                     "invalid primary key definition".to_string(),

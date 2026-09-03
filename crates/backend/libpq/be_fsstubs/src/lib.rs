@@ -55,10 +55,7 @@ fn invalid_descriptor(fd: i32) -> Box<types_error::PgError> {
 }
 
 fn fd_is_valid(fd: i32) -> bool {
-    fd >= 0
-        && with_state(|s| {
-            (fd as usize) < s.cookies.len() && s.cookies[fd as usize].is_some()
-        })
+    fd >= 0 && with_state(|s| (fd as usize) < s.cookies.len() && s.cookies[fd as usize].is_some())
 }
 
 fn newLOfd() -> i32 {
@@ -137,7 +134,9 @@ pub fn be_lo_close(fd: i32) -> PgResult<i32> {
 fn not_opened(fd: i32, what: &str) -> Box<types_error::PgError> {
     ereport(ERROR)
         .errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE)
-        .errmsg(format!("large object descriptor {fd} was not opened for {what}"))
+        .errmsg(format!(
+            "large object descriptor {fd} was not opened for {what}"
+        ))
         .into_error()
         .into()
 }
@@ -175,7 +174,12 @@ pub fn be_lo_lseek<'mcx>(mcx: Mcx<'mcx>, fd: i32, offset: i32, whence: i32) -> P
         return Err(invalid_descriptor(fd));
     }
     let status = with_state(|s| {
-        inv_seek(mcx, s.cookies[fd as usize].as_mut().expect("fd_is_valid"), offset as int64, whence)
+        inv_seek(
+            mcx,
+            s.cookies[fd as usize].as_mut().expect("fd_is_valid"),
+            offset as int64,
+            whence,
+        )
     })?;
     if status != status as i32 as int64 {
         return Err(ereport(ERROR)
@@ -194,7 +198,12 @@ pub fn be_lo_lseek64<'mcx>(mcx: Mcx<'mcx>, fd: i32, offset: int64, whence: i32) 
         return Err(invalid_descriptor(fd));
     }
     with_state(|s| {
-        inv_seek(mcx, s.cookies[fd as usize].as_mut().expect("fd_is_valid"), offset, whence)
+        inv_seek(
+            mcx,
+            s.cookies[fd as usize].as_mut().expect("fd_is_valid"),
+            offset,
+            whence,
+        )
     })
 }
 
@@ -415,8 +424,7 @@ pub fn be_lo_export<'mcx>(mcx: Mcx<'mcx>, lobjId: Oid, filename: &[u8]) -> PgRes
                 break;
             }
             // SAFETY: buf's first nbytes bytes were just filled by inv_read.
-            let written =
-                unsafe { libc::write(fd, buf.as_ptr().cast(), nbytes as usize) };
+            let written = unsafe { libc::write(fd, buf.as_ptr().cast(), nbytes as usize) };
             if written != nbytes as isize {
                 return Err(ereport(ERROR)
                     .with_saved_errno(elog::errno::current_errno())

@@ -42,10 +42,12 @@ pub fn get_attgenerated(relid: Oid, attnum: AttrNumber) -> PgResult<i8> {
 }
 
 pub fn get_atttype(relid: Oid, attnum: AttrNumber) -> PgResult<Oid> {
-    Ok(match syscache_seams::lookup_pg_attribute_shape::call(relid, attnum)? {
-        Some(att) => att.atttypid,
-        None => InvalidOid,
-    })
+    Ok(
+        match syscache_seams::lookup_pg_attribute_shape::call(relid, attnum)? {
+            Some(att) => att.atttypid,
+            None => InvalidOid,
+        },
+    )
 }
 
 pub fn get_atttypetypmodcoll(relid: Oid, attnum: AttrNumber) -> PgResult<(Oid, i32, Oid)> {

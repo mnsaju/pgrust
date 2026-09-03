@@ -100,7 +100,9 @@ mod tests {
         assert_eq!(h.estimate(), 0.0);
         let mut x: u64 = 0x9e3779b97f4a7c15;
         for _ in 0..50_000 {
-            x = x.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            x = x
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             h.add((x >> 32) as u32);
         }
         let est = h.estimate();
@@ -122,7 +124,9 @@ mod tests {
         let mut h = HyperLogLog32::new(5);
         let mut x: u64 = 0x9e3779b97f4a7c15;
         for _ in 0..10_000 {
-            x = x.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            x = x
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             h.add((x >> 32) as u32);
         }
         let est = h.estimate();

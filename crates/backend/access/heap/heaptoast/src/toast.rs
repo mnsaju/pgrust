@@ -3,16 +3,15 @@ use ::mcx::{Mcx, PgVec};
 use ::types_error::PgResult;
 use ::types_rel::{RelationData, RELKIND_MATVIEW, RELKIND_RELATION};
 use ::types_tuple::{
-    heap_deform_tuple, HeapTupleData, TupleDescData, BITMAPLEN, HEAP2_XACT_MASK, HEAP_XACT_MASK,
-    MAXALIGN, SizeofHeapTupleHeader, TYPSTORAGE_EXTENDED,
+    heap_deform_tuple, HeapTupleData, SizeofHeapTupleHeader, TupleDescData, BITMAPLEN,
+    HEAP2_XACT_MASK, HEAP_XACT_MASK, MAXALIGN, TYPSTORAGE_EXTENDED,
 };
 use heaptuple::{heap_compute_data_size, heap_fill_tuple, heap_form_tuple, HeapTuple};
 
 use crate::helper::{
     toast_delete_external, toast_tuple_cleanup, toast_tuple_externalize,
     toast_tuple_find_biggest_attribute, toast_tuple_init, toast_tuple_try_compression, va_slice,
-    ToastAttrInfo, ToastTupleContext, TOASTCOL_INCOMPRESSIBLE, TOAST_HAS_NULLS,
-    TOAST_NEEDS_CHANGE,
+    ToastAttrInfo, ToastTupleContext, TOASTCOL_INCOMPRESSIBLE, TOAST_HAS_NULLS, TOAST_NEEDS_CHANGE,
 };
 use crate::internals::reltoastrelid_valid;
 use crate::{TOAST_TUPLE_TARGET, TOAST_TUPLE_TARGET_MAIN};
@@ -39,9 +38,7 @@ pub fn heap_toast_delete<'mcx>(
     oldtup: &HeapTupleData<'_>,
     is_speculative: bool,
 ) -> PgResult<()> {
-    debug_assert!(
-        rel.rd_rel.relkind == RELKIND_RELATION || rel.rd_rel.relkind == RELKIND_MATVIEW
-    );
+    debug_assert!(rel.rd_rel.relkind == RELKIND_RELATION || rel.rd_rel.relkind == RELKIND_MATVIEW);
     let tuple_desc = rel.rd_att.clone();
     let (toast_values, toast_isnull) = deform(mcx, oldtup, &tuple_desc);
     toast_delete_external(mcx, rel, &toast_values, &toast_isnull, is_speculative)
@@ -60,9 +57,7 @@ pub fn heap_toast_insert_or_update<'mcx>(
 ) -> PgResult<Option<HeapTuple<'mcx>>> {
     let options = options & !HEAP_INSERT_SPECULATIVE;
 
-    debug_assert!(
-        rel.rd_rel.relkind == RELKIND_RELATION || rel.rd_rel.relkind == RELKIND_MATVIEW
-    );
+    debug_assert!(rel.rd_rel.relkind == RELKIND_RELATION || rel.rd_rel.relkind == RELKIND_MATVIEW);
 
     let tuple_desc = rel.rd_att.clone();
     let num_attrs = tuple_desc.natts as usize;
@@ -70,17 +65,16 @@ pub fn heap_toast_insert_or_update<'mcx>(
     let (mut toast_values, toast_isnull) = deform(mcx, newtup, &tuple_desc);
     let old = oldtup.map(|t| deform(mcx, t, &tuple_desc));
 
-    let mut toast_attr =
-        ::mcx::vec_from_elem_in(
-            mcx,
-            ToastAttrInfo {
-                tai_oldexternal: None,
-                tai_size: 0,
-                tai_colflags: 0,
-                tai_compression: 0,
-            },
-            num_attrs,
-        );
+    let mut toast_attr = ::mcx::vec_from_elem_in(
+        mcx,
+        ToastAttrInfo {
+            tai_oldexternal: None,
+            tai_size: 0,
+            tai_colflags: 0,
+            tai_compression: 0,
+        },
+        num_attrs,
+    );
     let mut ttc = ToastTupleContext {
         ttc_rel: rel,
         ttc_values: &mut toast_values,
@@ -98,8 +92,7 @@ pub fn heap_toast_insert_or_update<'mcx>(
         hoff += BITMAPLEN(num_attrs as i32) as usize;
     }
     let hoff = MAXALIGN(hoff);
-    let mut max_data_len =
-        rel.get_toast_tuple_target(TOAST_TUPLE_TARGET as i32) as usize - hoff;
+    let mut max_data_len = rel.get_toast_tuple_target(TOAST_TUPLE_TARGET as i32) as usize - hoff;
 
     // Pass 1: compress EXTENDED attrs; push any still-oversized value out.
     while heap_compute_data_size(&tuple_desc, ttc.ttc_values, ttc.ttc_isnull) > max_data_len {
@@ -168,9 +161,8 @@ pub fn heap_toast_insert_or_update<'mcx>(
         result_tuple.as_tuple_mut().t_tableOid = newtup.t_tableOid;
 
         // SAFETY: newtup header is SizeofHeapTupleHeader readable bytes.
-        let old_header = unsafe {
-            core::slice::from_raw_parts(newtup.header_ptr(), SizeofHeapTupleHeader)
-        };
+        let old_header =
+            unsafe { core::slice::from_raw_parts(newtup.header_ptr(), SizeofHeapTupleHeader) };
         result_tuple.image_mut()[..SizeofHeapTupleHeader].copy_from_slice(old_header);
         {
             let hdr = result_tuple.as_tuple_mut().t_data_mut();

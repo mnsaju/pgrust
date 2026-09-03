@@ -36,7 +36,14 @@ fn lseg_io() {
 #[test]
 fn line_io() {
     let l = io::line_in("{1,2,3}", None).unwrap();
-    assert_eq!(l, LINE { A: 1.0, B: 2.0, C: 3.0 });
+    assert_eq!(
+        l,
+        LINE {
+            A: 1.0,
+            B: 2.0,
+            C: 3.0
+        }
+    );
     assert_eq!(out_str(|o| io::line_out(&l, o)), "{1,2,3}");
 
     let err = io::line_in("{0,0,5}", None).unwrap_err();
@@ -47,7 +54,14 @@ fn line_io() {
     assert_eq!(err.sqlstate(), ERRCODE_INVALID_TEXT_REPRESENTATION);
 
     let l2 = io::line_in("[(0,0),(1,0)]", None).unwrap();
-    assert_eq!(l2, LINE { A: 0.0, B: -1.0, C: 0.0 });
+    assert_eq!(
+        l2,
+        LINE {
+            A: 0.0,
+            B: -1.0,
+            C: 0.0
+        }
+    );
     let err = io::line_in("[(0,0),(0,0)]", None).unwrap_err();
     assert_eq!(
         err.message(),
@@ -88,7 +102,7 @@ fn path_io() {
 
     assert!(io::path_in(ctx.mcx(), "(0,0),(1,1)x", None).is_err());
     assert!(io::path_in(ctx.mcx(), "", None).is_err());
-    assert!(io::path_in(ctx.mcx(), "(0,0",  None).is_err());
+    assert!(io::path_in(ctx.mcx(), "(0,0", None).is_err());
 }
 
 #[test]

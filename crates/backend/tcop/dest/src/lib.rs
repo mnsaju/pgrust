@@ -21,18 +21,18 @@ const PQMSG_EMPTY_QUERY_RESPONSE: u8 = b'I';
 // CommandDest in CreateDestReceiver's switch), so dispatch is an enum match
 // (rule 4): receive_slot is per-row hot at M1 and each arm is a direct call.
 pub enum DestReceiver<'mcx> {
-    DoNothing,                             // donothingDR (DestNone); fully functional
+    DoNothing,                                // donothingDR (DestNone); fully functional
     DebugTup(printtup::debugtup::DrDebugtup), // debugtupDR (printtup.c debugStartup/debugtup)
-    PrintTup(printtup::DrPrinttup<'mcx>),  // printtup_create_DR(Remote|RemoteExecute)
+    PrintTup(printtup::DrPrinttup<'mcx>),     // printtup_create_DR(Remote|RemoteExecute)
     PrintSimple(printtup::printsimple::DrPrintsimple), // printsimpleDR (DestRemoteSimple)
-    SpiPrintTup,                           // spi_printtupDR shell; callbacks in spi.c
-    Tuplestore(tstore_receiver::DrTstore), // CreateTuplestoreDestReceiver (tstoreReceiver.c)
+    SpiPrintTup,                              // spi_printtupDR shell; callbacks in spi.c
+    Tuplestore(tstore_receiver::DrTstore),    // CreateTuplestoreDestReceiver (tstoreReceiver.c)
     IntoRel(createas_seams::IntoRelState<'mcx>), // CreateIntoRelDestReceiver (createas.c)
-    CopyOut(copy_seams::CopyDestState),    // CreateCopyDestReceiver (copyto.c)
+    CopyOut(copy_seams::CopyDestState),       // CreateCopyDestReceiver (copyto.c)
     TransientRel(matview_seams::TransientRelState<'mcx>), // CreateTransientRelDestReceiver (matview.c)
     SqlFunction(sql_functions_seams::SqlFunctionDestState<'mcx>), // CreateSQLFunctionDestReceiver (functions.c)
     ExplainSerialize(explain_dr::SerializeDestReceiver<'mcx>), // CreateExplainSerializeDestReceiver (explain_dr.c)
-    TupleQueue(tqueue::DrTqueue),          // CreateTupleQueueDestReceiver (tqueue.c)
+    TupleQueue(tqueue::DrTqueue), // CreateTupleQueueDestReceiver (tqueue.c)
 }
 
 impl<'mcx> DestReceiver<'mcx> {
@@ -254,8 +254,11 @@ pub fn EndCommand(
     match dest {
         CommandDest::Remote | CommandDest::RemoteExecute | CommandDest::RemoteSimple => {
             let mut completionTag = [0u8; COMPLETION_TAG_BUFSIZE];
-            let len =
-                cmdtag::BuildQueryCompletionString(&mut completionTag, qc, force_undecorated_output);
+            let len = cmdtag::BuildQueryCompletionString(
+                &mut completionTag,
+                qc,
+                force_undecorated_output,
+            );
             // len + 1 ships the trailing NUL, as C does.
             pqcomm_seams::pq_putmessage::call(PQMSG_COMMAND_COMPLETE, &completionTag[..len + 1])?;
         }

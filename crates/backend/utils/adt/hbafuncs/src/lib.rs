@@ -8,7 +8,9 @@ use hba::TokenizedAuthLine;
 use mcx::Mcx;
 use types_core::catalog::TEXTOID;
 use types_error::{PgResult, ERROR};
-use types_fmgr::{varlena_result, FmgrBuiltin, FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFunction};
+use types_fmgr::{
+    varlena_result, FmgrBuiltin, FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFunction,
+};
 use types_startup::{clientCertCA, clientCertOff, AuthToken, HbaLine};
 
 pub static HBAFUNCS_BUILTINS: &[FmgrBuiltin] = &[
@@ -17,7 +19,14 @@ pub static HBAFUNCS_BUILTINS: &[FmgrBuiltin] = &[
 ];
 
 const fn srf(foid: types_core::Oid, name: &'static str, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs: 0, strict: true, retset: true, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs: 0,
+        strict: true,
+        retset: true,
+        func,
+    }
 }
 
 fn text_datum(mcx: Mcx<'_>, s: &str) -> PgResult<Datum> {
@@ -68,7 +77,11 @@ fn hba_options_strings(hba: &HbaLine) -> Vec<String> {
         opts.push(format!("map={usermap}"));
     }
     if hba.clientcert != clientCertOff {
-        let mode = if hba.clientcert == clientCertCA { "verify-ca" } else { "verify-full" };
+        let mode = if hba.clientcert == clientCertCA {
+            "verify-ca"
+        } else {
+            "verify-full"
+        };
         opts.push(format!("clientcert={mode}"));
     }
 
@@ -183,7 +196,11 @@ fn fill_hba_line(
         }
         i += 1;
     } else {
-        for slot in nulls.iter_mut().take(NUM_PG_HBA_FILE_RULES_ATTS - 1).skip(3) {
+        for slot in nulls
+            .iter_mut()
+            .take(NUM_PG_HBA_FILE_RULES_ATTS - 1)
+            .skip(3)
+        {
             *slot = true;
         }
         i = NUM_PG_HBA_FILE_RULES_ATTS - 1;
@@ -282,7 +299,11 @@ fn fill_ident_line(
         values[i] = text_datum(mcx, &ident.pg_user.string)?;
         i += 1;
     } else {
-        for slot in nulls.iter_mut().take(NUM_PG_IDENT_FILE_MAPPINGS_ATTS - 1).skip(3) {
+        for slot in nulls
+            .iter_mut()
+            .take(NUM_PG_IDENT_FILE_MAPPINGS_ATTS - 1)
+            .skip(3)
+        {
             *slot = true;
         }
         i = NUM_PG_IDENT_FILE_MAPPINGS_ATTS - 1;

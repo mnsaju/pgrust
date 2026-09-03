@@ -202,13 +202,21 @@ fn run_workload(txns: u64, retry_fsync_believer: bool) -> RunOutcome {
     let mut acked = Vec::new();
     let wal_fd = match OpenTransientFile(WAL, libc::O_RDWR) {
         Ok(fd) if fd >= 0 => fd,
-        _ => return RunOutcome { acked, completed: false },
+        _ => {
+            return RunOutcome {
+                acked,
+                completed: false,
+            }
+        }
     };
     let heap_fd = match OpenTransientFile(HEAP, libc::O_RDWR) {
         Ok(fd) if fd >= 0 => fd,
         _ => {
             let _ = CloseTransientFile(wal_fd);
-            return RunOutcome { acked, completed: false };
+            return RunOutcome {
+                acked,
+                completed: false,
+            };
         }
     };
     let mut wal_end: i64 = vfs::file_size(wal_fd);
@@ -278,7 +286,10 @@ fn recover() -> Result<Recovered, String> {
 
     let mut heap = read_opt(HEAP).ok_or("heap missing after crash")?;
     if heap.len() < HEAP_LEN {
-        return Err(format!("heap shorter than its durable floor: {}", heap.len()));
+        return Err(format!(
+            "heap shorter than its durable floor: {}",
+            heap.len()
+        ));
     }
     heap.truncate(HEAP_LEN);
 
@@ -307,7 +318,9 @@ fn recover() -> Result<Recovered, String> {
         let slot = rec[12] as usize;
         let val = u64le(&rec[13..21]);
         if txid != expect_txid {
-            return Err(format!("WAL txid discontinuity: got {txid}, expected {expect_txid}"));
+            return Err(format!(
+                "WAL txid discontinuity: got {txid}, expected {expect_txid}"
+            ));
         }
         if slot >= NSLOTS {
             return Err(format!("replayed record has bad slot {slot}"));
@@ -317,7 +330,11 @@ fn recover() -> Result<Recovered, String> {
         expect_txid += 1;
         pos += len;
     }
-    Ok(Recovered { ckpt_txid, replayed, heap })
+    Ok(Recovered {
+        ckpt_txid,
+        replayed,
+        heap,
+    })
 }
 
 /// The standing property (scoping doc §4.4): committed survives,
@@ -377,7 +394,10 @@ fn crash_recovery_property_sweep() {
     assert!(base.completed, "fault-free baseline must complete");
     assert_eq!(base.acked.len(), TXNS as usize);
     let workload_ops = SimVfs::op_seq() - boot_ops;
-    assert!(workload_ops > 100, "baseline too small to sweep ({workload_ops} ops)");
+    assert!(
+        workload_ops > 100,
+        "baseline too small to sweep ({workload_ops} ops)"
+    );
 
     // ---- ARM A: cut at EVERY op boundary of the workload (step 1),
     //      surviving-subset image seeded per cut point ----
@@ -428,7 +448,10 @@ fn crash_recovery_property_sweep() {
             break; // j exceeds the workload's fsync count — arm exhausted
         }
         arm_b_points += 1;
-        assert!(!out.completed, "an injected fsync EIO must stop the engine (j={j})");
+        assert!(
+            !out.completed,
+            "an injected fsync EIO must stop the engine (j={j})"
+        );
         if SimVfs::cut_count() == 0 {
             SimVfs::cut(); // the PANIC-induced node death
         }
@@ -438,7 +461,10 @@ fn crash_recovery_property_sweep() {
             Err(e) => failures.push(format!("armB j={j}: RECOVERY FAILED: {e}")),
         }
     }
-    assert!(arm_b_points > TXNS / 2, "fsync sweep too small ({arm_b_points})");
+    assert!(
+        arm_b_points > TXNS / 2,
+        "fsync sweep too small ({arm_b_points})"
+    );
 
     // ---- ARM C: torn write on the m-th WAL-class write (crash mid-record;
     //      the tear must never replay — CRC is the gate) ----
@@ -541,7 +567,10 @@ fn red_missing_parent_dir_fsync_is_caught() {
     bootstrap();
     super::vfs_write_file(CONTROL_TMP, &new_ctl);
     fsync_fname(CONTROL_TMP, false).unwrap();
-    assert_eq!(vfs::rename(&super::cpath(CONTROL_TMP), &super::cpath(CONTROL)), 0);
+    assert_eq!(
+        vfs::rename(&super::cpath(CONTROL_TMP), &super::cpath(CONTROL)),
+        0
+    );
     SimVfs::cut();
     let ctl = read_opt(CONTROL).expect("the OLD control dirent is durable");
     assert_eq!(
@@ -549,14 +578,20 @@ fn red_missing_parent_dir_fsync_is_caught() {
         control_payload(0, 0),
         "the model MUST expose the lost dirent: control reverts to the old image"
     );
-    assert_ne!(ctl, new_ctl, "if the new control survived, the model has no teeth");
+    assert_ne!(
+        ctl, new_ctl,
+        "if the new control survived, the model has no teeth"
+    );
 
     // Disciplined arm: durable_rename (fsyncs the parent dir) — survives.
     SimVfs::reset();
     bootstrap();
     super::vfs_write_file(CONTROL_TMP, &new_ctl);
     fsync_fname(CONTROL_TMP, false).unwrap();
-    assert_eq!(durable_rename(CONTROL_TMP, CONTROL, ::types_error::LOG).unwrap(), 0);
+    assert_eq!(
+        durable_rename(CONTROL_TMP, CONTROL, ::types_error::LOG).unwrap(),
+        0
+    );
     SimVfs::cut();
     assert_eq!(
         read_opt(CONTROL).expect("control present"),
@@ -583,7 +618,9 @@ fn red_atomic_multisector_write_masks_torn_wal_record() {
                     path_contains: None,
                 },
                 3,
-                FaultDecision::TornWrite { persist_prefix: 550 },
+                FaultDecision::TornWrite {
+                    persist_prefix: 550,
+                },
             )],
         );
         let out = run_workload(6, false);

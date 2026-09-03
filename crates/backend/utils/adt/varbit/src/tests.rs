@@ -195,7 +195,10 @@ fn counts() {
     let ctx = MemoryContext::new("t");
     let mcx = ctx.mcx();
     let a = img(mcx, "b110110001");
-    let n: i64 = payload_bits(&a[4..]).iter().map(|&b| b.count_ones() as i64).sum();
+    let n: i64 = payload_bits(&a[4..])
+        .iter()
+        .map(|&b| b.count_ones() as i64)
+        .sum();
     assert_eq!(n, 5);
     assert_eq!(payload_bitlen(&a[4..]), 9);
     assert_eq!(payload_bits(&a[4..]).len(), 2);
@@ -255,7 +258,9 @@ fn bit_coerce_c_bounds_guards() {
     assert!(bit_coerce(mcx, &a[4..], i32::MIN, true).unwrap().is_none());
     // len > VARBITMAXLEN (INT_MAX-7): unchanged — i32::MAX must NOT allocate.
     assert!(bit_coerce(mcx, &a[4..], i32::MAX, true).unwrap().is_none());
-    assert!(bit_coerce(mcx, &a[4..], (VARBITMAXLEN + 1) as i32, true).unwrap().is_none());
+    assert!(bit_coerce(mcx, &a[4..], (VARBITMAXLEN + 1) as i32, true)
+        .unwrap()
+        .is_none());
     // len == VARBITLEN(arg): unchanged.
     assert!(bit_coerce(mcx, &a[4..], 3, true).unwrap().is_none());
     // in-range explicit cast still widens with zero padding.

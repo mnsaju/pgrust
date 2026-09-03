@@ -1,8 +1,7 @@
 use crate::layout::*;
 use crate::utils::*;
 use bufmgr::{
-    LockBuffer, LockBufferForCleanup, UnlockReleaseBuffer, BUFFER_LOCK_EXCLUSIVE,
-    BUFFER_LOCK_SHARE,
+    LockBuffer, LockBufferForCleanup, UnlockReleaseBuffer, BUFFER_LOCK_EXCLUSIVE, BUFFER_LOCK_SHARE,
 };
 use generic_xlog::{GenericXLogAbort, GenericXLogFinish, GenericXLogStart};
 use mcx::{Mcx, PgFxHashMap};
@@ -11,8 +10,8 @@ use types_error::PgResult;
 use types_hnsw::*;
 use types_nbtree::genam::IndexBulkDeleteResult;
 use types_rel::Relation;
-use types_storage::bufpage::PageRef;
 use types_storage::buf::BufferAccessStrategyType;
+use types_storage::bufpage::PageRef;
 use types_storage::lock::{ExclusiveLock, ShareLock};
 use types_tuple::itemptr::{
     ItemPointerData, ItemPointerGetBlockNumberNoCheck, ItemPointerGetOffsetNumberNoCheck,
@@ -32,7 +31,9 @@ fn tid_cmp(a: &ItemPointerData, b: &ItemPointerData) -> core::cmp::Ordering {
 }
 
 fn tid_reaped(dead_items: &[ItemPointerData], tid: &ItemPointerData) -> bool {
-    dead_items.binary_search_by(|probe| tid_cmp(probe, tid)).is_ok()
+    dead_items
+        .binary_search_by(|probe| tid_cmp(probe, tid))
+        .is_ok()
 }
 
 type Deleting<'t> = PgFxHashMap<'t, (BlockNumber, u16), ()>;
@@ -76,9 +77,7 @@ fn remove_heap_tids(vs: &mut VacState<'_, '_, '_>) -> PgResult<()> {
         let mut updated = false;
 
         // SAFETY: registered image, exclusive access.
-        let pr = unsafe {
-            PageRef::from_raw(core::ptr::NonNull::new(page_ptr).unwrap())
-        };
+        let pr = unsafe { PageRef::from_raw(core::ptr::NonNull::new(page_ptr).unwrap()) };
         let maxoffno = pr.max_offset_number();
         for offno in 1..=maxoffno {
             let (item_off, item_len) = {
@@ -87,9 +86,8 @@ fn remove_heap_tids(vs: &mut VacState<'_, '_, '_>) -> PgResult<()> {
                 (p as usize - page_ptr as usize, len as usize)
             };
             // SAFETY: item bounds within the registered image.
-            let bytes = unsafe {
-                core::slice::from_raw_parts_mut(page_ptr.add(item_off), item_len)
-            };
+            let bytes =
+                unsafe { core::slice::from_raw_parts_mut(page_ptr.add(item_off), item_len) };
             if bytes[0] != HNSW_ELEMENT_TUPLE_TYPE {
                 continue;
             }
@@ -170,10 +168,11 @@ fn needs_updated(
     LockBuffer(buf, BUFFER_LOCK_SHARE)?;
     let page = buf_page_bytes(buf);
     // SAFETY: share lock held.
-    let pr = unsafe {
-        PageRef::from_raw(core::ptr::NonNull::new(page.as_ptr() as *mut u8).unwrap())
+    let pr =
+        unsafe { PageRef::from_raw(core::ptr::NonNull::new(page.as_ptr() as *mut u8).unwrap()) };
+    let ntup = NeighborTupleView {
+        bytes: item_bytes(&pr, neighbor_offno),
     };
-    let ntup = NeighborTupleView { bytes: item_bytes(&pr, neighbor_offno) };
     let mut needs = false;
     let count = ntup.count() as usize;
     for i in 0..count {
@@ -211,7 +210,16 @@ fn repair_graph_element(
     let e_id = pool.from_block(element.0, element.1);
     let mut support = vs.support.clone();
     // Load level/version/value; then clear heaptids per C (skip self search).
-    load_element(&mut pool, e_id, None, None, vs.index, &mut support, true, None)?;
+    load_element(
+        &mut pool,
+        e_id,
+        None,
+        None,
+        vs.index,
+        &mut support,
+        true,
+        None,
+    )?;
     pool.get_mut(e_id).heaptids_len = 0;
 
     let entry_id = entry_point.map(|(b, o, l)| {
@@ -275,7 +283,14 @@ fn update_neighbors_on_disk_repair(
 ) -> PgResult<()> {
     let mut support = vs.support.clone();
     crate::insert::update_neighbors_on_disk(
-        vs.index, &mut support, pool, e_id, vs.m, true, false, vs.op_mcx,
+        vs.index,
+        &mut support,
+        pool,
+        e_id,
+        vs.m,
+        true,
+        false,
+        vs.op_mcx,
     )
 }
 
@@ -287,10 +302,11 @@ fn element_neighbor_tid(
     LockBuffer(buf, BUFFER_LOCK_SHARE)?;
     let page = buf_page_bytes(buf);
     // SAFETY: share lock held.
-    let pr = unsafe {
-        PageRef::from_raw(core::ptr::NonNull::new(page.as_ptr() as *mut u8).unwrap())
+    let pr =
+        unsafe { PageRef::from_raw(core::ptr::NonNull::new(page.as_ptr() as *mut u8).unwrap()) };
+    let etup = ElementTupleView {
+        bytes: item_bytes(&pr, element.1),
     };
-    let etup = ElementTupleView { bytes: item_bytes(&pr, element.1) };
     let out = etup.neighbortid();
     UnlockReleaseBuffer(buf)?;
     Ok(out)
@@ -368,7 +384,9 @@ fn repair_graph(vs: &mut VacState<'_, '_, '_>) -> PgResult<()> {
         };
         let maxoffno = pr.max_offset_number();
         for offno in 1..=maxoffno {
-            let etup = ElementTupleView { bytes: item_bytes(&pr, offno) };
+            let etup = ElementTupleView {
+                bytes: item_bytes(&pr, offno),
+            };
             if etup.tuple_type() != HNSW_ELEMENT_TUPLE_TYPE {
                 continue;
             }
@@ -447,7 +465,9 @@ fn confirm_repaired(vs: &VacState<'_, '_, '_>) -> PgResult<()> {
         };
         let maxoffno = pr.max_offset_number();
         for offno in 1..=maxoffno {
-            let etup = ElementTupleView { bytes: item_bytes(&pr, offno) };
+            let etup = ElementTupleView {
+                bytes: item_bytes(&pr, offno),
+            };
             if etup.tuple_type() != HNSW_ELEMENT_TUPLE_TYPE
                 || etup.deleted() != 0
                 || !itemptr_is_valid(etup.heaptid_bytes(0))
@@ -472,22 +492,20 @@ fn confirm_repaired(vs: &VacState<'_, '_, '_>) -> PgResult<()> {
                 let npage = buf_page_bytes(nbuf);
                 // SAFETY: share lock held.
                 npr_owned = unsafe {
-                    PageRef::from_raw(
-                        core::ptr::NonNull::new(npage.as_ptr() as *mut u8).unwrap(),
-                    )
+                    PageRef::from_raw(core::ptr::NonNull::new(npage.as_ptr() as *mut u8).unwrap())
                 };
                 npr = npr_owned;
             }
-            let ntup = NeighborTupleView { bytes: item_bytes(&npr, no) };
+            let ntup = NeighborTupleView {
+                bytes: item_bytes(&npr, no),
+            };
             for i in 0..ntup.count() as usize {
                 let tid = ntup.indextid_bytes(i);
                 if !itemptr_is_valid(tid) {
                     continue;
                 }
                 if vs.deleting.contains_key(&itemptr_decode(tid)) {
-                    return Err(
-                        types_error::PgError::error("hnsw graph not repaired").into()
-                    );
+                    return Err(types_error::PgError::error("hnsw graph not repaired").into());
                 }
             }
             if nbuf != buf {
@@ -530,7 +548,9 @@ fn mark_deleted(vs: &mut VacState<'_, '_, '_>) -> PgResult<()> {
         let maxoffno = {
             // SAFETY: cleanup lock held.
             let pr = unsafe {
-                PageRef::from_raw(core::ptr::NonNull::new(state.page_image_mut(0).as_mut_ptr()).unwrap())
+                PageRef::from_raw(
+                    core::ptr::NonNull::new(state.page_image_mut(0).as_mut_ptr()).unwrap(),
+                )
             };
             pr.max_offset_number()
         };
@@ -616,17 +636,14 @@ fn mark_deleted(vs: &mut VacState<'_, '_, '_>) -> PgResult<()> {
                 let img_idx = if same_page { 0 } else { 1 };
                 let npage_ptr = state.page_image_mut(img_idx).as_mut_ptr();
                 // SAFETY: registered image.
-                let npr =
-                    unsafe { PageRef::from_raw(core::ptr::NonNull::new(npage_ptr).unwrap()) };
+                let npr = unsafe { PageRef::from_raw(core::ptr::NonNull::new(npage_ptr).unwrap()) };
                 let (noff2, nlen2) = {
                     let id = npr.item_id(no);
                     let (p, len) = npr.item_raw(id);
                     (p as usize - npage_ptr as usize, len as usize)
                 };
                 // SAFETY: item bounds.
-                let nb = unsafe {
-                    core::slice::from_raw_parts_mut(npage_ptr.add(noff2), nlen2)
-                };
+                let nb = unsafe { core::slice::from_raw_parts_mut(npage_ptr.add(noff2), nlen2) };
                 let count = u16::from_ne_bytes(nb[2..4].try_into().unwrap()) as usize;
                 for i in 0..count {
                     let off = NEIGHBOR_TIDS_OFFSET + i * 6;
@@ -708,7 +725,9 @@ pub fn hnswbulkdelete_collect<'mcx>(
             PageRef::from_raw(core::ptr::NonNull::new(page.as_ptr() as *mut u8).unwrap())
         };
         for offno in 1..=pr.max_offset_number() {
-            let etup = ElementTupleView { bytes: item_bytes(&pr, offno) };
+            let etup = ElementTupleView {
+                bytes: item_bytes(&pr, offno),
+            };
             if etup.tuple_type() != HNSW_ELEMENT_TUPLE_TYPE || etup.deleted() != 0 {
                 continue;
             }

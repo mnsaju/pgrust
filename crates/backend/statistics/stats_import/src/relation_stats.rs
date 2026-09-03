@@ -19,12 +19,30 @@ const RELALLFROZEN_ARG: usize = 5;
 const NUM_RELATION_STATS_ARGS: usize = 6;
 
 static RELARGINFO: [StatsArgInfo; NUM_RELATION_STATS_ARGS] = [
-    StatsArgInfo { argname: "schemaname", argtype: TEXTOID },
-    StatsArgInfo { argname: "relname", argtype: TEXTOID },
-    StatsArgInfo { argname: "relpages", argtype: INT4OID },
-    StatsArgInfo { argname: "reltuples", argtype: FLOAT4OID },
-    StatsArgInfo { argname: "relallvisible", argtype: INT4OID },
-    StatsArgInfo { argname: "relallfrozen", argtype: INT4OID },
+    StatsArgInfo {
+        argname: "schemaname",
+        argtype: TEXTOID,
+    },
+    StatsArgInfo {
+        argname: "relname",
+        argtype: TEXTOID,
+    },
+    StatsArgInfo {
+        argname: "relpages",
+        argtype: INT4OID,
+    },
+    StatsArgInfo {
+        argname: "reltuples",
+        argtype: FLOAT4OID,
+    },
+    StatsArgInfo {
+        argname: "relallvisible",
+        argtype: INT4OID,
+    },
+    StatsArgInfo {
+        argname: "relallfrozen",
+        argtype: INT4OID,
+    },
 ];
 
 const Anum_pg_class_relpages: i32 = 10;
@@ -109,7 +127,8 @@ fn relation_statistics_update(mcx: Mcx<'_>, args: &[Arg]) -> PgResult<bool> {
         let nulls: [bool; 4] = [false; 4];
         let mut nreplaces = 0usize;
 
-        if update_relpages && relpages != getattr(&old, Anum_pg_class_relpages, desc).as_i32() as u32
+        if update_relpages
+            && relpages != getattr(&old, Anum_pg_class_relpages, desc).as_i32() as u32
         {
             replaces[nreplaces] = Anum_pg_class_relpages;
             values[nreplaces] = Datum::from_i32(relpages as i32);
@@ -208,8 +227,14 @@ pub fn fc_pg_clear_relation_stats(
     let mcx = cx.mcx();
 
     let mut positional = [Arg::NULL; NUM_RELATION_STATS_ARGS];
-    positional[RELSCHEMA_ARG] = Arg { value: fcinfo.arg(0), isnull: fcinfo.argisnull(0) };
-    positional[RELNAME_ARG] = Arg { value: fcinfo.arg(1), isnull: fcinfo.argisnull(1) };
+    positional[RELSCHEMA_ARG] = Arg {
+        value: fcinfo.arg(0),
+        isnull: fcinfo.argisnull(0),
+    };
+    positional[RELNAME_ARG] = Arg {
+        value: fcinfo.arg(1),
+        isnull: fcinfo.argisnull(1),
+    };
     positional[RELPAGES_ARG] = Arg::present(Datum::from_i32(0));
     positional[RELTUPLES_ARG] = Arg::present(Datum::from_f32(-1.0));
     positional[RELALLVISIBLE_ARG] = Arg::present(Datum::from_i32(0));

@@ -20,9 +20,7 @@ use types_error::{
     ERRCODE_INTERNAL_ERROR, ERROR, PANIC, WARNING,
 };
 use types_storage::{ReadBufferMode, RelFileLocator, RelFileLocatorBackend};
-use xlogreader_seams::{
-    WALReadError, XLogReaderState, BKPBLOCK_WILL_INIT, XLOG_BLCKSZ,
-};
+use xlogreader_seams::{WALReadError, XLogReaderState, BKPBLOCK_WILL_INIT, XLOG_BLCKSZ};
 
 pub const InvalidXLogRecPtr: XLogRecPtr = 0;
 const P_NEW: BlockNumber = InvalidBlockNumber;
@@ -115,9 +113,15 @@ fn report_invalid_page(
 ) -> PgResult<()> {
     let path = relpathperm(locator, forkno);
     if present {
-        elog(elevel, format!("page {blkno} of relation {path} is uninitialized"))
+        elog(
+            elevel,
+            format!("page {blkno} of relation {path} is uninitialized"),
+        )
     } else {
-        elog(elevel, format!("page {blkno} of relation {path} does not exist"))
+        elog(
+            elevel,
+            format!("page {blkno} of relation {path} does not exist"),
+        )
     }
 }
 
@@ -131,7 +135,11 @@ fn log_invalid_page(
     if xlogrecovery_seams::reached_consistency::call() {
         report_invalid_page(WARNING, locator, forkno, blkno, present)?;
         elog(
-            if ignore_invalid_pages() { WARNING } else { PANIC },
+            if ignore_invalid_pages() {
+                WARNING
+            } else {
+                PANIC
+            },
             "WAL contains references to invalid pages",
         )?;
     }
@@ -237,7 +245,11 @@ pub fn XLogCheckInvalidPages() -> PgResult<()> {
 
     if foundone {
         elog(
-            if ignore_invalid_pages() { WARNING } else { PANIC },
+            if ignore_invalid_pages() {
+                WARNING
+            } else {
+                PANIC
+            },
             "WAL contains references to invalid pages",
         )?;
     }
@@ -450,10 +462,10 @@ impl core::ops::Deref for FakeRelcacheEntry {
 // rd_backend, relpersistence, lockRelId; everything else is C's palloc0 zero.
 #[cold]
 pub fn CreateFakeRelcacheEntry(rlocator: RelFileLocator) -> FakeRelcacheEntry {
-    use std::rc::Rc;
     use ::mcx::PgVec;
     use ::types_rel::{FormData_pg_class, LockInfoData, LockRelId, RelationData};
     use ::types_tuple::{NameData, TupleDescData};
+    use std::rc::Rc;
 
     thread_local! {
         // Backs the entry's empty PgVecs only; nothing is ever allocated in it.
@@ -477,7 +489,10 @@ pub fn CreateFakeRelcacheEntry(rlocator: RelFileLocator) -> FakeRelcacheEntry {
             rd_firstRelfilelocatorSubid: Cell::new(0),
             rd_droppedSubid: Cell::new(0),
             rd_lockInfo: LockInfoData {
-                lockRelId: LockRelId { relId: rlocator.relNumber, dbId: rlocator.dbOid },
+                lockRelId: LockRelId {
+                    relId: rlocator.relNumber,
+                    dbId: rlocator.dbOid,
+                },
             },
             rd_rel: FormData_pg_class {
                 relname,
@@ -521,13 +536,16 @@ pub fn CreateFakeRelcacheEntry(rlocator: RelFileLocator) -> FakeRelcacheEntry {
             pgstat_enabled: Cell::new(false),
             pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
             rd_amcache: Default::default(),
-            rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+            rd_amcache_hash: Default::default(),
+            rd_amcache_gin: Default::default(),
+            rd_amcache_spgist: Default::default(),
             rd_support: PgVec::new_in(mcx),
             rd_supportinfo: Default::default(),
             rd_opcoptions: Default::default(),
             rd_indexlist: Default::default(),
             rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+            rd_hastriggers: false,
+            rd_hasrules: false,
         },
     }
 }
@@ -585,8 +603,7 @@ pub fn XLogReadDetermineTimeline(
     if state.currTLIValidUntil != InvalidXLogRecPtr
         && state.currTLI != currTLI
         && state.currTLI != 0
-        && ((wantPage + wantLength as u64) / ws_segsize)
-            < (state.currTLIValidUntil / ws_segsize)
+        && ((wantPage + wantLength as u64) / ws_segsize) < (state.currTLIValidUntil / ws_segsize)
     {
         return Ok(());
     }
@@ -633,7 +650,12 @@ fn XLogSegmentsPerXLogId(wal_segsz_bytes: i32) -> u64 {
 
 fn XLogFileName(tli: TimeLineID, logSegNo: XLogSegNo, wal_segsz_bytes: i32) -> String {
     let per = XLogSegmentsPerXLogId(wal_segsz_bytes);
-    format!("{:08X}{:08X}{:08X}", tli, (logSegNo / per) as u32, (logSegNo % per) as u32)
+    format!(
+        "{:08X}{:08X}{:08X}",
+        tli,
+        (logSegNo / per) as u32,
+        (logSegNo % per) as u32
+    )
 }
 
 fn XLogFilePath(tli: TimeLineID, logSegNo: XLogSegNo, wal_segsz_bytes: i32) -> String {
@@ -669,7 +691,9 @@ pub fn wal_segment_open(
         ereport(ERROR)
             .with_saved_errno(en)
             .errcode_for_file_access()
-            .errmsg(format!("requested WAL segment {path} has already been removed"))
+            .errmsg(format!(
+                "requested WAL segment {path} has already been removed"
+            ))
             .finish(loc("wal_segment_open"))?;
     } else {
         ereport(ERROR)
@@ -778,7 +802,11 @@ fn read_local_xlog_page_guts(
 
 pub fn WALReadRaiseError(errinfo: &WALReadError) -> PgResult<()> {
     let seg = &errinfo.wre_seg;
-    let fname = XLogFileName(seg.ws_tli, seg.ws_segno, transam_xlog_seams::wal_segment_size::call());
+    let fname = XLogFileName(
+        seg.ws_tli,
+        seg.ws_segno,
+        transam_xlog_seams::wal_segment_size::call(),
+    );
 
     if errinfo.wre_read < 0 {
         ereport(ERROR)

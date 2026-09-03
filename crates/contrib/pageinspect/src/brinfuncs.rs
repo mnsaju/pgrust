@@ -6,7 +6,7 @@ use types_brin::{
     BrinPageType, BRIN_PAGETYPE_META, BRIN_PAGETYPE_REGULAR, BRIN_PAGETYPE_REVMAP,
     REVMAP_PAGE_MAXITEMS,
 };
-use types_core::{BRIN_AM_OID, INT4OID, INT8OID, InvalidOid};
+use types_core::{InvalidOid, BRIN_AM_OID, INT4OID, INT8OID};
 use types_error::ERRCODE_WRONG_OBJECT_TYPE;
 use types_rel::pg_class::RELKIND_INDEX;
 
@@ -153,8 +153,12 @@ pub(crate) fn fc_brin_page_items(
     }
     if index_rel.rd_rel.relam != BRIN_AM_OID {
         return Err(Box::new(
-            PgError::error(format!("\"{}\" is not a {} index", index_rel.name(), "BRIN"))
-                .with_sqlstate(ERRCODE_WRONG_OBJECT_TYPE),
+            PgError::error(format!(
+                "\"{}\" is not a {} index",
+                index_rel.name(),
+                "BRIN"
+            ))
+            .with_sqlstate(ERRCODE_WRONG_OBJECT_TYPE),
         ));
     }
 
@@ -194,84 +198,84 @@ pub(crate) fn fc_brin_page_items(
     // C's for(;;) loop bottom-tests `offset > maxoff`, so an empty page
     // still emits one unused-item row for offset 1.
     loop {
-            let mut values = [Datum::null(); 8];
-            let mut nulls = [false; 8];
+        let mut values = [Datum::null(); 8];
+        let mut nulls = [false; 8];
 
-            // One iteration per attribute of every tuple on the page; a None
-            // dtup signals decoding the next item.
-            if dtup.is_none() {
-                let item_id = page_item_id(b, offset);
-                if item_id.is_used()
-                    && item_id.has_storage()
-                    && (item_id.off as usize) + (item_id.len as usize) <= b.len()
-                {
-                    let tuple = &b[item_id.off as usize..(item_id.off + item_id.len) as usize];
-                    let mut mem = brin_tuple::brin_new_memtuple(&bdesc);
-                    brin_tuple::brin_deform_tuple(&bdesc, tuple, &mut mem)?;
-                    dtup = Some(mem);
-                    attno = 1;
-                    unused_item = false;
-                } else {
-                    unused_item = true;
-                }
+        // One iteration per attribute of every tuple on the page; a None
+        // dtup signals decoding the next item.
+        if dtup.is_none() {
+            let item_id = page_item_id(b, offset);
+            if item_id.is_used()
+                && item_id.has_storage()
+                && (item_id.off as usize) + (item_id.len as usize) <= b.len()
+            {
+                let tuple = &b[item_id.off as usize..(item_id.off + item_id.len) as usize];
+                let mut mem = brin_tuple::brin_new_memtuple(&bdesc);
+                brin_tuple::brin_deform_tuple(&bdesc, tuple, &mut mem)?;
+                dtup = Some(mem);
+                attno = 1;
+                unused_item = false;
             } else {
-                attno += 1;
+                unused_item = true;
             }
+        } else {
+            attno += 1;
+        }
 
-            if unused_item {
-                values[0] = Datum::from_i16(offset as i16);
-                for n in nulls.iter_mut().skip(1) {
-                    *n = true;
-                }
-            } else {
-                let d = dtup.as_ref().expect("decoded tuple");
-                let att = attno - 1;
-                values[0] = Datum::from_i16(offset as i16);
-                values[1] = match blknum_typid {
-                    INT8OID => Datum::from_i64(d.bt_blkno as i64),
-                    // Old extension versions used int4.
-                    INT4OID => Datum::from_i32(d.bt_blkno as i32),
-                    _ => return Err(Box::new(PgError::error("incorrect output types"))),
-                };
-                values[2] = Datum::from_i16(attno as i16);
-                values[3] = Datum::from_bool(d.bt_columns[att].bv_allnulls);
-                values[4] = Datum::from_bool(d.bt_columns[att].bv_hasnulls);
-                values[5] = Datum::from_bool(d.bt_placeholder);
-                values[6] = Datum::from_bool(d.bt_empty_range);
-                if !d.bt_columns[att].bv_allnulls {
-                    let mut s = String::new();
-                    s.push('{');
-                    for i in 0..out_fns[att].len() {
-                        if i > 0 {
-                            s.push_str(" .. ");
-                        }
-                        let val = types_fmgr::function_call1_coll_in(
-                            &mut out_fns[att][i],
-                            InvalidOid,
-                            mcx,
-                            d.bt_columns[att].bv_values[i],
-                        )?;
-                        // SAFETY: output functions return NUL-terminated cstrings.
-                        let cs = unsafe {
-                            core::ffi::CStr::from_ptr(val.as_usize() as *const core::ffi::c_char)
-                        };
-                        s.push_str(&String::from_utf8_lossy(cs.to_bytes()));
+        if unused_item {
+            values[0] = Datum::from_i16(offset as i16);
+            for n in nulls.iter_mut().skip(1) {
+                *n = true;
+            }
+        } else {
+            let d = dtup.as_ref().expect("decoded tuple");
+            let att = attno - 1;
+            values[0] = Datum::from_i16(offset as i16);
+            values[1] = match blknum_typid {
+                INT8OID => Datum::from_i64(d.bt_blkno as i64),
+                // Old extension versions used int4.
+                INT4OID => Datum::from_i32(d.bt_blkno as i32),
+                _ => return Err(Box::new(PgError::error("incorrect output types"))),
+            };
+            values[2] = Datum::from_i16(attno as i16);
+            values[3] = Datum::from_bool(d.bt_columns[att].bv_allnulls);
+            values[4] = Datum::from_bool(d.bt_columns[att].bv_hasnulls);
+            values[5] = Datum::from_bool(d.bt_placeholder);
+            values[6] = Datum::from_bool(d.bt_empty_range);
+            if !d.bt_columns[att].bv_allnulls {
+                let mut s = String::new();
+                s.push('{');
+                for i in 0..out_fns[att].len() {
+                    if i > 0 {
+                        s.push_str(" .. ");
                     }
-                    s.push('}');
-                    values[7] = text_datum(mcx, s.as_bytes())?;
-                } else {
-                    nulls[7] = true;
+                    let val = types_fmgr::function_call1_coll_in(
+                        &mut out_fns[att][i],
+                        InvalidOid,
+                        mcx,
+                        d.bt_columns[att].bv_values[i],
+                    )?;
+                    // SAFETY: output functions return NUL-terminated cstrings.
+                    let cs = unsafe {
+                        core::ffi::CStr::from_ptr(val.as_usize() as *const core::ffi::c_char)
+                    };
+                    s.push_str(&String::from_utf8_lossy(cs.to_bytes()));
                 }
+                s.push('}');
+                values[7] = text_datum(mcx, s.as_bytes())?;
+            } else {
+                nulls[7] = true;
             }
+        }
 
-            srf.putvalues(&values, &nulls)?;
+        srf.putvalues(&values, &nulls)?;
 
-            if unused_item {
-                offset += 1;
-            } else if attno >= natts {
-                dtup = None;
-                offset += 1;
-            }
+        if unused_item {
+            offset += 1;
+        } else if attno >= natts {
+            dtup = None;
+            offset += 1;
+        }
 
         if offset > maxoff {
             break;

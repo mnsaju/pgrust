@@ -10,7 +10,9 @@ use types_rel::{
     LOCKMODE, RELKIND_INDEX, RELKIND_PARTITIONED_INDEX, RELKIND_RELATION, REPLICA_IDENTITY_DEFAULT,
 };
 use types_scan::sdir::ForwardScanDirection;
-use types_slot::{BufferHeapTupleTableSlot, HeapTupleTableSlot, SlotData, TupleSlotKind, TupleTableSlot};
+use types_slot::{
+    BufferHeapTupleTableSlot, HeapTupleTableSlot, SlotData, TupleSlotKind, TupleTableSlot,
+};
 use types_snapshot::{SnapshotData, SNAPSHOT_MVCC};
 use types_tuple::itemptr::ItemPointerData;
 use types_tuple::{NameData, TupleDescData};
@@ -33,7 +35,9 @@ fn record_close(oid: Oid, lockmode: LOCKMODE) -> PgResult<()> {
 fn make<'mcx>(mcx: Mcx<'mcx>, oid: Oid, name: &str, relkind: u8, relam: Oid) -> Relation<'mcx> {
     let mut relname = NameData::default();
     relname.namestrcpy(name);
-    let data = RelationData { rd_locator: Default::default(), rd_smgr: Default::default(),
+    let data = RelationData {
+        rd_locator: Default::default(),
+        rd_smgr: Default::default(),
         rd_id: oid,
         rd_backend: INVALID_PROC_NUMBER,
         rd_islocaltemp: false,
@@ -43,7 +47,10 @@ fn make<'mcx>(mcx: Mcx<'mcx>, oid: Oid, name: &str, relkind: u8, relam: Oid) -> 
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
         rd_lockInfo: LockInfoData {
-            lockRelId: LockRelId { relId: oid, dbId: 5 },
+            lockRelId: LockRelId {
+                relId: oid,
+                dbId: 5,
+            },
         },
         rd_rel: FormData_pg_class {
             relname,
@@ -87,13 +94,16 @@ fn make<'mcx>(mcx: Mcx<'mcx>, oid: Oid, name: &str, relkind: u8, relam: Oid) -> 
         pgstat_enabled: Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: PgVec::new_in(mcx),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     };
     Relation::open(data, Some(record_close))
 }
@@ -102,7 +112,13 @@ fn fake_relation_open(mcx: Mcx<'_>, oid: Oid, _lockmode: LOCKMODE) -> PgResult<R
     match oid {
         TBL => Ok(make(mcx, oid, "tbl", RELKIND_RELATION, 2)),
         IDX => Ok(make(mcx, oid, "idx", RELKIND_INDEX, MOCK_AM_OID)),
-        PIDX => Ok(make(mcx, oid, "pidx", RELKIND_PARTITIONED_INDEX, BTREE_AM_OID)),
+        PIDX => Ok(make(
+            mcx,
+            oid,
+            "pidx",
+            RELKIND_PARTITIONED_INDEX,
+            BTREE_AM_OID,
+        )),
         _ => Err(PgError::error(format!("relation {oid} does not exist")).into()),
     }
 }
@@ -135,9 +151,7 @@ fn snapshot(mcx: Mcx<'_>) -> Rc<SnapshotData<'_>> {
     Rc::new(SnapshotData::sentinel(mcx, SNAPSHOT_MVCC))
 }
 
-fn scan_pair<'mcx>(
-    mcx: Mcx<'mcx>,
-) -> (Relation<'mcx>, Relation<'mcx>, IndexScanDescData<'mcx>) {
+fn scan_pair<'mcx>(mcx: Mcx<'mcx>) -> (Relation<'mcx>, Relation<'mcx>, IndexScanDescData<'mcx>) {
     let heap = make(mcx, TBL, "tbl", RELKIND_RELATION, 2);
     let idx = make(mcx, IDX, "idx", RELKIND_INDEX, MOCK_AM_OID);
     let scan = index_beginscan(mcx, &heap, &idx, snapshot(mcx), 1, 0).unwrap();
@@ -171,8 +185,12 @@ fn open_accepts_indexes_rejects_tables() {
 fn try_open_missing_is_none_wrong_kind_errors() {
     install();
     let ctx = MemoryContext::new("t");
-    assert!(try_index_open(ctx.mcx(), 999, AccessShareLock).unwrap().is_none());
-    assert!(try_index_open(ctx.mcx(), IDX, AccessShareLock).unwrap().is_some());
+    assert!(try_index_open(ctx.mcx(), 999, AccessShareLock)
+        .unwrap()
+        .is_none());
+    assert!(try_index_open(ctx.mcx(), IDX, AccessShareLock)
+        .unwrap()
+        .is_some());
     assert!(try_index_open(ctx.mcx(), TBL, AccessShareLock).is_err());
 }
 
@@ -244,7 +262,10 @@ fn getnext_tid_sequence_kill_reset_and_exhaustion() {
     assert_eq!(mock(&mut scan).kill_seen, vec![false, true]);
 
     // Exhaustion resets the heap fetch (buffer-pin release in C).
-    assert_eq!(index_getnext_tid(&mut scan, ForwardScanDirection).unwrap(), None);
+    assert_eq!(
+        index_getnext_tid(&mut scan, ForwardScanDirection).unwrap(),
+        None
+    );
     assert_eq!(scan.xs_heapfetch.as_ref().unwrap().mock().resets, 1);
 }
 

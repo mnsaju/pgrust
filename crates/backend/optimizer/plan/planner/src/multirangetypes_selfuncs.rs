@@ -9,9 +9,9 @@ use types_error::PgResult;
 use types_pathnodes::NodeId;
 
 use crate::rangetypes_selfuncs::{
-    calc_hist_selectivity_contained, calc_hist_selectivity_contains,
-    calc_hist_selectivity_scalar, varlena_image, RangeSelCtx,
-    STATISTIC_KIND_BOUNDS_HISTOGRAM, STATISTIC_KIND_RANGE_LENGTH_HISTOGRAM,
+    calc_hist_selectivity_contained, calc_hist_selectivity_contains, calc_hist_selectivity_scalar,
+    varlena_image, RangeSelCtx, STATISTIC_KIND_BOUNDS_HISTOGRAM,
+    STATISTIC_KIND_RANGE_LENGTH_HISTOGRAM,
 };
 use crate::run::PlannerRun;
 use crate::selfuncs::{
@@ -62,7 +62,11 @@ fn multirange_sel_ctx(mltrngtypid: Oid) -> PgResult<MultirangeSelCtx> {
         ))));
     };
     let rngtypid = rt.type_id;
-    Ok(MultirangeSelCtx { mltrngtypid, rngtypid, rng: RangeSelCtx::from_entry(rt)? })
+    Ok(MultirangeSelCtx {
+        mltrngtypid,
+        rngtypid,
+        rng: RangeSelCtx::from_entry(rt)?,
+    })
 }
 
 fn default_multirange_selectivity(operator: Oid) -> f64 {
@@ -105,8 +109,7 @@ pub fn multirangesel<'mcx>(
     args: &[NodeId],
     varrelid: i32,
 ) -> PgResult<f64> {
-    let Some((vardata, other, varonleft)) = get_restriction_variable(run, args, varrelid)?
-    else {
+    let Some((vardata, other, varonleft)) = get_restriction_variable(run, args, varrelid)? else {
         return Ok(default_multirange_selectivity(operator));
     };
     let Some(c) = other.as_const() else {
@@ -141,14 +144,22 @@ pub fn multirangesel<'mcx>(
                 lower: false,
             };
             let img = adt_rangetypes::range_serialize(
-                mcx, &mut c2.rng.ri, &mut lower, &mut upper, false, None,
+                mcx,
+                &mut c2.rng.ri,
+                &mut lower,
+                &mut upper,
+                false,
+                None,
             )?
             .expect("point range never soft-fails");
             let range: &[u8] = adt_multirangetypes::leak_image(img);
             let mut ranges: mcx::PgVec<'_, &[u8]> = mcx::vec_with_capacity_in(mcx, 1)?;
             ranges.push(range);
             let mr = adt_multirangetypes::make_multirange(
-                mcx, c2.mltrngtypid, &mut c2.rng.ri, &mut ranges,
+                mcx,
+                c2.mltrngtypid,
+                &mut c2.rng.ri,
+                &mut ranges,
             )?;
             constmultirange = Some(adt_multirangetypes::leak_image(mr));
         }
@@ -169,7 +180,10 @@ pub fn multirangesel<'mcx>(
             let mut ranges: mcx::PgVec<'_, &[u8]> = mcx::vec_with_capacity_in(mcx, 1)?;
             ranges.push(range);
             let mr = adt_multirangetypes::make_multirange(
-                mcx, c2.mltrngtypid, &mut c2.rng.ri, &mut ranges,
+                mcx,
+                c2.mltrngtypid,
+                &mut c2.rng.ri,
+                &mut ranges,
             )?;
             constmultirange = Some(adt_multirangetypes::leak_image(mr));
         }
@@ -298,13 +312,10 @@ fn calc_hist_selectivity<'mcx>(
         return Ok(-1.0);
     }
     let nhist = hvalues.len();
-    let mut hist_lower: mcx::PgVec<'mcx, RangeBound> =
-        mcx::vec_with_capacity_in(run.mcx, nhist)?;
-    let mut hist_upper: mcx::PgVec<'mcx, RangeBound> =
-        mcx::vec_with_capacity_in(run.mcx, nhist)?;
+    let mut hist_lower: mcx::PgVec<'mcx, RangeBound> = mcx::vec_with_capacity_in(run.mcx, nhist)?;
+    let mut hist_upper: mcx::PgVec<'mcx, RangeBound> = mcx::vec_with_capacity_in(run.mcx, nhist)?;
     for &v in hvalues {
-        let (lo, up, empty) =
-            adt_rangetypes::range_deserialize(&rng.ri.elem, varlena_image(v));
+        let (lo, up, empty) = adt_rangetypes::range_deserialize(&rng.ri.elem, varlena_image(v));
         if empty {
             // C: elog(ERROR) — degenerate stats content aborts the
             // statement, never the backend.
@@ -359,12 +370,10 @@ fn calc_hist_selectivity<'mcx>(
         OID_MULTIRANGE_RIGHT_RANGE_OP | OID_MULTIRANGE_RIGHT_MULTIRANGE_OP => {
             1.0 - calc_hist_selectivity_scalar(run.mcx, rng, &const_upper, &hist_lower, true)?
         }
-        OID_MULTIRANGE_OVERLAPS_RIGHT_RANGE_OP
-        | OID_MULTIRANGE_OVERLAPS_RIGHT_MULTIRANGE_OP => {
+        OID_MULTIRANGE_OVERLAPS_RIGHT_RANGE_OP | OID_MULTIRANGE_OVERLAPS_RIGHT_MULTIRANGE_OP => {
             1.0 - calc_hist_selectivity_scalar(run.mcx, rng, &const_lower, &hist_lower, false)?
         }
-        OID_MULTIRANGE_OVERLAPS_LEFT_RANGE_OP
-        | OID_MULTIRANGE_OVERLAPS_LEFT_MULTIRANGE_OP => {
+        OID_MULTIRANGE_OVERLAPS_LEFT_RANGE_OP | OID_MULTIRANGE_OVERLAPS_LEFT_MULTIRANGE_OP => {
             calc_hist_selectivity_scalar(run.mcx, rng, &const_upper, &hist_upper, true)?
         }
         OID_MULTIRANGE_OVERLAPS_RANGE_OP
@@ -372,8 +381,7 @@ fn calc_hist_selectivity<'mcx>(
         | OID_MULTIRANGE_CONTAINS_ELEM_OP => {
             let mut s =
                 calc_hist_selectivity_scalar(run.mcx, rng, &const_lower, &hist_upper, false)?;
-            s += 1.0
-                - calc_hist_selectivity_scalar(run.mcx, rng, &const_upper, &hist_lower, true)?;
+            s += 1.0 - calc_hist_selectivity_scalar(run.mcx, rng, &const_upper, &hist_lower, true)?;
             1.0 - s
         }
         OID_MULTIRANGE_CONTAINS_RANGE_OP | OID_MULTIRANGE_CONTAINS_MULTIRANGE_OP => {
@@ -390,9 +398,7 @@ fn calc_hist_selectivity<'mcx>(
             if const_lower.infinite {
                 calc_hist_selectivity_scalar(run.mcx, rng, &const_upper, &hist_upper, true)?
             } else if const_upper.infinite {
-                1.0 - calc_hist_selectivity_scalar(
-                    run.mcx, rng, &const_lower, &hist_lower, false,
-                )?
+                1.0 - calc_hist_selectivity_scalar(run.mcx, rng, &const_lower, &hist_lower, false)?
             } else {
                 calc_hist_selectivity_contained(
                     run.mcx,

@@ -54,7 +54,9 @@ fn to_json_common(fcinfo: &mut Fcinfo, loose: bool) -> PgResult<Datum> {
     let count = hs.count();
     let mcx = fcinfo.result_mcx();
     if count == 0 {
-        return Ok(types_fmgr::varlena_result(varlena::cstring_to_text(mcx, b"{}")?));
+        return Ok(types_fmgr::varlena_result(varlena::cstring_to_text(
+            mcx, b"{}",
+        )?));
     }
     let mut dst = stringinfo::StringInfo::new_in(mcx)?;
     dst.append_byte(b'{')?;
@@ -122,7 +124,9 @@ fn to_jsonb_common(fcinfo: &mut Fcinfo, loose: bool) -> PgResult<Datum> {
         };
         ps.push_value(v);
     }
-    let root = ps.end_object()?.expect("top-level object closes to a value");
+    let root = ps
+        .end_object()?
+        .expect("top-level object closes to a value");
     let img = adt_jsonb::build::convert_to_jsonb(mcx, &root)?;
     Ok(crate::ret_array(fcinfo, img))
 }

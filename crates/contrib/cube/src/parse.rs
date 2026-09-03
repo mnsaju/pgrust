@@ -128,7 +128,11 @@ impl<'a> Lexer<'a> {
             i += 1;
         }
         let rest = &s[i..];
-        let lower3: Vec<u8> = rest.iter().take(8).map(|b| b.to_ascii_lowercase()).collect();
+        let lower3: Vec<u8> = rest
+            .iter()
+            .take(8)
+            .map(|b| b.to_ascii_lowercase())
+            .collect();
         if lower3.starts_with(b"infinity") {
             return i - p + 8;
         }
@@ -144,7 +148,8 @@ impl<'a> Lexer<'a> {
 
     fn next(&mut self) -> Tok<'a> {
         let s = self.input;
-        while self.pos < s.len() && matches!(s[self.pos], b' ' | b'\t' | b'\n' | b'\r' | 0x0c | 0x0b)
+        while self.pos < s.len()
+            && matches!(s[self.pos], b' ' | b'\t' | b'\n' | b'\r' | 0x0c | 0x0b)
         {
             self.pos += 1;
         }

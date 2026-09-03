@@ -61,8 +61,7 @@ pub fn EventTriggerSQLDropAddObject(
     } else if object.classId == ATTR_DEFAULT_RELATION_ID {
         let (relid, attnum) = pg_attrdef::GetAttrDefaultColumnAddress(mcx, object.objectId)?;
         if OidIsValid(relid) {
-            let mut colobject =
-                ObjectAddress::set(types_core::RELATION_RELATION_ID, relid);
+            let mut colobject = ObjectAddress::set(types_core::RELATION_RELATION_ID, relid);
             colobject.objectSubId = attnum as i32;
             if !obtain_object_name_namespace(mcx, &colobject, &mut obj)? {
                 return Ok(());
@@ -93,9 +92,8 @@ pub fn EventTriggerSQLDropAddObject(
         return Ok(());
     }
 
-    let identity =
-        catalog_objectaddress::getObjectIdentityParts(mcx, &obj.address, false)?
-            .expect("missing_ok=false");
+    let identity = catalog_objectaddress::getObjectIdentityParts(mcx, &obj.address, false)?
+        .expect("missing_ok=false");
     obj.objidentity = Some(identity.identity);
     obj.addrnames = Some(identity.objname);
     obj.addrargs = Some(identity.objargs);
@@ -207,7 +205,9 @@ fn obtain_object_name_namespace(
     let unique = match object.classId {
         types_core::RELATION_RELATION_ID => true,
         REWRITE_RELATION_ID => false,
-        other => class_naming(other).map(|n| n.namensp_unique).unwrap_or(false),
+        other => class_naming(other)
+            .map(|n| n.namensp_unique)
+            .unwrap_or(false),
     };
     if unique && object.objectSubId == 0 {
         obj.objname = name;
@@ -235,7 +235,11 @@ fn syscache_naming(oid: Oid, naming: &ClassNaming) -> PgResult<(Option<Oid>, Opt
         Some(attnum) => {
             let (nsp_d, nsp_null) =
                 cache_syscache::SysCacheGetAttr(naming.syscache_id, &tup, attnum)?;
-            if nsp_null { None } else { Some(nsp_d.as_oid()) }
+            if nsp_null {
+                None
+            } else {
+                Some(nsp_d.as_oid())
+            }
         }
         None => None,
     };
@@ -277,7 +281,12 @@ fn trigger_get_relid(mcx: Mcx<'_>, trigger_oid: Oid) -> PgResult<Oid> {
         let mut isnull = false;
         // SAFETY: fixed NOT NULL pg_trigger.tgrelid under its descriptor.
         relid = unsafe {
-            types_tuple::heap_getattr(tup, Anum_pg_trigger_tgrelid as i32, rel.descr(), &mut isnull)
+            types_tuple::heap_getattr(
+                tup,
+                Anum_pg_trigger_tgrelid as i32,
+                rel.descr(),
+                &mut isnull,
+            )
         }
         .as_oid();
     }
@@ -312,7 +321,12 @@ fn policy_get_relid(mcx: Mcx<'_>, policy_oid: Oid) -> PgResult<Oid> {
         let mut isnull = false;
         // SAFETY: fixed NOT NULL pg_policy.polrelid under its descriptor.
         relid = unsafe {
-            types_tuple::heap_getattr(tup, Anum_pg_policy_polrelid as i32, rel.descr(), &mut isnull)
+            types_tuple::heap_getattr(
+                tup,
+                Anum_pg_policy_polrelid as i32,
+                rel.descr(),
+                &mut isnull,
+            )
         }
         .as_oid();
     }

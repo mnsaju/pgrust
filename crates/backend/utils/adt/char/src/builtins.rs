@@ -87,7 +87,9 @@ pub fn fc_char_text(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRe
 
 pub fn fc_hashchar(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let [a] = fcinfo.args_n::<1>();
-    Ok(Datum::from_u32(::hashfn::hash_bytes_uint32(a.value.as_char() as i32 as u32)))
+    Ok(Datum::from_u32(::hashfn::hash_bytes_uint32(
+        a.value.as_char() as i32 as u32,
+    )))
 }
 
 pub fn fc_hashcharextended(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -99,7 +101,14 @@ pub fn fc_hashcharextended(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) 
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 // pg_proc.dat rows (all proisstrict, none retset), OID-ascending.

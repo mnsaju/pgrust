@@ -60,7 +60,12 @@ thread_local! {
 }
 
 pub fn EnumUncommitted(enum_id: Oid) -> bool {
-    UNCOMMITTED.with(|u| u.borrow().values.as_ref().is_some_and(|v| v.contains(&enum_id)))
+    UNCOMMITTED.with(|u| {
+        u.borrow()
+            .values
+            .as_ref()
+            .is_some_and(|v| v.contains(&enum_id))
+    })
 }
 
 pub fn HasUncommittedEnums() -> bool {
@@ -72,7 +77,12 @@ pub fn HasUncommittedEnums() -> bool {
 }
 
 fn EnumTypeUncommitted(typ_id: Oid) -> bool {
-    UNCOMMITTED.with(|u| u.borrow().types.as_ref().is_some_and(|v| v.contains(&typ_id)))
+    UNCOMMITTED.with(|u| {
+        u.borrow()
+            .types
+            .as_ref()
+            .is_some_and(|v| v.contains(&typ_id))
+    })
 }
 
 pub fn AtEOXact_Enum() {
@@ -161,7 +171,14 @@ pub fn EnumValuesCreate<'mcx>(mcx: Mcx<'mcx>, enumTypeOid: Oid, vals: &[&str]) -
         }
         let mut label = NameData::default();
         label.namestrcpy(lab);
-        form_and_insert(mcx, &pg_enum, oids[elemno], enumTypeOid, (elemno + 1) as f32, &label)?;
+        form_and_insert(
+            mcx,
+            &pg_enum,
+            oids[elemno],
+            enumTypeOid,
+            (elemno + 1) as f32,
+            &label,
+        )?;
     }
 
     pg_enum.close(RowExclusiveLock)
@@ -219,8 +236,10 @@ fn list_enum_members<'mcx>(
     pg_enum: &Relation<'mcx>,
     enumTypeOid: Oid,
 ) -> PgResult<PgVec<'mcx, EnumMember>> {
-    let list =
-        SearchSysCacheList1(ENUMTYPOIDNAME, SysCacheKey::Value(Datum::from_oid(enumTypeOid)))?;
+    let list = SearchSysCacheList1(
+        ENUMTYPOIDNAME,
+        SysCacheKey::Value(Datum::from_oid(enumTypeOid)),
+    )?;
     let n = list.n_members() as usize;
     let mut out: PgVec<'mcx, EnumMember> = PgVec::with_capacity_in(n, mcx);
     for i in 0..n {
@@ -255,8 +274,11 @@ pub fn AddEnumLabel<'mcx>(
         ReleaseSysCache(tup);
         if skipIfExists {
             elog_seams::ereport::call(
-                PgError::new(NOTICE, format!("enum label \"{newVal}\" already exists, skipping"))
-                    .with_sqlstate(ERRCODE_DUPLICATE_OBJECT),
+                PgError::new(
+                    NOTICE,
+                    format!("enum label \"{newVal}\" already exists, skipping"),
+                )
+                .with_sqlstate(ERRCODE_DUPLICATE_OBJECT),
             )?;
             return Ok(());
         }
@@ -268,7 +290,9 @@ pub fn AddEnumLabel<'mcx>(
     let (newOid, newelemorder) = 'restart: loop {
         let mut existing = list_enum_members(mcx, &pg_enum, enumTypeOid)?;
         existing.sort_by(|a, b| {
-            a.enumsortorder.partial_cmp(&b.enumsortorder).unwrap_or(core::cmp::Ordering::Equal)
+            a.enumsortorder
+                .partial_cmp(&b.enumsortorder)
+                .unwrap_or(core::cmp::Ordering::Equal)
         });
         let nelems = existing.len();
 
@@ -281,14 +305,18 @@ pub fn AddEnumLabel<'mcx>(
                 }
             }
             Some(neighbor) => {
-                let Some(nbr_index) =
-                    existing.iter().position(|m| label_str(&m.enumlabel) == neighbor)
+                let Some(nbr_index) = existing
+                    .iter()
+                    .position(|m| label_str(&m.enumlabel) == neighbor)
                 else {
                     return Err(not_existing_label(neighbor));
                 };
                 let nbr_order = existing[nbr_index].enumsortorder;
-                let other_nbr_index =
-                    if newValIsAfter { nbr_index as i64 + 1 } else { nbr_index as i64 - 1 };
+                let other_nbr_index = if newValIsAfter {
+                    nbr_index as i64 + 1
+                } else {
+                    nbr_index as i64 - 1
+                };
                 if other_nbr_index < 0 {
                     nbr_order - 1.0
                 } else if other_nbr_index >= nelems as i64 {
@@ -450,8 +478,11 @@ pub fn scan_enum_typid_sorted<'mcx>(
     backward: bool,
     limit_one: bool,
 ) -> PgResult<PgVec<'mcx, pg_enum_seams::EnumSortedRow>> {
-    let direction =
-        if backward { ScanDirection::BackwardScanDirection } else { ScanDirection::ForwardScanDirection };
+    let direction = if backward {
+        ScanDirection::BackwardScanDirection
+    } else {
+        ScanDirection::ForwardScanDirection
+    };
     let key = [oid_key(Anum_pg_enum_enumtypid, enumtypoid)];
     let enum_rel = table::table_open(mcx, EnumRelationId, AccessShareLock)?;
     let enum_idx = indexam::index_open(mcx, EnumTypIdSortOrderIndexId, AccessShareLock)?;
@@ -528,8 +559,11 @@ fn take_next_pg_enum_oid() -> Option<Oid> {
 
 fn oid_not_set() -> Box<PgError> {
     Box::new(
-        PgError::new(ERROR, "pg_enum OID value not set when in binary upgrade mode".to_string())
-            .with_sqlstate(ERRCODE_INVALID_PARAMETER_VALUE),
+        PgError::new(
+            ERROR,
+            "pg_enum OID value not set when in binary upgrade mode".to_string(),
+        )
+        .with_sqlstate(ERRCODE_INVALID_PARAMETER_VALUE),
     )
 }
 
@@ -574,7 +608,7 @@ pub fn init_seams() {
 mod tests {
     use super::*;
     use types_core::{FLOAT4OID, NAMEOID, OIDOID};
-    use types_tuple::{FormData_pg_attribute, CompactAttribute, TupleDescData};
+    use types_tuple::{CompactAttribute, FormData_pg_attribute, TupleDescData};
     use types_tuple::{TYPALIGN_CHAR, TYPALIGN_INT};
 
     fn attr(num: i16, typid: Oid, len: i16, byval: bool, align: i8) -> FormData_pg_attribute {

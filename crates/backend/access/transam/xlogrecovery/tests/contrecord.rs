@@ -106,9 +106,7 @@ fn install_stub_seams() {
     be_fsstubs_seams::at_eoxact_large_object::set(|_| Ok(()));
     namespace_seams::at_eoxact_namespace::set(|_, _| {});
     catalog_index_seams::reset_reindex_state::set(|_| {});
-    catalog_storage_seams::smgr_get_pending_deletes::set(|mcx, _for_commit| {
-        Ok(PgVec::new_in(mcx))
-    });
+    catalog_storage_seams::smgr_get_pending_deletes::set(|mcx, _for_commit| Ok(PgVec::new_in(mcx)));
     catalog_storage_seams::smgr_do_pending_deletes::set(|_| Ok(()));
     catalog_storage_seams::smgr_do_pending_syncs::set(|_, _| Ok(()));
     combocid_seams::at_eoxact_combocid::set(|| {});
@@ -236,11 +234,9 @@ fn install_real() {
     procarray::ProcArrayAdd(lmgr_proc::MyProc().unwrap()).unwrap();
 
     if resowner::CurrentResourceOwner().is_null() {
-        let owner = resowner::ResourceOwnerCreate(
-            types_resowner::ResourceOwner::NULL,
-            "contrecord-test",
-        )
-        .unwrap();
+        let owner =
+            resowner::ResourceOwnerCreate(types_resowner::ResourceOwner::NULL, "contrecord-test")
+                .unwrap();
         resowner::SetCurrentResourceOwner(owner);
     }
 }
@@ -345,14 +341,19 @@ fn run_child(dd: &std::path::Path) -> (bool, String) {
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)
     );
-    (out.status.success() && text.contains("CONTRECORD_CHILD_OK"), text)
+    (
+        out.status.success() && text.contains("CONTRECORD_CHILD_OK"),
+        text,
+    )
 }
 
 // Child process body: the real recovery boot over $PGRUST_CONTREC_DD.
 #[test]
 #[ignore]
 fn contrecord_child() {
-    let Ok(dd) = std::env::var(CHILD_ENV) else { return };
+    let Ok(dd) = std::env::var(CHILD_ENV) else {
+        return;
+    };
     let dd = std::path::PathBuf::from(dd);
     std::env::set_current_dir(&dd).unwrap();
     init_small::globals::SetDataDir(dd.to_str().unwrap());
@@ -368,7 +369,10 @@ fn contrecord_child() {
 
     let cf = *transam_xlog::control_file::control_file();
     assert_eq!(cf.state, DB_IN_PRODUCTION);
-    assert!(cf.checkPoint > CKPT_LOC, "end-of-recovery checkpoint advanced");
+    assert!(
+        cf.checkPoint > CKPT_LOC,
+        "end-of-recovery checkpoint advanced"
+    );
 
     println!("CONTRECORD_CHILD_OK");
 }
@@ -416,8 +420,12 @@ fn overwrite_contrecord_round_trip() {
     let ctl = transam_xlog::ctl::XLogCtl();
     ctl.InsertTimeLineID.store(1, Relaxed);
     ctl.PrevTimeLineID.store(1, Relaxed);
-    ctl.Insert.CurrBytePos.store(XLogRecPtrToBytePos(end_of_log), Relaxed);
-    ctl.Insert.PrevBytePos.store(XLogRecPtrToBytePos(CKPT_LOC), Relaxed);
+    ctl.Insert
+        .CurrBytePos
+        .store(XLogRecPtrToBytePos(end_of_log), Relaxed);
+    ctl.Insert
+        .PrevBytePos
+        .store(XLogRecPtrToBytePos(CKPT_LOC), Relaxed);
     ctl.Insert.fullPageWrites.store(true, Relaxed);
     ctl.Insert.RedoRecPtr.store(CKPT_LOC, Relaxed);
     ctl.RedoRecPtr.store(CKPT_LOC, Relaxed);
@@ -434,9 +442,11 @@ fn overwrite_contrecord_round_trip() {
     {
         let page_begin = end_of_log - end_of_log % 8192;
         let idx = transam_xlog::ctl::XLogRecPtrToBufIdx(end_of_log) as usize;
-        let seg_bytes = std::fs::read(
-            dd1.join("pg_wal").join(transam_xlog::XLogFileName(1, CKPT_LOC / SEG as u64, SEG)),
-        )
+        let seg_bytes = std::fs::read(dd1.join("pg_wal").join(transam_xlog::XLogFileName(
+            1,
+            CKPT_LOC / SEG as u64,
+            SEG,
+        )))
         .unwrap();
         let off = (page_begin % SEG as u64) as usize;
         let len = (end_of_log - page_begin) as usize;
@@ -450,9 +460,10 @@ fn overwrite_contrecord_round_trip() {
         ctl.InitializedUpTo.store(page_begin + 8192, Relaxed);
     }
     xlogutils::set_in_recovery(false);
-    procarray::TransamVariables()
-        .nextXid
-        .store(types_core::FullTransactionId::from_epoch_and_xid(0, 3).value, Relaxed);
+    procarray::TransamVariables().nextXid.store(
+        types_core::FullTransactionId::from_epoch_and_xid(0, 3).value,
+        Relaxed,
+    );
     subtrans::StartupSUBTRANS(3).unwrap();
     assert!(transam_xlog::XLogInsertAllowed());
 
@@ -460,13 +471,24 @@ fn overwrite_contrecord_round_trip() {
     // then the record the crash tears: a full-page FPI (page_std=false =>
     // no hole removal; tot_len > XLOG_BLCKSZ guarantees a continuation).
     let mut small_page = init_page();
-    xloginsert::log_newpage(&RLOC_SMALL, ForkNumber::MAIN_FORKNUM, 0, &mut small_page, true)
-        .unwrap();
+    xloginsert::log_newpage(
+        &RLOC_SMALL,
+        ForkNumber::MAIN_FORKNUM,
+        0,
+        &mut small_page,
+        true,
+    )
+    .unwrap();
 
     let mut torn_page = full_page();
-    let end_lsn =
-        xloginsert::log_newpage(&RLOC_TORN, ForkNumber::MAIN_FORKNUM, 0, &mut torn_page, false)
-            .unwrap();
+    let end_lsn = xloginsert::log_newpage(
+        &RLOC_TORN,
+        ForkNumber::MAIN_FORKNUM,
+        0,
+        &mut torn_page,
+        false,
+    )
+    .unwrap();
     let start_lsn = transam_xlog::ProcLastRecPtr();
     transam_xlog::XLogFlush(end_lsn).unwrap();
 
@@ -511,11 +533,12 @@ fn overwrite_contrecord_round_trip() {
     assert_eq!(seg[rec_off + 16], XLOG_OVERWRITE_CONTRECORD, "xl_info");
     assert_eq!(seg[rec_off + 17], RM_XLOG_ID, "xl_rmid");
     let payload = rec_off + SizeOfXLogRecord + 2;
-    let overwritten_lsn =
-        u64::from_ne_bytes(seg[payload..payload + 8].try_into().unwrap());
-    assert_eq!(overwritten_lsn, start_lsn, "overwritten_lsn names the torn record");
-    let overwrite_time =
-        i64::from_ne_bytes(seg[payload + 8..payload + 16].try_into().unwrap());
+    let overwritten_lsn = u64::from_ne_bytes(seg[payload..payload + 8].try_into().unwrap());
+    assert_eq!(
+        overwritten_lsn, start_lsn,
+        "overwritten_lsn names the torn record"
+    );
+    let overwrite_time = i64::from_ne_bytes(seg[payload + 8..payload + 16].try_into().unwrap());
     assert_eq!(overwrite_time, 777_000_000, "stubbed GetCurrentTimestamp");
 
     // Cycle B: crash again after the overwrite record but before the

@@ -9,7 +9,11 @@ fn ascii_caseless_eq(a: &str, b: &str) -> bool {
 
 // C elog(ERROR)s on an unknown value; None lets the caller surface that.
 pub fn config_enum_lookup_by_value(record: &config_enum, val: i32) -> Option<&'static str> {
-    record.entries().iter().find(|e| e.val == val).map(|e| e.name)
+    record
+        .entries()
+        .iter()
+        .find(|e| e.val == val)
+        .map(|e| e.name)
 }
 
 pub fn config_enum_lookup_by_name(record: &config_enum, value: &str) -> Option<i32> {

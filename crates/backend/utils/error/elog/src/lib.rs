@@ -13,6 +13,7 @@ pub mod sink;
 mod stack;
 mod syslog;
 
+pub use ::types_error::{ErrorLevel, PgError, PgResult, SoftErrorContext, SqlState};
 pub use builder::{elog, ereport, ErrorBuilder};
 pub use config::{
     assign_backtrace_functions, assign_log_destination, assign_syslog_facility,
@@ -36,20 +37,18 @@ pub use sink::{
     EmitLogHook, FrontendRedirect,
 };
 pub use stack::{
-    emit_error_report_for, ereport_msg, err_generic_string, errbacktrace, errcode,
-    errcode_for_file_access, errcode_for_socket_access, errcontext_msg, errdetail,
-    errdetail_internal, errdetail_log, errdetail_log_plural, errdetail_plural, errfinish,
-    errhidecontext, errhidestmt, errhint, errhint_internal, errhint_plural, errmsg,
-    errmsg_internal, errmsg_plural, errposition, errsave_finish, errsave_start, errstart,
-    errstart_cold, error_stack_clean, geterrcode, geterrposition, getinternalerrposition,
+    clear_emit_context_callbacks, emit_error_report_for, ereport_msg, err_generic_string,
+    errbacktrace, errcode, errcode_for_file_access, errcode_for_socket_access, errcontext_msg,
+    errdetail, errdetail_internal, errdetail_log, errdetail_log_plural, errdetail_plural,
+    errfinish, errhidecontext, errhidestmt, errhint, errhint_internal, errhint_plural, errmsg,
+    errmsg_internal, errmsg_plural, error_stack_clean, errposition, errsave_finish, errsave_start,
+    errstart, errstart_cold, geterrcode, geterrposition, getinternalerrposition,
     in_error_recursion_trouble, internalerrposition, internalerrquery, pg_re_throw,
     pop_emit_context_callback, push_emit_context_callback, reset_statement_suppressed,
-    clear_emit_context_callbacks, suppress_statement,
-    set_errcontext_domain, CopyErrorData, EmitErrorReport, FlushErrorState, FreeErrorData,
-    GetErrorContextStack, ReThrowError, ThrowErrorData, ERRORDATA_STACK_SIZE,
+    set_errcontext_domain, suppress_statement, CopyErrorData, EmitErrorReport, FlushErrorState,
+    FreeErrorData, GetErrorContextStack, ReThrowError, ThrowErrorData, ERRORDATA_STACK_SIZE,
 };
 pub use syslog::write_syslog;
-pub use ::types_error::{ErrorLevel, PgError, PgResult, SoftErrorContext, SqlState};
 
 pub fn init_seams() {
     use ::guc_tables::{hooks, vars, GucHookExtra, GucVarAccessors};

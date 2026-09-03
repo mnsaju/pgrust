@@ -53,7 +53,11 @@ fn setup() {
 fn create_extend_write_read_nblocks_roundtrip() {
     setup();
     let key = RelFileLocatorBackend {
-        locator: RelFileLocator { spcOid: 1663, dbOid: 5, relNumber: 16384 },
+        locator: RelFileLocator {
+            spcOid: 1663,
+            dbOid: 5,
+            relNumber: 16384,
+        },
         backend: INVALID_PROC_NUMBER,
     };
     let fork = ForkNumber::MAIN_FORKNUM;
@@ -83,7 +87,10 @@ fn create_extend_write_read_nblocks_roundtrip() {
     smgr::smgrread(key, fork, 4, &mut readback).unwrap();
     assert_eq!(readback, [0u8; BLCKSZ]);
 
-    assert!(SYNC_REQUESTS.load(Ordering::Relaxed) > 0, "dirty segments must be registered");
+    assert!(
+        SYNC_REQUESTS.load(Ordering::Relaxed) > 0,
+        "dirty segments must be registered"
+    );
 
     smgr::smgrsettargblock(key, 4);
     assert_eq!(smgr::smgrgettargblock(key), 4);

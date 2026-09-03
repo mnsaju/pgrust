@@ -129,7 +129,10 @@ fn init_database_collation_libc_c() {
     let l = pg_newlocale_from_collation(DEFAULT_COLLATION_OID).unwrap();
     assert_eq!(l.provider, COLLPROVIDER_LIBC);
     assert!(l.is_default && l.collate_is_c && l.ctype_is_c && l.deterministic);
-    assert_eq!(varstr_cmp_locale(DEFAULT_COLLATION_OID, b"a", b"ab").unwrap(), -1);
+    assert_eq!(
+        varstr_cmp_locale(DEFAULT_COLLATION_OID, b"a", b"ab").unwrap(),
+        -1
+    );
     assert!(collation_is_deterministic(DEFAULT_COLLATION_OID).unwrap());
 }
 
@@ -212,13 +215,24 @@ fn collation_actual_versions_match_c() {
     let err = get_collation_actual_version(COLLPROVIDER_BUILTIN, "en_US").unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_WRONG_OBJECT_TYPE);
 
-    assert_eq!(get_collation_actual_version(COLLPROVIDER_LIBC, "C").unwrap(), None);
-    assert_eq!(get_collation_actual_version(COLLPROVIDER_LIBC, "posix").unwrap(), None);
-    assert_eq!(get_collation_actual_version(COLLPROVIDER_LIBC, "C.UTF-8").unwrap(), None);
+    assert_eq!(
+        get_collation_actual_version(COLLPROVIDER_LIBC, "C").unwrap(),
+        None
+    );
+    assert_eq!(
+        get_collation_actual_version(COLLPROVIDER_LIBC, "posix").unwrap(),
+        None
+    );
+    assert_eq!(
+        get_collation_actual_version(COLLPROVIDER_LIBC, "C.UTF-8").unwrap(),
+        None
+    );
     #[cfg(all(target_os = "linux", target_env = "gnu"))]
-    assert!(get_collation_actual_version(COLLPROVIDER_LIBC, "en_US.utf8")
-        .unwrap()
-        .is_some());
+    assert!(
+        get_collation_actual_version(COLLPROVIDER_LIBC, "en_US.utf8")
+            .unwrap()
+            .is_some()
+    );
     #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
     assert_eq!(
         get_collation_actual_version(COLLPROVIDER_LIBC, "en_US.UTF-8").unwrap(),
@@ -242,7 +256,9 @@ fn icu_unicode_version_str_has_c_constant_shape() {
         let parts: Vec<&str> = v.split('.').collect();
         assert!(parts.len() >= 2, "U_UNICODE_VERSION is dotted: {v:?}");
         assert!(
-            parts.iter().all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit())),
+            parts
+                .iter()
+                .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit())),
             "numeric fields: {v:?}"
         );
         // Stable across calls (OnceLock) — the fmgr result must not move.
@@ -260,15 +276,22 @@ fn builtin_validators_match_c() {
         ERRCODE_WRONG_OBJECT_TYPE
     );
 
-    assert_eq!(builtin_validate_locale(PG_UTF8, "C.UTF8").unwrap(), "C.UTF-8");
+    assert_eq!(
+        builtin_validate_locale(PG_UTF8, "C.UTF8").unwrap(),
+        "C.UTF-8"
+    );
     assert_eq!(builtin_validate_locale(-1, "C").unwrap(), "C");
     assert_eq!(builtin_validate_locale(0, "C").unwrap(), "C");
     assert_eq!(
-        builtin_validate_locale(0, "C.UTF-8").unwrap_err().sqlstate(),
+        builtin_validate_locale(0, "C.UTF-8")
+            .unwrap_err()
+            .sqlstate(),
         ERRCODE_WRONG_OBJECT_TYPE
     );
     assert_eq!(
-        builtin_validate_locale(PG_UTF8, "bogus").unwrap_err().sqlstate(),
+        builtin_validate_locale(PG_UTF8, "bogus")
+            .unwrap_err()
+            .sqlstate(),
         ERRCODE_WRONG_OBJECT_TYPE
     );
 }
@@ -416,10 +439,30 @@ fn live_pg_differential() {
             let f: Vec<&str> = line.split('\t').collect();
             assert_eq!(f.len(), 5, "{file}: {line}");
             let s = f[0].as_bytes();
-            assert_eq!(run(pg_strlower, s, &loc), f[1], "lower({}) full={full}", f[0]);
-            assert_eq!(run(pg_strupper, s, &loc), f[2], "upper({}) full={full}", f[0]);
-            assert_eq!(run(pg_strtitle, s, &loc), f[3], "initcap({}) full={full}", f[0]);
-            assert_eq!(run(pg_strfold, s, &loc), f[4], "casefold({}) full={full}", f[0]);
+            assert_eq!(
+                run(pg_strlower, s, &loc),
+                f[1],
+                "lower({}) full={full}",
+                f[0]
+            );
+            assert_eq!(
+                run(pg_strupper, s, &loc),
+                f[2],
+                "upper({}) full={full}",
+                f[0]
+            );
+            assert_eq!(
+                run(pg_strtitle, s, &loc),
+                f[3],
+                "initcap({}) full={full}",
+                f[0]
+            );
+            assert_eq!(
+                run(pg_strfold, s, &loc),
+                f[4],
+                "casefold({}) full={full}",
+                f[0]
+            );
             checked += 4;
         }
     }
@@ -435,9 +478,7 @@ fn live_pg_differential() {
         let data = std::fs::read_to_string(format!("{dir}/{file}")).unwrap();
         let expected: Vec<&str> = data.lines().collect();
         let mut ours: Vec<&str> = expected.clone();
-        ours.sort_by(|a, b| {
-            varstr_cmp_locale_with(&loc, a.as_bytes(), b.as_bytes()).cmp(&0)
-        });
+        ours.sort_by(|a, b| varstr_cmp_locale_with(&loc, a.as_bytes(), b.as_bytes()).cmp(&0));
         assert_eq!(ours, expected, "{locname} strcoll order");
         checked += expected.len();
     }

@@ -124,7 +124,15 @@ fn mva_mutate<'mcx>(
         panic!("unported: map_variable_attnos over SubLink (Query walk)");
     }
     let mut m = |n: Node<'mcx>| {
-        mva_mutate(mcx, n, target_varno, sublevels_up, attnums, to_rowtype, found_whole_row)
+        mva_mutate(
+            mcx,
+            n,
+            target_varno,
+            sublevels_up,
+            attnums,
+            to_rowtype,
+            found_whole_row,
+        )
     };
     nodes_core::expression_tree_mutator(mcx, node, &mut m)
 }
@@ -263,8 +271,7 @@ impl<'mcx> nodes_core::NodeWalker<'mcx> for OffsetVars<'mcx> {
             }
             NodeTag::T_Query => {
                 self.sublevels_up += 1;
-                let r =
-                    nodes_core::query_tree_walker(node.as_query().expect("Query"), self, 0)?;
+                let r = nodes_core::query_tree_walker(node.as_query().expect("Query"), self, 0)?;
                 self.sublevels_up -= 1;
                 Ok(r)
             }
@@ -301,7 +308,11 @@ pub fn OffsetVarNodes<'mcx>(
     offset: i32,
     sublevels_up: u32,
 ) -> PgResult<()> {
-    let mut w = OffsetVars { mcx, offset, sublevels_up };
+    let mut w = OffsetVars {
+        mcx,
+        offset,
+        sublevels_up,
+    };
     if node.node_tag() == NodeTag::T_Query {
         if sublevels_up == 0 {
             // SAFETY: exclusive tree (module contract).
@@ -447,8 +458,7 @@ impl<'mcx> nodes_core::NodeWalker<'mcx> for ChangeVars<'mcx> {
             }
             NodeTag::T_Query => {
                 self.sublevels_up += 1;
-                let r =
-                    nodes_core::query_tree_walker(node.as_query().expect("Query"), self, 0)?;
+                let r = nodes_core::query_tree_walker(node.as_query().expect("Query"), self, 0)?;
                 self.sublevels_up -= 1;
                 Ok(r)
             }
@@ -496,7 +506,13 @@ pub fn ChangeVarNodes<'mcx>(
     new_index: i32,
     sublevels_up: u32,
 ) -> PgResult<()> {
-    let mut w = ChangeVars { mcx, rt_index, new_index, sublevels_up, skip_rangetblref: false };
+    let mut w = ChangeVars {
+        mcx,
+        rt_index,
+        new_index,
+        sublevels_up,
+        skip_rangetblref: false,
+    };
     if node.node_tag() == NodeTag::T_Query {
         if sublevels_up == 0 {
             // SAFETY: exclusive tree (module contract).
@@ -556,7 +572,13 @@ pub fn ChangeVarNodesExtendedSJE<'mcx>(
     sublevels_up: u32,
 ) -> PgResult<()> {
     debug_assert!(node.node_tag() != NodeTag::T_Query);
-    let mut w = ChangeVars { mcx, rt_index, new_index, sublevels_up, skip_rangetblref: true };
+    let mut w = ChangeVars {
+        mcx,
+        rt_index,
+        new_index,
+        sublevels_up,
+        skip_rangetblref: true,
+    };
     use nodes_core::NodeWalker as _;
     w.visit(node)?;
     Ok(())
@@ -595,7 +617,13 @@ pub fn ChangeVarNodesExtendedSJEQueryRef<'mcx>(
         }
         .expect("rowMarks holds RowMarkClause");
     }
-    let mut w = ChangeVars { mcx, rt_index, new_index, sublevels_up: 0, skip_rangetblref: true };
+    let mut w = ChangeVars {
+        mcx,
+        rt_index,
+        new_index,
+        sublevels_up: 0,
+        skip_rangetblref: true,
+    };
     use nodes_core::NodeWalker as _;
     nodes_core::query_tree_walker(q, &mut w, 0)?;
     Ok(())
@@ -720,7 +748,10 @@ pub fn IncrementVarSublevelsUp_query<'mcx>(
     delta_sublevels_up: i32,
     min_sublevels_up: u32,
 ) -> PgResult<()> {
-    let mut w = IncrVarSublevels { delta: delta_sublevels_up, min_sublevels_up };
+    let mut w = IncrVarSublevels {
+        delta: delta_sublevels_up,
+        min_sublevels_up,
+    };
     nodes_core::query_tree_walker(q, &mut w, nodes_core::QTW_EXAMINE_RTES_BEFORE)?;
     Ok(())
 }
@@ -730,7 +761,10 @@ pub fn IncrementVarSublevelsUp<'mcx>(
     delta_sublevels_up: i32,
     min_sublevels_up: u32,
 ) -> PgResult<()> {
-    let mut w = IncrVarSublevels { delta: delta_sublevels_up, min_sublevels_up };
+    let mut w = IncrVarSublevels {
+        delta: delta_sublevels_up,
+        min_sublevels_up,
+    };
     use nodes_core::NodeWalker as _;
     if node.node_tag() == NodeTag::T_Query {
         nodes_core::query_tree_walker(
@@ -771,8 +805,7 @@ impl<'mcx> nodes_core::NodeWalker<'mcx> for RtiUsed {
             }
             NodeTag::T_Query => {
                 self.sublevels_up += 1;
-                let r =
-                    nodes_core::query_tree_walker(node.as_query().expect("Query"), self, 0)?;
+                let r = nodes_core::query_tree_walker(node.as_query().expect("Query"), self, 0)?;
                 self.sublevels_up -= 1;
                 Ok(r)
             }
@@ -793,7 +826,10 @@ pub fn rangeTableEntry_used<'mcx>(
     rt_index: i32,
     sublevels_up: u32,
 ) -> PgResult<bool> {
-    let mut w = RtiUsed { rt_index, sublevels_up };
+    let mut w = RtiUsed {
+        rt_index,
+        sublevels_up,
+    };
     use nodes_core::NodeWalker as _;
     if node.node_tag() == NodeTag::T_Query {
         nodes_core::query_tree_walker(node.as_query().expect("Query"), &mut w, 0)
@@ -807,7 +843,10 @@ pub fn rangeTableEntry_used_query<'mcx>(
     rt_index: i32,
     sublevels_up: u32,
 ) -> PgResult<bool> {
-    let mut w = RtiUsed { rt_index, sublevels_up };
+    let mut w = RtiUsed {
+        rt_index,
+        sublevels_up,
+    };
     nodes_core::query_tree_walker(q, &mut w, 0)
 }
 
@@ -816,7 +855,10 @@ pub fn rangeTableEntry_used_list<'mcx>(
     rt_index: i32,
     sublevels_up: u32,
 ) -> PgResult<bool> {
-    let mut w = RtiUsed { rt_index, sublevels_up };
+    let mut w = RtiUsed {
+        rt_index,
+        sublevels_up,
+    };
     nodes_core::walk_list(list, &mut w)
 }
 
@@ -873,9 +915,7 @@ pub fn getInsertSelectQuery_parts<'mcx>(
 
 // getInsertSelectQuery (rewriteManip.c), read-only shape (C's NULL
 // subquery_ptr callers).
-pub fn getInsertSelectQuery_ref<'a, 'mcx>(
-    parsetree: &'a Query<'mcx>,
-) -> PgResult<&'a Query<'mcx>>
+pub fn getInsertSelectQuery_ref<'a, 'mcx>(parsetree: &'a Query<'mcx>) -> PgResult<&'a Query<'mcx>>
 where
     'mcx: 'a,
 {
@@ -900,17 +940,18 @@ pub fn getInsertSelectQuery_node<'mcx>(
             let sub_node = copy_query_node(mcx, selectquery)?;
             let sub_ref = sub_node.as_query().expect("Query round trip");
             // SAFETY: exclusive tree (module contract).
-            unsafe {
-                select_rte_node.with_mut::<RangeTblEntry, _>(|r| r.subquery = Some(sub_ref))
-            }
-            .expect("RangeTblEntry");
+            unsafe { select_rte_node.with_mut::<RangeTblEntry, _>(|r| r.subquery = Some(sub_ref)) }
+                .expect("RangeTblEntry");
             Ok((sub_node, true))
         }
     }
 }
 
 fn rte_at<'a, 'mcx>(rtable: &'a NodeList<'mcx>, varno: i32) -> &'mcx RangeTblEntry<'mcx> {
-    rtable.nth(varno as usize - 1).as_range_tbl_entry().expect("rtable holds RangeTblEntry")
+    rtable
+        .nth(varno as usize - 1)
+        .as_range_tbl_entry()
+        .expect("rtable holds RangeTblEntry")
 }
 
 // contain_aggs_of_level / contain_aggs_of_level_walker (rewriteManip.c).
@@ -946,7 +987,9 @@ impl<'mcx> nodes_core::NodeWalker<'mcx> for ContainAggsOfLevel {
 }
 
 pub fn contain_aggs_of_level(node: Node<'_>, levelsup: i32) -> PgResult<bool> {
-    let mut w = ContainAggsOfLevel { sublevels_up: levelsup };
+    let mut w = ContainAggsOfLevel {
+        sublevels_up: levelsup,
+    };
     nodes_core::query_or_expression_tree_walker(node, &mut w, 0)
 }
 
@@ -986,7 +1029,10 @@ impl<'mcx> nodes_core::NodeWalker<'mcx> for LocateAggOfLevel {
 }
 
 pub fn locate_agg_of_level(node: Node<'_>, levelsup: i32) -> PgResult<types_core::ParseLoc> {
-    let mut w = LocateAggOfLevel { agg_location: -1, sublevels_up: levelsup };
+    let mut w = LocateAggOfLevel {
+        agg_location: -1,
+        sublevels_up: levelsup,
+    };
     nodes_core::query_or_expression_tree_walker(node, &mut w, 0)?;
     Ok(w.agg_location)
 }
@@ -1031,10 +1077,14 @@ pub fn AddQual<'mcx>(
     let Some(qual) = qual else { return Ok(()) };
     let q = query_node.as_query().expect("Query");
     if q.commandType == types_nodes::nodes_enums::CmdType::CMD_UTILITY {
-        if q.utilityStmt.is_some_and(|u| u.node_tag() == NodeTag::T_NotifyStmt) {
+        if q.utilityStmt
+            .is_some_and(|u| u.node_tag() == NodeTag::T_NotifyStmt)
+        {
             return Ok(());
         }
-        return Err(feature_not_supported("conditional utility statements are not implemented"));
+        return Err(feature_not_supported(
+            "conditional utility statements are not implemented",
+        ));
     }
     if q.setOperations.is_some() {
         return Err(feature_not_supported(
@@ -1046,7 +1096,10 @@ pub fn AddQual<'mcx>(
     let new_quals = make_and_qual(mcx, jt.quals, copy)?;
     let new_jt = mcx::alloc_leak_in(
         mcx,
-        FromExpr { fromlist: jt.fromlist.clone_in(mcx)?, quals: Some(new_quals) },
+        FromExpr {
+            fromlist: jt.fromlist.clone_in(mcx)?,
+            quals: Some(new_quals),
+        },
     )?;
     let has_sublinks = q.hasSubLinks || checkExprHasSubLink(copy)?;
     // SAFETY: exclusive tree (module contract); `q`/`jt` reads completed.
@@ -1074,7 +1127,11 @@ pub fn make_and_qual<'mcx>(
             args.lappend(mcx, qual2)?;
             Node::mk(
                 mcx,
-                BoolExpr { boolop: BoolExprType::AND_EXPR, args, location: -1 },
+                BoolExpr {
+                    boolop: BoolExprType::AND_EXPR,
+                    args,
+                    location: -1,
+                },
             )
         }
     }
@@ -1088,7 +1145,11 @@ pub fn AddInvertedQual<'mcx>(
     let Some(qual) = qual else { return Ok(()) };
     let invqual = Node::mk(
         mcx,
-        BooleanTest { arg: Some(qual), booltesttype: BoolTestType::IS_NOT_TRUE, location: -1 },
+        BooleanTest {
+            arg: Some(qual),
+            booltesttype: BoolTestType::IS_NOT_TRUE,
+            location: -1,
+        },
     )?;
     AddQual(mcx, query_node, Some(invqual))
 }
@@ -1218,9 +1279,9 @@ fn rv_mutate<'mcx>(
         NodeTag::T_CurrentOfExpr => {
             let cexpr = node.as_current_of_expr().expect("CurrentOfExpr");
             if cexpr.cvarno == ctx.target_varno as u32 && ctx.sublevels_up == 0 {
-                return Err(feature_not_supported(
-                    "WHERE CURRENT OF on a view is not implemented",
-                ).into());
+                return Err(
+                    feature_not_supported("WHERE CURRENT OF on a view is not implemented").into(),
+                );
             }
             Ok(None)
         }
@@ -1255,8 +1316,7 @@ fn rv_mutate<'mcx>(
             rv_query_inplace(node, ctx)?;
             let inserted = ctx.inserted_sublink;
             // SAFETY: exclusive tree (module contract).
-            unsafe { node.with_mut::<Query, _>(|q| q.hasSubLinks |= inserted) }
-                .expect("Query");
+            unsafe { node.with_mut::<Query, _>(|q| q.hasSubLinks |= inserted) }.expect("Query");
             ctx.inserted_sublink = saved;
             ctx.sublevels_up -= 1;
             Ok(None)
@@ -1277,9 +1337,7 @@ fn rv_mutate_onconflict<'mcx>(
     oc_node: Node<'mcx>,
     ctx: &mut ReplaceVarsCtx<'_, 'mcx>,
 ) -> PgResult<()> {
-    let oc = oc_node
-        .as_on_conflict_expr()
-        .expect("OnConflictExpr");
+    let oc = oc_node.as_on_conflict_expr().expect("OnConflictExpr");
     let arbiter_elems = rv_mutate_list(&oc.arbiterElems, ctx)?;
     let arbiter_where = rv_mutate_opt(oc.arbiterWhere, ctx)?;
     let set = rv_mutate_list(&oc.onConflictSet, ctx)?;
@@ -1336,10 +1394,7 @@ fn rv_mutate_list<'mcx>(
 }
 
 // query_tree_mutator's field set, applied in place on the Query node.
-fn rv_query_inplace<'mcx>(
-    qnode: Node<'mcx>,
-    ctx: &mut ReplaceVarsCtx<'_, 'mcx>,
-) -> PgResult<()> {
+fn rv_query_inplace<'mcx>(qnode: Node<'mcx>, ctx: &mut ReplaceVarsCtx<'_, 'mcx>) -> PgResult<()> {
     let mcx = ctx.mcx;
     let q = qnode.as_query().expect("Query");
 
@@ -1453,8 +1508,7 @@ fn rv_query_inplace<'mcx>(
                 if let Some(new_lists) = rv_mutate_list(&rte.values_lists, ctx)? {
                     // SAFETY: exclusive tree (module contract).
                     unsafe {
-                        rte_node
-                            .with_mut::<RangeTblEntry, _>(|r| r.values_lists = new_lists)
+                        rte_node.with_mut::<RangeTblEntry, _>(|r| r.values_lists = new_lists)
                     }
                     .expect("RangeTblEntry");
                 }
@@ -1463,8 +1517,7 @@ fn rv_query_inplace<'mcx>(
                 if let Some(new_javs) = rv_mutate_list(&rte.joinaliasvars, ctx)? {
                     // SAFETY: as above.
                     unsafe {
-                        rte_node
-                            .with_mut::<RangeTblEntry, _>(|r| r.joinaliasvars = new_javs)
+                        rte_node.with_mut::<RangeTblEntry, _>(|r| r.joinaliasvars = new_javs)
                     }
                     .expect("RangeTblEntry");
                 }
@@ -1477,10 +1530,8 @@ fn rv_query_inplace<'mcx>(
         }
         if let Some(new_sq) = rv_mutate_list(&rte.securityQuals, ctx)? {
             // SAFETY: exclusive tree (module contract).
-            unsafe {
-                rte_node.with_mut::<RangeTblEntry, _>(|r| r.securityQuals = new_sq)
-            }
-            .expect("RangeTblEntry");
+            unsafe { rte_node.with_mut::<RangeTblEntry, _>(|r| r.securityQuals = new_sq) }
+                .expect("RangeTblEntry");
         }
     }
     // SAFETY: exclusive tree (module contract); field reads completed.
@@ -1592,7 +1643,10 @@ fn ReplaceVarFromTargetList<'mcx>(
                 var.varattno
             ))),
             ReplaceVarsNoMatchOption::ChangeVarno(nomatch_varno) => {
-                let mut newvar = Var { varnullingrels: var.varnullingrels.clone_in(mcx)?, ..*var };
+                let mut newvar = Var {
+                    varnullingrels: var.varnullingrels.clone_in(mcx)?,
+                    ..*var
+                };
                 newvar.varno = nomatch_varno;
                 newvar.varlevelsup = 0;
                 Node::mk(mcx, newvar)
@@ -1636,8 +1690,7 @@ fn ReplaceVarFromTargetList<'mcx>(
                         mcx,
                         types_nodes::primnodes::ReturningExpr {
                             retlevelsup: 0,
-                            retold: var.varreturningtype
-                                == VarReturningType::VAR_RETURNING_OLD,
+                            retold: var.varreturningtype == VarReturningType::VAR_RETURNING_OLD,
                             retexpr: newnode,
                         },
                     );
@@ -1663,9 +1716,7 @@ impl<'mcx> nodes_core::NodeWalker<'mcx> for SetVarReturningTypeWalker {
                     // SAFETY: exclusive freshly-copied tree (caller copies
                     // before calling, per C's copyObject-then-modify shape).
                     unsafe {
-                        node.with_mut::<Var, _>(|vm| {
-                            vm.varreturningtype = self.returning_type
-                        })
+                        node.with_mut::<Var, _>(|vm| vm.varreturningtype = self.returning_type)
                     }
                     .expect("Var");
                 }
@@ -1673,8 +1724,7 @@ impl<'mcx> nodes_core::NodeWalker<'mcx> for SetVarReturningTypeWalker {
             }
             NodeTag::T_Query => {
                 self.sublevels_up += 1;
-                let r =
-                    nodes_core::query_tree_walker(node.as_query().expect("Query"), self, 0)?;
+                let r = nodes_core::query_tree_walker(node.as_query().expect("Query"), self, 0)?;
                 self.sublevels_up -= 1;
                 Ok(r)
             }
@@ -1692,7 +1742,11 @@ pub fn SetVarReturningType(
     sublevels_up: u32,
     returning_type: VarReturningType,
 ) -> PgResult<()> {
-    let mut w = SetVarReturningTypeWalker { result_relation, sublevels_up, returning_type };
+    let mut w = SetVarReturningTypeWalker {
+        result_relation,
+        sublevels_up,
+        returning_type,
+    };
     use nodes_core::NodeWalker as _;
     w.visit(node)?;
     Ok(())
@@ -1707,10 +1761,10 @@ struct MultiExprParam;
 impl<'mcx> nodes_core::NodeWalker<'mcx> for MultiExprParam {
     fn visit(&mut self, node: Node<'mcx>) -> PgResult<bool> {
         if node.node_tag() == NodeTag::T_Param {
-            let p = node.as_variant::<types_nodes::primnodes::Param>().expect("Param");
-            return Ok(
-                p.paramkind == types_nodes::primnodes::ParamKind::PARAM_MULTIEXPR
-            );
+            let p = node
+                .as_variant::<types_nodes::primnodes::Param>()
+                .expect("Param");
+            return Ok(p.paramkind == types_nodes::primnodes::ParamKind::PARAM_MULTIEXPR);
         }
         nodes_core::expression_tree_walker(node, self)
     }

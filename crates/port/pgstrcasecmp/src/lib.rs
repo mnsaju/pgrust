@@ -85,7 +85,10 @@ mod tests {
     #[test]
     fn strcasecmp_ascii_equal() {
         assert_eq!(pg_strcasecmp(b"SELECT", b"select"), 0);
-        assert_eq!(pg_strcasecmp(b"Select", b"selecu"), pg_strcasecmp(b"t", b"u"));
+        assert_eq!(
+            pg_strcasecmp(b"Select", b"selecu"),
+            pg_strcasecmp(b"t", b"u")
+        );
     }
 
     #[test]

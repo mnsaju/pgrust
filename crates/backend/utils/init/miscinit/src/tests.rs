@@ -58,7 +58,10 @@ fn backend_type_and_desc() {
     assert_eq!(GetMyBackendType(), BackendType::Invalid);
     assert_eq!(GetBackendTypeDesc(BackendType::Invalid), "not initialized");
     assert_eq!(GetBackendTypeDesc(BackendType::Backend), "client backend");
-    assert_eq!(GetBackendTypeDesc(BackendType::WalSummarizer), "walsummarizer");
+    assert_eq!(
+        GetBackendTypeDesc(BackendType::WalSummarizer),
+        "walsummarizer"
+    );
     assert!(!IgnoreSystemIndexes());
     SetIgnoreSystemIndexes(true);
     assert!(IgnoreSystemIndexes());
@@ -92,7 +95,10 @@ fn sec_context_guard_restores_on_both_paths() {
     SetUserIdAndSecContext(ALICE, 0);
 
     let guard = SecContextGuard::security_restricted(BOB);
-    assert_eq!(GetUserIdAndSecContext(), (BOB, SECURITY_RESTRICTED_OPERATION));
+    assert_eq!(
+        GetUserIdAndSecContext(),
+        (BOB, SECURITY_RESTRICTED_OPERATION)
+    );
     assert!(InSecurityRestrictedOperation());
     assert!(SetUserIdAndContext(ALICE, true).is_err());
     assert_eq!(guard.saved(), (ALICE, 0));
@@ -102,7 +108,10 @@ fn sec_context_guard_restores_on_both_paths() {
     // Drop is the abort path.
     {
         let _guard = SecContextGuard::set(BOB, SECURITY_RESTRICTED_OPERATION);
-        assert_eq!(GetUserIdAndSecContext(), (BOB, SECURITY_RESTRICTED_OPERATION));
+        assert_eq!(
+            GetUserIdAndSecContext(),
+            (BOB, SECURITY_RESTRICTED_OPERATION)
+        );
     }
     assert_eq!(GetUserIdAndSecContext(), (ALICE, 0));
 
@@ -121,7 +130,10 @@ fn session_authorization_and_set_role() {
     assert_eq!(GetUserId(), ALICE);
     assert_eq!(GetCurrentRoleId(), InvalidOid);
     GUC_SETS.with_borrow(|v| {
-        assert_eq!(v.last().unwrap(), &("is_superuser".to_string(), "off".to_string()));
+        assert_eq!(
+            v.last().unwrap(),
+            &("is_superuser".to_string(), "off".to_string())
+        );
     });
 
     SetCurrentRoleId(BOB, true).unwrap();
@@ -239,7 +251,9 @@ fn local_latch_release_guard_recycles_slot() {
     assert_eq!(backend(), first);
 
     // A guard on a thread that never allocated is a no-op.
-    std::thread::spawn(|| drop(LocalLatchReleaseGuard::new())).join().unwrap();
+    std::thread::spawn(|| drop(LocalLatchReleaseGuard::new()))
+        .join()
+        .unwrap();
     assert_eq!(backend(), first);
 }
 
@@ -348,9 +362,8 @@ thread_local! {
 }
 
 fn record_emitted(error: &PgError, _output_to_server: &mut bool) {
-    EMITTED.with_borrow_mut(|v| {
-        v.push((error.sqlstate, error.message.clone(), error.hint.clone()))
-    });
+    EMITTED
+        .with_borrow_mut(|v| v.push((error.sqlstate, error.message.clone(), error.hint.clone())));
 }
 
 #[derive(Debug)]
@@ -385,7 +398,12 @@ fn refuses(f: impl FnOnce() -> PgResult<()>) -> Refusal {
     let (sqlstate, message, hint) = EMITTED
         .with_borrow(|v| v.last().cloned())
         .expect("the FATAL was reported before exiting");
-    Refusal { sqlstate, message, hint, exit }
+    Refusal {
+        sqlstate,
+        message,
+        hint,
+        exit,
+    }
 }
 
 /// A System V segment standing in for one a C postmaster left behind.
@@ -413,7 +431,11 @@ impl CSegment {
         assert!(id >= 0, "shmget: {}", std::io::Error::last_os_error());
         // SAFETY: our own segment, kernel-chosen address.
         let addr = unsafe { libc::shmat(id, std::ptr::null(), 0) };
-        assert!(addr as isize != -1, "shmat: {}", std::io::Error::last_os_error());
+        assert!(
+            addr as isize != -1,
+            "shmat: {}",
+            std::io::Error::last_os_error()
+        );
 
         let meta = std::fs::metadata(datadir).unwrap();
         let hdr = PGShmemHeader {
@@ -428,7 +450,10 @@ impl CSegment {
         };
         // SAFETY: `addr` maps size_of::<PGShmemHeader>() bytes we just created.
         unsafe { std::ptr::write(addr as *mut PGShmemHeader, hdr) };
-        CSegment { id, attached: Some(addr) }
+        CSegment {
+            id,
+            attached: Some(addr),
+        }
     }
 }
 
@@ -517,7 +542,9 @@ fn c_pidfile_with_a_still_attached_segment_refuses_cleanly() {
         )
     );
     // The refusal must leave the foreign pid file alone.
-    assert!(std::fs::read_to_string(&path).unwrap().starts_with(&format!("{DEAD_PID}\n")));
+    assert!(std::fs::read_to_string(&path)
+        .unwrap()
+        .starts_with(&format!("{DEAD_PID}\n")));
 }
 
 #[test]
@@ -586,7 +613,10 @@ fn a_live_owner_refuses_before_the_segment_is_ever_probed() {
     let refusal = refuses(|| create_dd_lock_file(&dir));
     assert_eq!(refusal.exit, "proc_exit(1)");
     assert_eq!(refusal.sqlstate, ERRCODE_LOCK_FILE_EXISTS);
-    assert_eq!(refusal.message, format!("lock file \"{path}\" already exists"));
+    assert_eq!(
+        refusal.message,
+        format!("lock file \"{path}\" already exists")
+    );
     assert_eq!(
         refusal.hint.as_deref(),
         Some(

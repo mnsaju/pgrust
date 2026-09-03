@@ -12,7 +12,9 @@ use types_core::catalog::{RECORDARRAYOID, RECORDOID, UNKNOWNOID};
 use types_core::{AttrNumber, Index, Oid, ParseLoc};
 use types_error::{PgError, PgResult, ERRCODE_QUERY_CANCELED};
 use types_nodes::nodes_enums::CmdType;
-use types_nodes::parsenodes::{Query, QuerySource, SetOperation, SetOperationStmt, SortGroupClause};
+use types_nodes::parsenodes::{
+    Query, QuerySource, SetOperation, SetOperationStmt, SortGroupClause,
+};
 use types_nodes::rawnodes::SelectStmt;
 use types_nodes::{
     Alias, Bitmapset, FromExpr, JoinType, Node, NodeList, NodeTag, SetToDefault, TargetEntry, Var,
@@ -59,14 +61,19 @@ pub(crate) fn transformSetOperationStmt<'mcx>(
     }
 
     let sostmt_node = transformSetOperationTree(mcx, pstate, stmt, true, None)?;
-    let sostmt = sostmt_node.as_set_operation_stmt().expect("top set-op node");
+    let sostmt = sostmt_node
+        .as_set_operation_stmt()
+        .expect("top set-op node");
     qry.setOperations = Some(sostmt_node);
 
     let mut node = sostmt.larg.expect("set-op node has larg");
     while let Some(op) = node.as_set_operation_stmt() {
         node = op.larg.expect("set-op node has larg");
     }
-    let leftmostRTI = node.as_range_tbl_ref().expect("set-op leaf is a RangeTblRef").rtindex;
+    let leftmostRTI = node
+        .as_range_tbl_ref()
+        .expect("set-op leaf is a RangeTblRef")
+        .rtindex;
     let leftmostQuery = pstate
         .p_rtable
         .nth(leftmostRTI as usize - 1)
@@ -182,8 +189,14 @@ pub(crate) fn transformSetOperationStmt<'mcx>(
     qry.rtable = mem::take(&mut pstate.p_rtable);
     qry.rteperminfos = mem::take(&mut pstate.p_rteperminfos);
     qry.jointree = Some(
-        Node::mk_mut(mcx, FromExpr { fromlist: mem::take(&mut pstate.p_joinlist), quals: None })?
-            .seal_ref(),
+        Node::mk_mut(
+            mcx,
+            FromExpr {
+                fromlist: mem::take(&mut pstate.p_joinlist),
+                quals: None,
+            },
+        )?
+        .seal_ref(),
     );
 
     qry.hasSubLinks = pstate.p_hasSubLinks;
@@ -288,7 +301,10 @@ fn transformSetOperationTree<'mcx>(
         let selectName = str_in(mcx, &format!("*SELECT* {}", pstate.p_rtable.len() + 1))?;
         let alias = Node::mk_mut(
             mcx,
-            Alias { aliasname: Some(selectName), colnames: NodeList::nil() },
+            Alias {
+                aliasname: Some(selectName),
+                colnames: NodeList::nil(),
+            },
         )?
         .seal_ref();
         let nsitem = parse_relation::addRangeTableEntryForSubquery(
@@ -458,7 +474,10 @@ fn determineRecursiveColTypes<'mcx>(
     while let Some(op) = node.as_set_operation_stmt() {
         node = op.larg.expect("set-op node has larg");
     }
-    let leftmostRTI = node.as_range_tbl_ref().expect("set-op leaf is a RangeTblRef").rtindex;
+    let leftmostRTI = node
+        .as_range_tbl_ref()
+        .expect("set-op leaf is a RangeTblRef")
+        .rtindex;
     let leftmostQuery = pstate
         .p_rtable
         .nth(leftmostRTI as usize - 1)
@@ -479,7 +498,9 @@ fn determineRecursiveColTypes<'mcx>(
         targetList.lappend(mcx, tle)?;
     }
 
-    let parent_cte = pstate.p_parent_cte.expect("recursive set-op has a parent CTE");
+    let parent_cte = pstate
+        .p_parent_cte
+        .expect("recursive set-op has a parent CTE");
     crate::parse_cte::analyzeCTETargetList(mcx, pstate, parent_cte, &targetList)
 }
 
@@ -517,8 +538,8 @@ pub fn makeSortGroupClauseForSetOp<'mcx>(
     let ops = parse_oper::get_sort_group_operators(rescoltype, false, true, false, true)?;
     // C: the typcache never reports record as hashable, but a recursive union
     // needs hashing — assume it and let execution fail if a field can't hash.
-    let hashable = ops.hashable
-        || (require_hash && (rescoltype == RECORDOID || rescoltype == RECORDARRAYOID));
+    let hashable =
+        ops.hashable || (require_hash && (rescoltype == RECORDOID || rescoltype == RECORDARRAYOID));
     Node::mk(
         mcx,
         SortGroupClause {
@@ -568,14 +589,20 @@ fn setop_column_count_mismatch(
     Box::new(
         elog::ereport(ERROR)
             .errcode(ERRCODE_SYNTAX_ERROR)
-            .errmsg(format!("each {context} query must have the same number of columns"))
+            .errmsg(format!(
+                "each {context} query must have the same number of columns"
+            ))
             .errposition(parser_errposition(
                 pstate,
                 tlist_location(rtargetlist),
                 mbutils::GetDatabaseEncoding(),
             ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformSetOperationTree")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformSetOperationTree",
+            )),
     )
 }
 
@@ -591,9 +618,17 @@ fn setop_refers_to_same_level(pstate: &ParseState<'_, '_>, location: i32) -> Box
                  same query level"
                     .to_string(),
             )
-            .errposition(parser_errposition(pstate, location, mbutils::GetDatabaseEncoding()))
+            .errposition(parser_errposition(
+                pstate,
+                location,
+                mbutils::GetDatabaseEncoding(),
+            ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformSetOperationTree")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformSetOperationTree",
+            )),
     )
 }
 
@@ -611,9 +646,17 @@ fn invalid_setop_order_by(pstate: &ParseState<'_, '_>, extra_tle: Node<'_>) -> B
                 "Add the expression/function to every SELECT, or move the UNION into a \
                  FROM clause.",
             )
-            .errposition(parser_errposition(pstate, location, mbutils::GetDatabaseEncoding()))
+            .errposition(parser_errposition(
+                pstate,
+                location,
+                mbutils::GetDatabaseEncoding(),
+            ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "transformSetOperationStmt")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "transformSetOperationStmt",
+            )),
     )
 }
 

@@ -34,12 +34,8 @@ pub fn NamespaceCreate<'mcx>(
     };
 
     let nspdesc = table::table_open(mcx, NAMESPACE_RELATION_ID, RowExclusiveLock)?;
-    let nspoid = catalog::GetNewOidWithIndex(
-        mcx,
-        &nspdesc,
-        NamespaceOidIndexId,
-        Anum_pg_namespace_oid,
-    )?;
+    let nspoid =
+        catalog::GetNewOidWithIndex(mcx, &nspdesc, NamespaceOidIndexId, Anum_pg_namespace_oid)?;
     let mut name = NameData::default();
     name.namestrcpy(nspName);
     let mut values = [

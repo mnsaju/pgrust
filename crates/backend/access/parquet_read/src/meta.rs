@@ -65,10 +65,21 @@ pub enum Logical {
     Bson,
     Uuid,
     Date,
-    Time { unit: TimeUnit },
-    Timestamp { unit: TimeUnit, utc: bool },
-    Int { bits: u8, signed: bool },
-    Decimal { precision: i32, scale: i32 },
+    Time {
+        unit: TimeUnit,
+    },
+    Timestamp {
+        unit: TimeUnit,
+        utc: bool,
+    },
+    Int {
+        bits: u8,
+        signed: bool,
+    },
+    Decimal {
+        precision: i32,
+        scale: i32,
+    },
     Interval,
     Float16,
     /// Logical UNKNOWN (always-null) or an annotation this reader has no
@@ -238,15 +249,15 @@ pub fn parse_file_meta(buf: &[u8]) -> PgResult<FileMeta> {
                     .ok_or_else(|| corrupt("row_groups precede schema"))?
                     .len();
                 let mut rgs = Vec::new();
-                rgs.try_reserve(n).map_err(|_| corrupt("row group list too large"))?;
+                rgs.try_reserve(n)
+                    .map_err(|_| corrupt("row group list too large"))?;
                 for _ in 0..n {
                     rgs.push(parse_row_group(&mut cur, schema.as_ref().unwrap(), ncols)?);
                 }
                 row_groups = Some(rgs);
             }
             6 => {
-                created_by =
-                    Some(String::from_utf8_lossy(cur.binary_value(t)?).into_owned());
+                created_by = Some(String::from_utf8_lossy(cur.binary_value(t)?).into_owned());
             }
             8 => {
                 // EncryptionAlgorithm on a plaintext-footer file: columns are
@@ -265,13 +276,22 @@ pub fn parse_file_meta(buf: &[u8]) -> PgResult<FileMeta> {
     if num_rows < 0 {
         return Err(corrupt("negative num_rows"));
     }
-    let rg_rows: i64 = row_groups.iter().map(|rg| rg.num_rows).try_fold(0i64, |a, b| {
-        a.checked_add(b).ok_or_else(|| corrupt("row counts overflow"))
-    })?;
+    let rg_rows: i64 = row_groups
+        .iter()
+        .map(|rg| rg.num_rows)
+        .try_fold(0i64, |a, b| {
+            a.checked_add(b)
+                .ok_or_else(|| corrupt("row counts overflow"))
+        })?;
     if rg_rows != num_rows {
         return Err(corrupt("row group row counts do not sum to num_rows"));
     }
-    Ok(FileMeta { num_rows, columns, row_groups, created_by })
+    Ok(FileMeta {
+        num_rows,
+        columns,
+        row_groups,
+        created_by,
+    })
 }
 
 // SchemaElement field ids.
@@ -317,7 +337,8 @@ fn parse_schema(cur: &mut Cur<'_>) -> PgResult<Vec<ColumnSchema>> {
         }
     }
     let mut cols = Vec::new();
-    cols.try_reserve(ncols).map_err(|_| corrupt("schema too large"))?;
+    cols.try_reserve(ncols)
+        .map_err(|_| corrupt("schema too large"))?;
     let mut remaining = n - 1;
     for _ in 0..ncols {
         if remaining == 0 {
@@ -345,7 +366,12 @@ fn parse_schema(cur: &mut Cur<'_>) -> PgResult<Vec<ColumnSchema>> {
             }
             _ => return Err(corrupt("invalid repetition type")),
         };
-        cols.push(ColumnSchema { name: el.name, phys, max_def, logical: el.logical });
+        cols.push(ColumnSchema {
+            name: el.name,
+            phys,
+            max_def,
+            logical: el.logical,
+        });
     }
     if remaining != 0 {
         return Err(corrupt("schema list longer than root child count"));
@@ -371,14 +397,11 @@ fn parse_schema_element(cur: &mut Cur<'_>) -> PgResult<SchemaElem> {
             SE_TYPE_LENGTH => type_length = Some(cur.i32_value(t)?),
             SE_REPETITION => repetition = cur.i32_value(t)?,
             SE_NAME => {
-                name = Some(
-                    String::from_utf8_lossy(cur.binary_value(t)?).into_owned(),
-                );
+                name = Some(String::from_utf8_lossy(cur.binary_value(t)?).into_owned());
             }
             SE_NUM_CHILDREN => {
                 let n = cur.i32_value(t)?;
-                num_children =
-                    usize::try_from(n).map_err(|_| corrupt("negative num_children"))?;
+                num_children = usize::try_from(n).map_err(|_| corrupt("negative num_children"))?;
             }
             SE_CONVERTED => converted = Some(cur.i32_value(t)?),
             SE_SCALE => scale = Some(cur.i32_value(t)?),
@@ -406,7 +429,9 @@ fn parse_schema_element(cur: &mut Cur<'_>) -> PgResult<SchemaElem> {
         Some(7) => {
             let n = type_length.unwrap_or(-1);
             if n <= 0 {
-                return Err(corrupt("FIXED_LEN_BYTE_ARRAY without a positive type_length"));
+                return Err(corrupt(
+                    "FIXED_LEN_BYTE_ARRAY without a positive type_length",
+                ));
             }
             Some(Phys::Flba(n as u32))
         }
@@ -417,7 +442,13 @@ fn parse_schema_element(cur: &mut Cur<'_>) -> PgResult<SchemaElem> {
         Some(l) => l,
         None => converted_to_logical(converted, scale, precision),
     };
-    Ok(SchemaElem { name, phys, repetition, num_children, logical })
+    Ok(SchemaElem {
+        name,
+        phys,
+        repetition,
+        num_children,
+        logical,
+    })
 }
 
 fn converted_to_logical(
@@ -427,30 +458,64 @@ fn converted_to_logical(
 ) -> Logical {
     match converted {
         None => Logical::None,
-        Some(0) => Logical::String,                       // UTF8
-        Some(4) => Logical::Enum,                         // ENUM
+        Some(0) => Logical::String, // UTF8
+        Some(4) => Logical::Enum,   // ENUM
         Some(5) => Logical::Decimal {
             precision: precision.unwrap_or(0),
             scale: scale.unwrap_or(0),
         },
-        Some(6) => Logical::Date,                         // DATE
-        Some(7) => Logical::Time { unit: TimeUnit::Millis }, // TIME_MILLIS
-        Some(8) => Logical::Time { unit: TimeUnit::Micros }, // TIME_MICROS
+        Some(6) => Logical::Date, // DATE
+        Some(7) => Logical::Time {
+            unit: TimeUnit::Millis,
+        }, // TIME_MILLIS
+        Some(8) => Logical::Time {
+            unit: TimeUnit::Micros,
+        }, // TIME_MICROS
         // Legacy converted timestamps carry no UTC flag; instant semantics
         // (adjusted to UTC) is the convention every writer follows.
-        Some(9) => Logical::Timestamp { unit: TimeUnit::Millis, utc: true },
-        Some(10) => Logical::Timestamp { unit: TimeUnit::Micros, utc: true },
-        Some(11) => Logical::Int { bits: 8, signed: false },  // UINT_8
-        Some(12) => Logical::Int { bits: 16, signed: false }, // UINT_16
-        Some(13) => Logical::Int { bits: 32, signed: false }, // UINT_32
-        Some(14) => Logical::Int { bits: 64, signed: false }, // UINT_64
-        Some(15) => Logical::Int { bits: 8, signed: true },   // INT_8
-        Some(16) => Logical::Int { bits: 16, signed: true },  // INT_16
-        Some(17) => Logical::Int { bits: 32, signed: true },  // INT_32
-        Some(18) => Logical::Int { bits: 64, signed: true },  // INT_64
-        Some(19) => Logical::Json,                            // JSON
-        Some(20) => Logical::Bson,                            // BSON
-        Some(21) => Logical::Interval,                        // INTERVAL
+        Some(9) => Logical::Timestamp {
+            unit: TimeUnit::Millis,
+            utc: true,
+        },
+        Some(10) => Logical::Timestamp {
+            unit: TimeUnit::Micros,
+            utc: true,
+        },
+        Some(11) => Logical::Int {
+            bits: 8,
+            signed: false,
+        }, // UINT_8
+        Some(12) => Logical::Int {
+            bits: 16,
+            signed: false,
+        }, // UINT_16
+        Some(13) => Logical::Int {
+            bits: 32,
+            signed: false,
+        }, // UINT_32
+        Some(14) => Logical::Int {
+            bits: 64,
+            signed: false,
+        }, // UINT_64
+        Some(15) => Logical::Int {
+            bits: 8,
+            signed: true,
+        }, // INT_8
+        Some(16) => Logical::Int {
+            bits: 16,
+            signed: true,
+        }, // INT_16
+        Some(17) => Logical::Int {
+            bits: 32,
+            signed: true,
+        }, // INT_32
+        Some(18) => Logical::Int {
+            bits: 64,
+            signed: true,
+        }, // INT_64
+        Some(19) => Logical::Json,     // JSON
+        Some(20) => Logical::Bson,     // BSON
+        Some(21) => Logical::Interval, // INTERVAL
         Some(_) => Logical::Other,
     }
 }
@@ -594,7 +659,8 @@ fn parse_row_group(
                     return Err(corrupt("row group chunk count does not match schema"));
                 }
                 let mut v = Vec::new();
-                v.try_reserve(n).map_err(|_| corrupt("chunk list too large"))?;
+                v.try_reserve(n)
+                    .map_err(|_| corrupt("chunk list too large"))?;
                 for i in 0..n {
                     v.push(parse_column_chunk(cur, schema, i)?);
                 }
@@ -684,15 +750,16 @@ fn parse_column_meta(
                     return Err(corrupt("path_in_schema element is not a string"));
                 }
                 if n != 1 {
-                    return Err(unsupported(
-                        "nested column path in column metadata".into(),
-                    ));
+                    return Err(unsupported("nested column path in column metadata".into()));
                 }
                 let name = cur.binary()?;
                 // Chunks appear in schema-leaf order in every known writer;
                 // verify, and fall back to a name search if a writer ever
                 // permutes them.
-                if schema.get(ordinal).is_some_and(|c| c.name.as_bytes() == name) {
+                if schema
+                    .get(ordinal)
+                    .is_some_and(|c| c.name.as_bytes() == name)
+                {
                     column = Some(ordinal);
                 } else {
                     column = schema.iter().position(|c| c.name.as_bytes() == name);

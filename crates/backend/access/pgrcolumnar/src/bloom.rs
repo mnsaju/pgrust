@@ -55,8 +55,9 @@ mod tests {
 
     #[test]
     fn no_false_negatives() {
-        let keys: Vec<i64> =
-            (0..8192u64).map(|i| i.wrapping_mul(0x9e37_79b9_7f4a_7c15) as i64 ^ i as i64).collect();
+        let keys: Vec<i64> = (0..8192u64)
+            .map(|i| i.wrapping_mul(0x9e37_79b9_7f4a_7c15) as i64 ^ i as i64)
+            .collect();
         let buf = filled(keys.iter().copied());
         for &k in &keys {
             assert!(bloom_may_contain(&buf, k));

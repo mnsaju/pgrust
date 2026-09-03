@@ -104,7 +104,10 @@ pub fn fc_hash_aclitem(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> P
 }
 
 // pub for the proofs suite (proofs/state-seam-probe); not part of the crate API.
-pub fn fc_hash_aclitem_extended(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+pub fn fc_hash_aclitem_extended(
+    _flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     let a = arg_aclitem(fcinfo, 0);
     let seed = fcinfo.arg_i64(1) as u64;
     let sum = (a.ai_privs as u32)
@@ -133,23 +136,42 @@ fn hash_uint32_extended(k: u32, seed: u64) -> u64 {
 }
 
 fn mix(mut a: u32, mut b: u32, mut c: u32) -> (u32, u32, u32) {
-    a = a.wrapping_sub(c); a ^= c.rotate_left(4);  c = c.wrapping_add(b);
-    b = b.wrapping_sub(a); b ^= a.rotate_left(6);  a = a.wrapping_add(c);
-    c = c.wrapping_sub(b); c ^= b.rotate_left(8);  b = b.wrapping_add(a);
-    a = a.wrapping_sub(c); a ^= c.rotate_left(16); c = c.wrapping_add(b);
-    b = b.wrapping_sub(a); b ^= a.rotate_left(19); a = a.wrapping_add(c);
-    c = c.wrapping_sub(b); c ^= b.rotate_left(4);  b = b.wrapping_add(a);
+    a = a.wrapping_sub(c);
+    a ^= c.rotate_left(4);
+    c = c.wrapping_add(b);
+    b = b.wrapping_sub(a);
+    b ^= a.rotate_left(6);
+    a = a.wrapping_add(c);
+    c = c.wrapping_sub(b);
+    c ^= b.rotate_left(8);
+    b = b.wrapping_add(a);
+    a = a.wrapping_sub(c);
+    a ^= c.rotate_left(16);
+    c = c.wrapping_add(b);
+    b = b.wrapping_sub(a);
+    b ^= a.rotate_left(19);
+    a = a.wrapping_add(c);
+    c = c.wrapping_sub(b);
+    c ^= b.rotate_left(4);
+    b = b.wrapping_add(a);
     (a, b, c)
 }
 
 fn final_mix(mut a: u32, mut b: u32, mut c: u32) -> (u32, u32, u32) {
-    c ^= b; c = c.wrapping_sub(b.rotate_left(14));
-    a ^= c; a = a.wrapping_sub(c.rotate_left(11));
-    b ^= a; b = b.wrapping_sub(a.rotate_left(25));
-    c ^= b; c = c.wrapping_sub(b.rotate_left(16));
-    a ^= c; a = a.wrapping_sub(c.rotate_left(4));
-    b ^= a; b = b.wrapping_sub(a.rotate_left(14));
-    c ^= b; c = c.wrapping_sub(b.rotate_left(24));
+    c ^= b;
+    c = c.wrapping_sub(b.rotate_left(14));
+    a ^= c;
+    a = a.wrapping_sub(c.rotate_left(11));
+    b ^= a;
+    b = b.wrapping_sub(a.rotate_left(25));
+    c ^= b;
+    c = c.wrapping_sub(b.rotate_left(16));
+    a ^= c;
+    a = a.wrapping_sub(c.rotate_left(4));
+    b ^= a;
+    b = b.wrapping_sub(a.rotate_left(14));
+    c ^= b;
+    c = c.wrapping_sub(b.rotate_left(24));
     (a, b, c)
 }
 
@@ -180,22 +202,70 @@ fn fc_aclremove(_flinfo: Option<&mut FmgrInfo>, _fcinfo: &mut Fcinfo) -> PgResul
 }
 
 const MAKEACLITEM_PRIV_MAP: &[PrivMapEntry] = &[
-    PrivMapEntry { name: "SELECT", value: ACL_SELECT },
-    PrivMapEntry { name: "INSERT", value: ACL_INSERT },
-    PrivMapEntry { name: "UPDATE", value: ACL_UPDATE },
-    PrivMapEntry { name: "DELETE", value: ACL_DELETE },
-    PrivMapEntry { name: "TRUNCATE", value: ACL_TRUNCATE },
-    PrivMapEntry { name: "REFERENCES", value: ACL_REFERENCES },
-    PrivMapEntry { name: "TRIGGER", value: ACL_TRIGGER },
-    PrivMapEntry { name: "EXECUTE", value: crate::ACL_EXECUTE },
-    PrivMapEntry { name: "USAGE", value: crate::ACL_USAGE },
-    PrivMapEntry { name: "CREATE", value: crate::ACL_CREATE },
-    PrivMapEntry { name: "TEMP", value: crate::ACL_CREATE_TEMP },
-    PrivMapEntry { name: "TEMPORARY", value: crate::ACL_CREATE_TEMP },
-    PrivMapEntry { name: "CONNECT", value: crate::ACL_CONNECT },
-    PrivMapEntry { name: "SET", value: crate::ACL_SET },
-    PrivMapEntry { name: "ALTER SYSTEM", value: crate::ACL_ALTER_SYSTEM },
-    PrivMapEntry { name: "MAINTAIN", value: ACL_MAINTAIN },
+    PrivMapEntry {
+        name: "SELECT",
+        value: ACL_SELECT,
+    },
+    PrivMapEntry {
+        name: "INSERT",
+        value: ACL_INSERT,
+    },
+    PrivMapEntry {
+        name: "UPDATE",
+        value: ACL_UPDATE,
+    },
+    PrivMapEntry {
+        name: "DELETE",
+        value: ACL_DELETE,
+    },
+    PrivMapEntry {
+        name: "TRUNCATE",
+        value: ACL_TRUNCATE,
+    },
+    PrivMapEntry {
+        name: "REFERENCES",
+        value: ACL_REFERENCES,
+    },
+    PrivMapEntry {
+        name: "TRIGGER",
+        value: ACL_TRIGGER,
+    },
+    PrivMapEntry {
+        name: "EXECUTE",
+        value: crate::ACL_EXECUTE,
+    },
+    PrivMapEntry {
+        name: "USAGE",
+        value: crate::ACL_USAGE,
+    },
+    PrivMapEntry {
+        name: "CREATE",
+        value: crate::ACL_CREATE,
+    },
+    PrivMapEntry {
+        name: "TEMP",
+        value: crate::ACL_CREATE_TEMP,
+    },
+    PrivMapEntry {
+        name: "TEMPORARY",
+        value: crate::ACL_CREATE_TEMP,
+    },
+    PrivMapEntry {
+        name: "CONNECT",
+        value: crate::ACL_CONNECT,
+    },
+    PrivMapEntry {
+        name: "SET",
+        value: crate::ACL_SET,
+    },
+    PrivMapEntry {
+        name: "ALTER SYSTEM",
+        value: crate::ACL_ALTER_SYSTEM,
+    },
+    PrivMapEntry {
+        name: "MAINTAIN",
+        value: ACL_MAINTAIN,
+    },
 ];
 
 fn fc_makeaclitem(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -209,7 +279,11 @@ fn fc_makeaclitem(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResu
         ai_grantor: grantor,
         ai_privs: 0,
     };
-    aclitem_set_privs_goptions(&mut item, privs, if goption { privs } else { ACL_NO_RIGHTS });
+    aclitem_set_privs_goptions(
+        &mut item,
+        privs,
+        if goption { privs } else { ACL_NO_RIGHTS },
+    );
     aclitem_result(fcinfo, &item)
 }
 
@@ -246,25 +320,70 @@ fn fc_acldefault_sql(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgR
 }
 
 const TABLE_PRIV_MAP: &[PrivMapEntry] = &[
-    PrivMapEntry { name: "SELECT", value: ACL_SELECT },
-    PrivMapEntry { name: "SELECT WITH GRANT OPTION", value: acl_grant_option_for(ACL_SELECT) },
-    PrivMapEntry { name: "INSERT", value: ACL_INSERT },
-    PrivMapEntry { name: "INSERT WITH GRANT OPTION", value: acl_grant_option_for(ACL_INSERT) },
-    PrivMapEntry { name: "UPDATE", value: ACL_UPDATE },
-    PrivMapEntry { name: "UPDATE WITH GRANT OPTION", value: acl_grant_option_for(ACL_UPDATE) },
-    PrivMapEntry { name: "DELETE", value: ACL_DELETE },
-    PrivMapEntry { name: "DELETE WITH GRANT OPTION", value: acl_grant_option_for(ACL_DELETE) },
-    PrivMapEntry { name: "TRUNCATE", value: ACL_TRUNCATE },
-    PrivMapEntry { name: "TRUNCATE WITH GRANT OPTION", value: acl_grant_option_for(ACL_TRUNCATE) },
-    PrivMapEntry { name: "REFERENCES", value: ACL_REFERENCES },
+    PrivMapEntry {
+        name: "SELECT",
+        value: ACL_SELECT,
+    },
+    PrivMapEntry {
+        name: "SELECT WITH GRANT OPTION",
+        value: acl_grant_option_for(ACL_SELECT),
+    },
+    PrivMapEntry {
+        name: "INSERT",
+        value: ACL_INSERT,
+    },
+    PrivMapEntry {
+        name: "INSERT WITH GRANT OPTION",
+        value: acl_grant_option_for(ACL_INSERT),
+    },
+    PrivMapEntry {
+        name: "UPDATE",
+        value: ACL_UPDATE,
+    },
+    PrivMapEntry {
+        name: "UPDATE WITH GRANT OPTION",
+        value: acl_grant_option_for(ACL_UPDATE),
+    },
+    PrivMapEntry {
+        name: "DELETE",
+        value: ACL_DELETE,
+    },
+    PrivMapEntry {
+        name: "DELETE WITH GRANT OPTION",
+        value: acl_grant_option_for(ACL_DELETE),
+    },
+    PrivMapEntry {
+        name: "TRUNCATE",
+        value: ACL_TRUNCATE,
+    },
+    PrivMapEntry {
+        name: "TRUNCATE WITH GRANT OPTION",
+        value: acl_grant_option_for(ACL_TRUNCATE),
+    },
+    PrivMapEntry {
+        name: "REFERENCES",
+        value: ACL_REFERENCES,
+    },
     PrivMapEntry {
         name: "REFERENCES WITH GRANT OPTION",
         value: acl_grant_option_for(ACL_REFERENCES),
     },
-    PrivMapEntry { name: "TRIGGER", value: ACL_TRIGGER },
-    PrivMapEntry { name: "TRIGGER WITH GRANT OPTION", value: acl_grant_option_for(ACL_TRIGGER) },
-    PrivMapEntry { name: "MAINTAIN", value: ACL_MAINTAIN },
-    PrivMapEntry { name: "MAINTAIN WITH GRANT OPTION", value: acl_grant_option_for(ACL_MAINTAIN) },
+    PrivMapEntry {
+        name: "TRIGGER",
+        value: ACL_TRIGGER,
+    },
+    PrivMapEntry {
+        name: "TRIGGER WITH GRANT OPTION",
+        value: acl_grant_option_for(ACL_TRIGGER),
+    },
+    PrivMapEntry {
+        name: "MAINTAIN",
+        value: ACL_MAINTAIN,
+    },
+    PrivMapEntry {
+        name: "MAINTAIN WITH GRANT OPTION",
+        value: acl_grant_option_for(ACL_MAINTAIN),
+    },
 ];
 
 fn convert_table_priv_string(priv_type: &str) -> PgResult<u64> {
@@ -324,15 +443,22 @@ fn undefined_table_oid(oid: Oid) -> Box<PgError> {
 }
 
 fn table_priv_check(roleid: Oid, tableoid: Oid, mode: u64) -> PgResult<Datum> {
-    let (aclresult, is_missing) = aclchk_seams::pg_class_aclcheck_ext::call(tableoid, roleid, mode)?;
+    let (aclresult, is_missing) =
+        aclchk_seams::pg_class_aclcheck_ext::call(tableoid, roleid, mode)?;
     if is_missing {
         return Err(undefined_table_oid(tableoid));
     }
     Ok(Datum::from_bool(aclresult == ACLCHECK_OK))
 }
 
-fn table_priv_check_ext(fcinfo: &mut Fcinfo, roleid: Oid, tableoid: Oid, mode: u64) -> PgResult<Datum> {
-    let (aclresult, is_missing) = aclchk_seams::pg_class_aclcheck_ext::call(tableoid, roleid, mode)?;
+fn table_priv_check_ext(
+    fcinfo: &mut Fcinfo,
+    roleid: Oid,
+    tableoid: Oid,
+    mode: u64,
+) -> PgResult<Datum> {
+    let (aclresult, is_missing) =
+        aclchk_seams::pg_class_aclcheck_ext::call(tableoid, roleid, mode)?;
     if is_missing {
         return Ok(fcinfo.return_null());
     }
@@ -383,10 +509,7 @@ fn fc_has_table_privilege_id_name(
     table_priv_check(roleid, tableoid, mode)
 }
 
-fn fc_has_table_privilege_id_id(
-    _f: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+fn fc_has_table_privilege_id_id(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let roleid = fcinfo.arg_oid(0);
     let tableoid = fcinfo.arg_oid(1);
     let mode = convert_table_priv_string(arg_text_str(fcinfo, 2)?)?;
@@ -394,41 +517,98 @@ fn fc_has_table_privilege_id_id(
 }
 
 const DATABASE_PRIV_MAP: &[PrivMapEntry] = &[
-    PrivMapEntry { name: "CREATE", value: crate::ACL_CREATE },
-    PrivMapEntry { name: "CREATE WITH GRANT OPTION", value: acl_grant_option_for(crate::ACL_CREATE) },
-    PrivMapEntry { name: "TEMPORARY", value: crate::ACL_CREATE_TEMP },
+    PrivMapEntry {
+        name: "CREATE",
+        value: crate::ACL_CREATE,
+    },
+    PrivMapEntry {
+        name: "CREATE WITH GRANT OPTION",
+        value: acl_grant_option_for(crate::ACL_CREATE),
+    },
+    PrivMapEntry {
+        name: "TEMPORARY",
+        value: crate::ACL_CREATE_TEMP,
+    },
     PrivMapEntry {
         name: "TEMPORARY WITH GRANT OPTION",
         value: acl_grant_option_for(crate::ACL_CREATE_TEMP),
     },
-    PrivMapEntry { name: "TEMP", value: crate::ACL_CREATE_TEMP },
-    PrivMapEntry { name: "TEMP WITH GRANT OPTION", value: acl_grant_option_for(crate::ACL_CREATE_TEMP) },
-    PrivMapEntry { name: "CONNECT", value: crate::ACL_CONNECT },
-    PrivMapEntry { name: "CONNECT WITH GRANT OPTION", value: acl_grant_option_for(crate::ACL_CONNECT) },
+    PrivMapEntry {
+        name: "TEMP",
+        value: crate::ACL_CREATE_TEMP,
+    },
+    PrivMapEntry {
+        name: "TEMP WITH GRANT OPTION",
+        value: acl_grant_option_for(crate::ACL_CREATE_TEMP),
+    },
+    PrivMapEntry {
+        name: "CONNECT",
+        value: crate::ACL_CONNECT,
+    },
+    PrivMapEntry {
+        name: "CONNECT WITH GRANT OPTION",
+        value: acl_grant_option_for(crate::ACL_CONNECT),
+    },
 ];
 
 const FUNCTION_PRIV_MAP: &[PrivMapEntry] = &[
-    PrivMapEntry { name: "EXECUTE", value: crate::ACL_EXECUTE },
-    PrivMapEntry { name: "EXECUTE WITH GRANT OPTION", value: acl_grant_option_for(crate::ACL_EXECUTE) },
+    PrivMapEntry {
+        name: "EXECUTE",
+        value: crate::ACL_EXECUTE,
+    },
+    PrivMapEntry {
+        name: "EXECUTE WITH GRANT OPTION",
+        value: acl_grant_option_for(crate::ACL_EXECUTE),
+    },
 ];
 
 const USAGE_PRIV_MAP: &[PrivMapEntry] = &[
-    PrivMapEntry { name: "USAGE", value: crate::ACL_USAGE },
-    PrivMapEntry { name: "USAGE WITH GRANT OPTION", value: acl_grant_option_for(crate::ACL_USAGE) },
+    PrivMapEntry {
+        name: "USAGE",
+        value: crate::ACL_USAGE,
+    },
+    PrivMapEntry {
+        name: "USAGE WITH GRANT OPTION",
+        value: acl_grant_option_for(crate::ACL_USAGE),
+    },
 ];
 
 const SCHEMA_PRIV_MAP: &[PrivMapEntry] = &[
-    PrivMapEntry { name: "CREATE", value: crate::ACL_CREATE },
-    PrivMapEntry { name: "CREATE WITH GRANT OPTION", value: acl_grant_option_for(crate::ACL_CREATE) },
-    PrivMapEntry { name: "USAGE", value: crate::ACL_USAGE },
-    PrivMapEntry { name: "USAGE WITH GRANT OPTION", value: acl_grant_option_for(crate::ACL_USAGE) },
+    PrivMapEntry {
+        name: "CREATE",
+        value: crate::ACL_CREATE,
+    },
+    PrivMapEntry {
+        name: "CREATE WITH GRANT OPTION",
+        value: acl_grant_option_for(crate::ACL_CREATE),
+    },
+    PrivMapEntry {
+        name: "USAGE",
+        value: crate::ACL_USAGE,
+    },
+    PrivMapEntry {
+        name: "USAGE WITH GRANT OPTION",
+        value: acl_grant_option_for(crate::ACL_USAGE),
+    },
 ];
 
 const LARGEOBJECT_PRIV_MAP: &[PrivMapEntry] = &[
-    PrivMapEntry { name: "SELECT", value: ACL_SELECT },
-    PrivMapEntry { name: "SELECT WITH GRANT OPTION", value: acl_grant_option_for(ACL_SELECT) },
-    PrivMapEntry { name: "UPDATE", value: ACL_UPDATE },
-    PrivMapEntry { name: "UPDATE WITH GRANT OPTION", value: acl_grant_option_for(ACL_UPDATE) },
+    PrivMapEntry {
+        name: "SELECT",
+        value: ACL_SELECT,
+    },
+    PrivMapEntry {
+        name: "SELECT WITH GRANT OPTION",
+        value: acl_grant_option_for(ACL_SELECT),
+    },
+    PrivMapEntry {
+        name: "UPDATE",
+        value: ACL_UPDATE,
+    },
+    PrivMapEntry {
+        name: "UPDATE WITH GRANT OPTION",
+        value: acl_grant_option_for(ACL_UPDATE),
+    },
 ];
 
 fn object_priv_check(classid: Oid, objectid: Oid, roleid: Oid, mode: u64) -> PgResult<Datum> {
@@ -588,25 +768,57 @@ has_priv_family!(
     fc_has_type_privilege_id
 );
 
-
 pub(crate) const TABLESPACE_PRIV_MAP: &[PrivMapEntry] = &[
-    PrivMapEntry { name: "CREATE", value: crate::ACL_CREATE },
-    PrivMapEntry { name: "CREATE WITH GRANT OPTION", value: acl_grant_option_for(crate::ACL_CREATE) },
+    PrivMapEntry {
+        name: "CREATE",
+        value: crate::ACL_CREATE,
+    },
+    PrivMapEntry {
+        name: "CREATE WITH GRANT OPTION",
+        value: acl_grant_option_for(crate::ACL_CREATE),
+    },
 ];
 
 pub(crate) const SEQUENCE_PRIV_MAP: &[PrivMapEntry] = &[
-    PrivMapEntry { name: "USAGE", value: crate::ACL_USAGE },
-    PrivMapEntry { name: "USAGE WITH GRANT OPTION", value: acl_grant_option_for(crate::ACL_USAGE) },
-    PrivMapEntry { name: "SELECT", value: ACL_SELECT },
-    PrivMapEntry { name: "SELECT WITH GRANT OPTION", value: acl_grant_option_for(ACL_SELECT) },
-    PrivMapEntry { name: "UPDATE", value: ACL_UPDATE },
-    PrivMapEntry { name: "UPDATE WITH GRANT OPTION", value: acl_grant_option_for(ACL_UPDATE) },
+    PrivMapEntry {
+        name: "USAGE",
+        value: crate::ACL_USAGE,
+    },
+    PrivMapEntry {
+        name: "USAGE WITH GRANT OPTION",
+        value: acl_grant_option_for(crate::ACL_USAGE),
+    },
+    PrivMapEntry {
+        name: "SELECT",
+        value: ACL_SELECT,
+    },
+    PrivMapEntry {
+        name: "SELECT WITH GRANT OPTION",
+        value: acl_grant_option_for(ACL_SELECT),
+    },
+    PrivMapEntry {
+        name: "UPDATE",
+        value: ACL_UPDATE,
+    },
+    PrivMapEntry {
+        name: "UPDATE WITH GRANT OPTION",
+        value: acl_grant_option_for(ACL_UPDATE),
+    },
 ];
 
 pub(crate) const PARAMETER_PRIV_MAP: &[PrivMapEntry] = &[
-    PrivMapEntry { name: "SET", value: crate::ACL_SET },
-    PrivMapEntry { name: "SET WITH GRANT OPTION", value: acl_grant_option_for(crate::ACL_SET) },
-    PrivMapEntry { name: "ALTER SYSTEM", value: crate::ACL_ALTER_SYSTEM },
+    PrivMapEntry {
+        name: "SET",
+        value: crate::ACL_SET,
+    },
+    PrivMapEntry {
+        name: "SET WITH GRANT OPTION",
+        value: acl_grant_option_for(crate::ACL_SET),
+    },
+    PrivMapEntry {
+        name: "ALTER SYSTEM",
+        value: crate::ACL_ALTER_SYSTEM,
+    },
     PrivMapEntry {
         name: "ALTER SYSTEM WITH GRANT OPTION",
         value: acl_grant_option_for(crate::ACL_ALTER_SYSTEM),
@@ -615,15 +827,42 @@ pub(crate) const PARAMETER_PRIV_MAP: &[PrivMapEntry] = &[
 
 // MEMBER has no ACL bit; ACL_CREATE stands in, shared only with pg_role_aclcheck.
 pub(crate) const ROLE_PRIV_MAP: &[PrivMapEntry] = &[
-    PrivMapEntry { name: "USAGE", value: crate::ACL_USAGE },
-    PrivMapEntry { name: "MEMBER", value: crate::ACL_CREATE },
-    PrivMapEntry { name: "SET", value: crate::ACL_SET },
-    PrivMapEntry { name: "USAGE WITH GRANT OPTION", value: acl_grant_option_for(crate::ACL_CREATE) },
-    PrivMapEntry { name: "USAGE WITH ADMIN OPTION", value: acl_grant_option_for(crate::ACL_CREATE) },
-    PrivMapEntry { name: "MEMBER WITH GRANT OPTION", value: acl_grant_option_for(crate::ACL_CREATE) },
-    PrivMapEntry { name: "MEMBER WITH ADMIN OPTION", value: acl_grant_option_for(crate::ACL_CREATE) },
-    PrivMapEntry { name: "SET WITH GRANT OPTION", value: acl_grant_option_for(crate::ACL_CREATE) },
-    PrivMapEntry { name: "SET WITH ADMIN OPTION", value: acl_grant_option_for(crate::ACL_CREATE) },
+    PrivMapEntry {
+        name: "USAGE",
+        value: crate::ACL_USAGE,
+    },
+    PrivMapEntry {
+        name: "MEMBER",
+        value: crate::ACL_CREATE,
+    },
+    PrivMapEntry {
+        name: "SET",
+        value: crate::ACL_SET,
+    },
+    PrivMapEntry {
+        name: "USAGE WITH GRANT OPTION",
+        value: acl_grant_option_for(crate::ACL_CREATE),
+    },
+    PrivMapEntry {
+        name: "USAGE WITH ADMIN OPTION",
+        value: acl_grant_option_for(crate::ACL_CREATE),
+    },
+    PrivMapEntry {
+        name: "MEMBER WITH GRANT OPTION",
+        value: acl_grant_option_for(crate::ACL_CREATE),
+    },
+    PrivMapEntry {
+        name: "MEMBER WITH ADMIN OPTION",
+        value: acl_grant_option_for(crate::ACL_CREATE),
+    },
+    PrivMapEntry {
+        name: "SET WITH GRANT OPTION",
+        value: acl_grant_option_for(crate::ACL_CREATE),
+    },
+    PrivMapEntry {
+        name: "SET WITH ADMIN OPTION",
+        value: acl_grant_option_for(crate::ACL_CREATE),
+    },
 ];
 
 fn convert_tablespace_name(fcinfo: &Fcinfo, i: usize) -> PgResult<Oid> {
@@ -688,7 +927,12 @@ fn not_a_sequence(name: &str) -> Box<PgError> {
     )
 }
 
-fn sequence_priv_byname(fcinfo: &Fcinfo, roleid: Oid, nameidx: usize, mode: u64) -> PgResult<Datum> {
+fn sequence_priv_byname(
+    fcinfo: &Fcinfo,
+    roleid: Oid,
+    nameidx: usize,
+    mode: u64,
+) -> PgResult<Datum> {
     let sequenceoid = convert_table_name(fcinfo, nameidx)?;
     if lsyscache::get_rel_relkind(sequenceoid)? as u8 != types_rel::pg_class::RELKIND_SEQUENCE {
         return Err(not_a_sequence(arg_text_str(fcinfo, nameidx)?));
@@ -696,7 +940,12 @@ fn sequence_priv_byname(fcinfo: &Fcinfo, roleid: Oid, nameidx: usize, mode: u64)
     table_priv_check(roleid, sequenceoid, mode)
 }
 
-fn sequence_priv_byid(fcinfo: &mut Fcinfo, roleid: Oid, oididx: usize, mode: u64) -> PgResult<Datum> {
+fn sequence_priv_byid(
+    fcinfo: &mut Fcinfo,
+    roleid: Oid,
+    oididx: usize,
+    mode: u64,
+) -> PgResult<Datum> {
     let sequenceoid = fcinfo.arg_oid(oididx);
     let relkind = lsyscache::get_rel_relkind(sequenceoid)? as u8;
     if relkind == 0 {
@@ -756,17 +1005,20 @@ fn fc_has_sequence_privilege_name(
     sequence_priv_byname(fcinfo, roleid, 0, mode)
 }
 
-fn fc_has_sequence_privilege_id(
-    _f: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+fn fc_has_sequence_privilege_id(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let roleid = miscinit_seams::get_user_id::call();
     let mode = convert_sequence_priv_string(arg_text_str(fcinfo, 1)?)?;
     sequence_priv_byid(fcinfo, roleid, 0, mode)
 }
 
-fn parameter_priv_check(fcinfo: &Fcinfo, roleid: Oid, paramidx: usize, mode: u64) -> PgResult<Datum> {
-    let r = aclchk_seams::pg_parameter_aclcheck::call(arg_text_str(fcinfo, paramidx)?, roleid, mode)?;
+fn parameter_priv_check(
+    fcinfo: &Fcinfo,
+    roleid: Oid,
+    paramidx: usize,
+    mode: u64,
+) -> PgResult<Datum> {
+    let r =
+        aclchk_seams::pg_parameter_aclcheck::call(arg_text_str(fcinfo, paramidx)?, roleid, mode)?;
     Ok(Datum::from_bool(r == ACLCHECK_OK))
 }
 
@@ -818,7 +1070,9 @@ fn pg_role_aclcheck(role_oid: Oid, roleid: Oid, mode: u64) -> PgResult<i32> {
 }
 
 fn role_priv_result(role_oid: Oid, roleid: Oid, mode: u64) -> PgResult<Datum> {
-    Ok(Datum::from_bool(pg_role_aclcheck(role_oid, roleid, mode)? == ACLCHECK_OK))
+    Ok(Datum::from_bool(
+        pg_role_aclcheck(role_oid, roleid, mode)? == ACLCHECK_OK,
+    ))
 }
 
 fn fc_pg_has_role_name_name(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -902,13 +1156,34 @@ fn fc_has_largeobject_privilege_id_id(
 }
 
 const COLUMN_PRIV_MAP: &[PrivMapEntry] = &[
-    PrivMapEntry { name: "SELECT", value: ACL_SELECT },
-    PrivMapEntry { name: "SELECT WITH GRANT OPTION", value: acl_grant_option_for(ACL_SELECT) },
-    PrivMapEntry { name: "INSERT", value: ACL_INSERT },
-    PrivMapEntry { name: "INSERT WITH GRANT OPTION", value: acl_grant_option_for(ACL_INSERT) },
-    PrivMapEntry { name: "UPDATE", value: ACL_UPDATE },
-    PrivMapEntry { name: "UPDATE WITH GRANT OPTION", value: acl_grant_option_for(ACL_UPDATE) },
-    PrivMapEntry { name: "REFERENCES", value: ACL_REFERENCES },
+    PrivMapEntry {
+        name: "SELECT",
+        value: ACL_SELECT,
+    },
+    PrivMapEntry {
+        name: "SELECT WITH GRANT OPTION",
+        value: acl_grant_option_for(ACL_SELECT),
+    },
+    PrivMapEntry {
+        name: "INSERT",
+        value: ACL_INSERT,
+    },
+    PrivMapEntry {
+        name: "INSERT WITH GRANT OPTION",
+        value: acl_grant_option_for(ACL_INSERT),
+    },
+    PrivMapEntry {
+        name: "UPDATE",
+        value: ACL_UPDATE,
+    },
+    PrivMapEntry {
+        name: "UPDATE WITH GRANT OPTION",
+        value: acl_grant_option_for(ACL_UPDATE),
+    },
+    PrivMapEntry {
+        name: "REFERENCES",
+        value: ACL_REFERENCES,
+    },
     PrivMapEntry {
         name: "REFERENCES WITH GRANT OPTION",
         value: acl_grant_option_for(ACL_REFERENCES),
@@ -1324,7 +1599,6 @@ const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrB
     }
 }
 
-
 pub const ACL_BUILTINS: &[FmgrBuiltin] = &[
     b(329, "hash_aclitem", 1, fc_hash_aclitem),
     b(777, "hash_aclitem_extended", 2, fc_hash_aclitem_extended),
@@ -1343,95 +1617,505 @@ pub const ACL_BUILTINS: &[FmgrBuiltin] = &[
         retset: true,
         func: fc_aclexplode,
     },
-    b(2181, "has_sequence_privilege_name_name", 3, fc_has_sequence_privilege_name_name),
-    b(2182, "has_sequence_privilege_name_id", 3, fc_has_sequence_privilege_name_id),
-    b(2183, "has_sequence_privilege_id_name", 3, fc_has_sequence_privilege_id_name),
-    b(2184, "has_sequence_privilege_id_id", 3, fc_has_sequence_privilege_id_id),
-    b(2185, "has_sequence_privilege_name", 2, fc_has_sequence_privilege_name),
-    b(2186, "has_sequence_privilege_id", 2, fc_has_sequence_privilege_id),
-    b(2390, "has_tablespace_privilege_name_name", 3, fc_has_tablespace_privilege_name_name),
-    b(2391, "has_tablespace_privilege_name_id", 3, fc_has_tablespace_privilege_name_id),
-    b(2392, "has_tablespace_privilege_id_name", 3, fc_has_tablespace_privilege_id_name),
-    b(2393, "has_tablespace_privilege_id_id", 3, fc_has_tablespace_privilege_id_id),
-    b(2394, "has_tablespace_privilege_name", 2, fc_has_tablespace_privilege_name),
-    b(2395, "has_tablespace_privilege_id", 2, fc_has_tablespace_privilege_id),
+    b(
+        2181,
+        "has_sequence_privilege_name_name",
+        3,
+        fc_has_sequence_privilege_name_name,
+    ),
+    b(
+        2182,
+        "has_sequence_privilege_name_id",
+        3,
+        fc_has_sequence_privilege_name_id,
+    ),
+    b(
+        2183,
+        "has_sequence_privilege_id_name",
+        3,
+        fc_has_sequence_privilege_id_name,
+    ),
+    b(
+        2184,
+        "has_sequence_privilege_id_id",
+        3,
+        fc_has_sequence_privilege_id_id,
+    ),
+    b(
+        2185,
+        "has_sequence_privilege_name",
+        2,
+        fc_has_sequence_privilege_name,
+    ),
+    b(
+        2186,
+        "has_sequence_privilege_id",
+        2,
+        fc_has_sequence_privilege_id,
+    ),
+    b(
+        2390,
+        "has_tablespace_privilege_name_name",
+        3,
+        fc_has_tablespace_privilege_name_name,
+    ),
+    b(
+        2391,
+        "has_tablespace_privilege_name_id",
+        3,
+        fc_has_tablespace_privilege_name_id,
+    ),
+    b(
+        2392,
+        "has_tablespace_privilege_id_name",
+        3,
+        fc_has_tablespace_privilege_id_name,
+    ),
+    b(
+        2393,
+        "has_tablespace_privilege_id_id",
+        3,
+        fc_has_tablespace_privilege_id_id,
+    ),
+    b(
+        2394,
+        "has_tablespace_privilege_name",
+        2,
+        fc_has_tablespace_privilege_name,
+    ),
+    b(
+        2395,
+        "has_tablespace_privilege_id",
+        2,
+        fc_has_tablespace_privilege_id,
+    ),
     b(2705, "pg_has_role_name_name", 3, fc_pg_has_role_name_name),
     b(2706, "pg_has_role_name_id", 3, fc_pg_has_role_name_id),
     b(2707, "pg_has_role_id_name", 3, fc_pg_has_role_id_name),
     b(2708, "pg_has_role_id_id", 3, fc_pg_has_role_id_id),
     b(2709, "pg_has_role_name", 2, fc_pg_has_role_name),
     b(2710, "pg_has_role_id", 2, fc_pg_has_role_id),
-    b(3000, "has_foreign_data_wrapper_privilege_name_name", 3, fc_has_fdw_privilege_name_name),
-    b(3001, "has_foreign_data_wrapper_privilege_name_id", 3, fc_has_fdw_privilege_name_id),
-    b(3002, "has_foreign_data_wrapper_privilege_id_name", 3, fc_has_fdw_privilege_id_name),
-    b(3003, "has_foreign_data_wrapper_privilege_id_id", 3, fc_has_fdw_privilege_id_id),
-    b(3004, "has_foreign_data_wrapper_privilege_name", 2, fc_has_fdw_privilege_name),
-    b(3005, "has_foreign_data_wrapper_privilege_id", 2, fc_has_fdw_privilege_id),
-    b(3006, "has_server_privilege_name_name", 3, fc_has_server_privilege_name_name),
-    b(3007, "has_server_privilege_name_id", 3, fc_has_server_privilege_name_id),
-    b(3008, "has_server_privilege_id_name", 3, fc_has_server_privilege_id_name),
-    b(3009, "has_server_privilege_id_id", 3, fc_has_server_privilege_id_id),
-    b(3010, "has_server_privilege_name", 2, fc_has_server_privilege_name),
-    b(3011, "has_server_privilege_id", 2, fc_has_server_privilege_id),
-    b(6205, "has_parameter_privilege_name_name", 3, fc_has_parameter_privilege_name_name),
-    b(6206, "has_parameter_privilege_id_name", 3, fc_has_parameter_privilege_id_name),
-    b(6207, "has_parameter_privilege_name", 2, fc_has_parameter_privilege_name),
-    b(1922, "has_table_privilege_name_name", 3, fc_has_table_privilege_name_name),
-    b(1923, "has_table_privilege_name_id", 3, fc_has_table_privilege_name_id),
-    b(1924, "has_table_privilege_id_name", 3, fc_has_table_privilege_id_name),
-    b(1925, "has_table_privilege_id_id", 3, fc_has_table_privilege_id_id),
-    b(1926, "has_table_privilege_name", 2, fc_has_table_privilege_name),
+    b(
+        3000,
+        "has_foreign_data_wrapper_privilege_name_name",
+        3,
+        fc_has_fdw_privilege_name_name,
+    ),
+    b(
+        3001,
+        "has_foreign_data_wrapper_privilege_name_id",
+        3,
+        fc_has_fdw_privilege_name_id,
+    ),
+    b(
+        3002,
+        "has_foreign_data_wrapper_privilege_id_name",
+        3,
+        fc_has_fdw_privilege_id_name,
+    ),
+    b(
+        3003,
+        "has_foreign_data_wrapper_privilege_id_id",
+        3,
+        fc_has_fdw_privilege_id_id,
+    ),
+    b(
+        3004,
+        "has_foreign_data_wrapper_privilege_name",
+        2,
+        fc_has_fdw_privilege_name,
+    ),
+    b(
+        3005,
+        "has_foreign_data_wrapper_privilege_id",
+        2,
+        fc_has_fdw_privilege_id,
+    ),
+    b(
+        3006,
+        "has_server_privilege_name_name",
+        3,
+        fc_has_server_privilege_name_name,
+    ),
+    b(
+        3007,
+        "has_server_privilege_name_id",
+        3,
+        fc_has_server_privilege_name_id,
+    ),
+    b(
+        3008,
+        "has_server_privilege_id_name",
+        3,
+        fc_has_server_privilege_id_name,
+    ),
+    b(
+        3009,
+        "has_server_privilege_id_id",
+        3,
+        fc_has_server_privilege_id_id,
+    ),
+    b(
+        3010,
+        "has_server_privilege_name",
+        2,
+        fc_has_server_privilege_name,
+    ),
+    b(
+        3011,
+        "has_server_privilege_id",
+        2,
+        fc_has_server_privilege_id,
+    ),
+    b(
+        6205,
+        "has_parameter_privilege_name_name",
+        3,
+        fc_has_parameter_privilege_name_name,
+    ),
+    b(
+        6206,
+        "has_parameter_privilege_id_name",
+        3,
+        fc_has_parameter_privilege_id_name,
+    ),
+    b(
+        6207,
+        "has_parameter_privilege_name",
+        2,
+        fc_has_parameter_privilege_name,
+    ),
+    b(
+        1922,
+        "has_table_privilege_name_name",
+        3,
+        fc_has_table_privilege_name_name,
+    ),
+    b(
+        1923,
+        "has_table_privilege_name_id",
+        3,
+        fc_has_table_privilege_name_id,
+    ),
+    b(
+        1924,
+        "has_table_privilege_id_name",
+        3,
+        fc_has_table_privilege_id_name,
+    ),
+    b(
+        1925,
+        "has_table_privilege_id_id",
+        3,
+        fc_has_table_privilege_id_id,
+    ),
+    b(
+        1926,
+        "has_table_privilege_name",
+        2,
+        fc_has_table_privilege_name,
+    ),
     b(1927, "has_table_privilege_id", 2, fc_has_table_privilege_id),
-    b(2250, "has_database_privilege_name_name", 3, fc_has_database_privilege_name_name),
-    b(2251, "has_database_privilege_name_id", 3, fc_has_database_privilege_name_id),
-    b(2252, "has_database_privilege_id_name", 3, fc_has_database_privilege_id_name),
-    b(2253, "has_database_privilege_id_id", 3, fc_has_database_privilege_id_id),
-    b(2254, "has_database_privilege_name", 2, fc_has_database_privilege_name),
-    b(2255, "has_database_privilege_id", 2, fc_has_database_privilege_id),
-    b(2256, "has_function_privilege_name_name", 3, fc_has_function_privilege_name_name),
-    b(2257, "has_function_privilege_name_id", 3, fc_has_function_privilege_name_id),
-    b(2258, "has_function_privilege_id_name", 3, fc_has_function_privilege_id_name),
-    b(2259, "has_function_privilege_id_id", 3, fc_has_function_privilege_id_id),
-    b(2260, "has_function_privilege_name", 2, fc_has_function_privilege_name),
-    b(2261, "has_function_privilege_id", 2, fc_has_function_privilege_id),
-    b(2262, "has_language_privilege_name_name", 3, fc_has_language_privilege_name_name),
-    b(2263, "has_language_privilege_name_id", 3, fc_has_language_privilege_name_id),
-    b(2264, "has_language_privilege_id_name", 3, fc_has_language_privilege_id_name),
-    b(2265, "has_language_privilege_id_id", 3, fc_has_language_privilege_id_id),
-    b(2266, "has_language_privilege_name", 2, fc_has_language_privilege_name),
-    b(2267, "has_language_privilege_id", 2, fc_has_language_privilege_id),
-    b(2268, "has_schema_privilege_name_name", 3, fc_has_schema_privilege_name_name),
-    b(2269, "has_schema_privilege_name_id", 3, fc_has_schema_privilege_name_id),
-    b(2270, "has_schema_privilege_id_name", 3, fc_has_schema_privilege_id_name),
-    b(2271, "has_schema_privilege_id_id", 3, fc_has_schema_privilege_id_id),
-    b(2272, "has_schema_privilege_name", 2, fc_has_schema_privilege_name),
-    b(2273, "has_schema_privilege_id", 2, fc_has_schema_privilege_id),
-    b(3012, "has_column_privilege_name_name_name", 4, fc_has_column_privilege_name_name_name),
-    b(3013, "has_column_privilege_name_name_attnum", 4, fc_has_column_privilege_name_name_attnum),
-    b(3014, "has_column_privilege_name_id_name", 4, fc_has_column_privilege_name_id_name),
-    b(3015, "has_column_privilege_name_id_attnum", 4, fc_has_column_privilege_name_id_attnum),
-    b(3016, "has_column_privilege_id_name_name", 4, fc_has_column_privilege_id_name_name),
-    b(3017, "has_column_privilege_id_name_attnum", 4, fc_has_column_privilege_id_name_attnum),
-    b(3018, "has_column_privilege_id_id_name", 4, fc_has_column_privilege_id_id_name),
-    b(3019, "has_column_privilege_id_id_attnum", 4, fc_has_column_privilege_id_id_attnum),
-    b(3020, "has_column_privilege_name_name", 3, fc_has_column_privilege_name_name),
-    b(3021, "has_column_privilege_name_attnum", 3, fc_has_column_privilege_name_attnum),
-    b(3022, "has_column_privilege_id_name", 3, fc_has_column_privilege_id_name),
-    b(3023, "has_column_privilege_id_attnum", 3, fc_has_column_privilege_id_attnum),
-    b(3024, "has_any_column_privilege_name_name", 3, fc_has_any_column_privilege_name_name),
-    b(3025, "has_any_column_privilege_name_id", 3, fc_has_any_column_privilege_name_id),
-    b(3026, "has_any_column_privilege_id_name", 3, fc_has_any_column_privilege_id_name),
-    b(3027, "has_any_column_privilege_id_id", 3, fc_has_any_column_privilege_id_id),
-    b(3028, "has_any_column_privilege_name", 2, fc_has_any_column_privilege_name),
-    b(3029, "has_any_column_privilege_id", 2, fc_has_any_column_privilege_id),
-    b(3138, "has_type_privilege_name_name", 3, fc_has_type_privilege_name_name),
-    b(3139, "has_type_privilege_name_id", 3, fc_has_type_privilege_name_id),
-    b(3140, "has_type_privilege_id_name", 3, fc_has_type_privilege_id_name),
-    b(3141, "has_type_privilege_id_id", 3, fc_has_type_privilege_id_id),
-    b(3142, "has_type_privilege_name", 2, fc_has_type_privilege_name),
+    b(
+        2250,
+        "has_database_privilege_name_name",
+        3,
+        fc_has_database_privilege_name_name,
+    ),
+    b(
+        2251,
+        "has_database_privilege_name_id",
+        3,
+        fc_has_database_privilege_name_id,
+    ),
+    b(
+        2252,
+        "has_database_privilege_id_name",
+        3,
+        fc_has_database_privilege_id_name,
+    ),
+    b(
+        2253,
+        "has_database_privilege_id_id",
+        3,
+        fc_has_database_privilege_id_id,
+    ),
+    b(
+        2254,
+        "has_database_privilege_name",
+        2,
+        fc_has_database_privilege_name,
+    ),
+    b(
+        2255,
+        "has_database_privilege_id",
+        2,
+        fc_has_database_privilege_id,
+    ),
+    b(
+        2256,
+        "has_function_privilege_name_name",
+        3,
+        fc_has_function_privilege_name_name,
+    ),
+    b(
+        2257,
+        "has_function_privilege_name_id",
+        3,
+        fc_has_function_privilege_name_id,
+    ),
+    b(
+        2258,
+        "has_function_privilege_id_name",
+        3,
+        fc_has_function_privilege_id_name,
+    ),
+    b(
+        2259,
+        "has_function_privilege_id_id",
+        3,
+        fc_has_function_privilege_id_id,
+    ),
+    b(
+        2260,
+        "has_function_privilege_name",
+        2,
+        fc_has_function_privilege_name,
+    ),
+    b(
+        2261,
+        "has_function_privilege_id",
+        2,
+        fc_has_function_privilege_id,
+    ),
+    b(
+        2262,
+        "has_language_privilege_name_name",
+        3,
+        fc_has_language_privilege_name_name,
+    ),
+    b(
+        2263,
+        "has_language_privilege_name_id",
+        3,
+        fc_has_language_privilege_name_id,
+    ),
+    b(
+        2264,
+        "has_language_privilege_id_name",
+        3,
+        fc_has_language_privilege_id_name,
+    ),
+    b(
+        2265,
+        "has_language_privilege_id_id",
+        3,
+        fc_has_language_privilege_id_id,
+    ),
+    b(
+        2266,
+        "has_language_privilege_name",
+        2,
+        fc_has_language_privilege_name,
+    ),
+    b(
+        2267,
+        "has_language_privilege_id",
+        2,
+        fc_has_language_privilege_id,
+    ),
+    b(
+        2268,
+        "has_schema_privilege_name_name",
+        3,
+        fc_has_schema_privilege_name_name,
+    ),
+    b(
+        2269,
+        "has_schema_privilege_name_id",
+        3,
+        fc_has_schema_privilege_name_id,
+    ),
+    b(
+        2270,
+        "has_schema_privilege_id_name",
+        3,
+        fc_has_schema_privilege_id_name,
+    ),
+    b(
+        2271,
+        "has_schema_privilege_id_id",
+        3,
+        fc_has_schema_privilege_id_id,
+    ),
+    b(
+        2272,
+        "has_schema_privilege_name",
+        2,
+        fc_has_schema_privilege_name,
+    ),
+    b(
+        2273,
+        "has_schema_privilege_id",
+        2,
+        fc_has_schema_privilege_id,
+    ),
+    b(
+        3012,
+        "has_column_privilege_name_name_name",
+        4,
+        fc_has_column_privilege_name_name_name,
+    ),
+    b(
+        3013,
+        "has_column_privilege_name_name_attnum",
+        4,
+        fc_has_column_privilege_name_name_attnum,
+    ),
+    b(
+        3014,
+        "has_column_privilege_name_id_name",
+        4,
+        fc_has_column_privilege_name_id_name,
+    ),
+    b(
+        3015,
+        "has_column_privilege_name_id_attnum",
+        4,
+        fc_has_column_privilege_name_id_attnum,
+    ),
+    b(
+        3016,
+        "has_column_privilege_id_name_name",
+        4,
+        fc_has_column_privilege_id_name_name,
+    ),
+    b(
+        3017,
+        "has_column_privilege_id_name_attnum",
+        4,
+        fc_has_column_privilege_id_name_attnum,
+    ),
+    b(
+        3018,
+        "has_column_privilege_id_id_name",
+        4,
+        fc_has_column_privilege_id_id_name,
+    ),
+    b(
+        3019,
+        "has_column_privilege_id_id_attnum",
+        4,
+        fc_has_column_privilege_id_id_attnum,
+    ),
+    b(
+        3020,
+        "has_column_privilege_name_name",
+        3,
+        fc_has_column_privilege_name_name,
+    ),
+    b(
+        3021,
+        "has_column_privilege_name_attnum",
+        3,
+        fc_has_column_privilege_name_attnum,
+    ),
+    b(
+        3022,
+        "has_column_privilege_id_name",
+        3,
+        fc_has_column_privilege_id_name,
+    ),
+    b(
+        3023,
+        "has_column_privilege_id_attnum",
+        3,
+        fc_has_column_privilege_id_attnum,
+    ),
+    b(
+        3024,
+        "has_any_column_privilege_name_name",
+        3,
+        fc_has_any_column_privilege_name_name,
+    ),
+    b(
+        3025,
+        "has_any_column_privilege_name_id",
+        3,
+        fc_has_any_column_privilege_name_id,
+    ),
+    b(
+        3026,
+        "has_any_column_privilege_id_name",
+        3,
+        fc_has_any_column_privilege_id_name,
+    ),
+    b(
+        3027,
+        "has_any_column_privilege_id_id",
+        3,
+        fc_has_any_column_privilege_id_id,
+    ),
+    b(
+        3028,
+        "has_any_column_privilege_name",
+        2,
+        fc_has_any_column_privilege_name,
+    ),
+    b(
+        3029,
+        "has_any_column_privilege_id",
+        2,
+        fc_has_any_column_privilege_id,
+    ),
+    b(
+        3138,
+        "has_type_privilege_name_name",
+        3,
+        fc_has_type_privilege_name_name,
+    ),
+    b(
+        3139,
+        "has_type_privilege_name_id",
+        3,
+        fc_has_type_privilege_name_id,
+    ),
+    b(
+        3140,
+        "has_type_privilege_id_name",
+        3,
+        fc_has_type_privilege_id_name,
+    ),
+    b(
+        3141,
+        "has_type_privilege_id_id",
+        3,
+        fc_has_type_privilege_id_id,
+    ),
+    b(
+        3142,
+        "has_type_privilege_name",
+        2,
+        fc_has_type_privilege_name,
+    ),
     b(3143, "has_type_privilege_id", 2, fc_has_type_privilege_id),
-    b(6348, "has_largeobject_privilege_name_id", 3, fc_has_largeobject_privilege_name_id),
-    b(6349, "has_largeobject_privilege_id", 2, fc_has_largeobject_privilege_id),
-    b(6350, "has_largeobject_privilege_id_id", 3, fc_has_largeobject_privilege_id_id),
+    b(
+        6348,
+        "has_largeobject_privilege_name_id",
+        3,
+        fc_has_largeobject_privilege_name_id,
+    ),
+    b(
+        6349,
+        "has_largeobject_privilege_id",
+        2,
+        fc_has_largeobject_privilege_id,
+    ),
+    b(
+        6350,
+        "has_largeobject_privilege_id_id",
+        3,
+        fc_has_largeobject_privilege_id_id,
+    ),
     b(3943, "acldefault_sql", 2, fc_acldefault_sql),
 ];

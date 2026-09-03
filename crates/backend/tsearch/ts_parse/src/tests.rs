@@ -1,4 +1,4 @@
-use ::mcx::{MemoryContext, Mcx, PgVec};
+use ::mcx::{Mcx, MemoryContext, PgVec};
 use ::ts_locale::{DictSubState, TsLexeme, TSL_FILTER};
 use ::types_core::Oid;
 use ::types_error::PgResult;
@@ -21,14 +21,25 @@ struct MockEnv<'mcx> {
 
 impl<'mcx> MockEnv<'mcx> {
     fn new(mcx: Mcx<'mcx>, tokens: Vec<(i32, &'static str)>, dicts: Vec<Oid>) -> Self {
-        MockEnv { mcx, tokens, next: 0, buf: Vec::new(), dicts, thes_seen: Vec::new() }
+        MockEnv {
+            mcx,
+            tokens,
+            next: 0,
+            buf: Vec::new(),
+            dicts,
+            thes_seen: Vec::new(),
+        }
     }
 
     fn lex<'a>(&self, s: &str) -> PgVec<'mcx, TsLexeme<'mcx>> {
         let mut v = PgVec::new_in(self.mcx);
         let mut w = PgVec::new_in(self.mcx);
         w.extend_from_slice(s.as_bytes());
-        v.push(TsLexeme { nvariant: 0, flags: 0, lexeme: w });
+        v.push(TsLexeme {
+            nvariant: 0,
+            flags: 0,
+            lexeme: w,
+        });
         v
     }
 }

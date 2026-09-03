@@ -130,7 +130,11 @@ pub fn fc_to_regtypemod(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> 
         let s = String::from_utf8_lossy(payload);
         let mut soft = SoftErrorContext::new(false);
         let r = crate::to_regtypemod(fcinfo.result_mcx(), &s, Some(&mut soft))?;
-        if soft.error_occurred() { None } else { r }
+        if soft.error_occurred() {
+            None
+        } else {
+            r
+        }
     };
     Ok(match result {
         Some(typmod) => Datum::from_i32(typmod),
@@ -163,7 +167,14 @@ pub fn fc_reg_send(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRes
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 pub const REGPROC_BUILTINS: &[FmgrBuiltin] = &[

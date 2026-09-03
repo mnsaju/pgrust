@@ -58,7 +58,9 @@ fn main() {
 }
 
 fn section<'a>(src: &'a str, marker: &str) -> &'a str {
-    let start = src.find(marker).unwrap_or_else(|| panic!("marker {marker}"));
+    let start = src
+        .find(marker)
+        .unwrap_or_else(|| panic!("marker {marker}"));
     let rest = &src[start..];
     let end = rest.find("\n};").expect("section end");
     &rest[..end]
@@ -91,7 +93,12 @@ fn parse_scalar_array(src: &str, marker: &str) -> Vec<u32> {
 
 fn parse_special_case(src: &str) -> Vec<(i16, [[u32; 3]; 4])> {
     let sec = section(src, "special_case[106] =");
-    let kinds = ["[CaseLower] = ", "[CaseTitle] = ", "[CaseUpper] = ", "[CaseFold] = "];
+    let kinds = [
+        "[CaseLower] = ",
+        "[CaseTitle] = ",
+        "[CaseUpper] = ",
+        "[CaseFold] = ",
+    ];
     let mut out = Vec::new();
     for line in sec.lines() {
         let line = line.trim();
@@ -111,7 +118,9 @@ fn parse_special_case(src: &str) -> Vec<(i16, [[u32; 3]; 4])> {
         let mut map = [[0u32; 3]; 4];
         if body.contains("[CaseLower]") {
             for (k, label) in kinds.iter().enumerate() {
-                let pos = body.find(label).unwrap_or_else(|| panic!("{label} in {line}"));
+                let pos = body
+                    .find(label)
+                    .unwrap_or_else(|| panic!("{label} in {line}"));
                 let triple = &body[pos + label.len()..];
                 let triple = triple
                     .strip_prefix('{')
@@ -124,7 +133,9 @@ fn parse_special_case(src: &str) -> Vec<(i16, [[u32; 3]; 4])> {
         } else {
             // Positional zero row: {0, {{0,0,0},{0,0,0},{0,0,0}}}
             assert!(
-                body.replace(['{', '}', ',', ' '], "").chars().all(|c| c == '0'),
+                body.replace(['{', '}', ',', ' '], "")
+                    .chars()
+                    .all(|c| c == '0'),
                 "unexpected positional entry {line}"
             );
         }
@@ -134,7 +145,9 @@ fn parse_special_case(src: &str) -> Vec<(i16, [[u32; 3]; 4])> {
 }
 
 fn parse_case_index_ranges(src: &str, case_map_len: usize) -> Vec<(u32, u32, u16)> {
-    let start = src.find("case_index(pg_wchar cp)").expect("case_index body");
+    let start = src
+        .find("case_index(pg_wchar cp)")
+        .expect("case_index body");
     let body = &src[start..];
 
     // Fast-path bound: "if (cp < 0xNNNN)\n\t{\n\t\treturn case_map[cp];"
@@ -158,8 +171,15 @@ fn parse_case_index_ranges(src: &str, case_map_len: usize) -> Vec<(u32, u32, u16
             offset.trim().parse().expect("range offset int"),
         ));
     }
-    assert!(pairs.windows(2).all(|w| w[0].1 < w[1].1), "offsets monotonic");
-    assert_eq!(pairs.first().map(|p| p.1), Some(fast_end), "fast-path length");
+    assert!(
+        pairs.windows(2).all(|w| w[0].1 < w[1].1),
+        "offsets monotonic"
+    );
+    assert_eq!(
+        pairs.first().map(|p| p.1),
+        Some(fast_end),
+        "fast-path length"
+    );
 
     let mut out = Vec::new();
     for (i, &(start, offset)) in pairs.iter().enumerate() {

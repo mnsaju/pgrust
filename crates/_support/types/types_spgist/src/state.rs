@@ -73,8 +73,10 @@ impl SpGistState<'_> {
         self.frame2.rearm(self.indexCollation);
         // SAFETY: as call_compress.
         unsafe { self.frame2.set_result_mcx(mcx) };
-        self.frame2
-            .set_arg(0, Datum::from_usize(input as *const spgPickSplitIn as usize));
+        self.frame2.set_arg(
+            0,
+            Datum::from_usize(input as *const spgPickSplitIn as usize),
+        );
         self.frame2
             .set_arg(1, Datum::from_usize(out as *mut spgPickSplitOut as usize));
         self.picksplitFn.invoke(&mut self.frame2)?;
@@ -284,8 +286,10 @@ pub fn spg_search_item_cmp(a: &SpGistSearchItem, b: &SpGistSearchItem) -> i32 {
     0
 }
 
-pub type SpGistScanQueue =
-    ::types_gist::pairingheap::PairingHeap<SpGistSearchItem, fn(&SpGistSearchItem, &SpGistSearchItem) -> i32>;
+pub type SpGistScanQueue = ::types_gist::pairingheap::PairingHeap<
+    SpGistSearchItem,
+    fn(&SpGistSearchItem, &SpGistSearchItem) -> i32,
+>;
 
 pub struct SpGistScanOpaqueData<'mcx> {
     pub state: SpGistState<'mcx>,

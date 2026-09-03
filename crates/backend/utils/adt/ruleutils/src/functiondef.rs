@@ -120,8 +120,7 @@ fn pg_proc_row(funcid: Oid) -> PgResult<Option<PgProcRow>> {
         pronargdefaults: getattr(&t, PROCOID, ANUM_PG_PROC_PRONARGDEFAULTS).as_i16(),
         prorettype: getattr(&t, PROCOID, ANUM_PG_PROC_PRORETTYPE).as_oid(),
         proargtypes: crate::oid_array_at(
-            getattr_null(&t, PROCOID, ANUM_PG_PROC_PROARGTYPES)
-                .expect("proargtypes is NOT NULL"),
+            getattr_null(&t, PROCOID, ANUM_PG_PROC_PROARGTYPES).expect("proargtypes is NOT NULL"),
         ),
         proallargtypes: getattr_null(&t, PROCOID, ANUM_PG_PROC_PROALLARGTYPES)
             .map(crate::oid_array_at),
@@ -198,15 +197,13 @@ fn print_function_arguments(
 
     let mut insertorderbyat: i64 = -1;
     if proc.prokind == PROKIND_AGGREGATE {
-        let Some(ht) =
-            SearchSysCache1(AGGFNOID, SysCacheKey::Value(Datum::from_oid(proc.oid)))?
+        let Some(ht) = SearchSysCache1(AGGFNOID, SysCacheKey::Value(Datum::from_oid(proc.oid)))?
         else {
             return Err(crate::cache_lookup_failed("aggregate", proc.oid));
         };
         let t = ht.tuple();
         let aggkind = getattr(&t, AGGFNOID, ANUM_PG_AGGREGATE_AGGKIND).as_i8() as u8;
-        let aggnumdirectargs =
-            getattr(&t, AGGFNOID, ANUM_PG_AGGREGATE_AGGNUMDIRECTARGS).as_i16();
+        let aggnumdirectargs = getattr(&t, AGGFNOID, ANUM_PG_AGGREGATE_AGGNUMDIRECTARGS).as_i16();
         drop(t);
         ReleaseSysCache(ht);
         if aggkind != AGGKIND_NORMAL {
@@ -227,7 +224,11 @@ fn print_function_arguments(
             .and_then(|n| n.get(i))
             .map(String::as_str)
             .filter(|s| !s.is_empty());
-        let argmode = info.argmodes.as_ref().map(|m| m[i]).unwrap_or(PROARGMODE_IN);
+        let argmode = info
+            .argmodes
+            .as_ref()
+            .map(|m| m[i])
+            .unwrap_or(PROARGMODE_IN);
         let (modename, isinput) = match argmode {
             PROARGMODE_IN => {
                 if proc.prokind == PROKIND_PROCEDURE {
@@ -307,12 +308,11 @@ pub fn pg_get_functiondef_worker(mcx: Mcx<'_>, funcid: Oid) -> PgResult<Option<S
         return Ok(None);
     };
     if proc.prokind == PROKIND_AGGREGATE {
-        return Err(PgError::error(format!(
-            "\"{}\" is an aggregate function",
-            proc.proname
-        ))
-        .with_sqlstate(ERRCODE_WRONG_OBJECT_TYPE)
-        .into());
+        return Err(
+            PgError::error(format!("\"{}\" is an aggregate function", proc.proname))
+                .with_sqlstate(ERRCODE_WRONG_OBJECT_TYPE)
+                .into(),
+        );
     }
     let isfunction = proc.prokind != PROKIND_PROCEDURE;
 
@@ -344,9 +344,12 @@ pub fn pg_get_functiondef_worker(mcx: Mcx<'_>, funcid: Oid) -> PgResult<Option<S
         }
     }
 
-    let langname = lsyscache::get_language_name(mcx, proc.prolang, false)?
-        .expect("missing_ok=false");
-    buf.push_str(&format!(" LANGUAGE {}\n", quote_identifier(langname.as_str())));
+    let langname =
+        lsyscache::get_language_name(mcx, proc.prolang, false)?.expect("missing_ok=false");
+    buf.push_str(&format!(
+        " LANGUAGE {}\n",
+        quote_identifier(langname.as_str())
+    ));
 
     let oldlen = buf.len();
     if proc.prokind == PROKIND_WINDOW {
@@ -371,12 +374,12 @@ pub fn pg_get_functiondef_worker(mcx: Mcx<'_>, funcid: Oid) -> PgResult<Option<S
     if proc.proleakproof {
         buf.push_str(" LEAKPROOF");
     }
-    let default_cost: f32 =
-        if proc.prolang == INTERNAL_LANGUAGE_ID || proc.prolang == C_LANGUAGE_ID {
-            1.0
-        } else {
-            100.0
-        };
+    let default_cost: f32 = if proc.prolang == INTERNAL_LANGUAGE_ID || proc.prolang == C_LANGUAGE_ID
+    {
+        1.0
+    } else {
+        100.0
+    };
     if proc.procost != default_cost {
         buf.push_str(&format!(" COST {}", fmt_g(proc.procost)));
     }
@@ -443,7 +446,10 @@ fn print_function_sqlbody(mcx: Mcx<'_>, buf: &mut String, proc: &PgProcRow) -> P
     let mut dpns = crate::query::DeparseNamespace::empty(Vec::new());
     dpns.funcname = Some(proc.proname.clone());
     dpns.argnames = Some(info.argnames.clone().unwrap_or_default());
-    let src = proc.prosqlbody.as_deref().expect("caller checked prosqlbody");
+    let src = proc
+        .prosqlbody
+        .as_deref()
+        .expect("caller checked prosqlbody");
     let n = readfuncs::stringToNode(mcx, src)?;
     let dpns = std::rc::Rc::new(dpns);
     if let Some(list) = n.as_list() {
@@ -451,8 +457,7 @@ fn print_function_sqlbody(mcx: Mcx<'_>, buf: &mut String, proc: &PgProcRow) -> P
         buf.push_str("BEGIN ATOMIC\n");
         for q in stmts.iter() {
             let query = q.as_query().expect("prosqlbody stmt is a Query");
-            let mut ctx =
-                crate::deparse::DeparseContext::new(mcx, crate::PRETTYFLAG_INDENT);
+            let mut ctx = crate::deparse::DeparseContext::new(mcx, crate::PRETTYFLAG_INDENT);
             ctx.namespaces.push(dpns.clone());
             // C passes WRAP_COLUMN_DEFAULT: pretty-indent wraps each target on
             // its own line.
@@ -513,7 +518,10 @@ fn is_input_argument(nth: usize, argmodes: Option<&Vec<u8>>) -> bool {
     match argmodes {
         None => true,
         Some(m) => {
-            matches!(m[nth], PROARGMODE_IN | PROARGMODE_INOUT | PROARGMODE_VARIADIC)
+            matches!(
+                m[nth],
+                PROARGMODE_IN | PROARGMODE_INOUT | PROARGMODE_VARIADIC
+            )
         }
     }
 }
@@ -546,8 +554,11 @@ pub fn pg_get_function_arg_default_worker(
         return Ok(None);
     };
     let node = readfuncs::stringToNode(mcx, defs)?;
-    let argdefaults: Vec<types_nodes::Node<'_>> =
-        node.as_list().expect("proargdefaults is a List").iter().collect();
+    let argdefaults: Vec<types_nodes::Node<'_>> = node
+        .as_list()
+        .expect("proargdefaults is a List")
+        .iter()
+        .collect();
 
     let nth_default = nth_inputarg - 1 - (proc.pronargs - proc.pronargdefaults) as i32;
     if nth_default < 0 || nth_default >= argdefaults.len() as i32 {

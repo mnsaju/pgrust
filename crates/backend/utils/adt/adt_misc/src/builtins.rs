@@ -1,10 +1,10 @@
 use datum::array_build::ArrayBuildState;
 use datum::Datum;
-use types_core::{InvalidOid, Oid, TEXTOID, PG_CATALOG_NAMESPACE, RELATION_RELATION_ID};
+use types_core::{InvalidOid, Oid, PG_CATALOG_NAMESPACE, RELATION_RELATION_ID, TEXTOID};
 use types_error::{PgError, PgResult, ERRCODE_INVALID_PARAMETER_VALUE};
 use types_fmgr::{
-    byref_result, cstring_result, varlena_result, FmgrBuiltin, FmgrInfo, FunctionCallInfoBaseData as Fcinfo,
-    PGFunction,
+    byref_result, cstring_result, varlena_result, FmgrBuiltin, FmgrInfo,
+    FunctionCallInfoBaseData as Fcinfo, PGFunction,
 };
 
 fn is_ident_start(c: u8) -> bool {
@@ -95,7 +95,8 @@ pub fn fc_parse_ident(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> Pg
             while pos < buf.len() && is_ident_cont(buf[pos]) {
                 pos += 1;
             }
-            let down = parser_small1::downcase_identifier(mcx, &buf[start..pos], false, false, encoding)?;
+            let down =
+                parser_small1::downcase_identifier(mcx, &buf[start..pos], false, false, encoding)?;
             let text = varlena::cstring_to_text(mcx, &down)?;
             astate = Some(arrayfuncs::accum_array_result(
                 mcx,
@@ -109,9 +110,15 @@ pub fn fc_parse_ident(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> Pg
 
         if missing_ident {
             if pos < buf.len() && buf[pos] == b'.' {
-                return Err(invalid_ident_err(&qualname, Some("No valid identifier before \".\".")));
+                return Err(invalid_ident_err(
+                    &qualname,
+                    Some("No valid identifier before \".\"."),
+                ));
             } else if after_dot {
-                return Err(invalid_ident_err(&qualname, Some("No valid identifier after \".\".")));
+                return Err(invalid_ident_err(
+                    &qualname,
+                    Some("No valid identifier after \".\"."),
+                ));
             } else {
                 return Err(invalid_ident_err(&qualname, None));
             }
@@ -172,8 +179,9 @@ fn description_result(
     classoid: Oid,
     objsubid: i32,
 ) -> PgResult<Datum> {
-    let found = crate::introspect::get_description(fcinfo.result_mcx(), objoid, classoid, objsubid)?
-        .map(varlena_result);
+    let found =
+        crate::introspect::get_description(fcinfo.result_mcx(), objoid, classoid, objsubid)?
+            .map(varlena_result);
     match found {
         Some(d) => Ok(d),
         None => Ok(fcinfo.return_null()),
@@ -185,9 +193,12 @@ pub fn fc_obj_description(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -
     let objoid = fcinfo.arg_oid(0);
     // SAFETY: catalog arg 1 of obj_description is a non-null name (strict fn).
     let catalogname = unsafe { fcinfo.arg_name(1) };
-    let len = catalogname.iter().position(|&b| b == 0).unwrap_or(catalogname.len());
-    let catalogname = core::str::from_utf8(&catalogname[..len])
-        .expect("catalog names are valid UTF-8");
+    let len = catalogname
+        .iter()
+        .position(|&b| b == 0)
+        .unwrap_or(catalogname.len());
+    let catalogname =
+        core::str::from_utf8(&catalogname[..len]).expect("catalog names are valid UTF-8");
     let classoid = lsyscache::get_relname_relid(catalogname, PG_CATALOG_NAMESPACE)?;
     if classoid == InvalidOid {
         return Ok(fcinfo.return_null());
@@ -208,9 +219,12 @@ pub fn fc_shobj_description(
     let objoid = fcinfo.arg_oid(0);
     // SAFETY: catalog arg 1 of shobj_description is a non-null name (strict fn).
     let catalogname = unsafe { fcinfo.arg_name(1) };
-    let len = catalogname.iter().position(|&b| b == 0).unwrap_or(catalogname.len());
-    let catalogname = core::str::from_utf8(&catalogname[..len])
-        .expect("catalog names are valid UTF-8");
+    let len = catalogname
+        .iter()
+        .position(|&b| b == 0)
+        .unwrap_or(catalogname.len());
+    let catalogname =
+        core::str::from_utf8(&catalogname[..len]).expect("catalog names are valid UTF-8");
     let classoid = lsyscache::get_relname_relid(catalogname, PG_CATALOG_NAMESPACE)?;
     if classoid == InvalidOid {
         return Ok(fcinfo.return_null());
@@ -248,7 +262,9 @@ fn xlog_file_name(tli: u32, segno: u64, seg_size: u64) -> [u8; XLOG_FNAME_LEN] {
 
 fn is_xlog_file_name(name: &[u8]) -> bool {
     name.len() == XLOG_FNAME_LEN
-        && name.iter().all(|b| b.is_ascii_digit() || (b'A'..=b'F').contains(b))
+        && name
+            .iter()
+            .all(|b| b.is_ascii_digit() || (b'A'..=b'F').contains(b))
 }
 
 fn xlog_from_file_name(name: &[u8], seg_size: u64) -> (u32, u64) {
@@ -289,7 +305,11 @@ pub fn fc_pg_walfile_name(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -
         return Err(recovery_in_progress_err("pg_walfile_name()"));
     }
     let seg_size = transam_xlog::wal_segment_size() as u64;
-    let name = xlog_file_name(transam_xlog::ctl::GetWALInsertionTimeLine(), lsn / seg_size, seg_size);
+    let name = xlog_file_name(
+        transam_xlog::ctl::GetWALInsertionTimeLine(),
+        lsn / seg_size,
+        seg_size,
+    );
     crate::text_datum(fcinfo.result_mcx(), &name)
 }
 
@@ -304,7 +324,9 @@ fn composite_result(
     if resolved.class != funcapi::TypeFuncClass::Composite {
         return Err(crate::not_row_type());
     }
-    let tupdesc = resolved.result_tuple_desc.expect("composite result has tupdesc");
+    let tupdesc = resolved
+        .result_tuple_desc
+        .expect("composite result has tupdesc");
     let tup = heaptuple::heap_form_tuple(mcx, &tupdesc, values, isnull)?;
     let d = Datum::from_usize(tup.header_ptr() as usize);
     core::mem::forget(tup); // leak into the arming context (C palloc ownership)
@@ -321,7 +343,11 @@ pub fn fc_pg_walfile_name_offset(
         return Err(recovery_in_progress_err("pg_walfile_name_offset()"));
     }
     let seg_size = transam_xlog::wal_segment_size() as u64;
-    let name = xlog_file_name(transam_xlog::ctl::GetWALInsertionTimeLine(), lsn / seg_size, seg_size);
+    let name = xlog_file_name(
+        transam_xlog::ctl::GetWALInsertionTimeLine(),
+        lsn / seg_size,
+        seg_size,
+    );
     let values = [
         crate::text_datum(fcinfo.result_mcx(), &name)?,
         Datum::from_u32((lsn % seg_size) as u32),
@@ -366,7 +392,10 @@ pub fn fc_pg_split_walfile_name(
     composite_result(flinfo, fcinfo, &values, &[false, false])
 }
 
-pub fn fc_pg_current_wal_lsn(_flinfo: Option<&mut FmgrInfo>, _fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+pub fn fc_pg_current_wal_lsn(
+    _flinfo: Option<&mut FmgrInfo>,
+    _fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     if transam_xlog::RecoveryInProgress() {
         return Err(recovery_in_progress_err("WAL control functions"));
     }
@@ -400,7 +429,10 @@ pub fn fc_pg_wal_lsn_diff(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -
     byref_result(fcinfo.result_mcx(), img.as_bytes())
 }
 
-pub fn fc_pg_is_in_recovery(_flinfo: Option<&mut FmgrInfo>, _fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+pub fn fc_pg_is_in_recovery(
+    _flinfo: Option<&mut FmgrInfo>,
+    _fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     Ok(Datum::from_bool(transam_xlog::RecoveryInProgress()))
 }
 
@@ -454,7 +486,9 @@ fn promotion_ongoing_err(fname: &str) -> Box<types_error::PgError> {
     Box::new(
         types_error::PgError::error("standby promotion is ongoing")
             .with_sqlstate(types_error::ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE)
-            .with_hint(format!("{fname} cannot be executed after promotion is triggered.")),
+            .with_hint(format!(
+                "{fname} cannot be executed after promotion is triggered."
+            )),
     )
 }
 
@@ -618,7 +652,9 @@ pub fn fc_pg_promote(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgR
         return Err(elog::ereport(types_error::ERROR)
             .with_saved_errno(saved_errno())
             .errcode_for_file_access()
-            .errmsg(format!("could not create file \"{PROMOTE_SIGNAL_FILE}\": %m"))
+            .errmsg(format!(
+                "could not create file \"{PROMOTE_SIGNAL_FILE}\": %m"
+            ))
             .into_error()
             .into());
     }
@@ -626,7 +662,9 @@ pub fn fc_pg_promote(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgR
         return Err(elog::ereport(types_error::ERROR)
             .with_saved_errno(saved_errno())
             .errcode_for_file_access()
-            .errmsg(format!("could not write file \"{PROMOTE_SIGNAL_FILE}\": %m"))
+            .errmsg(format!(
+                "could not write file \"{PROMOTE_SIGNAL_FILE}\": %m"
+            ))
             .into_error()
             .into());
     }
@@ -654,7 +692,11 @@ pub fn fc_pg_promote(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgR
                 .errcode(types_error::ERRCODE_ADMIN_SHUTDOWN)
                 .errmsg("terminating connection due to unexpected postmaster exit")
                 .errcontext_msg("while waiting on promotion")
-                .finish(types_error::ErrorLocation::new(file!(), line!() as i32, "pg_promote"))?;
+                .finish(types_error::ErrorLocation::new(
+                    file!(),
+                    line!() as i32,
+                    "pg_promote",
+                ))?;
         }
     }
 
@@ -664,7 +706,11 @@ pub fn fc_pg_promote(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgR
             format!("server did not promote within {wait_seconds} seconds"),
             wait_seconds as u64,
         )
-        .finish(types_error::ErrorLocation::new(file!(), line!() as i32, "pg_promote"))?;
+        .finish(types_error::ErrorLocation::new(
+            file!(),
+            line!() as i32,
+            "pg_promote",
+        ))?;
     Ok(Datum::from_bool(false))
 }
 
@@ -758,13 +804,19 @@ pub fn fc_system_user(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> Pg
     }
 }
 
-pub fn fc_pg_client_encoding(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+pub fn fc_pg_client_encoding(
+    _flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     let mut n = types_tuple::NameData::default();
     n.namestrcpy(mbutils::pg_get_client_encoding_name());
     byref_result(fcinfo.result_mcx(), &n.data)
 }
 
-pub fn fc_pg_conf_load_time(_flinfo: Option<&mut FmgrInfo>, _fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+pub fn fc_pg_conf_load_time(
+    _flinfo: Option<&mut FmgrInfo>,
+    _fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     Ok(Datum::from_i64(guc::pg_reload_time()))
 }
 
@@ -777,7 +829,10 @@ thread_local! {
         const { std::cell::Cell::new(false) };
 }
 
-pub fn fc_pg_jit_available(_flinfo: Option<&mut FmgrInfo>, _fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+pub fn fc_pg_jit_available(
+    _flinfo: Option<&mut FmgrInfo>,
+    _fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     Ok(Datum::from_bool(jit_provider_init()?))
 }
 
@@ -801,7 +856,10 @@ fn jit_provider_init() -> PgResult<bool> {
     };
     let pkglib = init_small::globals::pkglib_path();
     let len = pkglib.iter().position(|&b| b == 0).unwrap_or(pkglib.len());
-    let path = format!("{}/{provider}{DLSUFFIX}", String::from_utf8_lossy(&pkglib[..len]));
+    let path = format!(
+        "{}/{provider}{DLSUFFIX}",
+        String::from_utf8_lossy(&pkglib[..len])
+    );
     if !fd::pg_file_exists(&path)? {
         JIT_PROVIDER_FAILED_LOADING.set(true);
         return Ok(false);
@@ -839,7 +897,9 @@ fn current_logfile(fcinfo: &mut Fcinfo, logfmt: Option<&[u8]>) -> PgResult<Datum
             return Err(elog::ereport(types_error::ERROR)
                 .with_saved_errno(e.raw_os_error().unwrap_or(0))
                 .errcode_for_file_access()
-                .errmsg(format!("could not read file \"{LOG_METAINFO_DATAFILE}\": %m"))
+                .errmsg(format!(
+                    "could not read file \"{LOG_METAINFO_DATAFILE}\": %m"
+                ))
                 .into_error()
                 .into())
         }
@@ -902,12 +962,16 @@ pub fn fc_pg_get_wal_summarizer_state(
 
 fn fc_pg_my_temp_schema(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let _ = fcinfo;
-    Ok(Datum::from_oid(catalog_namespace::GetTempNamespaceState().0))
+    Ok(Datum::from_oid(
+        catalog_namespace::GetTempNamespaceState().0,
+    ))
 }
 
 fn fc_pg_is_other_temp_schema(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let oid = fcinfo.arg_oid(0);
-    Ok(Datum::from_bool(catalog_namespace::isOtherTempNamespace(oid)?))
+    Ok(Datum::from_bool(catalog_namespace::isOtherTempNamespace(
+        oid,
+    )?))
 }
 
 pub fn fc_pg_trigger_depth(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -938,7 +1002,10 @@ fn typmod_paren(fcinfo: &mut Fcinfo, s: String) -> PgResult<Datum> {
 }
 
 // utils/mb/mbutils.c PG_encoding_to_char, hosted with the misc slice.
-pub fn fc_pg_encoding_to_char(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+pub fn fc_pg_encoding_to_char(
+    _flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     let name = mbutils::pg_encoding_to_char(fcinfo.arg_i32(0));
     let mut n = types_tuple::NameData::default();
     n.namestrcpy(name);
@@ -946,19 +1013,31 @@ pub fn fc_pg_encoding_to_char(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinf
 }
 
 // utils/mb/mbutils.c PG_char_to_encoding, hosted with the misc slice.
-pub fn fc_pg_char_to_encoding(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+pub fn fc_pg_char_to_encoding(
+    _flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     // SAFETY: catalog arg is name; strict fn.
     let raw = unsafe { fcinfo.arg_name(0) };
     let nul = raw.iter().position(|&b| b == 0).unwrap_or(raw.len());
     // Bytes, not str: C cleans invalid-encoding bytes byte-wise; a
     // from_utf8 wholesale-reject here was divergence #10 (reachable in
     // SQL_ASCII databases; proofs/encnames witness + glibc ground truth).
-    Ok(Datum::from_i32(mbutils::pg_char_to_encoding_bytes(&raw[..nul])))
+    Ok(Datum::from_i32(mbutils::pg_char_to_encoding_bytes(
+        &raw[..nul],
+    )))
 }
 
-pub fn fc_anychar_typmodout(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+pub fn fc_anychar_typmodout(
+    _flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     let typmod = fcinfo.arg_i32(0);
-    let out = if typmod > 4 { format!("({})", typmod - 4) } else { String::new() };
+    let out = if typmod > 4 {
+        format!("({})", typmod - 4)
+    } else {
+        String::new()
+    };
     typmod_paren(fcinfo, out)
 }
 
@@ -988,7 +1067,9 @@ fn collect_keyword_rows(flinfo: &FmgrInfo, fcinfo: &Fcinfo) -> PgResult<KeywordR
             "return type must be a row type",
         )));
     }
-    let desc = resolved.result_tuple_desc.expect("composite result carries a tupdesc");
+    let desc = resolved
+        .result_tuple_desc
+        .expect("composite result carries a tupdesc");
 
     let n = keywords::ScanKeywords.num_keywords as usize;
     let mut tuples = Vec::with_capacity(n);
@@ -1005,7 +1086,11 @@ fn collect_keyword_rows(flinfo: &FmgrInfo, fcinfo: &Fcinfo) -> PgResult<KeywordR
             keywords::KeywordCategory::Reserved => (b'R', "reserved"),
         };
         let barelabel = keywords::ScanKeywordBareLabel[i];
-        let baredesc = if barelabel { "can be bare label" } else { "requires AS" };
+        let baredesc = if barelabel {
+            "can be bare label"
+        } else {
+            "requires AS"
+        };
         let values = [
             varlena_result(varlena::cstring_to_text(mcx, word)?),
             Datum::from_char(catcode as i8),
@@ -1044,7 +1129,9 @@ pub fn fc_pg_get_keywords(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) ->
 }
 
 fn text_list_array_datum(mcx: mcx::Mcx<'_>, cols: &str) -> PgResult<Datum> {
-    let inner = cols.strip_prefix('{').and_then(|s| s.strip_suffix('}'))
+    let inner = cols
+        .strip_prefix('{')
+        .and_then(|s| s.strip_suffix('}'))
         .expect("generated column list is brace-wrapped");
     let mut astate: Option<ArrayBuildState<'_>> = None;
     for name in inner.split(',') {
@@ -1071,7 +1158,9 @@ fn collect_catalog_fk_rows(flinfo: &FmgrInfo, fcinfo: &Fcinfo) -> PgResult<Catal
     if resolved.class != funcapi::TypeFuncClass::Composite {
         return Err(crate::not_row_type());
     }
-    let desc = resolved.result_tuple_desc.expect("composite result carries a tupdesc");
+    let desc = resolved
+        .result_tuple_desc
+        .expect("composite result carries a tupdesc");
 
     let rows = crate::catalog_fk::SYS_FK_RELATIONSHIPS;
     let mut tuples = Vec::with_capacity(rows.len());
@@ -1120,7 +1209,11 @@ pub fn fc_pg_get_catalog_foreign_keys(
 fn tablespace_warning(msg: String) -> PgResult<()> {
     elog::ereport(types_error::WARNING)
         .errmsg(msg)
-        .finish(types_error::ErrorLocation::new(file!(), line!() as i32, "pg_tablespace_databases"))
+        .finish(types_error::ErrorLocation::new(
+            file!(),
+            line!() as i32,
+            "pg_tablespace_databases",
+        ))
 }
 
 #[track_caller]
@@ -1240,7 +1333,10 @@ pub fn fc_pg_tablespace_location(
             .into()
     })?;
     if !md.file_type().is_symlink() {
-        return Ok(varlena_result(varlena::cstring_to_text(mcx, sourcepath.as_bytes())?));
+        return Ok(varlena_result(varlena::cstring_to_text(
+            mcx,
+            sourcepath.as_bytes(),
+        )?));
     }
     let target = std::fs::read_link(&sourcepath).map_err(|e| -> Box<types_error::PgError> {
         ereport(ERROR)
@@ -1251,12 +1347,20 @@ pub fn fc_pg_tablespace_location(
             .into()
     })?;
     let target = target.to_string_lossy();
-    Ok(varlena_result(varlena::cstring_to_text(mcx, target.as_bytes())?))
+    Ok(varlena_result(varlena::cstring_to_text(
+        mcx,
+        target.as_bytes(),
+    )?))
 }
 
 pub const MISC_BUILTINS: &[FmgrBuiltin] = &[
     b(89, "pgsql_version", 0, fc_version),
-    b(2855, "pg_is_other_temp_schema", 1, fc_pg_is_other_temp_schema),
+    b(
+        2855,
+        "pg_is_other_temp_schema",
+        1,
+        fc_pg_is_other_temp_schema,
+    ),
     b(2854, "pg_my_temp_schema", 0, fc_pg_my_temp_schema),
     b(3163, "pg_trigger_depth", 0, fc_pg_trigger_depth),
     b(3778, "pg_tablespace_location", 1, fc_pg_tablespace_location),
@@ -1271,19 +1375,59 @@ pub const MISC_BUILTINS: &[FmgrBuiltin] = &[
     b(2851, "pg_walfile_name", 1, fc_pg_walfile_name),
     b(6213, "pg_split_walfile_name", 1, fc_pg_split_walfile_name),
     b(2849, "pg_current_wal_lsn", 0, fc_pg_current_wal_lsn),
-    b(2852, "pg_current_wal_insert_lsn", 0, fc_pg_current_wal_insert_lsn),
-    b(3330, "pg_current_wal_flush_lsn", 0, fc_pg_current_wal_flush_lsn),
+    b(
+        2852,
+        "pg_current_wal_insert_lsn",
+        0,
+        fc_pg_current_wal_insert_lsn,
+    ),
+    b(
+        3330,
+        "pg_current_wal_flush_lsn",
+        0,
+        fc_pg_current_wal_flush_lsn,
+    ),
     b(3165, "pg_wal_lsn_diff", 2, fc_pg_wal_lsn_diff),
     b(3810, "pg_is_in_recovery", 0, fc_pg_is_in_recovery),
-    b(3820, "pg_last_wal_receive_lsn", 0, fc_pg_last_wal_receive_lsn),
+    b(
+        3820,
+        "pg_last_wal_receive_lsn",
+        0,
+        fc_pg_last_wal_receive_lsn,
+    ),
     b(3821, "pg_last_wal_replay_lsn", 0, fc_pg_last_wal_replay_lsn),
-    b(3830, "pg_last_xact_replay_timestamp", 0, fc_pg_last_xact_replay_timestamp),
+    b(
+        3830,
+        "pg_last_xact_replay_timestamp",
+        0,
+        fc_pg_last_xact_replay_timestamp,
+    ),
     b(3071, "pg_wal_replay_pause", 0, fc_pg_wal_replay_pause),
     b(3072, "pg_wal_replay_resume", 0, fc_pg_wal_replay_resume),
-    b(3073, "pg_is_wal_replay_paused", 0, fc_pg_is_wal_replay_paused),
-    b(1137, "pg_get_wal_replay_pause_state", 0, fc_pg_get_wal_replay_pause_state),
-    b(3098, "pg_create_restore_point", 1, fc_pg_create_restore_point),
-    b(6305, "pg_log_standby_snapshot", 0, fc_pg_log_standby_snapshot),
+    b(
+        3073,
+        "pg_is_wal_replay_paused",
+        0,
+        fc_pg_is_wal_replay_paused,
+    ),
+    b(
+        1137,
+        "pg_get_wal_replay_pause_state",
+        0,
+        fc_pg_get_wal_replay_pause_state,
+    ),
+    b(
+        3098,
+        "pg_create_restore_point",
+        1,
+        fc_pg_create_restore_point,
+    ),
+    b(
+        6305,
+        "pg_log_standby_snapshot",
+        0,
+        fc_pg_log_standby_snapshot,
+    ),
     b(3436, "pg_promote", 2, fc_pg_promote),
     b(2172, "pg_backup_start", 2, fc_pg_backup_start),
     b(2739, "pg_backup_stop", 1, fc_pg_backup_stop),
@@ -1291,8 +1435,18 @@ pub const MISC_BUILTINS: &[FmgrBuiltin] = &[
     b(810, "pg_client_encoding", 0, fc_pg_client_encoding),
     b(2034, "pg_conf_load_time", 0, fc_pg_conf_load_time),
     b(315, "pg_jit_available", 0, fc_pg_jit_available),
-    b(6323, "pg_get_wal_summarizer_state", 0, fc_pg_get_wal_summarizer_state),
-    b(6241, "pg_stop_making_pinned_objects", 0, fc_pg_stop_making_pinned_objects),
+    b(
+        6323,
+        "pg_get_wal_summarizer_state",
+        0,
+        fc_pg_get_wal_summarizer_state,
+    ),
+    b(
+        6241,
+        "pg_stop_making_pinned_objects",
+        0,
+        fc_pg_stop_making_pinned_objects,
+    ),
     FmgrBuiltin {
         foid: 3800,
         name: "pg_current_logfile",

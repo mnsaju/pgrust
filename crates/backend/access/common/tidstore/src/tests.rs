@@ -40,7 +40,10 @@ fn check_oracle(
     for &blk in probe_blocks {
         let offs: &[OffsetNumber] = oracle.get(&blk).map(|v| v.as_slice()).unwrap_or(&[]);
         for &off in offs {
-            assert!(ts.is_member(&ItemPointerData::new(blk, off)), "({blk},{off})");
+            assert!(
+                ts.is_member(&ItemPointerData::new(blk, off)),
+                "({blk},{off})"
+            );
         }
         for _ in 0..20 {
             let off = 1 + (rng.next() % MAX_OFFSET_IN_BITMAP as u64) as OffsetNumber;
@@ -184,7 +187,9 @@ fn header_only_and_bitmap_entries() {
 fn offset_out_of_range_errors() {
     let ctx = MemoryContext::new("tidstore test");
     let mut ts = TidStore::create_local(ctx.mcx(), 1024 * 1024, true).unwrap();
-    let err = ts.set_block_offsets(1, &[MAX_OFFSET_IN_BITMAP + 1]).unwrap_err();
+    let err = ts
+        .set_block_offsets(1, &[MAX_OFFSET_IN_BITMAP + 1])
+        .unwrap_err();
     assert!(err.message().contains("tuple offset out of range"));
     let big: Vec<OffsetNumber> = (1..=4).chain([MAX_OFFSET_IN_BITMAP + 1]).collect();
     assert!(ts.set_block_offsets(2, &big).is_err());

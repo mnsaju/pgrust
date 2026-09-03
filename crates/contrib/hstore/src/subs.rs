@@ -37,7 +37,10 @@ pub(crate) fn fetch<'m>(mcx: Mcx<'m>, source: Datum, key: Datum) -> PgResult<Nul
     match find_key(&hs, None, key) {
         Some(idx) if !hs.val_isnull(idx) => {
             let t = varlena::cstring_to_text(mcx, hs.val(idx))?;
-            Ok(NullableDatum { value: types_fmgr::varlena_result(t), isnull: false })
+            Ok(NullableDatum {
+                value: types_fmgr::varlena_result(t),
+                isnull: false,
+            })
         }
         _ => Ok(NullableDatum::null()),
     }
@@ -58,7 +61,11 @@ pub(crate) fn assign<'m>(
         check_val_len(v.len())?;
         Some(v)
     };
-    let p = Pair { key, val, needfree: false };
+    let p = Pair {
+        key,
+        val,
+        needfree: false,
+    };
 
     let img = if source.isnull {
         build_hstore(&[p])

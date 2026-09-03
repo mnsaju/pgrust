@@ -27,16 +27,14 @@ impl<'mcx> ScanNode<'mcx> for NamedTuplestoreScanState<'mcx> {
     }
 
     /// `NamedTuplestoreScanRecheck`: nothing to check.
-    fn epq_recheck(
-        &mut self,
-        _estate: &mut EStateData<'mcx>,
-        _slot: ExecSlotId,
-    ) -> PgResult<bool> {
+    fn epq_recheck(&mut self, _estate: &mut EStateData<'mcx>, _slot: ExecSlotId) -> PgResult<bool> {
         Ok(true)
     }
 
     fn scan_next(&mut self, estate: &mut EStateData<'mcx>) -> PgResult<bool> {
-        debug_assert!(::types_scan::sdir::ScanDirectionIsForward(estate.es_direction));
+        debug_assert!(::types_scan::sdir::ScanDirectionIsForward(
+            estate.es_direction
+        ));
         let mcx = estate.es_query_cxt;
         let readptr = self.readptr;
         let slot = estate.slot_mut(self.ss.ss_ScanTupleSlot);
@@ -72,7 +70,9 @@ pub fn exec_init_named_tuplestore_scan<'mcx>(
     debug_assert!(eflags & (EXEC_FLAG_BACKWARD | EXEC_FLAG_MARK) == 0);
     debug_assert!(node.scan.plan.lefttree.is_none() && node.scan.plan.righttree.is_none());
 
-    let enrname = node.enrname.expect("NamedTuplestoreScan carries an enrname");
+    let enrname = node
+        .enrname
+        .expect("NamedTuplestoreScan carries an enrname");
     let enr = estate
         .es_queryEnv
         .and_then(|env| ::queryenvironment::get_ENR(env, enrname))
@@ -115,7 +115,11 @@ pub fn exec_init_named_tuplestore_scan<'mcx>(
         })?
     };
 
-    Ok(NamedTuplestoreScanState { ss, relation, readptr })
+    Ok(NamedTuplestoreScanState {
+        ss,
+        relation,
+        readptr,
+    })
 }
 
 pub fn exec_rescan_named_tuplestore_scan<'mcx>(

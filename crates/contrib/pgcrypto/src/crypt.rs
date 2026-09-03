@@ -161,11 +161,31 @@ fn crypt_md5(pw: &[u8], salt: &[u8]) -> Result<String, String> {
 
     let d = &digest;
     let mut enc = Vec::with_capacity(22);
-    to64(&mut enc, ((d[0] as u32) << 16) | ((d[6] as u32) << 8) | (d[12] as u32), 4);
-    to64(&mut enc, ((d[1] as u32) << 16) | ((d[7] as u32) << 8) | (d[13] as u32), 4);
-    to64(&mut enc, ((d[2] as u32) << 16) | ((d[8] as u32) << 8) | (d[14] as u32), 4);
-    to64(&mut enc, ((d[3] as u32) << 16) | ((d[9] as u32) << 8) | (d[15] as u32), 4);
-    to64(&mut enc, ((d[4] as u32) << 16) | ((d[10] as u32) << 8) | (d[5] as u32), 4);
+    to64(
+        &mut enc,
+        ((d[0] as u32) << 16) | ((d[6] as u32) << 8) | (d[12] as u32),
+        4,
+    );
+    to64(
+        &mut enc,
+        ((d[1] as u32) << 16) | ((d[7] as u32) << 8) | (d[13] as u32),
+        4,
+    );
+    to64(
+        &mut enc,
+        ((d[2] as u32) << 16) | ((d[8] as u32) << 8) | (d[14] as u32),
+        4,
+    );
+    to64(
+        &mut enc,
+        ((d[3] as u32) << 16) | ((d[9] as u32) << 8) | (d[15] as u32),
+        4,
+    );
+    to64(
+        &mut enc,
+        ((d[4] as u32) << 16) | ((d[10] as u32) << 8) | (d[5] as u32),
+        4,
+    );
     to64(&mut enc, d[11] as u32, 2);
 
     Ok(format!(
@@ -190,7 +210,10 @@ mod tests {
     // Traditional/xdes DES known vectors (crypt-des.c), incl. adversarial salt.
     #[test]
     fn des_known_vectors() {
-        assert_eq!(crypt("foob", "rl").map_err(|_| ()).unwrap(), "rlK6kmJqyMjZM");
+        assert_eq!(
+            crypt("foob", "rl").map_err(|_| ()).unwrap(),
+            "rlK6kmJqyMjZM"
+        );
         assert_eq!(
             crypt("password", "_/!!!!!!!").map_err(|_| ()).unwrap(),
             "_/!!!!!!!zqM49hRzxko"

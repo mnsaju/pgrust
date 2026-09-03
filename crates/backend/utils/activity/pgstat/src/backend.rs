@@ -51,8 +51,7 @@ fn backend_key(proc_number: i32) -> PgStat_HashKey {
 }
 
 fn current_wal_usage() -> Option<WalUsage> {
-    transam_xlog_seams::wal_usage::is_installed()
-        .then(transam_xlog_seams::wal_usage::call)
+    transam_xlog_seams::wal_usage::is_installed().then(transam_xlog_seams::wal_usage::call)
 }
 
 pub fn pgstat_tracks_backend_bktype(bktype: BackendType) -> bool {
@@ -73,9 +72,7 @@ pub fn pgstat_tracks_backend_bktype(bktype: BackendType) -> bool {
 
 fn backend_wal_have_pending() -> bool {
     match current_wal_usage() {
-        Some(usage) => {
-            usage.wal_records != PREV_BACKEND_WAL_USAGE.with(|c| c.get()).wal_records
-        }
+        Some(usage) => usage.wal_records != PREV_BACKEND_WAL_USAGE.with(|c| c.get()).wal_records,
         None => false,
     }
 }
@@ -115,8 +112,9 @@ pub fn pgstat_flush_backend(nowait: bool, flags: u32) -> bool {
             let w = &mut entry.wal_counters;
             w.wal_records += usage.wal_records - prev.wal_records;
             w.wal_fpi += usage.wal_fpi - prev.wal_fpi;
-            w.wal_bytes =
-                w.wal_bytes.wrapping_add(usage.wal_bytes.wrapping_sub(prev.wal_bytes));
+            w.wal_bytes = w
+                .wal_bytes
+                .wrapping_add(usage.wal_bytes.wrapping_sub(prev.wal_bytes));
             w.wal_buffers_full += usage.wal_buffers_full - prev.wal_buffers_full;
             PREV_BACKEND_WAL_USAGE.with(|c| c.set(usage));
         }

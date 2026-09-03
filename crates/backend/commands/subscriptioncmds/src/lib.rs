@@ -9,7 +9,6 @@ mod connect;
 mod conninfo;
 mod origin;
 
-
 use datum::Datum;
 use mcx::{Mcx, PgString, PgVec};
 use types_core::catalog::DATABASE_RELATION_ID;
@@ -17,11 +16,11 @@ use types_core::fmgr::NAMEDATALEN;
 use types_core::primitive::XLogRecPtr;
 use types_core::{AttrNumber, InvalidOid, InvalidXLogRecPtr, Oid, TEXTOID};
 use types_error::{
-    ErrorLocation, PgError, PgResult, SqlState, ERRCODE_CONNECTION_FAILURE,
+    ErrorLevel, ErrorLocation, PgError, PgResult, SqlState, ERRCODE_CONNECTION_FAILURE,
     ERRCODE_DUPLICATE_OBJECT, ERRCODE_INSUFFICIENT_PRIVILEGE, ERRCODE_INVALID_NAME,
     ERRCODE_INVALID_OBJECT_DEFINITION, ERRCODE_INVALID_PARAMETER_VALUE, ERRCODE_NAME_TOO_LONG,
     ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE, ERRCODE_SYNTAX_ERROR, ERRCODE_UNDEFINED_OBJECT,
-    ErrorLevel, NOTICE, WARNING,
+    NOTICE, WARNING,
 };
 use types_guc::{PGC_BACKEND, PGC_S_TEST};
 use types_nodes::parsenodes::{
@@ -42,17 +41,16 @@ use pg_subscription::{
     Anum_pg_subscription_oid, Anum_pg_subscription_subbinary, Anum_pg_subscription_subconninfo,
     Anum_pg_subscription_subdbid, Anum_pg_subscription_subdisableonerr,
     Anum_pg_subscription_subenabled, Anum_pg_subscription_subfailover,
-    Anum_pg_subscription_subname, Anum_pg_subscription_subowner,
+    Anum_pg_subscription_subname, Anum_pg_subscription_suborigin, Anum_pg_subscription_subowner,
     Anum_pg_subscription_subpasswordrequired, Anum_pg_subscription_subpublications,
     Anum_pg_subscription_subrunasowner, Anum_pg_subscription_subskiplsn,
     Anum_pg_subscription_subslotname, Anum_pg_subscription_substream,
-    Anum_pg_subscription_subsynccommit, Anum_pg_subscription_subtwophasestate,
-    Anum_pg_subscription_suborigin, GetSubscription, GetSubscriptionRelations,
-    Natts_pg_subscription, RemoveSubscriptionRel, Subscription, SubscriptionObjectIndexId,
-    SubscriptionRelationId, LOGICALREP_ORIGIN_ANY, LOGICALREP_ORIGIN_NONE,
-    LOGICALREP_STREAM_OFF, LOGICALREP_STREAM_ON, LOGICALREP_STREAM_PARALLEL,
-    LOGICALREP_TWOPHASE_STATE_DISABLED, LOGICALREP_TWOPHASE_STATE_ENABLED,
-    LOGICALREP_TWOPHASE_STATE_PENDING,
+    Anum_pg_subscription_subsynccommit, Anum_pg_subscription_subtwophasestate, GetSubscription,
+    GetSubscriptionRelations, Natts_pg_subscription, RemoveSubscriptionRel, Subscription,
+    SubscriptionObjectIndexId, SubscriptionRelationId, LOGICALREP_ORIGIN_ANY,
+    LOGICALREP_ORIGIN_NONE, LOGICALREP_STREAM_OFF, LOGICALREP_STREAM_ON,
+    LOGICALREP_STREAM_PARALLEL, LOGICALREP_TWOPHASE_STATE_DISABLED,
+    LOGICALREP_TWOPHASE_STATE_ENABLED, LOGICALREP_TWOPHASE_STATE_PENDING,
 };
 
 const SUBOPT_CONNECT: u32 = 0x00000001;
@@ -91,8 +89,8 @@ fn loc(func: &'static str) -> ErrorLocation {
 }
 
 fn conflicting_def_elem(defel: &DefElem<'_>) -> Box<PgError> {
-    let mut e = PgError::error("conflicting or redundant options")
-        .with_sqlstate(ERRCODE_SYNTAX_ERROR);
+    let mut e =
+        PgError::error("conflicting or redundant options").with_sqlstate(ERRCODE_SYNTAX_ERROR);
     if defel.location >= 0 {
         e.cursor_position = Some(defel.location + 1);
     }
@@ -107,7 +105,9 @@ fn getattr(td: &TupleDescData<'_>, tup: &HeapTupleData<'_>, attno: i32) -> (Datu
 }
 
 fn text_datum(mcx: Mcx<'_>, s: &str) -> PgResult<Datum> {
-    let img = varlena::cstring_to_text(mcx, s.as_bytes())?.into_image().leak();
+    let img = varlena::cstring_to_text(mcx, s.as_bytes())?
+        .into_image()
+        .leak();
     Ok(Datum::from_usize(img.as_ptr() as usize))
 }
 
@@ -226,7 +226,9 @@ fn parse_subscription_options<'mcx>(
     };
 
     for node in stmt_options.iter() {
-        let defel = node.as_def_elem().expect("subscription options are DefElems");
+        let defel = node
+            .as_def_elem()
+            .expect("subscription options are DefElems");
         let defname = defel.defname.unwrap_or("");
 
         if is_set(supported_opts, SUBOPT_CONNECT) && defname == "connect" {
@@ -314,8 +316,7 @@ fn parse_subscription_options<'mcx>(
             }
             opts.specified_opts |= SUBOPT_DISABLE_ON_ERR;
             opts.disableonerr = commands_define::defGetBoolean(defel)?;
-        } else if is_set(supported_opts, SUBOPT_PASSWORD_REQUIRED)
-            && defname == "password_required"
+        } else if is_set(supported_opts, SUBOPT_PASSWORD_REQUIRED) && defname == "password_required"
         {
             if is_set(opts.specified_opts, SUBOPT_PASSWORD_REQUIRED) {
                 return Err(conflicting_def_elem(defel));
@@ -458,7 +459,11 @@ fn check_duplicates(names: &[&str]) -> PgResult<()> {
 fn publist_names<'mcx>(mcx: Mcx<'mcx>, list: &NodeList<'mcx>) -> PgResult<PgVec<'mcx, &'mcx str>> {
     let mut names: PgVec<'mcx, &'mcx str> = mcx::vec_with_capacity_in(mcx, list.len())?;
     for node in list.iter() {
-        names.push(node.as_string().expect("publication names are Strings").sval);
+        names.push(
+            node.as_string()
+                .expect("publication names are Strings")
+                .sval,
+        );
     }
     Ok(names)
 }
@@ -482,9 +487,7 @@ fn merge_publications<'mcx>(
             Some(idx) => {
                 if addpub {
                     return Err(err(
-                        format!(
-                            "publication \"{name}\" is already in subscription \"{subname}\""
-                        ),
+                        format!("publication \"{name}\" is already in subscription \"{subname}\""),
                         ERRCODE_DUPLICATE_OBJECT,
                     ));
                 }
@@ -583,8 +586,7 @@ pub fn CreateSubscription<'mcx>(
         ));
     }
 
-    let slot_name = if !is_set(opts.specified_opts, SUBOPT_SLOT_NAME) && opts.slot_name.is_none()
-    {
+    let slot_name = if !is_set(opts.specified_opts, SUBOPT_SLOT_NAME) && opts.slot_name.is_none() {
         Some(subname)
     } else {
         opts.slot_name
@@ -612,18 +614,46 @@ pub fn CreateSubscription<'mcx>(
     subname_buf.namestrcpy(subname);
     let mut slotname_buf = NameData::default();
 
-    set(&mut values, Anum_pg_subscription_oid, Datum::from_oid(subid));
-    set(&mut values, Anum_pg_subscription_subdbid, Datum::from_oid(db));
-    set(&mut values, Anum_pg_subscription_subskiplsn, Datum::from_u64(InvalidXLogRecPtr));
+    set(
+        &mut values,
+        Anum_pg_subscription_oid,
+        Datum::from_oid(subid),
+    );
+    set(
+        &mut values,
+        Anum_pg_subscription_subdbid,
+        Datum::from_oid(db),
+    );
+    set(
+        &mut values,
+        Anum_pg_subscription_subskiplsn,
+        Datum::from_u64(InvalidXLogRecPtr),
+    );
     set(
         &mut values,
         Anum_pg_subscription_subname,
         Datum::from_usize(subname_buf.data.as_ptr() as usize),
     );
-    set(&mut values, Anum_pg_subscription_subowner, Datum::from_oid(owner));
-    set(&mut values, Anum_pg_subscription_subenabled, Datum::from_bool(opts.enabled));
-    set(&mut values, Anum_pg_subscription_subbinary, Datum::from_bool(opts.binary));
-    set(&mut values, Anum_pg_subscription_substream, Datum::from_char(opts.streaming as i8));
+    set(
+        &mut values,
+        Anum_pg_subscription_subowner,
+        Datum::from_oid(owner),
+    );
+    set(
+        &mut values,
+        Anum_pg_subscription_subenabled,
+        Datum::from_bool(opts.enabled),
+    );
+    set(
+        &mut values,
+        Anum_pg_subscription_subbinary,
+        Datum::from_bool(opts.binary),
+    );
+    set(
+        &mut values,
+        Anum_pg_subscription_substream,
+        Datum::from_char(opts.streaming as i8),
+    );
     set(
         &mut values,
         Anum_pg_subscription_subtwophasestate,
@@ -633,15 +663,31 @@ pub fn CreateSubscription<'mcx>(
             LOGICALREP_TWOPHASE_STATE_DISABLED
         } as i8),
     );
-    set(&mut values, Anum_pg_subscription_subdisableonerr, Datum::from_bool(opts.disableonerr));
+    set(
+        &mut values,
+        Anum_pg_subscription_subdisableonerr,
+        Datum::from_bool(opts.disableonerr),
+    );
     set(
         &mut values,
         Anum_pg_subscription_subpasswordrequired,
         Datum::from_bool(opts.passwordrequired),
     );
-    set(&mut values, Anum_pg_subscription_subrunasowner, Datum::from_bool(opts.runasowner));
-    set(&mut values, Anum_pg_subscription_subfailover, Datum::from_bool(opts.failover));
-    set(&mut values, Anum_pg_subscription_subconninfo, text_datum(mcx, conninfo)?);
+    set(
+        &mut values,
+        Anum_pg_subscription_subrunasowner,
+        Datum::from_bool(opts.runasowner),
+    );
+    set(
+        &mut values,
+        Anum_pg_subscription_subfailover,
+        Datum::from_bool(opts.failover),
+    );
+    set(
+        &mut values,
+        Anum_pg_subscription_subconninfo,
+        text_datum(mcx, conninfo)?,
+    );
     match slot_name {
         Some(name) => {
             slotname_buf.namestrcpy(name);
@@ -653,11 +699,19 @@ pub fn CreateSubscription<'mcx>(
         }
         None => nulls[(Anum_pg_subscription_subslotname - 1) as usize] = true,
     }
-    set(&mut values, Anum_pg_subscription_subsynccommit, text_datum(mcx, synchronous_commit)?);
+    set(
+        &mut values,
+        Anum_pg_subscription_subsynccommit,
+        text_datum(mcx, synchronous_commit)?,
+    );
     let pubnames = publist_names(mcx, &stmt.publication)?;
     let (pub_datum, _pub_img) = publication_list_to_array(mcx, &pubnames)?;
     set(&mut values, Anum_pg_subscription_subpublications, pub_datum);
-    set(&mut values, Anum_pg_subscription_suborigin, text_datum(mcx, opts.origin)?);
+    set(
+        &mut values,
+        Anum_pg_subscription_suborigin,
+        text_datum(mcx, opts.origin)?,
+    );
 
     let mut tup = heaptuple::heap_form_tuple(mcx, rel.descr(), &values, &nulls)?;
     catalog_indexing::CatalogTupleInsert(mcx, &rel, &mut tup)?;
@@ -713,11 +767,8 @@ pub fn CreateSubscription<'mcx>(
                     relpersistence: b'p',
                     location: -1,
                 };
-                let relid = catalog_namespace::RangeVarGetRelid(
-                    &rv,
-                    types_rel::AccessShareLock,
-                    false,
-                )?;
+                let relid =
+                    catalog_namespace::RangeVarGetRelid(&rv, types_rel::AccessShareLock, false)?;
                 CheckSubscriptionRelkind(
                     lsyscache::get_rel_relkind(relid)? as u8,
                     &nspname,
@@ -841,7 +892,9 @@ pub fn AlterSubscription<'mcx>(
         ));
     };
 
-    let subid = getattr(rel.descr(), tup.as_tuple(), Anum_pg_subscription_oid).0.as_oid();
+    let subid = getattr(rel.descr(), tup.as_tuple(), Anum_pg_subscription_oid)
+        .0
+        .as_oid();
 
     if !aclchk::object_ownercheck(SubscriptionRelationId, subid, miscinit::GetUserId())? {
         aclchk::aclcheck_error(ACLCHECK_NOT_OWNER, ObjectType::OBJECT_SUBSCRIPTION, subname)?;
@@ -899,8 +952,7 @@ pub fn AlterSubscription<'mcx>(
             }
 
             if let Some(val) = opts.synchronous_commit {
-                values[(Anum_pg_subscription_subsynccommit - 1) as usize] =
-                    text_datum(mcx, val)?;
+                values[(Anum_pg_subscription_subsynccommit - 1) as usize] = text_datum(mcx, val)?;
                 replaces[(Anum_pg_subscription_subsynccommit - 1) as usize] = true;
             }
 
@@ -996,8 +1048,7 @@ pub fn AlterSubscription<'mcx>(
                 ));
             }
 
-            values[(Anum_pg_subscription_subenabled - 1) as usize] =
-                Datum::from_bool(opts.enabled);
+            values[(Anum_pg_subscription_subenabled - 1) as usize] = Datum::from_bool(opts.enabled);
             replaces[(Anum_pg_subscription_subenabled - 1) as usize] = true;
 
             if opts.enabled {
@@ -1125,7 +1176,10 @@ pub fn AlterSubscription<'mcx>(
 
                 let pubs: Vec<&str> = publist.iter().copied().collect();
                 let added: Vec<&str> = if isadd {
-                    publist_names(mcx, &stmt.publication)?.iter().copied().collect()
+                    publist_names(mcx, &stmt.publication)?
+                        .iter()
+                        .copied()
+                        .collect()
                 } else {
                     Vec::new()
                 };
@@ -1274,11 +1328,15 @@ pub fn DropSubscription<'mcx>(
             ));
         }
         return elog::ereport(NOTICE)
-            .errmsg(format!("subscription \"{subname}\" does not exist, skipping"))
+            .errmsg(format!(
+                "subscription \"{subname}\" does not exist, skipping"
+            ))
             .finish(loc("DropSubscription"));
     };
 
-    let subid = getattr(rel.descr(), tup.as_tuple(), Anum_pg_subscription_oid).0.as_oid();
+    let subid = getattr(rel.descr(), tup.as_tuple(), Anum_pg_subscription_oid)
+        .0
+        .as_oid();
 
     if !aclchk::object_ownercheck(SubscriptionRelationId, subid, miscinit::GetUserId())? {
         aclchk::aclcheck_error(ACLCHECK_NOT_OWNER, ObjectType::OBJECT_SUBSCRIPTION, subname)?;
@@ -1331,7 +1389,8 @@ pub fn DropSubscription<'mcx>(
     // Drop the slot(s) at the publisher (subscriptioncmds.c:1810). Connection
     // failure with a slot to drop is an ERROR with C's hint.
     let must_use_password = sub.passwordrequired && !superuser::superuser_arg(sub.owner)?;
-    let mut wrconn = match connect::connect(mcx, sub.conninfo.as_str(), must_use_password, subname)? {
+    let mut wrconn = match connect::connect(mcx, sub.conninfo.as_str(), must_use_password, subname)?
+    {
         Ok(conn) => conn,
         Err(errmsg) => {
             if slotname.is_none() {
@@ -1373,10 +1432,15 @@ fn AlterSubscriptionOwner_internal<'mcx>(
     new_owner_id: Oid,
 ) -> PgResult<()> {
     let td = rel.descr();
-    let subid = getattr(td, tup.as_tuple(), Anum_pg_subscription_oid).0.as_oid();
-    let subowner = getattr(td, tup.as_tuple(), Anum_pg_subscription_subowner).0.as_oid();
-    let passwordrequired =
-        getattr(td, tup.as_tuple(), Anum_pg_subscription_subpasswordrequired).0.as_bool();
+    let subid = getattr(td, tup.as_tuple(), Anum_pg_subscription_oid)
+        .0
+        .as_oid();
+    let subowner = getattr(td, tup.as_tuple(), Anum_pg_subscription_subowner)
+        .0
+        .as_oid();
+    let passwordrequired = getattr(td, tup.as_tuple(), Anum_pg_subscription_subpasswordrequired)
+        .0
+        .as_bool();
 
     if subowner == new_owner_id {
         return Ok(());
@@ -1386,12 +1450,17 @@ fn AlterSubscriptionOwner_internal<'mcx>(
         // SAFETY: a name attr datum addresses NAMEDATALEN in-tuple bytes.
         let name = unsafe {
             core::ptr::read_unaligned(
-                getattr(td, tup.as_tuple(), Anum_pg_subscription_subname).0.as_usize()
-                    as *const NameData,
+                getattr(td, tup.as_tuple(), Anum_pg_subscription_subname)
+                    .0
+                    .as_usize() as *const NameData,
             )
         };
         let name_str = core::str::from_utf8(name.name_str()).expect("subname is UTF-8");
-        aclchk::aclcheck_error(ACLCHECK_NOT_OWNER, ObjectType::OBJECT_SUBSCRIPTION, name_str)?;
+        aclchk::aclcheck_error(
+            ACLCHECK_NOT_OWNER,
+            ObjectType::OBJECT_SUBSCRIPTION,
+            name_str,
+        )?;
     }
 
     if !passwordrequired && !superuser::superuser()? {
@@ -1459,7 +1528,9 @@ pub fn AlterSubscriptionOwner<'mcx>(
         ));
     };
 
-    let subid = getattr(rel.descr(), tup.as_tuple(), Anum_pg_subscription_oid).0.as_oid();
+    let subid = getattr(rel.descr(), tup.as_tuple(), Anum_pg_subscription_oid)
+        .0
+        .as_oid();
 
     AlterSubscriptionOwner_internal(mcx, &rel, &tup, new_owner_id)?;
 

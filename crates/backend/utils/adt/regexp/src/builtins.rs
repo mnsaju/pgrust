@@ -3,7 +3,9 @@ use mcx::{Mcx, PgVec};
 use types_core::catalog::TEXTOID;
 use types_core::Oid;
 use types_error::PgResult;
-use types_fmgr::{varlena_result, FmgrBuiltin, FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFunction};
+use types_fmgr::{
+    varlena_result, FmgrBuiltin, FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFunction,
+};
 
 // Per-call wide-char conversion scratch (C pallocs and pfrees in
 // CurrentMemoryContext); reset on entry, so nothing escapes a call.
@@ -132,7 +134,11 @@ pub fn fc_textregexreplace_noopt(
     _flinfo: Option<&mut FmgrInfo>,
     fcinfo: &mut Fcinfo,
 ) -> PgResult<Datum> {
-    let (s, p, r) = (arg_text!(fcinfo, 0), arg_text!(fcinfo, 1), arg_text!(fcinfo, 2));
+    let (s, p, r) = (
+        arg_text!(fcinfo, 0),
+        arg_text!(fcinfo, 1),
+        arg_text!(fcinfo, 2),
+    );
     let mcx = fcinfo.result_mcx();
     let out =
         crate::textregexreplace_noopt(mcx, s.data(), p.data(), r.data(), fcinfo.get_collation())?;
@@ -140,8 +146,12 @@ pub fn fc_textregexreplace_noopt(
 }
 
 pub fn fc_textregexreplace(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
-    let (s, p, r, opt) =
-        (arg_text!(fcinfo, 0), arg_text!(fcinfo, 1), arg_text!(fcinfo, 2), arg_text!(fcinfo, 3));
+    let (s, p, r, opt) = (
+        arg_text!(fcinfo, 0),
+        arg_text!(fcinfo, 1),
+        arg_text!(fcinfo, 2),
+        arg_text!(fcinfo, 3),
+    );
     let mcx = fcinfo.result_mcx();
     let out = crate::textregexreplace(
         mcx,
@@ -155,10 +165,22 @@ pub fn fc_textregexreplace(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) 
 }
 
 fn fc_replace_extended(fcinfo: &mut Fcinfo, with_n: bool, with_flags: bool) -> PgResult<Datum> {
-    let (s, p, r) = (arg_text!(fcinfo, 0), arg_text!(fcinfo, 1), arg_text!(fcinfo, 2));
+    let (s, p, r) = (
+        arg_text!(fcinfo, 0),
+        arg_text!(fcinfo, 1),
+        arg_text!(fcinfo, 2),
+    );
     let start = fcinfo.arg_i32(3);
-    let n = if with_n { Some(fcinfo.arg_i32(4)) } else { None };
-    let flags = if with_flags { Some(arg_text!(fcinfo, 5)) } else { None };
+    let n = if with_n {
+        Some(fcinfo.arg_i32(4))
+    } else {
+        None
+    };
+    let flags = if with_flags {
+        Some(arg_text!(fcinfo, 5))
+    } else {
+        None
+    };
     let mcx = fcinfo.result_mcx();
     let out = crate::textregexreplace_extended(
         mcx,
@@ -219,17 +241,28 @@ pub fn fc_similar_escape(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) ->
         return Ok(fcinfo.return_null());
     }
     let pat = arg_text!(fcinfo, 0);
-    let esc = if fcinfo.argisnull(1) { None } else { Some(arg_text!(fcinfo, 1)) };
+    let esc = if fcinfo.argisnull(1) {
+        None
+    } else {
+        Some(arg_text!(fcinfo, 1))
+    };
     let mcx = fcinfo.result_mcx();
-    let out =
-        crate::similar_escape_internal(mcx, pat.data(), esc.as_ref().map(|e| e.data()))?;
+    let out = crate::similar_escape_internal(mcx, pat.data(), esc.as_ref().map(|e| e.data()))?;
     text_datum(mcx, &out)
 }
 
 fn fc_count(fcinfo: &mut Fcinfo, with_start: bool, with_flags: bool) -> PgResult<Datum> {
     let (s, p) = (arg_text!(fcinfo, 0), arg_text!(fcinfo, 1));
-    let start = if with_start { Some(fcinfo.arg_i32(2)) } else { None };
-    let flags = if with_flags { Some(arg_text!(fcinfo, 3)) } else { None };
+    let start = if with_start {
+        Some(fcinfo.arg_i32(2))
+    } else {
+        None
+    };
+    let flags = if with_flags {
+        Some(arg_text!(fcinfo, 3))
+    } else {
+        None
+    };
     with_exec_scratch(|mcx| {
         Ok(Datum::from_i32(crate::matches::regexp_count(
             mcx,
@@ -262,11 +295,31 @@ pub fn fc_regexp_count_no_start(
 
 fn fc_instr(fcinfo: &mut Fcinfo, nopt: usize) -> PgResult<Datum> {
     let (s, p) = (arg_text!(fcinfo, 0), arg_text!(fcinfo, 1));
-    let start = if nopt >= 1 { Some(fcinfo.arg_i32(2)) } else { None };
-    let n = if nopt >= 2 { Some(fcinfo.arg_i32(3)) } else { None };
-    let endoption = if nopt >= 3 { Some(fcinfo.arg_i32(4)) } else { None };
-    let flags = if nopt >= 4 { Some(arg_text!(fcinfo, 5)) } else { None };
-    let subexpr = if nopt >= 5 { Some(fcinfo.arg_i32(6)) } else { None };
+    let start = if nopt >= 1 {
+        Some(fcinfo.arg_i32(2))
+    } else {
+        None
+    };
+    let n = if nopt >= 2 {
+        Some(fcinfo.arg_i32(3))
+    } else {
+        None
+    };
+    let endoption = if nopt >= 3 {
+        Some(fcinfo.arg_i32(4))
+    } else {
+        None
+    };
+    let flags = if nopt >= 4 {
+        Some(arg_text!(fcinfo, 5))
+    } else {
+        None
+    };
+    let subexpr = if nopt >= 5 {
+        Some(fcinfo.arg_i32(6))
+    } else {
+        None
+    };
     with_exec_scratch(|mcx| {
         Ok(Datum::from_i32(crate::matches::regexp_instr(
             mcx,
@@ -323,7 +376,11 @@ pub fn fc_regexp_instr_no_start(
 
 fn fc_like(fcinfo: &mut Fcinfo, with_flags: bool) -> PgResult<Datum> {
     let (s, p) = (arg_text!(fcinfo, 0), arg_text!(fcinfo, 1));
-    let flags = if with_flags { Some(arg_text!(fcinfo, 2)) } else { None };
+    let flags = if with_flags {
+        Some(arg_text!(fcinfo, 2))
+    } else {
+        None
+    };
     with_exec_scratch(|mcx| {
         Ok(Datum::from_bool(crate::matches::regexp_like(
             mcx,
@@ -349,10 +406,26 @@ pub fn fc_regexp_like_no_flags(
 fn fc_substr(fcinfo: &mut Fcinfo, nopt: usize) -> PgResult<Datum> {
     let out = {
         let (s, p) = (arg_text!(fcinfo, 0), arg_text!(fcinfo, 1));
-        let start = if nopt >= 1 { Some(fcinfo.arg_i32(2)) } else { None };
-        let n = if nopt >= 2 { Some(fcinfo.arg_i32(3)) } else { None };
-        let flags = if nopt >= 3 { Some(arg_text!(fcinfo, 4)) } else { None };
-        let subexpr = if nopt >= 4 { Some(fcinfo.arg_i32(5)) } else { None };
+        let start = if nopt >= 1 {
+            Some(fcinfo.arg_i32(2))
+        } else {
+            None
+        };
+        let n = if nopt >= 2 {
+            Some(fcinfo.arg_i32(3))
+        } else {
+            None
+        };
+        let flags = if nopt >= 3 {
+            Some(arg_text!(fcinfo, 4))
+        } else {
+            None
+        };
+        let subexpr = if nopt >= 4 {
+            Some(fcinfo.arg_i32(5))
+        } else {
+            None
+        };
         let mcx = fcinfo.result_mcx();
         match crate::matches::regexp_substr(
             mcx,
@@ -409,7 +482,11 @@ pub fn fc_regexp_substr_no_start(
 fn fc_match(fcinfo: &mut Fcinfo, with_flags: bool) -> PgResult<Datum> {
     let out = {
         let (s, p) = (arg_text!(fcinfo, 0), arg_text!(fcinfo, 1));
-        let flags = if with_flags { Some(arg_text!(fcinfo, 2)) } else { None };
+        let flags = if with_flags {
+            Some(arg_text!(fcinfo, 2))
+        } else {
+            None
+        };
         let mcx = fcinfo.result_mcx();
         match crate::matches::regexp_match(
             mcx,
@@ -459,7 +536,11 @@ pub fn fc_regexp_match_no_flags(
 
 fn fc_split_to_array(fcinfo: &mut Fcinfo, with_flags: bool) -> PgResult<Datum> {
     let (s, p) = (arg_text!(fcinfo, 0), arg_text!(fcinfo, 1));
-    let flags = if with_flags { Some(arg_text!(fcinfo, 2)) } else { None };
+    let flags = if with_flags {
+        Some(arg_text!(fcinfo, 2))
+    } else {
+        None
+    };
     let mcx = fcinfo.result_mcx();
     let mut ctx = crate::matches::regexp_split_setup(
         mcx,
@@ -604,47 +685,80 @@ fn collect_split(fcinfo: &Fcinfo, with_flags: bool) -> PgResult<SrfRows> {
     )?;
     let mut rows = Vec::with_capacity((ctx.nmatches + 1).max(1) as usize);
     while ctx.next_match <= ctx.nmatches {
-        rows.push(crate::matches::build_regexp_split_result(&ctx)?.as_slice().to_vec());
+        rows.push(
+            crate::matches::build_regexp_split_result(&ctx)?
+                .as_slice()
+                .to_vec(),
+        );
         ctx.next_match += 1;
     }
     Ok(SrfRows::Texts(rows))
 }
 
 pub fn fc_regexp_matches(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
-    srf_drive(flinfo, fcinfo, "regexp_matches", |fcinfo| collect_matches(fcinfo, true))
+    srf_drive(flinfo, fcinfo, "regexp_matches", |fcinfo| {
+        collect_matches(fcinfo, true)
+    })
 }
 
 pub fn fc_regexp_matches_no_flags(
     flinfo: Option<&mut FmgrInfo>,
     fcinfo: &mut Fcinfo,
 ) -> PgResult<Datum> {
-    srf_drive(flinfo, fcinfo, "regexp_matches", |fcinfo| collect_matches(fcinfo, false))
+    srf_drive(flinfo, fcinfo, "regexp_matches", |fcinfo| {
+        collect_matches(fcinfo, false)
+    })
 }
 
 pub fn fc_regexp_split_to_table(
     flinfo: Option<&mut FmgrInfo>,
     fcinfo: &mut Fcinfo,
 ) -> PgResult<Datum> {
-    srf_drive(flinfo, fcinfo, "regexp_split_to_table", |fcinfo| collect_split(fcinfo, true))
+    srf_drive(flinfo, fcinfo, "regexp_split_to_table", |fcinfo| {
+        collect_split(fcinfo, true)
+    })
 }
 
 pub fn fc_regexp_split_to_table_no_flags(
     flinfo: Option<&mut FmgrInfo>,
     fcinfo: &mut Fcinfo,
 ) -> PgResult<Datum> {
-    srf_drive(flinfo, fcinfo, "regexp_split_to_table", |fcinfo| collect_split(fcinfo, false))
+    srf_drive(flinfo, fcinfo, "regexp_split_to_table", |fcinfo| {
+        collect_split(fcinfo, false)
+    })
 }
 
 const fn b(foid: Oid, name: &'static str, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs: 2, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs: 2,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 const fn bn(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 const fn srf(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: true, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: true,
+        func,
+    }
 }
 
 // pg_proc.dat rows; 1656-1659 are the bpchar rows sharing the text prosrc,
@@ -675,31 +789,76 @@ pub const REGEXP_BUILTINS: &[FmgrBuiltin] = &[
     bn(2073, "textregexsubstr", 2, fc_textregexsubstr),
     bn(2284, "textregexreplace_noopt", 3, fc_textregexreplace_noopt),
     bn(2285, "textregexreplace", 4, fc_textregexreplace),
-    srf(2763, "regexp_matches_no_flags", 2, fc_regexp_matches_no_flags),
+    srf(
+        2763,
+        "regexp_matches_no_flags",
+        2,
+        fc_regexp_matches_no_flags,
+    ),
     srf(2764, "regexp_matches", 3, fc_regexp_matches),
-    srf(2765, "regexp_split_to_table_no_flags", 2, fc_regexp_split_to_table_no_flags),
+    srf(
+        2765,
+        "regexp_split_to_table_no_flags",
+        2,
+        fc_regexp_split_to_table_no_flags,
+    ),
     srf(2766, "regexp_split_to_table", 3, fc_regexp_split_to_table),
-    bn(2767, "regexp_split_to_array_no_flags", 2, fc_regexp_split_to_array_no_flags),
+    bn(
+        2767,
+        "regexp_split_to_array_no_flags",
+        2,
+        fc_regexp_split_to_array_no_flags,
+    ),
     bn(2768, "regexp_split_to_array", 3, fc_regexp_split_to_array),
     bn(3396, "regexp_match_no_flags", 2, fc_regexp_match_no_flags),
     bn(3397, "regexp_match", 3, fc_regexp_match),
-    bn(6251, "textregexreplace_extended", 6, fc_textregexreplace_extended),
-    bn(6252, "textregexreplace_extended_no_flags", 5, fc_textregexreplace_extended_no_flags),
-    bn(6253, "textregexreplace_extended_no_n", 4, fc_textregexreplace_extended_no_n),
+    bn(
+        6251,
+        "textregexreplace_extended",
+        6,
+        fc_textregexreplace_extended,
+    ),
+    bn(
+        6252,
+        "textregexreplace_extended_no_flags",
+        5,
+        fc_textregexreplace_extended_no_flags,
+    ),
+    bn(
+        6253,
+        "textregexreplace_extended_no_n",
+        4,
+        fc_textregexreplace_extended_no_n,
+    ),
     bn(6254, "regexp_count_no_start", 2, fc_regexp_count_no_start),
     bn(6255, "regexp_count_no_flags", 3, fc_regexp_count_no_flags),
     bn(6256, "regexp_count", 4, fc_regexp_count),
     bn(6257, "regexp_instr_no_start", 2, fc_regexp_instr_no_start),
     bn(6258, "regexp_instr_no_n", 3, fc_regexp_instr_no_n),
-    bn(6259, "regexp_instr_no_endoption", 4, fc_regexp_instr_no_endoption),
+    bn(
+        6259,
+        "regexp_instr_no_endoption",
+        4,
+        fc_regexp_instr_no_endoption,
+    ),
     bn(6260, "regexp_instr_no_flags", 5, fc_regexp_instr_no_flags),
-    bn(6261, "regexp_instr_no_subexpr", 6, fc_regexp_instr_no_subexpr),
+    bn(
+        6261,
+        "regexp_instr_no_subexpr",
+        6,
+        fc_regexp_instr_no_subexpr,
+    ),
     bn(6262, "regexp_instr", 7, fc_regexp_instr),
     bn(6263, "regexp_like_no_flags", 2, fc_regexp_like_no_flags),
     bn(6264, "regexp_like", 3, fc_regexp_like),
     bn(6265, "regexp_substr_no_start", 2, fc_regexp_substr_no_start),
     bn(6266, "regexp_substr_no_n", 3, fc_regexp_substr_no_n),
     bn(6267, "regexp_substr_no_flags", 4, fc_regexp_substr_no_flags),
-    bn(6268, "regexp_substr_no_subexpr", 5, fc_regexp_substr_no_subexpr),
+    bn(
+        6268,
+        "regexp_substr_no_subexpr",
+        5,
+        fc_regexp_substr_no_subexpr,
+    ),
     bn(6269, "regexp_substr", 6, fc_regexp_substr),
 ];

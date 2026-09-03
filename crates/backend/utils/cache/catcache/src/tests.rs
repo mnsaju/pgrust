@@ -52,7 +52,10 @@ fn get_cc_hash_eq_funcs_table() {
     assert_eq!(get_cc_hash_eq_funcs(25), (CCFastKind::Text, F_TEXTEQ));
     assert_eq!(get_cc_hash_eq_funcs(26), (CCFastKind::Int4, F_OIDEQ));
     assert_eq!(get_cc_hash_eq_funcs(2206), (CCFastKind::Int4, F_OIDEQ));
-    assert_eq!(get_cc_hash_eq_funcs(30), (CCFastKind::OidVector, F_OIDVECTOREQ));
+    assert_eq!(
+        get_cc_hash_eq_funcs(30),
+        (CCFastKind::OidVector, F_OIDVECTOREQ)
+    );
 }
 
 #[test]
@@ -73,8 +76,25 @@ fn oid_hit_negative_and_miss_shape() {
     let id = fresh_id();
     testing::init_cache_bare(id, 1, KINDS1, 4, None);
     let img = tiny_image();
-    testing::insert_positive(id, &[oid_key(1259), CatCKey::UNUSED, CatCKey::UNUSED, CatCKey::UNUSED], &img);
-    testing::insert_negative(id, &[oid_key(4444), CatCKey::UNUSED, CatCKey::UNUSED, CatCKey::UNUSED]);
+    testing::insert_positive(
+        id,
+        &[
+            oid_key(1259),
+            CatCKey::UNUSED,
+            CatCKey::UNUSED,
+            CatCKey::UNUSED,
+        ],
+        &img,
+    );
+    testing::insert_negative(
+        id,
+        &[
+            oid_key(4444),
+            CatCKey::UNUSED,
+            CatCKey::UNUSED,
+            CatCKey::UNUSED,
+        ],
+    );
 
     let t = SearchCatCache1(id, oid_key(1259)).unwrap().expect("hit");
     assert_eq!(t.tuple().t_len, img.len() as u32);
@@ -93,10 +113,20 @@ fn oid_hit_negative_and_miss_shape() {
 #[test]
 fn two_key_hit_general_lane() {
     let id = fresh_id();
-    let kinds = [CCFastKind::Int4, CCFastKind::Int2, CCFastKind::Int4, CCFastKind::Int4];
+    let kinds = [
+        CCFastKind::Int4,
+        CCFastKind::Int2,
+        CCFastKind::Int4,
+        CCFastKind::Int4,
+    ];
     testing::init_cache_bare(id, 2, kinds, 4, None);
     let img = tiny_image();
-    let k = [oid_key(1259), CatCKey::Value(Datum::from_i16(3)), CatCKey::UNUSED, CatCKey::UNUSED];
+    let k = [
+        oid_key(1259),
+        CatCKey::Value(Datum::from_i16(3)),
+        CatCKey::UNUSED,
+        CatCKey::UNUSED,
+    ];
     testing::insert_positive(id, &k, &img);
 
     let t = SearchCatCache2(id, oid_key(1259), CatCKey::Value(Datum::from_i16(3)))
@@ -113,15 +143,27 @@ fn two_key_hit_general_lane() {
 #[test]
 fn name_key_hit() {
     let id = fresh_id();
-    let kinds = [CCFastKind::Name, CCFastKind::Int4, CCFastKind::Int4, CCFastKind::Int4];
+    let kinds = [
+        CCFastKind::Name,
+        CCFastKind::Int4,
+        CCFastKind::Int4,
+        CCFastKind::Int4,
+    ];
     testing::init_cache_bare(id, 1, kinds, 4, None);
     let img = tiny_image();
     testing::insert_positive(
         id,
-        &[CatCKey::Str("pg_class"), CatCKey::UNUSED, CatCKey::UNUSED, CatCKey::UNUSED],
+        &[
+            CatCKey::Str("pg_class"),
+            CatCKey::UNUSED,
+            CatCKey::UNUSED,
+            CatCKey::UNUSED,
+        ],
         &img,
     );
-    let t = SearchCatCache1(id, CatCKey::Str("pg_class")).unwrap().expect("name hit");
+    let t = SearchCatCache1(id, CatCKey::Str("pg_class"))
+        .unwrap()
+        .expect("name hit");
     ReleaseCatCache(t);
     assert!(std::panic::catch_unwind(|| SearchCatCache1(id, CatCKey::Str("pg_clasz"))).is_err());
 }
@@ -132,7 +174,16 @@ fn move_to_front_on_hit() {
     testing::init_cache_bare(id, 1, KINDS1, 1, None); /* one bucket */
     let img = tiny_image();
     for oid in [10u32, 11, 12] {
-        testing::insert_positive(id, &[oid_key(oid), CatCKey::UNUSED, CatCKey::UNUSED, CatCKey::UNUSED], &img);
+        testing::insert_positive(
+            id,
+            &[
+                oid_key(oid),
+                CatCKey::UNUSED,
+                CatCKey::UNUSED,
+                CatCKey::UNUSED,
+            ],
+            &img,
+        );
     }
     /* head is last inserted (12); hitting 10 moves it to the head */
     let t = SearchCatCache1(id, oid_key(10)).unwrap().unwrap();
@@ -159,20 +210,55 @@ fn invalidate_and_reset() {
     let id = fresh_id();
     testing::init_cache_bare(id, 1, KINDS1, 4, None);
     let img = tiny_image();
-    testing::insert_positive(id, &[oid_key(77), CatCKey::UNUSED, CatCKey::UNUSED, CatCKey::UNUSED], &img);
-    testing::insert_negative(id, &[oid_key(78), CatCKey::UNUSED, CatCKey::UNUSED, CatCKey::UNUSED]);
+    testing::insert_positive(
+        id,
+        &[
+            oid_key(77),
+            CatCKey::UNUSED,
+            CatCKey::UNUSED,
+            CatCKey::UNUSED,
+        ],
+        &img,
+    );
+    testing::insert_negative(
+        id,
+        &[
+            oid_key(78),
+            CatCKey::UNUSED,
+            CatCKey::UNUSED,
+            CatCKey::UNUSED,
+        ],
+    );
     assert_eq!(testing::cache_ntup(id), 2);
 
     /* unreferenced entry: removed outright */
     let hv = with_state(|st| {
         let c = st.cache(id);
-        compute_hash_value(&c.cc_kind, 1, &[oid_key(77), CatCKey::UNUSED, CatCKey::UNUSED, CatCKey::UNUSED])
+        compute_hash_value(
+            &c.cc_kind,
+            1,
+            &[
+                oid_key(77),
+                CatCKey::UNUSED,
+                CatCKey::UNUSED,
+                CatCKey::UNUSED,
+            ],
+        )
     });
     crate::CatCacheInvalidate(id, hv);
     assert_eq!(testing::cache_ntup(id), 1);
 
     /* referenced entry: marked dead, freed on release */
-    testing::insert_positive(id, &[oid_key(77), CatCKey::UNUSED, CatCKey::UNUSED, CatCKey::UNUSED], &img);
+    testing::insert_positive(
+        id,
+        &[
+            oid_key(77),
+            CatCKey::UNUSED,
+            CatCKey::UNUSED,
+            CatCKey::UNUSED,
+        ],
+        &img,
+    );
     let t = SearchCatCache1(id, oid_key(77)).unwrap().unwrap();
     crate::CatCacheInvalidate(id, hv);
     assert_eq!(testing::cache_ntup(id), 2); /* still counted: pinned */
@@ -190,7 +276,15 @@ fn rehash_preserves_entries() {
     testing::init_cache_bare(id, 1, KINDS1, 2, None);
     let img = tiny_image();
     for oid in 0..40u32 {
-        testing::insert_negative(id, &[oid_key(oid), CatCKey::UNUSED, CatCKey::UNUSED, CatCKey::UNUSED]);
+        testing::insert_negative(
+            id,
+            &[
+                oid_key(oid),
+                CatCKey::UNUSED,
+                CatCKey::UNUSED,
+                CatCKey::UNUSED,
+            ],
+        );
         let _ = img;
     }
     with_state(|st| {
@@ -230,11 +324,28 @@ mod state_kernel {
         let id = fresh_id();
         testing::init_cache_bare(id, 1, KINDS1, 4, None);
         let img = super::tiny_image();
-        testing::insert_positive(id, &[oid_key(9), CatCKey::UNUSED, CatCKey::UNUSED, CatCKey::UNUSED], &img);
+        testing::insert_positive(
+            id,
+            &[
+                oid_key(9),
+                CatCKey::UNUSED,
+                CatCKey::UNUSED,
+                CatCKey::UNUSED,
+            ],
+            &img,
+        );
         let t = SearchCatCache1(id, oid_key(9)).unwrap().unwrap();
         /* slot-vec growth while the pin is live: the image is a separate stable allocation */
         for oid in 100..164u32 {
-            testing::insert_negative(id, &[oid_key(oid), CatCKey::UNUSED, CatCKey::UNUSED, CatCKey::UNUSED]);
+            testing::insert_negative(
+                id,
+                &[
+                    oid_key(oid),
+                    CatCKey::UNUSED,
+                    CatCKey::UNUSED,
+                    CatCKey::UNUSED,
+                ],
+            );
         }
         assert_eq!(t.tuple().t_len, img.len() as u32);
         assert_eq!(t.tuple().t_data().t_hoff, 24);

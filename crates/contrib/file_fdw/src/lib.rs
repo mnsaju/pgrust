@@ -5,9 +5,7 @@
 
 use datum::Datum;
 use mcx::{Mcx, MemoryContext, PgVec};
-use types_core::{
-    BlockNumber, Oid, ATTRIBUTE_RELATION_ID, BLCKSZ, FOREIGN_TABLE_RELATION_ID,
-};
+use types_core::{BlockNumber, Oid, ATTRIBUTE_RELATION_ID, BLCKSZ, FOREIGN_TABLE_RELATION_ID};
 use types_error::{
     ErrorLocation, PgError, PgResult, ERRCODE_FDW_DYNAMIC_PARAMETER_VALUE_NEEDED,
     ERRCODE_FDW_INVALID_OPTION_NAME, ERRCODE_INSUFFICIENT_PRIVILEGE,
@@ -16,14 +14,16 @@ use types_error::{
 use types_fmgr::{FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFunction};
 use types_nodes::parsenodes::{DefElem, DefElemAction};
 use types_nodes::{FdwKind, FdwRoutine, Node, NodeList};
-use types_pathnodes::{PathNode, PathId, RelId, RinfoId};
+use types_pathnodes::{PathId, PathNode, RelId, RinfoId};
 use types_rel::Relation;
 use types_tuple::{HeapTupleData, SizeofHeapTupleHeader, MAXALIGN};
 
 use commands_analyze::{AcquireSampleRowsFn, FdwAnalyzeRoutine};
 use copy_cmd::CopyFromState;
 use executils::EStateData;
-use foreigncmds::foreign::{GetForeignColumnOptions, GetForeignDataWrapper, GetForeignServer, GetForeignTable};
+use foreigncmds::foreign::{
+    GetForeignColumnOptions, GetForeignDataWrapper, GetForeignServer, GetForeignTable,
+};
 use nodeforeignscan::{FdwExecRoutine, ForeignScanState};
 use planner::fdwplan::FdwPlanRoutine;
 use planner::run::PlannerRun;
@@ -115,7 +115,9 @@ fn fc_file_fdw_handler(_flinfo: Option<&mut FmgrInfo>, _fcinfo: &mut Fcinfo) -> 
 }
 
 fn is_valid_option(option: &str, context: Oid) -> bool {
-    VALID_OPTIONS.iter().any(|&(n, ctx)| ctx == context && n == option)
+    VALID_OPTIONS
+        .iter()
+        .any(|&(n, ctx)| ctx == context && n == option)
 }
 
 const MAX_LEVENSHTEIN_STRLEN: usize = 255;
@@ -132,7 +134,9 @@ fn invalid_option_error(mcx: Mcx<'_>, name: &str, catalog: Oid) -> PgResult<Box<
             continue;
         }
         has_valid_options = true;
-        if name.is_empty() || name.len() > MAX_LEVENSHTEIN_STRLEN || n.len() > MAX_LEVENSHTEIN_STRLEN
+        if name.is_empty()
+            || name.len() > MAX_LEVENSHTEIN_STRLEN
+            || n.len() > MAX_LEVENSHTEIN_STRLEN
         {
             continue;
         }
@@ -217,7 +221,10 @@ fn fc_file_fdw_validator(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) ->
                 if opt.name == "program"
                     && !acl_seams::has_privs_of_role::call(userid, ROLE_PG_EXECUTE_SERVER_PROGRAM)?
                 {
-                    return Err(option_permission_denied("program", "pg_execute_server_program"));
+                    return Err(option_permission_denied(
+                        "program",
+                        "pg_execute_server_program",
+                    ));
                 }
                 // C: defGetString(def) — errors on a value-less option.
                 filename = Some(opt.require_value()?);
@@ -291,8 +298,11 @@ fn get_file_fdw_attribute_options<'mcx>(mcx: Mcx<'mcx>, relid: Oid) -> PgResult<
                         attr.attname.name_str(),
                     )?)
                 };
-                let target =
-                    if opt.name == "force_not_null" { &mut fnncolumns } else { &mut fncolumns };
+                let target = if opt.name == "force_not_null" {
+                    &mut fnncolumns
+                } else {
+                    &mut fncolumns
+                };
                 target.lappend(mcx, mk_string(mcx, attname)?)?;
             }
         }
@@ -301,10 +311,16 @@ fn get_file_fdw_attribute_options<'mcx>(mcx: Mcx<'mcx>, relid: Oid) -> PgResult<
 
     let mut options: NodeList<'mcx> = NodeList::nil();
     if !fnncolumns.is_nil() {
-        options.lappend(mcx, mk_def_elem(mcx, "force_not_null", Some(Node::mk_list(mcx, fnncolumns)?))?)?;
+        options.lappend(
+            mcx,
+            mk_def_elem(mcx, "force_not_null", Some(Node::mk_list(mcx, fnncolumns)?))?,
+        )?;
     }
     if !fncolumns.is_nil() {
-        options.lappend(mcx, mk_def_elem(mcx, "force_null", Some(Node::mk_list(mcx, fncolumns)?))?)?;
+        options.lappend(
+            mcx,
+            mk_def_elem(mcx, "force_null", Some(Node::mk_list(mcx, fncolumns)?))?,
+        )?;
     }
     Ok(options)
 }
@@ -322,7 +338,12 @@ fn file_get_options<'mcx>(
     let mut filename: Option<&'mcx str> = None;
     let mut is_program = false;
     let mut options: NodeList<'mcx> = NodeList::nil();
-    for opt in wrapper.options.iter().chain(server.options.iter()).chain(table.options.iter()) {
+    for opt in wrapper
+        .options
+        .iter()
+        .chain(server.options.iter())
+        .chain(table.options.iter())
+    {
         if filename.is_none() && (opt.name == "filename" || opt.name == "program") {
             // C: defGetString(def) — errors on a value-less option.
             filename = Some(opt.require_value()?);
@@ -351,7 +372,9 @@ fn estimate_size(
     let size = if fdw_private.is_program {
         None
     } else {
-        std::fs::metadata(&fdw_private.filename).ok().map(|m| m.len())
+        std::fs::metadata(&fdw_private.filename)
+            .ok()
+            .map(|m| m.len())
     }
     .unwrap_or(10 * BLCKSZ as u64);
 
@@ -372,7 +395,13 @@ fn estimate_size(
     };
     fdw_private.ntuples = ntuples;
 
-    let rinfos: Vec<RinfoId> = run.root.rel(rel_id).baserestrictinfo.iter().copied().collect();
+    let rinfos: Vec<RinfoId> = run
+        .root
+        .rel(rel_id)
+        .baserestrictinfo
+        .iter()
+        .copied()
+        .collect();
     let sel = planner::clausesel::clauselist_selectivity(
         run,
         &rinfos,
@@ -417,8 +446,14 @@ fn file_get_foreign_rel_size(
     let mut items: NodeList<'_> = NodeList::nil();
     items.lappend(mcx, Node::mk_string(mcx, str_in(mcx, &state.filename)?)?)?;
     items.lappend(mcx, Node::mk_boolean(mcx, state.is_program)?)?;
-    items.lappend(mcx, Node::mk_float(mcx, str_in(mcx, &state.pages.to_string())?)?)?;
-    items.lappend(mcx, Node::mk_float(mcx, str_in(mcx, &format!("{:?}", state.ntuples))?)?)?;
+    items.lappend(
+        mcx,
+        Node::mk_float(mcx, str_in(mcx, &state.pages.to_string())?)?,
+    )?;
+    items.lappend(
+        mcx,
+        Node::mk_float(mcx, str_in(mcx, &format!("{:?}", state.ntuples))?)?,
+    )?;
     let node = Node::mk_list(mcx, items)?;
     run.root.rel_mut(rel_id).fdw_private = run.intern_expr(node);
     Ok(())
@@ -427,7 +462,9 @@ fn file_get_foreign_rel_size(
 // Decode fileGetForeignRelSize's fdw_private value-node list; the shape is
 // ours alone, so any mismatch is LOUD.
 fn decode_plan_state(node: Node<'_>) -> FileFdwPlanState {
-    let items = node.as_list().expect("file_fdw fdw_private: value-node list");
+    let items = node
+        .as_list()
+        .expect("file_fdw fdw_private: value-node list");
     let mut it = items.iter();
     let filename = it
         .next()
@@ -435,8 +472,11 @@ fn decode_plan_state(node: Node<'_>) -> FileFdwPlanState {
         .expect("file_fdw fdw_private: filename")
         .sval
         .to_string();
-    let is_program =
-        it.next().and_then(|n| n.as_boolean()).expect("file_fdw fdw_private: is_program").boolval;
+    let is_program = it
+        .next()
+        .and_then(|n| n.as_boolean())
+        .expect("file_fdw fdw_private: is_program")
+        .boolval;
     let pages: f64 = it
         .next()
         .and_then(|n| n.as_float())
@@ -451,7 +491,12 @@ fn decode_plan_state(node: Node<'_>) -> FileFdwPlanState {
         .fval
         .parse()
         .expect("file_fdw fdw_private: ntuples parses");
-    FileFdwPlanState { filename, is_program, pages: pages as BlockNumber, ntuples }
+    FileFdwPlanState {
+        filename,
+        is_program,
+        pages: pages as BlockNumber,
+        ntuples,
+    }
 }
 
 // check_selective_binary_conversion (file_fdw.c). Some(columns) = convert
@@ -476,12 +521,22 @@ fn check_selective_binary_conversion<'mcx>(
 
     let varno = run.root.rel(rel_id).relid as i32;
     let mut attrs_used = types_nodes::Bitmapset::empty();
-    let expr_ids: Vec<types_pathnodes::NodeId> =
-        run.pathtarget(run.rel_reltarget_id(rel_id)).exprs.iter().copied().collect();
+    let expr_ids: Vec<types_pathnodes::NodeId> = run
+        .pathtarget(run.rel_reltarget_id(rel_id))
+        .exprs
+        .iter()
+        .copied()
+        .collect();
     for id in expr_ids {
         vars::pull_varattnos(mcx, *run.root.expr_node(id), varno, &mut attrs_used)?;
     }
-    let rinfo_ids: Vec<RinfoId> = run.root.rel(rel_id).baserestrictinfo.iter().copied().collect();
+    let rinfo_ids: Vec<RinfoId> = run
+        .root
+        .rel(rel_id)
+        .baserestrictinfo
+        .iter()
+        .copied()
+        .collect();
     for rid in rinfo_ids {
         let clause = run.root.rinfo(rid).clause;
         vars::pull_varattnos(mcx, *run.root.expr_node(clause), varno, &mut attrs_used)?;
@@ -537,7 +592,11 @@ fn file_get_foreign_paths(
 
     let mut coptions: PgVec<'_, types_pathnodes::NodeId> = PgVec::new_in(mcx);
     if let Some(columns) = check_selective_binary_conversion(run, rel_id, foreigntableid)? {
-        let arg = if columns.is_nil() { None } else { Some(Node::mk_list(mcx, columns)?) };
+        let arg = if columns.is_nil() {
+            None
+        } else {
+            Some(Node::mk_list(mcx, columns)?)
+        };
         let def = mk_def_elem(mcx, "convert_selectively", arg)?;
         coptions.push(run.intern_expr(def));
     }
@@ -604,7 +663,9 @@ fn file_get_foreign_plan<'mcx>(
 }
 
 fn festate<'a>(node: &'a mut ForeignScanState<'_>) -> Option<&'a mut FileFdwExecutionState> {
-    node.fdw_state.as_mut().and_then(|s| s.downcast_mut::<FileFdwExecutionState>())
+    node.fdw_state
+        .as_mut()
+        .and_then(|s| s.downcast_mut::<FileFdwExecutionState>())
 }
 
 fn begin_copy<'mcx>(
@@ -639,7 +700,11 @@ fn file_begin_foreign_scan<'mcx>(
         return Ok(());
     }
     let mcx = estate.es_query_cxt;
-    let rel = node.ss.ss_currentRelation.as_ref().expect("foreign scan has a relation");
+    let rel = node
+        .ss
+        .ss_currentRelation
+        .as_ref()
+        .expect("foreign scan has a relation");
     let (filename, is_program, mut options) = file_get_options(mcx, rel.rd_id)?;
     if is_program {
         panic!(
@@ -659,8 +724,11 @@ fn file_begin_foreign_scan<'mcx>(
             core::mem::transmute::<NodeList<'mcx>, NodeList<'static>>(options),
         )
     };
-    node.fdw_state =
-        Some(Box::new(FileFdwExecutionState { filename, options, cstate: Some(cstate) }));
+    node.fdw_state = Some(Box::new(FileFdwExecutionState {
+        filename,
+        options,
+        cstate: Some(cstate),
+    }));
     Ok(())
 }
 
@@ -684,9 +752,8 @@ fn file_iterate_foreign_scan<'mcx>(
     let qmcx = estate.es_query_cxt;
     // SAFETY: reset-only per-tuple context (exec_scan resets it before the
     // next fetch), outlives each returned row through projection.
-    let row_mcx = unsafe {
-        core::mem::transmute::<Mcx<'_>, Mcx<'static>>(estate.ecxt(ecxt).per_tuple_mcx())
-    };
+    let row_mcx =
+        unsafe { core::mem::transmute::<Mcx<'_>, Mcx<'static>>(estate.ecxt(ecxt).per_tuple_mcx()) };
 
     exectuples::exec_clear_tuple(estate.slot_mut(scan_slot), qmcx);
     let cstate = festate(node)
@@ -712,8 +779,7 @@ fn file_iterate_foreign_scan<'mcx>(
             cstate.reset_soft_error();
             postgres_seams::check_for_interrupts::call()?;
             estate.ecxt_mut(ecxt).reset();
-            if cstate.opts.reject_limit > 0
-                && cstate.num_errors() > cstate.opts.reject_limit as u64
+            if cstate.opts.reject_limit > 0 && cstate.num_errors() > cstate.opts.reject_limit as u64
             {
                 // C raises inside the CopyFromErrorCallback scope.
                 return Err(copy_cmd::copy_from_error_context(
@@ -733,7 +799,11 @@ fn file_rescan_foreign_scan<'mcx>(
     estate: &mut EStateData<'mcx>,
 ) -> PgResult<()> {
     let mcx = estate.es_query_cxt;
-    let rel = node.ss.ss_currentRelation.as_ref().expect("foreign scan has a relation");
+    let rel = node
+        .ss
+        .ss_currentRelation
+        .as_ref()
+        .expect("foreign scan has a relation");
     let f = node
         .fdw_state
         .as_mut()
@@ -761,7 +831,9 @@ fn skipped_rows_notice(cstate: &CopyFromState<'_, '_>) -> PgResult<()> {
         } else {
             format!("{n} rows were skipped due to data type incompatibility")
         };
-        elog::ereport(NOTICE).errmsg(msg).finish(loc("fileEndForeignScan"))?;
+        elog::ereport(NOTICE)
+            .errmsg(msg)
+            .finish(loc("fileEndForeignScan"))?;
     }
     Ok(())
 }
@@ -771,7 +843,9 @@ fn file_end_foreign_scan<'mcx>(
     _estate: &mut EStateData<'mcx>,
 ) -> PgResult<()> {
     // fdw_state None: EXPLAIN; nothing to do.
-    let Some(f) = festate(node) else { return Ok(()) };
+    let Some(f) = festate(node) else {
+        return Ok(());
+    };
     if let Some(cstate) = f.cstate.take() {
         skipped_rows_notice(&cstate)?;
         copy_cmd::EndCopyFrom(cstate)?;
@@ -786,10 +860,18 @@ fn file_explain_foreign_scan<'mcx>(
     emit: &mut dyn FnMut(&str, types_nodes::FdwExplainProp<'_>) -> PgResult<()>,
 ) -> PgResult<()> {
     let mcx = estate.es_query_cxt;
-    let rel = node.ss.ss_currentRelation.as_ref().expect("foreign scan has a relation");
+    let rel = node
+        .ss
+        .ss_currentRelation
+        .as_ref()
+        .expect("foreign scan has a relation");
     let (filename, is_program, _options) = file_get_options(mcx, rel.rd_id)?;
 
-    let label = if is_program { "Foreign Program" } else { "Foreign File" };
+    let label = if is_program {
+        "Foreign Program"
+    } else {
+        "Foreign File"
+    };
     emit(label, types_nodes::FdwExplainProp::Text(filename))?;
 
     // C file_fdw.c fileExplainForeignScan: "Suppress file size if we're not
@@ -798,7 +880,10 @@ fn file_explain_foreign_scan<'mcx>(
         if let Ok(md) = std::fs::metadata(filename) {
             emit(
                 "Foreign File Size",
-                types_nodes::FdwExplainProp::Integer { value: md.len() as i64, unit: "b" },
+                types_nodes::FdwExplainProp::Integer {
+                    value: md.len() as i64,
+                    unit: "b",
+                },
             )?;
         }
     }
@@ -973,8 +1058,9 @@ static EXEC_ROUTINE: FdwExecRoutine = FdwExecRoutine {
     explain: Some(file_explain_foreign_scan),
 };
 
-static ANALYZE_ROUTINE: FdwAnalyzeRoutine =
-    FdwAnalyzeRoutine { analyze_foreign_table: file_analyze_foreign_table };
+static ANALYZE_ROUTINE: FdwAnalyzeRoutine = FdwAnalyzeRoutine {
+    analyze_foreign_table: file_analyze_foreign_table,
+};
 
 fn lookup(function: &str) -> Option<PGFunction> {
     Some(match function {
@@ -1003,10 +1089,16 @@ mod tests {
     fn valid_option_matrix() {
         assert!(is_valid_option("filename", FOREIGN_TABLE_RELATION_ID));
         assert!(is_valid_option("force_not_null", ATTRIBUTE_RELATION_ID));
-        assert!(!is_valid_option("force_not_null", FOREIGN_TABLE_RELATION_ID));
+        assert!(!is_valid_option(
+            "force_not_null",
+            FOREIGN_TABLE_RELATION_ID
+        ));
         assert!(!is_valid_option("filename", ATTRIBUTE_RELATION_ID));
         assert!(!is_valid_option("force_quote", FOREIGN_TABLE_RELATION_ID));
-        assert!(!is_valid_option("filename", types_core::FOREIGN_SERVER_RELATION_ID));
+        assert!(!is_valid_option(
+            "filename",
+            types_core::FOREIGN_SERVER_RELATION_ID
+        ));
     }
 
     #[test]

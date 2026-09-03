@@ -46,7 +46,11 @@ impl<'a> WriteChunk<'a> {
     /// scratch page, a local-buffer block, a test fixture).
     #[inline]
     pub fn from_slice(buf: &'a [u8]) -> Self {
-        WriteChunk { base: buf.as_ptr(), len: buf.len(), _borrow: PhantomData }
+        WriteChunk {
+            base: buf.as_ptr(),
+            len: buf.len(),
+            _borrow: PhantomData,
+        }
     }
 
     /// A chunk over a shared page image that another backend may mutate while
@@ -62,7 +66,11 @@ impl<'a> WriteChunk<'a> {
     /// established.
     #[inline]
     pub unsafe fn from_shared(base: *const u8, len: usize) -> Self {
-        WriteChunk { base, len, _borrow: PhantomData }
+        WriteChunk {
+            base,
+            len,
+            _borrow: PhantomData,
+        }
     }
 
     #[inline]
@@ -118,6 +126,8 @@ impl<'a> From<&'a [u8]> for WriteChunk<'a> {
 impl core::fmt::Debug for WriteChunk<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         // Never print the bytes: they may be changing under us.
-        f.debug_struct("WriteChunk").field("len", &self.len).finish_non_exhaustive()
+        f.debug_struct("WriteChunk")
+            .field("len", &self.len)
+            .finish_non_exhaustive()
     }
 }

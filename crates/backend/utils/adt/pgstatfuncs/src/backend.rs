@@ -62,8 +62,7 @@ pub fn fc_pg_stat_get_backend_wait_event_type(
     let we = match beentry(fcinfo) {
         None => Some("<backend information not available>"),
         Some(be) if !has_pgstat_permissions(be.st_userid)? => Some("<insufficient privilege>"),
-        Some(be) => wait_event_info(be.st_procpid)
-            .and_then(waitevent::pgstat_get_wait_event_type),
+        Some(be) => wait_event_info(be.st_procpid).and_then(waitevent::pgstat_get_wait_event_type),
     };
     match we {
         Some(t) => text_datum(fcinfo, t),
@@ -91,7 +90,10 @@ fn wait_event_info(pid: i32) -> Option<u32> {
     if proc.is_none() {
         proc = aux_pid_get_proc(pid);
     }
-    proc.map(|p| p.wait_event_info.load(core::sync::atomic::Ordering::Relaxed))
+    proc.map(|p| {
+        p.wait_event_info
+            .load(core::sync::atomic::Ordering::Relaxed)
+    })
 }
 
 fn beentry_tstz(
@@ -186,7 +188,9 @@ pub fn fc_pg_stat_get_backend_client_port(
     let Some((_, remote_port)) = crate::activity::client_addr_port(&be.st_clientaddr) else {
         return Ok(fcinfo.return_null());
     };
-    Ok(Datum::from_i32(remote_port.parse().expect("numeric service string")))
+    Ok(Datum::from_i32(
+        remote_port.parse().expect("numeric service string"),
+    ))
 }
 
 pub fn fc_pg_stat_get_backend_idset(
@@ -210,7 +214,11 @@ pub fn fc_pg_stat_get_backend_idset(
     if cur <= backend_status::pgstat_fetch_stat_numbackends() {
         let local = backend_status::pgstat_get_local_beentry_by_index(cur)
             .expect("index within numbackends");
-        Ok(::funcapi::srf_return_next(flinfo, fcinfo, Datum::from_i32(local.proc_number)))
+        Ok(::funcapi::srf_return_next(
+            flinfo,
+            fcinfo,
+            Datum::from_i32(local.proc_number),
+        ))
     } else {
         Ok(::funcapi::srf_return_done(flinfo, fcinfo))
     }

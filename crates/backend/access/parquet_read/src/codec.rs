@@ -63,9 +63,7 @@ pub(crate) fn decompress_page(
         CodecId::Zstd => zstd_decompress(src, dst)?,
         CodecId::Lz4Raw => lz4_flex::block::decompress_into(src, dst)
             .map_err(|e| decompress_failed("LZ4_RAW", e.to_string()))?,
-        other => {
-            return Err(unsupported(format!("compression codec {}", other.name())))
-        }
+        other => return Err(unsupported(format!("compression codec {}", other.name()))),
     };
     if written != uncompressed {
         return Err(decompress_failed(
@@ -83,11 +81,12 @@ pub(crate) fn decompress_page(
 
 #[cfg(not(target_family = "wasm"))]
 fn zstd_decompress(src: &[u8], dst: &mut [u8]) -> PgResult<usize> {
-    zstd::bulk::decompress_to_buffer(src, dst)
-        .map_err(|e| decompress_failed("ZSTD", e.to_string()))
+    zstd::bulk::decompress_to_buffer(src, dst).map_err(|e| decompress_failed("ZSTD", e.to_string()))
 }
 
 #[cfg(target_family = "wasm")]
 fn zstd_decompress(_src: &[u8], _dst: &mut [u8]) -> PgResult<usize> {
-    Err(unsupported("compression codec ZSTD (unavailable on this platform)".into()))
+    Err(unsupported(
+        "compression codec ZSTD (unavailable on this platform)".into(),
+    ))
 }

@@ -11,9 +11,9 @@
 //! (increment 4) owns one in the job envelope so cycles may execute on any
 //! pool worker without resetting the control loop.
 
+use crate::write::{SyncOneBuffer, WritebackContext, BUF_REUSABLE, BUF_WRITTEN};
 use pgstat::bgwriter::with_pending_bgwriter_stats;
 use types_error::PgResult;
-use crate::write::{SyncOneBuffer, WritebackContext, BUF_REUSABLE, BUF_WRITTEN};
 
 /// The bgwriter's per-daemon control state (C: BgBufferSync's statics +
 /// BgWriterMain's WritebackContext frame slot).
@@ -221,7 +221,11 @@ pub fn bgw_plan_scan(state: &mut BgwSyncState, inp: BgwScanInputs) -> BgwScanPla
         upcoming_alloc_est = min_scan_buffers + reusable_buffers_est;
     }
 
-    BgwScanPlan { bufs_to_lap, reusable_buffers_est, upcoming_alloc_est }
+    BgwScanPlan {
+        bufs_to_lap,
+        reusable_buffers_est,
+        upcoming_alloc_est,
+    }
 }
 
 /// Scan-loop clock-sweep advance (shared by the loop and the unit tests):
@@ -305,7 +309,10 @@ mod bgw_plan_tests {
         st.next_to_clean = 1000;
         // Strategy wraps past the sweep point (passes+1, ahead of sweep).
         let plan = bgw_plan_scan(&mut st, inp(200, 1, 8));
-        assert_eq!(plan.bufs_to_lap, 1024, "lapped sweep must replan a full lap");
+        assert_eq!(
+            plan.bufs_to_lap, 1024,
+            "lapped sweep must replan a full lap"
+        );
         assert_eq!(st.next_to_clean, 200);
         assert_eq!(st.next_passes, 1);
     }

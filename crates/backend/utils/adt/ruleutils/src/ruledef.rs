@@ -49,7 +49,11 @@ pub(crate) fn req(td: &TupleDescData<'_>, tup: &HeapTupleData<'_>, attno: i32) -
 }
 
 // ev_qual/ev_action are routinely pglz-compressed inline.
-pub(crate) fn text_attr(td: &TupleDescData<'_>, tup: &HeapTupleData<'_>, attno: i32) -> PgResult<String> {
+pub(crate) fn text_attr(
+    td: &TupleDescData<'_>,
+    tup: &HeapTupleData<'_>,
+    attno: i32,
+) -> PgResult<String> {
     let d = req(td, tup, attno);
     let p = d.as_usize() as *const u8;
     // SAFETY: non-null varlena attr datum addresses in-tuple bytes; length is
@@ -67,8 +71,10 @@ pub(crate) fn text_attr(td: &TupleDescData<'_>, tup: &HeapTupleData<'_>, attno: 
     };
     let scratch = MemoryContext::new("pg_rewrite text attr");
     let image = detoast::detoast_attr(scratch.mcx(), raw)?;
-    Ok(String::from_utf8(image[datum::varlena::VARHDRSZ..].to_vec())
-        .expect("pg_rewrite text attr is UTF-8"))
+    Ok(
+        String::from_utf8(image[datum::varlena::VARHDRSZ..].to_vec())
+            .expect("pg_rewrite text attr is UTF-8"),
+    )
 }
 
 fn fetch_rule(ruleoid: Oid) -> PgResult<Option<PgRewriteRow>> {
@@ -128,8 +134,10 @@ fn make_ruledef(mcx: Mcx<'_>, rule: &PgRewriteRow, pretty_flags: i32) -> PgResul
 
     let mut ctx = DeparseContext::new(mcx, pretty_flags);
     ctx.wrap_column = WRAP_COLUMN_DEFAULT;
-    ctx.buf
-        .push_str(&format!("CREATE RULE {} AS", quote_identifier(&rule.rulename)));
+    ctx.buf.push_str(&format!(
+        "CREATE RULE {} AS",
+        quote_identifier(&rule.rulename)
+    ));
     ctx.buf.push_str(if pretty_flags & PRETTYFLAG_INDENT != 0 {
         "\n    ON "
     } else {
@@ -191,7 +199,8 @@ fn make_ruledef(mcx: Mcx<'_>, rule: &PgRewriteRow, pretty_flags: i32) -> PgResul
         for action in actions.iter() {
             let query = action.as_query().expect("ev_action holds Queries");
             get_query_def(query, &mut ctx, view_result_desc.clone(), true)?;
-            ctx.buf.push_str(if pretty_flags != 0 { ";\n" } else { "; " });
+            ctx.buf
+                .push_str(if pretty_flags != 0 { ";\n" } else { "; " });
         }
         ctx.buf.push_str(");");
     } else {

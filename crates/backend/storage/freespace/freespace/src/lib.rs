@@ -13,8 +13,8 @@ pub use fsmpage::{
 };
 
 use ::bufmgr_seams::{
-    BufferPin, BUFFER_LOCK_EXCLUSIVE, BUFFER_LOCK_SHARE, BUFFER_LOCK_UNLOCK,
-    EB_CLEAR_SIZE_CACHE, EB_CREATE_FORK_IF_NEEDED,
+    BufferPin, BUFFER_LOCK_EXCLUSIVE, BUFFER_LOCK_SHARE, BUFFER_LOCK_UNLOCK, EB_CLEAR_SIZE_CACHE,
+    EB_CREATE_FORK_IF_NEEDED,
 };
 use ::types_core::{BlockNumber, Buffer, ForkNumber, InvalidBlockNumber, Size, BLCKSZ};
 use ::types_error::{PgError, PgResult};
@@ -42,7 +42,10 @@ struct FSMAddress {
     logpageno: i32,
 }
 
-const FSM_ROOT_ADDRESS: FSMAddress = FSMAddress { level: FSM_ROOT_LEVEL, logpageno: 0 };
+const FSM_ROOT_ADDRESS: FSMAddress = FSMAddress {
+    level: FSM_ROOT_LEVEL,
+    logpageno: 0,
+};
 
 pub fn GetPageWithFreeSpace(rel: &RelationData<'_>, spaceNeeded: Size) -> PgResult<BlockNumber> {
     let min_cat = fsm_space_needed_to_cat(spaceNeeded)?;
@@ -122,8 +125,7 @@ pub fn XLogRecordPageWithFreeSpace(
     }
 
     // SAFETY: exclusive content lock held for `guard`'s lifetime.
-    let page =
-        unsafe { FsmPage::from_raw(bufmgr_seams::buffer_get_page::call(pin.buffer())) };
+    let page = unsafe { FsmPage::from_raw(bufmgr_seams::buffer_get_page::call(pin.buffer())) };
     if fsm_set_avail(page, slot as i32, new_cat) {
         bufmgr_seams::mark_buffer_dirty::call(pin.buffer())?;
     }
@@ -468,9 +470,8 @@ fn fsm_search(rel: &RelationData<'_>, min_cat: u8) -> PgResult<BlockNumber> {
             slot = fsm_search_avail(pin, min_cat, addr.level == FSM_BOTTOM_LEVEL, false)?;
             if slot == -1 {
                 // SAFETY: pinned; root byte read while share-locked.
-                let page = unsafe {
-                    FsmPage::from_raw(bufmgr_seams::buffer_get_page::call(pin.buffer()))
-                };
+                let page =
+                    unsafe { FsmPage::from_raw(bufmgr_seams::buffer_get_page::call(pin.buffer())) };
                 max_avail = fsm_get_max_avail(page);
                 bufmgr_seams::lock_buffer::call(pin.buffer(), BUFFER_LOCK_UNLOCK)?;
                 held.take().unwrap().release();
@@ -493,9 +494,8 @@ fn fsm_search(rel: &RelationData<'_>, min_cat: u8) -> PgResult<BlockNumber> {
                 // Past relation end: clear the slot, restart from the root.
                 bufmgr_seams::lock_buffer::call(pin.buffer(), BUFFER_LOCK_EXCLUSIVE)?;
                 // SAFETY: pinned + exclusively locked just above.
-                let page = unsafe {
-                    FsmPage::from_raw(bufmgr_seams::buffer_get_page::call(pin.buffer()))
-                };
+                let page =
+                    unsafe { FsmPage::from_raw(bufmgr_seams::buffer_get_page::call(pin.buffer())) };
                 fsm_set_avail(page, slot, 0);
                 bufmgr_seams::mark_buffer_dirty_hint::call(pin.buffer(), false)?;
                 bufmgr_seams::lock_buffer::call(pin.buffer(), BUFFER_LOCK_UNLOCK)?;
@@ -537,17 +537,16 @@ fn fsm_does_block_exist(rel: &RelationData<'_>, blknumber: BlockNumber) -> PgRes
         return Ok(true);
     }
     Ok(blknumber
-        < bufmgr_seams::relation_get_number_of_blocks_in_fork::call(
-            rel,
-            ForkNumber::MAIN_FORKNUM,
-        )?)
+        < bufmgr_seams::relation_get_number_of_blocks_in_fork::call(rel, ForkNumber::MAIN_FORKNUM)?)
 }
 
 #[track_caller]
 #[cold]
 #[inline(never)]
 fn invalid_fsm_request_size(needed: Size) -> Box<PgError> {
-    Box::new(PgError::error(std::format!("invalid FSM request size {needed}")))
+    Box::new(PgError::error(std::format!(
+        "invalid FSM request size {needed}"
+    )))
 }
 
 #[cold]
@@ -555,13 +554,12 @@ fn invalid_fsm_request_size(needed: Size) -> Box<PgError> {
 // RelationNeedsWAL (rel.h) / XLogHintBitIsNeeded (xlog.h); uninstalled
 // slots read as boot defaults (bufmgr precedent).
 fn relation_needs_wal(rel: &RelationData<'_>) -> bool {
-    let xlog_is_needed = guc_tables::vars::wal_level.installed()
-        && guc_tables::vars::wal_level.read() >= 1;
+    let xlog_is_needed =
+        guc_tables::vars::wal_level.installed() && guc_tables::vars::wal_level.read() >= 1;
     rel.rd_rel.relpersistence == types_core::RELPERSISTENCE_PERMANENT
         && (xlog_is_needed
             || (rel.rd_createSubid.get() == types_core::InvalidSubTransactionId
-                && rel.rd_firstRelfilelocatorSubid.get()
-                    == types_core::InvalidSubTransactionId))
+                && rel.rd_firstRelfilelocatorSubid.get() == types_core::InvalidSubTransactionId))
 }
 
 fn xlog_hint_bit_is_needed() -> bool {

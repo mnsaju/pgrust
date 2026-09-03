@@ -6,15 +6,54 @@ use ::types_core::{Size, TimeLineID, XLogRecPtr};
 /// Minimal leaf ops so a `Bbsink` can be built for `get_sink` tests.
 struct NoopLeaf;
 impl<'mcx> BbsinkOps<'mcx> for NoopLeaf {
-    fn begin_backup(&mut self, _: &mut Bbsink<'mcx>, _: &mut BbsinkState) -> PgResult<()> { Ok(()) }
-    fn begin_archive(&mut self, _: &mut Bbsink<'mcx>, _: &mut BbsinkState, _: &str) -> PgResult<()> { Ok(()) }
-    fn archive_contents(&mut self, _: &mut Bbsink<'mcx>, _: &mut BbsinkState, _: Size) -> PgResult<()> { Ok(()) }
-    fn end_archive(&mut self, _: &mut Bbsink<'mcx>, _: &mut BbsinkState) -> PgResult<()> { Ok(()) }
-    fn begin_manifest(&mut self, _: &mut Bbsink<'mcx>, _: &mut BbsinkState) -> PgResult<()> { Ok(()) }
-    fn manifest_contents(&mut self, _: &mut Bbsink<'mcx>, _: &mut BbsinkState, _: Size) -> PgResult<()> { Ok(()) }
-    fn end_manifest(&mut self, _: &mut Bbsink<'mcx>, _: &mut BbsinkState) -> PgResult<()> { Ok(()) }
-    fn end_backup(&mut self, _: &mut Bbsink<'mcx>, _: &mut BbsinkState, _: XLogRecPtr, _: TimeLineID) -> PgResult<()> { Ok(()) }
-    fn cleanup(&mut self, _: &mut Bbsink<'mcx>, _: &mut BbsinkState) -> PgResult<()> { Ok(()) }
+    fn begin_backup(&mut self, _: &mut Bbsink<'mcx>, _: &mut BbsinkState) -> PgResult<()> {
+        Ok(())
+    }
+    fn begin_archive(
+        &mut self,
+        _: &mut Bbsink<'mcx>,
+        _: &mut BbsinkState,
+        _: &str,
+    ) -> PgResult<()> {
+        Ok(())
+    }
+    fn archive_contents(
+        &mut self,
+        _: &mut Bbsink<'mcx>,
+        _: &mut BbsinkState,
+        _: Size,
+    ) -> PgResult<()> {
+        Ok(())
+    }
+    fn end_archive(&mut self, _: &mut Bbsink<'mcx>, _: &mut BbsinkState) -> PgResult<()> {
+        Ok(())
+    }
+    fn begin_manifest(&mut self, _: &mut Bbsink<'mcx>, _: &mut BbsinkState) -> PgResult<()> {
+        Ok(())
+    }
+    fn manifest_contents(
+        &mut self,
+        _: &mut Bbsink<'mcx>,
+        _: &mut BbsinkState,
+        _: Size,
+    ) -> PgResult<()> {
+        Ok(())
+    }
+    fn end_manifest(&mut self, _: &mut Bbsink<'mcx>, _: &mut BbsinkState) -> PgResult<()> {
+        Ok(())
+    }
+    fn end_backup(
+        &mut self,
+        _: &mut Bbsink<'mcx>,
+        _: &mut BbsinkState,
+        _: XLogRecPtr,
+        _: TimeLineID,
+    ) -> PgResult<()> {
+        Ok(())
+    }
+    fn cleanup(&mut self, _: &mut Bbsink<'mcx>, _: &mut BbsinkState) -> PgResult<()> {
+        Ok(())
+    }
 }
 
 #[test]

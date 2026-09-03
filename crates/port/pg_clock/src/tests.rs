@@ -55,7 +55,10 @@ fn posix_wall_is_plausible_epoch() {
     // 2020-01-01..2100-01-01 sanity window; also exercises the leaf fns.
     let ns = posix::PosixClock::new().wall_ns();
     assert!(ns > 1_577_836_800 * 1_000_000_000, "wall before 2020: {ns}");
-    assert!(ns < 4_102_444_800i64 * 1_000_000_000, "wall after 2100: {ns}");
+    assert!(
+        ns < 4_102_444_800i64 * 1_000_000_000,
+        "wall after 2100: {ns}"
+    );
 }
 
 // ---- leaf API / MonoStamp / Deadline (run on ActiveClock either cfg) --------
@@ -156,7 +159,10 @@ fn knob_parse_clock_mode() {
 #[test]
 fn knob_parse_wall_base() {
     assert_eq!(parse_wall_base("0"), Some(0));
-    assert_eq!(parse_wall_base("1767225600000000000"), Some(1_767_225_600_000_000_000));
+    assert_eq!(
+        parse_wall_base("1767225600000000000"),
+        Some(1_767_225_600_000_000_000)
+    );
     assert_eq!(parse_wall_base("0x10"), Some(16));
     assert_eq!(parse_wall_base("0X10"), Some(16));
     assert_eq!(parse_wall_base("-1"), Some(-1));
@@ -165,7 +171,7 @@ fn knob_parse_wall_base() {
     assert_eq!(parse_wall_base("0xZZ"), None); // bad hex
     assert_eq!(parse_wall_base("99999999999999999999999999"), None); // overflow
     assert_eq!(parse_wall_base("0x8000000000000000"), None); // i64 overflow
-    // Default is 2026-01-01T00:00:00Z.
+                                                             // Default is 2026-01-01T00:00:00Z.
     assert_eq!(DEFAULT_WALL_BASE_NS, 1_767_225_600 * 1_000_000_000);
 }
 

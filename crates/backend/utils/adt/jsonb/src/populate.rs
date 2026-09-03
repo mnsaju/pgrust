@@ -19,7 +19,7 @@ use types_error::{
 };
 use types_fmgr::{
     input_function_call_safe, ErrorSaveNode, FmgrInfo, FunctionCallInfoBaseData as Fcinfo,
-    SetFunctionReturnMode, SFRM_Materialize, SFRM_Materialize_Random,
+    SFRM_Materialize, SFRM_Materialize_Random, SetFunctionReturnMode,
 };
 use types_tuple::{HeapTupleData, HeapTupleHeaderData, ItemPointerData, TupleDescData};
 
@@ -136,7 +136,10 @@ impl<'mcx> ColumnIoData<'mcx> {
         Ok(ColumnIoData {
             typid,
             typmod,
-            io: ScalarIoData { typiofunc, typioparam },
+            io: ScalarIoData {
+                typiofunc,
+                typioparam,
+            },
             kind,
         })
     }
@@ -211,14 +214,20 @@ pub unsafe fn json_populate_type<'mcx>(
     let mut unquoted_holder: Option<PgVec<'_, u8>> = None;
     let jsv: JsValue<'_> = if *isnull {
         if is_json {
-            JsValue::Json { s: None, ttype: JsonToken::Invalid }
+            JsValue::Json {
+                s: None,
+                ttype: JsonToken::Invalid,
+            }
         } else {
             JsValue::Jsonb(None)
         }
     } else if is_json {
         // SAFETY: caller contract — live non-null text varlena.
         let payload = text_holder.insert(unsafe { text_payload_from_datum(mcx, json_val)? });
-        JsValue::Json { s: Some(&payload[..]), ttype: JsonToken::Invalid }
+        JsValue::Json {
+            s: Some(&payload[..]),
+            ttype: JsonToken::Invalid,
+        }
     } else {
         // SAFETY: caller contract — live non-null jsonb varlena.
         let payload = payload_holder
@@ -241,10 +250,7 @@ pub unsafe fn json_populate_type<'mcx>(
 }
 
 // C DatumGetTextPP: detoasted text payload (no header).
-unsafe fn text_payload_from_datum<'mcx>(
-    mcx: Mcx<'mcx>,
-    d: Datum,
-) -> PgResult<PgVec<'mcx, u8>> {
+unsafe fn text_payload_from_datum<'mcx>(mcx: Mcx<'mcx>, d: Datum) -> PgResult<PgVec<'mcx, u8>> {
     let p = d.as_usize() as *const u8;
     // SAFETY: caller contract — live varlena readable through VARSIZE_ANY.
     let raw = unsafe { core::slice::from_raw_parts(p, types_tuple::varatt::varsize_any(p)) };
@@ -319,14 +325,9 @@ fn populate_record_field(
             escontext,
             omit_scalar_quotes,
         ),
-        ColumnKind::Array { element } => populate_array(
-            element,
-            colname,
-            mcx,
-            jsv,
-            isnull,
-            escontext,
-        ),
+        ColumnKind::Array { element } => {
+            populate_array(element, colname, mcx, jsv, isnull, escontext)
+        }
         ColumnKind::Composite { io } | ColumnKind::CompositeDomain { io } => {
             let dfl = match defaultval {
                 // SAFETY: a non-null composite datum from the caller.
@@ -546,8 +547,10 @@ impl<'v> JsonSem<'v> for JHashSem<'v, '_> {
             return Ok(true);
         }
         self.saved_token_type = lex.token_type;
-        self.save_json_start = if matches!(lex.token_type, JsonToken::ArrayStart | JsonToken::ObjectStart)
-        {
+        self.save_json_start = if matches!(
+            lex.token_type,
+            JsonToken::ArrayStart | JsonToken::ObjectStart
+        ) {
             lex.token_start
         } else {
             None
@@ -573,7 +576,13 @@ impl<'v> JsonSem<'v> for JHashSem<'v, '_> {
             None => self.saved_scalar,
         };
         // C hash_search HASH_ENTER: a later duplicate overrides the earlier.
-        self.hash.insert(fname, JsonHashEntry { ttype: self.saved_token_type, val });
+        self.hash.insert(
+            fname,
+            JsonHashEntry {
+                ttype: self.saved_token_type,
+                val,
+            },
+        );
         Ok(true)
     }
 
@@ -643,8 +652,10 @@ fn js_value_to_js_object<'v>(
     match jsv {
         JsValue::Json { s, .. } => {
             let s = s.expect("non-null json jsv");
-            Ok(get_json_object_as_hash(mcx, s, "populate_composite", escontext)?
-                .map(JsObject::Json))
+            Ok(
+                get_json_object_as_hash(mcx, s, "populate_composite", escontext)?
+                    .map(JsObject::Json),
+            )
         }
         JsValue::Jsonb(v) => match v {
             Some(JsonbItem::Binary(c)) if container_is_object(c) => {
@@ -675,11 +686,21 @@ fn js_object_get_field<'v>(obj: &JsObject<'v>, field: &[u8]) -> (bool, JsValue<'
             Some(e) => (
                 true,
                 JsValue::Json {
-                    s: if e.ttype == JsonToken::Null { None } else { e.val },
+                    s: if e.ttype == JsonToken::Null {
+                        None
+                    } else {
+                        e.val
+                    },
                     ttype: e.ttype,
                 },
             ),
-            None => (false, JsValue::Json { s: None, ttype: JsonToken::Null }),
+            None => (
+                false,
+                JsValue::Json {
+                    s: None,
+                    ttype: JsonToken::Null,
+                },
+            ),
         },
         JsObject::Jsonb(cont) => {
             let v = cont.and_then(|c| get_key_value(c, field));
@@ -781,7 +802,9 @@ fn populate_record<'c>(
         if need {
             record.columns[i] = Some(ColumnIoData::new(cache_mcx, att.atttypid, att.atttypmod)?);
         }
-        let col = record.columns[i].as_mut().expect("column cache just filled");
+        let col = record.columns[i]
+            .as_mut()
+            .expect("column cache just filled");
         let dfl_datum = if nulls[i] { None } else { Some(values[i]) };
         // SAFETY: attnames are valid server-encoding text.
         let colname_str = unsafe { core::str::from_utf8_unchecked(colname) };
@@ -890,8 +913,8 @@ struct PopulateArrayContext<'e, 'c, 'r> {
 
 #[cold]
 fn expected_json_array_error(ctx: &PopulateArrayContext<'_, '_, '_>, ndim: i32) -> PgError {
-    let mut e = PgError::error("expected JSON array")
-        .with_sqlstate(ERRCODE_INVALID_TEXT_REPRESENTATION);
+    let mut e =
+        PgError::error("expected JSON array").with_sqlstate(ERRCODE_INVALID_TEXT_REPRESENTATION);
     if ndim <= 0 {
         if let Some(colname) = ctx.colname {
             e = e.with_hint(alloc::format!("See the value of key \"{colname}\"."));
@@ -1061,9 +1084,15 @@ impl<'v> JsonSem<'v> for PopulateArraySem<'_, '_, '_, '_, 'v> {
         }
         let jsv = if isnull {
             debug_assert_eq!(self.element_type, JsonToken::Null);
-            JsValue::Json { s: None, ttype: JsonToken::Null }
+            JsValue::Json {
+                s: None,
+                ttype: JsonToken::Null,
+            }
         } else if let Some(scalar) = self.element_scalar {
-            JsValue::Json { s: Some(scalar), ttype: self.element_type }
+            JsValue::Json {
+                s: Some(scalar),
+                ttype: self.element_type,
+            }
         } else {
             let start = self.element_start.expect("element start recorded");
             JsValue::Json {
@@ -1257,7 +1286,10 @@ fn jsonb_unquote<'r>(mcx: Mcx<'r>, payload: &[u8]) -> PgResult<PgVec<'r, u8>> {
         }
         Some(JsonbItem::Numeric(image)) => {
             let mut scratch = alloc::vec::Vec::new();
-            adt_numeric::numeric_out_into(adt_numeric::Num::from_payload(&image[4..]), &mut scratch);
+            adt_numeric::numeric_out_into(
+                adt_numeric::Num::from_payload(&image[4..]),
+                &mut scratch,
+            );
             let mut v = mcx::vec_with_capacity_in(mcx, scratch.len())?;
             mcx::vec_append_bytes(&mut v, &scratch)?;
             Ok(v)
@@ -1375,7 +1407,9 @@ fn get_record_type_from_query(
     if resolved.class != funcapi::TypeFuncClass::Composite {
         return Err(cannot_determine_row_type(funcname));
     }
-    let src = resolved.result_tuple_desc.expect("composite result carries a tupdesc");
+    let src = resolved
+        .result_tuple_desc
+        .expect("composite result carries a tupdesc");
     cache.argtype = src.tdtypeid;
     if cache.c.is_none() {
         cache.c = Some(ColumnIoData::new(cache.mcx(), RECORDOID, -1)?);
@@ -1465,7 +1499,10 @@ fn populate_record_worker(
             // SAFETY: arg checked non-null; live text varlena.
             let t = text_holder
                 .insert(unsafe { text_payload_from_datum(mcx, fcinfo.arg(json_arg_num))? });
-            JsValue::Json { s: Some(&t[..]), ttype: JsonToken::Invalid }
+            JsValue::Json {
+                s: Some(&t[..]),
+                ttype: JsonToken::Invalid,
+            }
         } else {
             let p = payload_holder.insert(crate::builtins::arg_jsonb(fcinfo, json_arg_num, mcx)?);
             JsValue::Jsonb(Some(JsonbItem::Binary(p.as_bytes())))
@@ -1636,8 +1673,10 @@ impl<'v> JsonSem<'v> for RecordsetSem<'_, 'v> {
             return Ok(true);
         }
         self.saved_token_type = lex.token_type;
-        self.save_json_start = if matches!(lex.token_type, JsonToken::ArrayStart | JsonToken::ObjectStart)
-        {
+        self.save_json_start = if matches!(
+            lex.token_type,
+            JsonToken::ArrayStart | JsonToken::ObjectStart
+        ) {
             lex.token_start
         } else {
             None
@@ -1662,7 +1701,13 @@ impl<'v> JsonSem<'v> for RecordsetSem<'_, 'v> {
             None => self.saved_scalar,
         };
         if let Some(hash) = self.json_hash.as_mut() {
-            hash.insert(fname, JsonHashEntry { ttype: self.saved_token_type, val });
+            hash.insert(
+                fname,
+                JsonHashEntry {
+                    ttype: self.saved_token_type,
+                    val,
+                },
+            );
         }
         Ok(true)
     }
@@ -1845,18 +1890,13 @@ fn populate_recordset_worker(
         .expect("cache just restored");
     if let Some(io) = cache_ref.c.as_ref().and_then(|c| c.composite_io_ref()) {
         if let Some(td) = io.tupdesc.as_ref() {
-            rsi.setDesc = Some(
-                core::ptr::NonNull::from(td).cast::<core::ffi::c_void>(),
-            );
+            rsi.setDesc = Some(core::ptr::NonNull::from(td).cast::<core::ffi::c_void>());
         }
     }
     Ok(fcinfo.return_null())
 }
 
-fn require_flinfo<'a>(
-    flinfo: Option<&'a mut FmgrInfo>,
-    name: &str,
-) -> &'a mut FmgrInfo {
+fn require_flinfo<'a>(flinfo: Option<&'a mut FmgrInfo>, name: &str) -> &'a mut FmgrInfo {
     flinfo.unwrap_or_else(|| panic!("{name}: NULL flinfo"))
 }
 
@@ -1885,10 +1925,7 @@ pub fn fc_jsonb_populate_record_valid(
     Ok(Datum::from_bool(!escontext.ctx.error_occurred()))
 }
 
-pub fn fc_jsonb_to_record(
-    flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_jsonb_to_record(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let flinfo = require_flinfo(flinfo, "jsonb_to_record");
     populate_record_worker(flinfo, fcinfo, "jsonb_to_record", false, false, None)
 }
@@ -1901,10 +1938,7 @@ pub fn fc_json_populate_record(
     populate_record_worker(flinfo, fcinfo, "json_populate_record", true, true, None)
 }
 
-pub fn fc_json_to_record(
-    flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_json_to_record(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let flinfo = require_flinfo(flinfo, "json_to_record");
     populate_record_worker(flinfo, fcinfo, "json_to_record", true, false, None)
 }
@@ -1933,10 +1967,7 @@ pub fn fc_json_populate_recordset(
     populate_recordset_worker(flinfo, fcinfo, "json_populate_recordset", true, true)
 }
 
-pub fn fc_json_to_recordset(
-    flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_json_to_recordset(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let flinfo = require_flinfo(flinfo, "json_to_recordset");
     populate_recordset_worker(flinfo, fcinfo, "json_to_recordset", true, false)
 }

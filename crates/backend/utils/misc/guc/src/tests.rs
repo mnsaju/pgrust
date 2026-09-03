@@ -20,7 +20,12 @@ fn test_parse_bool(value: &str) -> Option<bool> {
     if lower.is_empty() {
         return None;
     }
-    for (word, result) in [("true", true), ("false", false), ("yes", true), ("no", false)] {
+    for (word, result) in [
+        ("true", true),
+        ("false", false),
+        ("yes", true),
+        ("no", false),
+    ] {
         if word.starts_with(&lower) {
             return Some(result);
         }
@@ -54,7 +59,10 @@ fn setup() {
             if p.is_absolute() {
                 p.to_path_buf()
             } else if let Some(calling) = calling_file {
-                calling.parent().unwrap_or(std::path::Path::new(".")).join(p)
+                calling
+                    .parent()
+                    .unwrap_or(std::path::Path::new("."))
+                    .join(p)
             } else if let Some(dd) = init_small::globals::DataDir() {
                 // C AbsoluteConfigLocation: a relative name with no calling
                 // file resolves against DataDir (how postgresql.auto.conf is
@@ -92,7 +100,9 @@ fn show(name: &str) -> Option<String> {
 #[test]
 fn boot_defaults_seeded() {
     setup();
-    let _guard = APPLICATION_NAME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _guard = APPLICATION_NAME_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     assert_eq!(get_int("work_mem"), Some(4096));
     assert_eq!(get_bool("enable_seqscan"), Some(true));
     assert_eq!(get_real("cursor_tuple_fraction"), Some(0.1));
@@ -114,13 +124,19 @@ fn set_with_units_and_show() {
 fn invalid_values_error_at_session_source() {
     setup();
     let e = set_session("work_mem", Some("banana")).unwrap_err();
-    assert!(e.message().contains("invalid value for parameter \"work_mem\""));
+    assert!(e
+        .message()
+        .contains("invalid value for parameter \"work_mem\""));
 
     let e = set_session("work_mem", Some("1XB")).unwrap_err();
     assert_eq!(e.hint(), Some(MEMORY_UNITS_HINT));
 
     let e = set_session("work_mem", Some("1")).unwrap_err();
-    assert!(e.message().contains("outside the valid range"), "{}", e.message());
+    assert!(
+        e.message().contains("outside the valid range"),
+        "{}",
+        e.message()
+    );
 
     let e = set_session("statement_timeout", Some("5banana")).unwrap_err();
     assert_eq!(e.hint(), Some(TIME_UNITS_HINT));
@@ -151,9 +167,13 @@ fn file_source_rejection_returns_zero() {
 fn postmaster_param_cannot_change_at_runtime() {
     setup();
     let e = set_session("shared_buffers", Some("1000")).unwrap_err();
-    assert!(e.message().contains("cannot be changed without restarting the server"));
+    assert!(e
+        .message()
+        .contains("cannot be changed without restarting the server"));
     let e = set_session("wal_level", Some("logical")).unwrap_err();
-    assert!(e.message().contains("cannot be changed without restarting the server"));
+    assert!(e
+        .message()
+        .contains("cannot be changed without restarting the server"));
 }
 
 #[test]
@@ -208,7 +228,10 @@ fn higher_source_wins_and_seeds_reset_default() {
     .unwrap();
     assert_eq!(rc, -1);
     assert_eq!(get_int("work_mem"), Some(8192));
-    assert_eq!(GetConfigOptionResetString("work_mem"), Some("2048".to_string()));
+    assert_eq!(
+        GetConfigOptionResetString("work_mem"),
+        Some("2048".to_string())
+    );
     assert_eq!(set_session("work_mem", None).unwrap(), 1);
     assert_eq!(get_int("work_mem"), Some(2048));
 }
@@ -322,7 +345,9 @@ fn at_eoxact_without_store_is_noop() {
 #[test]
 fn report_list_is_o_changed() {
     setup();
-    let _guard = APPLICATION_NAME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _guard = APPLICATION_NAME_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     elog::config::set_where_to_send_output(types_dest::CommandDest::Remote);
     begin_reporting_guc_options();
     let initial = SENT.with(|s| std::mem::take(&mut *s.borrow_mut()));
@@ -350,7 +375,9 @@ fn report_list_is_o_changed() {
 #[test]
 fn reset_and_reset_all() {
     setup();
-    let _guard = APPLICATION_NAME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _guard = APPLICATION_NAME_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     assert_eq!(set_session("work_mem", Some("8192")).unwrap(), 1);
     assert_eq!(set_session("application_name", Some("x")).unwrap(), 1);
     assert_eq!(set_session("work_mem", None).unwrap(), 1);
@@ -392,7 +419,9 @@ fn case_insensitive_lookup() {
 #[test]
 fn guc_is_name_truncates_long_values() {
     setup();
-    let _guard = APPLICATION_NAME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _guard = APPLICATION_NAME_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let long = "a".repeat(100);
     assert_eq!(set_session("application_name", Some(&long)).unwrap(), 1);
     assert_eq!(get_string("application_name"), Some(Some("a".repeat(63))));
@@ -460,7 +489,10 @@ fn parse_long_option_splits_and_underscores() {
         ParseLongOption("some-option=some value"),
         ("some_option".to_string(), Some("some value".to_string()))
     );
-    assert_eq!(ParseLongOption("flag-only"), ("flag_only".to_string(), None));
+    assert_eq!(
+        ParseLongOption("flag-only"),
+        ("flag_only".to_string(), None)
+    );
 }
 
 #[test]
@@ -478,23 +510,37 @@ fn valid_custom_names() {
 #[test]
 fn process_config_file_applies_and_reverts() {
     setup();
-    let _guard = APPLICATION_NAME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _guard = APPLICATION_NAME_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let dir = std::env::temp_dir().join(format!("guc_pcf_test_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let conf = dir.join("postgresql.conf");
     init_small::globals::SetDataDir(dir.to_str().unwrap());
 
-    std::fs::write(&conf, "work_mem = 2MB\nwork_mem = 8MB\napplication_name = 'from_file'\nnot.known = 'kept'\n").unwrap();
-    SetConfigOption("config_file", Some(conf.to_str().unwrap()), PGC_POSTMASTER, PGC_S_OVERRIDE)
-        .unwrap();
+    std::fs::write(
+        &conf,
+        "work_mem = 2MB\nwork_mem = 8MB\napplication_name = 'from_file'\nnot.known = 'kept'\n",
+    )
+    .unwrap();
+    SetConfigOption(
+        "config_file",
+        Some(conf.to_str().unwrap()),
+        PGC_POSTMASTER,
+        PGC_S_OVERRIDE,
+    )
+    .unwrap();
 
     let clean =
         crate::process_config::process_config_file_internal(PGC_SIGHUP, true, types_error::LOG)
             .unwrap();
     assert!(clean);
     assert_eq!(get_int("work_mem"), Some(8192));
-    assert_eq!(get_string("application_name"), Some(Some("from_file".to_string())));
+    assert_eq!(
+        get_string("application_name"),
+        Some(Some("from_file".to_string()))
+    );
     assert_eq!(show("not.known"), Some("kept".to_string()));
     assert_eq!(pg_reload_time(), 42);
     let (source, sourcefile) = with_store(|reg| {
@@ -512,7 +558,10 @@ fn process_config_file_applies_and_reverts() {
             .unwrap();
     assert!(clean);
     assert_eq!(get_int("work_mem"), Some(4096));
-    assert_eq!(with_store(|reg| reg.find_option("work_mem").unwrap().gen().source).unwrap(), PGC_S_DEFAULT);
+    assert_eq!(
+        with_store(|reg| reg.find_option("work_mem").unwrap().gen().source).unwrap(),
+        PGC_S_DEFAULT
+    );
 
     // An unknown non-custom name is a recorded error; settings are not applied.
     std::fs::write(&conf, "no_such_thing = 1\nwork_mem = 3MB\n").unwrap();
@@ -531,15 +580,22 @@ fn process_config_file_applies_and_reverts() {
 #[test]
 fn process_config_file_duplicate_orderings_last_wins() {
     setup();
-    let _guard = APPLICATION_NAME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _guard = APPLICATION_NAME_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let dir = std::env::temp_dir().join(format!("guc_dup_test_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let conf = dir.join("postgresql.conf");
     let auto_conf = dir.join("postgresql.auto.conf");
     init_small::globals::SetDataDir(dir.to_str().unwrap());
-    SetConfigOption("config_file", Some(conf.to_str().unwrap()), PGC_POSTMASTER, PGC_S_OVERRIDE)
-        .unwrap();
+    SetConfigOption(
+        "config_file",
+        Some(conf.to_str().unwrap()),
+        PGC_POSTMASTER,
+        PGC_S_OVERRIDE,
+    )
+    .unwrap();
 
     let reload = || {
         crate::process_config::process_config_file_internal(PGC_SIGHUP, true, types_error::LOG)
@@ -581,14 +637,19 @@ fn process_config_file_duplicate_orderings_last_wins() {
 #[test]
 fn seams_route_to_bodies() {
     setup();
-    let _guard = APPLICATION_NAME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _guard = APPLICATION_NAME_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let level = NewGUCNestLevel();
     AtEOXact_GUC(true, level);
     AtStart_GUC();
     AtEOXact_GUC(true, 1);
     guc_seams::set_config_option_internal_dynamic_default::call("application_name", "seamtest")
         .unwrap();
-    assert_eq!(get_string("application_name"), Some(Some("seamtest".to_string())));
+    assert_eq!(
+        get_string("application_name"),
+        Some(Some("seamtest".to_string()))
+    );
 }
 
 // GUCArrayAdd/Delete + the secdef proconfig seam (fmgr_security_definer's
@@ -610,7 +671,13 @@ fn guc_array_add_replaces_in_place_and_deletes() {
     let a = GUCArrayAdd(&a, "enable_seqscan", "off").unwrap();
     assert_eq!(a.len(), 2);
     let a = GUCArrayAdd(&a, "work_mem", "128MB").unwrap();
-    assert_eq!(a, vec!["work_mem=128MB".to_string(), "enable_seqscan=off".to_string()]);
+    assert_eq!(
+        a,
+        vec![
+            "work_mem=128MB".to_string(),
+            "enable_seqscan=off".to_string()
+        ]
+    );
     let a = GUCArrayDelete(&a, "work_mem").unwrap().unwrap();
     assert_eq!(a, vec!["enable_seqscan=off".to_string()]);
     assert!(GUCArrayDelete(&a, "enable_seqscan").unwrap().is_none());
@@ -620,9 +687,17 @@ fn guc_array_add_replaces_in_place_and_deletes() {
 fn guc_array_add_validates_name_and_value() {
     array_setup();
     let e = GUCArrayAdd(&[], "no_such_setting", "x").unwrap_err();
-    assert!(e.message().contains("unrecognized configuration parameter"), "{}", e.message());
+    assert!(
+        e.message().contains("unrecognized configuration parameter"),
+        "{}",
+        e.message()
+    );
     let e = GUCArrayAdd(&[], "work_mem", "banana").unwrap_err();
-    assert!(e.message().contains("invalid value for parameter"), "{}", e.message());
+    assert!(
+        e.message().contains("invalid value for parameter"),
+        "{}",
+        e.message()
+    );
 }
 
 #[test]
@@ -639,7 +714,10 @@ fn process_guc_array_secdef_pushes_and_nest_pop_restores() {
 #[test]
 fn session_bind_transfers_leader_state() {
     setup();
-    assert_eq!(set_session("cursor_tuple_fraction", Some("0.25")).unwrap(), 1);
+    assert_eq!(
+        set_session("cursor_tuple_fraction", Some("0.25")).unwrap(),
+        1
+    );
     assert_eq!(
         set_config_option_ext(
             "statement_timeout",
@@ -717,9 +795,14 @@ fn session_bind_guard_rejects_double_bind() {
 #[test]
 fn session_bind_matches_string_restore_end_state() {
     setup();
-    let _guard = APPLICATION_NAME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _guard = APPLICATION_NAME_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     assert_eq!(set_session("work_mem", Some("8MB")).unwrap(), 1);
-    assert_eq!(set_session("application_name", Some("bindcheck")).unwrap(), 1);
+    assert_eq!(
+        set_session("application_name", Some("bindcheck")).unwrap(),
+        1
+    );
     // Restrict both legs to the vars this test set: the unit-test env lacks
     // the owning units of several always-nondefault vars (external enum
     // options slots), which the string-restore leg would have to re-parse.

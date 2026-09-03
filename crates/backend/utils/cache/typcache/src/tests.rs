@@ -86,7 +86,9 @@ fn install() {
         });
         s::lookup_pg_type_typcache_shape::set(|typid| {
             Ok(match typid {
-                INT4OID => Some(typrow("int4", b'b' as i8, true, InvalidOid, InvalidOid, InvalidOid)),
+                INT4OID => Some(typrow(
+                    "int4", b'b' as i8, true, InvalidOid, InvalidOid, InvalidOid,
+                )),
                 INT4_ARRAY => Some(typrow(
                     "_int4",
                     b'b' as i8,
@@ -95,13 +97,32 @@ fn install() {
                     INT4OID,
                     F_ARRAY_SUBSCRIPT_HANDLER,
                 )),
-                COMPOSITE_OID => Some(typrow("comp", b'c' as i8, true, COMPOSITE_REL, InvalidOid, InvalidOid)),
-                DOMAIN_OID => Some(typrow("dom", b'd' as i8, true, InvalidOid, InvalidOid, InvalidOid)),
-                RANGE_OID => Some(typrow("rng", b'r' as i8, true, InvalidOid, InvalidOid, InvalidOid)),
-                MULTI_OID => Some(typrow("mrng", b'm' as i8, true, InvalidOid, InvalidOid, InvalidOid)),
-                SHELL_OID => Some(typrow("shell", b'b' as i8, false, InvalidOid, InvalidOid, InvalidOid)),
-                NOHASH_OID => Some(typrow("nohash", b'b' as i8, true, InvalidOid, InvalidOid, InvalidOid)),
-                ENUM_OID => Some(typrow("mood", b'e' as i8, true, InvalidOid, InvalidOid, InvalidOid)),
+                COMPOSITE_OID => Some(typrow(
+                    "comp",
+                    b'c' as i8,
+                    true,
+                    COMPOSITE_REL,
+                    InvalidOid,
+                    InvalidOid,
+                )),
+                DOMAIN_OID => Some(typrow(
+                    "dom", b'd' as i8, true, InvalidOid, InvalidOid, InvalidOid,
+                )),
+                RANGE_OID => Some(typrow(
+                    "rng", b'r' as i8, true, InvalidOid, InvalidOid, InvalidOid,
+                )),
+                MULTI_OID => Some(typrow(
+                    "mrng", b'm' as i8, true, InvalidOid, InvalidOid, InvalidOid,
+                )),
+                SHELL_OID => Some(typrow(
+                    "shell", b'b' as i8, false, InvalidOid, InvalidOid, InvalidOid,
+                )),
+                NOHASH_OID => Some(typrow(
+                    "nohash", b'b' as i8, true, InvalidOid, InvalidOid, InvalidOid,
+                )),
+                ENUM_OID => Some(typrow(
+                    "mood", b'e' as i8, true, InvalidOid, InvalidOid, InvalidOid,
+                )),
                 _ => None,
             })
         });
@@ -237,9 +258,7 @@ fn install() {
                 rngsubdiff: InvalidOid,
             }))
         });
-        s::lookup_pg_range_by_multirange::set(|mr| {
-            Ok((mr == MULTI_OID).then_some(RANGE_OID))
-        });
+        s::lookup_pg_range_by_multirange::set(|mr| Ok((mr == MULTI_OID).then_some(RANGE_OID)));
         s::lookup_pg_proc_shape::set(|funcid| {
             Ok((funcid == 147).then_some(s::PgProcShape {
                 prolang: 12,
@@ -353,7 +372,9 @@ fn no_opclasses_yields_invalid_oids() {
 fn missing_and_shell_types_ereport() {
     install();
     let err = lookup_type_cache(424242, 0).unwrap_err();
-    assert!(err.message().contains("type with OID 424242 does not exist"));
+    assert!(err
+        .message()
+        .contains("type with OID 424242 does not exist"));
     let err = lookup_type_cache(SHELL_OID, 0).unwrap_err();
     assert!(err.message().contains("type \"shell\" is only a shell"));
     // The failed lookups left in_progress slots; eoxact cleanup drains them.
@@ -416,7 +437,12 @@ fn domain_entry_threads_into_chain() {
 fn composite_entry_maintains_rel_map() {
     install();
     let _e = lookup_type_cache(COMPOSITE_OID, 0).unwrap();
-    with_state(|st| assert_eq!(st.rel_id_to_type_id.get(&COMPOSITE_REL), Some(&COMPOSITE_OID)));
+    with_state(|st| {
+        assert_eq!(
+            st.rel_id_to_type_id.get(&COMPOSITE_REL),
+            Some(&COMPOSITE_OID)
+        )
+    });
     invalidate::TypeCacheTypCallback(
         Datum::from_oid(InvalidOid),
         82,
@@ -479,7 +505,10 @@ fn domain_constraints_order_and_update() {
     let mut r = crate::domain::DomainConstraintRef::init(DOMAIN_OID).unwrap();
     let names: Vec<&str> = r.constraints().iter().map(|c| c.name).collect();
     assert_eq!(names, ["NOT NULL", "dom_check_a", "dom_check_b"]);
-    assert_eq!(r.constraints()[0].constrainttype, DomConstraintType::NotNull);
+    assert_eq!(
+        r.constraints()[0].constrainttype,
+        DomConstraintType::NotNull
+    );
     assert!(r.constraints()[1].check_expr.is_some());
     assert!(!r.update().unwrap());
     invalidate::TypeCacheConstrCallback(Datum::from_oid(InvalidOid), 19, 0);

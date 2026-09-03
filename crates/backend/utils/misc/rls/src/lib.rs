@@ -14,8 +14,16 @@ use rls_seams::CheckEnableRls::{RlsEnabled, RlsNone, RlsNoneEnv};
 const ANUM_PG_CLASS_RELROWSECURITY: i32 = 24;
 const ANUM_PG_CLASS_RELFORCEROWSECURITY: i32 = 25;
 
-pub fn check_enable_rls(relid: Oid, check_as_user: Oid, no_error: bool) -> PgResult<CheckEnableRls> {
-    let user_id = if check_as_user != InvalidOid { check_as_user } else { miscinit::GetUserId() };
+pub fn check_enable_rls(
+    relid: Oid,
+    check_as_user: Oid,
+    no_error: bool,
+) -> PgResult<CheckEnableRls> {
+    let user_id = if check_as_user != InvalidOid {
+        check_as_user
+    } else {
+        miscinit::GetUserId()
+    };
 
     if relid < FirstNormalObjectId {
         return Ok(RlsNone);
@@ -49,9 +57,11 @@ pub fn check_enable_rls(relid: Oid, check_as_user: Oid, no_error: bool) -> PgRes
         let relname = syscache_seams::pg_class_relname::call(relid)?
             .map(|n| String::from_utf8_lossy(n.name_str()).into_owned())
             .unwrap_or_default();
-        let mut b = elog::ereport(ERROR).errcode(ERRCODE_INSUFFICIENT_PRIVILEGE).errmsg(format!(
-            "query would be affected by row-level security policy for table \"{relname}\""
-        ));
+        let mut b = elog::ereport(ERROR)
+            .errcode(ERRCODE_INSUFFICIENT_PRIVILEGE)
+            .errmsg(format!(
+                "query would be affected by row-level security policy for table \"{relname}\""
+            ));
         if amowner {
             b = b.errhint(
                 "To disable the policy for the table's owner, use ALTER TABLE NO FORCE ROW LEVEL SECURITY.",
@@ -82,12 +92,24 @@ fn fc_row_security_active_name(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 pub const RLS_BUILTINS: &[FmgrBuiltin] = &[
     b(3298, "row_security_active", 1, fc_row_security_active),
-    b(3299, "row_security_active_name", 1, fc_row_security_active_name),
+    b(
+        3299,
+        "row_security_active_name",
+        1,
+        fc_row_security_active_name,
+    ),
 ];
 
 pub fn init_seams() {
@@ -110,6 +132,9 @@ mod tests {
     fn install_seams() {
         init_seams();
         assert!(rls_seams::check_enable_rls::is_installed());
-        assert_eq!(rls_seams::check_enable_rls::call(1247, 10, false).unwrap(), RlsNone);
+        assert_eq!(
+            rls_seams::check_enable_rls::call(1247, 10, false).unwrap(),
+            RlsNone
+        );
     }
 }

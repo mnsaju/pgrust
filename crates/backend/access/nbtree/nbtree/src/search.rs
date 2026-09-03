@@ -22,8 +22,8 @@ use types_scan::scankey::{
     BTEqualStrategyNumber, BTGreaterEqualStrategyNumber, BTGreaterStrategyNumber,
     BTLessEqualStrategyNumber, BTLessStrategyNumber, InvalidStrategy, ScanKeyData, StrategyNumber,
     SK_BT_DESC, SK_BT_MAXVAL, SK_BT_MINVAL, SK_BT_NEXT, SK_BT_NULLS_FIRST, SK_BT_PRIOR,
-    SK_BT_REQBKWD, SK_BT_REQFWD, SK_BT_SKIP, SK_ISNULL, SK_ROW_END, SK_ROW_HEADER,
-    SK_ROW_MEMBER, SK_SEARCHNOTNULL,
+    SK_BT_REQBKWD, SK_BT_REQFWD, SK_BT_SKIP, SK_ISNULL, SK_ROW_END, SK_ROW_HEADER, SK_ROW_MEMBER,
+    SK_SEARCHNOTNULL,
 };
 use types_scan::sdir::{ScanDirection, ScanDirectionIsBackward, ScanDirectionIsForward};
 use types_snapshot::SnapshotData;
@@ -513,9 +513,16 @@ pub(crate) fn bt_first(ctx: &mut ScanCtx<'_, '_>, dir: ScanDirection) -> PgResul
                             keys[bk].sk_flags & SK_BT_MINVAL == 0
                         });
                         let arr = &ctx.so.arrayKeys[a];
-                        let have =
-                            if low { arr.low_compare.is_some() } else { arr.high_compare.is_some() };
-                        chosen = if have { Some(Chosen::Skip(a, low)) } else { None };
+                        let have = if low {
+                            arr.low_compare.is_some()
+                        } else {
+                            arr.high_compare.is_some()
+                        };
+                        chosen = if have {
+                            Some(Chosen::Skip(a, low))
+                        } else {
+                            None
+                        };
                         if !arr.null_elem {
                             implies_nn = Some(bk);
                         } else {
@@ -556,8 +563,12 @@ pub(crate) fn bt_first(ctx: &mut ScanCtx<'_, '_>, dir: ScanDirection) -> PgResul
                     Chosen::Idx(k) => &keys[k],
                     Chosen::Skip(a, low) => {
                         let arr = &ctx.so.arrayKeys[a];
-                        if low { arr.low_compare.as_ref() } else { arr.high_compare.as_ref() }
-                            .expect("checked above")
+                        if low {
+                            arr.low_compare.as_ref()
+                        } else {
+                            arr.high_compare.as_ref()
+                        }
+                        .expect("checked above")
                     }
                 };
                 start_keys[keysz] = Some(match chosen.expect("checked above") {
@@ -632,8 +643,12 @@ pub(crate) fn bt_first(ctx: &mut ScanCtx<'_, '_>, dir: ScanDirection) -> PgResul
             StartKey::Data(idx) => &ctx.so.keyData[*idx],
             StartKey::SkipCompare(a, low) => {
                 let arr = &ctx.so.arrayKeys[*a];
-                if *low { arr.low_compare.as_ref() } else { arr.high_compare.as_ref() }
-                    .expect("chosen skip compare exists")
+                if *low {
+                    arr.low_compare.as_ref()
+                } else {
+                    arr.high_compare.as_ref()
+                }
+                .expect("chosen skip compare exists")
             }
             StartKey::NotNull(nn) => nn,
         };

@@ -25,11 +25,19 @@ pub struct ObjectAddress {
 
 impl ObjectAddress {
     pub const fn set(classId: Oid, objectId: Oid) -> Self {
-        Self { classId, objectId, objectSubId: 0 }
+        Self {
+            classId,
+            objectId,
+            objectSubId: 0,
+        }
     }
 
     pub const fn sub_set(classId: Oid, objectId: Oid, objectSubId: i32) -> Self {
-        Self { classId, objectId, objectSubId }
+        Self {
+            classId,
+            objectId,
+            objectSubId,
+        }
     }
 }
 
@@ -101,7 +109,12 @@ pub fn recordMultipleDependencies<'mcx>(
             Datum::from_char(behavior.as_char()),
         ];
         let nulls = [false; Natts_pg_depend];
-        tuples.push(heaptuple::heap_form_tuple(mcx, rel.descr(), &values, &nulls)?);
+        tuples.push(heaptuple::heap_form_tuple(
+            mcx,
+            rel.descr(),
+            &values,
+            &nulls,
+        )?);
         if tuples.len() == max_slots {
             if indstate.is_none() {
                 indstate = Some(catalog_indexing::CatalogOpenIndexes(mcx, &rel)?);
@@ -183,7 +196,11 @@ impl<'mcx> nodes_core::NodeWalker<'mcx> for FindExprRefs<'_, 'mcx> {
                      single-rel rtable; unported lane"
                 );
                 if v.varattno != 0 {
-                    addrs.push(ObjectAddress::sub_set(RELATION_CLASS, rel_id, v.varattno as i32));
+                    addrs.push(ObjectAddress::sub_set(
+                        RELATION_CLASS,
+                        rel_id,
+                        v.varattno as i32,
+                    ));
                 }
                 return Ok(false);
             }
@@ -248,8 +265,7 @@ impl<'mcx> nodes_core::NodeWalker<'mcx> for FindExprRefs<'_, 'mcx> {
                             return Err(Box::new(
                                 types_error::PgError::new(
                                     types_error::ERROR,
-                                    "constant of the type regrole cannot be used here"
-                                        .to_string(),
+                                    "constant of the type regrole cannot be used here".to_string(),
                                 )
                                 .with_sqlstate(types_error::ERRCODE_FEATURE_NOT_SUPPORTED),
                             ));
@@ -260,7 +276,9 @@ impl<'mcx> nodes_core::NodeWalker<'mcx> for FindExprRefs<'_, 'mcx> {
                 return Ok(false);
             }
             T_Param => {
-                let p = node.as_variant::<types_nodes::primnodes::Param>().expect("Param");
+                let p = node
+                    .as_variant::<types_nodes::primnodes::Param>()
+                    .expect("Param");
                 addrs.push(ObjectAddress::set(TYPE_CLASS, p.paramtype));
                 if p.paramcollid != 0 && p.paramcollid != DEFAULT_COLLATION_OID {
                     addrs.push(ObjectAddress::set(COLL_CLASS, p.paramcollid));
@@ -309,7 +327,9 @@ impl<'mcx> nodes_core::NodeWalker<'mcx> for FindExprRefs<'_, 'mcx> {
             T_CoerceToDomain => {
                 addrs.push(ObjectAddress::set(
                     TYPE_CLASS,
-                    node.as_coerce_to_domain().expect("CoerceToDomain").resulttype,
+                    node.as_coerce_to_domain()
+                        .expect("CoerceToDomain")
+                        .resulttype,
                 ));
             }
             T_CollateExpr => {
@@ -326,8 +346,9 @@ impl<'mcx> nodes_core::NodeWalker<'mcx> for FindExprRefs<'_, 'mcx> {
                 }
             }
             T_FieldSelect => {
-                let fselect =
-                    node.as_variant::<types_nodes::primnodes::FieldSelect>().expect("FieldSelect");
+                let fselect = node
+                    .as_variant::<types_nodes::primnodes::FieldSelect>()
+                    .expect("FieldSelect");
                 let argtype = lsyscache::getBaseType(nodes_core::expr_type(fselect.arg))?;
                 let reltype = lsyscache::get_typ_typrelid(argtype)?;
                 if reltype != 0 {
@@ -383,14 +404,25 @@ impl<'mcx> nodes_core::NodeWalker<'mcx> for FindExprRefs<'_, 'mcx> {
             // XmlExpr likewise has no dependency.c case: default recursion.
             // CoerceToDomainValue (a domain CHECK's VALUE) likewise has no
             // dependency.c case: default recursion, no dependency recorded.
-            T_BoolExpr | T_NullTest | T_BooleanTest | T_CaseExpr | T_CaseWhen
-            | T_CaseTestExpr | T_CoalesceExpr | T_MinMaxExpr | T_ArrayExpr | T_List
-            | T_SQLValueFunction | T_XmlExpr | T_JsonExpr | T_JsonValueExpr
-            | T_JsonConstructorExpr | T_JsonIsPredicate | T_JsonBehavior
+            T_BoolExpr
+            | T_NullTest
+            | T_BooleanTest
+            | T_CaseExpr
+            | T_CaseWhen
+            | T_CaseTestExpr
+            | T_CoalesceExpr
+            | T_MinMaxExpr
+            | T_ArrayExpr
+            | T_List
+            | T_SQLValueFunction
+            | T_XmlExpr
+            | T_JsonExpr
+            | T_JsonValueExpr
+            | T_JsonConstructorExpr
+            | T_JsonIsPredicate
+            | T_JsonBehavior
             | T_CoerceToDomainValue => {}
-            other => panic!(
-                "find_expr_references_walker (dependency.c): {other:?}; unported lane"
-            ),
+            other => panic!("find_expr_references_walker (dependency.c): {other:?}; unported lane"),
         }
         nodes_core::expression_tree_walker(node, self)
     }
@@ -408,7 +440,14 @@ pub fn recordDependencyOnSingleRelExpr<'mcx>(
     reverse_self: bool,
 ) -> PgResult<()> {
     let mut addrs: mcx::PgVec<'mcx, ObjectAddress> = mcx::PgVec::new_in(mcx);
-    nodes_core::NodeWalker::visit(&mut FindExprRefs { mcx, rel_id, addrs: &mut addrs }, expr)?;
+    nodes_core::NodeWalker::visit(
+        &mut FindExprRefs {
+            mcx,
+            rel_id,
+            addrs: &mut addrs,
+        },
+        expr,
+    )?;
     eliminate_duplicate_dependencies(&mut addrs);
 
     if (behavior != self_behavior || reverse_self) && !addrs.is_empty() {
@@ -491,7 +530,10 @@ pub fn deleteDependencyRecordsFor<'mcx>(
         k.sk_argument = Datum::from_oid(oid);
         k
     };
-    let keys = [key(Anum_pg_depend_classid, classId), key(Anum_pg_depend_objid, objectId)];
+    let keys = [
+        key(Anum_pg_depend_classid, classId),
+        key(Anum_pg_depend_objid, objectId),
+    ];
     let mut scan = genam::systable_beginscan(mcx, &rel, DependDependerIndexId, true, None, &keys)?;
     while let Some(tup) = genam::systable_getnext(mcx, &mut scan)? {
         if skipExtensionDeps {
@@ -539,7 +581,10 @@ pub fn changeDependencyFor<'mcx>(
     }
     let mut count = 0i64;
     let rel = table::table_open(mcx, DependRelationId, RowExclusiveLock)?;
-    let keys = [oid_key(Anum_pg_depend_classid, classId), oid_key(Anum_pg_depend_objid, objectId)];
+    let keys = [
+        oid_key(Anum_pg_depend_classid, classId),
+        oid_key(Anum_pg_depend_objid, objectId),
+    ];
     let mut scan = genam::systable_beginscan(mcx, &rel, DependDependerIndexId, true, None, &keys)?;
     let desc = rel.descr();
     let natts = desc.natts as usize;
@@ -590,8 +635,10 @@ pub fn changeDependenciesOf<'mcx>(
 ) -> PgResult<i64> {
     let mut count = 0i64;
     let rel = table::table_open(mcx, DependRelationId, RowExclusiveLock)?;
-    let keys =
-        [oid_key(Anum_pg_depend_classid, classId), oid_key(Anum_pg_depend_objid, oldObjectId)];
+    let keys = [
+        oid_key(Anum_pg_depend_classid, classId),
+        oid_key(Anum_pg_depend_objid, oldObjectId),
+    ];
     let mut scan = genam::systable_beginscan(mcx, &rel, DependDependerIndexId, true, None, &keys)?;
     let desc = rel.descr();
     let natts = desc.natts as usize;
@@ -735,7 +782,10 @@ pub fn set_current_extension_object(oid: Oid) {
 
 pub fn getExtensionOfObject<'mcx>(mcx: Mcx<'mcx>, classId: Oid, objectId: Oid) -> PgResult<Oid> {
     let rel = table::table_open(mcx, DependRelationId, types_rel::AccessShareLock)?;
-    let keys = [oid_key(Anum_pg_depend_classid, classId), oid_key(Anum_pg_depend_objid, objectId)];
+    let keys = [
+        oid_key(Anum_pg_depend_classid, classId),
+        oid_key(Anum_pg_depend_objid, objectId),
+    ];
     let mut scan = genam::systable_beginscan(mcx, &rel, DependDependerIndexId, true, None, &keys)?;
     let mut result = types_core::InvalidOid;
     let desc = rel.descr();
@@ -801,9 +851,7 @@ pub fn recordDependencyOnCurrentExtension<'mcx>(
                     extension_name_or_lookup_fail(CurrentExtensionObject())?
                 ),
             )
-            .with_detail(
-                "An extension is not allowed to replace an object that it does not own.",
-            )
+            .with_detail("An extension is not allowed to replace an object that it does not own.")
             .with_sqlstate(types_error::ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
         ));
     }
@@ -864,7 +912,10 @@ pub fn deleteDependencyRecordsForSpecific<'mcx>(
 ) -> PgResult<i64> {
     let mut count = 0i64;
     let rel = table::table_open(mcx, DependRelationId, RowExclusiveLock)?;
-    let keys = [oid_key(Anum_pg_depend_classid, classId), oid_key(Anum_pg_depend_objid, objectId)];
+    let keys = [
+        oid_key(Anum_pg_depend_classid, classId),
+        oid_key(Anum_pg_depend_objid, objectId),
+    ];
     let mut scan = genam::systable_beginscan(mcx, &rel, DependDependerIndexId, true, None, &keys)?;
     let desc = rel.descr();
     while let Some(tup) = genam::systable_getnext(mcx, &mut scan)? {
@@ -898,7 +949,10 @@ pub fn getAutoExtensionsOfObject<'mcx>(
 ) -> PgResult<mcx::PgVec<'mcx, Oid>> {
     let mut result: mcx::PgVec<'mcx, Oid> = mcx::PgVec::new_in(mcx);
     let rel = table::table_open(mcx, DependRelationId, types_rel::AccessShareLock)?;
-    let keys = [oid_key(Anum_pg_depend_classid, classId), oid_key(Anum_pg_depend_objid, objectId)];
+    let keys = [
+        oid_key(Anum_pg_depend_classid, classId),
+        oid_key(Anum_pg_depend_objid, objectId),
+    ];
     let mut scan = genam::systable_beginscan(mcx, &rel, DependDependerIndexId, true, None, &keys)?;
     let desc = rel.descr();
     while let Some(tup) = genam::systable_getnext(mcx, &mut scan)? {
@@ -1228,12 +1282,17 @@ pub fn deleteDependencyRecordsForClass<'mcx>(
     deptype: DependencyType,
 ) -> PgResult<i64> {
     let rel = table::table_open(mcx, DependRelationId, RowExclusiveLock)?;
-    let keys = [oid_key(Anum_pg_depend_classid, classId), oid_key(Anum_pg_depend_objid, objectId)];
+    let keys = [
+        oid_key(Anum_pg_depend_classid, classId),
+        oid_key(Anum_pg_depend_objid, objectId),
+    ];
     let mut scan = genam::systable_beginscan(mcx, &rel, DependDependerIndexId, true, None, &keys)?;
     let mut count = 0i64;
     let desc = rel.descr();
     loop {
-        let Some(tup) = genam::systable_getnext(mcx, &mut scan)? else { break };
+        let Some(tup) = genam::systable_getnext(mcx, &mut scan)? else {
+            break;
+        };
         let tid = tup.t_self;
         // SAFETY: aliases the slot-held image for this iteration's reads only.
         let view = unsafe {
@@ -1260,9 +1319,17 @@ pub fn deleteDependencyRecordsForClass<'mcx>(
 pub fn get_index_constraint<'mcx>(mcx: Mcx<'mcx>, index_id: Oid) -> PgResult<Oid> {
     use types_scan::scankey::{BTEqualStrategyNumber, ScanKeyData};
     const ConstraintRelationId: Oid = 2606;
-    let mut keys = [ScanKeyData::empty(), ScanKeyData::empty(), ScanKeyData::empty()];
+    let mut keys = [
+        ScanKeyData::empty(),
+        ScanKeyData::empty(),
+        ScanKeyData::empty(),
+    ];
     let fns = [
-        (1u16, types_core::fmgr::F_OIDEQ, Datum::from_oid(types_core::RELATION_RELATION_ID)),
+        (
+            1u16,
+            types_core::fmgr::F_OIDEQ,
+            Datum::from_oid(types_core::RELATION_RELATION_ID),
+        ),
         (2u16, types_core::fmgr::F_OIDEQ, Datum::from_oid(index_id)),
         (3u16, types_core::fmgr::F_INT4EQ, Datum::from_i32(0)),
     ];
@@ -1275,8 +1342,7 @@ pub fn get_index_constraint<'mcx>(mcx: Mcx<'mcx>, index_id: Oid) -> PgResult<Oid
         k.sk_argument = arg;
     }
     let rel = table::table_open(mcx, DependRelationId, types_rel::AccessShareLock)?;
-    let mut scan =
-        genam::systable_beginscan(mcx, &rel, DependDependerIndexId, true, None, &keys)?;
+    let mut scan = genam::systable_beginscan(mcx, &rel, DependDependerIndexId, true, None, &keys)?;
     let mut constraint_id = types_core::InvalidOid;
     while let Some(tup) = genam::systable_getnext(mcx, &mut scan)? {
         let mut isnull = false;

@@ -15,7 +15,12 @@ pub struct CallContext {
 
 impl CallContext {
     pub fn new(atomic: bool) -> Self {
-        Self { node: FmNode { tag: T_CALL_CONTEXT }, atomic }
+        Self {
+            node: FmNode {
+                tag: T_CALL_CONTEXT,
+            },
+            atomic,
+        }
     }
 
     pub fn fm_node_ptr(&mut self) -> FmNodePtr {

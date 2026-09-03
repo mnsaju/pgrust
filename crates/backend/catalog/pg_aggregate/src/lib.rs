@@ -7,9 +7,8 @@ use datum::Datum;
 use mcx::Mcx;
 use pg_depend::{DependencyType, ObjectAddress};
 use pg_proc::{
-    check_valid_internal_signature, check_valid_polymorphic_signature, ProcedureCreate,
-    ProcedureCreateArgs, FUNC_MAX_ARGS, INTERNALlanguageId, PROKIND_AGGREGATE,
-    PROVOLATILE_IMMUTABLE,
+    check_valid_internal_signature, check_valid_polymorphic_signature, INTERNALlanguageId,
+    ProcedureCreate, ProcedureCreateArgs, FUNC_MAX_ARGS, PROKIND_AGGREGATE, PROVOLATILE_IMMUTABLE,
 };
 use types_core::{
     InvalidOid, Oid, OidIsValid, AGGREGATE_RELATION_ID, ANYOID, BYTEAOID, INTERNALOID,
@@ -117,7 +116,11 @@ fn type_acl_check(typeId: Oid) -> PgResult<()> {
 #[track_caller]
 #[cold]
 fn detail_error(msg: &str, sqlstate: types_error::SqlState, detail: String) -> Box<PgError> {
-    Box::new(PgError::error(msg.to_string()).with_sqlstate(sqlstate).with_detail(detail))
+    Box::new(
+        PgError::error(msg.to_string())
+            .with_sqlstate(sqlstate)
+            .with_detail(detail),
+    )
 }
 
 pub fn AggregateCreate<'mcx>(
@@ -141,7 +144,10 @@ pub fn AggregateCreate<'mcx>(
     if numArgs > FUNC_MAX_ARGS as i32 - 1 {
         return Err(err(
             ERRCODE_TOO_MANY_ARGUMENTS,
-            format!("aggregates cannot have more than {} arguments", FUNC_MAX_ARGS - 1),
+            format!(
+                "aggregates cannot have more than {} arguments",
+                FUNC_MAX_ARGS - 1
+            ),
         ));
     }
 
@@ -309,7 +315,8 @@ pub fn AggregateCreate<'mcx>(
         if proc.proisstrict != mtransIsStrict {
             return Err(err(
                 ERRCODE_INVALID_FUNCTION_DEFINITION,
-                "strictness of aggregate's forward and inverse transition functions must match".to_string(),
+                "strictness of aggregate's forward and inverse transition functions must match"
+                    .to_string(),
             ));
         }
     }
@@ -549,26 +556,106 @@ pub fn AggregateCreate<'mcx>(
     let mut values = [Datum::null(); Natts_pg_aggregate];
     let mut nulls = [false; Natts_pg_aggregate];
     let set = |values: &mut [Datum], attnum: i32, d: Datum| values[attnum as usize - 1] = d;
-    set(&mut values, Anum_pg_aggregate_aggfnoid, Datum::from_oid(procOid));
-    set(&mut values, Anum_pg_aggregate_aggkind, Datum::from_char(a.agg_kind));
-    set(&mut values, Anum_pg_aggregate_aggnumdirectargs, Datum::from_i16(numDirectArgs as i16));
-    set(&mut values, Anum_pg_aggregate_aggtransfn, Datum::from_oid(transfn));
-    set(&mut values, Anum_pg_aggregate_aggfinalfn, Datum::from_oid(finalfn));
-    set(&mut values, Anum_pg_aggregate_aggcombinefn, Datum::from_oid(combinefn));
-    set(&mut values, Anum_pg_aggregate_aggserialfn, Datum::from_oid(serialfn));
-    set(&mut values, Anum_pg_aggregate_aggdeserialfn, Datum::from_oid(deserialfn));
-    set(&mut values, Anum_pg_aggregate_aggmtransfn, Datum::from_oid(mtransfn));
-    set(&mut values, Anum_pg_aggregate_aggminvtransfn, Datum::from_oid(minvtransfn));
-    set(&mut values, Anum_pg_aggregate_aggmfinalfn, Datum::from_oid(mfinalfn));
-    set(&mut values, Anum_pg_aggregate_aggfinalextra, Datum::from_bool(a.finalfn_extra_args));
-    set(&mut values, Anum_pg_aggregate_aggmfinalextra, Datum::from_bool(a.mfinalfn_extra_args));
-    set(&mut values, Anum_pg_aggregate_aggfinalmodify, Datum::from_char(a.finalfn_modify));
-    set(&mut values, Anum_pg_aggregate_aggmfinalmodify, Datum::from_char(a.mfinalfn_modify));
-    set(&mut values, Anum_pg_aggregate_aggsortop, Datum::from_oid(sortop));
-    set(&mut values, Anum_pg_aggregate_aggtranstype, Datum::from_oid(a.agg_trans_type));
-    set(&mut values, Anum_pg_aggregate_aggtransspace, Datum::from_i32(a.agg_trans_space));
-    set(&mut values, Anum_pg_aggregate_aggmtranstype, Datum::from_oid(a.agg_mtrans_type));
-    set(&mut values, Anum_pg_aggregate_aggmtransspace, Datum::from_i32(a.agg_mtrans_space));
+    set(
+        &mut values,
+        Anum_pg_aggregate_aggfnoid,
+        Datum::from_oid(procOid),
+    );
+    set(
+        &mut values,
+        Anum_pg_aggregate_aggkind,
+        Datum::from_char(a.agg_kind),
+    );
+    set(
+        &mut values,
+        Anum_pg_aggregate_aggnumdirectargs,
+        Datum::from_i16(numDirectArgs as i16),
+    );
+    set(
+        &mut values,
+        Anum_pg_aggregate_aggtransfn,
+        Datum::from_oid(transfn),
+    );
+    set(
+        &mut values,
+        Anum_pg_aggregate_aggfinalfn,
+        Datum::from_oid(finalfn),
+    );
+    set(
+        &mut values,
+        Anum_pg_aggregate_aggcombinefn,
+        Datum::from_oid(combinefn),
+    );
+    set(
+        &mut values,
+        Anum_pg_aggregate_aggserialfn,
+        Datum::from_oid(serialfn),
+    );
+    set(
+        &mut values,
+        Anum_pg_aggregate_aggdeserialfn,
+        Datum::from_oid(deserialfn),
+    );
+    set(
+        &mut values,
+        Anum_pg_aggregate_aggmtransfn,
+        Datum::from_oid(mtransfn),
+    );
+    set(
+        &mut values,
+        Anum_pg_aggregate_aggminvtransfn,
+        Datum::from_oid(minvtransfn),
+    );
+    set(
+        &mut values,
+        Anum_pg_aggregate_aggmfinalfn,
+        Datum::from_oid(mfinalfn),
+    );
+    set(
+        &mut values,
+        Anum_pg_aggregate_aggfinalextra,
+        Datum::from_bool(a.finalfn_extra_args),
+    );
+    set(
+        &mut values,
+        Anum_pg_aggregate_aggmfinalextra,
+        Datum::from_bool(a.mfinalfn_extra_args),
+    );
+    set(
+        &mut values,
+        Anum_pg_aggregate_aggfinalmodify,
+        Datum::from_char(a.finalfn_modify),
+    );
+    set(
+        &mut values,
+        Anum_pg_aggregate_aggmfinalmodify,
+        Datum::from_char(a.mfinalfn_modify),
+    );
+    set(
+        &mut values,
+        Anum_pg_aggregate_aggsortop,
+        Datum::from_oid(sortop),
+    );
+    set(
+        &mut values,
+        Anum_pg_aggregate_aggtranstype,
+        Datum::from_oid(a.agg_trans_type),
+    );
+    set(
+        &mut values,
+        Anum_pg_aggregate_aggtransspace,
+        Datum::from_i32(a.agg_trans_space),
+    );
+    set(
+        &mut values,
+        Anum_pg_aggregate_aggmtranstype,
+        Datum::from_oid(a.agg_mtrans_type),
+    );
+    set(
+        &mut values,
+        Anum_pg_aggregate_aggmtransspace,
+        Datum::from_i32(a.agg_mtrans_space),
+    );
     let initval_text = match a.agg_initval {
         Some(s) => Some(varlena::cstring_to_text(mcx, s.as_bytes())?),
         None => None,
@@ -624,15 +711,17 @@ pub fn AggregateCreate<'mcx>(
         // affect how an aggregate call is treated in parse analysis.
         if a.agg_kind != old_aggkind {
             let detail = match old_aggkind {
-                AGGKIND_NORMAL => {
-                    Some(format!("\"{}\" is an ordinary aggregate function.", a.agg_name))
-                }
+                AGGKIND_NORMAL => Some(format!(
+                    "\"{}\" is an ordinary aggregate function.",
+                    a.agg_name
+                )),
                 AGGKIND_ORDERED_SET => {
                     Some(format!("\"{}\" is an ordered-set aggregate.", a.agg_name))
                 }
-                AGGKIND_HYPOTHETICAL => {
-                    Some(format!("\"{}\" is a hypothetical-set aggregate.", a.agg_name))
-                }
+                AGGKIND_HYPOTHETICAL => Some(format!(
+                    "\"{}\" is a hypothetical-set aggregate.",
+                    a.agg_name
+                )),
                 _ => None,
             };
             let mut e = PgError::error("cannot change routine kind".to_string())
@@ -671,7 +760,11 @@ pub fn AggregateCreate<'mcx>(
     let mut n = 0;
     let mut add = |class_id: Oid, object_id: Oid| {
         if OidIsValid(object_id) {
-            refs[n] = ObjectAddress { classId: class_id, objectId: object_id, objectSubId: 0 };
+            refs[n] = ObjectAddress {
+                classId: class_id,
+                objectId: object_id,
+                objectSubId: 0,
+            };
             n += 1;
         }
     };
@@ -700,7 +793,9 @@ fn func_signature_string(
     fnName: &NodeList<'_>,
     argtypes: &[Oid],
 ) -> PgResult<String> {
-    let mut sig = commands_define::NameListToString(mcx, fnName)?.as_str().to_string();
+    let mut sig = commands_define::NameListToString(mcx, fnName)?
+        .as_str()
+        .to_string();
     sig.push('(');
     for (i, &t) in argtypes.iter().enumerate() {
         if i > 0 {
@@ -747,7 +842,10 @@ fn lookup_agg_function<'mcx>(
     let not_found = |argtypes: &[Oid]| -> PgResult<Box<PgError>> {
         Ok(err(
             ERRCODE_UNDEFINED_FUNCTION,
-            format!("function {} does not exist", func_signature_string(mcx, fnName, argtypes)?),
+            format!(
+                "function {} does not exist",
+                func_signature_string(mcx, fnName, argtypes)?
+            ),
         ))
     };
     let Some(best) = best else {
@@ -829,7 +927,11 @@ fn lookup_agg_function<'mcx>(
 fn name_parts<'a, 'mcx>(names: &NodeList<'mcx>, buf: &'a mut [&'mcx str; 4]) -> &'a [&'mcx str] {
     let n = names.len().min(buf.len());
     for (i, slot) in buf.iter_mut().enumerate().take(n) {
-        *slot = names.nth(i).as_string().expect("name list holds String nodes").sval;
+        *slot = names
+            .nth(i)
+            .as_string()
+            .expect("name list holds String nodes")
+            .sval;
     }
     &buf[..n]
 }

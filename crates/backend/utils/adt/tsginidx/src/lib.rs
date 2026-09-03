@@ -165,9 +165,11 @@ pub fn gin_tsquery_triconsistent(
     if query.size() == 0 {
         return Ok(GIN_FALSE);
     }
-    Ok(match exec_over_check(mcx, check, query, map_item_operand)? {
-        Ternary::No => GIN_FALSE,
-        Ternary::Yes => GIN_TRUE,
-        Ternary::Maybe => GIN_MAYBE,
-    })
+    Ok(
+        match exec_over_check(mcx, check, query, map_item_operand)? {
+            Ternary::No => GIN_FALSE,
+            Ternary::Yes => GIN_TRUE,
+            Ternary::Maybe => GIN_MAYBE,
+        },
+    )
 }

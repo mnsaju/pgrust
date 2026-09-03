@@ -1,4 +1,6 @@
-use crate::{appendf, array_desc, block_data, has_block_data, rec_data, rec_info, Rec, XLR_INFO_MASK};
+use crate::{
+    appendf, array_desc, block_data, has_block_data, rec_data, rec_info, Rec, XLR_INFO_MASK,
+};
 use stringinfo::StringInfo;
 use types_error::PgResult;
 use types_nbtree::xlog::{
@@ -17,7 +19,9 @@ pub fn btree_desc(buf: &mut StringInfo<'_>, record: &XLogReaderState) -> PgResul
     let info = rec_info(record) & !XLR_INFO_MASK;
 
     match info {
-        XLOG_BTREE_INSERT_LEAF | XLOG_BTREE_INSERT_UPPER | XLOG_BTREE_INSERT_META
+        XLOG_BTREE_INSERT_LEAF
+        | XLOG_BTREE_INSERT_UPPER
+        | XLOG_BTREE_INSERT_META
         | XLOG_BTREE_INSERT_POST => {
             appendf!(buf, "off: {}", rec.u16(0, "xl_btree_insert")?)?;
         }
@@ -105,7 +109,11 @@ pub fn btree_desc(buf: &mut StringInfo<'_>, record: &XLogReaderState) -> PgResul
                 rec.u32(8, "xl_btree_reuse_page")?,
                 (horizon >> 32) as u32,
                 horizon as u32,
-                if rec.u8(24, "xl_btree_reuse_page")? != 0 { 'T' } else { 'F' }
+                if rec.u8(24, "xl_btree_reuse_page")? != 0 {
+                    'T'
+                } else {
+                    'F'
+                }
             )?;
         }
         XLOG_BTREE_META_CLEANUP => {

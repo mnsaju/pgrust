@@ -360,13 +360,21 @@ impl<'mcx> DistinctSet<'mcx> {
     /// inflate the retained table, and a capacity-bounded memset would then
     /// tax every later small group with it (the train-10 near-unique +17%).
     fn reset_values(&mut self) {
-        let DistinctSet { table, ints, blob, spans, .. } = self;
+        let DistinctSet {
+            table,
+            ints,
+            blob,
+            spans,
+            ..
+        } = self;
         match table {
             ProbeTab::Empty => {}
             ProbeTab::Legacy(t) => t.iter_mut().for_each(|s| *s = 0),
             ProbeTab::Int(t) => t.clear_with_keys(ints),
             ProbeTab::Bytes(t) => t.clear_with_entries(
-                spans.iter().map(|s| (s.hash, s.off + varatt::VARHDRSZ as u32)),
+                spans
+                    .iter()
+                    .map(|s| (s.hash, s.off + varatt::VARHDRSZ as u32)),
             ),
         }
         ints.clear();
@@ -393,18 +401,24 @@ impl<'mcx> DistinctSet<'mcx> {
             self.table = ProbeTab::Legacy(vec![0u32; INIT_TABLE]);
         }
         let len = self.len();
-        let ProbeTab::Legacy(t) = &self.table else { unreachable!("legacy arm") };
+        let ProbeTab::Legacy(t) = &self.table else {
+            unreachable!("legacy arm")
+        };
         if (len + 1) * 8 > t.len() * 7 {
             self.grow();
         }
-        let ProbeTab::Legacy(t) = &self.table else { unreachable!("legacy arm") };
+        let ProbeTab::Legacy(t) = &self.table else {
+            unreachable!("legacy arm")
+        };
         t.len() - 1
     }
 
     #[cold]
     #[inline(never)]
     fn grow(&mut self) {
-        let ProbeTab::Legacy(cur) = &self.table else { unreachable!("legacy arm") };
+        let ProbeTab::Legacy(cur) = &self.table else {
+            unreachable!("legacy arm")
+        };
         let new_len = cur.len() * 2;
         let mask = new_len - 1;
         let mut table = vec![0u32; new_len];
@@ -511,7 +525,9 @@ impl<'mcx> DistinctSet<'mcx> {
             return;
         }
         let mask = self.probe_ready_legacy();
-        let ProbeTab::Legacy(table) = &mut self.table else { unreachable!("legacy arm") };
+        let ProbeTab::Legacy(table) = &mut self.table else {
+            unreachable!("legacy arm")
+        };
         let mut slot = (h as usize) & mask;
         loop {
             match table[slot] {
@@ -546,8 +562,7 @@ impl<'mcx> DistinctSet<'mcx> {
             let content_off = (img_off + varatt::VARHDRSZ) as u32;
             if t.insert(hash, content, &self.blob, content_off) {
                 self.blob.resize(img_off, 0);
-                let word =
-                    varatt::set_varsize_4b_word((content.len() + varatt::VARHDRSZ) as u32);
+                let word = varatt::set_varsize_4b_word((content.len() + varatt::VARHDRSZ) as u32);
                 self.blob.extend_from_slice(&word.to_ne_bytes());
                 self.blob.extend_from_slice(content);
                 self.spans.push(BytesSpan {
@@ -561,7 +576,9 @@ impl<'mcx> DistinctSet<'mcx> {
         let mask = self.probe_ready_legacy();
         let h = mix64(hash as u64);
         let mut slot = (h as usize) & mask;
-        let ProbeTab::Legacy(table) = &mut self.table else { unreachable!("legacy arm") };
+        let ProbeTab::Legacy(table) = &mut self.table else {
+            unreachable!("legacy arm")
+        };
         loop {
             match table[slot] {
                 0 => {
@@ -570,9 +587,8 @@ impl<'mcx> DistinctSet<'mcx> {
                     let pad = (8 - (self.blob.len() & 7)) & 7;
                     self.blob.resize(self.blob.len() + pad, 0);
                     let off = self.blob.len();
-                    let word = varatt::set_varsize_4b_word(
-                        (content.len() + varatt::VARHDRSZ) as u32,
-                    );
+                    let word =
+                        varatt::set_varsize_4b_word((content.len() + varatt::VARHDRSZ) as u32);
                     self.blob.extend_from_slice(&word.to_ne_bytes());
                     self.blob.extend_from_slice(content);
                     self.spans.push(BytesSpan {
@@ -693,7 +709,11 @@ impl<'mcx> DistinctSet<'mcx> {
                     blob.extend_from_slice(
                         &content_blob[off as usize..off as usize + len as usize],
                     );
-                    out_spans.push(BytesSpan { off: img_off as u32, len, hash });
+                    out_spans.push(BytesSpan {
+                        off: img_off as u32,
+                        len,
+                        hash,
+                    });
                 }
                 set.blob = blob;
                 set.spans = out_spans;
@@ -752,7 +772,13 @@ impl<'mcx> DistinctSet<'mcx> {
             });
         }
         {
-            let DistinctSet { spill, ints, spans, blob, .. } = self;
+            let DistinctSet {
+                spill,
+                ints,
+                spans,
+                blob,
+                ..
+            } = self;
             let sp = spill.as_mut().expect("armed above");
             debug_assert!(!sp.reading);
             let nparts = sp.tapes.len();
@@ -771,7 +797,8 @@ impl<'mcx> DistinctSet<'mcx> {
                         let p = spill_part(mix64(s.hash as u64), nparts);
                         sp.tapes_set.write(sp.tapes[p], &s.len.to_ne_bytes())?;
                         let at = s.off as usize + varatt::VARHDRSZ;
-                        sp.tapes_set.write(sp.tapes[p], &blob[at..at + s.len as usize])?;
+                        sp.tapes_set
+                            .write(sp.tapes[p], &blob[at..at + s.len as usize])?;
                     }
                 }
             }
@@ -881,7 +908,11 @@ impl<'mcx> DistinctSet<'mcx> {
             return Ok(false);
         }
         debug_assert_eq!(n % 8, 0, "int spill tape holds whole i64 records");
-        out.extend(buf[..n].chunks_exact(8).map(|c| i64::from_ne_bytes(c.try_into().unwrap())));
+        out.extend(
+            buf[..n]
+                .chunks_exact(8)
+                .map(|c| i64::from_ne_bytes(c.try_into().unwrap())),
+        );
         Ok(true)
     }
 
@@ -1054,7 +1085,11 @@ mod tests {
         }
         assert_eq!(s.len(), 50_000);
         assert_eq!(s.ints()[0], 0);
-        assert_eq!(s.ints.as_ptr(), base_ptr, "value array reallocated despite reserve");
+        assert_eq!(
+            s.ints.as_ptr(),
+            base_ptr,
+            "value array reallocated despite reserve"
+        );
         // Small target below the promote gate: table decision deferred
         // (legacy on first insert), dedup unchanged.
         let mut t = DistinctSet::new();
@@ -1070,7 +1105,10 @@ mod tests {
             p.insert_i64(i);
         }
         p.reserve_projected(30_000);
-        assert!(p.ints.capacity() >= 30_000, "promoted-arm reserve covers the value array");
+        assert!(
+            p.ints.capacity() >= 30_000,
+            "promoted-arm reserve covers the value array"
+        );
         for i in 0..200i64 {
             p.insert_i64(i); // still dups
         }

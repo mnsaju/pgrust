@@ -107,11 +107,7 @@ impl PgError {
     }
 
     #[cold]
-    fn new_impl(
-        level: ErrorLevel,
-        message: String,
-        caller: &core::panic::Location<'_>,
-    ) -> Self {
+    fn new_impl(level: ErrorLevel, message: String, caller: &core::panic::Location<'_>) -> Self {
         Self {
             level,
             sqlstate: default_sqlstate_for_level(level),
@@ -377,8 +373,16 @@ impl PgError {
             Some(captured) => {
                 let explicit_pair = location.filename.is_some() || location.lineno > 0;
                 ErrorLocation {
-                    filename: if explicit_pair { location.filename } else { captured.filename },
-                    lineno: if explicit_pair { location.lineno } else { captured.lineno },
+                    filename: if explicit_pair {
+                        location.filename
+                    } else {
+                        captured.filename
+                    },
+                    lineno: if explicit_pair {
+                        location.lineno
+                    } else {
+                        captured.lineno
+                    },
                     funcname: location.funcname.or(captured.funcname),
                 }
             }
@@ -683,7 +687,9 @@ mod tests {
             .with_error_field(PG_DIAG_COLUMN_NAME, "col")
             .unwrap();
         assert_eq!(err.column_name(), Some("col"));
-        assert!(PgError::error("x").with_error_field(ErrorField(0), "v").is_err());
+        assert!(PgError::error("x")
+            .with_error_field(ErrorField(0), "v")
+            .is_err());
 
         let mut soft = SoftErrorContext::new(true);
         assert!(!soft.error_occurred());

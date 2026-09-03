@@ -8,7 +8,13 @@ pub static MONTHS: [&str; 12] = [
 ];
 
 pub static DAYS: [&str; 7] = [
-    "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
 ];
 
 #[inline]
@@ -46,7 +52,11 @@ pub fn j2date(jd: i32, year: &mut i32, month: &mut i32, day: &mut i32) {
     quad = julian / 1461;
     julian -= quad * 1461;
     let mut y = (julian * 4 / 1461) as i32;
-    julian = if y != 0 { (julian + 305) % 365 } else { (julian + 306) % 366 } + 123;
+    julian = if y != 0 {
+        (julian + 305) % 365
+    } else {
+        (julian + 306) % 366
+    } + 123;
     y += (quad * 4) as i32;
     *year = y - 4800;
     quad = julian * 2141 / 65536;
@@ -69,7 +79,9 @@ pub const fn j2day(mut date: i32) -> i32 {
 pub fn isoweek2j(year: i32, week: i32) -> i32 {
     let day4 = date2j(year, 1, 4);
     let day0 = j2day(day4.wrapping_sub(1));
-    (week - 1).wrapping_mul(7).wrapping_add(day4.wrapping_sub(day0))
+    (week - 1)
+        .wrapping_mul(7)
+        .wrapping_add(day4.wrapping_sub(day0))
 }
 
 pub fn isoweek2date(woy: i32, year: &mut i32, mon: &mut i32, mday: &mut i32) {

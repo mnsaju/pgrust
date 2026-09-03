@@ -15,7 +15,11 @@ fn lex<'a>(sc: &mut Scanner<'a>) -> types_error::PgResult<Token<'a>> {
     let mut value = CoreYYSTYPE::None;
     let mut location = 0;
     let token = sc.core_yylex(&mut value, &mut location)?;
-    Ok(Token { token, value, location })
+    Ok(Token {
+        token,
+        value,
+        location,
+    })
 }
 
 fn lex_all_with(input: &[u8], settings: ScannerSettings) -> Vec<(i32, String, i32)> {
@@ -118,7 +122,10 @@ fn string_literals() {
         vec![(tokens::SCONST, "=hello world".into(), 0)]
     );
     assert_eq!(lex_all("'it''s'")[0].1, "=it's");
-    assert_eq!(lex_all("'foo'\n'bar'"), vec![(tokens::SCONST, "=foobar".into(), 0)]);
+    assert_eq!(
+        lex_all("'foo'\n'bar'"),
+        vec![(tokens::SCONST, "=foobar".into(), 0)]
+    );
     let sep = lex_all("'foo' 'bar'");
     assert_eq!(sep.len(), 2);
     assert_eq!(sep[1], (tokens::SCONST, "=bar".into(), 6));
@@ -126,7 +133,10 @@ fn string_literals() {
 
 #[test]
 fn extended_string_escapes() {
-    assert_eq!(lex_all(r"E'a\tb\n'")[0], (tokens::SCONST, "=a\tb\n".into(), 0));
+    assert_eq!(
+        lex_all(r"E'a\tb\n'")[0],
+        (tokens::SCONST, "=a\tb\n".into(), 0)
+    );
     assert_eq!(lex_all(r"E'\x41'")[0].1, "=A");
     assert_eq!(lex_all(r"E'\101'")[0].1, "=A");
     assert_eq!(lex_all(r"E'A'")[0].1, "=A");
@@ -193,10 +203,7 @@ fn comments_are_whitespace() {
 #[test]
 fn locations_are_byte_offsets() {
     let toks = lex_all("a + bb");
-    assert_eq!(
-        toks.iter().map(|t| t.2).collect::<Vec<_>>(),
-        vec![0, 2, 4]
-    );
+    assert_eq!(toks.iter().map(|t| t.2).collect::<Vec<_>>(), vec![0, 2, 4]);
 }
 
 #[test]
@@ -244,7 +251,9 @@ fn errors_carry_sqlstate_and_message() {
     let e = lex_err("'unterminated");
     assert!(e.message().starts_with("unterminated quoted string"));
     let e = lex_err("123abc");
-    assert!(e.message().starts_with("trailing junk after numeric literal"));
+    assert!(e
+        .message()
+        .starts_with("trailing junk after numeric literal"));
     let e = lex_err("0x");
     assert!(e.message().starts_with("invalid hexadecimal integer"));
     let e = lex_err("$1x");

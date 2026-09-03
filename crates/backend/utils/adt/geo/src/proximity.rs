@@ -3,8 +3,10 @@ use ::types_core::geo::{Point, BOX, CIRCLE, LINE, LSEG};
 use ::types_error::PgResult;
 
 use crate::boxes::{box_cn, box_contain_lseg};
-use crate::line::{line_closept_point, line_contain_point, line_construct, line_sl};
-use crate::lseg::{lseg_contain_point, lseg_interpt_line, lseg_interpt_lseg, lseg_sl, statlseg_construct};
+use crate::line::{line_closept_point, line_construct, line_contain_point, line_sl};
+use crate::lseg::{
+    lseg_contain_point, lseg_interpt_line, lseg_interpt_lseg, lseg_sl, statlseg_construct,
+};
 use crate::point::point_invsl;
 use crate::{box_contain_point, box_ov, point_dt, point_inside, FPeq, PathRef, PolyRef, Pts};
 

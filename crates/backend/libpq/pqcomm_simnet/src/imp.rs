@@ -171,7 +171,10 @@ impl NetOpMatch {
     }
 
     pub fn kind(kind: NetOpKind) -> Self {
-        NetOpMatch { kinds: Some(vec![kind]), end: None }
+        NetOpMatch {
+            kinds: Some(vec![kind]),
+            end: None,
+        }
     }
 
     fn matches(&self, op: &NetOpDesc) -> bool {
@@ -203,7 +206,12 @@ pub struct NetFaultRule {
 impl NetFaultRule {
     /// Inject `action` on the nth op matching `matcher` (once).
     pub fn nth_matching(matcher: NetOpMatch, nth: u64, action: NetFaultDecision) -> Self {
-        NetFaultRule { matcher, nth, action, sticky: false }
+        NetFaultRule {
+            matcher,
+            nth,
+            action,
+            sticky: false,
+        }
     }
 }
 
@@ -239,7 +247,8 @@ impl SeededNetFaultPlan {
         let n = rules.len();
         with(|st| {
             st.plan = Box::new(SeededNetFaultPlan::new(seed, rules));
-            st.op_log.push(format!("NETPLAN seed=0x{seed:016x} rules={n}"));
+            st.op_log
+                .push(format!("NETPLAN seed=0x{seed:016x} rules={n}"));
         });
     }
 }
@@ -292,8 +301,11 @@ impl NetFaultPlan for SeededNetFaultPlan {
 /// Panics on malformed specs (harness domain: loud beats silent).
 pub fn parse_fault_spec(spec: &str) -> (u64, Vec<NetFaultRule>) {
     fn parse_u64(s: &str, what: &str) -> u64 {
-        let (digits, radix) =
-            if let Some(hex) = s.strip_prefix("0x") { (hex, 16) } else { (s, 10) };
+        let (digits, radix) = if let Some(hex) = s.strip_prefix("0x") {
+            (hex, 16)
+        } else {
+            (s, 10)
+        };
         u64::from_str_radix(digits, radix)
             .unwrap_or_else(|_| panic!("fault spec: bad {what} {s:?}"))
     }
@@ -322,10 +334,12 @@ pub fn parse_fault_spec(spec: &str) -> (u64, Vec<NetFaultRule>) {
             seed = parse_u64(s, "seed");
             continue;
         }
-        let (lhs, action) =
-            tok.split_once('=').unwrap_or_else(|| panic!("fault spec: bad token {tok:?}"));
-        let (kind_s, nth_s) =
-            lhs.split_once('@').unwrap_or_else(|| panic!("fault spec: bad target {lhs:?}"));
+        let (lhs, action) = tok
+            .split_once('=')
+            .unwrap_or_else(|| panic!("fault spec: bad token {tok:?}"));
+        let (kind_s, nth_s) = lhs
+            .split_once('@')
+            .unwrap_or_else(|| panic!("fault spec: bad target {lhs:?}"));
         let (nth_s, sticky) = match nth_s.strip_suffix('!') {
             Some(base) => (base, true),
             None => (nth_s, false),
@@ -341,17 +355,27 @@ pub fn parse_fault_spec(spec: &str) -> (u64, Vec<NetFaultRule>) {
             None => (action, None),
         };
         let need = |what: &str| -> u64 {
-            parse_u64(arg.unwrap_or_else(|| panic!("fault spec: {verb} needs :{what}")), what)
+            parse_u64(
+                arg.unwrap_or_else(|| panic!("fault spec: {verb} needs :{what}")),
+                what,
+            )
         };
         let action = match verb {
             "shortread" => NetFaultDecision::ShortRead(need("bytes") as usize),
             "shortwrite" => NetFaultDecision::ShortWrite(need("bytes") as usize),
             "delay" => NetFaultDecision::Delay(need("ops")),
-            "drop" => NetFaultDecision::Drop { keep: need("bytes") as usize },
+            "drop" => NetFaultDecision::Drop {
+                keep: need("bytes") as usize,
+            },
             "reset" => NetFaultDecision::Reset,
             other => panic!("fault spec: unknown action {other:?}"),
         };
-        rules.push(NetFaultRule { matcher, nth, action, sticky });
+        rules.push(NetFaultRule {
+            matcher,
+            nth,
+            action,
+            sticky,
+        });
     }
     (seed, rules)
 }
@@ -515,22 +539,30 @@ impl SimNetState {
     /// order is sacred even under delay faults).
     fn queue_c2s(&mut self, bytes: &[u8], release_at: Option<u64>) {
         match release_at {
-            Some(at) => self.staged_c2s.push_back(Staged { release_at: at, bytes: bytes.to_vec() }),
+            Some(at) => self.staged_c2s.push_back(Staged {
+                release_at: at,
+                bytes: bytes.to_vec(),
+            }),
             None if self.staged_c2s.is_empty() => self.c2s.extend(bytes.iter().copied()),
-            None => self
-                .staged_c2s
-                .push_back(Staged { release_at: self.op_seq, bytes: bytes.to_vec() }),
+            None => self.staged_c2s.push_back(Staged {
+                release_at: self.op_seq,
+                bytes: bytes.to_vec(),
+            }),
         }
     }
 
     /// Queue bytes toward the client, behind any staged segment.
     fn queue_s2c(&mut self, bytes: &[u8], release_at: Option<u64>) {
         match release_at {
-            Some(at) => self.staged_s2c.push_back(Staged { release_at: at, bytes: bytes.to_vec() }),
+            Some(at) => self.staged_s2c.push_back(Staged {
+                release_at: at,
+                bytes: bytes.to_vec(),
+            }),
             None if self.staged_s2c.is_empty() => self.s2c.extend(bytes.iter().copied()),
-            None => self
-                .staged_s2c
-                .push_back(Staged { release_at: self.op_seq, bytes: bytes.to_vec() }),
+            None => self.staged_s2c.push_back(Staged {
+                release_at: self.op_seq,
+                bytes: bytes.to_vec(),
+            }),
         }
     }
 
@@ -602,7 +634,13 @@ pub fn client_send(bytes: &[u8]) {
             NetFaultDecision::Delay(d) => {
                 let at = st.op_seq.saturating_add(d);
                 st.queue_c2s(bytes, Some(at));
-                st.log("ClientSend", 'C', bytes.len(), bytes.len() as isize, "Delayed");
+                st.log(
+                    "ClientSend",
+                    'C',
+                    bytes.len(),
+                    bytes.len() as isize,
+                    "Delayed",
+                );
             }
             NetFaultDecision::ShortWrite(n) => {
                 // Partial send: n bytes move now; the remainder follows as
@@ -617,7 +655,13 @@ pub fn client_send(bytes: &[u8]) {
             }
             _ => {
                 st.queue_c2s(bytes, None);
-                st.log("ClientSend", 'C', bytes.len(), bytes.len() as isize, "Proceed");
+                st.log(
+                    "ClientSend",
+                    'C',
+                    bytes.len(),
+                    bytes.len() as isize,
+                    "Proceed",
+                );
             }
         }
     });
@@ -788,7 +832,13 @@ pub fn secure_read(buf: &mut [u8]) -> PgResult<Result<usize, i32>> {
                     *b = st.c2s.pop_front().expect("len checked");
                 }
                 let short = matches!(decision, NetFaultDecision::ShortRead(_));
-                st.log("Read", 'S', want, n as isize, if short { "Short" } else { "Proceed" });
+                st.log(
+                    "Read",
+                    'S',
+                    want,
+                    n as isize,
+                    if short { "Short" } else { "Proceed" },
+                );
                 Step::Got(n)
             } else if deferred || !st.staged_c2s.is_empty() {
                 // Delayed delivery: either this very consult was deferred,
@@ -970,7 +1020,10 @@ fn modify_fe_be_wait_set_latch(_latch: types_storage::latch::LatchHandle) -> PgR
 
 /// A ClientSocket bound to the pair (virtual fd; zeroed raddr).
 pub fn simnet_client_socket() -> ClientSocket {
-    ClientSocket { sock: SIMNET_CONN_FD, raddr: ip_zeroed() }
+    ClientSocket {
+        sock: SIMNET_CONN_FD,
+        raddr: ip_zeroed(),
+    }
 }
 
 fn ip_zeroed() -> ip::SockAddr {
@@ -1018,7 +1071,13 @@ pub fn init_transport_seams() {
         let pending = with(|st| {
             let _ = st.consult(NetOpKind::Accept, 'S', 0);
             let got = st.pending_accepts.pop_front().is_some();
-            st.log("Accept", 'S', 0, if got { SIMNET_CONN_FD as isize } else { -1 }, if got { "Proceed" } else { "WouldBlock" });
+            st.log(
+                "Accept",
+                'S',
+                0,
+                if got { SIMNET_CONN_FD as isize } else { -1 },
+                if got { "Proceed" } else { "WouldBlock" },
+            );
             got
         });
         if pending {

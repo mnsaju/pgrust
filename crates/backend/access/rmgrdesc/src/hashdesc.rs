@@ -29,7 +29,9 @@ fn append_g6(buf: &mut StringInfo<'_>, v: f64) -> PgResult<()> {
     let av = v.abs();
     let sci = format!("{av:.5e}");
     let epos = sci.find('e').expect("Rust {:e} always emits 'e'");
-    let exp: i32 = sci[epos + 1..].parse().expect("Rust {:e} exponent is a plain integer");
+    let exp: i32 = sci[epos + 1..]
+        .parse()
+        .expect("Rust {:e} exponent is a plain integer");
 
     if !(-4..6).contains(&exp) {
         let mantissa = trim_trailing_zeros(&sci[..epos]);
@@ -56,8 +58,15 @@ pub fn hash_desc(buf: &mut StringInfo<'_>, record: &XLogReaderState) -> PgResult
         XLOG_HASH_INIT_META_PAGE => {
             // xl_hash_init_meta_page: num_tuples 0 (f64), procid 8 (u32), ffactor 12.
             buf.append_str("num_tuples ")?;
-            append_g6(buf, f64::from_ne_bytes(rec.arr::<8>(0, "xl_hash_init_meta_page")?))?;
-            appendf!(buf, ", fillfactor {}", rec.u16(12, "xl_hash_init_meta_page")?)?;
+            append_g6(
+                buf,
+                f64::from_ne_bytes(rec.arr::<8>(0, "xl_hash_init_meta_page")?),
+            )?;
+            appendf!(
+                buf,
+                ", fillfactor {}",
+                rec.u16(12, "xl_hash_init_meta_page")?
+            )?;
         }
         XLOG_HASH_INIT_BITMAP_PAGE => {
             appendf!(buf, "bmsize {}", rec.u16(0, "xl_hash_init_bitmap_page")?)?;
@@ -70,7 +79,11 @@ pub fn hash_desc(buf: &mut StringInfo<'_>, record: &XLogReaderState) -> PgResult
                 buf,
                 "bmsize {}, bmpage_found {}",
                 rec.u16(0, "xl_hash_add_ovfl_page")?,
-                if rec.u8(2, "xl_hash_add_ovfl_page")? != 0 { 'T' } else { 'F' }
+                if rec.u8(2, "xl_hash_add_ovfl_page")? != 0 {
+                    'T'
+                } else {
+                    'F'
+                }
             )?;
         }
         XLOG_HASH_SPLIT_ALLOCATE_PAGE => {
@@ -79,8 +92,16 @@ pub fn hash_desc(buf: &mut StringInfo<'_>, record: &XLogReaderState) -> PgResult
                 buf,
                 "new_bucket {}, meta_page_masks_updated {}, issplitpoint_changed {}",
                 rec.u32(0, "xl_hash_split_allocate_page")?,
-                if flags & XLH_SPLIT_META_UPDATE_MASKS != 0 { 'T' } else { 'F' },
-                if flags & XLH_SPLIT_META_UPDATE_SPLITPOINT != 0 { 'T' } else { 'F' }
+                if flags & XLH_SPLIT_META_UPDATE_MASKS != 0 {
+                    'T'
+                } else {
+                    'F'
+                },
+                if flags & XLH_SPLIT_META_UPDATE_SPLITPOINT != 0 {
+                    'T'
+                } else {
+                    'F'
+                }
             )?;
         }
         XLOG_HASH_SPLIT_COMPLETE => {
@@ -96,7 +117,11 @@ pub fn hash_desc(buf: &mut StringInfo<'_>, record: &XLogReaderState) -> PgResult
                 buf,
                 "ntups {}, is_primary {}",
                 rec.u16(0, "xl_hash_move_page_contents")?,
-                if rec.u8(2, "xl_hash_move_page_contents")? != 0 { 'T' } else { 'F' }
+                if rec.u8(2, "xl_hash_move_page_contents")? != 0 {
+                    'T'
+                } else {
+                    'F'
+                }
             )?;
         }
         XLOG_HASH_SQUEEZE_PAGE => {
@@ -106,20 +131,35 @@ pub fn hash_desc(buf: &mut StringInfo<'_>, record: &XLogReaderState) -> PgResult
                 rec.u32(0, "xl_hash_squeeze_page")?,
                 rec.u32(4, "xl_hash_squeeze_page")?,
                 rec.u16(8, "xl_hash_squeeze_page")?,
-                if rec.u8(10, "xl_hash_squeeze_page")? != 0 { 'T' } else { 'F' }
+                if rec.u8(10, "xl_hash_squeeze_page")? != 0 {
+                    'T'
+                } else {
+                    'F'
+                }
             )?;
         }
         XLOG_HASH_DELETE => {
             appendf!(
                 buf,
                 "clear_dead_marking {}, is_primary {}",
-                if rec.u8(0, "xl_hash_delete")? != 0 { 'T' } else { 'F' },
-                if rec.u8(1, "xl_hash_delete")? != 0 { 'T' } else { 'F' }
+                if rec.u8(0, "xl_hash_delete")? != 0 {
+                    'T'
+                } else {
+                    'F'
+                },
+                if rec.u8(1, "xl_hash_delete")? != 0 {
+                    'T'
+                } else {
+                    'F'
+                }
             )?;
         }
         XLOG_HASH_UPDATE_META_PAGE => {
             buf.append_str("ntuples ")?;
-            append_g6(buf, f64::from_ne_bytes(rec.arr::<8>(0, "xl_hash_update_meta_page")?))?;
+            append_g6(
+                buf,
+                f64::from_ne_bytes(rec.arr::<8>(0, "xl_hash_update_meta_page")?),
+            )?;
         }
         XLOG_HASH_VACUUM_ONE_PAGE => {
             appendf!(
@@ -127,7 +167,11 @@ pub fn hash_desc(buf: &mut StringInfo<'_>, record: &XLogReaderState) -> PgResult
                 "ntuples {}, snapshotConflictHorizon {}, isCatalogRel {}",
                 rec.u16(4, "xl_hash_vacuum_one_page")?,
                 rec.u32(0, "xl_hash_vacuum_one_page")?,
-                if rec.u8(6, "xl_hash_vacuum_one_page")? != 0 { 'T' } else { 'F' }
+                if rec.u8(6, "xl_hash_vacuum_one_page")? != 0 {
+                    'T'
+                } else {
+                    'F'
+                }
             )?;
         }
         _ => {}

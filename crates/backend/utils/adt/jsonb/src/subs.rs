@@ -61,8 +61,14 @@ pub fn subscript_fetch<'mcx>(
     }
     Ok(match get_element(mcx, payload, &p, false)? {
         PathResult::Null => NullableDatum::null(),
-        PathResult::Jsonb(v) => NullableDatum { value: image_result(v), isnull: false },
-        PathResult::Input => NullableDatum { value: source, isnull: false },
+        PathResult::Jsonb(v) => NullableDatum {
+            value: image_result(v),
+            isnull: false,
+        },
+        PathResult::Input => NullableDatum {
+            value: source,
+            isnull: false,
+        },
         PathResult::Text(_) => unreachable!("as_text=false"),
     })
 }
@@ -83,9 +89,14 @@ pub fn subscript_assign<'mcx>(
     };
     let payload: &[u8] = if source.isnull {
         let empty = if expect_array {
-            JsonbValue::Array { elems: ArenaVec::with_capacity(mcx, 0)?, raw_scalar: false }
+            JsonbValue::Array {
+                elems: ArenaVec::with_capacity(mcx, 0)?,
+                raw_scalar: false,
+            }
         } else {
-            JsonbValue::Object { pairs: ArenaVec::with_capacity(mcx, 0)? }
+            JsonbValue::Object {
+                pairs: ArenaVec::with_capacity(mcx, 0)?,
+            }
         };
         // convert_to_jsonb returns a full varlena image; the container payload
         // starts past the 4-byte header.

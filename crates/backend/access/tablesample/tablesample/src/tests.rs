@@ -4,21 +4,29 @@ use super::*;
 fn cutoff_limits() {
     let mut s = Tsm::Bernoulli.init_state();
     s.begin_sample_scan(&[Datum::from_f32(0.0)], 7).unwrap();
-    let TsmState::Bernoulli(b) = &s else { unreachable!() };
+    let TsmState::Bernoulli(b) = &s else {
+        unreachable!()
+    };
     assert_eq!(b.cutoff, 0);
     let mut s = Tsm::Bernoulli.init_state();
     s.begin_sample_scan(&[Datum::from_f32(100.0)], 7).unwrap();
-    let TsmState::Bernoulli(b) = &s else { unreachable!() };
+    let TsmState::Bernoulli(b) = &s else {
+        unreachable!()
+    };
     assert_eq!(b.cutoff, 1u64 << 32);
 }
 
 #[test]
 fn bad_percent_is_2202h() {
     let mut s = Tsm::System.init_state();
-    let err = s.begin_sample_scan(&[Datum::from_f32(-1.0)], 0).unwrap_err();
+    let err = s
+        .begin_sample_scan(&[Datum::from_f32(-1.0)], 0)
+        .unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_INVALID_TABLESAMPLE_ARGUMENT);
     let mut s = Tsm::System.init_state();
-    let err = s.begin_sample_scan(&[Datum::from_f32(f32::NAN)], 0).unwrap_err();
+    let err = s
+        .begin_sample_scan(&[Datum::from_f32(f32::NAN)], 0)
+        .unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_INVALID_TABLESAMPLE_ARGUMENT);
 }
 
@@ -78,11 +86,20 @@ fn system_blocks_deterministic() {
 
 #[test]
 fn registry_dispatch() {
-    assert_eq!(Tsm::from_handler(F_TSM_BERNOULLI_HANDLER), Some(Tsm::Bernoulli));
+    assert_eq!(
+        Tsm::from_handler(F_TSM_BERNOULLI_HANDLER),
+        Some(Tsm::Bernoulli)
+    );
     assert_eq!(Tsm::from_handler(F_TSM_SYSTEM_HANDLER), Some(Tsm::System));
     assert_eq!(Tsm::from_handler(9999), None);
-    assert_eq!(Tsm::from_symbol(b"tsm_system_rows_handler"), Some(Tsm::SystemRows));
-    assert_eq!(Tsm::from_symbol(b"tsm_system_time_handler"), Some(Tsm::SystemTime));
+    assert_eq!(
+        Tsm::from_symbol(b"tsm_system_rows_handler"),
+        Some(Tsm::SystemRows)
+    );
+    assert_eq!(
+        Tsm::from_symbol(b"tsm_system_time_handler"),
+        Some(Tsm::SystemTime)
+    );
     assert_eq!(Tsm::from_symbol(b"blhandler"), None);
     assert_eq!(Tsm::from_symbol(b""), None);
 }
@@ -127,13 +144,19 @@ fn extension_states_route_params() {
     assert!(b < 4);
     assert_eq!(s.next_sample_tuple(b, 2, 0), FirstOffsetNumber);
     assert_eq!(s.next_sample_tuple(b, 2, 3), InvalidOffsetNumber);
-    let err = Tsm::SystemRows.init_state().begin_sample_scan(&[Datum::from_i64(-1)], 0).unwrap_err();
+    let err = Tsm::SystemRows
+        .init_state()
+        .begin_sample_scan(&[Datum::from_i64(-1)], 0)
+        .unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_INVALID_TABLESAMPLE_ARGUMENT);
 
     let mut s = Tsm::SystemTime.init_state();
     let (bulkread, pagemode) = s.begin_sample_scan(&[Datum::from_f64(0.0)], 11).unwrap();
     assert!(bulkread && pagemode);
     assert_eq!(s.next_sample_block(4, 0), types_core::InvalidBlockNumber);
-    let err = Tsm::SystemTime.init_state().begin_sample_scan(&[Datum::from_f64(-1.0)], 0).unwrap_err();
+    let err = Tsm::SystemTime
+        .init_state()
+        .begin_sample_scan(&[Datum::from_f64(-1.0)], 0)
+        .unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_INVALID_TABLESAMPLE_ARGUMENT);
 }

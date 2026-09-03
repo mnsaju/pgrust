@@ -163,7 +163,6 @@ pub struct BTArrayKeyInfo<'mcx> {
     pub high_compare: Option<ScanKeyData>,
 }
 
-
 // C divergence: arrayContext is dropped — the PgVec allocations' 'mcx IS the scan-lifespan context.
 pub struct BTScanOpaqueData<'mcx> {
     pub qual_ok: bool,

@@ -57,8 +57,8 @@ use loom::thread;
 
 use runtime::{
     Clock, CompletionWaiter, Generation, MorselRange, ParticipantOwner, QuerySpec,
-    QueryTaskLifecycle, RgOutcome, Runtime, RuntimeConfig, SizingParams, Step,
-    StreamSource, SyntheticMorselSource, TaskSetSpec, TaskSetWork, VirtualClock,
+    QueryTaskLifecycle, RgOutcome, Runtime, RuntimeConfig, SizingParams, Step, StreamSource,
+    SyntheticMorselSource, TaskSetSpec, TaskSetWork, VirtualClock,
 };
 use types_error::{PgError, ERROR};
 
@@ -135,7 +135,11 @@ impl ModelWork {
         for (g, x) in self.executed.iter().enumerate() {
             assert_eq!(x.load(Ordering::SeqCst), 1, "granule {g} not exactly-once");
         }
-        assert_eq!(self.finalized.load(Ordering::SeqCst), 1, "finalize not exactly-once");
+        assert_eq!(
+            self.finalized.load(Ordering::SeqCst),
+            1,
+            "finalize not exactly-once"
+        );
         assert_eq!(self.inside.load(Ordering::SeqCst), 0);
     }
 }
@@ -167,7 +171,11 @@ impl TaskSetWork for ModelWork {
             "finalize ran while a worker was inside run_morsel"
         );
         for (g, x) in self.executed.iter().enumerate() {
-            assert_eq!(x.load(Ordering::SeqCst), 1, "finalize before granule {g} ran");
+            assert_eq!(
+                x.load(Ordering::SeqCst),
+                1,
+                "finalize before granule {g} ran"
+            );
         }
         let prev = self.finalized.fetch_add(1, Ordering::SeqCst);
         assert_eq!(prev, 0, "finalize ran twice");
@@ -275,13 +283,18 @@ fn generation_handoff_unconsumable() {
                 Ok(participant) => {
                     // Joining can race an in-flight abort, but never a
                     // COMPLETED one: unconsumable-by-construction.
-                    assert!(!abort_was_done, "joined a generation whose abort had completed");
+                    assert!(
+                        !abort_was_done,
+                        "joined a generation whose abort had completed"
+                    );
                     // While we are inside, the generation cannot retire.
                     assert!(
                         !handle_c.lifecycle().retired(),
                         "generation retired with a live participant"
                     );
-                    participant.complete().expect("drained participant completes");
+                    participant
+                        .complete()
+                        .expect("drained participant completes");
                 }
                 Err(_refused) => {}
             }
@@ -294,9 +307,14 @@ fn generation_handoff_unconsumable() {
         // admits nobody ever again; reinitialize opens a live one.
         assert!(handle.lifecycle().retired());
         assert!(handle.join().is_err(), "retired generation admitted");
-        let fresh = task.reinitialize().expect("reinitialize opens a new generation");
+        let fresh = task
+            .reinitialize()
+            .expect("reinitialize opens a new generation");
         assert_ne!(handle.generation(), fresh.generation());
-        assert!(handle.join().is_err(), "stale handle joined the new generation");
+        assert!(
+            handle.join().is_err(),
+            "stale handle joined the new generation"
+        );
         let participant = fresh.join().expect("new generation must admit");
         participant.complete().unwrap();
         let _ = task.close_generation_and_wait_with(fresh.lifecycle(), || false, || Ok(()));
@@ -322,7 +340,8 @@ fn abort_cleanup() {
             // guard edge from the work body, so the checkable invariant is
             // exactly-once execution; the no-consume-after-abort edge is
             // model 2's job (the guard IS the mechanism).
-            self.executed.fetch_add((range.end - range.start) as usize, Ordering::SeqCst);
+            self.executed
+                .fetch_add((range.end - range.start) as usize, Ordering::SeqCst);
         }
         fn finalize(&self) {
             // Aborted RGs must not run finalize work; completed ones must
@@ -852,7 +871,6 @@ fn dag_abort_live_siblings_completes_once() {
     });
 }
 
-
 /// Model 5: the STREAM-FED source / producer handshake (parallel COPY's
 /// segmentator feed). One producer publishes granule 1, then granule 2 and
 /// closes — each publish/close followed by the wake (`publish`-then-wake is
@@ -1166,8 +1184,12 @@ fn standing_gang_detach_count_join_no_lost_wake() {
 
         let workers: Vec<_> = (0..N)
             .map(|_| {
-                let (claimed, detached, m, cv) =
-                    (Arc::clone(&claimed), Arc::clone(&detached), Arc::clone(&m), Arc::clone(&cv));
+                let (claimed, detached, m, cv) = (
+                    Arc::clone(&claimed),
+                    Arc::clone(&detached),
+                    Arc::clone(&m),
+                    Arc::clone(&cv),
+                );
                 thread::spawn(move || {
                     // try_claim: take a ticket.
                     claimed.fetch_add(1, Ordering::SeqCst);
@@ -1199,7 +1221,11 @@ fn standing_gang_detach_count_join_no_lost_wake() {
             w.join().unwrap();
         }
         assert_eq!(claimed.load(Ordering::SeqCst), N);
-        assert_eq!(detached.load(Ordering::SeqCst), N, "detached == claimed at join");
+        assert_eq!(
+            detached.load(Ordering::SeqCst),
+            N,
+            "detached == claimed at join"
+        );
     });
 }
 
@@ -1307,8 +1333,11 @@ fn pooldb_crash_drain_never_races_reset() {
         // Dying pool worker (identity minted under epoch 0): busy charge
         // FIRST, then the fence check decides drain vs raw.
         let worker = {
-            let (fence, busy, reset_done) =
-                (Arc::clone(&fence), Arc::clone(&busy), Arc::clone(&reset_done));
+            let (fence, busy, reset_done) = (
+                Arc::clone(&fence),
+                Arc::clone(&busy),
+                Arc::clone(&reset_done),
+            );
             thread::spawn(move || {
                 busy.fetch_add(1, Ordering::SeqCst);
                 // Store-buffering fence (production: shm_busy_guard) — the
@@ -1456,7 +1485,11 @@ fn mailbox_try_send_feeder_never_loses_a_chunk() {
         drop(tx); // EOF: consumer drains then observes None
 
         let got = consumer.join().unwrap();
-        assert_eq!(got, vec![1, 2, 3], "every chunk delivered exactly once, in order");
+        assert_eq!(
+            got,
+            vec![1, 2, 3],
+            "every chunk delivered exactly once, in order"
+        );
     });
 }
 
@@ -1490,7 +1523,11 @@ fn mailbox_mpmc_close_wakes_every_receiver() {
         for c in consumers {
             all.extend(c.join().unwrap());
         }
-        assert_eq!(all, vec![7], "delivered exactly once, both consumers exited");
+        assert_eq!(
+            all,
+            vec![7],
+            "delivered exactly once, both consumers exited"
+        );
     });
 }
 
@@ -2019,7 +2056,10 @@ fn ledger_renudge_bounded_and_live() {
 
         work.assert_complete();
         let snap = rt.ledger_snapshot();
-        assert_eq!(snap.admitted, 0, "entry retired despite never reaching target");
+        assert_eq!(
+            snap.admitted, 0,
+            "entry retired despite never reaching target"
+        );
         assert_eq!(snap.granted_total, 0);
         assert!(
             snap.renudges <= 4,
@@ -2385,22 +2425,16 @@ fn caller_c2_ledger_starved_park_completes() {
         let mut parks = 0u64;
         let mut caller = runtime::CallerWorker::enter(&rt).expect("caller lane available");
         let outcome = caller
-            .drive_with_duties_parked(
-                &rt,
-                &h,
-                &mut || Ok(()),
-                &mut || true,
-                &mut || {
-                    parks += 1;
-                    // Park-as-producer (publish-then-wake order): the
-                    // starved window ends HERE, so reaching the park at
-                    // all is the liveness being modeled.
-                    source.publish(2);
-                    source.close();
-                    rt.notify_source_progress();
-                    Ok(())
-                },
-            )
+            .drive_with_duties_parked(&rt, &h, &mut || Ok(()), &mut || true, &mut || {
+                parks += 1;
+                // Park-as-producer (publish-then-wake order): the
+                // starved window ends HERE, so reaching the park at
+                // all is the liveness being modeled.
+                source.publish(2);
+                source.close();
+                rt.notify_source_progress();
+                Ok(())
+            })
             .expect("duty and park never fail");
         assert_eq!(outcome, RgOutcome::Completed);
         assert!(parks >= 1, "the bounded idle park must run");
@@ -2562,7 +2596,12 @@ fn bound_model_submit(
     rt: &Arc<Runtime>,
     total: u64,
     refuse_all: bool,
-) -> (Arc<ModelWork>, Arc<BoundModelPayload>, RgHandle, CompletionWaiter) {
+) -> (
+    Arc<ModelWork>,
+    Arc<BoundModelPayload>,
+    RgHandle,
+    CompletionWaiter,
+) {
     let work = ModelWork::new(total, None);
     // The descriptor must ride the submit (the active bit keys off it at
     // publication), but the payload needs the submit's own RgHandle: an
@@ -2574,7 +2613,11 @@ fn bound_model_submit(
         let slot = Arc::clone(payload)
             .downcast::<loom::sync::Mutex<Option<Arc<BoundModelPayload>>>>()
             .expect("model placeholder");
-        let inner = slot.lock().unwrap().clone().expect("payload installed pre-publish (on_rg)");
+        let inner = slot
+            .lock()
+            .unwrap()
+            .clone()
+            .expect("payload installed pre-publish (on_rg)");
         let inner: Arc<dyn std::any::Any + Send + Sync> = inner;
         bound_model_serve(&inner)
     }
@@ -2609,7 +2652,11 @@ fn bound_model_submit(
             *out2.lock().unwrap() = Some(payload);
         },
     );
-    let payload = payload_out.lock().unwrap().take().expect("on_rg ran at submit");
+    let payload = payload_out
+        .lock()
+        .unwrap()
+        .take()
+        .expect("on_rg ran at submit");
     (work, payload, h, waiter)
 }
 
@@ -2637,7 +2684,10 @@ fn bound_gate_serve_completes_under_permit_cap() {
         assert_eq!(waiter.try_wait(), Some(RgOutcome::Completed));
         work.assert_complete();
         assert_eq!(rt.stats().finalize_events, 1);
-        assert!(payload.serves.load(Ordering::SeqCst) <= 1, "ticket cap held");
+        assert!(
+            payload.serves.load(Ordering::SeqCst) <= 1,
+            "ticket cap held"
+        );
         assert_eq!(rt.execution_permits().available(), 1, "permit balance");
     });
 }
@@ -2676,7 +2726,8 @@ fn bound_gate_refused_skip_no_lost_wake() {
         let h1 = h.clone();
         let external = thread::spawn(move || {
             let mut cw = runtime::CallerWorker::enter(&rt1).expect("caller lane");
-            cw.drive_with_duty(&rt1, &h1, &mut || Ok(())).expect("duty never fails")
+            cw.drive_with_duty(&rt1, &h1, &mut || Ok(()))
+                .expect("duty never fails")
         });
         drive_bound_pool(&rt, 0, &[bwaiter.clone(), uwaiter.clone()]);
         assert_eq!(external.join().unwrap(), RgOutcome::Completed);
@@ -2685,7 +2736,11 @@ fn bound_gate_refused_skip_no_lost_wake() {
         assert_eq!(uwaiter.try_wait(), Some(RgOutcome::Completed));
         bwork.assert_complete();
         uwork.assert_complete();
-        assert_eq!(payload.serves.load(Ordering::SeqCst), 0, "refused board never served");
+        assert_eq!(
+            payload.serves.load(Ordering::SeqCst),
+            0,
+            "refused board never served"
+        );
         assert_eq!(rt.execution_permits().available(), 1, "permit balance");
     });
 }
@@ -2866,7 +2921,11 @@ impl SealedParallelSink for LoomSealedSink {
         1
     }
     fn combine(&self, _part: u64, _sealed: &[usize]) {
-        assert_eq!(self.ready.load(Ordering::SeqCst), 1, "combine before sealed_ready");
+        assert_eq!(
+            self.ready.load(Ordering::SeqCst),
+            1,
+            "combine before sealed_ready"
+        );
         self.combines.fetch_add(1, Ordering::SeqCst);
     }
     fn finalize(&self, sealed: &[usize]) {
@@ -2895,7 +2954,11 @@ fn pool_board_serve(payload: &Arc<dyn std::any::Any + Send + Sync>) -> BoundServ
     let cell = Arc::clone(payload)
         .downcast::<loom::sync::Mutex<Option<Arc<PoolBoardPayload>>>>()
         .expect("model placeholder");
-    let p = cell.lock().unwrap().clone().expect("payload installed pre-publish (on_rg)");
+    let p = cell
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("payload installed pre-publish (on_rg)");
     if p.board.closed.load(Ordering::SeqCst) {
         return BoundServe::Closed;
     }
@@ -2922,7 +2985,12 @@ fn sealed_bound_submit(
     granules: u64,
     tickets: usize,
     nslots: usize,
-) -> (Arc<LoomSealedSink>, Arc<PoolBoardPayload>, RgHandle, CompletionWaiter) {
+) -> (
+    Arc<LoomSealedSink>,
+    Arc<PoolBoardPayload>,
+    RgHandle,
+    CompletionWaiter,
+) {
     let sink = LoomSealedSink::new();
     let sets = sealed_sink_tasksets(
         Arc::clone(&sink),
@@ -2959,7 +3027,11 @@ fn sealed_bound_submit(
             *out2.lock().unwrap() = Some(payload);
         },
     );
-    let payload = payload_out.lock().unwrap().take().expect("on_rg ran at submit");
+    let payload = payload_out
+        .lock()
+        .unwrap()
+        .take()
+        .expect("on_rg ran at submit");
     (sink, payload, h, waiter)
 }
 
@@ -3067,7 +3139,10 @@ fn pool_sealed_elastic_join_across_sets() {
         assert_eq!(sink.ready.load(Ordering::SeqCst), 1);
         assert_eq!(sink.combines.load(Ordering::SeqCst), 1);
         assert_eq!(sink.finalizes.load(Ordering::SeqCst), 1);
-        assert!(payload.serves.load(Ordering::SeqCst) <= 2, "ticket cap held");
+        assert!(
+            payload.serves.load(Ordering::SeqCst) <= 2,
+            "ticket cap held"
+        );
         assert_eq!(
             payload.board.detached.load(Ordering::SeqCst),
             payload.board.claimed.load(Ordering::SeqCst)
@@ -3164,7 +3239,8 @@ fn pool_two_bound_boards_starved_no_lost_wake() {
         let ah1 = ah.clone();
         let external = thread::spawn(move || {
             let mut cw = runtime::CallerWorker::enter(&rt1).expect("caller lane");
-            cw.drive_with_duty(&rt1, &ah1, &mut || Ok(())).expect("duty never fails")
+            cw.drive_with_duty(&rt1, &ah1, &mut || Ok(()))
+                .expect("duty never fails")
         });
         drive_bound_pool(&rt, 0, &[awaiter.clone(), bwaiter.clone()]);
         assert_eq!(external.join().unwrap(), RgOutcome::Completed);
@@ -3173,8 +3249,15 @@ fn pool_two_bound_boards_starved_no_lost_wake() {
         assert_eq!(bwaiter.try_wait(), Some(RgOutcome::Completed));
         awork.assert_complete();
         bwork.assert_complete();
-        assert_eq!(apayload.serves.load(Ordering::SeqCst), 0, "refused board never served");
-        assert!(bpayload.serves.load(Ordering::SeqCst) <= 1, "ticket cap held");
+        assert_eq!(
+            apayload.serves.load(Ordering::SeqCst),
+            0,
+            "refused board never served"
+        );
+        assert!(
+            bpayload.serves.load(Ordering::SeqCst) <= 1,
+            "ticket cap held"
+        );
         assert_eq!(rt.execution_permits().available(), 1, "permit balance");
     });
 }
@@ -3216,11 +3299,7 @@ fn pool_blocking_inside_bound_serve() {
     }
 
     /// drive_bound_pool with the facade registration (pool.rs worker_loop).
-    fn drive_bound_pool_registered(
-        rt: &Arc<Runtime>,
-        worker: usize,
-        waiters: &[CompletionWaiter],
-    ) {
+    fn drive_bound_pool_registered(rt: &Arc<Runtime>, worker: usize, waiters: &[CompletionWaiter]) {
         // SAFETY: the runtime outlives this drive; the permit is held
         // across worker_step, where the facade is called.
         let _reg = unsafe { runtime::PermitThreadReg::new(rt.execution_permits()) };
@@ -3267,8 +3346,11 @@ fn pool_blocking_inside_bound_serve() {
             let slot = Arc::clone(payload)
                 .downcast::<loom::sync::Mutex<Option<Arc<BoundModelPayload>>>>()
                 .expect("model placeholder");
-            let inner =
-                slot.lock().unwrap().clone().expect("payload installed pre-publish (on_rg)");
+            let inner = slot
+                .lock()
+                .unwrap()
+                .clone()
+                .expect("payload installed pre-publish (on_rg)");
             let inner: Arc<dyn std::any::Any + Send + Sync> = inner;
             bound_model_serve(&inner)
         }
@@ -3289,7 +3371,7 @@ fn pool_blocking_inside_bound_serve() {
             BoundDescriptor {
                 serve: deferred_serve,
                 payload: Arc::clone(&placeholder) as Arc<dyn std::any::Any + Send + Sync>,
-            width: 0,
+                width: 0,
             },
             move |rg| {
                 let payload = Arc::new(BoundModelPayload {
@@ -3303,7 +3385,11 @@ fn pool_blocking_inside_bound_serve() {
                 *out2.lock().unwrap() = Some(payload);
             },
         );
-        let payload = payload_out.lock().unwrap().take().expect("on_rg ran at submit");
+        let payload = payload_out
+            .lock()
+            .unwrap()
+            .take()
+            .expect("on_rg ran at submit");
 
         let rt1 = Arc::clone(&rt);
         let w1 = waiter.clone();
@@ -3313,7 +3399,10 @@ fn pool_blocking_inside_bound_serve() {
 
         assert_eq!(waiter.try_wait(), Some(RgOutcome::Completed));
         inner.assert_complete();
-        assert!(payload.serves.load(Ordering::SeqCst) <= 1, "ticket cap held");
+        assert!(
+            payload.serves.load(Ordering::SeqCst) <= 1,
+            "ticket cap held"
+        );
         assert_eq!(rt.execution_permits().available(), 1, "permit balance");
     });
 }
@@ -3358,13 +3447,17 @@ fn nolaunch_allrefused_abort_drain_terminates() {
         let leader = thread::spawn(move || {
             h1.abort();
             let mut cw = runtime::CallerWorker::enter(&rt1).expect("caller lane for the drain");
-            cw.drive_with_duty(&rt1, &h1, &mut || Ok(())).expect("drain duty never fails")
+            cw.drive_with_duty(&rt1, &h1, &mut || Ok(()))
+                .expect("drain duty never fails")
         });
         drive_bound_pool(&rt, 0, &[waiter.clone()]);
         let drained = leader.join().unwrap();
 
         let outcome = waiter.try_wait().expect("drain settled the RG");
-        assert_eq!(outcome, drained, "leader drain observed the settled outcome");
+        assert_eq!(
+            outcome, drained,
+            "leader drain observed the settled outcome"
+        );
         if outcome == RgOutcome::Completed {
             work.assert_complete();
             assert_eq!(rt.stats().finalize_events, 1);
@@ -3374,7 +3467,11 @@ fn nolaunch_allrefused_abort_drain_terminates() {
             // drained granule completed first (doc above).
             assert!(rt.stats().finalize_events <= 1, "at most one finalize");
         }
-        assert_eq!(payload.serves.load(Ordering::SeqCst), 0, "refused board never served");
+        assert_eq!(
+            payload.serves.load(Ordering::SeqCst),
+            0,
+            "refused board never served"
+        );
         assert_eq!(rt.execution_permits().available(), 1, "permit balance");
     });
 }
@@ -3565,9 +3662,19 @@ fn pool_qos_yield_last_active_guard_and_needle() {
         }
         qb.board.close_and_await();
 
-        assert!(complete.load(Ordering::SeqCst), "the last active participant completed");
-        assert!(qb.yielded.load(Ordering::SeqCst) <= 1, "last-active guard: at most one yield");
-        assert_eq!(qb.yield_grants.load(Ordering::SeqCst), 0, "grants fully settled");
+        assert!(
+            complete.load(Ordering::SeqCst),
+            "the last active participant completed"
+        );
+        assert!(
+            qb.yielded.load(Ordering::SeqCst) <= 1,
+            "last-active guard: at most one yield"
+        );
+        assert_eq!(
+            qb.yield_grants.load(Ordering::SeqCst),
+            0,
+            "grants fully settled"
+        );
         assert_eq!(
             qb.board.detached.load(Ordering::SeqCst),
             qb.board.claimed.load(Ordering::SeqCst),
@@ -3731,7 +3838,10 @@ fn pool_publish_order_no_rg_gone_churn() {
             0,
             "spurious refusal churn on a healthy engagement"
         );
-        assert!(payload.serves.load(Ordering::SeqCst) <= 1, "ticket cap held");
+        assert!(
+            payload.serves.load(Ordering::SeqCst) <= 1,
+            "ticket cap held"
+        );
         assert_eq!(
             payload.board.detached.load(Ordering::SeqCst),
             payload.board.claimed.load(Ordering::SeqCst)
@@ -3874,9 +3984,16 @@ fn lg_leave(w: &LgWorld, procno: usize) {
     w.slots[procno].leader.store(LG_INVALID, Ordering::Relaxed);
     if g.is_empty() {
         let mut fl = w.freelist.lock().unwrap(); // ProcStructLock
-        w.slots[leader_no].leader.store(LG_INVALID, Ordering::Relaxed);
+        w.slots[leader_no]
+            .leader
+            .store(LG_INVALID, Ordering::Relaxed);
         if w.slots[leader_no].pid.load(Ordering::Relaxed) == 0 {
-            lg_freelist_push(&mut fl, leader_no, true, "LeaveLockGroup leader-exited-first");
+            lg_freelist_push(
+                &mut fl,
+                leader_no,
+                true,
+                "LeaveLockGroup leader-exited-first",
+            );
         } else {
             w.refused_push.fetch_add(1, Ordering::Relaxed); // handoff arm (leader self-pushes / parked)
         }
@@ -3900,14 +4017,18 @@ fn lg_prockill(w: &LgWorld, procno: usize, parking: bool) {
                 // pid read + maybe-push in ONE ProcStructLock section
                 // (see lg_leave; identical arm in ProcKill's member leg).
                 let mut fl = w.freelist.lock().unwrap(); // ProcStructLock
-                w.slots[leader_no].leader.store(LG_INVALID, Ordering::Relaxed);
+                w.slots[leader_no]
+                    .leader
+                    .store(LG_INVALID, Ordering::Relaxed);
                 if w.slots[leader_no].pid.load(Ordering::Relaxed) == 0 {
                     lg_freelist_push(&mut fl, leader_no, true, "ProcKill leader-exited-first");
                 } else {
                     w.refused_push.fetch_add(1, Ordering::Relaxed); // handoff arm
                 }
             } else {
-                w.slots[leader_no].leader.store(LG_INVALID, Ordering::Relaxed);
+                w.slots[leader_no]
+                    .leader
+                    .store(LG_INVALID, Ordering::Relaxed);
             }
         } else if leader_no != procno {
             w.slots[procno].leader.store(LG_INVALID, Ordering::Relaxed);
@@ -3919,10 +4040,10 @@ fn lg_prockill(w: &LgWorld, procno: usize, parking: bool) {
     }
     {
         let mut fl = w.freelist.lock().unwrap(); // ProcStructLock
-        // FIXED PROTOCOL: pid=0 INSIDE the ProcStructLock section — the
-        // deferred-return arbiter. A member's empty-transition arm reading
-        // pid!=0 under this lock is proof we have not passed this gate:
-        // it hands the return off to us (we see its pointer clear below).
+                                                 // FIXED PROTOCOL: pid=0 INSIDE the ProcStructLock section — the
+                                                 // deferred-return arbiter. A member's empty-transition arm reading
+                                                 // pid!=0 under this lock is proof we have not passed this gate:
+                                                 // it hands the return off to us (we see its pointer clear below).
         w.slots[procno].pid.store(0, Ordering::Relaxed);
         // Pointer still set (== procno) means the last member has not run
         // its empty transition; that member returns this PGPROC instead.
@@ -3939,7 +4060,11 @@ fn lg_prockill(w: &LgWorld, procno: usize, parking: bool) {
 fn lg_init_pop(w: &LgWorld, new_pid: usize) -> Option<usize> {
     let popped = {
         let mut fl = w.freelist.lock().unwrap(); // ProcStructLock :571
-        if fl.is_empty() { None } else { Some(fl.remove(0)) } // plist_pop_head
+        if fl.is_empty() {
+            None
+        } else {
+            Some(fl.remove(0))
+        } // plist_pop_head
     };
     let procno = popped?;
     let stale_pid = w.slots[procno].pid.load(Ordering::Relaxed);
@@ -4073,7 +4198,13 @@ fn lockgroup_slot_reuse_pop_vs_deferred_return_never_live() {
         // Exactly-once, counting the racing reuse as a completed return
         // (fixed-protocol bar: no leak arm — a dying leader is always
         // returned by exactly one side of the arbitration).
-        let on_list = w.freelist.lock().unwrap().iter().filter(|&&s| s == 0).count();
+        let on_list = w
+            .freelist
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|&&s| s == 0)
+            .count();
         let returned = on_list + usize::from(reused == Some(0));
         assert_eq!(returned, 1, "dead leader PGPROC returned {returned}x");
     });

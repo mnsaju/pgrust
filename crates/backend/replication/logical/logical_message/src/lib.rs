@@ -63,7 +63,10 @@ pub fn LogLogicalMessage(
 /// matters to logical decoding (decode.c), which reads it directly off the
 /// WAL stream rather than through redo.
 pub fn logicalmsg_redo(record: &mut XLogReaderState) -> PgResult<()> {
-    let rec = record.record.as_ref().expect("logicalmsg_redo with no decoded record");
+    let rec = record
+        .record
+        .as_ref()
+        .expect("logicalmsg_redo with no decoded record");
     let info = rec.xl_info & !XLR_INFO_MASK;
     if info != XLOG_LOGICAL_MESSAGE {
         panic!("logicalmsg_redo: unknown op code {info}");

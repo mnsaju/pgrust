@@ -126,15 +126,17 @@ fn scan_opaque_alloc_and_pos() {
 fn stack_walk() {
     let ctx = MemoryContext::new("t");
     let mcx = ctx.mcx();
-    let root = ::mcx::leak_in(::mcx::alloc_in(
-        mcx,
-        BTStackData {
-            bts_blkno: 1,
-            bts_offset: 2,
-            bts_parent: None,
-        },
-    )
-    .unwrap());
+    let root = ::mcx::leak_in(
+        ::mcx::alloc_in(
+            mcx,
+            BTStackData {
+                bts_blkno: 1,
+                bts_offset: 2,
+                bts_parent: None,
+            },
+        )
+        .unwrap(),
+    );
     let mut leaf = BTStackData {
         bts_blkno: 10,
         bts_offset: 3,

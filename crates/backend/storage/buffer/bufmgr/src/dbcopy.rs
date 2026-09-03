@@ -24,8 +24,14 @@ fn RelationCopyStorageUsingBuffer(
     let use_wal = transam_xlog_seams::xlog_standby_info_active::call()
         && (permanent || fork_num == ForkNumber::INIT_FORKNUM);
 
-    let src_key = RelFileLocatorBackend { locator: srclocator, backend: INVALID_PROC_NUMBER };
-    let dst_key = RelFileLocatorBackend { locator: dstlocator, backend: INVALID_PROC_NUMBER };
+    let src_key = RelFileLocatorBackend {
+        locator: srclocator,
+        backend: INVALID_PROC_NUMBER,
+    };
+    let dst_key = RelFileLocatorBackend {
+        locator: dstlocator,
+        backend: INVALID_PROC_NUMBER,
+    };
     let nblocks = smgr_seams::smgr_nblocks::call(src_key, fork_num)?;
     if nblocks == 0 {
         return Ok(());
@@ -106,12 +112,23 @@ pub fn CreateAndCopyRelationData(
         RELPERSISTENCE_UNLOGGED
     };
 
-    let src_key = RelFileLocatorBackend { locator: src_rlocator, backend: INVALID_PROC_NUMBER };
-    let dst_key = RelFileLocatorBackend { locator: dst_rlocator, backend: INVALID_PROC_NUMBER };
+    let src_key = RelFileLocatorBackend {
+        locator: src_rlocator,
+        backend: INVALID_PROC_NUMBER,
+    };
+    let dst_key = RelFileLocatorBackend {
+        locator: dst_rlocator,
+        backend: INVALID_PROC_NUMBER,
+    };
 
     catalog_storage_seams::relation_create_storage::call(dst_rlocator, relpersistence, false)?;
 
-    RelationCopyStorageUsingBuffer(src_rlocator, dst_rlocator, ForkNumber::MAIN_FORKNUM, permanent)?;
+    RelationCopyStorageUsingBuffer(
+        src_rlocator,
+        dst_rlocator,
+        ForkNumber::MAIN_FORKNUM,
+        permanent,
+    )?;
 
     for fork_i in (ForkNumber::MAIN_FORKNUM as i32 + 1)..=(MAX_FORKNUM as i32) {
         let fork_num = ForkNumber::from_i32(fork_i).expect("fork range");

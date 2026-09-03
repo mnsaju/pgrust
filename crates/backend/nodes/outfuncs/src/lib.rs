@@ -20,8 +20,8 @@ use types_nodes::parsenodes::{
 use types_nodes::primnodes::{
     Aggref, Alias, ArrayCoerceExpr, BoolExpr, BoolExprType, CoerceToDomain, CoerceToDomainValue,
     CoerceViaIO, Const, ConvertRowtypeExpr, FromExpr, FuncExpr, JoinExpr, NamedArgExpr, NullTest,
-    OpExpr, PlaceHolderVar, RangeTblRef, RelabelType, ScalarArrayOpExpr, SubLink, TableFunc, TargetEntry, Var,
-    XmlExpr,
+    OpExpr, PlaceHolderVar, RangeTblRef, RelabelType, ScalarArrayOpExpr, SubLink, TableFunc,
+    TargetEntry, Var, XmlExpr,
 };
 use types_nodes::rawnodes::{PartitionBoundSpec, PartitionRangeDatum};
 use types_nodes::{Boolean, Float, Integer, Node, NodeTag};
@@ -52,30 +52,35 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
         NodeTag::T_OpExpr => out_op_expr(out, node.as_variant::<OpExpr>().expect("OpExpr"))?,
         NodeTag::T_DistinctExpr => out_distinct_expr(
             out,
-            node.as_variant::<types_nodes::primnodes::DistinctExpr>().expect("DistinctExpr"),
+            node.as_variant::<types_nodes::primnodes::DistinctExpr>()
+                .expect("DistinctExpr"),
         )?,
         NodeTag::T_NullIfExpr => out_null_if_expr(
             out,
-            node.as_variant::<types_nodes::primnodes::NullIfExpr>().expect("NullIfExpr"),
+            node.as_variant::<types_nodes::primnodes::NullIfExpr>()
+                .expect("NullIfExpr"),
         )?,
         NodeTag::T_FuncExpr => {
             out_func_expr(out, node.as_variant::<FuncExpr>().expect("FuncExpr"))?
         }
-        NodeTag::T_NamedArgExpr => {
-            out_named_arg_expr(out, node.as_variant::<NamedArgExpr>().expect("NamedArgExpr"))?
-        }
+        NodeTag::T_NamedArgExpr => out_named_arg_expr(
+            out,
+            node.as_variant::<NamedArgExpr>().expect("NamedArgExpr"),
+        )?,
         NodeTag::T_BoolExpr => {
             out_bool_expr(out, node.as_variant::<BoolExpr>().expect("BoolExpr"))?
         }
         NodeTag::T_NullTest => {
             out_null_test(out, node.as_variant::<NullTest>().expect("NullTest"))?
         }
-        NodeTag::T_XmlExpr => {
-            out_xml_expr(out, node.as_variant::<XmlExpr>().expect("XmlExpr"))?
-        }
+        NodeTag::T_XmlExpr => out_xml_expr(out, node.as_variant::<XmlExpr>().expect("XmlExpr"))?,
         NodeTag::T_ReturningExpr => {
             let r = node.as_returning_expr().expect("ReturningExpr");
-            w!(out, "{{RETURNINGEXPR :retlevelsup {} :retold ", r.retlevelsup);
+            w!(
+                out,
+                "{{RETURNINGEXPR :retlevelsup {} :retold ",
+                r.retlevelsup
+            );
             out_bool(out, r.retold);
             w!(out, " :retexpr ");
             out_node(out, r.retexpr)?;
@@ -88,7 +93,10 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
             w!(
                 out,
                 " :fieldnum {} :resulttype {} :resulttypmod {} :resultcollid {}}}",
-                f.fieldnum, f.resulttype, f.resulttypmod, f.resultcollid
+                f.fieldnum,
+                f.resulttype,
+                f.resulttypmod,
+                f.resultcollid
             );
         }
         NodeTag::T_FieldStore => {
@@ -106,7 +114,9 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
             w!(
                 out,
                 "{{ARRAYEXPR :array_typeid {} :array_collid {} :element_typeid {} :elements ",
-                a.array_typeid, a.array_collid, a.element_typeid
+                a.array_typeid,
+                a.array_collid,
+                a.element_typeid
             );
             out_list(out, &a.elements)?;
             w!(out, " :multidims ");
@@ -118,12 +128,19 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
             w!(
                 out,
                 "{{CASETESTEXPR :typeId {} :typeMod {} :collation {}}}",
-                c.typeId, c.typeMod, c.collation
+                c.typeId,
+                c.typeMod,
+                c.collation
             );
         }
         NodeTag::T_CaseExpr => {
             let c = node.as_case_expr().expect("CaseExpr");
-            w!(out, "{{CASEEXPR :casetype {} :casecollid {} :arg ", c.casetype, c.casecollid);
+            w!(
+                out,
+                "{{CASEEXPR :casetype {} :casecollid {} :arg ",
+                c.casetype,
+                c.casecollid
+            );
             out_opt_node(out, c.arg)?;
             w!(out, " :args ");
             out_list(out, &c.args)?;
@@ -144,7 +161,8 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
             w!(
                 out,
                 "{{MERGESUPPORTFUNC :msftype {} :msfcollid {} :location -1}}",
-                m.msftype, m.msfcollid
+                m.msftype,
+                m.msfcollid
             );
         }
         NodeTag::T_WindowFunc => {
@@ -152,7 +170,10 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
             w!(
                 out,
                 "{{WINDOWFUNC :winfnoid {} :wintype {} :wincollid {} :inputcollid {} :args ",
-                f.winfnoid, f.wintype, f.wincollid, f.inputcollid
+                f.winfnoid,
+                f.wintype,
+                f.wincollid,
+                f.inputcollid
             );
             out_list(out, &f.args)?;
             w!(out, " :aggfilter ");
@@ -182,7 +203,9 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
             w!(
                 out,
                 " :startInRangeFunc {} :endInRangeFunc {} :inRangeColl {} :inRangeAsc ",
-                c.startInRangeFunc, c.endInRangeFunc, c.inRangeColl
+                c.startInRangeFunc,
+                c.endInRangeFunc,
+                c.inRangeColl
             );
             out_bool(out, c.inRangeAsc);
             w!(out, " :inRangeNullsFirst ");
@@ -229,7 +252,8 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
             w!(
                 out,
                 "{{COALESCEEXPR :coalescetype {} :coalescecollid {} :args ",
-                c.coalescetype, c.coalescecollid
+                c.coalescetype,
+                c.coalescecollid
             );
             out_list(out, &c.args)?;
             w!(out, " :location -1}}");
@@ -240,22 +264,28 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
         }
         NodeTag::T_ArrayCoerceExpr => out_array_coerce_expr(
             out,
-            node.as_variant::<ArrayCoerceExpr>().expect("ArrayCoerceExpr"),
+            node.as_variant::<ArrayCoerceExpr>()
+                .expect("ArrayCoerceExpr"),
         )?,
         NodeTag::T_ConvertRowtypeExpr => out_convert_rowtype_expr(
             out,
-            node.as_variant::<ConvertRowtypeExpr>().expect("ConvertRowtypeExpr"),
+            node.as_variant::<ConvertRowtypeExpr>()
+                .expect("ConvertRowtypeExpr"),
         )?,
         NodeTag::T_CoerceToDomain => out_coerce_to_domain(
             out,
             node.as_variant::<CoerceToDomain>().expect("CoerceToDomain"),
         )?,
         NodeTag::T_CoerceToDomainValue => {
-            let v = node.as_variant::<CoerceToDomainValue>().expect("CoerceToDomainValue");
+            let v = node
+                .as_variant::<CoerceToDomainValue>()
+                .expect("CoerceToDomainValue");
             w!(
                 out,
                 "{{COERCETODOMAINVALUE :typeId {} :typeMod {} :collation {} :location -1}}",
-                v.typeId, v.typeMod, v.collation
+                v.typeId,
+                v.typeMod,
+                v.collation
             );
         }
         NodeTag::T_SQLValueFunction => {
@@ -265,20 +295,25 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
             w!(
                 out,
                 "{{SQLVALUEFUNCTION :op {} :type {} :typmod {} :location -1}}",
-                v.op as u32, v.r#type, v.typmod
+                v.op as u32,
+                v.r#type,
+                v.typmod
             );
         }
         NodeTag::T_ScalarArrayOpExpr => out_scalar_array_op_expr(
             out,
-            node.as_variant::<ScalarArrayOpExpr>().expect("ScalarArrayOpExpr"),
+            node.as_variant::<ScalarArrayOpExpr>()
+                .expect("ScalarArrayOpExpr"),
         )?,
         NodeTag::T_PartitionBoundSpec => out_partition_bound_spec(
             out,
-            node.as_variant::<PartitionBoundSpec>().expect("PartitionBoundSpec"),
+            node.as_variant::<PartitionBoundSpec>()
+                .expect("PartitionBoundSpec"),
         )?,
         NodeTag::T_PartitionRangeDatum => out_partition_range_datum(
             out,
-            node.as_variant::<PartitionRangeDatum>().expect("PartitionRangeDatum"),
+            node.as_variant::<PartitionRangeDatum>()
+                .expect("PartitionRangeDatum"),
         )?,
         NodeTag::T_BooleanTest => {
             let bt = node
@@ -286,7 +321,11 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
                 .expect("BooleanTest");
             w!(out, "{{BOOLEANTEST :arg ");
             out_opt_node(out, bt.arg)?;
-            w!(out, " :booltesttype {} :location -1}}", bt.booltesttype as u32);
+            w!(
+                out,
+                " :booltesttype {} :location -1}}",
+                bt.booltesttype as u32
+            );
         }
         NodeTag::T_SetToDefault => {
             let d = node
@@ -295,12 +334,12 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
             w!(
                 out,
                 "{{SETTODEFAULT :typeId {} :typeMod {} :collation {} :location -1}}",
-                d.typeId, d.typeMod, d.collation
+                d.typeId,
+                d.typeMod,
+                d.collation
             );
         }
-        NodeTag::T_JsonFormat => {
-            out_json_format(out, node.as_json_format().expect("JsonFormat"))
-        }
+        NodeTag::T_JsonFormat => out_json_format(out, node.as_json_format().expect("JsonFormat")),
         NodeTag::T_JsonReturning => {
             out_json_returning(out, node.as_json_returning().expect("JsonReturning"))
         }
@@ -315,8 +354,14 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
             w!(out, "}}");
         }
         NodeTag::T_JsonConstructorExpr => {
-            let c = node.as_json_constructor_expr().expect("JsonConstructorExpr");
-            w!(out, "{{JSONCONSTRUCTOREXPR :type {} :args ", c.r#type as u32);
+            let c = node
+                .as_json_constructor_expr()
+                .expect("JsonConstructorExpr");
+            w!(
+                out,
+                "{{JSONCONSTRUCTOREXPR :type {} :args ",
+                c.r#type as u32
+            );
             out_list(out, &c.args)?;
             w!(out, " :func ");
             out_opt_node(out, c.func)?;
@@ -372,11 +417,7 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
             out_bool(out, j.use_io_coercion);
             w!(out, " :use_json_coercion ");
             out_bool(out, j.use_json_coercion);
-            w!(
-                out,
-                " :wrapper {} :omit_quotes ",
-                j.wrapper as u32
-            );
+            w!(out, " :wrapper {} :omit_quotes ", j.wrapper as u32);
             out_bool(out, j.omit_quotes);
             w!(out, " :collation {} :location -1}}", j.collation);
         }
@@ -399,7 +440,9 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
             w!(out, " :colMin {} :colMax {}}}", s.colMin, s.colMax);
         }
         NodeTag::T_JsonTableSiblingJoin => {
-            let j = node.as_json_table_sibling_join().expect("JsonTableSiblingJoin");
+            let j = node
+                .as_json_table_sibling_join()
+                .expect("JsonTableSiblingJoin");
             w!(out, "{{JSONTABLESIBLINGJOIN :lplan ");
             out_opt_node(out, j.lplan)?;
             w!(out, " :rplan ");
@@ -407,12 +450,19 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
             w!(out, "}}");
         }
         NodeTag::T_Query => out_query(out, node.as_variant::<Query>().expect("Query"))?,
-        NodeTag::T_RangeTblEntry => {
-            out_range_tbl_entry(out, node.as_variant::<RangeTblEntry>().expect("RangeTblEntry"))?
-        }
+        NodeTag::T_RangeTblEntry => out_range_tbl_entry(
+            out,
+            node.as_variant::<RangeTblEntry>().expect("RangeTblEntry"),
+        )?,
         NodeTag::T_TableSampleClause => {
-            let t = node.as_variant::<TableSampleClause>().expect("TableSampleClause");
-            w!(out, "{{TABLESAMPLECLAUSE :tsmhandler {} :args ", t.tsmhandler);
+            let t = node
+                .as_variant::<TableSampleClause>()
+                .expect("TableSampleClause");
+            w!(
+                out,
+                "{{TABLESAMPLECLAUSE :tsmhandler {} :args ",
+                t.tsmhandler
+            );
             out_list(out, &t.args)?;
             w!(out, " :repeatable ");
             out_opt_node(out, t.repeatable)?;
@@ -420,7 +470,8 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
         }
         NodeTag::T_RTEPermissionInfo => out_rte_permission_info(
             out,
-            node.as_variant::<RTEPermissionInfo>().expect("RTEPermissionInfo"),
+            node.as_variant::<RTEPermissionInfo>()
+                .expect("RTEPermissionInfo"),
         ),
         NodeTag::T_Alias => out_alias(out, node.as_variant::<Alias>().expect("Alias"))?,
         NodeTag::T_FromExpr => {
@@ -437,11 +488,13 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
         }
         NodeTag::T_SortGroupClause => out_sort_group_clause(
             out,
-            node.as_variant::<SortGroupClause>().expect("SortGroupClause"),
+            node.as_variant::<SortGroupClause>()
+                .expect("SortGroupClause"),
         ),
         NodeTag::T_GroupingSet => out_grouping_set(
             out,
-            node.as_variant::<types_nodes::parsenodes::GroupingSet>().expect("GroupingSet"),
+            node.as_variant::<types_nodes::parsenodes::GroupingSet>()
+                .expect("GroupingSet"),
         )?,
         NodeTag::T_Aggref => out_aggref(out, node.as_variant::<Aggref>().expect("Aggref"))?,
         NodeTag::T_GroupingFunc => {
@@ -458,12 +511,18 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
         }
         NodeTag::T_SubLink => out_sub_link(out, node.as_variant::<SubLink>().expect("SubLink"))?,
         NodeTag::T_Param => {
-            let p = node.as_variant::<types_nodes::primnodes::Param>().expect("Param");
+            let p = node
+                .as_variant::<types_nodes::primnodes::Param>()
+                .expect("Param");
             w!(
                 out,
                 "{{PARAM :paramkind {} :paramid {} :paramtype {} :paramtypmod {} \
                  :paramcollid {} :location -1}}",
-                p.paramkind as u32, p.paramid, p.paramtype, p.paramtypmod, p.paramcollid
+                p.paramkind as u32,
+                p.paramid,
+                p.paramtype,
+                p.paramtypmod,
+                p.paramcollid
             );
         }
         NodeTag::T_CTESearchClause => out_cte_search_clause(
@@ -488,18 +547,21 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
         )?,
         NodeTag::T_CommonTableExpr => out_common_table_expr(
             out,
-            node.as_variant::<CommonTableExpr>().expect("CommonTableExpr"),
+            node.as_variant::<CommonTableExpr>()
+                .expect("CommonTableExpr"),
         )?,
         NodeTag::T_IntList => out_int_list(out, node.as_int_list().expect("IntList")),
         NodeTag::T_OidList => out_oid_list(out, node.as_oid_list().expect("OidList")),
         NodeTag::T_String => out_string_node(out, node.as_string().expect("String").sval),
         NodeTag::T_Integer => {
-            w!(out, "{}", node.as_variant::<Integer>().expect("Integer").ival)
+            w!(
+                out,
+                "{}",
+                node.as_variant::<Integer>().expect("Integer").ival
+            )
         }
         NodeTag::T_Float => w!(out, "{}", node.as_variant::<Float>().expect("Float").fval),
-        NodeTag::T_Boolean => {
-            out_bool(out, node.as_variant::<Boolean>().expect("Boolean").boolval)
-        }
+        NodeTag::T_Boolean => out_bool(out, node.as_variant::<Boolean>().expect("Boolean").boolval),
         NodeTag::T_SubscriptingRef => {
             let sr = node
                 .as_variant::<types_nodes::primnodes::SubscriptingRef>()
@@ -508,7 +570,11 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
                 out,
                 "{{SUBSCRIPTINGREF :refcontainertype {} :refelemtype {} :refrestype {} \
                  :reftypmod {} :refcollid {} :refupperindexpr ",
-                sr.refcontainertype, sr.refelemtype, sr.refrestype, sr.reftypmod, sr.refcollid
+                sr.refcontainertype,
+                sr.refelemtype,
+                sr.refrestype,
+                sr.reftypmod,
+                sr.refcollid
             );
             out_opt_list(out, &sr.refupperindexpr)?;
             w!(out, " :reflowerindexpr ");
@@ -520,8 +586,15 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
             w!(out, "}}");
         }
         NodeTag::T_CaseExpr => {
-            let c = node.as_variant::<types_nodes::primnodes::CaseExpr>().expect("CaseExpr");
-            w!(out, "{{CASEEXPR :casetype {} :casecollid {} :arg ", c.casetype, c.casecollid);
+            let c = node
+                .as_variant::<types_nodes::primnodes::CaseExpr>()
+                .expect("CaseExpr");
+            w!(
+                out,
+                "{{CASEEXPR :casetype {} :casecollid {} :arg ",
+                c.casetype,
+                c.casecollid
+            );
             out_opt_node(out, c.arg)?;
             w!(out, " :args ");
             out_list(out, &c.args)?;
@@ -530,7 +603,9 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
             w!(out, " :location -1}}");
         }
         NodeTag::T_CaseWhen => {
-            let cw = node.as_variant::<types_nodes::primnodes::CaseWhen>().expect("CaseWhen");
+            let cw = node
+                .as_variant::<types_nodes::primnodes::CaseWhen>()
+                .expect("CaseWhen");
             w!(out, "{{CASEWHEN :expr ");
             out_opt_node(out, cw.expr)?;
             w!(out, " :result ");
@@ -546,13 +621,16 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
             w!(out, " :collOid {} :location -1}}", c.collOid);
         }
         NodeTag::T_RowExpr => {
-            let r = node.as_variant::<types_nodes::primnodes::RowExpr>().expect("RowExpr");
+            let r = node
+                .as_variant::<types_nodes::primnodes::RowExpr>()
+                .expect("RowExpr");
             w!(out, "{{ROWEXPR :args ");
             out_list(out, &r.args)?;
             w!(
                 out,
                 " :row_typeid {} :row_format {} :colnames ",
-                r.row_typeid, r.row_format as u32
+                r.row_typeid,
+                r.row_format as u32
             );
             out_list(out, &r.colnames)?;
             w!(out, " :location -1}}");
@@ -574,23 +652,31 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
             w!(out, "}}");
         }
         NodeTag::T_MinMaxExpr => {
-            let m =
-                node.as_variant::<types_nodes::primnodes::MinMaxExpr>().expect("MinMaxExpr");
+            let m = node
+                .as_variant::<types_nodes::primnodes::MinMaxExpr>()
+                .expect("MinMaxExpr");
             w!(
                 out,
                 "{{MINMAXEXPR :minmaxtype {} :minmaxcollid {} :inputcollid {} :op {} :args ",
-                m.minmaxtype, m.minmaxcollid, m.inputcollid, m.op as u32
+                m.minmaxtype,
+                m.minmaxcollid,
+                m.inputcollid,
+                m.op as u32
             );
             out_list(out, &m.args)?;
             w!(out, " :location -1}}");
         }
         NodeTag::T_WindowFunc => {
-            let f =
-                node.as_variant::<types_nodes::primnodes::WindowFunc>().expect("WindowFunc");
+            let f = node
+                .as_variant::<types_nodes::primnodes::WindowFunc>()
+                .expect("WindowFunc");
             w!(
                 out,
                 "{{WINDOWFUNC :winfnoid {} :wintype {} :wincollid {} :inputcollid {} :args ",
-                f.winfnoid, f.wintype, f.wincollid, f.inputcollid
+                f.winfnoid,
+                f.wintype,
+                f.wincollid,
+                f.inputcollid
             );
             out_list(out, &f.args)?;
             w!(out, " :aggfilter ");
@@ -604,7 +690,9 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
             w!(out, " :location -1}}");
         }
         NodeTag::T_SetOperationStmt => {
-            let s = node.as_variant::<SetOperationStmt>().expect("SetOperationStmt");
+            let s = node
+                .as_variant::<SetOperationStmt>()
+                .expect("SetOperationStmt");
             w!(out, "{{SETOPERATIONSTMT :op {} :all ", s.op as u32);
             out_bool(out, s.all);
             w!(out, " :larg ");
@@ -636,7 +724,9 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
             w!(
                 out,
                 "{{ROWMARKCLAUSE :rti {} :strength {} :waitPolicy {} :pushedDown ",
-                r.rti, r.strength as u32, r.waitPolicy as u32
+                r.rti,
+                r.strength as u32,
+                r.waitPolicy as u32
             );
             out_bool(out, r.pushedDown);
             w!(out, "}}");
@@ -685,10 +775,17 @@ fn out_node(out: &mut PgString<'_>, node: Node<'_>) -> PgResult<()> {
                 .expect("InferenceElem");
             w!(out, "{{INFERENCEELEM :expr ");
             out_opt_node(out, ie.expr)?;
-            w!(out, " :infercollid {} :inferopclass {}}}", ie.infercollid, ie.inferopclass);
+            w!(
+                out,
+                " :infercollid {} :inferopclass {}}}",
+                ie.infercollid,
+                ie.inferopclass
+            );
         }
         NodeTag::T_SubPlan => {
-            let sp = node.as_variant::<types_nodes::primnodes::SubPlan>().expect("SubPlan");
+            let sp = node
+                .as_variant::<types_nodes::primnodes::SubPlan>()
+                .expect("SubPlan");
             w!(out, "{{SUBPLAN :subLinkType {}", sp.subLinkType as u32);
             w!(out, " :testexpr ");
             out_opt_node(out, sp.testexpr)?;
@@ -789,13 +886,20 @@ fn out_var(out: &mut PgString<'_>, v: &Var<'_>) {
     w!(
         out,
         "{{VAR :varno {} :varattno {} :vartype {} :vartypmod {} :varcollid {} :varnullingrels ",
-        v.varno, v.varattno, v.vartype, v.vartypmod, v.varcollid
+        v.varno,
+        v.varattno,
+        v.vartype,
+        v.vartypmod,
+        v.varcollid
     );
     out_bitmapset(out, &v.varnullingrels);
     w!(
         out,
         " :varlevelsup {} :varreturningtype {} :varnosyn {} :varattnosyn {} :location -1}}",
-        v.varlevelsup, v.varreturningtype as u32, v.varnosyn, v.varattnosyn
+        v.varlevelsup,
+        v.varreturningtype as u32,
+        v.varnosyn,
+        v.varattnosyn
     );
 }
 
@@ -814,7 +918,10 @@ fn out_const(out: &mut PgString<'_>, c: &Const) {
     w!(
         out,
         "{{CONST :consttype {} :consttypmod {} :constcollid {} :constlen {} :constbyval ",
-        c.consttype, c.consttypmod, c.constcollid, c.constlen
+        c.consttype,
+        c.consttypmod,
+        c.constcollid,
+        c.constlen
     );
     out_bool(out, c.constbyval);
     w!(out, " :constisnull ");
@@ -895,10 +1002,17 @@ fn out_op_expr(out: &mut PgString<'_>, o: &OpExpr<'_>) -> PgResult<()> {
     w!(
         out,
         "{{OPEXPR :opno {} :opfuncid {} :opresulttype {} :opretset ",
-        o.opno, o.opfuncid, o.opresulttype
+        o.opno,
+        o.opfuncid,
+        o.opresulttype
     );
     out_bool(out, o.opretset);
-    w!(out, " :opcollid {} :inputcollid {} :args ", o.opcollid, o.inputcollid);
+    w!(
+        out,
+        " :opcollid {} :inputcollid {} :args ",
+        o.opcollid,
+        o.inputcollid
+    );
     out_list(out, &o.args)?;
     w!(out, " :location -1}}");
     Ok(())
@@ -911,10 +1025,17 @@ fn out_distinct_expr(
     w!(
         out,
         "{{DISTINCTEXPR :opno {} :opfuncid {} :opresulttype {} :opretset ",
-        o.opno, o.opfuncid, o.opresulttype
+        o.opno,
+        o.opfuncid,
+        o.opresulttype
     );
     out_bool(out, o.opretset);
-    w!(out, " :opcollid {} :inputcollid {} :args ", o.opcollid, o.inputcollid);
+    w!(
+        out,
+        " :opcollid {} :inputcollid {} :args ",
+        o.opcollid,
+        o.inputcollid
+    );
     out_list(out, &o.args)?;
     w!(out, " :location -1}}");
     Ok(())
@@ -927,24 +1048,38 @@ fn out_null_if_expr(
     w!(
         out,
         "{{NULLIFEXPR :opno {} :opfuncid {} :opresulttype {} :opretset ",
-        o.opno, o.opfuncid, o.opresulttype
+        o.opno,
+        o.opfuncid,
+        o.opresulttype
     );
     out_bool(out, o.opretset);
-    w!(out, " :opcollid {} :inputcollid {} :args ", o.opcollid, o.inputcollid);
+    w!(
+        out,
+        " :opcollid {} :inputcollid {} :args ",
+        o.opcollid,
+        o.inputcollid
+    );
     out_list(out, &o.args)?;
     w!(out, " :location -1}}");
     Ok(())
 }
 
 fn out_func_expr(out: &mut PgString<'_>, f: &FuncExpr<'_>) -> PgResult<()> {
-    w!(out, "{{FUNCEXPR :funcid {} :funcresulttype {} :funcretset ", f.funcid, f.funcresulttype);
+    w!(
+        out,
+        "{{FUNCEXPR :funcid {} :funcresulttype {} :funcretset ",
+        f.funcid,
+        f.funcresulttype
+    );
     out_bool(out, f.funcretset);
     w!(out, " :funcvariadic ");
     out_bool(out, f.funcvariadic);
     w!(
         out,
         " :funcformat {} :funccollid {} :inputcollid {} :args ",
-        f.funcformat as u32, f.funccollid, f.inputcollid
+        f.funcformat as u32,
+        f.funccollid,
+        f.inputcollid
     );
     out_list(out, &f.args)?;
     w!(out, " :location -1}}");
@@ -990,15 +1125,15 @@ fn out_coerce_to_domain(out: &mut PgString<'_>, c: &CoerceToDomain<'_>) -> PgRes
     w!(
         out,
         " :resulttype {} :resulttypmod {} :resultcollid {} :coercionformat {} :location -1}}",
-        c.resulttype, c.resulttypmod, c.resultcollid, c.coercionformat as u32
+        c.resulttype,
+        c.resulttypmod,
+        c.resultcollid,
+        c.coercionformat as u32
     );
     Ok(())
 }
 
-fn out_partition_bound_spec(
-    out: &mut PgString<'_>,
-    b: &PartitionBoundSpec<'_>,
-) -> PgResult<()> {
+fn out_partition_bound_spec(out: &mut PgString<'_>, b: &PartitionBoundSpec<'_>) -> PgResult<()> {
     w!(out, "{{PARTITIONBOUNDSPEC :strategy ");
     if b.strategy == 0 {
         w!(out, "<>");
@@ -1007,7 +1142,12 @@ fn out_partition_bound_spec(
     }
     w!(out, " :is_default ");
     out_bool(out, b.is_default);
-    w!(out, " :modulus {} :remainder {} :listdatums ", b.modulus, b.remainder);
+    w!(
+        out,
+        " :modulus {} :remainder {} :listdatums ",
+        b.modulus,
+        b.remainder
+    );
     out_list(out, &b.listdatums)?;
     w!(out, " :lowerdatums ");
     out_list(out, &b.lowerdatums)?;
@@ -1017,10 +1157,7 @@ fn out_partition_bound_spec(
     Ok(())
 }
 
-fn out_partition_range_datum(
-    out: &mut PgString<'_>,
-    d: &PartitionRangeDatum<'_>,
-) -> PgResult<()> {
+fn out_partition_range_datum(out: &mut PgString<'_>, d: &PartitionRangeDatum<'_>) -> PgResult<()> {
     w!(out, "{{PARTITIONRANGEDATUM :kind {} :value ", d.kind as i32);
     match d.value {
         Some(v) => out_node(out, v)?,
@@ -1036,7 +1173,10 @@ fn out_relabel_type(out: &mut PgString<'_>, r: &RelabelType<'_>) -> PgResult<()>
     w!(
         out,
         " :resulttype {} :resulttypmod {} :resultcollid {} :relabelformat {} :location -1}}",
-        r.resulttype, r.resulttypmod, r.resultcollid, r.relabelformat as u32
+        r.resulttype,
+        r.resulttypmod,
+        r.resultcollid,
+        r.relabelformat as u32
     );
     Ok(())
 }
@@ -1047,7 +1187,9 @@ fn out_coerce_via_io(out: &mut PgString<'_>, c: &CoerceViaIO<'_>) -> PgResult<()
     w!(
         out,
         " :resulttype {} :resultcollid {} :coerceformat {} :location -1}}",
-        c.resulttype, c.resultcollid, c.coerceformat as u32
+        c.resulttype,
+        c.resultcollid,
+        c.coerceformat as u32
     );
     Ok(())
 }
@@ -1060,7 +1202,10 @@ fn out_array_coerce_expr(out: &mut PgString<'_>, a: &ArrayCoerceExpr<'_>) -> PgR
     w!(
         out,
         " :resulttype {} :resulttypmod {} :resultcollid {} :coerceformat {} :location -1}}",
-        a.resulttype, a.resulttypmod, a.resultcollid, a.coerceformat as u32
+        a.resulttype,
+        a.resulttypmod,
+        a.resultcollid,
+        a.coerceformat as u32
     );
     Ok(())
 }
@@ -1071,7 +1216,8 @@ fn out_convert_rowtype_expr(out: &mut PgString<'_>, c: &ConvertRowtypeExpr<'_>) 
     w!(
         out,
         " :resulttype {} :convertformat {} :location -1}}",
-        c.resulttype, c.convertformat as u32
+        c.resulttype,
+        c.convertformat as u32
     );
     Ok(())
 }
@@ -1130,7 +1276,8 @@ fn out_json_format(out: &mut PgString<'_>, f: &types_nodes::JsonFormat) {
     w!(
         out,
         "{{JSONFORMAT :format_type {} :encoding {} :location -1}}",
-        f.format_type as u32, f.encoding as u32
+        f.format_type as u32,
+        f.encoding as u32
     );
 }
 
@@ -1215,12 +1362,21 @@ fn out_xml_expr(out: &mut PgString<'_>, x: &XmlExpr<'_>) -> PgResult<()> {
     out_list(out, &x.args)?;
     w!(out, " :xmloption {} :indent ", x.xmloption as u32);
     out_bool(out, x.indent);
-    w!(out, " :type {} :typmod {} :location -1}}", x.r#type, x.typmod);
+    w!(
+        out,
+        " :type {} :typmod {} :location -1}}",
+        x.r#type,
+        x.typmod
+    );
     Ok(())
 }
 
 fn out_table_func(out: &mut PgString<'_>, tf: &TableFunc<'_>) -> PgResult<()> {
-    w!(out, "{{TABLEFUNC :functype {} :ns_uris ", tf.functype as u32);
+    w!(
+        out,
+        "{{TABLEFUNC :functype {} :ns_uris ",
+        tf.functype as u32
+    );
     out_list(out, &tf.ns_uris)?;
     w!(out, " :ns_names ");
     out_opt_list(out, &tf.ns_names)?;
@@ -1275,7 +1431,8 @@ fn out_query(out: &mut PgString<'_>, q: &Query<'_>) -> PgResult<()> {
     w!(
         out,
         "{{QUERY :commandType {} :querySource {} :canSetTag ",
-        q.commandType as u32, q.querySource as u32
+        q.commandType as u32,
+        q.querySource as u32
     );
     out_bool(out, q.canSetTag);
     w!(out, " :utilityStmt ");
@@ -1315,7 +1472,11 @@ fn out_query(out: &mut PgString<'_>, q: &Query<'_>) -> PgResult<()> {
     }
     w!(out, " :mergeActionList ");
     out_list(out, &q.mergeActionList)?;
-    w!(out, " :mergeTargetRelation {} :mergeJoinCondition ", q.mergeTargetRelation);
+    w!(
+        out,
+        " :mergeTargetRelation {} :mergeJoinCondition ",
+        q.mergeTargetRelation
+    );
     out_opt_node(out, q.mergeJoinCondition)?;
     w!(out, " :targetList ");
     out_list(out, &q.targetList)?;
@@ -1392,7 +1553,8 @@ fn out_range_tbl_entry(out: &mut PgString<'_>, r: &RangeTblEntry<'_>) -> PgResul
             w!(
                 out,
                 " :rellockmode {} :perminfoindex {} :tablesample ",
-                r.rellockmode, r.perminfoindex
+                r.rellockmode,
+                r.perminfoindex
             );
             out_opt_node(out, r.tablesample)?;
         }
@@ -1411,14 +1573,16 @@ fn out_range_tbl_entry(out: &mut PgString<'_>, r: &RangeTblEntry<'_>) -> PgResul
             w!(
                 out,
                 " :rellockmode {} :perminfoindex {}",
-                r.rellockmode, r.perminfoindex
+                r.rellockmode,
+                r.perminfoindex
             );
         }
         RTEKind::RTE_JOIN => {
             w!(
                 out,
                 " :jointype {} :joinmergedcols {} :joinaliasvars ",
-                r.jointype as u32, r.joinmergedcols
+                r.jointype as u32,
+                r.joinmergedcols
             );
             out_list(out, &r.joinaliasvars)?;
             w!(out, " :joinleftcols ");
@@ -1475,9 +1639,9 @@ fn out_range_tbl_entry(out: &mut PgString<'_>, r: &RangeTblEntry<'_>) -> PgResul
             w!(out, " :groupexprs ");
             out_list(out, &r.groupexprs)?;
         }
-        other => panic!(
-            "_outRangeTblEntry (outfuncs.c): {other:?} arm unported (view SELECT-rule set)"
-        ),
+        other => {
+            panic!("_outRangeTblEntry (outfuncs.c): {other:?} arm unported (view SELECT-rule set)")
+        }
     }
     w!(out, " :lateral ");
     out_bool(out, r.lateral);
@@ -1495,7 +1659,8 @@ fn out_rte_permission_info(out: &mut PgString<'_>, p: &RTEPermissionInfo<'_>) {
     w!(
         out,
         " :requiredPerms {} :checkAsUser {} :selectedCols ",
-        p.requiredPerms, p.checkAsUser
+        p.requiredPerms,
+        p.checkAsUser
     );
     out_bitmapset(out, &p.selectedCols);
     w!(out, " :insertedCols ");
@@ -1515,7 +1680,11 @@ fn out_from_expr(out: &mut PgString<'_>, f: &FromExpr<'_>) -> PgResult<()> {
 }
 
 fn out_join_expr(out: &mut PgString<'_>, j: &JoinExpr<'_>) -> PgResult<()> {
-    w!(out, "{{JOINEXPR :jointype {} :isNatural ", j.jointype as u32);
+    w!(
+        out,
+        "{{JOINEXPR :jointype {} :isNatural ",
+        j.jointype as u32
+    );
     out_bool(out, j.isNatural);
     w!(out, " :larg ");
     out_node(out, j.larg)?;
@@ -1545,7 +1714,9 @@ fn out_target_entry(out: &mut PgString<'_>, t: &TargetEntry<'_>) -> PgResult<()>
     w!(
         out,
         " :ressortgroupref {} :resorigtbl {} :resorigcol {} :resjunk ",
-        t.ressortgroupref, t.resorigtbl, t.resorigcol
+        t.ressortgroupref,
+        t.resorigtbl,
+        t.resorigcol
     );
     out_bool(out, t.resjunk);
     w!(out, "}}");
@@ -1556,7 +1727,9 @@ fn out_sort_group_clause(out: &mut PgString<'_>, s: &SortGroupClause) {
     w!(
         out,
         "{{SORTGROUPCLAUSE :tleSortGroupRef {} :eqop {} :sortop {} :reverse_sort ",
-        s.tleSortGroupRef, s.eqop, s.sortop
+        s.tleSortGroupRef,
+        s.eqop,
+        s.sortop
     );
     out_bool(out, s.reverse_sort);
     w!(out, " :nulls_first ");
@@ -1567,13 +1740,21 @@ fn out_sort_group_clause(out: &mut PgString<'_>, s: &SortGroupClause) {
 }
 
 // SIMPLE content is Integer nodes in memory; C stores it as an int list.
-fn out_grouping_set(out: &mut PgString<'_>, g: &types_nodes::parsenodes::GroupingSet<'_>) -> PgResult<()> {
+fn out_grouping_set(
+    out: &mut PgString<'_>,
+    g: &types_nodes::parsenodes::GroupingSet<'_>,
+) -> PgResult<()> {
     w!(out, "{{GROUPINGSET :kind {} :content ", g.kind as i32);
-    if g.kind == types_nodes::parsenodes::GroupingSetKind::GROUPING_SET_SIMPLE && !g.content.is_nil()
+    if g.kind == types_nodes::parsenodes::GroupingSetKind::GROUPING_SET_SIMPLE
+        && !g.content.is_nil()
     {
         w!(out, "(i");
         for n in g.content.iter() {
-            w!(out, " {}", n.as_integer().expect("SIMPLE grouping-set ref").ival);
+            w!(
+                out,
+                " {}",
+                n.as_integer().expect("SIMPLE grouping-set ref").ival
+            );
         }
         w!(out, ")");
     } else {
@@ -1588,7 +1769,11 @@ fn out_aggref(out: &mut PgString<'_>, a: &Aggref<'_>) -> PgResult<()> {
         out,
         "{{AGGREF :aggfnoid {} :aggtype {} :aggcollid {} :inputcollid {} :aggtranstype {} \
          :aggargtypes ",
-        a.aggfnoid, a.aggtype, a.aggcollid, a.inputcollid, a.aggtranstype
+        a.aggfnoid,
+        a.aggtype,
+        a.aggcollid,
+        a.inputcollid,
+        a.aggtranstype
     );
     out_oid_list(out, &a.aggargtypes);
     w!(out, " :aggdirectargs ");
@@ -1612,7 +1797,10 @@ fn out_aggref(out: &mut PgString<'_>, a: &Aggref<'_>) -> PgResult<()> {
     w!(
         out,
         " :agglevelsup {} :aggsplit {} :aggno {} :aggtransno {} :location -1}}",
-        a.agglevelsup, a.aggsplit, a.aggno, a.aggtransno
+        a.agglevelsup,
+        a.aggsplit,
+        a.aggno,
+        a.aggtransno
     );
     Ok(())
 }
@@ -1621,7 +1809,8 @@ fn out_sub_link(out: &mut PgString<'_>, s: &SubLink<'_>) -> PgResult<()> {
     w!(
         out,
         "{{SUBLINK :subLinkType {} :subLinkId {} :testexpr ",
-        s.subLinkType as u32, s.subLinkId
+        s.subLinkType as u32,
+        s.subLinkId
     );
     out_opt_node(out, s.testexpr)?;
     w!(out, " :operName ");
@@ -1637,7 +1826,11 @@ fn out_common_table_expr(out: &mut PgString<'_>, c: &CommonTableExpr<'_>) -> PgR
     out_str(out, c.ctename);
     w!(out, " :aliascolnames ");
     out_list(out, &c.aliascolnames)?;
-    w!(out, " :ctematerialized {} :ctequery ", c.ctematerialized as u32);
+    w!(
+        out,
+        " :ctematerialized {} :ctequery ",
+        c.ctematerialized as u32
+    );
     out_opt_node(out, c.ctequery)?;
     w!(out, " :search_clause ");
     out_opt_node(out, c.search_clause)?;
@@ -1657,7 +1850,10 @@ fn out_common_table_expr(out: &mut PgString<'_>, c: &CommonTableExpr<'_>) -> PgR
     Ok(())
 }
 
-fn out_cte_search_clause(out: &mut PgString<'_>, s: &types_nodes::parsenodes::CTESearchClause<'_>) -> PgResult<()> {
+fn out_cte_search_clause(
+    out: &mut PgString<'_>,
+    s: &types_nodes::parsenodes::CTESearchClause<'_>,
+) -> PgResult<()> {
     w!(out, "{{CTESEARCHCLAUSE :search_col_list ");
     out_list(out, &s.search_col_list)?;
     w!(out, " :search_breadth_first ");
@@ -1668,7 +1864,10 @@ fn out_cte_search_clause(out: &mut PgString<'_>, s: &types_nodes::parsenodes::CT
     Ok(())
 }
 
-fn out_cte_cycle_clause(out: &mut PgString<'_>, c: &types_nodes::parsenodes::CTECycleClause<'_>) -> PgResult<()> {
+fn out_cte_cycle_clause(
+    out: &mut PgString<'_>,
+    c: &types_nodes::parsenodes::CTECycleClause<'_>,
+) -> PgResult<()> {
     w!(out, "{{CTECYCLECLAUSE :cycle_col_list ");
     out_list(out, &c.cycle_col_list)?;
     w!(out, " :cycle_mark_column ");
@@ -1683,12 +1882,18 @@ fn out_cte_cycle_clause(out: &mut PgString<'_>, c: &types_nodes::parsenodes::CTE
         out,
         " :location -1 :cycle_mark_type {} :cycle_mark_typmod {} :cycle_mark_collation {} \
          :cycle_mark_neop {}}}",
-        c.cycle_mark_type, c.cycle_mark_typmod, c.cycle_mark_collation, c.cycle_mark_neop
+        c.cycle_mark_type,
+        c.cycle_mark_typmod,
+        c.cycle_mark_collation,
+        c.cycle_mark_neop
     );
     Ok(())
 }
 
-fn out_notify_stmt(out: &mut PgString<'_>, n: &types_nodes::parsenodes::NotifyStmt<'_>) -> PgResult<()> {
+fn out_notify_stmt(
+    out: &mut PgString<'_>,
+    n: &types_nodes::parsenodes::NotifyStmt<'_>,
+) -> PgResult<()> {
     w!(out, "{{NOTIFYSTMT :conditionname ");
     out_str(out, n.conditionname);
     w!(out, " :payload ");
@@ -1697,8 +1902,16 @@ fn out_notify_stmt(out: &mut PgString<'_>, n: &types_nodes::parsenodes::NotifySt
     Ok(())
 }
 
-fn out_next_value_expr(out: &mut PgString<'_>, n: &types_nodes::primnodes::NextValueExpr) -> PgResult<()> {
-    w!(out, "{{NEXTVALUEEXPR :seqid {} :typeId {}}}", n.seqid, n.typeId);
+fn out_next_value_expr(
+    out: &mut PgString<'_>,
+    n: &types_nodes::primnodes::NextValueExpr,
+) -> PgResult<()> {
+    w!(
+        out,
+        "{{NEXTVALUEEXPR :seqid {} :typeId {}}}",
+        n.seqid,
+        n.typeId
+    );
     Ok(())
 }
 
@@ -1706,7 +1919,10 @@ fn out_scalar_array_op_expr(out: &mut PgString<'_>, s: &ScalarArrayOpExpr<'_>) -
     w!(
         out,
         "{{SCALARARRAYOPEXPR :opno {} :opfuncid {} :hashfuncid {} :negfuncid {} :useOr ",
-        s.opno, s.opfuncid, s.hashfuncid, s.negfuncid
+        s.opno,
+        s.opfuncid,
+        s.hashfuncid,
+        s.negfuncid
     );
     out_bool(out, s.useOr);
     w!(out, " :inputcollid {} :args ", s.inputcollid);

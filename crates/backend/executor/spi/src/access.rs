@@ -80,7 +80,7 @@ pub fn SPI_getvalue<'mcx>(
     let out = types_fmgr::function_call1_coll_in(&mut finfo, InvalidOid, mcx, val)?;
     // SAFETY: type output functions return a NUL-terminated cstring datum
     // allocated in mcx (printtup/copyto precedent).
-    let s = unsafe { core::ffi::CStr::from_ptr(out.as_usize() as *const core::ffi::c_char) }
-        .to_bytes();
+    let s =
+        unsafe { core::ffi::CStr::from_ptr(out.as_usize() as *const core::ffi::c_char) }.to_bytes();
     Ok(Some(mcx::slice_borrow_in(mcx, s)?))
 }

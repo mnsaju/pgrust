@@ -36,7 +36,10 @@ fn stub_planner<'a, 'mcx>(
     let tree = Node::mk(
         mcx,
         ResultPlan {
-            plan: Plan { total_cost: PLANNER_COST.with(Cell::get), ..Plan::default() },
+            plan: Plan {
+                total_cost: PLANNER_COST.with(Cell::get),
+                ..Plan::default()
+            },
             resconstantqual: None,
         },
     )?;
@@ -48,7 +51,13 @@ fn stub_planner<'a, 'mcx>(
     let mut inval_items = types_nodes::list::NodeList::nil();
     inval_items.lappend(
         mcx,
-        Node::mk(mcx, types_nodes::plannodes::PlanInvalItem { cacheId: PROCOID, hashValue: TEST_FUNC_HASH })?,
+        Node::mk(
+            mcx,
+            types_nodes::plannodes::PlanInvalItem {
+                cacheId: PROCOID,
+                hashValue: TEST_FUNC_HASH,
+            },
+        )?,
     )?;
     Ok(PlannedStmt {
         commandType: CmdType::CMD_SELECT,
@@ -121,8 +130,7 @@ fn test_mcx() -> mcx::Mcx<'static> {
 // pushed sentinel just satisfies ActiveSnapshotSet for the test thread.
 fn push_snapshot() {
     let mcx = test_mcx();
-    let snap: snapmgr::Snapshot =
-        Rc::new(SnapshotData::sentinel(mcx, SnapshotType::SNAPSHOT_MVCC));
+    let snap: snapmgr::Snapshot = Rc::new(SnapshotData::sentinel(mcx, SnapshotType::SNAPSHOT_MVCC));
     snapmgr::PushActiveSnapshot(&snap).unwrap();
 }
 
@@ -278,7 +286,11 @@ fn func_inval_invalidates_generic_plan_and_replans() {
     // A non-matching hash on PROCOID must not invalidate.
     inval::invalidate::CallSyscacheCallbacks(PROCOID, TEST_FUNC_HASH ^ 1).unwrap();
     let p2 = GetCachedPlan(h, ParamListHandle::NULL, None, QueryEnvHandle::NULL).unwrap();
-    assert_eq!(PLANNER_CALLS.with(Cell::get), 1, "warm hit: no re-plan on miss");
+    assert_eq!(
+        PLANNER_CALLS.with(Cell::get),
+        1,
+        "warm hit: no re-plan on miss"
+    );
     ReleaseCachedPlan(p2);
 
     // Matching PROCOID inval: source stays valid, generic plan is invalidated.
@@ -286,7 +298,11 @@ fn func_inval_invalidates_generic_plan_and_replans() {
     assert!(CachedPlanIsValid(h), "source querytree stays valid");
 
     let p3 = GetCachedPlan(h, ParamListHandle::NULL, None, QueryEnvHandle::NULL).unwrap();
-    assert_eq!(PLANNER_CALLS.with(Cell::get), 2, "generic plan re-planned after inval");
+    assert_eq!(
+        PLANNER_CALLS.with(Cell::get),
+        2,
+        "generic plan re-planned after inval"
+    );
     let stmts = CachedPlanStmtList(p3);
     assert_eq!(stmts.len(), 1);
     ReleaseCachedPlan(p3);
@@ -413,7 +429,11 @@ fn post_rewrite_hook_error_leaves_source_invalid() {
     PlanCacheSysCallback(Datum::from_oid(InvalidOid), NAMESPACEOID, 0);
     let err = GetCachedPlan(h, ParamListHandle::NULL, None, QueryEnvHandle::NULL)
         .expect_err("the hook's error must reach the caller");
-    assert!(err.message().contains("post-rewrite refusal"), "{:?}", err.message());
+    assert!(
+        err.message().contains("post-rewrite refusal"),
+        "{:?}",
+        err.message()
+    );
     assert!(!CachedPlanIsValid(h));
     DropCachedPlan(h);
 }
@@ -468,7 +488,10 @@ fn stub_post_rewrite_fails(
     _query_list: &mut PgVec<'static, Query<'static>>,
     _arg: i32,
 ) -> PgResult<()> {
-    Err(ereport(ERROR).errmsg("post-rewrite refusal").into_error().into())
+    Err(ereport(ERROR)
+        .errmsg("post-rewrite refusal")
+        .into_error()
+        .into())
 }
 
 fn stub_parse_analyze_fixedparams<'a, 'mcx>(

@@ -194,9 +194,7 @@ impl Iterator for VfsDirIter {
     fn next(&mut self) -> Option<Self::Item> {
         match &mut self.0 {
             DirIterInner::Posix(rd) => match rd.next() {
-                Some(Ok(entry)) => {
-                    Some(Ok(entry.file_name().to_string_lossy().into_owned()))
-                }
+                Some(Ok(entry)) => Some(Ok(entry.file_name().to_string_lossy().into_owned())),
                 Some(Err(e)) => {
                     let en = e.raw_os_error().unwrap_or(libc::EIO);
                     set_errno(en);

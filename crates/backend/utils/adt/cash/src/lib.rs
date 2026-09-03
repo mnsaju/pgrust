@@ -206,7 +206,12 @@ pub fn cash_out_into(value: Cash, out: &mut [u8; CASH_OUT_BUFLEN]) -> PgResult<u
     let points = clamp_fpoint(lconvert);
     // As with frac_digits, mon_grouping gets a plausibility range check.
     let mon_group = {
-        let g = lconvert.mon_grouping.as_bytes().first().copied().unwrap_or(0) as i32;
+        let g = lconvert
+            .mon_grouping
+            .as_bytes()
+            .first()
+            .copied()
+            .unwrap_or(0) as i32;
         if !(1..=6).contains(&g) {
             3
         } else {
@@ -484,9 +489,34 @@ pub fn int8_cash(amount: i64) -> PgResult<Cash> {
 }
 
 const SMALL_WORDS: [&str; 28] = [
-    "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
-    "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
-    "nineteen", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety",
+    "zero",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+    "eleven",
+    "twelve",
+    "thirteen",
+    "fourteen",
+    "fifteen",
+    "sixteen",
+    "seventeen",
+    "eighteen",
+    "nineteen",
+    "twenty",
+    "thirty",
+    "forty",
+    "fifty",
+    "sixty",
+    "seventy",
+    "eighty",
+    "ninety",
 ];
 
 // C: big = small + 18, so big[tu/10] = SMALL_WORDS[tu/10 + 18].

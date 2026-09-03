@@ -129,7 +129,11 @@ pub fn statext_mcv_build<'mcx>(
         types[i] = data.stats[i].attrtypid;
     }
     groups.clear();
-    Ok(Some(MCVList { ndimensions: numattrs, types, items: mcv_items }))
+    Ok(Some(MCVList {
+        ndimensions: numattrs,
+        types,
+        items: mcv_items,
+    }))
 }
 
 fn bsearch_dim(
@@ -163,11 +167,17 @@ fn build_distinct_groups<'mcx>(
 ) -> PgResult<(PgVec<'mcx, SortItem>, usize)> {
     let numrows = items.len();
     let mut groups: PgVec<'mcx, SortItem> = PgVec::new_in(mcx);
-    groups.push(SortItem { off: items[0].off, count: 1 });
+    groups.push(SortItem {
+        off: items[0].off,
+        count: 1,
+    });
     let mut j = 0usize;
     for i in 1..numrows {
         if store.compare(mss, items[i], items[i - 1]) != 0 {
-            groups.push(SortItem { off: items[i].off, count: 0 });
+            groups.push(SortItem {
+                off: items[i].off,
+                count: 0,
+            });
             j += 1;
         }
         groups[j].count += 1;
@@ -456,15 +466,14 @@ pub fn statext_mcv_deserialize<'mcx>(mcx: Mcx<'mcx>, data: &[u8]) -> PgResult<MC
         return Err(PgError::error("invalid zero-length item array in MCVList").into());
     } else if nitems as usize > STATS_MCVLIST_MAX_ITEMS {
         return Err(
-            PgError::error(format!("invalid length ({nitems}) item array in MCVList")).into()
+            PgError::error(format!("invalid length ({nitems}) item array in MCVList")).into(),
         );
     }
     let nitems = nitems as usize;
     let ndims = ndimensions as usize;
 
     let item_size = ndims * (2 + 1) + 2 * 8;
-    let mut expected_size =
-        MIN_SIZE_OF_MCVLIST + 4 * ndims + 20 * ndims + nitems * item_size;
+    let mut expected_size = MIN_SIZE_OF_MCVLIST + 4 * ndims + 20 * ndims + nitems * item_size;
     if varsize < expected_size {
         return Err(PgError::error(format!(
             "invalid MCV size {varsize} (expected {expected_size})"
@@ -493,13 +502,11 @@ pub fn statext_mcv_deserialize<'mcx>(mcx: Mcx<'mcx>, data: &[u8]) -> PgResult<MC
         let typbyval = data[off + 16] != 0;
         if nvalues < 0 {
             return Err(
-                PgError::error(format!("invalid MCV nvalues ({nvalues}) in MCVList")).into()
+                PgError::error(format!("invalid MCV nvalues ({nvalues}) in MCVList")).into(),
             );
         }
         if nbytes < 0 {
-            return Err(
-                PgError::error(format!("invalid MCV nbytes ({nbytes}) in MCVList")).into()
-            );
+            return Err(PgError::error(format!("invalid MCV nbytes ({nbytes}) in MCVList")).into());
         }
         if typbyval && !matches!(typlen, 1 | 2 | 4 | 8) {
             return Err(PgError::error(format!("unsupported byval length: {typlen}")).into());
@@ -530,8 +537,11 @@ pub fn statext_mcv_deserialize<'mcx>(mcx: Mcx<'mcx>, data: &[u8]) -> PgResult<MC
         if di.typbyval {
             for _ in 0..di.nvalues {
                 let mut raw = [0u8; 8];
-                raw[..di.typlen as usize]
-                    .copy_from_slice(mcv_read(data, &mut off, di.typlen as usize)?);
+                raw[..di.typlen as usize].copy_from_slice(mcv_read(
+                    data,
+                    &mut off,
+                    di.typlen as usize,
+                )?);
                 let v = u64::from_ne_bytes(raw);
                 // fetch_att sign-extends narrow integers.
                 let v = match di.typlen {
@@ -551,9 +561,8 @@ pub fn statext_mcv_deserialize<'mcx>(mcx: Mcx<'mcx>, data: &[u8]) -> PgResult<MC
             }
         } else if di.typlen == -1 {
             for _ in 0..di.nvalues {
-                let len = u32::from_ne_bytes(
-                    mcv_read(data, &mut off, 4)?.try_into().unwrap(),
-                ) as usize;
+                let len =
+                    u32::from_ne_bytes(mcv_read(data, &mut off, 4)?.try_into().unwrap()) as usize;
                 let src = mcv_read(data, &mut off, len)?;
                 let buf = alloc_aligned(mcx, len + 4)?;
                 buf[..4].copy_from_slice(&(((len + 4) as u32) << 2).to_ne_bytes());
@@ -562,9 +571,8 @@ pub fn statext_mcv_deserialize<'mcx>(mcx: Mcx<'mcx>, data: &[u8]) -> PgResult<MC
             }
         } else if di.typlen == -2 {
             for _ in 0..di.nvalues {
-                let len = u32::from_ne_bytes(
-                    mcv_read(data, &mut off, 4)?.try_into().unwrap(),
-                ) as usize;
+                let len =
+                    u32::from_ne_bytes(mcv_read(data, &mut off, 4)?.try_into().unwrap()) as usize;
                 let src = mcv_read(data, &mut off, len)?;
                 let buf = alloc_aligned(mcx, len)?;
                 buf.copy_from_slice(src);
@@ -608,11 +616,20 @@ pub fn statext_mcv_deserialize<'mcx>(mcx: Mcx<'mcx>, data: &[u8]) -> PgResult<MC
                 values.push(v);
             }
         }
-        items.push(MCVItem { values, isnull, frequency, base_frequency });
+        items.push(MCVItem {
+            values,
+            isnull,
+            frequency,
+            base_frequency,
+        });
     }
     debug_assert_eq!(off, data.len());
 
-    Ok(MCVList { ndimensions: ndims, types, items })
+    Ok(MCVList {
+        ndimensions: ndims,
+        types,
+        items,
+    })
 }
 
 #[cfg(test)]

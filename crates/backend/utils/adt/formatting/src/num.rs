@@ -714,9 +714,7 @@ impl NumFromChar<'_> {
                 if self.number_at(0) == b' ' {
                     self.inout_p = tmp;
                 }
-            } else if !isread
-                && !self.num.is_lsign()
-                && (self.num.is_plus() || self.num.is_minus())
+            } else if !isread && !self.num.is_lsign() && (self.num.is_plus() || self.num.is_minus())
             {
                 let c = self.inout_at(self.inout_p);
                 if c == b'-' || c == b'+' {
@@ -840,9 +838,11 @@ pub fn num_processor_from_char(
     }
 
     if num.is_eeee() {
-        return Err(PgError::error("\"EEEE\" not supported for input".to_string())
-            .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED)
-            .into());
+        return Err(
+            PgError::error("\"EEEE\" not supported for input".to_string())
+                .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED)
+                .into(),
+        );
     }
 
     if number.len() < 2 {
@@ -939,10 +939,7 @@ pub fn num_processor_from_char(
                     continue;
                 }
                 NUM_TH_LOWER_ID | NUM_TH => {
-                    if np.num.is_roman()
-                        || np.number_at(0) == b'#'
-                        || np.num.is_decimal()
-                    {
+                    if np.num.is_roman() || np.number_at(0) == b'#' || np.num.is_decimal() {
                         idx += 1;
                         continue;
                     }

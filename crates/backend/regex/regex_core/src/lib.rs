@@ -4,7 +4,6 @@
 #![allow(dead_code)]
 #![allow(clippy::result_large_err)]
 
-
 extern crate alloc;
 
 pub mod regex_consts;

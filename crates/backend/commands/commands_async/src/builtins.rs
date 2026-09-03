@@ -41,7 +41,11 @@ pub fn fc_pg_listening_channels(
     match crate::listening_channel_at(cntr as usize) {
         Some(channel) => {
             let t = varlena::cstring_to_text(fcinfo.result_mcx(), &channel)?;
-            Ok(funcapi::srf_return_next(flinfo, fcinfo, types_fmgr::varlena_result(t)))
+            Ok(funcapi::srf_return_next(
+                flinfo,
+                fcinfo,
+                types_fmgr::varlena_result(t),
+            ))
         }
         None => Ok(funcapi::srf_return_done(flinfo, fcinfo)),
     }

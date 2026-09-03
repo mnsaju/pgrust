@@ -167,9 +167,14 @@ pub(crate) fn prepare_invalidation_state(state: &mut InvalState<'_>) -> PgResult
         }
 
         let parent_current = parent.ii.current_cmd_invalid_msgs;
-        my_info.prior_cmd_invalid_msgs.set_group_to_follow(&parent_current);
+        my_info
+            .prior_cmd_invalid_msgs
+            .set_group_to_follow(&parent_current);
         let prior = my_info.prior_cmd_invalid_msgs;
-        my_info.ii.current_cmd_invalid_msgs.set_group_to_follow(&prior);
+        my_info
+            .ii
+            .current_cmd_invalid_msgs
+            .set_group_to_follow(&prior);
     } else {
         // C nulls pointers freed with TopTransactionContext; retained-capacity
         // buffers just clear.
@@ -192,7 +197,9 @@ pub(crate) fn prepare_inplace_invalidation_state(state: &mut InvalState<'_>) -> 
 
     if let Some(top) = state.trans_stack.last() {
         let top_current = top.ii.current_cmd_invalid_msgs;
-        my_info.current_cmd_invalid_msgs.set_group_to_follow(&top_current);
+        my_info
+            .current_cmd_invalid_msgs
+            .set_group_to_follow(&top_current);
     } else {
         state.msg_arrays[crate::CAT_CACHE_MSGS].clear();
         state.msg_arrays[crate::REL_CACHE_MSGS].clear();

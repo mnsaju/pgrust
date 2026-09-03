@@ -2,7 +2,13 @@ use crate::schedule::{is_due, parse, BrokenDownTime, CronSchedule};
 use crate::scheduler::{decide_slot, CronSlot, SlotDecision};
 
 fn tm(minute: u32, hour: u32, day_of_month: u32, month: u32, day_of_week: u32) -> BrokenDownTime {
-    BrokenDownTime { minute, hour, day_of_month, month, day_of_week }
+    BrokenDownTime {
+        minute,
+        hour,
+        day_of_month,
+        month,
+        day_of_week,
+    }
 }
 
 #[test]
@@ -33,10 +39,16 @@ fn ranges_and_lists() {
 fn steps() {
     let s = parse("*/15 * * * *").expect("parses");
     for minute in [0, 15, 30, 45] {
-        assert!(is_due(&s, tm(minute, 0, 1, 1, 0)), "minute {minute} should match */15");
+        assert!(
+            is_due(&s, tm(minute, 0, 1, 1, 0)),
+            "minute {minute} should match */15"
+        );
     }
     for minute in [1, 14, 16, 44, 59] {
-        assert!(!is_due(&s, tm(minute, 0, 1, 1, 0)), "minute {minute} should not match */15");
+        assert!(
+            !is_due(&s, tm(minute, 0, 1, 1, 0)),
+            "minute {minute} should not match */15"
+        );
     }
 }
 
@@ -52,7 +64,10 @@ fn month_and_day_of_week_names_are_case_insensitive() {
 #[test]
 fn day_of_week_seven_means_sunday_same_as_zero() {
     let s = parse("0 0 * * 7").expect("parses");
-    assert!(is_due(&s, tm(0, 0, 1, 1, 0)), "day-of-week 0 (Sunday) must match a schedule written as 7");
+    assert!(
+        is_due(&s, tm(0, 0, 1, 1, 0)),
+        "day-of-week 0 (Sunday) must match a schedule written as 7"
+    );
 }
 
 #[test]
@@ -114,7 +129,13 @@ fn rejects_out_of_range_seconds_interval() {
 }
 
 fn slot(in_use: bool, jobid: i64) -> CronSlot {
-    CronSlot { in_use, jobid, command: String::new(), database: String::new(), username: String::new() }
+    CronSlot {
+        in_use,
+        jobid,
+        command: String::new(),
+        database: String::new(),
+        username: String::new(),
+    }
 }
 
 #[test]

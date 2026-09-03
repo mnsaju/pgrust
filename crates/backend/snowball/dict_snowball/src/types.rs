@@ -1,4 +1,3 @@
-
 use core::ffi::{c_int, c_uchar};
 
 #[allow(non_camel_case_types)]

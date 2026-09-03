@@ -83,8 +83,15 @@ impl<'mcx, 's> CopyFromState<'mcx, 's> {
             }
             CopySrc::Callback { .. } => {
                 // Split borrows: the callback writes straight into raw_buf.
-                let CopyFromState { src, raw_buf, raw_reached_eof, .. } = self;
-                let CopySrc::Callback { cb } = src else { unreachable!() };
+                let CopyFromState {
+                    src,
+                    raw_buf,
+                    raw_reached_eof,
+                    ..
+                } = self;
+                let CopySrc::Callback { cb } = src else {
+                    unreachable!()
+                };
                 let n = cb(&mut raw_buf[at..at + maxread], minread)?;
                 if n == 0 {
                     *raw_reached_eof = true;
@@ -513,7 +520,11 @@ impl<'mcx, 's> CopyFromState<'mcx, 's> {
                     last_was_esc = false;
                 }
                 if in_quote
-                    && c == if self.eol_type == EolType::Nl { b'\n' } else { b'\r' }
+                    && c == if self.eol_type == EolType::Nl {
+                        b'\n'
+                    } else {
+                        b'\r'
+                    }
                 {
                     self.cur_lineno += 1;
                 }
@@ -864,8 +875,14 @@ impl<'mcx, 's> CopyFromState<'mcx, 's> {
             }
             for k in 0..self.defmap.len() {
                 let m = self.defmap[k];
-                let state = self.defexprs[m].as_mut().expect("defmap entry sans defexpr");
-                let mut slots = execexpr::EvalSlots { scan: None, inner: None, outer: None };
+                let state = self.defexprs[m]
+                    .as_mut()
+                    .expect("defmap entry sans defexpr");
+                let mut slots = execexpr::EvalSlots {
+                    scan: None,
+                    inner: None,
+                    outer: None,
+                };
                 let r = execexpr::exec_eval_expr(state, &mut slots)?;
                 values[m] = r.value;
                 nulls[m] = r.isnull;
@@ -879,8 +896,14 @@ impl<'mcx, 's> CopyFromState<'mcx, 's> {
             }
             for k in 0..self.defmap.len() {
                 let m = self.defmap[k];
-                let state = self.defexprs[m].as_mut().expect("defmap entry sans defexpr");
-                let mut slots = execexpr::EvalSlots { scan: None, inner: None, outer: None };
+                let state = self.defexprs[m]
+                    .as_mut()
+                    .expect("defmap entry sans defexpr");
+                let mut slots = execexpr::EvalSlots {
+                    scan: None,
+                    inner: None,
+                    outer: None,
+                };
                 let r = execexpr::exec_eval_expr(state, &mut slots)?;
                 values[m] = r.value;
                 nulls[m] = r.isnull;
@@ -977,10 +1000,7 @@ impl<'mcx, 's> CopyFromState<'mcx, 's> {
                 if off < 0 && self.force_notnull_flags[m] {
                     // FORCE_NOT_NULL: convert NULL back to the null string.
                     off = self.null_print_field();
-                } else if off >= 0
-                    && self.force_null_flags[m]
-                    && self.field_is_null_print(off)
-                {
+                } else if off >= 0 && self.force_null_flags[m] && self.field_is_null_print(off) {
                     off = -1;
                 }
             }
@@ -999,8 +1019,14 @@ impl<'mcx, 's> CopyFromState<'mcx, 's> {
                 nulls[m] = true;
             }
             if self.defaults[m] {
-                let state = self.defexprs[m].as_mut().expect("DEFAULT marker sans defexpr");
-                let mut slots = execexpr::EvalSlots { scan: None, inner: None, outer: None };
+                let state = self.defexprs[m]
+                    .as_mut()
+                    .expect("DEFAULT marker sans defexpr");
+                let mut slots = execexpr::EvalSlots {
+                    scan: None,
+                    inner: None,
+                    outer: None,
+                };
                 let r = execexpr::exec_eval_expr(state, &mut slots)?;
                 values[m] = r.value;
                 nulls[m] = r.isnull;
@@ -1023,8 +1049,7 @@ impl<'mcx, 's> CopyFromState<'mcx, 's> {
                         let msg = match self.cur_attval_off {
                             Some(off) => {
                                 let bytes = &self.attribute_buf[off as usize..];
-                                let nul =
-                                    bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+                                let nul = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
                                 let attval = super::from::limit_printout_length(&bytes[..nul]);
                                 format!(
                                     "skipping row due to data type incompatibility at line {} \
@@ -1053,8 +1078,14 @@ impl<'mcx, 's> CopyFromState<'mcx, 's> {
         }
         for k in 0..self.defmap.len() {
             let m = self.defmap[k];
-            let state = self.defexprs[m].as_mut().expect("defmap entry sans defexpr");
-            let mut slots = execexpr::EvalSlots { scan: None, inner: None, outer: None };
+            let state = self.defexprs[m]
+                .as_mut()
+                .expect("defmap entry sans defexpr");
+            let mut slots = execexpr::EvalSlots {
+                scan: None,
+                inner: None,
+                outer: None,
+            };
             let r = execexpr::exec_eval_expr(state, &mut slots)?;
             values[m] = r.value;
             nulls[m] = r.isnull;
@@ -1293,7 +1324,10 @@ fn literal_nl(is_csv: bool) -> Box<PgError> {
             "Use quoted CSV field to represent newline.",
         )
     } else {
-        ("literal newline found in data", "Use \"\\n\" to represent newline.")
+        (
+            "literal newline found in data",
+            "Use \"\\n\" to represent newline.",
+        )
     };
     Box::new(
         PgError::error(msg)
@@ -1375,7 +1409,10 @@ pub mod bench_internals {
                 log_verbosity: crate::CopyLogVerbosityChoice::Default,
                 reject_limit: 0,
             },
-            src: CopySrc::File { fd: -1, filename: "" },
+            src: CopySrc::File {
+                fd: -1,
+                filename: "",
+            },
             raw_buf: PgVec::new_in(mcx),
             raw_buf_index: 0,
             raw_buf_len: 0,

@@ -85,9 +85,7 @@ fn setup() {
         xlogutils_seams::in_recovery::set(|| false);
         transam_xlog_seams::xlog_flush::set(|_| Ok(()));
         transam_xlog_seams::count_ckpt_slru_written::set(|| {});
-        transam_xlog_seams::recovery_in_progress::set(|| {
-            IN_RECOVERY_SEAM.load(Relaxed)
-        });
+        transam_xlog_seams::recovery_in_progress::set(|| IN_RECOVERY_SEAM.load(Relaxed));
         transam_xlog_seams::xlog_put_next_oid::set(|next_oid| {
             LOGGED_NEXT_OID.store(next_oid, Relaxed);
             Ok(())
@@ -170,7 +168,9 @@ fn with_proc() {
 
 fn reset_proc_xid_state() {
     let proc = my_proc();
-    proc.xid.value.store(types_core::InvalidTransactionId, Relaxed);
+    proc.xid
+        .value
+        .store(types_core::InvalidTransactionId, Relaxed);
     let pgxactoff = proc.pgxactoff.load(Relaxed) as usize;
     ProcGlobal().xids[pgxactoff]
         .value
@@ -186,7 +186,10 @@ fn shmem_size_matches_struct() {
 
     // The procarray re-export identity is proven by procarray's own tests
     // (cargo test-lib duplication makes it untestable from here).
-    assert_eq!(VarsupShmemSize(), core::mem::size_of::<TransamVariablesShared>());
+    assert_eq!(
+        VarsupShmemSize(),
+        core::mem::size_of::<TransamVariablesShared>()
+    );
 }
 
 #[test]
@@ -204,7 +207,10 @@ fn get_new_transaction_id_advances_and_publishes() {
 
     let full = GetNewTransactionId(false).unwrap();
     assert_eq!(full.xid(), 100);
-    assert_eq!(FullTransactionId::from_u64(tv.nextXid.load(Relaxed)).xid(), 101);
+    assert_eq!(
+        FullTransactionId::from_u64(tv.nextXid.load(Relaxed)).xid(),
+        101
+    );
 
     let proc = my_proc();
     assert_eq!(proc.xid.read(), 100);
@@ -278,20 +284,27 @@ fn advance_next_full_transaction_id_infers_epoch() {
     setup();
 
     let tv = TransamVariables();
-    tv.nextXid
-        .store(FullTransactionId::from_epoch_and_xid(0, 1000).value, Relaxed);
+    tv.nextXid.store(
+        FullTransactionId::from_epoch_and_xid(0, 1000).value,
+        Relaxed,
+    );
 
     // below nextXid: no-op
     AdvanceNextFullTransactionIdPastXid(500).unwrap();
-    assert_eq!(FullTransactionId::from_u64(tv.nextXid.load(Relaxed)).xid(), 1000);
+    assert_eq!(
+        FullTransactionId::from_u64(tv.nextXid.load(Relaxed)).xid(),
+        1000
+    );
 
     AdvanceNextFullTransactionIdPastXid(2000).unwrap();
     let next = FullTransactionId::from_u64(tv.nextXid.load(Relaxed));
     assert_eq!((next.epoch(), next.xid()), (0, 2001));
 
     // xid wraps past 2^32: epoch bumps
-    tv.nextXid
-        .store(FullTransactionId::from_epoch_and_xid(0, 0xFFFF_FFF0).value, Relaxed);
+    tv.nextXid.store(
+        FullTransactionId::from_epoch_and_xid(0, 0xFFFF_FFF0).value,
+        Relaxed,
+    );
     AdvanceNextFullTransactionIdPastXid(5).unwrap();
     let next = FullTransactionId::from_u64(tv.nextXid.load(Relaxed));
     assert_eq!((next.epoch(), next.xid()), (1, 6));
@@ -316,8 +329,10 @@ fn set_transaction_id_limit_computes_c_limits() {
     setup();
 
     let tv = TransamVariables();
-    tv.nextXid
-        .store(FullTransactionId::from_epoch_and_xid(0, 1000).value, Relaxed);
+    tv.nextXid.store(
+        FullTransactionId::from_epoch_and_xid(0, 1000).value,
+        Relaxed,
+    );
     let oldest: TransactionId = 1000;
     SetTransactionIdLimit(oldest, 7).unwrap();
 
@@ -353,8 +368,10 @@ fn xid_stop_limit_refuses_assignment() {
     let oldest: TransactionId = 1000;
     SetTransactionIdLimit(oldest, 7).unwrap();
     let stop = tv.xidStopLimit.load(Relaxed);
-    tv.nextXid
-        .store(FullTransactionId::from_epoch_and_xid(0, stop | 1).value, Relaxed);
+    tv.nextXid.store(
+        FullTransactionId::from_epoch_and_xid(0, stop | 1).value,
+        Relaxed,
+    );
 
     g::SetIsUnderPostmaster(true);
     let err = GetNewTransactionId(false);

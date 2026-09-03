@@ -1,4 +1,6 @@
-use crate::common::{copy_special_str, log10_pow2, log10_pow5, pow5bits, DIGIT_TABLE, STRICTLY_SHORTEST};
+use crate::common::{
+    copy_special_str, log10_pow2, log10_pow5, pow5bits, DIGIT_TABLE, STRICTLY_SHORTEST,
+};
 use crate::d2s_table::{
     DOUBLE_POW5_BITCOUNT, DOUBLE_POW5_INV_BITCOUNT, DOUBLE_POW5_INV_SPLIT, DOUBLE_POW5_SPLIT,
 };
@@ -141,7 +143,11 @@ fn d2d(ieee_mantissa: u64, ieee_exponent: u32) -> FloatingDecimal64 {
         m2 = (1u64 << DOUBLE_MANTISSA_BITS) | ieee_mantissa;
     }
 
-    let accept_bounds = if STRICTLY_SHORTEST { (m2 & 1) == 0 } else { false };
+    let accept_bounds = if STRICTLY_SHORTEST {
+        (m2 & 1) == 0
+    } else {
+        false
+    };
 
     let mv = 4 * m2;
     let mm_shift: u32 = (ieee_mantissa != 0 || ieee_exponent <= 1) as u32;

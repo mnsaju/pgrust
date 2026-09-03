@@ -24,7 +24,10 @@ pub unsafe fn fetch_att(t: *const u8, attbyval: bool, attlen: i32) -> Datum {
     // Mixed ==/> ladder: eq-chains over {1,2,4,8} trip LLVM 22's pow2 switch
     // lowering (+6 insns/fetch), panic arms break inlining (parity journal).
     if attbyval {
-        debug_assert!(matches!(attlen, 1 | 2 | 4 | 8), "unsupported byval length: {attlen}");
+        debug_assert!(
+            matches!(attlen, 1 | 2 | 4 | 8),
+            "unsupported byval length: {attlen}"
+        );
         if attlen == 4 {
             Datum::from_i32(t.cast::<i32>().read_unaligned())
         } else if attlen > 4 {
@@ -46,7 +49,10 @@ pub unsafe fn fetchatt(att: &CompactAttribute, t: *const u8) -> Datum {
     // Bit-tested (one tbnz/arm): wins at the getattr sites, not in deform.
     let attlen = att.attlen as i32;
     if att.attbyval {
-        debug_assert!(matches!(attlen, 1 | 2 | 4 | 8), "unsupported byval length: {attlen}");
+        debug_assert!(
+            matches!(attlen, 1 | 2 | 4 | 8),
+            "unsupported byval length: {attlen}"
+        );
         if attlen & 4 != 0 {
             Datum::from_i32(t.cast::<i32>().read_unaligned())
         } else if attlen & 8 != 0 {

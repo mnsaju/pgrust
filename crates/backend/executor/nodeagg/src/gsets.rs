@@ -37,10 +37,10 @@ use crate::AggStateData;
 // (AggStateData peragg precedent), so reserve without the no-drop ctor.
 fn droppy_vec<'mcx, T>(mcx: Mcx<'mcx>, cap: usize) -> PgResult<PgVec<'mcx, T>> {
     let mut v: PgVec<'mcx, T> = PgVec::new_in(mcx);
-    v.try_reserve(cap).map_err(|_| mcx.oom(cap * core::mem::size_of::<T>()))?;
+    v.try_reserve(cap)
+        .map_err(|_| mcx.oom(cap * core::mem::size_of::<T>()))?;
     Ok(v)
 }
-
 
 // C AggStatePerPhaseData for the SORTED phases only: phases[i] here is C's
 // phase i+1; C's phase 0 is HashSetsState.
@@ -203,8 +203,7 @@ pub(crate) fn init_grouping_sets<'mcx>(
     let numphases = sorted_nodes.len();
 
     let mut pergroups: PgVec<'mcx, PgVec<'mcx, AggPerGroup>> = droppy_vec(mcx, maxsets)?;
-    let mut pergroup_bases: PgVec<'mcx, NonNull<AggPerGroup>> =
-        vec_with_capacity_in(mcx, maxsets)?;
+    let mut pergroup_bases: PgVec<'mcx, NonNull<AggPerGroup>> = vec_with_capacity_in(mcx, maxsets)?;
     for _ in 0..maxsets {
         let mut pg: PgVec<'mcx, AggPerGroup> = vec_with_capacity_in(mcx, numtrans.max(1))?;
         pg.resize(
@@ -308,12 +307,14 @@ pub(crate) fn init_grouping_sets<'mcx>(
                 if length == 0 || eqfunctions[length - 1].is_some() {
                     continue;
                 }
-                eqfunctions[length - 1] =
-                    Some(build_grouping_equal_prefix(mcx, &scan_desc, aggnode, length)?);
+                eqfunctions[length - 1] = Some(build_grouping_equal_prefix(
+                    mcx, &scan_desc, aggnode, length,
+                )?);
             }
             if eqfunctions[num_cols - 1].is_none() {
-                eqfunctions[num_cols - 1] =
-                    Some(build_grouping_equal_prefix(mcx, &scan_desc, aggnode, num_cols)?);
+                eqfunctions[num_cols - 1] = Some(build_grouping_equal_prefix(
+                    mcx, &scan_desc, aggnode, num_cols,
+                )?);
             }
             for eq in eqfunctions.iter_mut().flatten() {
                 // Boundary eqs detoast compressed by-ref keys through the
@@ -332,8 +333,13 @@ pub(crate) fn init_grouping_sets<'mcx>(
         // hash side runs through each set's own program from
         // lookup_hash_entries instead; this program stays sorted-only even
         // for phase 0 of a mixed agg.
-        let mut evaltrans =
-            exec_build_agg_trans_gsets(mcx, specs, &pergroup_bases[..nsets_eff], fm_agg_node, params)?;
+        let mut evaltrans = exec_build_agg_trans_gsets(
+            mcx,
+            specs,
+            &pergroup_bases[..nsets_eff],
+            fm_agg_node,
+            params,
+        )?;
         // By-ref transfn results ride the armed per-tuple mcx (lib.rs note).
         // SAFETY: the tmpcontext ExprContext outlives every phase program.
         unsafe { evaltrans.arm_result_mcx_raw(per_tuple) };
@@ -352,16 +358,29 @@ pub(crate) fn init_grouping_sets<'mcx>(
     all_grouped.sort_unstable_by(|a, b| b.cmp(a));
 
     let cell_layout = core::alloc::Layout::new::<GroupedColsCell>();
-    let raw = mcx.allocate(cell_layout).map_err(|_| mcx.oom(cell_layout.size()))?;
+    let raw = mcx
+        .allocate(cell_layout)
+        .map_err(|_| mcx.oom(cell_layout.size()))?;
     let grouped_cols_cell: NonNull<GroupedColsCell> = raw.cast();
     // SAFETY: fresh allocation; repointed in prepare_projection_slot before
     // any projection reads it.
-    unsafe { grouped_cols_cell.write(GroupedColsCell { ptr: core::ptr::null(), len: 0 }) };
+    unsafe {
+        grouped_cols_cell.write(GroupedColsCell {
+            ptr: core::ptr::null(),
+            len: 0,
+        })
+    };
 
-    let first_slot =
-        exectuples::make_tuple_table_slot(mcx, TupleSlotKind::MinimalTuple, Some(scan_desc.clone()));
-    let pending_slot =
-        exectuples::make_tuple_table_slot(mcx, TupleSlotKind::MinimalTuple, Some(scan_desc.clone()));
+    let first_slot = exectuples::make_tuple_table_slot(
+        mcx,
+        TupleSlotKind::MinimalTuple,
+        Some(scan_desc.clone()),
+    );
+    let pending_slot = exectuples::make_tuple_table_slot(
+        mcx,
+        TupleSlotKind::MinimalTuple,
+        Some(scan_desc.clone()),
+    );
     let sort_slot =
         exectuples::make_tuple_table_slot(mcx, TupleSlotKind::MinimalTuple, Some(scan_desc));
     let sort_desc = if numphases > 1 {
@@ -478,7 +497,10 @@ fn init_hash_sets<'mcx>(
     for &aggnode in hashed_nodes {
         let num_cols = aggnode.numCols as usize;
         assert!(num_cols > 0 && aggnode.grpColIdx.len() == num_cols);
-        assert!(aggnode.numGroups > 0, "Agg.numGroups unset (planner must estimate it)");
+        assert!(
+            aggnode.numGroups > 0,
+            "Agg.numGroups unset (planner must estimate it)"
+        );
 
         let mut grouped_cols: PgVec<'mcx, i16> = vec_with_capacity_in(mcx, num_cols)?;
         grouped_cols.extend_from_slice(&aggnode.grpColIdx[..num_cols]);
@@ -504,8 +526,11 @@ fn init_hash_sets<'mcx>(
                 hash_grp_col_idx_input.push((i + 1) as i16);
             }
         }
-        let largest_grp_col_idx =
-            hash_grp_col_idx_input.iter().map(|&a| a as i32).max().unwrap_or(0);
+        let largest_grp_col_idx = hash_grp_col_idx_input
+            .iter()
+            .map(|&a| a as i32)
+            .max()
+            .unwrap_or(0);
 
         let mut hash_tlist = types_nodes::list::NodeList::nil();
         for &attno in hash_grp_col_idx_input.iter() {
@@ -536,16 +561,15 @@ fn init_hash_sets<'mcx>(
             additionalsize,
             false,
         )?;
-        let hashslot = exectuples::make_tuple_table_slot(
-            mcx,
-            TupleSlotKind::Virtual,
-            Some(hash_desc.clone()),
-        );
+        let hashslot =
+            exectuples::make_tuple_table_slot(mcx, TupleSlotKind::Virtual, Some(hash_desc.clone()));
         let retrieve_slot =
             exectuples::make_tuple_table_slot(mcx, TupleSlotKind::MinimalTuple, Some(hash_desc));
 
         let cell_layout = Layout::new::<NonNull<AggPerGroup>>();
-        let raw = mcx.allocate(cell_layout).map_err(|_| mcx.oom(cell_layout.size()))?;
+        let raw = mcx
+            .allocate(cell_layout)
+            .map_err(|_| mcx.oom(cell_layout.size()))?;
         let cell: NonNull<NonNull<AggPerGroup>> = raw.cast();
         // SAFETY: fresh allocation; repointed before every trans-program run
         // (lookup_hash_entries).
@@ -615,8 +639,11 @@ fn init_hash_sets<'mcx>(
         }
     }
     let outer_desc = execscan::exec_type_from_tl(mcx, outer_tlist)?;
-    let rslot =
-        exectuples::make_tuple_table_slot(mcx, TupleSlotKind::MinimalTuple, Some(outer_desc.clone()));
+    let rslot = exectuples::make_tuple_table_slot(
+        mcx,
+        TupleSlotKind::MinimalTuple,
+        Some(outer_desc.clone()),
+    );
     let wslot = exectuples::make_tuple_table_slot(mcx, TupleSlotKind::Virtual, Some(outer_desc));
     let tmp_ctx = mcx.context().new_child_bump("HashAgg spill tuple");
 
@@ -692,8 +719,13 @@ fn spill_tuple_gs<'mcx>(
     let tapeset = tapeset.as_mut().expect("spill mode has a tapeset");
     let ph = &mut perhash[setno];
     if ph.spill.is_none() {
-        ph.spill =
-            Some(crate::hashagg_spill_init(mcx, tapeset, used_bits, ph.num_groups, *hashentrysize)?);
+        ph.spill = Some(crate::hashagg_spill_init(
+            mcx,
+            tapeset,
+            used_bits,
+            ph.num_groups,
+            *hashentrysize,
+        )?);
     }
     let spill = ph.spill.as_mut().unwrap();
     let input = match input {
@@ -729,8 +761,11 @@ fn spill_tuple_gs<'mcx>(
             }
             exectuples::FetchedMinimalTuple::Copied(t) => (t.as_ptr(), t.t_len() as usize),
         };
-        let partition =
-            if spill.shift < 32 { ((hash & spill.mask) >> spill.shift) as usize } else { 0 };
+        let partition = if spill.shift < 32 {
+            ((hash & spill.mask) >> spill.shift) as usize
+        } else {
+            0
+        };
         spill.ntuples[partition] += 1;
         // Hash the hash: partition-shared bits skew the HLL otherwise.
         spill.hll_card[partition].add(::hashfn::hash_bytes_uint32(hash));
@@ -758,7 +793,10 @@ fn spill_finish_gs<'mcx>(
             continue;
         }
         let cardinality = spill.hll_card[i].estimate();
-        tapeset.rewind_for_read(spill.partitions[i], crate::HASHAGG_READ_BUFFER_SIZE as usize)?;
+        tapeset.rewind_for_read(
+            spill.partitions[i],
+            crate::HASHAGG_READ_BUFFER_SIZE as usize,
+        )?;
         h.hash_batches.push(HashAggBatchGs {
             setno,
             input_tape: spill.partitions[i],
@@ -793,7 +831,13 @@ fn hashagg_finish_initial_spills_gs<'mcx>(
         ai.hash_batches_used += batches_used;
     }
     update_hash_metrics(node, estate, false, total_npartitions);
-    node.gsets.as_mut().unwrap().hash.as_mut().unwrap().spill_mode = false;
+    node.gsets
+        .as_mut()
+        .unwrap()
+        .hash
+        .as_mut()
+        .unwrap()
+        .spill_mode = false;
     Ok(())
 }
 
@@ -879,8 +923,12 @@ fn lookup_hash_entries<'mcx>(
         let hashval = ph.hashtable.hash_slot(&mut ph.hashslot)?;
         let use_table = !hash.spill_mode;
         let ph = &mut hash.perhash[setno];
-        let (ix, isnew) =
-            ph.hashtable.lookup(&mut ph.hashslot, hashval, use_table.then_some(table_mcx), mcx)?;
+        let (ix, isnew) = ph.hashtable.lookup(
+            &mut ph.hashslot,
+            hashval,
+            use_table.then_some(table_mcx),
+            mcx,
+        )?;
         let Some(ix) = ix else {
             spill_tuple_gs(hash, setno, 0, Some(input_slot), hashval, mcx)?;
             continue;
@@ -898,7 +946,11 @@ fn lookup_hash_entries<'mcx>(
             unsafe { ph.cell.write(pergroup) };
         }
         let ph = &mut hash.perhash[setno];
-        let mut slots = EvalSlots { scan: None, inner: None, outer: Some(input_slot) };
+        let mut slots = EvalSlots {
+            scan: None,
+            inner: None,
+            outer: Some(input_slot),
+        };
         exec_eval_expr(&mut ph.refill_trans, &mut slots)?;
     }
     Ok(())
@@ -943,16 +995,33 @@ fn agg_refill_hash_table_gs<'mcx>(
     let setno = batch.setno;
     loop {
         let advance = {
-            let AggStateData { gsets, trans_init, trans_typ, agg_node, .. } = node;
+            let AggStateData {
+                gsets,
+                trans_init,
+                trans_typ,
+                agg_node,
+                ..
+            } = node;
             let gs = &mut **gsets.as_mut().unwrap();
             let h = &mut *gs.hash.as_mut().unwrap();
-            let HashSetsState { perhash, tapeset, rslot, read_buf, spill_mode, .. } = h;
+            let HashSetsState {
+                perhash,
+                tapeset,
+                rslot,
+                read_buf,
+                spill_mode,
+                ..
+            } = h;
             let tapeset = tapeset.as_mut().expect("batches imply a tapeset");
             let Some(hash) = crate::hashagg_batch_read(tapeset, batch.input_tape, read_buf)? else {
                 break;
             };
-            let tup = NonNull::new(read_buf.as_mut_ptr().cast::<::types_tuple::htup::MinimalTupleData>())
-                .expect("read_buf is non-null");
+            let tup = NonNull::new(
+                read_buf
+                    .as_mut_ptr()
+                    .cast::<::types_tuple::htup::MinimalTupleData>(),
+            )
+            .expect("read_buf is non-null");
             // SAFETY: the image stays live in read_buf until the next read.
             unsafe { exectuples::exec_store_minimal_tuple_ptr(rslot, mcx, tup) };
             let ph = &mut perhash[setno];
@@ -971,16 +1040,15 @@ fn agg_refill_hash_table_gs<'mcx>(
             // SAFETY: read of the once-allocated node; no &mut is live to it.
             let table_mcx = unsafe { agg_node.as_ref() }.aggcontext();
             let use_table = !*spill_mode;
-            let (ix, isnew) = ph.hashtable.lookup(
-                &mut ph.hashslot,
-                hash,
-                use_table.then_some(table_mcx),
-                mcx,
-            )?;
+            let (ix, isnew) =
+                ph.hashtable
+                    .lookup(&mut ph.hashslot, hash, use_table.then_some(table_mcx), mcx)?;
             match ix {
                 Some(ix) => {
                     if isnew {
-                        initialize_hash_entry_gs(h, setno, ix, trans_init, trans_typ, table_mcx, mcx)?;
+                        initialize_hash_entry_gs(
+                            h, setno, ix, trans_init, trans_typ, table_mcx, mcx,
+                        )?;
                     } else if !trans_init.is_empty() {
                         let ph = &mut h.perhash[setno];
                         let pergroup = ph
@@ -1005,7 +1073,11 @@ fn agg_refill_hash_table_gs<'mcx>(
             let h = &mut *gs.hash.as_mut().unwrap();
             let HashSetsState { perhash, rslot, .. } = h;
             let ph = &mut perhash[setno];
-            let mut slots = EvalSlots { scan: None, inner: None, outer: Some(rslot) };
+            let mut slots = EvalSlots {
+                scan: None,
+                inner: None,
+                outer: Some(rslot),
+            };
             exec_eval_expr(&mut ph.refill_trans, &mut slots)?;
         }
         estate.reset_expr_context(node.tmpcontext);
@@ -1047,7 +1119,13 @@ where
     while let Some(outer_id) = fetch_outer(estate)? {
         estate.ecxt_mut(node.tmpcontext).ecxt_outertuple = Some(outer_id);
         {
-            let AggStateData { gsets, trans_init, trans_typ, agg_node, .. } = node;
+            let AggStateData {
+                gsets,
+                trans_init,
+                trans_typ,
+                agg_node,
+                ..
+            } = node;
             let gs = gsets.as_mut().unwrap();
             let h = gs.hash.as_mut().expect("hashed grouping sets");
             let outer_slot = estate.slot_mut(outer_id);
@@ -1084,12 +1162,25 @@ fn update_hash_metrics(
     let meta: usize = h.perhash.iter().map(|ph| ph.hashtable.meta_mem()).sum();
     let hashkey_mem = aggctx.context().subtree_used();
     let buffer_mem = npartitions * crate::HASHAGG_WRITE_BUFFER_SIZE as usize
-        + if from_tape { crate::HASHAGG_READ_BUFFER_SIZE as usize } else { 0 };
+        + if from_tape {
+            crate::HASHAGG_READ_BUFFER_SIZE as usize
+        } else {
+            0
+        };
     let total = (meta + hashkey_mem + buffer_mem) as u64;
     let id = node.plan.plan.plan_node_id;
     let ai = crate::agg_instrumentation(estate, id);
     ai.hash_mem_peak = ai.hash_mem_peak.max(total);
-    if let Some(ts) = node.gsets.as_ref().unwrap().hash.as_ref().unwrap().tapeset.as_ref() {
+    if let Some(ts) = node
+        .gsets
+        .as_ref()
+        .unwrap()
+        .hash
+        .as_ref()
+        .unwrap()
+        .tapeset
+        .as_ref()
+    {
         let disk_used = ts.blocks() as u64 * 8;
         ai.hash_disk_used = ai.hash_disk_used.max(disk_used);
     }
@@ -1116,7 +1207,11 @@ pub(crate) fn agg_retrieve_hash_table<'mcx>(
             {
                 let gs = &mut **node.gsets.as_mut().unwrap();
                 let h = gs.hash.as_mut().expect("hashed grouping sets");
-                let HashSetsState { perhash, current_set, .. } = h;
+                let HashSetsState {
+                    perhash,
+                    current_set,
+                    ..
+                } = h;
                 loop {
                     let ph = &mut perhash[*current_set];
                     if let Some(ix) = ph.hashtable.iterate(&mut ph.hashiter) {
@@ -1138,9 +1233,17 @@ pub(crate) fn agg_retrieve_hash_table<'mcx>(
         let pergroup = {
             let AggStateData { gsets, .. } = node;
             let gs = &mut **gsets.as_mut().unwrap();
-            let GroupingSetsState { hash, grouped_cols_cell, .. } = gs;
+            let GroupingSetsState {
+                hash,
+                grouped_cols_cell,
+                ..
+            } = gs;
             let h = hash.as_mut().expect("hashed grouping sets");
-            let HashSetsState { perhash, hash_first_slot, .. } = h;
+            let HashSetsState {
+                perhash,
+                hash_first_slot,
+                ..
+            } = h;
             let ph = &mut perhash[current_set];
             let tup = ph.hashtable.entry_tuple(ix);
             // SAFETY: entry images live in the node's table context for the
@@ -1167,7 +1270,9 @@ pub(crate) fn agg_retrieve_hash_table<'mcx>(
                     len: ph.grouped_cols.len(),
                 })
             };
-            ph.hashtable.entry_additional(ix).map_or(NonNull::dangling(), |p| p.cast())
+            ph.hashtable
+                .entry_additional(ix)
+                .map_or(NonNull::dangling(), |p| p.cast())
         };
         crate::finalize_aggregates(node, estate, pergroup)?;
 
@@ -1177,7 +1282,9 @@ pub(crate) fn agg_retrieve_hash_table<'mcx>(
             let ecxt = node.ps_ExprContext;
             let result = node.ps_ResultTupleSlot;
             let instr_idx = node.instr_idx;
-            let AggStateData { gsets, qual, proj, .. } = node;
+            let AggStateData {
+                gsets, qual, proj, ..
+            } = node;
             let h = gsets.as_mut().unwrap().hash.as_mut().unwrap();
             if !::executils::exec_qual_with_subplans_outer(
                 qual.as_deref_mut(),
@@ -1200,8 +1307,11 @@ pub(crate) fn agg_retrieve_hash_table<'mcx>(
         {
             let AggStateData { gsets, qual, .. } = node;
             let h = gsets.as_mut().unwrap().hash.as_mut().unwrap();
-            let mut slots =
-                EvalSlots { scan: None, inner: None, outer: Some(&mut h.hash_first_slot) };
+            let mut slots = EvalSlots {
+                scan: None,
+                inner: None,
+                outer: Some(&mut h.hash_first_slot),
+            };
             if !exec_qual(qual.as_deref_mut(), &mut slots)? {
                 estate.instr_count_filtered1(node.instr_idx);
                 continue;
@@ -1209,8 +1319,11 @@ pub(crate) fn agg_retrieve_hash_table<'mcx>(
         }
         let result_slot = estate.slot_mut(node.ps_ResultTupleSlot);
         let h = node.gsets.as_mut().unwrap().hash.as_mut().unwrap();
-        let mut slots =
-            EvalSlots { scan: None, inner: None, outer: Some(&mut h.hash_first_slot) };
+        let mut slots = EvalSlots {
+            scan: None,
+            inner: None,
+            outer: Some(&mut h.hash_first_slot),
+        };
         exec_project(&mut node.proj, &mut slots, result_slot, mcx)?;
         return Ok(Some(node.ps_ResultTupleSlot));
     }
@@ -1224,16 +1337,22 @@ fn initialize_phase(gs: &mut GroupingSetsState<'_>, newphase: usize) -> PgResult
     if newphase == 0 {
         gs.sort_out = None;
     } else {
-        let mut ts = gs.sort_out.take().expect("previous phase fed the next phase's sort");
+        let mut ts = gs
+            .sort_out
+            .take()
+            .expect("previous phase fed the next phase's sort");
         ts.performsort()?;
         gs.sort_in = Some(ts);
     }
     if newphase + 1 < gs.phases.len() {
-        let sortnode =
-            gs.phases[newphase + 1].sortnode.expect("chain Agg without a Sort (init checked)");
+        let sortnode = gs.phases[newphase + 1]
+            .sortnode
+            .expect("chain Agg without a Sort (init checked)");
         let work_mem = init_small::globals::work_mem();
         gs.sort_out = Some(Tuplesort::begin_heap(
-            gs.sort_desc.clone().expect("chained grouping sets carry the outer result type"),
+            gs.sort_desc
+                .clone()
+                .expect("chained grouping sets carry the outer result type"),
             sortnode.sortColIdx,
             sortnode.sortOperators,
             sortnode.collations,
@@ -1261,8 +1380,17 @@ where
 {
     let mcx = estate.es_query_cxt;
     if gs.sort_in.is_some() {
-        let GroupingSetsState { sort_in, sort_out, sort_slot, .. } = gs;
-        if !sort_in.as_mut().unwrap().gettupleslot(true, false, sort_slot, mcx)? {
+        let GroupingSetsState {
+            sort_in,
+            sort_out,
+            sort_slot,
+            ..
+        } = gs;
+        if !sort_in
+            .as_mut()
+            .unwrap()
+            .gettupleslot(true, false, sort_slot, mcx)?
+        {
             return Ok(None);
         }
         if let Some(out) = sort_out.as_mut() {
@@ -1295,8 +1423,10 @@ fn prepare_projection_slot<'mcx>(
     // SAFETY: once-allocated cell; the per-set column vecs are stable after
     // init (never resized).
     unsafe {
-        gs.grouped_cols_cell
-            .write(GroupedColsCell { ptr: grouped.as_ptr(), len: grouped.len() })
+        gs.grouped_cols_cell.write(GroupedColsCell {
+            ptr: grouped.as_ptr(),
+            len: grouped.len(),
+        })
     };
     if !gs.first_stored {
         exectuples::exec_store_all_null_tuple(&mut gs.first_slot, mcx);
@@ -1400,13 +1530,12 @@ where
         let boundary = {
             let gs = node.gsets.as_mut().unwrap();
             let phase = &gs.phases[gs.current_phase];
-            let next_set_size = if gs.projected_set >= 0
-                && (gs.projected_set as usize) < num_grouping_sets - 1
-            {
-                phase.gset_lengths[gs.projected_set as usize + 1]
-            } else {
-                0
-            };
+            let next_set_size =
+                if gs.projected_set >= 0 && (gs.projected_set as usize) < num_grouping_sets - 1 {
+                    phase.gset_lengths[gs.projected_set as usize + 1]
+                } else {
+                    0
+                };
             if gs.input_done {
                 true
             } else if phase.aggstrategy != AGG_PLAIN
@@ -1415,8 +1544,13 @@ where
                 && next_set_size > 0
             {
                 debug_assert!(gs.have_pending);
-                let GroupingSetsState { phases, first_slot, pending_slot, current_phase, .. } =
-                    &mut **gs;
+                let GroupingSetsState {
+                    phases,
+                    first_slot,
+                    pending_slot,
+                    current_phase,
+                    ..
+                } = &mut **gs;
                 let eq = phases[*current_phase].eqfunctions[next_set_size - 1]
                     .as_mut()
                     .expect("eqfunctions built for every set length");
@@ -1444,7 +1578,11 @@ where
             let pending = node.gsets.as_ref().unwrap().have_pending;
             if pending {
                 let gs = node.gsets.as_mut().unwrap();
-                let GroupingSetsState { first_slot, pending_slot, .. } = &mut **gs;
+                let GroupingSetsState {
+                    first_slot,
+                    pending_slot,
+                    ..
+                } = &mut **gs;
                 core::mem::swap(first_slot, pending_slot);
                 gs.have_pending = false;
                 gs.first_stored = true;
@@ -1492,7 +1630,9 @@ where
             let ecxt = node.ps_ExprContext;
             let result = node.ps_ResultTupleSlot;
             let instr_idx = node.instr_idx;
-            let AggStateData { gsets, qual, proj, .. } = node;
+            let AggStateData {
+                gsets, qual, proj, ..
+            } = node;
             let gs = gsets.as_mut().unwrap();
             if !::executils::exec_qual_with_subplans_outer(
                 qual.as_deref_mut(),
@@ -1515,8 +1655,11 @@ where
         {
             let AggStateData { gsets, qual, .. } = node;
             let gs = gsets.as_mut().unwrap();
-            let mut slots =
-                EvalSlots { scan: None, inner: None, outer: Some(&mut gs.first_slot) };
+            let mut slots = EvalSlots {
+                scan: None,
+                inner: None,
+                outer: Some(&mut gs.first_slot),
+            };
             if !exec_qual(qual.as_deref_mut(), &mut slots)? {
                 estate.instr_count_filtered1(node.instr_idx);
                 continue;
@@ -1524,7 +1667,11 @@ where
         }
         let result_slot = estate.slot_mut(node.ps_ResultTupleSlot);
         let gs = node.gsets.as_mut().unwrap();
-        let mut slots = EvalSlots { scan: None, inner: None, outer: Some(&mut gs.first_slot) };
+        let mut slots = EvalSlots {
+            scan: None,
+            inner: None,
+            outer: Some(&mut gs.first_slot),
+        };
         exec_project(&mut node.proj, &mut slots, result_slot, mcx)?;
         return Ok(Some(node.ps_ResultTupleSlot));
     }
@@ -1545,7 +1692,11 @@ fn copy_into_first<'mcx>(
         }
         Fetched::Sorted => {
             let gs = node.gsets.as_mut().unwrap();
-            let GroupingSetsState { first_slot, sort_slot, .. } = &mut **gs;
+            let GroupingSetsState {
+                first_slot,
+                sort_slot,
+                ..
+            } = &mut **gs;
             exectuples::exec_copy_slot(first_slot, sort_slot, mcx, mcx)?;
         }
     }
@@ -1565,16 +1716,33 @@ where
 {
     let mcx = estate.es_query_cxt;
     {
-        let AggStateData { gsets, trans_init, trans_typ, agg_node, .. } = node;
+        let AggStateData {
+            gsets,
+            trans_init,
+            trans_typ,
+            agg_node,
+            ..
+        } = node;
         let gs = &mut **gsets.as_mut().unwrap();
-        let GroupingSetsState { phases, first_slot, current_phase, hash, mixed, .. } = gs;
+        let GroupingSetsState {
+            phases,
+            first_slot,
+            current_phase,
+            hash,
+            mixed,
+            ..
+        } = gs;
         // C: phase 1 (and only phase 1) of a mixed agg updates the hash
         // tables in the same advance.
         if *mixed && *current_phase == 0 {
             let h = hash.as_mut().expect("mixed grouping sets");
             lookup_hash_entries(h, trans_init, trans_typ, *agg_node, first_slot, mcx)?;
         }
-        let mut slots = EvalSlots { scan: None, inner: None, outer: Some(first_slot) };
+        let mut slots = EvalSlots {
+            scan: None,
+            inner: None,
+            outer: Some(first_slot),
+        };
         exec_eval_expr(&mut phases[*current_phase].evaltrans, &mut slots)?;
     }
     if !node.pertrans_sort.is_empty() {
@@ -1584,8 +1752,7 @@ where
     }
     estate.reset_expr_context(node.tmpcontext);
     loop {
-        let fetched = match fetch_input_tuple(node.gsets.as_mut().unwrap(), estate, fetch_outer)?
-        {
+        let fetched = match fetch_input_tuple(node.gsets.as_mut().unwrap(), estate, fetch_outer)? {
             Some(f) => f,
             None => {
                 let finish_spills = {
@@ -1611,8 +1778,12 @@ where
                 match fetched {
                     Fetched::Outer(id) => {
                         let outer_slot = estate.slot_mut(id);
-                        let GroupingSetsState { phases, first_slot, current_phase, .. } =
-                            &mut **gs;
+                        let GroupingSetsState {
+                            phases,
+                            first_slot,
+                            current_phase,
+                            ..
+                        } = &mut **gs;
                         let eq = phases[*current_phase].eqfunctions[num_cols - 1]
                             .as_mut()
                             .expect("full-width eqfunction built");
@@ -1660,27 +1831,51 @@ where
         };
         debug_assert!(!crossed);
         {
-            let AggStateData { gsets, trans_init, trans_typ, agg_node, .. } = node;
+            let AggStateData {
+                gsets,
+                trans_init,
+                trans_typ,
+                agg_node,
+                ..
+            } = node;
             let gs = &mut **gsets.as_mut().unwrap();
             match fetched {
                 Fetched::Outer(id) => {
                     let outer_slot = estate.slot_mut(id);
-                    let GroupingSetsState { phases, current_phase, hash, mixed, .. } = gs;
+                    let GroupingSetsState {
+                        phases,
+                        current_phase,
+                        hash,
+                        mixed,
+                        ..
+                    } = gs;
                     if *mixed && *current_phase == 0 {
                         let h = hash.as_mut().expect("mixed grouping sets");
                         lookup_hash_entries(h, trans_init, trans_typ, *agg_node, outer_slot, mcx)?;
                     }
-                    let mut slots =
-                        EvalSlots { scan: None, inner: None, outer: Some(outer_slot) };
+                    let mut slots = EvalSlots {
+                        scan: None,
+                        inner: None,
+                        outer: Some(outer_slot),
+                    };
                     exec_eval_expr(&mut phases[*current_phase].evaltrans, &mut slots)?;
                 }
                 Fetched::Sorted => {
-                    let GroupingSetsState { phases, sort_slot, current_phase, mixed, .. } = gs;
+                    let GroupingSetsState {
+                        phases,
+                        sort_slot,
+                        current_phase,
+                        mixed,
+                        ..
+                    } = gs;
                     // Phase 1 reads the outer plan directly; sorted input
                     // only feeds later, non-hashing phases.
                     debug_assert!(!*mixed || *current_phase > 0);
-                    let mut slots =
-                        EvalSlots { scan: None, inner: None, outer: Some(sort_slot) };
+                    let mut slots = EvalSlots {
+                        scan: None,
+                        inner: None,
+                        outer: Some(sort_slot),
+                    };
                     exec_eval_expr(&mut phases[*current_phase].evaltrans, &mut slots)?;
                 }
             }
@@ -1707,7 +1902,10 @@ where
 {
     let (in_hash, filled) = {
         let gs = node.gsets.as_ref().unwrap();
-        (gs.in_hash_mode, gs.hash.as_ref().is_some_and(|h| h.table_filled))
+        (
+            gs.in_hash_mode,
+            gs.hash.as_ref().is_some_and(|h| h.table_filled),
+        )
     };
     if in_hash {
         if !filled {
@@ -1724,7 +1922,9 @@ pub(crate) fn rescan_hash_reuse(gs: &mut GroupingSetsState<'_>) -> bool {
     if !gs.phases.is_empty() {
         return false;
     }
-    let Some(h) = gs.hash.as_mut() else { return false };
+    let Some(h) = gs.hash.as_mut() else {
+        return false;
+    };
     // C ExecReScanAgg: the no-reset fast path requires the hash side never
     // spilled (a spilled tapeset/batches state doesn't survive a rescan).
     if h.ever_spilled {

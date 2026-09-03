@@ -22,7 +22,9 @@ pub fn dispell_init(init: &DictInitData<'static>) -> PgResult<DictISpell> {
     let mut dictloaded = false;
     let mut stoploaded = false;
 
-    let mut stoplist = StopList { stop: PgVec::new_in(mcx) };
+    let mut stoplist = StopList {
+        stop: PgVec::new_in(mcx),
+    };
     let mut obj = IspellDict::new(mcx);
     obj.ni_start_build()?;
 

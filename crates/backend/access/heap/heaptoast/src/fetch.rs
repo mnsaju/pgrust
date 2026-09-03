@@ -8,10 +8,8 @@ use ::types_scan::scankey::{
 };
 use ::types_scan::sdir::ForwardScanDirection;
 use ::types_storage::lock::AccessShareLock;
-use ::types_tuple::varatt::{
-    set_varsize_4b_c_word, set_varsize_4b_word, VARHDRSZ, VARHDRSZ_SHORT,
-};
 use ::types_tuple::heap_getattr;
+use ::types_tuple::varatt::{set_varsize_4b_c_word, set_varsize_4b_word, VARHDRSZ, VARHDRSZ_SHORT};
 use toastdesc::VarattExternal;
 
 use crate::helper::va_slice;
@@ -72,7 +70,11 @@ pub fn heap_fetch_toast_slice<'mcx>(
     let endchunk = (sliceoffset + slicelength - 1) / max_chunk;
     debug_assert!(endchunk <= totalchunks);
 
-    let mut toastkey = [valueid_scan_key(valueid), ScanKeyData::empty(), ScanKeyData::empty()];
+    let mut toastkey = [
+        valueid_scan_key(valueid),
+        ScanKeyData::empty(),
+        ScanKeyData::empty(),
+    ];
     let nscankeys: usize = if startchunk == 0 && endchunk == totalchunks - 1 {
         1
     } else if startchunk == endchunk {

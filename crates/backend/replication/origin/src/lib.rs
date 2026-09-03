@@ -12,9 +12,9 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 
+use pgsync::OnceLock;
 use std::cell::Cell;
 use std::rc::Rc;
-use pgsync::OnceLock;
 
 use condition_variable::{
     ConditionVariable, ConditionVariableBroadcast, ConditionVariableCancelSleep,
@@ -24,11 +24,11 @@ use datum::Datum;
 use elog::{elog, ereport, errno};
 use lwlock::{LWLockAcquire, LWLockPadded, LWLockRelease, LW_EXCLUSIVE, LW_SHARED};
 use mcx::Mcx;
+use types_core::primitive::RmgrIds::RM_REPLORIGIN_ID;
 use types_core::{
     AttrNumber, DoNotReplicateId, InvalidOid, InvalidRepOriginId, InvalidXLogRecPtr, Oid,
     RepOriginId, TimestampTz, XLogRecPtr,
 };
-use types_core::primitive::RmgrIds::RM_REPLORIGIN_ID;
 use types_error::{
     ErrorLocation, PgResult, DEBUG2, ERRCODE_CONFIGURATION_LIMIT_EXCEEDED, ERRCODE_DATA_CORRUPTED,
     ERRCODE_OBJECT_IN_USE, ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE,
@@ -212,7 +212,9 @@ fn text_datum_to_string(mcx: Mcx<'_>, d: Datum) -> PgResult<String> {
 }
 
 fn text_datum(mcx: Mcx<'_>, s: &str) -> PgResult<Datum> {
-    let img = varlena::cstring_to_text(mcx, s.as_bytes())?.into_image().leak();
+    let img = varlena::cstring_to_text(mcx, s.as_bytes())?
+        .into_image()
+        .leak();
     Ok(Datum::from_usize(img.as_ptr() as usize))
 }
 
@@ -220,10 +222,9 @@ fn text_datum(mcx: Mcx<'_>, s: &str) -> PgResult<Datum> {
 pub fn replorigin_by_name(roname: &str, missing_ok: bool) -> PgResult<RepOriginId> {
     use cache_syscache::cacheinfo::REPLORIGNAME;
     let mut roident = InvalidOid;
-    if let Some(tup) = cache_syscache::SearchSysCache1(
-        REPLORIGNAME,
-        cache_syscache::SysCacheKey::Str(roname),
-    )? {
+    if let Some(tup) =
+        cache_syscache::SearchSysCache1(REPLORIGNAME, cache_syscache::SysCacheKey::Str(roname))?
+    {
         roident = cache_syscache::SysCacheGetAttr(
             REPLORIGNAME,
             &tup,
@@ -264,7 +265,11 @@ pub fn replorigin_create(mcx: Mcx<'_>, roname: &str) -> PgResult<RepOriginId> {
 
     // The numeric origin id is 16 bits: scan for the first unused id under an
     // exclusive lock, reading with a dirty snapshot so in-progress rows count.
-    let rel = table::table_open(mcx, catalog::ReplicationOriginRelationId, types_rel::ExclusiveLock)?;
+    let rel = table::table_open(
+        mcx,
+        catalog::ReplicationOriginRelationId,
+        types_rel::ExclusiveLock,
+    )?;
 
     let mut created = InvalidRepOriginId;
     for roident in 1..(u16::MAX as u32) {
@@ -369,10 +374,19 @@ fn replorigin_state_clear(roident: RepOriginId, nowait: bool) -> PgResult<()> {
 }
 
 // replorigin_drop_by_name (origin.c). Needs to be called in a transaction.
-pub fn replorigin_drop_by_name(mcx: Mcx<'_>, name: &str, missing_ok: bool, nowait: bool) -> PgResult<()> {
+pub fn replorigin_drop_by_name(
+    mcx: Mcx<'_>,
+    name: &str,
+    missing_ok: bool,
+    nowait: bool,
+) -> PgResult<()> {
     use cache_syscache::cacheinfo::REPLORIGIDENT;
 
-    let rel = table::table_open(mcx, catalog::ReplicationOriginRelationId, types_rel::RowExclusiveLock)?;
+    let rel = table::table_open(
+        mcx,
+        catalog::ReplicationOriginRelationId,
+        types_rel::RowExclusiveLock,
+    )?;
 
     let roident = replorigin_by_name(name, missing_ok)?;
 
@@ -444,9 +458,11 @@ pub fn replorigin_by_oid(
         if !missing_ok {
             ereport(ERROR)
                 .errcode(ERRCODE_UNDEFINED_OBJECT)
-                .errmsg(format!("replication origin with ID {roident} does not exist"))
+                .errmsg(format!(
+                    "replication origin with ID {roident} does not exist"
+                ))
                 .finish(loc("replorigin_by_oid"))?;
-        unreachable!();
+            unreachable!();
         }
         Ok(None)
     }
@@ -543,7 +559,7 @@ pub fn CheckPointReplicationOrigin() -> PgResult<()> {
                 .errcode_for_file_access()
                 .errmsg(format!("could not write to file \"{tmppath}\": %m"))
                 .finish(loc("CheckPointReplicationOrigin"))?;
-        unreachable!();
+            unreachable!();
         }
         write_off.set(write_off.get() + bytes.len() as i64);
         Ok(())
@@ -605,7 +621,10 @@ pub fn StartupReplicationOrigin() -> PgResult<()> {
         return Ok(());
     }
 
-    let _ = elog(DEBUG2, "starting up replication origin progress state".to_string());
+    let _ = elog(
+        DEBUG2,
+        "starting up replication origin progress state".to_string(),
+    );
 
     let fd_ = match fd::OpenTransientFile(path, libc::O_RDONLY) {
         Ok(f) if f >= 0 => f,
@@ -618,7 +637,7 @@ pub fn StartupReplicationOrigin() -> PgResult<()> {
                 .errcode_for_file_access()
                 .errmsg(format!("could not open file \"{path}\": %m"))
                 .finish(loc("StartupReplicationOrigin"))?;
-        unreachable!();
+            unreachable!();
         }
     };
 
@@ -635,7 +654,7 @@ pub fn StartupReplicationOrigin() -> PgResult<()> {
                 .errcode_for_file_access()
                 .errmsg(format!("could not read file \"{path}\": %m"))
                 .finish(loc("StartupReplicationOrigin"))?;
-        unreachable!();
+            unreachable!();
         }
         read_off.set(read_off.get() + n as i64);
         Ok(n)
@@ -682,7 +701,7 @@ pub fn StartupReplicationOrigin() -> PgResult<()> {
                     "could not read file \"{path}\": read {n} of {DISK_STATE_SIZE}"
                 ))
                 .finish(loc("StartupReplicationOrigin"))?;
-        unreachable!();
+            unreachable!();
         }
 
         crc = crc32c::pg_comp_crc32c(crc, &disk);
@@ -695,7 +714,7 @@ pub fn StartupReplicationOrigin() -> PgResult<()> {
                      \"max_active_replication_origins\"",
                 )
                 .finish(loc("StartupReplicationOrigin"))?;
-        unreachable!();
+            unreachable!();
         }
 
         // Copy data to the shared array.
@@ -759,7 +778,10 @@ fn serialize_replorigin_drop(node: RepOriginId) -> [u8; 2] {
 pub fn replorigin_redo(record: &mut xlogreader_seams::XLogReaderState) -> PgResult<()> {
     const XLR_INFO_MASK: u8 = 0x0F;
     let end_rec_ptr = record.EndRecPtr;
-    let decoded = record.record.as_ref().expect("replorigin_redo with no decoded record");
+    let decoded = record
+        .record
+        .as_ref()
+        .expect("replorigin_redo with no decoded record");
     let info = decoded.xl_info & !XLR_INFO_MASK;
     // SAFETY: the decoded record's main data lives for the redo call.
     let data = unsafe { decoded.main_data_bytes() };
@@ -876,7 +898,13 @@ pub fn replorigin_advance(
     // the standby gets the message. During WAL replay no logging is needed.
     if wal_log {
         let xlrec = serialize_replorigin_set(node, remote_commit, go_backward);
-        xloginsert::insert_record(RM_REPLORIGIN_ID as u8, XLOG_REPLORIGIN_SET, 0, &[&xlrec], &[])?;
+        xloginsert::insert_record(
+            RM_REPLORIGIN_ID as u8,
+            XLOG_REPLORIGIN_SET,
+            0,
+            &[&xlrec],
+            &[],
+        )?;
     }
 
     // Checkpoint races can present older values; don't go backward unless
@@ -1117,7 +1145,11 @@ pub(crate) fn show_status_rows() -> PgResult<Vec<(RepOriginId, XLogRecPtr, XLogR
             continue;
         }
         lw(&state.lock, LW_SHARED)?;
-        rows.push((state.roident.get(), state.remote_lsn.get(), state.local_lsn.get()));
+        rows.push((
+            state.roident.get(),
+            state.remote_lsn.get(),
+            state.local_lsn.get(),
+        ));
         LWLockRelease(&state.lock)?;
     }
     LWLockRelease(origin_lock())?;
@@ -1129,10 +1161,12 @@ pub(crate) fn show_status_rows() -> PgResult<Vec<(RepOriginId, XLogRecPtr, XLogR
 // ---------------------------------------------------------------------------
 
 pub fn init_seams() {
-    guc_tables::vars::max_active_replication_origins.install_if_absent(guc_tables::GucVarAccessors {
-        get: max_active_replication_origins,
-        set: |v| MAX_ACTIVE_REPLICATION_ORIGINS.store(v, std::sync::atomic::Ordering::Relaxed),
-    });
+    guc_tables::vars::max_active_replication_origins.install_if_absent(
+        guc_tables::GucVarAccessors {
+            get: max_active_replication_origins,
+            set: |v| MAX_ACTIVE_REPLICATION_ORIGINS.store(v, std::sync::atomic::Ordering::Relaxed),
+        },
+    );
     origin_seams::replorigin_session_origin::set(replorigin_session_origin);
     origin_seams::replorigin_session_origin_lsn::set(replorigin_session_origin_lsn);
     origin_seams::replorigin_session_origin_timestamp::set(replorigin_session_origin_timestamp);

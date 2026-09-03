@@ -1,6 +1,6 @@
 use std::cell::Cell;
 
-use guc_tables::{GucVarAccessors, vars};
+use guc_tables::{vars, GucVarAccessors};
 
 // xlog.c-owned GUC globals: per-backend thread_local cells (C file-scope
 // globals, one copy per backend), boot values matching guc_tables.
@@ -108,21 +108,77 @@ pub(crate) fn install_wal_segment_size() {
 
 // wal_sync_method_options[] / archive_mode_options[] (xlog.c).
 pub(crate) const WAL_SYNC_METHOD_OPTIONS: &[types_guc::config_enum_entry] = &[
-    types_guc::config_enum_entry { name: "fsync", val: crate::WAL_SYNC_METHOD_FSYNC, hidden: false },
-    types_guc::config_enum_entry { name: "fsync_writethrough", val: crate::WAL_SYNC_METHOD_FSYNC_WRITETHROUGH, hidden: false },
-    types_guc::config_enum_entry { name: "fdatasync", val: crate::WAL_SYNC_METHOD_FDATASYNC, hidden: false },
-    types_guc::config_enum_entry { name: "open_sync", val: crate::WAL_SYNC_METHOD_OPEN, hidden: false },
-    types_guc::config_enum_entry { name: "open_datasync", val: crate::WAL_SYNC_METHOD_OPEN_DSYNC, hidden: false },
+    types_guc::config_enum_entry {
+        name: "fsync",
+        val: crate::WAL_SYNC_METHOD_FSYNC,
+        hidden: false,
+    },
+    types_guc::config_enum_entry {
+        name: "fsync_writethrough",
+        val: crate::WAL_SYNC_METHOD_FSYNC_WRITETHROUGH,
+        hidden: false,
+    },
+    types_guc::config_enum_entry {
+        name: "fdatasync",
+        val: crate::WAL_SYNC_METHOD_FDATASYNC,
+        hidden: false,
+    },
+    types_guc::config_enum_entry {
+        name: "open_sync",
+        val: crate::WAL_SYNC_METHOD_OPEN,
+        hidden: false,
+    },
+    types_guc::config_enum_entry {
+        name: "open_datasync",
+        val: crate::WAL_SYNC_METHOD_OPEN_DSYNC,
+        hidden: false,
+    },
 ];
 
 pub(crate) const ARCHIVE_MODE_OPTIONS: &[types_guc::config_enum_entry] = &[
-    types_guc::config_enum_entry { name: "always", val: 2, hidden: false },
-    types_guc::config_enum_entry { name: "on", val: 1, hidden: false },
-    types_guc::config_enum_entry { name: "off", val: 0, hidden: false },
-    types_guc::config_enum_entry { name: "true", val: 1, hidden: true },
-    types_guc::config_enum_entry { name: "false", val: 0, hidden: true },
-    types_guc::config_enum_entry { name: "yes", val: 1, hidden: true },
-    types_guc::config_enum_entry { name: "no", val: 0, hidden: true },
-    types_guc::config_enum_entry { name: "1", val: 1, hidden: true },
-    types_guc::config_enum_entry { name: "0", val: 0, hidden: true },
+    types_guc::config_enum_entry {
+        name: "always",
+        val: 2,
+        hidden: false,
+    },
+    types_guc::config_enum_entry {
+        name: "on",
+        val: 1,
+        hidden: false,
+    },
+    types_guc::config_enum_entry {
+        name: "off",
+        val: 0,
+        hidden: false,
+    },
+    types_guc::config_enum_entry {
+        name: "true",
+        val: 1,
+        hidden: true,
+    },
+    types_guc::config_enum_entry {
+        name: "false",
+        val: 0,
+        hidden: true,
+    },
+    types_guc::config_enum_entry {
+        name: "yes",
+        val: 1,
+        hidden: true,
+    },
+    types_guc::config_enum_entry {
+        name: "no",
+        val: 0,
+        hidden: true,
+    },
+    types_guc::config_enum_entry {
+        name: "1",
+        val: 1,
+        hidden: true,
+    },
+    types_guc::config_enum_entry {
+        name: "0",
+        val: 0,
+        hidden: true,
+    },
 ];

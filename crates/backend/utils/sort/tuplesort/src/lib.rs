@@ -7,7 +7,7 @@ use core::cell::Cell;
 use core::mem;
 
 use ::datum::{Datum, NullableDatum};
-use ::mcx::{McxOwned, Mcx, MemoryContext, PgVec};
+use ::mcx::{Mcx, McxOwned, MemoryContext, PgVec};
 use ::types_core::instrument::{TuplesortInstrumentation, TuplesortMethod, TuplesortSpaceType};
 use ::types_core::Oid;
 use ::types_error::{PgError, PgResult, ERRCODE_UNIQUE_VIOLATION};
@@ -40,8 +40,7 @@ pub(crate) mod testhooks {
 
 pub use abbrev::AbbrevState;
 pub use ssup::{
-    apply_cmp, apply_sort_comparator_in, comparator_for_index_col,
-    comparator_for_opfamily,
+    apply_cmp, apply_sort_comparator_in, comparator_for_index_col, comparator_for_opfamily,
     prepare_sort_support_abbrev, prepare_sort_support_from_ordering_op, AbbrevArm, AbbrevKind,
     SortComparator, SortSupport, SortSupportInit,
 };
@@ -53,7 +52,12 @@ pub fn init_seams() {
     tuplesort_seams::tuplesort_datums::set(
         |mcx, datum_type, sort_operator, collation, nulls_first, work_mem, values| {
             let mut ts = Tuplesort::begin_datum(
-                datum_type, sort_operator, collation, nulls_first, work_mem, TUPLESORT_NONE,
+                datum_type,
+                sort_operator,
+                collation,
+                nulls_first,
+                work_mem,
+                TUPLESORT_NONE,
             )?;
             for v in values {
                 ts.putdatum(v.value, v.isnull)?;
@@ -69,7 +73,8 @@ pub fn init_seams() {
                     let bytes = unsafe {
                         core::slice::from_raw_parts(p, ::types_tuple::varatt::varsize_any(p))
                     };
-                    nd.value = Datum::from_usize(mcx::slice_borrow_in(mcx, bytes)?.as_ptr() as usize);
+                    nd.value =
+                        Datum::from_usize(mcx::slice_borrow_in(mcx, bytes)?.as_ptr() as usize);
                 }
                 out.push(nd);
             }
@@ -173,7 +178,9 @@ enum SortVariant {
         tup_desc: std::rc::Rc<TupleDescData<'static>>,
     },
     // byref_typlen 0 = by-value; else datums copy into tuplecontext (C base->tuples).
-    Datum { byref_typlen: i16 },
+    Datum {
+        byref_typlen: i16,
+    },
     Index {
         tup_desc: std::rc::Rc<TupleDescData<'static>>,
         nkeys: u16,
@@ -218,7 +225,6 @@ struct ClusterTupleHeader {
     itup_len: u32,
 }
 const _: () = assert!(mem::size_of::<ClusterTupleHeader>() == 16);
-
 
 /// Trigger classes for `Tuplesort::topk_tie_ambiguity` (top-k boundary-tie
 /// tracking, lane zone-adaptive sort feeds).
@@ -334,11 +340,22 @@ struct CmpCtx<'a> {
 impl CmpCtx<'_> {
     #[inline]
     fn comparetup(&self, a: &SortTuple, b: &SortTuple) -> i32 {
-        if let SortVariant::IndexHash { high_mask, low_mask, max_buckets, .. } = self.variant {
+        if let SortVariant::IndexHash {
+            high_mask,
+            low_mask,
+            max_buckets,
+            ..
+        } = self.variant
+        {
             return Self::comparetup_index_hash(*high_mask, *low_mask, *max_buckets, a, b);
         }
         let compare = ssup::apply_sort_comparator_in(
-            self.mcx, a.datum1, a.isnull1, b.datum1, b.isnull1, &self.keys[0],
+            self.mcx,
+            a.datum1,
+            a.isnull1,
+            b.datum1,
+            b.isnull1,
+            &self.keys[0],
         );
         if compare != 0 {
             return compare;
@@ -447,8 +464,9 @@ impl CmpCtx<'_> {
                             minimal_getattr(b.tuple, attno, tup_desc, &mut isnull2),
                         )
                     };
-                    let compare =
-                        ssup::apply_sort_comparator_in(self.mcx, datum1, isnull1, datum2, isnull2, key);
+                    let compare = ssup::apply_sort_comparator_in(
+                        self.mcx, datum1, isnull1, datum2, isnull2, key,
+                    );
                     if compare != 0 {
                         return compare;
                     }
@@ -471,14 +489,17 @@ impl CmpCtx<'_> {
             SortVariant::Index { .. } => self.comparetup_index_btree_tiebreak(a, b),
             SortVariant::IndexHash { .. } => unreachable!("comparetup dispatches IndexHash whole"),
             // Index/cluster sorts never arm abbrev (index-build abbrev lane).
-            SortVariant::Cluster { tup_desc, attnums, nkeys, index_desc } => {
+            SortVariant::Cluster {
+                tup_desc,
+                attnums,
+                nkeys,
+                index_desc,
+            } => {
                 debug_assert!(self.abbrev.is_none());
                 // comparetup_cluster_tiebreak, haveDatum1 lane (datum1 always
                 // precomputed here, C's evaluate-in-comparator lane included);
                 // no TID tiebreak (C leaves equal keys in qsort order).
-                let (ta, tb) = unsafe {
-                    (cluster_tuple_of(a.tuple), cluster_tuple_of(b.tuple))
-                };
+                let (ta, tb) = unsafe { (cluster_tuple_of(a.tuple), cluster_tuple_of(b.tuple)) };
                 for nkey in 1..*nkeys as usize {
                     let key = &self.keys[nkey];
                     let (mut isnull1, mut isnull2) = (false, false);
@@ -487,15 +508,31 @@ impl CmpCtx<'_> {
                         match index_desc {
                             Some(idesc) => (
                                 nbtree::itup::index_getattr(
-                                    cluster_itup_of(a.tuple), (nkey + 1) as i16, idesc, &mut isnull1,
+                                    cluster_itup_of(a.tuple),
+                                    (nkey + 1) as i16,
+                                    idesc,
+                                    &mut isnull1,
                                 ),
                                 nbtree::itup::index_getattr(
-                                    cluster_itup_of(b.tuple), (nkey + 1) as i16, idesc, &mut isnull2,
+                                    cluster_itup_of(b.tuple),
+                                    (nkey + 1) as i16,
+                                    idesc,
+                                    &mut isnull2,
                                 ),
                             ),
                             None => (
-                                ::types_tuple::heap_getattr(&ta, attnums[nkey] as i32, tup_desc, &mut isnull1),
-                                ::types_tuple::heap_getattr(&tb, attnums[nkey] as i32, tup_desc, &mut isnull2),
+                                ::types_tuple::heap_getattr(
+                                    &ta,
+                                    attnums[nkey] as i32,
+                                    tup_desc,
+                                    &mut isnull1,
+                                ),
+                                ::types_tuple::heap_getattr(
+                                    &tb,
+                                    attnums[nkey] as i32,
+                                    tup_desc,
+                                    &mut isnull2,
+                                ),
                             ),
                         }
                     };
@@ -779,8 +816,12 @@ impl Tuplesort {
         sortopt: i32,
     ) -> PgResult<Tuplesort> {
         let nkeys = att_nums.len();
-        assert!(nkeys > 0 && sort_operators.len() == nkeys && sort_collations.len() == nkeys
-            && nulls_first_flags.len() == nkeys);
+        assert!(
+            nkeys > 0
+                && sort_operators.len() == nkeys
+                && sort_collations.len() == nkeys
+                && nulls_first_flags.len() == nkeys
+        );
         let mut keys = Vec::with_capacity(nkeys);
         let mut abbrev_arm = None;
         for i in 0..nkeys {
@@ -791,8 +832,7 @@ impl Tuplesort {
                 ssup_attno: att_nums[i],
             };
             // C: sortKey->abbreviate = (i == 0 && base->haveDatum1).
-            let (key, arm) =
-                ssup::prepare_sort_support_abbrev(sort_operators[i], &init, i == 0)?;
+            let (key, arm) = ssup::prepare_sort_support_abbrev(sort_operators[i], &init, i == 0)?;
             keys.push(key);
             if i == 0 {
                 abbrev_arm = arm;
@@ -820,7 +860,14 @@ impl Tuplesort {
     ) -> Tuplesort {
         assert!(!keys.is_empty());
         let only_key = keys.len() == 1;
-        Self::begin_common(work_mem, sortopt, keys, only_key, None, SortVariant::Heap { tup_desc })
+        Self::begin_common(
+            work_mem,
+            sortopt,
+            keys,
+            only_key,
+            None,
+            SortVariant::Heap { tup_desc },
+        )
     }
 
     /// `tuplesort_begin_index_btree`, serial arm; keys read straight off the
@@ -940,7 +987,12 @@ impl Tuplesort {
             &[],
             false,
             None,
-            SortVariant::IndexHash { tup_desc, high_mask, low_mask, max_buckets },
+            SortVariant::IndexHash {
+                tup_desc,
+                high_mask,
+                low_mask,
+                max_buckets,
+            },
         )
     }
 
@@ -960,7 +1012,10 @@ impl Tuplesort {
         assert!(nkeys > 0 && nkeys <= index_attnums.len());
         let mut attnums = [0i16; 32];
         attnums[..nkeys].copy_from_slice(&index_attnums[..nkeys]);
-        assert!(attnums[..nkeys].iter().all(|&a| a >= 0), "system-attribute index columns");
+        assert!(
+            attnums[..nkeys].iter().all(|&a| a >= 0),
+            "system-attribute index columns"
+        );
         // SAFETY: lifetime erasure as for heap_tup_desc; the caller keeps the
         // index relation open for the life of the sort.
         let index_desc: Option<std::rc::Rc<TupleDescData<'static>>> =
@@ -992,7 +1047,12 @@ impl Tuplesort {
             &keys,
             false,
             None,
-            SortVariant::Cluster { tup_desc: heap_tup_desc, attnums, nkeys: nkeys as u16, index_desc },
+            SortVariant::Cluster {
+                tup_desc: heap_tup_desc,
+                attnums,
+                nkeys: nkeys as u16,
+                index_desc,
+            },
         ))
     }
 
@@ -1049,8 +1109,7 @@ impl Tuplesort {
             ssup_nulls_first: nulls_first_flag,
             ssup_attno: 1,
         };
-        let (key, abbrev_arm) =
-            ssup::prepare_sort_support_abbrev(sort_operator, &init, !typbyval)?;
+        let (key, abbrev_arm) = ssup::prepare_sort_support_abbrev(sort_operator, &init, !typbyval)?;
         let byref_typlen = if typbyval { 0 } else { typlen };
         Ok(Self::begin_common(
             work_mem,
@@ -1064,7 +1123,14 @@ impl Tuplesort {
 
     /// C divergence: as [`Tuplesort::begin_heap_with_keys`], datum variant.
     pub fn begin_datum_with_key(key: SortSupport, work_mem: i32, sortopt: i32) -> Tuplesort {
-        Self::begin_common(work_mem, sortopt, &[key], true, None, SortVariant::Datum { byref_typlen: 0 })
+        Self::begin_common(
+            work_mem,
+            sortopt,
+            &[key],
+            true,
+            None,
+            SortVariant::Datum { byref_typlen: 0 },
+        )
     }
 
     fn begin_common(
@@ -1084,8 +1150,7 @@ impl Tuplesort {
             let memtuples = PgVec::with_capacity_in(INITIAL_MEMTUPSIZE, mcx);
             let mut sort_keys = PgVec::with_capacity_in(keys.len(), mcx);
             sort_keys.extend_from_slice(keys);
-            let avail_mem =
-                allowed_mem - (INITIAL_MEMTUPSIZE * mem::size_of::<SortTuple>()) as i64;
+            let avail_mem = allowed_mem - (INITIAL_MEMTUPSIZE * mem::size_of::<SortTuple>()) as i64;
             Ok(TuplesortData {
                 mcx,
                 // C's TupleSortUseBumpTupleCxt: a bounded-capable sort
@@ -1176,9 +1241,9 @@ impl Tuplesort {
                     TupSortStatus::SortedInMem => TuplesortMethod::Quicksort,
                     TupSortStatus::SortedOnTape => TuplesortMethod::ExternalSort,
                     TupSortStatus::FinalMerge => TuplesortMethod::ExternalMerge,
-                    TupSortStatus::Initial
-                    | TupSortStatus::Bounded
-                    | TupSortStatus::BuildRuns => TuplesortMethod::StillInProgress,
+                    TupSortStatus::Initial | TupSortStatus::Bounded | TupSortStatus::BuildRuns => {
+                        TuplesortMethod::StillInProgress
+                    }
                 },
                 spaceType: if st.is_max_space_disk {
                     TuplesortSpaceType::Disk
@@ -1272,7 +1337,11 @@ impl Tuplesort {
                 let exact = !st.rowref_missing
                     && st.status == TupSortStatus::SortedInMem
                     && (st.bound_used || st.memtuples.len() <= st.bound as usize);
-                return if exact { None } else { Some(TopkTieAmbiguity::CutSelection) };
+                return if exact {
+                    None
+                } else {
+                    Some(TopkTieAmbiguity::CutSelection)
+                };
             }
             if !st.tie_track {
                 return None;
@@ -1342,11 +1411,7 @@ impl Tuplesort {
     }
 
     #[inline]
-    pub fn puttupleslot<'q>(
-        &mut self,
-        slot: &mut SlotData<'q>,
-        slot_mcx: Mcx<'q>,
-    ) -> PgResult<()> {
+    pub fn puttupleslot<'q>(&mut self, slot: &mut SlotData<'q>, slot_mcx: Mcx<'q>) -> PgResult<()> {
         self.puttupleslot_inner(slot, slot_mcx, None)
     }
 
@@ -1373,12 +1438,8 @@ impl Tuplesort {
         rowref: Option<u64>,
     ) -> PgResult<()> {
         self.0.with_mut(|st| {
-            let mtup = exectuples::exec_copy_slot_minimal_tuple(
-                slot,
-                slot_mcx,
-                st.tuplecontext.mcx(),
-                0,
-            )?;
+            let mtup =
+                exectuples::exec_copy_slot_minimal_tuple(slot, slot_mcx, st.tuplecontext.mcx(), 0)?;
             let t_len = mtup.t_len() as usize;
             let tuple = mtup.as_ptr().cast_mut().cast::<MinimalTupleData>();
             // Ownership moves to tuplecontext (bulk-freed at end); the wrapper
@@ -1409,7 +1470,12 @@ impl Tuplesort {
             // SAFETY: fresh live copy formed under the slot's descriptor,
             // which matches tup_desc (nodeSort contract).
             let datum1 = unsafe {
-                minimal_getattr(tuple, st.sort_keys[0].ssup_attno as i32, tup_desc, &mut isnull1)
+                minimal_getattr(
+                    tuple,
+                    st.sort_keys[0].ssup_attno as i32,
+                    tup_desc,
+                    &mut isnull1,
+                )
             };
             st.puttuple_common(tuple, datum1, isnull1, maxalign(t_len) as i64)
         })
@@ -1439,7 +1505,12 @@ impl Tuplesort {
             let mut isnull1 = false;
             // SAFETY: fresh live image formed under tup_desc just above.
             let datum1 = unsafe {
-                minimal_getattr(tuple, st.sort_keys[0].ssup_attno as i32, tup_desc, &mut isnull1)
+                minimal_getattr(
+                    tuple,
+                    st.sort_keys[0].ssup_attno as i32,
+                    tup_desc,
+                    &mut isnull1,
+                )
             };
             st.puttuple_common(tuple, datum1, isnull1, maxalign(t_len) as i64)
         })
@@ -1497,8 +1568,7 @@ impl Tuplesort {
 
             let mut isnull1 = false;
             // SAFETY: freshly formed live image under tup_desc.
-            let datum1 =
-                unsafe { nbtree::itup::index_getattr(tuple, 1, tup_desc, &mut isnull1) };
+            let datum1 = unsafe { nbtree::itup::index_getattr(tuple, 1, tup_desc, &mut isnull1) };
             st.puttuple_common(tuple.cast::<MinimalTupleData>(), datum1, isnull1, tuplen)
         })
     }
@@ -1535,8 +1605,7 @@ impl Tuplesort {
 
             let mut isnull1 = false;
             // SAFETY: freshly copied live image under tup_desc.
-            let datum1 =
-                unsafe { nbtree::itup::index_getattr(tuple, 1, tup_desc, &mut isnull1) };
+            let datum1 = unsafe { nbtree::itup::index_getattr(tuple, 1, tup_desc, &mut isnull1) };
             st.puttuple_common(tuple.cast::<MinimalTupleData>(), datum1, isnull1, tuplen)
         })
     }
@@ -1549,7 +1618,13 @@ impl Tuplesort {
         itup: Option<&[u8]>,
     ) -> PgResult<()> {
         self.0.with_mut(|st| {
-            let SortVariant::Cluster { tup_desc, attnums, index_desc, .. } = &st.variant else {
+            let SortVariant::Cluster {
+                tup_desc,
+                attnums,
+                index_desc,
+                ..
+            } = &st.variant
+            else {
                 panic!("tuplesort_putheaptuple on a non-cluster tuplesort")
             };
             assert!(itup.is_some() == index_desc.is_some());
@@ -1648,7 +1723,10 @@ impl Tuplesort {
     /// tuple descriptor.
     pub unsafe fn compare_index_tuples(&self, a: nbtree::itup::ITup, b: nbtree::itup::ITup) -> i32 {
         self.0.with(|st| {
-            let SortVariant::Index { tup_desc, nkeys, .. } = &st.variant else {
+            let SortVariant::Index {
+                tup_desc, nkeys, ..
+            } = &st.variant
+            else {
                 panic!("compare_index_tuples on a non-index tuplesort")
             };
             for nkey in 1..=(*nkeys as i16) {
@@ -1745,8 +1823,9 @@ impl Tuplesort {
 
     #[inline]
     pub fn datum_sort_is_byref(&self) -> bool {
-        self.0
-            .with(|st| matches!(st.variant, SortVariant::Datum { byref_typlen } if byref_typlen != 0))
+        self.0.with(
+            |st| matches!(st.variant, SortVariant::Datum { byref_typlen } if byref_typlen != 0),
+        )
     }
 
     /// 0 for by-value datum sorts, else the sorted type's typlen.
@@ -1801,9 +1880,7 @@ impl Tuplesort {
                 }
                 TupSortStatus::SortedInMem
                 | TupSortStatus::SortedOnTape
-                | TupSortStatus::FinalMerge => {
-                    return Err(invalid_state("tuplesort_performsort"))
-                }
+                | TupSortStatus::FinalMerge => return Err(invalid_state("tuplesort_performsort")),
             }
             st.put_watermark = 0;
             st.current = 0;
@@ -1881,10 +1958,7 @@ impl Tuplesort {
     /// word is the converted datum1 iff abbreviation is armed, else 0 (C
     /// leaves the caller's initial value untouched).
     #[inline]
-    pub fn getdatum_abbrev(
-        &mut self,
-        forward: bool,
-    ) -> PgResult<Option<(NullableDatum, Datum)>> {
+    pub fn getdatum_abbrev(&mut self, forward: bool) -> PgResult<Option<(NullableDatum, Datum)>> {
         self.0.with_mut(|st| {
             debug_assert!(matches!(st.variant, SortVariant::Datum { .. }));
             let abbrev_armed = st.abbrev.is_some();
@@ -1998,7 +2072,8 @@ impl Tuplesort {
                 TupSortStatus::SortedOnTape => {
                     let ts = st.tapes.as_mut().expect("SortedOnTape without tapes");
                     let tape = ts.result_tape.expect("SortedOnTape without result tape");
-                    ts.tapeset.seek(tape, ts.markpos_block, st.markpos_offset as i32)?;
+                    ts.tapeset
+                        .seek(tape, ts.markpos_block, st.markpos_offset as i32)?;
                     st.eof_reached = st.markpos_eof;
                     Ok(())
                 }
@@ -2049,7 +2124,11 @@ impl<'a, 'm> DatumPutter<'a, 'm> {
         unsafe {
             core::ptr::write(
                 next,
-                SortTuple { tuple: core::ptr::null_mut(), datum1, isnull1: is_null },
+                SortTuple {
+                    tuple: core::ptr::null_mut(),
+                    datum1,
+                    isnull1: is_null,
+                },
             );
             self.next = next.add(1);
         }
@@ -2066,7 +2145,12 @@ impl<'a, 'm> DatumPutter<'a, 'm> {
 fn datum_put_window<'m>(st: &mut TuplesortData<'m>) -> (*mut SortTuple, *mut SortTuple) {
     let base = st.memtuples.as_mut_ptr();
     // SAFETY: len <= capacity and put_watermark <= capacity - 1.
-    unsafe { (base.add(st.memtuples.len()), base.add(st.put_watermark as usize)) }
+    unsafe {
+        (
+            base.add(st.memtuples.len()),
+            base.add(st.put_watermark as usize),
+        )
+    }
 }
 
 fn datum_put_flush<'m>(st: &mut TuplesortData<'m>, next: *mut SortTuple) {
@@ -2095,7 +2179,10 @@ fn datum_put_slow<'m>(
         // SAFETY: TSS_BOUNDED holds exactly `bound` >= 1 tuples; Datum
         // variant carries a sort key (begin_datum asserts).
         let (heap_top, key0) = unsafe {
-            (*st.memtuples.get_unchecked(0), st.sort_keys.get_unchecked(0))
+            (
+                *st.memtuples.get_unchecked(0),
+                st.sort_keys.get_unchecked(0),
+            )
         };
         debug_assert!(st.abbrev.is_none());
         debug_assert!(matches!(st.variant, SortVariant::Datum { byref_typlen: 0 }));
@@ -2147,14 +2234,22 @@ impl<'m> TuplesortData<'m> {
                 unsafe {
                     core::ptr::write(
                         self.memtuples.as_mut_ptr().add(len),
-                        SortTuple { tuple, datum1, isnull1 },
+                        SortTuple {
+                            tuple,
+                            datum1,
+                            isnull1,
+                        },
                     );
                     self.memtuples.set_len(len + 1);
                 }
                 return Ok(());
             }
             if self.status == TupSortStatus::Bounded {
-                return self.puttuple_bounded(SortTuple { tuple, datum1, isnull1 });
+                return self.puttuple_bounded(SortTuple {
+                    tuple,
+                    datum1,
+                    isnull1,
+                });
             }
         }
         self.puttuple_full(tuple, datum1, isnull1, tuplen)
@@ -2191,7 +2286,11 @@ impl<'m> TuplesortData<'m> {
                 unsafe {
                     core::ptr::write(
                         self.memtuples.as_mut_ptr().add(len),
-                        SortTuple { tuple, datum1, isnull1 },
+                        SortTuple {
+                            tuple,
+                            datum1,
+                            isnull1,
+                        },
                     );
                     self.memtuples.set_len(len + 1);
                 }
@@ -2213,12 +2312,16 @@ impl<'m> TuplesortData<'m> {
             }
             TupSortStatus::Bounded => {
                 debug_assert!(self.abbrev.is_none());
-                self.puttuple_bounded(SortTuple { tuple, datum1, isnull1 })
+                self.puttuple_bounded(SortTuple {
+                    tuple,
+                    datum1,
+                    isnull1,
+                })
             }
             TupSortStatus::BuildRuns => self.puttuple_buildruns(tuple, datum1, isnull1, tuplen),
-            TupSortStatus::SortedInMem | TupSortStatus::SortedOnTape | TupSortStatus::FinalMerge => {
-                Err(invalid_state("tuplesort_puttuple_common"))
-            }
+            TupSortStatus::SortedInMem
+            | TupSortStatus::SortedOnTape
+            | TupSortStatus::FinalMerge => Err(invalid_state("tuplesort_puttuple_common")),
         }
     }
 
@@ -2242,7 +2345,11 @@ impl<'m> TuplesortData<'m> {
             datum1 = self.abbrev_datum1(datum1);
         }
         debug_assert!(self.memtuples.len() < self.memtuples.capacity());
-        self.memtuples.push(SortTuple { tuple, datum1, isnull1 });
+        self.memtuples.push(SortTuple {
+            tuple,
+            datum1,
+            isnull1,
+        });
         self.dumptuples(false)
     }
 
@@ -2289,15 +2396,19 @@ impl<'m> TuplesortData<'m> {
     #[cold]
     #[inline(never)]
     fn remove_abbrev(&mut self) {
-        let TuplesortData { variant, memtuples, sort_keys, .. } = self;
+        let TuplesortData {
+            variant,
+            memtuples,
+            sort_keys,
+            ..
+        } = self;
         match variant {
             SortVariant::Heap { tup_desc } => {
                 let attno = sort_keys[0].ssup_attno as i32;
                 for stup in memtuples.iter_mut() {
                     // SAFETY: live minimal tuples under this descriptor.
-                    stup.datum1 = unsafe {
-                        minimal_getattr(stup.tuple, attno, tup_desc, &mut stup.isnull1)
-                    };
+                    stup.datum1 =
+                        unsafe { minimal_getattr(stup.tuple, attno, tup_desc, &mut stup.isnull1) };
                 }
             }
             SortVariant::Datum { .. } => {
@@ -2466,15 +2577,15 @@ impl<'m> TuplesortData<'m> {
         };
 
         if newmemtupsize <= memtupsize
-            || self.avail_mem
-                < ((newmemtupsize - memtupsize) * mem::size_of::<SortTuple>()) as i64
+            || self.avail_mem < ((newmemtupsize - memtupsize) * mem::size_of::<SortTuple>()) as i64
         {
             self.grow_memtuples = false;
             return false;
         }
 
         self.avail_mem += (memtupsize * mem::size_of::<SortTuple>()) as i64;
-        self.memtuples.reserve_exact(newmemtupsize - self.memtuples.len());
+        self.memtuples
+            .reserve_exact(newmemtupsize - self.memtuples.len());
         self.avail_mem -= (self.memtuples.capacity() * mem::size_of::<SortTuple>()) as i64;
         debug_assert!(!self.lackmem());
         true
@@ -2553,7 +2664,12 @@ impl<'m> TuplesortData<'m> {
         } else if self.only_key {
             qsort_tuple(tuples, |a, b| {
                 ssup::apply_sort_comparator_in(
-                    ctx.mcx, a.datum1, a.isnull1, b.datum1, b.isnull1, &ctx.keys[0],
+                    ctx.mcx,
+                    a.datum1,
+                    a.isnull1,
+                    b.datum1,
+                    b.isnull1,
+                    &ctx.keys[0],
                 )
             })
         } else {
@@ -3052,7 +3168,9 @@ fn heap_replace_top_n(
 #[cold]
 #[inline(never)]
 fn invalid_state(caller: &'static str) -> Box<PgError> {
-    Box::new(PgError::error(format!("invalid tuplesort state in {caller}")))
+    Box::new(PgError::error(format!(
+        "invalid tuplesort state in {caller}"
+    )))
 }
 
 #[track_caller]
@@ -3066,7 +3184,9 @@ fn too_many_bounded() -> Box<PgError> {
 
 /// # Safety
 /// `p` must be a live cluster blob written by `putheaptuple`.
-unsafe fn cluster_tuple_of(p: *mut MinimalTupleData) -> ::types_tuple::htup::HeapTupleData<'static> {
+unsafe fn cluster_tuple_of(
+    p: *mut MinimalTupleData,
+) -> ::types_tuple::htup::HeapTupleData<'static> {
     let base = p.cast_const().cast::<u8>();
     let hdr = base.cast::<ClusterTupleHeader>();
     ::types_tuple::htup::HeapTupleData::from_raw_parts(

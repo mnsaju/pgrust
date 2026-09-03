@@ -154,7 +154,12 @@ pub fn CheckForSerializableConflictIn(
         f.db_oid,
         f.rd_id,
         f.uses_local_buffers,
-        tid.map(|t| (types_tuple::itemptr::ItemPointerGetBlockNumber(t), t.ip_posid)),
+        tid.map(|t| {
+            (
+                types_tuple::itemptr::ItemPointerGetBlockNumber(t),
+                t.ip_posid,
+            )
+        }),
         blkno,
     )
 }

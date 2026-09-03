@@ -26,9 +26,7 @@ pub fn unique_words<'mcx>(mcx: Mcx<'mcx>, prs: &mut ParsedText<'mcx>) -> PgResul
         match out.last_mut() {
             Some(res) if res.word.as_slice() == w.word.as_slice() => {
                 let last = *res.apos.last().expect("merged word has positions");
-                if res.apos.len() < MAXNUMPOS - 1
-                    && last != (MAXENTRYPOS - 1) as u16
-                    && last != pos
+                if res.apos.len() < MAXNUMPOS - 1 && last != (MAXENTRYPOS - 1) as u16 && last != pos
                 {
                     res.apos.push(pos);
                 }
@@ -45,7 +43,10 @@ pub fn unique_words<'mcx>(mcx: Mcx<'mcx>, prs: &mut ParsedText<'mcx>) -> PgResul
 }
 
 // make_tsvector: dedup + flat image build (4-byte zero header for stamping).
-pub fn make_tsvector<'mcx>(mcx: Mcx<'mcx>, prs: &mut ParsedText<'mcx>) -> PgResult<PgVec<'mcx, u8>> {
+pub fn make_tsvector<'mcx>(
+    mcx: Mcx<'mcx>,
+    prs: &mut ParsedText<'mcx>,
+) -> PgResult<PgVec<'mcx, u8>> {
     unique_words(mcx, prs)?;
 
     let mut lenstr = 0usize;

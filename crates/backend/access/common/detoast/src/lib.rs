@@ -155,9 +155,8 @@ fn flatten_expanded<'mcx>(mcx: Mcx<'mcx>, attr: &[u8]) -> PgResult<PgVec<'mcx, u
     // ExpandedObjectHeader (writer invariant; C detoast.c derefs the same);
     // flatten_into fills exactly `n` bytes of the reserved capacity.
     unsafe {
-        let eoh = datum::expandeddatum::datum_get_eohp(datum::Datum::from_usize(
-            attr.as_ptr() as usize,
-        ));
+        let eoh =
+            datum::expandeddatum::datum_get_eohp(datum::Datum::from_usize(attr.as_ptr() as usize));
         let n = datum::expandeddatum::eoh_get_flat_size(eoh);
         let mut result = mcx::vec_with_capacity_in(mcx, n)?;
         datum::expandeddatum::eoh_flatten_into(
@@ -224,7 +223,10 @@ pub fn detoast_attr<'mcx>(mcx: Mcx<'mcx>, attr: &[u8]) -> PgResult<PgVec<'mcx, u
             &mut new_attr,
             &varatt::set_varsize_4b_word(new_size as u32).to_ne_bytes(),
         )?;
-        mcx::vec_append_bytes(&mut new_attr, &attr[VARHDRSZ_SHORT..VARHDRSZ_SHORT + data_size])?;
+        mcx::vec_append_bytes(
+            &mut new_attr,
+            &attr[VARHDRSZ_SHORT..VARHDRSZ_SHORT + data_size],
+        )?;
         Ok(new_attr)
     } else {
         // C returns `attr` unchanged; this owned port copies verbatim.
@@ -433,7 +435,8 @@ fn lz4_decompress_datum<'mcx>(mcx: Mcx<'mcx>, value: &[u8]) -> PgResult<PgVec<'m
     // matching pgrcolumnar's own lz4_flex usage (loadsort.rs's
     // write_lz4_frame: `comp.resize(max, 0)` ahead of `compress_into`).
     result.resize(VARHDRSZ + rawsize, 0);
-    let n = lz4_flex::block::decompress_into(src, &mut result[VARHDRSZ..]).map_err(|_| corrupt_lz4())?;
+    let n = lz4_flex::block::decompress_into(src, &mut result[VARHDRSZ..])
+        .map_err(|_| corrupt_lz4())?;
     debug_assert_eq!(n, rawsize);
     Ok(result)
 }

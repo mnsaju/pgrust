@@ -476,7 +476,11 @@ pub fn read_item_pointer(b: &[u8]) -> ItemPointerData {
 pub fn write_item_pointer(b: &mut [u8], ip: &ItemPointerData) {
     debug_assert!(b.len() >= 6);
     // SAFETY: 6 bytes checked; unaligned write of a 6-byte POD.
-    unsafe { b.as_mut_ptr().cast::<ItemPointerData>().write_unaligned(*ip) }
+    unsafe {
+        b.as_mut_ptr()
+            .cast::<ItemPointerData>()
+            .write_unaligned(*ip)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -562,7 +566,11 @@ pub fn spgPageIndexMultiDelete(
     let mut tuple: Option<([u8; SGDTSIZE], u8)> = None;
 
     for &itemno in &sortednos[..nitems] {
-        let tupstate = if itemno == first_item { firststate } else { reststate };
+        let tupstate = if itemno == first_item {
+            firststate
+        } else {
+            reststate
+        };
         let img = match tuple {
             Some((img, st)) if st == tupstate => img,
             _ => {

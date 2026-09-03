@@ -3,21 +3,28 @@
 
 use datum::Datum;
 use mcx::{Mcx, PgString};
+use syscache_seams::PgTypeTypcacheShape;
 use types_core::{InvalidOid, Oid};
 use types_error::PgResult;
 use types_storage::PgClassShape;
-use syscache_seams::PgTypeTypcacheShape;
 use types_tuple::{HeapTupleData, NameData, PgTypeShape, TupleDescData};
 
 use mcx::PgVec;
 use syscache_seams::PgCastShape;
 
+use crate::cacheinfo::{
+    AGGFNOID, AMOID, AMOPOPID, AMOPSTRATEGY, AMPROCNUM, ATTNAME, ATTNUM, AUTHNAME, AUTHOID,
+    CASTSOURCETARGET, CLAAMNAMENSP, CLAOID, COLLNAMEENCNSP, COLLOID, CONSTROID, ENUMOID,
+    ENUMTYPOIDNAME, INDEXRELID, NAMESPACENAME, NAMESPACEOID, OPERNAMENSP, OPEROID,
+    OPFAMILYAMNAMENSP, OPFAMILYOID, PROCNAMEARGSNSP, PROCOID, RANGEMULTIRANGE, RANGETYPE,
+    RELNAMENSP, RELOID, SEQRELID, STATEXTDATASTXOID, STATEXTOID, STATRELATTINH, TSCONFIGNAMENSP,
+    TSCONFIGOID, TSDICTNAMENSP, TSDICTOID, TYPENAMENSP, TYPEOID,
+};
 use crate::{
     GetSysCacheOid, ReleaseSysCache, ReleaseSysCacheList, SearchSysCache1, SearchSysCache2,
-    SearchSysCache3, SearchSysCache4, SearchSysCacheExists, SearchSysCacheList, SearchSysCacheList1,
-    SysCacheGetAttr, SysCacheKey,
+    SearchSysCache3, SearchSysCache4, SearchSysCacheExists, SearchSysCacheList,
+    SearchSysCacheList1, SysCacheGetAttr, SysCacheKey,
 };
-use crate::cacheinfo::{AMOID, COLLNAMEENCNSP, COLLOID, AGGFNOID, AMOPOPID, AMOPSTRATEGY, AMPROCNUM, ATTNUM, CLAAMNAMENSP, OPFAMILYAMNAMENSP, CLAOID, OPFAMILYOID, PROCNAMEARGSNSP, AUTHNAME, ENUMOID, ENUMTYPOIDNAME, AUTHOID, CASTSOURCETARGET, CONSTROID, INDEXRELID, NAMESPACENAME, NAMESPACEOID, OPERNAMENSP, TSCONFIGNAMENSP, TSCONFIGOID, TSDICTNAMENSP, TSDICTOID, TYPENAMENSP, ATTNAME, OPEROID, PROCOID, RANGEMULTIRANGE, RANGETYPE, RELNAMENSP, RELOID, SEQRELID, STATEXTDATASTXOID, STATEXTOID, STATRELATTINH, TYPEOID};
 
 const ANUM_PG_CLASS_OID: i32 = 1;
 const ANUM_PG_CLASS_RELFILENODE: i32 = 8;
@@ -189,8 +196,8 @@ fn with_memos<R>(f: impl FnOnce(&mut ShapeMemos) -> R) -> R {
 }
 
 fn tupdesc_for(cache_id: i32) -> &'static TupleDescData<'static> {
-    use core::cell::Cell;
     use crate::cacheinfo::SYS_CACHE_SIZE;
+    use core::cell::Cell;
     thread_local! {
         // cc_tupdesc is written once at phase-2 init and never replaced, so
         // this flat memo cannot go stale (getattr calls this per column).
@@ -247,11 +254,8 @@ fn pg_index_indexrelid(tuple: &HeapTupleData<'_>) -> Oid {
     getattr(tuple, INDEXRELID, ANUM_PG_INDEX_INDEXRELID).as_oid()
 }
 
-fn lookup_pg_index_ls_shape(
-    index_oid: Oid,
-) -> PgResult<Option<syscache_seams::PgIndexLsShape>> {
-    let Some(tuple) =
-        SearchSysCache1(INDEXRELID, SysCacheKey::Value(Datum::from_oid(index_oid)))?
+fn lookup_pg_index_ls_shape(index_oid: Oid) -> PgResult<Option<syscache_seams::PgIndexLsShape>> {
+    let Some(tuple) = SearchSysCache1(INDEXRELID, SysCacheKey::Value(Datum::from_oid(index_oid)))?
     else {
         return Ok(None);
     };
@@ -269,8 +273,7 @@ fn lookup_pg_index_ls_shape(
 }
 
 fn pg_index_indclass_element(index_oid: Oid, index: i32) -> PgResult<Option<Oid>> {
-    let Some(tuple) =
-        SearchSysCache1(INDEXRELID, SysCacheKey::Value(Datum::from_oid(index_oid)))?
+    let Some(tuple) = SearchSysCache1(INDEXRELID, SysCacheKey::Value(Datum::from_oid(index_oid)))?
     else {
         return Ok(None);
     };
@@ -292,8 +295,7 @@ fn pg_index_indclass_element(index_oid: Oid, index: i32) -> PgResult<Option<Oid>
 
 fn pg_index_indoption_element(index_oid: Oid, index: i32) -> PgResult<Option<i16>> {
     const ANUM_PG_INDEX_INDOPTION: i32 = 19;
-    let Some(tuple) =
-        SearchSysCache1(INDEXRELID, SysCacheKey::Value(Datum::from_oid(index_oid)))?
+    let Some(tuple) = SearchSysCache1(INDEXRELID, SysCacheKey::Value(Datum::from_oid(index_oid)))?
     else {
         return Ok(None);
     };
@@ -473,9 +475,7 @@ fn pg_type_category(typid: Oid) -> PgResult<Option<(i8, bool)>> {
     Ok(Some((category, preferred)))
 }
 
-fn pg_type_element_shape(
-    typid: Oid,
-) -> PgResult<Option<syscache_seams::PgTypeElementShape>> {
+fn pg_type_element_shape(typid: Oid) -> PgResult<Option<syscache_seams::PgTypeElementShape>> {
     let Some(tuple) = SearchSysCache1(TYPEOID, SysCacheKey::Value(Datum::from_oid(typid)))? else {
         return Ok(None);
     };
@@ -495,9 +495,7 @@ const ANUM_PG_OPCLASS_OPCFAMILY: i32 = 6;
 const ANUM_PG_OPCLASS_OPCINTYPE: i32 = 7;
 const ANUM_PG_OPCLASS_OPCKEYTYPE: i32 = 9;
 
-fn lookup_pg_opclass_shape(
-    opclass: Oid,
-) -> PgResult<Option<syscache_seams::PgOpclassShape>> {
+fn lookup_pg_opclass_shape(opclass: Oid) -> PgResult<Option<syscache_seams::PgOpclassShape>> {
     let Some(tuple) = SearchSysCache1(CLAOID, SysCacheKey::Value(Datum::from_oid(opclass)))? else {
         return Ok(None);
     };
@@ -868,9 +866,7 @@ fn pg_type_name_namespace(typid: Oid) -> PgResult<Option<(NameData, Oid)>> {
     Ok(Some((name, nsp)))
 }
 
-fn lookup_pg_constraint_shape(
-    conoid: Oid,
-) -> PgResult<Option<syscache_seams::PgConstraintShape>> {
+fn lookup_pg_constraint_shape(conoid: Oid) -> PgResult<Option<syscache_seams::PgConstraintShape>> {
     let Some(tuple) = SearchSysCache1(CONSTROID, SysCacheKey::Value(Datum::from_oid(conoid)))?
     else {
         return Ok(None);
@@ -1236,11 +1232,8 @@ fn lookup_pg_amop_members_by_operator<'mcx>(
     Ok(out)
 }
 
-fn lookup_pg_opfamily_shape(
-    opfid: Oid,
-) -> PgResult<Option<syscache_seams::PgOpfamilyShape>> {
-    let Some(tuple) =
-        SearchSysCache1(OPFAMILYOID, SysCacheKey::Value(Datum::from_oid(opfid)))?
+fn lookup_pg_opfamily_shape(opfid: Oid) -> PgResult<Option<syscache_seams::PgOpfamilyShape>> {
+    let Some(tuple) = SearchSysCache1(OPFAMILYOID, SysCacheKey::Value(Datum::from_oid(opfid)))?
     else {
         return Ok(None);
     };
@@ -1503,9 +1496,7 @@ const ANUM_PG_LANGUAGE_LANPLCALLFOID: i32 = 6;
 const ANUM_PG_LANGUAGE_LANINLINE: i32 = 7;
 const ANUM_PG_LANGUAGE_LANVALIDATOR: i32 = 8;
 
-fn lookup_pg_language_fmgr(
-    langoid: Oid,
-) -> PgResult<Option<syscache_seams::PgLanguageFmgrShape>> {
+fn lookup_pg_language_fmgr(langoid: Oid) -> PgResult<Option<syscache_seams::PgLanguageFmgrShape>> {
     use crate::cacheinfo::LANGOID;
     let Some(tuple) = SearchSysCache1(LANGOID, SysCacheKey::Value(Datum::from_oid(langoid)))?
     else {
@@ -1866,7 +1857,10 @@ fn lookup_pg_cast_shape(sourcetypeid: Oid, targettypeid: Oid) -> PgResult<Option
     Ok(shape)
 }
 
-fn lookup_pg_cast_shape_uncached(sourcetypeid: Oid, targettypeid: Oid) -> PgResult<Option<PgCastShape>> {
+fn lookup_pg_cast_shape_uncached(
+    sourcetypeid: Oid,
+    targettypeid: Oid,
+) -> PgResult<Option<PgCastShape>> {
     let Some(tuple) = SearchSysCache2(
         CASTSOURCETARGET,
         SysCacheKey::Value(Datum::from_oid(sourcetypeid)),
@@ -1908,12 +1902,14 @@ fn getattr_nullable(tuple: &HeapTupleData<'_>, cache_id: i32, attnum: i32) -> Op
     let mut isnull = false;
     // SAFETY: caller passes a tuple of this catalog's row type.
     let d = unsafe { types_tuple::heap_getattr(tuple, attnum, td, &mut isnull) };
-    if isnull { None } else { Some(d) }
+    if isnull {
+        None
+    } else {
+        Some(d)
+    }
 }
 
-fn lookup_pg_collation_shape(
-    colloid: Oid,
-) -> PgResult<Option<syscache_seams::PgCollationShape>> {
+fn lookup_pg_collation_shape(colloid: Oid) -> PgResult<Option<syscache_seams::PgCollationShape>> {
     let Some(tuple) = SearchSysCache1(COLLOID, SysCacheKey::Value(Datum::from_oid(colloid)))?
     else {
         return Ok(None);
@@ -1926,8 +1922,7 @@ fn lookup_pg_collation_shape(
             *(getattr(&t, COLLOID, ANUM_PG_COLLATION_COLLNAME).as_usize() as *const NameData)
         },
         collnamespace: getattr(&t, COLLOID, ANUM_PG_COLLATION_COLLNAMESPACE).as_oid(),
-        collisdeterministic: getattr(&t, COLLOID, ANUM_PG_COLLATION_COLLISDETERMINISTIC)
-            .as_bool(),
+        collisdeterministic: getattr(&t, COLLOID, ANUM_PG_COLLATION_COLLISDETERMINISTIC).as_bool(),
     };
     drop(t);
     ReleaseSysCache(tuple);
@@ -1957,10 +1952,9 @@ fn lookup_pg_attribute_stattarget(
 
 fn pg_type_typanalyze(typid: Oid) -> PgResult<Oid> {
     let Some(tuple) = SearchSysCache1(TYPEOID, SysCacheKey::Value(Datum::from_oid(typid)))? else {
-        return Err(types_error::PgError::error(format!(
-            "cache lookup failed for type {typid}"
-        ))
-        .into());
+        return Err(
+            types_error::PgError::error(format!("cache lookup failed for type {typid}")).into(),
+        );
     };
     let out = getattr(&tuple.tuple(), TYPEOID, ANUM_PG_TYPE_TYPANALYZE).as_oid();
     ReleaseSysCache(tuple);
@@ -2022,14 +2016,20 @@ fn statext_form<'mcx>(
         .expect("stxkind is not null");
     let (target_d, target_null) =
         SysCacheGetAttr(STATEXTOID, &tuple, ANUM_PG_STATISTIC_EXT_STXSTATTARGET)?;
-    let stattarget = if target_null { -1 } else { target_d.as_i16() as i32 };
+    let stattarget = if target_null {
+        -1
+    } else {
+        target_d.as_i16() as i32
+    };
     let (_, exprs_null) = SysCacheGetAttr(STATEXTOID, &tuple, ANUM_PG_STATISTIC_EXT_STXEXPRS)?;
 
     let nkeys = datum::array_build::array_image_nelems(&keys_img);
     let mut keys: PgVec<'mcx, i16> = mcx::vec_with_capacity_in(mcx, nkeys)?;
     for i in 0..nkeys {
         let off = 4 + 20 + i * 2;
-        keys.push(i16::from_ne_bytes(keys_img[off..off + 2].try_into().unwrap()));
+        keys.push(i16::from_ne_bytes(
+            keys_img[off..off + 2].try_into().unwrap(),
+        ));
     }
     let nkinds = datum::array_build::array_image_nelems(&kinds_img);
     let mut kinds: PgVec<'mcx, u8> = mcx::vec_with_capacity_in(mcx, nkinds)?;
@@ -2189,8 +2189,7 @@ fn lookup_pg_collation_locale_row<'mcx>(
     mcx: Mcx<'mcx>,
     collid: Oid,
 ) -> PgResult<Option<syscache_seams::PgCollationLocaleRow<'mcx>>> {
-    let Some(tuple) = SearchSysCache1(COLLOID, SysCacheKey::Value(Datum::from_oid(collid)))?
-    else {
+    let Some(tuple) = SearchSysCache1(COLLOID, SysCacheKey::Value(Datum::from_oid(collid)))? else {
         return Ok(None);
     };
     let t = tuple.tuple();
@@ -2198,8 +2197,7 @@ fn lookup_pg_collation_locale_row<'mcx>(
         collname: getattr_name(&t, COLLOID, ANUM_PG_COLLATION_COLLNAME),
         collnamespace: getattr(&t, COLLOID, ANUM_PG_COLLATION_COLLNAMESPACE).as_oid(),
         collprovider: getattr(&t, COLLOID, ANUM_PG_COLLATION_COLLPROVIDER).as_i8() as u8,
-        collisdeterministic: getattr(&t, COLLOID, ANUM_PG_COLLATION_COLLISDETERMINISTIC)
-            .as_bool(),
+        collisdeterministic: getattr(&t, COLLOID, ANUM_PG_COLLATION_COLLISDETERMINISTIC).as_bool(),
         collencoding: getattr(&t, COLLOID, ANUM_PG_COLLATION_COLLENCODING).as_i32(),
         collcollate: text_attr(mcx, &t, COLLOID, ANUM_PG_COLLATION_COLLCOLLATE)?,
         collctype: text_attr(mcx, &t, COLLOID, ANUM_PG_COLLATION_COLLCTYPE)?,
@@ -2330,7 +2328,11 @@ fn lookup_pg_statistic_slot_images<'mcx>(
         };
     drop(t);
     ReleaseSysCache(tuple);
-    Ok(syscache_seams::PgStatisticSlotImages { valuetype, values_image, numbers_image })
+    Ok(syscache_seams::PgStatisticSlotImages {
+        valuetype,
+        values_image,
+        numbers_image,
+    })
 }
 
 fn decode_pg_statistic_values<'mcx>(
@@ -2363,9 +2365,7 @@ fn decode_pg_statistic_numbers<'mcx>(mcx: Mcx<'mcx>, image: &[u8]) -> PgResult<P
     Ok(out)
 }
 
-fn lookup_pg_aggregate_shape(
-    aggfnoid: Oid,
-) -> PgResult<Option<syscache_seams::PgAggregateShape>> {
+fn lookup_pg_aggregate_shape(aggfnoid: Oid) -> PgResult<Option<syscache_seams::PgAggregateShape>> {
     let Some(tuple) = SearchSysCache1(AGGFNOID, SysCacheKey::Value(Datum::from_oid(aggfnoid)))?
     else {
         return Ok(None);
@@ -2436,8 +2436,7 @@ fn pg_proc_proargdefaults<'mcx>(
     mcx: Mcx<'mcx>,
     funcid: Oid,
 ) -> PgResult<Option<Option<PgString<'mcx>>>> {
-    let Some(tuple) = SearchSysCache1(PROCOID, SysCacheKey::Value(Datum::from_oid(funcid)))?
-    else {
+    let Some(tuple) = SearchSysCache1(PROCOID, SysCacheKey::Value(Datum::from_oid(funcid)))? else {
         return Ok(None);
     };
     let t = tuple.tuple();
@@ -2453,9 +2452,7 @@ fn pg_proc_proargdefaults<'mcx>(
     Ok(Some(out))
 }
 
-fn lookup_pg_range_shape(
-    range_oid: Oid,
-) -> PgResult<Option<syscache_seams::PgRangeShape>> {
+fn lookup_pg_range_shape(range_oid: Oid) -> PgResult<Option<syscache_seams::PgRangeShape>> {
     let Some(tuple) = SearchSysCache1(
         crate::cacheinfo::RANGETYPE,
         SysCacheKey::Value(Datum::from_oid(range_oid)),
@@ -2468,11 +2465,9 @@ fn lookup_pg_range_shape(
         rngsubtype: getattr(&t, crate::cacheinfo::RANGETYPE, ANUM_PG_RANGE_RNGSUBTYPE).as_oid(),
         rngmultitypid: getattr(&t, crate::cacheinfo::RANGETYPE, ANUM_PG_RANGE_RNGMULTITYPID)
             .as_oid(),
-        rngcollation: getattr(&t, crate::cacheinfo::RANGETYPE, ANUM_PG_RANGE_RNGCOLLATION)
-            .as_oid(),
+        rngcollation: getattr(&t, crate::cacheinfo::RANGETYPE, ANUM_PG_RANGE_RNGCOLLATION).as_oid(),
         rngsubopc: getattr(&t, crate::cacheinfo::RANGETYPE, ANUM_PG_RANGE_RNGSUBOPC).as_oid(),
-        rngcanonical: getattr(&t, crate::cacheinfo::RANGETYPE, ANUM_PG_RANGE_RNGCANONICAL)
-            .as_oid(),
+        rngcanonical: getattr(&t, crate::cacheinfo::RANGETYPE, ANUM_PG_RANGE_RNGCANONICAL).as_oid(),
         rngsubdiff: getattr(&t, crate::cacheinfo::RANGETYPE, ANUM_PG_RANGE_RNGSUBDIFF).as_oid(),
     };
     drop(t);
@@ -2484,8 +2479,7 @@ fn lookup_pg_proc_signature<'mcx>(
     mcx: Mcx<'mcx>,
     funcid: Oid,
 ) -> PgResult<Option<(Oid, PgVec<'mcx, Oid>)>> {
-    let Some(tuple) = SearchSysCache1(PROCOID, SysCacheKey::Value(Datum::from_oid(funcid)))?
-    else {
+    let Some(tuple) = SearchSysCache1(PROCOID, SysCacheKey::Value(Datum::from_oid(funcid)))? else {
         return Ok(None);
     };
     let t = tuple.tuple();
@@ -2512,8 +2506,12 @@ fn lookup_pg_range_by_multirange(multirange_oid: Oid) -> PgResult<Option<Oid>> {
     else {
         return Ok(None);
     };
-    let oid = getattr(&tuple.tuple(), crate::cacheinfo::RANGEMULTIRANGE, ANUM_PG_RANGE_RNGTYPID)
-        .as_oid();
+    let oid = getattr(
+        &tuple.tuple(),
+        crate::cacheinfo::RANGEMULTIRANGE,
+        ANUM_PG_RANGE_RNGTYPID,
+    )
+    .as_oid();
     ReleaseSysCache(tuple);
     Ok(Some(oid))
 }
@@ -2528,7 +2526,11 @@ fn flat_array_meta(img: &[u8]) -> (i32, bool, usize, usize) {
         0
     };
     // No-null arrays have dataoffset 0: data starts after ndim/lbound words.
-    let data_off = if dataoffset == 0 { 16 + 8 * ndim as usize } else { dataoffset as usize };
+    let data_off = if dataoffset == 0 {
+        16 + 8 * ndim as usize
+    } else {
+        dataoffset as usize
+    };
     (ndim, dataoffset != 0, nelems, data_off)
 }
 
@@ -2536,8 +2538,7 @@ fn pg_proc_result_arrays<'mcx>(
     mcx: Mcx<'mcx>,
     funcid: Oid,
 ) -> PgResult<Option<syscache_seams::PgProcResultArraysShape<'mcx>>> {
-    let Some(tuple) = SearchSysCache1(PROCOID, SysCacheKey::Value(Datum::from_oid(funcid)))?
-    else {
+    let Some(tuple) = SearchSysCache1(PROCOID, SysCacheKey::Value(Datum::from_oid(funcid)))? else {
         return Ok(None);
     };
     let t = tuple.tuple();
@@ -2546,10 +2547,15 @@ fn pg_proc_result_arrays<'mcx>(
         None => None,
         Some(img) => {
             let (ndim, hasnull, nelems, off) = flat_array_meta(&img);
-            assert!(ndim == 1 && !hasnull, "proallargtypes is not a 1-D Oid array or it contains nulls");
+            assert!(
+                ndim == 1 && !hasnull,
+                "proallargtypes is not a 1-D Oid array or it contains nulls"
+            );
             let mut v: PgVec<'mcx, Oid> = mcx::vec_with_capacity_in(mcx, nelems)?;
             for i in 0..nelems {
-                v.push(Oid::from_ne_bytes(img[off + 4 * i..off + 4 * i + 4].try_into().unwrap()));
+                v.push(Oid::from_ne_bytes(
+                    img[off + 4 * i..off + 4 * i + 4].try_into().unwrap(),
+                ));
             }
             Some(v)
         }
@@ -2558,7 +2564,10 @@ fn pg_proc_result_arrays<'mcx>(
         None => None,
         Some(img) => {
             let (ndim, hasnull, nelems, off) = flat_array_meta(&img);
-            assert!(ndim == 1 && !hasnull, "proargmodes is not a 1-D char array or it contains nulls");
+            assert!(
+                ndim == 1 && !hasnull,
+                "proargmodes is not a 1-D char array or it contains nulls"
+            );
             let mut v: PgVec<'mcx, i8> = mcx::vec_with_capacity_in(mcx, nelems)?;
             for i in 0..nelems {
                 v.push(img[off + i] as i8);
@@ -2570,7 +2579,10 @@ fn pg_proc_result_arrays<'mcx>(
         None => None,
         Some(img) => {
             let (ndim, hasnull, nelems, mut off) = flat_array_meta(&img);
-            assert!(ndim == 1 && !hasnull, "proargnames is not a 1-D text array or it contains nulls");
+            assert!(
+                ndim == 1 && !hasnull,
+                "proargnames is not a 1-D text array or it contains nulls"
+            );
             let mut v: PgVec<'mcx, PgString<'mcx>> = PgVec::new_in(mcx);
             v.try_reserve_exact(nelems).map_err(|_| mcx.oom(nelems))?;
             for _ in 0..nelems {
@@ -2582,9 +2594,8 @@ fn pg_proc_result_arrays<'mcx>(
                     (&img[off + 1..off + total], total)
                 } else {
                     let aligned = (off + 3) & !3;
-                    let total =
-                        (u32::from_ne_bytes(img[aligned..aligned + 4].try_into().unwrap()) >> 2)
-                            as usize;
+                    let total = (u32::from_ne_bytes(img[aligned..aligned + 4].try_into().unwrap())
+                        >> 2) as usize;
                     off = aligned;
                     (&img[off + 4..off + total], total)
                 };
@@ -2651,10 +2662,11 @@ fn pg_attribute_attoptions<'mcx>(
         Some(d) => {
             let src = d.as_usize() as *const u8;
             // SAFETY: non-null by-ref varlena datum inside the live tuple.
-            let bytes = unsafe {
-                core::slice::from_raw_parts(src, types_tuple::varatt::varsize_any(src))
-            };
-            Some(Datum::from_usize(mcx::slice_in(mcx, bytes)?.leak().as_ptr() as usize))
+            let bytes =
+                unsafe { core::slice::from_raw_parts(src, types_tuple::varatt::varsize_any(src)) };
+            Some(Datum::from_usize(
+                mcx::slice_in(mcx, bytes)?.leak().as_ptr() as usize,
+            ))
         }
     };
     ReleaseSysCache(tuple);
@@ -2733,7 +2745,9 @@ pub(crate) fn install() {
     syscache_seams::search_syscache_exists_databaseoid::set(search_syscache_exists_databaseoid);
     syscache_seams::search_syscache_exists_tablespaceoid::set(search_syscache_exists_tablespaceoid);
     syscache_seams::sys_cache_invalidate::set(sys_cache_invalidate);
-    syscache_seams::relation_invalidates_snapshots_only::set(crate::RelationInvalidatesSnapshotsOnly);
+    syscache_seams::relation_invalidates_snapshots_only::set(
+        crate::RelationInvalidatesSnapshotsOnly,
+    );
     syscache_seams::lookup_pg_class_by_relid::set(lookup_pg_class_by_relid);
     syscache_seams::pg_class_shape::set(pg_class_shape);
     syscache_seams::pg_class_relname::set(pg_class_relname);
@@ -2785,7 +2799,9 @@ pub(crate) fn install() {
     syscache_seams::lookup_pg_ts_config_row::set(lookup_pg_ts_config_row);
     syscache_seams::lookup_pg_ts_dict_oid_by_name_nsp::set(lookup_pg_ts_dict_oid_by_name_nsp);
     syscache_seams::lookup_pg_conversion_oid_by_name_nsp::set(lookup_pg_conversion_oid_by_name_nsp);
-    syscache_seams::lookup_pg_statistic_ext_oid_by_name_nsp::set(lookup_pg_statistic_ext_oid_by_name_nsp);
+    syscache_seams::lookup_pg_statistic_ext_oid_by_name_nsp::set(
+        lookup_pg_statistic_ext_oid_by_name_nsp,
+    );
     syscache_seams::lookup_pg_ts_dict_row::set(lookup_pg_ts_dict_row);
     syscache_seams::lookup_pg_amproc::set(lookup_pg_amproc);
     syscache_seams::lookup_pg_amproc_members::set(lookup_pg_amproc_members);
@@ -2870,9 +2886,7 @@ const ANUM_PG_TS_CONFIG_MAP_MAPTOKENTYPE: i32 = 2;
 const ANUM_PG_TS_CONFIG_MAP_MAPSEQNO: i32 = 3;
 const ANUM_PG_TS_CONFIG_MAP_MAPDICT: i32 = 4;
 
-fn lookup_pg_ts_parser_shape(
-    prsid: Oid,
-) -> PgResult<Option<syscache_seams::PgTsParserShape>> {
+fn lookup_pg_ts_parser_shape(prsid: Oid) -> PgResult<Option<syscache_seams::PgTsParserShape>> {
     let Some(tuple) = SearchSysCache1(
         crate::cacheinfo::TSPARSEROID,
         SysCacheKey::Value(Datum::from_oid(prsid)),
@@ -2918,9 +2932,8 @@ fn lookup_pg_ts_dict_shape<'mcx>(
         Some(d) => {
             let p = d.as_usize() as *const u8;
             // SAFETY: non-null varlena attr datum inside the live tuple.
-            let src = unsafe {
-                core::slice::from_raw_parts(p, types_tuple::varatt::varsize_any(p))
-            };
+            let src =
+                unsafe { core::slice::from_raw_parts(p, types_tuple::varatt::varsize_any(p)) };
             let flat = detoast::detoast_attr(mcx, src)?;
             let mut out = mcx::vec_with_capacity_in(mcx, flat.len() - 4)?;
             out.extend_from_slice(&flat[4..]);
@@ -2929,12 +2942,15 @@ fn lookup_pg_ts_dict_shape<'mcx>(
     };
     drop(t);
     ReleaseSysCache(tuple);
-    Ok(Some(syscache_seams::PgTsDictShape { dictname, dictnamespace, dicttemplate, dictinitoption }))
+    Ok(Some(syscache_seams::PgTsDictShape {
+        dictname,
+        dictnamespace,
+        dicttemplate,
+        dictinitoption,
+    }))
 }
 
-fn lookup_pg_ts_template_shape(
-    tmplid: Oid,
-) -> PgResult<Option<syscache_seams::PgTsTemplateShape>> {
+fn lookup_pg_ts_template_shape(tmplid: Oid) -> PgResult<Option<syscache_seams::PgTsTemplateShape>> {
     let Some(tuple) = SearchSysCache1(
         crate::cacheinfo::TSTEMPLATEOID,
         SysCacheKey::Value(Datum::from_oid(tmplid)),
@@ -2953,9 +2969,7 @@ fn lookup_pg_ts_template_shape(
     Ok(Some(shape))
 }
 
-fn lookup_pg_ts_config_shape(
-    cfgid: Oid,
-) -> PgResult<Option<syscache_seams::PgTsConfigShape>> {
+fn lookup_pg_ts_config_shape(cfgid: Oid) -> PgResult<Option<syscache_seams::PgTsConfigShape>> {
     let Some(tuple) = SearchSysCache1(
         crate::cacheinfo::TSCONFIGOID,
         SysCacheKey::Value(Datum::from_oid(cfgid)),

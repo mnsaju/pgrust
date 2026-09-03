@@ -1,4 +1,3 @@
-
 use super::cfb::PgpCfb;
 use super::consts::*;
 use super::context::PgpContext;
@@ -91,7 +90,8 @@ fn parse_symenc_sesskey(
     }
     let s2k_cipher = body[1] as i32;
     let (mut s2k, consumed) = S2k::read(&body[2..]).map_err(|e| e.to_string())?;
-    s2k.process(s2k_cipher, passphrase).map_err(|e| e.to_string())?;
+    s2k.process(s2k_cipher, passphrase)
+        .map_err(|e| e.to_string())?;
 
     ctx.s2k_mode = s2k.mode;
     ctx.s2k_digest_algo = s2k.digest_algo;
@@ -110,7 +110,8 @@ fn parse_symenc_sesskey(
         })
     } else {
         ctx.use_sess_key = 1;
-        let mut cfb = PgpCfb::create(s2k_cipher, &s2k.key, false, None).map_err(|e| e.to_string())?;
+        let mut cfb =
+            PgpCfb::create(s2k_cipher, &s2k.key, false, None).map_err(|e| e.to_string())?;
         let dec = cfb.decrypt(rest);
         if dec.is_empty() {
             return Err(CORRUPT_DATA.to_string());

@@ -10,15 +10,15 @@ use std::rc::Rc;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::Mutex;
 
-use mcx::{MemoryContext, Mcx, PgVec};
+use mcx::{Mcx, MemoryContext, PgVec};
 use transam_xlog::control_file::{
     FirstNormalUnloggedLSN, FLOATFORMAT_VALUE, PG_CONTROL_FILE_SIZE, PG_CONTROL_VERSION,
     TOAST_MAX_CHUNK_SIZE,
 };
 use transam_xlog::{XLogRecPtrToBytePos, DB_IN_PRODUCTION, RECOVERY_STATE_DONE};
 use types_core::{
-    BackendType, BlockNumber, Buffer, ForkNumber, Oid, TimeLineID, XLogRecPtr, XLogSegNo,
-    BLCKSZ, INVALID_PROC_NUMBER, RELPERSISTENCE_PERMANENT,
+    BackendType, BlockNumber, Buffer, ForkNumber, Oid, TimeLineID, XLogRecPtr, XLogSegNo, BLCKSZ,
+    INVALID_PROC_NUMBER, RELPERSISTENCE_PERMANENT,
 };
 use types_error::PgResult;
 use types_fmgr::{FmgrInfo, FunctionCallInfoBaseData};
@@ -201,7 +201,10 @@ fn install_seams() {
     });
     bufmgr_seams::flush_one_buffer::set(|_| Ok(()));
     relpath_seams::relpathperm::set(|rlocator, forknum| {
-        format!("base/{}/{}#{:?}", rlocator.dbOid, rlocator.relNumber, forknum)
+        format!(
+            "base/{}/{}#{:?}",
+            rlocator.dbOid, rlocator.relNumber, forknum
+        )
     });
     xlogrecovery_seams::reached_consistency::set(|| false);
 }
@@ -302,7 +305,10 @@ fn index_rel(mcx: Mcx<'_>) -> Relation<'_> {
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
         rd_lockInfo: LockInfoData {
-            lockRelId: LockRelId { relId: REL_OID, dbId: 5 },
+            lockRelId: LockRelId {
+                relId: REL_OID,
+                dbId: 5,
+            },
         },
         rd_rel: FormData_pg_class {
             relname,
@@ -343,8 +349,8 @@ fn index_rel(mcx: Mcx<'_>) -> Relation<'_> {
             indisready: true,
             indkey,
             has_indpred: false,
-        indexprs_src: None,
-        indpred_src: None,
+            indexprs_src: None,
+            indpred_src: None,
         }),
         rd_opcintype: one(23),
         rd_opfamily: one(1976),
@@ -354,13 +360,16 @@ fn index_rel(mcx: Mcx<'_>) -> Relation<'_> {
         pgstat_enabled: Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: PgVec::new_in(mcx),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     };
     Relation::open(data, Some(noop_close))
 }
@@ -516,8 +525,12 @@ fn btree_redo_rebuilds_pages_byte_exact() {
     let ctl = transam_xlog::ctl::XLogCtl();
     ctl.InsertTimeLineID.store(1, Relaxed);
     ctl.PrevTimeLineID.store(1, Relaxed);
-    ctl.Insert.CurrBytePos.store(XLogRecPtrToBytePos(end_of_log), Relaxed);
-    ctl.Insert.PrevBytePos.store(XLogRecPtrToBytePos(prev_rec), Relaxed);
+    ctl.Insert
+        .CurrBytePos
+        .store(XLogRecPtrToBytePos(end_of_log), Relaxed);
+    ctl.Insert
+        .PrevBytePos
+        .store(XLogRecPtrToBytePos(prev_rec), Relaxed);
     ctl.Insert.fullPageWrites.store(true, Relaxed);
     ctl.Insert.RedoRecPtr.store(prev_rec, Relaxed);
     ctl.RedoRecPtr.store(prev_rec, Relaxed);
@@ -533,7 +546,8 @@ fn btree_redo_rebuilds_pages_byte_exact() {
     assert!(transam_xlog::XLogInsertAllowed());
 
     with_fake(|f| {
-        f.pages.push(Box::leak(empty_meta_page()).0.as_mut_ptr() as usize);
+        f.pages
+            .push(Box::leak(empty_meta_page()).0.as_mut_ptr() as usize);
         f.pins.push(0);
     });
 
@@ -640,7 +654,11 @@ fn btree_redo_rebuilds_pages_byte_exact() {
     for i in 1..=800u16 {
         insert_tid(dupkey, i);
     }
-    assert_eq!(with_fake(|f| f.pages.len()), before, "dedup avoided the split");
+    assert_eq!(
+        with_fake(|f| f.pages.len()),
+        before,
+        "dedup avoided the split"
+    );
 
     // Posting-split+page-split coincidence: strided duplicate TIDs so every
     // odd posid lands inside an existing posting list, then churn odd posids
@@ -654,7 +672,10 @@ fn btree_redo_rebuilds_pages_byte_exact() {
     for i in 1..=799u16 {
         insert_tid(dupkey2, i * 2 + 1);
     }
-    assert!(with_fake(|f| f.pages.len()) > before2, "churn split the leaf");
+    assert!(
+        with_fake(|f| f.pages.len()) > before2,
+        "churn split the leaf"
+    );
 
     with_fake(|f| assert!(f.pins.iter().all(|p| *p == 0), "leaked pins"));
 
@@ -680,7 +701,9 @@ fn btree_redo_rebuilds_pages_byte_exact() {
     let reader_ctx: &'static MemoryContext = Box::leak(Box::new(MemoryContext::new("reader")));
     let mut reader = xlogreader::XLogReaderState::allocate(reader_ctx.mcx(), SEG).unwrap();
     reader.system_identifier = SYS_ID;
-    let mut routine = SegFileRead { wal_dir: dir.join("pg_wal") };
+    let mut routine = SegFileRead {
+        wal_dir: dir.join("pg_wal"),
+    };
     reader.XLogBeginRead(end_of_log + 40);
 
     let mut seen = [0u32; 16];
@@ -701,11 +724,27 @@ fn btree_redo_rebuilds_pages_byte_exact() {
     }
     assert_eq!(reader.v.EndRecPtr, last_lsn);
 
-    assert!(seen[(XLOG_BTREE_INSERT_LEAF >> 4) as usize] > 0, "INSERT_LEAF replayed");
-    assert!(seen[(XLOG_BTREE_INSERT_UPPER >> 4) as usize] >= 1, "INSERT_UPPER replayed");
-    assert!(seen[(XLOG_BTREE_SPLIT_R >> 4) as usize] >= 1, "SPLIT_R replayed");
-    assert!(seen[(XLOG_BTREE_SPLIT_L >> 4) as usize] >= 1, "SPLIT_L replayed");
-    assert_eq!(seen[(XLOG_BTREE_NEWROOT >> 4) as usize], 2, "NEWROOT x2 replayed");
+    assert!(
+        seen[(XLOG_BTREE_INSERT_LEAF >> 4) as usize] > 0,
+        "INSERT_LEAF replayed"
+    );
+    assert!(
+        seen[(XLOG_BTREE_INSERT_UPPER >> 4) as usize] >= 1,
+        "INSERT_UPPER replayed"
+    );
+    assert!(
+        seen[(XLOG_BTREE_SPLIT_R >> 4) as usize] >= 1,
+        "SPLIT_R replayed"
+    );
+    assert!(
+        seen[(XLOG_BTREE_SPLIT_L >> 4) as usize] >= 1,
+        "SPLIT_L replayed"
+    );
+    assert_eq!(
+        seen[(XLOG_BTREE_NEWROOT >> 4) as usize],
+        2,
+        "NEWROOT x2 replayed"
+    );
     assert!(
         seen[(types_nbtree::XLOG_BTREE_INSERT_POST >> 4) as usize] >= 1,
         "INSERT_POST replayed"
@@ -714,14 +753,21 @@ fn btree_redo_rebuilds_pages_byte_exact() {
         seen[(types_nbtree::XLOG_BTREE_DEDUP >> 4) as usize] >= 1,
         "DEDUP replayed"
     );
-    assert!(posting_splits >= 1, "posting-split+page-split coincidence replayed");
+    assert!(
+        posting_splits >= 1,
+        "posting-split+page-split coincidence replayed"
+    );
 
     with_fake(|f| assert!(f.pins.iter().all(|p| *p == 0), "replay leaked pins"));
     assert_eq!(with_fake(|f| f.pages.len()), nblocks);
     for blk in 0..nblocks {
         let got = page_bytes(blk);
         if got[..] != expected[blk][..] {
-            let first = got.iter().zip(&expected[blk]).position(|(a, b)| a != b).unwrap();
+            let first = got
+                .iter()
+                .zip(&expected[blk])
+                .position(|(a, b)| a != b)
+                .unwrap();
             panic!(
                 "replayed block {blk} differs at byte {first}: got {:02x?} want {:02x?}",
                 &got[first..(first + 16).min(BLCKSZ)],

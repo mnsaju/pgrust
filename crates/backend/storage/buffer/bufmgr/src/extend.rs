@@ -1,20 +1,22 @@
 use elog::ereport;
 use lwlock::{LWLockAcquire, LWLockRelease, LW_EXCLUSIVE};
+use pgstat::io::{pgstat_count_io_op_time, pgstat_prepare_io_time, IOObject, IOOp};
 use types_core::{
     BlockNumber, Buffer, ForkNumber, InvalidBlockNumber, InvalidBuffer, MaxBlockNumber, BLCKSZ,
     INIT_FORKNUM, RELPERSISTENCE_PERMANENT, RELPERSISTENCE_TEMP,
 };
 use types_error::{ErrorLocation, PgResult, ERRCODE_PROGRAM_LIMIT_EXCEEDED, ERROR};
-use pgstat::io::{pgstat_count_io_op_time, pgstat_prepare_io_time, IOObject, IOOp};
+use types_rel::rel::RelationData;
 use types_storage::buf::{
     BufferAccessStrategy, BM_DIRTY, BM_JUST_DIRTIED, BM_PERMANENT, BM_TAG_VALID, BM_VALID,
     BUF_USAGECOUNT_ONE,
 };
 use types_storage::lock::ExclusiveLock;
 use types_storage::{ReadBufferMode, RelFileLocatorBackend};
-use types_rel::rel::RelationData;
 
-use crate::buf_hdr::{BufferDescriptorGetBuffer, BufferGetBlockPtr, GetBufferDescriptor, LockBufHdr, UnlockBufHdr};
+use crate::buf_hdr::{
+    BufferDescriptorGetBuffer, BufferGetBlockPtr, GetBufferDescriptor, LockBufHdr, UnlockBufHdr,
+};
 use crate::buf_table::{BufMappingPartitionLock, BufTableHashCode, BufTableInsert};
 use crate::freelist::{GetPinLimit, IOContextForStrategy, StrategyFreeBuffer};
 use crate::pin::{buffer_refcount, PinBuffer, UnpinBuffer};
@@ -91,7 +93,16 @@ pub fn ExtendBufferedRelTo(
     mode: ReadBufferMode,
 ) -> PgResult<Buffer> {
     let smgr = crate::rel_locator_backend(rel);
-    extend_to_guts(Some(rel), smgr, rel.rd_rel.relpersistence, fork, strategy, flags, extend_to, mode)
+    extend_to_guts(
+        Some(rel),
+        smgr,
+        rel.rd_rel.relpersistence,
+        fork,
+        strategy,
+        flags,
+        extend_to,
+        mode,
+    )
 }
 
 // The BMR_SMGR form: recovery/init callers hold no Relation, and every C call
@@ -109,7 +120,16 @@ pub fn ExtendBufferedRelToSmgr(
         flags & bufmgr_seams::EB_SKIP_EXTENSION_LOCK != 0,
         "ExtendBufferedRelTo: smgr form cannot take the relation extension lock"
     );
-    extend_to_guts(None, smgr, relpersistence, fork, strategy, flags, extend_to, mode)
+    extend_to_guts(
+        None,
+        smgr,
+        relpersistence,
+        fork,
+        strategy,
+        flags,
+        extend_to,
+        mode,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -125,15 +145,25 @@ fn extend_to_guts(
 ) -> PgResult<Buffer> {
     debug_assert!(extend_to != InvalidBlockNumber && extend_to > 0);
 
-    if flags & bufmgr_seams::EB_CREATE_FORK_IF_NEEDED != 0 && !smgr_seams::smgr_exists::call(smgr, fork)? {
+    if flags & bufmgr_seams::EB_CREATE_FORK_IF_NEEDED != 0
+        && !smgr_seams::smgr_exists::call(smgr, fork)?
+    {
         if let Some(rel) = rel {
             lmgr::LockRelationForExtension(rel, ExclusiveLock)?;
             if !smgr_seams::smgr_exists::call(smgr, fork)? {
-                smgr_seams::smgr_create::call(smgr, fork, flags & bufmgr_seams::EB_PERFORMING_RECOVERY != 0)?;
+                smgr_seams::smgr_create::call(
+                    smgr,
+                    fork,
+                    flags & bufmgr_seams::EB_PERFORMING_RECOVERY != 0,
+                )?;
             }
             lmgr::UnlockRelationForExtension(rel, ExclusiveLock)?;
         } else {
-            smgr_seams::smgr_create::call(smgr, fork, flags & bufmgr_seams::EB_PERFORMING_RECOVERY != 0)?;
+            smgr_seams::smgr_create::call(
+                smgr,
+                fork,
+                flags & bufmgr_seams::EB_PERFORMING_RECOVERY != 0,
+            )?;
         }
     }
 
@@ -143,7 +173,10 @@ fn extend_to_guts(
 
     let mut current_size = smgr_seams::smgr_nblocks::call(smgr, fork)?;
 
-    if matches!(mode, ReadBufferMode::ZeroAndLock | ReadBufferMode::ZeroAndCleanupLock) {
+    if matches!(
+        mode,
+        ReadBufferMode::ZeroAndLock | ReadBufferMode::ZeroAndCleanupLock
+    ) {
         flags |= bufmgr_seams::EB_LOCK_TARGET;
     }
 
@@ -203,18 +236,37 @@ fn ExtendBufferedRelCommon(
         // to the owning session (C 3aaefe8).
         if rel.is_some_and(|r| !r.rd_islocaltemp) {
             return Err(Box::new(
-                types_error::PgError::new(ERROR, "cannot access temporary tables of other sessions")
-                    .with_sqlstate(types_error::ERRCODE_FEATURE_NOT_SUPPORTED)
-                    .with_error_location(ErrorLocation::new(
-                        "bufmgr.c",
-                        0,
-                        "ExtendBufferedRelCommon",
-                    )),
+                types_error::PgError::new(
+                    ERROR,
+                    "cannot access temporary tables of other sessions",
+                )
+                .with_sqlstate(types_error::ERRCODE_FEATURE_NOT_SUPPORTED)
+                .with_error_location(ErrorLocation::new(
+                    "bufmgr.c",
+                    0,
+                    "ExtendBufferedRelCommon",
+                )),
             ));
         }
-        return crate::localbuf::ExtendBufferedRelLocal(smgr, fork, extend_by, extend_upto, buffers);
+        return crate::localbuf::ExtendBufferedRelLocal(
+            smgr,
+            fork,
+            extend_by,
+            extend_upto,
+            buffers,
+        );
     }
-    ExtendBufferedRelShared(rel, smgr, relpersistence, fork, strategy, flags, extend_by, extend_upto, buffers)
+    ExtendBufferedRelShared(
+        rel,
+        smgr,
+        relpersistence,
+        fork,
+        strategy,
+        flags,
+        extend_by,
+        extend_upto,
+        buffers,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -260,7 +312,11 @@ fn ExtendBufferedRelShared(
         } else if first_block as u64 + extend_by as u64 > extend_upto as u64 {
             extend_by = extend_upto - first_block;
         }
-        for buf in buffers.iter().take(orig_extend_by as usize).skip(extend_by as usize) {
+        for buf in buffers
+            .iter()
+            .take(orig_extend_by as usize)
+            .skip(extend_by as usize)
+        {
             let desc = GetBufferDescriptor(*buf - 1);
             StrategyFreeBuffer(desc.buf_id);
             UnpinBuffer(desc);
@@ -301,7 +357,11 @@ fn ExtendBufferedRelShared(
         let hash = BufTableHashCode(&tag);
         let partition_lock = BufMappingPartitionLock(hash);
 
-        LWLockAcquire(partition_lock, LW_EXCLUSIVE, init_small::globals::MyProcNumber())?;
+        LWLockAcquire(
+            partition_lock,
+            LW_EXCLUSIVE,
+            init_small::globals::MyProcNumber(),
+        )?;
         let existing_id = BufTableInsert(&tag, hash, victim_desc.buf_id)?;
 
         if existing_id >= 0 {
@@ -375,7 +435,11 @@ fn ExtendBufferedRelShared(
                 first_block + i as u32 + 1 == extend_upto
             });
         if lock {
-            LWLockAcquire(&desc.content_lock, LW_EXCLUSIVE, init_small::globals::MyProcNumber())?;
+            LWLockAcquire(
+                &desc.content_lock,
+                LW_EXCLUSIVE,
+                init_small::globals::MyProcNumber(),
+            )?;
         }
         TerminateBufferIO(desc, false, BM_VALID, true, false);
     }

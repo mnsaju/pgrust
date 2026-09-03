@@ -2,14 +2,15 @@ use std::sync::OnceLock;
 
 use ::types_error::{
     PgError, PgResult, ERRCODE_INVALID_ARGUMENT_FOR_LOG,
-    ERRCODE_INVALID_ARGUMENT_FOR_POWER_FUNCTION, ERRCODE_INVALID_ARGUMENT_FOR_WIDTH_BUCKET_FUNCTION,
+    ERRCODE_INVALID_ARGUMENT_FOR_POWER_FUNCTION,
+    ERRCODE_INVALID_ARGUMENT_FOR_WIDTH_BUCKET_FUNCTION,
     ERRCODE_INVALID_PRECEDING_OR_FOLLOWING_SIZE, ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE,
 };
 
 use crate::{
     float4_fits_in_int16, float4_fits_in_int32, float8_div, float8_fits_in_int16,
-    float8_fits_in_int32, float8_mul, float_overflow_error, float_underflow_error,
-    get_float8_nan, M_PI, RADIANS_PER_DEGREE,
+    float8_fits_in_int32, float8_mul, float_overflow_error, float_underflow_error, get_float8_nan,
+    M_PI, RADIANS_PER_DEGREE,
 };
 
 // erf/erfc/tgamma are absent from Rust std; C's own libm is the parity
@@ -178,9 +179,11 @@ pub fn dtrunc(arg1: f64) -> f64 {
 
 pub fn dsqrt(arg1: f64) -> PgResult<f64> {
     if arg1 < 0.0 {
-        return Err(PgError::error("cannot take square root of a negative number")
-            .with_sqlstate(ERRCODE_INVALID_ARGUMENT_FOR_POWER_FUNCTION)
-            .into());
+        return Err(
+            PgError::error("cannot take square root of a negative number")
+                .with_sqlstate(ERRCODE_INVALID_ARGUMENT_FOR_POWER_FUNCTION)
+                .into(),
+        );
     }
     let result = arg1.sqrt();
     if result.is_infinite() && !arg1.is_infinite() {
@@ -219,9 +222,11 @@ pub fn dpow(arg1: f64, arg2: f64) -> PgResult<f64> {
     }
 
     if arg1 == 0.0 && arg2 < 0.0 {
-        return Err(PgError::error("zero raised to a negative power is undefined")
-            .with_sqlstate(ERRCODE_INVALID_ARGUMENT_FOR_POWER_FUNCTION)
-            .into());
+        return Err(
+            PgError::error("zero raised to a negative power is undefined")
+                .with_sqlstate(ERRCODE_INVALID_ARGUMENT_FOR_POWER_FUNCTION)
+                .into(),
+        );
     }
     if arg1 < 0.0 && arg2.floor() != arg2 {
         return Err(PgError::error(

@@ -9,13 +9,14 @@ use types_core::xact::{
     InvalidXLogRecPtr, XidStatus, TRANSACTION_STATUS_ABORTED, TRANSACTION_STATUS_COMMITTED,
     TRANSACTION_STATUS_IN_PROGRESS, TRANSACTION_STATUS_SUB_COMMITTED,
 };
-use types_core::{BootstrapTransactionId, FrozenTransactionId, InvalidTransactionId, TransactionId, XLogRecPtr};
+use types_core::{
+    BootstrapTransactionId, FrozenTransactionId, InvalidTransactionId, TransactionId, XLogRecPtr,
+};
 use types_error::{PgResult, WARNING};
 
 pub use types_core::{
-    TransactionIdEquals, TransactionIdFollows, TransactionIdFollowsOrEquals,
-    TransactionIdIsNormal, TransactionIdIsValid, TransactionIdPrecedes,
-    TransactionIdPrecedesOrEquals,
+    TransactionIdEquals, TransactionIdFollows, TransactionIdFollowsOrEquals, TransactionIdIsNormal,
+    TransactionIdIsValid, TransactionIdPrecedes, TransactionIdPrecedesOrEquals,
 };
 
 thread_local! {

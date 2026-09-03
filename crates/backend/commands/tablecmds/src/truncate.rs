@@ -194,17 +194,23 @@ pub fn ExecuteTruncateGuts<'mcx>(
 
     // The BS/AS TRUNCATE trigger bracket (C creates an EState + relinfos;
     // the caches below are its per-statement ri_TrigFunctions/WhenExprs).
-    let mut trig_state: Vec<Option<(
-        std::rc::Rc<types_trigger::TriggerDesc<'static>>,
-        trigger::TriggerFmgrCache,
-        trigger::TriggerWhenCache<'mcx>,
-    )>> = Vec::with_capacity(rels.len());
+    let mut trig_state: Vec<
+        Option<(
+            std::rc::Rc<types_trigger::TriggerDesc<'static>>,
+            trigger::TriggerFmgrCache,
+            trigger::TriggerWhenCache<'mcx>,
+        )>,
+    > = Vec::with_capacity(rels.len());
     let mut any_triggers = false;
     for rel in rels.iter() {
         let entry = if rel.rd_hastriggers {
             relcache::RelationGetTriggerDesc(rel.rd_id)?.map(|d| {
                 any_triggers = true;
-                (d, trigger::TriggerFmgrCache::default(), trigger::TriggerWhenCache::default())
+                (
+                    d,
+                    trigger::TriggerFmgrCache::default(),
+                    trigger::TriggerWhenCache::default(),
+                )
             })
         } else {
             None
@@ -215,8 +221,11 @@ pub fn ExecuteTruncateGuts<'mcx>(
         trigger::AfterTriggerBeginQuery();
         for (rel, entry) in rels.iter().zip(trig_state.iter_mut()) {
             if let Some((td, fmgr, when_cache)) = entry.as_mut() {
-                let mut when =
-                    trigger::TriggerWhenEval { mcx, cache: when_cache, modified_cols: None };
+                let mut when = trigger::TriggerWhenEval {
+                    mcx,
+                    cache: when_cache,
+                    modified_cols: None,
+                };
                 trigger::ExecBSTruncateTriggers(mcx, rel, td, fmgr, &mut when)?;
             }
         }
@@ -227,9 +236,7 @@ pub fn ExecuteTruncateGuts<'mcx>(
         if rel.rd_rel.relkind == RELKIND_PARTITIONED_TABLE {
             continue;
         }
-        if rel.rd_createSubid.get() == my_subid
-            || rel.rd_newRelfilelocatorSubid.get() == my_subid
-        {
+        if rel.rd_createSubid.get() == my_subid || rel.rd_newRelfilelocatorSubid.get() == my_subid {
             catalog_heap::heap_truncate_one_rel(mcx, rel)?;
         } else {
             predicate_seams::check_table_for_serializable_conflict_in::call(rel)?;
@@ -288,8 +295,11 @@ pub fn ExecuteTruncateGuts<'mcx>(
     if any_triggers {
         for (rel, entry) in rels.iter().zip(trig_state.iter_mut()) {
             if let Some((td, _, when_cache)) = entry.as_mut() {
-                let mut when =
-                    trigger::TriggerWhenEval { mcx, cache: when_cache, modified_cols: None };
+                let mut when = trigger::TriggerWhenEval {
+                    mcx,
+                    cache: when_cache,
+                    modified_cols: None,
+                };
                 trigger::ExecASTruncateTriggers(rel, td, Some(&mut when))?;
             }
         }
@@ -349,8 +359,11 @@ fn truncate_check_rel(
         let serverid = foreigncmds::foreign::GetForeignServerIdByRelId(relid)?;
         let _routine = foreigncmds::foreign::GetFdwRoutineByServerId(mcx, serverid)?;
         return Err(Box::new(
-            PgError::new(ERROR, format!("cannot truncate foreign table \"{relname}\""))
-                .with_sqlstate(types_error::ERRCODE_FEATURE_NOT_SUPPORTED),
+            PgError::new(
+                ERROR,
+                format!("cannot truncate foreign table \"{relname}\""),
+            )
+            .with_sqlstate(types_error::ERRCODE_FEATURE_NOT_SUPPORTED),
         ));
     }
     if relkind != RELKIND_RELATION && relkind != RELKIND_PARTITIONED_TABLE {
@@ -361,8 +374,7 @@ fn truncate_check_rel(
     }
     // C exempts pg_largeobject during pg_upgrade (relfilenode carryover);
     // object-access hooks (InvokeObjectTruncateHook) are elided repo-wide.
-    let is_system =
-        catalog::IsCatalogRelationOid(relid) || catalog::IsToastNamespace(relnamespace);
+    let is_system = catalog::IsCatalogRelationOid(relid) || catalog::IsToastNamespace(relnamespace);
     if is_system
         && !init_small::globals::allowSystemTableMods()
         && (!init_small::globals::IsBinaryUpgrade() || relid != catalog::LargeObjectRelationId)
@@ -379,8 +391,7 @@ fn truncate_check_rel(
 }
 
 fn truncate_check_perms(relid: Oid, relkind: u8, relname: &str) -> PgResult<()> {
-    let aclresult =
-        aclchk::pg_class_aclcheck(relid, miscinit::GetUserId(), adt_acl::ACL_TRUNCATE)?;
+    let aclresult = aclchk::pg_class_aclcheck(relid, miscinit::GetUserId(), adt_acl::ACL_TRUNCATE)?;
     if aclresult != aclchk::ACLCHECK_OK {
         let _ = relkind; // get_relkind_objtype: both reachable relkinds map to OBJECT_TABLE
         aclchk_seams::aclcheck_error::call(aclresult, ObjectType::OBJECT_TABLE as i32, relname)?;

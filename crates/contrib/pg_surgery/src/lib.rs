@@ -17,7 +17,7 @@ use types_error::{
 use types_fmgr::{FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFunction};
 use types_nodes::parsenodes::ObjectType;
 use types_rel::pg_class::{
-    RELKIND_HAS_TABLE_AM, RELKIND_FOREIGN_TABLE, RELKIND_INDEX, RELKIND_MATVIEW,
+    RELKIND_FOREIGN_TABLE, RELKIND_HAS_TABLE_AM, RELKIND_INDEX, RELKIND_MATVIEW,
     RELKIND_PARTITIONED_INDEX, RELKIND_PARTITIONED_TABLE, RELKIND_RELATION, RELKIND_SEQUENCE,
     RELKIND_VIEW,
 };

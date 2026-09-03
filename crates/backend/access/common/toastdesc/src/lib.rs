@@ -164,9 +164,9 @@ pub fn get_toast_snapshot<'mcx>(
 ) -> PgResult<SnapshotData<'mcx>> {
     if !have_registered_or_active_snapshot {
         // C: elog(ERROR, ...) — internal error, XX000.
-        return Err(
-            Box::new(PgError::error("cannot fetch toast data without an active snapshot")),
-        );
+        return Err(Box::new(PgError::error(
+            "cannot fetch toast data without an active snapshot",
+        )));
     }
     Ok(SnapshotData::sentinel(mcx, SnapshotType::SNAPSHOT_TOAST))
 }

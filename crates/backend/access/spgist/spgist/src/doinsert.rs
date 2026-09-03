@@ -5,22 +5,22 @@ use ::bufmgr_seams::{self as bufmgr};
 use ::datum::Datum;
 use ::mcx::{Mcx, PgVec};
 use ::nbtree::itup::ItupBuf;
-use ::types_core::{
-    BlockNumber, Buffer, InvalidBlockNumber, OffsetNumber, BLCKSZ,
-};
 use ::types_core::fmgr::INDEX_MAX_KEYS;
+use ::types_core::{BlockNumber, Buffer, InvalidBlockNumber, OffsetNumber, BLCKSZ};
 use ::types_error::{PgError, PgResult, ERRCODE_PROGRAM_LIMIT_EXCEEDED};
 use ::types_rel::Relation;
-use ::types_spgist::state::{spgChooseIn, spgChooseOut, spgPickSplitIn, spgPickSplitOut, SpGistState};
+use ::types_spgist::state::{
+    spgChooseIn, spgChooseOut, spgPickSplitIn, spgPickSplitOut, SpGistState,
+};
 use ::types_spgist::xlog::*;
 use ::types_spgist::*;
 use ::types_storage::bufpage::{MaxIndexTuplesPerPage, PageMut};
 use ::types_tuple::itemptr::{ItemPointerData, ItemPointerIsValid};
 use ::xloginsert_seams::{XLogRegBuf, REGBUF_STANDARD, REGBUF_WILL_INIT};
 
+use crate::utils::ItupExt as _;
 use crate::utils::*;
 pub use ::types_spgist::{spgPageIndexMultiDelete, spgUpdateNodeLink};
-use crate::utils::ItupExt as _;
 
 const K: usize = INDEX_MAX_KEYS as usize;
 pub const RM_SPGIST_ID: u8 = ::types_core::RmgrIds::RM_SPGIST_ID as u8;
@@ -38,11 +38,7 @@ fn page(desc: &SPPageDesc) -> PageMut<'static> {
     buf_page_mut(desc.buffer)
 }
 
-fn saveNodeLink(
-    parent: &SPPageDesc,
-    blkno: BlockNumber,
-    offnum: OffsetNumber,
-) -> PgResult<()> {
+fn saveNodeLink(parent: &SPPageDesc, blkno: BlockNumber, offnum: OffsetNumber) -> PgResult<()> {
     let mut pm = page(parent);
     let inner = item_slice_mut(&mut pm, parent.offnum);
     spgUpdateNodeLink(inner, parent.node, blkno, offnum);
@@ -145,10 +141,7 @@ fn addLeafTuple(
     Ok(())
 }
 
-fn checkSplitConditions(
-    current: &SPPageDesc,
-    n_to_split: &mut i32,
-) -> usize {
+fn checkSplitConditions(current: &SPPageDesc, n_to_split: &mut i32) -> usize {
     if SpGistBlockIsRoot(current.blkno) {
         *n_to_split = BLCKSZ as i32;
         return BLCKSZ;
@@ -268,7 +261,11 @@ fn moveLeafs<'m>(
             state.redirectXid,
             &mut cpm,
             &to_delete,
-            if state.isBuild { SPGIST_PLACEHOLDER } else { SPGIST_REDIRECT },
+            if state.isBuild {
+                SPGIST_PLACEHOLDER
+            } else {
+                SPGIST_REDIRECT
+            },
             SPGIST_PLACEHOLDER,
             nblkno,
             r,
@@ -311,8 +308,7 @@ fn moveLeafs<'m>(
                 XLogRegBuf {
                     block_id: 1,
                     buffer: nbuf,
-                    flags: REGBUF_STANDARD
-                        | if xlrec.newPage { REGBUF_WILL_INIT } else { 0 },
+                    flags: REGBUF_STANDARD | if xlrec.newPage { REGBUF_WILL_INIT } else { 0 },
                     bufdata: &[],
                 },
                 XLogRegBuf {
@@ -440,7 +436,11 @@ fn doPickSplit<'m>(
                 let it = item_slice(&pr, i);
                 let st = tuple_state(it);
                 if st == SPGIST_LIVE {
-                    in_datums.push(if is_nulls { Datum::null() } else { leaf_datum(it, state) });
+                    in_datums.push(if is_nulls {
+                        Datum::null()
+                    } else {
+                        leaf_datum(it, state)
+                    });
                     old_leaf_offs.push(i);
                     to_delete.push(i);
                     space_to_delete += leaf_size(it) + SIZEOF_ITEM_ID_DATA;
@@ -454,7 +454,11 @@ fn doPickSplit<'m>(
                 let it = item_slice(&pr, i);
                 let st = tuple_state(it);
                 if st == SPGIST_LIVE {
-                    in_datums.push(if is_nulls { Datum::null() } else { leaf_datum(it, state) });
+                    in_datums.push(if is_nulls {
+                        Datum::null()
+                    } else {
+                        leaf_datum(it, state)
+                    });
                     old_leaf_offs.push(i);
                     to_delete.push(i);
                     debug_assert!(leaf_size(it) >= SGDTSIZE);
@@ -471,7 +475,11 @@ fn doPickSplit<'m>(
     }
 
     // the incoming tuple is always part of the picksplit input
-    in_datums.push(if is_nulls { Datum::null() } else { leaf_datum(new_leaf_tuple, state) });
+    in_datums.push(if is_nulls {
+        Datum::null()
+    } else {
+        leaf_datum(new_leaf_tuple, state)
+    });
     let n_tuples = in_datums.len();
     let n_to_delete = to_delete.len();
 
@@ -518,10 +526,7 @@ fn doPickSplit<'m>(
                     n_tuples,
                 ));
             out.leaf_tuple_datums
-                .extend_from_slice(core::slice::from_raw_parts(
-                    psout.leafTupleDatums,
-                    n_tuples,
-                ));
+                .extend_from_slice(core::slice::from_raw_parts(psout.leafTupleDatums, n_tuples));
         }
 
         for i in 0..n_tuples {
@@ -533,13 +538,25 @@ fn doPickSplit<'m>(
                 } else {
                     item_slice(&pr, old_leaf_offs[i])
                 };
-                spgDeformLeafTuple(src, &leaf_desc, &mut leaf_datums, &mut leaf_isnulls, is_nulls);
+                spgDeformLeafTuple(
+                    src,
+                    &leaf_desc,
+                    &mut leaf_datums,
+                    &mut leaf_isnulls,
+                    is_nulls,
+                );
             }
             leaf_datums[spgKeyColumn] = out.leaf_tuple_datums[i];
             leaf_isnulls[spgKeyColumn] = false;
 
             let heap_ptr = source_heap_ptr(current, &old_leaf_offs, new_leaf_tuple, i, n_tuples);
-            let lt = spgFormLeafTuple(mcx, state, &heap_ptr, &leaf_datums[..natts.max(1)], &leaf_isnulls[..natts.max(1)])?;
+            let lt = spgFormLeafTuple(
+                mcx,
+                state,
+                &heap_ptr,
+                &leaf_datums[..natts.max(1)],
+                &leaf_isnulls[..natts.max(1)],
+            )?;
             total_leaf_sizes += lt.size() + SIZEOF_ITEM_ID_DATA;
             new_leafs.push(lt);
         }
@@ -558,13 +575,25 @@ fn doPickSplit<'m>(
                 } else {
                     item_slice(&pr, old_leaf_offs[i])
                 };
-                spgDeformLeafTuple(src, &leaf_desc, &mut leaf_datums, &mut leaf_isnulls, is_nulls);
+                spgDeformLeafTuple(
+                    src,
+                    &leaf_desc,
+                    &mut leaf_datums,
+                    &mut leaf_isnulls,
+                    is_nulls,
+                );
             }
             leaf_datums[spgKeyColumn] = Datum::null();
             leaf_isnulls[spgKeyColumn] = true;
 
             let heap_ptr = source_heap_ptr(current, &old_leaf_offs, new_leaf_tuple, i, n_tuples);
-            let lt = spgFormLeafTuple(mcx, state, &heap_ptr, &leaf_datums[..natts.max(1)], &leaf_isnulls[..natts.max(1)])?;
+            let lt = spgFormLeafTuple(
+                mcx,
+                state,
+                &heap_ptr,
+                &leaf_datums[..natts.max(1)],
+                &leaf_isnulls[..natts.max(1)],
+            )?;
             total_leaf_sizes += lt.size() + SIZEOF_ITEM_ID_DATA;
             new_leafs.push(lt);
         }
@@ -601,13 +630,8 @@ fn doPickSplit<'m>(
         }
         v
     };
-    let mut inner_tuple = spgFormInnerTuple(
-        mcx,
-        state,
-        out.has_prefix,
-        out.prefix_datum,
-        &node_slices,
-    )?;
+    let mut inner_tuple =
+        spgFormInnerTuple(mcx, state, out.has_prefix, out.prefix_datum, &node_slices)?;
     set_all_the_same(inner_tuple.as_mut_slice(), all_the_same);
     let inner_size = inner_tuple_size(inner_tuple.as_slice());
 
@@ -627,8 +651,7 @@ fn doPickSplit<'m>(
     let new_inner_buffer: Buffer;
     if parent.buffer != InvalidBuffer
         && !SpGistBlockIsRoot(parent.blkno)
-        && SpGistPageGetFreeSpace(&page(parent).as_ref(), 1)
-            >= inner_size + SIZEOF_ITEM_ID_DATA
+        && SpGistPageGetFreeSpace(&page(parent).as_ref(), 1) >= inner_size + SIZEOF_ITEM_ID_DATA
     {
         new_inner_buffer = parent.buffer;
     } else if parent.buffer != InvalidBuffer {
@@ -702,8 +725,7 @@ fn doPickSplit<'m>(
             leaf_sizes[node_of_new] -=
                 (new_leafs[n_tuples - 1].size() + SIZEOF_ITEM_ID_DATA) as i32;
             let mut curspace = current_free_space as i64;
-            let mut newspace =
-                buf_page_mut(new_leaf_buffer).as_ref().exact_free_space() as i64;
+            let mut newspace = buf_page_mut(new_leaf_buffer).as_ref().exact_free_space() as i64;
             for i in 0..out.n_nodes {
                 if (leaf_sizes[i] as i64) <= curspace {
                     node_page_select[i] = 0;
@@ -772,15 +794,12 @@ fn doPickSplit<'m>(
             }
         }
     }
-    let redirect_tuple_pos = if !SpGistBlockIsRoot(current.blkno)
-        && !state.isBuild
-        && !is_new
-        && xlrec.nDelete > 0
-    {
-        to_delete[0]
-    } else {
-        InvalidOffsetNumber
-    };
+    let redirect_tuple_pos =
+        if !SpGistBlockIsRoot(current.blkno) && !state.isBuild && !is_new && xlrec.nDelete > 0 {
+            to_delete[0]
+        } else {
+            InvalidOffsetNumber
+        };
 
     // place leaf tuples, updating node downlinks in the inner-tuple image
     let mut start_offsets = [InvalidOffsetNumber; 2];
@@ -794,7 +813,11 @@ fn doPickSplit<'m>(
 
     for i in 0..n_to_insert {
         let sel = leaf_page_select[i];
-        let leaf_buffer = if sel != 0 { new_leaf_buffer } else { current.buffer };
+        let leaf_buffer = if sel != 0 {
+            new_leaf_buffer
+        } else {
+            current.buffer
+        };
         let leaf_block = bufmgr::buffer_get_block_number::call(leaf_buffer);
 
         let nn = out.map_tuples_to_nodes[i] as usize;
@@ -851,7 +874,12 @@ fn doPickSplit<'m>(
         saveNodeLink(parent, current.blkno, current.offnum)?;
 
         if redirect_tuple_pos != InvalidOffsetNumber {
-            setRedirectionTuple(&save_current, redirect_tuple_pos, current.blkno, current.offnum);
+            setRedirectionTuple(
+                &save_current,
+                redirect_tuple_pos,
+                current.blkno,
+                current.offnum,
+            );
         }
         bufmgr::mark_buffer_dirty::call(save_current.buffer)?;
     } else if parent.buffer != InvalidBuffer {
@@ -871,7 +899,12 @@ fn doPickSplit<'m>(
         saveNodeLink(parent, current.blkno, current.offnum)?;
 
         if redirect_tuple_pos != InvalidOffsetNumber {
-            setRedirectionTuple(&save_current, redirect_tuple_pos, current.blkno, current.offnum);
+            setRedirectionTuple(
+                &save_current,
+                redirect_tuple_pos,
+                current.blkno,
+                current.offnum,
+            );
         }
         bufmgr::mark_buffer_dirty::call(save_current.buffer)?;
     } else {
@@ -896,7 +929,9 @@ fn doPickSplit<'m>(
 
         bufmgr::mark_buffer_dirty::call(current.buffer)?;
     }
-    let save_current_valid = save_current.buffer != current.buffer && save_current.buffer != InvalidBuffer && !(new_inner_buffer == InvalidBuffer);
+    let save_current_valid = save_current.buffer != current.buffer
+        && save_current.buffer != InvalidBuffer
+        && !(new_inner_buffer == InvalidBuffer);
 
     if relation_needs_wal(index) && !state.isBuild {
         xlrec.nInsert = n_to_insert as u16;
@@ -1195,7 +1230,12 @@ fn spgAddNodeAction<'m>(
 
         current.offnum = {
             let mut pm = page(current);
-            SpGistPageAddNewItem(&mut pm, &new_inner_tuple.as_slice()[..new_size], None, false)
+            SpGistPageAddNewItem(
+                &mut pm,
+                &new_inner_tuple.as_slice()[..new_size],
+                None,
+                false,
+            )
         };
         xlrec.offnumNew = current.offnum;
         bufmgr::mark_buffer_dirty::call(current.buffer)?;
@@ -1203,9 +1243,19 @@ fn spgAddNodeAction<'m>(
         saveNodeLink(parent, current.blkno, current.offnum)?;
 
         let dt = if state.isBuild {
-            spgFormDeadTuple(state.redirectXid, SPGIST_PLACEHOLDER, InvalidBlockNumber, InvalidOffsetNumber)
+            spgFormDeadTuple(
+                state.redirectXid,
+                SPGIST_PLACEHOLDER,
+                InvalidBlockNumber,
+                InvalidOffsetNumber,
+            )
         } else {
-            spgFormDeadTuple(state.redirectXid, SPGIST_REDIRECT, current.blkno, current.offnum)
+            spgFormDeadTuple(
+                state.redirectXid,
+                SPGIST_REDIRECT,
+                current.blkno,
+                current.offnum,
+            )
         };
 
         {
@@ -1321,8 +1371,13 @@ fn spgSplitNodeAction<'m>(
             }
             v
         };
-        let prefix_tuple =
-            spgFormInnerTuple(mcx, state, prefixHasPrefix, prefixPrefixDatum, &prefix_slices)?;
+        let prefix_tuple = spgFormInnerTuple(
+            mcx,
+            state,
+            prefixHasPrefix,
+            prefixPrefixDatum,
+            &prefix_slices,
+        )?;
 
         if inner_tuple_size(prefix_tuple.as_slice()) > inner_hdr.size as usize {
             panic!("SPGiST inner-tuple split must not produce longer prefix");
@@ -1382,21 +1437,34 @@ fn spgSplitNodeAction<'m>(
     if new_buffer == InvalidBuffer {
         postfix_blkno = current.blkno;
         let mut pm = page(current);
-        postfix_offset =
-            SpGistPageAddNewItem(&mut pm, &postfix_tuple.as_slice()[..postfix_size], None, false);
+        postfix_offset = SpGistPageAddNewItem(
+            &mut pm,
+            &postfix_tuple.as_slice()[..postfix_size],
+            None,
+            false,
+        );
         xlrec.postfixBlkSame = true;
     } else {
         postfix_blkno = bufmgr::buffer_get_block_number::call(new_buffer);
         let mut pm = buf_page_mut(new_buffer);
-        postfix_offset =
-            SpGistPageAddNewItem(&mut pm, &postfix_tuple.as_slice()[..postfix_size], None, false);
+        postfix_offset = SpGistPageAddNewItem(
+            &mut pm,
+            &postfix_tuple.as_slice()[..postfix_size],
+            None,
+            false,
+        );
         bufmgr::mark_buffer_dirty::call(new_buffer)?;
         xlrec.postfixBlkSame = false;
     }
     xlrec.offnumPostfix = postfix_offset;
 
     // set the downlink in both the WAL image and the on-page copy
-    spgUpdateNodeLink(prefix_tuple.as_mut_slice(), childNodeN, postfix_blkno, postfix_offset);
+    spgUpdateNodeLink(
+        prefix_tuple.as_mut_slice(),
+        childNodeN,
+        postfix_blkno,
+        postfix_offset,
+    );
     {
         let mut pm = page(current);
         let on_page = item_slice_mut(&mut pm, current.offnum);
@@ -1515,7 +1583,11 @@ pub fn spgdoinsert<'m>(
     let mut num_no_progress_cycles = 0;
 
     let mut current = SPPageDesc {
-        blkno: if isnull { SPGIST_NULL_BLKNO } else { SPGIST_ROOT_BLKNO },
+        blkno: if isnull {
+            SPGIST_NULL_BLKNO
+        } else {
+            SPGIST_ROOT_BLKNO
+        },
         buffer: InvalidBuffer,
         offnum: FirstOffsetNumber,
         node: -1,
@@ -1684,9 +1756,8 @@ pub fn spgdoinsert<'m>(
                             panic!("cannot add a node to an allTheSame inner tuple")
                         }
                         spgChooseOut::MatchNode { nodeN, .. } => {
-                            *nodeN = pg_prng::global_prng(|p| {
-                                p.u64_range(0, (n_nodes - 1) as u64)
-                            }) as i32;
+                            *nodeN = pg_prng::global_prng(|p| p.u64_range(0, (n_nodes - 1) as u64))
+                                as i32;
                         }
                         _ => {}
                     }
@@ -1734,7 +1805,13 @@ pub fn spgdoinsert<'m>(
                             panic!("cannot add a node to an inner tuple without node labels");
                         }
                         spgAddNodeAction(
-                            mcx, index, state, &mut current, &parent, nodeN, nodeLabel,
+                            mcx,
+                            index,
+                            state,
+                            &mut current,
+                            &parent,
+                            nodeN,
+                            nodeLabel,
                         )?;
                         continue;
                     }

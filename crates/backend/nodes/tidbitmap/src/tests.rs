@@ -5,7 +5,9 @@ fn tid(blk: BlockNumber, off: OffsetNumber) -> ItemPointerData {
     ItemPointerData::new(blk, off)
 }
 
-fn drain(tbm: &mut TIDBitmap<'_>) -> alloc::vec::Vec<(BlockNumber, bool, alloc::vec::Vec<OffsetNumber>)> {
+fn drain(
+    tbm: &mut TIDBitmap<'_>,
+) -> alloc::vec::Vec<(BlockNumber, bool, alloc::vec::Vec<OffsetNumber>)> {
     let mut iter = tbm.begin_private_iterate().unwrap();
     let mut out = alloc::vec::Vec::new();
     while let Some(res) = iter.next(tbm) {
@@ -26,7 +28,8 @@ fn empty_and_one_page() {
     let ctx = MemoryContext::new("t");
     let mut tbm = TIDBitmap::new(ctx.mcx(), 1024 * 1024);
     assert!(tbm.is_empty());
-    tbm.add_tuples(&[tid(7, 3), tid(7, 1), tid(7, 291)], false).unwrap();
+    tbm.add_tuples(&[tid(7, 3), tid(7, 1), tid(7, 291)], false)
+        .unwrap();
     assert!(!tbm.is_empty());
     let pages = drain(&mut tbm);
     assert_eq!(pages, alloc::vec![(7, false, alloc::vec![1, 3, 291])]);
@@ -36,7 +39,8 @@ fn empty_and_one_page() {
 fn multi_page_sorted_iteration() {
     let ctx = MemoryContext::new("t");
     let mut tbm = TIDBitmap::new(ctx.mcx(), 1024 * 1024);
-    tbm.add_tuples(&[tid(50, 2), tid(3, 9), tid(3, 10), tid(1000, 65)], true).unwrap();
+    tbm.add_tuples(&[tid(50, 2), tid(3, 9), tid(3, 10), tid(1000, 65)], true)
+        .unwrap();
     let pages = drain(&mut tbm);
     assert_eq!(
         pages,
@@ -57,7 +61,10 @@ fn multi_page_sorted_iteration() {
 fn offset_out_of_range_errors() {
     let ctx = MemoryContext::new("t");
     let mut tbm = TIDBitmap::new(ctx.mcx(), 1024 * 1024);
-    let err = tbm.add_tuples(&[tid(1, (TBM_MAX_TUPLES_PER_PAGE + 1) as OffsetNumber)], false);
+    let err = tbm.add_tuples(
+        &[tid(1, (TBM_MAX_TUPLES_PER_PAGE + 1) as OffsetNumber)],
+        false,
+    );
     assert!(err.is_err());
 }
 
@@ -107,11 +114,16 @@ fn intersect_exact() {
     let ctx = MemoryContext::new("t");
     let mut a = TIDBitmap::new(ctx.mcx(), 1024 * 1024);
     let mut b = TIDBitmap::new(ctx.mcx(), 1024 * 1024);
-    a.add_tuples(&[tid(1, 1), tid(1, 2), tid(2, 3), tid(3, 4)], false).unwrap();
-    b.add_tuples(&[tid(1, 2), tid(3, 4), tid(3, 5)], false).unwrap();
+    a.add_tuples(&[tid(1, 1), tid(1, 2), tid(2, 3), tid(3, 4)], false)
+        .unwrap();
+    b.add_tuples(&[tid(1, 2), tid(3, 4), tid(3, 5)], false)
+        .unwrap();
     a.intersect(&b);
     let pages = drain(&mut a);
-    assert_eq!(pages, alloc::vec![(1, false, alloc::vec![2]), (3, false, alloc::vec![4])]);
+    assert_eq!(
+        pages,
+        alloc::vec![(1, false, alloc::vec![2]), (3, false, alloc::vec![4])]
+    );
 }
 
 #[test]
@@ -159,7 +171,10 @@ fn lossify_under_memory_pressure() {
     let mut seen: alloc::vec::Vec<BlockNumber> = pages.iter().map(|p| p.0).collect();
     seen.sort_unstable();
     assert_eq!(seen, expected);
-    assert!(pages.iter().any(|p| p.1), "memory pressure should have lossified pages");
+    assert!(
+        pages.iter().any(|p| p.1),
+        "memory pressure should have lossified pages"
+    );
     for (blockno, lossy, offs) in pages {
         if !lossy {
             assert_eq!(offs, alloc::vec![1], "block {blockno}");
@@ -194,7 +209,10 @@ fn lossify_grow_during_walk() {
     assert!(seen.windows(2).all(|w| w[0] < w[1]), "iteration sorted");
     seen.sort_unstable();
     assert_eq!(seen, expected, "every added page emitted exactly once");
-    assert!(pages.iter().any(|p| p.1), "pressure must have lossified pages");
+    assert!(
+        pages.iter().any(|p| p.1),
+        "pressure must have lossified pages"
+    );
     for (blockno, lossy, offs) in pages {
         if !lossy {
             assert_eq!(offs, alloc::vec![2], "block {blockno}");
@@ -237,11 +255,7 @@ fn drain_shared(tbm: &mut TIDBitmap<'_>) -> Drained {
     out
 }
 
-fn build<'a>(
-    ctx: &'a MemoryContext,
-    maxbytes: usize,
-    f: fn(&mut TIDBitmap<'_>),
-) -> TIDBitmap<'a> {
+fn build<'a>(ctx: &'a MemoryContext, maxbytes: usize, f: fn(&mut TIDBitmap<'_>)) -> TIDBitmap<'a> {
     let mut tbm = TIDBitmap::new(ctx.mcx(), maxbytes);
     f(&mut tbm);
     tbm
@@ -250,8 +264,14 @@ fn build<'a>(
 #[test]
 fn shared_matches_private_sequences() {
     let corpora: [fn(&mut TIDBitmap<'_>); 5] = [
-        |t| t.add_tuples(&[tid(7, 3), tid(7, 1), tid(7, 291)], false).unwrap(),
-        |t| t.add_tuples(&[tid(50, 2), tid(3, 9), tid(3, 10), tid(1000, 65)], true).unwrap(),
+        |t| {
+            t.add_tuples(&[tid(7, 3), tid(7, 1), tid(7, 291)], false)
+                .unwrap()
+        },
+        |t| {
+            t.add_tuples(&[tid(50, 2), tid(3, 9), tid(3, 10), tid(1000, 65)], true)
+                .unwrap()
+        },
         |t| {
             t.add_tuples(&[tid(700, 4)], false).unwrap();
             t.add_page(5).unwrap();
@@ -292,15 +312,21 @@ fn shared_one_page_mode() {
     let ctx = MemoryContext::new("t");
     let mut tbm = TIDBitmap::new(ctx.mcx(), 1024 * 1024);
     tbm.add_tuples(&[tid(9, 2), tid(9, 40)], true).unwrap();
-    assert_eq!(drain_shared(&mut tbm), alloc::vec![(9, false, alloc::vec![2, 40])]);
+    assert_eq!(
+        drain_shared(&mut tbm),
+        alloc::vec![(9, false, alloc::vec![2, 40])]
+    );
 }
 
 #[test]
 fn shared_two_iterators_partition_the_scan() {
     let ctx = MemoryContext::new("t");
     let fill: fn(&mut TIDBitmap<'_>) = |t| {
-        t.add_tuples(&[tid(1, 1), tid(4, 2), tid(9, 3), tid(700, 4), tid(1000, 5)], false)
-            .unwrap();
+        t.add_tuples(
+            &[tid(1, 1), tid(4, 2), tid(9, 3), tid(700, 4), tid(1000, 5)],
+            false,
+        )
+        .unwrap();
         t.add_page(300).unwrap();
     };
     let mut solo = build(&ctx, 1024 * 1024, fill);
@@ -312,7 +338,11 @@ fn shared_two_iterators_partition_the_scan() {
     let mut b = TbmSharedIterator::attach(st);
     let mut merged: Drained = alloc::vec::Vec::new();
     loop {
-        let res = if merged.len() % 2 == 0 { a.next() } else { b.next() };
+        let res = if merged.len() % 2 == 0 {
+            a.next()
+        } else {
+            b.next()
+        };
         let Some(res) = res else { break };
         let mut offs = alloc::vec::Vec::new();
         if !res.lossy {
@@ -448,7 +478,10 @@ fn range_iterator_windows_cover_shared_content() {
 #[test]
 fn union_frozen_matches_live_union() {
     let corpora: [fn(&mut TIDBitmap<'_>); 4] = [
-        |t| t.add_tuples(&[tid(1, 1), tid(2, 2), tid(7, 40)], false).unwrap(),
+        |t| {
+            t.add_tuples(&[tid(1, 1), tid(2, 2), tid(7, 40)], false)
+                .unwrap()
+        },
         |t| t.add_tuples(&[tid(2, 5), tid(9, 1)], true).unwrap(),
         |t| {
             t.add_tuples(&[tid(3, 3)], false).unwrap();

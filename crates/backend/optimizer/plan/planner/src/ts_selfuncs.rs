@@ -18,8 +18,7 @@ pub fn tsmatchsel<'mcx>(
     args: &[NodeId],
     varrelid: i32,
 ) -> PgResult<f64> {
-    let Some((vardata, other, _varonleft)) = get_restriction_variable(run, args, varrelid)?
-    else {
+    let Some((vardata, other, _varonleft)) = get_restriction_variable(run, args, varrelid)? else {
         return Ok(DEFAULT_TS_MATCH_SEL);
     };
     let Some(c) = other.as_const() else {
@@ -38,7 +37,9 @@ pub fn tsmatchsel<'mcx>(
 
 fn tsquerysel(mcx: mcx::Mcx<'_>, vardata: &VariableStatData<'_>, constval: Datum) -> PgResult<f64> {
     let img = crate::selfuncs::varlena_image_any(mcx, constval)?;
-    let query = TsQueryRef { payload: &img[datum::VARHDRSZ..] };
+    let query = TsQueryRef {
+        payload: &img[datum::VARHDRSZ..],
+    };
     if query.size() == 0 {
         return Ok(0.0);
     }
@@ -54,11 +55,7 @@ fn tsquerysel(mcx: mcx::Mcx<'_>, vardata: &VariableStatData<'_>, constval: Datum
     }
 }
 
-fn mcelem_tsquery_selec(
-    query: TsQueryRef<'_>,
-    values: &[Datum],
-    numbers: &[f32],
-) -> PgResult<f64> {
+fn mcelem_tsquery_selec(query: TsQueryRef<'_>, values: &[Datum], numbers: &[f32]) -> PgResult<f64> {
     // Two extra Numbers cells carry the min and max frequency.
     if numbers.len() != values.len() + 2 {
         return tsquery_opr_selec(query, 0, None, 0.0);
@@ -133,9 +130,7 @@ fn tsquery_opr_selec(
                 let s2 = tsquery_opr_selec(q, i + opr.left as usize, lookup, minfreq)?;
                 s1 + s2 - s1 * s2
             }
-            other => {
-                return Err(PgError::error(format!("unrecognized operator: {other}")).into())
-            }
+            other => return Err(PgError::error(format!("unrecognized operator: {other}")).into()),
         },
         Item::ValStop => panic!("tsquery_opr_selec: QI_VALSTOP in stored tsquery"),
     };

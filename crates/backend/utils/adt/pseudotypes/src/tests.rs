@@ -19,7 +19,10 @@ fn dummy_stubs_carry_0a000_and_exact_messages() {
     assert_eq!(err.message(), "cannot accept a value of type anyarray");
 
     let err = pg_ddl_command_send().unwrap_err();
-    assert_eq!(err.message(), "cannot display a value of type pg_ddl_command");
+    assert_eq!(
+        err.message(),
+        "cannot display a value of type pg_ddl_command"
+    );
 
     let err = shell_in().unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_FEATURE_NOT_SUPPORTED);
@@ -51,7 +54,10 @@ fn void_io() {
 fn pg_node_tree_out_passes_text_through() {
     let ctx = MemoryContext::new("t");
     let mcx = ctx.mcx();
-    assert_eq!(&pg_node_tree_out(mcx, b"{QUERY :junk 1}").unwrap()[..], b"{QUERY :junk 1}\0");
+    assert_eq!(
+        &pg_node_tree_out(mcx, b"{QUERY :junk 1}").unwrap()[..],
+        b"{QUERY :junk 1}\0"
+    );
 }
 
 #[test]

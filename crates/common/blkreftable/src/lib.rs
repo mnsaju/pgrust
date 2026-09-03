@@ -161,7 +161,8 @@ impl<'mcx> BlockRefTableEntry<'mcx> {
             self.chunk_data
                 .try_reserve(grow)
                 .map_err(|_| mcx.oom(grow * 8))?;
-            self.chunk_data.resize_with(max_chunks, || PgVec::new_in(mcx));
+            self.chunk_data
+                .resize_with(max_chunks, || PgVec::new_in(mcx));
         }
 
         if self.chunk_data[chunkno].is_empty() {
@@ -510,8 +511,7 @@ impl<'mcx, 'f, R: FnMut(&mut [u8]) -> PgResult<usize>> BlockRefTableReader<'mcx,
             let length = out.len() - written;
             if self.cursor < self.used {
                 let n = core::cmp::min(length, self.used - self.cursor);
-                out[written..written + n]
-                    .copy_from_slice(&self.data[self.cursor..self.cursor + n]);
+                out[written..written + n].copy_from_slice(&self.data[self.cursor..self.cursor + n]);
                 self.crc = pg_comp_crc32c(self.crc, &self.data[self.cursor..self.cursor + n]);
                 self.cursor += n;
                 written += n;
@@ -544,9 +544,7 @@ impl<'mcx, 'f, R: FnMut(&mut [u8]) -> PgResult<usize>> BlockRefTableReader<'mcx,
         .into()
     }
 
-    pub fn next_relation(
-        &mut self,
-    ) -> PgResult<Option<(RelFileLocator, ForkNumber, BlockNumber)>> {
+    pub fn next_relation(&mut self) -> PgResult<Option<(RelFileLocator, ForkNumber, BlockNumber)>> {
         debug_assert_eq!(self.total_chunks, self.consumed_chunks);
 
         let mut sbytes = [0u8; SERIALIZED_ENTRY_LEN];
@@ -573,7 +571,9 @@ impl<'mcx, 'f, R: FnMut(&mut [u8]) -> PgResult<usize>> BlockRefTableReader<'mcx,
         self.chunk_size.clear();
         let n = sentry.nchunks as usize;
         let alloc = *self.chunk_size.allocator();
-        self.chunk_size.try_reserve(n).map_err(|_| alloc.oom(n * 2))?;
+        self.chunk_size
+            .try_reserve(n)
+            .map_err(|_| alloc.oom(n * 2))?;
         self.chunk_size.resize(n, 0);
         let mut size_words = core::mem::replace(&mut self.chunk_size, PgVec::new_in(alloc));
         let res = self.read(u16s_as_bytes_mut(&mut size_words));
@@ -585,8 +585,7 @@ impl<'mcx, 'f, R: FnMut(&mut [u8]) -> PgResult<usize>> BlockRefTableReader<'mcx,
 
         // C carries the raw int through; unknown fork values only occur in
         // corrupt files and collapse to InvalidForkNumber here.
-        let forknum =
-            ForkNumber::from_i32(sentry.forknum).unwrap_or(ForkNumber::InvalidForkNumber);
+        let forknum = ForkNumber::from_i32(sentry.forknum).unwrap_or(ForkNumber::InvalidForkNumber);
         Ok(Some((sentry.rlocator, forknum, sentry.limit_block)))
     }
 

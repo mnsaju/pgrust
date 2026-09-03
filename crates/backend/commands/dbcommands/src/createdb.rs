@@ -30,7 +30,7 @@ const LC_COLLATE: i32 = 3;
 
 use crate::{
     check_db_file_conflict, database_is_invalid_form, get_db_info, have_createdb_privilege, loc,
-    GLOBALTABLESPACE_OID, TableSpaceRelationId, XLOG_DBASE_CREATE_FILE_COPY,
+    TableSpaceRelationId, GLOBALTABLESPACE_OID, XLOG_DBASE_CREATE_FILE_COPY,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -53,7 +53,10 @@ fn defGetInt32(def: &DefElem<'_>) -> PgResult<i32> {
         Some(i) => Ok(i.ival),
         None => Err(ereport(ERROR)
             .errcode(ERRCODE_SYNTAX_ERROR)
-            .errmsg(format!("{} requires an integer value", def.defname.unwrap_or("")))
+            .errmsg(format!(
+                "{} requires an integer value",
+                def.defname.unwrap_or("")
+            ))
             .into_error()
             .into()),
     }
@@ -69,17 +72,15 @@ fn defGetObjectId(def: &DefElem<'_>) -> PgResult<Oid> {
     }
     Err(ereport(ERROR)
         .errcode(ERRCODE_SYNTAX_ERROR)
-        .errmsg(format!("{} requires a numeric value", def.defname.unwrap_or("")))
+        .errmsg(format!(
+            "{} requires a numeric value",
+            def.defname.unwrap_or("")
+        ))
         .into_error()
         .into())
 }
 
-
-pub fn check_encoding_locale_matches(
-    encoding: i32,
-    collate: &str,
-    ctype: &str,
-) -> PgResult<()> {
+pub fn check_encoding_locale_matches(encoding: i32, collate: &str, ctype: &str) -> PgResult<()> {
     let ctype_encoding = pg_locale::pg_get_encoding_from_locale(Some(ctype), true)?;
     let collate_encoding = pg_locale::pg_get_encoding_from_locale(Some(collate), true)?;
 
@@ -155,7 +156,11 @@ fn CreateDatabaseUsingFileCopy(
             _ => continue,
         }
 
-        let dsttablespace = if srctablespace == src_tsid { dst_tsid } else { srctablespace };
+        let dsttablespace = if srctablespace == src_tsid {
+            dst_tsid
+        } else {
+            srctablespace
+        };
         let dstpath = relpath::GetDatabasePath(mcx, dst_dboid, dsttablespace)?;
 
         fd::copydir(srcpath.as_str(), dstpath.as_str(), false)?;
@@ -396,11 +401,14 @@ pub fn createdb<'mcx>(mcx: Mcx<'mcx>, stmt: &CreatedbStmt<'mcx>) -> PgResult<Oid
 
     // check_can_set_role(GetUserId(), datdba) (acl.c).
     if !adt_acl::member_can_set_role(miscinit::GetUserId(), datdba)? {
-        let rolename = miscinit::GetUserNameFromId(mcx, datdba, false)?
-            .expect("noerr=false yields a name");
+        let rolename =
+            miscinit::GetUserNameFromId(mcx, datdba, false)?.expect("noerr=false yields a name");
         return Err(ereport(ERROR)
             .errcode(ERRCODE_INSUFFICIENT_PRIVILEGE)
-            .errmsg(format!("must be able to SET ROLE \"{}\"", rolename.as_str()))
+            .errmsg(format!(
+                "must be able to SET ROLE \"{}\"",
+                rolename.as_str()
+            ))
             .into_error()
             .into());
     }
@@ -418,18 +426,20 @@ pub fn createdb<'mcx>(mcx: Mcx<'mcx>, stmt: &CreatedbStmt<'mcx>) -> PgResult<Oid
     if database_is_invalid_form(src.datconnlimit) {
         return Err(ereport(ERROR)
             .errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE)
-            .errmsg(format!("cannot use invalid database \"{dbtemplate}\" as template"))
+            .errmsg(format!(
+                "cannot use invalid database \"{dbtemplate}\" as template"
+            ))
             .errhint("Use DROP DATABASE to drop invalid databases.".to_string())
             .into_error()
             .into());
     }
 
-    if !src.datistemplate
-        && !adt_acl::has_privs_of_role(miscinit::GetUserId(), src.datdba)?
-    {
+    if !src.datistemplate && !adt_acl::has_privs_of_role(miscinit::GetUserId(), src.datdba)? {
         return Err(ereport(ERROR)
             .errcode(ERRCODE_INSUFFICIENT_PRIVILEGE)
-            .errmsg(format!("permission denied to copy database \"{dbtemplate}\""))
+            .errmsg(format!(
+                "permission denied to copy database \"{dbtemplate}\""
+            ))
             .into_error()
             .into());
     }
@@ -766,13 +776,9 @@ pub fn createdb<'mcx>(mcx: Mcx<'mcx>, stmt: &CreatedbStmt<'mcx>) -> PgResult<Oid
             src_deftablespace,
             dst_deftablespace,
         ),
-        CreateDBStrategy::FileCopy => CreateDatabaseUsingFileCopy(
-            mcx,
-            src_dboid,
-            dboid,
-            src_deftablespace,
-            dst_deftablespace,
-        ),
+        CreateDBStrategy::FileCopy => {
+            CreateDatabaseUsingFileCopy(mcx, src_dboid, dboid, src_deftablespace, dst_deftablespace)
+        }
     };
     if let Err(e) = copy {
         let _ = createdb_failure_cleanup(mcx, src_dboid, dboid, dbstrategy);

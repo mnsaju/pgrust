@@ -41,7 +41,11 @@ pub fn pgaio_io_set_iovec_pages(pages: &[*mut u8], page_len: usize) -> i32 {
     }
 }
 
-pub fn pgaio_io_start_readv_current(fd: i32, iovcnt: i32, offset: i64) -> types_error::PgResult<()> {
+pub fn pgaio_io_start_readv_current(
+    fd: i32,
+    iovcnt: i32,
+    offset: i64,
+) -> types_error::PgResult<()> {
     let index = current_handed_out("pgaio_io_start_readv");
     pgaio_io_before_start(index);
     let h = ioh(index);
@@ -89,7 +93,12 @@ pub(crate) fn pgaio_io_perform_synchronously(index: u32) {
             waitevent_seams::pgstat_report_wait_start::call(WAIT_EVENT_DATA_FILE_READ);
             // SAFETY: the iovec region was filled by the definer and the pages
             let r = unsafe {
-                pg_preadv_raw(op_data.fd, crate::iovec_region(h.iovec_off), op_data.iov_length as i32, op_data.offset as i64)
+                pg_preadv_raw(
+                    op_data.fd,
+                    crate::iovec_region(h.iovec_off),
+                    op_data.iov_length as i32,
+                    op_data.offset as i64,
+                )
             };
             waitevent_seams::pgstat_report_wait_end::call();
             r
@@ -98,7 +107,12 @@ pub(crate) fn pgaio_io_perform_synchronously(index: u32) {
             waitevent_seams::pgstat_report_wait_start::call(WAIT_EVENT_DATA_FILE_WRITE);
             // SAFETY: as READV.
             let r = unsafe {
-                pg_pwritev_raw(op_data.fd, crate::iovec_region(h.iovec_off), op_data.iov_length as i32, op_data.offset as i64)
+                pg_pwritev_raw(
+                    op_data.fd,
+                    crate::iovec_region(h.iovec_off),
+                    op_data.iov_length as i32,
+                    op_data.offset as i64,
+                )
             };
             waitevent_seams::pgstat_report_wait_end::call();
             r
@@ -107,7 +121,9 @@ pub(crate) fn pgaio_io_perform_synchronously(index: u32) {
     };
 
     let result_i32: i32 = if result < 0 {
-        -std::io::Error::last_os_error().raw_os_error().unwrap_or(libc::EIO)
+        -std::io::Error::last_os_error()
+            .raw_os_error()
+            .unwrap_or(libc::EIO)
     } else {
         result as i32
     };

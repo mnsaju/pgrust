@@ -36,7 +36,10 @@ fn probe_bloom_rejects_and_density() {
         let misses = (100_000..110_000i32)
             .filter(|v| !bf.test(::hashfn::hash_bytes_uint32(*v as u32)))
             .count();
-        assert!(misses > 9_000, "filter admits too much: {misses} misses of 10000");
+        assert!(
+            misses > 9_000,
+            "filter admits too much: {misses} misses of 10000"
+        );
         let full = ProbeBloom {
             words: ::mcx::vec_from_elem_in(mcx, u64::MAX, 64),
             wmask: 63,

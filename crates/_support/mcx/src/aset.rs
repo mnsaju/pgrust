@@ -126,7 +126,11 @@ impl Block {
         #[cfg(feature = "aset-stats")]
         stats::BLOCK_MALLOCS.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
         let ptr = Global.allocate(Block::layout(size))?;
-        Ok(Block { ptr: ptr.cast(), size, used: 0 })
+        Ok(Block {
+            ptr: ptr.cast(),
+            size,
+            used: 0,
+        })
     }
 
     /// # Safety: at most once per block, with no chunk in it still in use.
@@ -151,7 +155,9 @@ impl KeeperPool {
     // direct free) — see PoolMutex::try_with.
     #[cfg(test)]
     fn with<R>(&self, f: impl FnOnce(&mut alloc::vec::Vec<alloc::vec::Vec<Block>>) -> R) -> R {
-        self.stack.try_with(f).expect("uncontended in single-threaded test")
+        self.stack
+            .try_with(f)
+            .expect("uncontended in single-threaded test")
     }
 
     fn take(&self) -> alloc::vec::Vec<Block> {
@@ -375,7 +381,10 @@ impl AllocSet {
             // SAFETY: csize <= avail keeps the bump within the active block; p non-null there.
             unsafe {
                 self.cur_ptr = p.add(csize);
-                return Ok(NonNull::slice_from_raw_parts(NonNull::new_unchecked(p), csize));
+                return Ok(NonNull::slice_from_raw_parts(
+                    NonNull::new_unchecked(p),
+                    csize,
+                ));
             }
         }
 
@@ -606,7 +615,10 @@ mod tests {
         let keeper_base = a.blocks[0].ptr.as_ptr();
         assert_eq!(a.cur_ptr, keeper_base);
         let first = a.alloc(l).unwrap().cast::<u8>().as_ptr();
-        assert_eq!(first, keeper_base, "first post-reset chunk must start the keeper");
+        assert_eq!(
+            first, keeper_base,
+            "first post-reset chunk must start the keeper"
+        );
         for _ in 0..(INIT_BLOCK_SIZE / 64 + 10) {
             let _ = a.alloc(l).unwrap();
         }
@@ -697,7 +709,9 @@ mod tests {
 
     #[test]
     fn keeper_pool_caps_and_recycles() {
-        let pool = KeeperPool { stack: crate::PoolMutex::new(alloc::vec::Vec::new()) };
+        let pool = KeeperPool {
+            stack: crate::PoolMutex::new(alloc::vec::Vec::new()),
+        };
         pool.recycle(alloc::vec::Vec::new());
         assert_eq!(pool.with(|s| s.len()), 1);
         let _ = pool.take();

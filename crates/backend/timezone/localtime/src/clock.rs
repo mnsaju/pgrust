@@ -307,7 +307,11 @@ fn leaps_thru_end_of(y: i32) -> i32 {
     }
 }
 
-pub(crate) fn timesub(timep: pg_time_t, offset: i32, sp: Option<&TzState>) -> Option<PgTm<'static>> {
+pub(crate) fn timesub(
+    timep: pg_time_t,
+    offset: i32,
+    sp: Option<&TzState>,
+) -> Option<PgTm<'static>> {
     let (corr, hit) = leap_correction(sp, timep);
 
     let mut y: i32 = EPOCH_YEAR;

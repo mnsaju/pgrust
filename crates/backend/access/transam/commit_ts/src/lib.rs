@@ -7,7 +7,7 @@ use std::sync::OnceLock;
 
 use elog::ereport;
 use init_small::globals;
-use lwlock::{LWLockAcquire, LWLockRelease, LWLock, LW_EXCLUSIVE, LW_SHARED};
+use lwlock::{LWLock, LWLockAcquire, LWLockRelease, LW_EXCLUSIVE, LW_SHARED};
 use slru::{
     check_slru_buffers, LwGuard, SimpleLruAutotuneBuffers, SimpleLruDoesPhysicalPageExist,
     SimpleLruGetBankLock, SimpleLruInit, SimpleLruReadPage, SimpleLruReadPage_ReadOnly,
@@ -114,7 +114,11 @@ pub fn TransactionTreeSetCommitTsData(
     }
 
     let nsubxids = subxids.len();
-    let newestXact = if nsubxids > 0 { subxids[nsubxids - 1] } else { xid };
+    let newestXact = if nsubxids > 0 {
+        subxids[nsubxids - 1]
+    } else {
+        xid
+    };
 
     let mut headxid = xid;
     let mut i = 0usize;
@@ -180,7 +184,12 @@ fn TransactionIdSetCommitTs(
 ) {
     let entryno = TransactionIdToCTsEntry(xid);
     debug_assert!(TransactionIdIsNormal(xid));
-    write_entry(CommitTsCtl().page_buffer_mut(slotno, bank), entryno, ts, nodeid);
+    write_entry(
+        CommitTsCtl().page_buffer_mut(slotno, bank),
+        entryno,
+        ts,
+        nodeid,
+    );
 }
 
 pub fn TransactionIdGetCommitTsData(
@@ -565,8 +574,11 @@ pub fn commit_ts_redo(record: &mut XLogReaderState) -> PgResult<()> {
     let data = unsafe { decoded.main_data_bytes() };
 
     if info == COMMIT_TS_ZEROPAGE {
-        let pageno =
-            i64::from_ne_bytes(data[..8].try_into().expect("short COMMIT_TS_ZEROPAGE record"));
+        let pageno = i64::from_ne_bytes(
+            data[..8]
+                .try_into()
+                .expect("short COMMIT_TS_ZEROPAGE record"),
+        );
 
         let mut bank = LwGuard::acquire(SimpleLruGetBankLock(ctl, pageno), LW_EXCLUSIVE)?;
 
@@ -576,10 +588,15 @@ pub fn commit_ts_redo(record: &mut XLogReaderState) -> PgResult<()> {
 
         bank.release()
     } else if info == COMMIT_TS_TRUNCATE {
-        let pageno =
-            i64::from_ne_bytes(data[..8].try_into().expect("short COMMIT_TS_TRUNCATE record"));
+        let pageno = i64::from_ne_bytes(
+            data[..8]
+                .try_into()
+                .expect("short COMMIT_TS_TRUNCATE record"),
+        );
         let oldest_xid = TransactionId::from_ne_bytes(
-            data[8..12].try_into().expect("short COMMIT_TS_TRUNCATE record"),
+            data[8..12]
+                .try_into()
+                .expect("short COMMIT_TS_TRUNCATE record"),
         );
 
         AdvanceOldestCommitTsXid(oldest_xid)?;

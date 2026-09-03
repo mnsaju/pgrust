@@ -28,8 +28,16 @@ fn transform_count_star_sets_levels_and_has_aggs() {
     pstate.p_expr_kind = ParseExprKind::EXPR_KIND_SELECT_TARGET;
 
     let mut agg = count_aggref(mcx);
-    transformAggregateCall(mcx, &mut pstate, &mut agg, &NodeList::nil(), &[], &NodeList::nil(), false)
-        .unwrap();
+    transformAggregateCall(
+        mcx,
+        &mut pstate,
+        &mut agg,
+        &NodeList::nil(),
+        &[],
+        &NodeList::nil(),
+        false,
+    )
+    .unwrap();
 
     assert_eq!(agg.agglevelsup, 0);
     assert!(agg.args.is_nil());
@@ -51,8 +59,16 @@ fn sum_var_arg_becomes_targetlist() {
     agg.aggtype = INT8OID;
     agg.location = 7;
 
-    transformAggregateCall(mcx, &mut pstate, &mut agg, &args, &[INT4OID], &NodeList::nil(), false)
-        .unwrap();
+    transformAggregateCall(
+        mcx,
+        &mut pstate,
+        &mut agg,
+        &args,
+        &[INT4OID],
+        &NodeList::nil(),
+        false,
+    )
+    .unwrap();
 
     assert_eq!(agg.args.len(), 1);
     let tle = agg.args.nth(0).as_target_entry().unwrap();
@@ -83,7 +99,8 @@ fn aggregate_in_where_is_42803() {
 
     assert_eq!(err.sqlstate(), ERRCODE_GROUPING_ERROR);
     assert!(
-        err.message().contains("aggregate functions are not allowed in WHERE"),
+        err.message()
+            .contains("aggregate functions are not allowed in WHERE"),
         "{}",
         err.message()
     );
@@ -103,23 +120,38 @@ fn nested_aggregate_is_42803() {
     outer.aggtype = INT8OID;
     outer.location = 7;
 
-    let err =
-        transformAggregateCall(mcx, &mut pstate, &mut outer, &args, &[INT8OID], &NodeList::nil(), false)
-            .map(|_| ())
-            .unwrap_err();
+    let err = transformAggregateCall(
+        mcx,
+        &mut pstate,
+        &mut outer,
+        &args,
+        &[INT8OID],
+        &NodeList::nil(),
+        false,
+    )
+    .map(|_| ())
+    .unwrap_err();
 
     assert_eq!(err.sqlstate(), ERRCODE_GROUPING_ERROR);
     assert!(
-        err.message().contains("aggregate function calls cannot be nested"),
+        err.message()
+            .contains("aggregate function calls cannot be nested"),
         "{}",
         err.message()
     );
 }
 
 fn query_with_rtable<'mcx>(mcx: Mcx<'mcx>, tlist: NodeList<'mcx>) -> Query<'mcx> {
-    let colnames =
-        NodeList::make1(mcx, Node::mk(mcx, PgStr { sval: "x" }).unwrap()).unwrap();
-    let eref = Node::mk_mut(mcx, Alias { aliasname: Some("t"), colnames }).unwrap().seal_ref();
+    let colnames = NodeList::make1(mcx, Node::mk(mcx, PgStr { sval: "x" }).unwrap()).unwrap();
+    let eref = Node::mk_mut(
+        mcx,
+        Alias {
+            aliasname: Some("t"),
+            colnames,
+        },
+    )
+    .unwrap()
+    .seal_ref();
     let mut rte = Node::build::<RangeTblEntry>(mcx).unwrap();
     rte.eref = Some(eref);
     let mut qry = Query::default();
@@ -139,7 +171,9 @@ fn ungrouped_column_is_42803_with_column_name() {
     let tle = Node::mk_target_entry(mcx, var, 1, Some("x"), false).unwrap();
     let mut qry = query_with_rtable(mcx, NodeList::make1(mcx, tle).unwrap());
 
-    let err = parseCheckAggregates(mcx, &mut pstate, &mut qry).map(|_| ()).unwrap_err();
+    let err = parseCheckAggregates(mcx, &mut pstate, &mut qry)
+        .map(|_| ())
+        .unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_GROUPING_ERROR);
     assert!(
         err.message().contains(
@@ -163,8 +197,16 @@ fn var_inside_aggregate_passes_check() {
     agg.aggfnoid = 2108;
     agg.aggtype = INT8OID;
     agg.location = 7;
-    transformAggregateCall(mcx, &mut pstate, &mut agg, &args, &[INT4OID], &NodeList::nil(), false)
-        .unwrap();
+    transformAggregateCall(
+        mcx,
+        &mut pstate,
+        &mut agg,
+        &args,
+        &[INT4OID],
+        &NodeList::nil(),
+        false,
+    )
+    .unwrap();
 
     let tle = Node::mk_target_entry(mcx, agg.seal(), 1, Some("sum"), false).unwrap();
     let mut qry = query_with_rtable(mcx, NodeList::make1(mcx, tle).unwrap());
@@ -201,10 +243,8 @@ fn grouped_column_passes_check() {
     let var = Node::mk_var(mcx, 1, 1, INT4OID, -1, InvalidOid, 0).unwrap();
     let tle = Node::mk_target_entry(mcx, var, 1, Some("x"), false).unwrap();
     // SAFETY: freshly built tlist; no other reference is live.
-    unsafe {
-        tle.with_mut::<types_nodes::primnodes::TargetEntry, _>(|t| t.ressortgroupref = 1)
-    }
-    .unwrap();
+    unsafe { tle.with_mut::<types_nodes::primnodes::TargetEntry, _>(|t| t.ressortgroupref = 1) }
+        .unwrap();
     let mut qry = query_with_rtable(mcx, NodeList::make1(mcx, tle).unwrap());
     qry.groupClause = group_clause_ref1(mcx);
     parseCheckAggregates(mcx, &mut pstate, &mut qry).unwrap();
@@ -223,17 +263,23 @@ fn ungrouped_column_next_to_group_by_is_42803() {
         Node::mk(mcx, PgStr { sval: "y" }).unwrap(),
     )
     .unwrap();
-    let eref = Node::mk_mut(mcx, Alias { aliasname: Some("t"), colnames }).unwrap().seal_ref();
+    let eref = Node::mk_mut(
+        mcx,
+        Alias {
+            aliasname: Some("t"),
+            colnames,
+        },
+    )
+    .unwrap()
+    .seal_ref();
     let mut rte = Node::build::<RangeTblEntry>(mcx).unwrap();
     rte.eref = Some(eref);
 
     let gvar = Node::mk_var(mcx, 1, 1, INT4OID, -1, InvalidOid, 0).unwrap();
     let gtle = Node::mk_target_entry(mcx, gvar, 1, Some("x"), false).unwrap();
     // SAFETY: freshly built tlist; no other reference is live.
-    unsafe {
-        gtle.with_mut::<types_nodes::primnodes::TargetEntry, _>(|t| t.ressortgroupref = 1)
-    }
-    .unwrap();
+    unsafe { gtle.with_mut::<types_nodes::primnodes::TargetEntry, _>(|t| t.ressortgroupref = 1) }
+        .unwrap();
     let uvar = Node::mk_var(mcx, 1, 2, INT4OID, -1, InvalidOid, 0).unwrap();
     let utle = Node::mk_target_entry(mcx, uvar, 2, Some("y"), false).unwrap();
     let mut tlist = NodeList::make1(mcx, gtle).unwrap();
@@ -244,7 +290,9 @@ fn ungrouped_column_next_to_group_by_is_42803() {
     qry.targetList = tlist;
     qry.groupClause = group_clause_ref1(mcx);
 
-    let err = parseCheckAggregates(mcx, &mut pstate, &mut qry).map(|_| ()).unwrap_err();
+    let err = parseCheckAggregates(mcx, &mut pstate, &mut qry)
+        .map(|_| ())
+        .unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_GROUPING_ERROR);
     assert!(
         err.message().contains(
@@ -258,7 +306,9 @@ fn ungrouped_column_next_to_group_by_is_42803() {
 fn simple_set<'mcx>(mcx: Mcx<'mcx>, refs: &[i32], loc: i32) -> Node<'mcx> {
     let mut content = NodeList::nil();
     for &r in refs {
-        content.lappend(mcx, Node::mk_integer(mcx, r).unwrap()).unwrap();
+        content
+            .lappend(mcx, Node::mk_integer(mcx, r).unwrap())
+            .unwrap();
     }
     Node::mk_grouping_set(mcx, GroupingSetKind::GROUPING_SET_SIMPLE, content, loc).unwrap()
 }
@@ -298,7 +348,9 @@ fn expand_cube_sorted_by_length() {
         &[simple_set(mcx, &[1], 1), simple_set(mcx, &[2], 2)],
     );
     let gsets = NodeList::make1(mcx, cube).unwrap();
-    let out = expand_grouping_sets(mcx, &gsets, false, 4096).unwrap().unwrap();
+    let out = expand_grouping_sets(mcx, &gsets, false, 4096)
+        .unwrap()
+        .unwrap();
     assert_eq!(expanded(&out), [vec![], vec![1], vec![2], vec![1, 2]]);
 }
 
@@ -316,12 +368,13 @@ fn expand_sets_with_nested_rollup() {
         GroupingSetKind::GROUPING_SET_SETS,
         &[simple_set(mcx, &[1], 1), rollup],
     );
-    let out =
-        crate::expand_groupingset_node(mcx, sets.as_grouping_set().unwrap()).unwrap();
+    let out = crate::expand_groupingset_node(mcx, sets.as_grouping_set().unwrap()).unwrap();
     assert_eq!(expanded(&out), [vec![1], vec![2, 3], vec![2], vec![]]);
 
     let gsets = NodeList::make1(mcx, sets).unwrap();
-    let out = expand_grouping_sets(mcx, &gsets, false, 4096).unwrap().unwrap();
+    let out = expand_grouping_sets(mcx, &gsets, false, 4096)
+        .unwrap()
+        .unwrap();
     assert_eq!(expanded(&out), [vec![], vec![1], vec![2], vec![2, 3]]);
 }
 
@@ -339,7 +392,9 @@ fn expand_group_distinct_dedups() {
         ],
     );
     let gsets = NodeList::make1(mcx, sets).unwrap();
-    let out = expand_grouping_sets(mcx, &gsets, true, 4096).unwrap().unwrap();
+    let out = expand_grouping_sets(mcx, &gsets, true, 4096)
+        .unwrap()
+        .unwrap();
     assert_eq!(expanded(&out), [vec![1], vec![1, 2]]);
 }
 
@@ -358,12 +413,16 @@ fn expand_over_limit_returns_none() {
     for _ in 0..7 {
         gsets.lappend(mcx, cube4()).unwrap();
     }
-    assert!(expand_grouping_sets(mcx, &gsets, false, 4096).unwrap().is_none());
+    assert!(expand_grouping_sets(mcx, &gsets, false, 4096)
+        .unwrap()
+        .is_none());
     let mut six = NodeList::nil();
     for _ in 0..6 {
         six.lappend(mcx, cube4()).unwrap();
     }
-    let out = expand_grouping_sets(mcx, &six, false, 4096).unwrap().unwrap();
+    let out = expand_grouping_sets(mcx, &six, false, 4096)
+        .unwrap()
+        .unwrap();
     assert_eq!(out.len(), 4096);
 }
 
@@ -385,7 +444,11 @@ fn grouping_func_32_args_is_54023() {
     for _ in 0..32 {
         args.lappend(mcx, var_arg(mcx, 1, 20)).unwrap();
     }
-    let raw = GroupingFunc { args, location: 9, ..Default::default() };
+    let raw = GroupingFunc {
+        args,
+        location: 9,
+        ..Default::default()
+    };
 
     let err = transformGroupingFunc(mcx, &mut pstate, &raw, |_, _, n| Ok(n))
         .map(|_| ())
@@ -410,7 +473,10 @@ fn grouping_in_where_is_42803_with_grouping_wording() {
         .map(|_| ())
         .unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_GROUPING_ERROR);
-    assert_eq!(err.message(), "grouping operations are not allowed in WHERE");
+    assert_eq!(
+        err.message(),
+        "grouping operations are not allowed in WHERE"
+    );
 }
 
 #[test]
@@ -469,7 +535,10 @@ fn sublink_query_with_jointree_rangetblref_does_not_panic() {
     subq.jointree = Some(
         Node::mk_mut(
             mcx,
-            types_nodes::primnodes::FromExpr { fromlist: NodeList::make1(mcx, rtr).unwrap(), quals: None },
+            types_nodes::primnodes::FromExpr {
+                fromlist: NodeList::make1(mcx, rtr).unwrap(),
+                quals: None,
+            },
         )
         .unwrap()
         .seal_ref(),
@@ -491,8 +560,16 @@ fn sublink_query_with_jointree_rangetblref_does_not_panic() {
     agg.aggfnoid = 2116; // max(int4)
     agg.aggtype = INT4OID;
 
-    transformAggregateCall(mcx, &mut pstate, &mut agg, &args, &[INT4OID], &NodeList::nil(), false)
-        .unwrap();
+    transformAggregateCall(
+        mcx,
+        &mut pstate,
+        &mut agg,
+        &args,
+        &[INT4OID],
+        &NodeList::nil(),
+        false,
+    )
+    .unwrap();
     assert_eq!(agg.agglevelsup, 0);
 }
 
@@ -511,8 +588,16 @@ fn outer_var_in_sublink_counts_at_agg_level() {
     agg.aggfnoid = 2108;
     agg.aggtype = INT8OID;
 
-    transformAggregateCall(mcx, &mut pstate, &mut agg, &args, &[INT4OID], &NodeList::nil(), false)
-        .unwrap();
+    transformAggregateCall(
+        mcx,
+        &mut pstate,
+        &mut agg,
+        &args,
+        &[INT4OID],
+        &NodeList::nil(),
+        false,
+    )
+    .unwrap();
     assert_eq!(agg.agglevelsup, 0);
 }
 
@@ -531,8 +616,16 @@ fn subquery_local_var_in_sublink_is_ignored() {
     agg.aggfnoid = 2108;
     agg.aggtype = INT8OID;
 
-    transformAggregateCall(mcx, &mut pstate, &mut agg, &args, &[INT4OID], &NodeList::nil(), false)
-        .unwrap();
+    transformAggregateCall(
+        mcx,
+        &mut pstate,
+        &mut agg,
+        &args,
+        &[INT4OID],
+        &NodeList::nil(),
+        false,
+    )
+    .unwrap();
     assert_eq!(agg.agglevelsup, 0);
 }
 
@@ -565,7 +658,8 @@ fn nested_agg_via_sublink_is_42803() {
     .unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_GROUPING_ERROR);
     assert!(
-        err.message().contains("aggregate function calls cannot be nested"),
+        err.message()
+            .contains("aggregate function calls cannot be nested"),
         "{}",
         err.message()
     );
@@ -581,10 +675,8 @@ fn grouped_outer_var_in_sublink_passes_check() {
     let gvar = Node::mk_var(mcx, 1, 1, INT4OID, -1, InvalidOid, 0).unwrap();
     let gtle = Node::mk_target_entry(mcx, gvar, 1, Some("x"), false).unwrap();
     // SAFETY: freshly built tlist; no other reference is live.
-    unsafe {
-        gtle.with_mut::<types_nodes::primnodes::TargetEntry, _>(|t| t.ressortgroupref = 1)
-    }
-    .unwrap();
+    unsafe { gtle.with_mut::<types_nodes::primnodes::TargetEntry, _>(|t| t.ressortgroupref = 1) }
+        .unwrap();
 
     let outer_var = Node::mk_var(mcx, 1, 1, INT4OID, -1, InvalidOid, 1).unwrap();
     let stle = Node::mk_target_entry(mcx, outer_var, 1, None, false).unwrap();
@@ -611,14 +703,17 @@ fn ungrouped_outer_var_in_sublink_is_42803() {
     let tle = Node::mk_target_entry(mcx, sublink, 1, Some("s"), false).unwrap();
     let mut qry = query_with_rtable(mcx, NodeList::make1(mcx, tle).unwrap());
 
-    let err = parseCheckAggregates(mcx, &mut pstate, &mut qry).map(|_| ()).unwrap_err();
+    let err = parseCheckAggregates(mcx, &mut pstate, &mut qry)
+        .map(|_| ())
+        .unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_GROUPING_ERROR);
     assert_eq!(
         err.message(),
         "subquery uses ungrouped column \"t.x\" from outer query"
     );
     assert!(
-        err.message().contains("subquery uses ungrouped column \"t.x\" from outer query"),
+        err.message()
+            .contains("subquery uses ungrouped column \"t.x\" from outer query"),
         "{}",
         err.message()
     );
@@ -626,7 +721,15 @@ fn ungrouped_outer_var_in_sublink_is_42803() {
 
 fn sublink_with_from<'mcx>(mcx: Mcx<'mcx>, sub_tlist: NodeList<'mcx>) -> Node<'mcx> {
     let colnames = NodeList::make1(mcx, Node::mk(mcx, PgStr { sval: "z" }).unwrap()).unwrap();
-    let eref = Node::mk_mut(mcx, Alias { aliasname: Some("s"), colnames }).unwrap().seal_ref();
+    let eref = Node::mk_mut(
+        mcx,
+        Alias {
+            aliasname: Some("s"),
+            colnames,
+        },
+    )
+    .unwrap()
+    .seal_ref();
     let mut rte = Node::build::<RangeTblEntry>(mcx).unwrap();
     rte.eref = Some(eref);
     let rtr = Node::mk(mcx, types_nodes::primnodes::RangeTblRef { rtindex: 1 }).unwrap();
@@ -672,8 +775,16 @@ fn sublink_with_from_clause_in_agg_arg_walks_jointree() {
     agg.aggfnoid = 2108;
     agg.aggtype = INT8OID;
 
-    transformAggregateCall(mcx, &mut pstate, &mut agg, &args, &[INT4OID], &NodeList::nil(), false)
-        .unwrap();
+    transformAggregateCall(
+        mcx,
+        &mut pstate,
+        &mut agg,
+        &args,
+        &[INT4OID],
+        &NodeList::nil(),
+        false,
+    )
+    .unwrap();
     assert_eq!(agg.agglevelsup, 0);
 }
 
@@ -692,8 +803,16 @@ fn outer_var_arg_hops_to_parent_level() {
     agg.aggfnoid = 2108;
     agg.aggtype = INT8OID;
 
-    transformAggregateCall(mcx, &mut pstate, &mut agg, &args, &[INT4OID], &NodeList::nil(), false)
-        .unwrap();
+    transformAggregateCall(
+        mcx,
+        &mut pstate,
+        &mut agg,
+        &args,
+        &[INT4OID],
+        &NodeList::nil(),
+        false,
+    )
+    .unwrap();
     assert_eq!(agg.agglevelsup, 1);
     assert!(parent.p_hasAggs.get());
     assert!(!pstate.p_hasAggs.get());
@@ -709,10 +828,8 @@ fn sublink_with_from_clause_passes_ungrouped_check() {
     let gvar = Node::mk_var(mcx, 1, 1, INT4OID, -1, InvalidOid, 0).unwrap();
     let gtle = Node::mk_target_entry(mcx, gvar, 1, Some("x"), false).unwrap();
     // SAFETY: freshly built tlist; no other reference is live.
-    unsafe {
-        gtle.with_mut::<types_nodes::primnodes::TargetEntry, _>(|t| t.ressortgroupref = 1)
-    }
-    .unwrap();
+    unsafe { gtle.with_mut::<types_nodes::primnodes::TargetEntry, _>(|t| t.ressortgroupref = 1) }
+        .unwrap();
 
     let local_var = Node::mk_var(mcx, 1, 1, INT4OID, -1, InvalidOid, 0).unwrap();
     let stle = Node::mk_target_entry(mcx, local_var, 1, None, false).unwrap();
@@ -736,10 +853,8 @@ fn subscripting_ref_over_grouped_var_passes_check() {
     let gvar = Node::mk_var(mcx, 1, 1, INT4OID, -1, InvalidOid, 0).unwrap();
     let gtle = Node::mk_target_entry(mcx, gvar, 1, Some("x"), false).unwrap();
     // SAFETY: freshly built tlist; no other reference is live.
-    unsafe {
-        gtle.with_mut::<types_nodes::primnodes::TargetEntry, _>(|t| t.ressortgroupref = 1)
-    }
-    .unwrap();
+    unsafe { gtle.with_mut::<types_nodes::primnodes::TargetEntry, _>(|t| t.ressortgroupref = 1) }
+        .unwrap();
 
     let refexpr = Node::mk_var(mcx, 1, 1, INT4OID, -1, InvalidOid, 0).unwrap();
     let sref = Node::mk(
@@ -769,10 +884,8 @@ fn grouping_func_in_sublink_resolves_refs() {
     let gvar = Node::mk_var(mcx, 1, 1, INT4OID, -1, InvalidOid, 0).unwrap();
     let gtle = Node::mk_target_entry(mcx, gvar, 1, Some("x"), false).unwrap();
     // SAFETY: freshly built tlist; no other reference is live.
-    unsafe {
-        gtle.with_mut::<types_nodes::primnodes::TargetEntry, _>(|t| t.ressortgroupref = 1)
-    }
-    .unwrap();
+    unsafe { gtle.with_mut::<types_nodes::primnodes::TargetEntry, _>(|t| t.ressortgroupref = 1) }
+        .unwrap();
 
     let outer_var = Node::mk_var(mcx, 1, 1, INT4OID, -1, InvalidOid, 1).unwrap();
     let gf = Node::mk(
@@ -815,12 +928,20 @@ fn outer_agg_constraint_checked_against_parent_clause() {
     agg.aggfnoid = 2108;
     agg.aggtype = INT8OID;
 
-    let err =
-        transformAggregateCall(mcx, &mut pstate, &mut agg, &args, &[INT4OID], &NodeList::nil(), false)
-            .unwrap_err();
+    let err = transformAggregateCall(
+        mcx,
+        &mut pstate,
+        &mut agg,
+        &args,
+        &[INT4OID],
+        &NodeList::nil(),
+        false,
+    )
+    .unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_GROUPING_ERROR);
     assert!(
-        err.message().contains("aggregate functions are not allowed in WHERE"),
+        err.message()
+            .contains("aggregate functions are not allowed in WHERE"),
         "{}",
         err.message()
     );

@@ -80,11 +80,7 @@ pub fn mj_splitters(oruns: &[&[RunEnt]], iruns: &[&[RunEnt]], nparts: usize) -> 
 /// [`splitters[part-1]`, `splitters[part]`) on the PREFIX order (ends
 /// open at the edges; cut points are unique per run because runs are
 /// sorted and the predicate is monotone).
-fn slice_side<'a>(
-    runs: &[&'a [RunEnt]],
-    splitters: &[MjPrefix],
-    part: usize,
-) -> Vec<&'a [RunEnt]> {
+fn slice_side<'a>(runs: &[&'a [RunEnt]], splitters: &[MjPrefix], part: usize) -> Vec<&'a [RunEnt]> {
     let lo = part.checked_sub(1).map(|i| splitters[i]);
     let hi = splitters.get(part).copied();
     runs.iter()
@@ -164,14 +160,20 @@ pub struct PairBudget {
 
 impl PairBudget {
     pub fn new(cap: u64) -> PairBudget {
-        PairBudget { emitted: std::sync::atomic::AtomicU64::new(0), cap }
+        PairBudget {
+            emitted: std::sync::atomic::AtomicU64::new(0),
+            cap,
+        }
     }
 
     /// Reserve `n` pairs; `false` = budget crossed (sticky — the total
     /// stays over cap so every subsequent claim also refuses).
     #[inline]
     fn reserve(&self, n: u64) -> bool {
-        self.emitted.fetch_add(n, std::sync::atomic::Ordering::Relaxed) + n <= self.cap
+        self.emitted
+            .fetch_add(n, std::sync::atomic::Ordering::Relaxed)
+            + n
+            <= self.cap
     }
 }
 
@@ -200,9 +202,8 @@ pub fn mj_partition_pairs(
     let mut ic = GroupCursor::new(slice_side(iruns, splitters, part));
     let mut og: Vec<(u16, RunEnt)> = Vec::new();
     let mut ig: Vec<(u16, RunEnt)> = Vec::new();
-    let null_group = |pf: &MjPrefix| {
-        (0..nkeys).any(|k| (((pf[k] >> 64) & 1) != 0) ^ nulls_first[k])
-    };
+    let null_group =
+        |pf: &MjPrefix| (0..nkeys).any(|k| (((pf[k] >> 64) & 1) != 0) ^ nulls_first[k]);
     loop {
         let (Some(opf), Some(ipf)) = (oc.peek(), ic.peek()) else {
             return true; // either side exhausted — no more matches
@@ -239,12 +240,17 @@ mod tests {
     use crate::sink::WideEntry;
 
     fn ent(keys: &[(i64, bool)], flags: &[(bool, bool)], rowref: u64, bufrow: u32) -> RunEnt {
-        RunEnt { key: WideEntry::encode(keys, flags, rowref), bufrow }
+        RunEnt {
+            key: WideEntry::encode(keys, flags, rowref),
+            bufrow,
+        }
     }
 
     /// Deterministic pseudo-random (no dev-deps in this crate).
     fn rng(seed: &mut u64) -> u64 {
-        *seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        *seed = seed
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         *seed >> 11
     }
 
@@ -300,7 +306,14 @@ mod tests {
         for p in 0..nparts {
             let mut part_out = Vec::new();
             if !mj_partition_pairs(
-                &ov, &iv, splitters, p, nkeys, nulls_first, &budget, &mut part_out,
+                &ov,
+                &iv,
+                splitters,
+                p,
+                nkeys,
+                nulls_first,
+                &budget,
+                &mut part_out,
             ) {
                 return None;
             }
@@ -315,11 +328,13 @@ mod tests {
     #[test]
     fn partitions_concatenate_to_the_reference_join() {
         let mut seed = 7u64;
-        for &(arity, no, ni, nparts) in
-            &[(1usize, 1usize, 1usize, 1usize), (1, 3, 2, 8), (2, 4, 3, 16), (3, 2, 5, 7)]
-        {
-            let flags: Vec<(bool, bool)> =
-                (0..arity).map(|i| (i % 2 == 1, i % 3 == 0)).collect();
+        for &(arity, no, ni, nparts) in &[
+            (1usize, 1usize, 1usize, 1usize),
+            (1, 3, 2, 8),
+            (2, 4, 3, 16),
+            (3, 2, 5, 7),
+        ] {
+            let flags: Vec<(bool, bool)> = (0..arity).map(|i| (i % 2 == 1, i % 3 == 0)).collect();
             let nulls_first: Vec<bool> = flags.iter().map(|&(_, nf)| nf).collect();
             let mut rowref = 0u64;
             let mut mk = |nruns: usize, seed: &mut u64| -> Vec<Vec<RunEnt>> {
@@ -370,7 +385,13 @@ mod tests {
             assert!(sampled.windows(2).all(|w| w[0] <= w[1]));
             assert_eq!(
                 concat_partitions(
-                    &oruns, &iruns, &sampled, nparts, arity, &nulls_first, u64::MAX
+                    &oruns,
+                    &iruns,
+                    &sampled,
+                    nparts,
+                    arity,
+                    &nulls_first,
+                    u64::MAX
                 )
                 .expect("budget unbounded"),
                 reference,
@@ -390,7 +411,13 @@ mod tests {
             adversarial.sort_unstable();
             assert_eq!(
                 concat_partitions(
-                    &oruns, &iruns, &adversarial, nparts, arity, &nulls_first, u64::MAX
+                    &oruns,
+                    &iruns,
+                    &adversarial,
+                    nparts,
+                    arity,
+                    &nulls_first,
+                    u64::MAX
                 )
                 .expect("budget unbounded"),
                 reference,
@@ -405,8 +432,9 @@ mod tests {
     fn pair_budget_crossing_stops() {
         let flags = [(false, false)];
         // 40 outer × 40 inner of one key value = 1600 pairs.
-        let oruns: Vec<Vec<RunEnt>> =
-            vec![(0..40).map(|i| ent(&[(1, false)], &flags, i as u64, i as u32)).collect()];
+        let oruns: Vec<Vec<RunEnt>> = vec![(0..40)
+            .map(|i| ent(&[(1, false)], &flags, i as u64, i as u32))
+            .collect()];
         let iruns: Vec<Vec<RunEnt>> = vec![(0..40)
             .map(|i| ent(&[(1, false)], &flags, 100 + i as u64, i as u32))
             .collect()];
@@ -445,8 +473,7 @@ mod tests {
             v.sort_unstable();
             v
         }];
-        let got =
-            concat_partitions(&oruns, &iruns, &[], 1, 2, &nf, u64::MAX).expect("no budget");
+        let got = concat_partitions(&oruns, &iruns, &[], 1, 2, &nf, u64::MAX).expect("no budget");
         // Only the fully-non-NULL (1,2) rows join: exactly one pair.
         assert_eq!(got, vec![(0u16, 0u32, 0u16, 0u32)]);
     }
@@ -460,7 +487,16 @@ mod tests {
         let budget = PairBudget::new(0);
         let mut out = Vec::new();
         for p in 0..8 {
-            assert!(mj_partition_pairs(&ov, &iv, &[], p, 1, &[false], &budget, &mut out));
+            assert!(mj_partition_pairs(
+                &ov,
+                &iv,
+                &[],
+                p,
+                1,
+                &[false],
+                &budget,
+                &mut out
+            ));
         }
         assert!(out.is_empty());
     }
