@@ -71,6 +71,7 @@ SET enable_sort TO off;
 --
 -- awk '{if($1<10){print $0;}else{next;}}' onek.data | sort +0n -1
 --
+-- pgrust:rowsort
 SELECT onek2.* FROM onek2 WHERE onek2.unique1 < 10;
 
 --
@@ -83,6 +84,7 @@ SELECT onek2.unique1, onek2.stringu1 FROM onek2
 --
 -- awk '{if($1>980){print $1,$14;}else{next;}}' onek.data | sort +1d -2
 --
+-- pgrust:rowsort
 SELECT onek2.unique1, onek2.stringu1 FROM onek2
    WHERE onek2.unique1 > 980;
 
