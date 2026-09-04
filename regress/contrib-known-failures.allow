@@ -1,0 +1,52 @@
+# contrib-known-failures.allow — ratchet ledger for upstream's per-contrib
+# regression suites. Companion: regress/run-contrib-regress-docker.sh and
+# scripts/rowsort_compare.py --allow-file. Precedent:
+# regress/known-failures.allow, crates/_support/seams_init/tests/*.allow.
+#
+# Semantics are the core suite's: a listed module may fail without failing CI;
+# an unlisted module that fails breaks the build; a listed module that starts
+# PASSING is stale and also breaks the build. The file can only shrink.
+#
+# SEED: 2026-09-04 full sweep, vendored suites at REL_18_3
+# (62d6c7d3df6287f1bd83199c1a746e50d31571a0) against pgrust built from
+# main @ 4ea755227a. Result: 33 passed, 5 failed, 12 skipped, 0 hard failures.
+#
+# NOT in this file, deliberately: the 12 skipped modules. pgrust has no
+# extension ABI (crates/backend/utils/fmgr/dfmgr: "probin is a registry KEY,
+# never a file: no C ABI exists to dlopen"), so an unported module reports
+# C's file-not-found and the runner classifies it SKIP. Recording those as
+# "known failures" would misrepresent an absent feature as a defect.
+
+# --- genuine pgrust defects -------------------------------------------------
+
+# citext/create_index_acl: "ERROR: permission denied for schema s" where
+# upstream succeeds. citext's own tests pass; this is the ACL path. Same
+# territory as the core suite's privileges/rowsecurity failures.
+citext
+
+# hstore/hstore_utf8: 16-line diff, one bug — control characters are escaped
+# on output where upstream emits them literally:
+#   expected  "key"=>"value"
+#   actual    "key\x0B"=>"value\x0B"
+# hstore's main test passes.
+hstore
+
+# postgres_fdw: "use_remote_estimate is not yet supported (phase 3)" — an
+# explicitly unported feature, self-reported by the code. Largest diff in the
+# sweep (~11.8k lines) because it aborts early and everything after diverges.
+postgres_fdw
+
+# test_decoding: "ERROR: could not open file \"base/16708/2679\"" during
+# logical decoding, with wal_level=logical correctly applied by the runner.
+# Reads as a real logical-decoding defect, not a config gap.
+test_decoding
+
+# --- NOT a defect: unported archive_library ---------------------------------
+
+# basic_archive needs archive_library = 'basic_archive', which pgrust does not
+# implement. Unlike a LOAD failure this is SILENT — the server simply never
+# archives — so the runner's not-ported detector (which keys off "could not
+# access file") cannot see it. The whole diff is one row: the test asks whether
+# an archived segment matching ^[0-9A-F]{24}$ exists and gets f instead of t.
+# Listed so CI is green, annotated so nobody chases it as a bug.
+basic_archive

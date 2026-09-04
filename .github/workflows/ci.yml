@@ -91,6 +91,15 @@ jobs:
             --allow-file regress/known-failures.allow \
             --json regress-work/rowsort-report.json
 
+      # Extensions tier: upstream's per-contrib suites, same pg_regress
+      # --use-existing mechanism as the core suite. Gated by its own ratchet
+      # ledger. Modules pgrust does not port are classified SKIP by the runner
+      # (no extension ABI exists to load them), never counted as failures.
+      - name: Run contrib regression suites (gated)
+        run: |
+          regress/run-contrib-regress-docker.sh \
+            --allow-file regress/contrib-known-failures.allow
+
       - name: Upload regression artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -99,4 +108,5 @@ jobs:
           path: |
             regress-work/rowsort-report.json
             regress-work/regress-output/regression.diffs
+            regress-work/contrib/*.log
           if-no-files-found: ignore
