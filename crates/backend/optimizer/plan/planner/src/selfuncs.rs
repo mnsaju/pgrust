@@ -18,6 +18,7 @@ pub use types_pathnodes::DEFAULT_INEQ_SEL;
 pub use types_pathnodes::DEFAULT_NUM_DISTINCT;
 const DEFAULT_PAGE_CPU_MULTIPLIER: f64 = 50.0;
 const BOOLOID: u32 = 16;
+const TIDOID: u32 = 27;
 const SELF_ITEM_POINTER_ATTRIBUTE_NUMBER: i16 = -1;
 const TABLE_OID_ATTRIBUTE_NUMBER: i16 = -6;
 
@@ -314,6 +315,22 @@ pub fn scalarineqsel_wrapper<'mcx>(
     )
 }
 
+/// Whether the ctid-column, uniform-page-density selectivity shortcut in
+/// `scalarineqsel` may run for this Var/Const pair.
+///
+/// CVE-2026-14668: the original check here only confirmed the VARIABLE side
+/// is the ctid system column; it never confirmed the CONSTANT side is
+/// actually tid-typed. A maliciously constructed operator whose restriction
+/// estimator is `scalarineqsel` but whose real right-hand operand type is
+/// something else (e.g. `int4`, whose Datum holds the value inline rather
+/// than a pointer) made the caller's unsafe block dereference that inline
+/// value AS AN ADDRESS — one `ItemPointerData`'s worth (6 bytes) of
+/// arbitrary process memory disclosed through the resulting selectivity
+/// estimate. Both sides must match before the unsafe cast may run.
+fn applies_ctid_page_estimate(consttype: Oid, var_attno: Option<i16>) -> bool {
+    consttype == TIDOID && var_attno == Some(SELF_ITEM_POINTER_ATTRIBUTE_NUMBER)
+}
+
 // scalarineqsel (selfuncs.c).
 fn scalarineqsel<'mcx>(
     run: &PlannerRun<'mcx>,
@@ -326,10 +343,8 @@ fn scalarineqsel<'mcx>(
     consttype: Oid,
 ) -> PgResult<f64> {
     if vardata.stats.is_none() {
-        let is_ctid = vardata
-            .var
-            .and_then(|id| run.root.expr_node(id).as_var())
-            .is_some_and(|v| v.varattno == SELF_ITEM_POINTER_ATTRIBUTE_NUMBER);
+        let var_attno = vardata.var.and_then(|id| run.root.expr_node(id).as_var()).map(|v| v.varattno);
+        let is_ctid = applies_ctid_page_estimate(consttype, var_attno);
         if is_ctid {
             let rel = vardata.rel.expect("ctid Var has a rel");
             let pages = run.root.rel(rel).pages as f64;
@@ -4634,4 +4649,42 @@ fn strip_all_phvs_mutator<'mcx>(
         clauses::expression_tree_mutator(mcx, node, &mut |n| mutate(mcx, n))
     }
     Ok(mutate(mcx, node)?.unwrap_or(node))
+}
+
+#[cfg(test)]
+mod ctid_selectivity_tests {
+    use super::{applies_ctid_page_estimate, SELF_ITEM_POINTER_ATTRIBUTE_NUMBER, TIDOID};
+
+    // CVE-2026-14668 regression: both sides of `x ctid_op $1` must genuinely
+    // be tid before the caller's unsafe ItemPointerData dereference runs.
+    #[test]
+    fn requires_both_the_ctid_var_and_a_tid_constant() {
+        assert!(applies_ctid_page_estimate(
+            TIDOID,
+            Some(SELF_ITEM_POINTER_ATTRIBUTE_NUMBER)
+        ));
+    }
+
+    #[test]
+    fn rejects_a_non_tid_constant_against_the_ctid_column() {
+        // The exact shape of the CVE: the variable side is genuinely ctid,
+        // but the constant's declared type is something whose Datum is an
+        // inline value (int4) rather than a pointer — treating it as a tid
+        // pointer would read memory at that raw integer's address.
+        const INT4OID: types_core::Oid = 23;
+        assert!(!applies_ctid_page_estimate(
+            INT4OID,
+            Some(SELF_ITEM_POINTER_ATTRIBUTE_NUMBER)
+        ));
+    }
+
+    #[test]
+    fn rejects_a_tid_constant_against_an_ordinary_column() {
+        assert!(!applies_ctid_page_estimate(TIDOID, Some(1)));
+    }
+
+    #[test]
+    fn rejects_when_the_variable_side_has_no_var_at_all() {
+        assert!(!applies_ctid_page_estimate(TIDOID, None));
+    }
 }

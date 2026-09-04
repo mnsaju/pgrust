@@ -872,6 +872,8 @@ debug = 0
 strip = "symbols"
 lto = "thin"
 codegen-units = 1
+# Production correctness must not depend on debug-only arithmetic traps.
+overflow-checks = true
 
 # Optimized wasm artifact for the web demo (wasm). NATIVE-INERT:
 # nothing native selects this profile; only wasm/wasm-build.sh's optional

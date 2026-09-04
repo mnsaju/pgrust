@@ -183,6 +183,22 @@ pub fn SetTuplestoreCaptureSidecar(
     }
 }
 
+/// CVE-2026-16239: arm the outer-portal row-type cross-check on a
+/// tuplestore receiver (see DrTstore::required_shape's field doc). Called
+/// by FillPortalStore's PORTAL_UTIL_SELECT arm with the shape already fixed
+/// for the outer portal at PortalStart, before running the utility
+/// statement (EXECUTE, FETCH) whose dispatch may create and run an
+/// independent inner portal into this same receiver.
+pub fn SetTuplestoreRequiredShape(
+    receiver: &mut DestReceiver<'_>,
+    shape: Vec<(types_core::Oid, bool)>,
+) {
+    match receiver {
+        DestReceiver::Tuplestore(dr) => tstore_receiver::set_required_shape(dr, shape),
+        _ => panic!("SetTuplestoreRequiredShape: not a tuplestore receiver"),
+    }
+}
+
 impl DestReceiver<'_> {
     /// SE-R41: the capture sidecar of a capture-armed tuplestore receiver;
     /// None for every other receiver and every unarmed fill. Read once per

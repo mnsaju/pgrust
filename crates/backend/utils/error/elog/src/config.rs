@@ -7,8 +7,8 @@ use std::cell::{Cell, RefCell};
 use ::types_core::NAMEDATALEN;
 use ::types_dest::CommandDest;
 use ::types_error::{
-    ErrorLevel, PGErrorVerbosity, PgError, PgResult, ERROR, LOG_DESTINATION_CSVLOG,
-    LOG_DESTINATION_JSONLOG, LOG_DESTINATION_STDERR, LOG_DESTINATION_SYSLOG, NOTICE, WARNING,
+    ERROR, ErrorLevel, LOG_DESTINATION_CSVLOG, LOG_DESTINATION_JSONLOG, LOG_DESTINATION_STDERR,
+    LOG_DESTINATION_SYSLOG, NOTICE, PGErrorVerbosity, PgError, PgResult, WARNING,
 };
 
 thread_local! { static LOG_MIN_MESSAGES: Cell<i32> = const { Cell::new(WARNING.0) }; }
@@ -107,8 +107,6 @@ pub fn set_syslog_split_messages(value: bool) {
     SYSLOG_SPLIT_MESSAGES.with(|c| c.set(value));
 }
 
-// `CritSectionCount` (miscadmin.h; owned by the crit-section machinery).
-thread_local! { static CRIT_SECTION_COUNT: Cell<u32> = const { Cell::new(0) }; }
 // `ExitOnAnyError` (globals.c; initdb sets it).
 thread_local! { static EXIT_ON_ANY_ERROR: Cell<bool> = const { Cell::new(false) }; }
 // `proc_exit_inprogress` (storage/ipc/ipc.c).
@@ -128,11 +126,14 @@ thread_local! { static OUTPUT_FILE_NAME: RefCell<Option<String>> = const { RefCe
 
 #[inline]
 pub fn crit_section_count() -> u32 {
-    CRIT_SECTION_COUNT.with(Cell::get)
-}
-
-pub fn set_crit_section_count(count: u32) {
-    CRIT_SECTION_COUNT.with(|c| c.set(count));
+    // During isolated elog unit tests and the earliest seam-install phase no
+    // backend can be inside a critical section yet.  Product execution
+    // installs this seam from init_small::init_seams before accepting work.
+    if init_small_seams::crit_section_count::is_installed() {
+        init_small_seams::crit_section_count::call()
+    } else {
+        0
+    }
 }
 
 #[inline]
@@ -256,8 +257,11 @@ pub fn assign_backtrace_functions(extra: Option<BacktraceFunctionList>) {
 }
 
 pub fn matches_backtrace_functions(funcname: &str) -> bool {
-    BACKTRACE_FUNCTION_LIST
-        .with(|c| c.borrow().as_ref().is_some_and(|list| list.matches(funcname)))
+    BACKTRACE_FUNCTION_LIST.with(|c| {
+        c.borrow()
+            .as_ref()
+            .is_some_and(|list| list.matches(funcname))
+    })
 }
 
 pub fn check_log_destination(newval: &str) -> PgResult<i32> {

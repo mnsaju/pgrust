@@ -18563,6 +18563,7 @@ dependencies = [
  "exectuples",
  "mcx",
  "tuplestore",
+ "types_core",
  "types_error",
  "types_portal",
  "types_slot",

@@ -247,7 +247,7 @@ fn attribute_statistics_update(mcx: Mcx<'_>, args: &[Arg]) -> PgResult<bool> {
         result = false;
     }
 
-    let StatType { atttypid, atttypmod, atttyptype, mut atttypcoll, eq_opr, lt_opr } =
+    let StatType { atttypid, atttypmod, atttyptype, mut atttypcoll, eq_opr, lt_opr, range_typid } =
         get_attr_stat_type(mcx, reloid, attnum)?;
     let _ = &mut atttypcoll;
 
@@ -465,7 +465,7 @@ fn attribute_statistics_update(mcx: Mcx<'_>, args: &[Arg]) -> PgResult<bool> {
             mcx,
             "range_bounds_histogram",
             args[RANGE_BOUNDS_HISTOGRAM_ARG].value,
-            atttypid,
+            range_typid,
             atttypmod,
         )? {
             Some(img) => {
@@ -532,6 +532,18 @@ struct StatType {
     atttypcoll: Oid,
     eq_opr: Oid,
     lt_opr: Oid,
+    // CVE-2026-16238: multirange_typanalyze computes the bounds/length
+    // histograms from the multirange's constituent RANGE bounds, but every
+    // other statistic kind (MCV, regular histogram, correlation, element
+    // stats) describes values of the multirange type itself. Substituting
+    // atttypid with the underlying range type globally — as this function
+    // used to — is correct only for the bounds histogram; used anywhere
+    // else it makes text_to_stavalues parse (and eq_opr/lt_opr compare)
+    // multirange-typed MCV/histogram values as if they were plain ranges,
+    // and stores the result tagged with the range type's OID. range_typid
+    // carries the substituted type for the one call site that legitimately
+    // needs it; atttypid stays the column's real, unsubstituted type.
+    range_typid: Oid,
 }
 
 fn get_attr_expr<'m>(mcx: Mcx<'m>, rel: &Relation<'m>, attnum: i32) -> PgResult<Option<Node<'m>>> {
@@ -572,7 +584,7 @@ fn get_attr_stat_type(mcx: Mcx<'_>, reloid: Oid, attnum: AttrNumber) -> PgResult
 
     let expr = get_attr_expr(mcx, &rel, attnum as i32)?;
 
-    let (mut atttypid, atttypmod, mut atttypcoll) = match expr {
+    let (atttypid, atttypmod, mut atttypcoll) = match expr {
         None => (attr.atttypid, attr.atttypmod, attr.attcollation),
         Some(e) => {
             let coll = if attr.attcollation != InvalidOid {
@@ -588,10 +600,15 @@ fn get_attr_stat_type(mcx: Mcx<'_>, reloid: Oid, attnum: AttrNumber) -> PgResult
         }
     };
 
-    // A multirange steps down to its range type, as multirange_typanalyze does.
-    if lsyscache::type_is_multirange(atttypid)? {
-        atttypid = lsyscache::get_multirange_range(atttypid)?;
-    }
+    // Only the bounds/length histograms operate on the multirange's
+    // constituent range bounds, as multirange_typanalyze does; every other
+    // statistic kind describes values of atttypid itself, unsubstituted
+    // (CVE-2026-16238).
+    let range_typid = if lsyscache::type_is_multirange(atttypid)? {
+        lsyscache::get_multirange_range(atttypid)?
+    } else {
+        atttypid
+    };
 
     // finds the right operators even if atttypid is a domain
     let tce = typcache::lookup_type_cache(
@@ -609,7 +626,7 @@ fn get_attr_stat_type(mcx: Mcx<'_>, reloid: Oid, attnum: AttrNumber) -> PgResult
 
     rel.close(NoLock as LOCKMODE)?;
 
-    Ok(StatType { atttypid, atttypmod, atttyptype, atttypcoll, eq_opr, lt_opr })
+    Ok(StatType { atttypid, atttypmod, atttyptype, atttypcoll, eq_opr, lt_opr, range_typid })
 }
 
 fn get_elem_stat_type(atttypid: Oid) -> PgResult<Option<(Oid, Oid)>> {

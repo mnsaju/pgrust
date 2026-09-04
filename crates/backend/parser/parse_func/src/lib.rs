@@ -9,7 +9,7 @@ use coerce::{COERCION_EXPLICIT, COERCION_IMPLICIT, COERCION_PATH_COERCEVIAIO,
 use elog::ereport;
 use mcx::{Mcx, PgVec};
 use parser_small1::{parser_errposition, ParseState};
-use types_core::catalog::{RECORDOID, UNKNOWNOID, VOIDOID};
+use types_core::catalog::{INTERNALOID, RECORDOID, UNKNOWNOID, VOIDOID};
 use types_core::{InvalidOid, Oid, OidIsValid, ParseLoc};
 use types_error::{
     ErrorLocation, PgError, PgResult, ERRCODE_AMBIGUOUS_FUNCTION,
@@ -1466,6 +1466,25 @@ fn func_get_detail<'mcx>(
 
     let shape = syscache_seams::lookup_pg_proc_shape::call(funcid)?
         .unwrap_or_else(|| panic!("cache lookup failed for function {funcid} (parse_func.c)"));
+
+    // CVE-2026-14680: type "internal" carries a raw C pointer with no
+    // representation SQL can produce or interpret safely; a function
+    // resolved here came from ordinary user SQL text (ParseFuncOrColumn),
+    // so calling one whose signature mentions internal is always a type
+    // confusion, never a legitimate use — legitimate internal-typed calls
+    // (aggregate transition functions, etc.) are invoked directly by the
+    // executor, never through this parser entry point.
+    if shape.prorettype == INTERNALOID || declared_arg_types.contains(&INTERNALOID) {
+        return Err(Box::new(
+            ereport(ERROR)
+                .errcode(ERRCODE_UNDEFINED_FUNCTION)
+                .errmsg(
+                    "functions taking or returning type \"internal\" cannot be called \
+                     directly from SQL",
+                )
+                .into_error(),
+        ));
+    }
     if OidIsValid(shape.provariadic)
         && shape.prokind != PROKIND_FUNCTION
         && shape.prokind != PROKIND_PROCEDURE

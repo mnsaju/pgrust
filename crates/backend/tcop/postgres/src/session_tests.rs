@@ -11,6 +11,7 @@ use types_dest::CommandDest;
 use types_fmgr::FmgrInfo;
 
 use crate::main_loop::{error_recovery, run_one_iteration, LoopState};
+use ::ipc::ProcExitThread;
 
 const INT4OID: u32 = 23;
 const INT4IN: u32 = 42;
@@ -56,7 +57,10 @@ pub(crate) fn install_shared_stubs() {
         waitevent_seams::pgstat_report_wait_end::set(|| {});
         waitevent_seams::pgstat_reset_wait_event_storage::set(|| {});
         ipc_seams::on_shmem_exit::set(|_, _| {});
-        ipc_seams::proc_exit::set(|code, _pid| panic!("proc_exit({code})"));
+        // Match the real proc_exit()'s typed unwind payload (ipc::lib.rs) so
+        // pg_error_from_panic's ProcExitThread check re-raises it instead of
+        // treating it as an unexpected panic (crash-restart demotion).
+        ipc_seams::proc_exit::set(|code, _pid| std::panic::panic_any(ProcExitThread { code }));
         deadlock_seams::init_dead_lock_checking::set(|| Ok(()));
         pmsignal_seams::register_postmaster_child_active::set(|| {});
         syncrep_seams::sync_rep_cleanup_at_proc_exit::set(|| {});
@@ -619,12 +623,16 @@ fn run_session(input: Vec<u8>) -> Vec<u8> {
     for _ in 0..200 {
         message_context.reset();
         let mcx = message_context.mcx();
-        match run_one_iteration(mcx, &mut state) {
-            Ok(()) => {}
-            Err(err) => {
-                if err.message.contains("proc_exit(0)") {
-                    break;
-                }
+        // run_one_iteration re-raises a ProcExitThread payload rather than
+        // returning it (main_loop::pg_error_from_panic), matching the real
+        // backend-thread contract, so the clean-exit signal must be caught
+        // at this call site rather than matched out of an Err(..).
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            run_one_iteration(mcx, &mut state)
+        }));
+        match outcome {
+            Ok(Ok(())) => {}
+            Ok(Err(err)) => {
                 assert!(
                     err.level() < types_error::FATAL,
                     "session died: {}",
@@ -634,6 +642,15 @@ fn run_session(input: Vec<u8>) -> Vec<u8> {
                 if !crate::ignore_till_sync() {
                     state.send_ready_for_query = true;
                 }
+            }
+            Err(payload) => {
+                if payload
+                    .downcast_ref::<ProcExitThread>()
+                    .is_some_and(|exit| exit.code == 0)
+                {
+                    break;
+                }
+                std::panic::resume_unwind(payload);
             }
         }
     }

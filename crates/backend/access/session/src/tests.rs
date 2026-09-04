@@ -809,7 +809,7 @@ fn tls_source_census_and_session_surface_are_pinned() {
     // NOTE for whoever merges this to main: the same one declaration lands on a
     // DIFFERENT absolute total there (562 -> 563 at t56). Re-derive the pin at
     // the tip it will be enforced against; do not carry this number across.
-    assert_eq!(count_tree(crates), 544, "TLS census changed; classify the delta in SESSION_ENVELOPE_MANIFEST or document it as non-session TLS");
+    assert_eq!(count_tree(crates), 545, "TLS census changed; classify the delta in SESSION_ENVELOPE_MANIFEST or document it as non-session TLS");
     let session_sources = [
         ("backend/access/session/src/lib.rs", 1),
         ("backend/utils/init/init_small/src/globals.rs", 4),

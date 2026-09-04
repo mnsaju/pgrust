@@ -2,7 +2,7 @@
 // addendum). Block references are resolved from state the caller already
 // holds (rd_locator + the tuple TID), where C's XLogRegisterBuffer re-derives
 // them via BufferGetTag.
-use ::types_core::{BlockNumber, Buffer, ForkNumber, XLogRecPtr, BLCKSZ};
+use ::types_core::{BLCKSZ, BlockNumber, Buffer, ForkNumber, XLogRecPtr};
 use ::types_error::PgResult;
 use ::types_storage::RelFileLocator;
 
@@ -17,11 +17,52 @@ pub(crate) fn reg_block<'a>(
     flags: u8,
     bufdata: &'a [&'a [u8]],
 ) -> RegBlock<'a> {
+    reg_block_for_fork(
+        block_id,
+        rlocator,
+        ForkNumber::MAIN_FORKNUM,
+        block,
+        buffer,
+        flags,
+        bufdata,
+    )
+}
+
+#[inline(always)]
+pub(crate) fn reg_vm_block<'a>(
+    block_id: u8,
+    rlocator: RelFileLocator,
+    block: BlockNumber,
+    buffer: Buffer,
+    flags: u8,
+    bufdata: &'a [&'a [u8]],
+) -> RegBlock<'a> {
+    reg_block_for_fork(
+        block_id,
+        rlocator,
+        ForkNumber::VISIBILITYMAP_FORKNUM,
+        block,
+        buffer,
+        flags,
+        bufdata,
+    )
+}
+
+#[inline(always)]
+fn reg_block_for_fork<'a>(
+    block_id: u8,
+    rlocator: RelFileLocator,
+    forknum: ForkNumber,
+    block: BlockNumber,
+    buffer: Buffer,
+    flags: u8,
+    bufdata: &'a [&'a [u8]],
+) -> RegBlock<'a> {
     let page = ::bufmgr_seams::buffer_page_ptr(buffer).as_ptr() as *const u8;
     RegBlock {
         block_id,
         rlocator,
-        forknum: ForkNumber::MAIN_FORKNUM,
+        forknum,
         block,
         // SAFETY: caller holds the pin + exclusive content lock for the
         // record (XLogRegisterBuffer contract); page is a BLCKSZ image.

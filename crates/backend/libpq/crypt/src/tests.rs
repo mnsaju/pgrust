@@ -15,9 +15,15 @@ fn classifies_password_types() {
     assert_eq!(get_password_type(MD5_SECRET), PasswordType::Md5);
     assert_eq!(get_password_type(RFC7677_SECRET), PasswordType::ScramSha256);
     assert_eq!(get_password_type("md5short"), PasswordType::Plaintext);
-    assert_eq!(get_password_type("md5X3f48b7c4b76a86ce72276c5755f217d"), PasswordType::Plaintext);
+    assert_eq!(
+        get_password_type("md5X3f48b7c4b76a86ce72276c5755f217d"),
+        PasswordType::Plaintext
+    );
     assert_eq!(get_password_type("hunter2"), PasswordType::Plaintext);
-    assert_eq!(get_password_type("SCRAM-SHA-256$bogus"), PasswordType::Plaintext);
+    assert_eq!(
+        get_password_type("SCRAM-SHA-256$bogus"),
+        PasswordType::Plaintext
+    );
 }
 
 #[test]
@@ -69,9 +75,16 @@ fn md5_crypt_verify_challenge() {
     assert_eq!(ok, STATUS_OK);
     assert!(logdetail.is_none());
 
-    let bad = md5_crypt_verify("postgres", MD5_SECRET, "md5ffffffff", &salt, &mut logdetail).unwrap();
+    let bad =
+        md5_crypt_verify("postgres", MD5_SECRET, "md5ffffffff", &salt, &mut logdetail).unwrap();
     assert_eq!(bad, STATUS_ERROR);
-    assert_eq!(logdetail.as_deref(), Some("Password does not match for user \"postgres\"."));
+    assert_eq!(
+        logdetail.as_deref(),
+        Some("Password does not match for user \"postgres\".")
+    );
+
+    let short = md5_crypt_verify("postgres", MD5_SECRET, "md5", &salt, &mut logdetail).unwrap();
+    assert_eq!(short, STATUS_ERROR);
 
     let mut logdetail = None;
     let wrong_kind =
@@ -81,6 +94,14 @@ fn md5_crypt_verify_challenge() {
         logdetail.as_deref(),
         Some("User \"postgres\" has a password that cannot be used with MD5 authentication.")
     );
+}
+
+#[test]
+fn password_comparison_covers_equal_and_mismatched_lengths() {
+    assert!(password_bytes_eq(b"md5fixed", b"md5fixed"));
+    assert!(!password_bytes_eq(b"md5fixed", b"md5f ixed"));
+    assert!(!password_bytes_eq(b"md5fixed", b"md5"));
+    assert!(!password_bytes_eq(b"md5fixed", b"md5fixed-extra"));
 }
 
 #[test]
@@ -159,11 +180,17 @@ fn get_role_password_arms() {
 
     let mut ld = None;
     assert!(get_role_password("nopass", &mut ld).unwrap().is_none());
-    assert_eq!(ld.as_deref(), Some("User \"nopass\" has no password assigned."));
+    assert_eq!(
+        ld.as_deref(),
+        Some("User \"nopass\" has no password assigned.")
+    );
 
     let mut ld = None;
     assert!(get_role_password("expired", &mut ld).unwrap().is_none());
-    assert_eq!(ld.as_deref(), Some("User \"expired\" has an expired password."));
+    assert_eq!(
+        ld.as_deref(),
+        Some("User \"expired\" has an expired password.")
+    );
 
     let mut ld = None;
     assert!(get_role_password("future", &mut ld).unwrap().is_some());

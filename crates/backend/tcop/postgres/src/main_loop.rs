@@ -5,14 +5,13 @@ use ::mcx::{Mcx, MemoryContext, PgVec};
 use ::stringinfo::StringInfo;
 use ::types_dest::CommandDest;
 use ::types_error::{
-    ErrorLocation, PgError, PgResult, ERRCODE_CONNECTION_FAILURE, ERRCODE_PROTOCOL_VIOLATION,
-    ERROR, FATAL, LOG,
+    ERRCODE_CONNECTION_FAILURE, ERRCODE_PROTOCOL_VIOLATION, ERROR, ErrorLocation, FATAL, LOG,
+    PgError, PgResult,
 };
 
 use crate::{
-    check_for_interrupts, extended_query, loc, set_doing_command_read,
+    check_for_interrupts, extended_query, ignore_till_sync, loc, set_doing_command_read,
     set_doing_extended_query_message, set_ignore_till_sync, set_xact_started, simple_query,
-    ignore_till_sync,
 };
 
 mod pqmsg {
@@ -268,7 +267,6 @@ pub(crate) fn error_recovery(
 
     // (the report emission moved to the top of this function — GL-ERRFIX-1 E-4/E-5.)
 
-
     xact::AbortCurrentTransaction()?;
 
     if walsender_seams::am_walsender() {
@@ -284,7 +282,6 @@ pub(crate) fn error_recovery(
         slot::ReplicationSlotRelease()?;
     }
     slot::ReplicationSlotCleanup(false)?;
-
 
     elog::FlushErrorState();
 
@@ -391,8 +388,7 @@ fn log_connection_ready_durations() -> PgResult<()> {
     let timing = backend_startup::conn_timing::get();
     // TIMESTAMP_MINUS_INFINITY (types_startup) is i64::MIN.
     if timing.ready_for_use != i64::MIN
-        || backend_startup::log_connections::get()
-            & backend_startup::LOG_CONNECTION_SETUP_DURATIONS
+        || backend_startup::log_connections::get() & backend_startup::LOG_CONNECTION_SETUP_DURATIONS
             == 0
         || !matches!(
             miscinit::GetMyBackendType(),
@@ -406,7 +402,11 @@ fn log_connection_ready_durations() -> PgResult<()> {
     backend_startup::conn_timing::set_ready_for_use(now);
 
     let diff_us = |start: i64, stop: i64| -> u64 {
-        if start >= stop { 0 } else { (stop - start) as u64 }
+        if start >= stop {
+            0
+        } else {
+            (stop - start) as u64
+        }
     };
     let total = diff_us(timing.socket_create, now);
     let fork = diff_us(timing.fork_start, timing.fork_end);
@@ -543,16 +543,10 @@ fn dispatch_message<'mcx>(
 
             match describe_type as u8 {
                 b'S' => {
-                    extended_query::exec_describe_statement_message(
-                        mcx,
-                        describe_target.as_str(),
-                    )?;
+                    extended_query::exec_describe_statement_message(mcx, describe_target.as_str())?;
                 }
                 b'P' => {
-                    extended_query::exec_describe_portal_message(
-                        mcx,
-                        describe_target.as_str(),
-                    )?;
+                    extended_query::exec_describe_portal_message(mcx, describe_target.as_str())?;
                 }
                 other => {
                     return Err(ereport(ERROR)
@@ -583,13 +577,21 @@ fn dispatch_message<'mcx>(
                     ereport(LOG)
                         .errmsg(format!("duration: {msec_str} ms"))
                         .errhidestmt(true)
-                        .finish(ErrorLocation::new("fastpath.c", 312, "HandleFunctionRequest"))?;
+                        .finish(ErrorLocation::new(
+                            "fastpath.c",
+                            312,
+                            "HandleFunctionRequest",
+                        ))?;
                 }
                 (2, msec_str) => {
                     ereport(LOG)
                         .errmsg(format!("duration: {msec_str} ms  fastpath function call"))
                         .errhidestmt(true)
-                        .finish(ErrorLocation::new("fastpath.c", 316, "HandleFunctionRequest"))?;
+                        .finish(ErrorLocation::new(
+                            "fastpath.c",
+                            316,
+                            "HandleFunctionRequest",
+                        ))?;
                 }
                 _ => {}
             }
@@ -662,8 +664,7 @@ fn dispatch_message<'mcx>(
             ipc_seams::proc_exit::call(0, init_small::globals::MyProcPid());
         }
 
-        x if x == pqmsg::COPY_DATA || x == pqmsg::COPY_DONE || x == pqmsg::COPY_FAIL => {
-        }
+        x if x == pqmsg::COPY_DATA || x == pqmsg::COPY_DONE || x == pqmsg::COPY_FAIL => {}
 
         other => {
             return Err(ereport(FATAL)
@@ -711,11 +712,17 @@ fn log_disconnections(_code: i32, _arg: usize) {
             port.user_name.as_deref().unwrap_or(""),
             port.database_name.as_deref().unwrap_or(""),
             port.remote_host,
-            if port.remote_port.is_empty() { "" } else { " port=" },
+            if port.remote_port.is_empty() {
+                ""
+            } else {
+                " port="
+            },
             port.remote_port,
         )
     });
-    let _ = ereport(LOG).errmsg(msg).finish(loc(5168, "log_disconnections"));
+    let _ = ereport(LOG)
+        .errmsg(msg)
+        .finish(loc(5168, "log_disconnections"));
 }
 
 pub fn PostgresMain(dbname: &str, username: &str) -> ! {
@@ -767,7 +774,6 @@ fn postgres_main_inner(dbname: &str, username: &str) -> PgResult<()> {
         None,
     )?;
     drop(top);
-
 
     miscinit::SetProcessingMode(types_core::ProcessingMode::NormalProcessing);
 
@@ -877,8 +883,10 @@ fn postgres_main_inner(dbname: &str, username: &str) -> PgResult<()> {
 }
 
 // One iteration of the C for(;;) body (postgres.c:4516-5021), Err = the
-// sigsetjmp path. Panics from unported seams are mapped to ERROR-level errors
-// so the backend recovers as C does from ereport(ERROR).
+// sigsetjmp path. Only typed PgError payloads represent ereport(ERROR).
+// Unstructured Rust panics are internal-invariant failures and must escape as
+// a backend crash so the postmaster reinitializes shared state and runs crash
+// recovery.
 pub(crate) fn run_one_iteration(mcx: Mcx<'_>, state: &mut LoopState) -> PgResult<()> {
     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         run_one_iteration_inner(mcx, state)
@@ -889,7 +897,7 @@ pub(crate) fn run_one_iteration(mcx: Mcx<'_>, state: &mut LoopState) -> PgResult
     }
 }
 
-fn pg_error_from_panic(payload: Box<dyn std::any::Any + Send>) -> PgError {
+pub(crate) fn pg_error_from_panic(payload: Box<dyn std::any::Any + Send>) -> PgError {
     // proc_exit unwinds ProcExitThread; converting it to an ERROR turns
     // backend exit into an infinite recovery loop (client EOF -> proc_exit(0)
     // -> "recovered" -> ReadCommand panic, ~850/s). Re-raise it.
@@ -905,13 +913,11 @@ fn pg_error_from_panic(payload: Box<dyn std::any::Any + Send>) -> PgError {
     }
     match ::types_error::pg_error_from_panic(payload) {
         Ok(e) => e,
-        Err(payload) => {
-            let msg = payload
-                .downcast_ref::<String>()
-                .cloned()
-                .or_else(|| payload.downcast_ref::<&str>().map(|s| s.to_string()))
-                .unwrap_or_else(|| "backend panicked".to_string());
-            PgError::new(ERROR, msg)
+        Err(_raw_panic) => {
+            // The original panic hook has already logged the message and
+            // location.  Replace the arbitrary payload with the crash-class
+            // marker consumed by the backend-thread/postmaster choreography.
+            std::panic::resume_unwind(Box::new(types_error::PanicExitThread))
         }
     }
 }

@@ -277,18 +277,33 @@ mod tests {
         assert!(process_postgres_switches(&av(&[]), GucContext::PGC_BACKEND as u8).is_ok());
     }
 
-    #[test]
-    #[should_panic(expected = "proc_exit(1)")]
-    fn unknown_switch_is_fatal() {
-        setup();
-        let _ = process_postgres_switches(&av(&["-Z"]), GucContext::PGC_BACKEND as u8);
+    // proc_exit()'s stub now raises the typed ProcExitThread payload the
+    // real backend-thread contract uses (session_tests::install_shared_stubs),
+    // so #[should_panic]'s string matching can no longer see it; assert on
+    // the downcast and the exact exit code instead.
+    fn assert_proc_exits_with(code: i32, body: impl FnOnce() + std::panic::UnwindSafe) {
+        let outcome = std::panic::catch_unwind(body);
+        let payload = outcome.expect_err("expected a proc_exit panic");
+        assert_eq!(
+            payload.downcast_ref::<::ipc::ProcExitThread>().map(|e| e.code),
+            Some(code)
+        );
     }
 
     #[test]
-    #[should_panic(expected = "proc_exit(1)")]
+    fn unknown_switch_is_fatal() {
+        setup();
+        assert_proc_exits_with(1, || {
+            let _ = process_postgres_switches(&av(&["-Z"]), GucContext::PGC_BACKEND as u8);
+        });
+    }
+
+    #[test]
     fn trailing_dbname_rejected_when_no_out_param() {
         setup();
-        let _ = process_postgres_switches(&av(&["mydb"]), GucContext::PGC_BACKEND as u8);
+        assert_proc_exits_with(1, || {
+            let _ = process_postgres_switches(&av(&["mydb"]), GucContext::PGC_BACKEND as u8);
+        });
     }
 
     #[test]
