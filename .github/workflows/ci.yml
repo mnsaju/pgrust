@@ -25,10 +25,14 @@ jobs:
 
       # rust-toolchain.toml pins 1.96.0; rustup (preinstalled on the runner)
       # picks it up automatically on the first cargo/rustc invocation below.
+      # locales: pg_locale's libc-collation tests build a real en_US.UTF-8
+      # collator and fail if the OS has no locale data for it.
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends build-essential pkg-config libre2-dev
+          sudo apt-get install -y --no-install-recommends build-essential pkg-config libre2-dev locales
+          echo 'en_US.UTF-8 UTF-8' | sudo tee -a /etc/locale.gen
+          sudo locale-gen
 
       - name: Install pinned toolchain
         run: rustup show
