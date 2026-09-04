@@ -148,7 +148,7 @@ if [ -f "$WORK/isolation-output/regression.diffs" ]; then
     echo "==> raw isolation diffs: $WORK/isolation-output/regression.diffs"
 fi
 
-echo "==> Next: scripts/rowsort-compare.py to reclassify diffs against -- pgrust:rowsort/-- pgrust:stable-tie annotations"
+echo "==> Next: scripts/rowsort_compare.py to reclassify diffs against -- pgrust:rowsort/-- pgrust:stable-tie annotations"
 
 # Exit status 2 from either driver means "could not run at all" (a harness
 # problem, e.g. the server never came up correctly) -- that's a real script

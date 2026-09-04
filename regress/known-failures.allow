@@ -1,0 +1,47 @@
+# known-failures.allow — the PostgreSQL regression-suite ratchet ledger.
+# Companion: scripts/rowsort_compare.py --allow-file. Precedent:
+# crates/_support/seams_init/tests/lint-determinism.allow.
+#
+# One overlaid test name per line. A listed test may fail without failing CI;
+# a test NOT listed that fails breaks the build, and a listed test that starts
+# PASSING is reported stale and also breaks the build, so this file can only
+# shrink. Removing an entry is the unit of progress.
+#
+# SEED: 2026-09-04, first execution of the vendored suite (submodule pinned to
+# REL_18_3 = 62d6c7d3df6287f1bd83199c1a746e50d31571a0) against a pgrust server
+# built from main @ 489c1fc542. pg_regress raw: 157/230 "failed", but 136 of
+# those were the overlay's own -- pgrust:rowsort marker echo, which this
+# comparator strips. Real residual: 17 fail + 1 error, seeded below.
+#
+# Clusters, for whoever picks these up:
+#   generated columns   — output stops early (~900 deleted lines, 0 added):
+#                         reads as an unported feature or an aborting error,
+#                         not a wrong answer.
+#   COPY                — copy/copy2/copyselect/compression.
+#   partitioning/planner— mixed +/-, consistent with plan-shape divergence from
+#                         the redesigned executor. feat/pgbackrest-compat has
+#                         two written adjudications of exactly this territory
+#                         (ADJUDICATION-PARALLEL-PLAN-SHAPE.md,
+#                         ADJUDICATION-PORTALS-CURSOR-ORDER.md) not on main.
+#   security            — privileges, rowsecurity.
+
+alter_table
+compression
+copy
+copy2
+copyselect
+generated_stored
+generated_virtual
+join
+limit
+partition_aggregate
+partition_join
+partition_prune
+portals
+privileges
+rowsecurity
+select_distinct
+subselect
+
+# error, not a diff: produced no output at all on the seed run.
+numeric_big

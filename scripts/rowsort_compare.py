@@ -251,7 +251,24 @@ def main() -> int:
     ap.add_argument("--expected-dir", required=True, type=Path, help="vendor expected dir (expected/*.out)")
     ap.add_argument("--json", type=Path, help="write a JSON report here")
     ap.add_argument("--show-diffs", action="store_true", help="print residual diffs for failing files")
+    ap.add_argument(
+        "--allow-file",
+        type=Path,
+        help="ratchet ledger of known-failing test names (one per line, '#' comments). "
+        "Listed files may fail without failing the run; a listed file that PASSES is "
+        "reported as stale and also fails, so the ledger can only shrink.",
+    )
     args = ap.parse_args()
+
+    allowed: set[str] = set()
+    if args.allow_file:
+        if not args.allow_file.exists():
+            print(f"allow-file not found: {args.allow_file}", file=sys.stderr)
+            return 2
+        for line in args.allow_file.read_text().splitlines():
+            line = line.split("#", 1)[0].strip()
+            if line:
+                allowed.add(line)
 
     sql_files = sorted(args.sql_dir.glob("*.sql"))
     if not sql_files:
@@ -300,7 +317,31 @@ def main() -> int:
             )
         )
 
-    return 1 if by_status.get("fail") or by_status.get("error") else 0
+    bad = {r.name for r in by_status.get("fail", [])} | {r.name for r in by_status.get("error", [])}
+
+    if not args.allow_file:
+        return 1 if bad else 0
+
+    # Ratchet: only failures absent from the ledger break the build, and a
+    # ledger entry that has started passing must be removed (otherwise the
+    # baseline silently permits a future regression in that file).
+    new_failures = sorted(bad - allowed)
+    stale = sorted(allowed - bad)
+    print()
+    print(f"ratchet ledger: {args.allow_file} ({len(allowed)} entries)")
+    print(f"  known failures still failing : {len(allowed) - len(stale)}")
+    if new_failures:
+        print(f"  NEW failures (not in ledger) : {len(new_failures)}")
+        for n in new_failures:
+            print(f"    - {n}")
+    if stale:
+        print(f"  STALE entries (now passing)  : {len(stale)}")
+        for n in stale:
+            print(f"    - {n}  <- fixed; remove it from the ledger")
+    if new_failures or stale:
+        return 1
+    print("  no new failures, no stale entries")
+    return 0
 
 
 if __name__ == "__main__":

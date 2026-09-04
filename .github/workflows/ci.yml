@@ -73,3 +73,30 @@ jobs:
 
       - name: Run regression + isolation suites
         run: regress/run-regress-docker.sh
+
+      # run-regress-docker.sh deliberately exits 0 on "some tests failed"
+      # (status 1) and only fails on "could not run at all" (status 2), so it
+      # cannot gate on its own. The gate is the comparator: pg_regress's raw
+      # diff counts the overlay's own `-- pgrust:rowsort` marker echo as a
+      # failure (136 of 157 on the 2026-09-04 seed run), which this strips
+      # before judging. --allow-file ratchets against the known-failure
+      # ledger: a new failure fails the build, and so does a ledger entry
+      # that has started passing.
+      - name: Gate regression results (rowsort comparator + ratchet)
+        run: |
+          python3 scripts/rowsort_compare.py \
+            --sql-dir regress/overlay/sql \
+            --actual-dir regress-work/regress-output/results \
+            --expected-dir regress-work/regress/expected \
+            --allow-file regress/known-failures.allow \
+            --json regress-work/rowsort-report.json
+
+      - name: Upload regression artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regress-results
+          path: |
+            regress-work/rowsort-report.json
+            regress-work/regress-output/regression.diffs
+          if-no-files-found: ignore
