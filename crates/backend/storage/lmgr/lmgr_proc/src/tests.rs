@@ -314,6 +314,11 @@ fn signals_and_deadlock_alert() {
 #[test]
 fn guc_storage_and_installed_seams() {
     setup();
+    // procno 0's semaphore is shared process-wide state: InitProcess/ProcKill
+    // (guarded by freelist_guard elsewhere in this file) can reset it mid-test
+    // if it allocates proc slot 0 concurrently, stranding the lock() below
+    // waiting on a post that got wiped out.
+    let _guard = freelist_guard();
     thread_globals(404);
 
     assert_eq!(guc_tables::vars::DeadlockTimeout.read(), 1000);
