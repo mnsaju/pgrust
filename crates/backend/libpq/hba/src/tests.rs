@@ -77,9 +77,13 @@ fn write_temp(name: &str, content: &str) -> String {
     path.to_string_lossy().into_owned()
 }
 
+// Writes to the crate's global `PARSED_HBA_LINES`/`PARSED_IDENT_LINES` state
+// (via `load_hba`), so the caller must hold `GUC_LOCK` for this call and for
+// every subsequent read of that state (`check_hba`, `check_usermap`, or
+// another `load_hba`/`load_ident` call) in the same test — otherwise a
+// concurrently-running test can swap the global config out from under it.
 fn load_hba_content(name: &str, content: &str) -> bool {
     setup();
-    let _g = GUC_LOCK.lock().unwrap();
     let path = write_temp(name, content);
     guc_tables::vars::HbaFileName.write(Some(path));
     load_hba().unwrap()
@@ -344,6 +348,7 @@ fn parse_cert_method() {
 
 #[test]
 fn load_and_check_hba_local_trust() {
+    let _g = GUC_LOCK.lock().unwrap();
     assert!(load_hba_content(
         "trust.conf",
         "local all all trust\nhost all all 127.0.0.1/32 trust\n"
@@ -376,6 +381,7 @@ fn load_and_check_hba_local_trust() {
 
 #[test]
 fn check_hba_db_user_matching() {
+    let _g = GUC_LOCK.lock().unwrap();
     assert!(load_hba_content(
         "matching.conf",
         concat!(
@@ -407,6 +413,7 @@ fn check_hba_db_user_matching() {
 
 #[test]
 fn check_hba_ipv6_and_ssl_skip() {
+    let _g = GUC_LOCK.lock().unwrap();
     assert!(load_hba_content(
         "v6.conf",
         "hostssl all all 127.0.0.1/32 md5\nhost all all ::1/128 trust\n"
@@ -424,6 +431,7 @@ fn check_hba_ipv6_and_ssl_skip() {
 
 #[test]
 fn load_hba_failures() {
+    let _g = GUC_LOCK.lock().unwrap();
     // A file with no entries fails.
     assert!(!load_hba_content("empty.conf", "# nothing here\n"));
     // A parse error anywhere fails the load.
@@ -434,7 +442,6 @@ fn load_hba_failures() {
     // Missing file fails.
     setup();
     {
-        let _g = GUC_LOCK.lock().unwrap();
         guc_tables::vars::HbaFileName.write(Some("/nonexistent/pg_hba.conf".to_string()));
         assert!(!load_hba().unwrap());
     }
@@ -443,6 +450,7 @@ fn load_hba_failures() {
 // The M1 fixture: byte-identical to the entries C initdb writes.
 #[test]
 fn load_hba_initdb_default() {
+    let _g = GUC_LOCK.lock().unwrap();
     assert!(load_hba_content(
         "initdb_default.conf",
         concat!(
@@ -476,10 +484,9 @@ fn load_hba_from_c_initdb_datadir() {
         return;
     };
     setup();
-    let g = GUC_LOCK.lock().unwrap();
+    let _g = GUC_LOCK.lock().unwrap();
     guc_tables::vars::HbaFileName.write(Some(format!("{datadir}/pg_hba.conf")));
     assert!(load_hba().unwrap());
-    drop(g);
 
     let mut port = unix_port("malisper", "postgres");
     check_hba(&mut port).unwrap();
@@ -512,14 +519,13 @@ fn check_usermap_null_map() {
 #[test]
 fn load_ident_and_usermap() {
     setup();
-    let g = GUC_LOCK.lock().unwrap();
+    let _g = GUC_LOCK.lock().unwrap();
     let path = write_temp(
         "ident.conf",
         "# map system pg\nmymap   osuser   alice\nmymap   root     bob\n",
     );
     guc_tables::vars::IdentFileName.write(Some(path));
     assert!(load_ident().unwrap());
-    drop(g);
 
     assert_eq!(
         check_usermap(Some("mymap"), "alice", "osuser", false).unwrap(),
