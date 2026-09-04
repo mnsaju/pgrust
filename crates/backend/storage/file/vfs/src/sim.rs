@@ -320,7 +320,12 @@ pub struct FaultRule {
 impl FaultRule {
     /// Fail the nth op matching `matcher` (once).
     pub fn nth_matching(matcher: OpMatch, nth: u64, action: FaultDecision) -> Self {
-        FaultRule { matcher, nth, action, sticky: false }
+        FaultRule {
+            matcher,
+            nth,
+            action,
+            sticky: false,
+        }
     }
 
     /// Crash at the nth op of the run, whatever it is.
@@ -453,7 +458,9 @@ fn sector_prefix(off: usize, len: usize, want: usize, atomic: bool) -> usize {
         return len;
     }
     let end = off + want;
-    (end / SECTOR_SIZE * SECTOR_SIZE).saturating_sub(off).min(len)
+    (end / SECTOR_SIZE * SECTOR_SIZE)
+        .saturating_sub(off)
+        .min(len)
 }
 
 // ===========================================================================
@@ -732,7 +739,9 @@ fn red_applies_here() -> bool {
     }
     // SAFETY: only ever stored as a leaked Box<String> in arm_red_adoption_scope.
     let scope: &String = unsafe { &*(scope as *const String) };
-    std::thread::current().name().is_some_and(|n| n.contains(scope.as_str()))
+    std::thread::current()
+        .name()
+        .is_some_and(|n| n.contains(scope.as_str()))
 }
 
 /// Deliberately broken sharing shapes for the red battery.
@@ -991,8 +1000,9 @@ impl SimVfs {
             "SimVfs: share_universe_as on an already-bound thread"
         );
         let moved = SIM.with(|cell| cell.replace(SimState::fresh()));
-        let cell: &'static UniverseCell =
-            Box::leak(Box::new(UniverseCell { state: RefCell::new(moved) }));
+        let cell: &'static UniverseCell = Box::leak(Box::new(UniverseCell {
+            state: RefCell::new(moved),
+        }));
         // SAFETY: permit-serialized (asserted above).
         let reg = unsafe { &mut *UNIVERSES.0.get() };
         let prev = reg.insert(id, cell);
@@ -1020,7 +1030,11 @@ impl SimVfs {
     /// wiring bug). Subject to [`SimVfs::arm_red_adoption`] sabotage.
     pub fn adopt_universe(id: u64) {
         assert_permit("adopt_universe");
-        match if red_applies_here() { RED_ADOPTION.load(Ordering::Acquire) } else { 0 } {
+        match if red_applies_here() {
+            RED_ADOPTION.load(Ordering::Acquire)
+        } else {
+            0
+        } {
             1 => return, // RedAdoption::Empty: the pre-lane bug, resurrected
             2 => {
                 // RedAdoption::Stale: a frozen deep copy instead of a bind.
@@ -1105,9 +1119,7 @@ impl SimVfs {
             st.namespace
                 .iter()
                 .map(|(path, &id)| match &st.nodes[id].node {
-                    Node::File(f) => {
-                        (path.clone(), Some((f.volatile.clone(), f.durable.clone())))
-                    }
+                    Node::File(f) => (path.clone(), Some((f.volatile.clone(), f.durable.clone()))),
                     _ => (path.clone(), None),
                 })
                 .collect()
@@ -1205,7 +1217,8 @@ impl SimVfs {
             }
             return 0;
         }
-        SIM.try_with(|cell| close_locked(&mut cell.borrow_mut(), fd)).unwrap_or(0)
+        SIM.try_with(|cell| close_locked(&mut cell.borrow_mut(), fd))
+            .unwrap_or(0)
     }
 }
 
@@ -1274,7 +1287,9 @@ fn crash_locked(st: &mut SimState, forced: Option<(NodeId, JournalOp)>) {
         // every later vfs op until revive() so unwind residue cannot
         // repair the post-crash image before the harness packs it.
         st.killed = true;
-        st.fault_log.push(format!("KILL#{cut} seq={seq} node frozen (whole-node kill armed)"));
+        st.fault_log.push(format!(
+            "KILL#{cut} seq={seq} node frozen (whole-node kill armed)"
+        ));
     }
     st.open.clear();
 
@@ -1302,9 +1317,7 @@ fn crash_locked(st: &mut SimState, forced: Option<(NodeId, JournalOp)>) {
                         let coin = subset_coin(seed, cut, id, i);
                         let keep = coin & 1 == 1;
                         let cap = match e {
-                            JournalOp::Write { off, data }
-                                if keep && (coin >> 1) & 3 == 0 =>
-                            {
+                            JournalOp::Write { off, data } if keep && (coin >> 1) & 3 == 0 => {
                                 sector_prefix(
                                     *off,
                                     data.len(),
@@ -1459,7 +1472,10 @@ fn norm_path(path: &CStr) -> Result<PathBuf, i32> {
     let mut out = if s.starts_with('/') {
         PathBuf::from("/")
     } else {
-        BOOT_CWD.get().cloned().unwrap_or_else(|| PathBuf::from("/"))
+        BOOT_CWD
+            .get()
+            .cloned()
+            .unwrap_or_else(|| PathBuf::from("/"))
     };
     for comp in Path::new(s).components() {
         match comp {
@@ -1531,9 +1547,9 @@ impl SimState {
     /// True if any directory's DURABLE entry image still references `id`
     /// (a crash could resurrect the node; it must not be freed).
     fn durably_referenced(&self, id: NodeId) -> bool {
-        self.nodes.iter().any(|s| {
-            matches!(&s.node, Node::Dir(d) if d.durable_entries.values().any(|&v| v == id))
-        })
+        self.nodes.iter().any(
+            |s| matches!(&s.node, Node::Dir(d) if d.durable_entries.values().any(|&v| v == id)),
+        )
     }
 
     fn maybe_free(&mut self, id: NodeId) {
@@ -1567,14 +1583,19 @@ impl SimState {
     fn dir_set_entry(&mut self, dir: NodeId, name: &str, node: NodeId) {
         if let Node::Dir(d) = &mut self.nodes[dir].node {
             d.entries.insert(name.to_string(), node);
-            d.unsynced.push(DirentOp::Set { name: name.to_string(), node });
+            d.unsynced.push(DirentOp::Set {
+                name: name.to_string(),
+                node,
+            });
         }
     }
 
     fn dir_remove_entry(&mut self, dir: NodeId, name: &str) {
         if let Node::Dir(d) = &mut self.nodes[dir].node {
             d.entries.remove(name);
-            d.unsynced.push(DirentOp::Remove { name: name.to_string() });
+            d.unsynced.push(DirentOp::Remove {
+                name: name.to_string(),
+            });
         }
     }
 
@@ -1588,7 +1609,10 @@ impl SimState {
             // inc-5: offset rides the diagnostic trace so harness stratifiers
             // can identify page REWRITES (the FPW-red selector); `-` when the
             // op has no offset. Purely diagnostic — plans never read it.
-            let off = op.offset.map(|o| o.to_string()).unwrap_or_else(|| "-".into());
+            let off = op
+                .offset
+                .map(|o| o.to_string())
+                .unwrap_or_else(|| "-".into());
             self.trace.push(format!(
                 "OP seq={} kind={:?} class={class:?} off={off} path={path}",
                 self.op_seq, op.kind
@@ -1606,7 +1630,8 @@ impl SimState {
             ));
         }
         for note in self.plan.drain_notes() {
-            self.fault_log.push(format!("NOTE seq={} {note}", self.op_seq));
+            self.fault_log
+                .push(format!("NOTE seq={} {note}", self.op_seq));
         }
         d
     }
@@ -1667,7 +1692,11 @@ fn gate_simple(st: &mut SimState, op: &OpDesc<'_>) -> Option<i32> {
         FaultDecision::ShortRead(_)
         | FaultDecision::ShortWrite(_)
         | FaultDecision::TornWrite { .. } => {
-            debug_assert!(false, "Short/Torn decision on non-data-plane op {:?}", op.kind);
+            debug_assert!(
+                false,
+                "Short/Torn decision on non-data-plane op {:?}",
+                op.kind
+            );
             None
         }
     }
@@ -1679,7 +1708,13 @@ fn sync_locked(st: &mut SimState, fd: c_int, kind: OpKind) -> c_int {
         return fail(libc::EIO);
     }
     let opath = st.fd_path(fd);
-    let desc = OpDesc { kind, path: opath.as_deref(), fd: Some(fd), offset: None, len: None };
+    let desc = OpDesc {
+        kind,
+        path: opath.as_deref(),
+        fd: Some(fd),
+        offset: None,
+        len: None,
+    };
     match st.consult(&desc) {
         FaultDecision::Proceed => promote(st, fd),
         FaultDecision::Errno(e) => {
@@ -1825,7 +1860,13 @@ impl Vfs for SimVfs {
             }
             if let Some(e) = gate_simple(
                 st,
-                &OpDesc { kind: OpKind::Open, path: Some(&p), fd: None, offset: None, len: None },
+                &OpDesc {
+                    kind: OpKind::Open,
+                    path: Some(&p),
+                    fd: None,
+                    offset: None,
+                    len: None,
+                },
             ) {
                 return fail(e);
             }
@@ -1893,7 +1934,14 @@ impl Vfs for SimVfs {
             st.nodes[node].open_count += 1;
             let fd = st.next_fd;
             st.next_fd += 1;
-            st.open.insert(fd, OpenFile { node, flags, path: p.clone() });
+            st.open.insert(
+                fd,
+                OpenFile {
+                    node,
+                    flags,
+                    path: p.clone(),
+                },
+            );
             st.fd_trace.push(fd);
             fd
         })
@@ -2271,7 +2319,13 @@ impl Vfs for SimVfs {
             }
             if let Some(e) = gate_simple(
                 st,
-                &OpDesc { kind: OpKind::Stat, path: Some(&p), fd: None, offset: None, len: None },
+                &OpDesc {
+                    kind: OpKind::Stat,
+                    path: Some(&p),
+                    fd: None,
+                    offset: None,
+                    len: None,
+                },
             ) {
                 return fail(e);
             }
@@ -2321,7 +2375,13 @@ impl Vfs for SimVfs {
             }
             if let Some(e) = gate_simple(
                 st,
-                &OpDesc { kind: OpKind::Lstat, path: Some(&p), fd: None, offset: None, len: None },
+                &OpDesc {
+                    kind: OpKind::Lstat,
+                    path: Some(&p),
+                    fd: None,
+                    offset: None,
+                    len: None,
+                },
             ) {
                 return fail(e);
             }
@@ -2428,7 +2488,11 @@ impl Vfs for SimVfs {
                 return fail(e);
             }
             if fp == tp {
-                return if st.lookup(&fp).is_some() { 0 } else { fail(libc::ENOENT) };
+                return if st.lookup(&fp).is_some() {
+                    0
+                } else {
+                    fail(libc::ENOENT)
+                };
             }
             let Some(src) = st.lookup(&fp) else {
                 return fail(libc::ENOENT);
@@ -2517,7 +2581,13 @@ impl Vfs for SimVfs {
             }
             if let Some(e) = gate_simple(
                 st,
-                &OpDesc { kind: OpKind::Mkdir, path: Some(&p), fd: None, offset: None, len: None },
+                &OpDesc {
+                    kind: OpKind::Mkdir,
+                    path: Some(&p),
+                    fd: None,
+                    offset: None,
+                    len: None,
+                },
             ) {
                 return fail(e);
             }
@@ -2559,7 +2629,13 @@ impl Vfs for SimVfs {
             }
             if let Some(e) = gate_simple(
                 st,
-                &OpDesc { kind: OpKind::Rmdir, path: Some(&p), fd: None, offset: None, len: None },
+                &OpDesc {
+                    kind: OpKind::Rmdir,
+                    path: Some(&p),
+                    fd: None,
+                    offset: None,
+                    len: None,
+                },
             ) {
                 return fail(e);
             }
@@ -2786,7 +2862,11 @@ mod tests {
 
         // O_EXCL on existing file
         set_errno(0);
-        let r = v.open(&c("/f"), libc::O_CREAT | libc::O_EXCL | libc::O_RDWR, 0o600 as mode_t);
+        let r = v.open(
+            &c("/f"),
+            libc::O_CREAT | libc::O_EXCL | libc::O_RDWR,
+            0o600 as mode_t,
+        );
         assert_eq!(r, -1);
         assert_eq!(get_errno(), libc::EEXIST);
 
@@ -2803,7 +2883,11 @@ mod tests {
 
         // data-plane op on a raw-domain (small-int) fd
         set_errno(0);
-        assert_eq!(v.pwrite(7, b"x", 0), -1, "raw posix fd must not work on sim");
+        assert_eq!(
+            v.pwrite(7, b"x", 0),
+            -1,
+            "raw posix fd must not work on sim"
+        );
         assert_eq!(get_errno(), libc::EBADF);
     }
 
@@ -2867,12 +2951,14 @@ mod tests {
             let fd = open_rw_create(&v, &format!("/d/{name}"));
             assert_eq!(v.close(fd), 0);
         }
-        let names1: Vec<String> =
-            v.read_dir(&c("/d")).unwrap().map(Result::unwrap).collect();
-        let names2: Vec<String> =
-            v.read_dir(&c("/d")).unwrap().map(Result::unwrap).collect();
+        let names1: Vec<String> = v.read_dir(&c("/d")).unwrap().map(Result::unwrap).collect();
+        let names2: Vec<String> = v.read_dir(&c("/d")).unwrap().map(Result::unwrap).collect();
         assert_eq!(names1, names2, "two reads identical");
-        assert_eq!(names1, vec!["alpha", "beta", "mid", "zeta"], "BTree order, no dot entries");
+        assert_eq!(
+            names1,
+            vec!["alpha", "beta", "mid", "zeta"],
+            "BTree order, no dot entries"
+        );
     }
 
     #[test]
@@ -3010,15 +3096,24 @@ mod tests {
         assert_eq!(v.mkdir(&c(&dir), 0o700 as mode_t), 0);
 
         let tmp = format!("{dir}/data.tmp");
-        let fd =
-            v.open(&c(&tmp), libc::O_CREAT | libc::O_EXCL | libc::O_RDWR, 0o600 as mode_t);
+        let fd = v.open(
+            &c(&tmp),
+            libc::O_CREAT | libc::O_EXCL | libc::O_RDWR,
+            0o600 as mode_t,
+        );
         assert!(fd >= 0);
 
         // vectored write: "hello " + "world"
         let (a, b) = (b"hello ".to_vec(), b"world".to_vec());
         let iov = [
-            libc::iovec { iov_base: a.as_ptr() as *mut libc::c_void, iov_len: a.len() },
-            libc::iovec { iov_base: b.as_ptr() as *mut libc::c_void, iov_len: b.len() },
+            libc::iovec {
+                iov_base: a.as_ptr() as *mut libc::c_void,
+                iov_len: a.len(),
+            },
+            libc::iovec {
+                iov_base: b.as_ptr() as *mut libc::c_void,
+                iov_len: b.len(),
+            },
         ];
         out.push(vec![v.pwritev(fd, &iov, 0) as u8]);
         // overwrite in the middle + extend past EOF (hole)
@@ -3039,8 +3134,14 @@ mod tests {
         let mut r1 = vec![0u8; 7];
         let mut r2 = vec![0u8; 64];
         let iov = [
-            libc::iovec { iov_base: r1.as_mut_ptr() as *mut libc::c_void, iov_len: r1.len() },
-            libc::iovec { iov_base: r2.as_mut_ptr() as *mut libc::c_void, iov_len: r2.len() },
+            libc::iovec {
+                iov_base: r1.as_mut_ptr() as *mut libc::c_void,
+                iov_len: r1.len(),
+            },
+            libc::iovec {
+                iov_base: r2.as_mut_ptr() as *mut libc::c_void,
+                iov_len: r2.len(),
+            },
         ];
         let n = v.preadv(fd, &iov, 0);
         out.push(n.to_le_bytes().to_vec());
@@ -3054,8 +3155,7 @@ mod tests {
         out.push(hole);
 
         // deterministic namespace view
-        let mut names: Vec<String> =
-            v.read_dir(&c(&dir)).unwrap().map(Result::unwrap).collect();
+        let mut names: Vec<String> = v.read_dir(&c(&dir)).unwrap().map(Result::unwrap).collect();
         names.sort(); // posix order is fs-defined; sim is already sorted
         out.push(names.join(",").into_bytes());
 
@@ -3108,13 +3208,39 @@ mod tests {
 
     #[derive(Debug, Clone)]
     enum ScriptOp {
-        Open { path: String, flags: c_int, expect: c_int },
-        PWrite { fd: c_int, off: off_t, data: Vec<u8>, expect: isize },
-        Fsync { fd: c_int, expect: c_int },
-        Ftruncate { fd: c_int, len: off_t, expect: c_int },
-        Close { fd: c_int, expect: c_int },
-        Rename { from: String, to: String, expect: c_int },
-        Unlink { path: String, expect: c_int },
+        Open {
+            path: String,
+            flags: c_int,
+            expect: c_int,
+        },
+        PWrite {
+            fd: c_int,
+            off: off_t,
+            data: Vec<u8>,
+            expect: isize,
+        },
+        Fsync {
+            fd: c_int,
+            expect: c_int,
+        },
+        Ftruncate {
+            fd: c_int,
+            len: off_t,
+            expect: c_int,
+        },
+        Close {
+            fd: c_int,
+            expect: c_int,
+        },
+        Rename {
+            from: String,
+            to: String,
+            expect: c_int,
+        },
+        Unlink {
+            path: String,
+            expect: c_int,
+        },
         Crash,
     }
 
@@ -3122,7 +3248,11 @@ mod tests {
     /// result matches the recording.
     fn apply(v: &SimVfs, op: &mut ScriptOp, replay: bool) {
         match op {
-            ScriptOp::Open { path, flags, expect } => {
+            ScriptOp::Open {
+                path,
+                flags,
+                expect,
+            } => {
                 let r = v.open(&c(path), *flags, 0o600 as mode_t);
                 if replay {
                     assert_eq!(r, *expect, "open({path}) fd/result diverged on replay");
@@ -3130,7 +3260,12 @@ mod tests {
                     *expect = r;
                 }
             }
-            ScriptOp::PWrite { fd, off, data, expect } => {
+            ScriptOp::PWrite {
+                fd,
+                off,
+                data,
+                expect,
+            } => {
                 let r = v.pwrite(*fd, data, *off);
                 if replay {
                     assert_eq!(r, *expect, "pwrite(fd={fd}) diverged on replay");
@@ -3211,13 +3346,21 @@ mod tests {
                     for b in &mut data {
                         *b = rng.next() as u8;
                     }
-                    ScriptOp::PWrite { fd, off: rng.below(4096) as off_t, data, expect: 0 }
+                    ScriptOp::PWrite {
+                        fd,
+                        off: rng.below(4096) as off_t,
+                        data,
+                        expect: 0,
+                    }
                 }
                 60..=71 => {
                     if live_fds.is_empty() {
                         continue;
                     }
-                    ScriptOp::Fsync { fd: live_fds[rng.below(live_fds.len())], expect: 0 }
+                    ScriptOp::Fsync {
+                        fd: live_fds[rng.below(live_fds.len())],
+                        expect: 0,
+                    }
                 }
                 72..=78 => {
                     if live_fds.is_empty() {
@@ -3262,7 +3405,10 @@ mod tests {
 
         let recorded_images = vfs.image_dump();
         let recorded_fds = vfs.fd_trace();
-        assert!(!recorded_fds.is_empty(), "script must have opened something");
+        assert!(
+            !recorded_fds.is_empty(),
+            "script must have opened something"
+        );
 
         // ---- replay pass: same recorded stream into a fresh SimVfs ----
         let vfs = fresh();
@@ -3364,7 +3510,11 @@ mod tests {
         let guard = unsafe { crate::VfsFd::from_raw(raw) };
         assert_eq!(v.fstat(raw, &mut info), 0, "open before drop");
         drop(guard);
-        assert_eq!(v.fstat(raw, &mut info), -1, "guard drop must close sim-side");
+        assert_eq!(
+            v.fstat(raw, &mut info),
+            -1,
+            "guard drop must close sim-side"
+        );
         assert_eq!(get_errno(), libc::EBADF);
 
         // Disarm arm: into_raw hands the fd back, no close happens; the
@@ -3409,9 +3559,14 @@ mod tests {
         SeededFaultPlan::install(
             0x1,
             vec![FaultRule::nth_matching(
-                OpMatch { kinds: Some(vec![OpKind::PWriteV]), ..OpMatch::default() },
+                OpMatch {
+                    kinds: Some(vec![OpKind::PWriteV]),
+                    ..OpMatch::default()
+                },
                 1,
-                FaultDecision::TornWrite { persist_prefix: 700 },
+                FaultDecision::TornWrite {
+                    persist_prefix: 700,
+                },
             )],
         );
         // NOTE: install arms SeededSubset, but there are no other unsynced
@@ -3444,14 +3599,22 @@ mod tests {
         SeededFaultPlan::install(
             0x1,
             vec![FaultRule::nth_matching(
-                OpMatch { kinds: Some(vec![OpKind::PWriteV]), ..OpMatch::default() },
+                OpMatch {
+                    kinds: Some(vec![OpKind::PWriteV]),
+                    ..OpMatch::default()
+                },
                 1,
-                FaultDecision::TornWrite { persist_prefix: 9999 },
+                FaultDecision::TornWrite {
+                    persist_prefix: 9999,
+                },
             )],
         );
         assert_eq!(v.pwrite(fd, &vec![0xEEu8; 700], 100), -1);
         let img = read_file(&v, "/g").expect("durable dirent");
-        assert!(img[100..800].iter().all(|&b| b == 0xEE), "full write survived");
+        assert!(
+            img[100..800].iter().all(|&b| b == 0xEE),
+            "full write survived"
+        );
     }
 
     /// Rule 2 (fsyncgate): a failed fsync's dirty epoch is may-be-lost
@@ -3470,7 +3633,10 @@ mod tests {
         SimVfs::set_fault_plan(Box::new(SeededFaultPlan::new(
             0,
             vec![FaultRule::nth_matching(
-                OpMatch { kinds: Some(vec![OpKind::Fsync]), ..OpMatch::default() },
+                OpMatch {
+                    kinds: Some(vec![OpKind::Fsync]),
+                    ..OpMatch::default()
+                },
                 1,
                 FaultDecision::Errno(libc::EIO),
             )],
@@ -3482,7 +3648,11 @@ mod tests {
         assert_eq!(get_errno(), libc::EIO);
 
         assert_eq!(v.pwrite(fd, b"CCCC", 8), 4); // epoch 2
-        assert_eq!(v.fsync(fd), 0, "retry succeeds — but must not resurrect epoch 1");
+        assert_eq!(
+            v.fsync(fd),
+            0,
+            "retry succeeds — but must not resurrect epoch 1"
+        );
 
         // The page-cache view still shows everything (the trap!).
         let mut buf = [0u8; 12];
@@ -3501,7 +3671,9 @@ mod tests {
 
         // The log carries the fsyncgate event with its op-seq.
         assert!(
-            SimVfs::fault_log().iter().any(|l| l.starts_with("FSYNCGATE ")),
+            SimVfs::fault_log()
+                .iter()
+                .any(|l| l.starts_with("FSYNCGATE ")),
             "fsyncgate transition must be logged: {:?}",
             SimVfs::fault_log()
         );
@@ -3527,7 +3699,10 @@ mod tests {
         SimVfs::cut();
 
         assert_eq!(read_file(&v, "/a").as_deref(), Some(b"adata".as_slice()));
-        assert!(read_file(&v, "/c").is_none(), "un-fsync'd dirent lost at crash");
+        assert!(
+            read_file(&v, "/c").is_none(),
+            "un-fsync'd dirent lost at crash"
+        );
 
         // --- rename without the parent-dir fsync: the new name is LOST ---
         let v = fresh();
@@ -3539,7 +3714,10 @@ mod tests {
         assert_eq!(v.rename(&c("/old"), &c("/new")), 0);
         // (no dir fsync — the durable_rename discipline violated)
         SimVfs::cut();
-        assert!(read_file(&v, "/new").is_none(), "rename dirent lost at crash");
+        assert!(
+            read_file(&v, "/new").is_none(),
+            "rename dirent lost at crash"
+        );
         assert_eq!(
             read_file(&v, "/old").as_deref(),
             Some(b"payload".as_slice()),
@@ -3556,7 +3734,10 @@ mod tests {
         assert_eq!(v.rename(&c("/old"), &c("/new")), 0);
         dir_fsync(&v, "/");
         SimVfs::cut();
-        assert_eq!(read_file(&v, "/new").as_deref(), Some(b"payload".as_slice()));
+        assert_eq!(
+            read_file(&v, "/new").as_deref(),
+            Some(b"payload".as_slice())
+        );
         assert!(read_file(&v, "/old").is_none());
     }
 
@@ -3582,7 +3763,10 @@ mod tests {
 
         let (img_a1, log_a1) = run(0xA11CE);
         let (img_a2, log_a2) = run(0xA11CE);
-        assert_eq!(img_a1, img_a2, "same seed ⇒ byte-identical post-crash image");
+        assert_eq!(
+            img_a1, img_a2,
+            "same seed ⇒ byte-identical post-crash image"
+        );
         assert_eq!(log_a1, log_a2, "same seed ⇒ byte-identical fault log");
 
         let (img_b, _) = run(0xB0B);
@@ -3607,14 +3791,38 @@ mod tests {
     #[test]
     fn path_class_and_nth_matching_rules() {
         // classifier vocabulary
-        assert_eq!(classify_path(Path::new("/data/pg_wal/000000010000000000000001")), PathClass::Wal);
-        assert_eq!(classify_path(Path::new("/data/pg_control")), PathClass::Config);
-        assert_eq!(classify_path(Path::new("/data/pg_control.tmp")), PathClass::Config);
-        assert_eq!(classify_path(Path::new("/data/postgresql.conf")), PathClass::Config);
-        assert_eq!(classify_path(Path::new("/data/base/pgsql_tmp/pgsql_tmp1.0")), PathClass::Temp);
-        assert_eq!(classify_path(Path::new("/data/base/5/16384")), PathClass::Heap);
-        assert_eq!(classify_path(Path::new("/data/global/1213")), PathClass::Heap);
-        assert_eq!(classify_path(Path::new("/somewhere/else")), PathClass::Other);
+        assert_eq!(
+            classify_path(Path::new("/data/pg_wal/000000010000000000000001")),
+            PathClass::Wal
+        );
+        assert_eq!(
+            classify_path(Path::new("/data/pg_control")),
+            PathClass::Config
+        );
+        assert_eq!(
+            classify_path(Path::new("/data/pg_control.tmp")),
+            PathClass::Config
+        );
+        assert_eq!(
+            classify_path(Path::new("/data/postgresql.conf")),
+            PathClass::Config
+        );
+        assert_eq!(
+            classify_path(Path::new("/data/base/pgsql_tmp/pgsql_tmp1.0")),
+            PathClass::Temp
+        );
+        assert_eq!(
+            classify_path(Path::new("/data/base/5/16384")),
+            PathClass::Heap
+        );
+        assert_eq!(
+            classify_path(Path::new("/data/global/1213")),
+            PathClass::Heap
+        );
+        assert_eq!(
+            classify_path(Path::new("/somewhere/else")),
+            PathClass::Other
+        );
 
         let v = fresh();
         assert_eq!(v.mkdir(&c("/data"), 0o700 as mode_t), 0);
@@ -3666,7 +3874,10 @@ mod tests {
                 0xD57,
                 vec![
                     FaultRule::nth_matching(
-                        OpMatch { kinds: Some(vec![OpKind::Fsync]), ..OpMatch::default() },
+                        OpMatch {
+                            kinds: Some(vec![OpKind::Fsync]),
+                            ..OpMatch::default()
+                        },
                         2,
                         FaultDecision::Errno(libc::EIO),
                     ),
@@ -3695,8 +3906,14 @@ mod tests {
         let (log1, img1) = faulted_run();
         let (log2, img2) = faulted_run();
         assert!(!log1.is_empty());
-        assert_eq!(log1, log2, "fault logs must be byte-identical across replay");
-        assert_eq!(img1, img2, "post-crash images must be byte-identical across replay");
+        assert_eq!(
+            log1, log2,
+            "fault logs must be byte-identical across replay"
+        );
+        assert_eq!(
+            img1, img2,
+            "post-crash images must be byte-identical across replay"
+        );
     }
 
     /// RED BATTERY (model level): the test-only atomic-multi-sector mode
@@ -3715,9 +3932,14 @@ mod tests {
             SeededFaultPlan::install(
                 0x2,
                 vec![FaultRule::nth_matching(
-                    OpMatch { kinds: Some(vec![OpKind::PWriteV]), ..OpMatch::default() },
+                    OpMatch {
+                        kinds: Some(vec![OpKind::PWriteV]),
+                        ..OpMatch::default()
+                    },
                     1,
-                    FaultDecision::TornWrite { persist_prefix: 700 },
+                    FaultDecision::TornWrite {
+                        persist_prefix: 700,
+                    },
                 )],
             );
             assert_eq!(v.pwrite(fd, &[0xEEu8; 1300], 100), -1);
@@ -3729,10 +3951,16 @@ mod tests {
 
         // Weakened arm: the FULL 1300-byte write survived — multi-sector
         // atomicity that no disk guarantees. The tear is masked.
-        assert!(weakened[100..1400].iter().all(|&b| b == 0xEE), "weakened arm masks the tear");
+        assert!(
+            weakened[100..1400].iter().all(|&b| b == 0xEE),
+            "weakened arm masks the tear"
+        );
         // Floor arm: the tear is real — data stops at the sector boundary.
         assert!(floored[100..512].iter().all(|&b| b == 0xEE));
-        assert!(floored[512..].iter().all(|&b| b == 0xBB), "floor arm catches the tear");
+        assert!(
+            floored[512..].iter().all(|&b| b == 0xBB),
+            "floor arm catches the tear"
+        );
         assert_ne!(floored, weakened, "if these agree the model has no teeth");
     }
 
@@ -3754,7 +3982,10 @@ mod tests {
             SimVfs::set_fault_plan(Box::new(SeededFaultPlan::new(
                 0,
                 vec![FaultRule::nth_matching(
-                    OpMatch { kinds: Some(vec![OpKind::Fsync]), ..OpMatch::default() },
+                    OpMatch {
+                        kinds: Some(vec![OpKind::Fsync]),
+                        ..OpMatch::default()
+                    },
                     1,
                     FaultDecision::Errno(libc::EIO),
                 )],
@@ -3777,12 +4008,18 @@ mod tests {
         let (vol, dur) = run(CrashImage::DropAll);
         assert_eq!(vol.len(), 2048);
         assert!(vol.iter().all(|&b| b >= 0xB0), "volatile hides the loss");
-        assert!(dur.iter().all(|&b| b == 0xAA), "DropAll: doomed epoch fully lost");
+        assert!(
+            dur.iter().all(|&b| b == 0xAA),
+            "DropAll: doomed epoch fully lost"
+        );
 
         // KeepAll (kindest legal disk): the whole epoch made it out before
         // the error — durable shows all of it.
         let (_, dur) = run(CrashImage::KeepAll);
-        assert!(dur.iter().all(|&b| b >= 0xB0), "KeepAll: doomed epoch fully persisted");
+        assert!(
+            dur.iter().all(|&b| b >= 0xB0),
+            "KeepAll: doomed epoch fully persisted"
+        );
 
         // SeededSubset: deterministically scan for a seed whose doomed-epoch
         // draw keeps a PROPER nonempty subset — the N2 semantics proper.
@@ -3790,7 +4027,11 @@ mod tests {
         for seed in 0..64u64 {
             let (_, dur) = run(CrashImage::SeededSubset(seed));
             let kept_blocks: Vec<bool> = (0..4)
-                .map(|i| dur[i * 512..(i + 1) * 512].iter().all(|&b| b == 0xB0 + i as u8))
+                .map(|i| {
+                    dur[i * 512..(i + 1) * 512]
+                        .iter()
+                        .all(|&b| b == 0xB0 + i as u8)
+                })
                 .collect();
             let dropped_blocks: Vec<bool> = (0..4)
                 .map(|i| dur[i * 512..(i + 1) * 512].iter().all(|&b| b == 0xAA))
@@ -3814,7 +4055,10 @@ mod tests {
         // Same seed twice ⇒ identical durable images (determinism).
         let (_, d1) = run(CrashImage::SeededSubset(seed));
         let (_, d2) = run(CrashImage::SeededSubset(seed));
-        assert_eq!(d1, d2, "doomed-epoch subset must be deterministic in the seed");
+        assert_eq!(
+            d1, d2,
+            "doomed-epoch subset must be deterministic in the seed"
+        );
 
         // No resurrection: after the failure, a NEW write + successful fsync
         // promotes only the new epoch; dropped doomed ops stay lost.
@@ -3827,7 +4071,10 @@ mod tests {
         SimVfs::set_fault_plan(Box::new(SeededFaultPlan::new(
             0,
             vec![FaultRule::nth_matching(
-                OpMatch { kinds: Some(vec![OpKind::Fsync]), ..OpMatch::default() },
+                OpMatch {
+                    kinds: Some(vec![OpKind::Fsync]),
+                    ..OpMatch::default()
+                },
                 1,
                 FaultDecision::Errno(libc::EIO),
             )],
@@ -3860,8 +4107,9 @@ mod tests {
             }
         }
         assert!(
-            SimVfs::fault_log().iter().any(|l| l.starts_with("FSYNCGATE ")
-                && l.contains("policy=SeededSubset")),
+            SimVfs::fault_log()
+                .iter()
+                .any(|l| l.starts_with("FSYNCGATE ") && l.contains("policy=SeededSubset")),
             "the doomed-epoch draw is logged with its policy: {:?}",
             SimVfs::fault_log()
         );
@@ -3895,15 +4143,23 @@ mod tests {
         assert_eq!(v.pwrite(fd, b"tmp", 0), 3, "Temp-class write proceeds");
         // The recycle: rename INTO pg_wal while the fd stays open.
         assert_eq!(
-            v.rename(&c("/data/recycle.tmp"), &c("/data/pg_wal/000000010000000000000042")),
+            v.rename(
+                &c("/data/recycle.tmp"),
+                &c("/data/pg_wal/000000010000000000000042")
+            ),
             0
         );
         set_errno(0);
-        assert_eq!(v.pwrite(fd, b"wal", 0), -1, "post-rename the SAME fd is Wal-class");
+        assert_eq!(
+            v.pwrite(fd, b"wal", 0),
+            -1,
+            "post-rename the SAME fd is Wal-class"
+        );
         assert_eq!(get_errno(), libc::EIO);
         let log = SimVfs::fault_log();
         assert!(
-            log.iter().any(|l| l.contains("pg_wal/000000010000000000000042")),
+            log.iter()
+                .any(|l| l.contains("pg_wal/000000010000000000000042")),
             "the log carries the CURRENT (renamed) path: {log:?}"
         );
 
@@ -3924,7 +4180,11 @@ mod tests {
         )));
         assert_eq!(v.unlink(&c("/data.tmp")), 0);
         set_errno(0);
-        assert_eq!(v.pwrite(fd, b"x", 0), -1, "unlinked fd keeps its open-time class");
+        assert_eq!(
+            v.pwrite(fd, b"x", 0),
+            -1,
+            "unlinked fd keeps its open-time class"
+        );
         assert_eq!(get_errno(), libc::ENOSPC);
         assert_eq!(v.close(fd), 0);
     }
@@ -3947,7 +4207,10 @@ mod tests {
             SeededFaultPlan::install(
                 0x7,
                 vec![FaultRule::nth_matching(
-                    OpMatch { kinds: Some(vec![OpKind::PWriteV]), ..OpMatch::default() },
+                    OpMatch {
+                        kinds: Some(vec![OpKind::PWriteV]),
+                        ..OpMatch::default()
+                    },
                     1,
                     FaultDecision::Crash,
                 )],
@@ -3977,9 +4240,17 @@ mod tests {
         let (v, dead_fd) = setup(true);
         assert!(SimVfs::killed());
         set_errno(0);
-        assert_eq!(v.open(&c("/f"), libc::O_RDWR, 0 as mode_t), -1, "dead node refuses open");
+        assert_eq!(
+            v.open(&c("/f"), libc::O_RDWR, 0 as mode_t),
+            -1,
+            "dead node refuses open"
+        );
         assert_eq!(get_errno(), libc::EIO);
-        assert_eq!(v.pwrite(dead_fd, &[0xCCu8; 512], 0), -1, "dead node refuses writes");
+        assert_eq!(
+            v.pwrite(dead_fd, &[0xCCu8; 512], 0),
+            -1,
+            "dead node refuses writes"
+        );
         assert_eq!(v.fsync(dead_fd), -1, "dead node refuses fsync");
         assert_eq!(v.unlink(&c("/f")), -1, "dead node refuses unlink");
         assert_eq!(v.rename(&c("/f"), &c("/g")), -1, "dead node refuses rename");
@@ -3987,8 +4258,14 @@ mod tests {
         assert_eq!(v.stat(&c("/f"), &mut info), -1, "dead node refuses stat");
         assert!(SimVfs::frozen_op_count() >= 6, "refusals counted");
         let log = SimVfs::fault_log();
-        assert!(log.iter().any(|l| l.starts_with("KILL#1 ")), "kill logged: {log:?}");
-        assert!(log.iter().any(|l| l.starts_with("KILLED ")), "first refusal logged");
+        assert!(
+            log.iter().any(|l| l.starts_with("KILL#1 ")),
+            "kill logged: {log:?}"
+        );
+        assert!(
+            log.iter().any(|l| l.starts_with("KILLED ")),
+            "first refusal logged"
+        );
         // Guard drops on the unwind path are tolerated (and refused).
         let _ = SimVfs::close_on_drop(dead_fd);
         // Revive = the recovery boot on the SAME disk: exactly the at-cut
@@ -4023,7 +4300,10 @@ mod tests {
             SimVfs::set_fault_plan(Box::new(SeededFaultPlan::new(
                 0,
                 vec![FaultRule::nth_matching(
-                    OpMatch { kinds: Some(vec![OpKind::Fsync]), ..OpMatch::default() },
+                    OpMatch {
+                        kinds: Some(vec![OpKind::Fsync]),
+                        ..OpMatch::default()
+                    },
                     1,
                     FaultDecision::Errno(libc::EIO),
                 )],
@@ -4073,7 +4353,10 @@ mod tests {
         // the error — the rename IS durable.
         let v = rename_with_failed_parent_fsync(CrashImage::KeepAll);
         SimVfs::cut();
-        assert_eq!(read_file(&v, "/new").as_deref(), Some(b"payload".as_slice()));
+        assert_eq!(
+            read_file(&v, "/new").as_deref(),
+            Some(b"payload".as_slice())
+        );
         assert!(read_file(&v, "/old").is_none());
 
         // SeededSubset: deterministic in the seed; some seed keeps a PROPER
@@ -4091,7 +4374,10 @@ mod tests {
             SimVfs::set_fault_plan(Box::new(SeededFaultPlan::new(
                 0,
                 vec![FaultRule::nth_matching(
-                    OpMatch { kinds: Some(vec![OpKind::Fsync]), ..OpMatch::default() },
+                    OpMatch {
+                        kinds: Some(vec![OpKind::Fsync]),
+                        ..OpMatch::default()
+                    },
                     1,
                     FaultDecision::Errno(libc::EIO),
                 )],
@@ -4102,7 +4388,9 @@ mod tests {
             // Post-failure set is empty; the cut exposes the durable image.
             SimVfs::set_crash_image(CrashImage::DropAll);
             SimVfs::cut();
-            (0..4).map(|i| read_file(&v, &format!("/s{i}")).is_some()).collect()
+            (0..4)
+                .map(|i| read_file(&v, &format!("/s{i}")).is_some())
+                .collect()
         }
         let mut proper = None;
         for seed in 0..64u64 {
@@ -4114,7 +4402,11 @@ mod tests {
             }
         }
         let seed = proper.expect("a proper-subset seed exists in the first 64");
-        assert_eq!(subset_run(seed), subset_run(seed), "deterministic in the seed");
+        assert_eq!(
+            subset_run(seed),
+            subset_run(seed),
+            "deterministic in the seed"
+        );
     }
 
     /// inc-3: fsync is the only BARRIER on the namespace plane too — on a
@@ -4137,7 +4429,9 @@ mod tests {
             "kindest legal disk persisted the dirent without the parent fsync"
         );
         assert!(
-            SimVfs::fault_log().iter().any(|l| l.contains(" dir=") && l.contains("kept=1")),
+            SimVfs::fault_log()
+                .iter()
+                .any(|l| l.contains(" dir=") && l.contains("kept=1")),
             "the dir-plane cut draw is logged: {:?}",
             SimVfs::fault_log()
         );
@@ -4160,12 +4454,15 @@ mod tests {
         assert_eq!(v.pwrite(fd, b"x", 0), -1, "op 2: rule#0 wins");
         assert_eq!(get_errno(), libc::EIO, "first rule in order wins");
         // rule#1's nth firing was consumed on op 2 — it must NOT fire later.
-        assert_eq!(v.pwrite(fd, b"y", 0), 1, "op 3 proceeds: loser's nth was consumed");
+        assert_eq!(
+            v.pwrite(fd, b"y", 0),
+            1,
+            "op 3 proceeds: loser's nth was consumed"
+        );
         let log = SimVfs::fault_log();
         assert!(
-            log.iter()
-                .any(|l| l.contains("SUPPRESSED rule#1")
-                    && l.contains(&format!("Errno({})", libc::ENOSPC))),
+            log.iter().any(|l| l.contains("SUPPRESSED rule#1")
+                && l.contains(&format!("Errno({})", libc::ENOSPC))),
             "the consumed firing must be visible in the log: {log:?}"
         );
         assert_eq!(v.close(fd), 0);

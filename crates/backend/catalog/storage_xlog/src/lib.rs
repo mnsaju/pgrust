@@ -15,7 +15,10 @@ pub const SMGR_TRUNCATE_ALL: u32 = SMGR_TRUNCATE_HEAP | SMGR_TRUNCATE_VM | SMGR_
 pub fn smgr_redo(record: &mut XLogReaderState) -> PgResult<()> {
     const XLR_INFO_MASK: u8 = 0x0F;
     let lsn = record.EndRecPtr;
-    let rec = record.record.as_ref().expect("smgr redo with no decoded record");
+    let rec = record
+        .record
+        .as_ref()
+        .expect("smgr redo with no decoded record");
     let info = rec.xl_info & !XLR_INFO_MASK;
     // SAFETY: points into the reader's decode buffer, valid for this callback.
     let xlrec = unsafe { rec.main_data_bytes() };
@@ -25,10 +28,12 @@ pub fn smgr_redo(record: &mut XLogReaderState) -> PgResult<()> {
             u32::from_ne_bytes(xlrec[4..8].try_into().unwrap()),
             u32::from_ne_bytes(xlrec[8..12].try_into().unwrap()),
         );
-        let fork_num =
-            ForkNumber::from_i32(i32::from_ne_bytes(xlrec[12..16].try_into().unwrap()))
-                .expect("invalid forknum in XLOG_SMGR_CREATE");
-        let key = RelFileLocatorBackend { locator, backend: INVALID_PROC_NUMBER };
+        let fork_num = ForkNumber::from_i32(i32::from_ne_bytes(xlrec[12..16].try_into().unwrap()))
+            .expect("invalid forknum in XLOG_SMGR_CREATE");
+        let key = RelFileLocatorBackend {
+            locator,
+            backend: INVALID_PROC_NUMBER,
+        };
         smgr::smgropen(locator, INVALID_PROC_NUMBER)?;
         smgr::smgrcreate(key, fork_num, true)?;
         Ok(())
@@ -40,7 +45,10 @@ pub fn smgr_redo(record: &mut XLogReaderState) -> PgResult<()> {
             u32::from_ne_bytes(xlrec[12..16].try_into().unwrap()),
         );
         let flags = u32::from_ne_bytes(xlrec[16..20].try_into().unwrap());
-        let key = RelFileLocatorBackend { locator, backend: INVALID_PROC_NUMBER };
+        let key = RelFileLocatorBackend {
+            locator,
+            backend: INVALID_PROC_NUMBER,
+        };
         smgr::smgropen(locator, INVALID_PROC_NUMBER)?;
 
         // Recreate if dropped later in the WAL sequence; flush so the minimum
@@ -88,7 +96,12 @@ pub fn smgr_redo(record: &mut XLogReaderState) -> PgResult<()> {
 
         if nforks > 0 {
             init_small::globals::StartCriticalSection();
-            smgr::smgrtruncate(key, &forks[..nforks], &old_blocks[..nforks], &blocks[..nforks])?;
+            smgr::smgrtruncate(
+                key,
+                &forks[..nforks],
+                &old_blocks[..nforks],
+                &blocks[..nforks],
+            )?;
             init_small::globals::EndCriticalSection();
         }
 

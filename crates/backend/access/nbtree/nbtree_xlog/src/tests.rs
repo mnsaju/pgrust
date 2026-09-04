@@ -19,8 +19,7 @@ fn restore_page_reverses_stream_into_offnum_order() {
     struct P([u8; BLCKSZ]);
     let mut p = P([0u8; BLCKSZ]);
     // SAFETY: owned aligned scratch page.
-    let mut pm =
-        unsafe { PageMut::from_raw(core::ptr::NonNull::new(p.0.as_mut_ptr()).unwrap()) };
+    let mut pm = unsafe { PageMut::from_raw(core::ptr::NonNull::new(p.0.as_mut_ptr()).unwrap()) };
     bt_pageinit(&mut pm);
     bt_restore_page(&mut pm, &stream).unwrap();
 
@@ -36,7 +35,10 @@ fn restore_page_reverses_stream_into_offnum_order() {
     let off3 = r.item_id(3).lp_off();
     let off1 = r.item_id(1).lp_off();
     assert!(off3 < off1);
-    assert_eq!(r.pd_special() as usize - r.pd_upper() as usize, 16 + 24 + 16);
+    assert_eq!(
+        r.pd_special() as usize - r.pd_upper() as usize,
+        16 + 24 + 16
+    );
 }
 
 #[test]

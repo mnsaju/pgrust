@@ -24,7 +24,11 @@ fn read_controlfile() -> PgResult<ControlFileData> {
     let datadir = init_small::globals::DataDir()
         .expect("pg_controldata functions require DataDir")
         .to_string();
-    LWLockAcquire(ControlFileLock(), LW_SHARED, init_small::globals::MyProcNumber())?;
+    LWLockAcquire(
+        ControlFileLock(),
+        LW_SHARED,
+        init_small::globals::MyProcNumber(),
+    )?;
     let read = get_controlfile(&datadir);
     LWLockRelease(ControlFileLock())?;
     let (control_file, crc_ok) = read?;
@@ -47,7 +51,9 @@ fn composite_result(
     if resolved.class != funcapi::TypeFuncClass::Composite {
         return Err(Box::new(PgError::error("return type must be a row type")));
     }
-    let tupdesc = resolved.result_tuple_desc.expect("composite result has tupdesc");
+    let tupdesc = resolved
+        .result_tuple_desc
+        .expect("composite result has tupdesc");
     let tup = heaptuple::heap_form_tuple(mcx, &tupdesc, values, isnull)?;
     let d = Datum::from_usize(tup.header_ptr() as usize);
     core::mem::forget(tup); // leak into the arming context (C palloc ownership)
@@ -55,13 +61,13 @@ fn composite_result(
 }
 
 fn text_datum(fcinfo: &Fcinfo, s: &str) -> PgResult<Datum> {
-    Ok(varlena_result(varlena::cstring_to_text(fcinfo.result_mcx(), s.as_bytes())?))
+    Ok(varlena_result(varlena::cstring_to_text(
+        fcinfo.result_mcx(),
+        s.as_bytes(),
+    )?))
 }
 
-pub fn fc_pg_control_system(
-    flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_pg_control_system(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let flinfo = flinfo.expect("pg_control_system: NULL flinfo");
     let cf = read_controlfile()?;
     let values = [
@@ -92,7 +98,10 @@ pub fn fc_pg_control_checkpoint(
         Datum::from_i32(cp.ThisTimeLineID as i32),
         Datum::from_i32(cp.PrevTimeLineID as i32),
         Datum::from_bool(cp.fullPageWrites),
-        text_datum(fcinfo, &format!("{}:{}", cp.nextXid.epoch(), cp.nextXid.xid()))?,
+        text_datum(
+            fcinfo,
+            &format!("{}:{}", cp.nextXid.epoch(), cp.nextXid.xid()),
+        )?,
         Datum::from_oid(cp.nextOid),
         Datum::from_transaction_id(cp.nextMulti),
         Datum::from_transaction_id(cp.nextMultiOffset),
@@ -124,10 +133,7 @@ pub fn fc_pg_control_recovery(
     composite_result(flinfo, fcinfo, &values, &[false; 5])
 }
 
-pub fn fc_pg_control_init(
-    flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_pg_control_init(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let flinfo = flinfo.expect("pg_control_init: NULL flinfo");
     let cf = read_controlfile()?;
     let values = [

@@ -14,11 +14,11 @@ use types_error::{
     ERRCODE_INVALID_TABLE_DEFINITION, ERRCODE_SYNTAX_ERROR, ERRCODE_UNDEFINED_OBJECT,
     ERRCODE_UNDEFINED_SCHEMA, ERROR,
 };
+use types_nodes::parsenodes::{DefElem, DefElemAction};
 use types_nodes::rawnodes::{
-    ColumnDef, Constraint, ConstrType, CreateSeqStmt, CreateStmt, IndexElem, IndexStmt, SortByDir,
+    ColumnDef, ConstrType, Constraint, CreateSeqStmt, CreateStmt, IndexElem, IndexStmt, SortByDir,
     SortByNulls, TypeName,
 };
-use types_nodes::parsenodes::{DefElem, DefElemAction};
 use types_nodes::{
     AlterSeqStmt, CoercionForm, FuncCall, Node, NodeList, NodeTag, RangeVar, TypeCast, ValUnion,
 };
@@ -64,8 +64,7 @@ fn unported_feature_at(
             .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED),
     );
     if let Some(ps) = pstate {
-        let pos =
-            parser_small1::parser_errposition(ps, location, mbutils::GetDatabaseEncoding());
+        let pos = parser_small1::parser_errposition(ps, location, mbutils::GetDatabaseEncoding());
         if pos > 0 {
             e.cursor_position = Some(pos);
         }
@@ -109,7 +108,10 @@ fn typename_type_id_and_mod<'mcx>(
     }
     if tn.names.is_nil() {
         // LookupTypeName pre-resolved arm (makeTypeNameFromOid; LIKE / OF type).
-        assert!(tn.typeOid != InvalidOid, "TypeName without names or typeOid");
+        assert!(
+            tn.typeOid != InvalidOid,
+            "TypeName without names or typeOid"
+        );
         match syscache_seams::pg_type_isdefined::call(tn.typeOid)? {
             Some(true) => {}
             _ => unported("shell types (typisdefined = false)"),
@@ -268,10 +270,7 @@ pub fn LookupTypeNameOidExtended<'mcx>(
 
 // The names→Oid walk shared by typenameTypeIdAndMod and parseTypeString
 // (LookupTypeNameExtended's "normal reference" arm, pre array-bounds).
-fn resolveTypeNames<'mcx, 'tn>(
-    mcx: Mcx<'mcx>,
-    tn: &TypeName<'tn>,
-) -> PgResult<(Oid, &'tn str)> {
+fn resolveTypeNames<'mcx, 'tn>(mcx: Mcx<'mcx>, tn: &TypeName<'tn>) -> PgResult<(Oid, &'tn str)> {
     resolve_type_names_ext(mcx, tn, false)
 }
 
@@ -364,14 +363,18 @@ pub fn typeStringToTypeNameEsc<'mcx>(
     s: &str,
     esc: Option<&mut SoftErrorContext>,
 ) -> PgResult<Option<&'mcx TypeName<'mcx>>> {
-    if s.bytes().all(|c| matches!(c, b' ' | b'\t' | b'\n' | b'\r' | 0x0c | 0x0b)) {
+    if s.bytes()
+        .all(|c| matches!(c, b' ' | b'\t' | b'\n' | b'\r' | 0x0c | 0x0b))
+    {
         return ereturn(esc, None, *invalid_type_name(s));
     }
     let list = gram_core::raw_parser(mcx, s, parser_seams::RawParseMode::RAW_PARSE_TYPE_NAME)
         .map_err(|e| Box::new((*e).with_context(format!("invalid type name \"{s}\""))))?;
     debug_assert_eq!(list.len(), 1);
     let node = list.first().expect("TYPE_NAME parse yields one node");
-    let tn = node.as_type_name().expect("TYPE_NAME parse yields TypeName");
+    let tn = node
+        .as_type_name()
+        .expect("TYPE_NAME parse yields TypeName");
     if tn.setof {
         return ereturn(esc, None, *invalid_type_name(s));
     }
@@ -469,7 +472,10 @@ pub fn typenameTypeMod<'mcx>(
         return Err(Box::new(
             PgError::new(
                 ERROR,
-                format!("type modifier is not allowed for type \"{}\"", typename_to_string(tn)),
+                format!(
+                    "type modifier is not allowed for type \"{}\"",
+                    typename_to_string(tn)
+                ),
             )
             .with_sqlstate(ERRCODE_SYNTAX_ERROR),
         ));
@@ -479,8 +485,11 @@ pub fn typenameTypeMod<'mcx>(
     #[cold]
     fn bad_typmod_expr() -> Box<PgError> {
         Box::new(
-            PgError::new(ERROR, "type modifiers must be simple constants or identifiers")
-                .with_sqlstate(ERRCODE_SYNTAX_ERROR),
+            PgError::new(
+                ERROR,
+                "type modifiers must be simple constants or identifiers",
+            )
+            .with_sqlstate(ERRCODE_SYNTAX_ERROR),
         )
     }
 
@@ -494,7 +503,10 @@ pub fn typenameTypeMod<'mcx>(
                 _ => None,
             }
         } else if let Some(cr) = tm.as_variant::<ColumnRef>() {
-            match (cr.fields.len(), cr.fields.first().and_then(|f| f.as_string())) {
+            match (
+                cr.fields.len(),
+                cr.fields.first().and_then(|f| f.as_string()),
+            ) {
                 (1, Some(s)) => Some(s.sval.to_string()),
                 _ => None,
             }
@@ -513,7 +525,14 @@ pub fn typenameTypeMod<'mcx>(
         .iter()
         .map(|v| datum::Datum::from_usize(v.as_ptr() as usize))
         .collect();
-    let img = datum::array_build::construct_array_image(mcx, &datums, types_core::CSTRINGOID, -2, false, b'c')?;
+    let img = datum::array_build::construct_array_image(
+        mcx,
+        &datums,
+        types_core::CSTRINGOID,
+        -2,
+        false,
+        b'c',
+    )?;
 
     let mut flinfo = types_fmgr::FmgrInfo::unresolved();
     fmgr_core::fmgr_info_into(io.typmodin, &mut flinfo)?;
@@ -521,7 +540,8 @@ pub fn typenameTypeMod<'mcx>(
     // setup_parser_errposition_callback: reports emitted inside the typmodin
     // call (e.g. intervaltypmodin's precision WARNING) carry the cursor.
     let cb = pstate.map(|ps| {
-        let pos = parser_small1::parser_errposition(ps, tn.location, mbutils::GetDatabaseEncoding());
+        let pos =
+            parser_small1::parser_errposition(ps, tn.location, mbutils::GetDatabaseEncoding());
         elog::push_emit_context_callback(Box::new(move |err| {
             if err.cursor_position.is_none() && pos > 0 {
                 err.cursor_position = Some(pos);
@@ -639,7 +659,9 @@ pub fn transformCreateSchemaStmtElements<'mcx>(
         // refs live across the write.
         match element.node_tag() {
             NodeTag::T_CreateSeqStmt => {
-                let s = element.as_variant::<CreateSeqStmt>().expect("CreateSeqStmt");
+                let s = element
+                    .as_variant::<CreateSeqStmt>()
+                    .expect("CreateSeqStmt");
                 if let Some(rv) = set_schema_name(mcx, schema_name, s.sequence)? {
                     unsafe {
                         element
@@ -683,7 +705,9 @@ pub fn transformCreateSchemaStmtElements<'mcx>(
                 indexes.lappend(mcx, element)?;
             }
             NodeTag::T_CreateTrigStmt => {
-                let s = element.as_variant::<CreateTrigStmt>().expect("CreateTrigStmt");
+                let s = element
+                    .as_variant::<CreateTrigStmt>()
+                    .expect("CreateTrigStmt");
                 if let Some(rv) = set_schema_name(mcx, schema_name, s.relation)? {
                     unsafe {
                         element
@@ -709,10 +733,7 @@ pub fn transformCreateSchemaStmtElements<'mcx>(
 // transformConstraintAttrs (parse_utilcmd.c): fold CONSTR_ATTR_* markers onto
 // the preceding constraint. Deferrable UNIQUE/PK louds downstream in the
 // transformIndexConstraint lanes (deferred-unique lane owns them).
-fn transformConstraintAttrs<'mcx>(
-    constraints: &NodeList<'mcx>,
-    src: Option<&str>,
-) -> PgResult<()> {
+fn transformConstraintAttrs<'mcx>(constraints: &NodeList<'mcx>, src: Option<&str>) -> PgResult<()> {
     let supports_attrs = |c: Option<&Constraint<'_>>| {
         matches!(
             c.map(|c| c.contype),
@@ -747,8 +768,7 @@ fn transformConstraintAttrs<'mcx>(
     let mut saw_enforced = false;
     for cnode in constraints.iter() {
         let con = cnode.as_variant::<Constraint>().expect("column constraint");
-        let last = lastprimarycon
-            .map(|n| n.as_variant::<Constraint>().expect("Constraint"));
+        let last = lastprimarycon.map(|n| n.as_variant::<Constraint>().expect("Constraint"));
         // SAFETY (each with_mut): parse tree is analyze-owned; `last` is not
         // read again after the write.
         match con.contype {
@@ -782,7 +802,10 @@ fn transformConstraintAttrs<'mcx>(
                         .expect("Constraint");
                 }
                 if saw_initially
-                    && last_node.as_variant::<Constraint>().expect("Constraint").initdeferred
+                    && last_node
+                        .as_variant::<Constraint>()
+                        .expect("Constraint")
+                        .initdeferred
                 {
                     return Err(initially_deferred_not_deferrable(con.location));
                 }
@@ -808,7 +831,10 @@ fn transformConstraintAttrs<'mcx>(
                         .expect("Constraint");
                 }
                 if saw_deferrability
-                    && !last_node.as_variant::<Constraint>().expect("Constraint").deferrable
+                    && !last_node
+                        .as_variant::<Constraint>()
+                        .expect("Constraint")
+                        .deferrable
                 {
                     return Err(initially_deferred_not_deferrable(con.location));
                 }
@@ -974,7 +1000,11 @@ fn transformColumnDefinition<'mcx>(
         regclass_tn.location = -1;
         let castnode = Node::mk(
             mcx,
-            TypeCast { arg: Some(snamenode), typeName: Some(regclass_tn.seal()), location: -1 },
+            TypeCast {
+                arg: Some(snamenode),
+                typeName: Some(regclass_tn.seal()),
+                location: -1,
+            },
         )?;
         let mut funcname = NodeList::make1(mcx, Node::mk_string(mcx, "pg_catalog")?)?;
         funcname.lappend(mcx, Node::mk_string(mcx, "nextval")?)?;
@@ -1006,8 +1036,15 @@ fn transformColumnDefinition<'mcx>(
 
     if !disallow_noinherit_notnull {
         for i in 0..col!().constraints.len() {
-            let c = col!().constraints.nth(i).as_variant::<Constraint>().expect("column constraint");
-            if matches!(c.contype, ConstrType::CONSTR_IDENTITY | ConstrType::CONSTR_PRIMARY) {
+            let c = col!()
+                .constraints
+                .nth(i)
+                .as_variant::<Constraint>()
+                .expect("column constraint");
+            if matches!(
+                c.contype,
+                ConstrType::CONSTR_IDENTITY | ConstrType::CONSTR_PRIMARY
+            ) {
                 disallow_noinherit_notnull = true;
             }
         }
@@ -1029,10 +1066,7 @@ fn transformColumnDefinition<'mcx>(
         match constraint.contype {
             ConstrType::CONSTR_DEFAULT => {
                 if saw_default {
-                    return Err(multiple_defaults(
-                        col!().colname.unwrap_or(""),
-                        relname,
-                    ));
+                    return Err(multiple_defaults(col!().colname.unwrap_or(""), relname));
                 }
                 let raw_expr = constraint.raw_expr;
                 debug_assert!(constraint.cooked_expr.is_none());
@@ -1205,8 +1239,7 @@ fn transformColumnDefinition<'mcx>(
                     nnconstraints.lappend(mcx, cnode)?;
                 } else if let Some(first_node) = notnull_constraint {
                     // Redundant specification: merge onto the first one.
-                    let first =
-                        first_node.as_variant::<Constraint>().expect("Constraint");
+                    let first = first_node.as_variant::<Constraint>().expect("Constraint");
                     if let (Some(a), Some(b)) = (first.conname, constraint.conname) {
                         if a != b {
                             return Err(Box::new(PgError::new(
@@ -1294,7 +1327,9 @@ fn transformColumnDefinition<'mcx>(
                     let keys = NodeList::make1(mcx, Node::mk_string(mcx, colname)?)?;
                     // SAFETY: parse tree is analyze-owned; no derived refs.
                     unsafe {
-                        cnode.with_mut::<Constraint, _>(|c| c.keys = keys).expect("Constraint");
+                        cnode
+                            .with_mut::<Constraint, _>(|c| c.keys = keys)
+                            .expect("Constraint");
                     }
                 }
                 ixconstraints.lappend(mcx, cnode)?;
@@ -1416,10 +1451,12 @@ fn transformColumnDefinition<'mcx>(
     let tn = tn_node.as_variant::<TypeName>().expect("TypeName");
     // transformColumnType: validate the type reference and any COLLATE spec.
     // C typenameType(cxt->pstate, ...) attaches errposition at tn.location.
-    let (type_oid, _typmod) = typenameTypeIdAndMod(mcx, None, tn)
-        .map_err(|e| position_on_src(e, src, tn.location))?;
+    let (type_oid, _typmod) =
+        typenameTypeIdAndMod(mcx, None, tn).map_err(|e| position_on_src(e, src, tn.location))?;
     if let Some(cc) = col!().collClause {
-        let cc = cc.as_variant::<types_nodes::CollateClause>().expect("CollateClause");
+        let cc = cc
+            .as_variant::<types_nodes::CollateClause>()
+            .expect("CollateClause");
         catalog_namespace::get_collation_oid_list(&cc.collname, false)
             .map_err(|e| position_on_src(e, src, cc.location))?;
         let typcollation = syscache_seams::lookup_pg_type_shape::call(type_oid)?
@@ -1451,11 +1488,13 @@ fn position_on_src(
     if e.cursor_position().is_some() {
         return e;
     }
-    Box::new((*e).with_cursor_position(parser_small1::parser_errposition_source(
-        src.map(str::as_bytes),
-        location,
-        mbutils::GetDatabaseEncoding(),
-    )))
+    Box::new(
+        (*e).with_cursor_position(parser_small1::parser_errposition_source(
+            src.map(str::as_bytes),
+            location,
+            mbutils::GetDatabaseEncoding(),
+        )),
+    )
 }
 
 // transformOfType (parse_utilcmd.c:1638): derive is_from_type ColumnDefs from
@@ -1472,7 +1511,9 @@ fn transformOfType<'mcx>(
     tablecmds_seams::check_of_type::call(mcx, of_type_id)?;
     // SAFETY: parse tree is analyze-owned; no derived refs live.
     unsafe {
-        of_tn_node.with_mut::<TypeName, _>(|t| t.typeOid = of_type_id).expect("TypeName");
+        of_tn_node
+            .with_mut::<TypeName, _>(|t| t.typeOid = of_type_id)
+            .expect("TypeName");
     }
     let tupdesc = typcache_seams::lookup_rowtype_tupdesc_copy::call(mcx, of_type_id, -1)?;
     for i in 0..tupdesc.natts as usize {
@@ -1518,7 +1559,9 @@ pub fn transformCreateStmt<'mcx>(
             .expect("transformCreateStmt on non-CreateStmt")
             .base
     } else {
-        stmt_node.as_variant::<CreateStmt>().expect("transformCreateStmt on non-CreateStmt")
+        stmt_node
+            .as_variant::<CreateStmt>()
+            .expect("transformCreateStmt on non-CreateStmt")
     };
 
     debug_assert!(stmt.constraints.is_nil() && stmt.nnconstraints.is_nil());
@@ -1546,14 +1589,15 @@ pub fn transformCreateStmt<'mcx>(
     // no-op for them beyond creating the temp namespace, a side effect our
     // cached-plan revalidation lane cannot absorb yet (plancache loud); it
     // still happens at execution (DefineRelation).
-    let probe = relation.schemaname.is_some()
-        || relation.relpersistence != types_core::RELPERSISTENCE_TEMP;
+    let probe =
+        relation.schemaname.is_some() || relation.relpersistence != types_core::RELPERSISTENCE_TEMP;
     let mut nspid = InvalidOid;
     let mut existing_relid = InvalidOid;
     let mut adjusted_persistence = relation.relpersistence;
     if probe {
         let (n, e, p) =
-            RangeVarGetAndCheckCreationNamespace(mcx, relation, types_rel::NoLock, true).map_err(at_rel)?;
+            RangeVarGetAndCheckCreationNamespace(mcx, relation, types_rel::NoLock, true)
+                .map_err(at_rel)?;
         nspid = n;
         existing_relid = e;
         adjusted_persistence = p;
@@ -1589,8 +1633,8 @@ pub fn transformCreateStmt<'mcx>(
     // added-on commands (LIKE expansion) can't latch onto a same-named
     // relation earlier in the search path; the persistence adjustment above
     // is stamped alongside (C mutates stmt->relation in place).
-    let qualify = relation.schemaname.is_none()
-        && adjusted_persistence != types_core::RELPERSISTENCE_TEMP;
+    let qualify =
+        relation.schemaname.is_none() && adjusted_persistence != types_core::RELPERSISTENCE_TEMP;
     let relation = if qualify || adjusted_persistence != relation.relpersistence {
         let schemaname = if qualify {
             Some(leak_str(
@@ -1638,7 +1682,9 @@ pub fn transformCreateStmt<'mcx>(
             .expect("transformCreateStmt on non-CreateStmt")
             .base
     } else {
-        stmt_node.as_variant::<CreateStmt>().expect("transformCreateStmt on non-CreateStmt")
+        stmt_node
+            .as_variant::<CreateStmt>()
+            .expect("transformCreateStmt on non-CreateStmt")
     };
     let mut columns = NodeList::nil();
     if let Some(of_tn) = stmt.ofTypename {
@@ -1648,8 +1694,11 @@ pub fn transformCreateStmt<'mcx>(
     // lookup can report a missing inheritance parent instead.
     if stmt.partspec.is_some() && !stmt.inhRelations.is_nil() && stmt.partbound.is_none() {
         return Err(Box::new(
-            PgError::new(ERROR, "cannot create partitioned table as inheritance child".to_string())
-                .with_sqlstate(types_error::ERRCODE_INVALID_OBJECT_DEFINITION),
+            PgError::new(
+                ERROR,
+                "cannot create partitioned table as inheritance child".to_string(),
+            )
+            .with_sqlstate(types_error::ERRCODE_INVALID_OBJECT_DEFINITION),
         ));
     }
     let mut cxt = CreateStmtCxt::new(if is_foreign {
@@ -1760,7 +1809,8 @@ pub fn transformCreateStmt<'mcx>(
             if !cd.is_not_null {
                 // SAFETY: parse tree is analyze-owned; no derived refs.
                 unsafe {
-                    cn.with_mut::<ColumnDef, _>(|c| c.is_not_null = true).expect("ColumnDef");
+                    cn.with_mut::<ColumnDef, _>(|c| c.is_not_null = true)
+                        .expect("ColumnDef");
                 }
             }
             break;
@@ -1877,7 +1927,9 @@ fn key_found_in_inh_relations<'mcx>(
     nnconstraints: &mut NodeList<'mcx>,
 ) -> PgResult<Option<Oid>> {
     for inode in inh_relations.iter() {
-        let prv = inode.as_variant::<RangeVar>().expect("inhRelations RangeVar");
+        let prv = inode
+            .as_variant::<RangeVar>()
+            .expect("inhRelations RangeVar");
         let relname = prv.relname.expect("RangeVar.relname");
         let rv = rel_vocab::RangeVar {
             catalogname: prv.catalogname,
@@ -1962,9 +2014,7 @@ fn transform_index_constraints<'mcx>(
         let constraint = cnode.as_variant::<Constraint>().expect("Constraint");
         debug_assert!(matches!(
             constraint.contype,
-            ConstrType::CONSTR_PRIMARY
-                | ConstrType::CONSTR_UNIQUE
-                | ConstrType::CONSTR_EXCLUSION
+            ConstrType::CONSTR_PRIMARY | ConstrType::CONSTR_UNIQUE | ConstrType::CONSTR_EXCLUSION
         ));
         let is_exclusion = constraint.contype == ConstrType::CONSTR_EXCLUSION;
         if constraint.indexname.is_some() {
@@ -2015,14 +2065,9 @@ fn transform_index_constraints<'mcx>(
                 if catalog_heap::SystemAttributeByName(key).is_some() {
                     found = true;
                 } else if !inh_relations.is_nil() {
-                    found = key_found_in_inh_relations(
-                        mcx,
-                        key,
-                        false,
-                        inh_relations,
-                        nnconstraints,
-                    )?
-                    .is_some();
+                    found =
+                        key_found_in_inh_relations(mcx, key, false, inh_relations, nnconstraints)?
+                            .is_some();
                 }
             }
             if !found && !isalter {
@@ -2171,8 +2216,7 @@ fn transform_index_constraints<'mcx>(
                 return Err(Box::new(
                     PgError::new(
                         ERROR,
-                        "constraint using WITHOUT OVERLAPS needs at least two columns"
-                            .to_string(),
+                        "constraint using WITHOUT OVERLAPS needs at least two columns".to_string(),
                     )
                     .with_sqlstate(types_error::ERRCODE_SYNTAX_ERROR),
                 ));
@@ -2257,9 +2301,7 @@ pub fn transformIndexConstraintForAlter<'mcx>(
     let constraint = cnode.as_variant::<Constraint>().expect("Constraint");
     debug_assert!(matches!(
         constraint.contype,
-        ConstrType::CONSTR_PRIMARY
-            | ConstrType::CONSTR_UNIQUE
-            | ConstrType::CONSTR_EXCLUSION
+        ConstrType::CONSTR_PRIMARY | ConstrType::CONSTR_UNIQUE | ConstrType::CONSTR_EXCLUSION
     ));
     let is_exclusion = constraint.contype == ConstrType::CONSTR_EXCLUSION;
     // transformTableConstraint isforeign guards (parse_utilcmd.c:1043-1066).
@@ -2291,9 +2333,8 @@ pub fn transformIndexConstraintForAlter<'mcx>(
     index.whereClause = constraint.where_clause;
     // SAFETY: parse tree is statement-owned; the constraint node's options
     // list moves onto the IndexStmt (C shares the pointer).
-    index.options =
-        unsafe { cnode.with_mut::<Constraint, _>(|c| core::mem::take(&mut c.options)) }
-            .expect("Constraint");
+    index.options = unsafe { cnode.with_mut::<Constraint, _>(|c| core::mem::take(&mut c.options)) }
+        .expect("Constraint");
     index.tableSpace = constraint.indexspace;
 
     if is_exclusion {
@@ -2421,18 +2462,15 @@ fn transform_existing_index_constraint<'mcx>(
     }
     let index_rel = indexam::index_open(mcx, index_oid, types_rel::AccessShareLock)?;
     let existing_err = |msg: String| -> Box<PgError> {
-        at(Box::new(
-            PgError::new(ERROR, msg)
-                .with_sqlstate(types_error::ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-        ))
+        at(Box::new(PgError::new(ERROR, msg).with_sqlstate(
+            types_error::ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE,
+        )))
     };
     let wrong_type = |msg: String, detail: bool| -> Box<PgError> {
-        let mut e = PgError::new(ERROR, msg)
-            .with_sqlstate(types_error::ERRCODE_WRONG_OBJECT_TYPE);
+        let mut e = PgError::new(ERROR, msg).with_sqlstate(types_error::ERRCODE_WRONG_OBJECT_TYPE);
         if detail {
             e = e.with_detail(
-                "Cannot create a primary key or unique constraint using such an index."
-                    .to_string(),
+                "Cannot create a primary key or unique constraint using such an index.".to_string(),
             );
         }
         at(Box::new(e))
@@ -2453,13 +2491,22 @@ fn transform_existing_index_constraint<'mcx>(
         return Err(existing_err(format!("index \"{index_name}\" is not valid")));
     }
     if !index_form.indisunique {
-        return Err(wrong_type(format!("\"{index_name}\" is not a unique index"), true));
+        return Err(wrong_type(
+            format!("\"{index_name}\" is not a unique index"),
+            true,
+        ));
     }
     if index_form.indexprs_src.is_some() {
-        return Err(wrong_type(format!("index \"{index_name}\" contains expressions"), true));
+        return Err(wrong_type(
+            format!("index \"{index_name}\" contains expressions"),
+            true,
+        ));
     }
     if index_form.has_indpred {
-        return Err(wrong_type(format!("\"{index_name}\" is a partial index"), true));
+        return Err(wrong_type(
+            format!("\"{index_name}\" is a partial index"),
+            true,
+        ));
     }
     if !index_form.indimmediate && !constraint.deferrable {
         let mut e = PgError::new(ERROR, format!("\"{index_name}\" is a deferrable index"))
@@ -2470,7 +2517,10 @@ fn transform_existing_index_constraint<'mcx>(
         return Err(at(Box::new(e)));
     }
     if index_rel.rd_rel.relam != types_core::BTREE_AM_OID {
-        return Err(wrong_type(format!("index \"{index_name}\" is not a btree"), false));
+        return Err(wrong_type(
+            format!("index \"{index_name}\" is not a btree"),
+            false,
+        ));
     }
 
     let (indcollation, indclass, indoption) = pg_index_vectors(mcx, index_oid)?;
@@ -2554,9 +2604,16 @@ fn catalog_oid_key(attno: usize, oid: Oid) -> types_scan::scankey::ScanKeyData {
 fn pg_index_vectors<'mcx>(
     mcx: Mcx<'mcx>,
     indexoid: Oid,
-) -> PgResult<(mcx::PgVec<'mcx, Oid>, mcx::PgVec<'mcx, Oid>, mcx::PgVec<'mcx, i16>)> {
-    let pg_index =
-        table::table_open(mcx, types_core::INDEX_RELATION_ID, types_rel::AccessShareLock)?;
+) -> PgResult<(
+    mcx::PgVec<'mcx, Oid>,
+    mcx::PgVec<'mcx, Oid>,
+    mcx::PgVec<'mcx, i16>,
+)> {
+    let pg_index = table::table_open(
+        mcx,
+        types_core::INDEX_RELATION_ID,
+        types_rel::AccessShareLock,
+    )?;
     let key = catalog_oid_key(1, indexoid);
     let mut scan =
         genam::systable_beginscan(mcx, &pg_index, IndexRelidIndexId, true, None, &[key])?;
@@ -2572,12 +2629,27 @@ fn pg_index_vectors<'mcx>(
         // SAFETY: NOT NULL varlena, live through the scan.
         unsafe { core::slice::from_raw_parts(p, types_tuple::varatt::varsize_any(p)) }
     };
-    let coll_elems =
-        datum::array_build::deconstruct_array_image(mcx, vector_image(Anum_pg_index_indcollation), 4, true, b'i')?;
-    let class_elems =
-        datum::array_build::deconstruct_array_image(mcx, vector_image(Anum_pg_index_indclass), 4, true, b'i')?;
-    let opt_elems =
-        datum::array_build::deconstruct_array_image(mcx, vector_image(Anum_pg_index_indoption), 2, true, b's')?;
+    let coll_elems = datum::array_build::deconstruct_array_image(
+        mcx,
+        vector_image(Anum_pg_index_indcollation),
+        4,
+        true,
+        b'i',
+    )?;
+    let class_elems = datum::array_build::deconstruct_array_image(
+        mcx,
+        vector_image(Anum_pg_index_indclass),
+        4,
+        true,
+        b'i',
+    )?;
+    let opt_elems = datum::array_build::deconstruct_array_image(
+        mcx,
+        vector_image(Anum_pg_index_indoption),
+        2,
+        true,
+        b's',
+    )?;
     let mut indcollation: mcx::PgVec<'mcx, Oid> = mcx::vec_with_capacity_in(mcx, coll_elems.len())?;
     indcollation.extend(coll_elems.iter().map(|d| d.as_oid()));
     let mut indclass: mcx::PgVec<'mcx, Oid> = mcx::vec_with_capacity_in(mcx, class_elems.len())?;
@@ -2591,8 +2663,11 @@ fn pg_index_vectors<'mcx>(
 
 // get_attoptions(relid, attnum) != (Datum) 0 — only the null test is needed.
 fn index_attoptions_set(mcx: Mcx<'_>, relid: Oid, attnum: i16) -> PgResult<bool> {
-    let pg_attribute =
-        table::table_open(mcx, types_core::ATTRIBUTE_RELATION_ID, types_rel::AccessShareLock)?;
+    let pg_attribute = table::table_open(
+        mcx,
+        types_core::ATTRIBUTE_RELATION_ID,
+        types_rel::AccessShareLock,
+    )?;
     let key1 = catalog_oid_key(1, relid);
     let mut key2 = types_scan::scankey::ScanKeyData::empty();
     key2.sk_attno = 5;
@@ -2609,8 +2684,9 @@ fn index_attoptions_set(mcx: Mcx<'_>, relid: Oid, attnum: i16) -> PgResult<bool>
         None,
         &[key1, key2],
     )?;
-    let tup = genam::systable_getnext(mcx, &mut scan)?
-        .unwrap_or_else(|| panic!("cache lookup failed for attribute {attnum} of relation {relid}"));
+    let tup = genam::systable_getnext(mcx, &mut scan)?.unwrap_or_else(|| {
+        panic!("cache lookup failed for attribute {attnum} of relation {relid}")
+    });
     let mut isnull = false;
     // SAFETY: attoptions under pg_attribute's descriptor; null checked.
     let _ = unsafe {
@@ -2749,7 +2825,11 @@ pub(crate) fn generateSerialExtraStmts<'mcx>(
             .expect("SEQUENCE NAME is a name list");
         let parts: Vec<&str> = names
             .iter()
-            .map(|n| n.as_string().expect("qualified name component is a String node").sval)
+            .map(|n| {
+                n.as_string()
+                    .expect("qualified name component is a String node")
+                    .sval
+            })
             .collect();
         let (nschema, nname) = match parts.as_slice() {
             [r] => (None, *r),
@@ -2770,8 +2850,13 @@ pub(crate) fn generateSerialExtraStmts<'mcx>(
         };
         (nschema.unwrap_or(snamespace_default), nname)
     } else {
-        let sname =
-            leak_str(ChooseRelationName(mcx, relname, Some(colname), "seq", snamespaceid)?);
+        let sname = leak_str(ChooseRelationName(
+            mcx,
+            relname,
+            Some(colname),
+            "seq",
+            snamespaceid,
+        )?);
         (snamespace_default, sname)
     };
 
@@ -2790,8 +2875,7 @@ pub(crate) fn generateSerialExtraStmts<'mcx>(
 
     // C: the sequence copies the table's persistence, LOGGED/UNLOGGED
     // override it (rejected on TEMP tables).
-    let mut seqpersistence =
-        rel.map_or(relation.relpersistence, |r| r.rd_rel.relpersistence);
+    let mut seqpersistence = rel.map_or(relation.relpersistence, |r| r.rd_rel.relpersistence);
     if let Some(unlogged) = logged_el_unlogged {
         if seqpersistence == types_core::RELPERSISTENCE_TEMP {
             return Err(Box::new(
@@ -2884,10 +2968,7 @@ pub(crate) fn generateSerialExtraStmts<'mcx>(
     Ok((snamespace, sname))
 }
 
-fn RangeVarGetCreationNamespace<'mcx>(
-    mcx: Mcx<'mcx>,
-    relation: &RangeVar<'_>,
-) -> PgResult<Oid> {
+fn RangeVarGetCreationNamespace<'mcx>(mcx: Mcx<'mcx>, relation: &RangeVar<'_>) -> PgResult<Oid> {
     let rv = rel_vocab::RangeVar {
         catalogname: relation.catalogname,
         schemaname: relation.schemaname,
@@ -2945,7 +3026,8 @@ fn ident_needs_quotes(ident: &str) -> bool {
     }
     let safe_first = b[0].is_ascii_lowercase() || b[0] == b'_';
     let safe = safe_first
-        && b.iter().all(|&c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'_');
+        && b.iter()
+            .all(|&c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'_');
     if !safe {
         return true;
     }
@@ -3006,14 +3088,12 @@ pub fn transformAlterTableCmd<'mcx>(
     let cmd = cnode.as_variant::<AlterTableCmd>().expect("AlterTableCmd");
     let mut ckconstraints = NodeList::nil();
     let mut nnconstraints = NodeList::nil();
-    let mut cxt = CreateStmtCxt::new(
-        if rel.rd_rel.relkind == types_rel::RELKIND_FOREIGN_TABLE {
-            "ALTER FOREIGN TABLE"
-        } else {
-            "ALTER TABLE"
-        },
-    );
-    let arena_relname =|| -> PgResult<&'mcx str> {
+    let mut cxt = CreateStmtCxt::new(if rel.rd_rel.relkind == types_rel::RELKIND_FOREIGN_TABLE {
+        "ALTER FOREIGN TABLE"
+    } else {
+        "ALTER TABLE"
+    });
+    let arena_relname = || -> PgResult<&'mcx str> {
         let mut s = PgString::new_in(mcx);
         s.try_push_str(relname)?;
         Ok(leak_str(s))
@@ -3134,7 +3214,12 @@ pub fn transformAlterTableCmd<'mcx>(
         AlterTableType::AT_SetIdentity => {
             let mut newseqopts = NodeList::nil();
             let mut newdef = NodeList::nil();
-            for opt in cmd.def.expect("AT_SetIdentity options").as_list().expect("DefElem list").iter()
+            for opt in cmd
+                .def
+                .expect("AT_SetIdentity options")
+                .as_list()
+                .expect("DefElem list")
+                .iter()
             {
                 let defel = opt.as_variant::<DefElem>().expect("DefElem");
                 if defel.defname == Some("generated") {
@@ -3152,8 +3237,9 @@ pub fn transformAlterTableCmd<'mcx>(
             if seq_relid != InvalidOid {
                 let snamespaceid = lsyscache::get_rel_namespace(seq_relid)?;
                 let snamespace = leak_str(
-                    lsyscache::get_namespace_name(mcx, snamespaceid)?
-                        .unwrap_or_else(|| panic!("cache lookup failed for namespace {snamespaceid}")),
+                    lsyscache::get_namespace_name(mcx, snamespaceid)?.unwrap_or_else(|| {
+                        panic!("cache lookup failed for namespace {snamespaceid}")
+                    }),
                 );
                 let sname = leak_str(
                     lsyscache::get_rel_name(mcx, seq_relid)?
@@ -3173,8 +3259,11 @@ pub fn transformAlterTableCmd<'mcx>(
                 cxt.blist.lappend(mcx, seqstmt.seal())?;
             }
             // A non-identity column errors in ATExecSetIdentity, per C.
-            let newdef_node =
-                if newdef.is_nil() { None } else { Some(Node::mk_list(mcx, newdef)?) };
+            let newdef_node = if newdef.is_nil() {
+                None
+            } else {
+                Some(Node::mk_list(mcx, newdef)?)
+            };
             // SAFETY: parse tree is statement-owned; no derived refs live.
             unsafe {
                 cnode
@@ -3213,15 +3302,14 @@ pub fn transformAlterTableCmd<'mcx>(
                     let (type_oid, _) = typenameTypeIdAndMod(mcx, None, tn)?;
                     let snamespaceid = lsyscache::get_rel_namespace(seq_relid)?;
                     let snamespace = leak_str(
-                        lsyscache::get_namespace_name(mcx, snamespaceid)?.unwrap_or_else(
-                            || panic!("cache lookup failed for namespace {snamespaceid}"),
-                        ),
-                    );
-                    let sname = leak_str(
-                        lsyscache::get_rel_name(mcx, seq_relid)?.unwrap_or_else(|| {
-                            panic!("cache lookup failed for relation {seq_relid}")
+                        lsyscache::get_namespace_name(mcx, snamespaceid)?.unwrap_or_else(|| {
+                            panic!("cache lookup failed for namespace {snamespaceid}")
                         }),
                     );
+                    let sname =
+                        leak_str(lsyscache::get_rel_name(mcx, seq_relid)?.unwrap_or_else(|| {
+                            panic!("cache lookup failed for relation {seq_relid}")
+                        }));
                     let mut seq_rv = RangeVar::default();
                     seq_rv.schemaname = Some(snamespace);
                     seq_rv.relname = Some(sname);
@@ -3369,13 +3457,16 @@ fn duplicate_key_column(colname: &str, primary: bool, _location: i32) -> Box<PgE
 #[inline(never)]
 fn not_supported_on_foreign_tables(what: &str, src: Option<&str>, location: i32) -> Box<PgError> {
     Box::new(
-        PgError::new(ERROR, format!("{what} constraints are not supported on foreign tables"))
-            .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED)
-            .with_cursor_position(parser_small1::parser_errposition_source(
-                src.map(str::as_bytes),
-                location,
-                mbutils::GetDatabaseEncoding(),
-            )),
+        PgError::new(
+            ERROR,
+            format!("{what} constraints are not supported on foreign tables"),
+        )
+        .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED)
+        .with_cursor_position(parser_small1::parser_errposition_source(
+            src.map(str::as_bytes),
+            location,
+            mbutils::GetDatabaseEncoding(),
+        )),
     )
 }
 
@@ -3435,8 +3526,13 @@ mod tests {
         let mcx = ctx().mcx();
         // Whitespace-only input: typeStringToTypeName's own arm is soft.
         let mut soft = SoftErrorContext::new(true);
-        assert!(typeStringToTypeNameEsc(mcx, " \t ", Some(&mut soft)).unwrap().is_none());
-        assert_eq!(soft.error().unwrap().message(), "invalid type name \" \t \"");
+        assert!(typeStringToTypeNameEsc(mcx, " \t ", Some(&mut soft))
+            .unwrap()
+            .is_none());
+        assert_eq!(
+            soft.error().unwrap().message(),
+            "invalid type name \" \t \""
+        );
         // >3 dotted names stay hard even with a soft context
         // (DeconstructQualifiedName's default arm, namespace.c).
         let mut soft = SoftErrorContext::new(true);
@@ -3451,21 +3547,41 @@ mod tests {
         let err =
             parseTypeStringEsc(mcx, "incorrect type name syntax", Some(&mut soft)).unwrap_err();
         assert_eq!(err.message(), "syntax error at or near \"type\"");
-        assert_eq!(err.context(), Some("invalid type name \"incorrect type name syntax\""));
+        assert_eq!(
+            err.context(),
+            Some("invalid type name \"incorrect type name syntax\"")
+        );
     }
 
     #[test]
     fn quote_identifier_matches_c() {
         let mcx = ctx().mcx();
-        assert_eq!(quote_identifier(mcx, "st_id_seq").unwrap().as_str(), "st_id_seq");
-        assert_eq!(quote_identifier(mcx, "MiXed").unwrap().as_str(), "\"MiXed\"");
-        assert_eq!(quote_identifier(mcx, "se\"q").unwrap().as_str(), "\"se\"\"q\"");
+        assert_eq!(
+            quote_identifier(mcx, "st_id_seq").unwrap().as_str(),
+            "st_id_seq"
+        );
+        assert_eq!(
+            quote_identifier(mcx, "MiXed").unwrap().as_str(),
+            "\"MiXed\""
+        );
+        assert_eq!(
+            quote_identifier(mcx, "se\"q").unwrap().as_str(),
+            "\"se\"\"q\""
+        );
         // reserved keyword quoted; unreserved keyword bare.
-        assert_eq!(quote_identifier(mcx, "select").unwrap().as_str(), "\"select\"");
-        assert_eq!(quote_identifier(mcx, "between").unwrap().as_str(), "\"between\"");
+        assert_eq!(
+            quote_identifier(mcx, "select").unwrap().as_str(),
+            "\"select\""
+        );
+        assert_eq!(
+            quote_identifier(mcx, "between").unwrap().as_str(),
+            "\"between\""
+        );
         assert_eq!(quote_identifier(mcx, "cache").unwrap().as_str(), "cache");
         assert_eq!(
-            quote_qualified_identifier(mcx, Some("public"), "t_id_seq").unwrap().as_str(),
+            quote_qualified_identifier(mcx, Some("public"), "t_id_seq")
+                .unwrap()
+                .as_str(),
             "public.t_id_seq"
         );
     }
@@ -3491,12 +3607,16 @@ mod tests {
         con.location = -1;
         let mut keylist = NodeList::nil();
         for k in keys {
-            keylist.lappend(mcx, Node::mk_string(mcx, k).unwrap()).unwrap();
+            keylist
+                .lappend(mcx, Node::mk_string(mcx, k).unwrap())
+                .unwrap();
         }
         con.keys = keylist;
         let mut inclist = NodeList::nil();
         for k in including {
-            inclist.lappend(mcx, Node::mk_string(mcx, k).unwrap()).unwrap();
+            inclist
+                .lappend(mcx, Node::mk_string(mcx, k).unwrap())
+                .unwrap();
         }
         con.including = inclist;
         con.seal()
@@ -3506,7 +3626,11 @@ mod tests {
         params
             .iter()
             .map(|n| {
-                n.as_variant::<IndexElem>().expect("IndexElem").name.expect("named").to_string()
+                n.as_variant::<IndexElem>()
+                    .expect("IndexElem")
+                    .name
+                    .expect("named")
+                    .to_string()
             })
             .collect()
     }
@@ -3551,8 +3675,7 @@ mod tests {
     fn transform_index_constraint_include_lowering() {
         let mcx = ctx().mcx();
         let columns = mk_columns(mcx, &["a", "b", "c"]);
-        let con =
-            mk_unique_constraint(mcx, ConstrType::CONSTR_UNIQUE, &["a"], &["b", "c"]);
+        let con = mk_unique_constraint(mcx, ConstrType::CONSTR_UNIQUE, &["a"], &["b", "c"]);
         let ix = NodeList::make1(mcx, con).unwrap();
         let alist = run_transform(mcx, &columns, &ix).unwrap();
         assert_eq!(alist.len(), 1);
@@ -3579,8 +3702,11 @@ mod tests {
         let mcx = ctx().mcx();
         let columns = mk_columns(mcx, &["a", "b"]);
         let mut ix = NodeList::nil();
-        ix.lappend(mcx, mk_unique_constraint(mcx, ConstrType::CONSTR_PRIMARY, &["a"], &[]))
-            .unwrap();
+        ix.lappend(
+            mcx,
+            mk_unique_constraint(mcx, ConstrType::CONSTR_PRIMARY, &["a"], &[]),
+        )
+        .unwrap();
         ix.lappend(
             mcx,
             mk_unique_constraint(mcx, ConstrType::CONSTR_UNIQUE, &["a"], &["b"]),
@@ -3625,9 +3751,14 @@ mod tests {
         let mcx = ctx().mcx();
         let check = mk_con(mcx, ConstrType::CONSTR_CHECK);
         let mut list = NodeList::make1(mcx, check).unwrap();
-        list.lappend(mcx, mk_con(mcx, ConstrType::CONSTR_ATTR_NOT_ENFORCED)).unwrap();
-        list.lappend(mcx, mk_con(mcx, ConstrType::CONSTR_ATTR_ENFORCED)).unwrap();
+        list.lappend(mcx, mk_con(mcx, ConstrType::CONSTR_ATTR_NOT_ENFORCED))
+            .unwrap();
+        list.lappend(mcx, mk_con(mcx, ConstrType::CONSTR_ATTR_ENFORCED))
+            .unwrap();
         let err = transformConstraintAttrs(&list, None).unwrap_err();
-        assert_eq!(err.message(), "multiple ENFORCED/NOT ENFORCED clauses not allowed");
+        assert_eq!(
+            err.message(),
+            "multiple ENFORCED/NOT ENFORCED clauses not allowed"
+        );
     }
 }

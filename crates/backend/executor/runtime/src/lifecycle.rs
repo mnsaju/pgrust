@@ -864,8 +864,7 @@ mod tests {
             let worker_barrier = Arc::clone(&barrier);
             let worker = std::thread::spawn(move || {
                 worker_barrier.wait();
-                let result =
-                    participant.run(|| Ok(worker_cursor.fetch_add(1, Ordering::SeqCst)));
+                let result = participant.run(|| Ok(worker_cursor.fetch_add(1, Ordering::SeqCst)));
                 participant.complete().unwrap();
                 result
             });

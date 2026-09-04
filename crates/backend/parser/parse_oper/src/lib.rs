@@ -69,7 +69,9 @@ thread_local! {
     static OPR_CACHE: RefCell<Option<ManuallyDrop<OprCache>>> = const { RefCell::new(None) };
 }
 
-fn with_opr_cache<R>(f: impl FnOnce(&mut PgHashMap<'static, OprCacheKey, Oid>) -> R) -> PgResult<R> {
+fn with_opr_cache<R>(
+    f: impl FnOnce(&mut PgHashMap<'static, OprCacheKey, Oid>) -> R,
+) -> PgResult<R> {
     OPR_CACHE.with(|cell| {
         let mut slot = cell.borrow_mut();
         if slot.is_none() {
@@ -105,7 +107,11 @@ fn InvalidateOprCacheCallBack(_arg: Datum, _cacheid: i32, _hashvalue: u32) {
 fn name_parts<'a, 'mcx>(opname: &NodeList<'mcx>, buf: &'a mut [&'mcx str; 4]) -> &'a [&'mcx str] {
     let n = opname.len().min(buf.len());
     for (i, slot) in buf.iter_mut().enumerate().take(n) {
-        *slot = opname.nth(i).as_string().expect("operator name list holds String nodes").sval;
+        *slot = opname
+            .nth(i)
+            .as_string()
+            .expect("operator name list holds String nodes")
+            .sval;
     }
     &buf[..n]
 }
@@ -151,7 +157,11 @@ pub fn LookupOperWithArgs(
     oper_args: &OptNodeList<'_>,
     noError: bool,
 ) -> PgResult<Oid> {
-    assert_eq!(oper_args.len(), 2, "LookupOperWithArgs: objargs must have 2 entries");
+    assert_eq!(
+        oper_args.len(),
+        2,
+        "LookupOperWithArgs: objargs must have 2 entries"
+    );
     let scratch = mcx::MemoryContext::new("LookupOperWithArgs");
     let mut oids = [InvalidOid; 2];
     for (i, n) in oper_args.iter().enumerate() {
@@ -280,8 +290,11 @@ pub fn oper(
         }
     }
 
-    let shape =
-        if OidIsValid(operOid) { syscache_seams::lookup_pg_operator_shape::call(operOid)? } else { None };
+    let shape = if OidIsValid(operOid) {
+        syscache_seams::lookup_pg_operator_shape::call(operOid)?
+    } else {
+        None
+    };
     match shape {
         Some(shape) => {
             if rejects_internal_operator(&shape) {
@@ -290,10 +303,20 @@ pub fn oper(
             if key_ok {
                 with_opr_cache(|map| map.insert(key, operOid))?;
             }
-            Ok(Some(Operator { oid: operOid, shape }))
+            Ok(Some(Operator {
+                oid: operOid,
+                shape,
+            }))
         }
         None if noError => Ok(None),
-        None => Err(op_error(pstate, parts, ltypeId, rtypeId, fd_multiple, location)),
+        None => Err(op_error(
+            pstate,
+            parts,
+            ltypeId,
+            rtypeId,
+            fd_multiple,
+            location,
+        )),
     }
 }
 
@@ -369,10 +392,20 @@ pub fn left_oper(
             if key_ok {
                 with_opr_cache(|map| map.insert(key, operOid))?;
             }
-            Ok(Some(Operator { oid: operOid, shape }))
+            Ok(Some(Operator {
+                oid: operOid,
+                shape,
+            }))
         }
         None if noError => Ok(None),
-        None => Err(op_error(pstate, parts, InvalidOid, arg, fd_multiple, location)),
+        None => Err(op_error(
+            pstate,
+            parts,
+            InvalidOid,
+            arg,
+            fd_multiple,
+            location,
+        )),
     }
 }
 
@@ -409,10 +442,12 @@ pub fn compatible_oper_opid(
     arg2: Oid,
     noError: bool,
 ) -> PgResult<Oid> {
-    Ok(match compatible_oper(pstate, opname, arg1, arg2, noError, -1)? {
-        Some(op) => op.oid,
-        None => InvalidOid,
-    })
+    Ok(
+        match compatible_oper(pstate, opname, arg1, arg2, noError, -1)? {
+            Some(op) => op.oid,
+            None => InvalidOid,
+        },
+    )
 }
 
 #[track_caller]
@@ -436,7 +471,11 @@ fn coercion_error(
             .errmsg(format!("operator requires run-time type coercion: {sig}"))
             .errposition(parser_errposition(pstate, location, encoding))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "compatible_oper")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "compatible_oper",
+            )),
     )
 }
 
@@ -471,8 +510,11 @@ pub fn make_op<'mcx>(
     }
 
     let nargs = if ltree.is_some() { 2 } else { 1 };
-    let actual_arg_types =
-        if ltree.is_some() { [ltypeId, rtypeId] } else { [rtypeId, InvalidOid] };
+    let actual_arg_types = if ltree.is_some() {
+        [ltypeId, rtypeId]
+    } else {
+        [rtypeId, InvalidOid]
+    };
     let mut declared_arg_types = if ltree.is_some() {
         [op.shape.oprleft, op.shape.oprright]
     } else {
@@ -488,7 +530,13 @@ pub fn make_op<'mcx>(
 
     // make_fn_arguments (parse_func.c) hosted here until backend-parser-func.
     let ltree = match ltree {
-        Some(l) => Some(coerce_arg(mcx, pstate, l, actual_arg_types[0], declared_arg_types[0])?),
+        Some(l) => Some(coerce_arg(
+            mcx,
+            pstate,
+            l,
+            actual_arg_types[0],
+            declared_arg_types[0],
+        )?),
         None => None,
     };
     let (r_actual, r_declared) = if ltree.is_some() {
@@ -647,9 +695,17 @@ fn saop_error(pstate: &ParseState<'_, '_>, msg: &str, location: ParseLoc) -> Box
         elog::ereport(ERROR)
             .errcode(ERRCODE_WRONG_OBJECT_TYPE)
             .errmsg(msg.to_string())
-            .errposition(parser_errposition(pstate, location, mbutils::GetDatabaseEncoding()))
+            .errposition(parser_errposition(
+                pstate,
+                location,
+                mbutils::GetDatabaseEncoding(),
+            ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "make_scalar_array_op")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "make_scalar_array_op",
+            )),
     )
 }
 
@@ -669,9 +725,17 @@ fn no_array_type_error(
         elog::ereport(ERROR)
             .errcode(ERRCODE_UNDEFINED_OBJECT)
             .errmsg(format!("could not find array type for data type {tname}"))
-            .errposition(parser_errposition(pstate, location, mbutils::GetDatabaseEncoding()))
+            .errposition(parser_errposition(
+                pstate,
+                location,
+                mbutils::GetDatabaseEncoding(),
+            ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "make_scalar_array_op")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "make_scalar_array_op",
+            )),
     )
 }
 
@@ -726,15 +790,20 @@ fn missing_op_error(argtype: Oid, ordering: bool) -> Box<PgError> {
     let mut b = elog::ereport(ERROR).errcode(ERRCODE_UNDEFINED_FUNCTION);
     if ordering {
         b = b
-            .errmsg(format!("could not identify an ordering operator for type {tname}"))
+            .errmsg(format!(
+                "could not identify an ordering operator for type {tname}"
+            ))
             .errhint("Use an explicit ordering operator or modify the query.".to_string());
     } else {
-        b = b.errmsg(format!("could not identify an equality operator for type {tname}"));
+        b = b.errmsg(format!(
+            "could not identify an equality operator for type {tname}"
+        ));
     }
-    Box::new(
-        b.into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "get_sort_group_operators")),
-    )
+    Box::new(b.into_error().with_error_location(ErrorLocation::new(
+        file!(),
+        line!() as i32,
+        "get_sort_group_operators",
+    )))
 }
 
 pub fn op_signature_string(parts: &[&str], arg1: Oid, arg2: Oid) -> PgResult<String> {

@@ -14,7 +14,10 @@ pub(crate) struct BackendSet {
 impl BackendSet {
     pub(crate) fn create(nevents: i32) -> PgResult<Self> {
         if !fd::AcquireExternalFD()? {
-            return Err(os_error(ERROR, "AcquireExternalFD, for epoll_create1, failed"));
+            return Err(os_error(
+                ERROR,
+                "AcquireExternalFD, for epoll_create1, failed",
+            ));
         }
         // SAFETY: epoll_create1(2).
         let epfd = unsafe { libc::epoll_create1(libc::EPOLL_CLOEXEC) };

@@ -43,7 +43,10 @@ fn composites_and_out_of_range_names() {
         format("%c %x %X", &sample_tm("UTC")),
         b"Tue Jan  2 15:06:07 2024 01/02/24 15:06:07"
     );
-    assert_eq!(format("%+", &sample_tm("PST")), b"Tue Jan  2 15:06:07 PST 2024");
+    assert_eq!(
+        format("%+", &sample_tm("PST")),
+        b"Tue Jan  2 15:06:07 PST 2024"
+    );
     assert_eq!(format("%v %D", &sample_tm("PST")), b" 2-Jan-2024 01/02/24");
 }
 
@@ -153,5 +156,8 @@ fn elog_timestamp_shape() {
         tm_gmtoff: 0,
         tm_zone: Some("GMT"),
     };
-    assert_eq!(format("%Y-%m-%d %H:%M:%S %Z", &t), b"1999-12-31 23:30:59 GMT");
+    assert_eq!(
+        format("%Y-%m-%d %H:%M:%S %Z", &t),
+        b"1999-12-31 23:30:59 GMT"
+    );
 }

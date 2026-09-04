@@ -1,4 +1,3 @@
-
 mod cipher;
 mod crypt;
 mod hashing;
@@ -6,9 +5,10 @@ mod pgp;
 
 use datum::Datum;
 use elog::ereport;
-use types_error::{ErrorLocation, PgError, PgResult, NOTICE,
-    ERRCODE_EXTERNAL_ROUTINE_INVOCATION_EXCEPTION,
-    ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_INVALID_PARAMETER_VALUE};
+use types_error::{
+    ErrorLocation, PgError, PgResult, ERRCODE_EXTERNAL_ROUTINE_INVOCATION_EXCEPTION,
+    ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_INVALID_PARAMETER_VALUE, NOTICE,
+};
 use types_fmgr::{FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFunction};
 
 const LIBRARY: &str = "pgcrypto";
@@ -19,14 +19,18 @@ fn bytea_result(fcinfo: &mut Fcinfo, bytes: &[u8]) -> PgResult<Datum> {
 }
 
 fn px_err(msg: String) -> Box<PgError> {
-    PgError::error(msg).with_sqlstate(ERRCODE_INVALID_PARAMETER_VALUE).into()
+    PgError::error(msg)
+        .with_sqlstate(ERRCODE_INVALID_PARAMETER_VALUE)
+        .into()
 }
 
 fn crypt_err(e: crypt::CryptError) -> Box<PgError> {
     match e {
-        crypt::CryptError::Unsupported(what) => PgError::error(format!("pgcrypto: {what} not yet ported"))
-            .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED)
-            .into(),
+        crypt::CryptError::Unsupported(what) => {
+            PgError::error(format!("pgcrypto: {what} not yet ported"))
+                .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED)
+                .into()
+        }
         crypt::CryptError::Message(m) => px_err(m),
     }
 }
@@ -92,7 +96,9 @@ fn fc_pg_crypt(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<
 
 fn cipher_err(op: &str, e: cipher::CipherError) -> Box<PgError> {
     let msg = match e {
-        cipher::CipherError::NoCipher(spec) => format!("Cannot use \"{spec}\": No such cipher algorithm"),
+        cipher::CipherError::NoCipher(spec) => {
+            format!("Cannot use \"{spec}\": No such cipher algorithm")
+        }
         cipher::CipherError::EncryptFailed => format!("{op} error: Encryption failed"),
         cipher::CipherError::DecryptFailed => format!("{op} error: Decryption failed"),
     };
@@ -159,7 +165,6 @@ fn fc_pg_check_fipsmode(_flinfo: Option<&mut FmgrInfo>, _fcinfo: &mut Fcinfo) ->
     Ok(Datum::from_bool(false))
 }
 
-
 #[track_caller]
 fn here(func: &'static str) -> ErrorLocation {
     // pgrust is Rust: report OUR source site (call site via track_caller).
@@ -168,7 +173,9 @@ fn here(func: &'static str) -> ErrorLocation {
 }
 
 fn pgp_notice(msg: &str) {
-    let _ = ereport(NOTICE).errmsg(msg.to_string()).finish(here("pgp_decrypt"));
+    let _ = ereport(NOTICE)
+        .errmsg(msg.to_string())
+        .finish(here("pgp_decrypt"));
 }
 
 // pgcrypto px_THROW text is rendered verbatim (byte-identical to C's ERROR).
@@ -295,7 +302,9 @@ fn fc_pg_armor(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum
         let k = deconstruct_nonnull_text(scratch.mcx(), &ki)?;
         let v = deconstruct_nonnull_text(scratch.mcx(), &vi)?;
         if k.len() != v.len() {
-            return Err(px_err("pgp_armor: number of keys and values must be equal".to_string()));
+            return Err(px_err(
+                "pgp_armor: number of keys and values must be equal".to_string(),
+            ));
         }
         (k, v)
     } else {
@@ -308,7 +317,8 @@ fn fc_pg_armor(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum
 fn fc_pg_dearmor(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: strict fn — arg0 text.
     let data = unsafe { fcinfo.arg_varlena_packed(0)? };
-    let out = pgp::armor::armor_decode(data.data()).map_err(|()| px_msg(pgp::armor::CORRUPT_ARMOR))?;
+    let out =
+        pgp::armor::armor_decode(data.data()).map_err(|()| px_msg(pgp::armor::CORRUPT_ARMOR))?;
     bytea_result(fcinfo, &out)
 }
 
@@ -335,13 +345,19 @@ fn deconstruct_nonnull_text(mcx: mcx::Mcx<'_>, image: &[u8]) -> PgResult<Vec<Vec
     let mut out = Vec::with_capacity(elems.len());
     for (d, &isnull) in elems.iter().zip(nulls.iter()) {
         if isnull {
-            return Err(px_err("pgp_armor: null value not allowed in header".to_string()));
+            return Err(px_err(
+                "pgp_armor: null value not allowed in header".to_string(),
+            ));
         }
         let p = d.as_usize() as *const u8;
         // SAFETY: non-null text element datum inside the array image.
         let bytes = unsafe {
             let total = types_tuple::varatt::varsize_any(p);
-            let hdr = if types_tuple::varatt::varatt_is_1b(p) { 1 } else { 4 };
+            let hdr = if types_tuple::varatt::varatt_is_1b(p) {
+                1
+            } else {
+                4
+            };
             core::slice::from_raw_parts(p.add(hdr), total - hdr).to_vec()
         };
         out.push(bytes);

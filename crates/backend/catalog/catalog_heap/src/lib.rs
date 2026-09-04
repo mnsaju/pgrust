@@ -7,10 +7,22 @@ pub mod create;
 pub mod drop;
 pub mod partition;
 pub mod truncate;
-pub use truncate::{heap_truncate, heap_truncate_check_FKs, heap_truncate_find_FKs, heap_truncate_one_rel};
-pub use create::{heap_create, heap_create_with_catalog, CheckAttributeNamesTypes, CheckAttributeType, FormExtraData_pg_attribute, InsertPgAttributeTuples, HeapCreateParams, InsertPgClassTuple, RelationClearMissing, SetAttrMissing, StoreAttrMissingVal, CHKATYPE_ANYARRAY, CHKATYPE_ANYRECORD, CHKATYPE_IS_PARTKEY, CHKATYPE_IS_VIRTUAL};
-pub use partition::{update_default_partition_oid, RemovePartitionKeyByRelId, StorePartitionBound, StorePartitionKey};
-pub use drop::{heap_drop_with_catalog, CheckTableNotInUse, CopyStatistics, DeleteAttributeTuples, DeleteRelationTuple, DeleteSystemAttributeTuples, RemoveAttributeById, RemoveStatistics};
+pub use create::{
+    heap_create, heap_create_with_catalog, CheckAttributeNamesTypes, CheckAttributeType,
+    FormExtraData_pg_attribute, HeapCreateParams, InsertPgAttributeTuples, InsertPgClassTuple,
+    RelationClearMissing, SetAttrMissing, StoreAttrMissingVal, CHKATYPE_ANYARRAY,
+    CHKATYPE_ANYRECORD, CHKATYPE_IS_PARTKEY, CHKATYPE_IS_VIRTUAL,
+};
+pub use drop::{
+    heap_drop_with_catalog, CheckTableNotInUse, CopyStatistics, DeleteAttributeTuples,
+    DeleteRelationTuple, DeleteSystemAttributeTuples, RemoveAttributeById, RemoveStatistics,
+};
+pub use partition::{
+    update_default_partition_oid, RemovePartitionKeyByRelId, StorePartitionBound, StorePartitionKey,
+};
+pub use truncate::{
+    heap_truncate, heap_truncate_check_FKs, heap_truncate_find_FKs, heap_truncate_one_rel,
+};
 
 use types_core::catalog::{CIDOID, OIDOID, TIDOID, XIDOID};
 use types_core::{AttrNumber, InvalidOid, NAMEDATALEN};
@@ -66,12 +78,54 @@ const fn sysatt(
 }
 
 pub static SysAtt: [FormData_pg_attribute; 6] = [
-    sysatt("ctid", TIDOID, 6, SelfItemPointerAttributeNumber, false, TYPALIGN_SHORT),
-    sysatt("xmin", XIDOID, 4, MinTransactionIdAttributeNumber, true, TYPALIGN_INT),
-    sysatt("cmin", CIDOID, 4, MinCommandIdAttributeNumber, true, TYPALIGN_INT),
-    sysatt("xmax", XIDOID, 4, MaxTransactionIdAttributeNumber, true, TYPALIGN_INT),
-    sysatt("cmax", CIDOID, 4, MaxCommandIdAttributeNumber, true, TYPALIGN_INT),
-    sysatt("tableoid", OIDOID, 4, TableOidAttributeNumber, true, TYPALIGN_INT),
+    sysatt(
+        "ctid",
+        TIDOID,
+        6,
+        SelfItemPointerAttributeNumber,
+        false,
+        TYPALIGN_SHORT,
+    ),
+    sysatt(
+        "xmin",
+        XIDOID,
+        4,
+        MinTransactionIdAttributeNumber,
+        true,
+        TYPALIGN_INT,
+    ),
+    sysatt(
+        "cmin",
+        CIDOID,
+        4,
+        MinCommandIdAttributeNumber,
+        true,
+        TYPALIGN_INT,
+    ),
+    sysatt(
+        "xmax",
+        XIDOID,
+        4,
+        MaxTransactionIdAttributeNumber,
+        true,
+        TYPALIGN_INT,
+    ),
+    sysatt(
+        "cmax",
+        CIDOID,
+        4,
+        MaxCommandIdAttributeNumber,
+        true,
+        TYPALIGN_INT,
+    ),
+    sysatt(
+        "tableoid",
+        OIDOID,
+        4,
+        TableOidAttributeNumber,
+        true,
+        TYPALIGN_INT,
+    ),
 ];
 
 pub fn SystemAttributeDefinition(attno: AttrNumber) -> &'static FormData_pg_attribute {
@@ -83,7 +137,9 @@ pub fn SystemAttributeDefinition(attno: AttrNumber) -> &'static FormData_pg_attr
 }
 
 pub fn SystemAttributeByName(attname: &str) -> Option<&'static FormData_pg_attribute> {
-    SysAtt.iter().find(|att| att.attname.name_str() == attname.as_bytes())
+    SysAtt
+        .iter()
+        .find(|att| att.attname.name_str() == attname.as_bytes())
 }
 
 #[cfg(test)]
@@ -108,7 +164,10 @@ mod tests {
             assert_eq!(att.attbyval, byval);
             assert_eq!(att.atttypmod, -1);
             assert!(att.attnotnull && att.attislocal && !att.attisdropped);
-            assert!(core::ptr::eq(att, SystemAttributeDefinition(attnum as AttrNumber)));
+            assert!(core::ptr::eq(
+                att,
+                SystemAttributeDefinition(attnum as AttrNumber)
+            ));
         }
         assert!(SystemAttributeByName("oid").is_none());
         assert!(SystemAttributeByName("nope").is_none());

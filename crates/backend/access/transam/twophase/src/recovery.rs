@@ -8,8 +8,9 @@ use types_error::{ErrorLevel, PgResult, ERRCODE_DATA_CORRUPTED, ERROR, LOG, WARN
 
 use crate::codec::{BufferLayout, TwoPhaseFileHeader};
 use crate::core::{
-    corrupt_guard, gxact_load_subxact_data, mark_as_preparing_guts, mark_as_prepared,
-    max_prepared_error, process_records, remove_gxact, xlog_read_twophase_data, PostPrepare_Twophase,
+    corrupt_guard, gxact_load_subxact_data, mark_as_prepared, mark_as_preparing_guts,
+    max_prepared_error, process_records, remove_gxact, xlog_read_twophase_data,
+    PostPrepare_Twophase,
 };
 use crate::files;
 use crate::here;
@@ -34,7 +35,9 @@ fn decode_children(buf: &[u8], layout: &BufferLayout, n: usize) -> Vec<Transacti
     let mut v = Vec::with_capacity(n);
     for i in 0..n {
         let o = layout.children + i * 4;
-        v.push(TransactionId::from_ne_bytes(buf[o..o + 4].try_into().unwrap()));
+        v.push(TransactionId::from_ne_bytes(
+            buf[o..o + 4].try_into().unwrap(),
+        ));
     }
     v
 }
@@ -171,13 +174,15 @@ fn process_two_phase_buffer(
     }
 
     let buf = if fromdisk {
-        files::read_twophase_file(xid, false)?
-            .expect("two-phase state file disappeared")
+        files::read_twophase_file(xid, false)?.expect("two-phase state file disappeared")
     } else {
         xlog_read_twophase_data(prepare_start_lsn)?
     };
 
-    let hdr = corrupt_guard(TwoPhaseFileHeader::from_bytes(&buf), "ProcessTwoPhaseBuffer")?;
+    let hdr = corrupt_guard(
+        TwoPhaseFileHeader::from_bytes(&buf),
+        "ProcessTwoPhaseBuffer",
+    )?;
     if hdr.xid != xid {
         let msg = if fromdisk {
             format!("corrupted two-phase state file for transaction {xid}")
@@ -294,8 +299,7 @@ pub fn TwoPhaseGetXidByVirtualXID(
         let proc = lmgr_proc::GetPGProcByNumber(g.pgprocno.get());
         // Startup process sets proc->vxid.procNumber to INVALID_PROC_NUMBER,
         // so redo-restored gxacts never match (C asserts !inredo on match).
-        if proc.vxid.procNumber.load(Relaxed) == proc_number
-            && proc.vxid.lxid.load(Relaxed) == lxid
+        if proc.vxid.procNumber.load(Relaxed) == proc_number && proc.vxid.lxid.load(Relaxed) == lxid
         {
             debug_assert!(!g.inredo.get());
             if result != ::types_core::InvalidTransactionId {
@@ -364,8 +368,10 @@ pub fn RecoverPreparedTransactions() -> PgResult<()> {
                 ))
                 .finish(here("RecoverPreparedTransactions"))?;
 
-            let hdr =
-                corrupt_guard(TwoPhaseFileHeader::from_bytes(&buf), "RecoverPreparedTransactions")?;
+            let hdr = corrupt_guard(
+                TwoPhaseFileHeader::from_bytes(&buf),
+                "RecoverPreparedTransactions",
+            )?;
             debug_assert_eq!(hdr.xid, xid);
             let layout = BufferLayout::of(&hdr);
             let gid = decode_gid(&buf, &layout, hdr.gidlen);

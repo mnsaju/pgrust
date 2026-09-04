@@ -150,11 +150,26 @@ fn eq_counts_and_special_indexes_differ() {
 #[test]
 fn eq_range_nonfinite_skips_datums() {
     let mcx = static_mcx();
-    let a = range_bi1(mcx, &[(0, KIND_MINVALUE), (10, KIND_VALUE)], &[-1, 0, -1], -1);
-    let mut b = range_bi1(mcx, &[(0, KIND_MINVALUE), (10, KIND_VALUE)], &[-1, 0, -1], -1);
+    let a = range_bi1(
+        mcx,
+        &[(0, KIND_MINVALUE), (10, KIND_VALUE)],
+        &[-1, 0, -1],
+        -1,
+    );
+    let mut b = range_bi1(
+        mcx,
+        &[(0, KIND_MINVALUE), (10, KIND_VALUE)],
+        &[-1, 0, -1],
+        -1,
+    );
     b.datums[0][0] = img(99);
     assert!(partition_bounds_equal(1, &a, &b));
-    let c = range_bi1(mcx, &[(0, KIND_MAXVALUE), (10, KIND_VALUE)], &[-1, 0, -1], -1);
+    let c = range_bi1(
+        mcx,
+        &[(0, KIND_MAXVALUE), (10, KIND_VALUE)],
+        &[-1, 0, -1],
+        -1,
+    );
     assert!(!partition_bounds_equal(1, &a, &c));
 }
 
@@ -295,7 +310,16 @@ fn list_dummy_default_treated_as_absent() {
     let b = list_bi(mcx, &[(10, 0)], -1, 1);
     // Outer's default is dummy, so 20 pairs with the inner default instead
     // of the both-defaults rejection.
-    let r = do_merge(mcx, 1, &a, &[false, false, true], &b, &[false; 2], JOIN_INNER).unwrap();
+    let r = do_merge(
+        mcx,
+        1,
+        &a,
+        &[false, false, true],
+        &b,
+        &[false; 2],
+        JOIN_INNER,
+    )
+    .unwrap();
     assert_eq!(row_vals(&r.merged_bounds), [10, 20]);
     assert_eq!(r.merged_bounds.default_index, -1);
     assert_eq!(&r.outer_parts[..], [0, 1]);
@@ -389,7 +413,12 @@ fn range_overlapping_next_partition_returns_none() {
     let a = range_bi1(mcx, &[(0, KIND_VALUE), (20, KIND_VALUE)], &[-1, 0, -1], -1);
     let b = range_bi1(
         mcx,
-        &[(0, KIND_VALUE), (5, KIND_VALUE), (6, KIND_VALUE), (20, KIND_VALUE)],
+        &[
+            (0, KIND_VALUE),
+            (5, KIND_VALUE),
+            (6, KIND_VALUE),
+            (20, KIND_VALUE),
+        ],
         &[-1, 0, -1, 1, -1],
         -1,
     );
@@ -407,8 +436,18 @@ fn range_default_beside_nonoverlap_returns_none() {
 #[test]
 fn range_minvalue_bounds_merge() {
     let mcx = static_mcx();
-    let a = range_bi1(mcx, &[(0, KIND_MINVALUE), (10, KIND_VALUE)], &[-1, 0, -1], -1);
-    let b = range_bi1(mcx, &[(0, KIND_MINVALUE), (10, KIND_VALUE)], &[-1, 0, -1], -1);
+    let a = range_bi1(
+        mcx,
+        &[(0, KIND_MINVALUE), (10, KIND_VALUE)],
+        &[-1, 0, -1],
+        -1,
+    );
+    let b = range_bi1(
+        mcx,
+        &[(0, KIND_MINVALUE), (10, KIND_VALUE)],
+        &[-1, 0, -1],
+        -1,
+    );
     let r = do_merge(mcx, 1, &a, &[false; 1], &b, &[false; 1], JOIN_INNER).unwrap();
     let k = r.merged_bounds.kind.as_ref().unwrap();
     assert_eq!(k[0][0], KIND_MINVALUE);

@@ -125,9 +125,7 @@ impl<'a> JsonLex<'a> {
         let mut s = self.token_terminator;
         self.prev_token_terminator = self.token_terminator;
 
-        while s < end
-            && matches!(self.input[s], b' ' | b'\t' | b'\n' | b'\r')
-        {
+        while s < end && matches!(self.input[s], b' ' | b'\t' | b'\n' | b'\r') {
             let c = self.input[s];
             s += 1;
             if c == b'\n' {
@@ -477,9 +475,7 @@ impl<'a> JsonLex<'a> {
                 format!("Expected string, but found \"{}\".", tok())
             }
             JsonError::InvalidToken => format!("Token \"{}\" is invalid.", tok()),
-            JsonError::UnicodeCodePointZero => {
-                "\\u0000 cannot be converted to text.".to_string()
-            }
+            JsonError::UnicodeCodePointZero => "\\u0000 cannot be converted to text.".to_string(),
             JsonError::UnicodeEscapeFormat => {
                 "\"\\u\" must be followed by four hexadecimal digits.".to_string()
             }
@@ -505,9 +501,10 @@ impl<'a> JsonLex<'a> {
 
         while context_end - context_start >= 50 {
             if self.input[context_start] & 0x80 != 0 {
-                context_start +=
-                    wchar::pg_encoding_mblen(self.encoding, &self.input[context_start..context_end])
-                        as usize;
+                context_start += wchar::pg_encoding_mblen(
+                    self.encoding,
+                    &self.input[context_start..context_end],
+                ) as usize;
             } else {
                 context_start += 1;
             }
@@ -518,7 +515,11 @@ impl<'a> JsonLex<'a> {
         }
 
         let ctxt = String::from_utf8_lossy(&self.input[context_start..context_end]);
-        let prefix = if context_start > line_start { "..." } else { "" };
+        let prefix = if context_start > line_start {
+            "..."
+        } else {
+            ""
+        };
         let suffix = if self.token_type != JsonToken::End
             && context_end < self.input.len()
             && self.input[context_end] != b'\n'
@@ -829,9 +830,7 @@ impl<'src, 'mcx> JsonLexDe<'src, 'mcx> {
                         hi_surrogate = -1;
                     }
                     if hi_surrogate != -1 {
-                        return Ok(self
-                            .lex
-                            .fail_at_char_end(s, JsonError::UnicodeLowSurrogate));
+                        return Ok(self.lex.fail_at_char_end(s, JsonError::UnicodeLowSurrogate));
                     }
                     if ch == 0 {
                         return Ok(self
@@ -849,9 +848,7 @@ impl<'src, 'mcx> JsonLexDe<'src, 'mcx> {
                         mcx::vec_append_bytes(&mut self.strval, &buf[..n])?;
                     } else {
                         match mbutils::pg_unicode_to_server_noerror(self.mcx, ch)? {
-                            Some(converted) => {
-                                mcx::vec_append_bytes(&mut self.strval, &converted)?
-                            }
+                            Some(converted) => mcx::vec_append_bytes(&mut self.strval, &converted)?,
                             None => {
                                 return Ok(self
                                     .lex
@@ -861,9 +858,7 @@ impl<'src, 'mcx> JsonLexDe<'src, 'mcx> {
                     }
                 } else {
                     if hi_surrogate != -1 {
-                        return Ok(self
-                            .lex
-                            .fail_at_char_end(s, JsonError::UnicodeLowSurrogate));
+                        return Ok(self.lex.fail_at_char_end(s, JsonError::UnicodeLowSurrogate));
                     }
                     match input[s] {
                         c @ (b'"' | b'\\' | b'/') => self.strval.push(c),
@@ -880,9 +875,7 @@ impl<'src, 'mcx> JsonLexDe<'src, 'mcx> {
                 }
             } else {
                 if hi_surrogate != -1 {
-                    return Ok(self
-                        .lex
-                        .fail_at_char_end(s, JsonError::UnicodeLowSurrogate));
+                    return Ok(self.lex.fail_at_char_end(s, JsonError::UnicodeLowSurrogate));
                 }
                 let mut p = s;
                 while p < end {

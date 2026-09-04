@@ -5,7 +5,9 @@ use types_pathnodes::{
     JOIN_RIGHT, JOIN_RIGHT_ANTI, JOIN_SEMI,
 };
 
-use crate::{KIND_VALUE, PARTITION_STRATEGY_HASH, PARTITION_STRATEGY_LIST, PARTITION_STRATEGY_RANGE};
+use crate::{
+    KIND_VALUE, PARTITION_STRATEGY_HASH, PARTITION_STRATEGY_LIST, PARTITION_STRATEGY_RANGE,
+};
 
 #[inline]
 fn is_outer_join(jointype: JoinType) -> bool {
@@ -109,10 +111,11 @@ where
         // partition_bounds_equal upstream.
         PARTITION_STRATEGY_HASH => Ok(None),
         PARTITION_STRATEGY_LIST => merge_list_bounds(mcx, cmp, outer, inner, jointype),
-        PARTITION_STRATEGY_RANGE => {
-            merge_range_bounds(mcx, partnatts, cmp, outer, inner, jointype)
-        }
-        other => panic!("partition_bounds_merge: unexpected strategy {}", other as char),
+        PARTITION_STRATEGY_RANGE => merge_range_bounds(mcx, partnatts, cmp, outer, inner, jointype),
+        other => panic!(
+            "partition_bounds_merge: unexpected strategy {}",
+            other as char
+        ),
     }
 }
 
@@ -132,7 +135,13 @@ fn init_partition_map<'m>(mcx: Mcx<'m>, nparts: i32) -> PgResult<PartitionMap<'m
     merged.resize(n, false);
     let mut old_indexes: PgVec<'m, i32> = mcx::vec_with_capacity_in(mcx, n)?;
     old_indexes.resize(n, -1);
-    Ok(PartitionMap { nparts, merged_indexes, merged, did_remapping: false, old_indexes })
+    Ok(PartitionMap {
+        nparts,
+        merged_indexes,
+        merged,
+        did_remapping: false,
+        old_indexes,
+    })
 }
 
 fn clone_row<'m>(mcx: Mcx<'m>, row: &[DatumImage<'m>]) -> PgVec<'m, DatumImage<'m>> {
@@ -356,7 +365,11 @@ where
             null_index,
             default_index,
         );
-        return Ok(Some(PartitionBoundsMergeResult { merged_bounds, outer_parts, inner_parts }));
+        return Ok(Some(PartitionBoundsMergeResult {
+            merged_bounds,
+            outer_parts,
+            inner_parts,
+        }));
     }
     Ok(None)
 }
@@ -371,7 +384,12 @@ struct RangeBound<'a, 'm> {
 
 impl RangeBound<'_, '_> {
     fn empty(lower: bool) -> Self {
-        RangeBound { index: -1, datums: &[], kind: &[], lower }
+        RangeBound {
+            index: -1,
+            datums: &[],
+            kind: &[],
+            lower,
+        }
     }
 }
 
@@ -612,7 +630,11 @@ where
             -1,
             default_index,
         );
-        return Ok(Some(PartitionBoundsMergeResult { merged_bounds, outer_parts, inner_parts }));
+        return Ok(Some(PartitionBoundsMergeResult {
+            merged_bounds,
+            outer_parts,
+            inner_parts,
+        }));
     }
     Ok(None)
 }
@@ -881,8 +903,13 @@ fn merge_default_partitions(
     } else {
         debug_assert!(outer_merged_index == -1 && inner_merged_index == -1);
         debug_assert!(*default_index == -1);
-        *default_index =
-            merge_matching_partitions(outer_map, inner_map, outer_default, inner_default, next_index);
+        *default_index = merge_matching_partitions(
+            outer_map,
+            inner_map,
+            outer_default,
+            inner_default,
+            next_index,
+        );
         debug_assert!(*default_index >= 0);
     }
 }
@@ -1044,7 +1071,10 @@ fn get_range_partition_internal<'a, 'm>(
     }
     debug_assert!(*lb_pos + 1 < bi.ndatums);
 
-    let kind = bi.kind.as_ref().expect("merge_range_bounds: boundinfo.kind missing");
+    let kind = bi
+        .kind
+        .as_ref()
+        .expect("merge_range_bounds: boundinfo.kind missing");
     let p = *lb_pos as usize;
 
     lb.index = bi.indexes[p];

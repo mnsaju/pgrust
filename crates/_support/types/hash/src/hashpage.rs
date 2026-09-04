@@ -19,8 +19,7 @@ pub const LH_BUCKET_BEING_SPLIT: uint16 = 1 << 5;
 pub const LH_BUCKET_NEEDS_SPLIT_CLEANUP: uint16 = 1 << 6;
 pub const LH_PAGE_HAS_DEAD_TUPLES: uint16 = 1 << 7;
 
-pub const LH_PAGE_TYPE: uint16 =
-    LH_OVERFLOW_PAGE | LH_BUCKET_PAGE | LH_BITMAP_PAGE | LH_META_PAGE;
+pub const LH_PAGE_TYPE: uint16 = LH_OVERFLOW_PAGE | LH_BUCKET_PAGE | LH_BITMAP_PAGE | LH_META_PAGE;
 
 pub const HASHO_PAGE_ID: uint16 = 0xFF80;
 
@@ -277,7 +276,12 @@ pub const XLH_SPLIT_META_UPDATE_SPLITPOINT: u8 = 1 << 1;
 pub const HASH_XLOG_FREE_OVFL_BUFS: usize = 6;
 
 #[inline]
-pub fn _hash_hashkey2bucket(hashkey: uint32, maxbucket: uint32, highmask: uint32, lowmask: uint32) -> Bucket {
+pub fn _hash_hashkey2bucket(
+    hashkey: uint32,
+    maxbucket: uint32,
+    highmask: uint32,
+    lowmask: uint32,
+) -> Bucket {
     let mut bucket = hashkey & highmask;
     if bucket > maxbucket {
         bucket &= lowmask;
@@ -301,7 +305,8 @@ pub fn _hash_spareindex(num_bucket: uint32) -> uint32 {
     let mut splitpoint_phases = HASH_SPLITPOINT_GROUPS_WITH_ONE_PHASE;
     splitpoint_phases +=
         (splitpoint_group - HASH_SPLITPOINT_GROUPS_WITH_ONE_PHASE) << HASH_SPLITPOINT_PHASE_BITS;
-    splitpoint_phases += ((num_bucket - 1) >> (splitpoint_group - (HASH_SPLITPOINT_PHASE_BITS + 1)))
+    splitpoint_phases += ((num_bucket - 1)
+        >> (splitpoint_group - (HASH_SPLITPOINT_PHASE_BITS + 1)))
         & HASH_SPLITPOINT_PHASE_MASK;
     splitpoint_phases
 }
@@ -311,12 +316,14 @@ pub fn _hash_get_totalbuckets(splitpoint_phase: uint32) -> uint32 {
         return 1 << splitpoint_phase;
     }
     let splitpoint_group = HASH_SPLITPOINT_GROUPS_WITH_ONE_PHASE
-        + ((splitpoint_phase - HASH_SPLITPOINT_GROUPS_WITH_ONE_PHASE) >> HASH_SPLITPOINT_PHASE_BITS);
+        + ((splitpoint_phase - HASH_SPLITPOINT_GROUPS_WITH_ONE_PHASE)
+            >> HASH_SPLITPOINT_PHASE_BITS);
     let mut total_buckets = 1 << (splitpoint_group - 1);
     let phases_within_splitpoint_group =
-        ((splitpoint_phase - HASH_SPLITPOINT_GROUPS_WITH_ONE_PHASE) & HASH_SPLITPOINT_PHASE_MASK) + 1;
-    total_buckets +=
-        ((1 << (splitpoint_group - 1)) >> HASH_SPLITPOINT_PHASE_BITS) * phases_within_splitpoint_group;
+        ((splitpoint_phase - HASH_SPLITPOINT_GROUPS_WITH_ONE_PHASE) & HASH_SPLITPOINT_PHASE_MASK)
+            + 1;
+    total_buckets += ((1 << (splitpoint_group - 1)) >> HASH_SPLITPOINT_PHASE_BITS)
+        * phases_within_splitpoint_group;
     total_buckets
 }
 

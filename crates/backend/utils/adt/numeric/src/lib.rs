@@ -38,9 +38,9 @@ pub use io::{get_str_from_var, numeric_in, numeric_out_into, numeric_recv, numer
 pub use keypack::{numeric_key_pack, numeric_key_unpack, NumericKeyForm, NUMERIC_KEY_EXP_MAX};
 pub use math::{
     div_mod_var, exp_var, gcd_var, ln_var, log_var, mod_var, numeric_exp, numeric_exp_into,
-    numeric_fac, numeric_gcd_common, numeric_lcm_common, numeric_ln, numeric_ln_into,
-    numeric_log, numeric_mod_common, numeric_out_sci, numeric_power, numeric_power_into,
-    numeric_sqrt, numeric_sqrt_into, power_var, sqrt_var, width_bucket_numeric,
+    numeric_fac, numeric_gcd_common, numeric_lcm_common, numeric_ln, numeric_ln_into, numeric_log,
+    numeric_mod_common, numeric_out_sci, numeric_power, numeric_power_into, numeric_sqrt,
+    numeric_sqrt_into, power_var, sqrt_var, width_bucket_numeric,
 };
 pub use ops::*;
 pub use var::{
@@ -276,6 +276,8 @@ pub fn division_by_zero_error() -> PgError {
 #[cold]
 #[inline(never)]
 pub fn invalid_numeric_syntax(input: &str) -> PgError {
-    PgError::error(format!("invalid input syntax for type numeric: \"{input}\""))
-        .with_sqlstate(ERRCODE_INVALID_TEXT_REPRESENTATION)
+    PgError::error(format!(
+        "invalid input syntax for type numeric: \"{input}\""
+    ))
+    .with_sqlstate(ERRCODE_INVALID_TEXT_REPRESENTATION)
 }

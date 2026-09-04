@@ -103,7 +103,6 @@ enum CgPhase {
     Emit,
 }
 
-
 /// One accepted batch's outcome (transactional bookkeeping for the degrade):
 /// `consumed` survivor rows were fully absorbed into states; `keep == false`
 /// means the caller must degrade — replay every absorbed row into the
@@ -276,7 +275,10 @@ impl CodedGroupState<'_> {
     /// memcmp-tier order — module doc), run id last (equal content across
     /// runs is absorbed at pop; the id keeps the heap order total).
     fn run_less(&self, a: u32, b: u32) -> bool {
-        let (ca, cb) = (self.content(self.head_state(a)), self.content(self.head_state(b)));
+        let (ca, cb) = (
+            self.content(self.head_state(a)),
+            self.content(self.head_state(b)),
+        );
         match ca.cmp(cb) {
             core::cmp::Ordering::Less => true,
             core::cmp::Ordering::Greater => false,
@@ -434,7 +436,9 @@ pub fn agg_codedgroup_key_arg_atts(node: &AggStateData<'_>) -> (u16, u16) {
     debug_assert!(agg_codedgroup_admissible(node));
     (
         (node.plan.grpColIdx[0] - 1) as u16,
-        node.pertrans_sort[0].direct_att.expect("admission proved direct_att"),
+        node.pertrans_sort[0]
+            .direct_att
+            .expect("admission proved direct_att"),
     )
 }
 
@@ -451,7 +455,10 @@ fn codedgroup_budget() -> usize {
 fn cgemit_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
-        !matches!(std::env::var("PGRUST_LANE_V2_CGEMIT").as_deref(), Ok("0") | Ok("off"))
+        !matches!(
+            std::env::var("PGRUST_LANE_V2_CGEMIT").as_deref(),
+            Ok("0") | Ok("off")
+        )
     })
 }
 
@@ -477,7 +484,10 @@ fn cgemit_small_max() -> usize {
 fn cg_touched_clear_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
-        !matches!(std::env::var("PGRUST_LANE_V2_CGTOUCHED").as_deref(), Ok("0") | Ok("off"))
+        !matches!(
+            std::env::var("PGRUST_LANE_V2_CGTOUCHED").as_deref(),
+            Ok("0") | Ok("off")
+        )
     })
 }
 
@@ -542,7 +552,9 @@ pub fn agg_codedgroup_begin<'mcx>(
         .clone();
     let natts = desc.natts as usize;
     let rep_slot = exectuples::make_tuple_table_slot(mcx, TupleSlotKind::Virtual, Some(desc));
-    let kind = node.pertrans_sort[0].set_kind.expect("admission proved a set kind");
+    let kind = node.pertrans_sort[0]
+        .set_kind
+        .expect("admission proved a set kind");
     node.codedgroup = Some(Box::new(CodedGroupState {
         phase: CgPhase::Building,
         key_att,
@@ -604,7 +616,12 @@ pub fn agg_codedgroup_accept_batch<'mcx>(
     let global = t.has_stitch();
     match cg.mode_global {
         None => cg.mode_global = Some(global),
-        Some(m) if m != global => return CgAccept { consumed: 0, keep: false },
+        Some(m) if m != global => {
+            return CgAccept {
+                consumed: 0,
+                keep: false,
+            }
+        }
         Some(_) => {}
     }
     let (ident, map_size) = if global {
@@ -618,19 +635,32 @@ pub fn agg_codedgroup_accept_batch<'mcx>(
         debug_assert!(!global || cg.cur_epoch.is_none(), "gepoch is scan-stable");
         cg.roll_epoch(ident, map_size);
     }
-    debug_assert!(cg.code_map.len() >= map_size, "map size is fixed per identity");
+    debug_assert!(
+        cg.code_map.len() >= map_size,
+        "map size is fixed per identity"
+    );
     for (idx, &i) in rows.iter().enumerate() {
         // NULL DISTINCT arg: C feeds it through seen_null; this arm keeps
         // v1 simple and degrades (unreachable on pgrcolumnar — no NULLs).
         if argn[i as usize] {
-            return CgAccept { consumed: idx, keep: false };
+            return CgAccept {
+                consumed: idx,
+                keep: false,
+            };
         }
         let code = lane.code(i as usize) as usize;
         debug_assert!(code < ndict, "filler contract: code < ndict");
         // Map index: part-global byte-rank code when stitched (one state
         // per distinct string part-wide), local code otherwise.
-        let mcode = if global { t.global_code(code as u32) as usize } else { code };
-        debug_assert!(mcode < cg.code_map.len(), "stitch contract: global code < gndv");
+        let mcode = if global {
+            t.global_code(code as u32) as usize
+        } else {
+            code
+        };
+        debug_assert!(
+            mcode < cg.code_map.len(),
+            "stitch contract: global code < gndv"
+        );
         let s = match cg.code_map[mcode] {
             0 => {
                 // First surviving row of (identity, code): land the dict
@@ -639,20 +669,23 @@ pub fn agg_codedgroup_accept_batch<'mcx>(
                 // SAFETY: dict entries are live decoded varlena datums for
                 // the pinned scan's lifetime (SoaDictTable contract),
                 // readable through their header.
-                let (external, len) = unsafe {
-                    (varatt::varatt_is_1b_e(p), varatt::varsize_any(p))
-                };
+                let (external, len) =
+                    unsafe { (varatt::varatt_is_1b_e(p), varatt::varsize_any(p)) };
                 if external {
                     // Non-inline image (never produced by the pgrcolumnar
                     // decode); refuse the row — the caller degrades.
-                    return CgAccept { consumed: idx, keep: false };
+                    return CgAccept {
+                        consumed: idx,
+                        keep: false,
+                    };
                 }
                 while !cg.arena.len().is_multiple_of(8) {
                     cg.arena.push(0);
                 }
                 let off = cg.arena.len();
                 // SAFETY: as above — `len` bytes readable at `p`.
-                cg.arena.extend_from_slice(unsafe { core::slice::from_raw_parts(p, len) });
+                cg.arena
+                    .extend_from_slice(unsafe { core::slice::from_raw_parts(p, len) });
                 cg.spans.push((off as u32, len as u32));
                 let s = (cg.spans.len() - 1) as u32;
                 cg.code_map[mcode] = s + 1;
@@ -670,7 +703,10 @@ pub fn agg_codedgroup_accept_batch<'mcx>(
         };
         cg.pool.push((v, s));
     }
-    CgAccept { consumed: rows.len(), keep: cg.mem() <= cg.budget }
+    CgAccept {
+        consumed: rows.len(),
+        keep: cg.mem() <= cg.budget,
+    }
 }
 
 /// Input exhausted with no degrade: close the last epoch, seed the merge
@@ -731,7 +767,10 @@ pub fn agg_codedgroup_mode_global(node: &AggStateData<'_>) -> Option<bool> {
 pub fn agg_codedgroup_emitting(node: &AggStateData<'_>) -> bool {
     matches!(
         node.codedgroup.as_deref(),
-        Some(CodedGroupState { phase: CgPhase::Emit, .. })
+        Some(CodedGroupState {
+            phase: CgPhase::Emit,
+            ..
+        })
     )
 }
 
@@ -753,7 +792,10 @@ pub fn agg_codedgroup_emit_next<'mcx>(
     estate: &mut EStateData<'mcx>,
 ) -> PgResult<Option<Option<ExecSlotId>>> {
     {
-        let cg = node.codedgroup.as_deref_mut().expect("codedgroup emit without state");
+        let cg = node
+            .codedgroup
+            .as_deref_mut()
+            .expect("codedgroup emit without state");
         debug_assert!(matches!(cg.phase, CgPhase::Emit));
         if !cg.pop_group() {
             // Stream end: C's agg_done arm.
@@ -807,7 +849,11 @@ pub fn agg_codedgroup_emit_next<'mcx>(
         // counts it exactly as before. Byte identity: the count is the value
         // multiset's support cardinality under i64 equality in every arm.
         let base = node.pergroup_base;
-        let AggStateData { codedgroup, pertrans_sort, .. } = node;
+        let AggStateData {
+            codedgroup,
+            pertrans_sort,
+            ..
+        } = node;
         let cg = codedgroup.as_deref_mut().expect("codedgroup state");
         let pt = &mut pertrans_sort[0];
         // Single-state groups read their run in place; merged groups read
@@ -834,7 +880,10 @@ pub fn agg_codedgroup_emit_next<'mcx>(
             unsafe { crate::count_distinct_apply(pg, count_distinct_small(vals))? };
         } else {
             let mut set = pt.dset.take().unwrap_or_else(DistinctSet::new);
-            debug_assert!(set.len() == 0 && !set.seen_null, "replay returns the set cleared");
+            debug_assert!(
+                set.len() == 0 && !set.seen_null,
+                "replay returns the set cleared"
+            );
             if cgemit_enabled() {
                 set.insert_i64_batch(vals, &mut cg.val_hashes);
             } else {
@@ -847,7 +896,11 @@ pub fn agg_codedgroup_emit_next<'mcx>(
     }
     // Synthesized representative (adopt_merged's argument — module doc).
     {
-        let AggStateData { codedgroup, persort, .. } = node;
+        let AggStateData {
+            codedgroup,
+            persort,
+            ..
+        } = node;
         let cg = codedgroup.as_deref_mut().expect("codedgroup state");
         let ps = persort.as_mut().expect("sorted Agg has persort");
         let key = cg.key_datum(cg.gstates[0]);
@@ -901,8 +954,7 @@ mod tests {
         let m: &'static ::mcx::MemoryContext =
             Box::leak(Box::new(::mcx::MemoryContext::new("cg-roll-test")));
         let mcx = m.mcx();
-        let rep_slot =
-            ::exectuples::make_tuple_table_slot(mcx, TupleSlotKind::Virtual, None);
+        let rep_slot = ::exectuples::make_tuple_table_slot(mcx, TupleSlotKind::Virtual, None);
         let mut cg = CodedGroupState {
             phase: CgPhase::Building,
             key_att: 0,

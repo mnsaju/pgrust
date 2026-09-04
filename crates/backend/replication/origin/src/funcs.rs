@@ -5,7 +5,9 @@
 use datum::Datum;
 use elog::ereport;
 use types_core::{InvalidRepOriginId, InvalidXLogRecPtr, XLogRecPtr};
-use types_error::{PgResult, ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE, ERRCODE_RESERVED_NAME, ERROR};
+use types_error::{
+    PgResult, ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE, ERRCODE_RESERVED_NAME, ERROR,
+};
 use types_fmgr::{FmgrBuiltin, FmgrInfo, FunctionCallInfoBaseData};
 
 use crate::{
@@ -99,7 +101,9 @@ pub fn fc_pg_replication_origin_session_is_setup(
     _fcinfo: &mut FunctionCallInfoBaseData,
 ) -> PgResult<Datum> {
     replorigin_check_prerequisites(false, false)?;
-    Ok(Datum::from_bool(replorigin_session_origin() != InvalidRepOriginId))
+    Ok(Datum::from_bool(
+        replorigin_session_origin() != InvalidRepOriginId,
+    ))
 }
 
 pub fn fc_pg_replication_origin_session_progress(
@@ -160,7 +164,10 @@ pub fn fc_pg_replication_origin_advance(
     let remote_commit = fcinfo.arg_i64(1) as XLogRecPtr;
 
     // Lock to prevent the replication origin from vanishing.
-    lmgr::LockRelationOid(catalog::ReplicationOriginRelationId, types_rel::RowExclusiveLock)?;
+    lmgr::LockRelationOid(
+        catalog::ReplicationOriginRelationId,
+        types_rel::RowExclusiveLock,
+    )?;
 
     let node = replorigin_by_name(&name, false)?;
 
@@ -168,7 +175,10 @@ pub fn fc_pg_replication_origin_advance(
     // xact hasn't committed yet: initial-state setup only, not replay.
     replorigin_advance(node, remote_commit, InvalidXLogRecPtr, true, true)?;
 
-    lmgr::UnlockRelationOid(catalog::ReplicationOriginRelationId, types_rel::RowExclusiveLock)?;
+    lmgr::UnlockRelationOid(
+        catalog::ReplicationOriginRelationId,
+        types_rel::RowExclusiveLock,
+    )?;
     Ok(Datum::from_usize(0))
 }
 
@@ -209,7 +219,9 @@ pub fn fc_pg_show_replication_origin_status(
 
         // The origin may be dropped concurrently; silently accept that.
         if let Some(roname) = replorigin_by_oid(mcx, roident, true)? {
-            let img = varlena::cstring_to_text(mcx, roname.as_bytes())?.into_image().leak();
+            let img = varlena::cstring_to_text(mcx, roname.as_bytes())?
+                .into_image()
+                .leak();
             values[1] = Datum::from_usize(img.as_ptr() as usize);
             nulls[1] = false;
         }

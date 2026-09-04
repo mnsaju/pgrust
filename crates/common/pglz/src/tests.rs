@@ -3,13 +3,23 @@ use super::*;
 fn compress(input: &[u8], strategy: &PglzStrategy) -> Option<Vec<u8>> {
     let mut dest = vec![MaybeUninit::<u8>::uninit(); pglz_max_output(input.len())];
     let n = pglz_compress_into(input, &mut dest, strategy)?;
-    Some(dest[..n].iter().map(|b| unsafe { b.assume_init() }).collect())
+    Some(
+        dest[..n]
+            .iter()
+            .map(|b| unsafe { b.assume_init() })
+            .collect(),
+    )
 }
 
 fn decompress(src: &[u8], rawsize: usize, complete: bool) -> Option<Vec<u8>> {
     let mut dest = vec![MaybeUninit::<u8>::uninit(); rawsize];
     let n = pglz_decompress(src, &mut dest, complete)?;
-    Some(dest[..n].iter().map(|b| unsafe { b.assume_init() }).collect())
+    Some(
+        dest[..n]
+            .iter()
+            .map(|b| unsafe { b.assume_init() })
+            .collect(),
+    )
 }
 
 #[test]
@@ -95,17 +105,27 @@ fn negative_match_size_drop_roundtrips() {
 #[test]
 fn hist_idx_matches_platform_char_signedness() {
     let signed = (0x80u8 as c_char as i32) < 0;
-    let expect = if signed { 384 } else { 0x80 << 6 & 0x1FFF ^ 0x80 << 4 ^ 0x80 << 2 ^ 0x80 };
+    let expect = if signed {
+        384
+    } else {
+        0x80 << 6 & 0x1FFF ^ 0x80 << 4 ^ 0x80 << 2 ^ 0x80
+    };
     let _ = expect;
     let input = [0x80u8; 4];
     let four = hist_idx(&input, 0, 0x1FFF);
     let short = hist_idx(&input[..1], 0, 0x1FFF);
     if signed {
         assert_eq!(short, 0x1F80);
-        assert_eq!(four, (((-128i32) << 6) ^ ((-128) << 4) ^ ((-128) << 2) ^ -128) as usize & 0x1FFF);
+        assert_eq!(
+            four,
+            (((-128i32) << 6) ^ ((-128) << 4) ^ ((-128) << 2) ^ -128) as usize & 0x1FFF
+        );
     } else {
         assert_eq!(short, 0x80);
-        assert_eq!(four, ((0x80 << 6) ^ (0x80 << 4) ^ (0x80 << 2) ^ 0x80) & 0x1FFF);
+        assert_eq!(
+            four,
+            ((0x80 << 6) ^ (0x80 << 4) ^ (0x80 << 2) ^ 0x80) & 0x1FFF
+        );
     }
 }
 
@@ -118,7 +138,9 @@ fn large_randomish_text_terminates_and_roundtrips() {
     let digits = b"0123456789.";
     let input: Vec<u8> = (0..200_000)
         .map(|_| {
-            s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            s = s
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             digits[((s >> 33) as usize) % digits.len()]
         })
         .collect();

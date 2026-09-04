@@ -48,18 +48,52 @@ impl LocalRelopts {
 
     /// add_local_int_reloption (desc dropped: only surfaced via extension
     /// catalogs C never reads on this path).
-    pub fn add_int(&mut self, name: &'static str, default_val: i32, min: i32, max: i32, offset: usize) {
-        self.opts.push(LocalOptDef { name, data: OptData::Int { default_val, min, max }, offset });
+    pub fn add_int(
+        &mut self,
+        name: &'static str,
+        default_val: i32,
+        min: i32,
+        max: i32,
+        offset: usize,
+    ) {
+        self.opts.push(LocalOptDef {
+            name,
+            data: OptData::Int {
+                default_val,
+                min,
+                max,
+            },
+            offset,
+        });
     }
 
     /// add_local_real_reloption.
-    pub fn add_real(&mut self, name: &'static str, default_val: f64, min: f64, max: f64, offset: usize) {
-        self.opts.push(LocalOptDef { name, data: OptData::Real { default_val, min, max }, offset });
+    pub fn add_real(
+        &mut self,
+        name: &'static str,
+        default_val: f64,
+        min: f64,
+        max: f64,
+        offset: usize,
+    ) {
+        self.opts.push(LocalOptDef {
+            name,
+            data: OptData::Real {
+                default_val,
+                min,
+                max,
+            },
+            offset,
+        });
     }
 
     /// add_local_bool_reloption.
     pub fn add_bool(&mut self, name: &'static str, default_val: bool, offset: usize) {
-        self.opts.push(LocalOptDef { name, data: OptData::Bool { default_val }, offset });
+        self.opts.push(LocalOptDef {
+            name,
+            data: OptData::Bool { default_val },
+            offset,
+        });
     }
 }
 
@@ -75,12 +109,15 @@ pub fn build_local_reloptions(
         .opts
         .iter()
         .map(|d| {
-            (false, match d.data {
-                OptData::Bool { .. } => OptVal::Bool(false),
-                OptData::Int { .. } => OptVal::Int(0),
-                OptData::Real { .. } => OptVal::Real(0.0),
-                OptData::Enum { .. } => OptVal::Enum(0),
-            })
+            (
+                false,
+                match d.data {
+                    OptData::Bool { .. } => OptVal::Bool(false),
+                    OptData::Int { .. } => OptVal::Int(0),
+                    OptData::Real { .. } => OptVal::Real(0.0),
+                    OptData::Enum { .. } => OptVal::Enum(0),
+                },
+            )
         })
         .collect();
 
@@ -97,9 +134,7 @@ pub fn build_local_reloptions(
                     if *isset && validate {
                         return Err(ereport(ERROR)
                             .errcode(ERRCODE_INVALID_PARAMETER_VALUE)
-                            .errmsg(format!(
-                                "parameter \"{kw}\" specified more than once"
-                            ))
+                            .errmsg(format!("parameter \"{kw}\" specified more than once"))
                             .into_error()
                             .into());
                     }

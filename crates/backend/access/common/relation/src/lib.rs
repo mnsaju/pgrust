@@ -57,7 +57,10 @@ fn finish_open<'mcx>(
     }
 
     r.pgstat_enabled
-        .set(pgstat_seams::pgstat_init_relation::call(r.rd_id, r.rd_rel.relkind));
+        .set(pgstat_seams::pgstat_init_relation::call(
+            r.rd_id,
+            r.rd_rel.relkind,
+        ));
 
     r
 }

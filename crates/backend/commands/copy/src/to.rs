@@ -102,7 +102,9 @@ pub fn BeginCopyTo<'mcx, 's>(
     };
     let tup_desc: &TupleDescData<'_> = match rel {
         Some(rel) => &rel.rd_att,
-        None => tupdesc.as_deref().expect("ExecutorStart computed a result tupDesc"),
+        None => tupdesc
+            .as_deref()
+            .expect("ExecutorStart computed a result tupDesc"),
     };
 
     let attnumlist = CopyGetAttnums(mcx, tup_desc, rel, attnamelist)?;
@@ -121,8 +123,8 @@ pub fn BeginCopyTo<'mcx, 's>(
     } else {
         opts.file_encoding
     };
-    let need_transcoding = !(file_encoding == mbutils::GetDatabaseEncoding()
-        || file_encoding == wchar::PG_SQL_ASCII);
+    let need_transcoding =
+        !(file_encoding == mbutils::GetDatabaseEncoding() || file_encoding == wchar::PG_SQL_ASCII);
     if !opts.binary && file_encoding >= wchar::PG_SJIS {
         // unported: COPY TO with a client-only encoding (pg_encoding_mblen escape walk)
         return Err(Box::new(
@@ -146,13 +148,17 @@ pub fn BeginCopyTo<'mcx, 's>(
             let copy_file = fd::AllocateFile(filename, "wb");
             // SAFETY: restore saved umask.
             #[cfg(not(target_family = "wasm"))]
-            unsafe { libc::umask(oumask) };
+            unsafe {
+                libc::umask(oumask)
+            };
             let copy_file = copy_file?;
             if copy_file < 0 {
                 ereport(ERROR)
                     .with_saved_errno(std::io::Error::last_os_error().raw_os_error().unwrap_or(0))
                     .errcode_for_file_access()
-                    .errmsg(format!("could not open file \"{filename}\" for writing: %m"))
+                    .errmsg(format!(
+                        "could not open file \"{filename}\" for writing: %m"
+                    ))
                     .errhint(
                         "COPY TO instructs the PostgreSQL server process to write a file. You \
                          may want a client-side facility such as psql's \\copy.",
@@ -169,7 +175,10 @@ pub fn BeginCopyTo<'mcx, 's>(
                         .with_sqlstate(ERRCODE_WRONG_OBJECT_TYPE),
                 ));
             }
-            CopyDest::File { fd: copy_file, filename }
+            CopyDest::File {
+                fd: copy_file,
+                filename,
+            }
         }
         None => {
             if elog::config::where_to_send_output() != CommandDest::Remote {
@@ -252,10 +261,14 @@ fn begin_copy_query<'mcx>(
         if u.as_variant::<CreateTableAsStmt>().is_some() {
             return Err(feature_not_supported("COPY (SELECT INTO) is not supported"));
         }
-        return Err(feature_not_supported("COPY query must not be a utility command"));
+        return Err(feature_not_supported(
+            "COPY query must not be a utility command",
+        ));
     }
     if query.commandType != CmdType::CMD_SELECT && query.returningList.is_nil() {
-        return Err(feature_not_supported("COPY query must have a RETURNING clause"));
+        return Err(feature_not_supported(
+            "COPY query must have a RETURNING clause",
+        ));
     }
 
     let plan = postgres::simple_query::pg_plan_query(
@@ -317,15 +330,17 @@ pub fn DoCopyTo<'mcx>(
     let query_tupdesc = cstate.tupdesc.clone();
     let tup_desc: &TupleDescData<'_> = match rel {
         Some(rel) => &rel.rd_att,
-        None => query_tupdesc.as_deref().expect("query COPY carries the executor tupDesc"),
+        None => query_tupdesc
+            .as_deref()
+            .expect("query COPY carries the executor tupDesc"),
     };
 
     // FmgrInfo carries droppy fn_extra, so PgVec::new_in (printtup precedent);
     // resolve-once, never per row (rule 4).
     let mut out_functions: PgVec<'mcx, FmgrInfo> = PgVec::new_in(mcx);
-    out_functions.try_reserve_exact(cstate.attnumlist.len()).map_err(|_| {
-        mcx.oom(cstate.attnumlist.len() * core::mem::size_of::<FmgrInfo>())
-    })?;
+    out_functions
+        .try_reserve_exact(cstate.attnumlist.len())
+        .map_err(|_| mcx.oom(cstate.attnumlist.len() * core::mem::size_of::<FmgrInfo>()))?;
     for &attnum in cstate.attnumlist.iter() {
         let attr = tup_desc.attr(attnum as usize - 1);
         let (func_oid, _is_varlena) = if cstate.opts.binary {
@@ -378,8 +393,7 @@ pub fn DoCopyTo<'mcx>(
     let processed: u64 = match rel {
         Some(rel) => {
             let snapshot = Some(snapmgr::GetActiveSnapshot());
-            let mut scandesc =
-                tableam::table_beginscan(mcx, rel, snapshot, 0, PgVec::new_in(mcx))?;
+            let mut scandesc = tableam::table_beginscan(mcx, rel, snapshot, 0, PgVec::new_in(mcx))?;
             let mut slot = tableam::table_slot_create(mcx, rel)?;
 
             let mut processed: u64 = 0;
@@ -400,7 +414,10 @@ pub fn DoCopyTo<'mcx>(
         }
         None => {
             let qd = cstate.query_desc.expect("query COPY has a QueryDesc");
-            let mut frame = QueryFrame { cstate, out_functions: &mut out_functions };
+            let mut frame = QueryFrame {
+                cstate,
+                out_functions: &mut out_functions,
+            };
             let mut dest = tcop_dest::DestReceiver::CopyOut(copy_seams::CopyDestState::new(
                 (&mut frame as *mut QueryFrame<'_, '_, '_>).cast(),
             ));
@@ -410,7 +427,9 @@ pub fn DoCopyTo<'mcx>(
                 0,
                 &mut dest,
             )?;
-            let tcop_dest::DestReceiver::CopyOut(st) = &dest else { unreachable!() };
+            let tcop_dest::DestReceiver::CopyOut(st) = &dest else {
+                unreachable!()
+            };
             st.processed
         }
     };
@@ -668,11 +687,7 @@ pub fn EndCopyTo(mut cstate: CopyToState<'_, '_>) -> PgResult<()> {
 
 /// `CopyAttributeOutText` (copyto.c), server-encoding arm: chunked dump with
 /// the exact C escape table (\b \f \n \r \t \v, backslash, delimiter).
-pub fn copy_attribute_out_text(
-    buf: &mut StringInfo<'_>,
-    s: &[u8],
-    delimc: u8,
-) -> PgResult<()> {
+pub fn copy_attribute_out_text(buf: &mut StringInfo<'_>, s: &[u8], delimc: u8) -> PgResult<()> {
     let mut start = 0usize;
     let mut ptr = 0usize;
     while ptr < s.len() {
@@ -745,7 +760,10 @@ fn cannot_copy_from_relkind(rel: &Relation<'_>) -> Box<PgError> {
             format!("cannot copy from partitioned table \"{name}\""),
             Some("Try the COPY (SELECT ...) TO variant."),
         ),
-        _ => (format!("cannot copy from non-table relation \"{name}\""), None),
+        _ => (
+            format!("cannot copy from non-table relation \"{name}\""),
+            None,
+        ),
     };
     let mut e = PgError::error(msg).with_sqlstate(ERRCODE_WRONG_OBJECT_TYPE);
     if let Some(h) = hint {

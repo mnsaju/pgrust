@@ -276,7 +276,8 @@ fn install_seams() {
         });
         syscache_seams::lookup_pg_operator_shape::set(|opno| {
             Ok(match opno {
-                INT4_EQ => Some(syscache_seams::PgOperatorShape { oprnamespace: 11,
+                INT4_EQ => Some(syscache_seams::PgOperatorShape {
+                    oprnamespace: 11,
                     oprleft: INT4OID,
                     oprright: INT4OID,
                     oprresult: 16,
@@ -288,7 +289,8 @@ fn install_seams() {
                     oprcanmerge: true,
                     oprcanhash: true,
                 }),
-                TEXT_EQ => Some(syscache_seams::PgOperatorShape { oprnamespace: 11,
+                TEXT_EQ => Some(syscache_seams::PgOperatorShape {
+                    oprnamespace: 11,
                     oprleft: TEXTOID,
                     oprright: TEXTOID,
                     oprresult: 16,
@@ -327,9 +329,7 @@ fn install_seams() {
         });
         syscache_seams::lookup_pg_amproc::set(|opfamily, lefttype, righttype, procnum| {
             Ok(
-                if (opfamily, lefttype, righttype, procnum)
-                    == (INT_HASH_FAM, INT4OID, INT4OID, 1)
-                {
+                if (opfamily, lefttype, righttype, procnum) == (INT_HASH_FAM, INT4OID, INT4OID, 1) {
                     F_HASHINT4
                 } else if (opfamily, lefttype, righttype, procnum)
                     == (INTEGER_BTREE_FAM, INT4OID, INT4OID, 2)
@@ -348,9 +348,7 @@ fn install_seams() {
                 COUNT_STAR_OID | COUNT_ANY_OID => {
                     Some(Some(::mcx::PgString::from_str_in("0", mcx).unwrap()))
                 }
-                AVG_INT4_OID => {
-                    Some(Some(::mcx::PgString::from_str_in("{0,0}", mcx).unwrap()))
-                }
+                AVG_INT4_OID => Some(Some(::mcx::PgString::from_str_in("{0,0}", mcx).unwrap())),
                 SUM_INT4_OID | SUM_INT8_OID | MIN_TEXT_OID | MAX_TEXT_OID => Some(None),
                 _ => None,
             })
@@ -466,10 +464,14 @@ fn run_agg(agg: &'static Agg<'static>, rows: &'static [i32]) -> (Datum, bool) {
             let base = estate.slot_mut(slot_id).base();
             (base.tts_values[0], base.tts_isnull[0])
         };
-        assert!(exec_agg(&mut state, estate, feeder(outer_id, &[])).unwrap().is_none());
+        assert!(exec_agg(&mut state, estate, feeder(outer_id, &[]))
+            .unwrap()
+            .is_none());
 
         exec_rescan_agg(&mut state, estate);
-        let again = exec_agg(&mut state, estate, feeder(outer_id, rows)).unwrap().unwrap();
+        let again = exec_agg(&mut state, estate, feeder(outer_id, rows))
+            .unwrap()
+            .unwrap();
         let base = estate.slot_mut(again).base();
         assert_eq!(base.tts_values[0].as_i64(), v.as_i64());
         assert_eq!(base.tts_isnull[0], isnull);
@@ -549,7 +551,16 @@ fn two_col_desc(mcx: Mcx<'_>) -> Rc<TupleDescData<'_>> {
         attstorage: TYPSTORAGE_PLAIN,
         ..Default::default()
     };
-    let a2 = FormData_pg_attribute { attnum: 2, atttypid: INT8OID, attlen: 8, attbyval: true, attalign: TYPALIGN_DOUBLE, atttypmod: -1, attstorage: TYPSTORAGE_PLAIN, ..Default::default() };
+    let a2 = FormData_pg_attribute {
+        attnum: 2,
+        atttypid: INT8OID,
+        attlen: 8,
+        attbyval: true,
+        attalign: TYPALIGN_DOUBLE,
+        atttypmod: -1,
+        attstorage: TYPSTORAGE_PLAIN,
+        ..Default::default()
+    };
     let mut attrs = PgVec::new_in(mcx);
     let mut compact = PgVec::new_in(mcx);
     compact.push(CompactAttribute::populate_from(&a1));
@@ -967,11 +978,15 @@ fn sum_int8_internal_state_and_finalfn() {
             assert!(!base.tts_isnull[0]);
             assert_eq!(numeric_datum_text(base.tts_values[0]), "15");
         }
-        assert!(exec_agg(&mut state, estate, int8_feeder(outer_id, &[])).unwrap().is_none());
+        assert!(exec_agg(&mut state, estate, int8_feeder(outer_id, &[]))
+            .unwrap()
+            .is_none());
 
         exec_rescan_agg(&mut state, estate);
         let rows2: &'static [Option<i64>] = &[Some(40), Some(2)];
-        let again = exec_agg(&mut state, estate, int8_feeder(outer_id, rows2)).unwrap().unwrap();
+        let again = exec_agg(&mut state, estate, int8_feeder(outer_id, rows2))
+            .unwrap()
+            .unwrap();
         let base = estate.slot_mut(again).base();
         assert_eq!(numeric_datum_text(base.tts_values[0]), "42");
     });
@@ -991,8 +1006,9 @@ fn sum_int8_of_empty_input_is_null() {
         // SAFETY: agg is leaked ('static) and read-only.
         let agg = unsafe { shorten(agg) };
         let mut state = exec_init_agg(agg, estate, 0, result_desc, None).unwrap();
-        let slot_id =
-            exec_agg(&mut state, estate, int8_feeder(outer_id, &[])).unwrap().unwrap();
+        let slot_id = exec_agg(&mut state, estate, int8_feeder(outer_id, &[]))
+            .unwrap()
+            .unwrap();
         let base = estate.slot_mut(slot_id).base();
         assert!(base.tts_isnull[0]);
     });
@@ -1176,7 +1192,10 @@ fn hashed_group_by_sum_int8() {
         while let Some(slot_id) = exec_agg(&mut state, estate, &mut feed).unwrap() {
             let base = estate.slot_mut(slot_id).base();
             assert!(!base.tts_isnull[0] && !base.tts_isnull[1]);
-            got.push((base.tts_values[0].as_i32(), numeric_datum_text(base.tts_values[1])));
+            got.push((
+                base.tts_values[0].as_i32(),
+                numeric_datum_text(base.tts_values[1]),
+            ));
         }
         got.sort_unstable();
         assert_eq!(
@@ -1269,8 +1288,14 @@ fn min_max_text_byref_transvalue() {
             let agg = unsafe { shorten(agg) };
             let mut state = exec_init_agg(agg, estate, 0, result_desc, None).unwrap();
 
-            let rows: &'static [Option<&'static str>] =
-                &[None, Some("mango"), Some("apple"), None, Some("pear"), Some("banana")];
+            let rows: &'static [Option<&'static str>] = &[
+                None,
+                Some("mango"),
+                Some("apple"),
+                None,
+                Some("pear"),
+                Some("banana"),
+            ];
             let slot_id = exec_agg(&mut state, estate, text_feeder(outer_id, rows))
                 .unwrap()
                 .expect("plain agg returns one row");
@@ -1283,8 +1308,9 @@ fn min_max_text_byref_transvalue() {
             // All-NULL input leaves the transvalue NULL (INIT never fires).
             exec_rescan_agg(&mut state, estate);
             let rows2: &'static [Option<&'static str>] = &[None, None];
-            let again =
-                exec_agg(&mut state, estate, text_feeder(outer_id, rows2)).unwrap().unwrap();
+            let again = exec_agg(&mut state, estate, text_feeder(outer_id, rows2))
+                .unwrap()
+                .unwrap();
             let base = estate.slot_mut(again).base();
             assert!(base.tts_isnull[0]);
         });
@@ -1350,8 +1376,9 @@ fn avg_int4_array_transtype() {
             i += 1;
             Ok(Some(outer_id))
         };
-        let slot_id =
-            exec_agg(&mut state, estate, &mut feed).unwrap().expect("plain agg returns one row");
+        let slot_id = exec_agg(&mut state, estate, &mut feed)
+            .unwrap()
+            .expect("plain agg returns one row");
         {
             let base = estate.slot_mut(slot_id).base();
             assert!(!base.tts_isnull[0]);
@@ -1360,7 +1387,9 @@ fn avg_int4_array_transtype() {
 
         // Empty input: count 0 in the initval copy -> int8_avg returns NULL.
         exec_rescan_agg(&mut state, estate);
-        let again = exec_agg(&mut state, estate, feeder(outer_id, &[])).unwrap().unwrap();
+        let again = exec_agg(&mut state, estate, feeder(outer_id, &[]))
+            .unwrap()
+            .unwrap();
         let base = estate.slot_mut(again).base();
         assert!(base.tts_isnull[0]);
     });
@@ -1553,7 +1582,10 @@ fn three_col_result_desc(mcx: Mcx<'_>) -> Rc<TupleDescData<'_>> {
 }
 
 fn two_int4_desc(mcx: Mcx<'_>) -> Rc<TupleDescData<'_>> {
-    desc_of(mcx, &[(INT4OID, 4, TYPALIGN_INT), (INT4OID, 4, TYPALIGN_INT)])
+    desc_of(
+        mcx,
+        &[(INT4OID, 4, TYPALIGN_INT), (INT4OID, 4, TYPALIGN_INT)],
+    )
 }
 
 // ROLLUP(a,b): one phase, sets [[a,b],[a],[]], plus GROUPING(a,b).
@@ -1566,7 +1598,10 @@ fn mk_rollup_agg(mcx: Mcx<'_>) -> &Agg<'_> {
     )
     .unwrap();
     outer_tl
-        .lappend(mcx, Node::mk_target_entry(mcx, b, 2, Some("b"), false).unwrap())
+        .lappend(
+            mcx,
+            Node::mk_target_entry(mcx, b, 2, Some("b"), false).unwrap(),
+        )
         .unwrap();
     let outer_plan = {
         let mut r = Node::build::<types_nodes::plannodes::Result>(mcx).unwrap();
@@ -1595,7 +1630,10 @@ fn mk_rollup_agg(mcx: Mcx<'_>) -> &Agg<'_> {
     )
     .unwrap();
     tlist
-        .lappend(mcx, Node::mk_target_entry(mcx, gb, 2, Some("b"), false).unwrap())
+        .lappend(
+            mcx,
+            Node::mk_target_entry(mcx, gb, 2, Some("b"), false).unwrap(),
+        )
         .unwrap();
     tlist
         .lappend(
@@ -1604,7 +1642,10 @@ fn mk_rollup_agg(mcx: Mcx<'_>) -> &Agg<'_> {
         )
         .unwrap();
     tlist
-        .lappend(mcx, Node::mk_target_entry(mcx, grouping, 4, Some("grouping"), false).unwrap())
+        .lappend(
+            mcx,
+            Node::mk_target_entry(mcx, grouping, 4, Some("grouping"), false).unwrap(),
+        )
         .unwrap();
 
     let set2 = Node::mk_int_list(
@@ -1612,12 +1653,16 @@ fn mk_rollup_agg(mcx: Mcx<'_>) -> &Agg<'_> {
         types_nodes::list::IntList::from_slice(mcx, &[0, 1]).unwrap(),
     )
     .unwrap();
-    let set1 =
-        Node::mk_int_list(mcx, types_nodes::list::IntList::from_slice(mcx, &[0]).unwrap())
-            .unwrap();
-    let set0 =
-        Node::mk_int_list(mcx, types_nodes::list::IntList::from_slice(mcx, &[]).unwrap())
-            .unwrap();
+    let set1 = Node::mk_int_list(
+        mcx,
+        types_nodes::list::IntList::from_slice(mcx, &[0]).unwrap(),
+    )
+    .unwrap();
+    let set0 = Node::mk_int_list(
+        mcx,
+        types_nodes::list::IntList::from_slice(mcx, &[]).unwrap(),
+    )
+    .unwrap();
     let mut gsets = NodeList::make1(mcx, set2).unwrap();
     gsets.lappend(mcx, set1).unwrap();
     gsets.lappend(mcx, set0).unwrap();
@@ -1731,7 +1776,10 @@ fn mk_two_rollup_chain_agg(mcx: Mcx<'_>) -> &Agg<'_> {
     )
     .unwrap();
     outer_tl
-        .lappend(mcx, Node::mk_target_entry(mcx, b, 2, Some("b"), false).unwrap())
+        .lappend(
+            mcx,
+            Node::mk_target_entry(mcx, b, 2, Some("b"), false).unwrap(),
+        )
         .unwrap();
     let outer_plan = {
         let mut r = Node::build::<types_nodes::plannodes::Result>(mcx).unwrap();
@@ -1760,7 +1808,10 @@ fn mk_two_rollup_chain_agg(mcx: Mcx<'_>) -> &Agg<'_> {
     )
     .unwrap();
     tlist
-        .lappend(mcx, Node::mk_target_entry(mcx, gb, 2, Some("b"), false).unwrap())
+        .lappend(
+            mcx,
+            Node::mk_target_entry(mcx, gb, 2, Some("b"), false).unwrap(),
+        )
         .unwrap();
     tlist
         .lappend(
@@ -1769,7 +1820,10 @@ fn mk_two_rollup_chain_agg(mcx: Mcx<'_>) -> &Agg<'_> {
         )
         .unwrap();
     tlist
-        .lappend(mcx, Node::mk_target_entry(mcx, grouping, 4, Some("grouping"), false).unwrap())
+        .lappend(
+            mcx,
+            Node::mk_target_entry(mcx, grouping, 4, Some("grouping"), false).unwrap(),
+        )
         .unwrap();
 
     let chain_sort = {
@@ -1812,8 +1866,11 @@ fn mk_two_rollup_chain_agg(mcx: Mcx<'_>) -> &Agg<'_> {
     agg.numGroups = 4;
     agg.groupingSets = NodeList::make1(
         mcx,
-        Node::mk_int_list(mcx, types_nodes::list::IntList::from_slice(mcx, &[0]).unwrap())
-            .unwrap(),
+        Node::mk_int_list(
+            mcx,
+            types_nodes::list::IntList::from_slice(mcx, &[0]).unwrap(),
+        )
+        .unwrap(),
     )
     .unwrap();
     agg.chain = NodeList::make1(mcx, chain_agg).unwrap();
@@ -1847,7 +1904,10 @@ fn mk_hashed_gsets_agg(mcx: Mcx<'_>) -> &Agg<'_> {
     )
     .unwrap();
     outer_tl
-        .lappend(mcx, Node::mk_target_entry(mcx, b, 2, Some("b"), false).unwrap())
+        .lappend(
+            mcx,
+            Node::mk_target_entry(mcx, b, 2, Some("b"), false).unwrap(),
+        )
         .unwrap();
     let outer_plan = {
         let mut r = Node::build::<types_nodes::plannodes::Result>(mcx).unwrap();
@@ -1876,7 +1936,10 @@ fn mk_hashed_gsets_agg(mcx: Mcx<'_>) -> &Agg<'_> {
     )
     .unwrap();
     tlist
-        .lappend(mcx, Node::mk_target_entry(mcx, gb, 2, Some("b"), false).unwrap())
+        .lappend(
+            mcx,
+            Node::mk_target_entry(mcx, gb, 2, Some("b"), false).unwrap(),
+        )
         .unwrap();
     tlist
         .lappend(
@@ -1885,7 +1948,10 @@ fn mk_hashed_gsets_agg(mcx: Mcx<'_>) -> &Agg<'_> {
         )
         .unwrap();
     tlist
-        .lappend(mcx, Node::mk_target_entry(mcx, grouping, 4, Some("grouping"), false).unwrap())
+        .lappend(
+            mcx,
+            Node::mk_target_entry(mcx, grouping, 4, Some("grouping"), false).unwrap(),
+        )
         .unwrap();
 
     let one_set = |mcx| {
@@ -1960,7 +2026,10 @@ fn mk_mixed_gsets_agg(mcx: Mcx<'_>) -> &Agg<'_> {
     )
     .unwrap();
     outer_tl
-        .lappend(mcx, Node::mk_target_entry(mcx, b, 2, Some("b"), false).unwrap())
+        .lappend(
+            mcx,
+            Node::mk_target_entry(mcx, b, 2, Some("b"), false).unwrap(),
+        )
         .unwrap();
     let outer_plan = {
         let mut r = Node::build::<types_nodes::plannodes::Result>(mcx).unwrap();
@@ -1989,7 +2058,10 @@ fn mk_mixed_gsets_agg(mcx: Mcx<'_>) -> &Agg<'_> {
     )
     .unwrap();
     tlist
-        .lappend(mcx, Node::mk_target_entry(mcx, gb, 2, Some("b"), false).unwrap())
+        .lappend(
+            mcx,
+            Node::mk_target_entry(mcx, gb, 2, Some("b"), false).unwrap(),
+        )
         .unwrap();
     tlist
         .lappend(
@@ -1998,7 +2070,10 @@ fn mk_mixed_gsets_agg(mcx: Mcx<'_>) -> &Agg<'_> {
         )
         .unwrap();
     tlist
-        .lappend(mcx, Node::mk_target_entry(mcx, grouping, 4, Some("grouping"), false).unwrap())
+        .lappend(
+            mcx,
+            Node::mk_target_entry(mcx, grouping, 4, Some("grouping"), false).unwrap(),
+        )
         .unwrap();
 
     let one_set = |mcx| {
@@ -2073,7 +2148,9 @@ mod hashspill {
     static CWD: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     fn enter_datadir(tag: &str) -> (std::sync::MutexGuard<'static, ()>, String) {
-        let guard = CWD.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let guard = CWD
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let dir = format!(
             "{}/pgrust-hashaggspill-{}-{}",
             std::env::temp_dir().display(),
@@ -2165,7 +2242,8 @@ mod hashspill {
                 estate.exec_init_extra_tuple_slot(Some(outer_desc), TupleSlotKind::Virtual);
             // SAFETY: agg is leaked ('static) and read-only.
             let agg = unsafe { shorten(agg) };
-            let mut state = exec_init_agg(agg, estate, 0, two_col_desc(leaked_mcx()), None).unwrap();
+            let mut state =
+                exec_init_agg(agg, estate, 0, two_col_desc(leaked_mcx()), None).unwrap();
 
             let mut got: Vec<(i32, i64)> = Vec::new();
             {
@@ -2184,7 +2262,10 @@ mod hashspill {
                 .iter()
                 .find_map(|(id, ai)| (*id == agg.plan.plan_node_id).then_some(ai))
                 .unwrap();
-            assert!(ai.hash_batches_used > 1, "expected spill batches, got {ai:?}");
+            assert!(
+                ai.hash_batches_used > 1,
+                "expected spill batches, got {ai:?}"
+            );
             assert!(ai.hash_disk_used > 0, "expected disk usage, got {ai:?}");
             assert!(ai.hash_mem_peak > 0);
 
@@ -2307,7 +2388,8 @@ mod hashspill {
                 estate.exec_init_extra_tuple_slot(Some(outer_desc), TupleSlotKind::Virtual);
             // SAFETY: agg is leaked ('static) and read-only.
             let agg = unsafe { shorten(agg) };
-            let mut state = exec_init_agg(agg, estate, 0, two_col_desc(leaked_mcx()), None).unwrap();
+            let mut state =
+                exec_init_agg(agg, estate, 0, two_col_desc(leaked_mcx()), None).unwrap();
 
             // Two passes: "b#####" first, then the winning "a#####".
             let mut i = 0i32;
@@ -2337,7 +2419,10 @@ mod hashspill {
             while let Some(slot_id) = exec_agg(&mut state, estate, &mut feed).unwrap() {
                 let base = estate.slot_mut(slot_id).base();
                 assert!(!base.tts_isnull[1]);
-                got.push((base.tts_values[0].as_i32(), text_any_str(base.tts_values[1])));
+                got.push((
+                    base.tts_values[0].as_i32(),
+                    text_any_str(base.tts_values[1]),
+                ));
             }
             got.sort_unstable();
             let expect: Vec<(i32, String)> = (0..N).map(|k| (k, format!("a{k:05}"))).collect();
@@ -2348,7 +2433,10 @@ mod hashspill {
                 .iter()
                 .find_map(|(id, ai)| (*id == agg.plan.plan_node_id).then_some(ai))
                 .unwrap();
-            assert!(ai.hash_batches_used > 1, "expected spill batches, got {ai:?}");
+            assert!(
+                ai.hash_batches_used > 1,
+                "expected spill batches, got {ai:?}"
+            );
 
             crate::exec_end_agg(&mut state);
         });
@@ -2381,11 +2469,13 @@ mod hashspill {
             }
         }
         assert!(s.spilled(), "60k i64 keys must cross a 256KB budget");
-        s.spill_finish_writes(DistinctKeyKind::Int64, budget, mcx).unwrap();
+        s.spill_finish_writes(DistinctKeyKind::Int64, budget, mcx)
+            .unwrap();
         let mut got: std::collections::HashSet<i64> = std::collections::HashSet::new();
         for p in 0..s.spill_nparts() {
             assert!(
-                s.spill_load_partition(DistinctKeyKind::Int64, p, budget).unwrap(),
+                s.spill_load_partition(DistinctKeyKind::Int64, p, budget)
+                    .unwrap(),
                 "partition {p} fits the budget"
             );
             assert!(s.mem_bytes() <= budget, "load stayed within budget");
@@ -2419,11 +2509,14 @@ mod hashspill {
             }
         }
         assert!(s.spilled());
-        s.spill_finish_writes(DistinctKeyKind::Int64, budget, mcx).unwrap();
+        s.spill_finish_writes(DistinctKeyKind::Int64, budget, mcx)
+            .unwrap();
         let mut got: std::collections::HashSet<i64> = std::collections::HashSet::new();
         let mut saw_partial = false;
         for p in 0..s.spill_nparts() {
-            let complete = s.spill_load_partition(DistinctKeyKind::Int64, p, budget).unwrap();
+            let complete = s
+                .spill_load_partition(DistinctKeyKind::Int64, p, budget)
+                .unwrap();
             let mut part: std::collections::HashSet<i64> = s.ints().iter().copied().collect();
             if !complete {
                 saw_partial = true;
@@ -2440,7 +2533,10 @@ mod hashspill {
                 assert!(got.insert(k), "value {k} appeared in two partitions");
             }
         }
-        assert!(saw_partial, "the shape must exercise the oversize-partition leg");
+        assert!(
+            saw_partial,
+            "the shape must exercise the oversize-partition leg"
+        );
         assert_eq!(got, expect);
         s.spill_end().unwrap();
         assert_eq!(temp_files(&dir), 0, "spill_end must drop the temp file");
@@ -2464,11 +2560,13 @@ mod hashspill {
             }
         }
         assert!(s.spilled(), "15k strings must cross a 256KB budget");
-        s.spill_finish_writes(DistinctKeyKind::Bytes, budget, mcx).unwrap();
+        s.spill_finish_writes(DistinctKeyKind::Bytes, budget, mcx)
+            .unwrap();
         let mut got: std::collections::HashSet<String> = std::collections::HashSet::new();
         for p in 0..s.spill_nparts() {
             assert!(
-                s.spill_load_partition(DistinctKeyKind::Bytes, p, budget).unwrap(),
+                s.spill_load_partition(DistinctKeyKind::Bytes, p, budget)
+                    .unwrap(),
                 "partition {p} fits the budget"
             );
             for i in 0..s.n_bytes() {
@@ -2498,7 +2596,11 @@ mod hashspill {
         av.sort_unstable();
         bv.sort_unstable();
         assert_eq!(av, bv);
-        assert_eq!(a.ints(), b.ints(), "same input order ⇒ same insertion order");
+        assert_eq!(
+            a.ints(),
+            b.ints(),
+            "same input order ⇒ same insertion order"
+        );
     }
 }
 
@@ -2749,7 +2851,9 @@ fn byref_merge_handed_tables_share_leader_bucket_mapping_under_variable_iv() {
             slot.base_mut().tts_isnull[0] = false;
             exectuples::exec_store_virtual_tuple(&mut slot);
             let hash = table.hash_slot(&mut slot).unwrap();
-            let (ix, _) = table.lookup(&mut slot, hash, Some(table_ctx.mcx()), mcx).unwrap();
+            let (ix, _) = table
+                .lookup(&mut slot, hash, Some(table_ctx.mcx()), mcx)
+                .unwrap();
             ix.unwrap();
         }
         table
@@ -2818,11 +2922,20 @@ fn byref_merge_handed_tables_share_leader_bucket_mapping_under_variable_iv() {
 /// Pins the flipped-default posture + the kill's exact spellings.
 #[test]
 fn grouponly_knob_is_default_on_with_kill() {
-    assert!(crate::grouponly_spelling_on(None), "unset must be ON (t36 flipped default)");
+    assert!(
+        crate::grouponly_spelling_on(None),
+        "unset must be ON (t36 flipped default)"
+    );
     assert!(!crate::grouponly_spelling_on(Some("0")), "kill spelling");
     assert!(!crate::grouponly_spelling_on(Some("off")), "kill spelling");
-    assert!(crate::grouponly_spelling_on(Some("")), "non-kill spellings stay ON");
-    assert!(crate::grouponly_spelling_on(Some("true")), "non-kill spellings stay ON");
+    assert!(
+        crate::grouponly_spelling_on(Some("")),
+        "non-kill spellings stay ON"
+    );
+    assert!(
+        crate::grouponly_spelling_on(Some("true")),
+        "non-kill spellings stay ON"
+    );
     assert!(
         crate::grouponly_spelling_on(Some("OFF")),
         "kill is case-sensitive, like the arm kills"

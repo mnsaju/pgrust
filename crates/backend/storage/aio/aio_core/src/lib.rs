@@ -40,23 +40,29 @@ pub use callback::{
 };
 pub use handle::{
     pgaio_closing_fd, pgaio_enter_batchmode, pgaio_error_cleanup, pgaio_exit_batchmode,
-    pgaio_have_staged, pgaio_io_acquire, pgaio_io_acquire_nb, pgaio_io_get_id,
-    pgaio_io_get_owner, pgaio_io_get_wref, pgaio_io_release, pgaio_io_set_flag,
-    pgaio_submit_staged, pgaio_wref_check_done, pgaio_wref_clear, pgaio_wref_valid,
-    pgaio_wref_wait, AtEOXact_Aio,
+    pgaio_have_staged, pgaio_io_acquire, pgaio_io_acquire_nb, pgaio_io_get_id, pgaio_io_get_owner,
+    pgaio_io_get_wref, pgaio_io_release, pgaio_io_set_flag, pgaio_submit_staged,
+    pgaio_wref_check_done, pgaio_wref_clear, pgaio_wref_valid, pgaio_wref_wait, AtEOXact_Aio,
 };
 pub use init::{pgaio_init_backend, AioShmemInit, AioShmemResetAfterCrash, AioShmemSize};
 pub use io::{pgaio_io_current, pgaio_io_set_iovec_pages, pgaio_io_start_readv_current};
 pub use method_worker::{
-    pgaio_worker_cycle, pgaio_worker_executed_count, pgaio_worker_register,
-    pgaio_workers_enabled,
+    pgaio_worker_cycle, pgaio_worker_executed_count, pgaio_worker_register, pgaio_workers_enabled,
 };
 pub use target::{pgaio_io_get_target_data, pgaio_io_set_target_smgr};
 
 pub const IO_METHOD_OPTIONS: &[config_enum_entry] = &[
     // io_uring stays unlisted until inc-2 (C compile-gates it the same way on
-    config_enum_entry { name: "sync", val: IOMETHOD_SYNC, hidden: false },
-    config_enum_entry { name: "worker", val: IOMETHOD_WORKER, hidden: false },
+    config_enum_entry {
+        name: "sync",
+        val: IOMETHOD_SYNC,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "worker",
+        val: IOMETHOD_WORKER,
+        hidden: false,
+    },
 ];
 
 // Boot default diverges from C (DEFAULT_IO_METHOD = worker) until the worker
@@ -89,7 +95,6 @@ pub fn pgaio_method_kind() -> IoMethodKind {
         m => panic!("pgaio_method_kind: io_method {m} unported (backend-storage-aio-core)"),
     }
 }
-
 
 pub const PGAIO_HS_IDLE: u8 = 0;
 pub const PGAIO_HS_HANDED_OUT: u8 = 1;
@@ -182,7 +187,11 @@ pub(crate) struct Dclist {
 
 impl Dclist {
     pub const fn new() -> Self {
-        Dclist { head: NO_HANDLE, tail: NO_HANDLE, count: 0 }
+        Dclist {
+            head: NO_HANDLE,
+            tail: NO_HANDLE,
+            count: 0,
+        }
     }
 }
 
@@ -241,7 +250,9 @@ thread_local! {
 }
 
 pub(crate) fn my_backend_procno() -> i32 {
-    MY_BACKEND.get().expect("pgaio_my_backend is NULL (pgaio_init_backend not called)")
+    MY_BACKEND
+        .get()
+        .expect("pgaio_my_backend is NULL (pgaio_init_backend not called)")
 }
 
 /// SAFETY: owner-thread-only by the pgaio_init_backend contract; callers must
@@ -251,7 +262,6 @@ pub(crate) unsafe fn my_backend() -> &'static mut BackendData {
     let slot = backend_slot(my_backend_procno());
     &mut *slot.b.get()
 }
-
 
 pub(crate) fn dclist_push_head(list: &mut Dclist, index: u32) {
     // SAFETY: owner-only node access (list membership is owner-driven).

@@ -17,7 +17,9 @@ use crate::core::{
 };
 use crate::files;
 use crate::here;
-use crate::state::{lock_twophase_state, unlock_twophase_state, TwoPhaseState, MY_LOCKED_GXACT, NO_GXACT};
+use crate::state::{
+    lock_twophase_state, unlock_twophase_state, TwoPhaseState, MY_LOCKED_GXACT, NO_GXACT,
+};
 
 fn decode_rels(buf: &[u8], base: usize, n: usize) -> Vec<RelFileLocator> {
     let mut v = Vec::with_capacity(n);
@@ -82,14 +84,19 @@ pub fn FinishPreparedTransaction(gid: &str, is_commit: bool) -> PgResult<()> {
         xlog_read_twophase_data(g.prepare_start_lsn.get())?
     };
 
-    let hdr = corrupt_guard(TwoPhaseFileHeader::from_bytes(&buf), "FinishPreparedTransaction")?;
+    let hdr = corrupt_guard(
+        TwoPhaseFileHeader::from_bytes(&buf),
+        "FinishPreparedTransaction",
+    )?;
     debug_assert_eq!(hdr.xid, xid);
     let layout = BufferLayout::of(&hdr);
     let children: Vec<TransactionId> = {
         let mut v = Vec::with_capacity(hdr.nsubxacts as usize);
         for i in 0..hdr.nsubxacts as usize {
             let o = layout.children + i * 4;
-            v.push(TransactionId::from_ne_bytes(buf[o..o + 4].try_into().unwrap()));
+            v.push(TransactionId::from_ne_bytes(
+                buf[o..o + 4].try_into().unwrap(),
+            ));
         }
         v
     };
@@ -240,7 +247,9 @@ fn record_transaction_commit_prepared(
     }
 
     if commit_ts_seams::transaction_tree_set_commit_ts_data::is_installed() {
-        commit_ts_seams::transaction_tree_set_commit_ts_data::call(xid, children, origin_ts, origin)?;
+        commit_ts_seams::transaction_tree_set_commit_ts_data::call(
+            xid, children, origin_ts, origin,
+        )?;
     }
 
     transam_xlog::XLogFlush(recptr)?;
@@ -329,8 +338,7 @@ pub fn LookupGXact(
                 xlog_read_twophase_data(g.prepare_start_lsn.get())?
             };
             let hdr = corrupt_guard(TwoPhaseFileHeader::from_bytes(&buf), "LookupGXact")?;
-            if hdr.origin_lsn == prepare_end_lsn
-                && hdr.origin_timestamp == origin_prepare_timestamp
+            if hdr.origin_lsn == prepare_end_lsn && hdr.origin_timestamp == origin_prepare_timestamp
             {
                 found = true;
                 break;

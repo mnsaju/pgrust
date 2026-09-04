@@ -1,8 +1,8 @@
 //! gistxlog.c WAL producers (redo lives in gist_xlog).
 
 use ::bufmgr_seams::BufferPin;
-use ::types_core::{BlockNumber, OffsetNumber, TransactionId, XLogRecPtr};
 use ::types_core::xact::FullTransactionId;
+use ::types_core::{BlockNumber, OffsetNumber, TransactionId, XLogRecPtr};
 use ::types_error::PgResult;
 use ::types_gist::{
     GistNSN, GistxlogDelete, GistxlogPageSplit, GistxlogPageUpdate, SizeOfGistxlogPageReuse,
@@ -32,9 +32,8 @@ pub fn gistXLogUpdate(
     .encode();
 
     // SAFETY: OffsetNumber (u16) as raw ne bytes.
-    let todelete_bytes = unsafe {
-        core::slice::from_raw_parts(todelete.as_ptr().cast::<u8>(), todelete.len() * 2)
-    };
+    let todelete_bytes =
+        unsafe { core::slice::from_raw_parts(todelete.as_ptr().cast::<u8>(), todelete.len() * 2) };
     let mut bufdata: Vec<&[u8]> = Vec::with_capacity(1 + itup.len());
     bufdata.push(todelete_bytes);
     for it in itup {
@@ -82,9 +81,8 @@ pub fn gistXLogDelete(
     .encode();
 
     // SAFETY: OffsetNumber (u16) as raw ne bytes.
-    let todelete_bytes = unsafe {
-        core::slice::from_raw_parts(todelete.as_ptr().cast::<u8>(), todelete.len() * 2)
-    };
+    let todelete_bytes =
+        unsafe { core::slice::from_raw_parts(todelete.as_ptr().cast::<u8>(), todelete.len() * 2) };
 
     xloginsert_seams::xlog_insert_record::call(
         RM_GIST_ID,

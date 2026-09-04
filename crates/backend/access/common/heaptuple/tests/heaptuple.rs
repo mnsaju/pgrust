@@ -2,7 +2,7 @@ use core::cell::Cell;
 
 use datum::Datum;
 use heaptuple::*;
-use mcx::{MemoryContext, Mcx, PgVec};
+use mcx::{Mcx, MemoryContext, PgVec};
 use types_tuple::varatt::set_varsize_4b_word;
 use types_tuple::*;
 
@@ -40,12 +40,7 @@ fn make_desc<'m>(mcx: Mcx<'m>, cols: &[CompactAttribute]) -> TupleDescData<'m> {
 
 // Hand-assembled C heap-tuple image: DatumTupleFields as heap_form_tuple sets
 // them, invalid ctid, natts/infomask/hoff, bitmap iff hasnull, MAXALIGN pad, data.
-fn expected_heap_image(
-    natts: u16,
-    infomask: u16,
-    nullbits: Option<&[u8]>,
-    data: &[u8],
-) -> Vec<u8> {
+fn expected_heap_image(natts: u16, infomask: u16, nullbits: Option<&[u8]>, data: &[u8]) -> Vec<u8> {
     let bitmap_len = nullbits.map_or(0, <[u8]>::len);
     let hoff = MAXALIGN(23 + bitmap_len);
     let len = hoff + data.len();
@@ -111,7 +106,12 @@ fn form_fixed_cols_matches_c_image_and_deforms() {
     let mcx = ctx.mcx();
     let desc = make_desc(
         mcx,
-        &[attr(4, true, 4), attr(8, true, 8), attr(2, true, 2), attr(1, true, 1)],
+        &[
+            attr(4, true, 4),
+            attr(8, true, 8),
+            attr(2, true, 2),
+            attr(1, true, 1),
+        ],
     );
     let values = [
         Datum::from_i32(-7),
@@ -160,7 +160,10 @@ fn form_with_nulls_sets_bitmap() {
     data[0..4].copy_from_slice(&5i32.to_ne_bytes());
     data[4..8].copy_from_slice(&9i32.to_ne_bytes());
     // bits: attr0 set, attr1 clear (null), attr2 set -> 0b101
-    assert_eq!(tup.image(), expected_heap_image(3, 0, Some(&[0b101]), &data));
+    assert_eq!(
+        tup.image(),
+        expected_heap_image(3, 0, Some(&[0b101]), &data)
+    );
 
     let mut out = [Datum::null(); 3];
     let mut nulls = [false; 3];
@@ -176,7 +179,12 @@ fn form_varlena_short_conversion_and_verbatim() {
     let mcx = ctx.mcx();
     let desc = make_desc(
         mcx,
-        &[attr(4, true, 4), attr(-1, false, 4), attr(-1, false, 4), attr(8, true, 8)],
+        &[
+            attr(4, true, 4),
+            attr(-1, false, 4),
+            attr(-1, false, 4),
+            attr(8, true, 8),
+        ],
     );
 
     let long4b = varlena_4b(b"hello world"); // packable -> converted short
@@ -199,7 +207,10 @@ fn form_varlena_short_conversion_and_verbatim() {
         data.push(0); // MAXALIGN pad before int8
     }
     data.extend_from_slice(&(-1i64).to_ne_bytes());
-    assert_eq!(tup.image(), expected_heap_image(4, HEAP_HASVARWIDTH, None, &data));
+    assert_eq!(
+        tup.image(),
+        expected_heap_image(4, HEAP_HASVARWIDTH, None, &data)
+    );
     assert_eq!(heap_compute_data_size(&desc, &values, &isnull), data.len());
 
     let mut out = [Datum::null(); 4];
@@ -230,7 +241,10 @@ fn form_varlena_4b_kept_when_not_packable() {
     let mut data = Vec::new();
     data.extend_from_slice(&1i32.to_ne_bytes());
     data.extend_from_slice(&v); // aligned at 4, full 4B header
-    assert_eq!(tup.image(), expected_heap_image(2, HEAP_HASVARWIDTH, None, &data));
+    assert_eq!(
+        tup.image(),
+        expected_heap_image(2, HEAP_HASVARWIDTH, None, &data)
+    );
 }
 
 #[test]
@@ -282,7 +296,10 @@ fn form_cstring_and_fixed_byref() {
         data.push(0);
     }
     data.extend_from_slice(&fixed);
-    assert_eq!(tup.image(), expected_heap_image(2, HEAP_HASVARWIDTH, None, &data));
+    assert_eq!(
+        tup.image(),
+        expected_heap_image(2, HEAP_HASVARWIDTH, None, &data)
+    );
 }
 
 #[test]
@@ -431,17 +448,31 @@ fn modify_tuple_replaces_and_keeps_identity() {
 fn desc_with_missing<'m>(mcx: Mcx<'m>, missing_val: &'m [u8]) -> TupleDescData<'m> {
     let mut desc = make_desc(
         mcx,
-        &[attr(4, true, 4), attr(8, true, 8), attr(8, true, 8), attr(4, true, 4)],
+        &[
+            attr(4, true, 4),
+            attr(8, true, 8),
+            attr(8, true, 8),
+            attr(4, true, 4),
+        ],
     );
     desc.compact_attrs[2].atthasmissing = true;
     let mut missing: PgVec<AttrMissing> = PgVec::new_in(mcx);
-    missing.push(AttrMissing { am_present: false, am_value: Datum::null() });
-    missing.push(AttrMissing { am_present: false, am_value: Datum::null() });
+    missing.push(AttrMissing {
+        am_present: false,
+        am_value: Datum::null(),
+    });
+    missing.push(AttrMissing {
+        am_present: false,
+        am_value: Datum::null(),
+    });
     missing.push(AttrMissing {
         am_present: true,
         am_value: Datum::from_i64(i64::from_ne_bytes(missing_val.try_into().unwrap())),
     });
-    missing.push(AttrMissing { am_present: false, am_value: Datum::null() });
+    missing.push(AttrMissing {
+        am_present: false,
+        am_value: Datum::null(),
+    });
     let constr = TupleConstr {
         defval: PgVec::new_in(mcx),
         check: PgVec::new_in(mcx),
@@ -567,7 +598,12 @@ fn planned_form_matches_generic() {
     let shapes: &[&[CompactAttribute]] = &[
         &[attr(4, true, 4)],
         &[attr(4, true, 4), attr(8, true, 8)],
-        &[attr(8, true, 8), attr(1, true, 1), attr(2, true, 2), attr(4, true, 4)],
+        &[
+            attr(8, true, 8),
+            attr(1, true, 1),
+            attr(2, true, 2),
+            attr(4, true, 4),
+        ],
         &[
             attr(1, true, 1),
             attr(8, true, 8),

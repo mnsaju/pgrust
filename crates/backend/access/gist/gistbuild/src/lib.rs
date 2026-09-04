@@ -9,7 +9,9 @@ use ::datum::Datum;
 use ::mcx::{Mcx, MemoryContext};
 use ::types_core::{BlockNumber, ForkNumber, BLCKSZ, RELPERSISTENCE_UNLOGGED};
 use ::types_error::PgResult;
-use ::types_gist::{GistBuildLSN, F_LEAF, GIST_DEFAULT_FILLFACTOR, GIST_ROOT_BLKNO, GIST_SORTSUPPORT_PROC};
+use ::types_gist::{
+    GistBuildLSN, F_LEAF, GIST_DEFAULT_FILLFACTOR, GIST_ROOT_BLKNO, GIST_SORTSUPPORT_PROC,
+};
 use ::types_rel::Relation;
 use ::types_storage::bufpage::{PageMut, PageRef};
 use ::types_tuple::itemptr::ItemPointerData;
@@ -17,7 +19,7 @@ use execindexing::IndexInfo;
 
 use gist::state::{index_getprocid, initGISTstate, GistState};
 use gist::util::{
-    gist_init_buffer, gistCompressValues, gistFormTuple, gistNewBuffer, gistextractpage,
+    gistCompressValues, gistFormTuple, gistNewBuffer, gist_init_buffer, gistextractpage,
     gistfillbuffer, gistfillitupvec, gistinitpage, gistunion,
 };
 
@@ -237,7 +239,10 @@ impl GistLevelState {
             pages: [None, None, None, None],
         };
         st.pages[0] = Some(new_build_page());
-        gistinitpage(&mut page_mut_of(st.pages[0].as_mut().expect("just set")), flags);
+        gistinitpage(
+            &mut page_mut_of(st.pages[0].as_mut().expect("just set")),
+            flags,
+        );
         st
     }
 }
@@ -253,9 +258,7 @@ fn page_mut_of(p: &mut bulkwrite::AlignedPage) -> PageMut<'_> {
 
 fn page_ref_of(p: &bulkwrite::AlignedPage) -> PageRef<'_> {
     // SAFETY: owned, aligned build page (shared read view).
-    unsafe {
-        PageRef::from_raw(core::ptr::NonNull::new_unchecked(p.0.as_ptr().cast_mut()))
-    }
+    unsafe { PageRef::from_raw(core::ptr::NonNull::new_unchecked(p.0.as_ptr().cast_mut())) }
 }
 
 struct SortedWriteState<'a, 'mcx> {
@@ -295,8 +298,7 @@ fn gist_sorted_build<'mcx>(
             // gistSortedBuildCallback
             |index_rel, tid, values, isnull, _tuple_is_alive| {
                 let tmcx = temp.mcx();
-                let mut compressed =
-                    [Datum::null(); ::types_core::fmgr::INDEX_MAX_KEYS as usize];
+                let mut compressed = [Datum::null(); ::types_core::fmgr::INDEX_MAX_KEYS as usize];
                 gistCompressValues(
                     tmcx,
                     giststate,
@@ -335,7 +337,10 @@ fn gist_sorted_build<'mcx>(
     // Flush partially full non-root pages; flush may stack a new root level.
     while levelstate.parent.is_some() || levelstate.current_page != 0 {
         levelstate_flush(&mut wstate, &mut levelstate)?;
-        levelstate = levelstate.parent.take().expect("flush created the parent level");
+        levelstate = levelstate
+            .parent
+            .take()
+            .expect("flush created the parent level");
     }
 
     {
@@ -380,7 +385,10 @@ fn levelstate_add(
         if slot.is_none() {
             *slot = Some(new_build_page());
         }
-        gistinitpage(&mut page_mut_of(slot.as_mut().expect("just set")), old_flags);
+        gistinitpage(
+            &mut page_mut_of(slot.as_mut().expect("just set")),
+            old_flags,
+        );
     }
     let page = levelstate.pages[levelstate.current_page]
         .as_mut()
@@ -492,7 +500,11 @@ fn levelstate_flush(
 
 fn page_mut_of_bulk(buf: &mut bulkwrite::BulkWriteBuffer) -> PageMut<'_> {
     // SAFETY: exclusively owned, aligned build page.
-    unsafe { PageMut::from_raw(core::ptr::NonNull::new_unchecked(buf.page_mut().as_mut_ptr())) }
+    unsafe {
+        PageMut::from_raw(core::ptr::NonNull::new_unchecked(
+            buf.page_mut().as_mut_ptr(),
+        ))
+    }
 }
 
 /// gistbuildempty (gist.c): unlogged indexes' INIT_FORKNUM root page.

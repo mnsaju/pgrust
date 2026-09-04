@@ -40,7 +40,9 @@ pub fn query_planner<'mcx>(
                 let target_id = run.rel_reltarget_id(final_rel);
                 let mut quals: PgVec<'mcx, types_pathnodes::NodeId> = PgVec::new_in(run.mcx);
                 if let Some(q) = jointree.quals {
-                    let list = q.as_list().expect("preprocessed quals are an implicit-AND list");
+                    let list = q
+                        .as_list()
+                        .expect("preprocessed quals are an implicit-AND list");
                     for clause in list {
                         quals.push(run.intern_expr(clause));
                     }

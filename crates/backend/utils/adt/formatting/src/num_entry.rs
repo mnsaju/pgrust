@@ -51,9 +51,15 @@ fn num_cache(len: usize, fmt: &[u8]) -> PgResult<(Fmt, NUMDesc)> {
     if len > NUM_CACHE_SIZE {
         let mut num = NUMDesc::default();
         num.zeroize();
-        let format: Fmt =
-            crate::parse::parse_format(fmt, NUM_KEYWORDS, &[], &NUM_INDEX, NUM_FLAG, Some(&mut num))?
-                .into();
+        let format: Fmt = crate::parse::parse_format(
+            fmt,
+            NUM_KEYWORDS,
+            &[],
+            &NUM_INDEX,
+            NUM_FLAG,
+            Some(&mut num),
+        )?
+        .into();
         Ok((format, num))
     } else {
         crate::cache::num_cache_fetch(fmt)
@@ -600,16 +606,27 @@ mod tests {
     fn int4_basic() {
         let c = ctx();
         // Positive values reserve a leading sign space (no FM/MI/PL/SG/S).
-        assert_eq!(as_text(&int4_to_char(c.mcx(), 1234, b"0000").unwrap()), " 1234");
-        assert_eq!(as_text(&int4_to_char(c.mcx(), 485, b"999").unwrap()), " 485");
+        assert_eq!(
+            as_text(&int4_to_char(c.mcx(), 1234, b"0000").unwrap()),
+            " 1234"
+        );
+        assert_eq!(
+            as_text(&int4_to_char(c.mcx(), 485, b"999").unwrap()),
+            " 485"
+        );
         // RN is right-justified in a 15-wide field, no sign space.
-        assert_eq!(as_text(&int4_to_char(c.mcx(), 485, b"RN").unwrap()), "        CDLXXXV");
+        assert_eq!(
+            as_text(&int4_to_char(c.mcx(), 485, b"RN").unwrap()),
+            "        CDLXXXV"
+        );
     }
 
     #[test]
     fn numeric_grouping_and_sign() {
         let c = ctx();
-        let v = ::numeric::numeric_in("-1234.56", -1, None).unwrap().unwrap();
+        let v = ::numeric::numeric_in("-1234.56", -1, None)
+            .unwrap()
+            .unwrap();
         assert_eq!(
             as_text(&numeric_to_char(c.mcx(), v.num(), b"9G999D99").unwrap()),
             "-1,234.56"
@@ -620,7 +637,10 @@ mod tests {
     fn numeric_fm() {
         let c = ctx();
         let v = ::numeric::numeric_in("0.1", -1, None).unwrap().unwrap();
-        assert_eq!(as_text(&numeric_to_char(c.mcx(), v.num(), b"FM9.99").unwrap()), ".1");
+        assert_eq!(
+            as_text(&numeric_to_char(c.mcx(), v.num(), b"FM9.99").unwrap()),
+            ".1"
+        );
     }
 
     #[test]

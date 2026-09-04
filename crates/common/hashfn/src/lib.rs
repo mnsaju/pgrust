@@ -100,9 +100,7 @@ fn hash_core(mut a: u32, mut b: u32, mut c: u32, mut k: &[u8]) -> (u32, u32) {
         0 => {}
         1 => a = a.wrapping_add(u32::from(k[0])),
         2 => a = a.wrapping_add(u32::from(k[0]) | u32::from(k[1]) << 8),
-        3 => {
-            a = a.wrapping_add(u32::from(k[0]) | u32::from(k[1]) << 8 | u32::from(k[2]) << 16)
-        }
+        3 => a = a.wrapping_add(u32::from(k[0]) | u32::from(k[1]) << 8 | u32::from(k[2]) << 16),
         4 => a = a.wrapping_add(word(k, 0)),
         5 => {
             a = a.wrapping_add(word(k, 0));

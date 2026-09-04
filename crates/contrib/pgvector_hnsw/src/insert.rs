@@ -1,8 +1,6 @@
 use crate::layout::*;
 use crate::utils::*;
-use bufmgr::{
-    LockBuffer, MarkBufferDirty, UnlockReleaseBuffer, BUFFER_LOCK_EXCLUSIVE,
-};
+use bufmgr::{LockBuffer, MarkBufferDirty, UnlockReleaseBuffer, BUFFER_LOCK_EXCLUSIVE};
 use datum::Datum;
 use generic_xlog::{GenericXLogAbort, GenericXLogFinish, GenericXLogStart, GenericXLogState};
 use mcx::{Mcx, PgBox, PgFxHashMap, PgVec};
@@ -86,7 +84,9 @@ fn hnsw_free_offset(
     let pr = unsafe { page_ref(page) };
     let maxoffno = pr.max_offset_number();
     for offno in 1..=maxoffno {
-        let etup = ElementTupleView { bytes: item_bytes_at(page, offno) };
+        let etup = ElementTupleView {
+            bytes: item_bytes_at(page, offno),
+        };
         if etup.tuple_type() != HNSW_ELEMENT_TUPLE_TYPE {
             continue;
         }
@@ -373,11 +373,7 @@ fn add_element_on_disk(
 #[track_caller]
 #[cold]
 fn add_item_failed(index: &Relation<'_>) -> Box<PgError> {
-    PgError::error(format!(
-        "failed to add index item to \"{}\"",
-        index.name()
-    ))
-    .into()
+    PgError::error(format!("failed to add index item to \"{}\"", index.name())).into()
 }
 
 // HnswLoadNeighbors (layer lc of an existing element).
@@ -400,7 +396,11 @@ fn load_neighbors(
         }
         let (blkno, offno) = itemptr_decode(tid);
         let id = pool.from_block(blkno, offno);
-        out.push(Candidate { element: id, distance: 0.0, closer: false });
+        out.push(Candidate {
+            element: id,
+            distance: 0.0,
+            closer: false,
+        });
     }
     Ok(out)
 }
@@ -429,7 +429,16 @@ fn get_update_index(
         let q = Some(pool.value_datum(element));
         for (i, hc) in neighbors.iter_mut().enumerate() {
             let mut d = 0.0f64;
-            load_element(pool, hc.element, Some(&mut d), q, index, support, true, None)?;
+            load_element(
+                pool,
+                hc.element,
+                Some(&mut d),
+                q,
+                index,
+                support,
+                true,
+                None,
+            )?;
             hc.distance = d as f32;
             // Prune element if being deleted: idx = its slot (C LoadElementsForInsert).
             if pool.get(hc.element).heaptids_len == 0 {
@@ -526,8 +535,7 @@ fn update_neighbor_on_disk(
     if idx >= 0 && idx < count {
         let ne = pool.get(new_element);
         let tid_off = NEIGHBOR_TIDS_OFFSET + (idx as usize) * 6;
-        ntup_bytes[tid_off..tid_off + 6]
-            .copy_from_slice(&itemptr_encode(ne.blkno, ne.offno));
+        ntup_bytes[tid_off..tid_off + 6].copy_from_slice(&itemptr_encode(ne.blkno, ne.offno));
         if building {
             MarkBufferDirty(buf)?;
         } else {
@@ -555,24 +563,39 @@ pub fn update_neighbors_on_disk(
     for lc in (0..=level).rev() {
         let lm = hnsw_get_layer_m(m, lc);
         let layer_idx = (level - lc) as usize;
-        let items: Vec<Candidate> = pool
-            .get(e_id)
-            .neighbors
-            .as_ref()
-            .expect("neighbors")[layer_idx]
+        let items: Vec<Candidate> = pool.get(e_id).neighbors.as_ref().expect("neighbors")
+            [layer_idx]
             .items
             .iter()
             .copied()
             .collect();
         for hc in items {
             let idx = get_update_index(
-                pool, hc.element, e_id, hc.distance, m, lm, lc, index, support,
+                pool,
+                hc.element,
+                e_id,
+                hc.distance,
+                m,
+                lm,
+                lc,
+                index,
+                support,
             )?;
             if idx == -1 {
                 continue;
             }
             update_neighbor_on_disk(
-                pool, hc.element, e_id, idx, m, lm, lc, index, check_existing, building, op_mcx,
+                pool,
+                hc.element,
+                e_id,
+                idx,
+                m,
+                lm,
+                lc,
+                index,
+                check_existing,
+                building,
+                op_mcx,
             )?;
         }
     }
@@ -636,11 +659,8 @@ fn find_duplicate_on_disk(
 ) -> PgResult<bool> {
     let level = pool.get(element).level as i32;
     let layer0_idx = level as usize;
-    let items: Vec<Candidate> = pool
-        .get(element)
-        .neighbors
-        .as_ref()
-        .expect("neighbors")[layer0_idx]
+    let items: Vec<Candidate> = pool.get(element).neighbors.as_ref().expect("neighbors")
+        [layer0_idx]
         .items
         .iter()
         .copied()

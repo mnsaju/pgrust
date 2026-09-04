@@ -151,10 +151,9 @@ fn tid_qual_from_restrict_info_list<'mcx>(
                     let (sub, sub_is_current_of) =
                         tid_qual_from_restrict_info_list(run, &andrids, rel)?;
                     if sub_is_current_of {
-                        return Err(PgError::error(
-                            "IS CURRENT OF within OR clause".to_string(),
-                        )
-                        .into());
+                        return Err(
+                            PgError::error("IS CURRENT OF within OR clause".to_string()).into()
+                        );
                     }
                     sublist = sub;
                 } else {
@@ -177,10 +176,7 @@ fn tid_qual_from_restrict_info_list<'mcx>(
                 rlst.extend(sublist.iter().copied());
             }
 
-            if !broke
-                && !rlst.is_empty()
-                && orlist.as_ref().is_none_or(|o| rlst.len() < o.len())
-            {
+            if !broke && !rlst.is_empty() && orlist.as_ref().is_none_or(|o| rlst.len() < o.len()) {
                 orlist = Some(rlst);
             }
         } else if restrict_info_is_tid_qual(run, rid, rel)? {
@@ -300,10 +296,8 @@ pub fn create_tidscan_paths<'mcx>(run: &mut PlannerRun<'mcx>, rel: RelId) -> PgR
         }
     }
     if !maybe_tid && run.root.rel(rel).has_eclass_joins {
-        let eclass_indexes = types_pathnodes::relids::relids_copy(
-            mcx,
-            &run.root.rel(rel).eclass_indexes,
-        );
+        let eclass_indexes =
+            types_pathnodes::relids::relids_copy(mcx, &run.root.rel(rel).eclass_indexes);
         'ecs: for i in types_pathnodes::relids::relids_members(&eclass_indexes) {
             let ec = types_pathnodes::EcId(i as u32);
             for m in 0..run.root.ec(ec).ec_members.len() {
@@ -322,8 +316,7 @@ pub fn create_tidscan_paths<'mcx>(run: &mut PlannerRun<'mcx>, rel: RelId) -> PgR
     let mut baserestrictinfo: PgVec<'mcx, RinfoId> = PgVec::new_in(mcx);
     baserestrictinfo.extend(run.root.rel(rel).baserestrictinfo.iter().copied());
 
-    let (tidquals, is_current_of) =
-        tid_qual_from_restrict_info_list(run, &baserestrictinfo, rel)?;
+    let (tidquals, is_current_of) = tid_qual_from_restrict_info_list(run, &baserestrictinfo, rel)?;
 
     if !tidquals.is_empty() && (crate::costsize::gucs::enable_tidscan() || is_current_of) {
         // No join clauses, but LATERAL refs in the tlist can still require
@@ -365,8 +358,7 @@ pub fn create_tidscan_paths<'mcx>(run: &mut PlannerRun<'mcx>, rel: RelId) -> PgR
     }
 
     // "Loose" join quals, e.g. ctid equalities that are outer join quals.
-    let joininfo =
-        types_pathnodes::relids::pgvec_clone_shallow(mcx, &run.root.rel(rel).joininfo);
+    let joininfo = types_pathnodes::relids::pgvec_clone_shallow(mcx, &run.root.rel(rel).joininfo);
     build_parameterized_tid_paths(run, rel, &joininfo)?;
 
     Ok(false)

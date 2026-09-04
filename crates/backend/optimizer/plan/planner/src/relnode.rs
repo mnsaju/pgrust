@@ -14,11 +14,14 @@ pub fn setup_simple_rel_arrays<'mcx>(root: &mut PlannerInfo<'mcx>, nrtable: usiz
     root.simple_rte_array.clear();
     root.simple_rel_array.reserve(size);
     root.simple_rte_array.reserve(size);
-    root.simple_rel_array.extend(core::iter::repeat(None).take(size));
+    root.simple_rel_array
+        .extend(core::iter::repeat(None).take(size));
     root.simple_rte_array.push(RangeTblEntryId::Invalid);
     for i in 0..nrtable {
-        root.simple_rte_array
-            .push(RangeTblEntryId::Parse { query: root.parse, index: i as u32 });
+        root.simple_rte_array.push(RangeTblEntryId::Parse {
+            query: root.parse,
+            index: i as u32,
+        });
     }
     // setup_append_rel_array (relnode.c): pre-planning appendrels (UNION ALL
     // pull-up) index by child relid; inheritance expansion appends its own.
@@ -29,7 +32,10 @@ pub fn setup_simple_rel_arrays<'mcx>(root: &mut PlannerInfo<'mcx>, nrtable: usiz
         }
         for i in 0..root.append_rel_list.len() {
             let child = root.append_rel_list[i].child_relid as usize;
-            assert!(root.append_rel_array[child].is_none(), "child relation already exists");
+            assert!(
+                root.append_rel_array[child].is_none(),
+                "child relation already exists"
+            );
             let a = root.append_rel_list[i].clone();
             root.append_rel_array[child] = Some(a);
         }
@@ -95,10 +101,17 @@ pub fn build_simple_rel<'mcx>(
     rtekind: RTEKind,
 ) -> types_error::PgResult<RelId> {
     let eref_max_attr = match rtekind {
-        RTEKind::RTE_FUNCTION | RTEKind::RTE_TABLEFUNC | RTEKind::RTE_VALUES
-        | RTEKind::RTE_CTE | RTEKind::RTE_NAMEDTUPLESTORE | RTEKind::RTE_SUBQUERY => {
-            run.rte(relid as usize).eref.expect("RTE has eref").colnames.len() as i16
-        }
+        RTEKind::RTE_FUNCTION
+        | RTEKind::RTE_TABLEFUNC
+        | RTEKind::RTE_VALUES
+        | RTEKind::RTE_CTE
+        | RTEKind::RTE_NAMEDTUPLESTORE
+        | RTEKind::RTE_SUBQUERY => run
+            .rte(relid as usize)
+            .eref
+            .expect("RTE has eref")
+            .colnames
+            .len() as i16,
         _ => 0,
     };
     // Hoisted over the `root` borrow (rte_check_as_user reads run.queries);
@@ -110,7 +123,10 @@ pub fn build_simple_rel<'mcx>(
     };
     let root = &mut run.root;
     assert!(relid > 0 && (relid as i32) < root.simple_rel_array_size);
-    assert!(root.simple_rel_array[relid as usize].is_none(), "rel {relid} already exists");
+    assert!(
+        root.simple_rel_array[relid as usize].is_none(),
+        "rel {relid} already exists"
+    );
 
     let mcx = root.mcx;
     let mut rel = RelOptInfo::new(mcx);
@@ -133,8 +149,12 @@ pub fn build_simple_rel<'mcx>(
             rel.min_attr = 0;
             rel.max_attr = -1;
         }
-        RTEKind::RTE_FUNCTION | RTEKind::RTE_TABLEFUNC | RTEKind::RTE_VALUES
-        | RTEKind::RTE_CTE | RTEKind::RTE_NAMEDTUPLESTORE | RTEKind::RTE_SUBQUERY => {
+        RTEKind::RTE_FUNCTION
+        | RTEKind::RTE_TABLEFUNC
+        | RTEKind::RTE_VALUES
+        | RTEKind::RTE_CTE
+        | RTEKind::RTE_NAMEDTUPLESTORE
+        | RTEKind::RTE_SUBQUERY => {
             rel.min_attr = 0;
             rel.max_attr = eref_max_attr;
             let span = (rel.max_attr - rel.min_attr + 1) as usize;
@@ -168,10 +188,12 @@ pub fn build_simple_rel_child<'mcx>(
     let rte = run.rte(relid as usize);
     let rtekind = rte.rtekind;
     let eref_max_attr = match rtekind {
-        RTEKind::RTE_FUNCTION | RTEKind::RTE_TABLEFUNC | RTEKind::RTE_VALUES
-        | RTEKind::RTE_CTE | RTEKind::RTE_NAMEDTUPLESTORE | RTEKind::RTE_SUBQUERY => {
-            rte.eref.expect("RTE has eref").colnames.len() as i16
-        }
+        RTEKind::RTE_FUNCTION
+        | RTEKind::RTE_TABLEFUNC
+        | RTEKind::RTE_VALUES
+        | RTEKind::RTE_CTE
+        | RTEKind::RTE_NAMEDTUPLESTORE
+        | RTEKind::RTE_SUBQUERY => rte.eref.expect("RTE has eref").colnames.len() as i16,
         _ => 0,
     };
     // C: a relation child under a subquery parent (UNION ALL pull-up) has its
@@ -187,7 +209,10 @@ pub fn build_simple_rel_child<'mcx>(
     };
     let root = &mut run.root;
     assert!(relid > 0 && (relid as i32) < root.simple_rel_array_size);
-    assert!(root.simple_rel_array[relid as usize].is_none(), "rel {relid} already exists");
+    assert!(
+        root.simple_rel_array[relid as usize].is_none(),
+        "rel {relid} already exists"
+    );
 
     let mcx = root.mcx;
     let mut rel = RelOptInfo::new(mcx);
@@ -209,8 +234,12 @@ pub fn build_simple_rel_child<'mcx>(
         }
         // RTE_NAMEDTUPLESTORE sits in the same case group as RTE_CTE
         // (relnode.c:151-165); setop pullup can make one a child rel.
-        RTEKind::RTE_FUNCTION | RTEKind::RTE_TABLEFUNC | RTEKind::RTE_VALUES
-        | RTEKind::RTE_CTE | RTEKind::RTE_NAMEDTUPLESTORE | RTEKind::RTE_SUBQUERY => {
+        RTEKind::RTE_FUNCTION
+        | RTEKind::RTE_TABLEFUNC
+        | RTEKind::RTE_VALUES
+        | RTEKind::RTE_CTE
+        | RTEKind::RTE_NAMEDTUPLESTORE
+        | RTEKind::RTE_SUBQUERY => {
             rel.min_attr = 0;
             rel.max_attr = eref_max_attr;
             let span = (rel.max_attr - rel.min_attr + 1) as usize;
@@ -254,7 +283,10 @@ pub fn build_simple_rel_child<'mcx>(
 const PARTITION_MAX_KEYS: usize = 32;
 const PARTITION_STRATEGY_HASH: i8 = b'h' as i8;
 
-fn part_schemes_match(a: &types_pathnodes::PartitionScheme<'_>, b: &types_pathnodes::PartitionScheme<'_>) -> bool {
+fn part_schemes_match(
+    a: &types_pathnodes::PartitionScheme<'_>,
+    b: &types_pathnodes::PartitionScheme<'_>,
+) -> bool {
     match (a, b) {
         (Some(x), Some(y)) => **x == **y,
         _ => false,
@@ -283,10 +315,19 @@ pub fn build_joinrel_partition_info<'mcx>(
         debug_assert!(!rel_is_partitioned(&run.root, joinrel));
         return Ok(());
     }
-    if !part_schemes_match(&run.root.rel(outer_rel).part_scheme, &run.root.rel(inner_rel).part_scheme)
-        || !run.root.rel(outer_rel).consider_partitionwise_join
+    if !part_schemes_match(
+        &run.root.rel(outer_rel).part_scheme,
+        &run.root.rel(inner_rel).part_scheme,
+    ) || !run.root.rel(outer_rel).consider_partitionwise_join
         || !run.root.rel(inner_rel).consider_partitionwise_join
-        || !have_partkey_equi_join(run, joinrel, outer_rel, inner_rel, sjinfo.jointype, restrictlist)?
+        || !have_partkey_equi_join(
+            run,
+            joinrel,
+            outer_rel,
+            inner_rel,
+            sjinfo.jointype,
+            restrictlist,
+        )?
     {
         debug_assert!(!rel_is_partitioned(&run.root, joinrel));
         return Ok(());
@@ -393,7 +434,13 @@ fn have_partkey_equi_join<'mcx>(
             if hashop == 0 || !lsyscache::op_in_opfamily(hashop, partopfamily)? {
                 continue;
             }
-        } else if !run.root.rinfo(rid).mergeopfamilies.iter().any(|&f| f == partopfamily) {
+        } else if !run
+            .root
+            .rinfo(rid)
+            .mergeopfamilies
+            .iter()
+            .any(|&f| f == partopfamily)
+        {
             continue;
         }
         pk_known_equal[ipk1] = true;
@@ -432,12 +479,23 @@ fn have_partkey_equi_join<'mcx>(
                 None => break,
             }
         } else {
-            run.root.rel(rel1).part_scheme.as_ref().unwrap().partopfamily[ipk]
+            run.root
+                .rel(rel1)
+                .part_scheme
+                .as_ref()
+                .unwrap()
+                .partopfamily[ipk]
         };
 
         // Only non-nullable partition keys: nullable ones are not in the
         // same equivalence classes as non-nullable ones.
-        let partcoll1 = run.root.rel(rel1).part_scheme.as_ref().unwrap().partcollation[ipk];
+        let partcoll1 = run
+            .root
+            .rel(rel1)
+            .part_scheme
+            .as_ref()
+            .unwrap()
+            .partcollation[ipk];
         'exprs: for i1 in 0..run.root.rel(rel1).partexprs[ipk].len() {
             let e1_id = run.root.rel(rel1).partexprs[ipk][i1];
             let expr1 = *run.root.expr_node(e1_id);
@@ -488,7 +546,10 @@ pub(crate) fn strip_nulling_relids<'mcx>(
                         nulling.del_member(m);
                     }
                 }
-                let newvar = types_nodes::primnodes::Var { varnullingrels: nulling, ..*v };
+                let newvar = types_nodes::primnodes::Var {
+                    varnullingrels: nulling,
+                    ..*v
+                };
                 Ok(Some(types_nodes::Node::mk(mcx, newvar)?))
             }
             NodeTag::T_PlaceHolderVar => {
@@ -498,8 +559,7 @@ pub(crate) fn strip_nulling_relids<'mcx>(
                         mutate(mcx, n, removable)
                     });
                 }
-                let new_expr =
-                    mutate(mcx, phv.phexpr, removable)?.unwrap_or(phv.phexpr);
+                let new_expr = mutate(mcx, phv.phexpr, removable)?.unwrap_or(phv.phexpr);
                 let mut phnullingrels = phv.phnullingrels.clone_in(mcx)?;
                 let mut phrels = phv.phrels.clone_in(mcx)?;
                 for m in relids_members(removable) {
@@ -565,8 +625,13 @@ fn set_joinrel_partition_key_exprs<'mcx>(
 ) -> types_error::PgResult<()> {
     use types_pathnodes::{JOIN_ANTI, JOIN_FULL, JOIN_INNER, JOIN_LEFT, JOIN_SEMI};
     let mcx = run.mcx;
-    let partnatts =
-        run.root.rel(joinrel).part_scheme.as_ref().unwrap().partnatts as usize;
+    let partnatts = run
+        .root
+        .rel(joinrel)
+        .part_scheme
+        .as_ref()
+        .unwrap()
+        .partnatts as usize;
     let mut partexprs: PgVec<'mcx, PgVec<'mcx, types_pathnodes::NodeId>> = PgVec::new_in(mcx);
     let mut nullable_partexprs: PgVec<'mcx, PgVec<'mcx, types_pathnodes::NodeId>> =
         PgVec::new_in(mcx);
@@ -661,22 +726,27 @@ pub fn build_child_join_rel<'mcx>(
     joinrel.nparts = -1;
     joinrel.baserestrict_min_security = u32::MAX;
     joinrel.parent = Some(parent_joinrel);
-    let top = run.root.rel(parent_joinrel).top_parent.unwrap_or(parent_joinrel);
+    let top = run
+        .root
+        .rel(parent_joinrel)
+        .top_parent
+        .unwrap_or(parent_joinrel);
     joinrel.top_parent = Some(top);
     joinrel.top_parent_relids = relids_copy(mcx, &run.root.rel(top).relids);
     joinrel.direct_lateral_relids =
         relids_copy(mcx, &run.root.rel(parent_joinrel).direct_lateral_relids);
     joinrel.lateral_relids = relids_copy(mcx, &run.root.rel(parent_joinrel).lateral_relids);
     joinrel.has_eclass_joins = run.root.rel(parent_joinrel).has_eclass_joins;
-    joinrel.pathtarget_id =
-        Some(run.root.alloc_pathtarget(types_pathnodes::PathTarget::new(mcx)));
+    joinrel.pathtarget_id = Some(
+        run.root
+            .alloc_pathtarget(types_pathnodes::PathTarget::new(mcx)),
+    );
     let joinrel = run.root.alloc_rel(joinrel);
 
     build_child_join_reltarget(run, parent_joinrel, joinrel, appinfos)?;
 
     {
-        let parent_joininfo =
-            pgvec_clone_shallow(mcx, &run.root.rel(parent_joinrel).joininfo);
+        let parent_joininfo = pgvec_clone_shallow(mcx, &run.root.rel(parent_joinrel).joininfo);
         let mut joininfo: PgVec<'mcx, types_pathnodes::RinfoId> = PgVec::new_in(mcx);
         for &rid in parent_joininfo.iter() {
             joininfo.push(crate::inherit::adjust_child_rinfo(run, rid, appinfos)?);
@@ -686,15 +756,20 @@ pub fn build_child_join_rel<'mcx>(
 
     build_joinrel_partition_info(run, joinrel, outer_rel, inner_rel, sjinfo, restrictlist)?;
 
-    run.root.rel_mut(joinrel).consider_parallel =
-        run.root.rel(parent_joinrel).consider_parallel;
+    run.root.rel_mut(joinrel).consider_parallel = run.root.rel(parent_joinrel).consider_parallel;
 
     crate::costsize::set_joinrel_size_estimates(
-        run, joinrel, outer_rel, inner_rel, sjinfo, restrictlist,
+        run,
+        joinrel,
+        outer_rel,
+        inner_rel,
+        sjinfo,
+        restrictlist,
     )?;
 
-    debug_assert!(crate::joinrels::find_join_rel(&run.root, &run.root.rel(joinrel).relids)
-        .is_none());
+    debug_assert!(
+        crate::joinrels::find_join_rel(&run.root, &run.root.rel(joinrel).relids).is_none()
+    );
     crate::joinrels::add_join_rel(&mut run.root, joinrel);
 
     if run.root.rel(joinrel).has_eclass_joins

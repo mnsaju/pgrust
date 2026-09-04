@@ -47,8 +47,7 @@ fn setup() {
                     out.filenames.sort();
                 }
                 Err(_) => {
-                    out.err_msg =
-                        Some(format!("could not open directory \"{}\"", dir.display()));
+                    out.err_msg = Some(format!("could not open directory \"{}\"", dir.display()));
                 }
             }
             Ok(out)
@@ -144,7 +143,10 @@ fn deescape_quoted_string() {
     assert_eq!(DeescapeQuotedString("'abc'"), "abc");
     assert_eq!(DeescapeQuotedString("'a''b'"), "a'b");
     assert_eq!(DeescapeQuotedString("'a\\'b'"), "a'b");
-    assert_eq!(DeescapeQuotedString("'a\\n\\t\\b\\f\\r'"), "a\n\t\u{8}\u{c}\r");
+    assert_eq!(
+        DeescapeQuotedString("'a\\n\\t\\b\\f\\r'"),
+        "a\n\t\u{8}\u{c}\r"
+    );
     assert_eq!(DeescapeQuotedString("'\\101'"), "A");
     assert_eq!(DeescapeQuotedString("'\\x'"), "x");
     assert_eq!(DeescapeQuotedString("''"), "");
@@ -181,8 +183,14 @@ fn syntax_errors_recorded_below_error() {
 fn syntax_error_throws_at_error_level() {
     setup();
     let mut vars = Vec::new();
-    let e = ParseConfigFp(b"= nonsense\n", Path::new("/tmp/x.conf"), 0, ERROR, &mut vars)
-        .unwrap_err();
+    let e = ParseConfigFp(
+        b"= nonsense\n",
+        Path::new("/tmp/x.conf"),
+        0,
+        ERROR,
+        &mut vars,
+    )
+    .unwrap_err();
     assert!(e.message().contains("syntax error in file"));
 }
 
@@ -235,7 +243,16 @@ fn include_recursion_rejected() {
     std::fs::write(&loop_conf, "include 'loop.conf'\n").unwrap();
 
     let mut vars = Vec::new();
-    let ok = ParseConfigFile(loop_conf.to_str().unwrap(), true, None, 0, 0, LOG, &mut vars).unwrap();
+    let ok = ParseConfigFile(
+        loop_conf.to_str().unwrap(),
+        true,
+        None,
+        0,
+        0,
+        LOG,
+        &mut vars,
+    )
+    .unwrap();
     assert!(!ok);
     assert!(vars
         .iter()
@@ -267,15 +284,26 @@ fn empty_file_name_rejected() {
     let mut vars = Vec::new();
     let ok = ParseConfigFile("  \t", true, None, 0, 0, LOG, &mut vars).unwrap();
     assert!(!ok);
-    assert_eq!(vars[0].errmsg.as_deref(), Some("empty configuration file name"));
+    assert_eq!(
+        vars[0].errmsg.as_deref(),
+        Some("empty configuration file name")
+    );
 }
 
 #[test]
 fn nesting_depth_limit() {
     setup();
     let mut vars = Vec::new();
-    let ok =
-        ParseConfigFile("x.conf", true, None, 0, CONF_FILE_MAX_DEPTH + 1, LOG, &mut vars).unwrap();
+    let ok = ParseConfigFile(
+        "x.conf",
+        true,
+        None,
+        0,
+        CONF_FILE_MAX_DEPTH + 1,
+        LOG,
+        &mut vars,
+    )
+    .unwrap();
     assert!(!ok);
     assert_eq!(vars[0].errmsg.as_deref(), Some("nesting depth exceeded"));
 }

@@ -10,9 +10,9 @@ pub mod consts;
 pub mod gather_fair;
 pub mod hooks;
 pub mod lane_pool;
+pub mod option_sets;
 pub mod parallel_engine;
 pub mod runtime_pool;
-pub mod option_sets;
 pub mod session;
 mod slots;
 mod tables;
@@ -121,15 +121,31 @@ pub fn init_seams() {
 // wal_level_options[] (xlogdesc.c); archive/hot_standby are hidden aliases of
 // replica.
 const WAL_LEVEL_OPTIONS: &[types_guc::config_enum_entry] = &[
-    types_guc::config_enum_entry { name: "minimal", val: 0, hidden: false },
-    types_guc::config_enum_entry { name: "replica", val: consts::WAL_LEVEL_REPLICA, hidden: false },
-    types_guc::config_enum_entry { name: "archive", val: consts::WAL_LEVEL_REPLICA, hidden: true },
+    types_guc::config_enum_entry {
+        name: "minimal",
+        val: 0,
+        hidden: false,
+    },
+    types_guc::config_enum_entry {
+        name: "replica",
+        val: consts::WAL_LEVEL_REPLICA,
+        hidden: false,
+    },
+    types_guc::config_enum_entry {
+        name: "archive",
+        val: consts::WAL_LEVEL_REPLICA,
+        hidden: true,
+    },
     types_guc::config_enum_entry {
         name: "hot_standby",
         val: consts::WAL_LEVEL_REPLICA,
         hidden: true,
     },
-    types_guc::config_enum_entry { name: "logical", val: 2, hidden: false },
+    types_guc::config_enum_entry {
+        name: "logical",
+        val: 2,
+        hidden: false,
+    },
 ];
 
 // recovery_target_action_options[] (xlogrecovery.c).
@@ -139,8 +155,16 @@ const RECOVERY_TARGET_ACTION_OPTIONS: &[types_guc::config_enum_entry] = &[
         val: consts::RECOVERY_TARGET_ACTION_PAUSE,
         hidden: false,
     },
-    types_guc::config_enum_entry { name: "promote", val: 1, hidden: false },
-    types_guc::config_enum_entry { name: "shutdown", val: 2, hidden: false },
+    types_guc::config_enum_entry {
+        name: "promote",
+        val: 1,
+        hidden: false,
+    },
+    types_guc::config_enum_entry {
+        name: "shutdown",
+        val: 2,
+        hidden: false,
+    },
 ];
 
 // Accessors for GUCs whose C conf->variable is a global defined in

@@ -56,7 +56,12 @@ static QUEUE: AioCell<WorkerQueue> = AioCell::new(WorkerQueue {
     tail: 0,
     sqes: [0; IO_WORKER_QUEUE_SIZE],
     idle_worker_mask: 0,
-    workers: [const { WorkerSlot { procno: INVALID_PROC, in_use: false } }; MAX_IO_WORKERS_USIZE],
+    workers: [const {
+        WorkerSlot {
+            procno: INVALID_PROC,
+            in_use: false,
+        }
+    }; MAX_IO_WORKERS_USIZE],
 });
 
 /// SAFETY: caller holds AioWorkerSubmissionQueueLock.

@@ -6,19 +6,24 @@ mod exec;
 mod queue;
 mod state;
 
-pub use catalog::{map_partition_qual, CreateTriggerFiringOn, CreateTriggerInternal, InternalTriggerArgs, TriggerSetParentTrigger};
-pub use ddl::{get_trigger_oid, renametrig, CreateTrigger, EnableDisableTrigger, RemoveTriggerById};
+pub use catalog::{
+    map_partition_qual, CreateTriggerFiringOn, CreateTriggerInternal, InternalTriggerArgs,
+    TriggerSetParentTrigger,
+};
+pub use ddl::{
+    get_trigger_oid, renametrig, CreateTrigger, EnableDisableTrigger, RemoveTriggerById,
+};
 pub use exec::{
     trigger_depth, ExecBRInsertTriggers, ExecBSInsertTriggers, ExecBSTruncateTriggers,
-    ExecCallTriggerFunc, ExecIRInsertTriggers, TriggerEnabled, TriggerFmgrCache,
-    TriggerWhenCache, TriggerWhenEval,
+    ExecCallTriggerFunc, ExecIRInsertTriggers, TriggerEnabled, TriggerFmgrCache, TriggerWhenCache,
+    TriggerWhenEval,
 };
 pub use queue::{
     before_stmt_triggers_fired, ri_trigger_kind, AfterTriggerBeginQuery, AfterTriggerBeginSubXact,
     AfterTriggerBeginXact, AfterTriggerEndQuery, AfterTriggerEndSubXact, AfterTriggerEndXact,
-    AfterTriggerFireDeferred, AfterTriggerPendingOnRel, ExecARDeleteTriggers,
+    AfterTriggerFireDeferred, AfterTriggerPendingOnRel, ChildToRoot, ExecARDeleteTriggers,
     ExecARInsertTriggers, ExecARUpdateTriggers, ExecASDeleteTriggers, ExecASInsertTriggers,
-    ChildToRoot, ExecASTruncateTriggers, ExecASUpdateTriggers, MakeTransitionCaptureState,
+    ExecASTruncateTriggers, ExecASUpdateTriggers, MakeTransitionCaptureState,
     TransitionCaptureState,
 };
 pub use state::AfterTriggerSetState;

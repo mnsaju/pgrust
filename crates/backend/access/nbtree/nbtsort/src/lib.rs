@@ -11,19 +11,19 @@ mod pool;
 use ::mcx::Mcx;
 use ::types_core::{BlockNumber, ForkNumber, InvalidOid, OffsetNumber, BLCKSZ};
 use ::types_error::PgResult;
+use ::types_nbtree::dedup::BTDedupState;
 use ::types_nbtree::{
     BTMaxItemSize, BTPageOpaqueData, BTP_LEAF, BTP_ROOT, BTREE_DEFAULT_FILLFACTOR,
     BTREE_NONLEAF_FILLFACTOR, P_FIRSTKEY, P_HIKEY,
 };
 use ::types_rel::Relation;
 use ::types_storage::bufpage::{ItemIdData, PageMut, SizeOfPageHeaderData};
-use ::types_nbtree::dedup::BTDedupState;
-use ::types_tuple::itemptr::{ItemPointerData, InvalidOffsetNumber};
+use ::types_tuple::itemptr::{InvalidOffsetNumber, ItemPointerData};
 use bulkwrite::{BulkWriteBuffer, BulkWriteState};
 use execindexing::IndexInfo;
 use nbtree::itup::{
-    self, index_tuple_size, maxalign, set_t_info, set_t_tid, ITup, ItupBuf,
-    INDEX_SIZE_MASK, INDEX_TUPLE_HEADER_SIZE,
+    self, index_tuple_size, maxalign, set_t_info, set_t_tid, ITup, ItupBuf, INDEX_SIZE_MASK,
+    INDEX_TUPLE_HEADER_SIZE,
 };
 use nbtree::{BtScanInsert, OrderProcFrame};
 
@@ -100,7 +100,10 @@ pub fn btbuild<'mcx>(
                 sortstate.put_index_tuple_image(image)?;
             } else {
                 havedead = true;
-                spool2.as_mut().expect("spool2").put_index_tuple_image(image)?;
+                spool2
+                    .as_mut()
+                    .expect("spool2")
+                    .put_index_tuple_image(image)?;
             }
             indtuples += 1.0;
             Ok(())
@@ -125,7 +128,10 @@ pub fn btbuild<'mcx>(
                     sortstate.putindextuplevalues(*tid, values, isnull)?;
                 } else {
                     havedead = true;
-                    spool2.as_mut().expect("spool2").putindextuplevalues(*tid, values, isnull)?;
+                    spool2
+                        .as_mut()
+                        .expect("spool2")
+                        .putindextuplevalues(*tid, values, isnull)?;
                 }
                 indtuples += 1.0;
                 Ok(())
@@ -139,7 +145,10 @@ pub fn btbuild<'mcx>(
 
     leafbuild(mcx, index, sortstate, spool2, indexInfo.ii_Unique)?;
 
-    Ok(IndexBuildResult { heap_tuples: reltuples, index_tuples: indtuples })
+    Ok(IndexBuildResult {
+        heap_tuples: reltuples,
+        index_tuples: indtuples,
+    })
 }
 
 fn spool_begin<'mcx>(
@@ -193,8 +202,7 @@ fn leafbuild<'mcx>(
         pages_alloced: BTREE_METAPAGE + 1,
     };
 
-    let deduplicate =
-        wstate.inskey.allequalimage && !is_unique && bt_get_deduplicate_items(index);
+    let deduplicate = wstate.inskey.allequalimage && !is_unique && bt_get_deduplicate_items(index);
 
     let mut levels: Vec<BTPageState<'mcx>> = Vec::new();
     if let Some(mut sort2) = spool2 {
@@ -304,7 +312,15 @@ fn pagestate<'mcx>(wstate: &mut BTWriteState<'_, '_>, level: u32) -> BTPageState
     } else {
         bt_get_target_page_free_space(wstate.index)
     };
-    BTPageState { buf, blkno, lowkey: None, lastoff: P_HIKEY, lastextra: 0, level, full }
+    BTPageState {
+        buf,
+        blkno,
+        lowkey: None,
+        lastoff: P_HIKEY,
+        lastextra: 0,
+        level,
+        full,
+    }
 }
 
 // BTGetDeduplicateItems
@@ -473,7 +489,10 @@ unsafe fn buildadd<'mcx>(
         }
 
         // Link the old page into its parent via its low key.
-        let mut lowkey = levels[level_idx].lowkey.take().expect("low key for finished page");
+        let mut lowkey = levels[level_idx]
+            .lowkey
+            .take()
+            .expect("low key for finished page");
         itup::bt_tuple_set_downlink(lowkey.as_mut_ptr(), obuf_blkno);
         buildadd(mcx, wstate, levels, level_idx + 1, lowkey.as_ptr(), 0)?;
         drop(lowkey);
@@ -521,7 +540,13 @@ unsafe fn buildadd<'mcx>(
     let new_off = state.lastoff + 1;
     let level = state.level;
     let mut page = page_mut_of(&mut state.buf);
-    sortaddtup(&mut page, itupsz, itup, new_off, level > 0 && new_off == P_FIRSTKEY)?;
+    sortaddtup(
+        &mut page,
+        itupsz,
+        itup,
+        new_off,
+        level > 0 && new_off == P_FIRSTKEY,
+    )?;
     state.lastoff = new_off;
     Ok(())
 }
@@ -546,7 +571,10 @@ fn uppershutdown<'mcx>(
             rootblkno = blkno;
             rootlevel = state.level;
         } else {
-            let mut lowkey = levels[i].lowkey.take().expect("low key for last page on level");
+            let mut lowkey = levels[i]
+                .lowkey
+                .take()
+                .expect("low key for last page on level");
             // SAFETY: lowkey is a live owned tuple image.
             unsafe {
                 itup::bt_tuple_set_downlink(lowkey.as_mut_ptr(), blkno);
@@ -572,7 +600,11 @@ fn uppershutdown<'mcx>(
 
 fn page_mut_of(buf: &mut BulkWriteBuffer) -> PageMut<'_> {
     // SAFETY: exclusively owned, aligned build page.
-    unsafe { PageMut::from_raw(core::ptr::NonNull::new_unchecked(buf.page_mut().as_mut_ptr())) }
+    unsafe {
+        PageMut::from_raw(core::ptr::NonNull::new_unchecked(
+            buf.page_mut().as_mut_ptr(),
+        ))
+    }
 }
 
 fn read_opaque(page: &PageMut<'_>) -> BTPageOpaqueData {

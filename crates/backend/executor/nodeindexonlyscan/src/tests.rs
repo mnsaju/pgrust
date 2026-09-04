@@ -172,9 +172,9 @@ fn install_seams() {
         predicate_seams::predicate_lock_tid::set(|_rel, _tid, _snap, _xid| Ok(()));
         predicate_seams::check_for_serializable_conflict_out_needed::set(|_rel, _snap| Ok(false));
 
-        heapam_visibility_seams::heap_tuple_satisfies_visibility::set(
-            |_htup, _snap, _buf| Ok(true),
-        );
+        heapam_visibility_seams::heap_tuple_satisfies_visibility::set(|_htup, _snap, _buf| {
+            Ok(true)
+        });
         heapam_visibility_seams::heap_tuple_satisfies_mvcc_page::set(
             |_htup, _snap, _buf, _memo| Ok(true),
         );

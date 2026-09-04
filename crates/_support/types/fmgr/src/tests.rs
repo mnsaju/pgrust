@@ -5,7 +5,10 @@ use ::types_error::{PgError, PgResult};
 
 use crate::fcinfo::*;
 
-fn int4pl(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut FunctionCallInfoBaseData) -> PgResult<Datum> {
+fn int4pl(
+    _flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut FunctionCallInfoBaseData,
+) -> PgResult<Datum> {
     let a = fcinfo.arg_i32(0);
     let b = fcinfo.arg_i32(1);
     match a.checked_add(b) {
@@ -14,7 +17,10 @@ fn int4pl(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut FunctionCallInfoBaseData)
     }
 }
 
-fn always_null(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut FunctionCallInfoBaseData) -> PgResult<Datum> {
+fn always_null(
+    _flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut FunctionCallInfoBaseData,
+) -> PgResult<Datum> {
     Ok(fcinfo.return_null())
 }
 
@@ -121,8 +127,7 @@ fn direct_function_call() {
     let r = direct_function_call2_coll(int4pl, 0, Datum::from_i32(20), Datum::from_i32(22))
         .expect("direct call ok");
     assert_eq!(r.as_i32(), 42);
-    let err =
-        direct_function_call1_coll(always_null, 0, Datum::from_i32(0)).unwrap_err();
+    let err = direct_function_call1_coll(always_null, 0, Datum::from_i32(0)).unwrap_err();
     assert!(err.message().ends_with("returned NULL"));
 }
 
@@ -456,7 +461,11 @@ mod soft {
         let mut fl = FmgrInfo::new(const_seven, 42, 3, false, false);
         let (ok, _) = call(&mut fl, None, None);
         let err = ok.unwrap_err();
-        assert!(err.message().contains("returned non-NULL"), "{}", err.message());
+        assert!(
+            err.message().contains("returned non-NULL"),
+            "{}",
+            err.message()
+        );
     }
 
     #[test]
@@ -472,20 +481,38 @@ mod soft {
         let ctx = MemoryContext::new_bump("soft-test");
         let mut result = Datum::null();
         assert!(direct_input_function_call_safe(
-            parse_i32, Some(c"7"), 0, -1, ctx.mcx(), None, &mut result
+            parse_i32,
+            Some(c"7"),
+            0,
+            -1,
+            ctx.mcx(),
+            None,
+            &mut result
         )
         .unwrap());
         assert_eq!(result.as_i32(), 7);
 
         let mut esc = ErrorSaveNode::new(true);
         assert!(!direct_input_function_call_safe(
-            parse_i32, Some(c"x"), 0, -1, ctx.mcx(), Some(&mut esc), &mut result
+            parse_i32,
+            Some(c"x"),
+            0,
+            -1,
+            ctx.mcx(),
+            Some(&mut esc),
+            &mut result
         )
         .unwrap());
         assert!(esc.ctx.error_occurred());
 
         assert!(direct_input_function_call_safe(
-            parse_i32, None, 0, -1, ctx.mcx(), None, &mut result
+            parse_i32,
+            None,
+            0,
+            -1,
+            ctx.mcx(),
+            None,
+            &mut result
         )
         .unwrap());
         assert_eq!(result.as_usize(), 0);
@@ -528,7 +555,15 @@ fn fn_extra_take_restore_and_drop() {
     assert_eq!(b.fn_extra_ref::<Memo>().unwrap().0, alloc::vec![1, 2, 3]);
     assert_eq!(DROPS.load(Ordering::Relaxed), 0);
     b.set_fn_extra(Memo(alloc::vec![9]));
-    assert_eq!(DROPS.load(Ordering::Relaxed), 1, "replacement drops the old memo");
+    assert_eq!(
+        DROPS.load(Ordering::Relaxed),
+        1,
+        "replacement drops the old memo"
+    );
     drop(b);
-    assert_eq!(DROPS.load(Ordering::Relaxed), 2, "flinfo death drops the memo");
+    assert_eq!(
+        DROPS.load(Ordering::Relaxed),
+        2,
+        "flinfo death drops the memo"
+    );
 }

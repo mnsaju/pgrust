@@ -8,11 +8,11 @@
 
 use datum::Datum;
 use mcx::{Mcx, PgVec};
-use types_core::fmgr::{F_NAMEEQ, F_OIDEQ};
 use pg_depend::ObjectAddress;
+use types_core::fmgr::{F_NAMEEQ, F_OIDEQ};
 use types_core::{
-    AttrNumber, Oid, RegProcedure, CONSTRAINT_NAME_NSP_INDEX_ID, CONSTRAINT_OID_INDEX_ID,
-    CONSTRAINT_RELATION_ID, INT2OID, InvalidOid, NAMEDATALEN, RELATION_RELATION_ID,
+    AttrNumber, InvalidOid, Oid, RegProcedure, CONSTRAINT_NAME_NSP_INDEX_ID,
+    CONSTRAINT_OID_INDEX_ID, CONSTRAINT_RELATION_ID, INT2OID, NAMEDATALEN, RELATION_RELATION_ID,
     TYPE_RELATION_ID,
 };
 
@@ -71,7 +71,10 @@ fn eq_key(attno: AttrNumber, func: RegProcedure, arg: Datum) -> ScanKeyData {
 
 fn name_arg<'mcx>(mcx: Mcx<'mcx>, name: &str) -> PgResult<PgVec<'mcx, u8>> {
     let n = NAMEDATALEN as usize;
-    assert!(name.len() < n, "makeObjectName truncation unported: {name:?}");
+    assert!(
+        name.len() < n,
+        "makeObjectName truncation unported: {name:?}"
+    );
     let mut buf: PgVec<'mcx, u8> = mcx::vec_with_capacity_in(mcx, n)?;
     mcx::vec_append_bytes(&mut buf, name.as_bytes())?;
     mcx::vec_append_bytes(&mut buf, &[0u8; 64][..n - name.len()])?;
@@ -162,28 +165,65 @@ pub fn CreateConstraintEntry<'mcx>(mcx: Mcx<'mcx>, e: &ConstraintEntry<'_>) -> P
         values[(anum - 1) as usize] = v;
         nulls[(anum - 1) as usize] = false;
     };
-    let con_oid =
-        catalog::GetNewOidWithIndex(mcx, &con_rel, CONSTRAINT_OID_INDEX_ID, Anum_pg_constraint_oid)?;
+    let con_oid = catalog::GetNewOidWithIndex(
+        mcx,
+        &con_rel,
+        CONSTRAINT_OID_INDEX_ID,
+        Anum_pg_constraint_oid,
+    )?;
     let cname = name_arg(mcx, e.name)?;
     set(Anum_pg_constraint_oid, Datum::from_oid(con_oid));
-    set(Anum_pg_constraint_conname, Datum::from_usize(cname.as_ptr() as usize));
-    set(Anum_pg_constraint_connamespace, Datum::from_oid(e.namespace_id));
+    set(
+        Anum_pg_constraint_conname,
+        Datum::from_usize(cname.as_ptr() as usize),
+    );
+    set(
+        Anum_pg_constraint_connamespace,
+        Datum::from_oid(e.namespace_id),
+    );
     set(Anum_pg_constraint_contype, Datum::from_i8(e.contype as i8));
-    set(Anum_pg_constraint_condeferrable, Datum::from_bool(e.deferrable));
+    set(
+        Anum_pg_constraint_condeferrable,
+        Datum::from_bool(e.deferrable),
+    );
     set(Anum_pg_constraint_condeferred, Datum::from_bool(e.deferred));
-    set(Anum_pg_constraint_conenforced, Datum::from_bool(e.is_enforced));
-    set(Anum_pg_constraint_convalidated, Datum::from_bool(e.is_validated));
+    set(
+        Anum_pg_constraint_conenforced,
+        Datum::from_bool(e.is_enforced),
+    );
+    set(
+        Anum_pg_constraint_convalidated,
+        Datum::from_bool(e.is_validated),
+    );
     set(Anum_pg_constraint_conrelid, Datum::from_oid(e.relid));
     set(Anum_pg_constraint_contypid, Datum::from_oid(e.domain_id));
     set(Anum_pg_constraint_conindid, Datum::from_oid(e.index_relid));
-    set(Anum_pg_constraint_conparentid, Datum::from_oid(e.parent_constr_id));
-    set(Anum_pg_constraint_confrelid, Datum::from_oid(e.foreign_relid));
-    set(Anum_pg_constraint_confupdtype, Datum::from_i8(e.fk_upd_type as i8));
-    set(Anum_pg_constraint_confdeltype, Datum::from_i8(e.fk_del_type as i8));
-    set(Anum_pg_constraint_confmatchtype, Datum::from_i8(e.fk_match_type as i8));
+    set(
+        Anum_pg_constraint_conparentid,
+        Datum::from_oid(e.parent_constr_id),
+    );
+    set(
+        Anum_pg_constraint_confrelid,
+        Datum::from_oid(e.foreign_relid),
+    );
+    set(
+        Anum_pg_constraint_confupdtype,
+        Datum::from_i8(e.fk_upd_type as i8),
+    );
+    set(
+        Anum_pg_constraint_confdeltype,
+        Datum::from_i8(e.fk_del_type as i8),
+    );
+    set(
+        Anum_pg_constraint_confmatchtype,
+        Datum::from_i8(e.fk_match_type as i8),
+    );
     set(Anum_pg_constraint_conislocal, Datum::from_bool(e.is_local));
     set(Anum_pg_constraint_coninhcount, Datum::from_i16(e.inhcount));
-    set(Anum_pg_constraint_connoinherit, Datum::from_bool(e.is_no_inherit));
+    set(
+        Anum_pg_constraint_connoinherit,
+        Datum::from_bool(e.is_no_inherit),
+    );
     set(Anum_pg_constraint_conperiod, Datum::from_bool(e.con_period));
 
     let i16_array = |vals: &[i16]| -> PgResult<Option<PgVec<'mcx, u8>>> {
@@ -192,7 +232,9 @@ pub fn CreateConstraintEntry<'mcx>(mcx: Mcx<'mcx>, e: &ConstraintEntry<'_>) -> P
         }
         let mut v: PgVec<'mcx, Datum> = mcx::vec_with_capacity_in(mcx, vals.len())?;
         v.extend(vals.iter().map(|&k| Datum::from_i16(k)));
-        Ok(Some(datum::array_build::construct_array_image(mcx, &v, INT2OID, 2, true, b's')?))
+        Ok(Some(datum::array_build::construct_array_image(
+            mcx, &v, INT2OID, 2, true, b's',
+        )?))
     };
     let oid_array = |vals: &[Oid]| -> PgResult<Option<PgVec<'mcx, u8>>> {
         if vals.is_empty() {
@@ -200,7 +242,9 @@ pub fn CreateConstraintEntry<'mcx>(mcx: Mcx<'mcx>, e: &ConstraintEntry<'_>) -> P
         }
         let mut v: PgVec<'mcx, Datum> = mcx::vec_with_capacity_in(mcx, vals.len())?;
         v.extend(vals.iter().map(|&k| Datum::from_oid(k)));
-        Ok(Some(datum::array_build::construct_array_image(mcx, &v, OIDOID, 4, true, b'i')?))
+        Ok(Some(datum::array_build::construct_array_image(
+            mcx, &v, OIDOID, 4, true, b'i',
+        )?))
     };
     // conkey holds the constraintNKeys key-column prefix (pg_constraint.c:
     // 117-127); included columns appear only in the dependency records below.
@@ -210,7 +254,10 @@ pub fn CreateConstraintEntry<'mcx>(mcx: Mcx<'mcx>, e: &ConstraintEntry<'_>) -> P
         (Anum_pg_constraint_conpfeqop, oid_array(e.pf_eq_op)?),
         (Anum_pg_constraint_conppeqop, oid_array(e.pp_eq_op)?),
         (Anum_pg_constraint_conffeqop, oid_array(e.ff_eq_op)?),
-        (Anum_pg_constraint_confdelsetcols, i16_array(e.fk_del_set_cols)?),
+        (
+            Anum_pg_constraint_confdelsetcols,
+            i16_array(e.fk_del_set_cols)?,
+        ),
         (Anum_pg_constraint_conexclop, oid_array(e.excl_op)?),
     ];
     for (anum, img) in &arrays {
@@ -224,7 +271,10 @@ pub fn CreateConstraintEntry<'mcx>(mcx: Mcx<'mcx>, e: &ConstraintEntry<'_>) -> P
         None => None,
     };
     if let Some(t) = &conbin_text {
-        set(Anum_pg_constraint_conbin, Datum::from_usize(t.as_bytes().as_ptr() as usize));
+        set(
+            Anum_pg_constraint_conbin,
+            Datum::from_usize(t.as_bytes().as_ptr() as usize),
+        );
     }
 
     let mut tuple = heaptuple::heap_form_tuple(mcx, con_rel.descr(), &values, &nulls)?;
@@ -237,7 +287,11 @@ pub fn CreateConstraintEntry<'mcx>(mcx: Mcx<'mcx>, e: &ConstraintEntry<'_>) -> P
     if e.relid != InvalidOid {
         if !e.conkey.is_empty() {
             for &k in e.conkey {
-                addrs_auto.push(ObjectAddress::sub_set(RELATION_RELATION_ID, e.relid, k as i32));
+                addrs_auto.push(ObjectAddress::sub_set(
+                    RELATION_RELATION_ID,
+                    e.relid,
+                    k as i32,
+                ));
             }
         } else {
             addrs_auto.push(ObjectAddress::set(RELATION_RELATION_ID, e.relid));
@@ -257,8 +311,11 @@ pub fn CreateConstraintEntry<'mcx>(mcx: Mcx<'mcx>, e: &ConstraintEntry<'_>) -> P
     if e.foreign_relid != InvalidOid {
         if !e.confkey.is_empty() {
             for &k in e.confkey {
-                addrs_normal
-                    .push(ObjectAddress::sub_set(RELATION_RELATION_ID, e.foreign_relid, k as i32));
+                addrs_normal.push(ObjectAddress::sub_set(
+                    RELATION_RELATION_ID,
+                    e.foreign_relid,
+                    k as i32,
+                ));
             }
         } else {
             addrs_normal.push(ObjectAddress::set(RELATION_RELATION_ID, e.foreign_relid));
@@ -334,7 +391,11 @@ pub fn findNotNullConstraintAttnum<'mcx>(
     attnum: AttrNumber,
 ) -> PgResult<Option<NotNullConTup>> {
     let con_rel = table::table_open(mcx, CONSTRAINT_RELATION_ID, AccessShareLock)?;
-    let keys = [eq_key(Anum_pg_constraint_conrelid, F_OIDEQ, Datum::from_oid(relid))];
+    let keys = [eq_key(
+        Anum_pg_constraint_conrelid,
+        F_OIDEQ,
+        Datum::from_oid(relid),
+    )];
     let mut scan = genam::systable_beginscan(
         mcx,
         &con_rel,
@@ -409,7 +470,11 @@ pub fn extract_notnull_column<'mcx>(
     mcx::vec_append_bytes(&mut full, &(((total as u32) << 2).to_ne_bytes()))?;
     mcx::vec_append_bytes(&mut full, body)?;
     let elems = datum::array_build::deconstruct_array_image(mcx, &full, 2, true, b's')?;
-    assert!(elems.len() == 1, "extractNotNullColumn: conkey with {} elements", elems.len());
+    assert!(
+        elems.len() == 1,
+        "extractNotNullColumn: conkey with {} elements",
+        elems.len()
+    );
     Ok(elems[0].as_i16())
 }
 
@@ -448,8 +513,16 @@ pub fn findConstraintByName<'mcx>(
     let cname = name_arg(mcx, conname)?;
     let keys = [
         eq_key(Anum_pg_constraint_conrelid, F_OIDEQ, Datum::from_oid(relid)),
-        eq_key(Anum_pg_constraint_contypid, F_OIDEQ, Datum::from_oid(InvalidOid)),
-        eq_key(Anum_pg_constraint_conname, F_NAMEEQ, Datum::from_usize(cname.as_ptr() as usize)),
+        eq_key(
+            Anum_pg_constraint_contypid,
+            F_OIDEQ,
+            Datum::from_oid(InvalidOid),
+        ),
+        eq_key(
+            Anum_pg_constraint_conname,
+            F_NAMEEQ,
+            Datum::from_usize(cname.as_ptr() as usize),
+        ),
     ];
     let mut scan = genam::systable_beginscan(
         mcx,
@@ -511,7 +584,11 @@ pub fn findConstraintByName<'mcx>(
 // scan, this re-finds the row by oid (catalog-only, same row).
 pub fn SetConstraintValidated<'mcx>(mcx: Mcx<'mcx>, con_id: Oid) -> PgResult<()> {
     let con_rel = table::table_open(mcx, CONSTRAINT_RELATION_ID, RowExclusiveLock)?;
-    let keys = [eq_key(Anum_pg_constraint_oid, F_OIDEQ, Datum::from_oid(con_id))];
+    let keys = [eq_key(
+        Anum_pg_constraint_oid,
+        F_OIDEQ,
+        Datum::from_oid(con_id),
+    )];
     let mut scan =
         genam::systable_beginscan(mcx, &con_rel, CONSTRAINT_OID_INDEX_ID, true, None, &keys)?;
     let tup = genam::systable_getnext(mcx, &mut scan)?
@@ -534,7 +611,11 @@ pub fn SetConstraintValidated<'mcx>(mcx: Mcx<'mcx>, con_id: Oid) -> PgResult<()>
 // The QueueCheckConstraintValidation conbin fetch (tablecmds.c).
 pub fn constraint_conbin<'mcx>(mcx: Mcx<'mcx>, con_id: Oid) -> PgResult<mcx::PgString<'mcx>> {
     let con_rel = table::table_open(mcx, CONSTRAINT_RELATION_ID, AccessShareLock)?;
-    let keys = [eq_key(Anum_pg_constraint_oid, F_OIDEQ, Datum::from_oid(con_id))];
+    let keys = [eq_key(
+        Anum_pg_constraint_oid,
+        F_OIDEQ,
+        Datum::from_oid(con_id),
+    )];
     let mut scan =
         genam::systable_beginscan(mcx, &con_rel, CONSTRAINT_OID_INDEX_ID, true, None, &keys)?;
     let tup = genam::systable_getnext(mcx, &mut scan)?
@@ -543,7 +624,12 @@ pub fn constraint_conbin<'mcx>(mcx: Mcx<'mcx>, con_id: Oid) -> PgResult<mcx::PgS
     // SAFETY: varlena column under pg_constraint's descriptor; image live
     // through the open scan.
     let d = unsafe {
-        types_tuple::heap_getattr(tup, Anum_pg_constraint_conbin as i32, con_rel.descr(), &mut isnull)
+        types_tuple::heap_getattr(
+            tup,
+            Anum_pg_constraint_conbin as i32,
+            con_rel.descr(),
+            &mut isnull,
+        )
     };
     assert!(!isnull, "null conbin for constraint {con_id}");
     let p = d.as_usize() as *const u8;
@@ -562,7 +648,11 @@ pub fn constraint_conbin<'mcx>(mcx: Mcx<'mcx>, con_id: Oid) -> PgResult<mcx::PgS
 // RenameConstraintById (pg_constraint.c) minus the object-access hook.
 pub fn RenameConstraintById<'mcx>(mcx: Mcx<'mcx>, con_id: Oid, newname: &str) -> PgResult<()> {
     let con_rel = table::table_open(mcx, CONSTRAINT_RELATION_ID, RowExclusiveLock)?;
-    let keys = [eq_key(Anum_pg_constraint_oid, F_OIDEQ, Datum::from_oid(con_id))];
+    let keys = [eq_key(
+        Anum_pg_constraint_oid,
+        F_OIDEQ,
+        Datum::from_oid(con_id),
+    )];
     let mut scan =
         genam::systable_beginscan(mcx, &con_rel, CONSTRAINT_OID_INDEX_ID, true, None, &keys)?;
     let tup = genam::systable_getnext(mcx, &mut scan)?
@@ -635,7 +725,11 @@ pub fn findDomainNotNullConstraint<'mcx>(mcx: Mcx<'mcx>, typid: Oid) -> PgResult
     // added here so the scan stays a plain prefix scan (skip scan unported) —
     // domain constraints always carry conrelid=0, identical row set.
     let keys = [
-        eq_key(Anum_pg_constraint_conrelid, F_OIDEQ, Datum::from_oid(InvalidOid)),
+        eq_key(
+            Anum_pg_constraint_conrelid,
+            F_OIDEQ,
+            Datum::from_oid(InvalidOid),
+        ),
         eq_key(Anum_pg_constraint_contypid, F_OIDEQ, Datum::from_oid(typid)),
     ];
     let mut scan = genam::systable_beginscan(
@@ -678,9 +772,17 @@ pub fn get_domain_constraint_oid<'mcx>(
     let con_rel = table::table_open(mcx, CONSTRAINT_RELATION_ID, AccessShareLock)?;
     let cname = name_arg(mcx, conname)?;
     let keys = [
-        eq_key(Anum_pg_constraint_conrelid, F_OIDEQ, Datum::from_oid(InvalidOid)),
+        eq_key(
+            Anum_pg_constraint_conrelid,
+            F_OIDEQ,
+            Datum::from_oid(InvalidOid),
+        ),
         eq_key(Anum_pg_constraint_contypid, F_OIDEQ, Datum::from_oid(typid)),
-        eq_key(Anum_pg_constraint_conname, F_NAMEEQ, Datum::from_usize(cname.as_ptr() as usize)),
+        eq_key(
+            Anum_pg_constraint_conname,
+            F_NAMEEQ,
+            Datum::from_usize(cname.as_ptr() as usize),
+        ),
     ];
     let mut scan = genam::systable_beginscan(
         mcx,
@@ -728,7 +830,11 @@ pub fn AlterConstraintNamespaces<'mcx>(
     objs_moved: &mut PgVec<'mcx, ObjectAddress>,
 ) -> PgResult<()> {
     let con_rel = table::table_open(mcx, CONSTRAINT_RELATION_ID, RowExclusiveLock)?;
-    let (relid, typid) = if is_type { (InvalidOid, owner_id) } else { (owner_id, InvalidOid) };
+    let (relid, typid) = if is_type {
+        (InvalidOid, owner_id)
+    } else {
+        (owner_id, InvalidOid)
+    };
     let keys = [
         eq_key(Anum_pg_constraint_conrelid, F_OIDEQ, Datum::from_oid(relid)),
         eq_key(Anum_pg_constraint_contypid, F_OIDEQ, Datum::from_oid(typid)),
@@ -751,12 +857,13 @@ pub fn AlterConstraintNamespaces<'mcx>(
         };
         let con_oid = get(Anum_pg_constraint_oid).as_oid();
         let thisobj = ObjectAddress::set(CONSTRAINT_RELATION_ID, con_oid);
-        if objs_moved.iter().any(|a| a.classId == thisobj.classId && a.objectId == thisobj.objectId)
+        if objs_moved
+            .iter()
+            .any(|a| a.classId == thisobj.classId && a.objectId == thisobj.objectId)
         {
             continue;
         }
-        if get(Anum_pg_constraint_connamespace).as_oid() == old_nsp_id && old_nsp_id != new_nsp_id
-        {
+        if get(Anum_pg_constraint_connamespace).as_oid() == old_nsp_id && old_nsp_id != new_nsp_id {
             let mut values: PgVec<'_, Datum> = mcx::vec_with_capacity_in(mcx, natts)?;
             let mut nulls: PgVec<'_, bool> = mcx::vec_with_capacity_in(mcx, natts)?;
             let mut replace: PgVec<'_, bool> = mcx::vec_with_capacity_in(mcx, natts)?;
@@ -791,7 +898,11 @@ pub fn ConstraintNameIsUsed<'mcx>(
     let keys = [
         eq_key(Anum_pg_constraint_conrelid, F_OIDEQ, Datum::from_oid(relid)),
         eq_key(Anum_pg_constraint_contypid, F_OIDEQ, Datum::from_oid(typid)),
-        eq_key(Anum_pg_constraint_conname, F_NAMEEQ, Datum::from_usize(cname.as_ptr() as usize)),
+        eq_key(
+            Anum_pg_constraint_conname,
+            F_NAMEEQ,
+            Datum::from_usize(cname.as_ptr() as usize),
+        ),
     ];
     let mut scan = genam::systable_beginscan(
         mcx,
@@ -811,7 +922,11 @@ pub fn ConstraintNameIsUsed<'mcx>(
 // (pg_constraint.c): CHECK decrements pg_class.relchecks.
 pub fn RemoveConstraintById<'mcx>(mcx: Mcx<'mcx>, con_id: Oid) -> PgResult<()> {
     let con_rel = table::table_open(mcx, CONSTRAINT_RELATION_ID, RowExclusiveLock)?;
-    let keys = [eq_key(Anum_pg_constraint_oid, F_OIDEQ, Datum::from_oid(con_id))];
+    let keys = [eq_key(
+        Anum_pg_constraint_oid,
+        F_OIDEQ,
+        Datum::from_oid(con_id),
+    )];
     let mut scan =
         genam::systable_beginscan(mcx, &con_rel, CONSTRAINT_OID_INDEX_ID, true, None, &keys)?;
     let tup = genam::systable_getnext(mcx, &mut scan)?
@@ -861,13 +976,23 @@ fn rel_name_for_error<'mcx>(mcx: Mcx<'mcx>, relid: Oid) -> PgResult<String> {
     let mut isnull = false;
     // SAFETY: relname is a fixed NOT NULL NameData column under pg_class's descriptor.
     let d = unsafe {
-        types_tuple::heap_getattr(reltup, Anum_pg_class_relname as i32, pgrel.descr(), &mut isnull)
+        types_tuple::heap_getattr(
+            reltup,
+            Anum_pg_class_relname as i32,
+            pgrel.descr(),
+            &mut isnull,
+        )
     };
     // SAFETY: NameData column is a 64-byte NUL-terminated in-tuple buffer.
     let bytes =
         unsafe { core::slice::from_raw_parts(d.as_usize() as *const u8, NAMEDATALEN as usize) };
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(NAMEDATALEN as usize);
-    let name = core::str::from_utf8(&bytes[..end]).expect("relname UTF-8").to_string();
+    let end = bytes
+        .iter()
+        .position(|&b| b == 0)
+        .unwrap_or(NAMEDATALEN as usize);
+    let name = core::str::from_utf8(&bytes[..end])
+        .expect("relname UTF-8")
+        .to_string();
     genam::systable_endscan(mcx, scan)?;
     pgrel.close(AccessShareLock)?;
     Ok(name)
@@ -935,8 +1060,16 @@ pub fn ChooseConstraintName<'mcx>(
         if !found {
             let cname = name_arg(mcx, conname.as_str())?;
             let keys = [
-                eq_key(Anum_pg_constraint_conname, F_NAMEEQ, Datum::from_usize(cname.as_ptr() as usize)),
-                eq_key(Anum_pg_constraint_connamespace, F_OIDEQ, Datum::from_oid(namespace_id)),
+                eq_key(
+                    Anum_pg_constraint_conname,
+                    F_NAMEEQ,
+                    Datum::from_usize(cname.as_ptr() as usize),
+                ),
+                eq_key(
+                    Anum_pg_constraint_connamespace,
+                    F_OIDEQ,
+                    Datum::from_oid(namespace_id),
+                ),
             ];
             let mut scan = genam::systable_beginscan(
                 mcx,
@@ -973,7 +1106,10 @@ fn make_object_name<'mcx>(
     if name2.is_some() {
         overhead += 1;
     }
-    assert!(NAMEDATALEN as usize - 1 > overhead, "makeObjectName label too long ({label:?})");
+    assert!(
+        NAMEDATALEN as usize - 1 > overhead,
+        "makeObjectName label too long ({label:?})"
+    );
     let availchars = NAMEDATALEN as usize - 1 - overhead;
     let mut name1chars = name1.len();
     let mut name2chars = name2.map_or(0, str::len);
@@ -984,18 +1120,14 @@ fn make_object_name<'mcx>(
             name2chars -= 1;
         }
     }
-    name1chars = mbutils_seams::pg_mbcliplen::call(
-        name1.as_bytes(),
-        name1chars as i32,
-        name1chars as i32,
-    ) as usize;
+    name1chars =
+        mbutils_seams::pg_mbcliplen::call(name1.as_bytes(), name1chars as i32, name1chars as i32)
+            as usize;
     let mut s = mcx::PgString::from_str_in(&name1[..name1chars], mcx)?;
     if let Some(n2) = name2 {
-        name2chars = mbutils_seams::pg_mbcliplen::call(
-            n2.as_bytes(),
-            name2chars as i32,
-            name2chars as i32,
-        ) as usize;
+        name2chars =
+            mbutils_seams::pg_mbcliplen::call(n2.as_bytes(), name2chars as i32, name2chars as i32)
+                as usize;
         s.try_push_str("_")?;
         s.try_push_str(&n2[..name2chars])?;
     }
@@ -1005,7 +1137,11 @@ fn make_object_name<'mcx>(
 }
 
 fn conrelid_scan_keys(relid: Oid) -> [ScanKeyData; 1] {
-    [eq_key(Anum_pg_constraint_conrelid, F_OIDEQ, Datum::from_oid(relid))]
+    [eq_key(
+        Anum_pg_constraint_conrelid,
+        F_OIDEQ,
+        Datum::from_oid(relid),
+    )]
 }
 
 fn getattr<'a>(
@@ -1023,7 +1159,10 @@ fn name_str<'mcx>(mcx: Mcx<'mcx>, d: Datum) -> PgResult<&'mcx str> {
     let p = d.as_usize() as *const u8;
     // SAFETY: NOT NULL name column; 64-byte NameData in the live tuple.
     let bytes = unsafe { core::slice::from_raw_parts(p, NAMEDATALEN as usize) };
-    let len = bytes.iter().position(|&b| b == 0).unwrap_or(NAMEDATALEN as usize);
+    let len = bytes
+        .iter()
+        .position(|&b| b == 0)
+        .unwrap_or(NAMEDATALEN as usize);
     let mut v: PgVec<'mcx, u8> = mcx::vec_with_capacity_in(mcx, len)?;
     mcx::vec_append_bytes(&mut v, &bytes[..len])?;
     Ok(core::str::from_utf8(v.leak()).expect("conname UTF-8"))
@@ -1041,7 +1180,11 @@ fn extract_not_null_column<'mcx>(mcx: Mcx<'mcx>, conkey: Datum) -> PgResult<Attr
     mcx::vec_append_bytes(&mut full, &(((total as u32) << 2).to_ne_bytes()))?;
     mcx::vec_append_bytes(&mut full, body)?;
     let elems = datum::array_build::deconstruct_array_image(mcx, &full, 2, true, b's')?;
-    assert!(elems.len() == 1, "not-null constraint with {} conkey entries", elems.len());
+    assert!(
+        elems.len() == 1,
+        "not-null constraint with {} conkey entries",
+        elems.len()
+    );
     Ok(elems[0].as_i16())
 }
 
@@ -1051,7 +1194,7 @@ pub fn RelationGetNotNullConstraints<'mcx>(
     rel: &types_rel::Relation<'mcx>,
     include_noinh: bool,
 ) -> PgResult<types_nodes::NodeList<'mcx>> {
-    use types_nodes::rawnodes::{Constraint, ConstrType};
+    use types_nodes::rawnodes::{ConstrType, Constraint};
     let relid = rel.rd_id;
     let con_rel = table::table_open(mcx, CONSTRAINT_RELATION_ID, AccessShareLock)?;
     let keys = conrelid_scan_keys(relid);
@@ -1069,13 +1212,18 @@ pub fn RelationGetNotNullConstraints<'mcx>(
         if contype != CONSTRAINT_NOTNULL {
             continue;
         }
-        let noinherit = getattr(&con_rel, tup, Anum_pg_constraint_connoinherit).0.as_bool();
+        let noinherit = getattr(&con_rel, tup, Anum_pg_constraint_connoinherit)
+            .0
+            .as_bool();
         if noinherit && !include_noinh {
             continue;
         }
-        let colnum = extract_not_null_column(mcx, getattr(&con_rel, tup, Anum_pg_constraint_conkey).0)?;
+        let colnum =
+            extract_not_null_column(mcx, getattr(&con_rel, tup, Anum_pg_constraint_conkey).0)?;
         let conname = name_str(mcx, getattr(&con_rel, tup, Anum_pg_constraint_conname).0)?;
-        let convalidated = getattr(&con_rel, tup, Anum_pg_constraint_convalidated).0.as_bool();
+        let convalidated = getattr(&con_rel, tup, Anum_pg_constraint_convalidated)
+            .0
+            .as_bool();
         let att = rel.rd_att.attr(colnum as usize - 1);
         let colname = {
             let raw = att.attname.name_str();
@@ -1083,10 +1231,7 @@ pub fn RelationGetNotNullConstraints<'mcx>(
             mcx::vec_append_bytes(&mut v, raw)?;
             core::str::from_utf8(v.leak()).expect("attname UTF-8")
         };
-        let keys1 = types_nodes::NodeList::make1(
-            mcx,
-            types_nodes::Node::mk_string(mcx, colname)?,
-        )?;
+        let keys1 = types_nodes::NodeList::make1(mcx, types_nodes::Node::mk_string(mcx, colname)?)?;
         let constr = Constraint {
             contype: ConstrType::CONSTR_NOTNULL,
             conname: Some(conname),
@@ -1108,15 +1253,15 @@ pub fn RelationGetNotNullConstraints<'mcx>(
 // get_relation_constraint_oid / get_domain_constraint_oid (pg_constraint.c);
 // both walk ConstraintRelidTypidNameIndexId with one of (conrelid, contypid)
 // pinned to InvalidOid, matching conname in the loop.
-fn constraint_oid_by_name<'mcx>(
-    mcx: Mcx<'mcx>,
-    relid: Oid,
-    conname: &str,
-) -> PgResult<Oid> {
+fn constraint_oid_by_name<'mcx>(mcx: Mcx<'mcx>, relid: Oid, conname: &str) -> PgResult<Oid> {
     let con_rel = table::table_open(mcx, CONSTRAINT_RELATION_ID, AccessShareLock)?;
     let keys = [
         eq_key(Anum_pg_constraint_conrelid, F_OIDEQ, Datum::from_oid(relid)),
-        eq_key(Anum_pg_constraint_contypid, F_OIDEQ, Datum::from_oid(InvalidOid)),
+        eq_key(
+            Anum_pg_constraint_contypid,
+            F_OIDEQ,
+            Datum::from_oid(InvalidOid),
+        ),
     ];
     let mut scan = genam::systable_beginscan(
         mcx,
@@ -1183,8 +1328,16 @@ pub fn get_relation_constraint_attnos<'mcx>(
     let cname = name_arg(mcx, conname)?;
     let keys = [
         eq_key(Anum_pg_constraint_conrelid, F_OIDEQ, Datum::from_oid(relid)),
-        eq_key(Anum_pg_constraint_contypid, F_OIDEQ, Datum::from_oid(InvalidOid)),
-        eq_key(Anum_pg_constraint_conname, F_NAMEEQ, Datum::from_usize(cname.as_ptr() as usize)),
+        eq_key(
+            Anum_pg_constraint_contypid,
+            F_OIDEQ,
+            Datum::from_oid(InvalidOid),
+        ),
+        eq_key(
+            Anum_pg_constraint_conname,
+            F_NAMEEQ,
+            Datum::from_usize(cname.as_ptr() as usize),
+        ),
     ];
     let mut scan = genam::systable_beginscan(
         mcx,
@@ -1239,7 +1392,9 @@ pub fn get_primary_key_attnos<'mcx>(
         if contype != CONSTRAINT_PRIMARY {
             continue;
         }
-        let condeferrable = getattr(&con_rel, tup, Anum_pg_constraint_condeferrable).0.as_bool();
+        let condeferrable = getattr(&con_rel, tup, Anum_pg_constraint_condeferrable)
+            .0
+            .as_bool();
         if condeferrable && !deferrable_ok {
             break;
         }
@@ -1301,13 +1456,21 @@ fn pk_subset_of_grouping_columns(
 
 pub fn get_constraint_deferrability<'mcx>(mcx: Mcx<'mcx>, con_id: Oid) -> PgResult<(bool, bool)> {
     let con_rel = table::table_open(mcx, CONSTRAINT_RELATION_ID, AccessShareLock)?;
-    let keys = [eq_key(Anum_pg_constraint_oid, F_OIDEQ, Datum::from_oid(con_id))];
+    let keys = [eq_key(
+        Anum_pg_constraint_oid,
+        F_OIDEQ,
+        Datum::from_oid(con_id),
+    )];
     let mut scan =
         genam::systable_beginscan(mcx, &con_rel, CONSTRAINT_OID_INDEX_ID, true, None, &keys)?;
     let tup = genam::systable_getnext(mcx, &mut scan)?
         .unwrap_or_else(|| panic!("cache lookup failed for constraint {con_id}"));
-    let deferrable = getattr(&con_rel, tup, Anum_pg_constraint_condeferrable).0.as_bool();
-    let deferred = getattr(&con_rel, tup, Anum_pg_constraint_condeferred).0.as_bool();
+    let deferrable = getattr(&con_rel, tup, Anum_pg_constraint_condeferrable)
+        .0
+        .as_bool();
+    let deferred = getattr(&con_rel, tup, Anum_pg_constraint_condeferred)
+        .0
+        .as_bool();
     genam::systable_endscan(mcx, scan)?;
     con_rel.close(AccessShareLock)?;
     Ok((deferrable, deferred))
@@ -1319,7 +1482,11 @@ pub fn get_relation_idx_constraint_oid<'mcx>(
     index_id: Oid,
 ) -> PgResult<Oid> {
     let con_rel = table::table_open(mcx, CONSTRAINT_RELATION_ID, AccessShareLock)?;
-    let keys = [eq_key(Anum_pg_constraint_conrelid, F_OIDEQ, Datum::from_oid(relation_id))];
+    let keys = [eq_key(
+        Anum_pg_constraint_conrelid,
+        F_OIDEQ,
+        Datum::from_oid(relation_id),
+    )];
     let mut scan = genam::systable_beginscan(
         mcx,
         &con_rel,
@@ -1338,7 +1505,8 @@ pub fn get_relation_idx_constraint_oid<'mcx>(
             types_tuple::heap_getattr(tup, Anum_pg_constraint_contype as i32, desc, &mut isnull)
         }
         .as_i8() as u8;
-        if contype != CONSTRAINT_PRIMARY && contype != CONSTRAINT_UNIQUE
+        if contype != CONSTRAINT_PRIMARY
+            && contype != CONSTRAINT_UNIQUE
             && contype != CONSTRAINT_EXCLUSION
         {
             continue;
@@ -1371,7 +1539,11 @@ pub fn ConstraintSetParentConstraint<'mcx>(
     child_table_id: Oid,
 ) -> PgResult<()> {
     let con_rel = table::table_open(mcx, CONSTRAINT_RELATION_ID, RowExclusiveLock)?;
-    let keys = [eq_key(Anum_pg_constraint_oid, F_OIDEQ, Datum::from_oid(child_constr_id))];
+    let keys = [eq_key(
+        Anum_pg_constraint_oid,
+        F_OIDEQ,
+        Datum::from_oid(child_constr_id),
+    )];
     let mut scan =
         genam::systable_beginscan(mcx, &con_rel, CONSTRAINT_OID_INDEX_ID, true, None, &keys)?;
     let tup = genam::systable_getnext(mcx, &mut scan)?
@@ -1380,12 +1552,22 @@ pub fn ConstraintSetParentConstraint<'mcx>(
     let mut isnull = false;
     // SAFETY: conparentid is a fixed NOT NULL pg_constraint column.
     let conparentid = unsafe {
-        types_tuple::heap_getattr(tup, Anum_pg_constraint_conparentid as i32, desc, &mut isnull)
+        types_tuple::heap_getattr(
+            tup,
+            Anum_pg_constraint_conparentid as i32,
+            desc,
+            &mut isnull,
+        )
     }
     .as_oid();
     // SAFETY: coninhcount is a fixed NOT NULL pg_constraint column.
     let prior_inhcount = unsafe {
-        types_tuple::heap_getattr(tup, Anum_pg_constraint_coninhcount as i32, desc, &mut isnull)
+        types_tuple::heap_getattr(
+            tup,
+            Anum_pg_constraint_coninhcount as i32,
+            desc,
+            &mut isnull,
+        )
     }
     .as_i16();
     let natts = desc.natts as usize;
@@ -1403,14 +1585,26 @@ pub fn ConstraintSetParentConstraint<'mcx>(
         if conparentid != InvalidOid {
             panic!("constraint {child_constr_id} already has a parent constraint");
         }
-        assert!(prior_inhcount == 0, "attach of constraint {child_constr_id} with coninhcount {prior_inhcount}");
+        assert!(
+            prior_inhcount == 0,
+            "attach of constraint {child_constr_id} with coninhcount {prior_inhcount}"
+        );
         set(Anum_pg_constraint_conislocal, Datum::from_bool(false));
         set(Anum_pg_constraint_coninhcount, Datum::from_i16(1));
-        set(Anum_pg_constraint_conparentid, Datum::from_oid(parent_constr_id));
+        set(
+            Anum_pg_constraint_conparentid,
+            Datum::from_oid(parent_constr_id),
+        );
     } else {
-        assert!(prior_inhcount == 1, "detach of constraint {child_constr_id} with coninhcount {prior_inhcount}");
+        assert!(
+            prior_inhcount == 1,
+            "detach of constraint {child_constr_id} with coninhcount {prior_inhcount}"
+        );
         set(Anum_pg_constraint_conislocal, Datum::from_bool(true));
-        set(Anum_pg_constraint_coninhcount, Datum::from_i16(prior_inhcount - 1));
+        set(
+            Anum_pg_constraint_coninhcount,
+            Datum::from_i16(prior_inhcount - 1),
+        );
         set(Anum_pg_constraint_conparentid, Datum::from_oid(InvalidOid));
     }
     let mut newtup = heaptuple::heap_modify_tuple(mcx, tup, desc, &values, &nulls, &replace)?;
@@ -1421,9 +1615,19 @@ pub fn ConstraintSetParentConstraint<'mcx>(
     let depender = ObjectAddress::set(CONSTRAINT_RELATION_ID, child_constr_id);
     if parent_constr_id != InvalidOid {
         let parent = ObjectAddress::set(CONSTRAINT_RELATION_ID, parent_constr_id);
-        pg_depend::recordDependencyOn(mcx, &depender, &parent, pg_depend::DependencyType::PartitionPri)?;
+        pg_depend::recordDependencyOn(
+            mcx,
+            &depender,
+            &parent,
+            pg_depend::DependencyType::PartitionPri,
+        )?;
         let tbl = ObjectAddress::set(types_core::RELATION_RELATION_ID, child_table_id);
-        pg_depend::recordDependencyOn(mcx, &depender, &tbl, pg_depend::DependencyType::PartitionSec)?;
+        pg_depend::recordDependencyOn(
+            mcx,
+            &depender,
+            &tbl,
+            pg_depend::DependencyType::PartitionSec,
+        )?;
     } else {
         pg_depend::deleteDependencyRecordsForClass(
             mcx,
@@ -1461,7 +1665,11 @@ pub fn update_constraint_fields<'mcx>(
     fields: &[(AttrNumber, Datum)],
 ) -> PgResult<()> {
     let con_rel = table::table_open(mcx, CONSTRAINT_RELATION_ID, RowExclusiveLock)?;
-    let keys = [eq_key(Anum_pg_constraint_oid, F_OIDEQ, Datum::from_oid(con_id))];
+    let keys = [eq_key(
+        Anum_pg_constraint_oid,
+        F_OIDEQ,
+        Datum::from_oid(con_id),
+    )];
     let mut scan =
         genam::systable_beginscan(mcx, &con_rel, CONSTRAINT_OID_INDEX_ID, true, None, &keys)?;
     let tup = genam::systable_getnext(mcx, &mut scan)?
@@ -1557,7 +1765,10 @@ pub fn AdjustNotNullInheritance<'mcx>(
         update_constraint_fields(
             mcx,
             con.oid,
-            &[(Anum_pg_constraint_coninhcount, Datum::from_i16(con.coninhcount + 1))],
+            &[(
+                Anum_pg_constraint_coninhcount,
+                Datum::from_i16(con.coninhcount + 1),
+            )],
         )?;
     } else if !con.conislocal {
         update_constraint_fields(
@@ -1657,7 +1868,11 @@ pub fn DeconstructFkConstraintRow<'mcx>(
     };
 
     let conkey = req(Anum_pg_constraint_conkey, "conkey")?;
-    let numkeys = fk_i16_array(&conkey, "conkey is not a 1-D smallint array", &mut out.conkey);
+    let numkeys = fk_i16_array(
+        &conkey,
+        "conkey is not a 1-D smallint array",
+        &mut out.conkey,
+    );
     assert!(
         numkeys > 0 && numkeys <= INDEX_MAX_KEYS,
         "foreign key constraint cannot have {numkeys} columns"
@@ -1666,12 +1881,27 @@ pub fn DeconstructFkConstraintRow<'mcx>(
 
     let confkey = req(Anum_pg_constraint_confkey, "confkey")?;
     let bad_confkey = "confkey is not a 1-D smallint array";
-    assert!(fk_i16_array(&confkey, bad_confkey, &mut out.confkey) == numkeys, "{bad_confkey}");
+    assert!(
+        fk_i16_array(&confkey, bad_confkey, &mut out.confkey) == numkeys,
+        "{bad_confkey}"
+    );
 
     for (attnum, name, slot) in [
-        (Anum_pg_constraint_conpfeqop, "conpfeqop", &mut out.pf_eq_oprs),
-        (Anum_pg_constraint_conppeqop, "conppeqop", &mut out.pp_eq_oprs),
-        (Anum_pg_constraint_conffeqop, "conffeqop", &mut out.ff_eq_oprs),
+        (
+            Anum_pg_constraint_conpfeqop,
+            "conpfeqop",
+            &mut out.pf_eq_oprs,
+        ),
+        (
+            Anum_pg_constraint_conppeqop,
+            "conppeqop",
+            &mut out.pp_eq_oprs,
+        ),
+        (
+            Anum_pg_constraint_conffeqop,
+            "conffeqop",
+            &mut out.ff_eq_oprs,
+        ),
     ] {
         let img = req(attnum, name)?;
         let bad = format!("{name} is not a 1-D Oid array");
@@ -1722,7 +1952,11 @@ fn operator_from_compare_type(
     if strat == 0 {
         return Err(cannot_identify(opcintype)?);
     }
-    let rhstype = if rhstype == InvalidOid { opcintype } else { rhstype };
+    let rhstype = if rhstype == InvalidOid {
+        opcintype
+    } else {
+        rhstype
+    };
     let opid = lsyscache::get_opfamily_member(opfamily, opcintype, rhstype, strat as i16)?;
     if opid == InvalidOid {
         return Err(cannot_identify(opcintype)?);
@@ -1753,7 +1987,11 @@ pub fn FindFKPeriodOpers(opclass: Oid) -> PgResult<(Oid, Oid, Oid)> {
         types_core::ANYRANGEOID => OID_RANGE_INTERSECT_RANGE_OP,
         _ => OID_MULTIRANGE_INTERSECT_MULTIRANGE_OP,
     };
-    Ok((containedbyoperoid, aggedcontainedbyoperoid, intersectoperoid))
+    Ok((
+        containedbyoperoid,
+        aggedcontainedbyoperoid,
+        intersectoperoid,
+    ))
 }
 
 #[cfg(test)]
@@ -1816,9 +2054,21 @@ mod truncation_tests {
         let long = "very_very_long_column_name_to_exceed_63_characters";
         let a_long = format!("a_{long}");
         for (name2, label, want) in [
-            (long, "fkey", "fktable2_very_very_long_column_name_to_exceed_63_character_fkey"),
-            (a_long.as_str(), "fkey", "fktable2_a_very_very_long_column_name_to_exceed_63_charact_fkey"),
-            (a_long.as_str(), "fkey1", "fktable2_a_very_very_long_column_name_to_exceed_63_charac_fkey1"),
+            (
+                long,
+                "fkey",
+                "fktable2_very_very_long_column_name_to_exceed_63_character_fkey",
+            ),
+            (
+                a_long.as_str(),
+                "fkey",
+                "fktable2_a_very_very_long_column_name_to_exceed_63_charact_fkey",
+            ),
+            (
+                a_long.as_str(),
+                "fkey1",
+                "fktable2_a_very_very_long_column_name_to_exceed_63_charac_fkey1",
+            ),
         ] {
             let got = super::make_object_name(ctx.mcx(), "fktable2", Some(name2), label).unwrap();
             assert_eq!(got.as_str(), want);

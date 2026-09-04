@@ -1,17 +1,17 @@
 use std::rc::Rc;
 
 use tcop_dest::DestReceiver;
+use types_core::instrument::{
+    AggregateInstrumentation, BitmapHeapScanInstrumentation, HashInstrumentation,
+    IncrementalSortInfo, Instrumentation, MemoizeInstrumentation, TuplesortInstrumentation,
+    TuplestoreInstrumentation,
+};
 use types_dest::CommandDest;
 use types_error::PgResult;
 use types_nodes::nodes_enums::CmdType;
 use types_nodes::plannodes::PlannedStmt;
 use types_portal::{CachedPlanHandle, ParamListHandle, QueryDescHandle, QueryEnvHandle};
 use types_scan::sdir::ScanDirection;
-use types_core::instrument::{
-    AggregateInstrumentation, BitmapHeapScanInstrumentation, HashInstrumentation,
-    IncrementalSortInfo, Instrumentation, MemoizeInstrumentation, TuplesortInstrumentation,
-    TuplestoreInstrumentation,
-};
 use types_snapshot::SnapshotData;
 use types_tuple::TupleDescData;
 

@@ -27,14 +27,20 @@ fn four_and_six_digit_escapes() {
 fn surrogate_pairs_combine() {
     // U+1D5B4 as UTF-16 pair D835/DDB4, in both escape widths.
     assert_eq!(de(br"\d835\ddb4", b'\\').unwrap(), "\u{1D5B4}".as_bytes());
-    assert_eq!(de(br"\d835\+00ddb4", b'\\').unwrap(), "\u{1D5B4}".as_bytes());
+    assert_eq!(
+        de(br"\d835\+00ddb4", b'\\').unwrap(),
+        "\u{1D5B4}".as_bytes()
+    );
 }
 
 #[test]
 fn invalid_escape_reports_hint_and_location() {
     let err = de(br"ab\00zz", b'\\').unwrap_err();
     assert_eq!(err.message, "invalid Unicode escape");
-    assert_eq!(err.hint, Some("Unicode escapes must be \\XXXX or \\+XXXXXX."));
+    assert_eq!(
+        err.hint,
+        Some("Unicode escapes must be \\XXXX or \\+XXXXXX.")
+    );
     // in - str + position + 3, position = 0.
     assert_eq!(err.location, 2 + 3);
 }
@@ -52,7 +58,10 @@ fn invalid_value_and_pairs() {
         br"\d835\\",               // pair first + doubled escape
     ] {
         let err = de(bad, b'\\').unwrap_err();
-        assert_eq!(err.message, "invalid Unicode surrogate pair", "input {bad:?}");
+        assert_eq!(
+            err.message, "invalid Unicode surrogate pair",
+            "input {bad:?}"
+        );
     }
 }
 

@@ -72,8 +72,11 @@ pub fn restore_param_list<'mcx>(
     mcx: Mcx<'mcx>,
     cursor: &mut &[u8],
 ) -> PgResult<PgVec<'mcx, ParamExternData>> {
-    let nparams =
-        i32::from_ne_bytes(cursor[..4].try_into().expect("restore_param_list: short header"));
+    let nparams = i32::from_ne_bytes(
+        cursor[..4]
+            .try_into()
+            .expect("restore_param_list: short header"),
+    );
     *cursor = &cursor[4..];
     let mut out = vec_with_capacity_in(mcx, nparams.max(0) as usize)?;
     for _ in 0..nparams {
@@ -82,7 +85,12 @@ pub fn restore_param_list<'mcx>(
         let pflags = u16::from_ne_bytes(cursor[..2].try_into().expect("short pflags"));
         *cursor = &cursor[2..];
         let (value, isnull) = adt_scalar::datum_restore(mcx, cursor)?;
-        out.push(ParamExternData { value, isnull, pflags, ptype });
+        out.push(ParamExternData {
+            value,
+            isnull,
+            pflags,
+            ptype,
+        });
     }
     Ok(out)
 }
@@ -100,8 +108,13 @@ pub fn build_param_log_string<'mcx>(
     }
     let mut buf = PgString::new_in(mcx);
     for (paramno, param) in params.iter().enumerate() {
-        write!(buf, "{}${} = ", if paramno > 0 { ", " } else { "" }, paramno + 1)
-            .expect("params: oom building log string");
+        write!(
+            buf,
+            "{}${} = ",
+            if paramno > 0 { ", " } else { "" },
+            paramno + 1
+        )
+        .expect("params: oom building log string");
         if param.isnull || !OidIsValid(param.ptype) {
             buf.try_push_str("NULL")?;
         } else if let Some(known) =
@@ -115,7 +128,11 @@ pub fn build_param_log_string<'mcx>(
             // SAFETY: out functions return a NUL-terminated cstring datum,
             // consumed before finfo scratch dies.
             let s = unsafe { core::ffi::CStr::from_ptr(d.as_usize() as *const core::ffi::c_char) };
-            conv::append_string_info_string_quoted(&mut buf, s.to_str().expect("non-UTF-8 output"), maxlen)?;
+            conv::append_string_info_string_quoted(
+                &mut buf,
+                s.to_str().expect("non-UTF-8 output"),
+                maxlen,
+            )?;
         }
     }
     Ok(Some(buf))

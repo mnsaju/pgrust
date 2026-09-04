@@ -261,7 +261,9 @@ pub(crate) fn CreateLockFile(
         contents.push('\n');
     }
 
-    let write_result = file.write_all(contents.as_bytes()).and_then(|()| file.sync_all());
+    let write_result = file
+        .write_all(contents.as_bytes())
+        .and_then(|()| file.sync_all());
     // C's third distinct check: close(fd) itself can fail (e.g. NFS EIO);
     // write, fsync, and close failures all share this exact message.
     // std::os::fd is the portable spelling (present on wasi too; unix::io
@@ -341,7 +343,11 @@ pub fn TouchSocketLockFiles() {}
 // Add or replace one line (no trailing newline in `line`). The file is never
 // truncated, so lines must never shrink; every failure is ereport(LOG).
 pub fn AddToDataDirLockFile(target_line: i32, line: &str) -> PgResult<()> {
-    let mut file = match OpenOptions::new().read(true).write(true).open(DIRECTORY_LOCK_FILE) {
+    let mut file = match OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(DIRECTORY_LOCK_FILE)
+    {
         Ok(f) => f,
         Err(e) => {
             return ereport(LOG)
@@ -356,7 +362,9 @@ pub fn AddToDataDirLockFile(target_line: i32, line: &str) -> PgResult<()> {
         return ereport(LOG)
             .with_saved_errno(e.raw_os_error().unwrap_or(0))
             .errcode_for_file_access()
-            .errmsg(format!("could not read from file \"{DIRECTORY_LOCK_FILE}\": %m"))
+            .errmsg(format!(
+                "could not read from file \"{DIRECTORY_LOCK_FILE}\": %m"
+            ))
             .finish(loc(1597, "AddToDataDirLockFile"));
     }
 
@@ -395,7 +403,9 @@ pub fn AddToDataDirLockFile(target_line: i32, line: &str) -> PgResult<()> {
         return ereport(LOG)
             .with_saved_errno(e.raw_os_error().unwrap_or(libc::ENOSPC))
             .errcode_for_file_access()
-            .errmsg(format!("could not write to file \"{DIRECTORY_LOCK_FILE}\": %m"))
+            .errmsg(format!(
+                "could not write to file \"{DIRECTORY_LOCK_FILE}\": %m"
+            ))
             .finish(loc(1661, "AddToDataDirLockFile"));
     }
     Ok(())
@@ -404,7 +414,11 @@ pub fn AddToDataDirLockFile(target_line: i32, line: &str) -> PgResult<()> {
 // Postmaster's periodic check that the lock file still carries our PID.
 // Return true on any doubt — false triggers a panic shutdown.
 pub fn RecheckDataDirLockFile() -> PgResult<bool> {
-    let mut file = match OpenOptions::new().read(true).write(true).open(DIRECTORY_LOCK_FILE) {
+    let mut file = match OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(DIRECTORY_LOCK_FILE)
+    {
         Ok(f) => f,
         Err(e) => {
             // Fail only on enumerated clearly-something-is-wrong conditions.
@@ -433,7 +447,9 @@ pub fn RecheckDataDirLockFile() -> PgResult<bool> {
         ereport(LOG)
             .with_saved_errno(e.raw_os_error().unwrap_or(0))
             .errcode_for_file_access()
-            .errmsg(format!("could not read from file \"{DIRECTORY_LOCK_FILE}\": %m"))
+            .errmsg(format!(
+                "could not read from file \"{DIRECTORY_LOCK_FILE}\": %m"
+            ))
             .finish(loc(1739, "RecheckDataDirLockFile"))?;
         return Ok(true);
     }

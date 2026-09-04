@@ -18,7 +18,9 @@ pub struct MonotonicClock {
 
 impl MonotonicClock {
     pub fn new() -> Self {
-        MonotonicClock { origin_ns: pg_clock::mono_ns() }
+        MonotonicClock {
+            origin_ns: pg_clock::mono_ns(),
+        }
     }
 }
 
@@ -42,7 +44,9 @@ pub struct VirtualClock {
 
 impl VirtualClock {
     pub fn new() -> Self {
-        VirtualClock { ns: AtomicU64::new(0) }
+        VirtualClock {
+            ns: AtomicU64::new(0),
+        }
     }
 
     pub fn advance(&self, ns: u64) {

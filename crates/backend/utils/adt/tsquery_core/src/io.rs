@@ -220,7 +220,7 @@ pub fn tsquery_recv_core<'mcx>(
             }
             if pool.len() > MAXSTRPOS {
                 return Err(
-                    PgError::error("invalid tsquery: total operand length exceeded").into()
+                    PgError::error("invalid tsquery: total operand length exceeded").into(),
                 );
             }
             let valcrc = ::crc32c::legacy_crc32_lexeme(val) as i32;
@@ -252,7 +252,11 @@ pub fn tsquery_recv_core<'mcx>(
             } else {
                 0
             };
-            items.push(Item::Opr(Operator { oper, distance, left: 0 }));
+            items.push(Item::Opr(Operator {
+                oper,
+                distance,
+                left: 0,
+            }));
         } else {
             return Err(PgError::error(format!("unrecognized tsquery node type: {typ}")).into());
         }
@@ -269,7 +273,11 @@ pub fn compare_tsq(a: TsQueryRef<'_>, b: TsQueryRef<'_>, mcx: Mcx<'_>) -> PgResu
         return Ok(if a.size() < b.size() { -1 } else { 1 });
     }
     if a.payload.len() != b.payload.len() {
-        return Ok(if a.payload.len() < b.payload.len() { -1 } else { 1 });
+        return Ok(if a.payload.len() < b.payload.len() {
+            -1
+        } else {
+            1
+        });
     }
     if a.size() != 0 {
         let an = crate::util::qt2qtn(mcx, a, 0)?;
@@ -285,7 +293,8 @@ pub fn collect_values<'mcx>(
     q: TsQueryRef<'_>,
 ) -> PgResult<PgVec<'mcx, PgVec<'mcx, u8>>> {
     let mut vals: PgVec<PgVec<u8>> = PgVec::new_in(mcx);
-    vals.try_reserve_exact(q.size()).map_err(|_| mcx.oom(q.size()))?;
+    vals.try_reserve_exact(q.size())
+        .map_err(|_| mcx.oom(q.size()))?;
     for i in 0..q.size() {
         if let Item::Val(op) = q.item(i) {
             let mut v = vec_with_capacity_in(mcx, op.length)?;
@@ -319,4 +328,3 @@ pub fn tsq_mcontains_core(
     }
     Ok(true)
 }
-

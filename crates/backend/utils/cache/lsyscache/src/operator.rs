@@ -16,10 +16,12 @@ fn operator_lookup_failed(opno: Oid) -> Box<types_error::PgError> {
 }
 
 pub fn get_opcode(opno: Oid) -> PgResult<RegProcedure> {
-    Ok(match syscache_seams::lookup_pg_operator_shape::call(opno)? {
-        Some(optup) => optup.oprcode,
-        None => InvalidOid,
-    })
+    Ok(
+        match syscache_seams::lookup_pg_operator_shape::call(opno)? {
+            Some(optup) => optup.oprcode,
+            None => InvalidOid,
+        },
+    )
 }
 
 pub fn get_opname<'mcx>(mcx: Mcx<'mcx>, opno: Oid) -> PgResult<Option<PgString<'mcx>>> {
@@ -30,10 +32,12 @@ pub fn get_opname<'mcx>(mcx: Mcx<'mcx>, opno: Oid) -> PgResult<Option<PgString<'
 }
 
 pub fn get_op_rettype(opno: Oid) -> PgResult<Oid> {
-    Ok(match syscache_seams::lookup_pg_operator_shape::call(opno)? {
-        Some(optup) => optup.oprresult,
-        None => InvalidOid,
-    })
+    Ok(
+        match syscache_seams::lookup_pg_operator_shape::call(opno)? {
+            Some(optup) => optup.oprresult,
+            None => InvalidOid,
+        },
+    )
 }
 
 pub fn op_input_types(opno: Oid) -> PgResult<(Oid, Oid)> {
@@ -55,10 +59,12 @@ pub fn op_mergejoinable(opno: Oid, inputtype: Oid) -> PgResult<bool> {
     if opno == ARRAY_EQ_OP {
         return Ok(typcache_seams::type_cache_cmp_proc::call(inputtype)? == F_BTARRAYCMP);
     }
-    Ok(match syscache_seams::lookup_pg_operator_shape::call(opno)? {
-        Some(optup) => optup.oprcanmerge,
-        None => false,
-    })
+    Ok(
+        match syscache_seams::lookup_pg_operator_shape::call(opno)? {
+            Some(optup) => optup.oprcanmerge,
+            None => false,
+        },
+    )
 }
 
 pub fn op_hashjoinable(opno: Oid, inputtype: Oid) -> PgResult<bool> {
@@ -68,16 +74,20 @@ pub fn op_hashjoinable(opno: Oid, inputtype: Oid) -> PgResult<bool> {
     if opno == ARRAY_EQ_OP {
         return Ok(typcache_seams::type_cache_hash_proc::call(inputtype)? == F_HASH_ARRAY);
     }
-    Ok(match syscache_seams::lookup_pg_operator_shape::call(opno)? {
-        Some(optup) => optup.oprcanhash,
-        None => false,
-    })
+    Ok(
+        match syscache_seams::lookup_pg_operator_shape::call(opno)? {
+            Some(optup) => optup.oprcanhash,
+            None => false,
+        },
+    )
 }
 
 pub fn op_strict(opno: Oid) -> PgResult<bool> {
     let funcid = get_opcode(opno)?;
     if funcid == InvalidOid {
-        return Err(cache_lookup_error(format!("operator {opno} does not exist")));
+        return Err(cache_lookup_error(format!(
+            "operator {opno} does not exist"
+        )));
     }
     func_strict(funcid)
 }
@@ -85,35 +95,45 @@ pub fn op_strict(opno: Oid) -> PgResult<bool> {
 pub fn op_volatile(opno: Oid) -> PgResult<i8> {
     let funcid = get_opcode(opno)?;
     if funcid == InvalidOid {
-        return Err(cache_lookup_error(format!("operator {opno} does not exist")));
+        return Err(cache_lookup_error(format!(
+            "operator {opno} does not exist"
+        )));
     }
     func_volatile(funcid)
 }
 
 pub fn get_commutator(opno: Oid) -> PgResult<Oid> {
-    Ok(match syscache_seams::lookup_pg_operator_shape::call(opno)? {
-        Some(optup) => optup.oprcom,
-        None => InvalidOid,
-    })
+    Ok(
+        match syscache_seams::lookup_pg_operator_shape::call(opno)? {
+            Some(optup) => optup.oprcom,
+            None => InvalidOid,
+        },
+    )
 }
 
 pub fn get_negator(opno: Oid) -> PgResult<Oid> {
-    Ok(match syscache_seams::lookup_pg_operator_shape::call(opno)? {
-        Some(optup) => optup.oprnegate,
-        None => InvalidOid,
-    })
+    Ok(
+        match syscache_seams::lookup_pg_operator_shape::call(opno)? {
+            Some(optup) => optup.oprnegate,
+            None => InvalidOid,
+        },
+    )
 }
 
 pub fn get_oprrest(opno: Oid) -> PgResult<RegProcedure> {
-    Ok(match syscache_seams::lookup_pg_operator_shape::call(opno)? {
-        Some(optup) => optup.oprrest,
-        None => InvalidOid,
-    })
+    Ok(
+        match syscache_seams::lookup_pg_operator_shape::call(opno)? {
+            Some(optup) => optup.oprrest,
+            None => InvalidOid,
+        },
+    )
 }
 
 pub fn get_oprjoin(opno: Oid) -> PgResult<RegProcedure> {
-    Ok(match syscache_seams::lookup_pg_operator_shape::call(opno)? {
-        Some(optup) => optup.oprjoin,
-        None => InvalidOid,
-    })
+    Ok(
+        match syscache_seams::lookup_pg_operator_shape::call(opno)? {
+            Some(optup) => optup.oprjoin,
+            None => InvalidOid,
+        },
+    )
 }

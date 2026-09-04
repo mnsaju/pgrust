@@ -60,7 +60,11 @@ struct Ready {
 
 impl Ready {
     fn new() -> Self {
-        Ready { epoch: AtomicUsize::new(0), m: Mutex::new(()), cv: Condvar::new() }
+        Ready {
+            epoch: AtomicUsize::new(0),
+            m: Mutex::new(()),
+            cv: Condvar::new(),
+        }
     }
     fn epoch(&self) -> usize {
         self.epoch.load(SeqCst)
@@ -92,7 +96,11 @@ struct Pipe {
 
 impl Pipe {
     fn new(cap: usize) -> Self {
-        Pipe { used: Mutex::new(0), room_cv: Condvar::new(), cap }
+        Pipe {
+            used: Mutex::new(0),
+            room_cv: Condvar::new(),
+            cap,
+        }
     }
 
     /// N1 FIX shape: a non-blocking, per-call-capped write. Returns the

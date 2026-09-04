@@ -30,7 +30,13 @@ pub struct UnaccentTrie {
 impl UnaccentTrie {
     fn new_node(&mut self, mcx: Mcx<'static>) -> PgResult<usize> {
         let mut node = vec_with_capacity_in(mcx, 256)?;
-        node.resize(256, TrieCell { next: 0, replace: 0 });
+        node.resize(
+            256,
+            TrieCell {
+                next: 0,
+                replace: 0,
+            },
+        );
         self.nodes.push(node);
         Ok(self.nodes.len() - 1)
     }
@@ -92,9 +98,7 @@ impl UnaccentTrie {
 }
 
 fn config_warning(msg: &str) {
-    let _ = ::elog::ThrowErrorData(
-        PgError::warning(msg).with_sqlstate(ERRCODE_CONFIG_FILE_ERROR),
-    );
+    let _ = ::elog::ThrowErrorData(PgError::warning(msg).with_sqlstate(ERRCODE_CONFIG_FILE_ERROR));
 }
 
 fn read_rules_lines<'mcx>(
@@ -241,12 +245,8 @@ fn init_trie(mcx: Mcx<'static>, filename: &[u8]) -> PgResult<UnaccentTrie> {
         match parse_rule_line(line) {
             Ok(Some((src, trg))) => trie.place(mcx, src, &trg)?,
             Ok(None) => {}
-            Err(-1) => {
-                config_warning("invalid syntax: more than two strings in unaccent rule")
-            }
-            Err(_) => {
-                config_warning("invalid syntax: unfinished quoted string in unaccent rule")
-            }
+            Err(-1) => config_warning("invalid syntax: more than two strings in unaccent rule"),
+            Err(_) => config_warning("invalid syntax: unfinished quoted string in unaccent rule"),
         }
     }
     Ok(trie)
@@ -314,13 +314,16 @@ pub fn unaccent_lexize<'mcx>(
     match buf {
         Some(lexeme) => {
             let mut out = PgVec::new_in(mcx);
-            out.push(TsLexeme { nvariant: 0, flags: TSL_FILTER, lexeme });
+            out.push(TsLexeme {
+                nvariant: 0,
+                flags: TSL_FILTER,
+                lexeme,
+            });
             Ok(Some(LexizeResult(out)))
         }
         None => Ok(None),
     }
 }
-
 
 fn arg_dict_ptr(fcinfo: &Fcinfo) -> usize {
     fcinfo.arg(0).as_usize()
@@ -356,7 +359,9 @@ fn fc_unaccent_lexize(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> Pg
 
 fn fc_unaccent_dict(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let (dict_oid, str_arg) = if fcinfo.nargs == 1 {
-        let flinfo = flinfo.as_ref().expect("unaccent(text): resolved FmgrInfo required");
+        let flinfo = flinfo
+            .as_ref()
+            .expect("unaccent(text): resolved FmgrInfo required");
         let procnspid = lsyscache::get_func_namespace(flinfo.fn_oid)?;
         let dict_oid =
             syscache_seams::lookup_pg_ts_dict_oid_by_name_nsp::call("unaccent", procnspid)?;
@@ -377,7 +382,9 @@ fn fc_unaccent_dict(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRes
     };
 
     // SAFETY: both SQL signatures are strict; the text arg is non-null.
-    let token = unsafe { fcinfo.arg_varlena_packed(str_arg)? }.data().to_vec();
+    let token = unsafe { fcinfo.arg_varlena_packed(str_arg)? }
+        .data()
+        .to_vec();
     // SAFETY: the arming context outlives this call.
     let mcx = unsafe { fcinfo.result_mcx_detached() };
 

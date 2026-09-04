@@ -68,10 +68,7 @@ fn hex_run_without_slash_is_identifier() {
     assert_eq!(lex("ABC"), vec![Token::Ident("abc".into())]);
     // A leading-digit run that isn't all-decimal: digits aren't ident_start,
     // so the decimal prefix lexes as UCONST and the rest as its own IDENT.
-    assert_eq!(
-        lex("1A"),
-        vec![Token::Uconst(1), Token::Ident("a".into())]
-    );
+    assert_eq!(lex("1A"), vec![Token::Uconst(1), Token::Ident("a".into())]);
 }
 
 #[test]

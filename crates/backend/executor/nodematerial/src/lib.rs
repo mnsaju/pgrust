@@ -175,7 +175,10 @@ pub fn exec_rescan_material<'mcx>(
             node.eof_underlying = false;
             true
         } else {
-            node.tuplestorestate.as_mut().expect("checked above").rescan()?;
+            node.tuplestorestate
+                .as_mut()
+                .expect("checked above")
+                .rescan()?;
             false
         }
     } else {

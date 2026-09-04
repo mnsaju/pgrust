@@ -9,10 +9,7 @@
 extern crate alloc;
 
 use ::datum::Datum;
-use ::execexpr::{
-    exec_eval_expr, EvalSlots, ExprState, ParamBind,
-    INDEX_VAR,
-};
+use ::execexpr::{exec_eval_expr, EvalSlots, ExprState, ParamBind, INDEX_VAR};
 use ::execscan::{ScanNode, ScanState};
 use ::executils::{exec_recheck_qual_and_reset, EStateData, EcxtId, ExecSlotId};
 use ::heaptuple::HeapTuple;
@@ -30,8 +27,8 @@ use ::types_nodes::plannodes::IndexScan;
 use ::types_nodes::NodeTag;
 use ::types_rel::{NoLock, Relation};
 use ::types_scan::scankey::{
-    ScanKeyData, StrategyNumber, SK_ISNULL, SK_ORDER_BY, SK_ROW_END, SK_ROW_HEADER,
-    SK_ROW_MEMBER, SK_SEARCHARRAY, SK_SEARCHNOTNULL, SK_SEARCHNULL,
+    ScanKeyData, StrategyNumber, SK_ISNULL, SK_ORDER_BY, SK_ROW_END, SK_ROW_HEADER, SK_ROW_MEMBER,
+    SK_SEARCHARRAY, SK_SEARCHNOTNULL, SK_SEARCHNULL,
 };
 use ::types_scan::sdir::ScanDirection;
 use ::types_slot::{EXEC_FLAG_BACKWARD, EXEC_FLAG_MARK};
@@ -138,11 +135,7 @@ impl<'mcx> ScanNode<'mcx> for IndexScanState<'mcx> {
     }
 
     /// `IndexRecheck`: does the EPQ test tuple meet the original quals?
-    fn epq_recheck(
-        &mut self,
-        estate: &mut EStateData<'mcx>,
-        slot: ExecSlotId,
-    ) -> PgResult<bool> {
+    fn epq_recheck(&mut self, estate: &mut EStateData<'mcx>, slot: ExecSlotId) -> PgResult<bool> {
         let ecxt = self.ss.ps_ExprContext;
         exec_recheck_qual_and_reset(self.indexqualorig.as_deref_mut(), estate, ecxt, slot)
     }
@@ -243,7 +236,9 @@ impl<'mcx> IndexScanState<'mcx> {
             self.iss_RelationDesc.as_ref().expect("index relation open"),
             snapshot,
             self.iss_ScanKeys.len() as i32,
-            self.iss_OrderBy.as_deref().map_or(0, |ob| ob.keys.len() as i32),
+            self.iss_OrderBy
+                .as_deref()
+                .map_or(0, |ob| ob.keys.len() as i32),
         )?;
         if self.iss_Runtime.as_deref().is_none_or(|r| r.ready) {
             index_rescan(
@@ -264,7 +259,10 @@ impl<'mcx> IndexScanState<'mcx> {
         let mcx = estate.es_query_cxt;
         // C asserts: reordering supports forward scans only (no AM has both
         // amcanorderbyop and amcanbackward).
-        debug_assert!(!matches!(self.iss_OrderDir, ScanDirection::BackwardScanDirection));
+        debug_assert!(!matches!(
+            self.iss_OrderDir,
+            ScanDirection::BackwardScanDirection
+        ));
         debug_assert!(matches!(
             estate.es_direction,
             ScanDirection::ForwardScanDirection
@@ -284,7 +282,9 @@ impl<'mcx> IndexScanState<'mcx> {
         } = self;
         // SAFETY: written by open_scandesc when None.
         let scandesc = unsafe { iss_ScanDesc.as_deref_mut().unwrap_unchecked() };
-        let ob = iss_OrderBy.as_deref_mut().expect("reorder path has ORDER BY state");
+        let ob = iss_OrderBy
+            .as_deref_mut()
+            .expect("reorder path has ORDER BY state");
 
         loop {
             check_for_interrupts()?;
@@ -482,7 +482,10 @@ pub fn index_scan_batch_fetch<'mcx>(
     let slot_id = node.ss.ss_ScanTupleSlot;
     // B8: es_direction combine narrowed to indexorderdir (see scan_next).
     let direction = node.iss_OrderDir;
-    let scandesc = node.iss_ScanDesc.as_deref_mut().expect("batch fetch before tidrun");
+    let scandesc = node
+        .iss_ScanDesc
+        .as_deref_mut()
+        .expect("batch fetch before tidrun");
     if i > 0 && index_getnext_tid(scandesc, direction)?.is_none() {
         return Ok(false);
     }
@@ -521,7 +524,11 @@ pub fn exec_init_index_scan<'mcx>(
     let rel = estate
         .exec_get_range_table_relation(node.scan.scanrelid, false)?
         .alias();
-    let index_rel = indexam::index_open(mcx, node.indexid, index_lockmode(estate, node.scan.scanrelid))?;
+    let index_rel = indexam::index_open(
+        mcx,
+        node.indexid,
+        index_lockmode(estate, node.scan.scanrelid),
+    )?;
     let mut state = exec_init_index_scan_rel(mcx, node, estate, rel, index_rel)?;
     // Lane-executor-v2: the batched tidrun drive is forward-only and can't
     // survive mark/restore, so forbid it for a mark-armed (B2 retired the scroll-eflags producer) or
@@ -572,11 +579,23 @@ pub fn exec_init_index_scan_rel<'mcx>(
                 ::execexpr::exec_init_qual_subplans(mcx, &node.indexqualorig, params, env)?;
             let mut runtime_keys: PgVec<'mcx, IndexRuntimeKeyInfo<'mcx>> = PgVec::new_in(mcx);
             let scan_keys = exec_index_build_scan_keys(
-                mcx, &index_rel, &node.indexqual, params, false, &mut runtime_keys, env,
+                mcx,
+                &index_rel,
+                &node.indexqual,
+                params,
+                false,
+                &mut runtime_keys,
+                env,
             )?;
             // ORDER BY exprs become scankeys the same way (SK_ORDER_BY).
             let orderby_keys = exec_index_build_scan_keys(
-                mcx, &index_rel, &node.indexorderby, params, true, &mut runtime_keys, env,
+                mcx,
+                &index_rel,
+                &node.indexorderby,
+                params,
+                true,
+                &mut runtime_keys,
+                env,
             )?;
             // orderbyorig re-evaluation (xs_recheckorderby) can carry the
             // same SubPlans the runtime keys do — compile under the env.
@@ -644,7 +663,11 @@ fn init_orderby_state<'mcx>(
     let mut typbyvals: PgVec<'mcx, bool> = PgVec::new_in(mcx);
     let mut typlens: PgVec<'mcx, i16> = PgVec::new_in(mcx);
     let mut orderbyorig: PgVec<'mcx, PgBox<'mcx, ExprState<'mcx>>> = PgVec::new_in(mcx);
-    for (orderbyop, orderbyexpr) in node.indexorderbyops.iter().zip(node.indexorderbyorig.iter()) {
+    for (orderbyop, orderbyexpr) in node
+        .indexorderbyops
+        .iter()
+        .zip(node.indexorderbyorig.iter())
+    {
         let init = SortSupportInit {
             ssup_collation: ::nodes_core::node_funcs::expr_collation(orderbyexpr),
             // cmp_orderbyvals supports NULLS LAST only.
@@ -777,12 +800,8 @@ pub fn exec_index_build_scan_keys<'mcx>(
                         panic!("RowCompare index qualification contains wrong operator");
                     }
                     // BTORDER_PROC: subkeys carry the 3-way comparison proc.
-                    let opfuncid = lsyscache::get_opfamily_proc(
-                        opfamily,
-                        op_lefttype,
-                        op_righttype,
-                        1,
-                    )?;
+                    let opfuncid =
+                        lsyscache::get_opfamily_proc(opfamily, op_lefttype, op_righttype, 1)?;
                     assert!(
                         opfuncid != 0,
                         "missing support function 1({op_lefttype},{op_righttype}) in opfamily {opfamily}"
@@ -870,8 +889,13 @@ pub fn exec_index_build_scan_keys<'mcx>(
                         runtime_keys.push(IndexRuntimeKeyInfo {
                             scan_key: scan_keys.len(),
                             orderby: false,
-                            key_expr: ::execexpr::exec_init_expr_subplans(mcx, Some(rightop), params, sub)?
-                                .expect("runtime key expr compiles"),
+                            key_expr: ::execexpr::exec_init_expr_subplans(
+                                mcx,
+                                Some(rightop),
+                                params,
+                                sub,
+                            )?
+                            .expect("runtime key expr compiles"),
                             // The expr yields an array of op_righttype, not
                             // op_righttype itself; every array type is toastable.
                             key_toastable: true,
@@ -1032,8 +1056,11 @@ pub fn skeleton_rebind<'mcx>(
     let rel = estate
         .exec_get_range_table_relation(node.ss.scanrelid, false)?
         .alias();
-    let index_rel =
-        indexam::index_open(mcx, node.iss_IndexOid, index_lockmode(estate, node.ss.scanrelid))?;
+    let index_rel = indexam::index_open(
+        mcx,
+        node.iss_IndexOid,
+        index_lockmode(estate, node.ss.scanrelid),
+    )?;
     if let Some(scandesc) = node.iss_ScanDesc.as_deref_mut() {
         let snapshot = estate
             .es_snapshot
@@ -1218,7 +1245,9 @@ pub fn exec_index_scan_initialize_dsm<'mcx>(
         heap,
         index,
         node.iss_ScanKeys.len() as i32,
-        node.iss_OrderBy.as_deref().map_or(0, |ob| ob.keys.len() as i32),
+        node.iss_OrderBy
+            .as_deref()
+            .map_or(0, |ob| ob.keys.len() as i32),
         std::sync::Arc::clone(&pscan),
     )?;
     if node.iss_Runtime.as_deref().is_none_or(|r| r.ready) {
@@ -1260,7 +1289,9 @@ pub fn exec_index_scan_initialize_worker<'mcx>(
         heap,
         index,
         node.iss_ScanKeys.len() as i32,
-        node.iss_OrderBy.as_deref().map_or(0, |ob| ob.keys.len() as i32),
+        node.iss_OrderBy
+            .as_deref()
+            .map_or(0, |ob| ob.keys.len() as i32),
         pscan,
     )?;
     if node.iss_Runtime.as_deref().is_none_or(|r| r.ready) {

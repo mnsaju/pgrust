@@ -13,12 +13,10 @@ use logical::{
 use mcx::{Mcx, MemoryContext};
 use reorderbuffer::{ReorderBuffer, ReorderBufferChange, ReorderBufferChangeData, TxnId};
 use types_core::{
-    InvalidOid, Oid, RepOriginId, TransactionId, XLogRecPtr, BITOID, BOOLOID, FLOAT4OID,
-    FLOAT8OID, INT2OID, INT4OID, INT8OID, NUMERICOID, OIDOID, VARBITOID,
+    InvalidOid, Oid, RepOriginId, TransactionId, XLogRecPtr, BITOID, BOOLOID, FLOAT4OID, FLOAT8OID,
+    INT2OID, INT4OID, INT8OID, NUMERICOID, OIDOID, VARBITOID,
 };
-use types_error::{
-    ErrorLocation, PgResult, ERRCODE_INVALID_PARAMETER_VALUE, ERROR,
-};
+use types_error::{ErrorLocation, PgResult, ERRCODE_INVALID_PARAMETER_VALUE, ERROR};
 use types_fmgr::{FmgrInfo, FunctionCallInfoBaseData as Fcinfo};
 use types_rel::RelationData;
 use types_tuple::{varatt, HeapTupleData, TupleDescData};
@@ -134,9 +132,7 @@ fn pg_decode_startup(opc: &mut OutputPluginContext, _is_init: bool) -> PgResult<
         let value_str = value.as_deref();
         match name.as_str() {
             "include-xids" => parse_bool_option(name, value_str, &mut data.include_xids)?,
-            "include-timestamp" => {
-                parse_bool_option(name, value_str, &mut data.include_timestamp)?
-            }
+            "include-timestamp" => parse_bool_option(name, value_str, &mut data.include_timestamp)?,
             "force-binary" => {
                 let mut force_binary = false;
                 if value_str.is_some() {
@@ -489,7 +485,11 @@ fn tuple_to_stringinfo(
         } else if typisvarlena && varatt_is_external_ondisk(origval) {
             s.push_str("unchanged-toast-datum");
         } else if !typisvarlena {
-            print_literal(s, typid, &oid_output_function_call(mcx, typoutput, origval)?);
+            print_literal(
+                s,
+                typid,
+                &oid_output_function_call(mcx, typoutput, origval)?,
+            );
         } else {
             let p = origval.as_usize() as *const u8;
             // SAFETY: a live varlena readable through its full VARSIZE_ANY.
@@ -529,20 +529,17 @@ fn pg_decode_change(
     OutputPluginPrepareWrite(opc, true)?;
 
     opc.out.push_str("table ");
-    let nspname = lsyscache::get_namespace_name(
-        mcx,
-        lsyscache::get_rel_namespace(relation.rd_id)?,
-    )?
-    .expect("relation namespace exists");
+    let nspname =
+        lsyscache::get_namespace_name(mcx, lsyscache::get_rel_namespace(relation.rd_id)?)?
+            .expect("relation namespace exists");
     // C prefers get_rel_name(relrewrite) for rewrite relations; relrewrite is
     // not carried by this port's FormData_pg_class and rewrite changes only
     // reach plugins with receive_rewrites (unreachable without that field).
     let relname = String::from_utf8_lossy(class_form.relname.name_str()).into_owned();
-    opc.out
-        .push_str(&ruleutils::quote_qualified_identifier(
-            Some(nspname.as_str()),
-            &relname,
-        ));
+    opc.out.push_str(&ruleutils::quote_qualified_identifier(
+        Some(nspname.as_str()),
+        &relname,
+    ));
     opc.out.push(':');
 
     match &change.data {
@@ -612,11 +609,10 @@ fn pg_decode_truncate(
         let nspname = lsyscache::get_namespace_name(mcx, rel.rd_rel.relnamespace)?
             .expect("relation namespace exists");
         let relname = String::from_utf8_lossy(rel.rd_rel.relname.name_str()).into_owned();
-        opc.out
-            .push_str(&ruleutils::quote_qualified_identifier(
-                Some(nspname.as_str()),
-                &relname,
-            ));
+        opc.out.push_str(&ruleutils::quote_qualified_identifier(
+            Some(nspname.as_str()),
+            &relname,
+        ));
     }
 
     opc.out.push_str(": TRUNCATE:");
@@ -799,7 +795,11 @@ fn pg_decode_stream_commit(
     }
     OutputPluginPrepareWrite(opc, true)?;
     if data.include_xids {
-        let _ = write!(opc.out, "committing streamed transaction TXN {}", rb.txn(txn).xid);
+        let _ = write!(
+            opc.out,
+            "committing streamed transaction TXN {}",
+            rb.txn(txn).xid
+        );
     } else {
         opc.out.push_str("committing streamed transaction");
     }

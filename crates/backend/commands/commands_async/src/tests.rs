@@ -15,8 +15,12 @@ fn n(channel: &str, payload: &str) -> Notification {
 
 #[test]
 fn dedup_linear_and_hashed() {
-    let mut list =
-        NotificationList { nesting_level: 1, events: vec![n("a", "x")], hashtab: None, upper: None };
+    let mut list = NotificationList {
+        nesting_level: 1,
+        events: vec![n("a", "x")],
+        hashtab: None,
+        upper: None,
+    };
     assert!(exists_pending_notify(&list, &n("a", "x")));
     assert!(!exists_pending_notify(&list, &n("a", "y")));
     assert!(!exists_pending_notify(&list, &n("b", "x")));
@@ -62,18 +66,21 @@ fn push_notify(level: i32, channel: &str, payload: &str) {
 
 fn pending_payloads() -> Vec<String> {
     LOCAL.with(|s| {
-        s.pending_notifies.borrow().as_ref().map_or(Vec::new(), |l| {
-            l.events
-                .iter()
-                .map(|e| {
-                    String::from_utf8_lossy(
-                        &e.data[e.channel_len as usize + 1
-                            ..e.channel_len as usize + 1 + e.payload_len as usize],
-                    )
-                    .into_owned()
-                })
-                .collect()
-        })
+        s.pending_notifies
+            .borrow()
+            .as_ref()
+            .map_or(Vec::new(), |l| {
+                l.events
+                    .iter()
+                    .map(|e| {
+                        String::from_utf8_lossy(
+                            &e.data[e.channel_len as usize + 1
+                                ..e.channel_len as usize + 1 + e.payload_len as usize],
+                        )
+                        .into_owned()
+                    })
+                    .collect()
+            })
     })
 }
 
@@ -87,7 +94,10 @@ fn subxact_commit_merges_without_dups_and_abort_pops() {
     assert_eq!(pending_payloads(), vec!["parent", "child"]);
     at_subcommit_merge(2);
     assert_eq!(pending_payloads(), vec!["parent", "child"]);
-    assert_eq!(LOCAL.with(|s| s.pending_notifies.borrow().as_ref().unwrap().nesting_level), 1);
+    assert_eq!(
+        LOCAL.with(|s| s.pending_notifies.borrow().as_ref().unwrap().nesting_level),
+        1
+    );
 
     // Abort of a deeper subxact discards only its list.
     push_notify(3, "ch", "doomed");
@@ -97,7 +107,10 @@ fn subxact_commit_merges_without_dups_and_abort_pops() {
     // Level gap: child at level 3 under parent at 1 -> reparent by decrement.
     push_notify(3, "ch", "gap");
     at_subcommit_merge(3);
-    assert_eq!(LOCAL.with(|s| s.pending_notifies.borrow().as_ref().unwrap().nesting_level), 2);
+    assert_eq!(
+        LOCAL.with(|s| s.pending_notifies.borrow().as_ref().unwrap().nesting_level),
+        2
+    );
     at_subcommit_merge(2);
     assert_eq!(pending_payloads(), vec!["parent", "child", "gap"]);
 

@@ -169,12 +169,18 @@ fn install_seams() {
                 })
             },
         );
-        bufmgr_seams::extend_buffered_rel_to_rel::set(|rel, fork, strategy, flags, extend_to, mode| {
-            bufmgr_seams::extend_buffered_rel_to::call(
-                bufmgr_seams::relation_smgr_locator::call(rel),
-                fork, strategy, flags, extend_to, mode,
-            )
-        });
+        bufmgr_seams::extend_buffered_rel_to_rel::set(
+            |rel, fork, strategy, flags, extend_to, mode| {
+                bufmgr_seams::extend_buffered_rel_to::call(
+                    bufmgr_seams::relation_smgr_locator::call(rel),
+                    fork,
+                    strategy,
+                    flags,
+                    extend_to,
+                    mode,
+                )
+            },
+        );
 
         smgr_seams::smgr_exists::set(|_rloc, fork| {
             assert_eq!(fork, ForkNumber::FSM_FORKNUM);
@@ -244,7 +250,9 @@ fn test_relation<'mcx>(mcx: mcx::Mcx<'mcx>) -> RelationData<'mcx> {
     });
     let mut relname = NameData::default();
     relname.namestrcpy("t");
-    RelationData { rd_locator: Cell::new(RelFileLocator::new(1663, 5, REL_OID)), rd_smgr: Default::default(),
+    RelationData {
+        rd_locator: Cell::new(RelFileLocator::new(1663, 5, REL_OID)),
+        rd_smgr: Default::default(),
         rd_id: REL_OID,
         rd_backend: INVALID_PROC_NUMBER,
         rd_islocaltemp: false,
@@ -253,7 +261,12 @@ fn test_relation<'mcx>(mcx: mcx::Mcx<'mcx>) -> RelationData<'mcx> {
         rd_newRelfilelocatorSubid: Cell::new(0),
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
-        rd_lockInfo: LockInfoData { lockRelId: LockRelId { relId: REL_OID, dbId: 5 } },
+        rd_lockInfo: LockInfoData {
+            lockRelId: LockRelId {
+                relId: REL_OID,
+                dbId: 5,
+            },
+        },
         rd_rel: FormData_pg_class {
             relname,
             relnamespace: 2200,
@@ -288,13 +301,16 @@ fn test_relation<'mcx>(mcx: mcx::Mcx<'mcx>) -> RelationData<'mcx> {
         pgstat_enabled: Cell::new(true),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: mcx::PgVec::new_in(mcx),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     }
 }
 
@@ -306,7 +322,7 @@ fn make_tuple(payload: usize) -> HeapTupleData<'static> {
     let img = unsafe { core::slice::from_raw_parts_mut(buf.as_mut_ptr().cast::<u8>(), t_len) };
     img[18..20].copy_from_slice(&1u16.to_ne_bytes()); // natts = 1
     img[22] = 24; // t_hoff
-    // SAFETY: 8-aligned leaked image, header-complete, unique.
+                  // SAFETY: 8-aligned leaked image, header-complete, unique.
     unsafe {
         HeapTupleData::from_raw_parts(
             buf.as_mut_ptr().cast::<u8>(),
@@ -351,7 +367,10 @@ fn insert_reuses_fsm_recorded_page_instead_of_extending() {
     let free0 = main_page_free_space(0);
     let recorded0 = freespace::GetRecordedFreeSpace(&rel, 0).unwrap();
     assert_eq!(recorded0, free0 / 32 * 32, "category rounds down");
-    assert!(recorded0 >= 800, "block 0 should have ~950 free, got {recorded0}");
+    assert!(
+        recorded0 >= 800,
+        "block 0 should have ~950 free, got {recorded0}"
+    );
 
     // Fill block 1 (this backend's saved target block) down to < 800 free.
     for off in 2..=4u16 {
@@ -384,6 +403,10 @@ fn insert_reuses_fsm_recorded_page_instead_of_extending() {
 
     with_fake(|f| {
         assert!(f.pins.iter().all(|p| *p == 0), "leaked pins: {:?}", f.pins);
-        assert!(f.locks.iter().all(|l| *l == 0), "leaked locks: {:?}", f.locks);
+        assert!(
+            f.locks.iter().all(|l| *l == 0),
+            "leaked locks: {:?}",
+            f.locks
+        );
     });
 }

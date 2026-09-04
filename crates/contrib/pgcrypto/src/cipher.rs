@@ -361,14 +361,18 @@ mod tests {
     // (PGDG's OpenSSL-3 legacy provider is off, so live C errors on them).
     #[test]
     fn blowfish_ecb_known_answer() {
-        let ct = encrypt("bf-ecb/pad:none", &[0u8; 8], &[], &[0u8; 8]).map_err(|_| ()).unwrap();
+        let ct = encrypt("bf-ecb/pad:none", &[0u8; 8], &[], &[0u8; 8])
+            .map_err(|_| ())
+            .unwrap();
         assert_eq!(hex(&ct), "4ef997456198dd78");
     }
 
     // Standard single-DES ECB KAT (all-zero key+block).
     #[test]
     fn des_ecb_known_answer() {
-        let ct = encrypt("des-ecb/pad:none", &[0u8; 8], &[], &[0u8; 8]).map_err(|_| ()).unwrap();
+        let ct = encrypt("des-ecb/pad:none", &[0u8; 8], &[], &[0u8; 8])
+            .map_err(|_| ())
+            .unwrap();
         assert_eq!(hex(&ct), "8ca64de9c1b123a7");
     }
 
@@ -387,6 +391,9 @@ mod tests {
 
     #[test]
     fn unknown_cipher_errors() {
-        assert!(matches!(encrypt("nope-cbc", &[0u8; 8], &[], &[0u8; 8]), Err(CipherError::NoCipher(_))));
+        assert!(matches!(
+            encrypt("nope-cbc", &[0u8; 8], &[], &[0u8; 8]),
+            Err(CipherError::NoCipher(_))
+        ));
     }
 }

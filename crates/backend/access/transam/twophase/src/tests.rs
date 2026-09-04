@@ -117,7 +117,11 @@ fn header_and_record_codecs_roundtrip() {
     let bytes = hdr.to_bytes();
     assert_eq!(TwoPhaseFileHeader::from_bytes(&bytes), Some(hdr));
 
-    let rec = TwoPhaseRecordOnDisk { len: 20, rmid: 1, info: 0 };
+    let rec = TwoPhaseRecordOnDisk {
+        len: 20,
+        rmid: 1,
+        info: 0,
+    };
     assert_eq!(TwoPhaseRecordOnDisk::from_bytes(&rec.to_bytes()), Some(rec));
 
     let layout = BufferLayout::of(&hdr);
@@ -143,9 +147,9 @@ fn gxact_state_machine() {
 
     let long_gid = "x".repeat(crate::GIDSIZE);
     let err = crate::MarkAsPreparing(700, &long_gid, 1, 10, 5).unwrap_err();
-    assert!(err
-        .message()
-        .contains(&format!("transaction identifier \"{long_gid}\" is too long")));
+    assert!(err.message().contains(&format!(
+        "transaction identifier \"{long_gid}\" is too long"
+    )));
 
     let slot = crate::MarkAsPreparing(701, "gid_a", 111, 10, 5).expect("reserve gid_a");
 
@@ -165,7 +169,10 @@ fn gxact_state_machine() {
     let _slot_b = crate::MarkAsPreparing(703, "gid_b", 113, 10, 5).expect("reserve gid_b");
     // Table full (max_prepared_transactions = 2).
     let err = crate::MarkAsPreparing(704, "gid_c", 114, 10, 5).unwrap_err();
-    assert_eq!(err.message(), "maximum number of prepared transactions reached");
+    assert_eq!(
+        err.message(),
+        "maximum number of prepared transactions reached"
+    );
     assert_eq!(
         err.hint(),
         Some("Increase \"max_prepared_transactions\" (currently 2).")
@@ -209,7 +216,10 @@ fn gxact_state_machine() {
 
     // Wrong owner (721 != 10) and not superuser.
     let err = crate::FinishPreparedTransaction("gid_vis", true).unwrap_err();
-    assert_eq!(err.message(), "permission denied to finish prepared transaction");
+    assert_eq!(
+        err.message(),
+        "permission denied to finish prepared transaction"
+    );
 
     // Cleanup: drop the entry and its procarray membership.
     procarray::ProcArrayRemove(TwoPhaseState().gxact(slot).pgprocno.get(), 801)
@@ -249,7 +259,14 @@ fn state_file_roundtrip_and_corruption() {
     let mut content = Vec::new();
     content.extend_from_slice(&hdr.to_bytes());
     content.extend_from_slice(b"g\0\0\0\0\0\0\0"); // gid, maxaligned
-    content.extend_from_slice(&TwoPhaseRecordOnDisk { len: 0, rmid: 0, info: 0 }.to_bytes());
+    content.extend_from_slice(
+        &TwoPhaseRecordOnDisk {
+            len: 0,
+            rmid: 0,
+            info: 0,
+        }
+        .to_bytes(),
+    );
     let total = (content.len() + 4) as u32;
     content[4..8].copy_from_slice(&total.to_ne_bytes());
 
@@ -269,7 +286,9 @@ fn state_file_roundtrip_and_corruption() {
     bytes[16] ^= 1;
     std::fs::write(&path, &bytes).unwrap();
     let err = crate::files::read_twophase_file(900, false).unwrap_err();
-    assert!(err.message().contains("calculated CRC checksum does not match"));
+    assert!(err
+        .message()
+        .contains("calculated CRC checksum does not match"));
 
     crate::files::remove_two_phase_file(900, true).expect("remove");
     assert!(!crate::files::twophase_file_exists(900).unwrap());

@@ -182,10 +182,14 @@ fn lookup(function: &str) -> Option<PGFunction> {
 
 pub fn init_seams() {
     use guc_tables::GucVarAccessors;
-    guc_tables::vars::pgss_max
-        .install(GucVarAccessors { get: gucs::pgss_max, set: gucs::set_pgss_max });
-    guc_tables::vars::pgss_track
-        .install(GucVarAccessors { get: gucs::pgss_track, set: gucs::set_pgss_track });
+    guc_tables::vars::pgss_max.install(GucVarAccessors {
+        get: gucs::pgss_max,
+        set: gucs::set_pgss_max,
+    });
+    guc_tables::vars::pgss_track.install(GucVarAccessors {
+        get: gucs::pgss_track,
+        set: gucs::set_pgss_track,
+    });
     guc_tables::vars::pgss_track_utility.install(GucVarAccessors {
         get: gucs::pgss_track_utility,
         set: gucs::set_pgss_track_utility,
@@ -194,8 +198,10 @@ pub fn init_seams() {
         get: gucs::pgss_track_planning,
         set: gucs::set_pgss_track_planning,
     });
-    guc_tables::vars::pgss_save
-        .install(GucVarAccessors { get: gucs::pgss_save, set: gucs::set_pgss_save });
+    guc_tables::vars::pgss_save.install(GucVarAccessors {
+        get: gucs::pgss_save,
+        set: gucs::set_pgss_save,
+    });
 
     dfmgr::register_builtin_library(dfmgr::BuiltinLibraryEntry {
         name: LIBRARY,

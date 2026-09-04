@@ -41,9 +41,7 @@ fn RelfilenumberMapInvalidateCallback(_arg: Datum, relid: Oid) {
         let mut slot = cell.borrow_mut();
         let map = slot.as_mut().expect("RelfilenumberMapHash != NULL");
         map.hash.retain(|_, entry_relid| {
-            !(relid == InvalidOid
-                || *entry_relid == InvalidOid
-                || *entry_relid == relid)
+            !(relid == InvalidOid || *entry_relid == InvalidOid || *entry_relid == relid)
         });
     });
 }
@@ -85,10 +83,7 @@ fn getattr(tup: &HeapTupleData<'_>, attnum: i32, desc: &TupleDescData<'_>) -> Da
 
 /// Temp relations can share a relfilenumber with permanent or other backends'
 /// temp relations; they are skipped. Returns InvalidOid when nothing matches.
-pub fn RelidByRelfilenumber(
-    mut reltablespace: Oid,
-    relfilenumber: RelFileNumber,
-) -> PgResult<Oid> {
+pub fn RelidByRelfilenumber(mut reltablespace: Oid, relfilenumber: RelFileNumber) -> PgResult<Oid> {
     if MAP.with(|cell| cell.borrow().is_none()) {
         InitializeRelfilenumberMap()?;
     }
@@ -97,10 +92,16 @@ pub fn RelidByRelfilenumber(
     if reltablespace == init_small::globals::MyDatabaseTableSpace() {
         reltablespace = 0;
     }
-    let key = RelfilenumberMapKey { reltablespace, relfilenumber };
+    let key = RelfilenumberMapKey {
+        reltablespace,
+        relfilenumber,
+    };
 
-    let cached =
-        MAP.with(|cell| cell.borrow().as_ref().and_then(|m| m.hash.get(&key).copied()));
+    let cached = MAP.with(|cell| {
+        cell.borrow()
+            .as_ref()
+            .and_then(|m| m.hash.get(&key).copied())
+    });
     if let Some(relid) = cached {
         return Ok(relid);
     }
@@ -110,8 +111,13 @@ pub fn RelidByRelfilenumber(
     if reltablespace == GLOBALTABLESPACE_OID {
         relid = relmapper::RelationMapFilenumberToOid(relfilenumber, true);
     } else {
-        let mut skey = MAP
-            .with(|cell| cell.borrow().as_ref().expect("map initialized").skey.clone());
+        let mut skey = MAP.with(|cell| {
+            cell.borrow()
+                .as_ref()
+                .expect("map initialized")
+                .skey
+                .clone()
+        });
         skey[0].sk_argument = Datum::from_oid(reltablespace);
         skey[1].sk_argument = Datum::from_oid(relfilenumber);
 
@@ -130,9 +136,7 @@ pub fn RelidByRelfilenumber(
         let mut found = false;
         while let Some(ntp) = genam::systable_getnext(mcx, &mut scandesc)? {
             let desc = relation.descr();
-            if getattr(ntp, Anum_pg_class_relpersistence, desc).as_u8()
-                == RELPERSISTENCE_TEMP
-            {
+            if getattr(ntp, Anum_pg_class_relpersistence, desc).as_u8() == RELPERSISTENCE_TEMP {
                 continue;
             }
             if found {

@@ -38,7 +38,11 @@ impl Segment {
     fn attach(&mut self) -> *mut libc::c_void {
         // SAFETY: our own segment, kernel-chosen address.
         let addr = unsafe { libc::shmat(self.id, std::ptr::null(), 0) };
-        assert!(addr as isize != -1, "shmat failed: {}", std::io::Error::last_os_error());
+        assert!(
+            addr as isize != -1,
+            "shmat failed: {}",
+            std::io::Error::last_os_error()
+        );
         self.attached = Some(addr);
         addr
     }

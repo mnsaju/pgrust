@@ -40,7 +40,11 @@ pub(crate) fn create_physical_replication_slot(
     slot::ReplicationSlotCreate(
         name,
         false,
-        if temporary { RS_TEMPORARY } else { RS_PERSISTENT },
+        if temporary {
+            RS_TEMPORARY
+        } else {
+            RS_PERSISTENT
+        },
         false,
         false,
         false,
@@ -76,7 +80,11 @@ pub(crate) fn create_logical_replication_slot(
     slot::ReplicationSlotCreate(
         name,
         true,
-        if temporary { RS_TEMPORARY } else { slot::RS_EPHEMERAL },
+        if temporary {
+            RS_TEMPORARY
+        } else {
+            slot::RS_EPHEMERAL
+        },
         two_phase,
         failover,
         false,
@@ -130,7 +138,9 @@ fn keep_log_seg(recptr: XLogRecPtr, log_seg_no: XLogSegNo) -> XLogSegNo {
     let mut segno = curr_seg_no;
 
     let ctl = transam_xlog::ctl::XLogCtl();
-    let keep = ctl.info_lck.with(|| ctl.replicationSlotMinLSN.load(Relaxed));
+    let keep = ctl
+        .info_lck
+        .with(|| ctl.replicationSlotMinLSN.load(Relaxed));
     if keep != InvalidXLogRecPtr && keep < recptr {
         segno = transam_xlog::XLByteToSeg(keep, segsize);
         let max_slot_wal_keep_size_mb = guc_tables::vars::max_slot_wal_keep_size_mb.read();
@@ -146,11 +156,19 @@ fn keep_log_seg(recptr: XLogRecPtr, log_seg_no: XLogSegNo) -> XLogSegNo {
     if wal_keep_size_mb > 0 {
         let keep_segs = convert_to_xsegs(wal_keep_size_mb, segsize);
         if curr_seg_no - segno < keep_segs {
-            segno = if curr_seg_no <= keep_segs { 1 } else { curr_seg_no - keep_segs };
+            segno = if curr_seg_no <= keep_segs {
+                1
+            } else {
+                curr_seg_no - keep_segs
+            };
         }
     }
 
-    if segno < log_seg_no { segno } else { log_seg_no }
+    if segno < log_seg_no {
+        segno
+    } else {
+        log_seg_no
+    }
 }
 
 // GetWALAvailability (xlog.c), hosted here for the same reason.
@@ -167,7 +185,11 @@ pub(crate) fn get_wal_availability(target_lsn: XLogRecPtr) -> WALAvailability {
 
     let curr_seg = transam_xlog::XLByteToSeg(currpos, segsize);
     let keep_segs = convert_to_xsegs(guc_tables::vars::max_wal_size_mb.read(), segsize) + 1;
-    let oldest_seg_max_wal_size = if curr_seg > keep_segs { curr_seg - keep_segs } else { 1 };
+    let oldest_seg_max_wal_size = if curr_seg > keep_segs {
+        curr_seg - keep_segs
+    } else {
+        1
+    };
 
     let target_seg = transam_xlog::XLByteToSeg(target_lsn, segsize);
 
@@ -374,7 +396,9 @@ pub(crate) fn copy_replication_slot(
     if first.invalidated != slot::RS_INVAL_NONE {
         return ereport(ERROR)
             .errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE)
-            .errmsg(format!("cannot copy invalidated replication slot \"{src_name}\""))
+            .errmsg(format!(
+                "cannot copy invalidated replication slot \"{src_name}\""
+            ))
             .finish(loc("copy_replication_slot"));
     }
 
@@ -413,7 +437,9 @@ pub(crate) fn copy_replication_slot(
     if src_islogical && second.confirmed_flush == InvalidXLogRecPtr {
         return ereport(ERROR)
             .errcode(ERRCODE_FEATURE_NOT_SUPPORTED)
-            .errmsg(format!("cannot copy unfinished logical replication slot \"{src_name}\""))
+            .errmsg(format!(
+                "cannot copy unfinished logical replication slot \"{src_name}\""
+            ))
             .errhint("Retry when the source replication slot's confirmed_flush_lsn is valid.")
             .finish(loc("copy_replication_slot"));
     }
@@ -427,7 +453,8 @@ pub(crate) fn copy_replication_slot(
     let dst = slot::MyReplicationSlot().expect("copy_replication_slot: destination not acquired");
     dst.with_mutex(|| {
         dst.effective_xmin.set(second.effective_xmin);
-        dst.effective_catalog_xmin.set(second.effective_catalog_xmin);
+        dst.effective_catalog_xmin
+            .set(second.effective_catalog_xmin);
         let mut d = dst.data.get();
         d.xmin = second.xmin;
         d.catalog_xmin = second.catalog_xmin;

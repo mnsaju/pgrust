@@ -264,8 +264,18 @@ pub fn brin_doupdate(
                 0,
                 &[&xlrec],
                 &[
-                    XLogRegBuf { block_id: 0, buffer: newbuf, flags: newflags, bufdata: &bufdata },
-                    XLogRegBuf { block_id: 1, buffer: revmapbuf, flags: 0, bufdata: &[] },
+                    XLogRegBuf {
+                        block_id: 0,
+                        buffer: newbuf,
+                        flags: newflags,
+                        bufdata: &bufdata,
+                    },
+                    XLogRegBuf {
+                        block_id: 1,
+                        buffer: revmapbuf,
+                        flags: 0,
+                        bufdata: &[],
+                    },
                     XLogRegBuf {
                         block_id: 2,
                         buffer: oldbuf,
@@ -369,8 +379,18 @@ pub fn brin_doinsert(
             0,
             &[&xlrec],
             &[
-                XLogRegBuf { block_id: 0, buffer: *buffer, flags, bufdata: &bufdata },
-                XLogRegBuf { block_id: 1, buffer: revmapbuf, flags: 0, bufdata: &[] },
+                XLogRegBuf {
+                    block_id: 0,
+                    buffer: *buffer,
+                    flags,
+                    bufdata: &bufdata,
+                },
+                XLogRegBuf {
+                    block_id: 1,
+                    buffer: revmapbuf,
+                    flags: 0,
+                    bufdata: &[],
+                },
             ],
         )?;
         page.set_lsn(recptr);
@@ -502,7 +522,10 @@ fn relation_set_target_block(rel: &RelationData<'_>, blk: BlockNumber) {
     if locator.relNumber == 0 {
         return;
     }
-    let key = ::types_storage::RelFileLocatorBackend { locator, backend: rel.rd_backend };
+    let key = ::types_storage::RelFileLocatorBackend {
+        locator,
+        backend: rel.rd_backend,
+    };
     if smgr::smgropen(key.locator, key.backend).is_ok() {
         smgr::smgrsettargblock(key, blk);
     }
@@ -655,7 +678,6 @@ pub fn brin_page_cleanup(idxrel: &Relation<'_>, buf: Buffer) -> PgResult<()> {
         br_page_get_freespace(&page),
     )
 }
-
 
 pub fn brinRevmapInitialize(idxrel: &Relation<'_>) -> PgResult<(BrinRevmap, BlockNumber)> {
     let meta = read_buffer::call(idxrel, BRIN_METAPAGE_BLKNO)?;
@@ -881,8 +903,18 @@ pub fn brinRevmapDesummarizeRange(idxrel: &Relation<'_>, heapBlk: BlockNumber) -
             0,
             &[&xlrec],
             &[
-                XLogRegBuf { block_id: 0, buffer: revmapBuf, flags: 0, bufdata: &[] },
-                XLogRegBuf { block_id: 1, buffer: regBuf, flags: REGBUF_STANDARD, bufdata: &[] },
+                XLogRegBuf {
+                    block_id: 0,
+                    buffer: revmapBuf,
+                    flags: 0,
+                    bufdata: &[],
+                },
+                XLogRegBuf {
+                    block_id: 1,
+                    buffer: regBuf,
+                    flags: REGBUF_STANDARD,
+                    bufdata: &[],
+                },
             ],
         )?;
         // SAFETY: both exclusively locked.
@@ -958,10 +990,8 @@ fn revmap_physical_extend(irel: &Relation<'_>, revmap: &BrinRevmap) -> PgResult<
     }
     let mapBlk = metadata.lastRevmapPage + 1;
 
-    let nblocks = bufmgr_seams::relation_get_number_of_blocks_in_fork::call(
-        irel,
-        ForkNumber::MAIN_FORKNUM,
-    )?;
+    let nblocks =
+        bufmgr_seams::relation_get_number_of_blocks_in_fork::call(irel, ForkNumber::MAIN_FORKNUM)?;
     let buf: Buffer;
     if mapBlk < nblocks {
         buf = read_buffer::call(irel, mapBlk)?;
@@ -1026,7 +1056,12 @@ fn revmap_physical_extend(irel: &Relation<'_>, revmap: &BrinRevmap) -> PgResult<
                     flags: REGBUF_STANDARD,
                     bufdata: &[],
                 },
-                XLogRegBuf { block_id: 1, buffer: buf, flags: REGBUF_WILL_INIT, bufdata: &[] },
+                XLogRegBuf {
+                    block_id: 1,
+                    buffer: buf,
+                    flags: REGBUF_WILL_INIT,
+                    bufdata: &[],
+                },
             ],
         )?;
         metapage.set_lsn(recptr);

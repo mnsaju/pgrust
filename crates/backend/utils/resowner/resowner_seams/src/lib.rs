@@ -36,7 +36,6 @@ seam_core::seam!(
     )
 );
 
-
 seam_core::seam!(
     // ResourceOwnerRemember over a caller-supplied desc (fd.c's File kind);
     // caller must have done resource_owner_enlarge first.

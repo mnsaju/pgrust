@@ -175,7 +175,10 @@ pub fn fc_hashint8extended(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) 
     let lohalf = val as u32;
     let hihalf = (val >> 32) as u32;
     let lohalf = lohalf ^ if val >= 0 { hihalf } else { !hihalf };
-    Ok(Datum::from_u64(::hashfn::hash_bytes_uint32_extended(lohalf, seed.value.as_u64())))
+    Ok(Datum::from_u64(::hashfn::hash_bytes_uint32_extended(
+        lohalf,
+        seed.value.as_u64(),
+    )))
 }
 
 fc2! {
@@ -250,7 +253,10 @@ fc_agg_inc! {
     fc_int8inc_float8_float8: int8inc_float8_float8, 3;
 }
 
-pub fn fc_in_range_int8_int8(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+pub fn fc_in_range_int8_int8(
+    _flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     let [v, b, o, s, l] = fcinfo.args_n::<5>();
     Ok(Datum::from_bool(crate::in_range_int8_int8(
         v.value.as_i64(),
@@ -271,7 +277,11 @@ pub fn fc_generate_series_step_int8(
     if !flinfo.has_fn_extra() {
         let start = fcinfo.arg(0).as_i64();
         let finish = fcinfo.arg(1).as_i64();
-        let step = if fcinfo.nargs() == 3 { fcinfo.arg(2).as_i64() } else { 1 };
+        let step = if fcinfo.nargs() == 3 {
+            fcinfo.arg(2).as_i64()
+        } else {
+            1
+        };
         let state = crate::GenerateSeriesInt8::new(start, finish, step)?;
         let fctx = ::funcapi::init_MultiFuncCall(flinfo, fcinfo)?;
         fctx.user_fctx = Some(alloc::boxed::Box::new(state));
@@ -284,7 +294,11 @@ pub fn fc_generate_series_step_int8(
         .expect("generate_series_int8: user_fctx is GenerateSeriesInt8")
         .next();
     match next {
-        Some(v) => Ok(::funcapi::srf_return_next(flinfo, fcinfo, Datum::from_i64(v))),
+        Some(v) => Ok(::funcapi::srf_return_next(
+            flinfo,
+            fcinfo,
+            Datum::from_i64(v),
+        )),
         None => Ok(::funcapi::srf_return_done(flinfo, fcinfo)),
     }
 }
@@ -328,7 +342,14 @@ pub fn fc_generate_series_int8_support(
 }
 
 const fn srf(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: true, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: true,
+        func,
+    }
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
@@ -344,9 +365,24 @@ const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrB
 
 // pg_proc.dat rows for int8.c.
 pub const INT8_BUILTINS: &[FmgrBuiltin] = &[
-    srf(1068, "generate_series_step_int8", 3, fc_generate_series_step_int8),
-    srf(1069, "generate_series_int8", 2, fc_generate_series_step_int8),
-    b(3995, "generate_series_int8_support", 1, fc_generate_series_int8_support),
+    srf(
+        1068,
+        "generate_series_step_int8",
+        3,
+        fc_generate_series_step_int8,
+    ),
+    srf(
+        1069,
+        "generate_series_int8",
+        2,
+        fc_generate_series_step_int8,
+    ),
+    b(
+        3995,
+        "generate_series_int8_support",
+        1,
+        fc_generate_series_int8_support,
+    ),
     b(460, "int8in", 1, fc_int8in),
     b(461, "int8out", 1, fc_int8out),
     b(2408, "int8recv", 1, fc_int8recv),
@@ -438,8 +474,18 @@ pub const INT8_BUILTINS: &[FmgrBuiltin] = &[
     b(4126, "in_range_int8_int8", 5, fc_in_range_int8_int8),
 ];
 
-const fn t(foid: Oid, nargs: i16, func: PGFunction, thin: ::types_fmgr::PGFunctionThin) -> ThinBuiltin {
-    ThinBuiltin { foid, nargs, func, thin }
+const fn t(
+    foid: Oid,
+    nargs: i16,
+    func: PGFunction,
+    thin: ::types_fmgr::PGFunctionThin,
+) -> ThinBuiltin {
+    ThinBuiltin {
+        foid,
+        nargs,
+        func,
+        thin,
+    }
 }
 
 // Thin-ABI twins of the fc1!/fc1t!/fc2!/fc2t! wrappers above (same cores, so

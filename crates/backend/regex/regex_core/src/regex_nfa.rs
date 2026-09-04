@@ -1,4 +1,3 @@
-
 extern crate alloc;
 
 use alloc::vec::Vec;
@@ -20,12 +19,10 @@ pub mod nfacolor;
 
 pub use self::nfacolor::{colorcomplement, okcolors, rainbow};
 
-
 pub const INCOMPATIBLE: i32 = 1;
 pub const SATISFIED: i32 = 2;
 pub const COMPATIBLE: i32 = 3;
 pub const REPLACEARC: i32 = 4;
-
 
 #[inline]
 pub fn reg_max_compile_space() -> usize {
@@ -34,17 +31,13 @@ pub fn reg_max_compile_space() -> usize {
 
 pub const MAX_RECURSION_DEPTH: u32 = 10_000;
 
-
 #[inline]
-fn check_interrupt() {
-}
-
+fn check_interrupt() {}
 
 #[inline]
 fn colored(type_: i32, co: color) -> bool {
     co >= 0 && (type_ == PLAIN || type_ == AHEAD || type_ == BEHIND)
 }
-
 
 impl Nfa {
     #[inline]
@@ -64,7 +57,6 @@ impl Nfa {
         &mut self.arc_arena[a.0 as usize]
     }
 }
-
 
 pub fn newnfa<'mcx>(mcx: Mcx<'mcx>, cm: &mut ColorMap, has_parent: bool) -> RegResult<Nfa> {
     let placeholder = StateId(0);
@@ -101,7 +93,9 @@ pub fn newnfa<'mcx>(mcx: Mcx<'mcx>, cm: &mut ColorMap, has_parent: bool) -> RegR
     rainbow(mcx, &mut nfa, cm, has_parent, PLAIN, COLORLESS, pre, init)?;
     newarc(mcx, &mut nfa, cm, has_parent, ARC_BOS, 1, pre, init)?;
     newarc(mcx, &mut nfa, cm, has_parent, ARC_BOS, 0, pre, init)?;
-    rainbow(mcx, &mut nfa, cm, has_parent, PLAIN, COLORLESS, final_, post)?;
+    rainbow(
+        mcx, &mut nfa, cm, has_parent, PLAIN, COLORLESS, final_, post,
+    )?;
     newarc(mcx, &mut nfa, cm, has_parent, ARC_EOS, 1, final_, post)?;
     newarc(mcx, &mut nfa, cm, has_parent, ARC_EOS, 0, final_, post)?;
 
@@ -118,7 +112,6 @@ pub fn freenfa(mut nfa: Nfa) {
     nfa.free_arcs = None;
     nfa.nstates = -1;
 }
-
 
 pub fn newstate<'mcx>(_mcx: Mcx<'mcx>, nfa: &mut Nfa) -> RegResult<StateId> {
     check_interrupt();
@@ -182,12 +175,7 @@ pub fn newfstate<'mcx>(mcx: Mcx<'mcx>, nfa: &mut Nfa, flag: u8) -> RegResult<Sta
     Ok(s)
 }
 
-pub fn dropstate(
-    nfa: &mut Nfa,
-    cm: &mut ColorMap,
-    has_parent: bool,
-    s: StateId,
-) -> RegResult<()> {
+pub fn dropstate(nfa: &mut Nfa, cm: &mut ColorMap, has_parent: bool, s: StateId) -> RegResult<()> {
     while let Some(a) = nfa.st(s).ins {
         freearc(nfa, cm, has_parent, a);
     }
@@ -224,7 +212,6 @@ pub fn freestate(nfa: &mut Nfa, s: StateId) {
     nfa.st_mut(s).next = nfa.free_states;
     nfa.free_states = Some(s);
 }
-
 
 fn allocarc<'mcx>(_mcx: Mcx<'mcx>, nfa: &mut Nfa) -> RegResult<ArcId> {
     if let Some(a) = nfa.free_arcs {
@@ -521,7 +508,6 @@ pub fn cparc<'mcx>(
     newarc(mcx, nfa, cm, has_parent, t, co, from, to)
 }
 
-
 fn sortins_key(nfa: &Nfa, a: ArcId) -> RegResult<(i32, color, i32)> {
     let aa = nfa.ar(a);
     let f = aa.from.ok_or(err_assert())?;
@@ -634,7 +620,6 @@ pub fn sortouts<'mcx>(_mcx: Mcx<'mcx>, nfa: &mut Nfa, s: StateId) -> RegResult<(
     }
     Ok(())
 }
-
 
 #[inline]
 fn bulk_arc_op_use_sort(nsrcarcs: i32, ndestarcs: i32) -> bool {
@@ -830,8 +815,7 @@ pub fn mergeins<'mcx>(
                 j += 1;
                 arcarray[j] = arcarray[i];
             }
-            core::cmp::Ordering::Equal => {
-            }
+            core::cmp::Ordering::Equal => {}
             core::cmp::Ordering::Greater => {
                 debug_assert!(false, "mergeins: array not sorted");
             }
@@ -894,7 +878,6 @@ pub fn cloneouts<'mcx>(
     }
     Ok(())
 }
-
 
 pub fn delsub(
     nfa: &mut Nfa,
@@ -1150,7 +1133,6 @@ fn duptraverse_cross<'mcx>(
     Ok(())
 }
 
-
 fn markreachable(
     nfa: &mut Nfa,
     s: StateId,
@@ -1230,7 +1212,6 @@ pub fn cleanup(nfa: &mut Nfa, cm: &mut ColorMap, has_parent: bool) -> RegResult<
     nfa.nstates = n;
     Ok(())
 }
-
 
 pub fn single_color_transition(nfa: &Nfa, s1: StateId, s2: StateId) -> Option<StateId> {
     let mut s1 = s1;
@@ -1386,7 +1367,6 @@ pub fn combine(nfa: &Nfa, cm: &ColorMap, con: ArcId, a: ArcId) -> i32 {
     INCOMPATIBLE // for benefit of blind compilers
 }
 
-
 pub fn pullback<'mcx>(
     mcx: Mcx<'mcx>,
     nfa: &mut Nfa,
@@ -1481,8 +1461,7 @@ fn pull<'mcx>(
             INCOMPATIBLE => {
                 freearc(nfa, cm, has_parent, a);
             }
-            SATISFIED => {
-            }
+            SATISFIED => {}
             COMPATIBLE => {
                 let afrom = nfa.ar(a).from.ok_or(err_assert())?;
                 let mut s_opt = *intermediates;
@@ -1625,8 +1604,7 @@ fn push<'mcx>(
             INCOMPATIBLE => {
                 freearc(nfa, cm, has_parent, a);
             }
-            SATISFIED => {
-            }
+            SATISFIED => {}
             COMPATIBLE => {
                 let ato = nfa.ar(a).to.ok_or(err_assert())?;
                 let mut s_opt = *intermediates;
@@ -1827,7 +1805,6 @@ fn emptyreachable(
     }
     Ok(lastfound)
 }
-
 
 pub fn checkmatchall(nfa: &mut Nfa, cm: &ColorMap) {
     if nfa.nstates > DUPINF * 2 {
@@ -2118,7 +2095,6 @@ fn check_in_colors_match(nfa: &mut Nfa, s: StateId, co1: color, co2: color) -> b
     result
 }
 
-
 #[inline]
 fn isconstraintarc(nfa: &Nfa, a: ArcId) -> bool {
     let t = nfa.ar(a).type_;
@@ -2135,7 +2111,6 @@ fn hasconstraintout(nfa: &Nfa, s: StateId) -> bool {
     }
     false
 }
-
 
 pub fn fixconstraintloops<'mcx>(
     mcx: Mcx<'mcx>,
@@ -2331,12 +2306,20 @@ fn clonesuccessorstates<'mcx>(
     }
 
     match curdonemap {
-        Some(dm) => {
-            clonesuccessorstates_fill(
-                mcx, nfa, cm, has_parent, ssource, sclone, spredecessor, refarc, dm, outerdonemap,
-                nstates, depth,
-            )
-        }
+        Some(dm) => clonesuccessorstates_fill(
+            mcx,
+            nfa,
+            cm,
+            has_parent,
+            ssource,
+            sclone,
+            spredecessor,
+            refarc,
+            dm,
+            outerdonemap,
+            nstates,
+            depth,
+        ),
         None => {
             let mut donemap: Vec<u8> = Vec::new();
             donemap.try_reserve_exact(nstates as usize)?;
@@ -2492,7 +2475,6 @@ fn inarc_chain_canmerge(nfa: &Nfa, sclone: StateId, a_type: i32, a_co: color) ->
     Ok(false)
 }
 
-
 pub fn optimize<'mcx>(
     mcx: Mcx<'mcx>,
     nfa: &mut Nfa,
@@ -2513,7 +2495,6 @@ pub fn optimize<'mcx>(
 }
 
 pub fn analyze(nfa: &mut Nfa, cm: &mut ColorMap) -> RegResult<i64> {
-
     if nfa.st(nfa.pre).outs.is_none() {
         return Ok(REG_UIMPOSSIBLE as i64);
     }
@@ -2535,7 +2516,6 @@ pub fn analyze(nfa: &mut Nfa, cm: &mut ColorMap) -> RegResult<i64> {
     }
     Ok(0)
 }
-
 
 pub fn compact<'mcx>(mcx: Mcx<'mcx>, nfa: &Nfa, cm: &ColorMap, cnfa: &mut Cnfa) -> RegResult<()> {
     let _ = mcx; // arena is plain Vec at this stage; mcx threaded for parity
@@ -2663,12 +2643,10 @@ pub fn freecnfa(cnfa: &mut Cnfa) {
     cnfa.nstates = 0; // ZAPCNFA semantics (production: nstates = 0)
 }
 
-
 #[inline]
 pub fn set_hascantmatch(nfa: &mut Nfa) {
     nfa.flags |= HASCANTMATCH;
 }
-
 
 pub fn getcolor(cm: &ColorMap, c: chr) -> color {
     crate::regex_foundation::pg_reg_getcolor(cm, c)

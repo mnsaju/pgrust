@@ -74,14 +74,7 @@ fn seam_heap_toast_insert_or_update<'mcx>(
     oldtup: Option<&::types_tuple::HeapTupleData<'_>>,
     options: i32,
 ) -> ::types_error::PgResult<Option<heaptuple::HeapTuple<'mcx>>> {
-    toast::heap_toast_insert_or_update(
-        mcx,
-        rel,
-        newtup,
-        oldtup,
-        ::types_core::InvalidOid,
-        options,
-    )
+    toast::heap_toast_insert_or_update(mcx, rel, newtup, oldtup, ::types_core::InvalidOid, options)
 }
 
 pub fn init_seams() {

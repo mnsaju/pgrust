@@ -12,16 +12,33 @@ fn case_functions_c_collation() {
     utf8();
     let ctx = MemoryContext::new("t");
     let mcx = ctx.mcx();
-    assert_eq!(lower(mcx, b"Hello, World!", C_COLLATION_OID).unwrap().data(), b"hello, world!");
-    assert_eq!(upper(mcx, b"Hello, World!", C_COLLATION_OID).unwrap().data(), b"HELLO, WORLD!");
     assert_eq!(
-        initcap(mcx, b"hello THE world 3rd time", C_COLLATION_OID).unwrap().data(),
+        lower(mcx, b"Hello, World!", C_COLLATION_OID)
+            .unwrap()
+            .data(),
+        b"hello, world!"
+    );
+    assert_eq!(
+        upper(mcx, b"Hello, World!", C_COLLATION_OID)
+            .unwrap()
+            .data(),
+        b"HELLO, WORLD!"
+    );
+    assert_eq!(
+        initcap(mcx, b"hello THE world 3rd time", C_COLLATION_OID)
+            .unwrap()
+            .data(),
         b"Hello The World 3rd Time"
     );
-    assert_eq!(casefold(mcx, b"MiXeD", C_COLLATION_OID).unwrap().data(), b"mixed");
+    assert_eq!(
+        casefold(mcx, b"MiXeD", C_COLLATION_OID).unwrap().data(),
+        b"mixed"
+    );
     // ASCII kernels leave multibyte sequences alone under C ctype.
     assert_eq!(
-        lower(mcx, "ÄbC".as_bytes(), C_COLLATION_OID).unwrap().data(),
+        lower(mcx, "ÄbC".as_bytes(), C_COLLATION_OID)
+            .unwrap()
+            .data(),
         "Äbc".as_bytes()
     );
     let err = lower(mcx, b"x", 0).unwrap_err();
@@ -41,7 +58,9 @@ fn pad_functions() {
     assert_eq!(lpad(mcx, b"hi", 5, b"").unwrap().data(), b"hi");
     // Multibyte: char-counted length, pad wraps at a char boundary.
     assert_eq!(
-        lpad(mcx, "héllo".as_bytes(), 7, "àb".as_bytes()).unwrap().data(),
+        lpad(mcx, "héllo".as_bytes(), 7, "àb".as_bytes())
+            .unwrap()
+            .data(),
         "àbhéllo".as_bytes()
     );
     assert_eq!(
@@ -69,7 +88,9 @@ fn trim_functions() {
     assert_eq!(btrim(mcx, b"aaaa", b"a").unwrap().data(), b"");
     // Multibyte set members trim whole characters only.
     assert_eq!(
-        btrim(mcx, "ééxàéé".as_bytes(), "é".as_bytes()).unwrap().data(),
+        btrim(mcx, "ééxàéé".as_bytes(), "é".as_bytes())
+            .unwrap()
+            .data(),
         "xà".as_bytes()
     );
 }
@@ -79,7 +100,10 @@ fn bytea_trim_functions() {
     utf8();
     let ctx = MemoryContext::new("t");
     let mcx = ctx.mcx();
-    assert_eq!(byteatrim(mcx, b"\x00abc\x00", b"\x00").unwrap().data(), b"abc");
+    assert_eq!(
+        byteatrim(mcx, b"\x00abc\x00", b"\x00").unwrap().data(),
+        b"abc"
+    );
     assert_eq!(bytealtrim(mcx, b"xxabxx", b"x").unwrap().data(), b"abxx");
     assert_eq!(byteartrim(mcx, b"xxabxx", b"x").unwrap().data(), b"xxab");
     assert_eq!(dobyteatrim(b"abc", b"", true, true), b"abc");
@@ -91,11 +115,16 @@ fn translate_exact() {
     utf8();
     let ctx = MemoryContext::new("t");
     let mcx = ctx.mcx();
-    assert_eq!(translate(mcx, b"12345", b"143", b"ax").unwrap().data(), b"a2x5");
+    assert_eq!(
+        translate(mcx, b"12345", b"143", b"ax").unwrap().data(),
+        b"a2x5"
+    );
     assert_eq!(translate(mcx, b"", b"a", b"b").unwrap().data(), b"");
     assert_eq!(translate(mcx, b"abc", b"", b"").unwrap().data(), b"abc");
     assert_eq!(
-        translate(mcx, "héllo".as_bytes(), "é".as_bytes(), b"e").unwrap().data(),
+        translate(mcx, "héllo".as_bytes(), "é".as_bytes(), b"e")
+            .unwrap()
+            .data(),
         b"hello"
     );
 }
@@ -113,8 +142,14 @@ fn ascii_and_chr() {
     assert_eq!(chr(mcx, 0xE9).unwrap().data(), "é".as_bytes());
     assert_eq!(chr(mcx, 0x20AC).unwrap().data(), "€".as_bytes());
     assert_eq!(chr(mcx, 0x10FFFF).unwrap().data().len(), 4);
-    assert_eq!(chr(mcx, 0).unwrap_err().message(), "null character not permitted");
-    assert_eq!(chr(mcx, -1).unwrap_err().message(), "character number must be positive");
+    assert_eq!(
+        chr(mcx, 0).unwrap_err().message(),
+        "null character not permitted"
+    );
+    assert_eq!(
+        chr(mcx, -1).unwrap_err().message(),
+        "character number must be positive"
+    );
     assert_eq!(
         chr(mcx, 0x110000).unwrap_err().message(),
         "requested character too large for encoding: 1114112"
@@ -143,9 +178,18 @@ fn embedded_nul_truncates_case_result() {
     utf8();
     let ctx = MemoryContext::new("t");
     let mcx = ctx.mcx();
-    assert_eq!(lower(mcx, b"AB\x00CD", C_COLLATION_OID).unwrap().data(), b"ab");
-    assert_eq!(upper(mcx, b"ab\x00cd", C_COLLATION_OID).unwrap().data(), b"AB");
-    assert_eq!(initcap(mcx, b"ab\x00cd", C_COLLATION_OID).unwrap().data(), b"Ab");
+    assert_eq!(
+        lower(mcx, b"AB\x00CD", C_COLLATION_OID).unwrap().data(),
+        b"ab"
+    );
+    assert_eq!(
+        upper(mcx, b"ab\x00cd", C_COLLATION_OID).unwrap().data(),
+        b"AB"
+    );
+    assert_eq!(
+        initcap(mcx, b"ab\x00cd", C_COLLATION_OID).unwrap().data(),
+        b"Ab"
+    );
 }
 
 #[test]
@@ -161,9 +205,18 @@ fn left_right_exact() {
     assert_eq!(text_left(mcx, b"", 3).unwrap().data(), b"");
     assert_eq!(text_left(mcx, b"hello", i32::MAX).unwrap().data(), b"hello");
     assert_eq!(text_left(mcx, b"hello", i32::MIN).unwrap().data(), b"");
-    assert_eq!(text_left(mcx, "日本語".as_bytes(), 2).unwrap().data(), "日本".as_bytes());
-    assert_eq!(text_left(mcx, "🐘é".as_bytes(), 1).unwrap().data(), "🐘".as_bytes());
-    assert_eq!(text_left(mcx, "日本語".as_bytes(), -1).unwrap().data(), "日本".as_bytes());
+    assert_eq!(
+        text_left(mcx, "日本語".as_bytes(), 2).unwrap().data(),
+        "日本".as_bytes()
+    );
+    assert_eq!(
+        text_left(mcx, "🐘é".as_bytes(), 1).unwrap().data(),
+        "🐘".as_bytes()
+    );
+    assert_eq!(
+        text_left(mcx, "日本語".as_bytes(), -1).unwrap().data(),
+        "日本".as_bytes()
+    );
 
     assert_eq!(text_right(mcx, b"hello", 2).unwrap().data(), b"lo");
     assert_eq!(text_right(mcx, b"hello", 0).unwrap().data(), b"");
@@ -171,12 +224,27 @@ fn left_right_exact() {
     assert_eq!(text_right(mcx, b"hello", -1).unwrap().data(), b"ello");
     assert_eq!(text_right(mcx, b"hello", -99).unwrap().data(), b"");
     assert_eq!(text_right(mcx, b"", 3).unwrap().data(), b"");
-    assert_eq!(text_right(mcx, b"hello", i32::MAX).unwrap().data(), b"hello");
+    assert_eq!(
+        text_right(mcx, b"hello", i32::MAX).unwrap().data(),
+        b"hello"
+    );
     // C: n = -n wraps at INT32_MIN, stays negative, clips to whole string.
-    assert_eq!(text_right(mcx, b"hello", i32::MIN).unwrap().data(), b"hello");
-    assert_eq!(text_right(mcx, "日本語".as_bytes(), 2).unwrap().data(), "本語".as_bytes());
-    assert_eq!(text_right(mcx, "é🐘".as_bytes(), 1).unwrap().data(), "🐘".as_bytes());
-    assert_eq!(text_right(mcx, "日本語".as_bytes(), -1).unwrap().data(), "本語".as_bytes());
+    assert_eq!(
+        text_right(mcx, b"hello", i32::MIN).unwrap().data(),
+        b"hello"
+    );
+    assert_eq!(
+        text_right(mcx, "日本語".as_bytes(), 2).unwrap().data(),
+        "本語".as_bytes()
+    );
+    assert_eq!(
+        text_right(mcx, "é🐘".as_bytes(), 1).unwrap().data(),
+        "🐘".as_bytes()
+    );
+    assert_eq!(
+        text_right(mcx, "日本語".as_bytes(), -1).unwrap().data(),
+        "本語".as_bytes()
+    );
 }
 
 #[test]
@@ -186,8 +254,14 @@ fn reverse_exact() {
     let mcx = ctx.mcx();
     assert_eq!(text_reverse(mcx, b"").unwrap().data(), b"");
     assert_eq!(text_reverse(mcx, b"abc").unwrap().data(), b"cba");
-    assert_eq!(text_reverse(mcx, "日本語".as_bytes()).unwrap().data(), "語本日".as_bytes());
-    assert_eq!(text_reverse(mcx, "a🐘é".as_bytes()).unwrap().data(), "é🐘a".as_bytes());
+    assert_eq!(
+        text_reverse(mcx, "日本語".as_bytes()).unwrap().data(),
+        "語本日".as_bytes()
+    );
+    assert_eq!(
+        text_reverse(mcx, "a🐘é".as_bytes()).unwrap().data(),
+        "é🐘a".as_bytes()
+    );
 }
 
 #[test]
@@ -215,7 +289,10 @@ fn chr_ascii_non_utf8_encodings() {
     mbutils::SetDatabaseEncoding(wchar::PG_EUC_JP).unwrap();
     assert_eq!(chr(mcx, 127).unwrap().data(), b"\x7F");
     let err = chr(mcx, 128).unwrap_err();
-    assert_eq!(err.message(), "requested character too large for encoding: 128");
+    assert_eq!(
+        err.message(),
+        "requested character too large for encoding: 128"
+    );
     assert_eq!(err.sqlstate(), ERRCODE_PROGRAM_LIMIT_EXCEEDED);
     let err = ascii(&[0xA1, 0xA1]).unwrap_err();
     assert_eq!(err.message(), "requested character too large");
@@ -249,7 +326,9 @@ fn pad_repeat_translate_edges() {
         "a🐘b".as_bytes()
     );
     assert_eq!(
-        translate(mcx, "aéb".as_bytes(), "xé".as_bytes(), b"y").unwrap().data(),
+        translate(mcx, "aéb".as_bytes(), "xé".as_bytes(), b"y")
+            .unwrap()
+            .data(),
         b"ab"
     );
 }
@@ -259,8 +338,7 @@ mod fc_results {
     use mcx::MemoryContext;
     use types_core::C_COLLATION_OID;
     use types_fmgr::{
-        direct_function_call1_coll_in, direct_function_call2_coll_in,
-        direct_function_call3_coll_in,
+        direct_function_call1_coll_in, direct_function_call2_coll_in, direct_function_call3_coll_in,
     };
 
     use crate::builtins::*;
@@ -360,7 +438,9 @@ fn case_functions_builtin_cutf8_collation() {
         "STRAßE ﬁ 剣".as_bytes()
     );
     assert_eq!(
-        initcap(mcx, "über-cool σοφος don't".as_bytes(), coll).unwrap().data(),
+        initcap(mcx, "über-cool σοφος don't".as_bytes(), coll)
+            .unwrap()
+            .data(),
         "Über-Cool Σοφος Don'T".as_bytes()
     );
     assert_eq!(

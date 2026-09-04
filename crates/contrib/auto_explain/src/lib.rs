@@ -41,12 +41,7 @@ pub(crate) mod gucs {
         (aex_log_format_cell, i32, log_format, set_log_format, guc_tables::consts::EXPLAIN_FORMAT_TEXT),
         (aex_log_level_cell, i32, log_level, set_log_level, guc_tables::consts::LOG),
     );
-    guc_tables::session_guc_real!(
-        AEX_SAMPLE_RATE,
-        sample_rate,
-        set_sample_rate,
-        1.0
-    );
+    guc_tables::session_guc_real!(AEX_SAMPLE_RATE, sample_rate, set_sample_rate, 1.0);
 }
 
 fn lookup(_function: &str) -> Option<PGFunction> {
@@ -64,30 +59,50 @@ pub fn init_seams() {
         get: gucs::log_parameter_max_length,
         set: gucs::set_log_parameter_max_length,
     });
-    guc_tables::vars::aex_log_analyze
-        .install(GucVarAccessors { get: gucs::log_analyze, set: gucs::set_log_analyze });
-    guc_tables::vars::aex_log_settings
-        .install(GucVarAccessors { get: gucs::log_settings, set: gucs::set_log_settings });
-    guc_tables::vars::aex_log_verbose
-        .install(GucVarAccessors { get: gucs::log_verbose, set: gucs::set_log_verbose });
-    guc_tables::vars::aex_log_buffers
-        .install(GucVarAccessors { get: gucs::log_buffers, set: gucs::set_log_buffers });
-    guc_tables::vars::aex_log_wal
-        .install(GucVarAccessors { get: gucs::log_wal, set: gucs::set_log_wal });
-    guc_tables::vars::aex_log_triggers
-        .install(GucVarAccessors { get: gucs::log_triggers, set: gucs::set_log_triggers });
-    guc_tables::vars::aex_log_timing
-        .install(GucVarAccessors { get: gucs::log_timing, set: gucs::set_log_timing });
+    guc_tables::vars::aex_log_analyze.install(GucVarAccessors {
+        get: gucs::log_analyze,
+        set: gucs::set_log_analyze,
+    });
+    guc_tables::vars::aex_log_settings.install(GucVarAccessors {
+        get: gucs::log_settings,
+        set: gucs::set_log_settings,
+    });
+    guc_tables::vars::aex_log_verbose.install(GucVarAccessors {
+        get: gucs::log_verbose,
+        set: gucs::set_log_verbose,
+    });
+    guc_tables::vars::aex_log_buffers.install(GucVarAccessors {
+        get: gucs::log_buffers,
+        set: gucs::set_log_buffers,
+    });
+    guc_tables::vars::aex_log_wal.install(GucVarAccessors {
+        get: gucs::log_wal,
+        set: gucs::set_log_wal,
+    });
+    guc_tables::vars::aex_log_triggers.install(GucVarAccessors {
+        get: gucs::log_triggers,
+        set: gucs::set_log_triggers,
+    });
+    guc_tables::vars::aex_log_timing.install(GucVarAccessors {
+        get: gucs::log_timing,
+        set: gucs::set_log_timing,
+    });
     guc_tables::vars::aex_log_nested_statements.install(GucVarAccessors {
         get: gucs::log_nested_statements,
         set: gucs::set_log_nested_statements,
     });
-    guc_tables::vars::aex_log_format
-        .install(GucVarAccessors { get: gucs::log_format, set: gucs::set_log_format });
-    guc_tables::vars::aex_log_level
-        .install(GucVarAccessors { get: gucs::log_level, set: gucs::set_log_level });
-    guc_tables::vars::aex_sample_rate
-        .install(GucVarAccessors { get: gucs::sample_rate, set: gucs::set_sample_rate });
+    guc_tables::vars::aex_log_format.install(GucVarAccessors {
+        get: gucs::log_format,
+        set: gucs::set_log_format,
+    });
+    guc_tables::vars::aex_log_level.install(GucVarAccessors {
+        get: gucs::log_level,
+        set: gucs::set_log_level,
+    });
+    guc_tables::vars::aex_sample_rate.install(GucVarAccessors {
+        get: gucs::sample_rate,
+        set: gucs::set_sample_rate,
+    });
 
     dfmgr::register_builtin_library(dfmgr::BuiltinLibraryEntry {
         name: LIBRARY,

@@ -22,7 +22,10 @@ const RELKIND_SEQUENCE: u8 = b'S';
 pub(crate) const AMFLAG_HAS_TID_RANGE: u32 = types_pathnodes::AMFLAG_HAS_TID_RANGE;
 
 fn relkind_has_table_am(relkind: u8) -> bool {
-    matches!(relkind, RELKIND_RELATION | RELKIND_MATVIEW | RELKIND_TOASTVALUE)
+    matches!(
+        relkind,
+        RELKIND_RELATION | RELKIND_MATVIEW | RELKIND_TOASTVALUE
+    )
 }
 
 pub fn get_relation_info<'mcx>(
@@ -45,7 +48,6 @@ pub fn get_relation_info<'mcx>(
     }
     // C's !RelationIsPermanent && RecoveryInProgress guard: no hot-standby
     // sessions exist, so the recovery arm is compile-time false.
-
 
     let natts = relation.rd_att.natts;
     {
@@ -102,8 +104,7 @@ pub fn get_relation_info<'mcx>(
     };
     let mut indexinfos: PgVec<'mcx, &'mcx IndexOptInfo<'mcx>> = PgVec::new_in(mcx);
     if hasindex {
-        let indexoidlist =
-            relcache_seams::relation_get_index_list::call(mcx, relation_object_id)?;
+        let indexoidlist = relcache_seams::relation_get_index_list::call(mcx, relation_object_id)?;
         let lmode = run.rte(varno as usize).rellockmode;
 
         for &indexoid in indexoidlist.iter() {
@@ -149,9 +150,8 @@ pub fn get_relation_info<'mcx>(
             // opfamily/opcintype are key-column-only.
             for i in 0..ncolumns as usize {
                 info.indexkeys.push(ind.indkey[i] as i32);
-                info.indexcollations.push(
-                    index_rel.rd_indcollation.get(i).copied().unwrap_or(0),
-                );
+                info.indexcollations
+                    .push(index_rel.rd_indcollation.get(i).copied().unwrap_or(0));
                 info.canreturn.push(match am_kind {
                     types_relscan::IndexAmKind::Btree => btcanreturn(),
                     types_relscan::IndexAmKind::Gist => {
@@ -230,7 +230,10 @@ pub fn get_relation_info<'mcx>(
             for i in 0..ncolumns as usize {
                 let indexkey = info.indexkeys[i];
                 let expr = if indexkey != 0 {
-                    assert!(indexkey > 0, "build_index_tlist: system-attribute index key");
+                    assert!(
+                        indexkey > 0,
+                        "build_index_tlist: system-attribute index key"
+                    );
                     let att = relation.rd_att.attrs[indexkey as usize - 1];
                     types_nodes::Node::mk_var(
                         mcx,
@@ -456,7 +459,9 @@ fn get_relation_foreign_keys<'mcx>(
         }
         for (idx, rte_node) in run.parse().rtable.iter().enumerate() {
             let rti = idx as u32 + 1;
-            let rte = rte_node.as_range_tbl_entry().expect("rtable cell is a RangeTblEntry");
+            let rte = rte_node
+                .as_range_tbl_entry()
+                .expect("rtable cell is a RangeTblEntry");
             if rte.rtekind != types_nodes::parsenodes::RTEKind::RTE_RELATION
                 || rte.relid != cachedfk.confrelid
             {
@@ -474,7 +479,8 @@ fn get_relation_foreign_keys<'mcx>(
             info.nkeys = cachedfk.nkeys;
             info.conkey.extend_from_slice(&cachedfk.conkey[..nkeys]);
             info.confkey.extend_from_slice(&cachedfk.confkey[..nkeys]);
-            info.conpfeqop.extend_from_slice(&cachedfk.conpfeqop[..nkeys]);
+            info.conpfeqop
+                .extend_from_slice(&cachedfk.conpfeqop[..nkeys]);
             for _ in 0..nkeys {
                 info.eclass.push(None);
                 info.fk_eclass_member.push(None);
@@ -555,7 +561,9 @@ fn find_partition_scheme<'mcx>(
         .iter()
         .any(|ps| ps.as_ref().is_some_and(|ps| **ps == fresh));
     if !found {
-        run.root.part_schemes.push(Some(mcx::alloc_in(mcx, build(mcx)?)?));
+        run.root
+            .part_schemes
+            .push(Some(mcx::alloc_in(mcx, build(mcx)?)?));
     }
     mcx::alloc_in(mcx, fresh)
 }
@@ -589,7 +597,11 @@ fn copy_boundinfo_for_planner<'mcx>(
         row.reserve(width);
         let mut krow: PgVec<'mcx, i8> = PgVec::new_in(mcx);
         for j in 0..width {
-            let kind = if has_kind { bi.kind_at(i, j) } else { partbounds::KIND_VALUE };
+            let kind = if has_kind {
+                bi.kind_at(i, j)
+            } else {
+                partbounds::KIND_VALUE
+            };
             if has_kind {
                 krow.push(kind);
             }
@@ -597,8 +609,11 @@ fn copy_boundinfo_for_planner<'mcx>(
                 row.push(DatumImage::ByVal(0));
                 continue;
             }
-            let (byval, typlen) =
-                if hash { (true, 4i16) } else { (key.parttypbyval[j], key.parttyplen[j]) };
+            let (byval, typlen) = if hash {
+                (true, 4i16)
+            } else {
+                (key.parttypbyval[j], key.parttyplen[j])
+            };
             let d = bi.datum(i, j);
             if byval {
                 row.push(DatumImage::ByVal(d.as_u64()));
@@ -654,9 +669,7 @@ fn copy_boundinfo_for_planner<'mcx>(
             let mut last_index = -1;
             for i in 0..out.indexes.len() {
                 let index = out.indexes[i];
-                if index < last_index
-                    || (bi.null_index != -1 && index == bi.null_index)
-                {
+                if index < last_index || (bi.null_index != -1 && index == bi.null_index) {
                     types_pathnodes::relids::relids_add_member_mut(
                         mcx,
                         &mut out.interleaved_parts,
@@ -838,8 +851,8 @@ pub fn estimate_rel_size(
             let density = if reltuples >= 0.0 && relpages > 0 {
                 reltuples / relpages as f64
             } else {
-                let tuple_width = get_rel_data_width(rel, None, 1)? as usize
-                    + HEAP_OVERHEAD_BYTES_PER_TUPLE;
+                let tuple_width =
+                    get_rel_data_width(rel, None, 1)? as usize + HEAP_OVERHEAD_BYTES_PER_TUPLE;
                 (HEAP_USABLE_BYTES_PER_PAGE / tuple_width) as f64
             };
             let tuples = (density * curpages as f64).round_ties_even();
@@ -859,7 +872,11 @@ pub fn estimate_rel_size(
             // C foreign-table + final else arms: just use whatever's in
             // pg_class (partitioned tables are storageless; reached with
             // ONLY / zero partitions).
-            return Ok((rel.rd_rel.relpages as BlockNumber, rel.rd_rel.reltuples as f64, 0.0));
+            return Ok((
+                rel.rd_rel.relpages as BlockNumber,
+                rel.rd_rel.reltuples as f64,
+                0.0,
+            ));
         }
         panic!("estimate_rel_size (plancat.c): relkind {relkind}; M2 lane");
     }
@@ -983,7 +1000,13 @@ pub fn restriction_selectivity<'mcx>(
             let isgt = oprrest == F_SCALARGTSEL || oprrest == F_SCALARGESEL;
             let iseq = oprrest == F_SCALARLESEL || oprrest == F_SCALARGESEL;
             crate::selfuncs::scalarineqsel_wrapper(
-                run, operatorid, args, varrelid, inputcollid, isgt, iseq,
+                run,
+                operatorid,
+                args,
+                varrelid,
+                inputcollid,
+                isgt,
+                iseq,
             )?
         }
         F_REGEXEQSEL | F_ICREGEXEQSEL | F_LIKESEL | F_ICLIKESEL | F_PREFIXSEL | F_REGEXNESEL
@@ -1000,7 +1023,13 @@ pub fn restriction_selectivity<'mcx>(
                 _ => (PatternType::LikeIc, true),
             };
             crate::like_support::patternsel(
-                run, operatorid, args, varrelid, inputcollid, ptype, negate,
+                run,
+                operatorid,
+                args,
+                varrelid,
+                inputcollid,
+                ptype,
+                negate,
             )?
         }
         3169 => crate::rangetypes_selfuncs::rangesel(run, operatorid, args, varrelid)?,
@@ -1024,9 +1053,7 @@ pub fn restriction_selectivity<'mcx>(
             Some("_int_matchsel") => {
                 crate::intarray_selfuncs::int_matchsel(run, args, varrelid, other)?
             }
-            _ => panic!(
-                "restriction_selectivity (plancat.c): oprrest {other}; M2 selfuncs lane"
-            ),
+            _ => panic!("restriction_selectivity (plancat.c): oprrest {other}; M2 selfuncs lane"),
         },
     };
     if !(0.0..=1.0).contains(&result) {
@@ -1133,11 +1160,8 @@ pub fn function_selectivity<'mcx>(
                 &mut estimate,
             );
             let addr = core::ptr::from_mut(&mut req) as usize;
-            let result = fmgr_core::oid_function_call1_coll(
-                prosupport,
-                0,
-                datum::Datum::from_usize(addr),
-            )?;
+            let result =
+                fmgr_core::oid_function_call1_coll(prosupport, 0, datum::Datum::from_usize(addr))?;
             if result.as_usize() == addr {
                 if !(0.0..=1.0).contains(&req.selectivity) {
                     panic!("invalid function selectivity: {}", req.selectivity);
@@ -1151,7 +1175,14 @@ pub fn function_selectivity<'mcx>(
         return Ok(crate::selfuncs::DEFAULT_MATCH_SEL);
     }
     crate::like_support::patternsel_common(
-        run, 0, funcid, args, varrelid, inputcollid, ptype, false,
+        run,
+        0,
+        funcid,
+        args,
+        varrelid,
+        inputcollid,
+        ptype,
+        false,
     )
 }
 
@@ -1164,8 +1195,11 @@ pub fn add_function_cost(funcid: Oid, cost: &mut types_pathnodes::QualCost) -> P
     if shape.prosupport != 0 {
         let mut req = types_nodes::supportnodes::SupportRequestCost::new(funcid, None);
         let addr = core::ptr::from_mut(&mut req) as usize;
-        let result =
-            fmgr_core::oid_function_call1_coll(shape.prosupport, 0, datum::Datum::from_usize(addr))?;
+        let result = fmgr_core::oid_function_call1_coll(
+            shape.prosupport,
+            0,
+            datum::Datum::from_usize(addr),
+        )?;
         if result.as_usize() == addr {
             cost.startup += req.startup;
             cost.per_tuple += req.per_tuple;
@@ -1184,8 +1218,11 @@ pub fn get_function_rows(funcid: Oid, node: Option<types_nodes::Node<'_>>) -> Pg
     if shape.prosupport != 0 {
         let mut req = types_nodes::supportnodes::SupportRequestRows::new(funcid, node);
         let addr = core::ptr::from_mut(&mut req) as usize;
-        let result =
-            fmgr_core::oid_function_call1_coll(shape.prosupport, 0, datum::Datum::from_usize(addr))?;
+        let result = fmgr_core::oid_function_call1_coll(
+            shape.prosupport,
+            0,
+            datum::Datum::from_usize(addr),
+        )?;
         if result.as_usize() == addr {
             return Ok(req.rows);
         }
@@ -1226,8 +1263,10 @@ pub fn infer_arbiter_indexes<'mcx>(
                         .with_sqlstate(types_error::ERRCODE_FEATURE_NOT_SUPPORTED),
                     ));
                 }
-                infer_attrs
-                    .add_member(mcx, var.varattno as i32 - FirstLowInvalidHeapAttributeNumber)?;
+                infer_attrs.add_member(
+                    mcx,
+                    var.varattno as i32 - FirstLowInvalidHeapAttributeNumber,
+                )?;
             }
         }
     }
@@ -1252,7 +1291,10 @@ pub fn infer_arbiter_indexes<'mcx>(
     for &indexoid in indexoidlist.iter() {
         let idx_rel = indexam::index_open(mcx, indexoid, rte.rellockmode)?;
         let _matched = 'matched: {
-            let ind = idx_rel.rd_index.as_ref().expect("index relation carries rd_index");
+            let ind = idx_rel
+                .rd_index
+                .as_ref()
+                .expect("index relation carries rd_index");
             if !ind.indisvalid {
                 break 'matched false;
             }
@@ -1342,7 +1384,11 @@ pub fn infer_arbiter_indexes<'mcx>(
             }
             let mut arbiter_where: Vec<types_nodes::Node<'mcx>> = Vec::new();
             if let Some(w) = oc.arbiterWhere {
-                for e in w.as_list().expect("preprocessed arbiterWhere is a List").iter() {
+                for e in w
+                    .as_list()
+                    .expect("preprocessed arbiterWhere is a List")
+                    .iter()
+                {
                     arbiter_where.push(e);
                 }
             }
@@ -1386,7 +1432,10 @@ fn infer_collation_opclass_match<'mcx>(
         inferopfamily = lsyscache::get_opclass_family(elem.inferopclass)?;
         inferopcinputtype = lsyscache::get_opclass_input_type(elem.inferopclass)?;
     }
-    let ind = idx_rel.rd_index.as_ref().expect("index relation carries rd_index");
+    let ind = idx_rel
+        .rd_index
+        .as_ref()
+        .expect("index relation carries rd_index");
     let elem_expr = elem.expr.expect("InferenceElem has expr");
     let mut nplain = 0usize;
     for natt in 1..=idx_rel.rd_att.natts as usize {
@@ -1622,8 +1671,9 @@ fn pgrcolumnar_sorted_pathkey_attnos<'mcx>(
     let Some(sorted) = ::tableam::pgrcolumnar_footer_sorted(relation)? else {
         return Ok(out);
     };
-    use types_core::catalog::{DATEOID, INT2OID, INT4OID, INT8OID, TEXTOID, TIMESTAMPOID,
-        VARCHAROID};
+    use types_core::catalog::{
+        DATEOID, INT2OID, INT4OID, INT8OID, TEXTOID, TIMESTAMPOID, VARCHAROID,
+    };
     for (i, a) in relation.rd_att.attrs.iter().enumerate() {
         if !sorted.get(i).copied().unwrap_or(false) || a.attisdropped {
             continue;

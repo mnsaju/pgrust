@@ -63,16 +63,18 @@ pub fn get_constraint_name<'mcx>(mcx: Mcx<'mcx>, conoid: Oid) -> PgResult<Option
 }
 
 pub fn get_constraint_index(conoid: Oid) -> PgResult<Oid> {
-    Ok(match syscache_seams::lookup_pg_constraint_shape::call(conoid)? {
-        Some(contup)
-            if contup.contype == CONSTRAINT_UNIQUE
-                || contup.contype == CONSTRAINT_PRIMARY
-                || contup.contype == CONSTRAINT_EXCLUSION =>
-        {
-            contup.conindid
-        }
-        _ => InvalidOid,
-    })
+    Ok(
+        match syscache_seams::lookup_pg_constraint_shape::call(conoid)? {
+            Some(contup)
+                if contup.contype == CONSTRAINT_UNIQUE
+                    || contup.contype == CONSTRAINT_PRIMARY
+                    || contup.contype == CONSTRAINT_EXCLUSION =>
+            {
+                contup.conindid
+            }
+            _ => InvalidOid,
+        },
+    )
 }
 
 pub fn get_constraint_type(conoid: Oid) -> PgResult<i8> {
@@ -157,20 +159,24 @@ pub fn get_transform_fromsql(typid: Oid, langid: Oid, trftypes: &[Oid]) -> PgRes
     if !trftypes.contains(&typid) {
         return Ok(InvalidOid);
     }
-    Ok(match syscache_seams::lookup_pg_transform_shape::call(typid, langid)? {
-        Some(trf) => trf.trffromsql,
-        None => InvalidOid,
-    })
+    Ok(
+        match syscache_seams::lookup_pg_transform_shape::call(typid, langid)? {
+            Some(trf) => trf.trffromsql,
+            None => InvalidOid,
+        },
+    )
 }
 
 pub fn get_transform_tosql(typid: Oid, langid: Oid, trftypes: &[Oid]) -> PgResult<Oid> {
     if !trftypes.contains(&typid) {
         return Ok(InvalidOid);
     }
-    Ok(match syscache_seams::lookup_pg_transform_shape::call(typid, langid)? {
-        Some(trf) => trf.trftosql,
-        None => InvalidOid,
-    })
+    Ok(
+        match syscache_seams::lookup_pg_transform_shape::call(typid, langid)? {
+            Some(trf) => trf.trftosql,
+            None => InvalidOid,
+        },
+    )
 }
 
 pub fn get_namespace_name<'mcx>(mcx: Mcx<'mcx>, nspid: Oid) -> PgResult<Option<PgString<'mcx>>> {
@@ -192,24 +198,30 @@ pub fn get_namespace_name_or_temp<'mcx>(
 }
 
 pub fn get_range_subtype(range_oid: Oid) -> PgResult<Oid> {
-    Ok(match syscache_seams::lookup_pg_range_shape::call(range_oid)? {
-        Some(rngtup) => rngtup.rngsubtype,
-        None => InvalidOid,
-    })
+    Ok(
+        match syscache_seams::lookup_pg_range_shape::call(range_oid)? {
+            Some(rngtup) => rngtup.rngsubtype,
+            None => InvalidOid,
+        },
+    )
 }
 
 pub fn get_range_collation(range_oid: Oid) -> PgResult<Oid> {
-    Ok(match syscache_seams::lookup_pg_range_shape::call(range_oid)? {
-        Some(rngtup) => rngtup.rngcollation,
-        None => InvalidOid,
-    })
+    Ok(
+        match syscache_seams::lookup_pg_range_shape::call(range_oid)? {
+            Some(rngtup) => rngtup.rngcollation,
+            None => InvalidOid,
+        },
+    )
 }
 
 pub fn get_range_multirange(range_oid: Oid) -> PgResult<Oid> {
-    Ok(match syscache_seams::lookup_pg_range_shape::call(range_oid)? {
-        Some(rngtup) => rngtup.rngmultitypid,
-        None => InvalidOid,
-    })
+    Ok(
+        match syscache_seams::lookup_pg_range_shape::call(range_oid)? {
+            Some(rngtup) => rngtup.rngmultitypid,
+            None => InvalidOid,
+        },
+    )
 }
 
 pub fn get_multirange_range(multirange_oid: Oid) -> PgResult<Oid> {

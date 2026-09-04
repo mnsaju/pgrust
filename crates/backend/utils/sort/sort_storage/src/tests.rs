@@ -10,7 +10,9 @@ static WAL_SYNC_METHOD: AtomicI32 = AtomicI32::new(0);
 static CWD: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 fn enter_datadir(tag: &str) -> std::sync::MutexGuard<'static, ()> {
-    let guard = CWD.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let guard = CWD
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let dir = format!(
         "{}/pgrust-sortstorage-{}-{}",
         std::env::temp_dir().display(),

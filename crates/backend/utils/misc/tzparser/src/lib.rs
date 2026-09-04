@@ -60,7 +60,11 @@ fn strtol10(tok: &[u8]) -> Option<i32> {
     for &d in digits {
         v = v.saturating_mul(10).saturating_sub((d - b'0') as i64);
     }
-    let v = if neg { v } else { v.checked_neg().unwrap_or(i64::MAX) };
+    let v = if neg {
+        v
+    } else {
+        v.checked_neg().unwrap_or(i64::MAX)
+    };
     Some(v as i32)
 }
 
@@ -87,7 +91,14 @@ fn split_tz_line<'mcx>(
         return None;
     };
 
-    let mut entry = TzParsedEntry { abbrev, zone: None, offset: 0, is_dst: false, lineno, filename };
+    let mut entry = TzParsedEntry {
+        abbrev,
+        zone: None,
+        offset: 0,
+        is_dst: false,
+        lineno,
+        filename,
+    };
 
     // We assume zone names don't begin with a digit or sign.
     let first = offset_tok[0];
@@ -170,9 +181,7 @@ fn add_to_array<'mcx>(
             core::cmp::Ordering::Greater => low = mid + 1,
             core::cmp::Ordering::Equal => {
                 let same = match (midptr.zone, entry.zone) {
-                    (None, None) => {
-                        midptr.offset == entry.offset && midptr.is_dst == entry.is_dst
-                    }
+                    (None, None) => midptr.offset == entry.offset && midptr.is_dst == entry.is_dst,
                     (Some(a), Some(b)) => a == b,
                     _ => false,
                 };

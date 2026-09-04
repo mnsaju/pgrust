@@ -94,39 +94,204 @@ struct Keyword {
 
 // Sorted by length then alphabetically (checkKeyword binary-search order).
 static KEYWORDS: &[Keyword] = &[
-    Keyword { len: 2, lowercase: false, val: Token::IsP, keyword: b"is" },
-    Keyword { len: 2, lowercase: false, val: Token::ToP, keyword: b"to" },
-    Keyword { len: 3, lowercase: false, val: Token::AbsP, keyword: b"abs" },
-    Keyword { len: 3, lowercase: false, val: Token::LaxP, keyword: b"lax" },
-    Keyword { len: 4, lowercase: false, val: Token::DateP, keyword: b"date" },
-    Keyword { len: 4, lowercase: false, val: Token::FlagP, keyword: b"flag" },
-    Keyword { len: 4, lowercase: false, val: Token::LastP, keyword: b"last" },
-    Keyword { len: 4, lowercase: true, val: Token::NullP, keyword: b"null" },
-    Keyword { len: 4, lowercase: false, val: Token::SizeP, keyword: b"size" },
-    Keyword { len: 4, lowercase: false, val: Token::TimeP, keyword: b"time" },
-    Keyword { len: 4, lowercase: true, val: Token::TrueP, keyword: b"true" },
-    Keyword { len: 4, lowercase: false, val: Token::TypeP, keyword: b"type" },
-    Keyword { len: 4, lowercase: false, val: Token::WithP, keyword: b"with" },
-    Keyword { len: 5, lowercase: true, val: Token::FalseP, keyword: b"false" },
-    Keyword { len: 5, lowercase: false, val: Token::FloorP, keyword: b"floor" },
-    Keyword { len: 6, lowercase: false, val: Token::BigintP, keyword: b"bigint" },
-    Keyword { len: 6, lowercase: false, val: Token::DoubleP, keyword: b"double" },
-    Keyword { len: 6, lowercase: false, val: Token::ExistsP, keyword: b"exists" },
-    Keyword { len: 6, lowercase: false, val: Token::NumberP, keyword: b"number" },
-    Keyword { len: 6, lowercase: false, val: Token::StartsP, keyword: b"starts" },
-    Keyword { len: 6, lowercase: false, val: Token::StrictP, keyword: b"strict" },
-    Keyword { len: 6, lowercase: false, val: Token::StringFuncP, keyword: b"string" },
-    Keyword { len: 7, lowercase: false, val: Token::BooleanP, keyword: b"boolean" },
-    Keyword { len: 7, lowercase: false, val: Token::CeilingP, keyword: b"ceiling" },
-    Keyword { len: 7, lowercase: false, val: Token::DecimalP, keyword: b"decimal" },
-    Keyword { len: 7, lowercase: false, val: Token::IntegerP, keyword: b"integer" },
-    Keyword { len: 7, lowercase: false, val: Token::TimeTzP, keyword: b"time_tz" },
-    Keyword { len: 7, lowercase: false, val: Token::UnknownP, keyword: b"unknown" },
-    Keyword { len: 8, lowercase: false, val: Token::DatetimeP, keyword: b"datetime" },
-    Keyword { len: 8, lowercase: false, val: Token::KeyValueP, keyword: b"keyvalue" },
-    Keyword { len: 9, lowercase: false, val: Token::TimestampP, keyword: b"timestamp" },
-    Keyword { len: 10, lowercase: false, val: Token::LikeRegexP, keyword: b"like_regex" },
-    Keyword { len: 12, lowercase: false, val: Token::TimestampTzP, keyword: b"timestamp_tz" },
+    Keyword {
+        len: 2,
+        lowercase: false,
+        val: Token::IsP,
+        keyword: b"is",
+    },
+    Keyword {
+        len: 2,
+        lowercase: false,
+        val: Token::ToP,
+        keyword: b"to",
+    },
+    Keyword {
+        len: 3,
+        lowercase: false,
+        val: Token::AbsP,
+        keyword: b"abs",
+    },
+    Keyword {
+        len: 3,
+        lowercase: false,
+        val: Token::LaxP,
+        keyword: b"lax",
+    },
+    Keyword {
+        len: 4,
+        lowercase: false,
+        val: Token::DateP,
+        keyword: b"date",
+    },
+    Keyword {
+        len: 4,
+        lowercase: false,
+        val: Token::FlagP,
+        keyword: b"flag",
+    },
+    Keyword {
+        len: 4,
+        lowercase: false,
+        val: Token::LastP,
+        keyword: b"last",
+    },
+    Keyword {
+        len: 4,
+        lowercase: true,
+        val: Token::NullP,
+        keyword: b"null",
+    },
+    Keyword {
+        len: 4,
+        lowercase: false,
+        val: Token::SizeP,
+        keyword: b"size",
+    },
+    Keyword {
+        len: 4,
+        lowercase: false,
+        val: Token::TimeP,
+        keyword: b"time",
+    },
+    Keyword {
+        len: 4,
+        lowercase: true,
+        val: Token::TrueP,
+        keyword: b"true",
+    },
+    Keyword {
+        len: 4,
+        lowercase: false,
+        val: Token::TypeP,
+        keyword: b"type",
+    },
+    Keyword {
+        len: 4,
+        lowercase: false,
+        val: Token::WithP,
+        keyword: b"with",
+    },
+    Keyword {
+        len: 5,
+        lowercase: true,
+        val: Token::FalseP,
+        keyword: b"false",
+    },
+    Keyword {
+        len: 5,
+        lowercase: false,
+        val: Token::FloorP,
+        keyword: b"floor",
+    },
+    Keyword {
+        len: 6,
+        lowercase: false,
+        val: Token::BigintP,
+        keyword: b"bigint",
+    },
+    Keyword {
+        len: 6,
+        lowercase: false,
+        val: Token::DoubleP,
+        keyword: b"double",
+    },
+    Keyword {
+        len: 6,
+        lowercase: false,
+        val: Token::ExistsP,
+        keyword: b"exists",
+    },
+    Keyword {
+        len: 6,
+        lowercase: false,
+        val: Token::NumberP,
+        keyword: b"number",
+    },
+    Keyword {
+        len: 6,
+        lowercase: false,
+        val: Token::StartsP,
+        keyword: b"starts",
+    },
+    Keyword {
+        len: 6,
+        lowercase: false,
+        val: Token::StrictP,
+        keyword: b"strict",
+    },
+    Keyword {
+        len: 6,
+        lowercase: false,
+        val: Token::StringFuncP,
+        keyword: b"string",
+    },
+    Keyword {
+        len: 7,
+        lowercase: false,
+        val: Token::BooleanP,
+        keyword: b"boolean",
+    },
+    Keyword {
+        len: 7,
+        lowercase: false,
+        val: Token::CeilingP,
+        keyword: b"ceiling",
+    },
+    Keyword {
+        len: 7,
+        lowercase: false,
+        val: Token::DecimalP,
+        keyword: b"decimal",
+    },
+    Keyword {
+        len: 7,
+        lowercase: false,
+        val: Token::IntegerP,
+        keyword: b"integer",
+    },
+    Keyword {
+        len: 7,
+        lowercase: false,
+        val: Token::TimeTzP,
+        keyword: b"time_tz",
+    },
+    Keyword {
+        len: 7,
+        lowercase: false,
+        val: Token::UnknownP,
+        keyword: b"unknown",
+    },
+    Keyword {
+        len: 8,
+        lowercase: false,
+        val: Token::DatetimeP,
+        keyword: b"datetime",
+    },
+    Keyword {
+        len: 8,
+        lowercase: false,
+        val: Token::KeyValueP,
+        keyword: b"keyvalue",
+    },
+    Keyword {
+        len: 9,
+        lowercase: false,
+        val: Token::TimestampP,
+        keyword: b"timestamp",
+    },
+    Keyword {
+        len: 10,
+        lowercase: false,
+        val: Token::LikeRegexP,
+        keyword: b"like_regex",
+    },
+    Keyword {
+        len: 12,
+        lowercase: false,
+        val: Token::TimestampTzP,
+        keyword: b"timestamp_tz",
+    },
 ];
 
 fn strncmp(a: &[u8], b: &[u8], n: usize) -> i32 {
@@ -164,7 +329,11 @@ fn check_keyword(s: &[u8]) -> Token {
         } else if diff > 0 {
             hi = mid;
         } else {
-            let fdiff = if kw.lowercase { strncmp(kw.keyword, s, slen as usize) } else { 0 };
+            let fdiff = if kw.lowercase {
+                strncmp(kw.keyword, s, slen as usize)
+            } else {
+                0
+            };
             if fdiff == 0 {
                 res = kw.val;
             }
@@ -178,8 +347,29 @@ fn check_keyword(s: &[u8]) -> Token {
 fn is_special(c: u8) -> bool {
     matches!(
         c,
-        b'?' | b'%' | b'$' | b'.' | b'[' | b']' | b'{' | b'}' | b'(' | b')' | b'|' | b'&'
-            | b'!' | b'=' | b'<' | b'>' | b'@' | b'#' | b',' | b'*' | b':' | b'-' | b'+' | b'/'
+        b'?' | b'%'
+            | b'$'
+            | b'.'
+            | b'['
+            | b']'
+            | b'{'
+            | b'}'
+            | b'('
+            | b')'
+            | b'|'
+            | b'&'
+            | b'!'
+            | b'='
+            | b'<'
+            | b'>'
+            | b'@'
+            | b'#'
+            | b','
+            | b'*'
+            | b':'
+            | b'-'
+            | b'+'
+            | b'/'
     )
 }
 
@@ -417,12 +607,23 @@ fn consider(best: &mut usize, which: &mut Which, cand: Option<usize>, w: Which) 
 }
 
 fn emit(token: Token) -> Step<'static> {
-    Step::Emit(Lexeme { token, value: None, start: 0, end: 0 })
+    Step::Emit(Lexeme {
+        token,
+        value: None,
+        start: 0,
+        end: 0,
+    })
 }
 
 impl<'a, 'mcx> Lexer<'a, 'mcx> {
     pub fn new(mcx: Mcx<'mcx>, input: &'a [u8]) -> Self {
-        Lexer { input, pos: 0, state: State::Initial, scanstring: PgVec::new_in(mcx), mcx }
+        Lexer {
+            input,
+            pos: 0,
+            state: State::Initial,
+            scanstring: PgVec::new_in(mcx),
+            mcx,
+        }
     }
 
     fn ss_init(&mut self) {
@@ -445,7 +646,12 @@ impl<'a, 'mcx> Lexer<'a, 'mcx> {
 
     fn emit_value(&mut self, token: Token) -> Step<'mcx> {
         let value = Some(self.ss_take());
-        Step::Emit(Lexeme { token, value, start: 0, end: 0 })
+        Step::Emit(Lexeme {
+            token,
+            value,
+            start: 0,
+            end: 0,
+        })
     }
 
     fn emit_keyword(&mut self) -> Step<'mcx> {
@@ -930,7 +1136,10 @@ impl<'a, 'mcx> Lexer<'a, 'mcx> {
         };
         let hexc = match_hex_char(s, p);
         let hexf = match_hex_fail(s, p);
-        let fixed2 = matches!(s.get(p + 1), Some(&b'b' | &b'f' | &b'n' | &b'r' | &b't' | &b'v'));
+        let fixed2 = matches!(
+            s.get(p + 1),
+            Some(&b'b' | &b'f' | &b'n' | &b'r' | &b't' | &b'v')
+        );
 
         let mut best: usize = 0;
         let mut which = Which::None;
@@ -939,9 +1148,18 @@ impl<'a, 'mcx> Lexer<'a, 'mcx> {
         consider(&mut best, &mut which, hexc, Which::HexChar);
         consider(&mut best, &mut which, unifail, Which::UnicodeFail);
         consider(&mut best, &mut which, hexf, Which::HexFail);
-        consider(&mut best, &mut which, uni_plus_bs, Which::UnicodePlusBackslash);
+        consider(
+            &mut best,
+            &mut which,
+            uni_plus_bs,
+            Which::UnicodePlusBackslash,
+        );
         // flex `.` excludes newline: backslash+LF falls to the lone-\\ rule.
-        let dot = if s.get(p + 1).is_some_and(|&c| c != b'\n') { Some(2) } else { None };
+        let dot = if s.get(p + 1).is_some_and(|&c| c != b'\n') {
+            Some(2)
+        } else {
+            None
+        };
         consider(&mut best, &mut which, dot, Which::Dot);
         consider(&mut best, &mut which, Some(1), Which::Backslash);
 
@@ -1174,7 +1392,11 @@ pub fn jsonpath_yyerror(
             return Ok(());
         }
     }
-    let yytext: &[u8] = if pos >= input.len() { &[] } else { &input[pos..] };
+    let yytext: &[u8] = if pos >= input.len() {
+        &[]
+    } else {
+        &input[pos..]
+    };
     jsonpath_yyerror_yytext(escontext, yytext, message)
 }
 

@@ -1,4 +1,3 @@
-
 extern crate alloc;
 
 use ::mcx::Mcx;
@@ -9,7 +8,6 @@ use crate::regguts::{
     chr, color, ColorDesc, ColorMap, ColorMapRange, Cvec, CvecRange, Nfa, StateId, CHR_MIN,
     COLORLESS, FREECOL, MAX_COLOR, MAX_SIMPLE_CHR, NOSUB, PLAIN, PSEUDO, WHITE,
 };
-
 
 pub fn newcvec<'mcx>(_mcx: Mcx<'mcx>, nchrs: i32, nranges: i32) -> RegResult<Cvec> {
     let mut chrs: alloc::vec::Vec<chr> = alloc::vec::Vec::new();
@@ -61,7 +59,6 @@ pub fn getcvec<'mcx>(
 pub fn freecvec(cv: Cvec) {
     drop(cv);
 }
-
 
 #[inline]
 fn unusedcolor(cd: &ColorDesc) -> bool {

@@ -109,10 +109,7 @@ fn list_member(list: &NodeList<'_>, node: Node<'_>) -> bool {
 
 // process_duplicate_ors (prepqual.c): ((A AND B) OR (A AND C)) becomes
 // (A AND (B OR C)).
-fn process_duplicate_ors<'mcx>(
-    mcx: Mcx<'mcx>,
-    orlist: &NodeList<'mcx>,
-) -> PgResult<Node<'mcx>> {
+fn process_duplicate_ors<'mcx>(mcx: Mcx<'mcx>, orlist: &NodeList<'mcx>) -> PgResult<Node<'mcx>> {
     if orlist.is_nil() {
         return make_bool_const(mcx, false, false);
     }

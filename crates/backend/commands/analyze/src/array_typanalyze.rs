@@ -40,7 +40,10 @@ pub(crate) fn setup(stats: &mut VacAttrStats<'_>) -> PgResult<bool> {
         ComputeStats::Distinct => StdCompute::Distinct,
         _ => StdCompute::Trivial,
     };
-    stats.compute = ComputeStats::Array { std, elem_typeid: element_typeid };
+    stats.compute = ComputeStats::Array {
+        std,
+        elem_typeid: element_typeid,
+    };
     Ok(true)
 }
 
@@ -202,9 +205,7 @@ pub(crate) fn compute_array_stats<'mcx>(
         slot_idx += 1;
     }
     if slot_idx > STATISTIC_NUM_SLOTS - 2 {
-        return Err(
-            PgError::error("insufficient pg_statistic slots for array stats").into(),
-        );
+        return Err(PgError::error("insufficient pg_statistic slots for array stats").into());
     }
 
     if analyzed_rows > 0 {
@@ -228,7 +229,9 @@ pub(crate) fn compute_array_stats<'mcx>(
             // C's qsort tie order is hash-iteration-dependent; ties at the
             // truncation boundary can keep a different (equal-frequency) set.
             sort_idx.sort_unstable_by(|&a, &b| {
-                items[b as usize].frequency.cmp(&items[a as usize].frequency)
+                items[b as usize]
+                    .frequency
+                    .cmp(&items[a as usize].frequency)
             });
             minfreq = items[sort_idx[num_mcelem as usize - 1] as usize].frequency as i64;
         } else {

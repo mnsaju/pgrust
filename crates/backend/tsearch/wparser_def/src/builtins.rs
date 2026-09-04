@@ -1,6 +1,3 @@
-
-
-
 use ::datum::Datum;
 use ::ts_locale::LexDescr;
 use ::types_core::catalog::{INT4OID, RECORDOID, TEXTOID};
@@ -66,7 +63,9 @@ pub fn lextype() -> Vec<LexDescr> {
 }
 
 pub fn fc_prsd_lextype(_flinfo: Option<&mut FmgrInfo>, _fcinfo: &mut Fcinfo) -> PgResult<Datum> {
-    Ok(Datum::from_usize(Box::into_raw(Box::new(lextype())) as usize))
+    Ok(Datum::from_usize(
+        Box::into_raw(Box::new(lextype())) as usize
+    ))
 }
 
 // Internal-arg contract (ts_headline entry in to_tsany):
@@ -76,23 +75,20 @@ pub fn fc_prsd_headline(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> 
     // SAFETY: the armed result mcx outlives this call.
     let mcx = unsafe { fcinfo.result_mcx_detached() };
     let prs_ptr = fcinfo.arg(0).as_usize() as *mut ::ts_parse::headline::HeadlineParsedText;
-    let opts_ptr = fcinfo.arg(1).as_usize()
-        as *const ::mcx::PgVec<'_, ::ts_cache::DefListItem<'_>>;
+    let opts_ptr = fcinfo.arg(1).as_usize() as *const ::mcx::PgVec<'_, ::ts_cache::DefListItem<'_>>;
     let q_ptr = fcinfo.arg(2).as_usize() as *const u8;
     // SAFETY (all): internal-arg contract — live pointers from the
     // ts_headline frame; the tsquery image spans varsize_any bytes.
     let prs = unsafe { &mut *prs_ptr };
-    let options: &[::ts_cache::DefListItem<'_>] =
-        if opts_ptr.is_null() {
-            &[]
-        } else {
-            // SAFETY: internal-arg contract — a live PgVec reference.
-            let v = unsafe { &*opts_ptr };
-            v.as_slice()
-        };
+    let options: &[::ts_cache::DefListItem<'_>] = if opts_ptr.is_null() {
+        &[]
+    } else {
+        // SAFETY: internal-arg contract — a live PgVec reference.
+        let v = unsafe { &*opts_ptr };
+        v.as_slice()
+    };
     let payload = unsafe {
-        let image =
-            core::slice::from_raw_parts(q_ptr, ::types_tuple::varatt::varsize_any(q_ptr));
+        let image = core::slice::from_raw_parts(q_ptr, ::types_tuple::varatt::varsize_any(q_ptr));
         &image[::types_tuple::varatt::VARHDRSZ..]
     };
     crate::headline::prsd_headline_impl(
@@ -193,8 +189,11 @@ pub fn fc_ts_token_type_byname(
 fn parser_oid_from_text_arg(fcinfo: &Fcinfo, i: usize) -> PgResult<::types_core::Oid> {
     // SAFETY: strict fn; arg i is a text varlena.
     let v = unsafe { fcinfo.arg_varlena_packed(i) }?;
-    let rawname = core::str::from_utf8(v.data())
-        .map_err(|_| Box::new(::types_error::PgError::error("invalid UTF-8 in parser name")))?;
+    let rawname = core::str::from_utf8(v.data()).map_err(|_| {
+        Box::new(::types_error::PgError::error(
+            "invalid UTF-8 in parser name",
+        ))
+    })?;
     let names = ::varlena::textToQualifiedNameList(fcinfo.result_mcx(), rawname)?;
     let name_refs: Vec<&str> = names.iter().map(|s| s.as_str()).collect();
     namespace_seams::get_ts_parser_oid::call(&name_refs, false)
@@ -234,22 +233,43 @@ fn parse_rows(fcinfo: &Fcinfo) -> PgResult<SrfRows> {
     Ok(SrfRows::Tuples(rows))
 }
 
-pub fn fc_ts_parse_byname(
-    flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_ts_parse_byname(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     srf_drive(flinfo, fcinfo, "ts_parse_byname", |fcinfo| {
         require_default_parser(parser_oid_from_text_arg(fcinfo, 0)?, "ts_parse");
         parse_rows(fcinfo)
     })
 }
 
-const fn b(foid: ::types_core::Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+const fn b(
+    foid: ::types_core::Oid,
+    name: &'static str,
+    nargs: i16,
+    func: PGFunction,
+) -> FmgrBuiltin {
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
-const fn srf(foid: ::types_core::Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: true, func }
+const fn srf(
+    foid: ::types_core::Oid,
+    name: &'static str,
+    nargs: i16,
+    func: PGFunction,
+) -> FmgrBuiltin {
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: true,
+        func,
+    }
 }
 
 pub const WPARSER_BUILTINS: &[FmgrBuiltin] = &[

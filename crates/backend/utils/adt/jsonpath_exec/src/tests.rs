@@ -89,8 +89,15 @@ fn exists_vars(json: &str, path: &str, vars: &str) -> Option<bool> {
     let jb = jb_payload(mcx, json);
     let jp = jp_image(mcx, path);
     let vars_jb = jb_payload(mcx, vars);
-    jsonb_path_exists_core(mcx, &jb[4..], &jp, JsonPathVars::Jsonb(&vars_jb[4..]), true, false)
-        .expect("silent exists never errors")
+    jsonb_path_exists_core(
+        mcx,
+        &jb[4..],
+        &jp,
+        JsonPathVars::Jsonb(&vars_jb[4..]),
+        true,
+        false,
+    )
+    .expect("silent exists never errors")
 }
 
 fn matches(json: &str, path: &str, silent: bool) -> Result<Option<bool>, String> {
@@ -133,10 +140,7 @@ fn accessors_and_wildcards() {
     assert_eq!(q("[1, 2, 3]", "$[1]"), ["2"]);
     assert_eq!(q("[1, 2, 3]", "$[1 to 2]"), ["2", "3"]);
     assert_eq!(q("[1, 2, 3]", "$[last]"), ["3"]);
-    assert_eq!(
-        q("{\"a\": {\"b\": 1, \"c\": 2}}", "$.a.*"),
-        ["1", "2"]
-    );
+    assert_eq!(q("{\"a\": {\"b\": 1, \"c\": 2}}", "$.a.*"), ["1", "2"]);
     assert_eq!(exists("{\"a\": 12}", "$.b"), Some(false));
     assert_eq!(exists("{\"a\": 12}", "$.a"), Some(true));
     assert_eq!(exists("{\"a\": {\"b\": 12}}", "$.a.b"), Some(true));
@@ -191,7 +195,10 @@ fn any_recursive_descent() {
         ]
     );
     assert_eq!(q(doc, "$.**{2}"), ["[1, 2]", "{\"d\": 3}"]);
-    assert_eq!(q(doc, "$.**{2 to last}"), ["[1, 2]", "1", "2", "{\"d\": 3}", "3"]);
+    assert_eq!(
+        q(doc, "$.**{2 to last}"),
+        ["[1, 2]", "1", "2", "{\"d\": 3}", "3"]
+    );
 }
 
 #[test]
@@ -199,24 +206,12 @@ fn filters_and_three_valued_logic() {
     let doc = "[{\"a\": 1}, {\"a\": 2}, {\"a\": 3}]";
     assert_eq!(q(doc, "$[*] ? (@.a > 1)"), ["{\"a\": 2}", "{\"a\": 3}"]);
     assert_eq!(q(doc, "$[*] ? (@.a == 2).a"), ["2"]);
-    assert_eq!(
-        q("[1, \"2\", null]", "$[*] ? (@ == null)"),
-        ["null"]
-    );
+    assert_eq!(q("[1, \"2\", null]", "$[*] ? (@ == null)"), ["null"]);
     // unknown from mixed-type comparison is not an error, just filtered out
     assert_eq!(q("[1, \"a\"]", "$[*] ? (@ > 0)"), ["1"]);
-    assert_eq!(
-        q("[1, \"a\"]", "$[*] ? ((@ > 0) is unknown)"),
-        ["\"a\""]
-    );
-    assert_eq!(
-        q("[1, 2, 3]", "$[*] ? (@ > 1 && @ < 3)"),
-        ["2"]
-    );
-    assert_eq!(
-        q("[1, 2, 3]", "$[*] ? (@ == 1 || @ == 3)"),
-        ["1", "3"]
-    );
+    assert_eq!(q("[1, \"a\"]", "$[*] ? ((@ > 0) is unknown)"), ["\"a\""]);
+    assert_eq!(q("[1, 2, 3]", "$[*] ? (@ > 1 && @ < 3)"), ["2"]);
+    assert_eq!(q("[1, 2, 3]", "$[*] ? (@ == 1 || @ == 3)"), ["1", "3"]);
     assert_eq!(q("[1, 2, 3]", "$[*] ? (!(@ == 2))"), ["1", "3"]);
     assert_eq!(
         q("{\"a\": [1, 2, 3]}", "$ ? (exists (@.a[*] ? (@ > 2)))"),
@@ -227,7 +222,10 @@ fn filters_and_three_valued_logic() {
 #[test]
 fn string_predicates() {
     assert_eq!(
-        q("[\"abc\", \"abd\", \"xbc\"]", "$[*] ? (@ starts with \"ab\")"),
+        q(
+            "[\"abc\", \"abd\", \"xbc\"]",
+            "$[*] ? (@ starts with \"ab\")"
+        ),
         ["\"abc\"", "\"abd\""]
     );
     // like_regex resolves the DEFAULT collation via pg_locale
@@ -260,7 +258,10 @@ fn item_methods() {
     assert_eq!(q("[-1.5, 2.3]", "$[*].abs()"), ["1.5", "2.3"]);
     assert_eq!(q("[-1.5, 2.3]", "$[*].floor()"), ["-2", "2"]);
     assert_eq!(q("[-1.5, 2.3]", "$[*].ceiling()"), ["-1", "3"]);
-    assert_eq!(q("[1, \"2\", {}]", "$[*].type()"), ["\"number\"", "\"string\"", "\"object\""]);
+    assert_eq!(
+        q("[1, \"2\", {}]", "$[*].type()"),
+        ["\"number\"", "\"string\"", "\"object\""]
+    );
     assert_eq!(q("[1, 2, 3]", "$.size()"), ["3"]);
     assert_eq!(q("{\"a\": 1}", "$.size()"), ["1"]);
     assert_eq!(q("[\"1.5\", 2]", "$[*].double()"), ["1.5", "2"]);
@@ -270,10 +271,7 @@ fn item_methods() {
     );
     assert_eq!(q("[\"123\", 456]", "$[*].bigint()"), ["123", "456"]);
     assert_eq!(q("[\"12\", 34.0]", "$[*].integer()"), ["12", "34"]);
-    assert_eq!(
-        q("[\"12.34\", 56]", "$[*].number()"),
-        ["12.34", "56"]
-    );
+    assert_eq!(q("[\"12.34\", 56]", "$[*].number()"), ["12.34", "56"]);
     assert_eq!(q("[\"12.345\"]", "$[0].decimal(5, 2)"), ["12.35"]);
     assert_eq!(
         q("[\"true\", \"false\", 1, 0, true]", "$[*].boolean()"),
@@ -295,10 +293,7 @@ fn keyvalue_method() {
             "{\"id\": 0, \"key\": \"b\", \"value\": [1, 2]}",
         ]
     );
-    assert_eq!(
-        q("{\"a\": 1}", "$.keyvalue().key"),
-        ["\"a\""]
-    );
+    assert_eq!(q("{\"a\": 1}", "$.keyvalue().key"), ["\"a\""]);
     assert_eq!(
         q_err("[1]", "strict $.keyvalue()"),
         "jsonpath item method .keyvalue() can only be applied to an object"
@@ -307,18 +302,9 @@ fn keyvalue_method() {
 
 #[test]
 fn datetime_methods() {
-    assert_eq!(
-        q("[\"2023-08-15\"]", "$[0].datetime()"),
-        ["\"2023-08-15\""]
-    );
-    assert_eq!(
-        q("[\"2023-08-15\"]", "$[0].date()"),
-        ["\"2023-08-15\""]
-    );
-    assert_eq!(
-        q("[\"12:34:56\"]", "$[0].time()"),
-        ["\"12:34:56\""]
-    );
+    assert_eq!(q("[\"2023-08-15\"]", "$[0].datetime()"), ["\"2023-08-15\""]);
+    assert_eq!(q("[\"2023-08-15\"]", "$[0].date()"), ["\"2023-08-15\""]);
+    assert_eq!(q("[\"12:34:56\"]", "$[0].time()"), ["\"12:34:56\""]);
     assert_eq!(
         q("[\"2023-08-15 12:34:56\"]", "$[0].timestamp()"),
         ["\"2023-08-15T12:34:56\""]
@@ -356,8 +342,14 @@ fn datetime_methods() {
 
 #[test]
 fn match_and_first() {
-    assert_eq!(matches("{\"a\": 1}", "$.a == 1", false).unwrap(), Some(true));
-    assert_eq!(matches("{\"a\": 1}", "$.a == 2", false).unwrap(), Some(false));
+    assert_eq!(
+        matches("{\"a\": 1}", "$.a == 1", false).unwrap(),
+        Some(true)
+    );
+    assert_eq!(
+        matches("{\"a\": 1}", "$.a == 2", false).unwrap(),
+        Some(false)
+    );
     assert_eq!(
         matches("{\"a\": 1}", "$.a", false).unwrap_err(),
         "single boolean result is expected"
@@ -406,7 +398,14 @@ fn jt_path_node<'mcx>(mcx: mcx::Mcx<'mcx>, path: &str) -> types_nodes::Node<'mcx
         false,
     )
     .unwrap();
-    types_nodes::Node::mk(mcx, JsonTablePath { value: Some(c), name: None }).unwrap()
+    types_nodes::Node::mk(
+        mcx,
+        JsonTablePath {
+            value: Some(c),
+            name: None,
+        },
+    )
+    .unwrap()
 }
 
 fn jt_scan<'mcx>(
@@ -484,7 +483,10 @@ fn json_table_nested_outer_join() {
     let mut jt =
         crate::json_table::JsonTableExecContext::init(mcx, root, mcx::PgVec::new_in(mcx), 2)
             .unwrap();
-    let doc = jb_payload(mcx, "[{\"x\": 1, \"ys\": [10, 11]}, {\"x\": 2, \"ys\": []}]");
+    let doc = jb_payload(
+        mcx,
+        "[{\"x\": 1, \"ys\": [10, 11]}, {\"x\": 2, \"ys\": []}]",
+    );
     jt.set_document(&doc[4..]).unwrap();
     let mut got = Vec::new();
     while jt.fetch_row().unwrap() {
@@ -512,7 +514,10 @@ fn json_table_sibling_join_union() {
     let r = jt_scan(mcx, "$.b[*]", Some((2, 2)), None, false);
     let join = types_nodes::Node::mk(
         mcx,
-        types_nodes::primnodes::JsonTableSiblingJoin { lplan: Some(l), rplan: Some(r) },
+        types_nodes::primnodes::JsonTableSiblingJoin {
+            lplan: Some(l),
+            rplan: Some(r),
+        },
     )
     .unwrap();
     let root = jt_scan(mcx, "$", Some((0, 0)), Some(join), false);

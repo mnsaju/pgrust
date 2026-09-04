@@ -27,7 +27,11 @@ fn find_digest(name: &str) -> Option<HashAlgo> {
         "sha512" => (Which::Sha512, 64, 128),
         _ => return None,
     };
-    Some(HashAlgo { which, digest_len, block_size })
+    Some(HashAlgo {
+        which,
+        digest_len,
+        block_size,
+    })
 }
 
 fn hash_bytes(algo: &HashAlgo, data: &[u8]) -> Vec<u8> {
@@ -86,8 +90,14 @@ mod tests {
     // Oracle: SELECT digest('abc','<algo>') on C 18.
     #[test]
     fn digests() {
-        assert_eq!(hex(&digest("md5", b"abc").unwrap()), "900150983cd24fb0d6963f7d28e17f72");
-        assert_eq!(hex(&digest("sha1", b"abc").unwrap()), "a9993e364706816aba3e25717850c26c9cd0d89d");
+        assert_eq!(
+            hex(&digest("md5", b"abc").unwrap()),
+            "900150983cd24fb0d6963f7d28e17f72"
+        );
+        assert_eq!(
+            hex(&digest("sha1", b"abc").unwrap()),
+            "a9993e364706816aba3e25717850c26c9cd0d89d"
+        );
         assert_eq!(
             hex(&digest("sha256", b"abc").unwrap()),
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
@@ -96,7 +106,10 @@ mod tests {
 
     #[test]
     fn unknown_algo() {
-        assert_eq!(digest("crc32", b"abc").unwrap_err(), "Cannot use \"crc32\": No such hash algorithm");
+        assert_eq!(
+            digest("crc32", b"abc").unwrap_err(),
+            "Cannot use \"crc32\": No such hash algorithm"
+        );
     }
 
     // RFC 2104 A.2 / C: SELECT hmac('Hi There', '\x0b'*20, 'md5') style.

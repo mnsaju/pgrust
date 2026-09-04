@@ -31,7 +31,11 @@ fn name_list_to_string(names: &NodeList<'_>) -> String {
         if i > 0 {
             out.push('.');
         }
-        out.push_str(n.as_string().expect("qualified name component is a String node").sval);
+        out.push_str(
+            n.as_string()
+                .expect("qualified name component is a String node")
+                .sval,
+        );
     }
     out
 }
@@ -104,8 +108,7 @@ pub fn CreateProceduralLanguage<'mcx>(
                         .with_sqlstate(ERRCODE_DUPLICATE_OBJECT),
                 ));
             }
-            let langoid =
-                SysCacheGetAttrNotNull(LANGNAME, &oldtup, Anum_pg_language_oid)?.as_oid();
+            let langoid = SysCacheGetAttrNotNull(LANGNAME, &oldtup, Anum_pg_language_oid)?.as_oid();
 
             // Existing oid, ownership and permissions are kept; the
             // dependency update below agrees with this.
@@ -122,8 +125,12 @@ pub fn CreateProceduralLanguage<'mcx>(
             (langoid, true)
         }
         None => {
-            let langoid =
-                catalog::GetNewOidWithIndex(mcx, &rel, LanguageOidIndexId, Anum_pg_language_oid_att)?;
+            let langoid = catalog::GetNewOidWithIndex(
+                mcx,
+                &rel,
+                LanguageOidIndexId,
+                Anum_pg_language_oid_att,
+            )?;
             values[0] = Datum::from_oid(langoid);
             let mut tup = heaptuple::heap_form_tuple(mcx, rel.descr(), &values, &nulls)?;
             catalog_indexing::CatalogTupleInsert(mcx, &rel, &mut tup)?;

@@ -65,7 +65,10 @@ impl TopnEntry {
     /// flag). `rowref` is the 48-bit physical address.
     #[inline]
     pub fn encode(key: i64, null: bool, desc: bool, nulls_first: bool, rowref: u64) -> TopnEntry {
-        debug_assert!(rowref <= TOPN_MAX_ROWREF, "rowref exceeds the 48-bit contract");
+        debug_assert!(
+            rowref <= TOPN_MAX_ROWREF,
+            "rowref exceeds the 48-bit contract"
+        );
         // Tier 0 is emitted first: nulls land there exactly when NULLS
         // FIRST (null XOR nulls_first == 0 covers both agreeing cases).
         let tier = (null ^ nulls_first) as u128;
@@ -185,7 +188,10 @@ impl WideEntry {
         for (i, (&(k, n), &(d, nf))) in keys.iter().zip(flags).enumerate() {
             packed[i] = key_word128(k, n, d, nf);
         }
-        WideEntry { keys: packed, rowref }
+        WideEntry {
+            keys: packed,
+            rowref,
+        }
     }
 
     /// The physical (rg, row) address for the leader's late-mat gather.
@@ -252,7 +258,10 @@ impl<T: Ord + Copy> BoundedTopnHeap<T> {
             (1..=TOPN_MAX_BOUND).contains(&bound),
             "top-N sink bound {bound} outside admission envelope"
         );
-        BoundedTopnHeap { bound, heap: BinaryHeap::with_capacity(bound) }
+        BoundedTopnHeap {
+            bound,
+            heap: BinaryHeap::with_capacity(bound),
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -316,7 +325,10 @@ impl<T: Ord + Copy> BoundedTopnHeap<T> {
 /// the union — claim-order independence needs no further argument.
 pub fn topn_merge<T: Ord + Copy>(sealed: &[Vec<T>], bound: usize) -> Vec<T> {
     use std::cmp::Reverse;
-    debug_assert!(sealed.iter().all(|run| run.windows(2).all(|w| w[0] < w[1])), "unsorted sealed run");
+    debug_assert!(
+        sealed.iter().all(|run| run.windows(2).all(|w| w[0] < w[1])),
+        "unsorted sealed run"
+    );
     let mut pos = vec![1usize; sealed.len()];
     let mut heads: BinaryHeap<Reverse<(T, usize)>> = sealed
         .iter()
@@ -327,7 +339,9 @@ pub fn topn_merge<T: Ord + Copy>(sealed: &[Vec<T>], bound: usize) -> Vec<T> {
     let cap = bound.min(sealed.iter().map(Vec::len).sum());
     let mut out = Vec::with_capacity(cap);
     while out.len() < bound {
-        let Some(Reverse((e, run))) = heads.pop() else { break };
+        let Some(Reverse((e, run))) = heads.pop() else {
+            break;
+        };
         out.push(e);
         let p = pos[run];
         if p < sealed[run].len() {
@@ -369,9 +383,16 @@ mod tests {
         for rg in [0, 1, 2, MAX_ADMISSIBLE_RG - 1, MAX_ADMISSIBLE_RG] {
             for row in [0, 1, MAX_ROW / 2, MAX_ROW] {
                 let rr = pack(rg, row);
-                assert!(rr <= TOPN_MAX_ROWREF, "admissible (rg={rg}, row={row}) does not fit");
+                assert!(
+                    rr <= TOPN_MAX_ROWREF,
+                    "admissible (rg={rg}, row={row}) does not fit"
+                );
                 let e = TopnEntry::encode(-42, false, false, false, rr);
-                assert_eq!(e.rowref(), rr, "carrier lost an admissible ref ({rg}, {row})");
+                assert_eq!(
+                    e.rowref(),
+                    rr,
+                    "carrier lost an admissible ref ({rg}, {row})"
+                );
                 let clean = TopnEntry::encode(-42, false, false, false, 0);
                 assert_eq!(
                     e.raw() >> ROWREF_BITS,
@@ -385,7 +406,10 @@ mod tests {
         // damage the mints exist to prevent, and it is why the threshold sits
         // at u16::MAX rather than anywhere else.
         let over = pack(MAX_ADMISSIBLE_RG + 1, 0);
-        assert!(over > TOPN_MAX_ROWREF, "the refusal threshold is not the carrier's limit");
+        assert!(
+            over > TOPN_MAX_ROWREF,
+            "the refusal threshold is not the carrier's limit"
+        );
         // Mirror `encode`'s pack rather than CALLING it. `encode` guards exactly
         // this case with a `debug_assert!`, which the dev tier still has, and
         // the whole point of this arm is what happens in the profiles where that
@@ -443,8 +467,20 @@ mod tests {
         a.2.cmp(&b.2)
     }
 
-    const KEY_SAMPLE: &[i64] =
-        &[i64::MIN, i64::MIN + 1, -3, -2, -1, 0, 1, 2, 3, 1 << 40, i64::MAX - 1, i64::MAX];
+    const KEY_SAMPLE: &[i64] = &[
+        i64::MIN,
+        i64::MIN + 1,
+        -3,
+        -2,
+        -1,
+        0,
+        1,
+        2,
+        3,
+        1 << 40,
+        i64::MAX - 1,
+        i64::MAX,
+    ];
 
     /// Encoding law: for every flag combination, encode order == reference
     /// order over the exhaustive key sample × null × rowref grid.
@@ -470,7 +506,10 @@ mod tests {
                         // Null key images are canonical: same-null pairs
                         // with equal rowref collide only if a == b.
                         if ea == eb {
-                            assert!(a.1 && b.1 && a.2 == b.2, "distinct obs encoded equal: {a:?} {b:?}");
+                            assert!(
+                                a.1 && b.1 && a.2 == b.2,
+                                "distinct obs encoded equal: {a:?} {b:?}"
+                            );
                             continue;
                         }
                         assert_eq!(
@@ -504,12 +543,10 @@ mod tests {
             .collect()
     }
 
-    fn encode_all(
-        obs: &[(i64, bool, u64)],
-        desc: bool,
-        nulls_first: bool,
-    ) -> Vec<TopnEntry> {
-        obs.iter().map(|&(k, n, r)| TopnEntry::encode(k, n, desc, nulls_first, r)).collect()
+    fn encode_all(obs: &[(i64, bool, u64)], desc: bool, nulls_first: bool) -> Vec<TopnEntry> {
+        obs.iter()
+            .map(|&(k, n, r)| TopnEntry::encode(k, n, desc, nulls_first, r))
+            .collect()
     }
 
     /// The reference winner list: sort the whole union, take bound.
@@ -617,14 +654,16 @@ mod tests {
     /// nulls_first against a lone non-null row.
     #[test]
     fn null_tiers() {
-        let nulls: Vec<TopnEntry> =
-            (0..20).map(|i| TopnEntry::encode(0, true, false, false, i)).collect();
+        let nulls: Vec<TopnEntry> = (0..20)
+            .map(|i| TopnEntry::encode(0, true, false, false, i))
+            .collect();
         let non_null = TopnEntry::encode(i64::MAX, false, false, false, 99);
         // NULLS LAST: the non-null MAX beats every null.
         assert!(nulls.iter().all(|&n| non_null < n));
         // NULLS FIRST flips it.
-        let nulls_f: Vec<TopnEntry> =
-            (0..20).map(|i| TopnEntry::encode(0, true, false, true, i)).collect();
+        let nulls_f: Vec<TopnEntry> = (0..20)
+            .map(|i| TopnEntry::encode(0, true, false, true, i))
+            .collect();
         let non_null_f = TopnEntry::encode(i64::MIN, false, false, true, 99);
         assert!(nulls_f.iter().all(|&n| n < non_null_f));
         // Within the null tier: rowref ascending.
@@ -652,7 +691,11 @@ mod tests {
         let rejected = TopnEntry::encode(10, false, false, false, 5);
         assert!(!h.admits(rejected));
         h.push(rejected);
-        assert_eq!(h.floor().expect("full").rowref(), 2, "non-admitted push mutated the heap");
+        assert_eq!(
+            h.floor().expect("full").rowref(),
+            2,
+            "non-admitted push mutated the heap"
+        );
         let better = TopnEntry::encode(9, false, false, false, 9);
         assert!(h.admits(better));
         h.push(better);
@@ -669,7 +712,10 @@ mod tests {
         assert!(topn_merge::<TopnEntry>(&[vec![], vec![]], 10).is_empty());
         let single = vec![e(1, 0), e(2, 1)];
         assert_eq!(topn_merge(&[single.clone()], 10), single);
-        let got = topn_merge(&[vec![e(5, 4)], vec![], vec![e(1, 0), e(9, 8)], vec![e(2, 1)]], 3);
+        let got = topn_merge(
+            &[vec![e(5, 4)], vec![], vec![e(1, 0), e(9, 8)], vec![e(2, 1)]],
+            3,
+        );
         assert_eq!(got, vec![e(1, 0), e(2, 1), e(5, 4)]);
     }
 
@@ -690,7 +736,11 @@ mod tests {
                 o => return o,
             }
             if !ka.1 && !kb.1 {
-                let k = if desc { kb.0.cmp(&ka.0) } else { ka.0.cmp(&kb.0) };
+                let k = if desc {
+                    kb.0.cmp(&ka.0)
+                } else {
+                    ka.0.cmp(&kb.0)
+                };
                 if k != Equal {
                     return k;
                 }
@@ -756,8 +806,10 @@ mod tests {
                 (vec![(k0, false), (k1, null1)], i as u64)
             })
             .collect();
-        let entries: Vec<WideEntry> =
-            obs.iter().map(|(ks, r)| WideEntry::encode(ks, &flags, *r)).collect();
+        let entries: Vec<WideEntry> = obs
+            .iter()
+            .map(|(ks, r)| WideEntry::encode(ks, &flags, *r))
+            .collect();
         for &bound in &[1usize, 7, 50, 599, 600] {
             let mut want = entries.clone();
             want.sort_unstable();
@@ -783,7 +835,11 @@ mod tests {
                         h.into_sorted()
                     })
                     .collect();
-                assert_eq!(topn_merge(&sealed, bound), want, "bound={bound} trial={trial}");
+                assert_eq!(
+                    topn_merge(&sealed, bound),
+                    want,
+                    "bound={bound} trial={trial}"
+                );
             }
         }
     }
@@ -808,7 +864,10 @@ mod tests {
                         let ea = TopnEntry::encode(a.0, a.1, desc, nf, a.2);
                         let eb = TopnEntry::encode(b.0, b.1, desc, nf, b.2);
                         if ea.cut64() > eb.cut64() {
-                            assert!(ea > eb, "cut64 prune law: {a:?} vs {b:?} desc={desc} nf={nf}");
+                            assert!(
+                                ea > eb,
+                                "cut64 prune law: {a:?} vs {b:?} desc={desc} nf={nf}"
+                            );
                         }
                     }
                 }

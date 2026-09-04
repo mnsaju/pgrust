@@ -90,11 +90,7 @@ impl Write for RunFile {
     }
 }
 
-fn vfs_open_file(
-    path: &std::path::Path,
-    flags: libc::c_int,
-    what: &str,
-) -> PgResult<RunFile> {
+fn vfs_open_file(path: &std::path::Path, flags: libc::c_int, what: &str) -> PgResult<RunFile> {
     #[cfg(not(target_family = "wasm"))]
     use std::os::unix::ffi::OsStrExt;
     // wasm32: same as_bytes surface, wasi's spelling of the trait home.
@@ -116,12 +112,18 @@ fn vfs_open_file(
             break fd;
         }
         if vfs::get_errno() != libc::EINTR {
-            return Err(io_err(what, std::io::Error::from_raw_os_error(vfs::get_errno())));
+            return Err(io_err(
+                what,
+                std::io::Error::from_raw_os_error(vfs::get_errno()),
+            ));
         }
     };
     // SAFETY: fresh descriptor minted by vfs::open above, exclusively owned
     // by the returned guard.
-    Ok(RunFile { fd: unsafe { vfs::VfsFd::from_raw(fd) }, pos: 0 })
+    Ok(RunFile {
+        fd: unsafe { vfs::VfsFd::from_raw(fd) },
+        pos: 0,
+    })
 }
 
 // ---- row codec -------------------------------------------------------------
@@ -216,8 +218,7 @@ impl RowCodec {
                     off += 8;
                 }
                 ColType::Text => {
-                    let len =
-                        u32::from_le_bytes(row[off..off + 4].try_into().unwrap()) as usize;
+                    let len = u32::from_le_bytes(row[off..off + 4].try_into().unwrap()) as usize;
                     off += 4;
                     let start = arena.len();
                     arena.extend_from_slice(&(((len + 4) as u32) << 2).to_le_bytes());
@@ -253,12 +254,20 @@ impl SortBatch {
     /// determinism kill switch reproduces the pre-GL-LOADDET-1 byte image
     /// exactly, and so the DST/unit corpora keep their recorded orders.
     pub fn new(key_w: usize) -> SortBatch {
-        SortBatch { key_w, arena: Vec::new(), index: Vec::new(), stable: false }
+        SortBatch {
+            key_w,
+            arena: Vec::new(),
+            index: Vec::new(),
+            stable: false,
+        }
     }
 
     /// GL-LOADDET-1: arrival-order tie break — the deterministic batch.
     pub fn new_stable(key_w: usize) -> SortBatch {
-        SortBatch { stable: true, ..SortBatch::new(key_w) }
+        SortBatch {
+            stable: true,
+            ..SortBatch::new(key_w)
+        }
     }
 
     pub fn bytes(&self) -> usize {
@@ -295,7 +304,9 @@ impl SortBatch {
         let (arena, kw) = (&self.arena, self.key_w);
         if self.stable {
             self.index.sort_unstable_by(|a, b| {
-                Self::key_of(arena, kw, *a).cmp(Self::key_of(arena, kw, *b)).then(a.0.cmp(&b.0))
+                Self::key_of(arena, kw, *a)
+                    .cmp(Self::key_of(arena, kw, *b))
+                    .then(a.0.cmp(&b.0))
             });
         } else {
             self.index.sort_unstable_by(|a, b| {
@@ -317,21 +328,28 @@ impl SortBatch {
     /// reassembles a byte stream identical to the raw format, so the
     /// merge is unaffected by construction.
     pub fn spill_run_opts(&mut self, path: &std::path::Path, lz4: bool) -> PgResult<u64> {
-        let f =
-            vfs_open_file(path, libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC, "run create")?;
+        let f = vfs_open_file(
+            path,
+            libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC,
+            "run create",
+        )?;
         let mut w = BufWriter::with_capacity(1 << 20, f);
         let mut written: u64 = 0;
         if !lz4 {
             for &(off, len) in &self.index {
                 let e = &self.arena[off as usize..off as usize + len as usize];
                 let rowlen = (len as usize - self.key_w) as u32;
-                w.write_all(&e[..self.key_w]).map_err(|e| io_err("run write", e))?;
-                w.write_all(&rowlen.to_le_bytes()).map_err(|e| io_err("run write", e))?;
-                w.write_all(&e[self.key_w..]).map_err(|e| io_err("run write", e))?;
+                w.write_all(&e[..self.key_w])
+                    .map_err(|e| io_err("run write", e))?;
+                w.write_all(&rowlen.to_le_bytes())
+                    .map_err(|e| io_err("run write", e))?;
+                w.write_all(&e[self.key_w..])
+                    .map_err(|e| io_err("run write", e))?;
                 written += self.key_w as u64 + 4 + rowlen as u64;
             }
         } else {
-            w.write_all(&RUN_LZ4_MAGIC).map_err(|e| io_err("run write", e))?;
+            w.write_all(&RUN_LZ4_MAGIC)
+                .map_err(|e| io_err("run write", e))?;
             written += 4;
             let mut chunk: Vec<u8> = Vec::with_capacity(RUN_CHUNK + 4096);
             let mut comp: Vec<u8> = Vec::new();
@@ -367,11 +385,7 @@ const RUN_FRAME_CAP: usize = 1 << 30;
 /// Empty chunk = no frame (0 bytes). Generic over the sink so the same
 /// framing serves run FILES (BufWriter) and in-memory runs (frame Vecs) —
 /// one encoder, byte-identical frames on both destinations.
-fn write_lz4_frame(
-    w: &mut impl Write,
-    chunk: &mut Vec<u8>,
-    comp: &mut Vec<u8>,
-) -> PgResult<u64> {
+fn write_lz4_frame(w: &mut impl Write, chunk: &mut Vec<u8>, comp: &mut Vec<u8>) -> PgResult<u64> {
     if chunk.is_empty() {
         return Ok(0);
     }
@@ -381,9 +395,12 @@ fn write_lz4_frame(
     }
     let n = lz4_flex::block::compress_into(chunk, comp)
         .map_err(|e| Box::new(PgError::error(format!("run lz4 compress: {e}"))))?;
-    w.write_all(&(chunk.len() as u32).to_le_bytes()).map_err(|e| io_err("run write", e))?;
-    w.write_all(&(n as u32).to_le_bytes()).map_err(|e| io_err("run write", e))?;
-    w.write_all(&comp[..n]).map_err(|e| io_err("run write", e))?;
+    w.write_all(&(chunk.len() as u32).to_le_bytes())
+        .map_err(|e| io_err("run write", e))?;
+    w.write_all(&(n as u32).to_le_bytes())
+        .map_err(|e| io_err("run write", e))?;
+    w.write_all(&comp[..n])
+        .map_err(|e| io_err("run write", e))?;
     chunk.clear();
     Ok(8 + n as u64)
 }
@@ -428,7 +445,10 @@ impl MemRunStore {
             if cur.saturating_add(n) > cap {
                 return false;
             }
-            match self.used.compare_exchange_weak(cur, cur + n, Relaxed, Relaxed) {
+            match self
+                .used
+                .compare_exchange_weak(cur, cur + n, Relaxed, Relaxed)
+            {
                 Ok(_) => return true,
                 Err(c) => cur = c,
             }
@@ -474,10 +494,14 @@ impl MemRun {
     /// frames verbatim, byte-identical to `spill_run_opts(path, true)` of
     /// the same batch by construction. Returns file bytes written.
     pub fn write_to_file(&self, path: &std::path::Path) -> PgResult<u64> {
-        let f =
-            vfs_open_file(path, libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC, "run create")?;
+        let f = vfs_open_file(
+            path,
+            libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC,
+            "run create",
+        )?;
         let mut w = BufWriter::with_capacity(1 << 20, f);
-        w.write_all(&RUN_LZ4_MAGIC).map_err(|e| io_err("run write", e))?;
+        w.write_all(&RUN_LZ4_MAGIC)
+            .map_err(|e| io_err("run write", e))?;
         let mut written = 4u64;
         for fr in &self.frames {
             w.write_all(fr).map_err(|e| io_err("run write", e))?;
@@ -505,16 +529,15 @@ impl SortBatch {
         let mut bytes = 0u64;
         let mut chunk: Vec<u8> = Vec::with_capacity(RUN_CHUNK + 4096);
         let mut comp: Vec<u8> = Vec::new();
-        let mut emit =
-            |chunk: &mut Vec<u8>, comp: &mut Vec<u8>| -> PgResult<()> {
-                if chunk.is_empty() {
-                    return Ok(());
-                }
-                let mut fb: Vec<u8> = Vec::new();
-                bytes += write_lz4_frame(&mut fb, chunk, comp)?;
-                frames.push_back(fb);
-                Ok(())
-            };
+        let mut emit = |chunk: &mut Vec<u8>, comp: &mut Vec<u8>| -> PgResult<()> {
+            if chunk.is_empty() {
+                return Ok(());
+            }
+            let mut fb: Vec<u8> = Vec::new();
+            bytes += write_lz4_frame(&mut fb, chunk, comp)?;
+            frames.push_back(fb);
+            Ok(())
+        };
         for &(off, len) in &self.index {
             let e = &self.arena[off as usize..off as usize + len as usize];
             let rowlen = (len as usize - self.key_w) as u32;
@@ -528,7 +551,11 @@ impl SortBatch {
         emit(&mut chunk, &mut comp)?;
         self.arena.clear();
         self.index.clear();
-        Ok(MemRun { frames, bytes, store: None })
+        Ok(MemRun {
+            frames,
+            bytes,
+            store: None,
+        })
     }
 }
 
@@ -677,7 +704,9 @@ struct MemLz4Source {
 impl std::io::Read for MemLz4Source {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         while self.pos >= self.raw.len() {
-            let Some(frame) = self.run.frames.pop_front() else { return Ok(0) };
+            let Some(frame) = self.run.frames.pop_front() else {
+                return Ok(0);
+            };
             let mut r: &[u8] = &frame;
             let mut d = 0u64;
             match read_lz4_frame(&mut r, &mut self.comp, &mut self.raw, &mut d)? {
@@ -984,7 +1013,10 @@ impl RunReader {
         // key (EOF here = clean end of run)
         let mut got = 0usize;
         while got < self.key_w {
-            let n = self.r.read(&mut self.key[got..]).map_err(|e| io_err("run read", e))?;
+            let n = self
+                .r
+                .read(&mut self.key[got..])
+                .map_err(|e| io_err("run read", e))?;
             if n == 0 {
                 if got == 0 {
                     self.live = false;
@@ -995,10 +1027,14 @@ impl RunReader {
             got += n;
         }
         let mut lenb = [0u8; 4];
-        self.r.read_exact(&mut lenb).map_err(|e| io_err("run read", e))?;
+        self.r
+            .read_exact(&mut lenb)
+            .map_err(|e| io_err("run read", e))?;
         let rowlen = u32::from_le_bytes(lenb) as usize;
         self.row.resize(rowlen, 0);
-        self.r.read_exact(&mut self.row).map_err(|e| io_err("run read", e))?;
+        self.r
+            .read_exact(&mut self.row)
+            .map_err(|e| io_err("run read", e))?;
         self.live = true;
         self.pos += (self.key_w + 4 + rowlen) as u64;
         self.fadv_tick();
@@ -1077,11 +1113,18 @@ impl RunMerge {
         for (i, p) in paths.iter().enumerate() {
             let rr = RunReader::open(p, key_w)?;
             if rr.live {
-                heap.push(HeapEntry { key: rr.key.clone(), run: i });
+                heap.push(HeapEntry {
+                    key: rr.key.clone(),
+                    run: i,
+                });
             }
             readers.push(rr);
         }
-        Ok(RunMerge { readers, heap, stats: FillStats::default() })
+        Ok(RunMerge {
+            readers,
+            heap,
+            stats: FillStats::default(),
+        })
     }
 
     /// loadcommit C0: arm the per-row advance timer (default off).
@@ -1105,7 +1148,9 @@ impl RunMerge {
     /// Copy the next entry (global key order) into the caller's buffers.
     /// Returns false at end of merge.
     pub fn next_entry(&mut self, key: &mut Vec<u8>, row: &mut Vec<u8>) -> PgResult<bool> {
-        let Some(top) = self.heap.pop() else { return Ok(false) };
+        let Some(top) = self.heap.pop() else {
+            return Ok(false);
+        };
         let rr = &mut self.readers[top.run];
         key.clear();
         key.extend_from_slice(&rr.key);
@@ -1115,7 +1160,10 @@ impl RunMerge {
         self.stats.advance(rr)?;
         let rr = &self.readers[top.run];
         if rr.live {
-            self.heap.push(HeapEntry { key: rr.key.clone(), run: top.run });
+            self.heap.push(HeapEntry {
+                key: rr.key.clone(),
+                run: top.run,
+            });
         }
         Ok(true)
     }
@@ -1178,7 +1226,12 @@ impl RunMergeV2 {
         key_w: usize,
         lz4: bool,
     ) -> PgResult<RunMergeV2> {
-        Self::open_mixed(paths.iter().cloned().map(RunInput::File).collect(), key_w, 0, lz4)
+        Self::open_mixed(
+            paths.iter().cloned().map(RunInput::File).collect(),
+            key_w,
+            0,
+            lz4,
+        )
     }
 
     /// loadcommit C2b (PGRUST_PARALLEL_COPY_FILL_PREFETCH=<n>): prefetch-fed
@@ -1249,8 +1302,7 @@ impl RunMergeV2 {
                 })),
                 RunInput::File(p) if threads > 0 => {
                     let f = vfs_open_file(&p, libc::O_RDONLY, "run open")?;
-                    let mut f =
-                        BufReader::with_capacity(if lz4 { 64 << 10 } else { 8 << 10 }, f);
+                    let mut f = BufReader::with_capacity(if lz4 { 64 << 10 } else { 8 << 10 }, f);
                     if lz4 {
                         check_run_magic(&mut f).map_err(|e| io_err("run magic", e))?;
                     }
@@ -1317,7 +1369,10 @@ impl RunMergeV2 {
         let pool = if handles.is_empty() {
             None
         } else {
-            Some(PrefetchPool { stop, threads: handles })
+            Some(PrefetchPool {
+                stop,
+                threads: handles,
+            })
         };
         let mut readers = Vec::with_capacity(pend.len());
         for src in pend {
@@ -1514,7 +1569,9 @@ pub mod sim_demo {
         for r in 0..RUNS {
             let mut batch = SortBatch::new(KW);
             for _ in 0..ROWS_PER_RUN {
-                lcg = lcg.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                lcg = lcg
+                    .wrapping_mul(6364136223846793005)
+                    .wrapping_add(1442695040888963407);
                 let key = ((lcg >> 32) as u32).to_be_bytes();
                 let rowlen = 8 + (lcg % 48) as usize;
                 let mut row = Vec::with_capacity(rowlen);
@@ -1526,13 +1583,15 @@ pub mod sim_demo {
             }
             batch.sort();
             let p = std::path::PathBuf::from(format!("/loadsort-demo/run-{r}"));
-            batch.spill_run(&p).map_err(|e| format!("spill run-{r}: {}", e.message()))?;
+            batch
+                .spill_run(&p)
+                .map_err(|e| format!("spill run-{r}: {}", e.message()))?;
             paths.push(p);
         }
 
         // --- 2. direct merge = the reference stream.
-        let mut direct = RunMergeV2::open(&paths, KW)
-            .map_err(|e| format!("direct open: {}", e.message()))?;
+        let mut direct =
+            RunMergeV2::open(&paths, KW).map_err(|e| format!("direct open: {}", e.message()))?;
         let mut ref_arena = Vec::new();
         let mut ref_lens = Vec::new();
         while let Some(l) = direct
@@ -1582,8 +1641,9 @@ pub mod sim_demo {
                 if go_rx.recv().is_none() {
                     return Err("go channel closed early".into());
                 }
-                let got = sim_read("/loadsort-demo/main-proof")
-                    .map_err(|e| format!("child cannot see the pump's post-adoption write ({e})"))?;
+                let got = sim_read("/loadsort-demo/main-proof").map_err(|e| {
+                    format!("child cannot see the pump's post-adoption write ({e})")
+                })?;
                 if got != b"written-by-pump" {
                     return Err("child read stale bytes for /main-proof".into());
                 }
@@ -1592,7 +1652,9 @@ pub mod sim_demo {
             .map_err(|e| format!("share-proof spawn: {e}"))?;
         sim_write("/loadsort-demo/main-proof", b"written-by-pump")?;
         let _ = go_tx.send(());
-        let child_verdict = helper.join().map_err(|_| "share-proof helper panicked".to_string())?;
+        let child_verdict = helper
+            .join()
+            .map_err(|_| "share-proof helper panicked".to_string())?;
         child_verdict.map_err(|e| format!("share-proof(child): {e}"))?;
         let got = sim_read("/loadsort-demo/child-proof")
             .map_err(|e| format!("share-proof(pump): child's write invisible ({e})"))?;
@@ -1700,8 +1762,11 @@ mod tests {
         }
         #[cfg(pgrust_sim)]
         {
-            let fd =
-                vfs::open(&cpath(p), libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC, 0o666);
+            let fd = vfs::open(
+                &cpath(p),
+                libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC,
+                0o666,
+            );
             assert!(fd >= 0, "vfs open {p:?}: errno {}", vfs::get_errno());
             let mut off = 0usize;
             while off < bytes.len() {
@@ -1731,7 +1796,11 @@ mod tests {
         let mut batch = SortBatch::new(kw);
         let rows: [(i32, i64, &[u8]); 2] = [(7, 1, b"alpha"), (3, 2, b"beta")];
         for r in &rows {
-            let vals = [Datum::from_i32(r.0), Datum::from_i64(r.1), text_datum(r.2, &mut keep)];
+            let vals = [
+                Datum::from_i32(r.0),
+                Datum::from_i64(r.1),
+                text_datum(r.2, &mut keep),
+            ];
             let mut key = Vec::with_capacity(kw);
             encode_sort_key(&keys, &vals, &mut key);
             let mut img = Vec::new();
@@ -1749,7 +1818,10 @@ mod tests {
         let rowlen = u32::from_le_bytes(bytes[kw..kw + 4].try_into().unwrap()) as usize;
         assert!(kw + 4 + rowlen <= bytes.len(), "corrupt first run entry");
         // (b) The real filesystem never saw the file.
-        assert!(std::fs::metadata(&p).is_err(), "run file leaked to the real fs");
+        assert!(
+            std::fs::metadata(&p).is_err(),
+            "run file leaked to the real fs"
+        );
         // (c) The read arm consumes it back through the same provider, in
         // key order (the (3,2) row sorts first).
         let mut m = RunMerge::open(&[p], kw).unwrap();
@@ -1766,7 +1838,10 @@ mod tests {
                 varlena_bytes(vals[2]).unwrap().to_vec(),
             ));
         }
-        assert_eq!(got, vec![(3, 2, b"beta".to_vec()), (7, 1, b"alpha".to_vec())]);
+        assert_eq!(
+            got,
+            vec![(3, 2, b"beta".to_vec()), (7, 1, b"alpha".to_vec())]
+        );
     }
 
     #[test]
@@ -1788,7 +1863,10 @@ mod tests {
             Datum::from_i64(-2461439046089301801),
             Datum::from_i64(i64::MAX),
             text_datum(b"", &mut keep),
-            text_datum("URL with \tescapes and \u{00fc}nicode".as_bytes(), &mut keep),
+            text_datum(
+                "URL with \tescapes and \u{00fc}nicode".as_bytes(),
+                &mut keep,
+            ),
         ];
         let mut img = Vec::new();
         codec.serialize_row(&vals, &mut img).unwrap();
@@ -1819,13 +1897,14 @@ mod tests {
         let dir = tmpdir("merge");
         // hits-shaped mini schema: (counterid i32, userid i64, url text)
         let codec = RowCodec::new(vec![ColType::I32, ColType::I64, ColType::Text]);
-        let keys =
-            [(0u16, CbSortKeyKind::Int32), (1, CbSortKeyKind::Int64)];
+        let keys = [(0u16, CbSortKeyKind::Int32), (1, CbSortKeyKind::Int64)];
         let kw = fixed_key_width(&keys).unwrap();
 
         let mut x: u64 = 42;
         let mut step = || {
-            x = x.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            x = x
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             x
         };
         let n = 10_000;
@@ -1846,8 +1925,11 @@ mod tests {
             let mut batch = SortBatch::new(kw);
             let mut ri = 0;
             for r in chunk {
-                let vals =
-                    [Datum::from_i32(r.0), Datum::from_i64(r.1), text_datum(&r.2, &mut keep)];
+                let vals = [
+                    Datum::from_i32(r.0),
+                    Datum::from_i64(r.1),
+                    text_datum(&r.2, &mut keep),
+                ];
                 let mut key = Vec::with_capacity(kw);
                 encode_sort_key(&keys, &vals, &mut key);
                 let mut img = Vec::new();
@@ -1868,7 +1950,11 @@ mod tests {
                 paths.push(p);
             }
         }
-        assert!(paths.len() > 8, "expected multiple runs, got {}", paths.len());
+        assert!(
+            paths.len() > 8,
+            "expected multiple runs, got {}",
+            paths.len()
+        );
 
         // Merge and decode.
         let mut merge = RunMerge::open(&paths, kw).unwrap();
@@ -1879,7 +1965,10 @@ mod tests {
         let mut vals = vec![Datum::null(); 3];
         while merge.next_entry(&mut key, &mut row).unwrap() {
             if let Some(pk) = &prev_key {
-                assert!(pk.as_slice() <= key.as_slice(), "merge emitted keys out of order");
+                assert!(
+                    pk.as_slice() <= key.as_slice(),
+                    "merge emitted keys out of order"
+                );
             }
             prev_key = Some(key.clone());
             arena.clear();
@@ -1932,7 +2021,9 @@ mod tests {
         let kw = fixed_key_width(&keys).unwrap();
         let mut x: u64 = seed;
         let mut step = || {
-            x = x.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            x = x
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             x
         };
         let mut keep = Vec::new();
@@ -2004,9 +2095,19 @@ mod tests {
         while let Some(l) = v2.next_row_into(&mut arena).unwrap() {
             lens.push(l);
         }
-        assert_eq!(lens, ref_lens, "V2 row lengths diverge from the heap reference");
-        assert_eq!(arena, ref_arena, "V2 row bytes diverge from the heap reference");
-        assert_eq!(v2.fill_stats().1, v1.fill_stats().1, "run-bytes accounting diverges");
+        assert_eq!(
+            lens, ref_lens,
+            "V2 row lengths diverge from the heap reference"
+        );
+        assert_eq!(
+            arena, ref_arena,
+            "V2 row bytes diverge from the heap reference"
+        );
+        assert_eq!(
+            v2.fill_stats().1,
+            v1.fill_stats().1,
+            "run-bytes accounting diverges"
+        );
         // C2b: the prefetch-fed merge must emit the identical stream.
         let mut vp = RunMergeV2::open_prefetch(paths, kw, 3, false).unwrap();
         let mut p_arena: Vec<u8> = Vec::new();
@@ -2041,9 +2142,7 @@ mod tests {
                 .map(|e| {
                     let s = e.0 as usize;
                     let k = u32::from_be_bytes(arena[s..s + kw].try_into().unwrap());
-                    let p = u32::from_be_bytes(
-                        arena[s + kw..s + e.1 as usize].try_into().unwrap(),
-                    );
+                    let p = u32::from_be_bytes(arena[s + kw..s + e.1 as usize].try_into().unwrap());
                     (k, p)
                 })
                 .collect()
@@ -2055,7 +2154,10 @@ mod tests {
         want.sort_by_key(|&(k, p)| (k, p));
 
         let stable = drain(SortBatch::new_stable(KW));
-        assert_eq!(stable, want, "stable batch did not order key-major / arrival-minor");
+        assert_eq!(
+            stable, want,
+            "stable batch did not order key-major / arrival-minor"
+        );
         // The legacy arm is deterministic for a fixed input but NOT arrival
         // order — that difference is the whole reason the bank bytes move.
         let legacy = drain(SortBatch::new(KW));
@@ -2073,7 +2175,10 @@ mod tests {
         let mut b = legacy.clone();
         a.sort();
         b.sort();
-        assert_eq!(a, b, "the two arms disagree on the MULTISET, not just the order");
+        assert_eq!(
+            a, b,
+            "the two arms disagree on the MULTISET, not just the order"
+        );
     }
 
     #[test]
@@ -2136,7 +2241,10 @@ mod tests {
                     let (_, l2, _) = r.fill_stats();
                     l2
                 });
-                assert!(disk > 0 && disk <= lz_disk, "disk accounting: {disk} vs {lz_disk}");
+                assert!(
+                    disk > 0 && disk <= lz_disk,
+                    "disk accounting: {disk} vs {lz_disk}"
+                );
             }
             let _ = std::fs::remove_dir_all(&draw);
             let _ = std::fs::remove_dir_all(&dlz);
@@ -2230,8 +2338,7 @@ mod tests {
             };
             // (a) all-memory.
             let store = MemRunStore::new(1 << 30);
-            let inputs: Vec<RunInput> =
-                make_mem(&store).into_iter().map(RunInput::Mem).collect();
+            let inputs: Vec<RunInput> = make_mem(&store).into_iter().map(RunInput::Mem).collect();
             let held = store.used();
             assert!(held > 0, "mem runs reserved nothing");
             let mut m = RunMergeV2::open_mixed(inputs, kw, 0, true).unwrap();
@@ -2262,15 +2369,17 @@ mod tests {
                         }
                     })
                     .collect();
-                let mut m =
-                    RunMergeV2::open_mixed(inputs, kw, prefetch, true).unwrap();
+                let mut m = RunMergeV2::open_mixed(inputs, kw, prefetch, true).unwrap();
                 let mut arena = Vec::new();
                 let mut lens = Vec::new();
                 while let Some(l) = m.next_row_into(&mut arena).unwrap() {
                     lens.push(l);
                 }
                 assert_eq!(lens, ref_lens, "mixed lens diverge (prefetch={prefetch})");
-                assert_eq!(arena, ref_arena, "mixed bytes diverge (prefetch={prefetch})");
+                assert_eq!(
+                    arena, ref_arena,
+                    "mixed bytes diverge (prefetch={prefetch})"
+                );
                 drop(m);
                 assert_eq!(store.used(), 0, "mixed store not drained");
             }
@@ -2293,7 +2402,10 @@ mod tests {
             let direct = read_file(&paths[i]);
             let flushed = read_file(&p);
             assert_eq!(written, flushed.len() as u64);
-            assert_eq!(flushed, direct, "flushed run {i} diverges from direct spill");
+            assert_eq!(
+                flushed, direct,
+                "flushed run {i} diverges from direct spill"
+            );
         }
         let _ = std::fs::remove_dir_all(&dir);
     }

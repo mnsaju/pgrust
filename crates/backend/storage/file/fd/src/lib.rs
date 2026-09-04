@@ -10,8 +10,8 @@ pub mod buffile;
 pub mod copydir;
 pub mod desc;
 pub mod fileset;
-pub mod reinit;
 pub mod io;
+pub mod reinit;
 pub mod sync;
 pub mod temp;
 pub mod vfd;
@@ -20,19 +20,18 @@ pub use buffile::{
     BufFile, BufFileCreateFileSet, BufFileCreateTemp, BufFileDeleteFileSet, BufFileOpenFileSet,
     BufFileOpenFileSetMaybe, PrepareTempTablespaces,
 };
-pub use fileset::FileSet;
 pub use copydir::{copy_file, copydir, directory_is_empty, pg_mkdir_p, rmtree};
 pub use desc::{
     closeAllVfds, with_allocated_dir, with_allocated_stdio, AllocateDir, AllocateFile,
     ClosePipeStream, CloseTransientFile, FreeDir, FreeFile, OpenPipeStream, OpenTransientFile,
     OpenTransientFilePerm, PipeStreamGets, ReadDir, ReadDirExtended, TransientFileRawFd,
 };
+pub use fileset::FileSet;
 pub use io::{
-    pg_file_size_raw, pg_pread, pg_pwrite, FileClose, FileFallocate, FileGetRawDesc, FileGetRawFlags,
-    FileGetRawMode, FilePathName, FilePrefetch, FileRead, FileReadV, FileSize,
-    FileRawDescForAio, FileStartBufferRead, FileStartReadV, FileSync, FileTruncate, FileWrite,
-    FileWriteV,
-    FileWriteback, FileZero, PathNameOpenFile, PathNameOpenFilePerm,
+    pg_file_size_raw, pg_pread, pg_pwrite, FileClose, FileFallocate, FileGetRawDesc,
+    FileGetRawFlags, FileGetRawMode, FilePathName, FilePrefetch, FileRawDescForAio, FileRead,
+    FileReadV, FileSize, FileStartBufferRead, FileStartReadV, FileSync, FileTruncate, FileWrite,
+    FileWriteV, FileWriteback, FileZero, PathNameOpenFile, PathNameOpenFilePerm,
 };
 pub use sync::{
     data_sync_elevel, durable_rename, durable_unlink, fsync_fname, fsync_fname_ext,

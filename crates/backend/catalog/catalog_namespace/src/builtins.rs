@@ -48,6 +48,11 @@ pub const NAMESPACE_BUILTINS: &[FmgrBuiltin] = &[
     b(2081, "pg_function_is_visible", 1, fc_pg_function_is_visible),
     b(2082, "pg_operator_is_visible", 1, fc_pg_operator_is_visible),
     b(2083, "pg_opclass_is_visible", 1, fc_pg_opclass_is_visible),
-    b(3403, "pg_statistics_obj_is_visible", 1, fc_pg_statistics_obj_is_visible),
+    b(
+        3403,
+        "pg_statistics_obj_is_visible",
+        1,
+        fc_pg_statistics_obj_is_visible,
+    ),
     b(3829, "pg_opfamily_is_visible", 1, fc_pg_opfamily_is_visible),
 ];

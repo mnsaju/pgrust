@@ -37,10 +37,7 @@ pub fn get_func_nargs(funcid: Oid) -> PgResult<i32> {
     }
 }
 
-pub fn get_func_signature<'mcx>(
-    mcx: Mcx<'mcx>,
-    funcid: Oid,
-) -> PgResult<(Oid, PgVec<'mcx, Oid>)> {
+pub fn get_func_signature<'mcx>(mcx: Mcx<'mcx>, funcid: Oid) -> PgResult<(Oid, PgVec<'mcx, Oid>)> {
     match syscache_seams::lookup_pg_proc_signature::call(mcx, funcid)? {
         Some((rettype, argtypes)) => Ok((rettype, argtypes)),
         None => Err(function_lookup_failed(funcid)),

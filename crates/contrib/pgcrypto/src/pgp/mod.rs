@@ -1,4 +1,3 @@
-
 pub mod armor;
 pub mod cfb;
 pub mod compress;
@@ -49,8 +48,10 @@ pub fn sym_decrypt(
 ) -> Result<DecryptOutput, DecryptError> {
     let mut ctx = PgpContext::default();
     if let Some(a) = args {
-        ctx.parse_args(a)
-            .map_err(|e| DecryptError { message: e, notices: Vec::new() })?;
+        ctx.parse_args(a).map_err(|e| DecryptError {
+            message: e,
+            notices: Vec::new(),
+        })?;
     }
     ctx.text_mode = if need_text { 1 } else { 0 };
 
@@ -80,16 +81,26 @@ fn build_expect_notices(exp: &PgpContext, ctx: &PgpContext) -> Vec<String> {
     let mut out = Vec::new();
     let mut chk = |name: &str, e: i32, g: i32| {
         if e >= 0 && e != g {
-            out.push(format!("pgp_decrypt: unexpected {name}: expected {e} got {g}"));
+            out.push(format!(
+                "pgp_decrypt: unexpected {name}: expected {e} got {g}"
+            ));
         }
     };
     chk("cipher_algo", exp.exp_cipher_algo, ctx.cipher_algo);
     chk("s2k_mode", exp.exp_s2k_mode, ctx.s2k_mode);
     chk("s2k_count", exp.exp_s2k_count, ctx.s2k_count);
-    chk("s2k_digest_algo", exp.exp_s2k_digest_algo, ctx.s2k_digest_algo);
+    chk(
+        "s2k_digest_algo",
+        exp.exp_s2k_digest_algo,
+        ctx.s2k_digest_algo,
+    );
     chk("use_sess_key", exp.exp_use_sess_key, ctx.use_sess_key);
     if ctx.use_sess_key != 0 {
-        chk("s2k_cipher_algo", exp.exp_s2k_cipher_algo, ctx.s2k_cipher_algo);
+        chk(
+            "s2k_cipher_algo",
+            exp.exp_s2k_cipher_algo,
+            ctx.s2k_cipher_algo,
+        );
     }
     chk("disable_mdc", exp.exp_disable_mdc, ctx.disable_mdc);
     chk("compress_algo", exp.exp_compress_algo, ctx.compress_algo);
@@ -132,13 +143,17 @@ pub fn pub_decrypt(
 ) -> Result<DecryptOutput, DecryptError> {
     let mut ctx = PgpContext::default();
     if let Some(a) = args {
-        ctx.parse_args(a)
-            .map_err(|e| DecryptError { message: e, notices: Vec::new() })?;
+        ctx.parse_args(a).map_err(|e| DecryptError {
+            message: e,
+            notices: Vec::new(),
+        })?;
     }
     ctx.text_mode = if need_text { 1 } else { 0 };
 
-    let pk = pubkey::read_key(key, psw, 1)
-        .map_err(|e| DecryptError { message: e, notices: Vec::new() })?;
+    let pk = pubkey::read_key(key, psw, 1).map_err(|e| DecryptError {
+        message: e,
+        notices: Vec::new(),
+    })?;
 
     let exp = ctx.clone();
     let result = decrypt::decrypt_pubkey(&mut ctx, data, &mut |body| {
@@ -283,7 +298,8 @@ mod tests {
     fn decrypt_known_zip_message() {
         let armored = "\n-----BEGIN PGP MESSAGE-----\n\nww0ECQMCsci6AdHnELlh0kQB4jFcVwHMJg0Bulop7m3Mi36s15TAhBo0AnzIrRFrdLVCkKohsS6+\nDMcmR53SXfLoDJOv/M8uKj3QSq7oWNIp95pxfA==\n=tbSn\n-----END PGP MESSAGE-----\n";
         let bin = armor::armor_decode(armored.as_bytes()).expect("dearmor");
-        let out = sym_decrypt(&bin, b"key", Some(b"expect-compress-algo=1"), true).expect("decrypt");
+        let out =
+            sym_decrypt(&bin, b"key", Some(b"expect-compress-algo=1"), true).expect("decrypt");
         assert_eq!(out.plaintext, b"Secret message");
     }
 }

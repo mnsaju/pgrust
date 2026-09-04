@@ -62,8 +62,11 @@ pub fn exec_init_unique<'mcx>(
         &eqfuncoids,
         node.uniqCollations,
     )?;
-    let prev_slot =
-        exectuples::make_tuple_table_slot(mcx, TupleSlotKind::MinimalTuple, Some(outer_desc.clone()));
+    let prev_slot = exectuples::make_tuple_table_slot(
+        mcx,
+        TupleSlotKind::MinimalTuple,
+        Some(outer_desc.clone()),
+    );
     Ok(UniqueState {
         plan: node,
         ps_ExprContext,

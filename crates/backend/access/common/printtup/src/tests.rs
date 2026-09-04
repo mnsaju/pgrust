@@ -3,9 +3,9 @@ use ::datum::varlena::set_varsize_4b;
 use ::mcx::MemoryContext;
 use ::types_fmgr::FunctionCallInfoBaseData;
 use ::types_portal::{
-    CachedPlanHandle, ParamListHandle, PortalCleanupHook, PortalData, PortalStatus,
-    PortalStrategy, QueryCompletion, QueryDescHandle, QueryEnvHandle, StmtListHandle,
-    TuplestoreHandle, CMDTAG_UNKNOWN,
+    CachedPlanHandle, ParamListHandle, PortalCleanupHook, PortalData, PortalStatus, PortalStrategy,
+    QueryCompletion, QueryDescHandle, QueryEnvHandle, StmtListHandle, TuplestoreHandle,
+    CMDTAG_UNKNOWN,
 };
 use ::types_resowner::ResourceOwner;
 use ::types_slot::{TupleSlotKind, TupleTableSlot, VirtualTupleTableSlot};
@@ -54,7 +54,7 @@ fn int4send_fn(
     img.extend_from_slice(&set_varsize_4b(8));
     img.extend_from_slice(&fcinfo.arg(0).as_i32().to_be_bytes());
     Ok(Datum::from_usize(
-        Box::leak(img.into_boxed_slice()).as_ptr() as usize
+        Box::leak(img.into_boxed_slice()).as_ptr() as usize,
     ))
 }
 
@@ -132,10 +132,7 @@ fn int4_attr(i: i16) -> FormData_pg_attribute {
     }
 }
 
-fn make_desc<'mcx>(
-    mcx: Mcx<'mcx>,
-    atts: Vec<FormData_pg_attribute>,
-) -> Rc<TupleDescData<'mcx>> {
+fn make_desc<'mcx>(mcx: Mcx<'mcx>, atts: Vec<FormData_pg_attribute>) -> Rc<TupleDescData<'mcx>> {
     let mut attrs = mcx::PgVec::new_in(mcx);
     let mut compact = mcx::PgVec::new_in(mcx);
     let natts = atts.len() as i32;
@@ -311,7 +308,9 @@ fn row_description_skips_resjunk_and_zero_fills_missing_tlist() {
 
     let (_, body) = &sent()[0];
     let mut expect = 2u16.to_be_bytes().to_vec();
-    expect.extend_from_slice(&expect_rowdesc_col_origin(b"c1", 16384, 2, INT4OID, 4, -1, 0));
+    expect.extend_from_slice(&expect_rowdesc_col_origin(
+        b"c1", 16384, 2, INT4OID, 4, -1, 0,
+    ));
     expect.extend_from_slice(&expect_rowdesc_col(b"c2", INT4OID, 4, -1, 0));
     assert_eq!(body, &expect);
 }
@@ -491,7 +490,11 @@ fn scratch_stays_flat_across_statement_cycles() {
         cycle();
     }
     assert_eq!(scratch.used(), used_after_first, "printtup scratch grew");
-    assert_eq!(scratch.peak(), peak_after_first, "printtup scratch peak grew");
+    assert_eq!(
+        scratch.peak(),
+        peak_after_first,
+        "printtup scratch peak grew"
+    );
     assert!(WIRE_BUF.with(|c| {
         let buf = c.take();
         let pooled = buf.is_some();

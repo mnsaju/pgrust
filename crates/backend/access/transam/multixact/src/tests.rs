@@ -239,9 +239,18 @@ fn create_three_members_and_read_back_exact() {
 
     multixact_seams::multi_xact_id_set_oldest_member::call().unwrap();
     let mut members = [
-        MultiXactMember { xid: 503, status: MultiXactStatusNoKeyUpdate },
-        MultiXactMember { xid: 501, status: MultiXactStatusForKeyShare },
-        MultiXactMember { xid: 502, status: MultiXactStatusForShare },
+        MultiXactMember {
+            xid: 503,
+            status: MultiXactStatusNoKeyUpdate,
+        },
+        MultiXactMember {
+            xid: 501,
+            status: MultiXactStatusForKeyShare,
+        },
+        MultiXactMember {
+            xid: 502,
+            status: MultiXactStatusForShare,
+        },
     ];
     let multi = MultiXactIdCreateFromMembers(&mut members).unwrap();
     assert!(MultiXactIdIsValid(multi));
@@ -252,7 +261,10 @@ fn create_three_members_and_read_back_exact() {
     assert_eq!(info, XLOG_MULTIXACT_CREATE_ID);
     assert_eq!(u32::from_ne_bytes(data[0..4].try_into().unwrap()), multi);
     assert_eq!(i32::from_ne_bytes(data[8..12].try_into().unwrap()), 3);
-    assert_eq!(data.len(), SIZE_OF_MULTIXACT_CREATE + 3 * SIZE_OF_MULTIXACT_MEMBER);
+    assert_eq!(
+        data.len(),
+        SIZE_OF_MULTIXACT_CREATE + 3 * SIZE_OF_MULTIXACT_MEMBER
+    );
 
     // Drop the cache so the read exercises the SLRU path.
     AtEOXact_MultiXact();
@@ -274,8 +286,14 @@ fn cache_hit_on_identical_member_set_recreate() {
 
     multixact_seams::multi_xact_id_set_oldest_member::call().unwrap();
     let mut members = [
-        MultiXactMember { xid: 701, status: MultiXactStatusForKeyShare },
-        MultiXactMember { xid: 702, status: MultiXactStatusForShare },
+        MultiXactMember {
+            xid: 701,
+            status: MultiXactStatusForKeyShare,
+        },
+        MultiXactMember {
+            xid: 702,
+            status: MultiXactStatusForShare,
+        },
     ];
     let first = MultiXactIdCreateFromMembers(&mut members).unwrap();
 
@@ -284,8 +302,14 @@ fn cache_hit_on_identical_member_set_recreate() {
 
     // Same set, different order: dedup must come from the cache probe.
     let mut permuted = [
-        MultiXactMember { xid: 702, status: MultiXactStatusForShare },
-        MultiXactMember { xid: 701, status: MultiXactStatusForKeyShare },
+        MultiXactMember {
+            xid: 702,
+            status: MultiXactStatusForShare,
+        },
+        MultiXactMember {
+            xid: 701,
+            status: MultiXactStatusForKeyShare,
+        },
     ];
     let second = MultiXactIdCreateFromMembers(&mut permuted).unwrap();
 
@@ -295,8 +319,14 @@ fn cache_hit_on_identical_member_set_recreate() {
 
     // A different set misses the cache and burns a new id.
     let mut other = [
-        MultiXactMember { xid: 701, status: MultiXactStatusForKeyShare },
-        MultiXactMember { xid: 703, status: MultiXactStatusForShare },
+        MultiXactMember {
+            xid: 701,
+            status: MultiXactStatusForKeyShare,
+        },
+        MultiXactMember {
+            xid: 703,
+            status: MultiXactStatusForShare,
+        },
     ];
     let third = MultiXactIdCreateFromMembers(&mut other).unwrap();
     assert_ne!(third, first);
@@ -310,8 +340,14 @@ fn is_running_against_fake_procarray() {
 
     multixact_seams::multi_xact_id_set_oldest_member::call().unwrap();
     let mut members = [
-        MultiXactMember { xid: 601, status: MultiXactStatusForKeyShare },
-        MultiXactMember { xid: 602, status: MultiXactStatusForShare },
+        MultiXactMember {
+            xid: 601,
+            status: MultiXactStatusForKeyShare,
+        },
+        MultiXactMember {
+            xid: 602,
+            status: MultiXactStatusForShare,
+        },
     ];
     let multi = MultiXactIdCreateFromMembers(&mut members).unwrap();
 
@@ -348,9 +384,18 @@ fn offsets_page_boundary_crossed() {
 
     multixact_seams::multi_xact_id_set_oldest_member::call().unwrap();
     let mut members = [
-        MultiXactMember { xid: 801, status: MultiXactStatusForKeyShare },
-        MultiXactMember { xid: 802, status: MultiXactStatusForShare },
-        MultiXactMember { xid: 803, status: MultiXactStatusForShare },
+        MultiXactMember {
+            xid: 801,
+            status: MultiXactStatusForKeyShare,
+        },
+        MultiXactMember {
+            xid: 802,
+            status: MultiXactStatusForShare,
+        },
+        MultiXactMember {
+            xid: 803,
+            status: MultiXactStatusForShare,
+        },
     ];
     let multi = MultiXactIdCreateFromMembers(&mut members).unwrap();
     assert_eq!(multi, MULTIXACT_OFFSETS_PER_PAGE - 1);
@@ -397,8 +442,14 @@ fn update_xid_and_eoxact_reset() {
     assert!(MultiXactIdIsValid(oldest_member(0)));
 
     let mut members = [
-        MultiXactMember { xid: 901, status: MultiXactStatusForKeyShare },
-        MultiXactMember { xid: 902, status: MultiXactStatusUpdate },
+        MultiXactMember {
+            xid: 901,
+            status: MultiXactStatusForKeyShare,
+        },
+        MultiXactMember {
+            xid: 902,
+            status: MultiXactStatusUpdate,
+        },
     ];
     let multi = MultiXactIdCreateFromMembers(&mut members).unwrap();
     assert_eq!(MultiXactIdGetUpdateXid(multi, false).unwrap(), 902);
@@ -406,8 +457,14 @@ fn update_xid_and_eoxact_reset() {
 
     // Two updating members is a hard error.
     let mut bad = [
-        MultiXactMember { xid: 903, status: MultiXactStatusUpdate },
-        MultiXactMember { xid: 904, status: MultiXactStatusNoKeyUpdate },
+        MultiXactMember {
+            xid: 903,
+            status: MultiXactStatusUpdate,
+        },
+        MultiXactMember {
+            xid: 904,
+            status: MultiXactStatusNoKeyUpdate,
+        },
     ];
     assert!(MultiXactIdCreateFromMembers(&mut bad).is_err());
     assert_eq!(g::CritSectionCount(), 0);
@@ -427,8 +484,14 @@ fn checkpoint_flushes_segments_to_disk() {
 
     multixact_seams::multi_xact_id_set_oldest_member::call().unwrap();
     let mut members = [
-        MultiXactMember { xid: 951, status: MultiXactStatusForKeyShare },
-        MultiXactMember { xid: 952, status: MultiXactStatusForShare },
+        MultiXactMember {
+            xid: 951,
+            status: MultiXactStatusForKeyShare,
+        },
+        MultiXactMember {
+            xid: 952,
+            status: MultiXactStatusForShare,
+        },
     ];
     MultiXactIdCreateFromMembers(&mut members).unwrap();
 
@@ -447,8 +510,14 @@ fn panic_in_consume_does_not_wedge_member_scratch() {
 
     multixact_seams::multi_xact_id_set_oldest_member::call().unwrap();
     let mut members = [
-        MultiXactMember { xid: 701, status: MultiXactStatusForKeyShare },
-        MultiXactMember { xid: 702, status: MultiXactStatusForShare },
+        MultiXactMember {
+            xid: 701,
+            status: MultiXactStatusForKeyShare,
+        },
+        MultiXactMember {
+            xid: 702,
+            status: MultiXactStatusForShare,
+        },
     ];
     let multi = MultiXactIdCreateFromMembers(&mut members).unwrap();
 
@@ -494,7 +563,11 @@ fn prepared_xact_oldest_member_slot_indexing() {
     assert_eq!(oldest_member(prepared_slot), my_oldest);
     assert_eq!(oldest_member(0), InvalidMultiXactId);
     for i in 0..(st.perBackendXactIds.len() - st.num_member_slots) {
-        assert_eq!(oldest_visible(i), InvalidMultiXactId, "visible slot {i} corrupted");
+        assert_eq!(
+            oldest_visible(i),
+            InvalidMultiXactId,
+            "visible slot {i} corrupted"
+        );
     }
 
     let oldest = GetOldestMultiXactId().unwrap();
@@ -509,7 +582,6 @@ fn prepared_xact_oldest_member_slot_indexing() {
     multixact_twophase_postabort(88, 0, &my_oldest.to_ne_bytes()).unwrap();
     assert_eq!(oldest_member(prepared_slot), InvalidMultiXactId);
 }
-
 
 // Upstream 0852643e: a CHECKPOINT record can seed latest_page_number to the
 // next offsets page before the CREATE_ID that crosses onto it is replayed, so
@@ -566,7 +638,10 @@ fn recovery_checkpoint_race_initializes_next_offsets_page() {
     // No-ZERO_OFF_PAGE-seen branch: CREATE_ID for the last multi of page 5
     // crosses onto missing page 6; the physical-existence probe must
     // initialize it despite latest_page_number already being 6.
-    let members = [MultiXactMember { xid: 950, status: MultiXactStatusForShare }];
+    let members = [MultiXactMember {
+        xid: 950,
+        status: MultiXactStatusForShare,
+    }];
     RecordNewMultiXact(boundary - 1, save_off, &members).unwrap();
     assert!(SimpleLruDoesPhysicalPageExist(octl, 6).unwrap());
     assert_eq!(PRE_INITIALIZED_OFFSETS_PAGE.get(), 6);

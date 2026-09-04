@@ -47,10 +47,17 @@ pub fn cached_multirange_io_data<'f>(
         let mi = MultirangeInfo::lookup(mltrngtypid)?;
         let io = get_type_io_data(mi.rng.rngtypid, func)?;
         if io.func == 0 {
-            return Err(no_binary_io(matches!(func, IOFuncSelector::IOFunc_receive), mi.rng.rngtypid));
+            return Err(no_binary_io(
+                matches!(func, IOFuncSelector::IOFunc_receive),
+                mi.rng.rngtypid,
+            ));
         }
         let typioproc = ::fmgr_seams::fmgr_info::call(io.func)?;
-        flinfo.set_fn_extra(MultirangeIOData { mi, typioproc, typioparam: io.typioparam });
+        flinfo.set_fn_extra(MultirangeIOData {
+            mi,
+            typioproc,
+            typioparam: io.typioparam,
+        });
     }
     Ok(flinfo.fn_extra_mut::<MultirangeIOData>().unwrap())
 }
@@ -199,10 +206,19 @@ pub fn multirange_in<'m>(
     }
     if pos != input.len() {
         let ctx = esc.as_deref_mut().map(|n| &mut n.ctx);
-        return ereturn(ctx, None, malformed(input, "Junk after closing right brace."));
+        return ereturn(
+            ctx,
+            None,
+            malformed(input, "Junk after closing right brace."),
+        );
     }
 
-    Ok(Some(make_multirange(mcx, mltrngtypid, &mut cache.mi.rng, &mut ranges)?))
+    Ok(Some(make_multirange(
+        mcx,
+        mltrngtypid,
+        &mut cache.mi.rng,
+        &mut ranges,
+    )?))
 }
 
 // A range input/receive result datum is a fresh 4-byte-header image in mcx.

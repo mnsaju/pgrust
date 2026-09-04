@@ -63,7 +63,10 @@ impl<'mcx> Node<'mcx> {
     /// its arena.
     #[inline]
     pub unsafe fn from_raw(p: NonNull<()>) -> Node<'mcx> {
-        Node { p, _arena: PhantomData }
+        Node {
+            p,
+            _arena: PhantomData,
+        }
     }
 }
 
@@ -126,7 +129,10 @@ impl<'mcx> Node<'mcx> {
         const { assert!(!core::mem::needs_drop::<T>()) };
         // `p` retains write provenance for `with_mut` (came from a `&mut` slot).
         let rep = mk_rep(mcx, T::TAG, payload)?;
-        Ok(Node { p: rep.cast(), _arena: PhantomData })
+        Ok(Node {
+            p: rep.cast(),
+            _arena: PhantomData,
+        })
     }
 
     /// C `makeNode(T)` (palloc0 + tag): zeroed payload, mutable until sealed.
@@ -138,7 +144,9 @@ impl<'mcx> Node<'mcx> {
         const { assert!(!core::mem::needs_drop::<T>()) };
         let rep = mk_rep(mcx, T::TAG, payload)?;
         // SAFETY: fresh, uniquely-owned arena `NodeRep<T>` initialized below.
-        Ok(NodeMut { rep: unsafe { &mut *rep.as_ptr() } })
+        Ok(NodeMut {
+            rep: unsafe { &mut *rep.as_ptr() },
+        })
     }
 
     #[inline]
@@ -293,7 +301,10 @@ impl<'mcx, T: NodeVariant<'mcx>> NodeMut<'mcx, T> {
     #[inline]
     pub fn seal(self) -> Node<'mcx> {
         let rep: &'mcx mut NodeRep<T> = self.rep;
-        Node { p: NonNull::from(rep).cast(), _arena: PhantomData }
+        Node {
+            p: NonNull::from(rep).cast(),
+            _arena: PhantomData,
+        }
     }
 
     #[inline]

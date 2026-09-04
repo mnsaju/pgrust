@@ -1,14 +1,22 @@
 use elog::ereport;
-use types_error::{ErrorLevel, PgResult, ERRCODE_INSUFFICIENT_PRIVILEGE, ERRCODE_SYNTAX_ERROR, ERRCODE_UNDEFINED_OBJECT, ERROR, WARNING};
+use types_error::{
+    ErrorLevel, PgResult, ERRCODE_INSUFFICIENT_PRIVILEGE, ERRCODE_SYNTAX_ERROR,
+    ERRCODE_UNDEFINED_OBJECT, ERROR, WARNING,
+};
 use types_guc::{GucContext, GucSource};
 
 use crate::store::with_store_mut;
-use crate::{set_config_option, valid_custom_variable_name, GucAction, ParseLongOption, GUC_ACTION_SET};
+use crate::{
+    set_config_option, valid_custom_variable_name, GucAction, ParseLongOption, GUC_ACTION_SET,
+};
 
 // GUC option arrays travel as flat "name=value" string lists; the text[]
 // image lives with the catalog owners (pg_db_role_setting et al.).
 
-fn find_option_normalized(name: &str, make_placeholder: bool) -> PgResult<Option<(String, GucContext, bool)>> {
+fn find_option_normalized(
+    name: &str,
+    make_placeholder: bool,
+) -> PgResult<Option<(String, GucContext, bool)>> {
     with_store_mut(|reg| -> PgResult<Option<(String, GucContext, bool)>> {
         if let Some(var) = reg.find_option(name) {
             let gen = var.gen();
@@ -101,7 +109,9 @@ pub fn GUCArrayAdd(array: &[String], name: &str, value: &str) -> PgResult<Vec<St
 
     let mut out: Vec<String> = array.to_vec();
     for entry in out.iter_mut() {
-        if entry.as_bytes().len() >= prefix_len && entry.as_bytes()[..prefix_len] == newval.as_bytes()[..prefix_len] {
+        if entry.as_bytes().len() >= prefix_len
+            && entry.as_bytes()[..prefix_len] == newval.as_bytes()[..prefix_len]
+        {
             *entry = newval;
             return Ok(out);
         }
@@ -120,7 +130,10 @@ pub fn GUCArrayDelete(array: &[String], name: &str) -> PgResult<Option<Vec<Strin
 
     let mut out: Vec<String> = Vec::new();
     for entry in array {
-        if entry.strip_prefix(name.as_str()).is_some_and(|rest| rest.starts_with('=')) {
+        if entry
+            .strip_prefix(name.as_str())
+            .is_some_and(|rest| rest.starts_with('='))
+        {
             continue;
         }
         out.push(entry.clone());
@@ -154,7 +167,11 @@ pub fn TransformGUCArray(array: &[String]) -> PgResult<Vec<(String, String)>> {
                 ereport(WARNING)
                     .errcode(ERRCODE_SYNTAX_ERROR)
                     .errmsg(format!("could not parse setting for parameter \"{name}\""))
-                    .finish(types_error::ErrorLocation::new(file!(), line!() as i32, "TransformGUCArray"))?;
+                    .finish(types_error::ErrorLocation::new(
+                        file!(),
+                        line!() as i32,
+                        "TransformGUCArray",
+                    ))?;
             }
         }
     }

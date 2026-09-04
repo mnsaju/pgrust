@@ -1176,54 +1176,30 @@ unsafe impl<'mcx> PlanVariant<'mcx> for LockRows<'mcx> {}
 
 const _: () = {
     assert!(offset_of!(Result, plan) == 0);
-    assert!(
-        offset_of!(NodeRep<Result>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<Result>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(ProjectSet, plan) == 0);
-    assert!(
-        offset_of!(NodeRep<ProjectSet>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<ProjectSet>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(Scan, plan) == 0);
     assert!(offset_of!(SeqScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<SeqScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<SeqScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(SampleScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<SampleScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<SampleScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(TidScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<TidScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<TidScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(TidRangeScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<TidRangeScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<TidRangeScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(IndexScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<IndexScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<IndexScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(IndexOnlyScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<IndexOnlyScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<IndexOnlyScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(BitmapAnd, plan) == 0);
-    assert!(
-        offset_of!(NodeRep<BitmapAnd>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<BitmapAnd>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(BitmapOr, plan) == 0);
-    assert!(
-        offset_of!(NodeRep<BitmapOr>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<BitmapOr>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(BitmapIndexScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<BitmapIndexScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<BitmapIndexScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(BitmapHeapScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<BitmapHeapScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<BitmapHeapScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(Append, plan) == 0);
     assert!(offset_of!(NodeRep<Append>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(MergeAppend, plan) == 0);
@@ -1233,41 +1209,27 @@ const _: () = {
     assert!(offset_of!(GatherMerge, plan) == 0);
     assert!(offset_of!(NodeRep<GatherMerge>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(SubqueryScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<SubqueryScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<SubqueryScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(SetOp, plan) == 0);
     assert!(offset_of!(NodeRep<SetOp>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(FunctionScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<FunctionScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<FunctionScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(TableFuncScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<TableFuncScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<TableFuncScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(CteScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<CteScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<CteScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(NamedTuplestoreScan, scan) == 0);
     assert!(
         offset_of!(NodeRep<NamedTuplestoreScan>, payload) == offset_of!(NodeRep<Plan>, payload)
     );
     assert!(offset_of!(ValuesScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<ValuesScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<ValuesScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(ForeignScan, scan) == 0);
-    assert!(
-        offset_of!(NodeRep<ForeignScan>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<ForeignScan>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(Sort, plan) == 0);
     assert!(offset_of!(NodeRep<Sort>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(IncrementalSort, sort) == 0);
-    assert!(
-        offset_of!(NodeRep<IncrementalSort>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<IncrementalSort>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(Group, plan) == 0);
     assert!(offset_of!(NodeRep<Group>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(Unique, plan) == 0);
@@ -1275,24 +1237,16 @@ const _: () = {
     assert!(offset_of!(Agg, plan) == 0);
     assert!(offset_of!(NodeRep<Agg>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(ModifyTable, plan) == 0);
-    assert!(
-        offset_of!(NodeRep<ModifyTable>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<ModifyTable>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(Limit, plan) == 0);
     assert!(offset_of!(NodeRep<Limit>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(Join, plan) == 0);
     assert!(offset_of!(NestLoop, join) == 0);
-    assert!(
-        offset_of!(NodeRep<NestLoop>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<NestLoop>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(MergeJoin, join) == 0);
-    assert!(
-        offset_of!(NodeRep<MergeJoin>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<MergeJoin>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(HashJoin, join) == 0);
-    assert!(
-        offset_of!(NodeRep<HashJoin>, payload) == offset_of!(NodeRep<Plan>, payload)
-    );
+    assert!(offset_of!(NodeRep<HashJoin>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(Hash, plan) == 0);
     assert!(offset_of!(NodeRep<Hash>, payload) == offset_of!(NodeRep<Plan>, payload));
     assert!(offset_of!(LockRows, plan) == 0);

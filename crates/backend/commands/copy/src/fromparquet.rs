@@ -107,7 +107,10 @@ pub(crate) struct ParquetPlan {
 
 impl ParquetPlan {
     pub(crate) fn make_batches(&self, meta: &parquet_read::FileMeta) -> Vec<ColumnBatch> {
-        self.cols.iter().map(|&c| ColumnBatch::new_for(meta.columns[c].phys)).collect()
+        self.cols
+            .iter()
+            .map(|&c| ColumnBatch::new_for(meta.columns[c].phys))
+            .collect()
     }
 }
 
@@ -133,7 +136,9 @@ fn type_mismatch(attname: &str, pg_type: &str, pq_type: &str) -> Box<PgError> {
             "type mismatch for column \"{attname}\" between table and parquet file"
         ))
         .with_sqlstate(ERRCODE_DATATYPE_MISMATCH)
-        .with_detail(format!("table has \"{pg_type}\", parquet file has \"{pq_type}\"")),
+        .with_detail(format!(
+            "table has \"{pg_type}\", parquet file has \"{pq_type}\""
+        )),
     )
 }
 
@@ -153,7 +158,10 @@ fn resolve_conv(
     let plain_int = |l: Logical, bits: u8| -> bool {
         match l {
             Logical::None => true,
-            Logical::Int { bits: b, signed: true } => b <= bits,
+            Logical::Int {
+                bits: b,
+                signed: true,
+            } => b <= bits,
             _ => false,
         }
     };
@@ -164,7 +172,10 @@ fn resolve_conv(
         matches!(l, Logical::Int { bits: b, signed: false } if b < bits)
     };
     let textual = |l: Logical| {
-        matches!(l, Logical::None | Logical::String | Logical::Enum | Logical::Json)
+        matches!(
+            l,
+            Logical::None | Logical::String | Logical::Enum | Logical::Json
+        )
     };
     // COERCE_EPOCH admits exactly the plain-integer annotation classes (no
     // temporal/other logical); annotated temporal columns keep their mapping.
@@ -174,7 +185,10 @@ fn resolve_conv(
         _ => EpochLane::I32,
     };
     let lane64 = |l: Logical| match l {
-        Logical::Int { bits: 64, signed: false } => EpochLane::U64,
+        Logical::Int {
+            bits: 64,
+            signed: false,
+        } => EpochLane::U64,
         _ => EpochLane::I64,
     };
     let conv = match (phys, atttypid) {
@@ -190,16 +204,34 @@ fn resolve_conv(
         (Phys::Int32, INT2OID) if small_uint(logical, 32) => Some(Conv::I16FromI32),
         (Phys::Int32, INT4OID) if small_uint(logical, 32) => Some(Conv::I32),
         (Phys::Int32, INT8OID) if small_uint(logical, 32) => Some(Conv::I64FromI32),
-        (Phys::Int32, INT4OID) if logical == (Logical::Int { bits: 32, signed: false }) => {
+        (Phys::Int32, INT4OID)
+            if logical
+                == (Logical::Int {
+                    bits: 32,
+                    signed: false,
+                }) =>
+        {
             Some(Conv::U32AsI32)
         }
-        (Phys::Int32, INT8OID) if logical == (Logical::Int { bits: 32, signed: false }) => {
+        (Phys::Int32, INT8OID)
+            if logical
+                == (Logical::Int {
+                    bits: 32,
+                    signed: false,
+                }) =>
+        {
             Some(Conv::U32AsI64)
         }
         (Phys::Int64, INT2OID) if small_uint(logical, 64) => Some(Conv::I16FromI64),
         (Phys::Int64, INT4OID) if small_uint(logical, 64) => Some(Conv::I32FromI64),
         (Phys::Int64, INT8OID) if small_uint(logical, 64) => Some(Conv::I64),
-        (Phys::Int64, INT8OID) if logical == (Logical::Int { bits: 64, signed: false }) => {
+        (Phys::Int64, INT8OID)
+            if logical
+                == (Logical::Int {
+                    bits: 64,
+                    signed: false,
+                }) =>
+        {
             Some(Conv::U64AsI64)
         }
         (Phys::Float, FLOAT4OID) if logical == Logical::None => Some(Conv::F32),
@@ -226,9 +258,7 @@ fn resolve_conv(
             }
             _ => None,
         },
-        (Phys::Int32, TIMESTAMPOID | TIMESTAMPTZOID)
-            if coerce_epoch && plain_integer(logical) =>
-        {
+        (Phys::Int32, TIMESTAMPOID | TIMESTAMPTZOID) if coerce_epoch && plain_integer(logical) => {
             Some(Conv::TsFromEpochSecs(lane32(logical)))
         }
         (Phys::Int64, TIMEOID) => match logical {
@@ -294,7 +324,13 @@ pub(crate) fn open_source(
         return Err(stdin_unsupported());
     };
     let reader = FileReader::open(filename)?;
-    let plan = resolve_plan(&reader.meta, tup_desc, attnumlist, match_by_name, coerce_epoch)?;
+    let plan = resolve_plan(
+        &reader.meta,
+        tup_desc,
+        attnumlist,
+        match_by_name,
+        coerce_epoch,
+    )?;
     let batches = plan.make_batches(&reader.meta);
     let file_len = reader.file_len();
     Ok((
@@ -361,20 +397,26 @@ pub(crate) fn resolve_plan(
         any_text |= wants_utf8(conv);
         cols.push(col);
         vutf8.push(wants_utf8(conv));
-        bindings.push(Binding { attidx, conv, batch: bindings.len() });
+        bindings.push(Binding {
+            attidx,
+            conv,
+            batch: bindings.len(),
+        });
     }
 
     if any_text && mbutils::GetDatabaseEncoding() != wchar::PG_UTF8 {
         // Parquet strings are UTF-8 by definition; transcoding into other
         // database encodings is a later increment.
         return Err(Box::new(
-            PgError::error(
-                "COPY FROM parquet with text columns requires a UTF8 database encoding",
-            )
-            .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED),
+            PgError::error("COPY FROM parquet with text columns requires a UTF8 database encoding")
+                .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED),
         ));
     }
-    Ok(ParquetPlan { bindings, cols, vutf8 })
+    Ok(ParquetPlan {
+        bindings,
+        cols,
+        vutf8,
+    })
 }
 
 /// bpchar(n): over-length values take the varchar blank-trim rule; shorter
@@ -416,7 +458,9 @@ fn bpchar_datum<'mcx>(mcx: Mcx<'mcx>, bytes: &[u8], maxlen: i32) -> PgResult<Dat
     for _ in 0..pad {
         image.push(b' ');
     }
-    Ok(types_fmgr::varlena_result(datum::Varlena::from_image(image)))
+    Ok(types_fmgr::varlena_result(datum::Varlena::from_image(
+        image,
+    )))
 }
 
 impl ParquetSrc {
@@ -451,7 +495,9 @@ fn dt_out_of_range(what: &'static str) -> Box<PgError> {
 
 #[inline]
 fn ts_from_unix_us(us: i64) -> PgResult<Datum> {
-    let t = us.checked_sub(EPOCH_SHIFT_US).ok_or_else(|| dt_out_of_range("timestamp"))?;
+    let t = us
+        .checked_sub(EPOCH_SHIFT_US)
+        .ok_or_else(|| dt_out_of_range("timestamp"))?;
     if !(MIN_TIMESTAMP_US..END_TIMESTAMP_US).contains(&t) {
         return Err(dt_out_of_range("timestamp"));
     }
@@ -486,7 +532,9 @@ fn date_from_unix_days(days: i64) -> PgResult<Datum> {
 }
 
 fn varlena_datum(mcx: Mcx<'_>, bytes: &[u8]) -> PgResult<Datum> {
-    Ok(types_fmgr::varlena_result(varlena::cstring_to_text(mcx, bytes)?))
+    Ok(types_fmgr::varlena_result(varlena::cstring_to_text(
+        mcx, bytes,
+    )?))
 }
 
 /// varchar(n) length rule: values longer than n characters are accepted only
@@ -541,7 +589,9 @@ impl ParquetSrc {
             if self.rg_idx >= self.reader.meta.row_groups.len() {
                 return Ok(false);
             }
-            let rg = self.reader.row_group(self.rg_idx, &self.plan.cols, &self.plan.vutf8)?;
+            let rg = self
+                .reader
+                .row_group(self.rg_idx, &self.plan.cols, &self.plan.vutf8)?;
             *bytes_progress += rg.compressed_bytes;
             self.rg_idx += 1;
             self.rg = Some(rg);
@@ -663,16 +713,18 @@ pub(crate) fn convert_cell<'mcx>(
         Conv::F64FromF32 => Datum::from_f64(f64::from(lane!(F32))),
         Conv::DateFromDays => {
             let v = lane!(I32);
-            let d = v.checked_sub(EPOCH_SHIFT_DAYS).ok_or_else(|| dt_out_of_range("date"))?;
+            let d = v
+                .checked_sub(EPOCH_SHIFT_DAYS)
+                .ok_or_else(|| dt_out_of_range("date"))?;
             Datum::from_i32(d)
         }
         Conv::Timestamp(unit) => {
             let v = lane!(I64);
             let us = match unit {
                 TimeUnit::Micros => v,
-                TimeUnit::Millis => {
-                    v.checked_mul(1000).ok_or_else(|| dt_out_of_range("timestamp"))?
-                }
+                TimeUnit::Millis => v
+                    .checked_mul(1000)
+                    .ok_or_else(|| dt_out_of_range("timestamp"))?,
                 // Floor division: pre-epoch nanos round down, matching the
                 // timestamp number line rather than truncation toward zero.
                 TimeUnit::Nanos => v.div_euclid(1000),
@@ -757,7 +809,7 @@ mod epoch_tests {
         assert_eq!(ts_us(946_684_800), 0); // the engine epoch
         assert_eq!(ts_us(-1), -946_684_801_000_000); // pre-1970
         assert_eq!(ts_us(2_147_483_648), 1_200_798_848_000_000); // past 2038
-        // Exact window edges (inclusive both ends in seconds terms).
+                                                                 // Exact window edges (inclusive both ends in seconds terms).
         assert_eq!(UNIX_SECS_MIN, -210_866_803_200);
         assert_eq!(UNIX_SECS_MAX, 9_224_318_015_999);
         ts_us(UNIX_SECS_MIN);
@@ -769,7 +821,10 @@ mod epoch_tests {
             i64::MAX,
             i64::MIN, // shift underflow
         ] {
-            assert!(ts_from_unix_secs(bad).is_err(), "{bad} must be out of range");
+            assert!(
+                ts_from_unix_secs(bad).is_err(),
+                "{bad} must be out of range"
+            );
         }
     }
 
@@ -781,23 +836,25 @@ mod epoch_tests {
         assert_eq!(day(-1), Datum::from_i32(-10_958)); // 1969-12-31
         assert_eq!(day(2_932_896), Datum::from_i32(2_921_939)); // 9999-12-31
         assert_eq!(day(-719_162), Datum::from_i32(-730_119)); // 0001-01-01
-        // The i32 datum bound after the shift, and both i64 extremes.
+                                                              // The i32 datum bound after the shift, and both i64 extremes.
         assert!(date_from_unix_days(i64::from(i32::MAX) + 10_958).is_err());
         assert!(date_from_unix_days(3_000_000_000).is_err());
         assert!(date_from_unix_days(i64::MIN).is_err());
-        assert_eq!(
-            day(i64::from(i32::MAX) + 10_957),
-            Datum::from_i32(i32::MAX)
-        );
+        assert_eq!(day(i64::from(i32::MAX) + 10_957), Datum::from_i32(i32::MAX));
     }
 
     #[test]
     fn epoch_lane_widening() {
         let ctx = MemoryContext::new("epoch-lane-test");
         let mcx = ctx.mcx();
-        let b32 = ColumnBatch { nulls: vec![false; 2], data: BatchData::I32(vec![-1, 86_400]) };
-        let b64 =
-            ColumnBatch { nulls: vec![false; 2], data: BatchData::I64(vec![-1, 4_102_444_800]) };
+        let b32 = ColumnBatch {
+            nulls: vec![false; 2],
+            data: BatchData::I32(vec![-1, 86_400]),
+        };
+        let b64 = ColumnBatch {
+            nulls: vec![false; 2],
+            data: BatchData::I64(vec![-1, 4_102_444_800]),
+        };
         // Signed i32 lane: -1 is one second before 1970.
         assert_eq!(
             convert_cell(mcx, Conv::TsFromEpochSecs(EpochLane::I32), &b32, 0).unwrap(),
@@ -853,14 +910,29 @@ mod epoch_tests {
             Ok(Conv::DateFromEpochDays(EpochLane::I64))
         ));
         // The flag never disturbs non-temporal targets.
-        assert!(matches!(resolve_conv(&plain64, INT8OID, -1, "c", true), Ok(Conv::I64)));
+        assert!(matches!(
+            resolve_conv(&plain64, INT8OID, -1, "c", true),
+            Ok(Conv::I64)
+        ));
         // Unsigned annotations pick the unsigned lanes.
-        let u16d = col(Phys::Int32, Logical::Int { bits: 16, signed: false });
+        let u16d = col(
+            Phys::Int32,
+            Logical::Int {
+                bits: 16,
+                signed: false,
+            },
+        );
         assert!(matches!(
             resolve_conv(&u16d, DATEOID, -1, "c", true),
             Ok(Conv::DateFromEpochDays(EpochLane::U32))
         ));
-        let u64c = col(Phys::Int64, Logical::Int { bits: 64, signed: false });
+        let u64c = col(
+            Phys::Int64,
+            Logical::Int {
+                bits: 64,
+                signed: false,
+            },
+        );
         assert!(matches!(
             resolve_conv(&u64c, TIMESTAMPOID, -1, "c", true),
             Ok(Conv::TsFromEpochSecs(EpochLane::U64))
@@ -871,8 +943,13 @@ mod epoch_tests {
             Ok(Conv::TsFromEpochSecs(EpochLane::I32))
         ));
         // Temporal annotations keep their mapping under the flag.
-        let annts =
-            col(Phys::Int64, Logical::Timestamp { unit: TimeUnit::Millis, utc: true });
+        let annts = col(
+            Phys::Int64,
+            Logical::Timestamp {
+                unit: TimeUnit::Millis,
+                utc: true,
+            },
+        );
         assert!(matches!(
             resolve_conv(&annts, TIMESTAMPOID, -1, "c", true),
             Ok(Conv::Timestamp(TimeUnit::Millis))

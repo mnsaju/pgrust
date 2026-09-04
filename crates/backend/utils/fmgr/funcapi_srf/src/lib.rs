@@ -57,7 +57,11 @@ pub fn init_MultiFuncCall<'a>(
 
     // C's shutdown_MultiFuncCall (delete the multi-call context on early
     // exit) is subsumed: the fn_extra Box dies with the FmgrInfo carrier.
-    flinfo.set_fn_extra(FuncCallContext { call_cntr: 0, max_calls: 0, user_fctx: None });
+    flinfo.set_fn_extra(FuncCallContext {
+        call_cntr: 0,
+        max_calls: 0,
+        user_fctx: None,
+    });
     Ok(flinfo.fn_extra_mut::<FuncCallContext>().unwrap())
 }
 
@@ -90,10 +94,7 @@ pub fn srf_return_next(
     result
 }
 
-pub fn srf_return_next_null(
-    flinfo: &mut FmgrInfo,
-    fcinfo: &mut FunctionCallInfoBaseData,
-) -> Datum {
+pub fn srf_return_next_null(flinfo: &mut FmgrInfo, fcinfo: &mut FunctionCallInfoBaseData) -> Datum {
     per_MultiFuncCall(flinfo).call_cntr += 1;
     match fcinfo.rsinfo_mut() {
         Some(rsi) => rsi.isDone = ExprDoneCond::ExprMultipleResult,

@@ -6,13 +6,13 @@ use types_core::{Oid, TransactionId};
 use types_error::{PgError, PgResult};
 use types_rel::{
     AccessExclusiveLock, AccessShareLock, ExclusiveLock, FormData_pg_class, LockInfoData,
-    LockRelId, MaxLockMode, RelationData, RowExclusiveLock, ShareLock, LOCKMODE,
-    RELKIND_RELATION, REPLICA_IDENTITY_DEFAULT,
+    LockRelId, MaxLockMode, RelationData, RowExclusiveLock, ShareLock, LOCKMODE, RELKIND_RELATION,
+    REPLICA_IDENTITY_DEFAULT,
 };
 use types_storage::lock::{
-    LockAcquireResult, DEFAULT_LOCKMETHOD, LOCKACQUIRE_ALREADY_CLEAR, LOCKACQUIRE_ALREADY_HELD,
-    LOCKACQUIRE_NOT_AVAIL, LOCKACQUIRE_OK, LOCKTAG, LOCKTAG_OBJECT, LOCKTAG_RELATION,
-    LOCKTAG_TRANSACTION, LOCKTAG_TUPLE, USER_LOCKMETHOD, XLTW_Oper,
+    LockAcquireResult, XLTW_Oper, DEFAULT_LOCKMETHOD, LOCKACQUIRE_ALREADY_CLEAR,
+    LOCKACQUIRE_ALREADY_HELD, LOCKACQUIRE_NOT_AVAIL, LOCKACQUIRE_OK, LOCKTAG, LOCKTAG_OBJECT,
+    LOCKTAG_RELATION, LOCKTAG_TRANSACTION, LOCKTAG_TUPLE, USER_LOCKMETHOD,
 };
 use types_tuple::{ItemPointerData, NameData, TupleDescData};
 
@@ -81,7 +81,9 @@ fn install() {
         });
         procarray_seams::transaction_id_is_in_progress::set(|xid| {
             log(Ev::InProgress(xid));
-            Ok(IN_PROGRESS.with_borrow_mut(|q| q.pop_front()).unwrap_or(false))
+            Ok(IN_PROGRESS
+                .with_borrow_mut(|q| q.pop_front())
+                .unwrap_or(false))
         });
         subtrans_seams::sub_trans_get_topmost_transaction::set(|xid| {
             log(Ev::Topmost(xid));
@@ -89,7 +91,9 @@ fn install() {
         });
         postgres_seams::check_for_interrupts::set(|| {
             log(Ev::Cfi);
-            CFI_RESULTS.with_borrow_mut(|q| q.pop_front()).unwrap_or(Ok(()))
+            CFI_RESULTS
+                .with_borrow_mut(|q| q.pop_front())
+                .unwrap_or(Ok(()))
         });
         crate::init_seams();
     });
@@ -106,7 +110,9 @@ fn install() {
 fn make_rel(mcx: mcx::Mcx<'_>, oid: Oid) -> RelationData<'_> {
     let mut relname = NameData::default();
     relname.namestrcpy("reltest");
-    RelationData { rd_locator: Default::default(), rd_smgr: Default::default(),
+    RelationData {
+        rd_locator: Default::default(),
+        rd_smgr: Default::default(),
         rd_id: oid,
         rd_backend: types_core::INVALID_PROC_NUMBER,
         rd_islocaltemp: false,
@@ -115,7 +121,12 @@ fn make_rel(mcx: mcx::Mcx<'_>, oid: Oid) -> RelationData<'_> {
         rd_newRelfilelocatorSubid: Cell::new(0),
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
-        rd_lockInfo: LockInfoData { lockRelId: LockRelId { relId: oid, dbId: DB } },
+        rd_lockInfo: LockInfoData {
+            lockRelId: LockRelId {
+                relId: oid,
+                dbId: DB,
+            },
+        },
         rd_rel: FormData_pg_class {
             relname,
             relnamespace: 2200,
@@ -158,13 +169,16 @@ fn make_rel(mcx: mcx::Mcx<'_>, oid: Oid) -> RelationData<'_> {
         pgstat_enabled: Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: mcx::PgVec::new_in(mcx),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     }
 }
 
@@ -181,25 +195,55 @@ fn tag_fields(tag: LOCKTAG) -> (u32, u32, u32, u16, u8, u8) {
 
 #[test]
 fn set_locktag_encodings_match_lock_h() {
-    assert_eq!(tag_fields(LOCKTAG::relation(5, 16384)), (5, 16384, 0, 0, 0, 1));
-    assert_eq!(tag_fields(LOCKTAG::relation_extend(5, 16384)), (5, 16384, 0, 0, 1, 1));
-    assert_eq!(tag_fields(LOCKTAG::database_frozen_ids(5)), (5, 0, 0, 0, 2, 1));
-    assert_eq!(tag_fields(LOCKTAG::page(5, 16384, 7)), (5, 16384, 7, 0, 3, 1));
-    assert_eq!(tag_fields(LOCKTAG::tuple(5, 16384, 7, 12)), (5, 16384, 7, 12, 4, 1));
+    assert_eq!(
+        tag_fields(LOCKTAG::relation(5, 16384)),
+        (5, 16384, 0, 0, 0, 1)
+    );
+    assert_eq!(
+        tag_fields(LOCKTAG::relation_extend(5, 16384)),
+        (5, 16384, 0, 0, 1, 1)
+    );
+    assert_eq!(
+        tag_fields(LOCKTAG::database_frozen_ids(5)),
+        (5, 0, 0, 0, 2, 1)
+    );
+    assert_eq!(
+        tag_fields(LOCKTAG::page(5, 16384, 7)),
+        (5, 16384, 7, 0, 3, 1)
+    );
+    assert_eq!(
+        tag_fields(LOCKTAG::tuple(5, 16384, 7, 12)),
+        (5, 16384, 7, 12, 4, 1)
+    );
     assert_eq!(tag_fields(LOCKTAG::transaction(724)), (724, 0, 0, 0, 5, 1));
-    assert_eq!(tag_fields(LOCKTAG::virtualtransaction(3, 9)), (3, 9, 0, 0, 6, 1));
-    assert_eq!(tag_fields(LOCKTAG::speculative_insertion(724, 2)), (724, 2, 0, 0, 7, 1));
+    assert_eq!(
+        tag_fields(LOCKTAG::virtualtransaction(3, 9)),
+        (3, 9, 0, 0, 6, 1)
+    );
+    assert_eq!(
+        tag_fields(LOCKTAG::speculative_insertion(724, 2)),
+        (724, 2, 0, 0, 7, 1)
+    );
     assert_eq!(
         tag_fields(LOCKTAG::object(5, 1259, 16384, 3)),
         (5, 1259, 16384, 3, LOCKTAG_OBJECT as u8, DEFAULT_LOCKMETHOD)
     );
-    assert_eq!(tag_fields(LOCKTAG::advisory(1, 2, 3, 4)), (1, 2, 3, 4, 10, USER_LOCKMETHOD));
-    assert_eq!(tag_fields(LOCKTAG::apply_transaction(5, 20000, 724, 1)), (5, 20000, 724, 1, 11, 1));
+    assert_eq!(
+        tag_fields(LOCKTAG::advisory(1, 2, 3, 4)),
+        (1, 2, 3, 4, 10, USER_LOCKMETHOD)
+    );
+    assert_eq!(
+        tag_fields(LOCKTAG::apply_transaction(5, 20000, 724, 1)),
+        (5, 20000, 724, 1, 11, 1)
+    );
 }
 
 #[test]
 fn lockmode_single_home_and_reexport() {
-    assert_eq!(types_rel::AccessShareLock, types_storage::lock::AccessShareLock);
+    assert_eq!(
+        types_rel::AccessShareLock,
+        types_storage::lock::AccessShareLock
+    );
     assert_eq!(MaxLockMode, AccessExclusiveLock);
     assert_eq!(MaxLockMode, 8);
     let _: types_storage::lock::LOCKMODE = types_rel::NoLock;
@@ -233,8 +277,13 @@ fn shared_relation_tag_uses_invalid_db_oid() {
     install();
     LockRelationOid(SHARED_REL, RowExclusiveLock).unwrap();
     let evs = take_events();
-    let Ev::Acquire(tag, ..) = &evs[0] else { panic!("{evs:?}") };
-    assert_eq!(tag_fields(*tag), (0, SHARED_REL, 0, 0, LOCKTAG_RELATION as u8, 1));
+    let Ev::Acquire(tag, ..) = &evs[0] else {
+        panic!("{evs:?}")
+    };
+    assert_eq!(
+        tag_fields(*tag),
+        (0, SHARED_REL, 0, 0, LOCKTAG_RELATION as u8, 1)
+    );
 }
 
 #[test]
@@ -244,7 +293,9 @@ fn conditional_lock_relation_oid_not_avail() {
     assert!(!ConditionalLockRelationOid(PLAIN_REL, AccessExclusiveLock).unwrap());
     let evs = take_events();
     assert_eq!(evs.len(), 1);
-    let Ev::Acquire(_, _, sess, dont_wait, _, _) = &evs[0] else { panic!() };
+    let Ev::Acquire(_, _, sess, dont_wait, _, _) = &evs[0] else {
+        panic!()
+    };
     assert!(!sess);
     assert!(*dont_wait);
 }
@@ -263,14 +314,21 @@ fn unlock_relation_oid_releases_transaction_lock() {
     UnlockRelationOid(PLAIN_REL, AccessShareLock).unwrap();
     assert_eq!(
         take_events(),
-        vec![Ev::Release(LOCKTAG::relation(DB, PLAIN_REL), AccessShareLock, false)]
+        vec![Ev::Release(
+            LOCKTAG::relation(DB, PLAIN_REL),
+            AccessShareLock,
+            false
+        )]
     );
 }
 
 #[test]
 fn lock_and_unlock_relation_id() {
     install();
-    let relid = LockRelId { relId: 999, dbId: 42 };
+    let relid = LockRelId {
+        relId: 999,
+        dbId: 42,
+    };
     LockRelationId(&relid, ShareLock).unwrap();
     UnlockRelationId(&relid, ShareLock).unwrap();
     let tag = LOCKTAG::relation(42, 999);
@@ -291,7 +349,11 @@ fn check_relation_oid_locked_by_me_delegates() {
     HELD.set(true);
     assert!(CheckRelationOidLockedByMe(PLAIN_REL, AccessShareLock, true));
     HELD.set(false);
-    assert!(!CheckRelationOidLockedByMe(PLAIN_REL, AccessShareLock, true));
+    assert!(!CheckRelationOidLockedByMe(
+        PLAIN_REL,
+        AccessShareLock,
+        true
+    ));
     let evs = take_events();
     assert_eq!(
         evs[0],
@@ -305,7 +367,11 @@ fn lmgr_seams_route_to_this_crate() {
     lmgr_seams::lock_relation_oid::call(PLAIN_REL, AccessShareLock).unwrap();
     lmgr_seams::unlock_relation_oid::call(PLAIN_REL, AccessShareLock).unwrap();
     HELD.set(true);
-    assert!(lmgr_seams::check_relation_locked_by_me::call(PLAIN_REL, AccessShareLock, true));
+    assert!(lmgr_seams::check_relation_locked_by_me::call(
+        PLAIN_REL,
+        AccessShareLock,
+        true
+    ));
     HELD.set(false);
     assert_eq!(take_events().len(), 5);
 }
@@ -349,7 +415,17 @@ fn xact_lock_table_wait_follows_subxact_to_topmost() {
     XactLockTableWait(724, None, None, XLTW_Oper::None).unwrap();
     let evs = take_events();
     assert_eq!(evs[3], Ev::Topmost(724));
-    assert_eq!(evs[4], Ev::Acquire(LOCKTAG::transaction(700), ShareLock, false, false, true, false));
+    assert_eq!(
+        evs[4],
+        Ev::Acquire(
+            LOCKTAG::transaction(700),
+            ShareLock,
+            false,
+            false,
+            true,
+            false
+        )
+    );
     assert_eq!(evs[6], Ev::InProgress(700));
     assert_eq!(evs.len(), 7);
 }
@@ -396,7 +472,10 @@ fn xact_wait_retry_arm_propagates_cancel_as_error() {
     init_small::globals::SetInterruptPending(true);
     IN_PROGRESS.with_borrow_mut(|q| q.extend([true, true]));
     CFI_RESULTS.with_borrow_mut(|q| {
-        q.push_back(Err(PgError::error("canceling statement due to user request").into()))
+        q.push_back(Err(PgError::error(
+            "canceling statement due to user request",
+        )
+        .into()))
     });
     let err = XactLockTableWait(724, None, None, XLTW_Oper::None).unwrap_err();
     init_small::globals::SetInterruptPending(false);
@@ -411,7 +490,10 @@ fn xact_wait_cancel_during_retry_attaches_wait_context() {
     init_small::globals::SetInterruptPending(true);
     IN_PROGRESS.with_borrow_mut(|q| q.extend([true, true]));
     CFI_RESULTS.with_borrow_mut(|q| {
-        q.push_back(Err(PgError::error("canceling statement due to user request").into()))
+        q.push_back(Err(PgError::error(
+            "canceling statement due to user request",
+        )
+        .into()))
     });
     let ctid = ItemPointerData::new(3, 7);
     let ctx = mcx::MemoryContext::new("t");
@@ -454,7 +536,10 @@ fn conditional_xact_wait_retry_arm_propagates_cancel_as_error() {
     init_small::globals::SetInterruptPending(true);
     IN_PROGRESS.with_borrow_mut(|q| q.extend([true, true]));
     CFI_RESULTS.with_borrow_mut(|q| {
-        q.push_back(Err(PgError::error("canceling statement due to user request").into()))
+        q.push_back(Err(PgError::error(
+            "canceling statement due to user request",
+        )
+        .into()))
     });
     let err = ConditionalXactLockTableWait(724, false).unwrap_err();
     init_small::globals::SetInterruptPending(false);
@@ -467,7 +552,9 @@ fn conditional_xact_lock_table_wait_not_avail() {
     queue_acquire(&[Ok(LOCKACQUIRE_NOT_AVAIL)]);
     assert!(!ConditionalXactLockTableWait(724, true).unwrap());
     let evs = take_events();
-    let Ev::Acquire(_, _, _, dont_wait, _, log_failure) = &evs[0] else { panic!() };
+    let Ev::Acquire(_, _, _, dont_wait, _, log_failure) = &evs[0] else {
+        panic!()
+    };
     assert!(*dont_wait);
     assert!(*log_failure);
     assert_eq!(evs.len(), 1);
@@ -487,7 +574,10 @@ fn lock_database_object_always_absorbs_inval() {
         ]
     );
     UnlockDatabaseObject(1259, PLAIN_REL, 0, AccessExclusiveLock).unwrap();
-    assert_eq!(take_events(), vec![Ev::Release(tag, AccessExclusiveLock, false)]);
+    assert_eq!(
+        take_events(),
+        vec![Ev::Release(tag, AccessExclusiveLock, false)]
+    );
 }
 
 #[test]
@@ -522,11 +612,17 @@ fn relation_init_lock_info_matches_c() {
     install();
     assert_eq!(
         RelationInitLockInfo(PLAIN_REL, false).lockRelId,
-        LockRelId { relId: PLAIN_REL, dbId: DB }
+        LockRelId {
+            relId: PLAIN_REL,
+            dbId: DB
+        }
     );
     assert_eq!(
         RelationInitLockInfo(SHARED_REL, true).lockRelId,
-        LockRelId { relId: SHARED_REL, dbId: 0 }
+        LockRelId {
+            relId: SHARED_REL,
+            dbId: 0
+        }
     );
 }
 
@@ -548,10 +644,35 @@ fn speculative_insertion_lock_cycle() {
     assert_eq!(
         evs,
         vec![
-            Ev::Acquire(LOCKTAG::speculative_insertion(700, t1), ExclusiveLock, false, false, true, false),
-            Ev::Acquire(LOCKTAG::speculative_insertion(700, t2), ExclusiveLock, false, false, true, false),
-            Ev::Release(LOCKTAG::speculative_insertion(700, t2), ExclusiveLock, false),
-            Ev::Acquire(LOCKTAG::speculative_insertion(701, t1), ShareLock, false, false, true, false),
+            Ev::Acquire(
+                LOCKTAG::speculative_insertion(700, t1),
+                ExclusiveLock,
+                false,
+                false,
+                true,
+                false
+            ),
+            Ev::Acquire(
+                LOCKTAG::speculative_insertion(700, t2),
+                ExclusiveLock,
+                false,
+                false,
+                true,
+                false
+            ),
+            Ev::Release(
+                LOCKTAG::speculative_insertion(700, t2),
+                ExclusiveLock,
+                false
+            ),
+            Ev::Acquire(
+                LOCKTAG::speculative_insertion(701, t1),
+                ShareLock,
+                false,
+                false,
+                true,
+                false
+            ),
             Ev::Release(LOCKTAG::speculative_insertion(701, t1), ShareLock, false),
         ]
     );

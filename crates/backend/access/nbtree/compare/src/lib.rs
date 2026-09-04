@@ -150,7 +150,6 @@ pub fn btoidvectorcmp(a: &oidvector, a_values: &[Oid], b: &oidvector, b_values: 
 #[inline(never)]
 fn not_valid_oidvector() -> Box<PgError> {
     Box::new(
-        PgError::error("array is not a valid oidvector")
-            .with_sqlstate(ERRCODE_DATATYPE_MISMATCH),
+        PgError::error("array is not a valid oidvector").with_sqlstate(ERRCODE_DATATYPE_MISMATCH),
     )
 }

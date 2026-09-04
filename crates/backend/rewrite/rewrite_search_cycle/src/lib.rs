@@ -9,8 +9,8 @@ use types_core::{AttrNumber, InvalidOid, Oid};
 use types_error::{PgError, PgResult, ERRCODE_FEATURE_NOT_SUPPORTED};
 use types_nodes::list::{IntList, OidList};
 use types_nodes::parsenodes::{
-    CTECycleClause, CTESearchClause, CommonTableExpr, Query, RTEKind, RangeTblEntry,
-    SetOperation, SetOperationStmt,
+    CTECycleClause, CTESearchClause, CommonTableExpr, Query, RTEKind, RangeTblEntry, SetOperation,
+    SetOperationStmt,
 };
 use types_nodes::primnodes::{
     Alias, ArrayExpr, CaseExpr, CaseWhen, CoercionForm, FieldSelect, FromExpr, FuncExpr, OpExpr,
@@ -122,8 +122,12 @@ pub fn rewriteSearchAndCycle<'mcx>(mcx: Mcx<'mcx>, cte_node: Node<'mcx>) -> PgRe
         coltypes: &cte.ctecoltypes,
         coltypmods: &cte.ctecoltypmods,
         colcollations: &cte.ctecolcollations,
-        search: cte.search_clause.map(|n| n.as_cte_search_clause().expect("search clause")),
-        cycle: cte.cycle_clause.map(|n| n.as_cte_cycle_clause().expect("cycle clause")),
+        search: cte
+            .search_clause
+            .map(|n| n.as_cte_search_clause().expect("search clause")),
+        cycle: cte
+            .cycle_clause
+            .map(|n| n.as_cte_cycle_clause().expect("cycle clause")),
     };
     let ctename = cte.ctename.unwrap_or("");
     let ctequery_node = cte.ctequery.expect("analyzed CTE query");
@@ -133,8 +137,18 @@ pub fn rewriteSearchAndCycle<'mcx>(mcx: Mcx<'mcx>, cte_node: Node<'mcx>) -> PgRe
     let sos = sos_node.as_set_operation_stmt().expect("SetOperationStmt");
     debug_assert!(sos.op == SetOperation::SETOP_UNION);
 
-    let rti1 = sos.larg.expect("larg").as_range_tbl_ref().expect("RangeTblRef").rtindex;
-    let rti2 = sos.rarg.expect("rarg").as_range_tbl_ref().expect("RangeTblRef").rtindex;
+    let rti1 = sos
+        .larg
+        .expect("larg")
+        .as_range_tbl_ref()
+        .expect("RangeTblRef")
+        .rtindex;
+    let rti2 = sos
+        .rarg
+        .expect("rarg")
+        .as_range_tbl_ref()
+        .expect("RangeTblRef")
+        .rtindex;
     let rte1_node = ctequery.rtable.nth((rti1 - 1) as usize);
     let rte2_node = ctequery.rtable.nth((rti2 - 1) as usize);
     let rte1 = rte1_node.as_range_tbl_entry().expect("rte1");
@@ -163,7 +177,10 @@ pub fn rewriteSearchAndCycle<'mcx>(mcx: Mcx<'mcx>, cte_node: Node<'mcx>) -> PgRe
 
     let alias1 = alloc_leak_in(
         mcx,
-        Alias { aliasname: Some("*TLOCRN*"), colnames: shape.colnames.clone_in(mcx)? },
+        Alias {
+            aliasname: Some("*TLOCRN*"),
+            colnames: shape.colnames.clone_in(mcx)?,
+        },
     )?;
     let newrte1 = Node::mk(
         mcx,
@@ -183,7 +200,10 @@ pub fn rewriteSearchAndCycle<'mcx>(mcx: Mcx<'mcx>, cte_node: Node<'mcx>) -> PgRe
         rtable: NodeList::make1(mcx, newrte1)?,
         jointree: Some(alloc_leak_in(
             mcx,
-            FromExpr { fromlist: NodeList::make1(mcx, Node::mk_range_tbl_ref(mcx, 1)?)?, quals: None },
+            FromExpr {
+                fromlist: NodeList::make1(mcx, Node::mk_range_tbl_ref(mcx, 1)?)?,
+                quals: None,
+            },
         )?),
         ..Default::default()
     };
@@ -197,7 +217,11 @@ pub fn rewriteSearchAndCycle<'mcx>(mcx: Mcx<'mcx>, cte_node: Node<'mcx>) -> PgRe
             shape.colcollations.nth(i),
             0,
         )?;
-        let orig_tle = orig_q1.targetList.nth(i).as_target_entry().expect("tlist cell");
+        let orig_tle = orig_q1
+            .targetList
+            .nth(i)
+            .as_target_entry()
+            .expect("tlist cell");
         newq1.targetList.lappend(
             mcx,
             Node::mk(
@@ -206,7 +230,12 @@ pub fn rewriteSearchAndCycle<'mcx>(mcx: Mcx<'mcx>, cte_node: Node<'mcx>) -> PgRe
                     expr: var,
                     resno: (i + 1) as AttrNumber,
                     resname: Some(
-                        shape.colnames.nth(i).as_string().expect("ctecolnames cell").sval,
+                        shape
+                            .colnames
+                            .nth(i)
+                            .as_string()
+                            .expect("ctecolnames cell")
+                            .sval,
                     ),
                     ressortgroupref: 0,
                     resorigtbl: orig_tle.resorigtbl,
@@ -282,12 +311,14 @@ pub fn rewriteSearchAndCycle<'mcx>(mcx: Mcx<'mcx>, cte_node: Node<'mcx>) -> PgRe
     }
 
     let newq1_node = Node::mk(mcx, newq1)?;
-    let mut eref1_colnames =
-        rte1.eref.expect("rte1 eref").colnames.clone_in(mcx)?;
+    let mut eref1_colnames = rte1.eref.expect("rte1 eref").colnames.clone_in(mcx)?;
     append_new_colnames(mcx, &mut eref1_colnames, &shape)?;
     let eref1 = alloc_leak_in(
         mcx,
-        Alias { aliasname: rte1.eref.expect("rte1 eref").aliasname, colnames: eref1_colnames },
+        Alias {
+            aliasname: rte1.eref.expect("rte1 eref").aliasname,
+            colnames: eref1_colnames,
+        },
     )?;
     // SAFETY: rewriter-owned tree; no derived refs of rte1 live across the write.
     unsafe {
@@ -304,7 +335,13 @@ pub fn rewriteSearchAndCycle<'mcx>(mcx: Mcx<'mcx>, cte_node: Node<'mcx>) -> PgRe
     append_new_colnames(mcx, &mut ewcl, &shape)?;
 
     let mut cte_rtindex: i32 = -1;
-    for (i, e_node) in rte2.subquery.expect("rte2 subquery").rtable.iter().enumerate() {
+    for (i, e_node) in rte2
+        .subquery
+        .expect("rte2 subquery")
+        .rtable
+        .iter()
+        .enumerate()
+    {
         let e = e_node.as_range_tbl_entry().expect("rtable cell");
         if e.rtekind == RTEKind::RTE_CTE && e.ctename == Some(ctename) && e.ctelevelsup == 2 {
             cte_rtindex = (i + 1) as i32;
@@ -323,7 +360,15 @@ pub fn rewriteSearchAndCycle<'mcx>(mcx: Mcx<'mcx>, cte_node: Node<'mcx>) -> PgRe
     // reference is dead after the re-point below.
     let mut newsubquery: Query<'mcx> = unsafe { core::ptr::read(orig_q2) };
     if let Some(sc) = shape.search {
-        let var = Node::mk_var(mcx, cte_rtindex, sqc_attno, search_seq_type, -1, InvalidOid, 0)?;
+        let var = Node::mk_var(
+            mcx,
+            cte_rtindex,
+            sqc_attno,
+            search_seq_type,
+            -1,
+            InvalidOid,
+            0,
+        )?;
         let resno = (newsubquery.targetList.len() + 1) as AttrNumber;
         newsubquery.targetList.lappend(
             mcx,
@@ -345,7 +390,15 @@ pub fn rewriteSearchAndCycle<'mcx>(mcx: Mcx<'mcx>, cte_node: Node<'mcx>) -> PgRe
             mcx,
             Node::mk_target_entry(mcx, var, resno, cc.cycle_mark_column, false)?,
         )?;
-        let var = Node::mk_var(mcx, cte_rtindex, cpa_attno, RECORDARRAYOID, -1, InvalidOid, 0)?;
+        let var = Node::mk_var(
+            mcx,
+            cte_rtindex,
+            cpa_attno,
+            RECORDARRAYOID,
+            -1,
+            InvalidOid,
+            0,
+        )?;
         let resno = (newsubquery.targetList.len() + 1) as AttrNumber;
         newsubquery.targetList.lappend(
             mcx,
@@ -356,7 +409,10 @@ pub fn rewriteSearchAndCycle<'mcx>(mcx: Mcx<'mcx>, cte_node: Node<'mcx>) -> PgRe
 
     let alias2 = alloc_leak_in(
         mcx,
-        Alias { aliasname: Some("*TROCRN*"), colnames: ewcl.clone_in(mcx)? },
+        Alias {
+            aliasname: Some("*TROCRN*"),
+            colnames: ewcl.clone_in(mcx)?,
+        },
     )?;
     let newrte2 = Node::mk(
         mcx,
@@ -404,7 +460,10 @@ pub fn rewriteSearchAndCycle<'mcx>(mcx: Mcx<'mcx>, cte_node: Node<'mcx>) -> PgRe
         rtable: NodeList::make1(mcx, newrte2)?,
         jointree: Some(alloc_leak_in(
             mcx,
-            FromExpr { fromlist: NodeList::make1(mcx, Node::mk_range_tbl_ref(mcx, 1)?)?, quals },
+            FromExpr {
+                fromlist: NodeList::make1(mcx, Node::mk_range_tbl_ref(mcx, 1)?)?,
+                quals,
+            },
         )?),
         ..Default::default()
     };
@@ -433,7 +492,12 @@ pub fn rewriteSearchAndCycle<'mcx>(mcx: Mcx<'mcx>, cte_node: Node<'mcx>) -> PgRe
                     expr: var,
                     resno: (i + 1) as AttrNumber,
                     resname: Some(
-                        shape.colnames.nth(i).as_string().expect("ctecolnames cell").sval,
+                        shape
+                            .colnames
+                            .nth(i)
+                            .as_string()
+                            .expect("ctecolnames cell")
+                            .sval,
                     ),
                     ressortgroupref: 0,
                     resorigtbl: orig_tle.resorigtbl,
@@ -545,7 +609,10 @@ pub fn rewriteSearchAndCycle<'mcx>(mcx: Mcx<'mcx>, cte_node: Node<'mcx>) -> PgRe
     append_new_colnames(mcx, &mut eref2_colnames, &shape)?;
     let eref2 = alloc_leak_in(
         mcx,
-        Alias { aliasname: rte2.eref.expect("rte2 eref").aliasname, colnames: eref2_colnames },
+        Alias {
+            aliasname: rte2.eref.expect("rte2 eref").aliasname,
+            colnames: eref2_colnames,
+        },
     )?;
     // SAFETY: rewriter-owned tree; no derived refs of rte2 live across the write.
     unsafe {
@@ -684,11 +751,20 @@ fn append_new_colnames<'mcx>(
     shape: &CteShape<'mcx>,
 ) -> PgResult<()> {
     if let Some(sc) = shape.search {
-        list.lappend(mcx, Node::mk_string(mcx, sc.search_seq_column.expect("SET column"))?)?;
+        list.lappend(
+            mcx,
+            Node::mk_string(mcx, sc.search_seq_column.expect("SET column"))?,
+        )?;
     }
     if let Some(cc) = shape.cycle {
-        list.lappend(mcx, Node::mk_string(mcx, cc.cycle_mark_column.expect("SET column"))?)?;
-        list.lappend(mcx, Node::mk_string(mcx, cc.cycle_path_column.expect("USING column"))?)?;
+        list.lappend(
+            mcx,
+            Node::mk_string(mcx, cc.cycle_mark_column.expect("SET column"))?,
+        )?;
+        list.lappend(
+            mcx,
+            Node::mk_string(mcx, cc.cycle_path_column.expect("USING column"))?,
+        )?;
     }
     Ok(())
 }

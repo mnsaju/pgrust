@@ -118,7 +118,10 @@ fn file_names_and_buffers_check() {
     assert_eq!(SlruFileName(&ctl, 0).as_str(), "slru_names_dir/0000");
     assert_eq!(SlruFileName(&ctl, 0x1234).as_str(), "slru_names_dir/1234");
     assert_eq!(SlruFileName(&ctl, 0x12345).as_str(), "slru_names_dir/12345");
-    assert_eq!(SlruFileName(&ctl, 0xFF_FFFF).as_str(), "slru_names_dir/FFFFFF");
+    assert_eq!(
+        SlruFileName(&ctl, 0xFF_FFFF).as_str(),
+        "slru_names_dir/FFFFFF"
+    );
 
     let long = SimpleLruInit(
         "slru_names_long",
@@ -261,7 +264,10 @@ fn missing_page_read_reports_and_releases_locks() {
     let mut bank = LwGuard::acquire(banklock, lwlock::LW_EXCLUSIVE).unwrap();
     let err = SimpleLruReadPage(&ctl, 5, true, 1234, &mut bank).unwrap_err();
     assert_eq!(err.message(), "could not access status of transaction 1234");
-    assert!(err.detail().unwrap().starts_with("Could not open file \"slru_missing_dir/0000\":"));
+    assert!(err
+        .detail()
+        .unwrap()
+        .starts_with("Could not open file \"slru_missing_dir/0000\":"));
     drop(bank);
 
     // The unwound path left no lock held: both locks are re-acquirable.

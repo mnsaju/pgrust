@@ -293,7 +293,9 @@ impl<'mcx> ParallelHashJoinTable<'mcx> {
     }
 
     pub fn set_skip_unmatched(&self, i: i32) {
-        self.shared_batch(i).skip_unmatched.store(true, Ordering::Relaxed);
+        self.shared_batch(i)
+            .skip_unmatched
+            .store(true, Ordering::Relaxed);
     }
 
     pub fn batch_done(&self, i: i32) -> bool {
@@ -364,12 +366,7 @@ impl<'mcx> ParallelHashJoinTable<'mcx> {
             let mut cur = head.load(Ordering::Relaxed);
             loop {
                 (*tuple).set_next(cur);
-                match head.compare_exchange_weak(
-                    cur,
-                    tuple,
-                    Ordering::Release,
-                    Ordering::Relaxed,
-                ) {
+                match head.compare_exchange_weak(cur, tuple, Ordering::Release, Ordering::Relaxed) {
                     Ok(_) => break,
                     Err(actual) => cur = actual,
                 }
@@ -388,11 +385,7 @@ impl<'mcx> ParallelHashJoinTable<'mcx> {
     }
 }
 
-fn make_batch(
-    pstate: &ParallelHashJoinState,
-    batchno: i32,
-    nbatch: i32,
-) -> ParallelHashJoinBatch {
+fn make_batch(pstate: &ParallelHashJoinState, batchno: i32, nbatch: i32) -> ParallelHashJoinBatch {
     let batch = ParallelHashJoinBatch {
         batch_barrier: Barrier::new(0),
         mu: Mutex::new(BatchShared {
@@ -434,8 +427,9 @@ fn make_batch(
 fn setup_batches(table: &mut ParallelHashJoinTable<'_>, nbatch: i32) {
     debug_assert!(table.batches.is_empty());
     let pstate = Arc::clone(&table.pstate);
-    let gen: Arc<[ParallelHashJoinBatch]> =
-        (0..nbatch).map(|i| make_batch(&pstate, i, nbatch)).collect();
+    let gen: Arc<[ParallelHashJoinBatch]> = (0..nbatch)
+        .map(|i| make_batch(&pstate, i, nbatch))
+        .collect();
     {
         let mut g = pstate.locked();
         g.batches = Some(Arc::clone(&gen));
@@ -521,7 +515,9 @@ fn ensure_batch_accessors(table: &mut ParallelHashJoinTable<'_>) -> PgResult<()>
 }
 
 fn alloc_buckets(nbuckets: u32) -> Box<[AtomicPtr<HashJoinTupleHdr>]> {
-    (0..nbuckets).map(|_| AtomicPtr::new(core::ptr::null_mut())).collect()
+    (0..nbuckets)
+        .map(|_| AtomicPtr::new(core::ptr::null_mut()))
+        .collect()
 }
 
 /// `ExecParallelHashTableAlloc`.
@@ -556,7 +552,11 @@ pub fn exec_parallel_hash_table_create<'mcx>(
     hs: &HashState<'mcx>,
     estate: &mut EStateData<'mcx>,
 ) -> PgResult<ParallelHashJoinTable<'mcx>> {
-    let pstate = Arc::clone(hs.parallel_state.as_ref().expect("parallel hash state attached"));
+    let pstate = Arc::clone(
+        hs.parallel_state
+            .as_ref()
+            .expect("parallel hash state attached"),
+    );
     let mcx = estate.es_query_cxt;
     // useskew mirrors C's OidIsValid(node->skewTable) exactly as the serial
     // create (sizing reserves skew memory even though parallel hash never
@@ -1020,7 +1020,12 @@ pub fn exec_parallel_hash_increase_num_batches(
                     // Mutex); this phase is barrier-exclusive anyway.
                     let (b_exhausted, b_estimated, b_ntuples, b_old_ntuples) = {
                         let b = gen[i as usize].lock();
-                        (b.space_exhausted, b.estimated_size, b.ntuples, b.old_ntuples)
+                        (
+                            b.space_exhausted,
+                            b.estimated_size,
+                            b.ntuples,
+                            b.old_ntuples,
+                        )
                     };
                     if b_exhausted || b_estimated > g.space_allowed {
                         space_exhausted = true;
@@ -1109,7 +1114,10 @@ fn repartition_rest(table: &mut ParallelHashJoinTable<'_>) -> PgResult<()> {
     let pstate = Arc::clone(&table.pstate);
     let (old_gen, old_nbatch) = {
         let g = pstate.locked();
-        (Arc::clone(g.old_batches.as_ref().expect("old generation present")), g.old_nbatch)
+        (
+            Arc::clone(g.old_batches.as_ref().expect("old generation present")),
+            g.old_nbatch,
+        )
     };
     let mut old_inner: Vec<SharedTuplestoreAccessor<'_>> = (1..old_nbatch)
         .map(|i| {
@@ -1132,7 +1140,10 @@ fn repartition_rest(table: &mut ParallelHashJoinTable<'_>) -> PgResult<()> {
             // out (put_tuple) before advancing.
             let (image, t_len) = unsafe {
                 let t_len = (*mt.as_ptr()).t_len as usize;
-                (core::slice::from_raw_parts(mt.as_ptr().cast::<u8>(), t_len), t_len)
+                (
+                    core::slice::from_raw_parts(mt.as_ptr().cast::<u8>(), t_len),
+                    t_len,
+                )
             };
             let tuple_size = (HJTUPLE_OVERHEAD + t_len + 7) & !7;
             let (_bucketno, batchno) = table.get_bucket_and_batch(hashvalue);
@@ -1220,8 +1231,12 @@ pub fn exec_hash_table_detach_batch(table: &mut ParallelHashJoinTable<'_>) -> Pg
         return Ok(());
     }
     let curbatch = table.curbatch;
-    table.batches[curbatch as usize].inner_tuples.end_parallel_scan()?;
-    table.batches[curbatch as usize].outer_tuples.end_parallel_scan()?;
+    table.batches[curbatch as usize]
+        .inner_tuples
+        .end_parallel_scan()?;
+    table.batches[curbatch as usize]
+        .outer_tuples
+        .end_parallel_scan()?;
     let batch = &table.batches_gen.as_ref().expect("batches installed")[curbatch as usize];
     let barrier = &batch.batch_barrier;
     debug_assert!(matches!(barrier.phase(), PHJ_BATCH_PROBE | PHJ_BATCH_SCAN));
@@ -1252,8 +1267,9 @@ pub fn exec_hash_table_detach_batch(table: &mut ParallelHashJoinTable<'_>) -> Pg
     }
 
     let size = batch.lock().size;
-    table.space_peak =
-        table.space_peak.max(size + SIZEOF_BUCKET * table.nbuckets as usize);
+    table.space_peak = table
+        .space_peak
+        .max(size + SIZEOF_BUCKET * table.nbuckets as usize);
     table.curbatch = -1;
     Ok(())
 }
@@ -1263,11 +1279,16 @@ pub fn exec_hash_table_detach_batch(table: &mut ParallelHashJoinTable<'_>) -> Pg
 pub fn parallel_prep_unmatched_lose(table: &mut ParallelHashJoinTable<'_>) -> PgResult<()> {
     let curbatch = table.curbatch;
     table.batches[curbatch as usize].done = true;
-    table.batches[curbatch as usize].inner_tuples.end_parallel_scan()?;
-    table.batches[curbatch as usize].outer_tuples.end_parallel_scan()?;
+    table.batches[curbatch as usize]
+        .inner_tuples
+        .end_parallel_scan()?;
+    table.batches[curbatch as usize]
+        .outer_tuples
+        .end_parallel_scan()?;
     let size = table.shared_batch(curbatch).lock().size;
-    table.space_peak =
-        table.space_peak.max(size + SIZEOF_BUCKET * table.nbuckets as usize);
+    table.space_peak = table
+        .space_peak
+        .max(size + SIZEOF_BUCKET * table.nbuckets as usize);
     table.curbatch = -1;
     Ok(())
 }

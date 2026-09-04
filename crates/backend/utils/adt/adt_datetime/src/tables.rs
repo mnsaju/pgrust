@@ -9,7 +9,11 @@ const fn tk(token: &[u8], typ: i32, value: i32) -> DateTkn {
         t[i] = token[i];
         i += 1;
     }
-    DateTkn { token: t, typ: typ as i8, value }
+    DateTkn {
+        token: t,
+        typ: typ as i8,
+        value,
+    }
 }
 
 pub static DATETKTBL: [DateTkn; 72] = [
@@ -150,4 +154,3 @@ pub static DELTATKTBL: [DateTkn; 61] = [
     tk(b"yr", UNITS, DTK_YEAR),
     tk(b"yrs", UNITS, DTK_YEAR),
 ];
-

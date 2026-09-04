@@ -5,7 +5,9 @@ use ::mcx::{Mcx, MemoryContext};
 use ::types_core::ForkNumber;
 use ::types_error::PgResult;
 use ::types_rel::Relation;
-use ::types_spgist::{SPGIST_LEAF, SPGIST_METAPAGE_BLKNO, SPGIST_NULLS, SPGIST_NULL_BLKNO, SPGIST_ROOT_BLKNO};
+use ::types_spgist::{
+    SPGIST_LEAF, SPGIST_METAPAGE_BLKNO, SPGIST_NULLS, SPGIST_NULL_BLKNO, SPGIST_ROOT_BLKNO,
+};
 use execindexing::IndexInfo;
 
 pub struct IndexBuildResult {

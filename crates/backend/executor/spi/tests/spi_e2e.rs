@@ -20,8 +20,7 @@ use types_core::{
     INVALID_PROC_NUMBER, RELPERSISTENCE_PERMANENT,
 };
 use types_rel::{
-    FormData_pg_class, LockInfoData, LockRelId, Relation, RelationData, LOCKMODE,
-    RELKIND_RELATION,
+    FormData_pg_class, LockInfoData, LockRelId, Relation, RelationData, LOCKMODE, RELKIND_RELATION,
 };
 use types_storage::bufpage::PageRef;
 use types_storage::RelFileLocator;
@@ -231,9 +230,7 @@ fn install_xact_periphery_seams() {
     be_fsstubs_seams::at_eoxact_large_object::set(|_| Ok(()));
     namespace_seams::at_eoxact_namespace::set(|_, _| {});
     catalog_index_seams::reset_reindex_state::set(|_| {});
-    catalog_storage_seams::smgr_get_pending_deletes::set(|mcx, _for_commit| {
-        Ok(PgVec::new_in(mcx))
-    });
+    catalog_storage_seams::smgr_get_pending_deletes::set(|mcx, _for_commit| Ok(PgVec::new_in(mcx)));
     catalog_storage_seams::smgr_do_pending_deletes::set(|_| Ok(()));
     catalog_storage_seams::smgr_do_pending_syncs::set(|_, _| Ok(()));
     combocid_seams::at_eoxact_combocid::set(|| {});
@@ -356,7 +353,10 @@ fn test_relation<'mcx>(mcx: Mcx<'mcx>) -> RelationData<'mcx> {
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
         rd_lockInfo: LockInfoData {
-            lockRelId: LockRelId { relId: REL_OID, dbId: 5 },
+            lockRelId: LockRelId {
+                relId: REL_OID,
+                dbId: 5,
+            },
         },
         rd_rel,
         rd_att: int4_x2_tupdesc(mcx),
@@ -369,13 +369,16 @@ fn test_relation<'mcx>(mcx: Mcx<'mcx>) -> RelationData<'mcx> {
         pgstat_enabled: Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: PgVec::new_in(mcx),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     }
 }
 
@@ -403,15 +406,13 @@ fn install_parser_fixture_seams() {
     syscache_seams::pg_statistic_stawidth::set(|_, _, _| Ok(None));
     indexcmds_seams::get_default_opclass::set(|_typid, _am| Ok(0));
     if !guc_tables::vars::cpu_operator_cost.installed() {
-        guc_tables::vars::cpu_operator_cost
-            .install(guc_tables::GucVarAccessors { get: || 0.0025, set: |_| {} });
+        guc_tables::vars::cpu_operator_cost.install(guc_tables::GucVarAccessors {
+            get: || 0.0025,
+            set: |_| {},
+        });
     }
-    syscache_seams::syscache_hash_value_typeoid::set(|typid| {
-        Ok(typid.wrapping_mul(0x9e37_79b1))
-    });
-    syscache_seams::syscache_hash_value_procoid::set(|funcid| {
-        Ok(funcid.wrapping_mul(0x9e37_79b1))
-    });
+    syscache_seams::syscache_hash_value_typeoid::set(|typid| Ok(typid.wrapping_mul(0x9e37_79b1)));
+    syscache_seams::syscache_hash_value_procoid::set(|funcid| Ok(funcid.wrapping_mul(0x9e37_79b1)));
     syscache_seams::lookup_pg_type_typcache_shape::set(|_typid| {
         Ok(Some(syscache_seams::PgTypeTypcacheShape {
             typname: types_tuple::NameData::default(),
@@ -464,12 +465,13 @@ fn install_parser_fixture_seams() {
         }
         Ok(v)
     });
-    syscache_seams::pg_operator_name_candidates_exist::set(|name, _| {
-        Ok(name == "=" || name == "+")
-    });
+    syscache_seams::pg_operator_name_candidates_exist::set(
+        |name, _| Ok(name == "=" || name == "+"),
+    );
     syscache_seams::lookup_pg_operator_shape::set(|opno| {
         Ok(match opno {
-            96 => Some(syscache_seams::PgOperatorShape { oprnamespace: 11,
+            96 => Some(syscache_seams::PgOperatorShape {
+                oprnamespace: 11,
                 oprleft: INT4OID,
                 oprright: INT4OID,
                 oprresult: BOOLOID,
@@ -481,7 +483,8 @@ fn install_parser_fixture_seams() {
                 oprcanmerge: true,
                 oprcanhash: true,
             }),
-            551 => Some(syscache_seams::PgOperatorShape { oprnamespace: 11,
+            551 => Some(syscache_seams::PgOperatorShape {
+                oprnamespace: 11,
                 oprleft: INT4OID,
                 oprright: INT4OID,
                 oprresult: INT4OID,
@@ -528,14 +531,16 @@ fn install_parser_fixture_seams() {
         Ok(v)
     });
     syscache_seams::lookup_pg_amop_by_operator::set(|opno, purpose, opfamily| {
-        Ok((opno == 96 && purpose == b's' && opfamily == 1976).then(|| {
-            syscache_seams::PgAmopShape {
-                amopstrategy: 3,
-                amopsortfamily: 0,
-                amoplefttype: INT4OID,
-                amoprighttype: INT4OID,
-            }
-        }))
+        Ok(
+            (opno == 96 && purpose == b's' && opfamily == 1976).then(|| {
+                syscache_seams::PgAmopShape {
+                    amopstrategy: 3,
+                    amopsortfamily: 0,
+                    amoplefttype: INT4OID,
+                    amoprighttype: INT4OID,
+                }
+            }),
+        )
     });
     syscache_seams::lookup_pg_opfamily_shape::set(|opfid| {
         Ok((opfid == 1976).then(|| syscache_seams::PgOpfamilyShape {
@@ -550,11 +555,13 @@ fn install_parser_fixture_seams() {
         })
     });
     syscache_seams::pg_proc_cost_shape::set(|funcid| {
-        Ok(matches!(funcid, 65 | 177).then(|| syscache_seams::PgProcCostShape {
-            procost: 1.0,
-            prorows: 0.0,
-            prosupport: 0,
-        }))
+        Ok(
+            matches!(funcid, 65 | 177).then(|| syscache_seams::PgProcCostShape {
+                procost: 1.0,
+                prorows: 0.0,
+                prosupport: 0,
+            }),
+        )
     });
     syscache_seams::lookup_pg_proc_shape::set(|funcid| {
         Ok(match funcid {
@@ -687,8 +694,12 @@ fn boot() {
     let ctl = transam_xlog::ctl::XLogCtl();
     ctl.InsertTimeLineID.store(1, Relaxed);
     ctl.PrevTimeLineID.store(1, Relaxed);
-    ctl.Insert.CurrBytePos.store(XLogRecPtrToBytePos(end_of_log), Relaxed);
-    ctl.Insert.PrevBytePos.store(XLogRecPtrToBytePos(prev_rec), Relaxed);
+    ctl.Insert
+        .CurrBytePos
+        .store(XLogRecPtrToBytePos(end_of_log), Relaxed);
+    ctl.Insert
+        .PrevBytePos
+        .store(XLogRecPtrToBytePos(prev_rec), Relaxed);
     ctl.Insert.fullPageWrites.store(true, Relaxed);
     ctl.Insert.RedoRecPtr.store(prev_rec, Relaxed);
     ctl.RedoRecPtr.store(prev_rec, Relaxed);
@@ -745,11 +756,23 @@ fn spi_end_to_end() {
     begin();
     assert_eq!(spi::SPI_connect().unwrap(), spi::SPI_OK_CONNECT);
 
-    assert_eq!(spi::SPI_execute("INSERT INTO t VALUES (1, 10)", false, 0).unwrap(), spi::SPI_OK_INSERT);
+    assert_eq!(
+        spi::SPI_execute("INSERT INTO t VALUES (1, 10)", false, 0).unwrap(),
+        spi::SPI_OK_INSERT
+    );
     assert_eq!(spi::SPI_processed(), 1);
-    assert!(spi::SPI_tuptable().is_none(), "INSERT without RETURNING has no tuptable");
-    assert_eq!(spi::SPI_execute("INSERT INTO t VALUES (2, 20)", false, 0).unwrap(), spi::SPI_OK_INSERT);
-    assert_eq!(spi::SPI_execute("INSERT INTO t VALUES (3, 30)", false, 0).unwrap(), spi::SPI_OK_INSERT);
+    assert!(
+        spi::SPI_tuptable().is_none(),
+        "INSERT without RETURNING has no tuptable"
+    );
+    assert_eq!(
+        spi::SPI_execute("INSERT INTO t VALUES (2, 20)", false, 0).unwrap(),
+        spi::SPI_OK_INSERT
+    );
+    assert_eq!(
+        spi::SPI_execute("INSERT INTO t VALUES (3, 30)", false, 0).unwrap(),
+        spi::SPI_OK_INSERT
+    );
 
     let mut rows = select_pairs("SELECT a, b FROM t");
     rows.sort();
@@ -757,17 +780,28 @@ fn spi_end_to_end() {
 
     // read-only arm: no CCI, the entry-time snapshot governs — this txn's own
     // inserts are invisible (C-exact), and DML is rejected with the C message.
-    assert_eq!(spi::SPI_execute("SELECT a, b FROM t", true, 0).unwrap(), spi::SPI_OK_SELECT);
-    assert_eq!(spi::SPI_processed(), 0, "read-only uses the pre-insert snapshot");
+    assert_eq!(
+        spi::SPI_execute("SELECT a, b FROM t", true, 0).unwrap(),
+        spi::SPI_OK_SELECT
+    );
+    assert_eq!(
+        spi::SPI_processed(),
+        0,
+        "read-only uses the pre-insert snapshot"
+    );
     let err = spi::SPI_execute("INSERT INTO t VALUES (9, 90)", true, 0).unwrap_err();
     assert!(
-        err.message().contains("is not allowed in a non-volatile function"),
+        err.message()
+            .contains("is not allowed in a non-volatile function"),
         "unexpected: {}",
         err.message()
     );
 
     // tcount limit arm.
-    assert_eq!(spi::SPI_execute("SELECT a, b FROM t", false, 2).unwrap(), spi::SPI_OK_SELECT);
+    assert_eq!(
+        spi::SPI_execute("SELECT a, b FROM t", false, 2).unwrap(),
+        spi::SPI_OK_SELECT
+    );
     assert_eq!(spi::SPI_processed(), 2);
 
     // Nested connection: inner results, outer globals restored on finish.
@@ -787,8 +821,7 @@ fn spi_end_to_end() {
     assert_eq!(spi::SPI_getargtypeid(plan, 0), INT4OID);
     assert!(spi::SPI_plan_is_valid(plan));
     for (arg, want) in [(2, 20), (3, 30)] {
-        let res =
-            spi::SPI_execute_plan(plan, &[Datum::from_i32(arg)], &[false], false, 0).unwrap();
+        let res = spi::SPI_execute_plan(plan, &[Datum::from_i32(arg)], &[false], false, 0).unwrap();
         assert_eq!(res, spi::SPI_OK_SELECT);
         assert_eq!(spi::SPI_processed(), 1);
         let h = spi::SPI_tuptable().unwrap();
@@ -805,7 +838,10 @@ fn spi_end_to_end() {
     let h = spi::SPI_tuptable().unwrap();
     let ctx = mcx::MemoryContext::new("getvalue");
     let rendered = spi::tuptable_with(h, |tt| {
-        spi::SPI_getvalue(ctx.mcx(), &tt.vals[0], &tt.tupdesc, 1).unwrap().unwrap().to_vec()
+        spi::SPI_getvalue(ctx.mcx(), &tt.vals[0], &tt.tupdesc, 1)
+            .unwrap()
+            .unwrap()
+            .to_vec()
     });
     assert_eq!(rendered, b"10");
     drop(ctx);
@@ -835,7 +871,10 @@ fn spi_end_to_end() {
     assert_eq!(rows, vec![(1, 11), (2, 20), (3, 30)]);
 
     // read-only arm with a fresh snapshot sees the committed rows.
-    assert_eq!(spi::SPI_execute("SELECT a, b FROM t", true, 0).unwrap(), spi::SPI_OK_SELECT);
+    assert_eq!(
+        spi::SPI_execute("SELECT a, b FROM t", true, 0).unwrap(),
+        spi::SPI_OK_SELECT
+    );
     assert_eq!(spi::SPI_processed(), 3);
 
     // A plan kept with SPI_keepplan survives SPI_finish.
@@ -850,7 +889,9 @@ fn spi_end_to_end() {
     let res = spi::SPI_execute_plan(kept, &[Datum::from_i32(1)], &[false], false, 0).unwrap();
     assert_eq!(res, spi::SPI_OK_SELECT);
     let h = spi::SPI_tuptable().unwrap();
-    let b = spi::tuptable_with(h, |tt| spi::SPI_getbinval(&tt.vals[0], &tt.tupdesc, 1).0.as_i32());
+    let b = spi::tuptable_with(h, |tt| {
+        spi::SPI_getbinval(&tt.vals[0], &tt.tupdesc, 1).0.as_i32()
+    });
     assert_eq!(b, 11);
     assert_eq!(spi::SPI_freeplan(kept), 0);
     spi::SPI_finish().unwrap();
@@ -862,8 +903,16 @@ fn spi_end_to_end() {
     spi::SPI_connect().unwrap();
     spi::SPI_connect().unwrap();
     let err = spi::SPI_execute("SELECT nosuchcol FROM t", false, 0).unwrap_err();
-    assert!(err.message().contains("nosuchcol"), "unexpected: {}", err.message());
-    assert_eq!(spi::debug_stack_depth(), 2, "error alone does not pop the stack");
+    assert!(
+        err.message().contains("nosuchcol"),
+        "unexpected: {}",
+        err.message()
+    );
+    assert_eq!(
+        spi::debug_stack_depth(),
+        2,
+        "error alone does not pop the stack"
+    );
     xact::AbortCurrentTransaction().unwrap();
     assert_eq!(spi::debug_stack_depth(), 0, "abort unwound both SPI levels");
     assert_eq!(spi::debug_live_counts(), (0, 0));
@@ -879,6 +928,10 @@ fn spi_end_to_end() {
 
     with_fake(|f| {
         assert!(f.pins.iter().all(|p| *p == 0), "leaked pins: {:?}", f.pins);
-        assert!(f.locks.iter().all(|l| *l == 0), "leaked locks: {:?}", f.locks);
+        assert!(
+            f.locks.iter().all(|l| *l == 0),
+            "leaked locks: {:?}",
+            f.locks
+        );
     });
 }

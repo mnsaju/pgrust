@@ -64,7 +64,10 @@ pub fn standby_desc(buf: &mut StringInfo<'_>, record: &XLogReaderState) -> PgRes
         // dbId 0, tsId 4, relcacheInitFileInval 8, nmsgs 12, msgs[] 16.
         let what = "xl_invalidations";
         let nmsgs = rec.i32(12, what)?.max(0) as usize;
-        let raw = rec.0.get(16..16 + nmsgs * 16).ok_or_else(|| crate::record_truncated(what))?;
+        let raw = rec
+            .0
+            .get(16..16 + nmsgs * 16)
+            .ok_or_else(|| crate::record_truncated(what))?;
         standby_desc_invalidations_raw(
             buf,
             nmsgs,
@@ -86,7 +89,10 @@ pub fn standby_identify(info: u8) -> Option<&'static str> {
     }
 }
 
-fn desc_one_invalidation(buf: &mut StringInfo<'_>, msg: &SharedInvalidationMessage) -> PgResult<()> {
+fn desc_one_invalidation(
+    buf: &mut StringInfo<'_>,
+    msg: &SharedInvalidationMessage,
+) -> PgResult<()> {
     match msg {
         SharedInvalidationMessage::Catcache(m) => appendf!(buf, " catcache {}", m.id),
         SharedInvalidationMessage::Catalog(m) => appendf!(buf, " catalog {}", m.catId),
@@ -136,7 +142,10 @@ pub fn standby_desc_invalidations_raw(
         appendf!(buf, "; relcache init file inval dbid {dbId} tsid {tsId}")?;
     }
     buf.append_str("; inval msgs:")?;
-    for chunk in raw.chunks_exact(SHARED_INVALIDATION_MESSAGE_SIZE).take(nmsgs) {
+    for chunk in raw
+        .chunks_exact(SHARED_INVALIDATION_MESSAGE_SIZE)
+        .take(nmsgs)
+    {
         let arr: [u8; SHARED_INVALIDATION_MESSAGE_SIZE] = chunk.try_into().unwrap();
         match SharedInvalidationMessage::from_wire_bytes(arr) {
             Some(msg) => desc_one_invalidation(buf, &msg)?,

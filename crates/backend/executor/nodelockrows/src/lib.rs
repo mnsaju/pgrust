@@ -62,7 +62,9 @@ fn eval_plan_qual_slot<'mcx>(
         return id;
     }
     let (kind, desc) = {
-        let rel = estate.es_relations[idx].as_ref().expect("rowmark relation opened");
+        let rel = estate.es_relations[idx]
+            .as_ref()
+            .expect("rowmark relation opened");
         (tableam::table_slot_callbacks(rel), rel.rd_att.clone())
     };
     let slot = exectuples::make_tuple_table_slot(mcx, kind, Some(desc));
@@ -96,7 +98,9 @@ pub fn exec_init_lock_rows<'mcx>(
     let mut lr_epq_arowMarks: PgVec<'mcx, ExecAuxRowMark> = PgVec::new_in(estate.es_query_cxt);
     let mut epq_subs: Option<EpqSubs<'mcx>> = None;
     for rc_node in &node.rowMarks {
-        let rc = rc_node.as_plan_row_mark().expect("rowMarks cell is a PlanRowMark");
+        let rc = rc_node
+            .as_plan_row_mark()
+            .expect("rowMarks cell is a PlanRowMark");
         if rc.isParent {
             continue;
         }
@@ -121,7 +125,9 @@ pub fn exec_init_lock_rows<'mcx>(
             let whole_name = format!("wholerow{}", erm.rowmarkId);
             let n = find_junk_attribute_in_tlist(outer_tlist, &whole_name);
             if n == 0 {
-                return Err(internal(&format!("could not find junk {whole_name} column")));
+                return Err(internal(&format!(
+                    "could not find junk {whole_name} column"
+                )));
             }
             (0, n)
         };
@@ -155,7 +161,12 @@ pub fn exec_init_lock_rows<'mcx>(
             });
         }
     }
-    Ok(LockRowsState { plan: node, lr_arowMarks, lr_epq_arowMarks, epq_subs })
+    Ok(LockRowsState {
+        plan: node,
+        lr_arowMarks,
+        lr_epq_arowMarks,
+        epq_subs,
+    })
 }
 
 /// `ExecLockRows`; C's goto lnext becomes the loop over the extracted
@@ -254,11 +265,8 @@ pub fn lr_accept_row<'mcx>(
             erm.ermActive = true;
 
             let mut isnull = false;
-            let datum = exectuples::slot_getattr(
-                estate.slot_mut(slot_id),
-                ctid_att as i32,
-                &mut isnull,
-            );
+            let datum =
+                exectuples::slot_getattr(estate.slot_mut(slot_id), ctid_att as i32, &mut isnull);
             if isnull {
                 return Err(internal("ctid is NULL"));
             }
@@ -363,17 +371,22 @@ pub fn lr_accept_row<'mcx>(
                     .expect("locking mark slot made at init created the subs");
                 for aerm in node.lr_epq_arowMarks.iter() {
                     let fetch = if aerm.wholeAttNo > 0 {
-                        ::executils::EpqRowMarkFetch::Copy { whole_attno: aerm.wholeAttNo }
+                        ::executils::EpqRowMarkFetch::Copy {
+                            whole_attno: aerm.wholeAttNo,
+                        }
                     } else {
                         debug_assert!(aerm.ctidAttNo > 0);
-                        ::executils::EpqRowMarkFetch::Reference { ctid_attno: aerm.ctidAttNo }
+                        ::executils::EpqRowMarkFetch::Reference {
+                            ctid_attno: aerm.ctidAttNo,
+                        }
                     };
                     subs.relsubs_rowmark[(aerm.rti - 1) as usize] = Some(fetch);
                 }
                 subs.origslot = Some(slot_id);
             }
-            let input =
-                node.lr_arowMarks[0].mark_slot.expect("locking mark slot made at init");
+            let input = node.lr_arowMarks[0]
+                .mark_slot
+                .expect("locking mark slot made at init");
             let Some(epqslot) = epq_eval(&mut node.epq_subs, estate, input)? else {
                 // Recheck says the latest version no longer passes: skip.
                 return Ok(None);

@@ -60,13 +60,11 @@ fn invalid_bytea_input() -> PgError {
 #[inline(never)]
 fn invalid_hex_digit(s: &[u8]) -> PgResult<PgError> {
     let n = (mbutils_seams::pg_mblen_range::call(s)? as usize).min(s.len());
-    Ok(
-        PgError::error(format!(
-            "invalid hexadecimal digit: \"{}\"",
-            String::from_utf8_lossy(&s[..n])
-        ))
-        .with_sqlstate(ERRCODE_INVALID_PARAMETER_VALUE),
-    )
+    Ok(PgError::error(format!(
+        "invalid hexadecimal digit: \"{}\"",
+        String::from_utf8_lossy(&s[..n])
+    ))
+    .with_sqlstate(ERRCODE_INVALID_PARAMETER_VALUE))
 }
 
 #[cold]
@@ -111,7 +109,11 @@ pub fn hex_decode_into(
         }
         let v1 = get_hex(c);
         if v1 < 0 {
-            return ereturn(escontext.as_deref_mut(), None, invalid_hex_digit(&src[i..])?);
+            return ereturn(
+                escontext.as_deref_mut(),
+                None,
+                invalid_hex_digit(&src[i..])?,
+            );
         }
         i += 1;
         if i >= src.len() {
@@ -119,13 +121,19 @@ pub fn hex_decode_into(
         }
         let v2 = get_hex(src[i]);
         if v2 < 0 {
-            return ereturn(escontext.as_deref_mut(), None, invalid_hex_digit(&src[i..])?);
+            return ereturn(
+                escontext.as_deref_mut(),
+                None,
+                invalid_hex_digit(&src[i..])?,
+            );
         }
         i += 1;
         // SAFETY: one output byte per digit pair; pairs <= src.len()/2, within
         // the asserted spare capacity past old.
         unsafe {
-            out.as_mut_ptr().add(old + written).write(((v1 as u8) << 4) | v2 as u8);
+            out.as_mut_ptr()
+                .add(old + written)
+                .write(((v1 as u8) << 4) | v2 as u8);
         }
         written += 1;
     }
@@ -250,7 +258,9 @@ pub fn byteaout_into(v: &[u8], mode: i32, out: &mut Vec<u8>) -> PgResult<()> {
             }
         }
     } else {
-        return Err(PgError::error(format!("unrecognized \"bytea_output\" setting: {mode}")).into());
+        return Err(
+            PgError::error(format!("unrecognized \"bytea_output\" setting: {mode}")).into(),
+        );
     }
     out.push(0);
     Ok(())

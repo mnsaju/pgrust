@@ -71,8 +71,11 @@ pub fn varstr_levenshtein_less_equal(
 
     if max_d >= 0 {
         let net_inserts = n0 - m0;
-        let min_theo_d =
-            if net_inserts < 0 { -net_inserts * del_c } else { net_inserts * ins_c };
+        let min_theo_d = if net_inserts < 0 {
+            -net_inserts * del_c
+        } else {
+            net_inserts * ins_c
+        };
         if min_theo_d > max_d {
             return Ok(max_d + 1);
         }
@@ -167,7 +170,11 @@ pub fn varstr_levenshtein_less_equal(
                 let ins = prev[i as usize] + ins_c;
                 let del = curr[(i - 1) as usize] + del_c;
                 let sub = prev[(i - 1) as usize]
-                    + if source[x_off] == target[y_off] { 0 } else { sub_c };
+                    + if source[x_off] == target[y_off] {
+                        0
+                    } else {
+                        sub_c
+                    };
                 curr[i as usize] = ins.min(del).min(sub);
                 x_off += 1;
                 i += 1;

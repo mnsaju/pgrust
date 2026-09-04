@@ -167,7 +167,8 @@ fn write_barrier() {
 // Pub for backend_progress (backend_progress.c writes under the same bracket).
 pub fn begin_write_activity(e: &PgBackendStatus) {
     g::StartCriticalSection();
-    e.st_changecount.store(e.st_changecount.load(Relaxed).wrapping_add(1), Relaxed);
+    e.st_changecount
+        .store(e.st_changecount.load(Relaxed).wrapping_add(1), Relaxed);
     write_barrier();
 }
 
@@ -263,7 +264,11 @@ pub fn BackendStatusShmemInit() -> PgResult<()> {
     let qsize = query_size();
     let total = shmem::mul_size(qsize, slots as usize)?;
     let base = shmem::ShmemAlloc(total)?;
-    let _ = BACKEND_ACTIVITY_BUFFER.set(ActivityBuffer { base, query_size: qsize, total });
+    let _ = BACKEND_ACTIVITY_BUFFER.set(ActivityBuffer {
+        base,
+        query_size: qsize,
+        total,
+    });
 
     let array: Vec<PgBackendStatus> = (0..slots)
         .map(|slot| PgBackendStatus {
@@ -363,8 +368,7 @@ pub fn pgstat_bestart_initial() -> PgResult<()> {
         SockAddr::zeroed()
     };
     let clienthostname = if g::HaveMyProcPort() {
-        g::WithMyProcPort(|p| p.remote_hostname.as_deref().map(str_to_name))
-            .unwrap_or([0; NAMELEN])
+        g::WithMyProcPort(|p| p.remote_hostname.as_deref().map(str_to_name)).unwrap_or([0; NAMELEN])
     } else {
         [0; NAMELEN]
     };
@@ -404,11 +408,14 @@ fn read_ssl_status() -> (bool, PgBackendSSLStatus) {
     let lssl = PgBackendSSLStatus::zeroed();
     if g::WithMyProcPort(|p| p.ssl_in_use) {
         ssl = true;
-        lssl.ssl_bits.set(be_secure_openssl::be_tls_get_cipher_bits());
-        lssl.ssl_version
-            .set(str_to_name(&be_secure_openssl::be_tls_get_version().unwrap_or_default()));
-        lssl.ssl_cipher
-            .set(str_to_name(&be_secure_openssl::be_tls_get_cipher().unwrap_or_default()));
+        lssl.ssl_bits
+            .set(be_secure_openssl::be_tls_get_cipher_bits());
+        lssl.ssl_version.set(str_to_name(
+            &be_secure_openssl::be_tls_get_version().unwrap_or_default(),
+        ));
+        lssl.ssl_cipher.set(str_to_name(
+            &be_secure_openssl::be_tls_get_cipher().unwrap_or_default(),
+        ));
         lssl.ssl_client_dn.set(str_to_name(
             &be_secure_openssl::be_tls_get_peer_subject_name().unwrap_or_default(),
         ));
@@ -441,9 +448,18 @@ pub fn pgstat_bestart_security() -> PgResult<()> {
     beentry.st_sslstatus.ssl_bits.set(lssl.ssl_bits.get());
     beentry.st_sslstatus.ssl_version.set(lssl.ssl_version.get());
     beentry.st_sslstatus.ssl_cipher.set(lssl.ssl_cipher.get());
-    beentry.st_sslstatus.ssl_client_dn.set(lssl.ssl_client_dn.get());
-    beentry.st_sslstatus.ssl_client_serial.set(lssl.ssl_client_serial.get());
-    beentry.st_sslstatus.ssl_issuer_dn.set(lssl.ssl_issuer_dn.get());
+    beentry
+        .st_sslstatus
+        .ssl_client_dn
+        .set(lssl.ssl_client_dn.get());
+    beentry
+        .st_sslstatus
+        .ssl_client_serial
+        .set(lssl.ssl_client_serial.get());
+    beentry
+        .st_sslstatus
+        .ssl_issuer_dn
+        .set(lssl.ssl_issuer_dn.get());
     end_write_activity(beentry);
     Ok(())
 }
@@ -480,7 +496,9 @@ pub fn pgstat_bestart_final() -> PgResult<()> {
 }
 
 fn pgstat_beshutdown_hook(_code: i32, _arg: usize) {
-    let Some(beentry) = MY_BE_ENTRY.get() else { return };
+    let Some(beentry) = MY_BE_ENTRY.get() else {
+        return;
+    };
     begin_write_activity(beentry);
     beentry.st_procpid.set(0);
     end_write_activity(beentry);
@@ -488,7 +506,9 @@ fn pgstat_beshutdown_hook(_code: i32, _arg: usize) {
 }
 
 pub fn pgstat_report_activity(state: BackendState, cmd_str: Option<&str>) {
-    let Some(beentry) = MY_BE_ENTRY.get() else { return };
+    let Some(beentry) = MY_BE_ENTRY.get() else {
+        return;
+    };
 
     if !track_activities() {
         if beentry.st_state.get() != BackendState::STATE_DISABLED {
@@ -501,7 +521,9 @@ pub fn pgstat_report_activity(state: BackendState, cmd_str: Option<&str>) {
             beentry.st_query_id.set(0);
             beentry.st_plan_id.set(0);
             if let Some(procno) = lmgr_proc::MyProc() {
-                lmgr_proc::GetPGProcByNumber(procno).wait_event_info.store(0, Relaxed);
+                lmgr_proc::GetPGProcByNumber(procno)
+                    .wait_event_info
+                    .store(0, Relaxed);
             }
             end_write_activity(beentry);
         }
@@ -518,8 +540,10 @@ pub fn pgstat_report_activity(state: BackendState, cmd_str: Option<&str>) {
         || prev_state == BackendState::STATE_IDLEINTRANSACTION_ABORTED)
         && state != prev_state
     {
-        let (secs, usecs) =
-            adt_timestamp::TimestampDifference(beentry.st_state_start_timestamp.get(), current_timestamp);
+        let (secs, usecs) = adt_timestamp::TimestampDifference(
+            beentry.st_state_start_timestamp.get(),
+            current_timestamp,
+        );
         let micros = secs * 1_000_000 + usecs as i64;
         if prev_state == BackendState::STATE_RUNNING || prev_state == BackendState::STATE_FASTPATH {
             pgstat::database::pgstat_count_conn_active_time(micros);
@@ -546,7 +570,9 @@ pub fn pgstat_report_activity(state: BackendState, cmd_str: Option<&str>) {
 }
 
 pub fn pgstat_report_query_id(query_id: i64, force: bool) {
-    let Some(beentry) = MY_BE_ENTRY.get() else { return };
+    let Some(beentry) = MY_BE_ENTRY.get() else {
+        return;
+    };
     if !track_activities() {
         return;
     }
@@ -560,7 +586,9 @@ pub fn pgstat_report_query_id(query_id: i64, force: bool) {
 }
 
 pub fn pgstat_report_plan_id(plan_id: i64, force: bool) {
-    let Some(beentry) = MY_BE_ENTRY.get() else { return };
+    let Some(beentry) = MY_BE_ENTRY.get() else {
+        return;
+    };
     if !track_activities() {
         return;
     }
@@ -573,7 +601,9 @@ pub fn pgstat_report_plan_id(plan_id: i64, force: bool) {
 }
 
 pub fn pgstat_report_appname(appname: &str) {
-    let Some(beentry) = MY_BE_ENTRY.get() else { return };
+    let Some(beentry) = MY_BE_ENTRY.get() else {
+        return;
+    };
     let len = mbutils::pg_mbcliplen(appname.as_bytes(), appname.len() as i32, NAMEDATALEN - 1);
     let mut name = [0u8; NAMELEN];
     name[..len as usize].copy_from_slice(&appname.as_bytes()[..len as usize]);
@@ -584,7 +614,9 @@ pub fn pgstat_report_appname(appname: &str) {
 }
 
 pub fn pgstat_report_xact_timestamp(tstamp: TimestampTz) {
-    let Some(beentry) = MY_BE_ENTRY.get() else { return };
+    let Some(beentry) = MY_BE_ENTRY.get() else {
+        return;
+    };
     if !track_activities() {
         return;
     }
@@ -602,7 +634,9 @@ pub fn pgstat_get_my_plan_id() -> i64 {
 }
 
 pub fn pgstat_get_backend_type_by_proc_number(procNumber: ProcNumber) -> BackendType {
-    backend_status_array()[procNumber as usize].st_backendType.get()
+    backend_status_array()[procNumber as usize]
+        .st_backendType
+        .get()
 }
 
 pub fn pgstat_get_backend_current_activity(pid: i32, check_user: bool) -> PgResult<String> {
@@ -645,7 +679,13 @@ pub fn pgstat_get_crashed_backend_activity(pid: i32) -> Option<String> {
             }
             let safe: String = raw
                 .iter()
-                .map(|&b| if (32..127).contains(&b) { b as char } else { '?' })
+                .map(|&b| {
+                    if (32..127).contains(&b) {
+                        b as char
+                    } else {
+                        '?'
+                    }
+                })
                 .collect();
             return Some(safe);
         }
@@ -742,8 +782,7 @@ fn pgstat_read_current_status() {
                 st_gss: beentry.st_gss.get(),
                 st_state: beentry.st_state.get(),
                 st_appname: name_to_string(&beentry.st_appname.get()),
-                st_activity_raw: String::from_utf8_lossy(&read_activity(beentry.slot))
-                    .into_owned(),
+                st_activity_raw: String::from_utf8_lossy(&read_activity(beentry.slot)).into_owned(),
                 st_progress_command: beentry.st_progress_command.get(),
                 st_progress_command_target: beentry.st_progress_command_target.get(),
                 st_progress_param: std::array::from_fn(|i| beentry.st_progress_param[i].get()),
@@ -786,8 +825,7 @@ pub fn pgstat_get_local_beentry_by_index(idx: i32) -> Option<LocalPgBackendStatu
     if idx < 1 {
         return None;
     }
-    LOCAL_BACKEND_STATUS_TABLE
-        .with(|t| t.borrow().as_ref().unwrap().get(idx as usize - 1).cloned())
+    LOCAL_BACKEND_STATUS_TABLE.with(|t| t.borrow().as_ref().unwrap().get(idx as usize - 1).cloned())
 }
 
 pub fn pgstat_get_beentry_by_proc_number(proc_number: ProcNumber) -> Option<LocalPgBackendStatus> {

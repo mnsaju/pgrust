@@ -11,12 +11,11 @@ use tcop_dest::DestReceiver;
 use tupdesc::{CreateTemplateTupleDesc, TupleDescInitBuiltinEntry, TupleDescInitEntry};
 use types_core::{Oid, TEXTOID};
 use types_error::{
-    ErrorLevel, PgResult, ERRCODE_INVALID_PARAMETER_VALUE, ERRCODE_INVALID_TRANSACTION_STATE,
-    ERROR,
+    ErrorLevel, PgResult, ERRCODE_INVALID_PARAMETER_VALUE, ERRCODE_INVALID_TRANSACTION_STATE, ERROR,
 };
 use types_guc::{
     GucContext, GUC_LIST_INPUT, GUC_LIST_QUOTE, GUC_NO_SHOW_ALL, GUC_SUPERUSER_ONLY, PGC_SUSET,
-    PGC_USERSET, PGC_S_SESSION,
+    PGC_S_SESSION, PGC_USERSET,
 };
 use types_nodes::node_tree::Node;
 use types_nodes::parsenodes::{VariableSetKind, VariableSetStmt};
@@ -44,11 +43,19 @@ fn unported(what: &str) -> ! {
 }
 
 fn suset_or_userset() -> PgResult<GucContext> {
-    Ok(if superuser::superuser()? { PGC_SUSET } else { PGC_USERSET })
+    Ok(if superuser::superuser()? {
+        PGC_SUSET
+    } else {
+        PGC_USERSET
+    })
 }
 
 fn set_config_option_session(name: &str, value: Option<&str>, is_local: bool) -> PgResult<()> {
-    let action = if is_local { GUC_ACTION_LOCAL } else { GUC_ACTION_SET };
+    let action = if is_local {
+        GUC_ACTION_LOCAL
+    } else {
+        GUC_ACTION_SET
+    };
     guc::set_config_option(
         name,
         value,
@@ -193,7 +200,9 @@ pub fn flatten_set_variable_args(name: &str, args: &[Node<'_>]) -> PgResult<Opti
                 // ConstInterval argument for TIME ZONE: coerce to interval
                 // and back to normalize the value and apply the typmod.
                 let tn = type_name.unwrap();
-                let tn = tn.as_variant::<types_nodes::rawnodes::TypeName>().expect("TypeName");
+                let tn = tn
+                    .as_variant::<types_nodes::rawnodes::TypeName>()
+                    .expect("TypeName");
                 let ctx = mcx::MemoryContext::new("flatten SET interval");
                 let (typoid, typmod) = parse_utilcmd::typenameTypeIdAndMod(ctx.mcx(), None, tn)?;
                 debug_assert_eq!(typoid, types_core::INTERVALOID);

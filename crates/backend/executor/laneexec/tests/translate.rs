@@ -27,7 +27,13 @@ const F_TEXTNE: u32 = 157;
 const F_TEXTICLIKE: u32 = 1633;
 
 fn cmp_clause(col: u16, fn_oid: u32, commuted: bool, rhs: LaneCmpRhs) -> LaneClause {
-    LaneClause::Cmp(LaneCmpClause { col, fn_oid, commuted, collation: 0, rhs })
+    LaneClause::Cmp(LaneCmpClause {
+        col,
+        fn_oid,
+        commuted,
+        collation: 0,
+        rhs,
+    })
 }
 
 fn text_clause(col: u16, fn_oid: u32, commuted: bool, pat: &[u8]) -> LaneClause {
@@ -55,7 +61,11 @@ fn shape(clauses: Vec<LaneClause>, suffix: LaneSuffix) -> LaneQualShape {
         })
         .max()
         .unwrap_or(0);
-    LaneQualShape { clauses, max_attnum, suffix }
+    LaneQualShape {
+        clauses,
+        max_attnum,
+        suffix,
+    }
 }
 
 // Leaked inline 4B-U text image (test fixture lifetime).
@@ -106,7 +116,11 @@ fn comparator_whitelist_families() {
     ];
     for &(oid, plain, commuted) in cases {
         assert_eq!(lane_cmp_for_fn_oid(oid, false), Some(plain), "oid {oid}");
-        assert_eq!(lane_cmp_for_fn_oid(oid, true), Some(commuted), "oid {oid} commuted");
+        assert_eq!(
+            lane_cmp_for_fn_oid(oid, true),
+            Some(commuted),
+            "oid {oid} commuted"
+        );
     }
     // Not whitelisted: textlike, int4pl, unknown.
     assert_eq!(lane_cmp_for_fn_oid(850, false), None);
@@ -173,7 +187,9 @@ fn ne_translates_and_evals_with_nulls() {
     assert_eq!(lq.nclauses, 2);
     assert_eq!(lq.nstaged(), 2);
     for k in 0..2 {
-        let zs = lq.staged_zone_src(k).expect("single-col ne folds a zone src");
+        let zs = lq
+            .staged_zone_src(k)
+            .expect("single-col ne folds a zone src");
         assert!(zs.fn_oid == F_INT4NE || zs.fn_oid == F_INT8NE);
     }
     let mut soa = SoaBatch::new_in(mcx, 2);
@@ -206,7 +222,12 @@ fn ne_translates_and_evals_with_nulls() {
 #[test]
 fn leading_unknown_oid_refuses() {
     let s = shape(
-        vec![cmp_clause(0, 177, false, LaneCmpRhs::Const(Datum::from_i32(1)))],
+        vec![cmp_clause(
+            0,
+            177,
+            false,
+            LaneCmpRhs::Const(Datum::from_i32(1)),
+        )],
         LaneSuffix::None,
     );
     assert!(translate_scan_qual(&s, false).is_err());
@@ -216,13 +237,23 @@ fn leading_unknown_oid_refuses() {
 fn hybrid_gate_one_clause_opaque_tail_refuses() {
     // 1-clause prefix + opaque (assumed-volatile) tail: below the gate.
     let s = shape(
-        vec![cmp_clause(0, F_INT4GT, false, LaneCmpRhs::Const(Datum::from_i32(5)))],
+        vec![cmp_clause(
+            0,
+            F_INT4GT,
+            false,
+            LaneCmpRhs::Const(Datum::from_i32(5)),
+        )],
         LaneSuffix::Opaque,
     );
     assert!(translate_scan_qual(&s, false).is_err());
     // Calls tail without a pg_proc seam: unknown volatility = volatile.
     let s = shape(
-        vec![cmp_clause(0, F_INT4GT, false, LaneCmpRhs::Const(Datum::from_i32(5)))],
+        vec![cmp_clause(
+            0,
+            F_INT4GT,
+            false,
+            LaneCmpRhs::Const(Datum::from_i32(5)),
+        )],
         LaneSuffix::Calls(vec![177]),
     );
     assert!(translate_scan_qual(&s, false).is_err());
@@ -265,7 +296,10 @@ fn no_suffix_no_requal() {
     let s = shape(
         vec![
             cmp_clause(0, F_INT4GT, false, LaneCmpRhs::Const(Datum::from_i32(5))),
-            LaneClause::NullTest { col: 1, want_null: false },
+            LaneClause::NullTest {
+                col: 1,
+                want_null: false,
+            },
         ],
         LaneSuffix::None,
     );
@@ -286,15 +320,25 @@ fn eval_parity_full_vocabulary() {
     let mcx = ctx.mcx();
     let elems: Vec<NullableDatum> = [2i32, 7, 9]
         .iter()
-        .map(|&v| NullableDatum { value: Datum::from_i32(v), isnull: false })
+        .map(|&v| NullableDatum {
+            value: Datum::from_i32(v),
+            isnull: false,
+        })
         .collect();
     let s = shape(
         vec![
             cmp_clause(0, F_INT4GT, false, LaneCmpRhs::Const(Datum::from_i32(5))),
             // b8 < a spelled as int48gt commuted? Use var-var: a int48gt b8.
             cmp_clause(0, F_INT48GT, false, LaneCmpRhs::Col(1)),
-            LaneClause::InList { col: 0, fn_oid: F_INT4EQ, elems },
-            LaneClause::NullTest { col: 2, want_null: false },
+            LaneClause::InList {
+                col: 0,
+                fn_oid: F_INT4EQ,
+                elems,
+            },
+            LaneClause::NullTest {
+                col: 2,
+                want_null: false,
+            },
             LaneClause::BoolVar { col: 3 },
         ],
         LaneSuffix::None,
@@ -306,7 +350,9 @@ fn eval_parity_full_vocabulary() {
     let mut soa = SoaBatch::new_in(mcx, 4);
     let mut state = 0x9e37_79b9_u64;
     let mut rnd = move || {
-        state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        state = state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         (state >> 33) as i64
     };
     for win in 0..2 {
@@ -332,11 +378,8 @@ fn eval_parity_full_vocabulary() {
         let mut sel = [0u64; SOA_BM_WORDS];
         eval_lane_qual(&mut lq, &soa, n as u32, &mut sel).unwrap();
         for (i, &(a, b8, c_null, d_null, d)) in rows.iter().enumerate() {
-            let want = a > 5
-                && (a as i64) > b8
-                && [2, 7, 9].contains(&a)
-                && !c_null
-                && (!d_null && d);
+            let want =
+                a > 5 && (a as i64) > b8 && [2, 7, 9].contains(&a) && !c_null && (!d_null && d);
             assert_eq!(bm_contains(&sel, i), want, "win {win} row {i}: {rows:?}");
         }
     }
@@ -351,29 +394,41 @@ fn staged_order_and_zone_srcs() {
     // null < eq < range < in-list < dict LIKE, ties by original position.
     let elems: Vec<NullableDatum> = [1i32, 2]
         .iter()
-        .map(|&v| NullableDatum { value: Datum::from_i32(v), isnull: false })
+        .map(|&v| NullableDatum {
+            value: Datum::from_i32(v),
+            isnull: false,
+        })
         .collect();
     let s = shape(
         vec![
             text_clause(4, F_TEXTLIKE, false, b"%ab%"),
             cmp_clause(0, F_INT4LT, false, LaneCmpRhs::Const(Datum::from_i32(3))),
             cmp_clause(1, F_INT4EQ, false, LaneCmpRhs::Const(Datum::from_i32(7))),
-            LaneClause::NullTest { col: 2, want_null: true },
-            LaneClause::InList { col: 0, fn_oid: F_INT4EQ, elems },
+            LaneClause::NullTest {
+                col: 2,
+                want_null: true,
+            },
+            LaneClause::InList {
+                col: 0,
+                fn_oid: F_INT4EQ,
+                elems,
+            },
         ],
         LaneSuffix::None,
     );
     let lq = translate_scan_qual(&s, true).expect("dict qual engages");
     assert_eq!(lq.ndict(), 1);
     assert_eq!(lq.nstaged(), 5);
-    let staged_first_cols: Vec<u16> =
-        (0..lq.nstaged()).map(|k| lq.staged_cols(k)[0]).collect();
+    let staged_first_cols: Vec<u16> = (0..lq.nstaged()).map(|k| lq.staged_cols(k)[0]).collect();
     // null(c=2), eq(c=1), lt(c=0), inlist(c=0), dict like(c=4).
     assert_eq!(staged_first_cols, vec![2, 1, 0, 0, 4]);
     // Zone srcs: only the single-column Var CMP Const int clauses fold.
     assert!(lq.staged_zone_src(0).is_none(), "null test never folds");
     let eq_src = lq.staged_zone_src(1).expect("eq clause folds");
-    assert_eq!((eq_src.col, eq_src.fn_oid, eq_src.commuted), (1, F_INT4EQ, false));
+    assert_eq!(
+        (eq_src.col, eq_src.fn_oid, eq_src.commuted),
+        (1, F_INT4EQ, false)
+    );
     assert_eq!(eq_src.konst.as_i32(), 7);
     let lt_src = lq.staged_zone_src(2).expect("lt clause folds");
     assert_eq!((lt_src.col, lt_src.fn_oid), (0, F_INT4LT));
@@ -416,7 +471,10 @@ fn eval_staged_conjunction_matches_eval_lane_qual() {
         vec![
             cmp_clause(0, F_INT4GT, false, LaneCmpRhs::Const(Datum::from_i32(2))),
             cmp_clause(1, F_INT8LT, false, LaneCmpRhs::Const(Datum::from_i64(50))),
-            LaneClause::NullTest { col: 2, want_null: false },
+            LaneClause::NullTest {
+                col: 2,
+                want_null: false,
+            },
         ],
         LaneSuffix::None,
     );
@@ -467,8 +525,15 @@ impl DictFixture {
                 v
             })
             .collect();
-        let datums = images.iter().map(|i| Datum::from_usize(i.as_ptr() as usize)).collect();
-        DictFixture { _images: images, datums, codes: codes.to_vec() }
+        let datums = images
+            .iter()
+            .map(|i| Datum::from_usize(i.as_ptr() as usize))
+            .collect();
+        DictFixture {
+            _images: images,
+            datums,
+            codes: codes.to_vec(),
+        }
     }
 
     fn lane(&self, epoch: u64, sorted: bool) -> SoaDictLane {
@@ -552,7 +617,10 @@ fn dict_like_joins_prefix_and_memo_parity() {
 fn dict_sorted_prefix_uses_code_range() {
     let ctx = MemoryContext::new("lane-dict-range");
     let mcx = ctx.mcx();
-    let s = shape(vec![text_clause(0, F_TEXTLIKE, false, b"ab%")], LaneSuffix::None);
+    let s = shape(
+        vec![text_clause(0, F_TEXTLIKE, false, b"ab%")],
+        LaneSuffix::None,
+    );
     let mut lq = translate_scan_qual(&s, true).expect("leading dict clause");
     // Byte-sorted dictionary; matching prefix run is [ab, abz].
     let strings: [&[u8]; 5] = [b"aa", b"ab", b"abz", b"ac", b"b"];
@@ -587,7 +655,12 @@ fn dict_raw_window_fallback_and_negations() {
     );
     let mut lq = translate_scan_qual(&s, true).expect("all three join the dict tier");
     assert_eq!(lq.ndict(), 3);
-    let rows: [(&[u8], bool); 4] = [(b"aa", false), (b"ab", false), (b"aa", true), (b"zz", false)];
+    let rows: [(&[u8], bool); 4] = [
+        (b"aa", false),
+        (b"ab", false),
+        (b"aa", true),
+        (b"zz", false),
+    ];
     let mut soa = SoaBatch::new_in(mcx, 1);
     soa.set_dict_want(0);
     soa.begin(rows.len() as u32);
@@ -614,11 +687,17 @@ fn dict_raw_window_fallback_and_negations() {
 #[test]
 fn dict_refusals_fail_closed() {
     // Commuted LIKE (column is the pattern): leading clause -> hard refusal.
-    let s = shape(vec![text_clause(0, F_TEXTLIKE, true, b"abc")], LaneSuffix::None);
+    let s = shape(
+        vec![text_clause(0, F_TEXTLIKE, true, b"abc")],
+        LaneSuffix::None,
+    );
     assert!(translate_scan_qual(&s, true).is_err());
 
     // Pattern ending in an escape: production errors per row; refuse.
-    let s = shape(vec![text_clause(0, F_TEXTLIKE, false, b"%ab\\")], LaneSuffix::None);
+    let s = shape(
+        vec![text_clause(0, F_TEXTLIKE, false, b"%ab\\")],
+        LaneSuffix::None,
+    );
     assert!(translate_scan_qual(&s, true).is_err());
 
     // Invalid collation (0): generic_match_text errors; refuse.
@@ -645,7 +724,10 @@ fn dict_refusals_fail_closed() {
     assert!(translate_scan_qual(&s, true).is_err());
 
     // Heap scans (dict_lanes=false) never admit text clauses.
-    let s = shape(vec![text_clause(0, F_TEXTLIKE, false, b"%ab%")], LaneSuffix::None);
+    let s = shape(
+        vec![text_clause(0, F_TEXTLIKE, false, b"%ab%")],
+        LaneSuffix::None,
+    );
     assert!(translate_scan_qual(&s, false).is_err());
 }
 
@@ -655,7 +737,10 @@ fn underscore_pattern_admits_without_kernel() {
     let mcx = ctx.mcx();
     // 'a_c' classifies no byte kernel but stays dict-memoizable through the
     // production match_text per distinct code.
-    let s = shape(vec![text_clause(0, F_TEXTLIKE, false, b"a_c")], LaneSuffix::None);
+    let s = shape(
+        vec![text_clause(0, F_TEXTLIKE, false, b"a_c")],
+        LaneSuffix::None,
+    );
     let mut lq = translate_scan_qual(&s, true).expect("scalar-predicate dict clause");
     let strings: [&[u8]; 3] = [b"abc", b"ac", b"axc"];
     let codes = vec![0u32, 1, 2, 0];
@@ -759,8 +844,7 @@ fn condcache_fingerprint_ignores_requal_tail() {
             cmp_clause(1, F_INT4LT, false, LaneCmpRhs::Const(Datum::from_i32(9))),
         ]
     };
-    let plain = translate_scan_qual(&shape(prefix(), LaneSuffix::None), true)
-        .expect("translates");
+    let plain = translate_scan_qual(&shape(prefix(), LaneSuffix::None), true).expect("translates");
     let tailed = translate_scan_qual(&shape(prefix(), LaneSuffix::Opaque), true)
         .expect("hybrid engages at prefix >= 2");
     assert!(tailed.requal && !plain.requal);

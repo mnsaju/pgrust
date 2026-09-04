@@ -16,8 +16,7 @@ mod tests;
 pub use startup::{init_seams, StartupReorderBuffer};
 pub use toast::ReorderBufferToastEnt;
 pub use visibility::{
-    ResolveCminCmaxDuringDecoding, ReorderBufferTupleCidEnt, ReorderBufferTupleCidKey,
-    TupleCidHash,
+    ReorderBufferTupleCidEnt, ReorderBufferTupleCidKey, ResolveCminCmaxDuringDecoding, TupleCidHash,
 };
 
 use std::any::Any;
@@ -139,7 +138,10 @@ pub(crate) struct Links {
 
 impl Default for Links {
     fn default() -> Self {
-        Links { prev: INVALID_ID, next: INVALID_ID }
+        Links {
+            prev: INVALID_ID,
+            next: INVALID_ID,
+        }
     }
 }
 
@@ -150,7 +152,10 @@ pub(crate) struct ListHead {
 }
 
 impl ListHead {
-    pub(crate) const EMPTY: ListHead = ListHead { head: INVALID_ID, tail: INVALID_ID };
+    pub(crate) const EMPTY: ListHead = ListHead {
+        head: INVALID_ID,
+        tail: INVALID_ID,
+    };
 
     pub(crate) fn is_empty(self) -> bool {
         self.head == INVALID_ID
@@ -414,15 +419,23 @@ pub struct ReorderBufferCallbacks {
     pub stream_prepare: Option<fn(&mut ReorderBuffer, TxnId, XLogRecPtr) -> PgResult<()>>,
     pub stream_commit: Option<fn(&mut ReorderBuffer, TxnId, XLogRecPtr) -> PgResult<()>>,
     pub stream_change: Option<
-        fn(&mut ReorderBuffer, TxnId, &RelationData<'static>, &mut ReorderBufferChange)
-            -> PgResult<()>,
+        fn(
+            &mut ReorderBuffer,
+            TxnId,
+            &RelationData<'static>,
+            &mut ReorderBufferChange,
+        ) -> PgResult<()>,
     >,
     pub stream_message: Option<
         fn(&mut ReorderBuffer, Option<TxnId>, XLogRecPtr, bool, &str, &[u8]) -> PgResult<()>,
     >,
     pub stream_truncate: Option<
-        fn(&mut ReorderBuffer, TxnId, &[Rc<RelationData<'static>>], &mut ReorderBufferChange)
-            -> PgResult<()>,
+        fn(
+            &mut ReorderBuffer,
+            TxnId,
+            &[Rc<RelationData<'static>>],
+            &mut ReorderBufferChange,
+        ) -> PgResult<()>,
     >,
     pub update_progress_txn: fn(&mut ReorderBuffer, TxnId, XLogRecPtr) -> PgResult<()>,
 }
@@ -717,8 +730,9 @@ impl ReorderBuffer {
                 prev_first_lsn = cur.first_lsn;
             }
             let mut prev_base_snap_lsn = InvalidXLogRecPtr;
-            for id in dl_iter(&self.txns, self.txns_by_base_snapshot_lsn, |t| t.base_snapshot_node)
-            {
+            for id in dl_iter(&self.txns, self.txns_by_base_snapshot_lsn, |t| {
+                t.base_snapshot_node
+            }) {
                 let cur = self.txn(id);
                 debug_assert!(cur.base_snapshot.is_some());
                 debug_assert!(cur.base_snapshot_lsn != InvalidXLogRecPtr);
@@ -826,7 +840,9 @@ impl ReorderBuffer {
             if self.txn(txn).base_snapshot.is_some() {
                 self.txn_mut(txn).base_snapshot = None;
                 let mut list = self.txns_by_base_snapshot_lsn;
-                dl_delete(&mut self.txns, &mut list, txn, |t| &mut t.base_snapshot_node);
+                dl_delete(&mut self.txns, &mut list, txn, |t| {
+                    &mut t.base_snapshot_node
+                });
                 self.txns_by_base_snapshot_lsn = list;
             }
             let snap = self.txn_mut(subtxn).base_snapshot.take();
@@ -836,14 +852,18 @@ impl ReorderBuffer {
             dl_insert_before(&mut self.txns, &mut list, subtxn, txn, |t| {
                 &mut t.base_snapshot_node
             });
-            dl_delete(&mut self.txns, &mut list, subtxn, |t| &mut t.base_snapshot_node);
+            dl_delete(&mut self.txns, &mut list, subtxn, |t| {
+                &mut t.base_snapshot_node
+            });
             self.txns_by_base_snapshot_lsn = list;
             self.txn_mut(subtxn).base_snapshot_lsn = InvalidXLogRecPtr;
         } else {
             self.txn_mut(subtxn).base_snapshot = None;
             self.txn_mut(subtxn).base_snapshot_lsn = InvalidXLogRecPtr;
             let mut list = self.txns_by_base_snapshot_lsn;
-            dl_delete(&mut self.txns, &mut list, subtxn, |t| &mut t.base_snapshot_node);
+            dl_delete(&mut self.txns, &mut list, subtxn, |t| {
+                &mut t.base_snapshot_node
+            });
             self.txns_by_base_snapshot_lsn = list;
         }
     }
@@ -909,7 +929,12 @@ impl ReorderBuffer {
         self.callbacks.stream_start.is_some()
     }
 
-    fn process_partial_change(&mut self, txn: TxnId, cid: ChangeId, toast_insert: bool) -> PgResult<()> {
+    fn process_partial_change(
+        &mut self,
+        txn: TxnId,
+        cid: ChangeId,
+        toast_insert: bool,
+    ) -> PgResult<()> {
         if !self.can_stream() {
             return Ok(());
         }
@@ -917,7 +942,10 @@ impl ReorderBuffer {
         let action = self.change(cid).action;
         let clear_toast = matches!(
             self.change(cid).data,
-            ReorderBufferChangeData::Tp { clear_toast_afterwards: true, .. }
+            ReorderBufferChangeData::Tp {
+                clear_toast_afterwards: true,
+                ..
+            }
         );
 
         if toast_insert {
@@ -995,7 +1023,12 @@ impl ReorderBuffer {
         }
     }
 
-    pub fn add_snapshot(&mut self, xid: TransactionId, lsn: XLogRecPtr, snap: Snapshot) -> PgResult<()> {
+    pub fn add_snapshot(
+        &mut self,
+        xid: TransactionId,
+        lsn: XLogRecPtr,
+        snap: Snapshot,
+    ) -> PgResult<()> {
         let change =
             ReorderBufferChange::new(InternalSnapshot, ReorderBufferChangeData::Snapshot(snap));
         self.queue_change(xid, lsn, change, false)
@@ -1015,7 +1048,9 @@ impl ReorderBuffer {
         self.txn_mut(txn).base_snapshot = Some(snap);
         self.txn_mut(txn).base_snapshot_lsn = lsn;
         let mut list = self.txns_by_base_snapshot_lsn;
-        dl_push_tail(&mut self.txns, &mut list, txn, |t| &mut t.base_snapshot_node);
+        dl_push_tail(&mut self.txns, &mut list, txn, |t| {
+            &mut t.base_snapshot_node
+        });
         self.txns_by_base_snapshot_lsn = list;
         self.assert_txn_lsn_order();
     }
@@ -1046,7 +1081,13 @@ impl ReorderBuffer {
 
         let mut change = ReorderBufferChange::new(
             InternalTupleCid,
-            ReorderBufferChangeData::TupleCid { locator, tid, cmin, cmax, combocid },
+            ReorderBufferChangeData::TupleCid {
+                locator,
+                tid,
+                cmin,
+                cmax,
+                combocid,
+            },
         );
         change.lsn = lsn;
         change.txn = txn;
@@ -1067,7 +1108,9 @@ impl ReorderBuffer {
         invals.extend_from_slice(msgs);
         let change = ReorderBufferChange::new(
             Invalidation,
-            ReorderBufferChangeData::Inval { invalidations: invals },
+            ReorderBufferChangeData::Inval {
+                invalidations: invals,
+            },
         );
         self.queue_change(xid, lsn, change, false)
     }
@@ -1135,11 +1178,10 @@ impl ReorderBuffer {
     }
 
     pub fn get_catalog_changes_xacts(&self) -> Vec<TransactionId> {
-        let mut xids: Vec<TransactionId> = dl_iter(&self.txns, self.catchange_txns, |t| {
-            t.catchange_node
-        })
-        .map(|id| self.txn(id).xid)
-        .collect();
+        let mut xids: Vec<TransactionId> =
+            dl_iter(&self.txns, self.catchange_txns, |t| t.catchange_node)
+                .map(|id| self.txn(id).xid)
+                .collect();
         debug_assert_eq!(xids.len(), self.catchange_count);
         // xidComparator: plain uint32 order.
         xids.sort_unstable();
@@ -1231,7 +1273,13 @@ impl ReorderBuffer {
 
         let (final_lsn, end_lsn, prepare_time, origin_id, origin_lsn) = {
             let t = self.txn(txn);
-            (t.final_lsn, t.end_lsn, t.xact_time, t.origin_id, t.origin_lsn)
+            (
+                t.final_lsn,
+                t.end_lsn,
+                t.xact_time,
+                t.origin_id,
+                t.origin_lsn,
+            )
         };
         self.replay(txn, final_lsn, end_lsn, prepare_time, origin_id, origin_lsn)?;
 
@@ -1290,7 +1338,13 @@ impl ReorderBuffer {
             // downstream gets accurate positions (not the commit record's).
             let (final_lsn, p_end_lsn, p_time, p_origin_id, p_origin_lsn) = {
                 let t = self.txn(txn);
-                (t.final_lsn, t.end_lsn, t.xact_time, t.origin_id, t.origin_lsn)
+                (
+                    t.final_lsn,
+                    t.end_lsn,
+                    t.xact_time,
+                    t.origin_id,
+                    t.origin_lsn,
+                )
             };
             self.replay(txn, final_lsn, p_end_lsn, p_time, p_origin_id, p_origin_lsn)?;
         }

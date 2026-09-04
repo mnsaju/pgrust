@@ -1,4 +1,6 @@
-use crate::common::{copy_special_str, log10_pow2, log10_pow5, pow5bits, DIGIT_TABLE, STRICTLY_SHORTEST};
+use crate::common::{
+    copy_special_str, log10_pow2, log10_pow5, pow5bits, DIGIT_TABLE, STRICTLY_SHORTEST,
+};
 
 const FLOAT_MANTISSA_BITS: u32 = 23;
 const FLOAT_EXPONENT_BITS: u32 = 8;
@@ -193,7 +195,11 @@ fn f2d(ieee_mantissa: u32, ieee_exponent: u32) -> FloatingDecimal32 {
         m2 = (1u32 << FLOAT_MANTISSA_BITS) | ieee_mantissa;
     }
 
-    let accept_bounds = if STRICTLY_SHORTEST { (m2 & 1) == 0 } else { false };
+    let accept_bounds = if STRICTLY_SHORTEST {
+        (m2 & 1) == 0
+    } else {
+        false
+    };
 
     let mv = 4 * m2;
     let mp = 4 * m2 + 2;

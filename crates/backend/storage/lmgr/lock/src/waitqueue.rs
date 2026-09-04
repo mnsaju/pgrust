@@ -13,11 +13,11 @@ use types_storage::storage::{
 use types_storage::waiteventset::{WL_EXIT_ON_PM_DEATH, WL_LATCH_SET};
 
 use crate::locallock::{awaited_lock, set_awaited_lock, with_local};
+use crate::my_procno;
 use crate::shared::{
     lock_check_conflicts_raw, CleanUpLock, LockHashPartitionLock, LockHashPartitionLockByIndex,
     LockTagHashCode,
 };
-use crate::my_procno;
 
 const PG_WAIT_LOCK: u32 = 0x0300_0000;
 
@@ -49,10 +49,7 @@ unsafe fn wq_push_tail(lock: *mut LOCK, procno: ProcNumber) {
 unsafe fn wq_insert_before(lock: *mut LOCK, procno: ProcNumber, before: ProcNumber) {
     let q = &mut (*lock).waitProcs;
     let prev = links_of(before).get().prev;
-    links_of(procno).set(proclist_node {
-        prev,
-        next: before,
-    });
+    links_of(procno).set(proclist_node { prev, next: before });
     if prev == INVALID_PROC_NUMBER {
         q.list.head = procno;
     } else {
@@ -172,13 +169,7 @@ pub(crate) unsafe fn JoinWaitQueue(
                     return false;
                 }
                 if lockMethodTable.conflictTab[lockmode as usize] & ahead_requests == 0
-                    && !lock_check_conflicts_raw(
-                        lockMethodTable,
-                        lockmode,
-                        lock,
-                        proclock,
-                        procno,
-                    )
+                    && !lock_check_conflicts_raw(lockMethodTable, lockmode, lock, proclock, procno)
                 {
                     crate::shared::grant_lock_raw(lock, proclock, lockmode);
                     granted_instead = true;
@@ -267,8 +258,8 @@ pub fn ProcSleep(localtag: &LOCALLOCKTAG) -> PgResult<ProcWaitStatus> {
     // conflict path breaks its wakeup and deadlock detection (031 case 5:
     // the cursor session's table2 wait hung 120s and the buffer-pin deadlock
     // never got the chance to resolve).
-    let in_hot_standby = xlogutils_seams::in_hot_standby::is_installed()
-        && xlogutils_seams::in_hot_standby::call();
+    let in_hot_standby =
+        xlogutils_seams::in_hot_standby::is_installed() && xlogutils_seams::in_hot_standby::call();
     let standby_wait_start: i64 = if in_hot_standby {
         if guc_tables::vars::log_recovery_conflict_waits.installed()
             && guc_tables::vars::log_recovery_conflict_waits.read()
@@ -306,9 +297,9 @@ pub fn ProcSleep(localtag: &LOCALLOCKTAG) -> PgResult<ProcWaitStatus> {
         // Reuse the timer's start time as waitStart; written without the
         // partition lock (pg_locks may transiently see null waitstart).
         proc.waitStart
-            .write(timeout_seams::get_timeout_start_time::call(
-                timeout_seams::DEADLOCK_TIMEOUT,
-            ) as u64);
+            .write(
+                timeout_seams::get_timeout_start_time::call(timeout_seams::DEADLOCK_TIMEOUT) as u64,
+            );
     }
 
     let my_wait_status = loop {
@@ -431,9 +422,8 @@ fn cancel_blocking_autovacuum(lock: *mut LOCK, lockmode: LOCKMODE) -> PgResult<(
     // a for-wraparound vacuum is canceled.
     let proc_array_lock = lwlock::main_lock(PROC_ARRAY_LOCK);
     lwlock::LWLockAcquire(proc_array_lock, lwlock::LW_EXCLUSIVE, my_procno())?;
-    let status_flags = lmgr_proc::ProcGlobal().statusFlags
-        [autovac.pgxactoff.load(Relaxed) as usize]
-        .load(Relaxed);
+    let status_flags =
+        lmgr_proc::ProcGlobal().statusFlags[autovac.pgxactoff.load(Relaxed) as usize].load(Relaxed);
     // SAFETY: `lock` is the LOCK we wait on; its tag is immutable while our
     // request keeps it pinned.
     let (lockmethod_copy, locktag_copy) =
@@ -629,7 +619,11 @@ pub fn RemoveFromWaitQueue(procno: ProcNumber, hashcode: u32) {
 pub fn CheckDeadLock() -> PgResult<()> {
     let procno = my_procno();
     for i in 0..NUM_LOCK_PARTITIONS as usize {
-        lwlock::LWLockAcquire(LockHashPartitionLockByIndex(i), lwlock::LW_EXCLUSIVE, procno)?;
+        lwlock::LWLockAcquire(
+            LockHashPartitionLockByIndex(i),
+            lwlock::LW_EXCLUSIVE,
+            procno,
+        )?;
     }
 
     let proc = lmgr_proc::GetPGProcByNumber(procno);
@@ -658,13 +652,7 @@ pub fn CheckDeadLock() -> PgResult<()> {
 /// The lock's partition lock must be held.
 pub fn GetLockHoldersAndWaiters(localtag: &LOCALLOCKTAG, hashcode: u32) -> (String, String, i32) {
     debug_assert!(lwlock::LWLockHeldByMe(LockHashPartitionLock(hashcode)));
-    let lock = with_local(|state| {
-        state
-            .table
-            .get(localtag)
-            .expect("missing LOCALLOCK")
-            .lock
-    });
+    let lock = with_local(|state| state.table.get(localtag).expect("missing LOCALLOCK").lock);
     let mut holders = String::new();
     let mut waiters = String::new();
     let mut holders_num = 0;
@@ -675,7 +663,11 @@ pub fn GetLockHoldersAndWaiters(localtag: &LOCALLOCKTAG, hashcode: u32) -> (Stri
             let owner = lmgr_proc::GetPGProcByNumber((*proclock).tag.myProc);
             let pid = owner.pid.load(Relaxed);
             let is_waiter = owner.waitProcLock.get() == proclock;
-            let buf = if is_waiter { &mut waiters } else { &mut holders };
+            let buf = if is_waiter {
+                &mut waiters
+            } else {
+                &mut holders
+            };
             if !buf.is_empty() {
                 buf.push_str(", ");
             }

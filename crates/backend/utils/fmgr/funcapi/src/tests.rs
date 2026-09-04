@@ -259,7 +259,10 @@ fn out_params_build_record_tupdesc() {
     // Unnamed OUT column gins up "column2" (build_function_result_tupdesc_d).
     assert_eq!(desc.attr(1).attname.name_str(), b"column2");
     assert_eq!(desc.attr(1).atttypid, TEXTOID);
-    assert_eq!(desc.tdtypmod, 42, "assign_record_type_typmod stamped the typmod");
+    assert_eq!(
+        desc.tdtypmod, 42,
+        "assign_record_type_typmod stamped the typmod"
+    );
 }
 
 #[test]
@@ -299,15 +302,26 @@ fn missing_function_errors() {
     install_seams();
     let ctx = MemoryContext::new("t");
     let err = get_func_result_type(ctx.mcx(), 999999).unwrap_err();
-    assert!(err.message().contains("cache lookup failed for function 999999"));
+    assert!(err
+        .message()
+        .contains("cache lookup failed for function 999999"));
 }
 
 #[test]
 fn get_type_func_class_pseudo_scalars() {
     install_seams();
-    assert_eq!(get_type_func_class(VOIDOID).unwrap().0, TypeFuncClass::Scalar);
-    assert_eq!(get_type_func_class(CSTRINGOID).unwrap().0, TypeFuncClass::Scalar);
-    assert_eq!(get_type_func_class(RECORDOID).unwrap().0, TypeFuncClass::Record);
+    assert_eq!(
+        get_type_func_class(VOIDOID).unwrap().0,
+        TypeFuncClass::Scalar
+    );
+    assert_eq!(
+        get_type_func_class(CSTRINGOID).unwrap().0,
+        TypeFuncClass::Scalar
+    );
+    assert_eq!(
+        get_type_func_class(RECORDOID).unwrap().0,
+        TypeFuncClass::Record
+    );
 }
 
 #[test]
@@ -315,7 +329,9 @@ fn multi_func_call_lifecycle() {
     install_seams();
     let mut flinfo = flinfo_for(F_SCALAR);
     let mut fcinfo = LocalFcinfo::<0>::new(0);
-    let mut rsinfo = FmNode { tag: NodeTag::T_ReturnSetInfo as u32 };
+    let mut rsinfo = FmNode {
+        tag: NodeTag::T_ReturnSetInfo as u32,
+    };
     fcinfo.resultinfo = Some(core::ptr::NonNull::from(&mut rsinfo));
 
     let fctx = init_MultiFuncCall(&mut flinfo, &fcinfo).unwrap();
@@ -326,7 +342,15 @@ fn multi_func_call_lifecycle() {
     again.call_cntr += 1;
     assert_eq!(again.call_cntr, 1);
     assert_eq!(again.max_calls, 3);
-    assert_eq!(*again.user_fctx.as_ref().unwrap().downcast_ref::<i32>().unwrap(), 7);
+    assert_eq!(
+        *again
+            .user_fctx
+            .as_ref()
+            .unwrap()
+            .downcast_ref::<i32>()
+            .unwrap(),
+        7
+    );
 
     let err = init_MultiFuncCall(&mut flinfo, &fcinfo).unwrap_err();
     assert!(err.message().contains("cannot be called more than once"));
@@ -359,7 +383,7 @@ fn int4_pair_desc(mcx: Mcx<'_>) -> TupleDescData<'_> {
 
 #[test]
 fn materialized_srf_expected_desc_roundtrip() {
-    use ::fmgr::{SetFunctionReturnMode, SFRM_Materialize, SFRM_ValuePerCall};
+    use ::fmgr::{SFRM_Materialize, SFRM_ValuePerCall, SetFunctionReturnMode};
     install_seams();
     let ctx = MemoryContext::new("t");
     let mcx = ctx.mcx();
@@ -374,8 +398,10 @@ fn materialized_srf_expected_desc_roundtrip() {
     let mut srf =
         InitMaterializedSRF(mcx, &mut flinfo, &mut fcinfo, MAT_SRF_USE_EXPECTED_DESC).unwrap();
     assert_eq!(srf.tupdesc.natts, 2);
-    srf.putvalues(&[Datum::from_i32(1), Datum::from_i32(2)], &[false, false]).unwrap();
-    srf.putvalues(&[Datum::from_i32(3), Datum::from_i32(4)], &[false, true]).unwrap();
+    srf.putvalues(&[Datum::from_i32(1), Datum::from_i32(2)], &[false, false])
+        .unwrap();
+    srf.putvalues(&[Datum::from_i32(3), Datum::from_i32(4)], &[false, true])
+        .unwrap();
     let result = srf.finish(&mut fcinfo);
     assert_eq!(result.as_usize(), 0);
     assert!(!fcinfo.isnull);
@@ -451,8 +477,13 @@ fn materialized_srf_requires_materialize_mode() {
     let mut rsinfo = materialize_rsinfo(SFRM_ValuePerCall | SFRM_Materialize);
     let mut fcinfo = LocalFcinfo::<0>::new(InvalidOid);
     fcinfo.resultinfo = rsinfo.as_fmnode_ptr();
-    let err = InitMaterializedSRF(ctx.mcx(), &mut flinfo, &mut fcinfo, MAT_SRF_USE_EXPECTED_DESC)
-        .unwrap_err();
+    let err = InitMaterializedSRF(
+        ctx.mcx(),
+        &mut flinfo,
+        &mut fcinfo,
+        MAT_SRF_USE_EXPECTED_DESC,
+    )
+    .unwrap_err();
     assert!(err.message().contains("materialize mode required"));
 }
 
@@ -520,12 +551,14 @@ fn polymorphic_rettype_resolves_via_agg_carrier() {
     static CARRIER_ARGS: [Oid; 1] = [INT4OID];
     let carrier = ::mcx::alloc_leak_in(
         mcx,
-        types_core::fmgr::AggFnArgTypes { rettype: INT4OID, argtypes: &CARRIER_ARGS },
+        types_core::fmgr::AggFnArgTypes {
+            rettype: INT4OID,
+            argtypes: &CARRIER_ARGS,
+        },
     )
     .unwrap();
     // SAFETY: carrier is arena-backed and outlives the flinfo below.
-    flinfo.fn_expr =
-        Some(unsafe { types_core::fmgr::FnExprErased::from_node_ref(carrier) });
+    flinfo.fn_expr = Some(unsafe { types_core::fmgr::FnExprErased::from_node_ref(carrier) });
     assert_eq!(get_fn_expr_rettype(&flinfo), INT4OID);
     let r = get_call_result_type(mcx, &flinfo, None).unwrap();
     assert_eq!(r.class, TypeFuncClass::Scalar);

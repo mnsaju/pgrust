@@ -29,7 +29,13 @@ fn pull_varnos_collects_varnos_and_nullingrels() {
     nulling.add_member(mcx, 5).unwrap();
     let v2 = Node::mk(
         mcx,
-        Var { varno: 2, varattno: 1, vartype: 23, varnullingrels: nulling, ..Default::default() },
+        Var {
+            varno: 2,
+            varattno: 1,
+            vartype: 23,
+            varnullingrels: nulling,
+            ..Default::default()
+        },
     )
     .unwrap();
     let expr = Node::mk_list(mcx, NodeList::make2(mcx, v1, v2).unwrap()).unwrap();
@@ -44,8 +50,7 @@ fn pull_varnos_recurses_into_rte_subquery() {
     let mcx = ctx.mcx();
 
     // Inner query's tlist references an outer var (varlevelsup 1, varno 3).
-    let inner_te =
-        Node::mk_target_entry(mcx, var(mcx, 3, 1, 1), 1, None, false).unwrap();
+    let inner_te = Node::mk_target_entry(mcx, var(mcx, 3, 1, 1), 1, None, false).unwrap();
     let mut inner = Query::default();
     inner.targetList = NodeList::make1(mcx, inner_te).unwrap();
     inner.jointree = Some(Node::mk_mut(mcx, FromExpr::default()).unwrap().seal_ref());
@@ -96,12 +101,18 @@ fn pull_varnos_recurses_into_sublink_subselect() {
         },
     )
     .unwrap();
-    let expr = Node::mk_list(mcx, NodeList::make2(mcx, var(mcx, 1, 1, 0), sublink).unwrap())
-        .unwrap();
+    let expr = Node::mk_list(
+        mcx,
+        NodeList::make2(mcx, var(mcx, 1, 1, 0), sublink).unwrap(),
+    )
+    .unwrap();
 
     let varnos = pull_varnos(mcx, expr).unwrap();
     assert!(varnos.is_member(1), "top-level var");
-    assert!(varnos.is_member(2), "outer reference inside sublink subselect");
+    assert!(
+        varnos.is_member(2),
+        "outer reference inside sublink subselect"
+    );
     assert!(!varnos.is_member(7), "subselect-local var must be excluded");
     assert_eq!(varnos.num_members(), 2);
 }
@@ -142,7 +153,13 @@ fn contain_and_locate_vars() {
 
     let located = Node::mk(
         mcx,
-        Var { varno: 1, varattno: 1, vartype: 23, location: 42, ..Default::default() },
+        Var {
+            varno: 1,
+            varattno: 1,
+            vartype: 23,
+            location: 42,
+            ..Default::default()
+        },
     )
     .unwrap();
     let te = Node::mk_target_entry(mcx, located, 1, None, false).unwrap();

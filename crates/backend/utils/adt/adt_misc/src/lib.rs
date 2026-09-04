@@ -79,7 +79,9 @@ fn input_is_valid_common(
     // C text_to_cstring: an embedded NUL truncates the value.
     let cstr = CStr::from_bytes_until_nul(&buf).expect("NUL-terminated above");
 
-    let v = flinfo.fn_extra_mut::<ValidIOData>().expect("populated above");
+    let v = flinfo
+        .fn_extra_mut::<ValidIOData>()
+        .expect("populated above");
     let mut converted = Datum::null();
     input_function_call_safe(
         &mut v.inputproc,
@@ -92,11 +94,10 @@ fn input_is_valid_common(
     )
 }
 
-pub fn fc_pg_input_is_valid(
-    flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
-    let Some(flinfo) = flinfo else { null_flinfo("pg_input_is_valid") };
+pub fn fc_pg_input_is_valid(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+    let Some(flinfo) = flinfo else {
+        null_flinfo("pg_input_is_valid")
+    };
     let mut escontext = ErrorSaveNode::new(false);
     let ok = input_is_valid_common(flinfo, fcinfo, &mut escontext)?;
     Ok(Datum::from_bool(ok))
@@ -131,7 +132,9 @@ pub fn fc_pg_input_error_info(
     flinfo: Option<&mut FmgrInfo>,
     fcinfo: &mut Fcinfo,
 ) -> PgResult<Datum> {
-    let Some(flinfo) = flinfo else { null_flinfo("pg_input_error_info") };
+    let Some(flinfo) = flinfo else {
+        null_flinfo("pg_input_error_info")
+    };
     let mut escontext = ErrorSaveNode::new(true);
     let ok = input_is_valid_common(flinfo, fcinfo, &mut escontext)?;
 
@@ -140,12 +143,17 @@ pub fn fc_pg_input_error_info(
     if resolved.class != funcapi::TypeFuncClass::Composite {
         return Err(not_row_type());
     }
-    let tupdesc = resolved.result_tuple_desc.expect("composite result has tupdesc");
+    let tupdesc = resolved
+        .result_tuple_desc
+        .expect("composite result has tupdesc");
 
     let mut values = [Datum::null(); 4];
     let mut isnull = [true; 4];
     if !ok {
-        let err = escontext.ctx.take_error().expect("details_wanted saved the error");
+        let err = escontext
+            .ctx
+            .take_error()
+            .expect("details_wanted saved the error");
         values[0] = text_datum(mcx, err.message.as_bytes())?;
         isnull[0] = false;
         if let Some(detail) = &err.detail {
@@ -166,12 +174,8 @@ pub fn fc_pg_input_error_info(
     Ok(d)
 }
 
-
 // C `count_nulls` (misc.c); false = SQL NULL result (VARIADIC NULL array).
-fn count_nulls(
-    flinfo: Option<&FmgrInfo>,
-    fcinfo: &Fcinfo,
-) -> PgResult<Option<(i32, i32)>> {
+fn count_nulls(flinfo: Option<&FmgrInfo>, fcinfo: &Fcinfo) -> PgResult<Option<(i32, i32)>> {
     if funcapi::get_fn_expr_variadic(flinfo) {
         if fcinfo.argisnull(0) {
             return Ok(None);
@@ -223,7 +227,10 @@ pub fn fc_pg_num_nonnulls(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) ->
 
 pub fn fc_pg_typeof(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let _ = fcinfo;
-    Ok(Datum::from_oid(funcapi::get_fn_expr_argtype(flinfo.as_deref(), 0)))
+    Ok(Datum::from_oid(funcapi::get_fn_expr_argtype(
+        flinfo.as_deref(),
+        0,
+    )))
 }
 
 pub fn fc_current_query(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -303,7 +310,9 @@ pub fn fc_pg_collation_for(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -
         return Ok(fcinfo.return_null());
     }
     if !lsyscache::type_is_collatable(typeid)? && typeid != types_core::UNKNOWNOID {
-        return Err(collations_not_supported(format_type::format_type_be(typeid)?));
+        return Err(collations_not_supported(format_type::format_type_be(
+            typeid,
+        )?));
     }
     let collid = fcinfo.get_collation();
     if collid == types_core::InvalidOid {
@@ -315,11 +324,25 @@ pub fn fc_pg_collation_for(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 const fn bn(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: false, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: false,
+        retset: false,
+        func,
+    }
 }
 
 pub const MISC_BUILTINS: &[FmgrBuiltin] = &[
@@ -334,5 +357,10 @@ pub const MISC_BUILTINS: &[FmgrBuiltin] = &[
     b(6292, "any_value_transfn", 2, fc_any_value_transfn),
     b(6315, "pg_basetype", 1, fc_pg_basetype),
     bn(3162, "pg_collation_for", 1, fc_pg_collation_for),
-    b(2560, "pg_postmaster_start_time", 0, builtins::fc_pg_postmaster_start_time),
+    b(
+        2560,
+        "pg_postmaster_start_time",
+        0,
+        builtins::fc_pg_postmaster_start_time,
+    ),
 ];

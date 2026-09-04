@@ -77,9 +77,17 @@ fn put_context_row(
     // tracked, charged bytes otherwise; free-chunk counts unavailable. Bump
     // free space is the block-transition window-tail snapshot, not C's live
     // freeptr walk.
-    let total = if t.arena_footprint > 0 { t.arena_footprint } else { t.used };
+    let total = if t.arena_footprint > 0 {
+        t.arena_footprint
+    } else {
+        t.used
+    };
     let total = total.max(t.used);
-    let free = if t.is_bump { t.free_tail.min(total) } else { total - t.used };
+    let free = if t.is_bump {
+        t.free_tail.min(total)
+    } else {
+        total - t.used
+    };
     values[5] = Datum::from_i64(total as i64);
     values[6] = Datum::from_i64(t.nblocks.max(1) as i64);
     values[7] = Datum::from_i64(free as i64);
@@ -158,11 +166,33 @@ pub fn fc_pg_log_backend_memory_contexts(
     Ok(Datum::from_bool(true))
 }
 
-const fn b(foid: types_core::Oid, name: &'static str, retset: bool, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs: if retset { 0 } else { 1 }, strict: true, retset, func }
+const fn b(
+    foid: types_core::Oid,
+    name: &'static str,
+    retset: bool,
+    func: PGFunction,
+) -> FmgrBuiltin {
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs: if retset { 0 } else { 1 },
+        strict: true,
+        retset,
+        func,
+    }
 }
 
 pub const MCXTFUNCS_BUILTINS: &[FmgrBuiltin] = &[
-    b(2282, "pg_get_backend_memory_contexts", true, fc_pg_get_backend_memory_contexts),
-    b(4543, "pg_log_backend_memory_contexts", false, fc_pg_log_backend_memory_contexts),
+    b(
+        2282,
+        "pg_get_backend_memory_contexts",
+        true,
+        fc_pg_get_backend_memory_contexts,
+    ),
+    b(
+        4543,
+        "pg_log_backend_memory_contexts",
+        false,
+        fc_pg_log_backend_memory_contexts,
+    ),
 ];

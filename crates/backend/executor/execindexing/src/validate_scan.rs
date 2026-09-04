@@ -42,7 +42,8 @@ impl ValidateIndexState {
 
     // validate_index_callback (index.c).
     pub fn collect(&mut self, itemptr: &ItemPointerData) -> PgResult<()> {
-        self.tuplesort.putdatum(Datum::from_i64(itemptr_encode(itemptr)), false)?;
+        self.tuplesort
+            .putdatum(Datum::from_i64(itemptr_encode(itemptr)), false)?;
         self.itups += 1.0;
         Ok(())
     }
@@ -103,7 +104,10 @@ pub fn table_index_validate_scan<'mcx>(
         state.htups += 1.0;
 
         if scan.rs_cblock != root_blkno {
-            let pin = scan.rs_cbuf.as_ref().expect("pinned page for returned tuple");
+            let pin = scan
+                .rs_cbuf
+                .as_ref()
+                .expect("pinned page for returned tuple");
             let guard = pin.lock_share()?;
             pruneheap::heap_get_root_tuples(pin.page(), &mut root_offsets)?;
             drop(guard);
@@ -150,8 +154,7 @@ pub fn table_index_validate_scan<'mcx>(
         }
 
         if (tuplesort_empty
-            || ItemPointerCompare(indexcursor.as_ref().expect("non-empty cursor"), &root_tuple)
-                > 0)
+            || ItemPointerCompare(indexcursor.as_ref().expect("non-empty cursor"), &root_tuple) > 0)
             && !in_index[root_offnum as usize - 1]
         {
             per_tuple.reset();

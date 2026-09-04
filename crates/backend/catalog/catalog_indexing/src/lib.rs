@@ -53,7 +53,17 @@ fn CatalogIndexInsert<'mcx>(
             "system catalog with expression/partial index"
         );
     }
-    execindexing::ExecInsertIndexTuples(mcx, mcx, indstate, heap_rel, &mut slot, false, None, &[], false)?;
+    execindexing::ExecInsertIndexTuples(
+        mcx,
+        mcx,
+        indstate,
+        heap_rel,
+        &mut slot,
+        false,
+        None,
+        &[],
+        false,
+    )?;
     exectuples::exec_clear_tuple(&mut slot, mcx);
     Ok(())
 }
@@ -77,15 +87,20 @@ pub fn CatalogTupleUpdate<'mcx>(
 ) -> PgResult<()> {
     let mut update_indexes = tableam_vocab::TU_UpdateIndexes::TU_All;
     let mut indstate = CatalogOpenIndexes(mcx, heap_rel)?;
-    heapam::simple_heap_update(heap_rel.data_rc(), otid, tup.as_tuple_mut(), &mut update_indexes)?;
+    heapam::simple_heap_update(
+        heap_rel.data_rc(),
+        otid,
+        tup.as_tuple_mut(),
+        &mut update_indexes,
+    )?;
     match update_indexes {
         tableam_vocab::TU_UpdateIndexes::TU_All => {
             CatalogIndexInsert(mcx, &mut indstate, heap_rel, tup.as_tuple())?
         }
         tableam_vocab::TU_UpdateIndexes::TU_None => {}
-        tableam_vocab::TU_UpdateIndexes::TU_Summarizing => panic!(
-            "CatalogIndexInsert (indexing.c): TU_Summarizing on a catalog index"
-        ),
+        tableam_vocab::TU_UpdateIndexes::TU_Summarizing => {
+            panic!("CatalogIndexInsert (indexing.c): TU_Summarizing on a catalog index")
+        }
     }
     CatalogCloseIndexes(indstate)
 }
@@ -146,14 +161,19 @@ pub fn CatalogTupleUpdateWithInfo<'mcx>(
     indstate: &mut CatalogIndexState<'mcx>,
 ) -> PgResult<()> {
     let mut update_indexes = tableam_vocab::TU_UpdateIndexes::TU_All;
-    heapam::simple_heap_update(heap_rel.data_rc(), otid, tup.as_tuple_mut(), &mut update_indexes)?;
+    heapam::simple_heap_update(
+        heap_rel.data_rc(),
+        otid,
+        tup.as_tuple_mut(),
+        &mut update_indexes,
+    )?;
     match update_indexes {
         tableam_vocab::TU_UpdateIndexes::TU_All => {
             CatalogIndexInsert(mcx, indstate, heap_rel, tup.as_tuple())
         }
         tableam_vocab::TU_UpdateIndexes::TU_None => Ok(()),
-        tableam_vocab::TU_UpdateIndexes::TU_Summarizing => panic!(
-            "CatalogIndexInsert (indexing.c): TU_Summarizing on a catalog index"
-        ),
+        tableam_vocab::TU_UpdateIndexes::TU_Summarizing => {
+            panic!("CatalogIndexInsert (indexing.c): TU_Summarizing on a catalog index")
+        }
     }
 }

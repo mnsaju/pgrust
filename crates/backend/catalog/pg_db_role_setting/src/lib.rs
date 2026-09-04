@@ -3,10 +3,10 @@
 use std::rc::Rc;
 
 use datum::Datum;
+use mcx::Mcx;
 use mcx::MemoryContext;
 use types_core::catalog::C_COLLATION_OID;
 use types_core::fmgr::F_OIDEQ;
-use mcx::Mcx;
 use types_core::{AttrNumber, InvalidOid, Oid};
 use types_error::PgResult;
 use types_guc::GucSource;
@@ -45,9 +45,7 @@ fn setconfig_entries(mcx: Mcx<'_>, d: Datum) -> PgResult<Vec<String>> {
         }
         let ep = e.as_usize() as *const u8;
         // SAFETY: by-ref text element datum inside the detoasted image.
-        let text = unsafe {
-            core::slice::from_raw_parts(ep, types_tuple::varatt::varsize_any(ep))
-        };
+        let text = unsafe { core::slice::from_raw_parts(ep, types_tuple::varatt::varsize_any(ep)) };
         let payload = varlena::open_image(mcx, text)?;
         out.push(String::from_utf8_lossy(payload.as_bytes()).into_owned());
     }
@@ -92,14 +90,8 @@ pub fn AlterSetting<'mcx>(
         oid_key(Anum_pg_db_role_setting_setdatabase, databaseid),
         oid_key(Anum_pg_db_role_setting_setrole, roleid),
     ];
-    let mut scan = genam::systable_beginscan(
-        mcx,
-        &rel,
-        DbRoleSettingDatidRolidIndexId,
-        true,
-        None,
-        &keys,
-    )?;
+    let mut scan =
+        genam::systable_beginscan(mcx, &rel, DbRoleSettingDatidRolidIndexId, true, None, &keys)?;
     let tuple = genam::systable_getnext(mcx, &mut scan)?;
 
     let old_config = |tup: &types_tuple::HeapTupleData<'_>| -> PgResult<Option<Vec<String>>> {
@@ -120,34 +112,33 @@ pub fn AlterSetting<'mcx>(
         }
     };
 
-    let replace_setconfig = |tup: &types_tuple::HeapTupleData<'_>,
-                             new: Option<&[String]>|
-     -> PgResult<()> {
-        match new {
-            Some(entries) => {
-                let a = entries_to_text_array(mcx, entries)?;
-                let mut values = [Datum::null(); Natts_pg_db_role_setting];
-                let mut isnull = [false; Natts_pg_db_role_setting];
-                let mut replace = [false; Natts_pg_db_role_setting];
-                values[Anum_pg_db_role_setting_setconfig as usize - 1] =
-                    Datum::from_usize(a.as_ptr() as usize);
-                replace[Anum_pg_db_role_setting_setconfig as usize - 1] = true;
-                let mut newtuple = heaptuple::heap_modify_tuple(
-                    mcx,
-                    tup,
-                    rel.descr(),
-                    &values,
-                    &isnull,
-                    &replace,
-                )?;
-                catalog_indexing::CatalogTupleUpdate(mcx, &rel, &tup.t_self, &mut newtuple)?;
+    let replace_setconfig =
+        |tup: &types_tuple::HeapTupleData<'_>, new: Option<&[String]>| -> PgResult<()> {
+            match new {
+                Some(entries) => {
+                    let a = entries_to_text_array(mcx, entries)?;
+                    let mut values = [Datum::null(); Natts_pg_db_role_setting];
+                    let mut isnull = [false; Natts_pg_db_role_setting];
+                    let mut replace = [false; Natts_pg_db_role_setting];
+                    values[Anum_pg_db_role_setting_setconfig as usize - 1] =
+                        Datum::from_usize(a.as_ptr() as usize);
+                    replace[Anum_pg_db_role_setting_setconfig as usize - 1] = true;
+                    let mut newtuple = heaptuple::heap_modify_tuple(
+                        mcx,
+                        tup,
+                        rel.descr(),
+                        &values,
+                        &isnull,
+                        &replace,
+                    )?;
+                    catalog_indexing::CatalogTupleUpdate(mcx, &rel, &tup.t_self, &mut newtuple)?;
+                }
+                None => {
+                    catalog_indexing::CatalogTupleDelete(&rel, &tup.t_self)?;
+                }
             }
-            None => {
-                catalog_indexing::CatalogTupleDelete(&rel, &tup.t_self)?;
-            }
-        }
-        Ok(())
-    };
+            Ok(())
+        };
 
     if setstmt.kind == VariableSetKind::VAR_RESET_ALL {
         if let Some(tup) = tuple {

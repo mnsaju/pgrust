@@ -30,7 +30,11 @@ impl AttInMetadata {
         let mut atts = Vec::with_capacity(natts);
         for att in &tupdesc.attrs[..natts] {
             if att.attisdropped {
-                atts.push(AttIn { in_func: None, typ_ioparam: types_core::InvalidOid, atttypmod: -1 });
+                atts.push(AttIn {
+                    in_func: None,
+                    typ_ioparam: types_core::InvalidOid,
+                    atttypmod: -1,
+                });
                 continue;
             }
             let (typinput, typioparam) = lsyscache::typ::getTypeInputInfo(att.atttypid)?;

@@ -11,7 +11,7 @@ use types_nodes::parsenodes::{
 };
 use types_nodes::primnodes::RangeVar;
 use types_nodes::rawnodes::{
-    ColumnDef, Constraint, ConstrType, IndexElem, IndexStmt, SortByDir, SortByNulls,
+    ColumnDef, ConstrType, Constraint, IndexElem, IndexStmt, SortByDir, SortByNulls,
     TableLikeClause, TypeName, CREATE_TABLE_LIKE_COMMENTS, CREATE_TABLE_LIKE_COMPRESSION,
     CREATE_TABLE_LIKE_CONSTRAINTS, CREATE_TABLE_LIKE_DEFAULTS, CREATE_TABLE_LIKE_GENERATED,
     CREATE_TABLE_LIKE_IDENTITY, CREATE_TABLE_LIKE_INDEXES, CREATE_TABLE_LIKE_STATISTICS,
@@ -81,9 +81,8 @@ fn sequence_options<'mcx>(mcx: Mcx<'mcx>, relid: Oid) -> PgResult<NodeList<'mcx>
     let form = syscache_seams::lookup_pg_sequence_form::call(relid)?
         .unwrap_or_else(|| panic!("cache lookup failed for sequence {relid}"));
     let mut options = NodeList::nil();
-    let int_opt = |v: i64| -> PgResult<Node<'mcx>> {
-        Node::mk_float(mcx, str_in(mcx, &v.to_string())?)
-    };
+    let int_opt =
+        |v: i64| -> PgResult<Node<'mcx>> { Node::mk_float(mcx, str_in(mcx, &v.to_string())?) };
     let opts: [(&'static str, Node<'mcx>); 6] = [
         ("cache", int_opt(form.seqcache)?),
         ("cycle", Node::mk_boolean(mcx, form.seqcycle)?),
@@ -134,7 +133,9 @@ pub(crate) fn transformTableLikeClause<'mcx>(
     tlc_node: Node<'mcx>,
     query_string: &str,
 ) -> PgResult<()> {
-    let tlc = tlc_node.as_variant::<TableLikeClause>().expect("TableLikeClause");
+    let tlc = tlc_node
+        .as_variant::<TableLikeClause>()
+        .expect("TableLikeClause");
     let options = tlc.options;
     let src_rv = tlc.relation.expect("TableLikeClause.relation");
     let location = src_rv.location;
@@ -154,14 +155,18 @@ pub(crate) fn transformTableLikeClause<'mcx>(
     };
 
     let rv = rel_vocab_rv(src_rv);
-    let relid = catalog_namespace::RangeVarGetRelid(&rv, AccessShareLock, false)
-        .map_err(attach_errpos)?;
+    let relid =
+        catalog_namespace::RangeVarGetRelid(&rv, AccessShareLock, false).map_err(attach_errpos)?;
     let relation = relation::relation_open(mcx, relid, NoLock)?;
 
     let relkind = relation.rd_rel.relkind;
     match relkind {
-        RELKIND_RELATION | RELKIND_VIEW | RELKIND_MATVIEW | RELKIND_COMPOSITE_TYPE
-        | RELKIND_FOREIGN_TABLE | RELKIND_PARTITIONED_TABLE => {}
+        RELKIND_RELATION
+        | RELKIND_VIEW
+        | RELKIND_MATVIEW
+        | RELKIND_COMPOSITE_TYPE
+        | RELKIND_FOREIGN_TABLE
+        | RELKIND_PARTITIONED_TABLE => {}
         _ => {
             return Err(attach_errpos(Box::new(
                 PgError::new(
@@ -205,8 +210,10 @@ pub(crate) fn transformTableLikeClause<'mcx>(
         if attribute.attisdropped {
             continue;
         }
-        let attname =
-            str_in(mcx, core::str::from_utf8(attribute.attname.name_str()).expect("attname"))?;
+        let attname = str_in(
+            mcx,
+            core::str::from_utf8(attribute.attname.name_str()).expect("attname"),
+        )?;
         if attname.len() >= NAMEDATALEN as usize {
             unported("overlength column name truncation");
         }
@@ -286,15 +293,20 @@ pub(crate) fn transformTableLikeClause<'mcx>(
         cxt.columns.lappend(mcx, def_node)?;
     }
 
-    let has_not_null =
-        relation.rd_att.constr.as_deref().map(|c| c.has_not_null).unwrap_or(false);
+    let has_not_null = relation
+        .rd_att
+        .constr
+        .as_deref()
+        .map(|c| c.has_not_null)
+        .unwrap_or(false);
     if has_not_null {
         let lst = pg_constraint::RelationGetNotNullConstraints(mcx, &relation, true)?;
         if (options & CREATE_TABLE_LIKE_COMMENTS) != 0 {
             for nnode in lst.iter() {
                 let nn = nnode.as_variant::<Constraint>().expect("Constraint");
                 let conname = nn.conname.expect("copied not-null conname");
-                let con_oid = pg_constraint::get_relation_constraint_oid(mcx, relid, conname, false)?;
+                let con_oid =
+                    pg_constraint::get_relation_constraint_oid(mcx, relid, conname, false)?;
                 if let Some(comment) =
                     commands_comment::GetComment(mcx, con_oid, CONSTRAINT_RELATION_ID, 0)?
                 {
@@ -423,8 +435,14 @@ pub fn expandTableLikeClause<'mcx>(
                     )
                 });
             let this_default = readfuncs::stringToNode(mcx, defbin.as_str())?;
-            let (mapped, found_whole_row) =
-                rewrite_manip::map_variable_attnos(mcx, this_default, 1, 0, &attmap, types_core::InvalidOid)?;
+            let (mapped, found_whole_row) = rewrite_manip::map_variable_attnos(
+                mcx,
+                this_default,
+                1,
+                0,
+                &attmap,
+                types_core::InvalidOid,
+            )?;
             if found_whole_row {
                 return Err(whole_row_error(
                     format!(
@@ -450,8 +468,14 @@ pub fn expandTableLikeClause<'mcx>(
                 let ccname = cc.ccname.as_ref().expect("check constraint name").as_str();
                 let ccbin = cc.ccbin.as_ref().expect("check constraint bin").as_str();
                 let ccbin_node = readfuncs::stringToNode(mcx, ccbin)?;
-                let (mapped, found_whole_row) =
-                    rewrite_manip::map_variable_attnos(mcx, ccbin_node, 1, 0, &attmap, types_core::InvalidOid)?;
+                let (mapped, found_whole_row) = rewrite_manip::map_variable_attnos(
+                    mcx,
+                    ccbin_node,
+                    1,
+                    0,
+                    &attmap,
+                    types_core::InvalidOid,
+                )?;
                 if found_whole_row {
                     return Err(whole_row_error(format!(
                         "Constraint \"{}\" contains a whole-row reference to table \"{}\".",
@@ -536,8 +560,13 @@ pub fn expandTableLikeClause<'mcx>(
     if (options & CREATE_TABLE_LIKE_STATISTICS) != 0 {
         let parent_extstats = relcache::statextlist::RelationGetStatExtList(mcx, relation.rd_id)?;
         for &parent_stat_oid in parent_extstats.iter() {
-            let mut stats_stmt =
-                generateClonedExtStatsStmt(mcx, heap_rel, childrel.rd_id, parent_stat_oid, &attmap)?;
+            let mut stats_stmt = generateClonedExtStatsStmt(
+                mcx,
+                heap_rel,
+                childrel.rd_id,
+                parent_stat_oid,
+                &attmap,
+            )?;
             if (options & CREATE_TABLE_LIKE_COMMENTS) != 0 {
                 if let Some(comment) =
                     commands_comment::GetComment(mcx, parent_stat_oid, StatisticExtRelationId, 0)?
@@ -559,9 +588,12 @@ pub fn expandTableLikeClause<'mcx>(
 #[inline(never)]
 fn whole_row_error(detail: String) -> Box<PgError> {
     Box::new(
-        PgError::new(ERROR, "cannot convert whole-row table reference".to_string())
-            .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED)
-            .with_detail(detail),
+        PgError::new(
+            ERROR,
+            "cannot convert whole-row table reference".to_string(),
+        )
+        .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED)
+        .with_detail(detail),
     )
 }
 
@@ -593,7 +625,10 @@ pub fn generateClonedIndexStmt<'mcx>(
     source_idx: &Relation<'mcx>,
     attmap: &[AttrNumber],
 ) -> PgResult<(IndexStmt<'mcx>, Oid)> {
-    let idxrec = source_idx.rd_index.as_ref().expect("index relation without rd_index");
+    let idxrec = source_idx
+        .rd_index
+        .as_ref()
+        .expect("index relation without rd_index");
     let indrelid = idxrec.indrelid;
     let mut constraint_oid = InvalidOid;
 
@@ -627,8 +662,7 @@ pub fn generateClonedIndexStmt<'mcx>(
         ));
     }
     // Temporal (WITHOUT OVERLAPS) unique/PK indexes are indisexclusion.
-    let iswithoutoverlaps =
-        (idxrec.indisprimary || idxrec.indisunique) && idxrec.indisexclusion;
+    let iswithoutoverlaps = (idxrec.indisprimary || idxrec.indisunique) && idxrec.indisexclusion;
     // unported: C copies per-column opclass options (untransformRelOptions of
     // attoptions); dropping them would silently build a different index, so
     // raise a clean 0A000 until that lane is ported.
@@ -674,9 +708,7 @@ pub fn generateClonedIndexStmt<'mcx>(
                 for &operid in ops.iter() {
                     let (oprname, oprnamespace) =
                         syscache_seams::pg_operator_oprnamensp::call(operid)?
-                            .unwrap_or_else(|| {
-                                panic!("cache lookup failed for operator {operid}")
-                            });
+                            .unwrap_or_else(|| panic!("cache lookup failed for operator {operid}"));
                     let namelist = qualified_name_list(mcx, oprnamespace, &oprname)?;
                     names.lappend(mcx, Node::mk_list(mcx, namelist)?)?;
                 }
@@ -700,18 +732,25 @@ pub fn generateClonedIndexStmt<'mcx>(
         let attnum = idxrec.indkey[keyno];
         let opt = source_idx.rd_indoption[keyno];
         let (elem_name, elem_expr, keycoltype) = if attnum != 0 {
-            let attname = lsyscache::get_attname(mcx, indrelid, attnum, false)?
-                .expect("index key column");
+            let attname =
+                lsyscache::get_attname(mcx, indrelid, attnum, false)?.expect("index key column");
             (
                 Some(str_in(mcx, attname.as_str())?),
                 None,
                 lsyscache::get_atttype(indrelid, attnum)?,
             )
         } else {
-            let indexkey =
-                indexpr_item.next().expect("too few entries in indexprs list");
-            let (mapped, found_whole_row) =
-                rewrite_manip::map_variable_attnos(mcx, indexkey, 1, 0, attmap, types_core::InvalidOid)?;
+            let indexkey = indexpr_item
+                .next()
+                .expect("too few entries in indexprs list");
+            let (mapped, found_whole_row) = rewrite_manip::map_variable_attnos(
+                mcx,
+                indexkey,
+                1,
+                0,
+                attmap,
+                types_core::InvalidOid,
+            )?;
             if found_whole_row {
                 return Err(whole_row_error(format!(
                     "Index \"{}\" contains a whole-row table reference.",
@@ -738,9 +777,7 @@ pub fn generateClonedIndexStmt<'mcx>(
         // datatype, else always schema-qualified.
         let (opcname, opcnamespace, opcmethod) =
             syscache_seams::pg_opclass_name_namespace_method::call(indclass[keyno])?
-                .unwrap_or_else(|| {
-                    panic!("cache lookup failed for opclass {}", indclass[keyno])
-                });
+                .unwrap_or_else(|| panic!("cache lookup failed for opclass {}", indclass[keyno]));
         let opclass = if indclass[keyno]
             != indexcmds_seams::get_default_opclass::call(keycoltype, opcmethod)?
         {
@@ -791,8 +828,8 @@ pub fn generateClonedIndexStmt<'mcx>(
                 .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED),
             ));
         }
-        let attname = lsyscache::get_attname(mcx, indrelid, attnum, false)?
-            .expect("included index column");
+        let attname =
+            lsyscache::get_attname(mcx, indrelid, attnum, false)?.expect("included index column");
         let iparam = IndexElem {
             name: Some(str_in(mcx, attname.as_str())?),
             indexcolname: Some(str_in(
@@ -888,9 +925,8 @@ fn read_indclass<'mcx>(mcx: Mcx<'mcx>, index_id: Oid, nkeys: usize) -> PgResult<
         .unwrap_or_else(|| panic!("cache lookup failed for index {index_id}"));
     let mut isnull = false;
     // SAFETY: NOT NULL plain-storage oidvector under pg_index's descriptor.
-    let d = unsafe {
-        types_tuple::heap_getattr(tup, Anum_pg_index_indclass, rel.descr(), &mut isnull)
-    };
+    let d =
+        unsafe { types_tuple::heap_getattr(tup, Anum_pg_index_indclass, rel.descr(), &mut isnull) };
     debug_assert!(!isnull);
     // SAFETY: live oidvector image; dim1 bounds the value array.
     let vals = unsafe {
@@ -1038,9 +1074,12 @@ fn generateClonedExtStatsStmt<'mcx>(
     let mut def_names = NodeList::nil();
     for i in 0..nkeys {
         let attnum = i16::from_ne_bytes(keydata[i * 2..i * 2 + 2].try_into().unwrap());
-        let attname = lsyscache::get_attname(mcx, heap_relid, attnum, false)?
-            .expect("statistics key column");
-        let selem = StatsElem { name: Some(str_in(mcx, attname.as_str())?), expr: None };
+        let attname =
+            lsyscache::get_attname(mcx, heap_relid, attnum, false)?.expect("statistics key column");
+        let selem = StatsElem {
+            name: Some(str_in(mcx, attname.as_str())?),
+            expr: None,
+        };
         def_names.lappend(mcx, Node::mk(mcx, selem)?)?;
     }
 
@@ -1052,8 +1091,9 @@ fn generateClonedExtStatsStmt<'mcx>(
     };
     if !isnull {
         let exprs_str = text_str(mcx, exprs_d)?;
-        let exprs =
-            readfuncs::stringToNode(mcx, exprs_str)?.as_list().expect("stxexprs is a List");
+        let exprs = readfuncs::stringToNode(mcx, exprs_str)?
+            .as_list()
+            .expect("stxexprs is a List");
         for expr in exprs.iter() {
             // C ignores found_whole_row here.
             let (mapped, _) = rewrite_manip::map_variable_attnos(
@@ -1064,7 +1104,10 @@ fn generateClonedExtStatsStmt<'mcx>(
                 attmap,
                 types_core::InvalidOid,
             )?;
-            let selem = StatsElem { name: None, expr: Some(mapped) };
+            let selem = StatsElem {
+                name: None,
+                expr: Some(mapped),
+            };
             def_names.lappend(mcx, Node::mk(mcx, selem)?)?;
         }
     }

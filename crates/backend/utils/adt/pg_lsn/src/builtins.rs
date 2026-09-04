@@ -83,11 +83,15 @@ fc_lsn_cmp! {
 }
 
 pub fn fc_pg_lsn_larger(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
-    Ok(Datum::from_i64(arg_lsn(fcinfo, 0).max(arg_lsn(fcinfo, 1)) as i64))
+    Ok(Datum::from_i64(
+        arg_lsn(fcinfo, 0).max(arg_lsn(fcinfo, 1)) as i64
+    ))
 }
 
 pub fn fc_pg_lsn_smaller(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
-    Ok(Datum::from_i64(arg_lsn(fcinfo, 0).min(arg_lsn(fcinfo, 1)) as i64))
+    Ok(Datum::from_i64(
+        arg_lsn(fcinfo, 0).min(arg_lsn(fcinfo, 1)) as i64
+    ))
 }
 
 pub fn fc_pg_lsn_cmp(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -115,7 +119,9 @@ pub fn fc_pg_lsn_hash_extended(
     let lohalf = val as u32;
     let hihalf = (val >> 32) as u32;
     let lohalf = lohalf ^ if val >= 0 { hihalf } else { !hihalf };
-    Ok(Datum::from_u64(::hashfn::hash_bytes_uint32_extended(lohalf, seed)))
+    Ok(Datum::from_u64(::hashfn::hash_bytes_uint32_extended(
+        lohalf, seed,
+    )))
 }
 
 fn img_result(fcinfo: &mut Fcinfo, img: &adt_numeric::NumericImage) -> PgResult<Datum> {
@@ -130,13 +136,17 @@ pub fn fc_pg_lsn_mi(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRe
 pub fn fc_pg_lsn_pli(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: strict fn — arg 1 is a non-null numeric varlena.
     let nbytes = unsafe { num_arg(fcinfo, 1)? };
-    Ok(Datum::from_i64(crate::pg_lsn_pli(arg_lsn(fcinfo, 0), nbytes)? as i64))
+    Ok(Datum::from_i64(
+        crate::pg_lsn_pli(arg_lsn(fcinfo, 0), nbytes)? as i64,
+    ))
 }
 
 pub fn fc_pg_lsn_mii(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: strict fn — arg 1 is a non-null numeric varlena.
     let nbytes = unsafe { num_arg(fcinfo, 1)? };
-    Ok(Datum::from_i64(crate::pg_lsn_mii(arg_lsn(fcinfo, 0), nbytes)? as i64))
+    Ok(Datum::from_i64(
+        crate::pg_lsn_mii(arg_lsn(fcinfo, 0), nbytes)? as i64,
+    ))
 }
 
 pub fn fc_numeric_pg_lsn(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -146,7 +156,14 @@ pub fn fc_numeric_pg_lsn(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) ->
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 // pg_proc.dat rows for pg_lsn.c (+ numeric.c's numeric_pg_lsn 6103).

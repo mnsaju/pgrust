@@ -6,6 +6,7 @@ pub mod relation_stats;
 
 use datum::Datum;
 use mcx::Mcx;
+use rel_vocab::RangeVar;
 use types_core::catalog::DATABASE_RELATION_ID;
 use types_core::{InvalidOid, Oid, TEXTOID};
 use types_error::{
@@ -13,7 +14,6 @@ use types_error::{
     ERRCODE_INVALID_PARAMETER_VALUE, ERRCODE_UNDEFINED_OBJECT, ERRCODE_WRONG_OBJECT_TYPE, WARNING,
 };
 use types_fmgr::{FmgrBuiltin, FmgrInfo, FunctionCallInfoBaseData as Fcinfo};
-use rel_vocab::RangeVar;
 use types_nodes::parsenodes::ObjectType;
 use types_rel::lock::{ShareUpdateExclusiveLock, LOCKMODE};
 
@@ -64,10 +64,16 @@ pub(crate) struct Arg {
 }
 
 impl Arg {
-    pub const NULL: Arg = Arg { value: Datum::null(), isnull: true };
+    pub const NULL: Arg = Arg {
+        value: Datum::null(),
+        isnull: true,
+    };
 
     pub fn present(value: Datum) -> Arg {
-        Arg { value, isnull: false }
+        Arg {
+            value,
+            isnull: false,
+        }
     }
 }
 
@@ -406,12 +412,11 @@ fn RangeVarCallbackForStats(
     let shape = syscache_seams::lookup_pg_class_by_relid::call(table_oid)?
         .ok_or_else(|| cache_lookup_failed(table_oid))?;
     let form_relkind = lsyscache::get_rel_relkind(table_oid)? as u8;
-    let form_relname = lsyscache::get_rel_name(mcx, table_oid)?
-        .ok_or_else(|| cache_lookup_failed(table_oid))?;
+    let form_relname =
+        lsyscache::get_rel_name(mcx, table_oid)?.ok_or_else(|| cache_lookup_failed(table_oid))?;
 
     match form_relkind {
-        RELKIND_RELATION | RELKIND_MATVIEW | RELKIND_FOREIGN_TABLE
-        | RELKIND_PARTITIONED_TABLE => {}
+        RELKIND_RELATION | RELKIND_MATVIEW | RELKIND_FOREIGN_TABLE | RELKIND_PARTITIONED_TABLE => {}
         other => {
             return Err(Box::new(
                 PgError::error(format!(

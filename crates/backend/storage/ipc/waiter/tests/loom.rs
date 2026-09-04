@@ -239,7 +239,8 @@ impl ModelLatch {
             if self.is_set.load(Ordering::SeqCst) != 0 {
                 return;
             }
-            self.waker.store(token as u64 | (1 << 32), Ordering::Release);
+            self.waker
+                .store(token as u64 | (1 << 32), Ordering::Release);
             // RMW store: see set() — the release ordering also publishes
             // the waker word to the setter's acquire-strength RMW read.
             self.maybe_sleeping.swap(1, Ordering::SeqCst);
@@ -407,10 +408,12 @@ impl ModelSema {
         loop {
             let mut c = self.count.load(Ordering::Acquire);
             while c > 0 {
-                match self
-                    .count
-                    .compare_exchange_weak(c, c - 1, Ordering::SeqCst, Ordering::Acquire)
-                {
+                match self.count.compare_exchange_weak(
+                    c,
+                    c - 1,
+                    Ordering::SeqCst,
+                    Ordering::Acquire,
+                ) {
                     Ok(_) => {
                         if published {
                             // Retire-on-return (production: store(0, SeqCst)).

@@ -12,8 +12,8 @@ use types_error::{
     PgResult, DEBUG1, ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_INVALID_PARAMETER_VALUE, ERROR, INFO,
 };
 
-mod queue;
 pub mod builtins;
+mod queue;
 
 pub use queue::{
     check_notify_buffers, AsyncNotifyFreezeXids, AsyncShmemInit, AsyncShmemResetAfterCrash,
@@ -224,7 +224,10 @@ fn queue_listen(kind: ListenActionKind, channel: &str) {
     // Duplicates are not collapsed: LISTEN/UNLISTEN/UNLISTEN* interactions
     // must replay in order (async.c:696).
     let my_level = xact::GetCurrentTransactionNestLevel();
-    let action = ListenAction { kind, channel: channel.as_bytes().into() };
+    let action = ListenAction {
+        kind,
+        channel: channel.as_bytes().into(),
+    };
 
     LOCAL.with(|s| {
         let mut pending = s.pending_actions.borrow_mut();
@@ -244,7 +247,10 @@ fn queue_listen(kind: ListenActionKind, channel: &str) {
 
 pub fn Async_Listen(channel: &str) -> PgResult<()> {
     if trace_notify() {
-        elog(DEBUG1, format!("Async_Listen({channel},{})", g::MyProcPid()))?;
+        elog(
+            DEBUG1,
+            format!("Async_Listen({channel},{})", g::MyProcPid()),
+        )?;
     }
     queue_listen(ListenActionKind::Listen, channel);
     Ok(())
@@ -252,7 +258,10 @@ pub fn Async_Listen(channel: &str) -> PgResult<()> {
 
 pub fn Async_Unlisten(channel: &str) -> PgResult<()> {
     if trace_notify() {
-        elog(DEBUG1, format!("Async_Unlisten({channel},{})", g::MyProcPid()))?;
+        elog(
+            DEBUG1,
+            format!("Async_Unlisten({channel},{})", g::MyProcPid()),
+        )?;
     }
     if LOCAL.with(|s| s.pending_actions.borrow().is_none() && !s.unlisten_exit_registered.get()) {
         return Ok(());
@@ -297,8 +306,12 @@ pub fn AtPrepare_Notify() -> PgResult<()> {
 }
 
 pub fn PreCommit_Notify() -> PgResult<()> {
-    let (has_actions, has_notifies) = LOCAL
-        .with(|s| (s.pending_actions.borrow().is_some(), s.pending_notifies.borrow().is_some()));
+    let (has_actions, has_notifies) = LOCAL.with(|s| {
+        (
+            s.pending_actions.borrow().is_some(),
+            s.pending_notifies.borrow().is_some(),
+        )
+    });
     if !has_actions && !has_notifies {
         return Ok(());
     }
@@ -331,8 +344,12 @@ pub fn PreCommit_Notify() -> PgResult<()> {
 }
 
 pub fn AtCommit_Notify() -> PgResult<()> {
-    let (has_actions, has_notifies) = LOCAL
-        .with(|s| (s.pending_actions.borrow().is_some(), s.pending_notifies.borrow().is_some()));
+    let (has_actions, has_notifies) = LOCAL.with(|s| {
+        (
+            s.pending_actions.borrow().is_some(),
+            s.pending_notifies.borrow().is_some(),
+        )
+    });
     if !has_actions && !has_notifies {
         return Ok(());
     }
@@ -427,7 +444,12 @@ fn exec_unlisten_all_commit() {
 }
 
 fn is_listening_on(channel: &[u8]) -> bool {
-    LOCAL.with(|s| s.listen_channels.borrow().iter().any(|c| c.as_ref() == channel))
+    LOCAL.with(|s| {
+        s.listen_channels
+            .borrow()
+            .iter()
+            .any(|c| c.as_ref() == channel)
+    })
 }
 
 fn async_queue_unregister() -> PgResult<()> {
@@ -457,7 +479,11 @@ fn at_subcommit_merge(my_level: i32) {
     LOCAL.with(|s| {
         let mut pending = s.pending_actions.borrow_mut();
         if let Some(mut list) = pending.take_if(|l| l.nesting_level >= my_level) {
-            if list.upper.as_ref().is_none_or(|u| u.nesting_level < my_level - 1) {
+            if list
+                .upper
+                .as_ref()
+                .is_none_or(|u| u.nesting_level < my_level - 1)
+            {
                 list.nesting_level -= 1;
                 *pending = Some(list);
             } else {
@@ -471,7 +497,11 @@ fn at_subcommit_merge(my_level: i32) {
         let mut pending = s.pending_notifies.borrow_mut();
         if let Some(mut list) = pending.take_if(|l| l.nesting_level >= my_level) {
             debug_assert!(list.nesting_level == my_level);
-            if list.upper.as_ref().is_none_or(|u| u.nesting_level < my_level - 1) {
+            if list
+                .upper
+                .as_ref()
+                .is_none_or(|u| u.nesting_level < my_level - 1)
+            {
                 list.nesting_level -= 1;
                 *pending = Some(list);
             } else {
@@ -605,11 +635,17 @@ fn deliver_local_entries(mcx: Mcx<'_>, local: &[u8]) -> PgResult<()> {
     while p < local.len() {
         let entry = queue::parse_entry(local, p);
         let data = entry.data;
-        let channel_end = data.iter().position(|&b| b == 0).expect("NUL-terminated channel");
+        let channel_end = data
+            .iter()
+            .position(|&b| b == 0)
+            .expect("NUL-terminated channel");
         let channel = &data[..channel_end];
         if is_listening_on(channel) {
             let rest = &data[channel_end + 1..];
-            let payload_end = rest.iter().position(|&b| b == 0).expect("NUL-terminated payload");
+            let payload_end = rest
+                .iter()
+                .position(|&b| b == 0)
+                .expect("NUL-terminated payload");
             NotifyMyFrontEnd(mcx, channel, &rest[..payload_end], entry.src_pid)?;
         }
         p += entry.length as usize;

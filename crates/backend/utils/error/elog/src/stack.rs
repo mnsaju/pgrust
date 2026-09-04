@@ -10,7 +10,7 @@ use std::io::Write;
 
 use ::types_dest::CommandDest;
 use ::types_error::{
-    ERROR, ErrorField, ErrorLevel, ErrorLocation, FATAL, PANIC, PgError, PgResult, SqlState,
+    ErrorField, ErrorLevel, ErrorLocation, PgError, PgResult, SqlState, ERROR, FATAL, PANIC,
 };
 
 use crate::{config, errno, policy, report, sink};

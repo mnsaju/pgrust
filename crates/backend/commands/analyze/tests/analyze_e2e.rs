@@ -17,8 +17,8 @@ use transam_xlog::control_file::{
 };
 use transam_xlog::{XLogRecPtrToBytePos, DB_IN_PRODUCTION, RECOVERY_STATE_DONE};
 use types_core::{
-    BackendType, BlockNumber, Buffer, ForkNumber, InvalidBlockNumber, Oid, XLogRecPtr,
-    BLCKSZ, INVALID_PROC_NUMBER, RELPERSISTENCE_PERMANENT,
+    BackendType, BlockNumber, Buffer, ForkNumber, InvalidBlockNumber, Oid, XLogRecPtr, BLCKSZ,
+    INVALID_PROC_NUMBER, RELPERSISTENCE_PERMANENT,
 };
 use types_nodes::list::NodeList;
 use types_rel::{
@@ -171,8 +171,12 @@ fn install_bufmgr_seams() {
     xloginsert_seams::xlog_insert_record::set(|rmid, info, flags, main_data, bufs| {
         let mut blocks: Vec<xloginsert::RegBlock<'_>> = Vec::with_capacity(bufs.len());
         for b in bufs {
-            let (addr, (relid, block)) =
-                with_fake(|f| (f.pages[(b.buffer - 1) as usize], f.buf_rel[(b.buffer - 1) as usize]));
+            let (addr, (relid, block)) = with_fake(|f| {
+                (
+                    f.pages[(b.buffer - 1) as usize],
+                    f.buf_rel[(b.buffer - 1) as usize],
+                )
+            });
             blocks.push(xloginsert::RegBlock {
                 block_id: b.block_id,
                 rlocator: types_storage::RelFileLocator::new(1663, 5, relid),
@@ -267,9 +271,7 @@ fn install_xact_periphery_seams() {
     be_fsstubs_seams::at_eoxact_large_object::set(|_| Ok(()));
     namespace_seams::at_eoxact_namespace::set(|_, _| {});
     catalog_index_seams::reset_reindex_state::set(|_| {});
-    catalog_storage_seams::smgr_get_pending_deletes::set(|mcx, _for_commit| {
-        Ok(PgVec::new_in(mcx))
-    });
+    catalog_storage_seams::smgr_get_pending_deletes::set(|mcx, _for_commit| Ok(PgVec::new_in(mcx)));
     catalog_storage_seams::smgr_do_pending_deletes::set(|_| Ok(()));
     catalog_storage_seams::smgr_do_pending_syncs::set(|_, _| Ok(()));
     combocid_seams::at_eoxact_combocid::set(|| {});
@@ -359,7 +361,16 @@ fn user_tupdesc<'mcx>(mcx: Mcx<'mcx>) -> Rc<TupleDescData<'mcx>> {
     })
 }
 
-fn stat_col(attnum: i16, name: &str, typid: Oid, len: i16, byval: bool, align: i8, storage: i8, notnull: bool) -> FormData_pg_attribute {
+fn stat_col(
+    attnum: i16,
+    name: &str,
+    typid: Oid,
+    len: i16,
+    byval: bool,
+    align: i8,
+    storage: i8,
+    notnull: bool,
+) -> FormData_pg_attribute {
     let mut att = FormData_pg_attribute {
         attrelid: STAT_OID,
         attnum,
@@ -389,19 +400,64 @@ fn pg_statistic_tupdesc<'mcx>(mcx: Mcx<'mcx>) -> Rc<TupleDescData<'mcx>> {
         stat_col(6, "stadistinct", 700, 4, true, I, P, true),
     ];
     for k in 0..5i16 {
-        cols.push(stat_col(7 + k, &format!("stakind{}", k + 1), 21, 2, true, b's' as i8, P, true));
+        cols.push(stat_col(
+            7 + k,
+            &format!("stakind{}", k + 1),
+            21,
+            2,
+            true,
+            b's' as i8,
+            P,
+            true,
+        ));
     }
     for k in 0..5i16 {
-        cols.push(stat_col(12 + k, &format!("staop{}", k + 1), 26, 4, true, I, P, true));
+        cols.push(stat_col(
+            12 + k,
+            &format!("staop{}", k + 1),
+            26,
+            4,
+            true,
+            I,
+            P,
+            true,
+        ));
     }
     for k in 0..5i16 {
-        cols.push(stat_col(17 + k, &format!("stacoll{}", k + 1), 26, 4, true, I, P, true));
+        cols.push(stat_col(
+            17 + k,
+            &format!("stacoll{}", k + 1),
+            26,
+            4,
+            true,
+            I,
+            P,
+            true,
+        ));
     }
     for k in 0..5i16 {
-        cols.push(stat_col(22 + k, &format!("stanumbers{}", k + 1), 1021, -1, false, I, b'x' as i8, false));
+        cols.push(stat_col(
+            22 + k,
+            &format!("stanumbers{}", k + 1),
+            1021,
+            -1,
+            false,
+            I,
+            b'x' as i8,
+            false,
+        ));
     }
     for k in 0..5i16 {
-        cols.push(stat_col(27 + k, &format!("stavalues{}", k + 1), 2277, -1, false, b'd' as i8, b'x' as i8, false));
+        cols.push(stat_col(
+            27 + k,
+            &format!("stavalues{}", k + 1),
+            2277,
+            -1,
+            false,
+            b'd' as i8,
+            b'x' as i8,
+            false,
+        ));
     }
     let mut attrs = PgVec::new_in(mcx);
     let mut compact = PgVec::new_in(mcx);
@@ -473,7 +529,12 @@ fn make_relation<'mcx>(mcx: Mcx<'mcx>, relid: Oid) -> RelationData<'mcx> {
         rd_newRelfilelocatorSubid: Cell::new(0),
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
-        rd_lockInfo: LockInfoData { lockRelId: LockRelId { relId: relid, dbId: 5 } },
+        rd_lockInfo: LockInfoData {
+            lockRelId: LockRelId {
+                relId: relid,
+                dbId: 5,
+            },
+        },
         rd_rel,
         rd_att: att,
         rd_index: None,
@@ -485,13 +546,16 @@ fn make_relation<'mcx>(mcx: Mcx<'mcx>, relid: Oid) -> RelationData<'mcx> {
         pgstat_enabled: Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: PgVec::new_in(mcx),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     }
 }
 
@@ -523,13 +587,35 @@ fn seed_reloid_cache() {
     let cols = [
         o4(),
         attr(64, false, 1),
-        o4(), o4(), o4(), o4(), o4(), o4(), o4(),
-        o4(), o4(), o4(), o4(), o4(),
-        n1(), n1(), n1(),
+        o4(),
+        o4(),
+        o4(),
+        o4(),
+        o4(),
+        o4(),
+        o4(),
+        o4(),
+        o4(),
+        o4(),
+        o4(),
+        o4(),
         n1(),
-        i2(), i2(),
-        n1(), n1(), n1(), n1(), n1(), n1(), n1(), n1(),
-        o4(), o4(), o4(),
+        n1(),
+        n1(),
+        n1(),
+        i2(),
+        i2(),
+        n1(),
+        n1(),
+        n1(),
+        n1(),
+        n1(),
+        n1(),
+        n1(),
+        n1(),
+        o4(),
+        o4(),
+        o4(),
         attr(-1, false, 4),
         attr(-1, false, 4),
         attr(-1, false, 4),
@@ -631,32 +717,40 @@ fn install_syscache_fixture_overrides() {
     syscache_seams::lookup_pg_type_typcache_shape::set(|typid| {
         let mut typname = NameData::default();
         typname.namestrcpy("int4");
-        Ok((typid == INT4OID).then_some(syscache_seams::PgTypeTypcacheShape {
-            typname,
-            typlen: 4,
-            typbyval: true,
-            typalign: b'i' as i8,
-            typstorage: b'p' as i8,
-            typtype: b'b' as i8,
-            typisdefined: true,
-            typrelid: 0,
-            typsubscript: 0,
-            typelem: 0,
-            typarray: 0,
-            typcollation: 0,
-        }))
+        Ok(
+            (typid == INT4OID).then_some(syscache_seams::PgTypeTypcacheShape {
+                typname,
+                typlen: 4,
+                typbyval: true,
+                typalign: b'i' as i8,
+                typstorage: b'p' as i8,
+                typtype: b'b' as i8,
+                typisdefined: true,
+                typrelid: 0,
+                typsubscript: 0,
+                typelem: 0,
+                typarray: 0,
+                typcollation: 0,
+            }),
+        )
     });
     indexcmds_seams::get_default_opclass::set(|typid, am| {
-        Ok(if typid == INT4OID && am == 403 { INT4_BTREE_OPCLASS } else { 0 })
+        Ok(if typid == INT4OID && am == 403 {
+            INT4_BTREE_OPCLASS
+        } else {
+            0
+        })
     });
     syscache_seams::lookup_pg_opclass_shape::set(|opclass| {
-        Ok((opclass == INT4_BTREE_OPCLASS).then_some(syscache_seams::PgOpclassShape {
-            opcmethod: 403,
-            opcfamily: INT4_BTREE_FAM,
-            opcintype: INT4OID,
-            // int4 opclasses store no separate key type (pg_opclass: 0).
-            opckeytype: ::types_core::InvalidOid,
-        }))
+        Ok(
+            (opclass == INT4_BTREE_OPCLASS).then_some(syscache_seams::PgOpclassShape {
+                opcmethod: 403,
+                opcfamily: INT4_BTREE_FAM,
+                opcintype: INT4OID,
+                // int4 opclasses store no separate key type (pg_opclass: 0).
+                opckeytype: ::types_core::InvalidOid,
+            }),
+        )
     });
     syscache_seams::lookup_pg_amop_by_strategy::set(|opfamily, left, right, strategy| {
         Ok(match (opfamily, left, right, strategy) {
@@ -673,7 +767,8 @@ fn install_syscache_fixture_overrides() {
         })
     });
     syscache_seams::lookup_pg_operator_shape::set(|opno| {
-        let mk = |code, com, neg, rest| syscache_seams::PgOperatorShape { oprnamespace: 11,
+        let mk = |code, com, neg, rest| syscache_seams::PgOperatorShape {
+            oprnamespace: 11,
             oprleft: INT4OID,
             oprright: INT4OID,
             oprresult: 16,
@@ -716,7 +811,11 @@ fn install_syscache_fixture_overrides() {
     });
     syscache_seams::pg_proc_cost_shape::set(|funcid| {
         Ok(match funcid {
-            65 | 66 | 147 => Some(syscache_seams::PgProcCostShape { procost: 1.0, prorows: 0.0, prosupport: 0 }),
+            65 | 66 | 147 => Some(syscache_seams::PgProcCostShape {
+                procost: 1.0,
+                prorows: 0.0,
+                prosupport: 0,
+            }),
             _ => None,
         })
     });
@@ -727,14 +826,16 @@ fn install_syscache_fixture_overrides() {
             INT4_GT_OP => 5,
             _ => return Ok(None),
         };
-        Ok((purpose == b's' && (opfamily == 0 || opfamily == INT4_BTREE_FAM)).then_some(
-            syscache_seams::PgAmopShape {
-                amopstrategy: strat,
-                amopsortfamily: 0,
-                amoplefttype: INT4OID,
-                amoprighttype: INT4OID,
-            },
-        ))
+        Ok(
+            (purpose == b's' && (opfamily == 0 || opfamily == INT4_BTREE_FAM)).then_some(
+                syscache_seams::PgAmopShape {
+                    amopstrategy: strat,
+                    amopsortfamily: 0,
+                    amoplefttype: INT4OID,
+                    amoprighttype: INT4OID,
+                },
+            ),
+        )
     });
     syscache_seams::lookup_pg_amop_members_by_operator::set(|mcx, opno| {
         let mut v = mcx::PgVec::new_in(mcx);
@@ -756,10 +857,12 @@ fn install_syscache_fixture_overrides() {
         Ok(v)
     });
     syscache_seams::lookup_pg_opfamily_shape::set(|opfid| {
-        Ok((opfid == INT4_BTREE_FAM).then_some(syscache_seams::PgOpfamilyShape {
-            opfmethod: 403,
-            opfname: NameData::default(),
-        }))
+        Ok(
+            (opfid == INT4_BTREE_FAM).then_some(syscache_seams::PgOpfamilyShape {
+                opfmethod: 403,
+                opfname: NameData::default(),
+            }),
+        )
     });
 }
 
@@ -841,13 +944,26 @@ fn boot() {
     seed_reloid_cache();
 
     RELSTATS.lock().unwrap().clear();
-    vacuum_seams::vac_update_relstats::set(|rel, num_pages, num_tuples, allvis, _allfroz, _hasindex, _frozenxid, _minmulti, _in_outer| {
-        RELSTATS.lock().unwrap().push((rel.rd_id, num_pages, num_tuples, allvis));
-        if rel.rd_id == T_OID {
-            *T_RELPAGES.lock().unwrap() = (num_pages as i32, num_tuples as f32);
-        }
-        Ok((false, false))
-    });
+    vacuum_seams::vac_update_relstats::set(
+        |rel,
+         num_pages,
+         num_tuples,
+         allvis,
+         _allfroz,
+         _hasindex,
+         _frozenxid,
+         _minmulti,
+         _in_outer| {
+            RELSTATS
+                .lock()
+                .unwrap()
+                .push((rel.rd_id, num_pages, num_tuples, allvis));
+            if rel.rd_id == T_OID {
+                *T_RELPAGES.lock().unwrap() = (num_pages as i32, num_tuples as f32);
+            }
+            Ok((false, false))
+        },
+    );
 
     fd::InitFileAccess();
     lwlock::CreateLWLocks(false).unwrap();
@@ -876,8 +992,12 @@ fn boot() {
     let ctl = transam_xlog::ctl::XLogCtl();
     ctl.InsertTimeLineID.store(1, Relaxed);
     ctl.PrevTimeLineID.store(1, Relaxed);
-    ctl.Insert.CurrBytePos.store(XLogRecPtrToBytePos(end_of_log), Relaxed);
-    ctl.Insert.PrevBytePos.store(XLogRecPtrToBytePos(prev_rec), Relaxed);
+    ctl.Insert
+        .CurrBytePos
+        .store(XLogRecPtrToBytePos(end_of_log), Relaxed);
+    ctl.Insert
+        .PrevBytePos
+        .store(XLogRecPtrToBytePos(prev_rec), Relaxed);
     ctl.Insert.fullPageWrites.store(true, Relaxed);
     ctl.Insert.RedoRecPtr.store(prev_rec, Relaxed);
     ctl.RedoRecPtr.store(prev_rec, Relaxed);
@@ -900,7 +1020,13 @@ fn insert_rows() {
     xact::StartTransactionCommand().unwrap();
     let rel = table::table_open(mcx, T_OID, 3).unwrap();
     for g in 1..=10000i32 {
-        let v = if g <= 5000 { 1 } else if g <= 8000 { 2 } else { 3 };
+        let v = if g <= 5000 {
+            1
+        } else if g <= 8000 {
+            2
+        } else {
+            3
+        };
         let values = [Datum::from_i32(v), Datum::from_i32(g)];
         let nulls = [false, false];
         let mut tup = heaptuple::heap_form_tuple(mcx, rel.descr(), &values, &nulls).unwrap();
@@ -930,8 +1056,15 @@ fn run_analyze() {
     let cx = MemoryContext::new("analyze");
     let mcx = cx.mcx();
     xact::StartTransactionCommand().unwrap();
-    commands_analyze::analyze_rel(mcx, T_OID, None, &NodeList::nil(), &VacuumParams { options: 0x02 }, false)
-        .unwrap();
+    commands_analyze::analyze_rel(
+        mcx,
+        T_OID,
+        None,
+        &NodeList::nil(),
+        &VacuumParams { options: 0x02 },
+        false,
+    )
+    .unwrap();
     xact::CommitTransactionCommand().unwrap();
 }
 
@@ -955,8 +1088,17 @@ fn plan_rows(qual: PlanQual) -> f64 {
     let rtr = Node::mk_range_tbl_ref(mcx, 1).unwrap();
 
     let var = Node::mk_var(mcx, 1, qual.attno, INT4OID, -1, 0, 0).unwrap();
-    let konst =
-        Node::mk_const(mcx, INT4OID, -1, 0, 4, Datum::from_i32(qual.value), false, true).unwrap();
+    let konst = Node::mk_const(
+        mcx,
+        INT4OID,
+        -1,
+        0,
+        4,
+        Datum::from_i32(qual.value),
+        false,
+        true,
+    )
+    .unwrap();
     let (opno, opfuncid) = match qual.op {
         Op::Eq => (INT4_EQ_OP, 65),
         Op::Lt => (INT4_LT_OP, 66),
@@ -979,7 +1121,10 @@ fn plan_rows(qual: PlanQual) -> f64 {
 
     let jointree = mcx::alloc_leak_in(
         mcx,
-        FromExpr { fromlist: NodeList::make1(mcx, rtr).unwrap(), quals: Some(opexpr) },
+        FromExpr {
+            fromlist: NodeList::make1(mcx, rtr).unwrap(),
+            quals: Some(opexpr),
+        },
     )
     .unwrap();
     let tvar = Node::mk_var(mcx, 1, 1, INT4OID, -1, 0, 0).unwrap();
@@ -994,11 +1139,19 @@ fn plan_rows(qual: PlanQual) -> f64 {
         stmt_len: 30,
         ..Query::default()
     };
-    let stmt = planner::planner(mcx, mcx::leak_in(mcx::alloc_in(mcx, parse).unwrap()), "test", 0, types_portal::ParamListHandle::NULL).unwrap();
+    let stmt = planner::planner(
+        mcx,
+        mcx::leak_in(mcx::alloc_in(mcx, parse).unwrap()),
+        "test",
+        0,
+        types_portal::ParamListHandle::NULL,
+    )
+    .unwrap();
     let plan = stmt.planTree.unwrap();
-    let rows = plan.as_seq_scan().map(|s| s.scan.plan.plan_rows).unwrap_or_else(|| {
-        panic!("expected SeqScan plan, got {:?}", plan.node_tag())
-    });
+    let rows = plan
+        .as_seq_scan()
+        .map(|s| s.scan.plan.plan_rows)
+        .unwrap_or_else(|| panic!("expected SeqScan plan, got {:?}", plan.node_tag()));
     xact::CommitTransactionCommand().unwrap();
     rows
 }
@@ -1059,7 +1212,10 @@ fn analyze_end_to_end_matches_live_postgres() {
     assert_eq!(freqs, [0.5, 0.3, 0.2]);
     let corr = &b.slots[1];
     assert_eq!(corr.kind, 3);
-    assert_eq!(corr.numbers().unwrap().iter().copied().collect::<Vec<_>>(), [1.0]);
+    assert_eq!(
+        corr.numbers().unwrap().iter().copied().collect::<Vec<_>>(),
+        [1.0]
+    );
 
     // Column u: stadistinct -1, histogram of 101 values 1..10000, correlation 1.
     let b = syscache_seams::lookup_pg_statistic_bundle::call(mcx, T_OID, 2, false)
@@ -1075,7 +1231,10 @@ fn analyze_end_to_end_matches_live_postgres() {
     assert_eq!(hist.values().unwrap()[100].as_i32(), 10000);
     let corr = &b.slots[1];
     assert_eq!(corr.kind, 3);
-    assert_eq!(corr.numbers().unwrap().iter().copied().collect::<Vec<_>>(), [1.0]);
+    assert_eq!(
+        corr.numbers().unwrap().iter().copied().collect::<Vec<_>>(),
+        [1.0]
+    );
     xact::CommitTransactionCommand().unwrap();
 
     assert_eq!(count_pg_statistic_rows(), 2);
@@ -1085,16 +1244,69 @@ fn analyze_end_to_end_matches_live_postgres() {
     assert_eq!(count_pg_statistic_rows(), 2);
 
     // Planner estimates vs live PostgreSQL 18.3 EXPLAIN on this dataset.
-    assert_eq!(plan_rows(PlanQual { attno: 1, op: Op::Eq, value: 1 }), 5000.0);
-    assert_eq!(plan_rows(PlanQual { attno: 1, op: Op::Eq, value: 2 }), 3000.0);
-    assert_eq!(plan_rows(PlanQual { attno: 1, op: Op::Eq, value: 4 }), 1.0);
-    assert_eq!(plan_rows(PlanQual { attno: 1, op: Op::Lt, value: 2 }), 5000.0);
-    assert_eq!(plan_rows(PlanQual { attno: 2, op: Op::Eq, value: 77 }), 1.0);
-    assert_eq!(plan_rows(PlanQual { attno: 2, op: Op::Lt, value: 2500 }), 2499.0);
-    assert_eq!(plan_rows(PlanQual { attno: 2, op: Op::Gt, value: 9000 }), 1000.0);
+    assert_eq!(
+        plan_rows(PlanQual {
+            attno: 1,
+            op: Op::Eq,
+            value: 1
+        }),
+        5000.0
+    );
+    assert_eq!(
+        plan_rows(PlanQual {
+            attno: 1,
+            op: Op::Eq,
+            value: 2
+        }),
+        3000.0
+    );
+    assert_eq!(
+        plan_rows(PlanQual {
+            attno: 1,
+            op: Op::Eq,
+            value: 4
+        }),
+        1.0
+    );
+    assert_eq!(
+        plan_rows(PlanQual {
+            attno: 1,
+            op: Op::Lt,
+            value: 2
+        }),
+        5000.0
+    );
+    assert_eq!(
+        plan_rows(PlanQual {
+            attno: 2,
+            op: Op::Eq,
+            value: 77
+        }),
+        1.0
+    );
+    assert_eq!(
+        plan_rows(PlanQual {
+            attno: 2,
+            op: Op::Lt,
+            value: 2500
+        }),
+        2499.0
+    );
+    assert_eq!(
+        plan_rows(PlanQual {
+            attno: 2,
+            op: Op::Gt,
+            value: 9000
+        }),
+        1000.0
+    );
 
     with_fake(|f| {
         assert!(f.pins.iter().all(|p| *p == 0), "leaked pins: {:?}", f.pins);
-        assert!(f.locks.iter().all(|l| *l == 0), "leaked locks: {:?}", f.locks);
+        assert!(
+            f.locks.iter().all(|l| *l == 0),
+            "leaked locks: {:?}",
+            f.locks
+        );
     });
 }

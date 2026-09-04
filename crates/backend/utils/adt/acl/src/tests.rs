@@ -1,7 +1,6 @@
 use super::*;
 use membership::{
-    cached_role, roles_is_member_of_contains, seed_db_hash, seed_membership_cache,
-    RoleRecurseType,
+    cached_role, roles_is_member_of_contains, seed_db_hash, seed_membership_cache, RoleRecurseType,
 };
 use types_core::catalog::BOOTSTRAP_SUPERUSERID;
 
@@ -16,7 +15,10 @@ fn constants_match_c_headers() {
     assert_eq!(ACL_SET, 1 << 12);
     assert_eq!(ACL_MAINTAIN, 1 << 14);
     assert_eq!(N_ACL_RIGHTS, 15);
-    assert_eq!(ACL_ALL_RIGHTS_DATABASE, ACL_CREATE | ACL_CREATE_TEMP | ACL_CONNECT);
+    assert_eq!(
+        ACL_ALL_RIGHTS_DATABASE,
+        ACL_CREATE | ACL_CREATE_TEMP | ACL_CONNECT
+    );
     assert_eq!(ACL_ALL_RIGHTS_PARAMETER_ACL, ACL_SET | ACL_ALTER_SYSTEM);
     assert_eq!(ACLITEM_ALL_GOPTION_BITS, 0xFFFF_FFFF_0000_0000);
     assert_eq!(types_core::catalog::ROLE_PG_DATABASE_OWNER, 6171);
@@ -38,7 +40,10 @@ fn acldefault_database_grants_connect_and_temp_to_public() {
 fn acldefault_arm_shapes() {
     assert_eq!(acldefault(AclObjectType::Column, 1).as_slice().len(), 0);
     assert_eq!(acldefault(AclObjectType::Table, 1).as_slice().len(), 1);
-    assert_eq!(acldefault(AclObjectType::Function, 1).as_slice()[0].ai_privs, ACL_EXECUTE);
+    assert_eq!(
+        acldefault(AclObjectType::Function, 1).as_slice()[0].ai_privs,
+        ACL_EXECUTE
+    );
     let pacl = acldefault(AclObjectType::ParameterAcl, BOOTSTRAP_SUPERUSERID);
     assert_eq!(pacl.as_slice().len(), 1);
     assert_eq!(pacl.as_slice()[0].ai_grantee, BOOTSTRAP_SUPERUSERID);
@@ -58,10 +63,20 @@ fn aclmask_public_and_owner_arms() {
         aclmask(items, 42, 42, ACL_CREATE, AclMaskHow::AclmaskAny).unwrap(),
         ACL_CREATE
     );
-    assert_eq!(aclmask(items, 42, 42, 0, AclMaskHow::AclmaskAny).unwrap(), 0);
+    assert_eq!(
+        aclmask(items, 42, 42, 0, AclMaskHow::AclmaskAny).unwrap(),
+        0
+    );
     // ACLMASK_ALL keeps accumulating until the full mask is covered.
     assert_eq!(
-        aclmask(items, 42, 42, ACL_CONNECT | ACL_CREATE, AclMaskHow::AclmaskAll).unwrap(),
+        aclmask(
+            items,
+            42,
+            42,
+            ACL_CONNECT | ACL_CREATE,
+            AclMaskHow::AclmaskAll
+        )
+        .unwrap(),
         ACL_CONNECT | ACL_CREATE
     );
 }
@@ -117,7 +132,11 @@ fn cache_ids_match_cacheinfo() {
 }
 
 fn item(grantee: Oid, grantor: Oid, privs: u64, gopts: u64) -> AclItem {
-    let mut it = AclItem { ai_grantee: grantee, ai_grantor: grantor, ai_privs: 0 };
+    let mut it = AclItem {
+        ai_grantee: grantee,
+        ai_grantor: grantor,
+        ai_privs: 0,
+    };
     aclitem_set_privs_goptions(&mut it, privs, gopts);
     it
 }
@@ -126,7 +145,10 @@ fn item(grantee: Oid, grantor: Oid, privs: u64, gopts: u64) -> AclItem {
 fn acl_image_roundtrips_and_matches_allocacl_layout() {
     let ctx = mcx::MemoryContext::new_bump("t");
     let mcx = ctx.mcx();
-    let items = [item(0, 10, ACL_SELECT, 0), item(11, 10, ACL_ALL_RIGHTS_RELATION, ACL_SELECT)];
+    let items = [
+        item(0, 10, ACL_SELECT, 0),
+        item(11, 10, ACL_ALL_RIGHTS_RELATION, ACL_SELECT),
+    ];
     let img = varlena::acl_image(mcx, &items).unwrap();
     assert_eq!(img.len(), 4 + 20 + 2 * 16);
     assert_eq!(&img[0..4], &(((img.len() as u32) << 2).to_le_bytes()));
@@ -161,8 +183,15 @@ fn aclupdate_add_del_and_prune() {
     let acl = aclupdate(mcx, &base, &grant, ACL_MODECHG_ADD, 10, DROP_RESTRICT).unwrap();
     assert_eq!(acl.len(), 2);
     assert_eq!(acl[1], grant);
-    let more = aclupdate(mcx, &acl, &item(0, 10, ACL_INSERT, 0), ACL_MODECHG_ADD, 10, DROP_RESTRICT)
-        .unwrap();
+    let more = aclupdate(
+        mcx,
+        &acl,
+        &item(0, 10, ACL_INSERT, 0),
+        ACL_MODECHG_ADD,
+        10,
+        DROP_RESTRICT,
+    )
+    .unwrap();
     assert_eq!(aclitem_get_privs(&more[1]), ACL_SELECT | ACL_INSERT);
     let gone = aclupdate(
         mcx,
@@ -204,7 +233,11 @@ fn aclcontains_requires_rights_subset() {
 fn aclmembers_dedups_and_skips_public() {
     let ctx = mcx::MemoryContext::new_bump("t");
     let mcx = ctx.mcx();
-    let acl = [item(0, 10, ACL_SELECT, 0), item(11, 10, ACL_SELECT, 0), item(10, 11, ACL_INSERT, 0)];
+    let acl = [
+        item(0, 10, ACL_SELECT, 0),
+        item(11, 10, ACL_SELECT, 0),
+        item(10, 11, ACL_INSERT, 0),
+    ];
     let m = aclmembers(mcx, &acl).unwrap();
     assert_eq!(m.as_slice(), &[10, 11]);
 }
@@ -212,9 +245,18 @@ fn aclmembers_dedups_and_skips_public() {
 #[test]
 fn convert_priv_string_case_and_spaces() {
     let map = [
-        PrivMapEntry { name: "SELECT", value: ACL_SELECT },
-        PrivMapEntry { name: "SELECT WITH GRANT OPTION", value: acl_grant_option_for(ACL_SELECT) },
-        PrivMapEntry { name: "INSERT", value: ACL_INSERT },
+        PrivMapEntry {
+            name: "SELECT",
+            value: ACL_SELECT,
+        },
+        PrivMapEntry {
+            name: "SELECT WITH GRANT OPTION",
+            value: acl_grant_option_for(ACL_SELECT),
+        },
+        PrivMapEntry {
+            name: "INSERT",
+            value: ACL_INSERT,
+        },
     ];
     assert_eq!(convert_any_priv_string("select", &map).unwrap(), ACL_SELECT);
     assert_eq!(
@@ -229,24 +271,41 @@ fn aclmask_direct_owner_goptions_only_on_exact_match() {
     let acl = [item(11, 10, ACL_SELECT, 0)];
     let g = crate::ACLITEM_ALL_GOPTION_BITS;
     assert_eq!(aclmask_direct(&acl, 10, 10, g, AclMaskHow::AclmaskAll), g);
-    assert_eq!(aclmask_direct(&acl, 11, 10, ACL_SELECT, AclMaskHow::AclmaskAll), ACL_SELECT);
-    assert_eq!(aclmask_direct(&acl, 12, 10, ACL_SELECT, AclMaskHow::AclmaskAll), 0);
+    assert_eq!(
+        aclmask_direct(&acl, 11, 10, ACL_SELECT, AclMaskHow::AclmaskAll),
+        ACL_SELECT
+    );
+    assert_eq!(
+        aclmask_direct(&acl, 12, 10, ACL_SELECT, AclMaskHow::AclmaskAll),
+        0
+    );
 }
 
 #[test]
 fn priv_string_maps_match_c() {
-    use crate::builtins::{PARAMETER_PRIV_MAP, ROLE_PRIV_MAP, SEQUENCE_PRIV_MAP, TABLESPACE_PRIV_MAP};
+    use crate::builtins::{
+        PARAMETER_PRIV_MAP, ROLE_PRIV_MAP, SEQUENCE_PRIV_MAP, TABLESPACE_PRIV_MAP,
+    };
     let gof = |m: u64| (m & 0xFFFF_FFFF) << 32;
     let c = |p: &str, map| convert_any_priv_string(p, map).unwrap();
     assert_eq!(c("CREATE", TABLESPACE_PRIV_MAP), ACL_CREATE);
-    assert_eq!(c("create with grant option", TABLESPACE_PRIV_MAP), gof(ACL_CREATE));
+    assert_eq!(
+        c("create with grant option", TABLESPACE_PRIV_MAP),
+        gof(ACL_CREATE)
+    );
     assert!(convert_any_priv_string("USAGE", TABLESPACE_PRIV_MAP).is_err());
     assert_eq!(c("USAGE", SEQUENCE_PRIV_MAP), ACL_USAGE);
     assert_eq!(c("SELECT", SEQUENCE_PRIV_MAP), ACL_SELECT);
-    assert_eq!(c("UPDATE WITH GRANT OPTION", SEQUENCE_PRIV_MAP), gof(ACL_UPDATE));
+    assert_eq!(
+        c("UPDATE WITH GRANT OPTION", SEQUENCE_PRIV_MAP),
+        gof(ACL_UPDATE)
+    );
     assert_eq!(c("SET", PARAMETER_PRIV_MAP), ACL_SET);
     assert_eq!(c("ALTER SYSTEM", PARAMETER_PRIV_MAP), ACL_ALTER_SYSTEM);
-    assert_eq!(c("alter system with grant option", PARAMETER_PRIV_MAP), gof(ACL_ALTER_SYSTEM));
+    assert_eq!(
+        c("alter system with grant option", PARAMETER_PRIV_MAP),
+        gof(ACL_ALTER_SYSTEM)
+    );
     assert_eq!(c("USAGE", ROLE_PRIV_MAP), ACL_USAGE);
     assert_eq!(c("MEMBER", ROLE_PRIV_MAP), ACL_CREATE);
     assert_eq!(c("SET", ROLE_PRIV_MAP), ACL_SET);
@@ -265,11 +324,27 @@ fn priv_string_maps_match_c() {
 #[test]
 fn aclright_strings_match_c() {
     let expected = [
-        "INSERT", "SELECT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "EXECUTE",
-        "USAGE", "CREATE", "TEMPORARY", "CONNECT", "SET", "ALTER SYSTEM", "MAINTAIN",
+        "INSERT",
+        "SELECT",
+        "UPDATE",
+        "DELETE",
+        "TRUNCATE",
+        "REFERENCES",
+        "TRIGGER",
+        "EXECUTE",
+        "USAGE",
+        "CREATE",
+        "TEMPORARY",
+        "CONNECT",
+        "SET",
+        "ALTER SYSTEM",
+        "MAINTAIN",
     ];
     assert_eq!(expected.len() as u32, N_ACL_RIGHTS);
     for (i, want) in expected.iter().enumerate() {
-        assert_eq!(crate::builtins::convert_aclright_to_string(1u64 << i), *want);
+        assert_eq!(
+            crate::builtins::convert_aclright_to_string(1u64 << i),
+            *want
+        );
     }
 }

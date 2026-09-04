@@ -379,7 +379,11 @@ pub fn translate<'mcx>(
         debug_assert!(old + bytes.len() <= image.capacity());
         // SAFETY: capacity = bytelen covers the worst case (above).
         unsafe {
-            core::ptr::copy_nonoverlapping(bytes.as_ptr(), image.as_mut_ptr().add(old), bytes.len());
+            core::ptr::copy_nonoverlapping(
+                bytes.as_ptr(),
+                image.as_mut_ptr().add(old),
+                bytes.len(),
+            );
             image.set_len(old + bytes.len());
         }
     };

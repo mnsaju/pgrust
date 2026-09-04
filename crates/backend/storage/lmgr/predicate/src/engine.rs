@@ -138,7 +138,10 @@ pub(crate) fn my_procno() -> ProcNumber {
 fn my_proc_vxid() -> VirtualTransactionId {
     let proc = lmgr_proc::GetPGProcByNumber(my_procno());
     VirtualTransactionId {
-        procNumber: proc.vxid.procNumber.load(std::sync::atomic::Ordering::Relaxed),
+        procNumber: proc
+            .vxid
+            .procNumber
+            .load(std::sync::atomic::Ordering::Relaxed),
         localTransactionId: proc.vxid.lxid.load(std::sync::atomic::Ordering::Relaxed),
     }
 }
@@ -197,8 +200,7 @@ unsafe fn PredicateLockHashCodeFromTargetHashCode(
     predicatelocktag: *const PREDICATELOCKTAG,
     targethash: u32,
 ) -> u32 {
-    targethash
-        ^ (((*predicatelocktag).myXact as usize as u32) << LOG2_NUM_PREDICATELOCK_PARTITIONS)
+    targethash ^ (((*predicatelocktag).myXact as usize as u32) << LOG2_NUM_PREDICATELOCK_PARTITIONS)
 }
 
 fn NPREDICATELOCKTARGETENTS(max_prepared_xacts: i32) -> i64 {
@@ -329,8 +331,8 @@ fn rw_conflict_pool_exhausted(potential: bool) -> Box<PgError> {
         PgError::error(msg)
             .with_sqlstate(ERRCODE_OUT_OF_MEMORY)
             .with_hint(
-                "You might need to run fewer transactions at a time or increase \"max_connections\".",
-            ),
+            "You might need to run fewer transactions at a time or increase \"max_connections\".",
+        ),
     )
 }
 
@@ -351,7 +353,10 @@ unsafe fn SetRWConflict(
 
     (*conflict).sxactOut = reader;
     (*conflict).sxactIn = writer;
-    dlist_push_tail(&raw mut (*reader).outConflicts, &raw mut (*conflict).outLink);
+    dlist_push_tail(
+        &raw mut (*reader).outConflicts,
+        &raw mut (*conflict).outLink,
+    );
     dlist_push_tail(&raw mut (*writer).inConflicts, &raw mut (*conflict).inLink);
     Ok(())
 }
@@ -569,8 +574,7 @@ pub fn PredicateLockShmemSize(max_prepared_xacts: i32) -> Size {
     size += hash_estimate_size(max_table_size, size_of::<PREDICATELOCK>());
     size += size / 10;
 
-    let mut max_table_size =
-        (init_small::globals::MaxBackends() + max_prepared_xacts) as i64 * 10;
+    let mut max_table_size = (init_small::globals::MaxBackends() + max_prepared_xacts) as i64 * 10;
     size += PredXactListDataSize();
     size += max_table_size as usize * size_of::<SERIALIZABLEXACT>();
     size += hash_estimate_size(max_table_size, size_of::<SERIALIZABLEXID>());
@@ -1199,7 +1203,10 @@ unsafe fn CreatePredicateLock(
     }
 
     if !found {
-        dlist_push_tail(&raw mut (*target).predicateLocks, &raw mut (*lock).targetLink);
+        dlist_push_tail(
+            &raw mut (*target).predicateLocks,
+            &raw mut (*lock).targetLink,
+        );
         dlist_push_tail(&raw mut (*sxact).predicateLocks, &raw mut (*lock).xactLink);
         (*lock).commitSeqNo = InvalidSerCommitSeqNo;
     }
@@ -1323,7 +1330,9 @@ unsafe fn DeleteLockTarget(target: *mut PREDICATELOCKTARGET, targettaghash: u32)
         SerializablePredicateListLock(),
         LW_EXCLUSIVE
     ));
-    debug_assert!(LWLockHeldByMe(PredicateLockHashPartitionLock(targettaghash)));
+    debug_assert!(LWLockHeldByMe(PredicateLockHashPartitionLock(
+        targettaghash
+    )));
 
     LWLockAcquire(SerializableXactHashLock(), LW_EXCLUSIVE, my_procno())?;
 
@@ -1447,10 +1456,7 @@ unsafe fn TransferPredicateLocksToNewTarget(
                 let _ = hash_search_with_hash_value(
                     shared().lock_hash,
                     &raw const (*oldpredlock).tag as *const u8,
-                    PredicateLockHashCodeFromTargetHashCode(
-                        &(*oldpredlock).tag,
-                        oldtargettaghash,
-                    ),
+                    PredicateLockHashCodeFromTargetHashCode(&(*oldpredlock).tag, oldtargettaghash),
                     HASH_REMOVE,
                     Some(&mut found),
                 )?;
@@ -1611,8 +1617,7 @@ pub fn ReleasePredicateLocks(mut isCommit: bool, isReadOnlySafe: bool) -> PgResu
         // sxact and no leader stash, C's worker and leader arms are both
         // no-ops, so skip the is_parallel_worker seam call. Single fused
         // branch: both cells live in one thread_local block.
-        if (MySerializableXact() as usize | SAVED_SERIALIZABLE_XACT.with(|c| c.get()) as usize)
-            == 0
+        if (MySerializableXact() as usize | SAVED_SERIALIZABLE_XACT.with(|c| c.get()) as usize) == 0
         {
             debug_assert!(LocalPredicateLockHash().is_null());
             return Ok(());
@@ -1720,8 +1725,7 @@ pub fn ReleasePredicateLocks(mut isCommit: bool, isReadOnlySafe: bool) -> PgResu
 
             if isCommit && !SxactIsReadOnly(mysx) && SxactIsCommitted((*conflict).sxactIn) {
                 if ((*mysx).flags & SXACT_FLAG_CONFLICT_OUT) == 0
-                    || (*(*conflict).sxactIn).prepareSeqNo
-                        < (*mysx).SeqNo.earliestOutConflictCommit
+                    || (*(*conflict).sxactIn).prepareSeqNo < (*mysx).SeqNo.earliestOutConflictCommit
                 {
                     (*mysx).SeqNo.earliestOutConflictCommit = (*(*conflict).sxactIn).prepareSeqNo;
                 }
@@ -2170,7 +2174,9 @@ pub fn CheckForSerializableConflictOut(
                 return Ok(());
             } else {
                 LWLockRelease(SerializableXactHashLock())?;
-                return Err(serialization_failure("Canceled on conflict out to old pivot."));
+                return Err(serialization_failure(
+                    "Canceled on conflict out to old pivot.",
+                ));
             }
         }
 
@@ -2414,7 +2420,11 @@ fn DropAllPredicateLocksFromTable(
         let procno = my_procno();
         LWLockAcquire(SerializablePredicateListLock(), LW_EXCLUSIVE, procno)?;
         for i in 0..NUM_PREDICATELOCK_PARTITIONS {
-            LWLockAcquire(PredicateLockHashPartitionLockByIndex(i), LW_EXCLUSIVE, procno)?;
+            LWLockAcquire(
+                PredicateLockHashPartitionLockByIndex(i),
+                LW_EXCLUSIVE,
+                procno,
+            )?;
         }
         LWLockAcquire(SerializableXactHashLock(), LW_EXCLUSIVE, procno)?;
 
@@ -2600,8 +2610,7 @@ pub fn CheckTableForSerializableConflictIn(
             while cur != (&raw mut (*head).head) as *mut dlist_node {
                 let next = (*cur).next;
                 let predlock = dlist_container!(PREDICATELOCK, targetLink, cur);
-                if (*predlock).tag.myXact != mysx
-                    && !RWConflictExists((*predlock).tag.myXact, mysx)
+                if (*predlock).tag.myXact != mysx && !RWConflictExists((*predlock).tag.myXact, mysx)
                 {
                     // Failure path: xact hash lock released by FlagRWConflict;
                     // the seq scan must not stay registered past the error.
@@ -2874,11 +2883,7 @@ pub fn AtPrepare_PredicateLocks() -> PgResult<()> {
         record[0..4].copy_from_slice(&TWOPHASEPREDICATERECORD_XACT.to_ne_bytes());
         record[4..8].copy_from_slice(&(*sxact).xmin.to_ne_bytes());
         record[8..12].copy_from_slice(&(*sxact).flags.to_ne_bytes());
-        twophase_seams::register_two_phase_record::call(
-            TWOPHASE_RM_PREDICATELOCK_ID,
-            0,
-            &record,
-        )?;
+        twophase_seams::register_two_phase_record::call(TWOPHASE_RM_PREDICATELOCK_ID, 0, &record)?;
 
         // One lock record per predicate lock. Walk the sxact's own lock list
         // (the local lock table is not authoritative). No perXactPredicateListLock
@@ -3162,8 +3167,7 @@ pub fn GetSafeSnapshotBlockingPids(blocked_pid: i32, output_size: usize) -> PgRe
             cur = (*cur).next;
         }
 
-        if !blocking_sxact.is_null()
-            && (*blocking_sxact).flags & SXACT_FLAG_DEFERRABLE_WAITING != 0
+        if !blocking_sxact.is_null() && (*blocking_sxact).flags & SXACT_FLAG_DEFERRABLE_WAITING != 0
         {
             let head = &raw const (*blocking_sxact).possibleUnsafeConflicts;
             let mut cur = (*head).head.next;

@@ -1,4 +1,6 @@
-use types_error::{PgResult, ERRCODE_INSUFFICIENT_PRIVILEGE, ERRCODE_READ_ONLY_SQL_TRANSACTION, ERROR, WARNING};
+use types_error::{
+    PgResult, ERRCODE_INSUFFICIENT_PRIVILEGE, ERRCODE_READ_ONLY_SQL_TRANSACTION, ERROR, WARNING,
+};
 use types_nodes::node_tree::Node;
 use types_nodes::nodes_enums::CmdType;
 use types_nodes::parsenodes::TransactionStmtKind::*;
@@ -122,17 +124,11 @@ pub fn ClassifyUtilityCommandAsReadOnly(parsetree: Node<'_>) -> PgResult<i32> {
 
         T_CheckPointStmt => COMMAND_IS_STRICTLY_READ_ONLY,
 
-        T_ClosePortalStmt
-        | T_ConstraintsSetStmt
-        | T_DeallocateStmt
-        | T_DeclareCursorStmt
-        | T_DiscardStmt
-        | T_ExecuteStmt
-        | T_FetchStmt
-        | T_LoadStmt
-        | T_PrepareStmt
-        | T_UnlistenStmt
-        | T_VariableSetStmt => COMMAND_OK_IN_RECOVERY | COMMAND_OK_IN_READ_ONLY_TXN,
+        T_ClosePortalStmt | T_ConstraintsSetStmt | T_DeallocateStmt | T_DeclareCursorStmt
+        | T_DiscardStmt | T_ExecuteStmt | T_FetchStmt | T_LoadStmt | T_PrepareStmt
+        | T_UnlistenStmt | T_VariableSetStmt => {
+            COMMAND_OK_IN_RECOVERY | COMMAND_OK_IN_READ_ONLY_TXN
+        }
 
         T_ClusterStmt | T_ReindexStmt | T_VacuumStmt => COMMAND_OK_IN_READ_ONLY_TXN,
 
@@ -164,10 +160,13 @@ pub fn ClassifyUtilityCommandAsReadOnly(parsetree: Node<'_>) -> PgResult<i32> {
         T_TransactionStmt => {
             let stmt = parsetree.as_transaction_stmt().unwrap();
             match stmt.kind {
-                TRANS_STMT_BEGIN | TRANS_STMT_START | TRANS_STMT_COMMIT | TRANS_STMT_ROLLBACK
-                | TRANS_STMT_SAVEPOINT | TRANS_STMT_RELEASE | TRANS_STMT_ROLLBACK_TO => {
-                    COMMAND_IS_STRICTLY_READ_ONLY
-                }
+                TRANS_STMT_BEGIN
+                | TRANS_STMT_START
+                | TRANS_STMT_COMMIT
+                | TRANS_STMT_ROLLBACK
+                | TRANS_STMT_SAVEPOINT
+                | TRANS_STMT_RELEASE
+                | TRANS_STMT_ROLLBACK_TO => COMMAND_IS_STRICTLY_READ_ONLY,
                 TRANS_STMT_PREPARE | TRANS_STMT_COMMIT_PREPARED | TRANS_STMT_ROLLBACK_PREPARED => {
                     COMMAND_OK_IN_READ_ONLY_TXN
                 }

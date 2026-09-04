@@ -1,10 +1,10 @@
-
 use core::cell::Cell;
 
 use ::mcx::Mcx;
-use ::types_core::{Oid, PgWChar, C_COLLATION_OID, OidIsValid};
-use ::types_error::{PgError, PgResult, ERRCODE_FEATURE_NOT_SUPPORTED,
-    ERRCODE_INDETERMINATE_COLLATION};
+use ::types_core::{Oid, OidIsValid, PgWChar, C_COLLATION_OID};
+use ::types_error::{
+    PgError, PgResult, ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_INDETERMINATE_COLLATION,
+};
 
 use ::pg_locale::{PgLocale, WcClass, COLLPROVIDER_BUILTIN, COLLPROVIDER_ICU, COLLPROVIDER_LIBC};
 use mbutils_seams as mb_seams;
@@ -26,12 +26,13 @@ fn regex_wc_isclass_builtin(class: WcClass, c: PgWChar, posix: bool) -> bool {
     }
 }
 
-use crate::regex_consts::{NUM_CCLASSES, REG_ECOLLATE, REG_ECTYPE, REG_ERANGE, REG_ESPACE,
-    REG_ETOOBIG, REG_FAKE, REG_ULOCALE};
+use crate::regex_consts::{
+    NUM_CCLASSES, REG_ECOLLATE, REG_ECTYPE, REG_ERANGE, REG_ESPACE, REG_ETOOBIG, REG_FAKE,
+    REG_ULOCALE,
+};
 use crate::regex_error::{RegError, RegResult};
 use crate::regex_foundation::{addchr, addrange, getcvec};
 use crate::regguts::{char_classes, chr, ColorMap, Cvec, CvecRange, MAX_SIMPLE_CHR};
-
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum PgLocaleStrategy {
@@ -73,7 +74,6 @@ fn regex_locale_state() -> RegexLocaleState {
 
 const PG_UTF8: i32 = 6;
 const UCHAR_MAX: chr = 255;
-
 
 const PG_ISDIGIT: u8 = 0x01;
 const PG_ISALPHA: u8 = 0x02;
@@ -152,7 +152,6 @@ fn pg_ascii_tolower(ch: u8) -> u8 {
     }
 }
 
-
 pub fn pg_set_regex_collation<'mcx>(mcx: Mcx<'mcx>, collation: Oid) -> PgResult<()> {
     let strategy;
     let mut is_default = false;
@@ -165,7 +164,8 @@ pub fn pg_set_regex_collation<'mcx>(mcx: Mcx<'mcx>, collation: Oid) -> PgResult<
             "could not determine which collation to use for regular expression",
         )
         .with_sqlstate(ERRCODE_INDETERMINATE_COLLATION)
-        .with_hint("Use the COLLATE clause to set the collation explicitly.").into());
+        .with_hint("Use the COLLATE clause to set the collation explicitly.")
+        .into());
     }
 
     if collation == C_COLLATION_OID {
@@ -179,7 +179,8 @@ pub fn pg_set_regex_collation<'mcx>(mcx: Mcx<'mcx>, collation: Oid) -> PgResult<
             return Err(PgError::error(
                 "nondeterministic collations are not supported for regular expressions",
             )
-            .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED).into());
+            .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED)
+            .into());
         }
 
         if locale.ctype_is_c {
@@ -393,113 +394,397 @@ fn store_match(cv: &mut Cvec, chr1: chr, nchrs: u32) {
     }
 }
 
-
 struct Cname {
     name: &'static str,
     code: u8,
 }
 
 const CNAMES: &[Cname] = &[
-    Cname { name: "NUL", code: 0o0 },
-    Cname { name: "SOH", code: 0o1 },
-    Cname { name: "STX", code: 0o2 },
-    Cname { name: "ETX", code: 0o3 },
-    Cname { name: "EOT", code: 0o4 },
-    Cname { name: "ENQ", code: 0o5 },
-    Cname { name: "ACK", code: 0o6 },
-    Cname { name: "BEL", code: 0o7 },
-    Cname { name: "alert", code: 0o7 },
-    Cname { name: "BS", code: 0o10 },
-    Cname { name: "backspace", code: 0x08 }, // '\b'
-    Cname { name: "HT", code: 0o11 },
-    Cname { name: "tab", code: 0x09 }, // '\t'
-    Cname { name: "LF", code: 0o12 },
-    Cname { name: "newline", code: 0x0a }, // '\n'
-    Cname { name: "VT", code: 0o13 },
-    Cname { name: "vertical-tab", code: 0x0b }, // '\v'
-    Cname { name: "FF", code: 0o14 },
-    Cname { name: "form-feed", code: 0x0c }, // '\f'
-    Cname { name: "CR", code: 0o15 },
-    Cname { name: "carriage-return", code: 0x0d }, // '\r'
-    Cname { name: "SO", code: 0o16 },
-    Cname { name: "SI", code: 0o17 },
-    Cname { name: "DLE", code: 0o20 },
-    Cname { name: "DC1", code: 0o21 },
-    Cname { name: "DC2", code: 0o22 },
-    Cname { name: "DC3", code: 0o23 },
-    Cname { name: "DC4", code: 0o24 },
-    Cname { name: "NAK", code: 0o25 },
-    Cname { name: "SYN", code: 0o26 },
-    Cname { name: "ETB", code: 0o27 },
-    Cname { name: "CAN", code: 0o30 },
-    Cname { name: "EM", code: 0o31 },
-    Cname { name: "SUB", code: 0o32 },
-    Cname { name: "ESC", code: 0o33 },
-    Cname { name: "IS4", code: 0o34 },
-    Cname { name: "FS", code: 0o34 },
-    Cname { name: "IS3", code: 0o35 },
-    Cname { name: "GS", code: 0o35 },
-    Cname { name: "IS2", code: 0o36 },
-    Cname { name: "RS", code: 0o36 },
-    Cname { name: "IS1", code: 0o37 },
-    Cname { name: "US", code: 0o37 },
-    Cname { name: "space", code: b' ' },
-    Cname { name: "exclamation-mark", code: b'!' },
-    Cname { name: "quotation-mark", code: b'"' },
-    Cname { name: "number-sign", code: b'#' },
-    Cname { name: "dollar-sign", code: b'$' },
-    Cname { name: "percent-sign", code: b'%' },
-    Cname { name: "ampersand", code: b'&' },
-    Cname { name: "apostrophe", code: b'\'' },
-    Cname { name: "left-parenthesis", code: b'(' },
-    Cname { name: "right-parenthesis", code: b')' },
-    Cname { name: "asterisk", code: b'*' },
-    Cname { name: "plus-sign", code: b'+' },
-    Cname { name: "comma", code: b',' },
-    Cname { name: "hyphen", code: b'-' },
-    Cname { name: "hyphen-minus", code: b'-' },
-    Cname { name: "period", code: b'.' },
-    Cname { name: "full-stop", code: b'.' },
-    Cname { name: "slash", code: b'/' },
-    Cname { name: "solidus", code: b'/' },
-    Cname { name: "zero", code: b'0' },
-    Cname { name: "one", code: b'1' },
-    Cname { name: "two", code: b'2' },
-    Cname { name: "three", code: b'3' },
-    Cname { name: "four", code: b'4' },
-    Cname { name: "five", code: b'5' },
-    Cname { name: "six", code: b'6' },
-    Cname { name: "seven", code: b'7' },
-    Cname { name: "eight", code: b'8' },
-    Cname { name: "nine", code: b'9' },
-    Cname { name: "colon", code: b':' },
-    Cname { name: "semicolon", code: b';' },
-    Cname { name: "less-than-sign", code: b'<' },
-    Cname { name: "equals-sign", code: b'=' },
-    Cname { name: "greater-than-sign", code: b'>' },
-    Cname { name: "question-mark", code: b'?' },
-    Cname { name: "commercial-at", code: b'@' },
-    Cname { name: "left-square-bracket", code: b'[' },
-    Cname { name: "backslash", code: b'\\' },
-    Cname { name: "reverse-solidus", code: b'\\' },
-    Cname { name: "right-square-bracket", code: b']' },
-    Cname { name: "circumflex", code: b'^' },
-    Cname { name: "circumflex-accent", code: b'^' },
-    Cname { name: "underscore", code: b'_' },
-    Cname { name: "low-line", code: b'_' },
-    Cname { name: "grave-accent", code: b'`' },
-    Cname { name: "left-brace", code: b'{' },
-    Cname { name: "left-curly-bracket", code: b'{' },
-    Cname { name: "vertical-line", code: b'|' },
-    Cname { name: "right-brace", code: b'}' },
-    Cname { name: "right-curly-bracket", code: b'}' },
-    Cname { name: "tilde", code: b'~' },
-    Cname { name: "DEL", code: 0o177 },
+    Cname {
+        name: "NUL",
+        code: 0o0,
+    },
+    Cname {
+        name: "SOH",
+        code: 0o1,
+    },
+    Cname {
+        name: "STX",
+        code: 0o2,
+    },
+    Cname {
+        name: "ETX",
+        code: 0o3,
+    },
+    Cname {
+        name: "EOT",
+        code: 0o4,
+    },
+    Cname {
+        name: "ENQ",
+        code: 0o5,
+    },
+    Cname {
+        name: "ACK",
+        code: 0o6,
+    },
+    Cname {
+        name: "BEL",
+        code: 0o7,
+    },
+    Cname {
+        name: "alert",
+        code: 0o7,
+    },
+    Cname {
+        name: "BS",
+        code: 0o10,
+    },
+    Cname {
+        name: "backspace",
+        code: 0x08,
+    }, // '\b'
+    Cname {
+        name: "HT",
+        code: 0o11,
+    },
+    Cname {
+        name: "tab",
+        code: 0x09,
+    }, // '\t'
+    Cname {
+        name: "LF",
+        code: 0o12,
+    },
+    Cname {
+        name: "newline",
+        code: 0x0a,
+    }, // '\n'
+    Cname {
+        name: "VT",
+        code: 0o13,
+    },
+    Cname {
+        name: "vertical-tab",
+        code: 0x0b,
+    }, // '\v'
+    Cname {
+        name: "FF",
+        code: 0o14,
+    },
+    Cname {
+        name: "form-feed",
+        code: 0x0c,
+    }, // '\f'
+    Cname {
+        name: "CR",
+        code: 0o15,
+    },
+    Cname {
+        name: "carriage-return",
+        code: 0x0d,
+    }, // '\r'
+    Cname {
+        name: "SO",
+        code: 0o16,
+    },
+    Cname {
+        name: "SI",
+        code: 0o17,
+    },
+    Cname {
+        name: "DLE",
+        code: 0o20,
+    },
+    Cname {
+        name: "DC1",
+        code: 0o21,
+    },
+    Cname {
+        name: "DC2",
+        code: 0o22,
+    },
+    Cname {
+        name: "DC3",
+        code: 0o23,
+    },
+    Cname {
+        name: "DC4",
+        code: 0o24,
+    },
+    Cname {
+        name: "NAK",
+        code: 0o25,
+    },
+    Cname {
+        name: "SYN",
+        code: 0o26,
+    },
+    Cname {
+        name: "ETB",
+        code: 0o27,
+    },
+    Cname {
+        name: "CAN",
+        code: 0o30,
+    },
+    Cname {
+        name: "EM",
+        code: 0o31,
+    },
+    Cname {
+        name: "SUB",
+        code: 0o32,
+    },
+    Cname {
+        name: "ESC",
+        code: 0o33,
+    },
+    Cname {
+        name: "IS4",
+        code: 0o34,
+    },
+    Cname {
+        name: "FS",
+        code: 0o34,
+    },
+    Cname {
+        name: "IS3",
+        code: 0o35,
+    },
+    Cname {
+        name: "GS",
+        code: 0o35,
+    },
+    Cname {
+        name: "IS2",
+        code: 0o36,
+    },
+    Cname {
+        name: "RS",
+        code: 0o36,
+    },
+    Cname {
+        name: "IS1",
+        code: 0o37,
+    },
+    Cname {
+        name: "US",
+        code: 0o37,
+    },
+    Cname {
+        name: "space",
+        code: b' ',
+    },
+    Cname {
+        name: "exclamation-mark",
+        code: b'!',
+    },
+    Cname {
+        name: "quotation-mark",
+        code: b'"',
+    },
+    Cname {
+        name: "number-sign",
+        code: b'#',
+    },
+    Cname {
+        name: "dollar-sign",
+        code: b'$',
+    },
+    Cname {
+        name: "percent-sign",
+        code: b'%',
+    },
+    Cname {
+        name: "ampersand",
+        code: b'&',
+    },
+    Cname {
+        name: "apostrophe",
+        code: b'\'',
+    },
+    Cname {
+        name: "left-parenthesis",
+        code: b'(',
+    },
+    Cname {
+        name: "right-parenthesis",
+        code: b')',
+    },
+    Cname {
+        name: "asterisk",
+        code: b'*',
+    },
+    Cname {
+        name: "plus-sign",
+        code: b'+',
+    },
+    Cname {
+        name: "comma",
+        code: b',',
+    },
+    Cname {
+        name: "hyphen",
+        code: b'-',
+    },
+    Cname {
+        name: "hyphen-minus",
+        code: b'-',
+    },
+    Cname {
+        name: "period",
+        code: b'.',
+    },
+    Cname {
+        name: "full-stop",
+        code: b'.',
+    },
+    Cname {
+        name: "slash",
+        code: b'/',
+    },
+    Cname {
+        name: "solidus",
+        code: b'/',
+    },
+    Cname {
+        name: "zero",
+        code: b'0',
+    },
+    Cname {
+        name: "one",
+        code: b'1',
+    },
+    Cname {
+        name: "two",
+        code: b'2',
+    },
+    Cname {
+        name: "three",
+        code: b'3',
+    },
+    Cname {
+        name: "four",
+        code: b'4',
+    },
+    Cname {
+        name: "five",
+        code: b'5',
+    },
+    Cname {
+        name: "six",
+        code: b'6',
+    },
+    Cname {
+        name: "seven",
+        code: b'7',
+    },
+    Cname {
+        name: "eight",
+        code: b'8',
+    },
+    Cname {
+        name: "nine",
+        code: b'9',
+    },
+    Cname {
+        name: "colon",
+        code: b':',
+    },
+    Cname {
+        name: "semicolon",
+        code: b';',
+    },
+    Cname {
+        name: "less-than-sign",
+        code: b'<',
+    },
+    Cname {
+        name: "equals-sign",
+        code: b'=',
+    },
+    Cname {
+        name: "greater-than-sign",
+        code: b'>',
+    },
+    Cname {
+        name: "question-mark",
+        code: b'?',
+    },
+    Cname {
+        name: "commercial-at",
+        code: b'@',
+    },
+    Cname {
+        name: "left-square-bracket",
+        code: b'[',
+    },
+    Cname {
+        name: "backslash",
+        code: b'\\',
+    },
+    Cname {
+        name: "reverse-solidus",
+        code: b'\\',
+    },
+    Cname {
+        name: "right-square-bracket",
+        code: b']',
+    },
+    Cname {
+        name: "circumflex",
+        code: b'^',
+    },
+    Cname {
+        name: "circumflex-accent",
+        code: b'^',
+    },
+    Cname {
+        name: "underscore",
+        code: b'_',
+    },
+    Cname {
+        name: "low-line",
+        code: b'_',
+    },
+    Cname {
+        name: "grave-accent",
+        code: b'`',
+    },
+    Cname {
+        name: "left-brace",
+        code: b'{',
+    },
+    Cname {
+        name: "left-curly-bracket",
+        code: b'{',
+    },
+    Cname {
+        name: "vertical-line",
+        code: b'|',
+    },
+    Cname {
+        name: "right-brace",
+        code: b'}',
+    },
+    Cname {
+        name: "right-curly-bracket",
+        code: b'}',
+    },
+    Cname {
+        name: "tilde",
+        code: b'~',
+    },
+    Cname {
+        name: "DEL",
+        code: 0o177,
+    },
 ];
 
 const CLASS_NAMES: [&str; NUM_CCLASSES as usize] = [
-    "alnum", "alpha", "ascii", "blank", "cntrl", "digit", "graph", "lower",
-    "print", "punct", "space", "upper", "xdigit", "word",
+    "alnum", "alpha", "ascii", "blank", "cntrl", "digit", "graph", "lower", "print", "punct",
+    "space", "upper", "xdigit", "word",
 ];
 
 #[inline]
@@ -519,7 +804,6 @@ fn name_eq_chrs(name: &str, startp: &[chr]) -> bool {
         .all(|(&b, &c)| (b as chr) == c)
 }
 
-
 #[inline]
 fn before(x: chr, y: chr) -> bool {
     x < y
@@ -529,7 +813,10 @@ pub fn element(startp: &[chr]) -> RegResult<ElementResult> {
     debug_assert!(!startp.is_empty());
     let len = startp.len();
     if len == 1 {
-        return Ok(ElementResult { code: startp[0], note_ulocale: false });
+        return Ok(ElementResult {
+            code: startp[0],
+            note_ulocale: false,
+        });
     }
 
     for cn in CNAMES {

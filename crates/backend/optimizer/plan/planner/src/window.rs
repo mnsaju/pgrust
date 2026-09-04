@@ -99,10 +99,8 @@ pub(crate) fn optimize_window_clauses<'mcx>(
                             .expect("WindowFunc");
                     }
                 }
-                let moved = core::mem::replace(
-                    &mut wflists.window_funcs[winref],
-                    PgVec::new_in(run.mcx),
-                );
+                let moved =
+                    core::mem::replace(&mut wflists.window_funcs[winref], PgVec::new_in(run.mcx));
                 for n in moved {
                     wflists.window_funcs[existing_winref].push(n);
                 }
@@ -140,7 +138,10 @@ pub(crate) fn select_active_windows<'mcx>(
                 unique_order.push(sc);
             }
         }
-        actives.push(Active { wc: wc_node, unique_order });
+        actives.push(Active {
+            wc: wc_node,
+            unique_order,
+        });
     }
     // common_prefix_cmp; stable sort where C's pg_qsort is not — equal-order
     // windows keep clause order (results identical, EXPLAIN order may differ).
@@ -164,14 +165,16 @@ pub(crate) fn select_active_windows<'mcx>(
     Ok(result)
 }
 
-pub(crate) fn name_active_windows(
-    mcx: Mcx<'_>,
-    active_windows: &[Node<'_>],
-) -> PgResult<()> {
+pub(crate) fn name_active_windows(mcx: Mcx<'_>, active_windows: &[Node<'_>]) -> PgResult<()> {
     let mut next_n = 1;
     for i in 0..active_windows.len() {
         let wc_node = active_windows[i];
-        if wc_node.as_window_clause().expect("WindowClause").name.is_some() {
+        if wc_node
+            .as_window_clause()
+            .expect("WindowClause")
+            .name
+            .is_some()
+        {
             continue;
         }
         let newname = loop {
@@ -202,12 +205,20 @@ pub(crate) fn make_window_input_target<'mcx>(
     for wc_node in run.active_windows.iter() {
         let wc = wc_node.as_window_clause().expect("WindowClause");
         for n in wc.partitionClause.iter().chain(wc.orderClause.iter()) {
-            sgrefs.push(n.as_sort_group_clause().expect("SortGroupClause").tleSortGroupRef);
+            sgrefs.push(
+                n.as_sort_group_clause()
+                    .expect("SortGroupClause")
+                    .tleSortGroupRef,
+            );
         }
     }
     for &id in run.root.processed_groupClause.iter() {
         let gc = *run.root.expr_node(id);
-        sgrefs.push(gc.as_sort_group_clause().expect("SortGroupClause").tleSortGroupRef);
+        sgrefs.push(
+            gc.as_sort_group_clause()
+                .expect("SortGroupClause")
+                .tleSortGroupRef,
+        );
     }
 
     let mut tlist = NodeList::nil();
@@ -241,12 +252,15 @@ pub(crate) fn make_window_input_target<'mcx>(
     // add_new_columns_to_pathtarget: dedupe by equal().
     let mut uniq: PgVec<'_, Node<'mcx>> = PgVec::new_in(mcx);
     for &v in vars.iter() {
-        if kept_exprs.iter().chain(uniq.iter()).any(|&u| types_nodes::equal(u, v)) {
+        if kept_exprs
+            .iter()
+            .chain(uniq.iter())
+            .any(|&u| types_nodes::equal(u, v))
+        {
             continue;
         }
         uniq.push(v);
-        let tle =
-            Node::mk_target_entry(mcx, v, (tlist.len() + 1) as i16, None, false)?;
+        let tle = Node::mk_target_entry(mcx, v, (tlist.len() + 1) as i16, None, false)?;
         tlist.lappend(mcx, tle)?;
     }
     crate::pathnode::create_pathtarget(run, &tlist)
@@ -271,9 +285,7 @@ fn pull_window_input_vars<'mcx>(node: Node<'mcx>, out: &mut PgVec<'_, Node<'mcx>
                 pull_window_input_vars(f, out);
             }
         }
-        NodeTag::T_TargetEntry => {
-            pull_window_input_vars(node.as_target_entry().unwrap().expr, out)
-        }
+        NodeTag::T_TargetEntry => pull_window_input_vars(node.as_target_entry().unwrap().expr, out),
         NodeTag::T_OpExpr => {
             for a in &node.as_op_expr().unwrap().args {
                 pull_window_input_vars(a, out);
@@ -284,12 +296,8 @@ fn pull_window_input_vars<'mcx>(node: Node<'mcx>, out: &mut PgVec<'_, Node<'mcx>
                 pull_window_input_vars(a, out);
             }
         }
-        NodeTag::T_RelabelType => {
-            pull_window_input_vars(node.as_relabel_type().unwrap().arg, out)
-        }
-        NodeTag::T_FieldSelect => {
-            pull_window_input_vars(node.as_field_select().unwrap().arg, out)
-        }
+        NodeTag::T_RelabelType => pull_window_input_vars(node.as_relabel_type().unwrap().arg, out),
+        NodeTag::T_FieldSelect => pull_window_input_vars(node.as_field_select().unwrap().arg, out),
         NodeTag::T_SubscriptingRef => {
             let sr = node.as_subscripting_ref().unwrap();
             for a in sr.refupperindexpr.iter().flatten() {
@@ -408,9 +416,7 @@ fn pull_window_input_vars<'mcx>(node: Node<'mcx>, out: &mut PgVec<'_, Node<'mcx>
                 pull_window_input_vars(a, out);
             }
         }
-        NodeTag::T_CoerceViaIO => {
-            pull_window_input_vars(node.as_coerce_via_io().unwrap().arg, out)
-        }
+        NodeTag::T_CoerceViaIO => pull_window_input_vars(node.as_coerce_via_io().unwrap().arg, out),
         NodeTag::T_ArrayCoerceExpr => {
             let a = node.as_array_coerce_expr().unwrap();
             pull_window_input_vars(a.arg, out);
@@ -478,12 +484,16 @@ pub(crate) fn make_pathkeys_for_window<'mcx>(
             .all(|n| n.as_sort_group_clause().expect("SortGroupClause").sortop != 0)
     };
     if !sortable(&wc.partitionClause) {
-        return Err(err_0a000("could not implement window PARTITION BY",
-            "Window partitioning columns must be of sortable datatypes."));
+        return Err(err_0a000(
+            "could not implement window PARTITION BY",
+            "Window partitioning columns must be of sortable datatypes.",
+        ));
     }
     if !sortable(&wc.orderClause) {
-        return Err(err_0a000("could not implement window ORDER BY",
-            "Window ordering columns must be of sortable datatypes."));
+        return Err(err_0a000(
+            "could not implement window ORDER BY",
+            "Window ordering columns must be of sortable datatypes.",
+        ));
     }
 
     let mut window_pathkeys: PgVec<'mcx, PathKey> = PgVec::new_in(mcx);
@@ -516,8 +526,7 @@ pub(crate) fn make_pathkeys_for_window<'mcx>(
     }
     let wc = wc_node.as_window_clause().expect("WindowClause");
     if !wc.orderClause.is_nil() {
-        let orderby =
-            crate::pathkeys::make_pathkeys_for_sortclauses(run, &wc.orderClause, tlist)?;
+        let orderby = crate::pathkeys::make_pathkeys_for_sortclauses(run, &wc.orderClause, tlist)?;
         // append_pathkeys: skip entries already present (canonical identity).
         for pk in orderby.iter() {
             if !window_pathkeys.iter().any(|p| p == pk) {
@@ -676,8 +685,11 @@ fn create_one_window_path<'mcx>(
                 let rc = rc_node
                     .as_window_func_run_condition()
                     .expect("runCondition cell is a WindowFuncRunCondition");
-                let (leftop, rightop) =
-                    if rc.wfunc_left { (*wf_node, rc.arg) } else { (rc.arg, *wf_node) };
+                let (leftop, rightop) = if rc.wfunc_left {
+                    (*wf_node, rc.arg)
+                } else {
+                    (rc.arg, *wf_node)
+                };
                 let opexpr = crate::like_support::make_opclause(
                     mcx,
                     rc.opno,

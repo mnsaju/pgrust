@@ -7,7 +7,11 @@
 #[cfg(not(target_family = "wasm"))]
 pub fn system(command: &str) -> i32 {
     use std::os::unix::process::ExitStatusExt;
-    match std::process::Command::new("/bin/sh").arg("-c").arg(command).status() {
+    match std::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg(command)
+        .status()
+    {
         Ok(status) => status.into_raw(),
         Err(_) => -1,
     }
@@ -67,7 +71,9 @@ pub fn pg_strsignal(signum: i32) -> String {
         return "unrecognized signal".to_string();
     }
     // SAFETY: non-NULL NUL-terminated string from libc.
-    unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned()
+    unsafe { std::ffi::CStr::from_ptr(p) }
+        .to_string_lossy()
+        .into_owned()
 }
 
 // wasm32: no strsignal in the wasi libc crate; C's NULL fallback string.
@@ -84,7 +90,9 @@ fn strerror_now() -> String {
         return format!("error {errnum}");
     }
     // SAFETY: non-NULL NUL-terminated string from libc.
-    unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned()
+    unsafe { std::ffi::CStr::from_ptr(p) }
+        .to_string_lossy()
+        .into_owned()
 }
 
 pub fn wait_result_to_str(exitstatus: i32) -> String {
@@ -156,7 +164,10 @@ mod tests {
 
     #[test]
     fn exit_code_classification() {
-        assert_eq!(wait_result_to_str(exited(0)), "child process exited with exit code 0");
+        assert_eq!(
+            wait_result_to_str(exited(0)),
+            "child process exited with exit code 0"
+        );
         assert_eq!(wait_result_to_str(exited(126)), "command not executable");
         assert_eq!(wait_result_to_str(exited(127)), "command not found");
     }
@@ -169,8 +180,14 @@ mod tests {
 
     #[test]
     fn is_signal_matches_direct_and_shell_form() {
-        assert!(wait_result_is_signal(signaled(libc::SIGTERM), libc::SIGTERM));
-        assert!(wait_result_is_signal(exited(128 + libc::SIGTERM), libc::SIGTERM));
+        assert!(wait_result_is_signal(
+            signaled(libc::SIGTERM),
+            libc::SIGTERM
+        ));
+        assert!(wait_result_is_signal(
+            exited(128 + libc::SIGTERM),
+            libc::SIGTERM
+        ));
         assert!(!wait_result_is_signal(exited(1), libc::SIGTERM));
     }
 
@@ -185,7 +202,10 @@ mod tests {
     #[test]
     fn exit_code_roundtrip() {
         assert_eq!(wait_result_to_exit_code(exited(3)), 3);
-        assert_eq!(wait_result_to_exit_code(signaled(libc::SIGTERM)), 128 + libc::SIGTERM);
+        assert_eq!(
+            wait_result_to_exit_code(signaled(libc::SIGTERM)),
+            128 + libc::SIGTERM
+        );
         assert_eq!(wait_result_to_exit_code(-1), -1);
     }
 }

@@ -43,9 +43,11 @@ fn with_cache<R>(f: impl FnOnce(&mut ReCache) -> R) -> R {
     RE_CACHE.with(|cell| {
         let mut slot = cell.borrow_mut();
         let cache = slot.get_or_insert_with(|| {
-            let mcx =
-                ::mcx::session_root("RegexpCacheMemoryContext").mcx();
-            ManuallyDrop::new(ReCache { mcx, entries: PgVec::new_in(mcx) })
+            let mcx = ::mcx::session_root("RegexpCacheMemoryContext").mcx();
+            ManuallyDrop::new(ReCache {
+                mcx,
+                entries: PgVec::new_in(mcx),
+            })
         });
         f(cache)
     })
@@ -108,7 +110,12 @@ pub fn RE_compile_and_cache(
         }
         cache.entries.insert(
             0,
-            CachedRe { cre_pat: pat_copy, cre_flags: cflags, cre_collation: collation, re: compiled.clone() },
+            CachedRe {
+                cre_pat: pat_copy,
+                cre_flags: cflags,
+                cre_collation: collation,
+                re: compiled.clone(),
+            },
         );
         Ok(())
     });
@@ -168,7 +175,14 @@ pub fn nameregexeq(mcx: Mcx<'_>, n: &[u8], p: &[u8], collation: Oid) -> PgResult
 }
 
 pub fn nameregexne(mcx: Mcx<'_>, n: &[u8], p: &[u8], collation: Oid) -> PgResult<bool> {
-    Ok(!RE_compile_and_execute(mcx, p, n, REG_ADVANCED, collation, &mut [])?)
+    Ok(!RE_compile_and_execute(
+        mcx,
+        p,
+        n,
+        REG_ADVANCED,
+        collation,
+        &mut [],
+    )?)
 }
 
 pub fn textregexeq(mcx: Mcx<'_>, s: &[u8], p: &[u8], collation: Oid) -> PgResult<bool> {
@@ -176,7 +190,14 @@ pub fn textregexeq(mcx: Mcx<'_>, s: &[u8], p: &[u8], collation: Oid) -> PgResult
 }
 
 pub fn textregexne(mcx: Mcx<'_>, s: &[u8], p: &[u8], collation: Oid) -> PgResult<bool> {
-    Ok(!RE_compile_and_execute(mcx, p, s, REG_ADVANCED, collation, &mut [])?)
+    Ok(!RE_compile_and_execute(
+        mcx,
+        p,
+        s,
+        REG_ADVANCED,
+        collation,
+        &mut [],
+    )?)
 }
 
 pub fn nameicregexeq(mcx: Mcx<'_>, n: &[u8], p: &[u8], collation: Oid) -> PgResult<bool> {
@@ -184,7 +205,14 @@ pub fn nameicregexeq(mcx: Mcx<'_>, n: &[u8], p: &[u8], collation: Oid) -> PgResu
 }
 
 pub fn nameicregexne(mcx: Mcx<'_>, n: &[u8], p: &[u8], collation: Oid) -> PgResult<bool> {
-    Ok(!RE_compile_and_execute(mcx, p, n, REG_ADVANCED | REG_ICASE, collation, &mut [])?)
+    Ok(!RE_compile_and_execute(
+        mcx,
+        p,
+        n,
+        REG_ADVANCED | REG_ICASE,
+        collation,
+        &mut [],
+    )?)
 }
 
 pub fn texticregexeq(mcx: Mcx<'_>, s: &[u8], p: &[u8], collation: Oid) -> PgResult<bool> {
@@ -192,7 +220,14 @@ pub fn texticregexeq(mcx: Mcx<'_>, s: &[u8], p: &[u8], collation: Oid) -> PgResu
 }
 
 pub fn texticregexne(mcx: Mcx<'_>, s: &[u8], p: &[u8], collation: Oid) -> PgResult<bool> {
-    Ok(!RE_compile_and_execute(mcx, p, s, REG_ADVANCED | REG_ICASE, collation, &mut [])?)
+    Ok(!RE_compile_and_execute(
+        mcx,
+        p,
+        s,
+        REG_ADVANCED | REG_ICASE,
+        collation,
+        &mut [],
+    )?)
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -202,7 +237,10 @@ pub struct PgReFlags {
 }
 
 pub fn parse_re_flags(opts: Option<&[u8]>) -> PgResult<PgReFlags> {
-    let mut flags = PgReFlags { cflags: REG_ADVANCED, glob: false };
+    let mut flags = PgReFlags {
+        cflags: REG_ADVANCED,
+        glob: false,
+    };
 
     if let Some(opt_p) = opts {
         for i in 0..opt_p.len() {
@@ -242,8 +280,7 @@ pub fn parse_re_flags(opts: Option<&[u8]>) -> PgResult<PgReFlags> {
 #[cold]
 #[inline(never)]
 fn invalid_re_option(opt: &[u8]) -> PgError {
-    let mblen =
-        (mbutils::pg_mblen_range(opt).unwrap_or(opt.len() as i32) as usize).min(opt.len());
+    let mblen = (mbutils::pg_mblen_range(opt).unwrap_or(opt.len() as i32) as usize).min(opt.len());
     PgError::error(format!(
         "invalid regular expression option: \"{}\"",
         String::from_utf8_lossy(&opt[..mblen])
@@ -320,7 +357,10 @@ pub fn textregexsubstr<'mcx>(
     if mbutils::pg_database_encoding_max_length() == 1 {
         Ok(Some(slice_in(mcx, &s[so as usize..eo as usize])?))
     } else {
-        Ok(Some(mbutils::pg_wchar2mb_with_len(mcx, &wide[so as usize..eo as usize])?))
+        Ok(Some(mbutils::pg_wchar2mb_with_len(
+            mcx,
+            &wide[so as usize..eo as usize],
+        )?))
     }
 }
 
@@ -564,7 +604,9 @@ pub fn similar_escape<'mcx>(
     pat_text: Option<&[u8]>,
     esc_text: Option<&[u8]>,
 ) -> PgResult<Option<PgVec<'mcx, u8>>> {
-    let Some(pat_text) = pat_text else { return Ok(None) };
+    let Some(pat_text) = pat_text else {
+        return Ok(None);
+    };
     Ok(Some(similar_escape_internal(mcx, pat_text, esc_text)?))
 }
 

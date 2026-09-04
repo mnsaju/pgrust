@@ -117,8 +117,7 @@ pub fn IsCatalogNamespace(namespaceId: Oid) -> bool {
 }
 
 pub fn IsToastNamespace(namespaceId: Oid) -> bool {
-    namespaceId == PG_TOAST_NAMESPACE
-        || namespace_seams::is_temp_toast_namespace::call(namespaceId)
+    namespaceId == PG_TOAST_NAMESPACE || namespace_seams::is_temp_toast_namespace::call(namespaceId)
 }
 
 pub fn IsReservedName(name: &str) -> bool {

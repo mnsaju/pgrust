@@ -230,8 +230,10 @@ fn xact_decode(ctx: &mut LogicalDecodingContext, buf: XLogRecordBuffer) -> PgRes
             }
         }
         XLOG_XACT_PREPARE => {
-            let parsed =
-                xact::parse_prepare_record(ctx.reader.XLogRecGetInfo(), ctx.reader.XLogRecGetData())?;
+            let parsed = xact::parse_prepare_record(
+                ctx.reader.XLogRecGetInfo(),
+                ctx.reader.XLogRecGetData(),
+            )?;
 
             // Process the transaction in a two-phase manner iff the output
             // plugin supports two-phase commits and doesn't filter the
@@ -843,7 +845,9 @@ fn DecodeDelete(ctx: &mut LogicalDecodingContext, buf: XLogRecordBuffer) -> PgRe
     let mut oldtuple = None;
     if flags & (XLH_DELETE_CONTAINS_OLD_TUPLE | XLH_DELETE_CONTAINS_OLD_KEY) != 0 {
         let datalen = ctx.reader.XLogRecGetDataLen() as usize - SizeOfHeapDelete;
-        debug_assert!(ctx.reader.XLogRecGetDataLen() as usize > SizeOfHeapDelete + SizeOfHeapHeader);
+        debug_assert!(
+            ctx.reader.XLogRecGetDataLen() as usize > SizeOfHeapDelete + SizeOfHeapHeader
+        );
         let mut t = ctx.reorder.alloc_tuple_buf(datalen - SizeOfHeapHeader)?;
         let rec = ctx.reader.XLogRecGetData();
         DecodeXLogTuple(&rec[SizeOfHeapDelete..], &mut t);

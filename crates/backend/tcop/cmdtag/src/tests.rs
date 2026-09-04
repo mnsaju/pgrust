@@ -29,7 +29,10 @@ fn known_positions_match_cmdtaglist_h() {
     assert_eq!(GetCommandTagName(CMDTAG_INSERT), "INSERT");
     assert_eq!(GetCommandTagName(CMDTAG_MERGE), "MERGE");
     assert_eq!(GetCommandTagName(CMDTAG_MOVE), "MOVE");
-    assert_eq!(GetCommandTagName(CommandTag::REFRESH_MATERIALIZED_VIEW), "REFRESH MATERIALIZED VIEW");
+    assert_eq!(
+        GetCommandTagName(CommandTag::REFRESH_MATERIALIZED_VIEW),
+        "REFRESH MATERIALIZED VIEW"
+    );
     assert_eq!(GetCommandTagName(CMDTAG_SELECT), "SELECT");
     assert_eq!(GetCommandTagName(CMDTAG_UPDATE), "UPDATE");
 }
@@ -50,10 +53,18 @@ fn flag_sets_match_cmdtaglist_h() {
         .filter(|r| r.table_rewrite_ok)
         .map(|r| r.name)
         .collect();
-    assert_eq!(rewrite, ["ALTER MATERIALIZED VIEW", "ALTER TABLE", "ALTER TYPE"]);
-    assert_eq!(TAG_BEHAVIOR.iter().filter(|r| r.event_trigger_ok).count(), 124);
+    assert_eq!(
+        rewrite,
+        ["ALTER MATERIALIZED VIEW", "ALTER TABLE", "ALTER TYPE"]
+    );
+    assert_eq!(
+        TAG_BEHAVIOR.iter().filter(|r| r.event_trigger_ok).count(),
+        124
+    );
     assert!(command_tag_event_trigger_ok(GetCommandTagEnum(b"LOGIN")));
-    assert!(!command_tag_event_trigger_ok(GetCommandTagEnum(b"ALTER DATABASE")));
+    assert!(!command_tag_event_trigger_ok(GetCommandTagEnum(
+        b"ALTER DATABASE"
+    )));
 }
 
 #[test]

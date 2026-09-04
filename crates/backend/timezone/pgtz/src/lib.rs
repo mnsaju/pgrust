@@ -363,9 +363,7 @@ pub fn pg_tzenumerate_next(dir: &mut PgTzEnum) -> PgResult<Option<&PgTz>> {
         })?;
         if meta.is_dir() {
             if dir.depth >= (MAX_TZDIR_DEPTH - 1) as isize {
-                return Err(
-                    PgError::error("timezone directory stack overflow".to_string()).into(),
-                );
+                return Err(PgError::error("timezone directory stack overflow".to_string()).into());
             }
             let sub = fd::AllocateDir(&fullname)?;
             if sub.is_none() {

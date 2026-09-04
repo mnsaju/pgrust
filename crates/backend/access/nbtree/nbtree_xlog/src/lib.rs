@@ -11,12 +11,11 @@ use types_core::{Buffer, InvalidBuffer, OffsetNumber, BLCKSZ};
 use types_error::{PgError, PgResult};
 use types_nbtree::{
     BTMetaPageData, BTPageOpaqueData, BTP_INCOMPLETE_SPLIT, BTP_LEAF, BTP_META, BTP_ROOT,
-    BTREE_MAGIC, BTREE_METAPAGE, BTREE_NOVAC_VERSION, P_FIRSTDATAKEY, P_HIKEY,
-    P_INCOMPLETE_SPLIT, P_NONE, XLOG_BTREE_DEDUP, XLOG_BTREE_DELETE, XLOG_BTREE_INSERT_LEAF,
-    XLOG_BTREE_INSERT_META, XLOG_BTREE_INSERT_POST, XLOG_BTREE_INSERT_UPPER,
-    XLOG_BTREE_MARK_PAGE_HALFDEAD, XLOG_BTREE_META_CLEANUP, XLOG_BTREE_NEWROOT,
-    XLOG_BTREE_REUSE_PAGE, XLOG_BTREE_SPLIT_L, XLOG_BTREE_SPLIT_R, XLOG_BTREE_UNLINK_PAGE,
-    XLOG_BTREE_UNLINK_PAGE_META, XLOG_BTREE_VACUUM,
+    BTREE_MAGIC, BTREE_METAPAGE, BTREE_NOVAC_VERSION, P_FIRSTDATAKEY, P_HIKEY, P_INCOMPLETE_SPLIT,
+    P_NONE, XLOG_BTREE_DEDUP, XLOG_BTREE_DELETE, XLOG_BTREE_INSERT_LEAF, XLOG_BTREE_INSERT_META,
+    XLOG_BTREE_INSERT_POST, XLOG_BTREE_INSERT_UPPER, XLOG_BTREE_MARK_PAGE_HALFDEAD,
+    XLOG_BTREE_META_CLEANUP, XLOG_BTREE_NEWROOT, XLOG_BTREE_REUSE_PAGE, XLOG_BTREE_SPLIT_L,
+    XLOG_BTREE_SPLIT_R, XLOG_BTREE_UNLINK_PAGE, XLOG_BTREE_UNLINK_PAGE_META, XLOG_BTREE_VACUUM,
 };
 use types_storage::bufpage::{PageMut, PageRef, SizeOfPageHeaderData};
 use xlogreader_seams::XLogReaderState;
@@ -44,7 +43,10 @@ pub mod sim_red {
 }
 
 fn main_data<'a>(record: &'a XLogReaderState) -> &'a [u8] {
-    let rec = record.record.as_ref().expect("btree redo with no decoded record");
+    let rec = record
+        .record
+        .as_ref()
+        .expect("btree redo with no decoded record");
     // SAFETY: points into the reader's decode buffer, valid for the redo
     // callback's duration.
     unsafe { rec.main_data_bytes() }
@@ -91,7 +93,12 @@ fn write_opaque(page: &mut PageMut<'_>, opaque: &BTPageOpaqueData) {
     debug_assert!(off == BLCKSZ - SizeOfBtreeOpaque);
     // SAFETY: in-bounds 4-aligned special area; exclusive page access.
     unsafe {
-        page.as_ref().as_ptr().cast_mut().add(off).cast::<BTPageOpaqueData>().write(*opaque)
+        page.as_ref()
+            .as_ptr()
+            .cast_mut()
+            .add(off)
+            .cast::<BTPageOpaqueData>()
+            .write(*opaque)
     }
 }
 
@@ -126,7 +133,9 @@ fn bt_restore_page(page: &mut PageMut<'_>, from: &[u8]) -> PgResult<()> {
             .add_item(&from[off..off + itemsz], (nitems - i) as OffsetNumber, 0)
             .is_none()
         {
-            return Err(panic_err("_bt_restore_page: cannot add item to page".into()));
+            return Err(panic_err(
+                "_bt_restore_page: cannot add item to page".into(),
+            ));
         }
     }
     Ok(())
@@ -220,8 +229,7 @@ fn bt_swap_posting(newitem: &mut [u8], nposting: &mut [u8], postingoff: usize) -
     }
 
     // posting offset = ip_blkid of the alt TID (bi_hi << 16 | bi_lo).
-    let postoff =
-        ((u16_at(nposting, 0) as u32) << 16 | u16_at(nposting, 2) as u32) as usize;
+    let postoff = ((u16_at(nposting, 0) as u32) << 16 | u16_at(nposting, 2) as u32) as usize;
     let replacepos = postoff + postingoff * IPD_SIZE;
     let nmovebytes = (nhtids - postingoff - 1) * IPD_SIZE;
 
@@ -297,7 +305,10 @@ fn btree_xlog_insert(
                     maxalign(oposting_size),
                 );
             }
-            if pm.add_item(&newitem.0[..orignewitem.len()], offnum, 0).is_none() {
+            if pm
+                .add_item(&newitem.0[..orignewitem.len()], offnum, 0)
+                .is_none()
+            {
                 return Err(panic_err("failed to add posting split new item".into()));
             }
         }
@@ -328,10 +339,12 @@ fn btree_xlog_split(newitemonleft: bool, record: &mut XLogReaderState) -> PgResu
     let postingoff = u16::from_ne_bytes(xlrec[8..10].try_into().unwrap());
     let isleaf = level == 0;
 
-    let (_, _, origpagenumber, _) =
-        record.block_tag_extended(0).expect("btree_xlog_split: no block 0");
-    let (_, _, rightpagenumber, _) =
-        record.block_tag_extended(1).expect("btree_xlog_split: no block 1");
+    let (_, _, origpagenumber, _) = record
+        .block_tag_extended(0)
+        .expect("btree_xlog_split: no block 0");
+    let (_, _, rightpagenumber, _) = record
+        .block_tag_extended(1)
+        .expect("btree_xlog_split: no block 1");
     let spagenumber = record.block_tag_extended(2).map(|t| t.2).unwrap_or(P_NONE);
 
     if !isleaf {
@@ -389,8 +402,7 @@ fn btree_xlog_split(newitemonleft: bool, record: &mut XLogReaderState) -> PgResu
             if postingoff != 0 {
                 let itemid = origpage.item_id(replacepostingoff);
                 let opos_off = itemid.lp_off() as usize;
-                nposting_sz =
-                    (u16_le_native(origpage, opos_off + 6) & INDEX_SIZE_MASK) as usize;
+                nposting_sz = (u16_le_native(origpage, opos_off + 6) & INDEX_SIZE_MASK) as usize;
                 let (ni, np) =
                     swap_imgs.insert((ItupImage([0u8; BLCKSZ]), ItupImage([0u8; BLCKSZ])));
                 ni.0[..newitemsz].copy_from_slice(newitem);
@@ -421,15 +433,16 @@ fn btree_xlog_split(newitemonleft: bool, record: &mut XLogReaderState) -> PgResu
         struct TempPage([u8; BLCKSZ]);
         let mut temp = TempPage([0u8; BLCKSZ]);
         // SAFETY: owned, aligned BLCKSZ scratch.
-        let mut leftpage = unsafe {
-            PageMut::from_raw(core::ptr::NonNull::new(temp.0.as_mut_ptr()).unwrap())
-        };
+        let mut leftpage =
+            unsafe { PageMut::from_raw(core::ptr::NonNull::new(temp.0.as_mut_ptr()).unwrap()) };
         bt_pageinit(&mut leftpage);
         write_opaque(&mut leftpage, &oopaque);
 
         let mut leftoff = P_HIKEY;
         if leftpage.add_item(left_hikey, P_HIKEY, 0).is_none() {
-            return Err(error_err("failed to add high key to left page after split".into()));
+            return Err(error_err(
+                "failed to add high key to left page after split".into(),
+            ));
         }
         leftoff += 1;
 
@@ -440,7 +453,10 @@ fn btree_xlog_split(newitemonleft: bool, record: &mut XLogReaderState) -> PgResu
                 let nposting = &swap_imgs.as_ref().unwrap().1;
                 let np_sz = maxalign(itup_size_at(&nposting.0, 0));
                 debug_assert!(np_sz == maxalign(nposting_sz));
-                if leftpage.add_item(&nposting.0[..np_sz], leftoff, 0).is_none() {
+                if leftpage
+                    .add_item(&nposting.0[..np_sz], leftoff, 0)
+                    .is_none()
+                {
                     return Err(error_err(
                         "failed to add new posting list item to left page after split".into(),
                     ));
@@ -464,7 +480,9 @@ fn btree_xlog_split(newitemonleft: bool, record: &mut XLogReaderState) -> PgResu
             // SAFETY: in-page tuple image under the pin + lock.
             let item = unsafe { core::slice::from_raw_parts(ptr, len as usize) };
             if leftpage.add_item(item, leftoff, 0).is_none() {
-                return Err(error_err("failed to add old item to left page after split".into()));
+                return Err(error_err(
+                    "failed to add old item to left page after split".into(),
+                ));
             }
             leftoff += 1;
             off += 1;
@@ -472,7 +490,9 @@ fn btree_xlog_split(newitemonleft: bool, record: &mut XLogReaderState) -> PgResu
 
         if newitemonleft && off == newitemoff {
             if leftpage.add_item(newitem, leftoff, 0).is_none() {
-                return Err(error_err("failed to add new item to left page after split".into()));
+                return Err(error_err(
+                    "failed to add new item to left page after split".into(),
+                ));
             }
         }
 
@@ -548,9 +568,8 @@ fn btree_xlog_dedup(record: &mut XLogReaderState) -> PgResult<()> {
         struct TempPage([u8; BLCKSZ]);
         let mut temp = TempPage([0u8; BLCKSZ]);
         // SAFETY: owned, aligned BLCKSZ scratch.
-        let mut newpage = unsafe {
-            PageMut::from_raw(core::ptr::NonNull::new(temp.0.as_mut_ptr()).unwrap())
-        };
+        let mut newpage =
+            unsafe { PageMut::from_raw(core::ptr::NonNull::new(temp.0.as_mut_ptr()).unwrap()) };
         bt_pageinit(&mut newpage);
         write_opaque(&mut newpage, &opaque);
 
@@ -579,8 +598,7 @@ fn btree_xlog_dedup(record: &mut XLogReaderState) -> PgResult<()> {
                 {
                     if !state.save_htid(itup) {
                         return Err(error_err(
-                            "deduplication failed to add heap tid to pending posting list"
-                                .into(),
+                            "deduplication failed to add heap tid to pending posting list".into(),
                         ));
                     }
                 } else {
@@ -595,7 +613,9 @@ fn btree_xlog_dedup(record: &mut XLogReaderState) -> PgResult<()> {
         }
         // SAFETY: as above.
         if unsafe { state.finish_pending(&mut newpage) }.is_err() {
-            return Err(error_err("deduplication failed to add tuple to page".into()));
+            return Err(error_err(
+                "deduplication failed to add tuple to page".into(),
+            ));
         }
         debug_assert!(state.nintervals == nintervals);
         debug_assert!(state.intervals_bytes() == intervals);
@@ -609,11 +629,7 @@ fn btree_xlog_dedup(record: &mut XLogReaderState) -> PgResult<()> {
         // PageRestoreTempPage
         // SAFETY: whole-page overwrite under the exclusive redo lock.
         unsafe {
-            core::ptr::copy_nonoverlapping(
-                temp.0.as_ptr(),
-                page.as_ptr().cast_mut(),
-                BLCKSZ,
-            )
+            core::ptr::copy_nonoverlapping(temp.0.as_ptr(), page.as_ptr().cast_mut(), BLCKSZ)
         };
         // SAFETY: pin + exclusive lock per the redo protocol (module contract).
         let mut pm = unsafe { page_mut(buf) };
@@ -685,8 +701,7 @@ fn tup_nposting(b: &[u8]) -> usize {
 
 fn tup_posting_offset(b: &[u8]) -> usize {
     debug_assert!(tup_is_posting(b));
-    ((u16::from_ne_bytes([b[0], b[1]]) as usize) << 16)
-        | u16::from_ne_bytes([b[2], b[3]]) as usize
+    ((u16::from_ne_bytes([b[0], b[1]]) as usize) << 16) | u16::from_ne_bytes([b[2], b[3]]) as usize
 }
 
 // _bt_update_posting over raw tuple bytes: write the replacement image
@@ -709,9 +724,7 @@ fn xlog_update_posting(orig: &[u8], deletetids: &[u8], out: &mut [u8]) -> usize 
     let info = (tup_tinfo(out) & !INDEX_SIZE_MASK) | newsize as u16;
 
     let htids_off = if nhtids > 1 {
-        out[6..8].copy_from_slice(
-            &(info | types_nbtree::INDEX_ALT_TID_MASK).to_ne_bytes(),
-        );
+        out[6..8].copy_from_slice(&(info | types_nbtree::INDEX_ALT_TID_MASK).to_ne_bytes());
         let posid = nhtids as u16 | types_nbtree::BT_IS_POSTING;
         out[4..6].copy_from_slice(&posid.to_ne_bytes());
         out[0..2].copy_from_slice(&((keysize >> 16) as u16).to_ne_bytes());
@@ -751,8 +764,7 @@ fn btree_xlog_updates(
 ) -> PgResult<()> {
     let mut scratch = [0u8; BLCKSZ];
     for i in 0..nupdated {
-        let offnum =
-            u16::from_ne_bytes([updatedoffsets[i * 2], updatedoffsets[i * 2 + 1]]);
+        let offnum = u16::from_ne_bytes([updatedoffsets[i * 2], updatedoffsets[i * 2 + 1]]);
         let ndeletedtids = u16::from_ne_bytes([updates[0], updates[1]]) as usize;
         let deletetids = &updates[2..2 + ndeletedtids * 2];
 
@@ -785,8 +797,9 @@ fn btree_xlog_delete(record: &mut XLogReaderState) -> PgResult<()> {
         let xlrec = main_data(record);
         let horizon = u32::from_ne_bytes(xlrec[0..4].try_into().unwrap());
         let is_catalog_rel = xlrec[8] != 0;
-        let (rlocator, _, _, _) =
-            record.block_tag_extended(0).expect("btree_xlog_delete: no block 0");
+        let (rlocator, _, _, _) = record
+            .block_tag_extended(0)
+            .expect("btree_xlog_delete: no block 0");
         standby::ResolveRecoveryConflictWithSnapshot(horizon, is_catalog_rel, rlocator)?;
     }
     btree_xlog_vacuum_or_delete(record, false)
@@ -828,7 +841,11 @@ fn btree_xlog_vacuum_or_delete(record: &mut XLogReaderState, is_vacuum: bool) ->
         // DST RED (sim-cfg only): the deliberately weakened vacuum redo —
         // stale entries kept, everything else applied. See sim_red.
         #[cfg(pgrust_sim)]
-        let ndeleted = if is_vacuum && crate::sim_red::armed() { 0 } else { ndeleted };
+        let ndeleted = if is_vacuum && crate::sim_red::armed() {
+            0
+        } else {
+            ndeleted
+        };
 
         if ndeleted > 0 {
             let mut offsets = [0 as OffsetNumber; MaxIndexTuplesPerPage];
@@ -874,8 +891,7 @@ fn btree_xlog_mark_page_halfdead(record: &mut XLogReaderState) -> PgResult<()> {
             let (ptr, _) = page.item_raw(id);
             // SAFETY: pivot tuple's downlink block number (t_tid bytes 0..4).
             unsafe {
-                ((ptr.cast::<u16>().read() as u32) << 16)
-                    | ptr.add(2).cast::<u16>().read() as u32
+                ((ptr.cast::<u16>().read() as u32) << 16) | ptr.add(2).cast::<u16>().read() as u32
             }
         };
         {
@@ -917,7 +933,9 @@ fn btree_xlog_mark_page_halfdead(record: &mut XLogReaderState) -> PgResult<()> {
 
         let trunctuple = trunc_hikey(topparent);
         if pm.add_item(&trunctuple, P_HIKEY, 0).is_none() {
-            return Err(error_err("could not add dummy high key to half-dead page".into()));
+            return Err(error_err(
+                "could not add dummy high key to half-dead page".into(),
+            ));
         }
 
         pm.set_lsn(lsn);
@@ -1061,7 +1079,11 @@ fn page_set_deleted(pm: &mut PageMut<'_>, safexid: u64) {
 }
 
 pub fn btree_redo(record: &mut XLogReaderState) -> PgResult<()> {
-    let info = record.record.as_ref().expect("btree_redo with no decoded record").xl_info
+    let info = record
+        .record
+        .as_ref()
+        .expect("btree_redo with no decoded record")
+        .xl_info
         & !XLR_INFO_MASK;
     match info {
         XLOG_BTREE_INSERT_LEAF => btree_xlog_insert(true, false, false, record),

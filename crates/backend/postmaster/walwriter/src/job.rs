@@ -137,7 +137,10 @@ impl auxjob::AuxDaemon for WalWriterDaemon {
 
     fn install_signal_handlers(&self) {
         use procsignal::ThreadSignalHandler::{Ignore, Simple};
-        procsignal::pqsignal_thread(procsignal::signums::SIGHUP, Simple(interrupt::SignalHandlerForConfigReload));
+        procsignal::pqsignal_thread(
+            procsignal::signums::SIGHUP,
+            Simple(interrupt::SignalHandlerForConfigReload),
+        );
         procsignal::pqsignal_thread(
             procsignal::signums::SIGINT,
             Simple(interrupt::SignalHandlerForShutdownRequest),
@@ -161,7 +164,9 @@ impl auxjob::AuxDaemon for WalWriterDaemon {
             *st = WalWriterState::new();
         }
         transam_xlog::SetWalWriterSleeping(false);
-        lmgr_proc::ProcGlobal().walwriterProc.store(g::MyProcNumber(), Relaxed);
+        lmgr_proc::ProcGlobal()
+            .walwriterProc
+            .store(g::MyProcNumber(), Relaxed);
         self.refresh_overlay();
     }
 

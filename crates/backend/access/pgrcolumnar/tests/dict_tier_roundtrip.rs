@@ -8,14 +8,14 @@
 // test-only driver the wiring tranche will replace with PgrcolumnarSource.
 use std::rc::Rc;
 
-use pgrcolumnar::scan::CbScanDescData;
-use pgrcolumnar::writer::open_writer_at;
-use pgrcolumnar::ColType;
 use datum::Datum;
 use exectuples::{SoaBatch, SOA_BM_WORDS};
 use laneexec::shape::{LaneClause, LaneCmpClause, LaneCmpRhs, LaneQualShape, LaneSuffix};
 use laneexec::{eval_lane_qual, translate_scan_qual};
 use mcx::{Mcx, MemoryContext, PgVec};
+use pgrcolumnar::scan::CbScanDescData;
+use pgrcolumnar::writer::open_writer_at;
+use pgrcolumnar::ColType;
 use types_core::{Oid, INVALID_PROC_NUMBER, RELPERSISTENCE_PERMANENT};
 use types_rel::{FormData_pg_class, LockInfoData, LockRelId, Relation, RELKIND_RELATION};
 use types_tuple::{CompactAttribute, FormData_pg_attribute, NameData, TupleDescData};
@@ -109,7 +109,12 @@ fn test_relation<'mcx>(mcx: Mcx<'mcx>, oid: Oid) -> Relation<'mcx> {
         rd_newRelfilelocatorSubid: std::cell::Cell::new(0),
         rd_firstRelfilelocatorSubid: std::cell::Cell::new(0),
         rd_droppedSubid: std::cell::Cell::new(0),
-        rd_lockInfo: LockInfoData { lockRelId: LockRelId { relId: oid, dbId: 5 } },
+        rd_lockInfo: LockInfoData {
+            lockRelId: LockRelId {
+                relId: oid,
+                dbId: 5,
+            },
+        },
         rd_rel,
         rd_att: tupdesc(mcx),
         rd_index: None,
@@ -209,17 +214,23 @@ fn dict_tier_roundtrip_over_real_part() {
 
     // Source data: 20k rows (3 granules), 8-string vocabulary (duplicates
     // force the dict encoding), ints cycling through a small range.
-    let vocab: [&[u8]; 8] =
-        [b"alpha", b"drab", b"beta", b"crab", b"delta", b"ab", b"zz", b"gamma"];
+    let vocab: [&[u8]; 8] = [
+        b"alpha", b"drab", b"beta", b"crab", b"delta", b"ab", b"zz", b"gamma",
+    ];
     let n_rows = 20_000usize;
     let ints: Vec<i64> = (0..n_rows as i64).map(|i| (i * 7) % 100).collect();
-    let codes: Vec<usize> = (0..n_rows).map(|i| (i * 11 + i / 13) % vocab.len()).collect();
+    let codes: Vec<usize> = (0..n_rows)
+        .map(|i| (i * 11 + i / 13) % vocab.len())
+        .collect();
 
     let coltypes = vec![ColType::I64, ColType::Text];
     let mut w = open_writer_at(&path, coltypes.clone()).unwrap();
     let mut keep = Vec::new();
     for i in 0..n_rows {
-        let vals = [Datum::from_i64(ints[i]), text_datum(vocab[codes[i]], &mut keep)];
+        let vals = [
+            Datum::from_i64(ints[i]),
+            text_datum(vocab[codes[i]], &mut keep),
+        ];
         w.append_row(&vals, &[false, false]).unwrap();
         if keep.len() > 512 {
             // append_row copies the payload; the images need not outlive it.
@@ -228,7 +239,11 @@ fn dict_tier_roundtrip_over_real_part() {
     }
     w.finish().unwrap();
 
-    let part = std::sync::Arc::new(pgrcolumnar::reader::Part::open(&path, 2).unwrap().expect("part exists"));
+    let part = std::sync::Arc::new(
+        pgrcolumnar::reader::Part::open(&path, 2)
+            .unwrap()
+            .expect("part exists"),
+    );
     assert_eq!(part.total_rows(), n_rows as u64);
 
     let ctx = MemoryContext::new("cbdicttier");
@@ -261,7 +276,9 @@ fn dict_tier_roundtrip_over_real_part() {
     assert!(!lq.requal);
     // The staged drive would fold this zone src per granule; assert the
     // translate side of the contract here.
-    let zone_srcs: Vec<_> = (0..lq.nstaged()).filter_map(|k| lq.staged_zone_src(k)).collect();
+    let zone_srcs: Vec<_> = (0..lq.nstaged())
+        .filter_map(|k| lq.staged_zone_src(k))
+        .collect();
     assert_eq!(zone_srcs.len(), 1);
     assert_eq!(zone_srcs[0].col, 0);
 
@@ -273,15 +290,20 @@ fn dict_tier_roundtrip_over_real_part() {
 
     let matches_ab = |s: &[u8]| s.windows(2).any(|w| w == b"ab");
     let oracle = |row: usize| ints[row] > 42 && matches_ab(vocab[codes[row]]);
-    let (staged, selected, dict_windows) =
-        drive_scan(&mut scan, &mut soa, &mut lq, 2, &oracle);
+    let (staged, selected, dict_windows) = drive_scan(&mut scan, &mut soa, &mut lq, 2, &oracle);
     assert_eq!(staged, n_rows, "no zone quals: every row stages");
     let want_total = (0..n_rows).filter(|&i| oracle(i)).count();
     assert_eq!(selected, want_total);
-    assert!(want_total > 0 && want_total < n_rows, "fixture must discriminate");
+    assert!(
+        want_total > 0 && want_total < n_rows,
+        "fixture must discriminate"
+    );
     // The text chunk dict-encoded and the zero-decode SoaDictLane publish
     // engaged on every window (the whole point of the tier).
-    assert!(dict_windows > 0, "text column must dict-encode + publish lanes");
+    assert!(
+        dict_windows > 0,
+        "text column must dict-encode + publish lanes"
+    );
 
     // Rescan (epoch stability: memo keyed on rg index survives; results
     // must be identical).
@@ -294,7 +316,9 @@ fn dict_tier_roundtrip_over_real_part() {
     let mut lq2 = translate_scan_qual(&qual, true).unwrap();
     let mut scan2 = CbScanDescData::new_with_part(
         scan_base(mcx),
-        Some(std::sync::Arc::new(pgrcolumnar::reader::Part::open(&path, 2).unwrap().unwrap())),
+        Some(std::sync::Arc::new(
+            pgrcolumnar::reader::Part::open(&path, 2).unwrap().unwrap(),
+        )),
         vec![ColType::I64, ColType::Text],
     );
     let mut soa2 = SoaBatch::new_in(mcx, 2);

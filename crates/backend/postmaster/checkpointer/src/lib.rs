@@ -246,7 +246,10 @@ pub fn CheckpointerMain(startup_data: &StartupData) -> ! {
 
     {
         use procsignal::ThreadSignalHandler::{Ignore, Simple};
-        procsignal::pqsignal_thread(procsignal::signums::SIGHUP, Simple(interrupt::SignalHandlerForConfigReload));
+        procsignal::pqsignal_thread(
+            procsignal::signums::SIGHUP,
+            Simple(interrupt::SignalHandlerForConfigReload),
+        );
         procsignal::pqsignal_thread(procsignal::signums::SIGINT, Simple(ReqShutdownXLOG));
         procsignal::pqsignal_thread(procsignal::signums::SIGTERM, Ignore);
         procsignal::pqsignal_thread(procsignal::signums::SIGALRM, Ignore);
@@ -442,7 +445,11 @@ fn checkpointer_main_loop() -> PgResult<()> {
                 && flags & CHECKPOINT_CAUSE_XLOG != 0
                 && elapsed_secs < CHECK_POINT_WARNING.get() as i64
             {
-                let plural = if elapsed_secs == 1 { "second" } else { "seconds" };
+                let plural = if elapsed_secs == 1 {
+                    "second"
+                } else {
+                    "seconds"
+                };
                 ereport(LOG)
                     .errmsg(format!(
                         "checkpoints are occurring too frequently ({elapsed_secs} {plural} apart)"
@@ -677,7 +684,8 @@ pub fn RequestCheckpoint(flags: i32) -> PgResult<()> {
     let (old_failed, old_started) = with_ckpt_lck(|cp| {
         let old_failed = cp.ckpt_failed.load(Relaxed);
         let old_started = cp.ckpt_started.load(Relaxed);
-        cp.ckpt_flags.fetch_or(flags | CHECKPOINT_REQUESTED, Relaxed);
+        cp.ckpt_flags
+            .fetch_or(flags | CHECKPOINT_REQUESTED, Relaxed);
         (old_failed, old_started)
     });
 
@@ -686,8 +694,15 @@ pub fn RequestCheckpoint(flags: i32) -> PgResult<()> {
         let checkpointer_proc = lmgr_proc::ProcGlobal().checkpointerProc.load(Relaxed);
         if checkpointer_proc == INVALID_PROC_NUMBER {
             if ntries >= MAX_SIGNAL_TRIES || flags & CHECKPOINT_WAIT == 0 {
-                let level = if flags & CHECKPOINT_WAIT != 0 { ERROR } else { LOG };
-                elog(level, "could not notify checkpoint: checkpointer is not running")?;
+                let level = if flags & CHECKPOINT_WAIT != 0 {
+                    ERROR
+                } else {
+                    LOG
+                };
+                elog(
+                    level,
+                    "could not notify checkpoint: checkpointer is not running",
+                )?;
                 break;
             }
         } else {
@@ -744,8 +759,11 @@ pub fn ForwardSyncRequest(ftag: FileTag, req_type: SyncRequestType) -> PgResult<
     }
 
     if am_checkpointer() {
-        return elog(ERROR, "ForwardSyncRequest must not be called in checkpointer")
-            .map(|_| false);
+        return elog(
+            ERROR,
+            "ForwardSyncRequest must not be called in checkpointer",
+        )
+        .map(|_| false);
     }
 
     let cp = shmem();
@@ -836,8 +854,7 @@ pub fn AbsorbSyncRequests() -> PgResult<()> {
     ABSORB_SCRATCH.with(|cell| -> PgResult<()> {
         let mut slot = cell.borrow_mut();
         let buf = slot.get_or_insert_with(|| {
-            let cx: &'static mcx::MemoryContext =
-                mcx::session_root("AbsorbSyncRequests scratch");
+            let cx: &'static mcx::MemoryContext = mcx::session_root("AbsorbSyncRequests scratch");
             // LIFO: empty the droppy TLS slot before its context is freed.
             mcx::register_session_cleanup(Box::new(|| {
                 ABSORB_SCRATCH.with(|c| drop(c.borrow_mut().take()));

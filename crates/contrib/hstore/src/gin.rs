@@ -93,9 +93,7 @@ pub(crate) fn consistent(check: &[i8], strategy: u16, nkeys: usize) -> PgResult<
             Ok(((0..nkeys).all(|i| check[i] != GIN_FALSE), true))
         }
         HSTORE_EXISTS_STRATEGY | HSTORE_EXISTS_ANY_STRATEGY => Ok((true, false)),
-        HSTORE_EXISTS_ALL_STRATEGY => {
-            Ok(((0..nkeys).all(|i| check[i] != GIN_FALSE), false))
-        }
+        HSTORE_EXISTS_ALL_STRATEGY => Ok(((0..nkeys).all(|i| check[i] != GIN_FALSE), false)),
         other => Err(PgError::error(format!("unrecognized strategy number: {other}")).into()),
     }
 }

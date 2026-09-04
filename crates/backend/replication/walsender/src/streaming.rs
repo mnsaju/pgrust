@@ -260,8 +260,7 @@ pub fn XLogSendPhysical(reader: &mut XLogReaderState<'_>) -> PgResult<()> {
             let send_tli = crate::SEND_TIME_LINE.with(|c| c.get());
             let (valid_upto, next_tli) = {
                 let cx = mcx::MemoryContext::new("XLogSendPhysical/timeline-history");
-                let history =
-                    timeline_seams::read_timeline_history::call(cx.mcx(), send_rqst_tli)?;
+                let history = timeline_seams::read_timeline_history::call(cx.mcx(), send_rqst_tli)?;
                 timeline_seams::tli_switch_point::call(send_tli, &history)?
             };
             debug_assert!(send_tli < next_tli);
@@ -381,7 +380,11 @@ fn xlog_send_physical_emit(
         let seg_end = (seg_no + 1) * segsize_u;
         let chunk_end = seg_end.min(endptr);
         let chunk_len = (chunk_end - chunk_start) as usize;
-        let tli = if historic && seg_no == end_seg_no { next_tli } else { send_tli };
+        let tli = if historic && seg_no == end_seg_no {
+            next_tli
+        } else {
+            send_tli
+        };
         if xlogreader_seams::wal_read::call(
             &mut reader.v,
             &mut wal_buf[off..off + chunk_len],
@@ -422,7 +425,11 @@ fn wal_read_raise_error() -> PgResult<()> {
     ereport(ERROR)
         .errcode_for_file_access()
         .errmsg("could not read from WAL: requested WAL segment slice is unavailable")
-        .finish(ErrorLocation::new(file!(), line!() as i32, "WALReadRaiseError"))
+        .finish(ErrorLocation::new(
+            file!(),
+            line!() as i32,
+            "WALReadRaiseError",
+        ))
 }
 
 // static void WalSndLoop(WalSndSendDataCallback send_data): shared by the
@@ -608,7 +615,11 @@ pub(crate) fn WalSndKeepalive(request_reply: bool, write_ptr: XLogRecPtr) -> PgR
         let mut b = b.borrow_mut();
         b.clear();
         b.push(b'k');
-        let wpos = if write_ptr == InvalidXLogRecPtr { sent } else { write_ptr };
+        let wpos = if write_ptr == InvalidXLogRecPtr {
+            sent
+        } else {
+            write_ptr
+        };
         b.extend_from_slice(&wpos.to_be_bytes());
         b.extend_from_slice(&(now as u64).to_be_bytes());
         b.push(u8::from(request_reply));

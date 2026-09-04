@@ -38,7 +38,10 @@ fn hibernation_idle_trajectory_exact() {
         left = hibernate_count_step(left, false);
         if cycle_timeout_ms(left, delay) != delay as i64 && stretch_iteration.is_none() {
             stretch_iteration = Some(i);
-            assert_eq!(cycle_timeout_ms(left, delay), delay as i64 * HIBERNATE_FACTOR);
+            assert_eq!(
+                cycle_timeout_ms(left, delay),
+                delay as i64 * HIBERNATE_FACTOR
+            );
         }
     }
     // Counter 50 decrements once per idle cycle: it reaches 1 after 49
@@ -67,13 +70,23 @@ fn hibernation_exit_on_work_exact() {
     // body's work resets the counter, and the NEXT cycle top exits
     // hibernation.
     let (flag, changed) = hibernate_flag_step(left, hibernating);
-    assert!(flag && !changed, "cycle top before the body sees the old counter");
+    assert!(
+        flag && !changed,
+        "cycle top before the body sees the old counter"
+    );
     left = hibernate_count_step(left, true);
     assert_eq!(left, LOOPS_UNTIL_HIBERNATE);
-    assert_eq!(cycle_timeout_ms(left, 200), 200, "stretch retracts with the reset counter");
+    assert_eq!(
+        cycle_timeout_ms(left, 200),
+        200,
+        "stretch retracts with the reset counter"
+    );
 
     let (flag, changed) = hibernate_flag_step(left, hibernating);
-    assert!(!flag && changed, "next cycle top publishes the exit exactly once");
+    assert!(
+        !flag && changed,
+        "next cycle top publishes the exit exactly once"
+    );
     hibernating = flag;
     let (_, changed) = hibernate_flag_step(left, hibernating);
     assert!(!changed, "no republication while awake");
@@ -106,7 +119,10 @@ const DELAY_US: i64 = 200_000; // wal_writer_delay=200ms
 #[test]
 fn pacing_first_call_and_delay_window_exact() {
     let mut p = WalFlushPacing::new();
-    assert!(wal_flush_pacing_decide(&mut p, 1_000_000, 1, 128, DELAY_US), "first call flushes");
+    assert!(
+        wal_flush_pacing_decide(&mut p, 1_000_000, 1, 128, DELAY_US),
+        "first call flushes"
+    );
     assert!(
         !wal_flush_pacing_decide(&mut p, 1_000_000 + DELAY_US - 1, 127, 128, DELAY_US),
         "inside the window, below the block threshold: defer"
@@ -116,7 +132,13 @@ fn pacing_first_call_and_delay_window_exact() {
         "window expired: flush"
     );
     // The clock re-armed at the second flush.
-    assert!(!wal_flush_pacing_decide(&mut p, 1_000_000 + DELAY_US + 1, 1, 128, DELAY_US));
+    assert!(!wal_flush_pacing_decide(
+        &mut p,
+        1_000_000 + DELAY_US + 1,
+        1,
+        128,
+        DELAY_US
+    ));
 }
 
 /// Block-threshold flushes inside the window (wal_writer_flush_after
@@ -151,7 +173,19 @@ fn pacing_deferral_keeps_the_original_deadline() {
     let mut p = WalFlushPacing::new();
     assert!(wal_flush_pacing_decide(&mut p, 1_000_000, 0, 128, DELAY_US));
     for dt in [10_000, 50_000, 150_000] {
-        assert!(!wal_flush_pacing_decide(&mut p, 1_000_000 + dt, 1, 128, DELAY_US));
+        assert!(!wal_flush_pacing_decide(
+            &mut p,
+            1_000_000 + dt,
+            1,
+            128,
+            DELAY_US
+        ));
     }
-    assert!(wal_flush_pacing_decide(&mut p, 1_000_000 + DELAY_US, 1, 128, DELAY_US));
+    assert!(wal_flush_pacing_decide(
+        &mut p,
+        1_000_000 + DELAY_US,
+        1,
+        128,
+        DELAY_US
+    ));
 }

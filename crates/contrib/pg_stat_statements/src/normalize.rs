@@ -50,9 +50,7 @@ pub(crate) fn generate_normalized_query(
         let len_to_wrt = off - last_off - last_tok_len;
         norm.push_str(core::str::from_utf8(&qbytes[quer_loc..quer_loc + len_to_wrt]).unwrap());
         norm.push('$');
-        norm.push_str(
-            &(num_constants_replaced + 1 + jstate.highest_extern_param_id).to_string(),
-        );
+        norm.push_str(&(num_constants_replaced + 1 + jstate.highest_extern_param_id).to_string());
         if l.squashed {
             norm.push_str(" /*, ... */");
         }

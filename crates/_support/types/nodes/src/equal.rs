@@ -7,27 +7,27 @@ use datum::Datum;
 use types_tuple::varatt::varsize_any;
 
 use crate::bitmapset::Bitmapset;
+use crate::list::OptNodeList;
 use crate::list::{IntList, NodeList, OidList, XidList};
 use crate::node_tree::{BitString, Boolean, Float, Integer, Node, String};
 use crate::parsenodes::{
-    CommonTableExpr, DeallocateStmt, DefElem, ExecuteStmt, ExplainStmt, FetchStmt, PrepareStmt,
-    GroupingSet, Query, RTEPermissionInfo, RangeTblEntry, TransactionStmt, VariableSetStmt, VariableShowStmt,
-    WithCheckOption, WithClause,
+    CommonTableExpr, DeallocateStmt, DefElem, ExecuteStmt, ExplainStmt, FetchStmt, GroupingSet,
+    PrepareStmt, Query, RTEPermissionInfo, RangeTblEntry, TransactionStmt, VariableSetStmt,
+    VariableShowStmt, WithCheckOption, WithClause,
 };
-use crate::list::OptNodeList;
 use crate::primnodes::{
     Aggref, Alias, ArrayCoerceExpr, ArrayExpr, BoolExpr, BooleanTest, CaseExpr, CaseTestExpr,
-    CaseWhen, CoalesceExpr, CoerceToDomain, CoerceToDomainValue, CoerceViaIO,
-    CollateExpr, Const, ConvertRowtypeExpr, CurrentOfExpr, DistinctExpr, FieldSelect, FieldStore, ReturningExpr, FromExpr, FuncExpr, GroupingFunc, NamedArgExpr,
-    NullTest, OpExpr, Param, PlaceHolderVar, RangeTblRef, RangeVar, RelabelType, RowCompareExpr, RowExpr,
-    SQLValueFunction, ScalarArrayOpExpr, SubLink, SubPlan, SubscriptingRef, TableFunc, TargetEntry, Var, WindowFunc,
-    MergeSupportFunc, WindowFuncRunCondition, XmlExpr,
+    CaseWhen, CoalesceExpr, CoerceToDomain, CoerceToDomainValue, CoerceViaIO, CollateExpr, Const,
+    ConvertRowtypeExpr, CurrentOfExpr, DistinctExpr, FieldSelect, FieldStore, FromExpr, FuncExpr,
+    GroupingFunc, MergeSupportFunc, NamedArgExpr, NullTest, OpExpr, Param, PlaceHolderVar,
+    RangeTblRef, RangeVar, RelabelType, ReturningExpr, RowCompareExpr, RowExpr, SQLValueFunction,
+    ScalarArrayOpExpr, SubLink, SubPlan, SubscriptingRef, TableFunc, TargetEntry, Var, WindowFunc,
+    WindowFuncRunCondition, XmlExpr,
 };
 use crate::rawnodes::{
     A_Const, A_Expr, A_Star, CollateClause, ColumnRef, DeleteStmt, DistinctClause, FuncCall,
     InsertStmt, ParamRef, RangeTableFunc, RangeTableFuncCol, RawStmt, ResTarget, SelectStmt,
-    SortBy, TypeCast, TypeName, UpdateStmt,
-    ValUnion, XmlSerialize,
+    SortBy, TypeCast, TypeName, UpdateStmt, ValUnion, XmlSerialize,
 };
 use crate::tags::NodeTag;
 
@@ -46,7 +46,9 @@ pub fn equal(a: Node<'_>, b: Node<'_>) -> bool {
     // C: check_stack_depth() — recursion guard unported repo-wide (stack lane).
     macro_rules! cmp {
         ($as_variant:ident) => {
-            a.$as_variant().unwrap().node_equal(b.$as_variant().unwrap())
+            a.$as_variant()
+                .unwrap()
+                .node_equal(b.$as_variant().unwrap())
         };
     }
     match tag {
@@ -336,7 +338,12 @@ impl NodeEqual for Const {
         if self.constisnull {
             return true;
         }
-        datum_is_equal(self.constvalue, b.constvalue, self.constbyval, self.constlen)
+        datum_is_equal(
+            self.constvalue,
+            b.constvalue,
+            self.constbyval,
+            self.constlen,
+        )
     }
 }
 
@@ -435,7 +442,9 @@ impl NodeEqual for RowExpr<'_> {
 
 impl NodeEqual for ReturningExpr<'_> {
     fn node_equal(&self, b: &Self) -> bool {
-        self.retlevelsup == b.retlevelsup && self.retold == b.retold && equal(self.retexpr, b.retexpr)
+        self.retlevelsup == b.retlevelsup
+            && self.retold == b.retold
+            && equal(self.retexpr, b.retexpr)
     }
 }
 

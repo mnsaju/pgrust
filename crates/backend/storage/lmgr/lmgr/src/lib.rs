@@ -74,8 +74,14 @@ pub fn WaitForLockersMultiple(
 }
 
 pub fn RelationInitLockInfo(relid: Oid, relisshared: bool) -> LockInfoData {
-    let dbId = if relisshared { 0 } else { init_small::globals::MyDatabaseId() };
-    LockInfoData { lockRelId: LockRelId { relId: relid, dbId } }
+    let dbId = if relisshared {
+        0
+    } else {
+        init_small::globals::MyDatabaseId()
+    };
+    LockInfoData {
+        lockRelId: LockRelId { relId: relid, dbId },
+    }
 }
 
 fn SetLocktagRelationOid(relid: Oid) -> LOCKTAG {
@@ -89,7 +95,10 @@ fn SetLocktagRelationOid(relid: Oid) -> LOCKTAG {
 
 #[inline]
 fn rel_tag(rel: &RelationData<'_>) -> LOCKTAG {
-    LOCKTAG::relation(rel.rd_lockInfo.lockRelId.dbId, rel.rd_lockInfo.lockRelId.relId)
+    LOCKTAG::relation(
+        rel.rd_lockInfo.lockRelId.dbId,
+        rel.rd_lockInfo.lockRelId.relId,
+    )
 }
 
 fn acquire(tag: LOCKTAG, lockmode: LOCKMODE, dont_wait: bool) -> PgResult<LockAcquireResult> {
@@ -98,7 +107,11 @@ fn acquire(tag: LOCKTAG, lockmode: LOCKMODE, dont_wait: bool) -> PgResult<LockAc
 
 // Absorb invalidation messages so stale relcache entries are flushed before
 // use; skippable when the lock was already held and cleared.
-fn absorb_inval_and_clear(tag: LOCKTAG, lockmode: LOCKMODE, res: LockAcquireResult) -> PgResult<()> {
+fn absorb_inval_and_clear(
+    tag: LOCKTAG,
+    lockmode: LOCKMODE,
+    res: LockAcquireResult,
+) -> PgResult<()> {
     if res != LOCKACQUIRE_ALREADY_CLEAR {
         inval_seams::accept_invalidation_messages::call()?;
         lock_seams::mark_lock_clear::call(tag, lockmode);
@@ -184,7 +197,10 @@ pub fn LockHasWaitersRelation(rel: &RelationData<'_>, lockmode: LOCKMODE) -> PgR
 
 #[inline]
 fn extend_tag(rel: &RelationData<'_>) -> LOCKTAG {
-    LOCKTAG::relation_extend(rel.rd_lockInfo.lockRelId.dbId, rel.rd_lockInfo.lockRelId.relId)
+    LOCKTAG::relation_extend(
+        rel.rd_lockInfo.lockRelId.dbId,
+        rel.rd_lockInfo.lockRelId.relId,
+    )
 }
 
 pub fn LockRelationForExtension(rel: &RelationData<'_>, lockmode: LOCKMODE) -> PgResult<()> {
@@ -303,7 +319,11 @@ pub fn SpeculativeInsertionLockAcquire(xid: TransactionId) -> PgResult<u32> {
         t.set(next);
         next
     });
-    acquire(LOCKTAG::speculative_insertion(xid, token), ExclusiveLock, false)?;
+    acquire(
+        LOCKTAG::speculative_insertion(xid, token),
+        ExclusiveLock,
+        false,
+    )?;
     Ok(token)
 }
 
@@ -379,8 +399,14 @@ pub fn ConditionalXactLockTableWait(
     loop {
         debug_assert!(xid != 0);
         let tag = LOCKTAG::transaction(xid);
-        let res =
-            lock_seams::lock_acquire_extended::call(tag, ShareLock, false, true, true, log_lock_failure)?;
+        let res = lock_seams::lock_acquire_extended::call(
+            tag,
+            ShareLock,
+            false,
+            true,
+            true,
+            log_lock_failure,
+        )?;
         if res == LOCKACQUIRE_NOT_AVAIL {
             return Ok(false);
         }
@@ -405,7 +431,12 @@ pub fn LockDatabaseObject(
     objsubid: u16,
     lockmode: LOCKMODE,
 ) -> PgResult<()> {
-    let tag = LOCKTAG::object(init_small::globals::MyDatabaseId(), classid, objid, objsubid);
+    let tag = LOCKTAG::object(
+        init_small::globals::MyDatabaseId(),
+        classid,
+        objid,
+        objsubid,
+    );
     acquire(tag, lockmode, false)?;
     // Unconditional in C: syscaches must reflect changes we waited out.
     inval_seams::accept_invalidation_messages::call()?;
@@ -418,7 +449,12 @@ pub fn ConditionalLockDatabaseObject(
     objsubid: u16,
     lockmode: LOCKMODE,
 ) -> PgResult<bool> {
-    let tag = LOCKTAG::object(init_small::globals::MyDatabaseId(), classid, objid, objsubid);
+    let tag = LOCKTAG::object(
+        init_small::globals::MyDatabaseId(),
+        classid,
+        objid,
+        objsubid,
+    );
     let res = acquire(tag, lockmode, true)?;
     if res == LOCKACQUIRE_NOT_AVAIL {
         return Ok(false);
@@ -433,7 +469,12 @@ pub fn UnlockDatabaseObject(
     objsubid: u16,
     lockmode: LOCKMODE,
 ) -> PgResult<()> {
-    let tag = LOCKTAG::object(init_small::globals::MyDatabaseId(), classid, objid, objsubid);
+    let tag = LOCKTAG::object(
+        init_small::globals::MyDatabaseId(),
+        classid,
+        objid,
+        objsubid,
+    );
     lock_seams::lock_release::call(tag, lockmode, false)?;
     Ok(())
 }

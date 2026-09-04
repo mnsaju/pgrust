@@ -94,7 +94,10 @@ fn bump_context_reset_reclaims_and_reuses() {
         }
         assert!(ctx.used() > 0);
     } // v drops; bump.c model — dealloc is a full no-op, the charge stays
-    assert!(ctx.used() > 0, "bump free is unaccounted; reset releases the charge");
+    assert!(
+        ctx.used() > 0,
+        "bump free is unaccounted; reset releases the charge"
+    );
     let footprint_before = ctx.stats().arena_footprint;
     assert!(footprint_before > 0, "arena retains memory after drops");
     ctx.reset();
@@ -116,8 +119,8 @@ fn bump_context_reset_reclaims_and_reuses() {
 
 #[test]
 fn reset_callbacks_fire_lifo_on_reset_and_drop() {
-    use core::cell::RefCell;
     use alloc::rc::Rc;
+    use core::cell::RefCell;
     let order: Rc<RefCell<alloc::vec::Vec<u8>>> = Rc::default();
 
     let mut ctx = MemoryContext::new("cb");
@@ -190,10 +193,14 @@ fn ancestor_limit_caps_descendants() {
 
     let _a = vec_with_capacity_in::<u8>(root.mcx(), 600).unwrap();
     let mut v: PgVec<u8> = PgVec::new_in(child.mcx());
-    assert!(v.try_reserve_exact(500).is_err(), "600+500 exceeds ancestor limit");
+    assert!(
+        v.try_reserve_exact(500).is_err(),
+        "600+500 exceeds ancestor limit"
+    );
     assert_eq!(root.subtree_used(), 600, "failed charge applied nothing");
     assert_eq!(child.subtree_used(), 0);
-    v.try_reserve_exact(400).expect("exactly at the ancestor limit");
+    v.try_reserve_exact(400)
+        .expect("exactly at the ancestor limit");
     assert_eq!(root.subtree_used(), 1000);
 }
 
@@ -393,7 +400,10 @@ fn hotpath_invariance_counters_byte_identical() {
     refm.uncharge(2, cap);
     check(&ctxs, &refm);
 
-    assert!(root.subtree_peak() >= 7 + 40 + 500 + 256, "peaks persist after frees");
+    assert!(
+        root.subtree_peak() >= 7 + 40 + 500 + 256,
+        "peaks persist after frees"
+    );
 
     for (i, v) in vecs.iter_mut().enumerate() {
         let cap = v.capacity();
@@ -431,7 +441,8 @@ fn hotpath_limit_flag_lifecycle_and_enforcement() {
 
     let root2 = MemoryContext::new("root2");
     let mut x: PgVec<u8> = PgVec::new_in(root2.mcx());
-    x.try_reserve_exact(1 << 20).expect("skip path restored after limits drop");
+    x.try_reserve_exact(1 << 20)
+        .expect("skip path restored after limits drop");
     assert_eq!(root2.used(), 1 << 20);
 }
 
@@ -457,8 +468,13 @@ mod bumpdrop {
         {
             let mcx = ctx.mcx();
             for _ in 0..5 {
-                let _r: &mut DropCounter =
-                    arena_box_in(mcx, DropCounter { drops: drops.clone() }).unwrap();
+                let _r: &mut DropCounter = arena_box_in(
+                    mcx,
+                    DropCounter {
+                        drops: drops.clone(),
+                    },
+                )
+                .unwrap();
             }
             assert_eq!(drops.get(), 0, "no per-object Drop ran at allocation");
             assert!(ctx.used() > 0, "values are charged while live");
@@ -467,7 +483,11 @@ mod bumpdrop {
 
         ctx.reset();
         assert_eq!(drops.get(), 5, "all destructors run exactly once at reset");
-        assert_eq!(ctx.used(), ctx.stats().arena_footprint, "only the keeper stays charged");
+        assert_eq!(
+            ctx.used(),
+            ctx.stats().arena_footprint,
+            "only the keeper stays charged"
+        );
 
         ctx.reset();
         assert_eq!(drops.get(), 5, "no destructor runs twice");
@@ -480,7 +500,13 @@ mod bumpdrop {
             let ctx = MemoryContext::new_bumpdrop("arena");
             let mcx = ctx.mcx();
             for _ in 0..3 {
-                let _r = arena_box_in(mcx, DropCounter { drops: drops.clone() }).unwrap();
+                let _r = arena_box_in(
+                    mcx,
+                    DropCounter {
+                        drops: drops.clone(),
+                    },
+                )
+                .unwrap();
             }
             assert_eq!(drops.get(), 0);
         }
@@ -503,11 +529,22 @@ mod bumpdrop {
         {
             let mcx = ctx.mcx();
             for id in 1..=4u8 {
-                let _r = arena_box_in(mcx, OrderRec { id, order: order.clone() }).unwrap();
+                let _r = arena_box_in(
+                    mcx,
+                    OrderRec {
+                        id,
+                        order: order.clone(),
+                    },
+                )
+                .unwrap();
             }
         }
         ctx.reset();
-        assert_eq!(&*order.borrow(), &[4, 3, 2, 1], "drop list runs LIFO like C");
+        assert_eq!(
+            &*order.borrow(),
+            &[4, 3, 2, 1],
+            "drop list runs LIFO like C"
+        );
     }
 
     #[test]
@@ -518,10 +555,16 @@ mod bumpdrop {
             let mcx = ctx.mcx();
             let mut v: PgVec<DropCounter> = PgVec::new_in(mcx);
             for _ in 0..10 {
-                v.push(DropCounter { drops: drops.clone() });
+                v.push(DropCounter {
+                    drops: drops.clone(),
+                });
             }
             let _leaked: &mut PgVec<DropCounter> = arena_vec_in(mcx, v).unwrap();
-            assert_eq!(drops.get(), 0, "elements not dropped while vec is live in arena");
+            assert_eq!(
+                drops.get(),
+                0,
+                "elements not dropped while vec is live in arena"
+            );
         }
         assert_eq!(drops.get(), 0, "vec leaked, elements still live");
         ctx.reset();
@@ -540,7 +583,11 @@ mod bumpdrop {
             assert!(ctx.used() > 0);
         }
         ctx.reset();
-        assert_eq!(ctx.used(), ctx.stats().arena_footprint, "string buffer reclaimed at reset");
+        assert_eq!(
+            ctx.used(),
+            ctx.stats().arena_footprint,
+            "string buffer reclaimed at reset"
+        );
     }
 
     #[test]
@@ -552,7 +599,13 @@ mod bumpdrop {
             {
                 let mcx = arena.mcx();
                 for _ in 0..20 {
-                    let _r = arena_box_in(mcx, DropCounter { drops: drops.clone() }).unwrap();
+                    let _r = arena_box_in(
+                        mcx,
+                        DropCounter {
+                            drops: drops.clone(),
+                        },
+                    )
+                    .unwrap();
                 }
                 assert!(arena.used() > 0, "round {round}: charged while live");
                 assert_eq!(
@@ -563,13 +616,21 @@ mod bumpdrop {
             }
             arena.reset();
             let keeper = arena.stats().arena_footprint;
-            assert_eq!(arena.used(), keeper, "round {round}: only the keeper stays charged");
+            assert_eq!(
+                arena.used(),
+                keeper,
+                "round {round}: only the keeper stays charged"
+            );
             assert_eq!(
                 root.subtree_used(),
                 keeper,
                 "round {round}: reset propagates to ancestor subtree_used"
             );
-            assert_eq!(drops.get(), 20 * (round + 1), "round {round}: 20 more drops");
+            assert_eq!(
+                drops.get(),
+                20 * (round + 1),
+                "round {round}: 20 more drops"
+            );
         }
     }
 
@@ -579,11 +640,22 @@ mod bumpdrop {
         let drops_inner = Rc::new(Cell::new(0u32));
         {
             let outer = MemoryContext::new_bumpdrop("outer");
-            let _o = arena_box_in(outer.mcx(), DropCounter { drops: drops_outer.clone() }).unwrap();
+            let _o = arena_box_in(
+                outer.mcx(),
+                DropCounter {
+                    drops: drops_outer.clone(),
+                },
+            )
+            .unwrap();
             let mut inner = outer.new_child_bumpdrop("inner");
             {
-                let _i =
-                    arena_box_in(inner.mcx(), DropCounter { drops: drops_inner.clone() }).unwrap();
+                let _i = arena_box_in(
+                    inner.mcx(),
+                    DropCounter {
+                        drops: drops_inner.clone(),
+                    },
+                )
+                .unwrap();
                 assert_eq!(outer.subtree_used(), outer.used() + inner.used());
             }
             inner.reset();
@@ -591,7 +663,11 @@ mod bumpdrop {
             assert_eq!(drops_outer.get(), 0, "outer untouched by inner reset");
         }
         assert_eq!(drops_outer.get(), 1, "outer drop runs outer's list once");
-        assert_eq!(drops_inner.get(), 1, "inner already drained; no double drop");
+        assert_eq!(
+            drops_inner.get(),
+            1,
+            "inner already drained; no double drop"
+        );
     }
 
     #[test]
@@ -616,9 +692,30 @@ mod bumpdrop {
         {
             let mcx = ctx.mcx();
             // Registered A(no), B(BOOM), C(no); LIFO drop order C, B, A.
-            let _a = arena_box_in(mcx, PanicOnDrop { boom: false, drops: drops.clone() }).unwrap();
-            let _b = arena_box_in(mcx, PanicOnDrop { boom: true, drops: drops.clone() }).unwrap();
-            let _c = arena_box_in(mcx, PanicOnDrop { boom: false, drops: drops.clone() }).unwrap();
+            let _a = arena_box_in(
+                mcx,
+                PanicOnDrop {
+                    boom: false,
+                    drops: drops.clone(),
+                },
+            )
+            .unwrap();
+            let _b = arena_box_in(
+                mcx,
+                PanicOnDrop {
+                    boom: true,
+                    drops: drops.clone(),
+                },
+            )
+            .unwrap();
+            let _c = arena_box_in(
+                mcx,
+                PanicOnDrop {
+                    boom: false,
+                    drops: drops.clone(),
+                },
+            )
+            .unwrap();
         }
         let n_before = drops.get();
         assert_eq!(n_before, 0);
@@ -628,7 +725,11 @@ mod bumpdrop {
 
         let res2 = catch_unwind(AssertUnwindSafe(|| ctx.reset()));
         assert!(res2.is_ok(), "second reset is clean");
-        assert_eq!(drops.get(), 3, "A drained on the 2nd reset; B/C never re-run");
+        assert_eq!(
+            drops.get(),
+            3,
+            "A drained on the 2nd reset; B/C never re-run"
+        );
     }
 
     #[test]
@@ -657,7 +758,9 @@ mod bumpdrop {
                 let mcx = batch.mcx();
                 let mut v = PgVec::new_in(mcx);
                 for _ in 0..per_batch {
-                    v.push(DropCounter { drops: drops.clone() });
+                    v.push(DropCounter {
+                        drops: drops.clone(),
+                    });
                 }
                 v
             };
@@ -682,7 +785,11 @@ mod bumpdrop {
 
         drop(batch);
         assert_eq!(drops.get() as usize, total_batches * per_batch);
-        assert_eq!(root.subtree_used(), 0, "child charge fully released to parent");
+        assert_eq!(
+            root.subtree_used(),
+            0,
+            "child charge fully released to parent"
+        );
     }
 
     #[test]
@@ -693,16 +800,26 @@ mod bumpdrop {
             let mcx = batch.mcx();
             let mut old: PgVec<DropCounter> = PgVec::new_in(mcx);
             for _ in 0..8 {
-                old.push(DropCounter { drops: drops.clone() });
+                old.push(DropCounter {
+                    drops: drops.clone(),
+                });
             }
             let mut newv: PgVec<DropCounter> = PgVec::new_in(mcx);
             for e in old.into_iter() {
                 newv.push(e);
             }
-            assert_eq!(drops.get(), 0, "moved tuples are not dropped during rebatch");
+            assert_eq!(
+                drops.get(),
+                0,
+                "moved tuples are not dropped during rebatch"
+            );
             newv.clear();
             drop(newv);
-            assert_eq!(drops.get(), 8, "elements drop once when the new arena drops");
+            assert_eq!(
+                drops.get(),
+                8,
+                "elements drop once when the new arena drops"
+            );
         }
         batch.reset();
         assert_eq!(batch.used(), batch.stats().arena_footprint);
@@ -711,7 +828,7 @@ mod bumpdrop {
     // OLD (Aset, per-tuple frees) vs NEW (bump, wholesale reset) churn counts.
     #[test]
     fn churn_measurement_per_tuple_free_vs_wholesale_reset() {
-        use crate::{alloc_in, PgVec, PgBox};
+        use crate::{alloc_in, PgBox, PgVec};
 
         let tuples_per_batch = 500usize;
         let nbatch = 16usize;
@@ -769,8 +886,11 @@ mod bumpdrop {
              (reclaimed by {} wholesale resets)\n\
              ELIMINATED per-tuple free operations: {}\n\
              ===============================================================",
-            tuples_per_batch, nbatch,
-            old_real_frees, new_real_frees, wholesale_resets,
+            tuples_per_batch,
+            nbatch,
+            old_real_frees,
+            new_real_frees,
+            wholesale_resets,
             old_real_frees - new_real_frees,
         );
 
@@ -779,7 +899,8 @@ mod bumpdrop {
         assert!(
             old_real_frees >= expected_old,
             "old model frees every box+vec individually every batch (>= {}, got {})",
-            expected_old, old_real_frees,
+            expected_old,
+            old_real_frees,
         );
         // Window-relative, not absolute: the probe counter is global, and the
         // parallel suite's own frees land in both measurement windows — a
@@ -788,7 +909,8 @@ mod bumpdrop {
         assert!(
             new_real_frees < old_real_frees / 3,
             "new model eliminates the bulk of per-tuple frees (got {}, old {})",
-            new_real_frees, old_real_frees,
+            new_real_frees,
+            old_real_frees,
         );
         assert_eq!(wholesale_resets, nbatch as u64);
     }
@@ -821,7 +943,10 @@ mod owned {
         }
         let plan = &mut cache[0];
         assert_eq!(plan.with(|p| p.nodes.iter().sum::<u64>()), 4950);
-        assert!(cache_root.subtree_used() >= 800, "bundle bytes visible from the cache root");
+        assert!(
+            cache_root.subtree_used() >= 800,
+            "bundle bytes visible from the cache root"
+        );
 
         let before = plan.context().used();
         plan.with_mut(|p| {
@@ -832,7 +957,11 @@ mod owned {
         assert!(plan.context().used() > before);
 
         drop(cache);
-        assert_eq!(cache_root.subtree_used(), 0, "dropping the bundle returns every byte");
+        assert_eq!(
+            cache_root.subtree_used(),
+            0,
+            "dropping the bundle returns every byte"
+        );
     }
 
     struct Tree<'mcx> {
@@ -844,7 +973,9 @@ mod owned {
     fn leak_projection_yields_honest_borrow_reclaimed_by_context_drop() {
         let root = MemoryContext::new("root");
         let mut bundle = McxOwned::<TreeTy>::try_new(root.new_child("ExecutorState"), |mcx| {
-            Ok(Tree { plan_tree: Some(alloc_in(mcx, 42u64)?) })
+            Ok(Tree {
+                plan_tree: Some(alloc_in(mcx, 42u64)?),
+            })
         })
         .unwrap();
 
@@ -855,7 +986,11 @@ mod owned {
         assert_eq!(seen, Some(42));
 
         drop(bundle);
-        assert_eq!(root.subtree_used(), 0, "context drop reclaims the leaked plan node");
+        assert_eq!(
+            root.subtree_used(),
+            0,
+            "context drop reclaims the leaked plan node"
+        );
     }
 
     #[test]
@@ -897,7 +1032,10 @@ mod owned {
         {
             let src = [9u8; 128];
             let v = slice_in(root.mcx(), &src).unwrap();
-            assert!(root.subtree_used() >= 128, "charge reflects the copied bytes");
+            assert!(
+                root.subtree_used() >= 128,
+                "charge reflects the copied bytes"
+            );
             drop(v);
         }
         assert_eq!(root.subtree_used(), 0, "dropping the vec uncharges");
@@ -906,8 +1044,8 @@ mod owned {
     #[test]
     fn slice_in_panic_safe_frees_buffer() {
         // A panicking clone() must free the buffer; the prefix needs no drops.
-        use core::sync::atomic::{AtomicUsize, Ordering};
         use super::std::panic::{catch_unwind, AssertUnwindSafe};
+        use core::sync::atomic::{AtomicUsize, Ordering};
 
         static CLONES: AtomicUsize = AtomicUsize::new(0);
 
@@ -953,14 +1091,25 @@ mod bump_pool {
         let footprint = ctx.stats().arena_footprint;
         assert!(footprint > 0);
         ctx.reset();
-        assert_eq!(ctx.stats().arena_footprint, footprint, "keeper retained over reset");
+        assert_eq!(
+            ctx.stats().arena_footprint,
+            footprint,
+            "keeper retained over reset"
+        );
         let again = {
             let mcx = ctx.mcx();
             let v = vec_with_capacity_in::<u8>(mcx, 64).unwrap();
             v.as_ptr() as usize
         };
-        assert_eq!(first, again, "first post-reset chunk starts the retained keeper");
-        assert_eq!(ctx.stats().arena_footprint, footprint, "no new block malloc'd");
+        assert_eq!(
+            first, again,
+            "first post-reset chunk starts the retained keeper"
+        );
+        assert_eq!(
+            ctx.stats().arena_footprint,
+            footprint,
+            "no new block malloc'd"
+        );
     }
 }
 
@@ -1023,7 +1172,11 @@ mod acct_pool {
             (*p1.as_ptr()).weak.set(0);
         }
         acct_give_to(&pool, p1);
-        assert_eq!(pool.try_with(|s| s.len()).unwrap(), 1, "allocation parked for reuse");
+        assert_eq!(
+            pool.try_with(|s| s.len()).unwrap(),
+            1,
+            "allocation parked for reuse"
+        );
 
         let p2 = acct_take_from(&pool);
         assert_eq!(p1.as_ptr(), p2.as_ptr(), "parked allocation reused");
@@ -1053,7 +1206,6 @@ mod acct_pool {
         assert_eq!(root.name(), "root");
     }
 
-
     #[derive(Clone, Copy)]
     #[allow(dead_code)]
     struct Node {
@@ -1072,7 +1224,10 @@ mod acct_pool {
                 assert_eq!(n.oid, 1);
                 let mut v: PgVec<Node> = PgVec::new_in(mcx);
                 for i in 0..100u32 {
-                    v.push(Node { oid: i, cost: i as f64 });
+                    v.push(Node {
+                        oid: i,
+                        cost: i as f64,
+                    });
                 }
                 let leaked: &mut PgVec<Node> = arena_vec_in_forget(mcx, v).unwrap();
                 assert_eq!(leaked.len(), 100);
@@ -1098,7 +1253,14 @@ mod acct_pool {
                 let mut graph: PgVec<Node> = PgVec::new_in(mcx);
                 graph.extend((0..(run as u32 + 1) * 10).map(|i| Node { oid: i, cost: 0.0 }));
                 let _leaked = arena_vec_in_forget(mcx, graph).unwrap();
-                let _b = arena_box_in_forget(mcx, Node { oid: run, cost: 1.0 }).unwrap();
+                let _b = arena_box_in_forget(
+                    mcx,
+                    Node {
+                        oid: run,
+                        cost: 1.0,
+                    },
+                )
+                .unwrap();
             }
             ctx.reset();
             assert_eq!(
@@ -1158,7 +1320,10 @@ fn generation_context_fifo_and_reset_roundtrip() {
     assert_eq!(ctx.used(), 0);
     let p = box_new_in(ctx.mcx(), 7u64);
     assert_eq!(*p, 7);
-    assert!(ctx.used() > 0, "keeper re-charged on first post-reset alloc");
+    assert!(
+        ctx.used() > 0,
+        "keeper re-charged on first post-reset alloc"
+    );
 }
 
 #[test]
@@ -1191,7 +1356,11 @@ fn slab_context_boxes_roundtrip_and_uncharge() {
             drop(b);
         }
         // Up to 10 empty blocks stay parked; the rest uncharge.
-        assert!(ctx.used() <= 10 * 8 * 1024, "used {} after drain", ctx.used());
+        assert!(
+            ctx.used() <= 10 * 8 * 1024,
+            "used {} after drain",
+            ctx.used()
+        );
         assert!(ctx.used() < peak);
     }
     ctx.reset();
@@ -1254,7 +1423,6 @@ fn global_footprint_tracks_context_block_bytes() {
     );
 }
 
-
 // LocalStack (the per-thread pool container; the TLS statics themselves are
 // cfg(not(test)) — the integration tests in tests/ exercise those).
 #[cfg(feature = "std")]
@@ -1305,6 +1473,4 @@ mod local_stack {
         drop(s);
         assert_eq!(DISPOSED.load(Ordering::Relaxed), before + 2);
     }
-
-
 }

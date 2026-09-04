@@ -135,8 +135,8 @@ impl<'mcx> Bitmapset<'mcx> {
             let ptr = if self.awords == 0 {
                 Allocator::allocate(&mcx, new_layout)
             } else {
-                let old_layout = Layout::array::<bitmapword>(self.awords as usize)
-                    .expect("valid old layout");
+                let old_layout =
+                    Layout::array::<bitmapword>(self.awords as usize).expect("valid old layout");
                 // SAFETY: words holds awords words from this arena with
                 // old_layout; new_layout is strictly larger.
                 unsafe { Allocator::grow(&mcx, self.words.cast(), old_layout, new_layout) }
@@ -172,7 +172,12 @@ impl<'mcx> Bitmapset<'mcx> {
         let words = Self::alloc_words(mcx, n)?;
         // SAFETY: fresh disjoint buffer of n words.
         unsafe { core::ptr::copy_nonoverlapping(self.words.as_ptr(), words.as_ptr(), n) };
-        Ok(Bitmapset { nwords: n as i32, awords: n as i32, words, _arena: PhantomData })
+        Ok(Bitmapset {
+            nwords: n as i32,
+            awords: n as i32,
+            words,
+            _arena: PhantomData,
+        })
     }
 
     #[inline]
@@ -277,8 +282,11 @@ impl<'mcx> Bitmapset<'mcx> {
     }
 
     pub fn union(&self, other: &Self, mcx: Mcx<'mcx>) -> PgResult<Self> {
-        let (longer, shorter) =
-            if self.nwords <= other.nwords { (other, self) } else { (self, other) };
+        let (longer, shorter) = if self.nwords <= other.nwords {
+            (other, self)
+        } else {
+            (self, other)
+        };
         let result = longer.clone_in(mcx)?;
         let dst = result.words.as_ptr();
         for (i, &w) in shorter.word_slice().iter().enumerate() {
@@ -348,8 +356,11 @@ impl<'mcx> Bitmapset<'mcx> {
         if self.is_empty() || other.is_empty() {
             return Ok(Self::empty());
         }
-        let (shorter, longer) =
-            if self.nwords <= other.nwords { (self, other) } else { (other, self) };
+        let (shorter, longer) = if self.nwords <= other.nwords {
+            (self, other)
+        } else {
+            (other, self)
+        };
         let mut result = shorter.clone_in(mcx)?;
         let dst = result.words.as_ptr();
         let mut lastnonzero: i32 = -1;
@@ -444,9 +455,7 @@ impl<'mcx> Bitmapset<'mcx> {
         let shortlen = core::cmp::min(self.nwords, other.nwords) as usize;
         for i in 0..shortlen {
             // SAFETY: i < both nwords.
-            let (aw, bw) = unsafe {
-                (*self.words.as_ptr().add(i), *other.words.as_ptr().add(i))
-            };
+            let (aw, bw) = unsafe { (*self.words.as_ptr().add(i), *other.words.as_ptr().add(i)) };
             if aw & !bw != 0 {
                 if result == BmsComparison::BmsSubset1 {
                     return BmsComparison::BmsDifferent;
@@ -500,7 +509,6 @@ impl<'mcx> Bitmapset<'mcx> {
             .any(|(&a, &b)| a & b != 0)
     }
 
-
     pub fn overlap_list(&self, xs: &[i32]) -> bool {
         if self.is_empty() || xs.is_empty() {
             return false;
@@ -521,7 +529,10 @@ impl<'mcx> Bitmapset<'mcx> {
     }
 
     pub fn num_members(&self) -> i32 {
-        self.word_slice().iter().map(|&w| w.count_ones() as i32).sum()
+        self.word_slice()
+            .iter()
+            .map(|&w| w.count_ones() as i32)
+            .sum()
     }
 
     pub fn membership(&self) -> BmsMembership {
@@ -547,7 +558,11 @@ impl<'mcx> Bitmapset<'mcx> {
                 result = (i * BITS_PER_BITMAPWORD) as i32 + rightmost_one_pos(w);
             }
         }
-        if result >= 0 { Some(result) } else { None }
+        if result >= 0 {
+            Some(result)
+        } else {
+            None
+        }
     }
 
     /// C shape: `x = -1; while ((x = bms_next_member(a, x)) >= 0) ...`;
@@ -592,7 +607,10 @@ impl<'mcx> Bitmapset<'mcx> {
     }
 
     pub fn iter(&self) -> BmsIter<'_, 'mcx> {
-        BmsIter { bms: self, prev: -1 }
+        BmsIter {
+            bms: self,
+            prev: -1,
+        }
     }
 }
 

@@ -42,10 +42,10 @@
 //! whitelist is count/sum — the increment's byte-parity envelope), poly
 //! numeric states.
 
-use types_error::PgResult;
-use types_nodes::parsenodes::{Query, RTEKind};
 use crate::m5_suppress::{is_whitelisted_agg, size_floors_enabled, trace_armed};
 use crate::run::PlannerRun;
+use types_error::PgResult;
+use types_nodes::parsenodes::{Query, RTEKind};
 use types_pathnodes::AMFLAG_PGRCOLUMNAR;
 
 /// Knob — DEFAULT ON since the GL-PARTWISE-1 flip;
@@ -77,8 +77,13 @@ const F_COUNT_ANY: u32 = 2147;
 const F_SUM_INT8: u32 = 2107;
 const F_SUM_INT4: u32 = 2108;
 const F_SUM_INT2: u32 = 2109;
-const PARTWISE_FOLD_AGGS: &[u32] =
-    &[F_COUNT_STAR, F_COUNT_ANY, F_SUM_INT8, F_SUM_INT4, F_SUM_INT2];
+const PARTWISE_FOLD_AGGS: &[u32] = &[
+    F_COUNT_STAR,
+    F_COUNT_ANY,
+    F_SUM_INT8,
+    F_SUM_INT4,
+    F_SUM_INT2,
+];
 
 /// Classify a single-RangeTblRef query whose RTE is a partitioned parent
 /// (`relkind 'p'`, `inh`) — reached from `classify_covered`'s hook, so the
@@ -106,7 +111,9 @@ pub(crate) fn classify_partitionwise(
     // (plan-time pruning would be fine — pruned children never reach the
     // Append — but the executor arm's census/prewhere economics per child
     // are unmeasured; a qual also risks a projected child scan shape).
-    let Some(top) = parse.jointree else { return Ok(false) };
+    let Some(top) = parse.jointree else {
+        return Ok(false);
+    };
     if top.quals.is_some() {
         return Ok(false);
     }
@@ -116,7 +123,9 @@ pub(crate) fn classify_partitionwise(
         return Ok(false);
     }
     for tle_node in &parse.targetList {
-        let Some(tle) = tle_node.as_target_entry() else { return Ok(false) };
+        let Some(tle) = tle_node.as_target_entry() else {
+            return Ok(false);
+        };
         if !is_whitelisted_agg(tle.expr, rti, PARTWISE_FOLD_AGGS) {
             return Ok(false);
         }
@@ -204,7 +213,8 @@ pub(crate) fn classify_partitionwise(
     // Matrix consult (the drift-guarded routing surface): the admission
     // above keys the class; whether the class routes runtime is the
     // BOOTSTRAP_MATRIX/tsv pair's verdict, same as every covered sibling.
-    let covered = crate::m5_suppress::class_covered(crate::m5_suppress::CoverClass::PartwisePlainFold);
+    let covered =
+        crate::m5_suppress::class_covered(crate::m5_suppress::CoverClass::PartwisePlainFold);
     if covered && trace_armed() {
         let _ = run;
         eprintln!(

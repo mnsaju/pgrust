@@ -17,12 +17,11 @@ use types_slot::EXEC_FLAG_SKIP_TRIGGERS;
 
 use crate::plan::{self, SpiPlanPtr, SpiPlanState};
 use crate::{
-    current_exec_mcx, set_spi_processed, set_spi_tuptable, with_current,
-    TuptabHandle, _SPI_begin_call, _SPI_end_call, SPI_ERROR_ARGUMENT, SPI_ERROR_COPY,
-    SPI_ERROR_OPUNKNOWN, SPI_ERROR_PARAM, SPI_ERROR_TRANSACTION, SPI_OK_DELETE,
-    SPI_OK_DELETE_RETURNING, SPI_OK_INSERT, SPI_OK_INSERT_RETURNING, SPI_OK_MERGE,
-    SPI_OK_MERGE_RETURNING, SPI_OK_REWRITTEN, SPI_OK_SELECT, SPI_OK_SELINTO, SPI_OK_UPDATE,
-    SPI_OK_UPDATE_RETURNING, SPI_OK_UTILITY,
+    _SPI_begin_call, _SPI_end_call, current_exec_mcx, set_spi_processed, set_spi_tuptable,
+    with_current, TuptabHandle, SPI_ERROR_ARGUMENT, SPI_ERROR_COPY, SPI_ERROR_OPUNKNOWN,
+    SPI_ERROR_PARAM, SPI_ERROR_TRANSACTION, SPI_OK_DELETE, SPI_OK_DELETE_RETURNING, SPI_OK_INSERT,
+    SPI_OK_INSERT_RETURNING, SPI_OK_MERGE, SPI_OK_MERGE_RETURNING, SPI_OK_REWRITTEN, SPI_OK_SELECT,
+    SPI_OK_SELINTO, SPI_OK_UPDATE, SPI_OK_UPDATE_RETURNING, SPI_OK_UTILITY,
 };
 
 pub struct SpiExecuteOptions {
@@ -116,7 +115,9 @@ pub fn SPI_execute_plan(
     read_only: bool,
     tcount: i64,
 ) -> PgResult<i32> {
-    execute_plan_common(ptr, values, nulls, false, read_only, false, tcount, None, None, true)
+    execute_plan_common(
+        ptr, values, nulls, false, read_only, false, tcount, None, None, true,
+    )
 }
 
 // SPI_execute_plan_with_paramlist (spi.c): C's entry for a PL-built
@@ -132,7 +133,9 @@ pub fn SPI_execute_plan_with_paramlist(
     read_only: bool,
     tcount: i64,
 ) -> PgResult<i32> {
-    execute_plan_common(ptr, values, nulls, true, read_only, false, tcount, None, None, true)
+    execute_plan_common(
+        ptr, values, nulls, true, read_only, false, tcount, None, None, true,
+    )
 }
 
 // SPI_execute_plan_extended's allow_nonatomic leg (spi.c); params ride the
@@ -224,7 +227,13 @@ fn execute_plan_common(
         tcount: tcount as u64,
         ..Default::default()
     };
-    let res = _SPI_execute_plan(&state, &options, snapshot, crosscheck_snapshot, fire_triggers);
+    let res = _SPI_execute_plan(
+        &state,
+        &options,
+        snapshot,
+        crosscheck_snapshot,
+        fire_triggers,
+    );
     if !params.is_null() {
         types_portal::params::free(params);
     }
@@ -246,7 +255,8 @@ pub(crate) fn convert_params(
         return Ok(ParamListHandle::NULL);
     }
     let mcx = current_exec_mcx();
-    let mut v: mcx::PgVec<'static, ParamExternData> = mcx::vec_with_capacity_in(mcx, argtypes.len())?;
+    let mut v: mcx::PgVec<'static, ParamExternData> =
+        mcx::vec_with_capacity_in(mcx, argtypes.len())?;
     for i in 0..argtypes.len() {
         v.push(ParamExternData {
             value: values[i],
@@ -344,8 +354,7 @@ pub(crate) fn _SPI_execute_plan(
 
             if snapshot.is_none()
                 && (stmt_list.len() > 1
-                    || (stmt_list.len() == 1
-                        && pquery::PlannedStmtRequiresSnapshot(&stmt_list[0])))
+                    || (stmt_list.len() == 1 && pquery::PlannedStmtRequiresSnapshot(&stmt_list[0])))
             {
                 pquery::EnsurePortalSnapshotExists()?;
                 if !options.read_only && !allow_nonatomic {
@@ -601,7 +610,11 @@ fn _SPI_pquery(
         _ => return Ok(SPI_ERROR_OPUNKNOWN),
     };
 
-    let eflags = if fire_triggers { 0 } else { EXEC_FLAG_SKIP_TRIGGERS };
+    let eflags = if fire_triggers {
+        0
+    } else {
+        EXEC_FLAG_SKIP_TRIGGERS
+    };
     execmain_seams::executor_start::call(qd, eflags)?;
     execmain_seams::executor_run::call(qd, ForwardScanDirection, tcount, dest)?;
     with_current(|c| c.processed = execmain_seams::query_desc_es_processed::call(qd));

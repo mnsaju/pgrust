@@ -103,28 +103,60 @@ pub(crate) enum FRel {
 /// Generic runs steps[lo..hi] through the virtual register file.
 pub(crate) enum ClauseShape {
     /// !isnull(lane) && int_cmp(lane, konst) — one fused stencil.
-    CmpConst { col: u16, op: CmpOp, konst: Datum },
+    CmpConst {
+        col: u16,
+        op: CmpOp,
+        konst: Datum,
+    },
     /// !isnull(lane) && pgf_rel(lane_as_f64, konst_f64) with konst non-NaN.
-    FCmpConst { col: u16, rel: FRel, konst_bits: u64, lane_f32: bool },
+    FCmpConst {
+        col: u16,
+        rel: FRel,
+        konst_bits: u64,
+        lane_f32: bool,
+    },
     /// !isnull(a) && !isnull(b) && int_cmp(a, b).
-    CmpVar { a_col: u16, b_col: u16, op: CmpOp },
+    CmpVar {
+        a_col: u16,
+        b_col: u16,
+        op: CmpOp,
+    },
     /// !isnull(a) && !isnull(b) && pgf_rel(a, b) — float var-var. Exact on
     /// both tiers via explicit NaN masks (emit arms carry the proofs); both
     /// sides evaluate at f64 (exact promotion).
-    FCmpVar { a_col: u16, b_col: u16, rel: FRel, a_f32: bool, b_f32: bool },
+    FCmpVar {
+        a_col: u16,
+        b_col: u16,
+        rel: FRel,
+        a_f32: bool,
+        b_f32: bool,
+    },
     /// lane IS [NOT] NULL fused with its Qual: a pure predicate of the
     /// row's isnull byte (NullTest never yields NULL).
-    NullTestQ { col: u16, kind: NullTestKind },
+    NullTestQ {
+        col: u16,
+        kind: NullTestKind,
+    },
     /// lane IS [NOT] TRUE/FALSE fused with its Qual: a pure predicate of
     /// (isnull byte, value word != 0) (BooleanTest never yields NULL).
-    BoolTestQ { col: u16, kind: BoolTestKind },
+    BoolTestQ {
+        col: u16,
+        kind: BoolTestKind,
+    },
     /// lane <op> ANY (const array) fused with its Qual. The three-valued
     /// SAOP surface collapses under a qual: the row passes iff the scalar
     /// is non-NULL and some non-NULL element matches (a NULL result fails
     /// the qual exactly like false), so NULL elements only matter by NOT
     /// matching. Whitelisted non-erroring comparators only (no floats).
-    SaopQ { col: u16, op: CmpOp, arr: u16 },
-    Generic { lo: usize, hi: usize },
+    SaopQ {
+        col: u16,
+        op: CmpOp,
+        arr: u16,
+    },
+    Generic {
+        lo: usize,
+        hi: usize,
+    },
 }
 
 pub(crate) struct Plan {
@@ -240,13 +272,31 @@ fn cmp_cond(op: CmpOp) -> (bool, Cond) {
         OidLe => Cond::Ls,
         OidGt => Cond::Hi,
         OidGe => Cond::Hs,
-        op => unreachable!("cmp_cond on a float comparator (float={})", is_float_cmp(op)),
+        op => unreachable!(
+            "cmp_cond on a float comparator (float={})",
+            is_float_cmp(op)
+        ),
     };
     let wide = matches!(
         op,
-        Int8Eq | Int8Ne | Int8Lt | Int8Le | Int8Gt | Int8Ge
-            | Int84Eq | Int84Ne | Int84Lt | Int84Le | Int84Gt | Int84Ge
-            | Int48Eq | Int48Ne | Int48Lt | Int48Le | Int48Gt | Int48Ge
+        Int8Eq
+            | Int8Ne
+            | Int8Lt
+            | Int8Le
+            | Int8Gt
+            | Int8Ge
+            | Int84Eq
+            | Int84Ne
+            | Int84Lt
+            | Int84Le
+            | Int84Gt
+            | Int84Ge
+            | Int48Eq
+            | Int48Ne
+            | Int48Lt
+            | Int48Le
+            | Int48Gt
+            | Int48Ge
     );
     (wide, cond)
 }
@@ -292,7 +342,11 @@ pub(crate) fn plan_clauses(prog: &Program, ncols: usize) -> Option<Plan> {
                 let konst = prog.consts[*k as usize].value;
                 if is_float_cmp(*op) {
                     let (lane_f32, konst_f32) = float_family(*op);
-                    let kf = if konst_f32 { konst.as_f32() as f64 } else { konst.as_f64() };
+                    let kf = if konst_f32 {
+                        konst.as_f32() as f64
+                    } else {
+                        konst.as_f64()
+                    };
                     if kf.is_nan() {
                         // The fcmp conds and the NEON ordered compares are
                         // exact only for a non-NaN rhs; a NaN konst refuses
@@ -306,7 +360,11 @@ pub(crate) fn plan_clauses(prog: &Program, ncols: usize) -> Option<Plan> {
                         lane_f32,
                     }
                 } else {
-                    ClauseShape::CmpConst { col: *col, op: *op, konst }
+                    ClauseShape::CmpConst {
+                        col: *col,
+                        op: *op,
+                        konst,
+                    }
                 }
             }
             [Step::LoadLane { col: ca, out: r0 }, Step::LoadLane { col: cb, out: r1 }, Step::Cmp { op, a, b, out }, Step::Qual { a: q }]
@@ -338,7 +396,11 @@ pub(crate) fn plan_clauses(prog: &Program, ncols: usize) -> Option<Plan> {
                         b_f32,
                     }
                 } else {
-                    ClauseShape::CmpVar { a_col: *ca, b_col: *cb, op: *op }
+                    ClauseShape::CmpVar {
+                        a_col: *ca,
+                        b_col: *cb,
+                        op: *op,
+                    }
                 }
             }
             [Step::LoadLane { col, out: r0 }, Step::NullTest { a, out: r1, kind }, Step::Qual { a: q }]
@@ -350,7 +412,10 @@ pub(crate) fn plan_clauses(prog: &Program, ncols: usize) -> Option<Plan> {
                     && regs_dead_after(steps, hi, &[*r0, *r1]) =>
             {
                 use_col(&mut used_cols, *col);
-                ClauseShape::NullTestQ { col: *col, kind: *kind }
+                ClauseShape::NullTestQ {
+                    col: *col,
+                    kind: *kind,
+                }
             }
             [Step::LoadLane { col, out: r0 }, Step::BoolTest { a, out: r1, kind }, Step::Qual { a: q }]
                 if a == r0
@@ -361,9 +426,17 @@ pub(crate) fn plan_clauses(prog: &Program, ncols: usize) -> Option<Plan> {
                     && regs_dead_after(steps, hi, &[*r0, *r1]) =>
             {
                 use_col(&mut used_cols, *col);
-                ClauseShape::BoolTestQ { col: *col, kind: *kind }
+                ClauseShape::BoolTestQ {
+                    col: *col,
+                    kind: *kind,
+                }
             }
-            [Step::LoadLane { col, out: r0 }, Step::SaopAny { a, out: r1, op, arr }, Step::Qual { a: q }]
+            [Step::LoadLane { col, out: r0 }, Step::SaopAny {
+                a,
+                out: r1,
+                op,
+                arr,
+            }, Step::Qual { a: q }]
                 if a == r0
                     && q == r1
                     && !reg_bad(*r0)
@@ -375,7 +448,11 @@ pub(crate) fn plan_clauses(prog: &Program, ncols: usize) -> Option<Plan> {
                     && regs_dead_after(steps, hi, &[*r0, *r1]) =>
             {
                 use_col(&mut used_cols, *col);
-                ClauseShape::SaopQ { col: *col, op: *op, arr: *arr }
+                ClauseShape::SaopQ {
+                    col: *col,
+                    op: *op,
+                    arr: *arr,
+                }
             }
             window => {
                 // Generic clause: every step individually classifiable
@@ -474,7 +551,11 @@ pub(crate) fn plan_clauses(prog: &Program, ncols: usize) -> Option<Plan> {
     if lo != steps.len() || clauses.is_empty() || used_cols.is_empty() {
         return None;
     }
-    Some(Plan { clauses, used_cols, has_arith })
+    Some(Plan {
+        clauses,
+        used_cols,
+        has_arith,
+    })
 }
 
 // Virtual register file offsets in the stack frame, plus the SIMD spill
@@ -483,7 +564,10 @@ const REGFILE_BYTES: u32 = (MAX_REGS as u32) * 16;
 const SPILL_MASK: u32 = REGFILE_BYTES;
 const SPILL_BASE: u32 = REGFILE_BYTES + 8;
 const SPILL_BITS: u32 = REGFILE_BYTES + 16;
-const _: () = assert!(REGFILE_BYTES == 256, "frame offsets assume the 256-byte register file");
+const _: () = assert!(
+    REGFILE_BYTES == 256,
+    "frame offsets assume the 256-byte register file"
+);
 const _: () = assert!(MAX_ROWS % 64 == 0);
 
 // ---- SVE2 tier frame extension (survivor-index buffer) --------------------
@@ -540,7 +624,10 @@ const HOIST_PAIRS: [(u32, u32); 2] = [(25, 26), (27, 28)];
 /// Kill switch for measurement: PGRUST_LANESTITCH_SIMD=0|off pins the
 /// scalar row-loop bodies (read per compile — compiles are rare).
 fn simd_enabled() -> bool {
-    !matches!(std::env::var("PGRUST_LANESTITCH_SIMD").as_deref(), Ok("0") | Ok("off"))
+    !matches!(
+        std::env::var("PGRUST_LANESTITCH_SIMD").as_deref(),
+        Ok("0") | Ok("off")
+    )
 }
 
 // ---- SVE2 stencil-tier selection ------------------------------------------
@@ -645,7 +732,12 @@ fn match_free_regs(plan: &Plan) -> Vec<u32> {
     let nconst = plan
         .clauses
         .iter()
-        .filter(|c| matches!(c, ClauseShape::CmpConst { .. } | ClauseShape::FCmpConst { .. }))
+        .filter(|c| {
+            matches!(
+                c,
+                ClauseShape::CmpConst { .. } | ClauseShape::FCmpConst { .. }
+            )
+        })
         .count() as u32;
     (18..24u32).chain(24 + nconst..29).collect()
 }
@@ -688,7 +780,13 @@ impl<'a> Ctx<'a> {
     /// Same binding context, different per-row fail/next targets (the SIMD
     /// bit-iteration loops re-aim the shared step stencils).
     fn with_row_labels(&self, row_fail: Label, row_next: Label) -> Ctx<'a> {
-        Ctx { lay: self.lay, hoist: self.hoist.clone(), row_fail, row_next, refuse: self.refuse }
+        Ctx {
+            lay: self.lay,
+            hoist: self.hoist.clone(),
+            row_fail,
+            row_next,
+            refuse: self.refuse,
+        }
     }
 }
 
@@ -768,7 +866,13 @@ pub(crate) fn emit_pipeline(prog: &Program, plan: &Plan, lay: &ParamsLayout) -> 
         .zip(HOIST_PAIRS)
         .map(|(&col, (p0, nul))| (col, p0, nul))
         .collect();
-    let mut ctx = Ctx { lay, hoist, row_fail: Label(0), row_next: Label(0), refuse: Label(0) };
+    let mut ctx = Ctx {
+        lay,
+        hoist,
+        row_fail: Label(0),
+        row_next: Label(0),
+        refuse: Label(0),
+    };
     for &(col, p0, nul) in &ctx.hoist {
         e.ldr_x(p0, PARAMS, lane_p0(&ctx, col));
         e.ldr_x(nul, PARAMS, lane_isnull(&ctx, col));
@@ -844,7 +948,12 @@ fn emit_clause(e: &mut Emitter, ctx: &Ctx<'_>, prog: &Program, shape: &ClauseSha
             e.ldr_x_idx3(11, p0, ROW);
             emit_cmp_konst_tail(e, ctx, op, konst);
         }
-        ClauseShape::FCmpConst { col, rel, konst_bits, lane_f32 } => {
+        ClauseShape::FCmpConst {
+            col,
+            rel,
+            konst_bits,
+            lane_f32,
+        } => {
             let nul = lane_isnull_reg(e, ctx, col, 8);
             e.ldrb_idx(10, nul, ROW);
             e.cbnz_w(10, ctx.row_fail);
@@ -880,7 +989,13 @@ fn emit_clause(e: &mut Emitter, ctx: &Ctx<'_>, prog: &Program, shape: &ClauseSha
             }
             e.b_cond(cond.inv(), ctx.row_fail);
         }
-        ClauseShape::FCmpVar { a_col, b_col, rel, a_f32, b_f32 } => {
+        ClauseShape::FCmpVar {
+            a_col,
+            b_col,
+            rel,
+            a_f32,
+            b_f32,
+        } => {
             let nul_a = lane_isnull_reg(e, ctx, a_col, 8);
             e.ldrb_idx(10, nul_a, ROW);
             let nul_b = lane_isnull_reg(e, ctx, b_col, 8);
@@ -1269,7 +1384,7 @@ fn emit_step(e: &mut Emitter, ctx: &Ctx<'_>, prog: &Program, step: &Step) {
             e.cmp_x_imm(10, 0);
             // nn/notnull selector.
             let null_cond = match kind {
-                IsTrue | IsFalse => Cond::Eq, // nn = isnull == 0
+                IsTrue | IsFalse => Cond::Eq,       // nn = isnull == 0
                 IsNotTrue | IsNotFalse => Cond::Ne, // notnull = isnull != 0
             };
             e.cset_x(12, null_cond);
@@ -1277,7 +1392,7 @@ fn emit_step(e: &mut Emitter, ctx: &Ctx<'_>, prog: &Program, step: &Step) {
             // truthy/falsy selector.
             let val_cond = match kind {
                 IsTrue | IsNotFalse => Cond::Ne, // value != 0 (truthy)
-                IsFalse | IsNotTrue => Cond::Eq,  // value == 0 (falsy)
+                IsFalse | IsNotTrue => Cond::Eq, // value == 0 (falsy)
             };
             e.cset_x(13, val_cond);
             match kind {
@@ -1378,7 +1493,11 @@ fn vector_pass_clause(c: &ClauseShape) -> bool {
 /// nothing to a qual (a NULL SAOP result fails exactly like false), so only
 /// non-NULL elements count against the vector-tier cap or emit code.
 fn saop_vector_elems(prog: &Program, arr: u16) -> Vec<Datum> {
-    prog.arrays[arr as usize].iter().filter(|e| !e.isnull).map(|e| e.value).collect()
+    prog.arrays[arr as usize]
+        .iter()
+        .filter(|e| !e.isnull)
+        .map(|e| e.value)
+        .collect()
 }
 
 /// SIMD legality for a whole plan: every clause pure and non-erroring
@@ -1590,7 +1709,9 @@ fn emit_simd_blocks(e: &mut Emitter, ctx: &Ctx<'_>, prog: &Program, plan: &Plan,
                     w
                 };
                 for chunk in elems.chunks(8) {
-                    let reg = free.next().expect("assign_match_clauses bounded the budget");
+                    let reg = free
+                        .next()
+                        .expect("assign_match_clauses bounded the budget");
                     let lo = pack4(chunk, elems[0]);
                     let hi = pack4(if chunk.len() > 4 { &chunk[4..] } else { &[] }, elems[0]);
                     e.ldr_lit(12, lo);
@@ -1626,7 +1747,9 @@ fn emit_simd_blocks(e: &mut Emitter, ctx: &Ctx<'_>, prog: &Program, plan: &Plan,
                 emit_notnull_8b(e, ctx, col, 17);
                 e.and_8b(0, 0, 17);
             }
-            ClauseShape::FCmpConst { col, rel, lane_f32, .. } => {
+            ClauseShape::FCmpConst {
+                col, rel, lane_f32, ..
+            } => {
                 emit_load_group(e, ctx, col, 0);
                 if lane_f32 {
                     // Promote 8 raw-f32 datums to f64 lanes (exact).
@@ -1650,7 +1773,13 @@ fn emit_simd_blocks(e: &mut Emitter, ctx: &Ctx<'_>, prog: &Program, plan: &Plan,
                 e.and_8b(17, 17, 16);
                 e.and_8b(0, 0, 17);
             }
-            ClauseShape::FCmpVar { a_col, b_col, rel, a_f32, b_f32 } => {
+            ClauseShape::FCmpVar {
+                a_col,
+                b_col,
+                rel,
+                a_f32,
+                b_f32,
+            } => {
                 emit_load_group(e, ctx, a_col, 0);
                 emit_load_group(e, ctx, b_col, 4);
                 if a_f32 {
@@ -1769,8 +1898,11 @@ fn emit_simd_blocks(e: &mut Emitter, ctx: &Ctx<'_>, prog: &Program, plan: &Plan,
     // non-erroring (classify_simd refused arith), so the implicit AND
     // commutes — a row failing a pure clause never reaches an erroring
     // clause in either order because no erroring clause exists here at all.
-    let generics: Vec<&ClauseShape> =
-        plan.clauses.iter().filter(|c| !vector_pass_clause(c)).collect();
+    let generics: Vec<&ClauseShape> = plan
+        .clauses
+        .iter()
+        .filter(|c| !vector_pass_clause(c))
+        .collect();
     if !generics.is_empty() {
         if let SimdTier::Sve2 { force } = tier {
             // Adaptive survivor-emit tier (spike K1): when this block keeps
@@ -2026,7 +2158,10 @@ pub(crate) fn plan_sve2_info(prog: &Program, plan: &Plan) -> (bool, usize) {
     let tier = simd_tier();
     let survivors = matches!(tier, SimdTier::Sve2 { .. })
         && plan.clauses.iter().any(|c| !vector_pass_clause(c));
-    let nmatch = assign_match_clauses(prog, plan, tier).iter().flatten().count();
+    let nmatch = assign_match_clauses(prog, plan, tier)
+        .iter()
+        .flatten()
+        .count();
     (survivors, nmatch)
 }
 
@@ -2171,7 +2306,13 @@ pub(crate) fn emit_project_pipeline(
         .zip(HOIST_PAIRS)
         .map(|(&col, (p0, nul))| (col, p0, nul))
         .collect();
-    let mut ctx = Ctx { lay, hoist, row_fail: Label(0), row_next: Label(0), refuse: Label(0) };
+    let mut ctx = Ctx {
+        lay,
+        hoist,
+        row_fail: Label(0),
+        row_next: Label(0),
+        refuse: Label(0),
+    };
     for &(col, p0, nul) in &ctx.hoist {
         e.ldr_x(p0, PARAMS, lane_p0(&ctx, col));
         e.ldr_x(nul, PARAMS, lane_isnull(&ctx, col));

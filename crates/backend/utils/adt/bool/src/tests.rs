@@ -46,7 +46,10 @@ fn boolin_trims_and_errors_like_c() {
 
     let err = boolin("o", None).unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_INVALID_TEXT_REPRESENTATION);
-    assert_eq!(err.message(), "invalid input syntax for type boolean: \"o\"");
+    assert_eq!(
+        err.message(),
+        "invalid input syntax for type boolean: \"o\""
+    );
     let err = boolin(" junk ", None).unwrap_err();
     assert_eq!(
         err.message(),
@@ -106,7 +109,13 @@ fn bool_agg_state_machine() {
     let s = bool_accum(None, Some(true));
     let s = bool_accum(Some(s), Some(false));
     let s = bool_accum(Some(s), None);
-    assert_eq!(s, BoolAggState { aggcount: 2, aggtrue: 1 });
+    assert_eq!(
+        s,
+        BoolAggState {
+            aggcount: 2,
+            aggtrue: 1
+        }
+    );
     assert_eq!(bool_alltrue(Some(&s)), Some(false));
     assert_eq!(bool_anytrue(Some(&s)), Some(true));
 
@@ -135,7 +144,12 @@ fn fc_wrappers_and_registry() {
     assert!(call2(fc_boollt, Datum::from_bool(false), Datum::from_bool(true)).as_bool());
     assert!(!call2(fc_boolge, Datum::from_bool(false), Datum::from_bool(true)).as_bool());
     assert_eq!(
-        call2(fc_hashboolextended, Datum::from_bool(true), Datum::from_i64(7)).as_u64(),
+        call2(
+            fc_hashboolextended,
+            Datum::from_bool(true),
+            Datum::from_i64(7)
+        )
+        .as_u64(),
         hashboolextended(true, 7)
     );
 

@@ -45,15 +45,96 @@ struct T {
 
 // pg_type.dat rows for the unit-testable range family.
 const TYPES: &[T] = &[
-    T { oid: INT4, name: "int4", typlen: 4, typbyval: true, typalign: b'i', typstorage: b'p', typtype: b'b', io: [42, 43, 2406, 2407] },
-    T { oid: INT8, name: "int8", typlen: 8, typbyval: true, typalign: b'd', typstorage: b'p', typtype: b'b', io: [460, 461, 2408, 2409] },
-    T { oid: NUMERIC, name: "numeric", typlen: -1, typbyval: false, typalign: b'i', typstorage: b'm', typtype: b'b', io: [1701, 1702, 2460, 2461] },
-    T { oid: INT4RANGE, name: "int4range", typlen: -1, typbyval: false, typalign: b'i', typstorage: b'x', typtype: b'r', io: [3834, 3835, 3836, 3837] },
-    T { oid: INT8RANGE, name: "int8range", typlen: -1, typbyval: false, typalign: b'd', typstorage: b'x', typtype: b'r', io: [3834, 3835, 3836, 3837] },
-    T { oid: NUMRANGE, name: "numrange", typlen: -1, typbyval: false, typalign: b'i', typstorage: b'x', typtype: b'r', io: [3834, 3835, 3836, 3837] },
-    T { oid: INT4MULTI, name: "int4multirange", typlen: -1, typbyval: false, typalign: b'i', typstorage: b'x', typtype: b'm', io: [4231, 4232, 4233, 4234] },
-    T { oid: INT8MULTI, name: "int8multirange", typlen: -1, typbyval: false, typalign: b'd', typstorage: b'x', typtype: b'm', io: [4231, 4232, 4233, 4234] },
-    T { oid: NUMMULTI, name: "nummultirange", typlen: -1, typbyval: false, typalign: b'i', typstorage: b'x', typtype: b'm', io: [4231, 4232, 4233, 4234] },
+    T {
+        oid: INT4,
+        name: "int4",
+        typlen: 4,
+        typbyval: true,
+        typalign: b'i',
+        typstorage: b'p',
+        typtype: b'b',
+        io: [42, 43, 2406, 2407],
+    },
+    T {
+        oid: INT8,
+        name: "int8",
+        typlen: 8,
+        typbyval: true,
+        typalign: b'd',
+        typstorage: b'p',
+        typtype: b'b',
+        io: [460, 461, 2408, 2409],
+    },
+    T {
+        oid: NUMERIC,
+        name: "numeric",
+        typlen: -1,
+        typbyval: false,
+        typalign: b'i',
+        typstorage: b'm',
+        typtype: b'b',
+        io: [1701, 1702, 2460, 2461],
+    },
+    T {
+        oid: INT4RANGE,
+        name: "int4range",
+        typlen: -1,
+        typbyval: false,
+        typalign: b'i',
+        typstorage: b'x',
+        typtype: b'r',
+        io: [3834, 3835, 3836, 3837],
+    },
+    T {
+        oid: INT8RANGE,
+        name: "int8range",
+        typlen: -1,
+        typbyval: false,
+        typalign: b'd',
+        typstorage: b'x',
+        typtype: b'r',
+        io: [3834, 3835, 3836, 3837],
+    },
+    T {
+        oid: NUMRANGE,
+        name: "numrange",
+        typlen: -1,
+        typbyval: false,
+        typalign: b'i',
+        typstorage: b'x',
+        typtype: b'r',
+        io: [3834, 3835, 3836, 3837],
+    },
+    T {
+        oid: INT4MULTI,
+        name: "int4multirange",
+        typlen: -1,
+        typbyval: false,
+        typalign: b'i',
+        typstorage: b'x',
+        typtype: b'm',
+        io: [4231, 4232, 4233, 4234],
+    },
+    T {
+        oid: INT8MULTI,
+        name: "int8multirange",
+        typlen: -1,
+        typbyval: false,
+        typalign: b'd',
+        typstorage: b'x',
+        typtype: b'm',
+        io: [4231, 4232, 4233, 4234],
+    },
+    T {
+        oid: NUMMULTI,
+        name: "nummultirange",
+        typlen: -1,
+        typbyval: false,
+        typalign: b'i',
+        typstorage: b'x',
+        typtype: b'm',
+        io: [4231, 4232, 4233, 4234],
+    },
 ];
 
 fn typ(oid: Oid) -> &'static T {
@@ -74,37 +155,43 @@ fn install() {
         fmgr_core::init_seams();
         miscinit_seams::is_bootstrap_processing_mode::set(|| false);
         s::lookup_pg_type_typcache_shape::set(|typid| {
-            Ok(TYPES.iter().find(|t| t.oid == typid).map(|t| s::PgTypeTypcacheShape {
-                typname: name(t.name),
-                typlen: t.typlen,
-                typbyval: t.typbyval,
-                typalign: t.typalign as i8,
-                typstorage: t.typstorage as i8,
-                typtype: t.typtype as i8,
-                typisdefined: true,
-                typrelid: InvalidOid,
-                typsubscript: InvalidOid,
-                typelem: InvalidOid,
-                typarray: InvalidOid,
-                typcollation: InvalidOid,
-            }))
+            Ok(TYPES
+                .iter()
+                .find(|t| t.oid == typid)
+                .map(|t| s::PgTypeTypcacheShape {
+                    typname: name(t.name),
+                    typlen: t.typlen,
+                    typbyval: t.typbyval,
+                    typalign: t.typalign as i8,
+                    typstorage: t.typstorage as i8,
+                    typtype: t.typtype as i8,
+                    typisdefined: true,
+                    typrelid: InvalidOid,
+                    typsubscript: InvalidOid,
+                    typelem: InvalidOid,
+                    typarray: InvalidOid,
+                    typcollation: InvalidOid,
+                }))
         });
         s::pg_type_io_shape::set(|typid| {
-            Ok(TYPES.iter().find(|t| t.oid == typid).map(|t| s::PgTypeIoShape {
-                oid: t.oid,
-                typinput: t.io[0],
-                typoutput: t.io[1],
-                typreceive: t.io[2],
-                typsend: t.io[3],
-                typmodin: InvalidOid,
-                typmodout: InvalidOid,
-                typelem: InvalidOid,
-                typlen: t.typlen,
-                typbyval: t.typbyval,
-                typalign: t.typalign as i8,
-                typdelim: b',' as i8,
-                typisdefined: true,
-            }))
+            Ok(TYPES
+                .iter()
+                .find(|t| t.oid == typid)
+                .map(|t| s::PgTypeIoShape {
+                    oid: t.oid,
+                    typinput: t.io[0],
+                    typoutput: t.io[1],
+                    typreceive: t.io[2],
+                    typsend: t.io[3],
+                    typmodin: InvalidOid,
+                    typmodout: InvalidOid,
+                    typelem: InvalidOid,
+                    typlen: t.typlen,
+                    typbyval: t.typbyval,
+                    typalign: t.typalign as i8,
+                    typdelim: b',' as i8,
+                    typisdefined: true,
+                }))
         });
         s::syscache_hash_value_typeoid::set(|typid| Ok(typid.wrapping_mul(0x9e37_79b1)));
         s::lookup_pg_range_shape::set(|range_oid| {
@@ -139,7 +226,12 @@ fn install() {
                 1979 => Some((HASH_AM_OID, 1977, INT4)),
                 _ => None,
             }
-            .map(|(m, f, i)| s::PgOpclassShape { opcmethod: m, opcfamily: f, opcintype: i, opckeytype: 0 }))
+            .map(|(m, f, i)| s::PgOpclassShape {
+                opcmethod: m,
+                opcfamily: f,
+                opcintype: i,
+                opckeytype: 0,
+            }))
         });
         s::lookup_pg_amproc::set(|opfamily, lefttype, righttype, procnum| {
             Ok(match (opfamily, lefttype, righttype, procnum) {
@@ -179,8 +271,10 @@ fn out_range(mcx: Mcx<'_>, oid: Oid, img: &[u8]) -> PgResult<String> {
 fn parse_mr<'m>(mcx: Mcx<'m>, oid: Oid, s: &str) -> PgResult<PgVec<'m, u8>> {
     let mut fl = FmgrInfo::unresolved();
     let cache = cached_multirange_io_data(&mut fl, oid, IOFuncSelector::IOFunc_input)?;
-    Ok(crate::io::multirange_in(mcx, cache, s.as_bytes(), -1, None)?
-        .expect("hard error path returns Some"))
+    Ok(
+        crate::io::multirange_in(mcx, cache, s.as_bytes(), -1, None)?
+            .expect("hard error path returns Some"),
+    )
 }
 
 fn out_mr(mcx: Mcx<'_>, oid: Oid, img: &[u8]) -> PgResult<String> {
@@ -272,8 +366,10 @@ fn eval(mcx: Mcx<'_>, kind: &str, oid: Oid, a1: &str, a2: &str) -> PgResult<Opti
 fn parse_range_full<'m>(mcx: Mcx<'m>, oid: Oid, s: &str) -> PgResult<PgVec<'m, u8>> {
     let mut fl = FmgrInfo::unresolved();
     let cache = cached_range_io_data(&mut fl, oid, IOFuncSelector::IOFunc_input)?;
-    Ok(::adt_rangetypes::io::range_in(mcx, cache, s.as_bytes(), -1, None)?
-        .expect("hard error path returns Some"))
+    Ok(
+        ::adt_rangetypes::io::range_in(mcx, cache, s.as_bytes(), -1, None)?
+            .expect("hard error path returns Some"),
+    )
 }
 
 fn hex(payload: &[u8]) -> String {
@@ -321,7 +417,9 @@ fn eval_fn(mcx: Mcx<'_>, fname: &str, oid: Oid, a1: &str, a2: &str) -> PgResult<
                 };
                 Some(out_range(mcx, mi.rng.rngtypid, &rimg)?)
             }
-            "hash" => Some((crate::hash_multirange_internal(mcx, &mut mi, &img)? as i32).to_string()),
+            "hash" => {
+                Some((crate::hash_multirange_internal(mcx, &mut mi, &img)? as i32).to_string())
+            }
             "hash_extended" => Some(
                 (crate::hash_multirange_extended_internal(mcx, &mut mi, &img, Datum::from_i64(42))?
                     as i64)
@@ -403,7 +501,11 @@ fn eval_range_op(mcx: Mcx<'_>, op: &str, oid: Oid, a1: &str, a2: &str) -> PgResu
             rops::UnionResult::Input2 => out_range(mcx, oid, &r2)?,
             rops::UnionResult::New(u) => out_range(mcx, oid, &u)?,
         },
-        "*" => out_range(mcx, oid, &rops::range_intersect_internal(mcx, &mut ri, &r1, &r2)?)?,
+        "*" => out_range(
+            mcx,
+            oid,
+            &rops::range_intersect_internal(mcx, &mut ri, &r1, &r2)?,
+        )?,
         "-" => match rops::range_minus_internal(mcx, &mut ri, &r1, &r2)? {
             rops::MinusResult::Input1 => out_range(mcx, oid, &r1)?,
             rops::MinusResult::New(m) => out_range(mcx, oid, &m)?,
@@ -424,11 +526,21 @@ fn eval_mr_op(mcx: Mcx<'_>, op: &str, oid: Oid, a1: &str, a2: &str) -> PgResult<
         "<=" => bool_s(crate::multirange_cmp_internal(mcx, rng, &mr1, &mr2)? <= 0),
         ">" => bool_s(crate::multirange_cmp_internal(mcx, rng, &mr1, &mr2)? > 0),
         ">=" => bool_s(crate::multirange_cmp_internal(mcx, rng, &mr1, &mr2)? >= 0),
-        "@>" => bool_s(crate::multirange_contains_multirange_internal(mcx, rng, &mr1, &mr2)?),
-        "<@" => bool_s(crate::multirange_contains_multirange_internal(mcx, rng, &mr2, &mr1)?),
-        "&&" => bool_s(crate::multirange_overlaps_multirange_internal(mcx, rng, &mr1, &mr2)?),
-        "<<" => bool_s(crate::multirange_before_multirange_internal(mcx, rng, &mr1, &mr2)?),
-        ">>" => bool_s(crate::multirange_before_multirange_internal(mcx, rng, &mr2, &mr1)?),
+        "@>" => bool_s(crate::multirange_contains_multirange_internal(
+            mcx, rng, &mr1, &mr2,
+        )?),
+        "<@" => bool_s(crate::multirange_contains_multirange_internal(
+            mcx, rng, &mr2, &mr1,
+        )?),
+        "&&" => bool_s(crate::multirange_overlaps_multirange_internal(
+            mcx, rng, &mr1, &mr2,
+        )?),
+        "<<" => bool_s(crate::multirange_before_multirange_internal(
+            mcx, rng, &mr1, &mr2,
+        )?),
+        ">>" => bool_s(crate::multirange_before_multirange_internal(
+            mcx, rng, &mr2, &mr1,
+        )?),
         "-|-" => {
             if crate::multirange_is_empty(&mr1) || crate::multirange_is_empty(&mr2) {
                 bool_s(false)
@@ -635,7 +747,9 @@ fn differential_corpus_vs_live_pg() {
         };
         let diverged = match (status, got) {
             ("OK", Ok(Some(g))) => (g != want).then(|| format!("{line}: got {g:?} want {want:?}")),
-            ("OK", Ok(None)) => (!want.is_empty()).then(|| format!("{line}: got NULL want {want:?}")),
+            ("OK", Ok(None)) => {
+                (!want.is_empty()).then(|| format!("{line}: got NULL want {want:?}"))
+            }
             ("OK", Err(e)) => Some(format!("{line}: got error {e} want {want:?}")),
             ("ERR", Ok(g)) => Some(format!("{line}: got {g:?} want error")),
             ("ERR", Err(e)) => check_err(&e, want).map(|d| format!("{line}: {d}")),
@@ -645,7 +759,10 @@ fn differential_corpus_vs_live_pg() {
             failures.push(d);
         }
     }
-    assert!(n > 3000, "corpus unexpectedly small: {n} rows ({skipped} skipped)");
+    assert!(
+        n > 3000,
+        "corpus unexpectedly small: {n} rows ({skipped} skipped)"
+    );
     // "FAILED-ROW" rides the fleet log's grep filter.
     assert!(
         failures.is_empty(),

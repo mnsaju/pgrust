@@ -25,8 +25,11 @@ pub struct ParamExecData {
 }
 
 impl ParamExecData {
-    pub const EMPTY: ParamExecData =
-        ParamExecData { value: Datum::null(), isnull: true, exec_plan: false };
+    pub const EMPTY: ParamExecData = ParamExecData {
+        value: Datum::null(),
+        isnull: true,
+        exec_plan: false,
+    };
 }
 
 // Resolve-once compile binding (execexpr's AggBind precedent); both arrays are address-stable.
@@ -38,8 +41,11 @@ pub struct ParamBind<'a> {
 }
 
 impl ParamBind<'_> {
-    pub const NONE: ParamBind<'static> =
-        ParamBind { extern_params: None, exec_vals: None, n_exec: 0 };
+    pub const NONE: ParamBind<'static> = ParamBind {
+        extern_params: None,
+        exec_vals: None,
+        n_exec: 0,
+    };
 }
 
 #[derive(Clone, Copy)]
@@ -92,7 +98,12 @@ unsafe fn register_with_hooked(params: &[ParamExternData], hooked: bool) -> Para
         g.set(v);
         v
     });
-    let entry = Entry { ptr: params.as_ptr(), len: params.len(), generation, hooked };
+    let entry = Entry {
+        ptr: params.as_ptr(),
+        len: params.len(),
+        generation,
+        hooked,
+    };
     let idx = match FREE.with(|f| f.borrow_mut().pop()) {
         Some(i) => {
             ENTRIES.with(|e| e.borrow_mut()[i as usize] = Some(entry));
@@ -169,7 +180,11 @@ pub fn is_live(h: ParamListHandle) -> bool {
     }
     let (idx, generation) = decode(h);
     ENTRIES.with(|e| {
-        e.borrow().get(idx as usize).copied().flatten().map(|en| en.generation)
+        e.borrow()
+            .get(idx as usize)
+            .copied()
+            .flatten()
+            .map(|en| en.generation)
             == Some(generation)
     })
 }

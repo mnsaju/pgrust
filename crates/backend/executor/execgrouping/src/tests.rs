@@ -5,7 +5,9 @@ use ::datum::Datum;
 use ::mcx::{Mcx, MemoryContext, PgVec};
 use ::types_core::INT4OID;
 use ::types_slot::TupleSlotKind;
-use ::types_tuple::{CompactAttribute, FormData_pg_attribute, TupleDescData, TYPALIGN_INT, TYPSTORAGE_PLAIN};
+use ::types_tuple::{
+    CompactAttribute, FormData_pg_attribute, TupleDescData, TYPALIGN_INT, TYPSTORAGE_PLAIN,
+};
 
 use crate::build_tuple_hash_table;
 
@@ -55,20 +57,9 @@ fn lookup_groups_and_isolates_keys() {
     let table_ctx = MemoryContext::new("entries");
     let desc = one_int4_desc(mcx);
     // hashint4 (450) / int4eq (65) passed as resolved oids, as nodeAgg does.
-    let mut table = build_tuple_hash_table(
-        mcx,
-        &desc,
-        &[1],
-        &[65],
-        &[450],
-        &[0],
-        16,
-        16,
-        false,
-    )
-    .unwrap();
-    let mut slot =
-        exectuples::make_tuple_table_slot(mcx, TupleSlotKind::Virtual, Some(desc));
+    let mut table =
+        build_tuple_hash_table(mcx, &desc, &[1], &[65], &[450], &[0], 16, 16, false).unwrap();
+    let mut slot = exectuples::make_tuple_table_slot(mcx, TupleSlotKind::Virtual, Some(desc));
 
     fn put<'mcx>(
         table: &mut crate::TupleHashTable<'mcx>,
@@ -83,7 +74,9 @@ fn lookup_groups_and_isolates_keys() {
         slot.base_mut().tts_isnull[0] = is_null;
         exectuples::exec_store_virtual_tuple(slot);
         let hash = table.hash_slot(slot).unwrap();
-        let (ix, isnew) = table.lookup(slot, hash, Some(table_ctx.mcx()), mcx).unwrap();
+        let (ix, isnew) = table
+            .lookup(slot, hash, Some(table_ctx.mcx()), mcx)
+            .unwrap();
         (ix.unwrap(), isnew)
     }
 
@@ -134,7 +127,9 @@ fn lookup_zero_additionalsize() {
         slot.base_mut().tts_isnull[0] = false;
         exectuples::exec_store_virtual_tuple(slot);
         let hash = table.hash_slot(slot).unwrap();
-        let (ix, isnew) = table.lookup(slot, hash, Some(table_ctx.mcx()), mcx).unwrap();
+        let (ix, isnew) = table
+            .lookup(slot, hash, Some(table_ctx.mcx()), mcx)
+            .unwrap();
         (ix.unwrap(), isnew)
     }
 
@@ -216,7 +211,9 @@ fn lookup_two_col_expr_path() {
         slot.base_mut().tts_isnull[1] = bn;
         exectuples::exec_store_virtual_tuple(slot);
         let hash = table.hash_slot(slot).unwrap();
-        let (ix, isnew) = table.lookup(slot, hash, Some(table_ctx.mcx()), mcx).unwrap();
+        let (ix, isnew) = table
+            .lookup(slot, hash, Some(table_ctx.mcx()), mcx)
+            .unwrap();
         (ix.unwrap(), isnew)
     }
 
@@ -282,7 +279,9 @@ fn lookup_int8_kernel() {
         slot.base_mut().tts_isnull[0] = isnull;
         exectuples::exec_store_virtual_tuple(slot);
         let hash = table.hash_slot(slot).unwrap();
-        let (ix, isnew) = table.lookup(slot, hash, Some(table_ctx.mcx()), mcx).unwrap();
+        let (ix, isnew) = table
+            .lookup(slot, hash, Some(table_ctx.mcx()), mcx)
+            .unwrap();
         (ix.unwrap(), isnew)
     }
 
@@ -309,9 +308,14 @@ fn lookup_int8_kernel() {
 #[ignore]
 fn probe_cost_insert_order() {
     install();
-    let n: usize = std::env::var("PROBE_N").ok().and_then(|v| v.parse().ok()).unwrap_or(4_000_000);
-    let init_buckets: usize =
-        std::env::var("PROBE_BUCKETS").ok().and_then(|v| v.parse().ok()).unwrap_or(250_000);
+    let n: usize = std::env::var("PROBE_N")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(4_000_000);
+    let init_buckets: usize = std::env::var("PROBE_BUCKETS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(250_000);
 
     // Deterministic shuffle (splitmix-based Fisher-Yates).
     let mut keys: Vec<i64> = (1..=n as i64).collect();
@@ -357,7 +361,15 @@ fn probe_cost_insert_order() {
             attrs,
         });
         let mut table = build_tuple_hash_table(
-            mcx, &desc, &[1], &[467], &[949], &[0], init_buckets, 16, false,
+            mcx,
+            &desc,
+            &[1],
+            &[467],
+            &[949],
+            &[0],
+            init_buckets,
+            16,
+            false,
         )
         .unwrap();
         let mut slot = exectuples::make_tuple_table_slot(mcx, TupleSlotKind::Virtual, Some(desc));
@@ -368,7 +380,9 @@ fn probe_cost_insert_order() {
             slot.base_mut().tts_isnull[0] = false;
             exectuples::exec_store_virtual_tuple(&mut slot);
             let hash = table.hash_slot(&mut slot).unwrap();
-            let (ix, _isnew) = table.lookup(&mut slot, hash, Some(table_ctx.mcx()), mcx).unwrap();
+            let (ix, _isnew) = table
+                .lookup(&mut slot, hash, Some(table_ctx.mcx()), mcx)
+                .unwrap();
             ix.unwrap();
         }
         let el = t0.elapsed();
@@ -411,22 +425,18 @@ fn staged_hash_matches_slot_under_variable_iv() {
 
     let hash_both = |variable_iv: bool| -> (Vec<u32>, Vec<u32>) {
         // hashint4 (450) / int4eq (65), as nodeAgg passes them.
-        let mut table = build_tuple_hash_table(
-            mcx,
-            &desc,
-            &[1],
-            &[65],
-            &[450],
-            &[0],
-            16,
-            16,
-            variable_iv,
-        )
-        .unwrap();
+        let mut table =
+            build_tuple_hash_table(mcx, &desc, &[1], &[65], &[450], &[0], 16, 16, variable_iv)
+                .unwrap();
         assert!(matches!(table.kernel, crate::ProbeKernel::Int4 { .. }));
         let mut slot =
             exectuples::make_tuple_table_slot(mcx, TupleSlotKind::Virtual, Some(desc.clone()));
-        let keys = [Datum::from_i32(0), Datum::from_i32(1), Datum::from_i32(-7), Datum::from_i32(i32::MAX)];
+        let keys = [
+            Datum::from_i32(0),
+            Datum::from_i32(1),
+            Datum::from_i32(-7),
+            Datum::from_i32(i32::MAX),
+        ];
         let isnull = [false, false, false, true];
         let mut slot_hashes = Vec::new();
         for (&k, &n) in keys.iter().zip(&isnull) {
@@ -437,15 +447,23 @@ fn staged_hash_matches_slot_under_variable_iv() {
             slot_hashes.push(table.hash_slot(&mut slot).unwrap());
         }
         let mut staged_hashes = Vec::new();
-        table.hash_staged(&keys, &isnull, &mut staged_hashes).unwrap();
+        table
+            .hash_staged(&keys, &isnull, &mut staged_hashes)
+            .unwrap();
         (slot_hashes, staged_hashes)
     };
 
     let (slot0, staged0) = hash_both(false);
     assert_eq!(slot0, staged0, "IV=0 staged/slot parity");
     let (slot1, staged1) = hash_both(true);
-    assert_eq!(slot1, staged1, "variable-IV staged/slot parity (t26 merge-1 revert class)");
-    assert_ne!(slot0, slot1, "the variable IV must actually engage the kernels");
+    assert_eq!(
+        slot1, staged1,
+        "variable-IV staged/slot parity (t26 merge-1 revert class)"
+    );
+    assert_ne!(
+        slot0, slot1,
+        "the variable IV must actually engage the kernels"
+    );
 }
 
 // q18fin r3 (t26 "q18fin-t26-r2 re-earn verdict" defect): the byref finalize
@@ -478,14 +496,19 @@ fn hash_to_iv0_rebases_variable_iv_onto_leader_mapping() {
         let isnull = [false, false, true];
         let hash_all = |iv: u32| -> (Vec<u32>, Vec<u32>) {
             let mut table = crate::build_tuple_hash_table_with_iv(
-                mcx, &desc, &[1], &[65], &[450], &[0], 16, 16, iv,
+                mcx,
+                &desc,
+                &[1],
+                &[65],
+                &[450],
+                &[0],
+                16,
+                16,
+                iv,
             )
             .unwrap();
-            let mut slot = exectuples::make_tuple_table_slot(
-                mcx,
-                TupleSlotKind::Virtual,
-                Some(desc.clone()),
-            );
+            let mut slot =
+                exectuples::make_tuple_table_slot(mcx, TupleSlotKind::Virtual, Some(desc.clone()));
             let mut slot_hashes = Vec::new();
             for (&k, &n) in keys.iter().zip(&isnull) {
                 exectuples::exec_clear_tuple(&mut slot, mcx);
@@ -532,11 +555,8 @@ fn hash_to_iv0_rebases_variable_iv_onto_leader_mapping() {
             )
             .unwrap();
             assert!(matches!(table.kernel, crate::ProbeKernel::Expr));
-            let mut slot = exectuples::make_tuple_table_slot(
-                mcx,
-                TupleSlotKind::Virtual,
-                Some(desc.clone()),
-            );
+            let mut slot =
+                exectuples::make_tuple_table_slot(mcx, TupleSlotKind::Virtual, Some(desc.clone()));
             let mut hashes = Vec::new();
             for ((v1, n1), (v2, n2)) in keyset {
                 exectuples::exec_clear_tuple(&mut slot, mcx);

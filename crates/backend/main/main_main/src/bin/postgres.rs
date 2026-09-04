@@ -64,11 +64,7 @@ mod alloc_track {
         core::arch::asm!("mov {}, x29", out(reg) fp);
         let mut n = 0;
         let mut prev = 0usize;
-        while n < BT_DEPTH
-            && fp > prev
-            && fp % 8 == 0
-            && (prev == 0 || fp - prev < (64 << 20))
-        {
+        while n < BT_DEPTH && fp > prev && fp % 8 == 0 && (prev == 0 || fp - prev < (64 << 20)) {
             let lr = *((fp + 8) as *const usize);
             if lr < 0x1_0000 {
                 break;
@@ -100,8 +96,14 @@ mod alloc_track {
                 // SAFETY: fp walk with monotonic + alignment guards.
                 let n = unsafe { backtrace_fp(&mut bt) };
                 let mut g = LIVE.lock().unwrap_or_else(|e| e.into_inner());
-                g.get_or_insert_with(HashMap::new)
-                    .insert(p as usize, Rec { size: l.size(), bt, n });
+                g.get_or_insert_with(HashMap::new).insert(
+                    p as usize,
+                    Rec {
+                        size: l.size(),
+                        bt,
+                        n,
+                    },
+                );
             }
             h.set(false);
         });
@@ -147,7 +149,12 @@ mod alloc_track {
         );
         for (bt, count, bytes) in rows.iter().take(25) {
             let addrs: Vec<String> = bt.iter().map(|a| format!("0x{a:x}")).collect();
-            eprintln!("ALLOC-TRACK leak: n={} bytes={} bt={}", count, bytes, addrs.join(" "));
+            eprintln!(
+                "ALLOC-TRACK leak: n={} bytes={} bt={}",
+                count,
+                bytes,
+                addrs.join(" ")
+            );
         }
     }
 
@@ -255,7 +262,10 @@ fn run() {
                 std::ptr::null_mut(),
             );
         }
-        memwatchdog::AllocatorStats { current_rss: rss, current_commit: commit }
+        memwatchdog::AllocatorStats {
+            current_rss: rss,
+            current_commit: commit,
+        }
     });
     // GL-CONCMEM-1: the POOL-QOS memory governor's fallback usage basis for
     // hosts without /proc (the primary basis is RssAnon) — the allocator's

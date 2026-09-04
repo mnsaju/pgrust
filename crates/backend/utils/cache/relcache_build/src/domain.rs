@@ -21,7 +21,8 @@ pub(crate) fn scan_domain_check_constraints<'mcx>(
     let smcx = cx.mcx();
     let rel = table::table_open(smcx, CONSTRAINT_RELATION_ID, AccessShareLock)?;
     let keys = [crate::oid_key(Anum_pg_constraint_contypid, contypid)];
-    let mut scan = genam::systable_beginscan(smcx, &rel, ConstraintTypidIndexId, true, None, &keys)?;
+    let mut scan =
+        genam::systable_beginscan(smcx, &rel, ConstraintTypidIndexId, true, None, &keys)?;
     let mut out: PgVec<'mcx, DomainCheckRow<'mcx>> = PgVec::new_in(mcx);
     while let Some(tup) = genam::systable_getnext(smcx, &mut scan)? {
         let td = rel.descr();

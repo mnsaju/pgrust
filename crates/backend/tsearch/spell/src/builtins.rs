@@ -31,8 +31,20 @@ pub fn fc_dispell_lexize(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) ->
     }
 }
 
-const fn b(foid: ::types_core::Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+const fn b(
+    foid: ::types_core::Oid,
+    name: &'static str,
+    nargs: i16,
+    func: PGFunction,
+) -> FmgrBuiltin {
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 pub const SPELL_BUILTINS: &[FmgrBuiltin] = &[

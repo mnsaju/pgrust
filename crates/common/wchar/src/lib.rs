@@ -1353,8 +1353,7 @@ pub fn pg_encoding_mblen(encoding: i32, mbstr: &[u8]) -> i32 {
 }
 
 pub fn pg_encoding_mblen_or_incomplete(encoding: i32, mbstr: &[u8]) -> i32 {
-    if mbstr.is_empty() || (encoding == PG_GB18030 && is_highbit_set(mbstr[0]) && mbstr.len() < 2)
-    {
+    if mbstr.is_empty() || (encoding == PG_GB18030 && is_highbit_set(mbstr[0]) && mbstr.len() < 2) {
         return i32::MAX;
     }
     pg_encoding_mblen(encoding, mbstr)

@@ -93,7 +93,11 @@ fn english_stem_oracle() {
             failures.push(format!("{input}: got {got:?}, want {want}"));
         }
     }
-    assert!(failures.is_empty(), "stem mismatches:\n{}", failures.join("\n"));
+    assert!(
+        failures.is_empty(),
+        "stem mismatches:\n{}",
+        failures.join("\n")
+    );
 
     // Every stop word lexizes to a present-but-empty result.
     let stop = std::fs::read_to_string(format!(

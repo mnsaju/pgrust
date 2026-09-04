@@ -86,7 +86,8 @@ fn install_fixtures() {
             })
         });
         syscache_seams::lookup_pg_operator_shape::set(|opno| {
-            let op = |negate: u32| syscache_seams::PgOperatorShape { oprnamespace: 11,
+            let op = |negate: u32| syscache_seams::PgOperatorShape {
+                oprnamespace: 11,
                 oprleft: 25,
                 oprright: 25,
                 oprresult: 16,
@@ -109,9 +110,13 @@ fn install_fixtures() {
         aclchk_seams::object_aclcheck::set(|_, _, _, _| Ok(0));
         clauses_seams::inline_sql_function::set(|mcx, funcid, _, _, _, args| {
             Ok(match funcid {
-                F_FAKE_SQL_INLINE => {
-                    Some(op_expr(mcx, 551, F_INT4PL, 23, &[args.nth(0), int4_const(mcx, Some(1))]))
-                }
+                F_FAKE_SQL_INLINE => Some(op_expr(
+                    mcx,
+                    551,
+                    F_INT4PL,
+                    23,
+                    &[args.nth(0), int4_const(mcx, Some(1))],
+                )),
                 F_FAKE_SQL_REC => Some(func_expr(mcx, F_FAKE_SQL_REC, &[args.nth(0)])),
                 _ => None,
             })
@@ -266,7 +271,8 @@ fn eval_const_boolean_equality() {
     let ctx = cx();
     let mcx = ctx.mcx();
     let var = Node::mk_var(mcx, 1, 1, 16, -1, 0, 0).unwrap();
-    let true_const = Node::mk_const(mcx, 16, -1, 0, 1, Datum::from_bool(true), false, true).unwrap();
+    let true_const =
+        Node::mk_const(mcx, 16, -1, 0, 1, Datum::from_bool(true), false, true).unwrap();
     let eq = op_expr(mcx, 91, F_BOOLEQ, 16, &[var, true_const]);
     let folded = eval_const_expressions(mcx, eq).unwrap();
     let v = folded.as_var().expect("x = true reduces to x");
@@ -413,23 +419,47 @@ fn eval_const_bool_and_or_not() {
     let mcx = ctx.mcx();
 
     // true AND false -> false (forceFalse).
-    let e = bool_expr(mcx, AND_EXPR, &[bool_c(mcx, Some(true)), bool_c(mcx, Some(false))]);
-    let c = eval_const_expressions(mcx, e).unwrap().as_const().unwrap().clone();
+    let e = bool_expr(
+        mcx,
+        AND_EXPR,
+        &[bool_c(mcx, Some(true)), bool_c(mcx, Some(false))],
+    );
+    let c = eval_const_expressions(mcx, e)
+        .unwrap()
+        .as_const()
+        .unwrap()
+        .clone();
     assert!(!c.constvalue.as_bool() && !c.constisnull && c.consttype == 16);
 
     // true OR false -> true (forceTrue).
-    let e = bool_expr(mcx, OR_EXPR, &[bool_c(mcx, Some(true)), bool_c(mcx, Some(false))]);
-    let c = eval_const_expressions(mcx, e).unwrap().as_const().unwrap().clone();
+    let e = bool_expr(
+        mcx,
+        OR_EXPR,
+        &[bool_c(mcx, Some(true)), bool_c(mcx, Some(false))],
+    );
+    let c = eval_const_expressions(mcx, e)
+        .unwrap()
+        .as_const()
+        .unwrap()
+        .clone();
     assert!(c.constvalue.as_bool() && !c.constisnull);
 
     // NOT true -> false via negate_clause.
     let e = bool_expr(mcx, NOT_EXPR, &[bool_c(mcx, Some(true))]);
-    let c = eval_const_expressions(mcx, e).unwrap().as_const().unwrap().clone();
+    let c = eval_const_expressions(mcx, e)
+        .unwrap()
+        .as_const()
+        .unwrap()
+        .clone();
     assert!(!c.constvalue.as_bool() && !c.constisnull);
 
     // NULL AND true -> NULL bool (haveNull, all non-forcing consts dropped).
     let e = bool_expr(mcx, AND_EXPR, &[bool_c(mcx, None), bool_c(mcx, Some(true))]);
-    let c = eval_const_expressions(mcx, e).unwrap().as_const().unwrap().clone();
+    let c = eval_const_expressions(mcx, e)
+        .unwrap()
+        .as_const()
+        .unwrap()
+        .clone();
     assert!(c.constisnull && c.consttype == 16);
 
     // Nested OR flattens: (x OR false) OR false -> x.
@@ -442,14 +472,22 @@ fn eval_const_bool_and_or_not() {
     // x AND false -> false even with a non-const input.
     let var = Node::mk_var(mcx, 1, 1, 16, -1, 0, 0).unwrap();
     let e = bool_expr(mcx, AND_EXPR, &[var, bool_c(mcx, Some(false))]);
-    let c = eval_const_expressions(mcx, e).unwrap().as_const().unwrap().clone();
+    let c = eval_const_expressions(mcx, e)
+        .unwrap()
+        .as_const()
+        .unwrap()
+        .clone();
     assert!(!c.constvalue.as_bool() && !c.constisnull);
 }
 
 fn case_when<'mcx>(mcx: Mcx<'mcx>, cond: Node<'mcx>, result: Node<'mcx>) -> Node<'mcx> {
     Node::mk(
         mcx,
-        types_nodes::primnodes::CaseWhen { expr: Some(cond), result: Some(result), location: -1 },
+        types_nodes::primnodes::CaseWhen {
+            expr: Some(cond),
+            result: Some(result),
+            location: -1,
+        },
     )
     .unwrap()
 }
@@ -483,20 +521,36 @@ fn eval_const_case_expr() {
     let e = case_expr(
         mcx,
         None,
-        &[case_when(mcx, bool_c(mcx, Some(true)), int4_const(mcx, Some(1)))],
+        &[case_when(
+            mcx,
+            bool_c(mcx, Some(true)),
+            int4_const(mcx, Some(1)),
+        )],
         int4_const(mcx, Some(2)),
     );
-    let c = eval_const_expressions(mcx, e).unwrap().as_const().unwrap().clone();
+    let c = eval_const_expressions(mcx, e)
+        .unwrap()
+        .as_const()
+        .unwrap()
+        .clone();
     assert_eq!(c.constvalue.as_i32(), 1);
 
     // CASE WHEN false THEN 1 ELSE 2 END -> 2 (all-FALSE reduces to ELSE).
     let e = case_expr(
         mcx,
         None,
-        &[case_when(mcx, bool_c(mcx, Some(false)), int4_const(mcx, Some(1)))],
+        &[case_when(
+            mcx,
+            bool_c(mcx, Some(false)),
+            int4_const(mcx, Some(1)),
+        )],
         int4_const(mcx, Some(2)),
     );
-    let c = eval_const_expressions(mcx, e).unwrap().as_const().unwrap().clone();
+    let c = eval_const_expressions(mcx, e)
+        .unwrap()
+        .as_const()
+        .unwrap()
+        .clone();
     assert_eq!(c.constvalue.as_i32(), 2);
 
     // NULL condition drops the alternative, like FALSE.
@@ -506,7 +560,11 @@ fn eval_const_case_expr() {
         &[case_when(mcx, bool_c(mcx, None), int4_const(mcx, Some(1)))],
         int4_const(mcx, Some(2)),
     );
-    let c = eval_const_expressions(mcx, e).unwrap().as_const().unwrap().clone();
+    let c = eval_const_expressions(mcx, e)
+        .unwrap()
+        .as_const()
+        .unwrap()
+        .clone();
     assert_eq!(c.constvalue.as_i32(), 2);
 
     // Non-const condition: WHEN kept, FALSE sibling dropped, TRUE tail folds
@@ -527,7 +585,15 @@ fn eval_const_case_expr() {
     assert_eq!(ce.args.len(), 1);
     let w = ce.args.nth(0).as_case_when().unwrap();
     assert!(w.expr.unwrap().as_var().is_some());
-    assert_eq!(ce.defresult.unwrap().as_const().unwrap().constvalue.as_i32(), 3);
+    assert_eq!(
+        ce.defresult
+            .unwrap()
+            .as_const()
+            .unwrap()
+            .constvalue
+            .as_i32(),
+        3
+    );
 }
 
 #[test]
@@ -540,7 +606,11 @@ fn eval_const_case_arg_form() {
     let case_test = || {
         Node::mk(
             mcx,
-            types_nodes::primnodes::CaseTestExpr { typeId: 16, typeMod: -1, collation: 0 },
+            types_nodes::primnodes::CaseTestExpr {
+                typeId: 16,
+                typeMod: -1,
+                collation: 0,
+            },
         )
         .unwrap()
     };
@@ -552,7 +622,11 @@ fn eval_const_case_arg_form() {
         &[case_when(mcx, case_test(), int4_const(mcx, Some(1)))],
         int4_const(mcx, Some(2)),
     );
-    let c = eval_const_expressions(mcx, e).unwrap().as_const().unwrap().clone();
+    let c = eval_const_expressions(mcx, e)
+        .unwrap()
+        .as_const()
+        .unwrap()
+        .clone();
     assert_eq!(c.constvalue.as_i32(), 1);
 
     // NULL const arg substitutes NULL: condition drops, ELSE remains.
@@ -562,7 +636,11 @@ fn eval_const_case_arg_form() {
         &[case_when(mcx, case_test(), int4_const(mcx, Some(1)))],
         int4_const(mcx, Some(2)),
     );
-    let c = eval_const_expressions(mcx, e).unwrap().as_const().unwrap().clone();
+    let c = eval_const_expressions(mcx, e)
+        .unwrap()
+        .as_const()
+        .unwrap()
+        .clone();
     assert_eq!(c.constvalue.as_i32(), 2);
 
     // Non-const arg: no substitution — arg kept, placeholder untouched.
@@ -577,7 +655,13 @@ fn eval_const_case_arg_form() {
     let ce = out.as_case_expr().expect("still a CaseExpr");
     assert!(ce.arg.unwrap().as_var().is_some());
     assert_eq!(
-        ce.args.nth(0).as_case_when().unwrap().expr.unwrap().node_tag(),
+        ce.args
+            .nth(0)
+            .as_case_when()
+            .unwrap()
+            .expr
+            .unwrap()
+            .node_tag(),
         NodeTag::T_CaseTestExpr
     );
 }
@@ -602,20 +686,33 @@ fn eval_const_coalesce() {
 
     // COALESCE(NULL, 42) -> 42.
     let e = coalesce(mcx, &[int4_const(mcx, None), int4_const(mcx, Some(42))]);
-    let c = eval_const_expressions(mcx, e).unwrap().as_const().unwrap().clone();
+    let c = eval_const_expressions(mcx, e)
+        .unwrap()
+        .as_const()
+        .unwrap()
+        .clone();
     assert_eq!(c.constvalue.as_i32(), 42);
     assert!(!c.constisnull);
 
     // All-null -> typed NULL Const.
     let e = coalesce(mcx, &[int4_const(mcx, None), int4_const(mcx, None)]);
-    let c = eval_const_expressions(mcx, e).unwrap().as_const().unwrap().clone();
+    let c = eval_const_expressions(mcx, e)
+        .unwrap()
+        .as_const()
+        .unwrap()
+        .clone();
     assert!(c.constisnull && c.consttype == 23);
 
     // Var head: null dropped, first following non-null const kept, tail cut.
     let var = Node::mk_var(mcx, 1, 1, 23, -1, 0, 0).unwrap();
     let e = coalesce(
         mcx,
-        &[var, int4_const(mcx, None), int4_const(mcx, Some(7)), int4_const(mcx, Some(8))],
+        &[
+            var,
+            int4_const(mcx, None),
+            int4_const(mcx, Some(7)),
+            int4_const(mcx, Some(8)),
+        ],
     );
     let out = eval_const_expressions(mcx, e).unwrap();
     let co = out.as_coalesce_expr().expect("still a CoalesceExpr");
@@ -632,7 +729,11 @@ fn minmax<'mcx>(mcx: Mcx<'mcx>, least: bool, args: &[Node<'mcx>]) -> Node<'mcx> 
             minmaxtype: 23,
             minmaxcollid: 0,
             inputcollid: 0,
-            op: if least { MinMaxOp::IS_LEAST } else { MinMaxOp::IS_GREATEST },
+            op: if least {
+                MinMaxOp::IS_LEAST
+            } else {
+                MinMaxOp::IS_GREATEST
+            },
             args: NodeList::from_slice(mcx, args).unwrap(),
             location: -1,
         },
@@ -655,7 +756,11 @@ fn eval_const_minmax_nonconst_keeps_node() {
 fn eval_const_minmax_all_const_defers_to_evaluate_expr_seam() {
     let ctx = cx();
     let mcx = ctx.mcx();
-    let e = minmax(mcx, true, &[int4_const(mcx, Some(1)), int4_const(mcx, Some(2))]);
+    let e = minmax(
+        mcx,
+        true,
+        &[int4_const(mcx, Some(1)), int4_const(mcx, Some(2))],
+    );
     let _ = eval_const_expressions(mcx, e);
 }
 
@@ -696,7 +801,10 @@ fn relabel_over_const_folds_to_retyped_const() {
     .unwrap();
     let out = eval_const_expressions(mcx, relabel).unwrap();
     let c = out.as_const().unwrap();
-    assert_eq!((c.consttype, c.constvalue.as_i32(), c.constisnull), (26, 5, false));
+    assert_eq!(
+        (c.consttype, c.constvalue.as_i32(), c.constisnull),
+        (26, 5, false)
+    );
 }
 
 #[test]
@@ -785,7 +893,9 @@ fn inline_replaces_sql_function_call() {
     let var = Node::mk_var(mcx, 1, 1, 23, -1, 0, 0).unwrap();
     let call = func_expr(mcx, F_FAKE_SQL_INLINE, &[var]);
     let out = eval_const_expressions(mcx, call).unwrap();
-    let o = out.as_op_expr().expect("inlined to the seam-provided OpExpr");
+    let o = out
+        .as_op_expr()
+        .expect("inlined to the seam-provided OpExpr");
     assert_eq!(o.opfuncid, F_INT4PL);
     assert!(o.args.nth(0).as_var().is_some());
     assert_eq!(o.args.nth(1).as_const().unwrap().constvalue.as_i32(), 1);
@@ -881,7 +991,9 @@ fn eval_const_nullif_null_arg_yields_first_arg() {
     // NULLIF(NULL, x): reduces to the first (null) argument.
     let e = nullif(mcx, &[int4_const(mcx, None), var]);
     let folded = eval_const_expressions(mcx, e).unwrap();
-    let c = folded.as_const().expect("NULLIF(NULL, x) reduces to the null const");
+    let c = folded
+        .as_const()
+        .expect("NULLIF(NULL, x) reduces to the null const");
     assert!(c.constisnull);
     assert_eq!(c.consttype, 23);
 }

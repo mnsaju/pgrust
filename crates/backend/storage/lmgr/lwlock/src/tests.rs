@@ -174,7 +174,10 @@ fn var_wait_and_update() {
 fn tranche_names() {
     assert_eq!(GetLWTrancheName(1), "ShmemIndex");
     assert_eq!(GetLWTrancheName(4), "ProcArray");
-    assert_eq!(GetLWTrancheName(LWTRANCHE_BUFFER_MAPPING as u16), "BufferMapping");
+    assert_eq!(
+        GetLWTrancheName(LWTRANCHE_BUFFER_MAPPING as u16),
+        "BufferMapping"
+    );
     assert_eq!(
         GetLWTrancheName((LWTRANCHE_FIRST_USER_DEFINED - 1) as u16),
         "AioUringCompletion"
@@ -209,19 +212,22 @@ fn create_lwlocks_and_named_tranche() {
     assert!(size >= ((NUM_FIXED_LWLOCKS + 2) as usize) * LWLOCK_PADDED_SIZE);
 
     let table = CreateLWLocks(false).unwrap();
-    assert_eq!(
-        table.locks().len(),
-        (NUM_FIXED_LWLOCKS + 2) as usize
-    );
+    assert_eq!(table.locks().len(), (NUM_FIXED_LWLOCKS + 2) as usize);
     assert_eq!(main_lock(4).tranche, 4);
     assert_eq!(
-        table.lock(BUFFER_MAPPING_LWLOCK_OFFSET as usize).unwrap().tranche,
+        table
+            .lock(BUFFER_MAPPING_LWLOCK_OFFSET as usize)
+            .unwrap()
+            .tranche,
         LWTRANCHE_BUFFER_MAPPING as u16
     );
 
     let named = GetNamedLWLockTranche(table, "test_tranche").unwrap();
     assert_eq!(named.len(), 2);
-    assert_eq!(named[0].lock.tranche as i32, table.named_tranches()[0].tranche_id);
+    assert_eq!(
+        named[0].lock.tranche as i32,
+        table.named_tranches()[0].tranche_id
+    );
     assert!(GetNamedLWLockTranche(table, "missing").is_err());
 
     // Attach leg sees the same table.

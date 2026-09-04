@@ -14,7 +14,10 @@ fn shmem_once() {
 // own fresh directory.
 fn with_wal_cwd(f: impl FnOnce()) {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    let _g = LOCK.get_or_init(|| Mutex::new(())).lock().unwrap_or_else(|e| e.into_inner());
+    let _g = LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     shmem_once();
     let dir = std::env::temp_dir().join(format!(
         "pgarch-test-{}-{:?}",
@@ -44,14 +47,23 @@ fn seg(name: &str) {
 fn ready_file_comparator_ordering() {
     use std::cmp::Ordering::*;
     // History files always outrank segments; otherwise oldest (strcmp) first.
-    assert_eq!(ready_file_cmp("00000002.history", "000000010000000000000001"), Less);
-    assert_eq!(ready_file_cmp("000000010000000000000001", "00000002.history"), Greater);
+    assert_eq!(
+        ready_file_cmp("00000002.history", "000000010000000000000001"),
+        Less
+    );
+    assert_eq!(
+        ready_file_cmp("000000010000000000000001", "00000002.history"),
+        Greater
+    );
     assert_eq!(ready_file_cmp("00000002.history", "00000003.history"), Less);
     assert_eq!(
         ready_file_cmp("000000010000000000000001", "000000010000000000000002"),
         Less
     );
-    assert_eq!(ready_file_cmp("000000010000000000000001", "000000010000000000000001"), Equal);
+    assert_eq!(
+        ready_file_cmp("000000010000000000000001", "000000010000000000000001"),
+        Equal
+    );
 }
 
 #[test]
@@ -64,8 +76,9 @@ fn ready_xlog_ordering_and_batch_cache() {
 
         // 70 ready segments (> NUM_FILES_PER_DIRECTORY_SCAN) + one history
         // file created out of order.
-        let mut names: Vec<String> =
-            (1..=70).map(|i| format!("0000000100000000000000{i:02X}")).collect();
+        let mut names: Vec<String> = (1..=70)
+            .map(|i| format!("0000000100000000000000{i:02X}"))
+            .collect();
         for n in &names {
             ready(n);
             seg(n);
@@ -77,12 +90,18 @@ fn ready_xlog_ordering_and_batch_cache() {
         // History first, then oldest segments in order; exactly 64 come from
         // the first scan's batch. Each consumed file is marked done, as the
         // copy loop would.
-        assert_eq!(pgarch_readyXlog(&mut af).unwrap().as_deref(), Some("00000002.history"));
+        assert_eq!(
+            pgarch_readyXlog(&mut af).unwrap().as_deref(),
+            Some("00000002.history")
+        );
         pgarch_archiveDone("00000002.history").unwrap();
         assert_eq!(af.files_size, 63);
         for i in 1..=63 {
             let expect = format!("0000000100000000000000{i:02X}");
-            assert_eq!(pgarch_readyXlog(&mut af).unwrap().as_deref(), Some(expect.as_str()));
+            assert_eq!(
+                pgarch_readyXlog(&mut af).unwrap().as_deref(),
+                Some(expect.as_str())
+            );
             pgarch_archiveDone(&expect).unwrap();
         }
         assert_eq!(af.files_size, 0);
@@ -137,10 +156,12 @@ fn archive_done_renames_ready() {
     with_wal_cwd(|| {
         ready("000000010000000000000005");
         pgarch_archiveDone("000000010000000000000005").unwrap();
-        assert!(!std::path::Path::new("pg_wal/archive_status/000000010000000000000005.ready")
-            .exists());
-        assert!(std::path::Path::new("pg_wal/archive_status/000000010000000000000005.done")
-            .exists());
+        assert!(
+            !std::path::Path::new("pg_wal/archive_status/000000010000000000000005.ready").exists()
+        );
+        assert!(
+            std::path::Path::new("pg_wal/archive_status/000000010000000000000005.done").exists()
+        );
     });
 }
 

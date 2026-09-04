@@ -60,7 +60,9 @@ impl FileSet {
     // `ChooseTablespace`: stable name-keyed spread (C uses hash_bytes; any
     // stable map works).
     fn tablespace_for(&self, name: &str) -> Oid {
-        let h = name.bytes().fold(0u64, |a, b| a.wrapping_mul(31).wrapping_add(b as u64));
+        let h = name
+            .bytes()
+            .fold(0u64, |a, b| a.wrapping_mul(31).wrapping_add(b as u64));
         self.tablespaces[(h % self.tablespaces.len() as u64) as usize]
     }
 

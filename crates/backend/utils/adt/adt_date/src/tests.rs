@@ -1,5 +1,7 @@
 use super::*;
-use adt_datetime::{set_date_style, USE_GERMAN_DATES, USE_ISO_DATES, USE_POSTGRES_DATES, USE_SQL_DATES};
+use adt_datetime::{
+    set_date_style, USE_GERMAN_DATES, USE_ISO_DATES, USE_POSTGRES_DATES, USE_SQL_DATES,
+};
 use types_error::{ERRCODE_DATETIME_FIELD_OVERFLOW, ERRCODE_INVALID_DATETIME_FORMAT};
 
 fn gmt_session() {
@@ -95,7 +97,10 @@ fn date_in_errors_are_c_exact() {
     gmt_session();
     let e = date_in("not a date", None).unwrap_err();
     assert_eq!(e.sqlstate(), ERRCODE_INVALID_DATETIME_FORMAT);
-    assert_eq!(e.message(), "invalid input syntax for type date: \"not a date\"");
+    assert_eq!(
+        e.message(),
+        "invalid input syntax for type date: \"not a date\""
+    );
     let e = date_in("2024-02-30", None).unwrap_err();
     assert_eq!(e.sqlstate(), ERRCODE_DATETIME_FIELD_OVERFLOW);
     let e = date_in("5874898-01-01", None).unwrap_err();
@@ -140,7 +145,10 @@ fn date_timestamp_conversions() {
     gmt_session();
     let d = d_in("2024-06-15");
     let ts = date2timestamp(d).unwrap();
-    assert_eq!(adt_timestamp::timestamp_in("2024-06-15 00:00:00", -1, None).unwrap(), ts);
+    assert_eq!(
+        adt_timestamp::timestamp_in("2024-06-15 00:00:00", -1, None).unwrap(),
+        ts
+    );
     assert_eq!(timestamp_date(ts).unwrap(), d);
     // GMT session: timestamptz epoch matches
     let tstz = date2timestamptz(d).unwrap();
@@ -155,9 +163,15 @@ fn date_timestamp_conversions() {
         ERRCODE_DATETIME_VALUE_OUT_OF_RANGE
     );
     let mut ovf = 0;
-    assert_eq!(date2timestamp_opt_overflow(big, Some(&mut ovf)).unwrap(), DT_NOEND);
+    assert_eq!(
+        date2timestamp_opt_overflow(big, Some(&mut ovf)).unwrap(),
+        DT_NOEND
+    );
     assert_eq!(ovf, 1);
-    assert_eq!(date2timestamp_no_overflow(d), (d as f64) * USECS_PER_DAY as f64);
+    assert_eq!(
+        date2timestamp_no_overflow(d),
+        (d as f64) * USECS_PER_DAY as f64
+    );
     assert_eq!(date2timestamp_no_overflow(DATEVAL_NOEND), f64::MAX);
 
     let t = t_in("12:34:56+00", -1);
@@ -228,7 +242,10 @@ fn sql_current_time_lives_on_tz_seams() {
 #[test]
 fn time_helpers_match_c() {
     gmt_session();
-    assert_eq!(make_time(8, 15, 55.333).unwrap(), t_in("08:15:55.333+00", -1));
+    assert_eq!(
+        make_time(8, 15, 55.333).unwrap(),
+        t_in("08:15:55.333+00", -1)
+    );
     assert!(make_time(24, 0, 2.1).is_err());
     assert!(make_time(10, 60, 0.0).is_err());
     assert!(make_time(10, 10, f64::NAN).is_err());
@@ -239,7 +256,10 @@ fn time_helpers_match_c() {
     // rint ties-to-even keeps 60000000.5 at the boundary, as in C
     assert!(!float_time_overflows(23, 59, 60.0000005));
 
-    assert_eq!(time_scale(t_in("12:34:56.789456+00", -1), 3), t_in("12:34:56.789+00", -1));
+    assert_eq!(
+        time_scale(t_in("12:34:56.789456+00", -1), 3),
+        t_in("12:34:56.789+00", -1)
+    );
     let mut t = -1i64;
     AdjustTimeForTypmod(&mut t, 0);
     assert_eq!(t, 0);
@@ -279,23 +299,35 @@ fn timetz_cmp_gmt_equivalent_then_zone() {
     let a = tz_in("12:00:00+02", -1);
     let b = tz_in("11:00:00+01", -1);
     // same GMT instant: zone breaks the tie (larger zone value sorts higher)
-    assert_eq!(timetz_cmp_internal(&a, &b), timetz_cmp_internal(&b, &a).wrapping_neg());
+    assert_eq!(
+        timetz_cmp_internal(&a, &b),
+        timetz_cmp_internal(&b, &a).wrapping_neg()
+    );
     assert_ne!(timetz_cmp_internal(&a, &b), 0);
     let c = tz_in("12:00:00+01", -1);
     assert_eq!(timetz_cmp_internal(&b, &c), -1);
     assert_eq!(timetz_cmp_internal(&c, &b), 1);
     assert_eq!(timetz_cmp_internal(&a, &a), 0);
     assert_eq!(timetz_time(&a), a.time);
-    assert_eq!(timetz_scale(&tz_in("12:00:00.789456+03", -1), 3).time, t_in("12:00:00.789+00", -1));
+    assert_eq!(
+        timetz_scale(&tz_in("12:00:00.789456+03", -1), 3).time,
+        t_in("12:00:00.789+00", -1)
+    );
 }
 
 #[test]
 fn timestamp_time_conversions() {
     gmt_session();
     let ts = adt_timestamp::timestamp_in("2024-06-15 12:34:56.789", -1, None).unwrap();
-    assert_eq!(timestamp_time(ts).unwrap().unwrap(), t_in("12:34:56.789+00", -1));
+    assert_eq!(
+        timestamp_time(ts).unwrap().unwrap(),
+        t_in("12:34:56.789+00", -1)
+    );
     assert_eq!(timestamp_time(DT_NOEND).unwrap(), None);
-    assert_eq!(timestamptz_time(ts).unwrap().unwrap(), t_in("12:34:56.789+00", -1));
+    assert_eq!(
+        timestamptz_time(ts).unwrap().unwrap(),
+        t_in("12:34:56.789+00", -1)
+    );
     let tt = timestamptz_timetz(ts).unwrap().unwrap();
     assert_eq!(tt.time, t_in("12:34:56.789+00", -1));
     assert_eq!(tt.zone, 0);
@@ -314,10 +346,13 @@ fn timestamp_time_conversions() {
 #[test]
 fn hash_folds_match_c_shape() {
     // hashint8 fold: positive xors hi, negative xors !hi
-    assert_eq!(int64_hash_fold(0x1234_5678_9abc_def0_u64 as i64 & i64::MAX), {
-        let v = 0x1234_5678_9abc_def0_u64 as i64 & i64::MAX;
-        (v as u32) ^ ((v >> 32) as u32)
-    });
+    assert_eq!(
+        int64_hash_fold(0x1234_5678_9abc_def0_u64 as i64 & i64::MAX),
+        {
+            let v = 0x1234_5678_9abc_def0_u64 as i64 & i64::MAX;
+            (v as u32) ^ ((v >> 32) as u32)
+        }
+    );
     let v = -42i64;
     assert_eq!(int64_hash_fold(v), (v as u32) ^ !((v >> 32) as u32));
     // equal int4/int8 values hash equal (cross-type hash join contract)
@@ -358,7 +393,13 @@ fn binary_wire_round_trip() {
         assert_eq!(si.cursor, si.len());
     }
 
-    for tz in [TimeTzADT { time: 0, zone: 0 }, TimeTzADT { time: 3600_000000, zone: -3600 }] {
+    for tz in [
+        TimeTzADT { time: 0, zone: 0 },
+        TimeTzADT {
+            time: 3600_000000,
+            zone: -3600,
+        },
+    ] {
         let b = timetz_send(mcx, &tz).unwrap();
         let mut si = StringInfo::with_capacity_in(mcx, b.data().len() + 1).unwrap();
         si.append_bytes(b.data()).unwrap();
@@ -393,9 +434,18 @@ fn pv_f64(v: PartValue) -> f64 {
 fn time_timetz_interval_arithmetic() {
     gmt_session();
     let t = t_in("23:00:00", -1);
-    assert_eq!(t_out(time_pl_interval(t, &iv("2 hours")).unwrap()), "01:00:00");
-    assert_eq!(t_out(time_mi_interval(t_in("01:00:00", -1), &iv("2 hours")).unwrap()), "23:00:00");
-    assert_eq!(t_out(time_pl_interval(t, &iv("-25 hours")).unwrap()), "22:00:00");
+    assert_eq!(
+        t_out(time_pl_interval(t, &iv("2 hours")).unwrap()),
+        "01:00:00"
+    );
+    assert_eq!(
+        t_out(time_mi_interval(t_in("01:00:00", -1), &iv("2 hours")).unwrap()),
+        "23:00:00"
+    );
+    assert_eq!(
+        t_out(time_pl_interval(t, &iv("-25 hours")).unwrap()),
+        "22:00:00"
+    );
     assert_eq!(
         t_out(time_pl_interval(t, &iv("1 mon 1 day 1 hour")).unwrap()),
         "00:00:00",
@@ -410,7 +460,10 @@ fn time_timetz_interval_arithmetic() {
 
     let arms: [(fn(TimeADT, &Interval) -> PgResult<TimeADT>, &str); 2] = [
         (time_pl_interval, "cannot add infinite interval to time"),
-        (time_mi_interval, "cannot subtract infinite interval from time"),
+        (
+            time_mi_interval,
+            "cannot subtract infinite interval from time",
+        ),
     ];
     for (f, msg) in arms {
         let e = f(t, &Interval::NOEND).unwrap_err();
@@ -432,8 +485,14 @@ fn date_interval_arithmetic() {
     let ts = date_mi_interval(d_in("2024-03-01"), &iv("1 day 12:00:00")).unwrap();
     let mut buf = [0u8; MAXDATELEN + 1];
     let n = adt_timestamp::timestamp_out(ts, &mut buf).unwrap();
-    assert_eq!(std::str::from_utf8(&buf[..n]).unwrap(), "2024-02-28 12:00:00");
-    assert_eq!(date_pl_interval(DATEVAL_NOEND, &iv("1 day")).unwrap(), DT_NOEND);
+    assert_eq!(
+        std::str::from_utf8(&buf[..n]).unwrap(),
+        "2024-02-28 12:00:00"
+    );
+    assert_eq!(
+        date_pl_interval(DATEVAL_NOEND, &iv("1 day")).unwrap(),
+        DT_NOEND
+    );
 }
 
 #[test]
@@ -442,7 +501,10 @@ fn time_interval_conversions() {
     let t = t_in("12:34:56.789", -1);
     let ivl = time_interval(t);
     assert_eq!((ivl.time, ivl.day, ivl.month), (t, 0, 0));
-    assert_eq!(interval_time(&iv("1 day 01:00:00")).unwrap(), t_in("01:00:00", -1));
+    assert_eq!(
+        interval_time(&iv("1 day 01:00:00")).unwrap(),
+        t_in("01:00:00", -1)
+    );
     assert_eq!(interval_time(&iv("-1 hour")).unwrap(), t_in("23:00:00", -1));
     let e = interval_time(&Interval::NOEND).unwrap_err();
     assert_eq!(e.message(), "cannot convert infinite interval to time");
@@ -463,7 +525,10 @@ fn timetz_zone_izone_rotation() {
     assert_eq!(tz_out(&r), "05:00:00-05");
 
     let e = timetz_izone(&Interval::NOEND, &ttz).unwrap_err();
-    assert_eq!(e.message(), "interval time zone \"infinity\" must be finite");
+    assert_eq!(
+        e.message(),
+        "interval time zone \"infinity\" must be finite"
+    );
     assert_eq!(e.sqlstate(), types_error::ERRCODE_INVALID_PARAMETER_VALUE);
     let e = timetz_izone(&iv("1 day"), &ttz).unwrap_err();
     assert_eq!(
@@ -485,8 +550,14 @@ fn extract_arms() {
     assert_eq!(pv_num(extract_date(b"doy", d).unwrap()), "60");
     assert_eq!(pv_num(extract_date(b"epoch", d).unwrap()), "1709164800");
     assert_eq!(pv_num(extract_date(b"julian", d).unwrap()), "2460370");
-    assert_eq!(pv_num(extract_date(b"epoch", DATEVAL_NOEND).unwrap()), "Infinity");
-    assert!(matches!(extract_date(b"day", DATEVAL_NOEND).unwrap(), PartValue::Null));
+    assert_eq!(
+        pv_num(extract_date(b"epoch", DATEVAL_NOEND).unwrap()),
+        "Infinity"
+    );
+    assert!(matches!(
+        extract_date(b"day", DATEVAL_NOEND).unwrap(),
+        PartValue::Null
+    ));
     let e = extract_date(b"hour", d).unwrap_err();
     assert_eq!(e.message(), "unit \"hour\" not supported for type date");
     assert_eq!(e.sqlstate(), ERRCODE_FEATURE_NOT_SUPPORTED);
@@ -494,24 +565,57 @@ fn extract_arms() {
     assert_eq!(e.message(), "unit \"bogus\" not recognized for type date");
 
     let t = t_in("13:30:25.123456", -1);
-    assert_eq!(pv_num(time_part_common(b"second", t, true).unwrap()), "25.123456");
-    assert_eq!(pv_f64(time_part_common(b"second", t, false).unwrap()), 25.123456);
+    assert_eq!(
+        pv_num(time_part_common(b"second", t, true).unwrap()),
+        "25.123456"
+    );
+    assert_eq!(
+        pv_f64(time_part_common(b"second", t, false).unwrap()),
+        25.123456
+    );
     assert_eq!(pv_num(time_part_common(b"minute", t, true).unwrap()), "30");
     assert_eq!(pv_f64(time_part_common(b"hour", t, false).unwrap()), 13.0);
-    assert_eq!(pv_num(time_part_common(b"epoch", t, true).unwrap()), "48625.123456");
+    assert_eq!(
+        pv_num(time_part_common(b"epoch", t, true).unwrap()),
+        "48625.123456"
+    );
     let e = time_part_common(b"day", t, false).unwrap_err();
-    assert_eq!(e.message(), "unit \"day\" not supported for type time without time zone");
+    assert_eq!(
+        e.message(),
+        "unit \"day\" not supported for type time without time zone"
+    );
     let e = time_part_common(b"bogus", t, true).unwrap_err();
-    assert_eq!(e.message(), "unit \"bogus\" not recognized for type time without time zone");
+    assert_eq!(
+        e.message(),
+        "unit \"bogus\" not recognized for type time without time zone"
+    );
 
     let ttz = tz_in("13:30:25.123456-04:30", -1);
-    assert_eq!(pv_f64(timetz_part_common(b"timezone", &ttz, false).unwrap()), -16200.0);
-    assert_eq!(pv_f64(timetz_part_common(b"timezone_hour", &ttz, false).unwrap()), -4.0);
-    assert_eq!(pv_f64(timetz_part_common(b"timezone_minute", &ttz, false).unwrap()), -30.0);
-    assert_eq!(pv_num(timetz_part_common(b"second", &ttz, true).unwrap()), "25.123456");
-    assert_eq!(pv_num(timetz_part_common(b"epoch", &ttz, true).unwrap()), "64825.123456");
+    assert_eq!(
+        pv_f64(timetz_part_common(b"timezone", &ttz, false).unwrap()),
+        -16200.0
+    );
+    assert_eq!(
+        pv_f64(timetz_part_common(b"timezone_hour", &ttz, false).unwrap()),
+        -4.0
+    );
+    assert_eq!(
+        pv_f64(timetz_part_common(b"timezone_minute", &ttz, false).unwrap()),
+        -30.0
+    );
+    assert_eq!(
+        pv_num(timetz_part_common(b"second", &ttz, true).unwrap()),
+        "25.123456"
+    );
+    assert_eq!(
+        pv_num(timetz_part_common(b"epoch", &ttz, true).unwrap()),
+        "64825.123456"
+    );
     let e = timetz_part_common(b"month", &ttz, true).unwrap_err();
-    assert_eq!(e.message(), "unit \"month\" not supported for type time with time zone");
+    assert_eq!(
+        e.message(),
+        "unit \"month\" not supported for type time with time zone"
+    );
 }
 
 #[test]
@@ -567,15 +671,22 @@ fn time_support_simplifies_widening_casts_only() {
 
         let mut req = SupportRequestSimplify::new(Some(fcall), Some(mcx));
         let mut fci = types_fmgr::LocalFcinfo::<1>::new(0);
-        fci.set_arg(0, datum::Datum::from_usize(core::ptr::from_mut(&mut req) as usize));
+        fci.set_arg(
+            0,
+            datum::Datum::from_usize(core::ptr::from_mut(&mut req) as usize),
+        );
         let d = builtins::fc_time_support(None, &mut fci).unwrap();
         if d.as_usize() == 0 {
             return None;
         }
         // SAFETY: fc_time_support returns a node it allocated in mcx.
-        let ret = unsafe { Node::from_raw(core::ptr::NonNull::new(d.as_usize() as *mut ()).unwrap()) };
+        let ret =
+            unsafe { Node::from_raw(core::ptr::NonNull::new(d.as_usize() as *mut ()).unwrap()) };
         // applyRelabelType folds into a same-type Const; otherwise wraps.
-        assert!(matches!(ret.node_tag(), NodeTag::T_RelabelType | NodeTag::T_Const));
+        assert!(matches!(
+            ret.node_tag(),
+            NodeTag::T_RelabelType | NodeTag::T_Const
+        ));
         Some(nodes_core::expr_typmod(ret))
     };
 
@@ -611,16 +722,43 @@ fn make_date_error_prints_bc_folded_year() {
 #[test]
 fn make_time_error_seconds_render_like_c_percent_g() {
     let msg = |h, m, s: f64| make_time(h, m, s).unwrap_err().message().to_string();
-    assert_eq!(msg(0, 0, f64::INFINITY), "time field value out of range: 0:00:Infinity");
-    assert_eq!(msg(0, 0, f64::NEG_INFINITY), "time field value out of range: 0:00:-Infinity");
-    assert_eq!(msg(0, 0, f64::NAN), "time field value out of range: 0:00:NaN");
-    assert_eq!(msg(0, 0, 1.5e300), "time field value out of range: 0:00:1.5e+300");
-    assert_eq!(msg(0, 0, f64::MAX), "time field value out of range: 0:00:1.79769e+308");
+    assert_eq!(
+        msg(0, 0, f64::INFINITY),
+        "time field value out of range: 0:00:Infinity"
+    );
+    assert_eq!(
+        msg(0, 0, f64::NEG_INFINITY),
+        "time field value out of range: 0:00:-Infinity"
+    );
+    assert_eq!(
+        msg(0, 0, f64::NAN),
+        "time field value out of range: 0:00:NaN"
+    );
+    assert_eq!(
+        msg(0, 0, 1.5e300),
+        "time field value out of range: 0:00:1.5e+300"
+    );
+    assert_eq!(
+        msg(0, 0, f64::MAX),
+        "time field value out of range: 0:00:1.79769e+308"
+    );
     assert_eq!(msg(25, 0, 5.0), "time field value out of range: 25:00:05");
     assert_eq!(msg(25, 0, 0.5), "time field value out of range: 25:00:0.5");
     assert_eq!(msg(25, 0, -5.0), "time field value out of range: 25:00:-5");
-    assert_eq!(msg(25, 0, 1e-7), "time field value out of range: 25:00:1e-07");
-    assert_eq!(msg(25, 0, 123456789.0), "time field value out of range: 25:00:1.23457e+08");
-    assert_eq!(msg(25, 0, 999999.5), "time field value out of range: 25:00:1e+06");
-    assert_eq!(msg(25, 0, 0.000123456789), "time field value out of range: 25:00:0.000123457");
+    assert_eq!(
+        msg(25, 0, 1e-7),
+        "time field value out of range: 25:00:1e-07"
+    );
+    assert_eq!(
+        msg(25, 0, 123456789.0),
+        "time field value out of range: 25:00:1.23457e+08"
+    );
+    assert_eq!(
+        msg(25, 0, 999999.5),
+        "time field value out of range: 25:00:1e+06"
+    );
+    assert_eq!(
+        msg(25, 0, 0.000123456789),
+        "time field value out of range: 25:00:0.000123457"
+    );
 }

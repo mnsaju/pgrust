@@ -241,10 +241,7 @@ fn err_loc() -> types_error::ErrorLocation {
     types_error::ErrorLocation::new(file!(), line!() as i32, "aclparse")
 }
 
-pub fn aclitemin(
-    s: &[u8],
-    mut escontext: Option<&mut ErrorSaveNode>,
-) -> PgResult<Option<AclItem>> {
+pub fn aclitemin(s: &[u8], mut escontext: Option<&mut ErrorSaveNode>) -> PgResult<Option<AclItem>> {
     let mut aip = AclItem {
         ai_grantee: 0,
         ai_grantor: 0,

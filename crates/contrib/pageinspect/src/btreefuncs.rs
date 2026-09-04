@@ -19,7 +19,13 @@ pub(crate) struct BtOpaque {
 pub(crate) fn bt_opaque(b: &[u8]) -> BtOpaque {
     let sp = pd_special(b) as usize;
     if sp + 16 > b.len() {
-        return BtOpaque { prev: 0, next: 0, level: 0, flags: 0, cycleid: 0 };
+        return BtOpaque {
+            prev: 0,
+            next: 0,
+            level: 0,
+            flags: 0,
+            cycleid: 0,
+        };
     }
     BtOpaque {
         prev: r_u32(b, sp),
@@ -224,7 +230,11 @@ pub(crate) fn fc_bt_multi_page_stats(
         let nblocks =
             bufmgr::RelationGetNumberOfBlocksInFork(&rel, types_core::ForkNumber::MAIN_FORKNUM)?
                 as i64;
-        let count = if blk_count < 0 { nblocks - blkno } else { blk_count };
+        let count = if blk_count < 0 {
+            nblocks - blkno
+        } else {
+            blk_count
+        };
 
         let tupdesc = composite_tupdesc(mcx, flinfo)?;
         let mut rows = Vec::new();
@@ -386,7 +396,9 @@ fn bt_page_items_rows(
     let tupdesc = composite_tupdesc(mcx, flinfo)?;
     let mut rows = Vec::with_capacity(maxoff);
     for offnum in 1..=maxoff {
-        rows.push(bt_page_print_tuple(mcx, &tupdesc, b, offnum, leafpage, rightmost)?);
+        rows.push(bt_page_print_tuple(
+            mcx, &tupdesc, b, offnum, leafpage, rightmost,
+        )?);
     }
     Ok(rows)
 }
@@ -478,7 +490,12 @@ pub(crate) fn fc_bt_page_items_bytea(
             notice("page is deleted")?;
         }
 
-        Some(bt_page_items_rows(mcx, flinfo, &page, "page from block is deleted")?)
+        Some(bt_page_items_rows(
+            mcx,
+            flinfo,
+            &page,
+            "page from block is deleted",
+        )?)
     } else {
         None
     };
@@ -546,7 +563,11 @@ pub(crate) fn fc_bt_metap(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) ->
     if btm_version >= types_nbtree::page::BTREE_NOVAC_VERSION {
         values.push(Some(format!("{}", btm_last_cleanup_num_delpages as i64)));
         values.push(Some(format!("{:.6}", btm_last_cleanup_num_heap_tuples)));
-        values.push(Some(if btm_allequalimage { "t".into() } else { "f".into() }));
+        values.push(Some(if btm_allequalimage {
+            "t".into()
+        } else {
+            "f".into()
+        }));
     } else {
         values.push(Some("0".into()));
         values.push(Some("-1".into()));

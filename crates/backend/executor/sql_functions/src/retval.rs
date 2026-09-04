@@ -9,9 +9,7 @@ use types_core::{InvalidOid, Oid};
 use types_error::{PgError, PgResult, ERRCODE_INVALID_FUNCTION_DEFINITION, ERROR};
 use types_nodes::nodes_enums::CmdType;
 use types_nodes::parsenodes::{Query, RTEKind, RangeTblEntry};
-use types_nodes::primnodes::{
-    Alias, CoercionForm, Const, FromExpr, RangeTblRef, TargetEntry, Var,
-};
+use types_nodes::primnodes::{Alias, CoercionForm, Const, FromExpr, RangeTblRef, TargetEntry, Var};
 use types_nodes::{Node, NodeList};
 use types_tuple::TupleDescData;
 
@@ -26,8 +24,7 @@ const PROKIND_PROCEDURE: i8 = b'p' as i8;
 pub(crate) fn retval_mismatch_final_stmt(rettype: Oid) -> Box<PgError> {
     retval_mismatch(
         rettype,
-        "Function's final statement must be SELECT or INSERT/UPDATE/DELETE/MERGE RETURNING."
-            .into(),
+        "Function's final statement must be SELECT or INSERT/UPDATE/DELETE/MERGE RETURNING.".into(),
     )
 }
 
@@ -37,7 +34,9 @@ fn retval_mismatch(rettype: Oid, detail: String) -> Box<PgError> {
     let tn = format_type::format_type_be(rettype).unwrap_or_else(|_| "???".into());
     ereport(ERROR)
         .errcode(ERRCODE_INVALID_FUNCTION_DEFINITION)
-        .errmsg(format!("return type mismatch in function declared to return {tn}"))
+        .errmsg(format!(
+            "return type mismatch in function declared to return {tn}"
+        ))
         .errdetail(detail)
         .into_error()
         .into()
@@ -95,7 +94,9 @@ fn coerce_fn_result_column<'mcx>(
     upper_tlist: &mut NodeList<'mcx>,
     upper_tlist_nontrivial: &mut bool,
 ) -> PgResult<bool> {
-    let src_tle = src_tle_node.as_target_entry().expect("tlist holds TargetEntries");
+    let src_tle = src_tle_node
+        .as_target_entry()
+        .expect("tlist holds TargetEntries");
     let pstate = parser_small1::make_parsestate(mcx, None);
     let new_tle_expr: Node<'mcx>;
     if tlist_is_modifiable && src_tle.ressortgroupref == 0 {
@@ -165,8 +166,15 @@ pub fn check_sql_stmt_retval<'mcx>(
     prokind: i8,
     insert_dropped_cols: bool,
 ) -> PgResult<bool> {
-    check_sql_stmt_retval_ext(mcx, query_list, rettype, rettupdesc, prokind, insert_dropped_cols)
-        .map(|(t, _)| t)
+    check_sql_stmt_retval_ext(
+        mcx,
+        query_list,
+        rettype,
+        rettupdesc,
+        prokind,
+        insert_dropped_cols,
+    )
+    .map(|(t, _)| t)
 }
 
 fn check_sql_stmt_retval_ext<'mcx>(
@@ -190,7 +198,10 @@ fn check_sql_stmt_retval_ext<'mcx>(
         let parse = &query_list[parse_idx];
         let (tlist, tlist_is_modifiable): (&NodeList<'mcx>, bool) = match parse.commandType {
             CmdType::CMD_SELECT => (&parse.targetList, parse.setOperations.is_none()),
-            CmdType::CMD_INSERT | CmdType::CMD_UPDATE | CmdType::CMD_DELETE | CmdType::CMD_MERGE
+            CmdType::CMD_INSERT
+            | CmdType::CMD_UPDATE
+            | CmdType::CMD_DELETE
+            | CmdType::CMD_MERGE
                 if !parse.returningList.is_nil() =>
             {
                 (&parse.returningList, true)
@@ -215,7 +226,9 @@ fn check_sql_stmt_retval_ext<'mcx>(
                 ));
             }
             let tle_node = tlist.nth(0);
-            let tle = tle_node.as_target_entry().expect("tlist holds TargetEntries");
+            let tle = tle_node
+                .as_target_entry()
+                .expect("tlist holds TargetEntries");
             assert!(!tle.resjunk, "non-junk TLEs must come first");
             if !coerce_fn_result_column(
                 mcx,
@@ -227,7 +240,10 @@ fn check_sql_stmt_retval_ext<'mcx>(
                 &mut upper_tlist_nontrivial,
             )? {
                 let actual = format_type::format_type_be(expr_type(tle.expr))?;
-                return Err(retval_mismatch(rettype, format!("Actual return type is {actual}.")));
+                return Err(retval_mismatch(
+                    rettype,
+                    format!("Actual return type is {actual}."),
+                ));
             }
         } else if fn_typtype == TYPTYPE_COMPOSITE || rettype == RECORDOID {
             let mut coerced_single = false;
@@ -251,7 +267,9 @@ fn check_sql_stmt_retval_ext<'mcx>(
                 let mut tuplogcols = 0usize;
                 let mut colindex = 0usize;
                 for tle_node in tlist.iter() {
-                    let tle = tle_node.as_target_entry().expect("tlist holds TargetEntries");
+                    let tle = tle_node
+                        .as_target_entry()
+                        .expect("tlist holds TargetEntries");
                     if tle.resjunk {
                         continue;
                     }
@@ -316,7 +334,9 @@ fn check_sql_stmt_retval_ext<'mcx>(
             let tn = format_type::format_type_be(rettype)?;
             return Err(ereport(ERROR)
                 .errcode(ERRCODE_INVALID_FUNCTION_DEFINITION)
-                .errmsg(format!("return type {tn} is not supported for SQL functions"))
+                .errmsg(format!(
+                    "return type {tn} is not supported for SQL functions"
+                ))
                 .into_error()
                 .into());
         }
@@ -343,19 +363,28 @@ fn inject_projection<'mcx>(
     );
     let mut colnames: NodeList<'mcx> = NodeList::default();
     for tle_node in query_list[parse_idx].targetList.iter() {
-        let tle = tle_node.as_target_entry().expect("tlist holds TargetEntries");
+        let tle = tle_node
+            .as_target_entry()
+            .expect("tlist holds TargetEntries");
         if tle.resjunk {
             continue;
         }
         colnames.lappend(mcx, Node::mk_string(mcx, tle.resname.unwrap_or(""))?)?;
     }
-    let sub: &'mcx Query<'mcx> =
-        mcx::leak_in(mcx::alloc_in(mcx, crate::clone_query(&query_list[parse_idx]))?);
+    let sub: &'mcx Query<'mcx> = mcx::leak_in(mcx::alloc_in(
+        mcx,
+        crate::clone_query(&query_list[parse_idx]),
+    )?);
     let name_bytes = mcx::slice_borrow_in(mcx, "*SELECT*".as_bytes())?;
     // SAFETY: byte-for-byte copy of a &str.
     let name: &'mcx str = unsafe { core::str::from_utf8_unchecked(name_bytes) };
-    let alias: &'mcx Alias<'mcx> =
-        mcx::leak_in(mcx::alloc_in(mcx, Alias { aliasname: Some(name), colnames })?);
+    let alias: &'mcx Alias<'mcx> = mcx::leak_in(mcx::alloc_in(
+        mcx,
+        Alias {
+            aliasname: Some(name),
+            colnames,
+        },
+    )?);
     let rte = Node::mk(
         mcx,
         RangeTblEntry {
@@ -371,7 +400,10 @@ fn inject_projection<'mcx>(
     let rtr = Node::mk(mcx, RangeTblRef { rtindex: 1 })?;
     let jointree: &'mcx FromExpr<'mcx> = mcx::leak_in(mcx::alloc_in(
         mcx,
-        FromExpr { fromlist: NodeList::make1(mcx, rtr)?, quals: None },
+        FromExpr {
+            fromlist: NodeList::make1(mcx, rtr)?,
+            quals: None,
+        },
     )?);
     let newquery = Query {
         commandType: CmdType::CMD_SELECT,
@@ -397,23 +429,28 @@ pub(crate) fn check_query_retval_inline<'mcx>(
     let mut list: PgVec<'mcx, Query<'mcx>> = mcx::vec_with_capacity_in(mcx, 1)?;
     list.push(q);
     let rettupdesc = inline_rettupdesc(mcx, rettype)?;
-    let (is_tuple, injected) =
-        check_sql_stmt_retval_ext(mcx, &mut list, rettype, rettupdesc.as_ref(), b'f' as i8, false)?;
+    let (is_tuple, injected) = check_sql_stmt_retval_ext(
+        mcx,
+        &mut list,
+        rettype,
+        rettupdesc.as_ref(),
+        b'f' as i8,
+        false,
+    )?;
     if is_tuple || injected {
         return Ok(None);
     }
     Ok(Some(list.pop().expect("one query in, one out")))
 }
 
-fn inline_rettupdesc<'mcx>(
-    mcx: Mcx<'mcx>,
-    rettype: Oid,
-) -> PgResult<Option<TupleDescData<'mcx>>> {
+fn inline_rettupdesc<'mcx>(mcx: Mcx<'mcx>, rettype: Oid) -> PgResult<Option<TupleDescData<'mcx>>> {
     if rettype == RECORDOID {
         return Ok(None);
     }
     if lsyscache::typ::get_typtype(rettype)? != TYPTYPE_COMPOSITE {
         return Ok(None);
     }
-    Ok(Some(typcache_seams::lookup_rowtype_tupdesc_copy::call(mcx, rettype, -1)?))
+    Ok(Some(typcache_seams::lookup_rowtype_tupdesc_copy::call(
+        mcx, rettype, -1,
+    )?))
 }

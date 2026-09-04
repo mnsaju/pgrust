@@ -21,11 +21,7 @@ fn norm<T: ToString>(r: PgResult<T>) -> String {
 
 fn err_str(e: &PgError) -> String {
     let ss = unpack_sqlstate(e.sqlstate());
-    format!(
-        "ERR:{}:{}",
-        core::str::from_utf8(&ss).unwrap(),
-        e.message()
-    )
+    format!("ERR:{}:{}", core::str::from_utf8(&ss).unwrap(), e.message())
 }
 
 fn text(r: PgResult<Option<datum::Varlena<'_>>>, source: &str) -> String {
@@ -64,11 +60,17 @@ fn cases() -> Vec<(String, Box<dyn Fn(mcx::Mcx<'_>) -> String>)> {
         let typmod = if n < 0 { -1 } else { tm(n) };
         case!(
             format!("SELECT format('%s', bpcharin('{s}'::cstring, 0, {typmod}))"),
-            move |mcx| text(adt_varchar::bpchar_input(mcx, s.as_bytes(), typmod, None), s)
+            move |mcx| text(
+                adt_varchar::bpchar_input(mcx, s.as_bytes(), typmod, None),
+                s
+            )
         );
         case!(
             format!("SELECT format('%s', varcharin('{s}'::cstring, 0, {typmod}))"),
-            move |mcx| text(adt_varchar::varchar_input(mcx, s.as_bytes(), typmod, None), s)
+            move |mcx| text(
+                adt_varchar::varchar_input(mcx, s.as_bytes(), typmod, None),
+                s
+            )
         );
     }
 
@@ -116,7 +118,9 @@ fn cases() -> Vec<(String, Box<dyn Fn(mcx::Mcx<'_>) -> String>)> {
         // C returns raw memcmp values from the cmp entry points; compare signs.
         case!(
             format!("SELECT sign(bpcharcmp('{a}'::bpchar, '{b}'::bpchar COLLATE \"C\"))::text"),
-            move |_| norm(adt_varchar::bpcharcmp(a.as_bytes(), b.as_bytes(), C).map(|c| c.signum()))
+            move |_| norm(
+                adt_varchar::bpcharcmp(a.as_bytes(), b.as_bytes(), C).map(|c| c.signum())
+            )
         );
         case!(
             format!("SELECT sign(btbpchar_pattern_cmp('{a}'::bpchar, '{b}'::bpchar))::text"),
@@ -131,9 +135,7 @@ fn cases() -> Vec<(String, Box<dyn Fn(mcx::Mcx<'_>) -> String>)> {
         );
         case!(
             format!("SELECT hashbpcharextended('{a}'::bpchar COLLATE \"C\", 42)::text"),
-            move |_| norm(
-                adt_varchar::hashbpcharextended(a.as_bytes(), C, 42).map(|h| h as i64)
-            )
+            move |_| norm(adt_varchar::hashbpcharextended(a.as_bytes(), C, 42).map(|h| h as i64))
         );
     }
 
@@ -151,33 +153,33 @@ fn cases() -> Vec<(String, Box<dyn Fn(mcx::Mcx<'_>) -> String>)> {
     for t in ["5", "1", "0", "-3", "10485760", "10485761"] {
         case!(
             format!("SELECT bpchartypmodin('{{{t}}}'::cstring[])::text"),
-            move |mcx| norm(adt_varchar::bpchartypmodin(mcx, &cstring_array_1d(&[t.as_bytes()])))
+            move |mcx| norm(adt_varchar::bpchartypmodin(
+                mcx,
+                &cstring_array_1d(&[t.as_bytes()])
+            ))
         );
         case!(
             format!("SELECT varchartypmodin('{{{t}}}'::cstring[])::text"),
-            move |mcx| norm(adt_varchar::varchartypmodin(mcx, &cstring_array_1d(&[t.as_bytes()])))
+            move |mcx| norm(adt_varchar::varchartypmodin(
+                mcx,
+                &cstring_array_1d(&[t.as_bytes()])
+            ))
         );
     }
     for t in [9i32, 5, 4, 0, -1] {
-        case!(
-            format!("SELECT bpchartypmodout({t})::text"),
-            move |_| {
-                let mut buf = [0u8; 16];
-                let n = adt_varchar::anychar_typmodout(t, &mut buf);
-                format!("V:{}", core::str::from_utf8(&buf[..n]).unwrap())
-            }
-        );
+        case!(format!("SELECT bpchartypmodout({t})::text"), move |_| {
+            let mut buf = [0u8; 16];
+            let n = adt_varchar::anychar_typmodout(t, &mut buf);
+            format!("V:{}", core::str::from_utf8(&buf[..n]).unwrap())
+        });
     }
 
     for s in ["abc   ", "abc", "a"] {
-        case!(
-            format!("SELECT ('{s}'::bpchar)::name::text"),
-            move |_| {
-                let n = adt_varchar::bpchar_name(s.as_bytes());
-                let end = n.iter().position(|&b| b == 0).unwrap_or(n.len());
-                format!("V:{}", core::str::from_utf8(&n[..end]).unwrap())
-            }
-        );
+        case!(format!("SELECT ('{s}'::bpchar)::name::text"), move |_| {
+            let n = adt_varchar::bpchar_name(s.as_bytes());
+            let end = n.iter().position(|&b| b == 0).unwrap_or(n.len());
+            format!("V:{}", core::str::from_utf8(&n[..end]).unwrap())
+        });
         case!(
             format!("SELECT format('%s', ('{s}'::name)::bpchar)"),
             move |mcx| {
@@ -190,10 +192,12 @@ fn cases() -> Vec<(String, Box<dyn Fn(mcx::Mcx<'_>) -> String>)> {
             }
         );
     }
-    case!("SELECT format('%s', ('x'::\"char\")::bpchar)", move |mcx| norm(
-        adt_varchar::char_bpchar(mcx, b'x' as i8)
-            .map(|v| String::from_utf8_lossy(v.data()).into_owned())
-    ));
+    case!("SELECT format('%s', ('x'::\"char\")::bpchar)", move |mcx| {
+        norm(
+            adt_varchar::char_bpchar(mcx, b'x' as i8)
+                .map(|v| String::from_utf8_lossy(v.data()).into_owned()),
+        )
+    });
 
     v
 }
@@ -242,7 +246,10 @@ fn pg_batch(sqls: &[String]) -> Option<Vec<String>> {
     // pid-unique: a fixed name strands another user's file in sticky /tmp
     // when an oracle-less run precedes the gated one (quote precedent).
     let path = dir.join(format!("pgrust_varchar_diff_{}.sql", std::process::id()));
-    std::fs::File::create(&path).ok()?.write_all(sql.as_bytes()).ok()?;
+    std::fs::File::create(&path)
+        .ok()?
+        .write_all(sql.as_bytes())
+        .ok()?;
 
     let out = Command::new("psql")
         .args(["-h", "/tmp", "-p", "5432", "-d", "postgres"])

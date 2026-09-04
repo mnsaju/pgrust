@@ -45,7 +45,9 @@ fn record_close(oid: Oid, lockmode: LOCKMODE) -> PgResult<()> {
 fn make<'mcx>(mcx: Mcx<'mcx>, oid: Oid, name: &str, relkind: u8) -> Relation<'mcx> {
     let mut relname = NameData::default();
     relname.namestrcpy(name);
-    let data = RelationData { rd_locator: Default::default(), rd_smgr: Default::default(),
+    let data = RelationData {
+        rd_locator: Default::default(),
+        rd_smgr: Default::default(),
         rd_id: oid,
         rd_backend: INVALID_PROC_NUMBER,
         rd_islocaltemp: false,
@@ -55,7 +57,10 @@ fn make<'mcx>(mcx: Mcx<'mcx>, oid: Oid, name: &str, relkind: u8) -> Relation<'mc
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
         rd_lockInfo: LockInfoData {
-            lockRelId: LockRelId { relId: oid, dbId: 5 },
+            lockRelId: LockRelId {
+                relId: oid,
+                dbId: 5,
+            },
         },
         rd_rel: FormData_pg_class {
             relname,
@@ -99,13 +104,16 @@ fn make<'mcx>(mcx: Mcx<'mcx>, oid: Oid, name: &str, relkind: u8) -> Relation<'mc
         pgstat_enabled: Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: PgVec::new_in(mcx),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     };
     Relation::open(data, Some(record_close))
 }
@@ -234,8 +242,12 @@ fn open_rejects_index_partitioned_index_composite() {
 fn try_open_missing_is_none_but_wrong_kind_still_errors() {
     install();
     let ctx = MemoryContext::new("t");
-    assert!(try_table_open(ctx.mcx(), 999, AccessShareLock).unwrap().is_none());
-    let r = try_table_open(ctx.mcx(), TBL, AccessShareLock).unwrap().unwrap();
+    assert!(try_table_open(ctx.mcx(), 999, AccessShareLock)
+        .unwrap()
+        .is_none());
+    let r = try_table_open(ctx.mcx(), TBL, AccessShareLock)
+        .unwrap()
+        .unwrap();
     assert_eq!(r.rd_id, TBL);
     let err = try_table_open(ctx.mcx(), IDX, AccessShareLock).unwrap_err();
     assert_wrong_kind(err, "idx", "indexes");
@@ -246,7 +258,9 @@ fn openrv_validates_kind() {
     install();
     let ctx = MemoryContext::new("t");
     assert_eq!(
-        table_openrv(ctx.mcx(), &rv("tbl"), RowExclusiveLock).unwrap().name(),
+        table_openrv(ctx.mcx(), &rv("tbl"), RowExclusiveLock)
+            .unwrap()
+            .name(),
         "tbl"
     );
     let err = table_openrv(ctx.mcx(), &rv("idx"), RowExclusiveLock).unwrap_err();
@@ -258,9 +272,11 @@ fn openrv_validates_kind() {
 fn openrv_extended_missing_ok() {
     install();
     let ctx = MemoryContext::new("t");
-    assert!(table_openrv_extended(ctx.mcx(), &rv("gone"), AccessShareLock, true)
-        .unwrap()
-        .is_none());
+    assert!(
+        table_openrv_extended(ctx.mcx(), &rv("gone"), AccessShareLock, true)
+            .unwrap()
+            .is_none()
+    );
     assert!(table_openrv_extended(ctx.mcx(), &rv("gone"), AccessShareLock, false).is_err());
     let err = table_openrv_extended(ctx.mcx(), &rv("comp"), AccessShareLock, true).unwrap_err();
     assert_wrong_kind(err, "comp", "composite types");

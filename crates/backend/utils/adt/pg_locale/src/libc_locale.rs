@@ -158,20 +158,30 @@ pub(crate) fn make_libc_collator(collate: &str, ctype: &str) -> PgResult<LibcLoc
         if is_c_or_posix(ctype) {
             return Ok(LibcLocale::NONE);
         }
-        let loc = newlocale(crate::lc::LC_COLLATE_MASK | crate::lc::LC_CTYPE_MASK, collate, core::ptr::null_mut())
-            .ok_or_else(|| report_newlocale_failure(collate))?;
+        let loc = newlocale(
+            crate::lc::LC_COLLATE_MASK | crate::lc::LC_CTYPE_MASK,
+            collate,
+            core::ptr::null_mut(),
+        )
+        .ok_or_else(|| report_newlocale_failure(collate))?;
         return Ok(LibcLocale(loc as usize));
     }
 
     let loc1 = if !is_c_or_posix(collate) {
-        Some(newlocale(crate::lc::LC_COLLATE_MASK, collate, core::ptr::null_mut())
-            .ok_or_else(|| report_newlocale_failure(collate))?)
+        Some(
+            newlocale(crate::lc::LC_COLLATE_MASK, collate, core::ptr::null_mut())
+                .ok_or_else(|| report_newlocale_failure(collate))?,
+        )
     } else {
         None
     };
 
     if !is_c_or_posix(ctype) {
-        match newlocale(crate::lc::LC_CTYPE_MASK, ctype, loc1.unwrap_or(core::ptr::null_mut())) {
+        match newlocale(
+            crate::lc::LC_CTYPE_MASK,
+            ctype,
+            loc1.unwrap_or(core::ptr::null_mut()),
+        ) {
             Some(loc) => Ok(LibcLocale(loc as usize)),
             None => {
                 let err = report_newlocale_failure(ctype);
@@ -509,8 +519,7 @@ fn case_libc_mb(
         } as wchar_t;
         if matches!(kind, MbCase::Title) {
             // SAFETY: pure wctype call.
-            wasalnum =
-                unsafe { iswalnum_l(workspace[curr_char] as wint_t, lt.get()) } != 0;
+            wasalnum = unsafe { iswalnum_l(workspace[curr_char] as wint_t, lt.get()) } != 0;
         }
         curr_char += 1;
     }

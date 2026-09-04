@@ -209,13 +209,13 @@ pub fn BufferManagerShmemInit() -> PgResult<()> {
         .expect("buffer block layout");
     // SAFETY: non-zero layout; zeroed like a fresh shmem segment.
     let blocks = unsafe { std::alloc::alloc_zeroed(blk_layout) };
-    let cv_layout = core::alloc::Layout::array::<ConditionVariable>(nu).expect("buffer IO CV layout");
+    let cv_layout =
+        core::alloc::Layout::array::<ConditionVariable>(nu).expect("buffer IO CV layout");
     // SAFETY: non-zero layout; initialized element-by-element below before publish.
     let io_cvs = unsafe { std::alloc::alloc(cv_layout) } as *mut ConditionVariable;
     if descs.is_null() || blocks.is_null() || io_cvs.is_null() {
         return Err(Box::new(
-            types_error::PgError::new(ERROR, "out of memory")
-                .with_sqlstate(ERRCODE_OUT_OF_MEMORY),
+            types_error::PgError::new(ERROR, "out of memory").with_sqlstate(ERRCODE_OUT_OF_MEMORY),
         ));
     }
     for i in 0..nu {

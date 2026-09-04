@@ -9,8 +9,8 @@ use ::types_brin::{BrinColInfo, BrinDesc, BrinOpcKind, BrinValues, MinmaxOpaque}
 use ::types_core::Oid;
 use ::types_error::PgResult;
 use ::types_scan::scankey::{
-    ScanKeyData, BTEqualStrategyNumber, BTGreaterEqualStrategyNumber, BTGreaterStrategyNumber,
-    BTLessEqualStrategyNumber, BTLessStrategyNumber, BTMaxStrategyNumber,
+    BTEqualStrategyNumber, BTGreaterEqualStrategyNumber, BTGreaterStrategyNumber,
+    BTLessEqualStrategyNumber, BTLessStrategyNumber, BTMaxStrategyNumber, ScanKeyData,
 };
 
 pub fn brin_minmax_opcinfo(typoid: Oid) -> BrinColInfo {
@@ -54,8 +54,14 @@ pub fn brin_minmax_add_value(
     let mut updated = false;
 
     let compar = call_strategy(
-        mcx, bdesc, attno as u16, atttypid, BTLessStrategyNumber, colloid,
-        newval, column.bv_values[0],
+        mcx,
+        bdesc,
+        attno as u16,
+        atttypid,
+        BTLessStrategyNumber,
+        colloid,
+        newval,
+        column.bv_values[0],
     )?;
     if compar.as_bool() {
         column.bv_values[0] = brin_tuple::datum_copy(mcx, newval, attbyval, attlen)?;
@@ -63,8 +69,14 @@ pub fn brin_minmax_add_value(
     }
 
     let compar = call_strategy(
-        mcx, bdesc, attno as u16, atttypid, BTGreaterStrategyNumber, colloid,
-        newval, column.bv_values[1],
+        mcx,
+        bdesc,
+        attno as u16,
+        atttypid,
+        BTGreaterStrategyNumber,
+        colloid,
+        newval,
+        column.bv_values[1],
     )?;
     if compar.as_bool() {
         column.bv_values[1] = brin_tuple::datum_copy(mcx, newval, attbyval, attlen)?;
@@ -88,24 +100,50 @@ pub fn brin_minmax_consistent(
 
     let matches = match key.sk_strategy {
         s @ (BTLessStrategyNumber | BTLessEqualStrategyNumber) => call_strategy(
-            mcx, bdesc, attno, subtype, s, colloid, column.bv_values[0], value,
+            mcx,
+            bdesc,
+            attno,
+            subtype,
+            s,
+            colloid,
+            column.bv_values[0],
+            value,
         )?,
         BTEqualStrategyNumber => {
             let m = call_strategy(
-                mcx, bdesc, attno, subtype, BTLessEqualStrategyNumber, colloid,
-                column.bv_values[0], value,
+                mcx,
+                bdesc,
+                attno,
+                subtype,
+                BTLessEqualStrategyNumber,
+                colloid,
+                column.bv_values[0],
+                value,
             )?;
             if !m.as_bool() {
                 m
             } else {
                 call_strategy(
-                    mcx, bdesc, attno, subtype, BTGreaterEqualStrategyNumber, colloid,
-                    column.bv_values[1], value,
+                    mcx,
+                    bdesc,
+                    attno,
+                    subtype,
+                    BTGreaterEqualStrategyNumber,
+                    colloid,
+                    column.bv_values[1],
+                    value,
                 )?
             }
         }
         s @ (BTGreaterEqualStrategyNumber | BTGreaterStrategyNumber) => call_strategy(
-            mcx, bdesc, attno, subtype, s, colloid, column.bv_values[1], value,
+            mcx,
+            bdesc,
+            attno,
+            subtype,
+            s,
+            colloid,
+            column.bv_values[1],
+            value,
         )?,
         other => panic!("invalid strategy number {other}"),
     };
@@ -127,16 +165,28 @@ pub fn brin_minmax_union(
     let (attbyval, attlen, atttypid) = (att.attbyval, att.attlen, att.atttypid);
 
     let needsadj = call_strategy(
-        mcx, bdesc, attno as u16, atttypid, BTLessStrategyNumber, colloid,
-        col_b.bv_values[0], col_a.bv_values[0],
+        mcx,
+        bdesc,
+        attno as u16,
+        atttypid,
+        BTLessStrategyNumber,
+        colloid,
+        col_b.bv_values[0],
+        col_a.bv_values[0],
     )?;
     if needsadj.as_bool() {
         col_a.bv_values[0] = brin_tuple::datum_copy(mcx, col_b.bv_values[0], attbyval, attlen)?;
     }
 
     let needsadj = call_strategy(
-        mcx, bdesc, attno as u16, atttypid, BTGreaterStrategyNumber, colloid,
-        col_b.bv_values[1], col_a.bv_values[1],
+        mcx,
+        bdesc,
+        attno as u16,
+        atttypid,
+        BTGreaterStrategyNumber,
+        colloid,
+        col_b.bv_values[1],
+        col_a.bv_values[1],
     )?;
     if needsadj.as_bool() {
         col_a.bv_values[1] = brin_tuple::datum_copy(mcx, col_b.bv_values[1], attbyval, attlen)?;
@@ -192,9 +242,7 @@ fn minmax_get_strategy_procinfo(
     let atttypid = bdesc.bd_tupdesc.attr(attno as usize - 1).atttypid;
     let oprid = lsyscache::get_opfamily_member(opfamily, atttypid, subtype, strategynum as i16)?;
     if oprid == 0 {
-        panic!(
-            "missing operator {strategynum}({atttypid},{subtype}) in opfamily {opfamily}"
-        );
+        panic!("missing operator {strategynum}({atttypid},{subtype}) in opfamily {opfamily}");
     }
     let proc = lsyscache::get_opcode(oprid)?;
     debug_assert!(proc != 0);

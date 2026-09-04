@@ -513,7 +513,10 @@ pub fn RestoreTransactionSnapshot(
     SetTransactionSnapshot(snapshot, source_proc)
 }
 
-fn SetTransactionSnapshot(sourcesnap: &SerializedSnapshot, source_proc: ProcNumber) -> PgResult<()> {
+fn SetTransactionSnapshot(
+    sourcesnap: &SerializedSnapshot,
+    source_proc: ProcNumber,
+) -> PgResult<()> {
     with_state(|s| {
         debug_assert!(!s.first_snapshot_set);
         invalidate_catalog_snapshot_locked(s);
@@ -566,7 +569,10 @@ fn SetTransactionSnapshot(sourcesnap: &SerializedSnapshot, source_proc: ProcNumb
 }
 
 pub fn PushActiveSnapshot(snapshot: &Snapshot) -> PgResult<()> {
-    PushActiveSnapshotWithLevel(snapshot, xact_seams::get_current_transaction_nest_level::call())
+    PushActiveSnapshotWithLevel(
+        snapshot,
+        xact_seams::get_current_transaction_nest_level::call(),
+    )
 }
 
 pub fn PushActiveSnapshotWithLevel(snapshot: &Snapshot, snap_level: i32) -> PgResult<()> {
@@ -587,7 +593,10 @@ pub fn PushActiveSnapshotWithLevel(snapshot: &Snapshot, snap_level: i32) -> PgRe
             snapshot.clone()
         };
         as_snap.active_count.set(as_snap.active_count.get() + 1);
-        s.active.push(ActiveSnapshotElt { as_snap, as_level: snap_level });
+        s.active.push(ActiveSnapshotElt {
+            as_snap,
+            as_level: snap_level,
+        });
     });
     Ok(())
 }
@@ -867,7 +876,8 @@ pub fn ExportSnapshot(snapshot: &Snapshot) -> PgResult<String> {
 
     let children = xact_seams::xact_get_committed_children::call()?;
 
-    let my_proc = lmgr_proc::GetPGProcByNumber(lmgr_proc::MyProc().expect("ExportSnapshot requires MyProc"));
+    let my_proc =
+        lmgr_proc::GetPGProcByNumber(lmgr_proc::MyProc().expect("ExportSnapshot requires MyProc"));
     let proc_number = my_proc.vxid.procNumber.load(Relaxed);
     let lxid = my_proc.vxid.lxid.load(Relaxed);
 
@@ -877,7 +887,10 @@ pub fn ExportSnapshot(snapshot: &Snapshot) -> PgResult<String> {
             s.exported.len() + 1
         );
         let copy = copy_snapshot_locked(s, snapshot);
-        s.exported.push(ExportedSnapshot { snapfile: path.clone(), snapshot: copy.clone() });
+        s.exported.push(ExportedSnapshot {
+            snapfile: path.clone(),
+            snapshot: copy.clone(),
+        });
         copy.regd_count.set(copy.regd_count.get() + 1);
         s.registered.push(copy.clone());
         (path, copy)
@@ -1030,7 +1043,10 @@ pub fn ImportSnapshot(idstr: &str) -> PgResult<()> {
     }
 
     // Only 0-9, A-F and hyphens: prevents reading arbitrary files.
-    if !idstr.bytes().all(|b| b.is_ascii_digit() || (b'A'..=b'F').contains(&b) || b == b'-') {
+    if !idstr
+        .bytes()
+        .all(|b| b.is_ascii_digit() || (b'A'..=b'F').contains(&b) || b == b'-')
+    {
         return Err(ereport(ERROR)
             .errcode(types_error::ERRCODE_INVALID_PARAMETER_VALUE)
             .errmsg(format!("invalid snapshot identifier: \"{idstr}\""))

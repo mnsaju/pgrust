@@ -47,7 +47,9 @@ impl SpillSet {
     /// Create the engagement's spill set. Caller must be a thread with
     /// temp-file access up (leader at admission time, or a bound helper).
     pub fn create() -> PgResult<Arc<SpillSet>> {
-        Ok(Arc::new(SpillSet { fileset: FileSet::init()? }))
+        Ok(Arc::new(SpillSet {
+            fileset: FileSet::init()?,
+        }))
     }
 
     /// Canonical spill-file name: unique per (purpose, generation, worker)
@@ -96,7 +98,14 @@ impl SpillFile {
     /// Lazy: no file exists until the first epoch is written.
     pub fn new(set: Arc<SpillSet>, name: String, nparts: u32) -> SpillFile {
         assert!(nparts > 0);
-        SpillFile { set, name, nparts, len: 0, created: false, epochs: Vec::new() }
+        SpillFile {
+            set,
+            name,
+            nparts,
+            len: 0,
+            created: false,
+            epochs: Vec::new(),
+        }
     }
 
     pub fn nparts(&self) -> u32 {
@@ -144,7 +153,13 @@ impl SpillFile {
         let _io = runtime::blocking_io_section();
         let bf = BufFileOpenFileSet(mcx, self.set.fileset(), &self.name, true)?;
         drop(_io);
-        Ok(PartReader { bf, extents: vec![extent], cur: 0, pos_in_cur: 0, seeked: false })
+        Ok(PartReader {
+            bf,
+            extents: vec![extent],
+            cur: 0,
+            pos_in_cur: 0,
+            seeked: false,
+        })
     }
 
     /// Begin one epoch write. MUST be called by the file's owning worker
@@ -169,7 +184,13 @@ impl SpillFile {
         // Drop the section while the writer stages in-memory state; each
         // write_part / finish enters its own.
         drop(_io);
-        Ok(EpochWriter { file: self, bf, cursor_valid: true, staged: Vec::new(), written: 0 })
+        Ok(EpochWriter {
+            file: self,
+            bf,
+            cursor_valid: true,
+            staged: Vec::new(),
+            written: 0,
+        })
     }
 
     /// Stream one partition's committed bytes. Any thread with temp-file
@@ -191,7 +212,13 @@ impl SpillFile {
         let _io = runtime::blocking_io_section();
         let bf = BufFileOpenFileSet(mcx, self.set.fileset(), &self.name, true)?;
         drop(_io);
-        Ok(Some(PartReader { bf, extents, cur: 0, pos_in_cur: 0, seeked: false }))
+        Ok(Some(PartReader {
+            bf,
+            extents,
+            cur: 0,
+            pos_in_cur: 0,
+            seeked: false,
+        }))
     }
 }
 
@@ -232,7 +259,13 @@ impl EpochWriter<'_, '_> {
                     last.map_or(true, |(p, _)| *p < part),
                     "partitions must be written in ascending order"
                 );
-                self.staged.push((part, Extent { offset: at, len: bytes.len() as u64 }));
+                self.staged.push((
+                    part,
+                    Extent {
+                        offset: at,
+                        len: bytes.len() as u64,
+                    },
+                ));
             }
         }
         let _io = runtime::blocking_io_section();
@@ -245,13 +278,21 @@ impl EpochWriter<'_, '_> {
     /// this (drop/unwind) abandons the epoch: nothing is committed and the
     /// next epoch overwrites the tail.
     pub fn finish(self) -> PgResult<()> {
-        let EpochWriter { file, bf, staged, written, .. } = self;
+        let EpochWriter {
+            file,
+            bf,
+            staged,
+            written,
+            ..
+        } = self;
         {
             let _io = runtime::blocking_io_section();
             bf.close()?;
         }
         if written > 0 {
-            file.epochs.push(EpochDir { parts: staged.into_boxed_slice() });
+            file.epochs.push(EpochDir {
+                parts: staged.into_boxed_slice(),
+            });
             file.len += written;
         }
         Ok(())
@@ -280,7 +321,9 @@ impl PartReader<'_> {
         let mut filled = 0usize;
         let _io = runtime::blocking_io_section();
         while filled < buf.len() {
-            let Some(x) = self.extents.get(self.cur) else { break };
+            let Some(x) = self.extents.get(self.cur) else {
+                break;
+            };
             if self.pos_in_cur == x.len {
                 self.cur += 1;
                 self.pos_in_cur = 0;

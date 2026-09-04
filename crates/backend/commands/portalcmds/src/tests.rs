@@ -113,7 +113,8 @@ fn install_fixtures() {
         parser_seams::raw_parser::set(|mcx, q, mode| {
             let list = gram_core::raw_parser(mcx, q, mode)?;
             let mut v = mcx::PgVec::new_in(mcx);
-            v.try_reserve_exact(list.len()).map_err(|_| mcx.oom(list.len()))?;
+            v.try_reserve_exact(list.len())
+                .map_err(|_| mcx.oom(list.len()))?;
             for n in list.iter() {
                 let rs = n.as_raw_stmt().expect("raw_parser yields RawStmt");
                 v.push(::types_nodes::rawnodes::RawStmt {
@@ -208,12 +209,24 @@ fn leaked_mcx() -> Mcx<'static> {
 
 // The analyzer's output for `SELECT 1` (pquery e2e's fixture shape).
 fn select_1_query(mcx: Mcx<'static>) -> Query<'static> {
-    let konst =
-        Node::mk_const(mcx, INT4OID, -1, 0, 4, datum::Datum::from_i32(1), false, true).unwrap();
+    let konst = Node::mk_const(
+        mcx,
+        INT4OID,
+        -1,
+        0,
+        4,
+        datum::Datum::from_i32(1),
+        false,
+        true,
+    )
+    .unwrap();
     let tle = Node::mk_target_entry(mcx, konst, 1, Some("?column?"), false).unwrap();
     let jointree = mcx::alloc_leak_in(
         mcx,
-        ::types_nodes::primnodes::FromExpr { fromlist: NodeList::nil(), quals: None },
+        ::types_nodes::primnodes::FromExpr {
+            fromlist: NodeList::nil(),
+            quals: None,
+        },
     )
     .unwrap();
     Query {
@@ -263,8 +276,12 @@ fn fetch(
     ismove: bool,
 ) -> (QueryCompletion, Vec<String>) {
     SENT.with(|s| s.borrow_mut().clear());
-    let stmt =
-        FetchStmt { direction, howMany: how_many, portalname: Some(portal_name), ismove };
+    let stmt = FetchStmt {
+        direction,
+        howMany: how_many,
+        portalname: Some(portal_name),
+        ismove,
+    };
     let portal = portalmem::GetPortalByName(Some(portal_name)).expect("portal exists");
     let mut dest = tcop_dest::CreateDestReceiver(CommandDest::RemoteExecute);
     tcop_dest::SetRemoteDestReceiverParams(&mut dest, portal);
@@ -305,8 +322,15 @@ fn declare_fetch_close_select1_e2e() {
     {
         let p = portal.borrow();
         assert_eq!(p.strategy, PORTAL_ONE_SELECT);
-        assert_ne!(p.cursorOptions & CURSOR_OPT_NO_SCROLL, 0, "Result plan can't back up");
-        assert_eq!(p.sourceText.as_ref().unwrap().as_str(), "DECLARE c1 CURSOR FOR SELECT 1");
+        assert_ne!(
+            p.cursorOptions & CURSOR_OPT_NO_SCROLL,
+            0,
+            "Result plan can't back up"
+        );
+        assert_eq!(
+            p.sourceText.as_ref().unwrap().as_str(),
+            "DECLARE c1 CURSOR FOR SELECT 1"
+        );
     }
     drop(portal);
 
@@ -324,7 +348,10 @@ fn declare_fetch_close_select1_e2e() {
     let portal = portalmem::GetPortalByName(Some("c1")).unwrap();
     let mut none = tcop_dest::DestReceiver::DoNothing;
     let err = pquery::PortalRunFetch(&portal, FETCH_BACKWARD, 1, &mut none).unwrap_err();
-    assert_eq!(err.sqlstate(), types_error::ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE);
+    assert_eq!(
+        err.sqlstate(),
+        types_error::ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE
+    );
     drop(portal);
 
     // The failed portal is closeable; CLOSE tears down the live executor
@@ -368,7 +395,11 @@ fn declare_fetch_move_close_through_utility_dispatch() {
         let query = Node::mk(mcx, select_1_query(mcx)).unwrap();
         Node::mk(
             mcx,
-            DeclareCursorStmt { portalname: Some("c2"), options: 0, query: Some(query) },
+            DeclareCursorStmt {
+                portalname: Some("c2"),
+                options: 0,
+                query: Some(query),
+            },
         )
         .unwrap()
     };
@@ -390,13 +421,25 @@ fn declare_fetch_move_close_through_utility_dispatch() {
         },
     )
     .unwrap();
-    assert_eq!(cmdtag::GetCommandTagName(utility::CreateCommandTag(move_stmt)), "MOVE");
+    assert_eq!(
+        cmdtag::GetCommandTagName(utility::CreateCommandTag(move_stmt)),
+        "MOVE"
+    );
     let qc = run(move_stmt, "MOVE c2");
     assert_eq!((qc.commandTag, qc.nprocessed), (CMDTAG_MOVE, 1));
     assert_eq!(pos("c2"), (false, false, 1));
 
-    let close = Node::mk(mcx, ClosePortalStmt { portalname: Some("c2") }).unwrap();
-    assert_eq!(cmdtag::GetCommandTagName(utility::CreateCommandTag(close)), "CLOSE CURSOR");
+    let close = Node::mk(
+        mcx,
+        ClosePortalStmt {
+            portalname: Some("c2"),
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        cmdtag::GetCommandTagName(utility::CreateCommandTag(close)),
+        "CLOSE CURSOR"
+    );
     run(close, "CLOSE c2");
     assert!(portalmem::GetPortalByName(Some("c2")).is_none());
 
@@ -422,7 +465,10 @@ fn declare_requires_transaction_block_at_top_level() {
         true,
     )
     .unwrap_err();
-    assert_eq!(err.sqlstate(), types_error::ERRCODE_NO_ACTIVE_SQL_TRANSACTION);
+    assert_eq!(
+        err.sqlstate(),
+        types_error::ERRCODE_NO_ACTIVE_SQL_TRANSACTION
+    );
     snapmgr::PopActiveSnapshot().unwrap();
 }
 
@@ -436,11 +482,22 @@ fn cursor_name_errors_match_c_sqlstates() {
         d.portalname = Some("");
         d.seal_ref()
     };
-    let err = PerformCursorOpen(mcx, cstmt, "DECLARE", "DECLARE", ParamListHandle::NULL, false)
-        .unwrap_err();
+    let err = PerformCursorOpen(
+        mcx,
+        cstmt,
+        "DECLARE",
+        "DECLARE",
+        ParamListHandle::NULL,
+        false,
+    )
+    .unwrap_err();
     assert_eq!(err.sqlstate(), types_error::ERRCODE_INVALID_CURSOR_NAME);
 
-    let stmt = FetchStmt { portalname: Some("no-such"), howMany: 1, ..FetchStmt::default() };
+    let stmt = FetchStmt {
+        portalname: Some("no-such"),
+        howMany: 1,
+        ..FetchStmt::default()
+    };
     let mut none = tcop_dest::DestReceiver::DoNothing;
     let err = PerformPortalFetch(&stmt, &mut none, None).unwrap_err();
     assert_eq!(err.sqlstate(), types_error::ERRCODE_UNDEFINED_CURSOR);
@@ -492,8 +549,13 @@ fn live_seqscan_cursor_full_fetch_sequence() {
     .unwrap();
     portal.borrow_mut().cursorOptions = CURSOR_OPT_SCROLL;
     push_snapshot();
-    pquery::PortalStart(&portal, ParamListHandle::NULL, 0, Some(snapmgr::GetActiveSnapshot()))
-        .unwrap();
+    pquery::PortalStart(
+        &portal,
+        ParamListHandle::NULL,
+        0,
+        Some(snapmgr::GetActiveSnapshot()),
+    )
+    .unwrap();
     snapmgr::PopActiveSnapshot().unwrap();
     drop(portal);
     assert_eq!(execmain::registry_len(), before + 1);
@@ -584,8 +646,13 @@ fn live_seqscan_cursor_backward_errors_without_store_b1() {
     .unwrap();
     portal.borrow_mut().cursorOptions = CURSOR_OPT_SCROLL;
     push_snapshot();
-    pquery::PortalStart(&portal, ParamListHandle::NULL, 0, Some(snapmgr::GetActiveSnapshot()))
-        .unwrap();
+    pquery::PortalStart(
+        &portal,
+        ParamListHandle::NULL,
+        0,
+        Some(snapmgr::GetActiveSnapshot()),
+    )
+    .unwrap();
     snapmgr::PopActiveSnapshot().unwrap();
     drop(portal);
 
@@ -637,7 +704,13 @@ fn mk_seqscan_pstmt<'mcx>(mcx: Mcx<'mcx>, relid: u32) -> &'mcx PlannedStmt<'mcx>
         mcx,
         SeqScan {
             cb_scan_cols: None,
-            scan: Scan { plan: Plan { targetlist: tlist, ..Default::default() }, scanrelid: 1 },
+            scan: Scan {
+                plan: Plan {
+                    targetlist: tlist,
+                    ..Default::default()
+                },
+                scanrelid: 1,
+            },
         },
     )
     .unwrap();
@@ -687,9 +760,7 @@ mod scanfix {
     use std::sync::Mutex;
 
     use ::mcx::{Mcx, PgVec};
-    use ::types_core::{
-        Buffer, Oid, BLCKSZ, INVALID_PROC_NUMBER, RELPERSISTENCE_PERMANENT,
-    };
+    use ::types_core::{Buffer, Oid, BLCKSZ, INVALID_PROC_NUMBER, RELPERSISTENCE_PERMANENT};
     use ::types_rel::{
         FormData_pg_class, LockInfoData, LockRelId, Relation, RelationData, LOCKMODE,
         RELKIND_RELATION,
@@ -911,7 +982,12 @@ mod scanfix {
             rd_newRelfilelocatorSubid: std::cell::Cell::new(0),
             rd_firstRelfilelocatorSubid: std::cell::Cell::new(0),
             rd_droppedSubid: std::cell::Cell::new(0),
-            rd_lockInfo: LockInfoData { lockRelId: LockRelId { relId: relid, dbId: 5 } },
+            rd_lockInfo: LockInfoData {
+                lockRelId: LockRelId {
+                    relId: relid,
+                    dbId: 5,
+                },
+            },
             rd_rel,
             rd_att: int4_tupdesc(mcx),
             rd_index: None,
@@ -923,13 +999,16 @@ mod scanfix {
             pgstat_enabled: std::cell::Cell::new(true),
             pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
             rd_amcache: Default::default(),
-            rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+            rd_amcache_hash: Default::default(),
+            rd_amcache_gin: Default::default(),
+            rd_amcache_spgist: Default::default(),
             rd_support: PgVec::new_in(mcx),
             rd_supportinfo: Default::default(),
             rd_opcoptions: Default::default(),
             rd_indexlist: Default::default(),
             rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+            rd_hastriggers: false,
+            rd_hasrules: false,
         };
         Ok(Relation::open(data, Some(record_close)))
     }
@@ -974,8 +1053,13 @@ mod cursors_w10_ca {
         .unwrap();
         portal.borrow_mut().cursorOptions = options;
         push_snapshot();
-        pquery::PortalStart(&portal, ParamListHandle::NULL, 0, Some(snapmgr::GetActiveSnapshot()))
-            .unwrap();
+        pquery::PortalStart(
+            &portal,
+            ParamListHandle::NULL,
+            0,
+            Some(snapmgr::GetActiveSnapshot()),
+        )
+        .unwrap();
         snapmgr::PopActiveSnapshot().unwrap();
     }
 
@@ -983,14 +1067,21 @@ mod cursors_w10_ca {
         let portal = portalmem::GetPortalByName(Some(name)).unwrap();
         let store = {
             let p = portal.borrow();
-            if !p.cursorStore.is_null() { p.cursorStore } else { p.holdStore }
+            if !p.cursorStore.is_null() {
+                p.cursorStore
+            } else {
+                p.holdStore
+            }
         };
         assert!(!store.is_null(), "store-armed portal has a cursor store");
         tuplestore_hold_seams::tuplestore_tuple_count::call(store)
     }
 
     fn fill_exhausted(name: &str) -> bool {
-        portalmem::GetPortalByName(Some(name)).unwrap().borrow().cursorFillExhausted
+        portalmem::GetPortalByName(Some(name))
+            .unwrap()
+            .borrow()
+            .cursorFillExhausted
     }
 
     /// 94001: the full knob-OFF fetch sequence byte-for-byte (fetch
@@ -1008,14 +1099,21 @@ mod cursors_w10_ca {
         mk_armed_cursor(mcx, "w10a", relid, CURSOR_OPT_SCROLL);
         {
             let portal = portalmem::GetPortalByName(Some("w10a")).unwrap();
-            assert!(portal.borrow().cursorStoreArmed, "knob-ON SCROLL ONE_SELECT arms");
+            assert!(
+                portal.borrow().cursorStoreArmed,
+                "knob-ON SCROLL ONE_SELECT arms"
+            );
         }
 
         let (qc, rows) = fetch("w10a", FETCH_FORWARD, 2, false);
         assert_eq!((qc.commandTag, qc.nprocessed), (CMDTAG_FETCH, 2));
         assert_eq!(rows, ["1", "2"]);
         assert_eq!(pos("w10a"), (false, false, 2));
-        assert_eq!(store_count("w10a"), 2, "§2.2: filled exactly as far as the fetch demands");
+        assert_eq!(
+            store_count("w10a"),
+            2,
+            "§2.2: filled exactly as far as the fetch demands"
+        );
         assert!(!fill_exhausted("w10a"));
         {
             // Non-hold SCROLL: the §1.1 cursorStore, not the holdStore.
@@ -1037,7 +1135,11 @@ mod cursors_w10_ca {
         assert_eq!((qc.commandTag, qc.nprocessed), (CMDTAG_MOVE, 1));
         assert!(rows.is_empty(), "MOVE sends no rows");
         assert_eq!(pos("w10a"), (false, false, 3));
-        assert_eq!(store_count("w10a"), 3, "MOVE ABSOLUTE 3 fills to row 3, never further");
+        assert_eq!(
+            store_count("w10a"),
+            3,
+            "MOVE ABSOLUTE 3 fills to row 3, never further"
+        );
 
         let (qc, rows) = fetch("w10a", FETCH_FORWARD, FETCH_ALL, false);
         assert_eq!((qc.commandTag, qc.nprocessed), (CMDTAG_FETCH, 2));
@@ -1052,7 +1154,11 @@ mod cursors_w10_ca {
         assert_eq!((qc.commandTag, qc.nprocessed), (CMDTAG_FETCH, 1));
         assert_eq!(rows, ["2"]);
         assert_eq!(pos("w10a"), (false, false, 2));
-        assert_eq!(store_count("w10a"), 5, "rewind-refetch replays; nothing re-executes");
+        assert_eq!(
+            store_count("w10a"),
+            5,
+            "rewind-refetch replays; nothing re-executes"
+        );
 
         let (qc, rows) = fetch("w10a", FETCH_RELATIVE, 2, false);
         assert_eq!((qc.commandTag, qc.nprocessed), (CMDTAG_FETCH, 1));
@@ -1108,11 +1214,22 @@ mod cursors_w10_ca {
 
         let portal = portalmem::GetPortalByName(Some("w10h")).unwrap();
         crate::PersistHoldablePortal(&portal).unwrap();
-        assert!(portal.borrow().queryDesc.is_null(), "persist tore the executor down");
+        assert!(
+            portal.borrow().queryDesc.is_null(),
+            "persist tore the executor down"
+        );
         drop(portal);
-        assert_eq!(store_count("w10h"), 5, "persist = fill_to(EOF) resume from high-water");
+        assert_eq!(
+            store_count("w10h"),
+            5,
+            "persist = fill_to(EOF) resume from high-water"
+        );
         assert!(fill_exhausted("w10h"));
-        assert_eq!(pos("w10h"), (false, false, 2), "cursor position survives persist");
+        assert_eq!(
+            pos("w10h"),
+            (false, false, 2),
+            "cursor position survives persist"
+        );
 
         let (_, rows) = fetch("w10h", FETCH_FORWARD, FETCH_ALL, false);
         assert_eq!(rows, ["30", "40", "50"]);
@@ -1158,15 +1275,14 @@ mod cursors_w10_ca {
         );
 
         // Another table's oid: the per-table search fails exactly as in C.
-        let err = execmain_seams::exec_current_of::call(Some("w10c"), 0, relid + 1, "other")
-            .unwrap_err();
+        let err =
+            execmain_seams::exec_current_of::call(Some("w10c"), 0, relid + 1, "other").unwrap_err();
         assert_eq!(err.sqlstate(), types_error::ERRCODE_INVALID_CURSOR_STATE);
 
         // Off-row (atEnd): C's "not positioned on a row".
         let (_, _) = fetch("w10c", FETCH_FORWARD, FETCH_ALL, true);
         assert_eq!(pos("w10c"), (false, true, 5));
-        let err =
-            execmain_seams::exec_current_of::call(Some("w10c"), 0, relid, "t").unwrap_err();
+        let err = execmain_seams::exec_current_of::call(Some("w10c"), 0, relid, "t").unwrap_err();
         assert_eq!(err.sqlstate(), types_error::ERRCODE_INVALID_CURSOR_STATE);
 
         PerformPortalClose(Some("w10c")).unwrap();

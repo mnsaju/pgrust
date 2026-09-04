@@ -125,11 +125,17 @@ fn cost_qual_eval_walker<'mcx>(
             }
             Ok(())
         }
-        NodeTag::T_RelabelType => cost_qual_eval_walker(run.as_deref_mut(), node.as_relabel_type().unwrap().arg, cost),
+        NodeTag::T_RelabelType => cost_qual_eval_walker(
+            run.as_deref_mut(),
+            node.as_relabel_type().unwrap().arg,
+            cost,
+        ),
         // C: no charge for FieldSelect itself.
-        NodeTag::T_FieldSelect => {
-            cost_qual_eval_walker(run.as_deref_mut(), node.as_field_select().unwrap().arg, cost)
-        }
+        NodeTag::T_FieldSelect => cost_qual_eval_walker(
+            run.as_deref_mut(),
+            node.as_field_select().unwrap().arg,
+            cost,
+        ),
         // C charges both I/O functions of the coercion.
         NodeTag::T_CoerceViaIO => {
             let c = node.as_coerce_via_io().unwrap();
@@ -139,9 +145,11 @@ fn cost_qual_eval_walker<'mcx>(
             planner_seams::add_function_cost::call(outfunc, cost)?;
             cost_qual_eval_walker(run.as_deref_mut(), c.arg, cost)
         }
-        NodeTag::T_CoerceToDomain => {
-            cost_qual_eval_walker(run.as_deref_mut(), node.as_coerce_to_domain().unwrap().arg, cost)
-        }
+        NodeTag::T_CoerceToDomain => cost_qual_eval_walker(
+            run.as_deref_mut(),
+            node.as_coerce_to_domain().unwrap().arg,
+            cost,
+        ),
         // C charges the per-element expression once per estimated element,
         // then its fall-through walks both children generically as well.
         NodeTag::T_ArrayCoerceExpr => {
@@ -157,9 +165,11 @@ fn cost_qual_eval_walker<'mcx>(
             }
             cost_qual_eval_walker(run.as_deref_mut(), a.arg, cost)
         }
-        NodeTag::T_ConvertRowtypeExpr => {
-            cost_qual_eval_walker(run.as_deref_mut(), node.as_convert_rowtype_expr().unwrap().arg, cost)
-        }
+        NodeTag::T_ConvertRowtypeExpr => cost_qual_eval_walker(
+            run.as_deref_mut(),
+            node.as_convert_rowtype_expr().unwrap().arg,
+            cost,
+        ),
         // Boolean connectives are free in C; NullTest is "cheap" (no charge).
         NodeTag::T_BoolExpr => {
             for arg in &node.as_bool_expr().unwrap().args {
@@ -189,13 +199,15 @@ fn cost_qual_eval_walker<'mcx>(
             if sa.hashfuncid != 0 {
                 // Hashed SAOP: build the table at startup, then one hash +
                 // one comparison per tuple.
-                let mut hcosts = QualCost { startup: 0.0, per_tuple: 0.0 };
+                let mut hcosts = QualCost {
+                    startup: 0.0,
+                    per_tuple: 0.0,
+                };
                 planner_seams::add_function_cost::call(sa.hashfuncid, &mut hcosts)?;
                 cost.startup += sacosts.startup + hcosts.startup;
-                cost.startup += planner_seams::estimate_array_length::call(
-                    run.as_deref_mut(),
-                    arraynode,
-                )? * hcosts.per_tuple;
+                cost.startup +=
+                    planner_seams::estimate_array_length::call(run.as_deref_mut(), arraynode)?
+                        * hcosts.per_tuple;
                 cost.per_tuple += hcosts.per_tuple + sacosts.per_tuple;
             } else {
                 // C: the operator runs against about half the array elements.
@@ -286,7 +298,11 @@ fn cost_qual_eval_walker<'mcx>(
         // C arbitrarily uses the first alternative's cost.
         NodeTag::T_AlternativeSubPlan => {
             let asp = node.as_alternative_sub_plan().unwrap();
-            cost_qual_eval_walker(run.as_deref_mut(), asp.subplans.first().expect("alternatives"), cost)
+            cost_qual_eval_walker(
+                run.as_deref_mut(),
+                asp.subplans.first().expect("alternatives"),
+                cost,
+            )
         }
         // The SubPlan's own costs, precomputed by cost_subplan; C does not
         // descend into the testexpr (already included) or args.
@@ -306,7 +322,11 @@ fn cost_qual_eval_walker<'mcx>(
             for w in &c.args {
                 let cw = w.as_case_when().expect("CaseWhen");
                 cost_qual_eval_walker(run.as_deref_mut(), cw.expr.expect("CaseWhen.expr"), cost)?;
-                cost_qual_eval_walker(run.as_deref_mut(), cw.result.expect("CaseWhen.result"), cost)?;
+                cost_qual_eval_walker(
+                    run.as_deref_mut(),
+                    cw.result.expect("CaseWhen.result"),
+                    cost,
+                )?;
             }
             match c.defresult {
                 Some(d) => cost_qual_eval_walker(run.as_deref_mut(), d, cost),
@@ -375,12 +395,10 @@ fn cost_qual_eval_walker<'mcx>(
             }
             Ok(())
         }
-        NodeTag::T_JsonIsPredicate => {
-            match node.as_json_is_predicate().unwrap().expr {
-                Some(e) => cost_qual_eval_walker(run.as_deref_mut(), e, cost),
-                None => Ok(()),
-            }
-        }
+        NodeTag::T_JsonIsPredicate => match node.as_json_is_predicate().unwrap().expr {
+            Some(e) => cost_qual_eval_walker(run.as_deref_mut(), e, cost),
+            None => Ok(()),
+        },
         NodeTag::T_JsonBehavior => match node.as_json_behavior().unwrap().expr {
             Some(e) => cost_qual_eval_walker(run.as_deref_mut(), e, cost),
             None => Ok(()),
@@ -395,7 +413,11 @@ fn cost_qual_eval_walker<'mcx>(
         }
         NodeTag::T_TableFunc => {
             let tf = node.as_table_func().unwrap();
-            for a in tf.ns_uris.iter().chain(tf.colvalexprs.iter().flatten()).chain(tf.passingvalexprs.iter())
+            for a in tf
+                .ns_uris
+                .iter()
+                .chain(tf.colvalexprs.iter().flatten())
+                .chain(tf.passingvalexprs.iter())
             {
                 cost_qual_eval_walker(run.as_deref_mut(), a, cost)?;
             }
@@ -411,13 +433,17 @@ fn cost_qual_eval_walker<'mcx>(
             Ok(())
         }
         // No C case: falls to C's expression_tree_walker default.
-        NodeTag::T_PlaceHolderVar => {
-            cost_qual_eval_walker(run.as_deref_mut(), node.as_place_holder_var().unwrap().phexpr, cost)
-        }
+        NodeTag::T_PlaceHolderVar => cost_qual_eval_walker(
+            run.as_deref_mut(),
+            node.as_place_holder_var().unwrap().phexpr,
+            cost,
+        ),
         // No C case: falls to C's expression_tree_walker default.
-        NodeTag::T_ReturningExpr => {
-            cost_qual_eval_walker(run.as_deref_mut(), node.as_returning_expr().unwrap().retexpr, cost)
-        }
+        NodeTag::T_ReturningExpr => cost_qual_eval_walker(
+            run.as_deref_mut(),
+            node.as_returning_expr().unwrap().retexpr,
+            cost,
+        ),
         other => panic!("cost_qual_eval_walker (costsize.c): {other:?}; M2 expression lane"),
     }
 }
@@ -481,7 +507,6 @@ pub fn compute_gather_rows(rows: f64, parallel_workers: i32) -> f64 {
     clamp_row_est(rows * get_parallel_divisor(parallel_workers))
 }
 
-
 // Gather setup price: pgrcolumnar-fed parallel plans pay the measured
 // thread-native startup (consts::DEFAULT_PGRCOLUMNAR_PARALLEL_SETUP_COST
 // provenance), heap plans keep C's parallel_setup_cost. The Gather may sit
@@ -528,15 +553,18 @@ fn gather_tuple_cost(run: &PlannerRun<'_>) -> f64 {
 
 pub fn pgrcolumnar_feeds_plan(run: &PlannerRun<'_>) -> bool {
     run.root.simple_rel_array.iter().any(|slot| {
-        slot.is_some_and(|rid| {
-            run.root.rel(rid).amflags & types_pathnodes::AMFLAG_PGRCOLUMNAR != 0
-        })
+        slot.is_some_and(|rid| run.root.rel(rid).amflags & types_pathnodes::AMFLAG_PGRCOLUMNAR != 0)
     })
 }
 
 // cost_gather (costsize.c); no parameterized Gather paths exist (required
 // outer is empty at every ported call site).
-pub fn cost_gather(run: &mut PlannerRun<'_>, path_id: types_pathnodes::PathId, rel: RelId, rows: Option<f64>) {
+pub fn cost_gather(
+    run: &mut PlannerRun<'_>,
+    path_id: types_pathnodes::PathId,
+    rel: RelId,
+    rows: Option<f64>,
+) {
     let rel_rows = run.root.rel(rel).rows;
     let (sub_startup, sub_total, sub_disabled, sub_id) = {
         let PathNode::GatherPath(g) = run.root.path(path_id) else {
@@ -694,7 +722,9 @@ fn pgrcolumnar_scan_col_fraction(
     use types_tuple::htup::FirstLowInvalidHeapAttributeNumber;
     {
         let r = run.root.rel(rel);
-        if r.amflags & types_pathnodes::AMFLAG_PGRCOLUMNAR == 0 || r.pgrcolumnar_col_bytes.is_empty() {
+        if r.amflags & types_pathnodes::AMFLAG_PGRCOLUMNAR == 0
+            || r.pgrcolumnar_col_bytes.is_empty()
+        {
             return 1.0;
         }
     }
@@ -968,7 +998,10 @@ pub fn set_namedtuplestore_size_estimates(run: &mut PlannerRun<'_>, rel: RelId) 
     debug_assert!(rti > 0);
     let enrtuples = {
         let rte = run.rte(rti);
-        debug_assert_eq!(rte.rtekind, types_nodes::parsenodes::RTEKind::RTE_NAMEDTUPLESTORE);
+        debug_assert_eq!(
+            rte.rtekind,
+            types_nodes::parsenodes::RTEKind::RTE_NAMEDTUPLESTORE
+        );
         rte.enrtuples
     };
     run.root.rel_mut(rel).tuples = if enrtuples < 0.0 { 1000.0 } else { enrtuples };
@@ -1023,7 +1056,12 @@ pub fn cost_recursive_union(
     };
     let (r_total, r_rows, r_disabled, r_width) = {
         let p = run.root.path(rterm).base();
-        (p.total_cost, p.rows, p.disabled_nodes, run.root.path_pathtarget(rterm).width)
+        (
+            p.total_cost,
+            p.rows,
+            p.disabled_nodes,
+            run.root.path_pathtarget(rterm).width,
+        )
     };
     // Live C contracts each `+= a * b` to fmadd on ARM64 (-ffp-contract;
     // docs/optimizations/adt_float-parity.md).
@@ -1850,7 +1888,10 @@ pub fn cost_agg_shape(
         // mul_add mirrors the C referee's fmadd (GCC fp-contract on aarch64
         // fuses `cost += expr * rows`); EXPLAIN costs are byte-compared and
         // a x.xx5 display boundary exposes the one-ulp difference.
-        startup_cost = aggcosts.transCost.per_tuple.mul_add(input_tuples, startup_cost);
+        startup_cost = aggcosts
+            .transCost
+            .per_tuple
+            .mul_add(input_tuples, startup_cost);
         startup_cost += aggcosts.finalCost.startup;
         startup_cost += aggcosts.finalCost.per_tuple;
         total_cost = startup_cost + gucs::cpu_tuple_cost();
@@ -1865,7 +1906,10 @@ pub fn cost_agg_shape(
             disabled_nodes += 1;
         }
         total_cost += aggcosts.transCost.startup;
-        total_cost = aggcosts.transCost.per_tuple.mul_add(input_tuples, total_cost);
+        total_cost = aggcosts
+            .transCost
+            .per_tuple
+            .mul_add(input_tuples, total_cost);
         total_cost =
             (gucs::cpu_operator_cost() * num_group_cols as f64).mul_add(input_tuples, total_cost);
         total_cost += aggcosts.finalCost.startup;
@@ -1878,9 +1922,12 @@ pub fn cost_agg_shape(
             disabled_nodes += 1;
         }
         startup_cost += aggcosts.transCost.startup;
-        startup_cost = aggcosts.transCost.per_tuple.mul_add(input_tuples, startup_cost);
-        startup_cost = (gucs::cpu_operator_cost() * num_group_cols as f64)
+        startup_cost = aggcosts
+            .transCost
+            .per_tuple
             .mul_add(input_tuples, startup_cost);
+        startup_cost =
+            (gucs::cpu_operator_cost() * num_group_cols as f64).mul_add(input_tuples, startup_cost);
         startup_cost += aggcosts.finalCost.startup;
         total_cost = startup_cost;
         total_cost = aggcosts.finalCost.per_tuple.mul_add(num_groups, total_cost);
@@ -1936,7 +1983,16 @@ pub fn cost_agg_shape(
         for &q in quals {
             let clause = *run.root.expr_node(q);
             rids.push(planner_seams::make_restrictinfo::call(
-                run, clause, true, false, false, false, 0, relids::relids_empty(), relids::relids_empty(), relids::relids_empty(),
+                run,
+                clause,
+                true,
+                false,
+                false,
+                false,
+                0,
+                relids::relids_empty(),
+                relids::relids_empty(),
+                relids::relids_empty(),
             )?);
         }
         let sel = planner_seams::clauselist_selectivity::call(
@@ -2031,7 +2087,10 @@ fn peel_projection(run: &PlannerRun<'_>, id: types_pathnodes::PathId) -> types_p
 /// AGGSPLIT_INITIAL_SERIAL AggPath whose group estimate clears the
 /// admission floor. Shared by cost_gather (transfer pricing) and the
 /// finalize-side shape check.
-pub fn lane_exchange_partial_agg(run: &PlannerRun<'_>, subpath_id: types_pathnodes::PathId) -> bool {
+pub fn lane_exchange_partial_agg(
+    run: &PlannerRun<'_>,
+    subpath_id: types_pathnodes::PathId,
+) -> bool {
     if !pgrcolumnar_feeds_plan(run) {
         return false;
     }
@@ -2070,9 +2129,7 @@ pub fn cost_agg_lane_exchange_adjust(
         && run.root.path(path_id).base().parallel_workers > 0;
     let is_final = aggsplit == types_pathnodes::AGGSPLIT_FINAL_DESERIAL
         && match run.root.path(subpath_id) {
-            PathNode::GatherPath(g) => g
-                .subpath
-                .is_some_and(|s| lane_exchange_partial_agg(run, s)),
+            PathNode::GatherPath(g) => g.subpath.is_some_and(|s| lane_exchange_partial_agg(run, s)),
             _ => false,
         };
     if !is_partial && !is_final {
@@ -2142,8 +2199,14 @@ pub fn cost_agg_leader_spill_adjust(
     if gather_sub.is_some_and(|s| lane_exchange_partial_agg(run, s)) {
         return;
     }
-    let (s_base, t_base) =
-        hashed_agg_spill_surcharge_scaled(run, aggcosts, num_groups, input_tuples, input_width, 1.0);
+    let (s_base, t_base) = hashed_agg_spill_surcharge_scaled(
+        run,
+        aggcosts,
+        num_groups,
+        input_tuples,
+        input_width,
+        1.0,
+    );
     let (s_honest, t_honest) = hashed_agg_spill_surcharge_scaled(
         run,
         aggcosts,
@@ -2184,7 +2247,10 @@ pub fn cost_group(
         (gucs::cpu_operator_cost() * input_tuples).mul_add(num_group_cols as f64, total_cost);
 
     if !quals.is_empty() {
-        let mut qual_cost = QualCost { startup: 0.0, per_tuple: 0.0 };
+        let mut qual_cost = QualCost {
+            startup: 0.0,
+            per_tuple: 0.0,
+        };
         for &q in quals {
             let node = *run.root.expr_node(q);
             let c = cost_qual_eval_node(Some(&mut *run), node)?;
@@ -2200,7 +2266,16 @@ pub fn cost_group(
         for &q in quals {
             let clause = *run.root.expr_node(q);
             rids.push(planner_seams::make_restrictinfo::call(
-                run, clause, true, false, false, false, 0, relids::relids_empty(), relids::relids_empty(), relids::relids_empty(),
+                run,
+                clause,
+                true,
+                false,
+                false,
+                false,
+                0,
+                relids::relids_empty(),
+                relids::relids_empty(),
+                relids::relids_empty(),
             )?);
         }
         let sel = planner_seams::clauselist_selectivity::call(
@@ -2328,9 +2403,7 @@ pub fn expr_type_typmod(node: Node<'_>) -> (u32, i32) {
             let v = node.as_var().unwrap();
             (v.vartype, v.vartypmod)
         }
-        NodeTag::T_PlaceHolderVar => {
-            expr_type_typmod(node.as_place_holder_var().unwrap().phexpr)
-        }
+        NodeTag::T_PlaceHolderVar => expr_type_typmod(node.as_place_holder_var().unwrap().phexpr),
         NodeTag::T_RelabelType => {
             let r = node.as_relabel_type().unwrap();
             (r.resulttype, r.resulttypmod)
@@ -3009,8 +3082,7 @@ pub fn cost_append(run: &mut PlannerRun<'_>, path_id: types_pathnodes::PathId) {
             disabled += s.disabled_nodes;
             rows = clamp_row_est(rows);
         }
-        total +=
-            append_nonpartial_cost(run, &subpaths, first_partial as usize, parallel_workers);
+        total += append_nonpartial_cost(run, &subpaths, first_partial as usize, parallel_workers);
         total += gucs::cpu_tuple_cost() * APPEND_CPU_COST_MULTIPLIER * rows;
         let p = run.root.path_mut(path_id).base_mut();
         p.rows = rows;
@@ -3047,7 +3119,9 @@ pub fn cost_append(run: &mut PlannerRun<'_>, path_id: types_pathnodes::PathId) {
                 if pathkeys_contained_in(&pathkeys, &s.pathkeys) {
                     (s.rows, s.disabled_nodes, s.startup_cost, s.total_cost)
                 } else {
-                    let width = s.pathtarget_id.map_or(0, |pt| run.root.pathtarget(pt).width);
+                    let width = s
+                        .pathtarget_id
+                        .map_or(0, |pt| run.root.pathtarget(pt).width);
                     let (d, st, t) = cost_sort_shape(
                         s.disabled_nodes,
                         s.total_cost,
@@ -3470,7 +3544,10 @@ pub fn final_cost_nestloop(
 
     let target = run.root.pathtarget(path.jpath.path.pathtarget_id.unwrap());
     startup_cost += target.cost.startup;
-    run_cost = target.cost.per_tuple.mul_add(path.jpath.path.rows, run_cost);
+    run_cost = target
+        .cost
+        .per_tuple
+        .mul_add(path.jpath.path.rows, run_cost);
 
     path.jpath.path.startup_cost = startup_cost;
     path.jpath.path.total_cost = startup_cost + run_cost;
@@ -3490,7 +3567,13 @@ pub fn initial_cost_hashjoin(
 ) -> JoinCostWorkspace {
     let (o_rows, o_startup, o_total, o_disabled, o_workers) = {
         let o = run.root.path(outer_path).base();
-        (o.rows, o.startup_cost, o.total_cost, o.disabled_nodes, o.parallel_workers)
+        (
+            o.rows,
+            o.startup_cost,
+            o.total_cost,
+            o.disabled_nodes,
+            o.parallel_workers,
+        )
     };
     let (i_rows, i_startup, i_total, i_disabled) = {
         let i = run.root.path(inner_path).base();
@@ -3601,11 +3684,8 @@ pub fn final_cost_hashjoin(
         innermcvfreq = 0.0;
         PgVec::new_in(run.mcx)
     } else {
-        let (other, bs) = planner_seams::estimate_multivariate_bucketsize::call(
-            run,
-            inner_parent,
-            &hcls,
-        )?;
+        let (other, bs) =
+            planner_seams::estimate_multivariate_bucketsize::call(run, inner_parent, &hcls)?;
         innerbucketsize = bs;
         other
     };
@@ -3719,7 +3799,10 @@ pub fn final_cost_hashjoin(
 
     let target = run.root.pathtarget(path.jpath.path.pathtarget_id.unwrap());
     startup_cost += target.cost.startup;
-    run_cost = target.cost.per_tuple.mul_add(path.jpath.path.rows, run_cost);
+    run_cost = target
+        .cost
+        .per_tuple
+        .mul_add(path.jpath.path.rows, run_cost);
 
     path.jpath.path.startup_cost = startup_cost;
     path.jpath.path.total_cost = startup_cost + run_cost;
@@ -4104,7 +4187,14 @@ pub fn set_joinrel_size_estimates<'mcx>(
     let outer_rows = run.root.rel(outer_rel).rows;
     let inner_rows = run.root.rel(inner_rel).rows;
     let nrows = calc_joinrel_size_estimate(
-        run, joinrel, outer_rel, inner_rel, outer_rows, inner_rows, sjinfo, restrictlist,
+        run,
+        joinrel,
+        outer_rel,
+        inner_rel,
+        outer_rows,
+        inner_rows,
+        sjinfo,
+        restrictlist,
     )?;
     run.root.rel_mut(joinrel).rows = nrows;
     Ok(())
@@ -4123,7 +4213,14 @@ pub fn get_parameterized_joinrel_size<'mcx>(
     let outer_rows = run.root.path(outer_path).base().rows;
     let inner_rows = run.root.path(inner_path).base().rows;
     let mut nrows = calc_joinrel_size_estimate(
-        run, rel, outer_rel, inner_rel, outer_rows, inner_rows, sjinfo, restrict_clauses,
+        run,
+        rel,
+        outer_rel,
+        inner_rel,
+        outer_rows,
+        inner_rows,
+        sjinfo,
+        restrict_clauses,
     )?;
     if nrows > run.root.rel(rel).rows {
         nrows = run.root.rel(rel).rows;
@@ -4233,7 +4330,9 @@ fn get_foreign_key_join_selectivity<'mcx>(
         // selectivity so it isn't double-counted.
         if run.root.foreign_key(fkid).nconst_ec > 0 {
             for i in 0..nkeys {
-                let Some(ec) = run.root.foreign_key(fkid).eclass[i] else { continue };
+                let Some(ec) = run.root.foreign_key(fkid).eclass[i] else {
+                    continue;
+                };
                 if !run.root.ec(ec).ec_has_const {
                     continue;
                 }
@@ -4362,8 +4461,8 @@ mod tests {
         assert_eq!(floor, 0.1, "the floor IS C's parallel_tuple_cost default");
         assert_eq!(floor, gucs::DEFAULT_GM_LEADER_MIN_TUPLE_COST);
         let rows = 6_680_000.0; // the witnessed catastrophe stream
-        // Product default (heap 0.01): uplift = (0.1-0.01)*rows*1.05 —
-        // the exact delta the witnessed ptc=0.1 bisection added.
+                                // Product default (heap 0.01): uplift = (0.1-0.01)*rows*1.05 —
+                                // the exact delta the witnessed ptc=0.1 bisection added.
         let up = super::gm_leader_uplift(0.01, rows);
         assert!((up - 0.09 * rows * 1.05).abs() < 1e-6);
         let bisection_total = 0.1 * rows * 1.05;
@@ -4399,12 +4498,19 @@ mod tests {
         let floor = gucs::gather_leader_min_tuple_cost();
         assert_eq!(floor, 0.1, "the floor IS C's parallel_tuple_cost default");
         assert_eq!(floor, gucs::DEFAULT_GATHER_LEADER_MIN_TUPLE_COST);
-        assert_eq!(floor, gucs::DEFAULT_GM_LEADER_MIN_TUPLE_COST, "GM-floor derivation parity");
+        assert_eq!(
+            floor,
+            gucs::DEFAULT_GM_LEADER_MIN_TUPLE_COST,
+            "GM-floor derivation parity"
+        );
         let rows = 8_713_000.0; // the witnessed ship-to-leader stream
-        // pgrcolumnar default (0.005): floored to the C rate.
+                                // pgrcolumnar default (0.005): floored to the C rate.
         let up_cb = super::gather_leader_uplift(0.005, rows);
         assert!((up_cb - 0.095 * rows).abs() < 1e-6);
-        assert!((0.005 * rows + up_cb - 0.1 * rows).abs() < 1e-6, "floored == C-rate total");
+        assert!(
+            (0.005 * rows + up_cb - 0.1 * rows).abs() < 1e-6,
+            "floored == C-rate total"
+        );
         // Heap default (0.01): floored the same way.
         let up = super::gather_leader_uplift(0.01, rows);
         assert!((up - 0.09 * rows).abs() < 1e-6);
@@ -4483,7 +4589,11 @@ mod tests {
     fn leader_hashagg_fixture<'m>(
         mcx: mcx::Mcx<'m>,
         columnar: bool,
-    ) -> (PlannerRun<'m>, types_pathnodes::PathId, types_pathnodes::PathId) {
+    ) -> (
+        PlannerRun<'m>,
+        types_pathnodes::PathId,
+        types_pathnodes::PathId,
+    ) {
         let mut run = PlannerRun::new(mcx);
         let mut rel = types_pathnodes::RelOptInfo::new(mcx);
         if columnar {
@@ -4492,12 +4602,14 @@ mod tests {
         let rid = run.root.alloc_rel(rel);
         run.root.simple_rel_array.push(Some(rid));
         let inner = run.root.alloc_path(PathNode::Path(scratch_path(mcx, rid)));
-        let gather = run.root.alloc_path(PathNode::GatherPath(types_pathnodes::GatherPath {
-            path: scratch_path(mcx, rid),
-            subpath: Some(inner),
-            single_copy: false,
-            num_workers: 16,
-        }));
+        let gather = run
+            .root
+            .alloc_path(PathNode::GatherPath(types_pathnodes::GatherPath {
+                path: scratch_path(mcx, rid),
+                subpath: Some(inner),
+                single_copy: false,
+                num_workers: 16,
+            }));
         let agg = run.root.alloc_path(PathNode::Path(scratch_path(mcx, rid)));
         (run, agg, gather)
     }
@@ -4523,9 +4635,18 @@ mod tests {
 
         // Precondition (the leader-spill disease): C's own pricing sees no spill.
         let (s_base, t_base) = hashed_agg_spill_surcharge_scaled(
-            &run, &costs, SPILLY_GROUPS, INPUT_TUPLES, INPUT_WIDTH, 1.0,
+            &run,
+            &costs,
+            SPILLY_GROUPS,
+            INPUT_TUPLES,
+            INPUT_WIDTH,
+            1.0,
         );
-        assert_eq!((s_base, t_base), (0.0, 0.0), "C estimate must fit the 8MB budget");
+        assert_eq!(
+            (s_base, t_base),
+            (0.0, 0.0),
+            "C estimate must fit the 8MB budget"
+        );
 
         let (before_s, before_t) = {
             let p = run.root.path(agg).base();
@@ -4592,8 +4713,14 @@ mod tests {
         let working_set = 10_000_000.0 * entry * scale;
         let budget_512mb = 524288.0 * 1024.0 * 4.0; // work_mem 512MB x hmm 4
         let budget_1gb = 1048576.0 * 1024.0 * 4.0; // work_mem 1GB x hmm 4
-        assert!(working_set > budget_512mb, "the 10M-group shape must spill-price at 512MB");
-        assert!(working_set < budget_1gb, "the 10M-group shape must stay delta-0 at 1GB");
+        assert!(
+            working_set > budget_512mb,
+            "the 10M-group shape must spill-price at 512MB"
+        );
+        assert!(
+            working_set < budget_1gb,
+            "the 10M-group shape must stay delta-0 at 1GB"
+        );
         // Calibration target: the measured ~3.03GB leader working set
         // (probe E2 TreeRssAnon peak) within 5%.
         assert!((working_set / 3.03e9 - 1.0).abs() < 0.05);
@@ -4608,7 +4735,9 @@ mod tests {
 
         // Serial hashagg (input is not a Gather): pure C costing kept.
         let (mut run, agg, gather) = leader_hashagg_fixture(mcx, true);
-        let PathNode::GatherPath(g) = run.root.path(gather) else { unreachable!() };
+        let PathNode::GatherPath(g) = run.root.path(gather) else {
+            unreachable!()
+        };
         let inner = g.subpath.unwrap();
         cost_agg_leader_spill_adjust(
             &mut run,

@@ -68,15 +68,34 @@ pub mod builtins {
     }
 
     const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-        FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+        FmgrBuiltin {
+            foid,
+            name,
+            nargs,
+            strict: true,
+            retset: false,
+            func,
+        }
     }
 
     const fn srf(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-        FmgrBuiltin { foid, name, nargs, strict: true, retset: true, func }
+        FmgrBuiltin {
+            foid,
+            name,
+            nargs,
+            strict: true,
+            retset: true,
+            func,
+        }
     }
 
     pub const FOREIGN_BUILTINS: &[FmgrBuiltin] = &[
-        b(2316, "postgresql_fdw_validator", 2, fc_postgresql_fdw_validator),
+        b(
+            2316,
+            "postgresql_fdw_validator",
+            2,
+            fc_postgresql_fdw_validator,
+        ),
         srf(2289, "pg_options_to_table", 1, fc_pg_options_to_table),
     ];
 }

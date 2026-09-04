@@ -16,11 +16,13 @@ use std::cell::Cell;
 use elog::ereport;
 use logical::{LogicalDecodingContext, OutputPluginContext, PluginOption};
 use repl_gram::{ReplOptionArg, StartReplicationCmd};
-use types_core::{InvalidXLogRecPtr, TimeLineID, TimestampTz, TransactionId, XLogRecPtr, XLogSegNo};
+use types_core::{
+    InvalidXLogRecPtr, TimeLineID, TimestampTz, TransactionId, XLogRecPtr, XLogSegNo,
+};
 use types_error::{ErrorLocation, PgResult, ERROR};
 use types_storage::waiteventset::{WL_SOCKET_READABLE, WL_SOCKET_WRITEABLE};
-use xlogreader_seams::XLogReaderState as ReaderView;
 use xlogreader::{XLogReaderRoutine, XLogSegmentRoutine};
+use xlogreader_seams::XLogReaderState as ReaderView;
 
 use crate::streaming::{
     proc_exit, reset_my_latch, WalSndCheckTimeOut, WalSndComputeSleeptime,
@@ -279,7 +281,11 @@ impl XLogReaderRoutine for LogicalWalSndPageRead {
             ereport(ERROR)
                 .errcode_for_file_access()
                 .errmsg("could not read from WAL: requested WAL segment slice is unavailable")
-                .finish(ErrorLocation::new(file!(), line!() as i32, "WALReadRaiseError"))?;
+                .finish(ErrorLocation::new(
+                    file!(),
+                    line!() as i32,
+                    "WALReadRaiseError",
+                ))?;
         }
 
         // The segment might have been recycled while we read it.

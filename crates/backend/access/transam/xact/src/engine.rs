@@ -78,10 +78,7 @@ fn RecordTransactionCommitGuts(xp: XsPtr, mcx: mcx::Mcx<'_>) -> PgResult<Transac
         debug_assert!(children.is_empty());
 
         if !inval_msgs.is_empty() {
-            standby_seams::log_standby_invalidations::call(
-                &inval_msgs,
-                relcache_init_file_inval,
-            )?;
+            standby_seams::log_standby_invalidations::call(&inval_msgs, relcache_init_file_inval)?;
             wrote_xlog = true; // not strictly necessary
         }
 
@@ -92,8 +89,8 @@ fn RecordTransactionCommitGuts(xp: XsPtr, mcx: mcx::Mcx<'_>) -> PgResult<Transac
         // Uninstalled origin seams = C defaults (origin.c globals); origin.c
         // is unported (wal.rs/xloginsert precedent).
         let session_origin = crate::wal::session_origin_or_default();
-        let replorigin = session_origin != types_core::InvalidRepOriginId
-            && session_origin != DoNotReplicateId;
+        let replorigin =
+            session_origin != types_core::InvalidRepOriginId && session_origin != DoNotReplicateId;
 
         // Commit critical section: force any concurrent checkpoint to wait
         // until we've updated pg_xact.
@@ -290,8 +287,8 @@ fn StartTransaction(xp: XsPtr) -> PgResult<()> {
 
     {
         let rate = (guc_tables::vars::log_xact_sample_rate.get().get)();
-        let sampled = rate != 0.0
-            && (rate == 1.0 || pg_prng::global_prng(pg_prng::PgPrng::next_f64) <= rate);
+        let sampled =
+            rate != 0.0 && (rate == 1.0 || pg_prng::global_prng(pg_prng::PgPrng::next_f64) <= rate);
         // One state borrow for the adjacent field writes (no seam between).
         xp.with(|s| {
             s.xact_is_sampled = sampled;
@@ -376,10 +373,7 @@ fn StartTransaction(xp: XsPtr) -> PgResult<()> {
 
     let transaction_timeout = lmgr_proc::globals::TransactionTimeout();
     if transaction_timeout > 0 {
-        timeout::enable_timeout_after(
-            timeout_seams::TRANSACTION_TIMEOUT,
-            transaction_timeout,
-        );
+        timeout::enable_timeout_after(timeout_seams::TRANSACTION_TIMEOUT, transaction_timeout);
     }
 
     ShowTransactionState("StartTransaction");
@@ -409,11 +403,14 @@ fn CommitTransaction(xp: XsPtr) -> PgResult<()> {
         }
     }
 
-    CallXactCallbacks(xp, if is_parallel_worker {
-        XACT_EVENT_PARALLEL_PRE_COMMIT
-    } else {
-        XACT_EVENT_PRE_COMMIT
-    })?;
+    CallXactCallbacks(
+        xp,
+        if is_parallel_worker {
+            XACT_EVENT_PARALLEL_PRE_COMMIT
+        } else {
+            XACT_EVENT_PRE_COMMIT
+        },
+    )?;
 
     parallel_seams::at_eoxact_parallel::call(true)?;
     let level = xp.with(|s| s.current().parallel_mode_level);
@@ -489,11 +486,14 @@ fn CommitTransaction(xp: XsPtr) -> PgResult<()> {
         latest_xid,
     )?;
 
-    CallXactCallbacks(xp, if is_parallel_worker {
-        XACT_EVENT_PARALLEL_COMMIT
-    } else {
-        XACT_EVENT_COMMIT
-    })?;
+    CallXactCallbacks(
+        xp,
+        if is_parallel_worker {
+            XACT_EVENT_PARALLEL_COMMIT
+        } else {
+            XACT_EVENT_COMMIT
+        },
+    )?;
 
     resowner::SetCurrentResourceOwner(types_resowner::ResourceOwner::NULL);
     release_transaction_owner_before_locks(true)?;
@@ -532,7 +532,9 @@ fn CommitTransaction(xp: XsPtr) -> PgResult<()> {
         tablecmds_seams::at_eoxact_on_commit_actions::call(true);
     }
     namespace_seams::at_eoxact_namespace::call(true, is_parallel_worker);
-    { let _ = smgr::AtEOXact_SMgr(); }
+    {
+        let _ = smgr::AtEOXact_SMgr();
+    }
     fd::AtEOXact_Files(true)?;
     // No combo CID can exist while combocid.c is unported (heapam's adjust_cmax
     // arm panics first); guarded.
@@ -613,7 +615,6 @@ fn PrepareTransaction(xp: XsPtr) -> PgResult<()> {
         be_fsstubs_seams::at_eoxact_large_object::call(true)?;
     }
 
-
     predicate_seams::pre_commit_check_for_serialization_failure::call()?;
 
     if (MyXactFlags() & XACT_FLAGS_ACCESSEDTEMPNAMESPACE) != 0 {
@@ -640,7 +641,8 @@ fn PrepareTransaction(xp: XsPtr) -> PgResult<()> {
 
     let prepared_at = timestamp_seams::get_current_timestamp::call();
 
-    let gid = xp.with(|s| s.prepare_gid.take())
+    let gid = xp
+        .with(|s| s.prepare_gid.take())
         .ok_or_else(|| PgError::error("PrepareTransaction: no prepared-transaction GID set"))?;
     let databaseid = init_small::globals::MyDatabaseId();
     twophase_seams::mark_as_preparing::call(
@@ -714,7 +716,6 @@ fn PrepareTransaction(xp: XsPtr) -> PgResult<()> {
 
     typcache_seams::at_eoxact_type_cache::call();
 
-
     pgstat::xact::PostPrepare_PgStat();
 
     inval::eoxact::PostPrepare_Inval()?;
@@ -738,7 +739,9 @@ fn PrepareTransaction(xp: XsPtr) -> PgResult<()> {
         tablecmds_seams::at_eoxact_on_commit_actions::call(true);
     }
     namespace_seams::at_eoxact_namespace::call(true, false);
-    { let _ = smgr::AtEOXact_SMgr(); }
+    {
+        let _ = smgr::AtEOXact_SMgr();
+    }
     fd::AtEOXact_Files(true)?;
     // No combo CID can exist while combocid.c is unported (heapam's adjust_cmax
     // arm panics first); guarded.
@@ -879,11 +882,14 @@ fn AbortTransaction(xp: XsPtr) -> PgResult<()> {
     )?;
 
     if xp.with(|s| s.current().has_resource_owner) {
-        CallXactCallbacks(xp, if is_parallel_worker {
-            XACT_EVENT_PARALLEL_ABORT
-        } else {
-            XACT_EVENT_ABORT
-        })?;
+        CallXactCallbacks(
+            xp,
+            if is_parallel_worker {
+                XACT_EVENT_PARALLEL_ABORT
+            } else {
+                XACT_EVENT_ABORT
+            },
+        )?;
 
         release_transaction_owner_before_locks(false)?;
         aio_seams::at_eoxact_aio::call(false);
@@ -906,7 +912,9 @@ fn AbortTransaction(xp: XsPtr) -> PgResult<()> {
             tablecmds_seams::at_eoxact_on_commit_actions::call(false);
         }
         namespace_seams::at_eoxact_namespace::call(false, is_parallel_worker);
-        { let _ = smgr::AtEOXact_SMgr(); }
+        {
+            let _ = smgr::AtEOXact_SMgr();
+        }
         fd::AtEOXact_Files(false)?;
         if combocid_seams::at_eoxact_combocid::is_installed() {
             combocid_seams::at_eoxact_combocid::call();
@@ -1259,7 +1267,10 @@ fn AbortCurrentTransactionInternal() -> PgResult<bool> {
             xp.with(|s| s.current_mut().block_state = TBLOCK_SUBABORT);
         }
 
-        TBLOCK_SUBBEGIN | TBLOCK_SUBRELEASE | TBLOCK_SUBCOMMIT | TBLOCK_SUBABORT_PENDING
+        TBLOCK_SUBBEGIN
+        | TBLOCK_SUBRELEASE
+        | TBLOCK_SUBCOMMIT
+        | TBLOCK_SUBABORT_PENDING
         | TBLOCK_SUBRESTART => {
             AbortSubTransaction()?;
             CleanupSubTransaction()?;
@@ -1990,7 +2001,6 @@ fn AbortSubTransaction() -> PgResult<()> {
         logical_seams::reset_logical_streaming_state::call();
     }
 
-
     let (my, parent) = subxact_ids();
     parallel_seams::at_eosubxact_parallel::call(false, my)?;
     xs(|s| s.current_mut().parallel_mode_level = 0);
@@ -1998,11 +2008,11 @@ fn AbortSubTransaction() -> PgResult<()> {
     if xs(|s| s.current().has_resource_owner) {
         trigger_seams::after_trigger_end_sub_xact::call(false)?;
         portalmem::AtSubAbort_Portals(
-                        my,
-                        parent,
-                        resowner::CurTransactionResourceOwner(),
-                        resowner::ResourceOwnerGetParent(resowner::CurTransactionResourceOwner()),
-                    )?;
+            my,
+            parent,
+            resowner::CurTransactionResourceOwner(),
+            resowner::ResourceOwnerGetParent(resowner::CurTransactionResourceOwner()),
+        )?;
         if be_fsstubs_seams::at_eosubxact_large_object::is_installed() {
             be_fsstubs_seams::at_eosubxact_large_object::call(false, my, parent)?;
         }
@@ -2099,8 +2109,7 @@ fn PushTransaction() -> PgResult<()> {
         let parent_nesting = parent.nesting_level;
         let parent_savepoint = parent.savepoint_level;
         let parent_started_in_recovery = parent.started_in_recovery;
-        let parent_parallel_child =
-            parent.parallel_mode_level != 0 || parent.parallel_child_xact;
+        let parent_parallel_child = parent.parallel_mode_level != 0 || parent.parallel_child_xact;
         let subid = s.current_sub_transaction_id;
         let prev_xact_read_only = s.XactReadOnly;
 
@@ -2140,7 +2149,10 @@ fn PopTransaction() -> PgResult<()> {
         ));
     }
     if xs(|s| s.stack_len()) <= 1 {
-        return Err(Box::new(PgError::new(FATAL, "PopTransaction with no parent")));
+        return Err(Box::new(PgError::new(
+            FATAL,
+            "PopTransaction with no parent",
+        )));
     }
     xs(|s| s.pop_node());
     Ok(())
@@ -2167,8 +2179,13 @@ pub fn SerializeTransactionState(out: &mut [u8]) -> PgResult<usize> {
     let (iso, deferrable, top_full, cur_full, cur_cid, xids) = xs(|s| {
         let xids: Vec<TransactionId> = if !s.parallel_current_xids.is_empty() {
             let mut xids = Vec::new();
-            if xids.try_reserve_exact(s.parallel_current_xids.len()).is_err() {
-                return Err(PgError::error("out of memory serializing transaction state"));
+            if xids
+                .try_reserve_exact(s.parallel_current_xids.len())
+                .is_err()
+            {
+                return Err(PgError::error(
+                    "out of memory serializing transaction state",
+                ));
             }
             xids.extend_from_slice(&s.parallel_current_xids);
             xids
@@ -2178,7 +2195,9 @@ pub fn SerializeTransactionState(out: &mut [u8]) -> PgResult<usize> {
                 let extra =
                     usize::from(node.full_transaction_id.is_valid()) + node.child_xids.len();
                 if workspace.try_reserve(extra).is_err() {
-                    return Err(PgError::error("out of memory serializing transaction state"));
+                    return Err(PgError::error(
+                        "out of memory serializing transaction state",
+                    ));
                 }
                 if node.full_transaction_id.is_valid() {
                     workspace.push(node.full_transaction_id.xid());
@@ -2200,7 +2219,9 @@ pub fn SerializeTransactionState(out: &mut [u8]) -> PgResult<usize> {
 
     let total = SERIALIZED_HEADER_SIZE + xids.len() * 4;
     if out.len() < total {
-        return Err(Box::new(PgError::error("transaction state buffer is too small")));
+        return Err(Box::new(PgError::error(
+            "transaction state buffer is too small",
+        )));
     }
     out[0..4].copy_from_slice(&iso.to_ne_bytes());
     out[4] = u8::from(deferrable);
@@ -2223,15 +2244,21 @@ pub fn StartParallelWorkerTransaction(tstatespace: &[u8]) -> PgResult<()> {
     StartTransaction(xp)?;
 
     if tstatespace.len() < SERIALIZED_HEADER_SIZE {
-        return Err(Box::new(PgError::error("invalid serialized transaction state")));
+        return Err(Box::new(PgError::error(
+            "invalid serialized transaction state",
+        )));
     }
     let n_xids = i32::from_ne_bytes(tstatespace[28..32].try_into().unwrap());
     if n_xids < 0 {
-        return Err(Box::new(PgError::error("invalid serialized transaction state")));
+        return Err(Box::new(PgError::error(
+            "invalid serialized transaction state",
+        )));
     }
     let total = SERIALIZED_HEADER_SIZE + n_xids as usize * 4;
     if tstatespace.len() < total {
-        return Err(Box::new(PgError::error("invalid serialized transaction state")));
+        return Err(Box::new(PgError::error(
+            "invalid serialized transaction state",
+        )));
     }
     let mut xids: Vec<TransactionId> = Vec::new();
     xids.try_reserve(n_xids as usize)
@@ -2253,7 +2280,9 @@ pub fn StartParallelWorkerTransaction(tstatespace: &[u8]) -> PgResult<()> {
         s.current_mut().full_transaction_id = FullTransactionId {
             value: u64::from_ne_bytes(tstatespace[16..24].try_into().unwrap()),
         };
-        s.set_command_id(CommandId::from_ne_bytes(tstatespace[24..28].try_into().unwrap()));
+        s.set_command_id(CommandId::from_ne_bytes(
+            tstatespace[24..28].try_into().unwrap(),
+        ));
         s.parallel_current_xids = xids;
         s.current_mut().block_state = TBLOCK_PARALLEL_INPROGRESS;
     });

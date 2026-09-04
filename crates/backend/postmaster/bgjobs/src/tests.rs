@@ -120,7 +120,8 @@ fn latch_wake_dispatches_promptly() {
     std::thread::sleep(Duration::from_millis(30));
     latch::set_latch(l);
     assert!(
-        wait_until(Duration::from_secs(10), || job.wakes.load(Ordering::SeqCst) >= 1),
+        wait_until(Duration::from_secs(10), || job.wakes.load(Ordering::SeqCst)
+            >= 1),
         "latch set must dispatch a Wake cycle"
     );
     assert!(job.cycles.load(Ordering::SeqCst) >= 2);
@@ -154,10 +155,14 @@ fn poke_collapses_deadline() {
         seen: AtomicUsize::new(0),
     });
     let id = d.register(Arc::clone(&job) as Arc<dyn BgJob>);
-    assert!(wait_until(Duration::from_secs(10), || job.seen.load(Ordering::SeqCst) == 1));
+    assert!(wait_until(Duration::from_secs(10), || job
+        .seen
+        .load(Ordering::SeqCst)
+        == 1));
     d.poke(id);
     assert!(
-        wait_until(Duration::from_secs(10), || job.seen.load(Ordering::SeqCst) == 2),
+        wait_until(Duration::from_secs(10), || job.seen.load(Ordering::SeqCst)
+            == 2),
         "poke must collapse the deadline"
     );
     let reasons = job.reasons.lock().unwrap();
@@ -248,20 +253,30 @@ fn two_latch_jobs_wake_independently() {
     // Wake A only.
     latch::set_latch(la);
     assert!(
-        wait_until(Duration::from_secs(10), || a.wakes.load(Ordering::SeqCst) >= 1),
+        wait_until(Duration::from_secs(10), || a.wakes.load(Ordering::SeqCst)
+            >= 1),
         "A's latch must dispatch A"
     );
     std::thread::sleep(Duration::from_millis(50));
-    assert_eq!(b.cycles.load(Ordering::SeqCst), 1, "B must not ride A's wake");
+    assert_eq!(
+        b.cycles.load(Ordering::SeqCst),
+        1,
+        "B must not ride A's wake"
+    );
 
     // Wake B only.
     latch::set_latch(lb);
     assert!(
-        wait_until(Duration::from_secs(10), || b.wakes.load(Ordering::SeqCst) >= 1),
+        wait_until(Duration::from_secs(10), || b.wakes.load(Ordering::SeqCst)
+            >= 1),
         "B's latch must dispatch B"
     );
     std::thread::sleep(Duration::from_millis(50));
-    assert_eq!(a.cycles.load(Ordering::SeqCst), 2, "A must not ride B's wake");
+    assert_eq!(
+        a.cycles.load(Ordering::SeqCst),
+        2,
+        "A must not ride B's wake"
+    );
 }
 
 /// Panic containment: a job whose cycle body panics is crash-retired
@@ -289,7 +304,9 @@ fn cycle_panic_crash_retires_job_dispatcher_survives() {
             panic!("synthetic cycle panic");
         }
     }
-    let bad = Arc::new(PanicJob { crashed: AtomicU64::new(0) });
+    let bad = Arc::new(PanicJob {
+        crashed: AtomicU64::new(0),
+    });
     let bad_id = d.register(Arc::clone(&bad) as Arc<dyn BgJob>);
 
     let good = Arc::new(TickJob {
@@ -302,7 +319,11 @@ fn cycle_panic_crash_retires_job_dispatcher_survives() {
     let good_id = d.register(Arc::clone(&good) as Arc<dyn BgJob>);
 
     assert!(wait_until(Duration::from_secs(10), || d.is_exited(bad_id)));
-    assert_eq!(bad.crashed.load(Ordering::SeqCst), 1, "crashed() exactly once");
+    assert_eq!(
+        bad.crashed.load(Ordering::SeqCst),
+        1,
+        "crashed() exactly once"
+    );
     assert!(
         wait_until(Duration::from_secs(10), || d.is_exited(good_id)),
         "dispatcher must survive and keep cycling the good job (got {})",

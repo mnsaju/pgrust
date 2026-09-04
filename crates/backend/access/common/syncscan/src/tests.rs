@@ -3,7 +3,10 @@ use std::sync::{Mutex, Once};
 
 #[test]
 fn lock_offset_is_sync_scan() {
-    assert_eq!(lwlock::GetLWTrancheName(SYNC_SCAN_LOCK_OFFSET as u16), "SyncScan");
+    assert_eq!(
+        lwlock::GetLWTrancheName(SYNC_SCAN_LOCK_OFFSET as u16),
+        "SyncScan"
+    );
 }
 
 #[test]

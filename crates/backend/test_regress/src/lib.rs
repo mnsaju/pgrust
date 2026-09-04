@@ -35,7 +35,10 @@ fn out_cstring(fcinfo: &Fcinfo, bytes: &[u8]) -> PgResult<Datum> {
 }
 
 fn out_text(fcinfo: &Fcinfo, payload: &[u8]) -> PgResult<Datum> {
-    Ok(varlena_result(varlena::cstring_to_text(fcinfo.result_mcx(), payload)?))
+    Ok(varlena_result(varlena::cstring_to_text(
+        fcinfo.result_mcx(),
+        payload,
+    )?))
 }
 
 // SAFETY contract of callers: the declared arg is a non-null live varlena.
@@ -51,7 +54,9 @@ unsafe fn arg_text_str(fcinfo: &Fcinfo, i: usize) -> PgResult<String> {
 
 // SAFETY: strict fn; catalog arg i is a non-null path varlena, live for the call.
 unsafe fn arg_path<'a>(fcinfo: &'a Fcinfo, i: usize) -> PgResult<::adt_geo::PathRef<'a>> {
-    Ok(::adt_geo::PathRef::from_payload(unsafe { fcinfo.arg_varlena_packed(i) }?.data()))
+    Ok(::adt_geo::PathRef::from_payload(
+        unsafe { fcinfo.arg_varlena_packed(i) }?.data(),
+    ))
 }
 
 fn fc_interpt_pp(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -86,9 +91,7 @@ fn fc_interpt_pp(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Dat
 /* ============================ overpaid(emp) ============================== */
 
 fn fc_overpaid(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
-    use ::types_tuple::{
-        heap_deform_tuple, HeapTupleData, HeapTupleHeaderData, ItemPointerData,
-    };
+    use ::types_tuple::{heap_deform_tuple, HeapTupleData, HeapTupleHeaderData, ItemPointerData};
     let (salary_null, salary) = {
         let mcx = fcinfo.result_mcx();
         // SAFETY: strict fn; catalog arg 0 is a non-null composite datum.
@@ -185,7 +188,11 @@ fn c_atof(bytes: &[u8]) -> f64 {
 // %f, both with trailing zeros (and a bare '.') stripped.
 fn fmt_g(x: f64) -> String {
     if x == 0.0 {
-        return if x.is_sign_negative() { "-0".into() } else { "0".into() };
+        return if x.is_sign_negative() {
+            "-0".into()
+        } else {
+            "0".into()
+        };
     }
     if x.is_nan() {
         return "nan".into();
@@ -344,7 +351,10 @@ fn fc_int44out(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum
     for (j, slot) in a.iter_mut().enumerate() {
         *slot = i32::from_ne_bytes(b[j * 4..j * 4 + 4].try_into().unwrap());
     }
-    out_cstring(fcinfo, format!("{},{},{},{}", a[0], a[1], a[2], a[3]).as_bytes())
+    out_cstring(
+        fcinfo,
+        format!("{},{},{},{}", a[0], a[1], a[2], a[3]).as_bytes(),
+    )
 }
 
 /* ==================== test_canonicalize_path(text) ======================= */
@@ -423,8 +433,7 @@ fn fc_make_tuple_indirect(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgR
         )
     };
 
-    let mut values: ::mcx::PgVec<'_, Datum> =
-        ::mcx::vec_from_elem_in(mcx, Datum::null(), ncolumns);
+    let mut values: ::mcx::PgVec<'_, Datum> = ::mcx::vec_from_elem_in(mcx, Datum::null(), ncolumns);
     let mut nulls: ::mcx::PgVec<'_, bool> = ::mcx::vec_from_elem_in(mcx, true, ncolumns);
     ::types_tuple::heap_deform_tuple(&tuple, &tupdesc, &mut values, &mut nulls);
 
@@ -463,7 +472,8 @@ fn fc_make_tuple_indirect(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgR
         let mut wrapper = [0u8; ::types_tuple::varatt::VARHDRSZ_EXTERNAL + 8];
         wrapper[0] = VARATT_EXTERNAL_MARKER;
         wrapper[1] = ::types_tuple::varatt::VARTAG_INDIRECT;
-        wrapper[::types_tuple::varatt::VARHDRSZ_EXTERNAL..].copy_from_slice(&target_ptr.to_ne_bytes());
+        wrapper[::types_tuple::varatt::VARHDRSZ_EXTERNAL..]
+            .copy_from_slice(&target_ptr.to_ne_bytes());
         let new_attr = byref_result(mcx, &wrapper)?;
 
         values[i] = new_attr;
@@ -509,7 +519,9 @@ fn fc_regress_setenv(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult
     let envvar = unsafe { arg_text_str(fcinfo, 0) }?;
     let envval = unsafe { arg_text_str(fcinfo, 1) }?;
     if !superuser::superuser()? {
-        return Err(err("must be superuser to change environment variables".to_string()));
+        return Err(err(
+            "must be superuser to change environment variables".to_string()
+        ));
     }
     std::env::set_var(&envvar, &envval);
     Ok(Datum::null())
@@ -563,13 +575,31 @@ fn expect_true(cond: bool, what: &str) -> PgResult<()> {
 
 fn test_atomic_flag() -> PgResult<()> {
     let flag = AtomicBool::new(false);
-    expect_true(!flag.load(Ordering::SeqCst), "pg_atomic_unlocked_test_flag(&flag)")?;
-    expect_true(!flag.swap(true, Ordering::SeqCst), "pg_atomic_test_set_flag(&flag)")?;
-    expect_true(flag.load(Ordering::SeqCst), "!pg_atomic_unlocked_test_flag(&flag)")?;
-    expect_true(flag.swap(true, Ordering::SeqCst), "!pg_atomic_test_set_flag(&flag)")?;
+    expect_true(
+        !flag.load(Ordering::SeqCst),
+        "pg_atomic_unlocked_test_flag(&flag)",
+    )?;
+    expect_true(
+        !flag.swap(true, Ordering::SeqCst),
+        "pg_atomic_test_set_flag(&flag)",
+    )?;
+    expect_true(
+        flag.load(Ordering::SeqCst),
+        "!pg_atomic_unlocked_test_flag(&flag)",
+    )?;
+    expect_true(
+        flag.swap(true, Ordering::SeqCst),
+        "!pg_atomic_test_set_flag(&flag)",
+    )?;
     flag.store(false, Ordering::SeqCst);
-    expect_true(!flag.load(Ordering::SeqCst), "pg_atomic_unlocked_test_flag(&flag)")?;
-    expect_true(!flag.swap(true, Ordering::SeqCst), "pg_atomic_test_set_flag(&flag)")?;
+    expect_true(
+        !flag.load(Ordering::SeqCst),
+        "pg_atomic_unlocked_test_flag(&flag)",
+    )?;
+    expect_true(
+        !flag.swap(true, Ordering::SeqCst),
+        "pg_atomic_test_set_flag(&flag)",
+    )?;
     Ok(())
 }
 
@@ -590,8 +620,16 @@ fn test_atomic_uint32() -> PgResult<()> {
     let d = var.load(SEQ).wrapping_sub(2);
     eq_u32(var.fetch_add(d, SEQ), 3, "pg_atomic_fetch_add_u32")?;
     eq_u32(var.fetch_sub(1, SEQ), 4, "pg_atomic_fetch_sub_u32")?;
-    eq_u32(var.fetch_sub(3, SEQ).wrapping_sub(3), 0, "pg_atomic_sub_fetch_u32")?;
-    eq_u32(var.fetch_add(10, SEQ).wrapping_add(10), 10, "pg_atomic_add_fetch_u32")?;
+    eq_u32(
+        var.fetch_sub(3, SEQ).wrapping_sub(3),
+        0,
+        "pg_atomic_sub_fetch_u32",
+    )?;
+    eq_u32(
+        var.fetch_add(10, SEQ).wrapping_add(10),
+        10,
+        "pg_atomic_add_fetch_u32",
+    )?;
     eq_u32(var.swap(5, SEQ), 10, "pg_atomic_exchange_u32")?;
     eq_u32(var.swap(0, SEQ), 5, "pg_atomic_exchange_u32")?;
 
@@ -602,8 +640,16 @@ fn test_atomic_uint32() -> PgResult<()> {
     eq_u32(var.fetch_add(INT_MAX, SEQ), INT_MAX, "fetch_add INT_MAX")?;
     var.fetch_add(2, SEQ);
     eq_u32(var.fetch_add(INT16_MAX, SEQ), 0, "fetch_add PG_INT16_MAX")?;
-    eq_u32(var.fetch_add(INT16_MAX + 1, SEQ), INT16_MAX, "fetch_add PG_INT16_MAX+1")?;
-    eq_u32(var.fetch_add(INT16_MIN, SEQ), 2 * INT16_MAX + 1, "fetch_add PG_INT16_MIN")?;
+    eq_u32(
+        var.fetch_add(INT16_MAX + 1, SEQ),
+        INT16_MAX,
+        "fetch_add PG_INT16_MAX+1",
+    )?;
+    eq_u32(
+        var.fetch_add(INT16_MIN, SEQ),
+        2 * INT16_MAX + 1,
+        "fetch_add PG_INT16_MIN",
+    )?;
     eq_u32(
         var.fetch_add(INT16_MIN.wrapping_sub(1), SEQ),
         INT16_MAX,
@@ -613,9 +659,19 @@ fn test_atomic_uint32() -> PgResult<()> {
     eq_u32(var.load(SEQ), u32::MAX, "pg_atomic_read_u32(&var)")?;
     eq_u32(var.fetch_sub(INT_MAX, SEQ), u32::MAX, "fetch_sub INT_MAX")?;
     eq_u32(var.load(SEQ), INT_MAX + 1, "pg_atomic_read_u32(&var)")?;
-    eq_u32(var.fetch_sub(INT_MAX, SEQ).wrapping_sub(INT_MAX), 1, "sub_fetch INT_MAX")?;
+    eq_u32(
+        var.fetch_sub(INT_MAX, SEQ).wrapping_sub(INT_MAX),
+        1,
+        "sub_fetch INT_MAX",
+    )?;
     var.fetch_sub(1, SEQ);
-    for exp in [INT16_MAX, INT16_MAX + 1, INT16_MIN, INT16_MIN.wrapping_sub(1), 10] {
+    for exp in [
+        INT16_MAX,
+        INT16_MAX + 1,
+        INT16_MIN,
+        INT16_MIN.wrapping_sub(1),
+        10,
+    ] {
         expect_true(
             var.compare_exchange(exp, 1, SEQ, SEQ).is_err(),
             "!pg_atomic_compare_exchange_u32(&var, &expected, 1)",
@@ -629,16 +685,36 @@ fn test_atomic_uint32() -> PgResult<()> {
         }
     }
     if !ok {
-        return Err(err("atomic_compare_exchange_u32() never succeeded".to_string()));
+        return Err(err(
+            "atomic_compare_exchange_u32() never succeeded".to_string()
+        ));
     }
     eq_u32(var.load(SEQ), 1, "pg_atomic_read_u32(&var)")?;
     var.store(0, SEQ);
-    expect_true(var.fetch_or(1, SEQ) & 1 == 0, "!(pg_atomic_fetch_or_u32(&var, 1) & 1)")?;
-    expect_true(var.fetch_or(2, SEQ) & 1 != 0, "pg_atomic_fetch_or_u32(&var, 2) & 1")?;
+    expect_true(
+        var.fetch_or(1, SEQ) & 1 == 0,
+        "!(pg_atomic_fetch_or_u32(&var, 1) & 1)",
+    )?;
+    expect_true(
+        var.fetch_or(2, SEQ) & 1 != 0,
+        "pg_atomic_fetch_or_u32(&var, 2) & 1",
+    )?;
     eq_u32(var.load(SEQ), 3, "pg_atomic_read_u32(&var)")?;
-    eq_u32(var.fetch_and(!2u32, SEQ) & 3, 3, "pg_atomic_fetch_and_u32(&var, ~2) & 3")?;
-    eq_u32(var.fetch_and(!1u32, SEQ), 1, "pg_atomic_fetch_and_u32(&var, ~1)")?;
-    eq_u32(var.fetch_and(!0u32, SEQ), 0, "pg_atomic_fetch_and_u32(&var, ~0)")?;
+    eq_u32(
+        var.fetch_and(!2u32, SEQ) & 3,
+        3,
+        "pg_atomic_fetch_and_u32(&var, ~2) & 3",
+    )?;
+    eq_u32(
+        var.fetch_and(!1u32, SEQ),
+        1,
+        "pg_atomic_fetch_and_u32(&var, ~1)",
+    )?;
+    eq_u32(
+        var.fetch_and(!0u32, SEQ),
+        0,
+        "pg_atomic_fetch_and_u32(&var, ~0)",
+    )?;
     Ok(())
 }
 
@@ -659,8 +735,16 @@ fn test_atomic_uint64() -> PgResult<()> {
     let d = var.load(SEQ).wrapping_sub(2);
     eq_u64(var.fetch_add(d, SEQ), 3, "pg_atomic_fetch_add_u64")?;
     eq_u64(var.fetch_sub(1, SEQ), 4, "pg_atomic_fetch_sub_u64")?;
-    eq_u64(var.fetch_sub(3, SEQ).wrapping_sub(3), 0, "pg_atomic_sub_fetch_u64")?;
-    eq_u64(var.fetch_add(10, SEQ).wrapping_add(10), 10, "pg_atomic_add_fetch_u64")?;
+    eq_u64(
+        var.fetch_sub(3, SEQ).wrapping_sub(3),
+        0,
+        "pg_atomic_sub_fetch_u64",
+    )?;
+    eq_u64(
+        var.fetch_add(10, SEQ).wrapping_add(10),
+        10,
+        "pg_atomic_add_fetch_u64",
+    )?;
     eq_u64(var.swap(5, SEQ), 10, "pg_atomic_exchange_u64")?;
     eq_u64(var.swap(0, SEQ), 5, "pg_atomic_exchange_u64")?;
     expect_true(
@@ -675,16 +759,36 @@ fn test_atomic_uint64() -> PgResult<()> {
         }
     }
     if !ok {
-        return Err(err("atomic_compare_exchange_u64() never succeeded".to_string()));
+        return Err(err(
+            "atomic_compare_exchange_u64() never succeeded".to_string()
+        ));
     }
     eq_u64(var.load(SEQ), 1, "pg_atomic_read_u64(&var)")?;
     var.store(0, SEQ);
-    expect_true(var.fetch_or(1, SEQ) & 1 == 0, "!(pg_atomic_fetch_or_u64(&var, 1) & 1)")?;
-    expect_true(var.fetch_or(2, SEQ) & 1 != 0, "pg_atomic_fetch_or_u64(&var, 2) & 1")?;
+    expect_true(
+        var.fetch_or(1, SEQ) & 1 == 0,
+        "!(pg_atomic_fetch_or_u64(&var, 1) & 1)",
+    )?;
+    expect_true(
+        var.fetch_or(2, SEQ) & 1 != 0,
+        "pg_atomic_fetch_or_u64(&var, 2) & 1",
+    )?;
     eq_u64(var.load(SEQ), 3, "pg_atomic_read_u64(&var)")?;
-    eq_u64(var.fetch_and(!2u64, SEQ) & 3, 3, "pg_atomic_fetch_and_u64(&var, ~2) & 3")?;
-    eq_u64(var.fetch_and(!1u64, SEQ), 1, "pg_atomic_fetch_and_u64(&var, ~1)")?;
-    eq_u64(var.fetch_and(!0u64, SEQ), 0, "pg_atomic_fetch_and_u64(&var, ~0)")?;
+    eq_u64(
+        var.fetch_and(!2u64, SEQ) & 3,
+        3,
+        "pg_atomic_fetch_and_u64(&var, ~2) & 3",
+    )?;
+    eq_u64(
+        var.fetch_and(!1u64, SEQ),
+        1,
+        "pg_atomic_fetch_and_u64(&var, ~1)",
+    )?;
+    eq_u64(
+        var.fetch_and(!0u64, SEQ),
+        0,
+        "pg_atomic_fetch_and_u64(&var, ~0)",
+    )?;
     Ok(())
 }
 
@@ -730,7 +834,9 @@ fn fc_is_catalog_text_unique_index_oid(
     _f: Option<&mut FmgrInfo>,
     fcinfo: &mut Fcinfo,
 ) -> PgResult<Datum> {
-    Ok(Datum::from_bool(catalog::IsCatalogTextUniqueIndexOid(fcinfo.arg_oid(0))))
+    Ok(Datum::from_bool(catalog::IsCatalogTextUniqueIndexOid(
+        fcinfo.arg_oid(0),
+    )))
 }
 
 /* ====================== test_support_func(internal) ====================== */
@@ -986,7 +1092,10 @@ fn fc_test_mblen_func(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResul
         // pg_mblen_cstr bounds the char at the first NUL; the bounded-range
         // walk over the NUL-clipped window raises the same invalid-char error.
         "pg_mblen_cstr" => {
-            let nul = at_offset.iter().position(|&b| b == 0).unwrap_or(at_offset.len());
+            let nul = at_offset
+                .iter()
+                .position(|&b| b == 0)
+                .unwrap_or(at_offset.len());
             mbutils::pg_mblen_range(&at_offset[..nul])?
         }
         "pg_mblen_with_len" => mbutils::pg_mblen_with_len(at_offset, (size - offset) as i32)?,
@@ -1065,10 +1174,15 @@ fn fc_test_wchars_to_text(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgR
 
 /* =================== test_valid_server_encoding(text) ==================== */
 
-fn fc_test_valid_server_encoding(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+fn fc_test_valid_server_encoding(
+    _f: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     // SAFETY: strict fn, text arg.
     let name = unsafe { arg_text_str(fcinfo, 0) }?;
-    Ok(Datum::from_bool(mbutils::pg_valid_server_encoding(&name) >= 0))
+    Ok(Datum::from_bool(
+        mbutils::pg_valid_server_encoding(&name) >= 0,
+    ))
 }
 
 /* ==================== binary_coercible(oid, oid) ========================= */
@@ -1076,7 +1190,9 @@ fn fc_test_valid_server_encoding(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo)
 fn fc_binary_coercible(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let srctype = fcinfo.arg_oid(0);
     let targettype = fcinfo.arg_oid(1);
-    Ok(Datum::from_bool(coerce::IsBinaryCoercible(srctype, targettype)?))
+    Ok(Datum::from_bool(coerce::IsBinaryCoercible(
+        srctype, targettype,
+    )?))
 }
 
 /* ======================= trigger_return_old() ============================ */
@@ -1085,7 +1201,9 @@ fn fc_trigger_return_old(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRe
     // SAFETY: a T_TRIGGER_DATA-tagged context is the live TriggerData the
     // trigger manager armed for this call.
     let Some(trigdata) = (unsafe { types_trigger_call::trigger_data_from_fcinfo(fcinfo) }) else {
-        return Err(err("trigger_return_old: not fired by trigger manager".to_string()));
+        return Err(err(
+            "trigger_return_old: not fired by trigger manager".to_string()
+        ));
     };
     Ok(Datum::from_usize(
         trigdata.tg_trigtuple.map_or(0, |p| p.as_ptr() as usize),
@@ -1175,7 +1293,11 @@ fn lookup(function: &str) -> Option<PGFunction> {
 }
 
 pub fn init_seams() {
-    dfmgr::register_builtin_library(dfmgr::BuiltinLibraryEntry { name: LIBRARY, lookup, pg_init: None });
+    dfmgr::register_builtin_library(dfmgr::BuiltinLibraryEntry {
+        name: LIBRARY,
+        lookup,
+        pg_init: None,
+    });
 }
 
 #[cfg(test)]
@@ -1213,17 +1335,40 @@ mod tests {
     #[test]
     fn lookup_covers_every_regress_symbol() {
         for sym in [
-            "interpt_pp", "overpaid", "widget_in", "widget_out", "pt_in_widget",
-            "reverse_name", "trigger_return_old", "int44in", "int44out",
-            "test_canonicalize_path", "make_tuple_indirect", "get_environ",
-            "regress_setenv", "wait_pid", "test_atomic_ops", "test_fdw_handler",
-            "is_catalog_text_unique_index_oid", "test_support_func",
-            "test_opclass_options_func", "test_enc_setup", "test_enc_conversion",
-            "test_bytea_to_text", "test_text_to_bytea", "test_mblen_func",
-            "test_text_to_wchars", "test_wchars_to_text",
-            "test_valid_server_encoding", "binary_coercible", "test_relpath",
+            "interpt_pp",
+            "overpaid",
+            "widget_in",
+            "widget_out",
+            "pt_in_widget",
+            "reverse_name",
+            "trigger_return_old",
+            "int44in",
+            "int44out",
+            "test_canonicalize_path",
+            "make_tuple_indirect",
+            "get_environ",
+            "regress_setenv",
+            "wait_pid",
+            "test_atomic_ops",
+            "test_fdw_handler",
+            "is_catalog_text_unique_index_oid",
+            "test_support_func",
+            "test_opclass_options_func",
+            "test_enc_setup",
+            "test_enc_conversion",
+            "test_bytea_to_text",
+            "test_text_to_bytea",
+            "test_mblen_func",
+            "test_text_to_wchars",
+            "test_wchars_to_text",
+            "test_valid_server_encoding",
+            "binary_coercible",
+            "test_relpath",
         ] {
-            assert!(lookup(sym).is_some(), "regress symbol {sym} missing from lookup");
+            assert!(
+                lookup(sym).is_some(),
+                "regress symbol {sym} missing from lookup"
+            );
         }
         assert!(lookup("nosuchsymbol").is_none());
     }

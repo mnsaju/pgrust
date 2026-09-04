@@ -95,15 +95,27 @@ pub(crate) fn pgstat_write_statsfile() -> std::io::Result<()> {
     }
     let mut out = Vec::with_capacity(8192);
     out.extend_from_slice(&PGSTAT_FILE_FORMAT_ID.to_ne_bytes());
-    push_fixed(&mut out, PGSTAT_KIND_ARCHIVER, &crate::archiver::export_archiver_stats());
-    push_fixed(&mut out, PGSTAT_KIND_BGWRITER, &crate::bgwriter::export_bgwriter_stats());
+    push_fixed(
+        &mut out,
+        PGSTAT_KIND_ARCHIVER,
+        &crate::archiver::export_archiver_stats(),
+    );
+    push_fixed(
+        &mut out,
+        PGSTAT_KIND_BGWRITER,
+        &crate::bgwriter::export_bgwriter_stats(),
+    );
     push_fixed(
         &mut out,
         PGSTAT_KIND_CHECKPOINTER,
         &crate::checkpointer::export_checkpointer_stats(),
     );
     push_fixed(&mut out, PGSTAT_KIND_IO, &crate::io::export_io_stats());
-    push_fixed(&mut out, PGSTAT_KIND_SLRU, &crate::slru::export_slru_stats());
+    push_fixed(
+        &mut out,
+        PGSTAT_KIND_SLRU,
+        &crate::slru::export_slru_stats(),
+    );
     push_fixed(&mut out, PGSTAT_KIND_WAL, &crate::wal::export_wal_stats());
     crate::shmem::export_entries(|key, entry| {
         if let SharedEntry::ReplSlot(slot_entry) = &entry {
@@ -280,7 +292,10 @@ pub(crate) fn pgstat_read_statsfile() {
         }
     };
     if read_statsfile_body(&buf).is_none() {
-        let _ = elog(LOG, format!("corrupted statistics file \"{}\"", path.display()));
+        let _ = elog(
+            LOG,
+            format!("corrupted statistics file \"{}\"", path.display()),
+        );
         pgstat_reset_after_failure();
     }
     let _ = fd::pg_unlink(path_s);
@@ -306,7 +321,9 @@ pub fn pgstat_before_server_shutdown(code: i32) -> PgResult<()> {
         if let Err(e) = pgstat_write_statsfile() {
             let _ = elog(
                 LOG,
-                format!("could not write statistics file \"{PGSTAT_STAT_PERMANENT_FILENAME}\": {e}"),
+                format!(
+                    "could not write statistics file \"{PGSTAT_STAT_PERMANENT_FILENAME}\": {e}"
+                ),
             );
         }
     }

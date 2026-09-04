@@ -455,7 +455,9 @@ impl Parser {
                 .into_error()
                 .into());
         }
-        Ok(ReplCommand::TimeLineHistory(TimeLineHistoryCmd { timeline }))
+        Ok(ReplCommand::TimeLineHistory(TimeLineHistoryCmd {
+            timeline,
+        }))
     }
 
     fn parse_upload_manifest(&mut self) -> PgResult<ReplCommand> {

@@ -139,7 +139,7 @@ impl<B: Bind> McxOwned<B> {
         }
     }
 
-/// Universal over `'mcx`: no external lifetime unifies, nothing smuggles out or in.
+    /// Universal over `'mcx`: no external lifetime unifies, nothing smuggles out or in.
     pub fn with<R>(&self, f: impl for<'mcx> FnOnce(&B::Out<'mcx>) -> R) -> R {
         // SAFETY: state live until Drop; shared reborrow shortened to &self.
         f(unsafe { self.state.as_ref() })
@@ -210,6 +210,8 @@ impl<B: Bind> Drop for McxOwned<B> {
 
 impl<B: Bind> core::fmt::Debug for McxOwned<B> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("McxOwned").field("ctx", self.context()).finish_non_exhaustive()
+        f.debug_struct("McxOwned")
+            .field("ctx", self.context())
+            .finish_non_exhaustive()
     }
 }

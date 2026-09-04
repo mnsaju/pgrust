@@ -26,7 +26,9 @@ pub struct TapeIdx(u32);
 #[inline]
 fn trailer_prev(buf: &[u8]) -> i64 {
     i64::from_ne_bytes(
-        buf[TAPE_BLOCK_PAYLOAD_SIZE..TAPE_BLOCK_PAYLOAD_SIZE + 8].try_into().unwrap(),
+        buf[TAPE_BLOCK_PAYLOAD_SIZE..TAPE_BLOCK_PAYLOAD_SIZE + 8]
+            .try_into()
+            .unwrap(),
     )
 }
 
@@ -545,7 +547,9 @@ fn seek_failed(blocknum: i64) -> Box<PgError> {
     Box::new(
         ::elog::ereport(::types_error::ERROR)
             .errcode_for_file_access()
-            .errmsg(format!("could not seek to block {blocknum} of temporary file"))
+            .errmsg(format!(
+                "could not seek to block {blocknum} of temporary file"
+            ))
             .into_error(),
     )
 }

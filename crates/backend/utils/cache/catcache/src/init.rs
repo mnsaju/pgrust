@@ -38,8 +38,9 @@ pub(crate) fn catalog_cache_initialize_cache(cache_id: i32) -> PgResult<()> {
         // ManuallyDrop'd, never-reset CacheMemoryContext (crate::STATE); it
         // is written once here and no path frees or rebuilds it, so
         // extending to 'static is sound.
-        let td: &'static TupleDescData<'static> =
-            unsafe { core::mem::transmute::<&TupleDescData<'_>, &'static TupleDescData<'static>>(leaked) };
+        let td: &'static TupleDescData<'static> = unsafe {
+            core::mem::transmute::<&TupleDescData<'_>, &'static TupleDescData<'static>>(leaked)
+        };
 
         let cache = st.cache_mut(cache_id);
         cache.cc_tupdesc = Some(td);
@@ -52,7 +53,11 @@ pub(crate) fn catalog_cache_initialize_cache(cache_id: i32) -> PgResult<()> {
                 debug_assert!(a.attnotnull);
                 a.atttypid
             } else if keyno[i] < 0 {
-                return Err(PgError::new(error::FATAL, "sys attributes are not supported in caches").into());
+                return Err(PgError::new(
+                    error::FATAL,
+                    "sys attributes are not supported in caches",
+                )
+                .into());
             } else {
                 OIDOID
             };
@@ -85,7 +90,10 @@ pub fn InitCatCachePhase2(cache_id: i32, touch_index: bool) -> PgResult<()> {
         let idesc = indexam::index_open(scratch.mcx(), indexoid, AccessShareLock)?;
         #[cfg(debug_assertions)]
         {
-            let idx = idesc.rd_index.as_ref().expect("index_open returned a non-index");
+            let idx = idesc
+                .rd_index
+                .as_ref()
+                .expect("index_open returned a non-index");
             debug_assert!(idx.indisunique && idx.indimmediate);
         }
         indexam::index_close(idesc, AccessShareLock)?;

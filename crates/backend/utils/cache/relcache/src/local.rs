@@ -9,7 +9,10 @@ use types_core::{
     RELPERSISTENCE_TEMP, RELPERSISTENCE_UNLOGGED,
 };
 use types_error::PgResult;
-use types_rel::{FormData_pg_class, RelationData, RELKIND_MATVIEW, RELKIND_PARTITIONED_TABLE, RELKIND_RELATION, REPLICA_IDENTITY_DEFAULT, REPLICA_IDENTITY_NOTHING};
+use types_rel::{
+    FormData_pg_class, RelationData, RELKIND_MATVIEW, RELKIND_PARTITIONED_TABLE, RELKIND_RELATION,
+    REPLICA_IDENTITY_DEFAULT, REPLICA_IDENTITY_NOTHING,
+};
 use types_tuple::{NameData, TupleConstr, TupleDescData};
 
 use crate::build::{RelationInitPhysicalAddr, RelationInitTableAccessMethod};
@@ -40,7 +43,11 @@ pub fn RelationBuildLocalRelation(
     let mcx = cache_mcx();
     let mut rd_att = tupdesc::CreateTupleDescCopy(mcx, tupDesc)?;
     rd_att.tdrefcount = 1;
-    rd_att.tdtypeid = if reltype != InvalidOid { reltype } else { types_core::RECORDOID };
+    rd_att.tdtypeid = if reltype != InvalidOid {
+        reltype
+    } else {
+        types_core::RECORDOID
+    };
     rd_att.tdtypmod = -1;
     let mut has_not_null = false;
     for i in 0..rd_att.natts as usize {
@@ -72,7 +79,9 @@ pub fn RelationBuildLocalRelation(
     let (rd_backend, rd_islocaltemp) = match relpersistence {
         RELPERSISTENCE_UNLOGGED | RELPERSISTENCE_PERMANENT => (INVALID_PROC_NUMBER, false),
         RELPERSISTENCE_TEMP => {
-            debug_assert!(namespace_seams::is_temp_or_temp_toast_namespace::call(relnamespace));
+            debug_assert!(namespace_seams::is_temp_or_temp_toast_namespace::call(
+                relnamespace
+            ));
             (init_small::globals::ProcNumberForTempRelations(), true)
         }
         _ => panic!(
@@ -91,7 +100,11 @@ pub fn RelationBuildLocalRelation(
         relam: accessmtd,
         // Mapped relations keep relfilenode 0; RelationInitPhysicalAddr
         // consults the map (relcache.c RelationBuildLocalRelation).
-        relfilenode: if mapped_relation { types_core::InvalidRelFileNumber } else { relfilenumber },
+        relfilenode: if mapped_relation {
+            types_core::InvalidRelFileNumber
+        } else {
+            relfilenumber
+        },
         reltablespace,
         // C's palloc0 leaves relpages/reltuples/relallvisible zero; the pokes
         // in AddNewRelationTuple (tables: reltuples -1) happen at insert time.
@@ -145,13 +158,16 @@ pub fn RelationBuildLocalRelation(
         pgstat_enabled: Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: PgVec::new_in(mcx),
         rd_supportinfo: core::cell::RefCell::new(Vec::new()),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     };
     if mapped_relation {
         relmapper_seams::relation_map_update_map::call(

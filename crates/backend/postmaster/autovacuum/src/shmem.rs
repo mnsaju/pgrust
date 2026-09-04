@@ -142,8 +142,7 @@ pub fn set_nworkers_for_balance(n: u32) {
 
 pub fn av_worker_available_locked(l: &AvLists) -> bool {
     let free_slots = l.free_workers.len() as i32;
-    let reserved_slots =
-        (autovacuum_worker_slots() - crate::autovacuum_max_workers()).max(0);
+    let reserved_slots = (autovacuum_worker_slots() - crate::autovacuum_max_workers()).max(0);
     free_slots > reserved_slots
 }
 

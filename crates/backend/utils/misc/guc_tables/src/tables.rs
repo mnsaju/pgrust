@@ -210,276 +210,988 @@ impl GucSetting {
 }
 
 pub static bytea_output_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "escape", val: BYTEA_OUTPUT_ESCAPE, hidden: false },
-    config_enum_entry { name: "hex", val: BYTEA_OUTPUT_HEX, hidden: false },
+    config_enum_entry {
+        name: "escape",
+        val: BYTEA_OUTPUT_ESCAPE,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "hex",
+        val: BYTEA_OUTPUT_HEX,
+        hidden: false,
+    },
 ];
 
 pub static client_message_level_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "debug5", val: DEBUG5, hidden: false },
-    config_enum_entry { name: "debug4", val: DEBUG4, hidden: false },
-    config_enum_entry { name: "debug3", val: DEBUG3, hidden: false },
-    config_enum_entry { name: "debug2", val: DEBUG2, hidden: false },
-    config_enum_entry { name: "debug1", val: DEBUG1, hidden: false },
-    config_enum_entry { name: "debug", val: DEBUG2, hidden: true },
-    config_enum_entry { name: "log", val: LOG, hidden: false },
-    config_enum_entry { name: "info", val: INFO, hidden: true },
-    config_enum_entry { name: "notice", val: NOTICE, hidden: false },
-    config_enum_entry { name: "warning", val: WARNING, hidden: false },
-    config_enum_entry { name: "error", val: ERROR, hidden: false },
+    config_enum_entry {
+        name: "debug5",
+        val: DEBUG5,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "debug4",
+        val: DEBUG4,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "debug3",
+        val: DEBUG3,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "debug2",
+        val: DEBUG2,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "debug1",
+        val: DEBUG1,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "debug",
+        val: DEBUG2,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "log",
+        val: LOG,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "info",
+        val: INFO,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "notice",
+        val: NOTICE,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "warning",
+        val: WARNING,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "error",
+        val: ERROR,
+        hidden: false,
+    },
 ];
 
 pub static server_message_level_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "debug5", val: DEBUG5, hidden: false },
-    config_enum_entry { name: "debug4", val: DEBUG4, hidden: false },
-    config_enum_entry { name: "debug3", val: DEBUG3, hidden: false },
-    config_enum_entry { name: "debug2", val: DEBUG2, hidden: false },
-    config_enum_entry { name: "debug1", val: DEBUG1, hidden: false },
-    config_enum_entry { name: "debug", val: DEBUG2, hidden: true },
-    config_enum_entry { name: "info", val: INFO, hidden: false },
-    config_enum_entry { name: "notice", val: NOTICE, hidden: false },
-    config_enum_entry { name: "warning", val: WARNING, hidden: false },
-    config_enum_entry { name: "error", val: ERROR, hidden: false },
-    config_enum_entry { name: "log", val: LOG, hidden: false },
-    config_enum_entry { name: "fatal", val: FATAL, hidden: false },
-    config_enum_entry { name: "panic", val: PANIC, hidden: false },
+    config_enum_entry {
+        name: "debug5",
+        val: DEBUG5,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "debug4",
+        val: DEBUG4,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "debug3",
+        val: DEBUG3,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "debug2",
+        val: DEBUG2,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "debug1",
+        val: DEBUG1,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "debug",
+        val: DEBUG2,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "info",
+        val: INFO,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "notice",
+        val: NOTICE,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "warning",
+        val: WARNING,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "error",
+        val: ERROR,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "log",
+        val: LOG,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "fatal",
+        val: FATAL,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "panic",
+        val: PANIC,
+        hidden: false,
+    },
 ];
 
 pub static hnsw_iterative_scan_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "off", val: 0, hidden: false },
-    config_enum_entry { name: "relaxed_order", val: 1, hidden: false },
-    config_enum_entry { name: "strict_order", val: 2, hidden: false },
+    config_enum_entry {
+        name: "off",
+        val: 0,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "relaxed_order",
+        val: 1,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "strict_order",
+        val: 2,
+        hidden: false,
+    },
 ];
 
 pub static intervalstyle_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "postgres", val: INTSTYLE_POSTGRES, hidden: false },
-    config_enum_entry { name: "postgres_verbose", val: INTSTYLE_POSTGRES_VERBOSE, hidden: false },
-    config_enum_entry { name: "sql_standard", val: INTSTYLE_SQL_STANDARD, hidden: false },
-    config_enum_entry { name: "iso_8601", val: INTSTYLE_ISO_8601, hidden: false },
+    config_enum_entry {
+        name: "postgres",
+        val: INTSTYLE_POSTGRES,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "postgres_verbose",
+        val: INTSTYLE_POSTGRES_VERBOSE,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "sql_standard",
+        val: INTSTYLE_SQL_STANDARD,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "iso_8601",
+        val: INTSTYLE_ISO_8601,
+        hidden: false,
+    },
 ];
 
 pub static icu_validation_level_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "disabled", val: -(1), hidden: false },
-    config_enum_entry { name: "debug5", val: DEBUG5, hidden: false },
-    config_enum_entry { name: "debug4", val: DEBUG4, hidden: false },
-    config_enum_entry { name: "debug3", val: DEBUG3, hidden: false },
-    config_enum_entry { name: "debug2", val: DEBUG2, hidden: false },
-    config_enum_entry { name: "debug1", val: DEBUG1, hidden: false },
-    config_enum_entry { name: "debug", val: DEBUG2, hidden: true },
-    config_enum_entry { name: "log", val: LOG, hidden: false },
-    config_enum_entry { name: "info", val: INFO, hidden: true },
-    config_enum_entry { name: "notice", val: NOTICE, hidden: false },
-    config_enum_entry { name: "warning", val: WARNING, hidden: false },
-    config_enum_entry { name: "error", val: ERROR, hidden: false },
+    config_enum_entry {
+        name: "disabled",
+        val: -(1),
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "debug5",
+        val: DEBUG5,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "debug4",
+        val: DEBUG4,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "debug3",
+        val: DEBUG3,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "debug2",
+        val: DEBUG2,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "debug1",
+        val: DEBUG1,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "debug",
+        val: DEBUG2,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "log",
+        val: LOG,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "info",
+        val: INFO,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "notice",
+        val: NOTICE,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "warning",
+        val: WARNING,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "error",
+        val: ERROR,
+        hidden: false,
+    },
 ];
 
 pub static log_error_verbosity_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "terse", val: PGERROR_TERSE, hidden: false },
-    config_enum_entry { name: "default", val: PGERROR_DEFAULT, hidden: false },
-    config_enum_entry { name: "verbose", val: PGERROR_VERBOSE, hidden: false },
+    config_enum_entry {
+        name: "terse",
+        val: PGERROR_TERSE,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "default",
+        val: PGERROR_DEFAULT,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "verbose",
+        val: PGERROR_VERBOSE,
+        hidden: false,
+    },
 ];
 
 pub static log_statement_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "none", val: LOGSTMT_NONE, hidden: false },
-    config_enum_entry { name: "ddl", val: LOGSTMT_DDL, hidden: false },
-    config_enum_entry { name: "mod", val: LOGSTMT_MOD, hidden: false },
-    config_enum_entry { name: "all", val: LOGSTMT_ALL, hidden: false },
+    config_enum_entry {
+        name: "none",
+        val: LOGSTMT_NONE,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "ddl",
+        val: LOGSTMT_DDL,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "mod",
+        val: LOGSTMT_MOD,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "all",
+        val: LOGSTMT_ALL,
+        hidden: false,
+    },
 ];
 
 pub static isolation_level_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "serializable", val: XACT_SERIALIZABLE, hidden: false },
-    config_enum_entry { name: "repeatable read", val: XACT_REPEATABLE_READ, hidden: false },
-    config_enum_entry { name: "read committed", val: XACT_READ_COMMITTED, hidden: false },
-    config_enum_entry { name: "read uncommitted", val: XACT_READ_UNCOMMITTED, hidden: false },
+    config_enum_entry {
+        name: "serializable",
+        val: XACT_SERIALIZABLE,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "repeatable read",
+        val: XACT_REPEATABLE_READ,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "read committed",
+        val: XACT_READ_COMMITTED,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "read uncommitted",
+        val: XACT_READ_UNCOMMITTED,
+        hidden: false,
+    },
 ];
 
 pub static session_replication_role_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "origin", val: SESSION_REPLICATION_ROLE_ORIGIN, hidden: false },
-    config_enum_entry { name: "replica", val: SESSION_REPLICATION_ROLE_REPLICA, hidden: false },
-    config_enum_entry { name: "local", val: SESSION_REPLICATION_ROLE_LOCAL, hidden: false },
+    config_enum_entry {
+        name: "origin",
+        val: SESSION_REPLICATION_ROLE_ORIGIN,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "replica",
+        val: SESSION_REPLICATION_ROLE_REPLICA,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "local",
+        val: SESSION_REPLICATION_ROLE_LOCAL,
+        hidden: false,
+    },
 ];
 
 pub static syslog_facility_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "local0", val: LOG_LOCAL0, hidden: false },
-    config_enum_entry { name: "local1", val: LOG_LOCAL1, hidden: false },
-    config_enum_entry { name: "local2", val: LOG_LOCAL2, hidden: false },
-    config_enum_entry { name: "local3", val: LOG_LOCAL3, hidden: false },
-    config_enum_entry { name: "local4", val: LOG_LOCAL4, hidden: false },
-    config_enum_entry { name: "local5", val: LOG_LOCAL5, hidden: false },
-    config_enum_entry { name: "local6", val: LOG_LOCAL6, hidden: false },
-    config_enum_entry { name: "local7", val: LOG_LOCAL7, hidden: false },
+    config_enum_entry {
+        name: "local0",
+        val: LOG_LOCAL0,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "local1",
+        val: LOG_LOCAL1,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "local2",
+        val: LOG_LOCAL2,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "local3",
+        val: LOG_LOCAL3,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "local4",
+        val: LOG_LOCAL4,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "local5",
+        val: LOG_LOCAL5,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "local6",
+        val: LOG_LOCAL6,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "local7",
+        val: LOG_LOCAL7,
+        hidden: false,
+    },
 ];
 
 pub static track_function_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "none", val: TRACK_FUNC_OFF, hidden: false },
-    config_enum_entry { name: "pl", val: TRACK_FUNC_PL, hidden: false },
-    config_enum_entry { name: "all", val: TRACK_FUNC_ALL, hidden: false },
+    config_enum_entry {
+        name: "none",
+        val: TRACK_FUNC_OFF,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "pl",
+        val: TRACK_FUNC_PL,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "all",
+        val: TRACK_FUNC_ALL,
+        hidden: false,
+    },
 ];
 
 pub static stats_fetch_consistency: &[config_enum_entry] = &[
-    config_enum_entry { name: "none", val: PGSTAT_FETCH_CONSISTENCY_NONE, hidden: false },
-    config_enum_entry { name: "cache", val: PGSTAT_FETCH_CONSISTENCY_CACHE, hidden: false },
-    config_enum_entry { name: "snapshot", val: PGSTAT_FETCH_CONSISTENCY_SNAPSHOT, hidden: false },
+    config_enum_entry {
+        name: "none",
+        val: PGSTAT_FETCH_CONSISTENCY_NONE,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "cache",
+        val: PGSTAT_FETCH_CONSISTENCY_CACHE,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "snapshot",
+        val: PGSTAT_FETCH_CONSISTENCY_SNAPSHOT,
+        hidden: false,
+    },
 ];
 
 pub static xmlbinary_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "base64", val: XMLBINARY_BASE64, hidden: false },
-    config_enum_entry { name: "hex", val: XMLBINARY_HEX, hidden: false },
+    config_enum_entry {
+        name: "base64",
+        val: XMLBINARY_BASE64,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "hex",
+        val: XMLBINARY_HEX,
+        hidden: false,
+    },
 ];
 
 pub static xmloption_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "content", val: XMLOPTION_CONTENT, hidden: false },
-    config_enum_entry { name: "document", val: XMLOPTION_DOCUMENT, hidden: false },
+    config_enum_entry {
+        name: "content",
+        val: XMLOPTION_CONTENT,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "document",
+        val: XMLOPTION_DOCUMENT,
+        hidden: false,
+    },
 ];
 
 pub static regex_engine_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "auto", val: REGEX_ENGINE_AUTO, hidden: false },
-    config_enum_entry { name: "spencer", val: REGEX_ENGINE_SPENCER, hidden: false },
-    config_enum_entry { name: "re2", val: REGEX_ENGINE_RE2, hidden: false },
+    config_enum_entry {
+        name: "auto",
+        val: REGEX_ENGINE_AUTO,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "spencer",
+        val: REGEX_ENGINE_SPENCER,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "re2",
+        val: REGEX_ENGINE_RE2,
+        hidden: false,
+    },
 ];
 
 pub static pgrust_parallel_engine_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "legacy", val: PARALLEL_ENGINE_LEGACY, hidden: false },
-    config_enum_entry { name: "runtime", val: PARALLEL_ENGINE_RUNTIME, hidden: false },
+    config_enum_entry {
+        name: "legacy",
+        val: PARALLEL_ENGINE_LEGACY,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "runtime",
+        val: PARALLEL_ENGINE_RUNTIME,
+        hidden: false,
+    },
 ];
 
 pub static backslash_quote_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "safe_encoding", val: BACKSLASH_QUOTE_SAFE_ENCODING, hidden: false },
-    config_enum_entry { name: "on", val: BACKSLASH_QUOTE_ON, hidden: false },
-    config_enum_entry { name: "off", val: BACKSLASH_QUOTE_OFF, hidden: false },
-    config_enum_entry { name: "true", val: BACKSLASH_QUOTE_ON, hidden: true },
-    config_enum_entry { name: "false", val: BACKSLASH_QUOTE_OFF, hidden: true },
-    config_enum_entry { name: "yes", val: BACKSLASH_QUOTE_ON, hidden: true },
-    config_enum_entry { name: "no", val: BACKSLASH_QUOTE_OFF, hidden: true },
-    config_enum_entry { name: "1", val: BACKSLASH_QUOTE_ON, hidden: true },
-    config_enum_entry { name: "0", val: BACKSLASH_QUOTE_OFF, hidden: true },
+    config_enum_entry {
+        name: "safe_encoding",
+        val: BACKSLASH_QUOTE_SAFE_ENCODING,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "on",
+        val: BACKSLASH_QUOTE_ON,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "off",
+        val: BACKSLASH_QUOTE_OFF,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "true",
+        val: BACKSLASH_QUOTE_ON,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "false",
+        val: BACKSLASH_QUOTE_OFF,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "yes",
+        val: BACKSLASH_QUOTE_ON,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "no",
+        val: BACKSLASH_QUOTE_OFF,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "1",
+        val: BACKSLASH_QUOTE_ON,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "0",
+        val: BACKSLASH_QUOTE_OFF,
+        hidden: true,
+    },
 ];
 
 pub static compute_query_id_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "auto", val: COMPUTE_QUERY_ID_AUTO, hidden: false },
-    config_enum_entry { name: "regress", val: COMPUTE_QUERY_ID_REGRESS, hidden: false },
-    config_enum_entry { name: "on", val: COMPUTE_QUERY_ID_ON, hidden: false },
-    config_enum_entry { name: "off", val: COMPUTE_QUERY_ID_OFF, hidden: false },
-    config_enum_entry { name: "true", val: COMPUTE_QUERY_ID_ON, hidden: true },
-    config_enum_entry { name: "false", val: COMPUTE_QUERY_ID_OFF, hidden: true },
-    config_enum_entry { name: "yes", val: COMPUTE_QUERY_ID_ON, hidden: true },
-    config_enum_entry { name: "no", val: COMPUTE_QUERY_ID_OFF, hidden: true },
-    config_enum_entry { name: "1", val: COMPUTE_QUERY_ID_ON, hidden: true },
-    config_enum_entry { name: "0", val: COMPUTE_QUERY_ID_OFF, hidden: true },
+    config_enum_entry {
+        name: "auto",
+        val: COMPUTE_QUERY_ID_AUTO,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "regress",
+        val: COMPUTE_QUERY_ID_REGRESS,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "on",
+        val: COMPUTE_QUERY_ID_ON,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "off",
+        val: COMPUTE_QUERY_ID_OFF,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "true",
+        val: COMPUTE_QUERY_ID_ON,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "false",
+        val: COMPUTE_QUERY_ID_OFF,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "yes",
+        val: COMPUTE_QUERY_ID_ON,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "no",
+        val: COMPUTE_QUERY_ID_OFF,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "1",
+        val: COMPUTE_QUERY_ID_ON,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "0",
+        val: COMPUTE_QUERY_ID_OFF,
+        hidden: true,
+    },
 ];
 
 pub static pgss_track_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "none", val: PGSS_TRACK_NONE, hidden: false },
-    config_enum_entry { name: "top", val: PGSS_TRACK_TOP, hidden: false },
-    config_enum_entry { name: "all", val: PGSS_TRACK_ALL, hidden: false },
+    config_enum_entry {
+        name: "none",
+        val: PGSS_TRACK_NONE,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "top",
+        val: PGSS_TRACK_TOP,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "all",
+        val: PGSS_TRACK_ALL,
+        hidden: false,
+    },
 ];
 
 // auto_explain.c format_options.
 pub static auto_explain_format_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "text", val: EXPLAIN_FORMAT_TEXT, hidden: false },
-    config_enum_entry { name: "xml", val: EXPLAIN_FORMAT_XML, hidden: false },
-    config_enum_entry { name: "json", val: EXPLAIN_FORMAT_JSON, hidden: false },
-    config_enum_entry { name: "yaml", val: EXPLAIN_FORMAT_YAML, hidden: false },
+    config_enum_entry {
+        name: "text",
+        val: EXPLAIN_FORMAT_TEXT,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "xml",
+        val: EXPLAIN_FORMAT_XML,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "json",
+        val: EXPLAIN_FORMAT_JSON,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "yaml",
+        val: EXPLAIN_FORMAT_YAML,
+        hidden: false,
+    },
 ];
 
 // auto_explain.c loglevel_options (a strict subset of the server levels).
 pub static auto_explain_loglevel_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "debug5", val: DEBUG5, hidden: false },
-    config_enum_entry { name: "debug4", val: DEBUG4, hidden: false },
-    config_enum_entry { name: "debug3", val: DEBUG3, hidden: false },
-    config_enum_entry { name: "debug2", val: DEBUG2, hidden: false },
-    config_enum_entry { name: "debug1", val: DEBUG1, hidden: false },
-    config_enum_entry { name: "debug", val: DEBUG2, hidden: true },
-    config_enum_entry { name: "info", val: INFO, hidden: false },
-    config_enum_entry { name: "notice", val: NOTICE, hidden: false },
-    config_enum_entry { name: "warning", val: WARNING, hidden: false },
-    config_enum_entry { name: "log", val: LOG, hidden: false },
+    config_enum_entry {
+        name: "debug5",
+        val: DEBUG5,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "debug4",
+        val: DEBUG4,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "debug3",
+        val: DEBUG3,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "debug2",
+        val: DEBUG2,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "debug1",
+        val: DEBUG1,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "debug",
+        val: DEBUG2,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "info",
+        val: INFO,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "notice",
+        val: NOTICE,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "warning",
+        val: WARNING,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "log",
+        val: LOG,
+        hidden: false,
+    },
 ];
 
 pub static constraint_exclusion_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "partition", val: CONSTRAINT_EXCLUSION_PARTITION, hidden: false },
-    config_enum_entry { name: "on", val: CONSTRAINT_EXCLUSION_ON, hidden: false },
-    config_enum_entry { name: "off", val: CONSTRAINT_EXCLUSION_OFF, hidden: false },
-    config_enum_entry { name: "true", val: CONSTRAINT_EXCLUSION_ON, hidden: true },
-    config_enum_entry { name: "false", val: CONSTRAINT_EXCLUSION_OFF, hidden: true },
-    config_enum_entry { name: "yes", val: CONSTRAINT_EXCLUSION_ON, hidden: true },
-    config_enum_entry { name: "no", val: CONSTRAINT_EXCLUSION_OFF, hidden: true },
-    config_enum_entry { name: "1", val: CONSTRAINT_EXCLUSION_ON, hidden: true },
-    config_enum_entry { name: "0", val: CONSTRAINT_EXCLUSION_OFF, hidden: true },
+    config_enum_entry {
+        name: "partition",
+        val: CONSTRAINT_EXCLUSION_PARTITION,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "on",
+        val: CONSTRAINT_EXCLUSION_ON,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "off",
+        val: CONSTRAINT_EXCLUSION_OFF,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "true",
+        val: CONSTRAINT_EXCLUSION_ON,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "false",
+        val: CONSTRAINT_EXCLUSION_OFF,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "yes",
+        val: CONSTRAINT_EXCLUSION_ON,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "no",
+        val: CONSTRAINT_EXCLUSION_OFF,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "1",
+        val: CONSTRAINT_EXCLUSION_ON,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "0",
+        val: CONSTRAINT_EXCLUSION_OFF,
+        hidden: true,
+    },
 ];
 
 pub static synchronous_commit_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "local", val: SYNCHRONOUS_COMMIT_LOCAL_FLUSH, hidden: false },
-    config_enum_entry { name: "remote_write", val: SYNCHRONOUS_COMMIT_REMOTE_WRITE, hidden: false },
-    config_enum_entry { name: "remote_apply", val: SYNCHRONOUS_COMMIT_REMOTE_APPLY, hidden: false },
-    config_enum_entry { name: "on", val: SYNCHRONOUS_COMMIT_REMOTE_FLUSH, hidden: false },
-    config_enum_entry { name: "off", val: SYNCHRONOUS_COMMIT_OFF, hidden: false },
-    config_enum_entry { name: "true", val: SYNCHRONOUS_COMMIT_REMOTE_FLUSH, hidden: true },
-    config_enum_entry { name: "false", val: SYNCHRONOUS_COMMIT_OFF, hidden: true },
-    config_enum_entry { name: "yes", val: SYNCHRONOUS_COMMIT_REMOTE_FLUSH, hidden: true },
-    config_enum_entry { name: "no", val: SYNCHRONOUS_COMMIT_OFF, hidden: true },
-    config_enum_entry { name: "1", val: SYNCHRONOUS_COMMIT_REMOTE_FLUSH, hidden: true },
-    config_enum_entry { name: "0", val: SYNCHRONOUS_COMMIT_OFF, hidden: true },
+    config_enum_entry {
+        name: "local",
+        val: SYNCHRONOUS_COMMIT_LOCAL_FLUSH,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "remote_write",
+        val: SYNCHRONOUS_COMMIT_REMOTE_WRITE,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "remote_apply",
+        val: SYNCHRONOUS_COMMIT_REMOTE_APPLY,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "on",
+        val: SYNCHRONOUS_COMMIT_REMOTE_FLUSH,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "off",
+        val: SYNCHRONOUS_COMMIT_OFF,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "true",
+        val: SYNCHRONOUS_COMMIT_REMOTE_FLUSH,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "false",
+        val: SYNCHRONOUS_COMMIT_OFF,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "yes",
+        val: SYNCHRONOUS_COMMIT_REMOTE_FLUSH,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "no",
+        val: SYNCHRONOUS_COMMIT_OFF,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "1",
+        val: SYNCHRONOUS_COMMIT_REMOTE_FLUSH,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "0",
+        val: SYNCHRONOUS_COMMIT_OFF,
+        hidden: true,
+    },
 ];
 
 pub static huge_pages_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "off", val: HUGE_PAGES_OFF, hidden: false },
-    config_enum_entry { name: "on", val: HUGE_PAGES_ON, hidden: false },
-    config_enum_entry { name: "try", val: HUGE_PAGES_TRY, hidden: false },
-    config_enum_entry { name: "true", val: HUGE_PAGES_ON, hidden: true },
-    config_enum_entry { name: "false", val: HUGE_PAGES_OFF, hidden: true },
-    config_enum_entry { name: "yes", val: HUGE_PAGES_ON, hidden: true },
-    config_enum_entry { name: "no", val: HUGE_PAGES_OFF, hidden: true },
-    config_enum_entry { name: "1", val: HUGE_PAGES_ON, hidden: true },
-    config_enum_entry { name: "0", val: HUGE_PAGES_OFF, hidden: true },
+    config_enum_entry {
+        name: "off",
+        val: HUGE_PAGES_OFF,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "on",
+        val: HUGE_PAGES_ON,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "try",
+        val: HUGE_PAGES_TRY,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "true",
+        val: HUGE_PAGES_ON,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "false",
+        val: HUGE_PAGES_OFF,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "yes",
+        val: HUGE_PAGES_ON,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "no",
+        val: HUGE_PAGES_OFF,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "1",
+        val: HUGE_PAGES_ON,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "0",
+        val: HUGE_PAGES_OFF,
+        hidden: true,
+    },
 ];
 
 pub static huge_pages_status_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "off", val: HUGE_PAGES_OFF, hidden: false },
-    config_enum_entry { name: "on", val: HUGE_PAGES_ON, hidden: false },
-    config_enum_entry { name: "unknown", val: HUGE_PAGES_UNKNOWN, hidden: false },
+    config_enum_entry {
+        name: "off",
+        val: HUGE_PAGES_OFF,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "on",
+        val: HUGE_PAGES_ON,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "unknown",
+        val: HUGE_PAGES_UNKNOWN,
+        hidden: false,
+    },
 ];
 
 pub static recovery_prefetch_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "off", val: RECOVERY_PREFETCH_OFF, hidden: false },
-    config_enum_entry { name: "on", val: RECOVERY_PREFETCH_ON, hidden: false },
-    config_enum_entry { name: "try", val: RECOVERY_PREFETCH_TRY, hidden: false },
-    config_enum_entry { name: "true", val: RECOVERY_PREFETCH_ON, hidden: true },
-    config_enum_entry { name: "false", val: RECOVERY_PREFETCH_OFF, hidden: true },
-    config_enum_entry { name: "yes", val: RECOVERY_PREFETCH_ON, hidden: true },
-    config_enum_entry { name: "no", val: RECOVERY_PREFETCH_OFF, hidden: true },
-    config_enum_entry { name: "1", val: RECOVERY_PREFETCH_ON, hidden: true },
-    config_enum_entry { name: "0", val: RECOVERY_PREFETCH_OFF, hidden: true },
+    config_enum_entry {
+        name: "off",
+        val: RECOVERY_PREFETCH_OFF,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "on",
+        val: RECOVERY_PREFETCH_ON,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "try",
+        val: RECOVERY_PREFETCH_TRY,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "true",
+        val: RECOVERY_PREFETCH_ON,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "false",
+        val: RECOVERY_PREFETCH_OFF,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "yes",
+        val: RECOVERY_PREFETCH_ON,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "no",
+        val: RECOVERY_PREFETCH_OFF,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "1",
+        val: RECOVERY_PREFETCH_ON,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "0",
+        val: RECOVERY_PREFETCH_OFF,
+        hidden: true,
+    },
 ];
 
 pub static debug_parallel_query_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "off", val: DEBUG_PARALLEL_OFF, hidden: false },
-    config_enum_entry { name: "on", val: DEBUG_PARALLEL_ON, hidden: false },
-    config_enum_entry { name: "regress", val: DEBUG_PARALLEL_REGRESS, hidden: false },
-    config_enum_entry { name: "true", val: DEBUG_PARALLEL_ON, hidden: true },
-    config_enum_entry { name: "false", val: DEBUG_PARALLEL_OFF, hidden: true },
-    config_enum_entry { name: "yes", val: DEBUG_PARALLEL_ON, hidden: true },
-    config_enum_entry { name: "no", val: DEBUG_PARALLEL_OFF, hidden: true },
-    config_enum_entry { name: "1", val: DEBUG_PARALLEL_ON, hidden: true },
-    config_enum_entry { name: "0", val: DEBUG_PARALLEL_OFF, hidden: true },
+    config_enum_entry {
+        name: "off",
+        val: DEBUG_PARALLEL_OFF,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "on",
+        val: DEBUG_PARALLEL_ON,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "regress",
+        val: DEBUG_PARALLEL_REGRESS,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "true",
+        val: DEBUG_PARALLEL_ON,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "false",
+        val: DEBUG_PARALLEL_OFF,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "yes",
+        val: DEBUG_PARALLEL_ON,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "no",
+        val: DEBUG_PARALLEL_OFF,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "1",
+        val: DEBUG_PARALLEL_ON,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "0",
+        val: DEBUG_PARALLEL_OFF,
+        hidden: true,
+    },
 ];
 
 pub static plan_cache_mode_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "auto", val: PLAN_CACHE_MODE_AUTO, hidden: false },
-    config_enum_entry { name: "force_generic_plan", val: PLAN_CACHE_MODE_FORCE_GENERIC_PLAN, hidden: false },
-    config_enum_entry { name: "force_custom_plan", val: PLAN_CACHE_MODE_FORCE_CUSTOM_PLAN, hidden: false },
+    config_enum_entry {
+        name: "auto",
+        val: PLAN_CACHE_MODE_AUTO,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "force_generic_plan",
+        val: PLAN_CACHE_MODE_FORCE_GENERIC_PLAN,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "force_custom_plan",
+        val: PLAN_CACHE_MODE_FORCE_CUSTOM_PLAN,
+        hidden: false,
+    },
 ];
 
 pub static password_encryption_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "md5", val: PASSWORD_TYPE_MD5, hidden: false },
-    config_enum_entry { name: "scram-sha-256", val: PASSWORD_TYPE_SCRAM_SHA_256, hidden: false },
+    config_enum_entry {
+        name: "md5",
+        val: PASSWORD_TYPE_MD5,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "scram-sha-256",
+        val: PASSWORD_TYPE_SCRAM_SHA_256,
+        hidden: false,
+    },
 ];
 
 const SSL_PROTOCOL_VERSIONS_INFO: [config_enum_entry; 5] = [
-    config_enum_entry { name: "", val: PG_TLS_ANY, hidden: false },
-    config_enum_entry { name: "TLSv1", val: PG_TLS1_VERSION, hidden: false },
-    config_enum_entry { name: "TLSv1.1", val: PG_TLS1_1_VERSION, hidden: false },
-    config_enum_entry { name: "TLSv1.2", val: PG_TLS1_2_VERSION, hidden: false },
-    config_enum_entry { name: "TLSv1.3", val: PG_TLS1_3_VERSION, hidden: false },
+    config_enum_entry {
+        name: "",
+        val: PG_TLS_ANY,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "TLSv1",
+        val: PG_TLS1_VERSION,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "TLSv1.1",
+        val: PG_TLS1_1_VERSION,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "TLSv1.2",
+        val: PG_TLS1_2_VERSION,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "TLSv1.3",
+        val: PG_TLS1_3_VERSION,
+        hidden: false,
+    },
 ];
 
 pub static ssl_protocol_versions_info: &[config_enum_entry] = &SSL_PROTOCOL_VERSIONS_INFO;
@@ -490,37 +1202,93 @@ pub static ssl_protocol_versions_info_without_any: &[config_enum_entry] = {
 };
 
 pub static debug_logical_replication_streaming_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "buffered", val: DEBUG_LOGICAL_REP_STREAMING_BUFFERED, hidden: false },
-    config_enum_entry { name: "immediate", val: DEBUG_LOGICAL_REP_STREAMING_IMMEDIATE, hidden: false },
+    config_enum_entry {
+        name: "buffered",
+        val: DEBUG_LOGICAL_REP_STREAMING_BUFFERED,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "immediate",
+        val: DEBUG_LOGICAL_REP_STREAMING_IMMEDIATE,
+        hidden: false,
+    },
 ];
 
-pub static recovery_init_sync_method_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "fsync", val: DATA_DIR_SYNC_METHOD_FSYNC, hidden: false },
-];
+pub static recovery_init_sync_method_options: &[config_enum_entry] = &[config_enum_entry {
+    name: "fsync",
+    val: DATA_DIR_SYNC_METHOD_FSYNC,
+    hidden: false,
+}];
 
 pub static shared_memory_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "sysv", val: SHMEM_TYPE_SYSV, hidden: false },
-    config_enum_entry { name: "mmap", val: SHMEM_TYPE_MMAP, hidden: false },
+    config_enum_entry {
+        name: "sysv",
+        val: SHMEM_TYPE_SYSV,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "mmap",
+        val: SHMEM_TYPE_MMAP,
+        hidden: false,
+    },
 ];
 
 // Reference build (../pgrust/postgres-18.3 pg_config.h): USE_LZ4, USE_ZSTD
 // undefined — entries/boot values follow the C #else branches. USE_SSL /
 // USE_OPENSSL are DEFINED here (be_secure_openssl): ssl_library, ssl_ciphers,
 // ssl_groups carry the OpenSSL boot values.
-pub static default_toast_compression_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "pglz", val: TOAST_PGLZ_COMPRESSION, hidden: false },
-];
+pub static default_toast_compression_options: &[config_enum_entry] = &[config_enum_entry {
+    name: "pglz",
+    val: TOAST_PGLZ_COMPRESSION,
+    hidden: false,
+}];
 
 pub static wal_compression_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "pglz", val: WAL_COMPRESSION_PGLZ, hidden: false },
-    config_enum_entry { name: "on", val: WAL_COMPRESSION_PGLZ, hidden: false },
-    config_enum_entry { name: "off", val: WAL_COMPRESSION_NONE, hidden: false },
-    config_enum_entry { name: "true", val: WAL_COMPRESSION_PGLZ, hidden: true },
-    config_enum_entry { name: "false", val: WAL_COMPRESSION_NONE, hidden: true },
-    config_enum_entry { name: "yes", val: WAL_COMPRESSION_PGLZ, hidden: true },
-    config_enum_entry { name: "no", val: WAL_COMPRESSION_NONE, hidden: true },
-    config_enum_entry { name: "1", val: WAL_COMPRESSION_PGLZ, hidden: true },
-    config_enum_entry { name: "0", val: WAL_COMPRESSION_NONE, hidden: true },
+    config_enum_entry {
+        name: "pglz",
+        val: WAL_COMPRESSION_PGLZ,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "on",
+        val: WAL_COMPRESSION_PGLZ,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "off",
+        val: WAL_COMPRESSION_NONE,
+        hidden: false,
+    },
+    config_enum_entry {
+        name: "true",
+        val: WAL_COMPRESSION_PGLZ,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "false",
+        val: WAL_COMPRESSION_NONE,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "yes",
+        val: WAL_COMPRESSION_PGLZ,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "no",
+        val: WAL_COMPRESSION_NONE,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "1",
+        val: WAL_COMPRESSION_PGLZ,
+        hidden: true,
+    },
+    config_enum_entry {
+        name: "0",
+        val: WAL_COMPRESSION_NONE,
+        hidden: true,
+    },
 ];
 
 // C compile-gates "clone" on platform support (guc_tables.c:489); pgrust has
@@ -528,13 +1296,17 @@ pub static wal_compression_options: &[config_enum_entry] = &[
 // build without HAVE_COPYFILE/HAVE_COPY_FILE_RANGE. SET file_copy_method=clone
 // is a clean invalid-value ERROR instead of copydir's unported-arm panic at
 // CREATE DATABASE time. Restore the entry when clone_file (copydir.c) lands.
-pub static file_copy_method_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "copy", val: FILE_COPY_METHOD_COPY, hidden: false },
-];
+pub static file_copy_method_options: &[config_enum_entry] = &[config_enum_entry {
+    name: "copy",
+    val: FILE_COPY_METHOD_COPY,
+    hidden: false,
+}];
 
-pub static file_extend_method_options: &[config_enum_entry] = &[
-    config_enum_entry { name: "write_zeros", val: FILE_EXTEND_METHOD_WRITE_ZEROS, hidden: false },
-];
+pub static file_extend_method_options: &[config_enum_entry] = &[config_enum_entry {
+    name: "write_zeros",
+    val: FILE_EXTEND_METHOD_WRITE_ZEROS,
+    hidden: false,
+}];
 
 pub static ConfigureNamesBool: &[GucBoolSetting] = &[
     GucBoolSetting { name: "enable_seqscan", context: PGC_USERSET, group: QUERY_TUNING_METHOD, short_desc: Some("Enables the planner's use of sequential-scan plans."), long_desc: None, flags: GUC_EXPLAIN, variable: &vars::enable_seqscan, boot_val: GucDefaultValue::Bool(true), check_hook: None, assign_hook: None, show_hook: None },

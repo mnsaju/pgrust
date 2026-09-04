@@ -6,7 +6,7 @@ use types_error::PgResult;
 use types_scan::scankey::ScanKeyData;
 use types_tuple::{HeapTupleData, ItemPointerData};
 
-use crate::compute::{fast_hash_probe, hash_index, int4_hash, CatCKey, CCFastKind};
+use crate::compute::{fast_hash_probe, hash_index, int4_hash, CCFastKind, CatCKey};
 use crate::graph::{create_entry_from_scan, create_entry_negative, remove_ct};
 use crate::{eq_stored, init, with_state, NONE};
 
@@ -53,19 +53,31 @@ const PROBE_INIT: usize = 3;
 impl ProbeRet {
     #[inline(always)]
     fn hit(image: *mut u8, slot: u32) -> Self {
-        ProbeRet { p: image, w: slot as u64 }
+        ProbeRet {
+            p: image,
+            w: slot as u64,
+        }
     }
     #[inline(always)]
     fn negative() -> Self {
-        ProbeRet { p: core::ptr::without_provenance_mut(PROBE_NEG), w: 0 }
+        ProbeRet {
+            p: core::ptr::without_provenance_mut(PROBE_NEG),
+            w: 0,
+        }
     }
     #[inline(always)]
     fn miss(hash_value: u32) -> Self {
-        ProbeRet { p: core::ptr::without_provenance_mut(PROBE_MISS), w: hash_value as u64 }
+        ProbeRet {
+            p: core::ptr::without_provenance_mut(PROBE_MISS),
+            w: hash_value as u64,
+        }
     }
     #[inline(always)]
     fn needs_init() -> Self {
-        ProbeRet { p: core::ptr::without_provenance_mut(PROBE_INIT), w: 0 }
+        ProbeRet {
+            p: core::ptr::without_provenance_mut(PROBE_INIT),
+            w: 0,
+        }
     }
 }
 
@@ -197,10 +209,13 @@ fn probe<K: ProbeKeys>(cache_id: i32, keys: &K) -> ProbeRet {
         if !cache.initialized {
             return ProbeRet::needs_init();
         }
-        let nkeys = if K::NKEYS > 0 { K::NKEYS } else { cache.cc_nkeys };
+        let nkeys = if K::NKEYS > 0 {
+            K::NKEYS
+        } else {
+            cache.cc_nkeys
+        };
         debug_assert!(K::NKEYS < 0 || cache.cc_nkeys == nkeys);
         let kinds = cache.cc_kind;
-
 
         if K::NKEYS == 1 {
             if let (CCFastKind::Int4, CatCKey::Value(w)) = (kinds[0], keys.slot(0)) {
@@ -303,7 +318,11 @@ fn search_internal<K: ProbeKeys>(cache_id: i32, keys: &K) -> PgResult<Option<Cat
 
 /// `SearchCatCacheMiss`.
 #[cold]
-fn search_miss(cache_id: i32, hash_value: u32, keys: &[CatCKey<'_>; 4]) -> PgResult<Option<CatCTuple>> {
+fn search_miss(
+    cache_id: i32,
+    hash_value: u32,
+    keys: &[CatCKey<'_>; 4],
+) -> PgResult<Option<CatCTuple>> {
     let (reloid, indexoid, nkeys) = with_state(|st| {
         let c = st.cache(cache_id);
         (c.cc_reloid, c.cc_indexoid, c.cc_nkeys)
@@ -455,7 +474,11 @@ pub fn SearchCatCache1(cache_id: i32, v1: CatCKey<'_>) -> PgResult<Option<CatCTu
 }
 
 #[inline]
-pub fn SearchCatCache2(cache_id: i32, v1: CatCKey<'_>, v2: CatCKey<'_>) -> PgResult<Option<CatCTuple>> {
+pub fn SearchCatCache2(
+    cache_id: i32,
+    v1: CatCKey<'_>,
+    v2: CatCKey<'_>,
+) -> PgResult<Option<CatCTuple>> {
     search_internal(cache_id, &K2(v1, v2))
 }
 

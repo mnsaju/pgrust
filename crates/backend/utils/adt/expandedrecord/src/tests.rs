@@ -6,7 +6,15 @@ use types_tuple::{FormData_pg_attribute, HEAP_HASNULL, HEAP_HASVARWIDTH};
 const INT4OID: Oid = 23;
 const TEXTOID: Oid = 25;
 
-fn att(name: &str, num: i16, typid: Oid, len: i16, byval: bool, align: i8, storage: i8) -> FormData_pg_attribute {
+fn att(
+    name: &str,
+    num: i16,
+    typid: Oid,
+    len: i16,
+    byval: bool,
+    align: i8,
+    storage: i8,
+) -> FormData_pg_attribute {
     let mut a = FormData_pg_attribute::default();
     a.attname.namestrcpy(name);
     a.attnum = num;
@@ -61,9 +69,18 @@ fn empty_record_reads_null() {
     assert!(erh.is_empty());
     assert_eq!(erh.nfields, 2);
     assert_ne!(erh.er_tupdesc_id, typcache::INVALID_TUPLEDESC_IDENTIFIER);
-    assert_eq!(expanded_record_fetch_field(erh, 1).unwrap(), (Datum::null(), true));
-    assert_eq!(expanded_record_fetch_field(erh, 99).unwrap(), (Datum::null(), true));
-    assert_eq!(expanded_record_fetch_field(erh, -1).unwrap(), (Datum::null(), true));
+    assert_eq!(
+        expanded_record_fetch_field(erh, 1).unwrap(),
+        (Datum::null(), true)
+    );
+    assert_eq!(
+        expanded_record_fetch_field(erh, 99).unwrap(),
+        (Datum::null(), true)
+    );
+    assert_eq!(
+        expanded_record_fetch_field(erh, -1).unwrap(),
+        (Datum::null(), true)
+    );
 }
 
 #[test]
@@ -121,8 +138,13 @@ fn null_field_sets_bitmap() {
     let p = registered_record(&parent);
     let erh = unsafe { &mut *p };
 
-    expanded_record_set_fields(erh, &[Datum::from_i32(7), Datum::null()], &[false, true], false)
-        .unwrap();
+    expanded_record_set_fields(
+        erh,
+        &[Datum::from_i32(7), Datum::null()],
+        &[false, true],
+        false,
+    )
+    .unwrap();
 
     let eoh = unsafe { datum_get_eohp(expanded_record_rw_datum(p)) };
     let n = unsafe { eoh_get_flat_size(eoh) };
@@ -235,8 +257,13 @@ fn from_exprecord_copies_rowtype_only() {
     let mcx = parent.mcx();
     let p = registered_record(&parent);
     let erh = unsafe { &mut *p };
-    expanded_record_set_fields(erh, &[Datum::from_i32(9), Datum::null()], &[false, true], false)
-        .unwrap();
+    expanded_record_set_fields(
+        erh,
+        &[Datum::from_i32(9), Datum::null()],
+        &[false, true],
+        false,
+    )
+    .unwrap();
     erh.flags |= ER_FLAG_IS_DOMAIN;
     let _ = erh;
 
@@ -323,8 +350,13 @@ fn domain_checks_gate_all_mutation_paths() {
     assert!(unsafe { expanded_record_set_tuple(erh, None, false, false) }.is_err());
     assert!(erh.is_empty());
 
-    expanded_record_set_fields(erh, &[Datum::from_i32(3), Datum::null()], &[false, true], false)
-        .unwrap();
+    expanded_record_set_fields(
+        erh,
+        &[Datum::from_i32(3), Datum::null()],
+        &[false, true],
+        false,
+    )
+    .unwrap();
     let (v, _) = expanded_record_get_field(erh, 1).unwrap();
     assert_eq!(v.as_i32(), 3);
 
@@ -346,14 +378,24 @@ fn domain_checks_gate_all_mutation_paths() {
 
     // set_tuple path checks the proposed tuple through the dummy fvalue.
     let td = int_text_desc(mcx);
-    let bad = heap_form_tuple(mcx, &td, &[Datum::from_i32(-1), Datum::null()], &[false, true])
-        .unwrap();
+    let bad = heap_form_tuple(
+        mcx,
+        &td,
+        &[Datum::from_i32(-1), Datum::null()],
+        &[false, true],
+    )
+    .unwrap();
     assert!(unsafe { expanded_record_set_tuple(erh, Some(bad.as_tuple()), true, false) }.is_err());
     let (v, _) = expanded_record_get_field(erh, 1).unwrap();
     assert_eq!(v.as_i32(), 9);
 
-    let good = heap_form_tuple(mcx, &td, &[Datum::from_i32(4), Datum::null()], &[false, true])
-        .unwrap();
+    let good = heap_form_tuple(
+        mcx,
+        &td,
+        &[Datum::from_i32(4), Datum::null()],
+        &[false, true],
+    )
+    .unwrap();
     unsafe { expanded_record_set_tuple(erh, Some(good.as_tuple()), true, false).unwrap() };
     let (v, _) = expanded_record_get_field(erh, 1).unwrap();
     assert_eq!(v.as_i32(), 4);

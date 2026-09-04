@@ -48,7 +48,10 @@ fn drain_when_posted() {
     let posted = POSTED.with(|p| p.borrow().as_ref().map(std::sync::Arc::clone).unwrap());
     let deadline = std::time::Instant::now() + Duration::from_secs(5);
     while !posted.load(O::SeqCst) {
-        assert!(std::time::Instant::now() < deadline, "timer thread never fired");
+        assert!(
+            std::time::Instant::now() < deadline,
+            "timer thread never fired"
+        );
         std::thread::sleep(Duration::from_millis(1));
     }
     ProcessTimeoutInterrupt();
@@ -63,7 +66,10 @@ fn register_enable_fire_after() {
     enable_timeout_after(STATEMENT_TIMEOUT, 5);
     assert!(get_timeout_active(STATEMENT_TIMEOUT));
     assert!(!get_timeout_indicator(STATEMENT_TIMEOUT, false));
-    assert_eq!(get_timeout_start_time(STATEMENT_TIMEOUT), NOW.load(O::Relaxed));
+    assert_eq!(
+        get_timeout_start_time(STATEMENT_TIMEOUT),
+        NOW.load(O::Relaxed)
+    );
     assert_eq!(
         get_timeout_finish_time(STATEMENT_TIMEOUT),
         NOW.load(O::Relaxed) + 5000
@@ -228,7 +234,9 @@ fn seams_installed_once() {
     timeout_seams::enable_timeout_after::call(TRANSACTION_TIMEOUT, 30_000).unwrap();
     assert!(timeout_seams::get_timeout_active::call(TRANSACTION_TIMEOUT));
     timeout_seams::disable_timeout::call(TRANSACTION_TIMEOUT, false).unwrap();
-    assert!(!timeout_seams::get_timeout_active::call(TRANSACTION_TIMEOUT));
+    assert!(!timeout_seams::get_timeout_active::call(
+        TRANSACTION_TIMEOUT
+    ));
     timeout_seams::disable_all_timeouts::call(false).unwrap();
     timeout_seams::reschedule_timeouts::call().unwrap();
     timeout_seams::process_timeout_interrupt::call();

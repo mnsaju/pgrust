@@ -29,7 +29,8 @@ fn convert_requires_to_datum(mcx: Mcx<'_>, requires: &[String]) -> PgResult<Datu
         datums.push(name_datum(mcx, r)?);
     }
     const NAMEDATALEN: i32 = 64;
-    let arr = arrayfuncs::construct::construct_array(mcx, &datums, NAMEOID, NAMEDATALEN, false, b'c')?;
+    let arr =
+        arrayfuncs::construct::construct_array(mcx, &datums, NAMEOID, NAMEDATALEN, false, b'c')?;
     let stable = arr.leak();
     Ok(Datum::from_usize(stable.as_ptr() as usize))
 }
@@ -95,7 +96,8 @@ fn get_available_versions_for_extension(
             continue;
         }
 
-        let control = crate::control::read_extension_aux_control_file(pcontrol, &evi_list[evi].name)?;
+        let control =
+            crate::control::read_extension_aux_control_file(pcontrol, &evi_list[evi].name)?;
 
         let mut values = [Datum::null(); 8];
         let mut nulls = [false; 8];
@@ -119,8 +121,10 @@ fn get_available_versions_for_extension(
             }
             let mut best_path: Vec<String> = Vec::new();
             if find_install_path(&mut evi_list, evi2, &mut best_path) == Some(evi) {
-                let control =
-                    crate::control::read_extension_aux_control_file(pcontrol, &evi_list[evi2].name)?;
+                let control = crate::control::read_extension_aux_control_file(
+                    pcontrol,
+                    &evi_list[evi2].name,
+                )?;
                 fill_version_row(mcx, &control, &evi_list[evi2].name, &mut values, &mut nulls)?;
                 srf.putvalues(&values, &nulls)?;
             }
@@ -200,4 +204,3 @@ pub fn fc_pg_extension_update_paths(
 
     Ok(srf.finish(fcinfo))
 }
-

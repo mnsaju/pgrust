@@ -6,8 +6,8 @@
 // some callers use them; allow dead for the unused accessors.
 #![allow(dead_code)]
 
-use ::types_error::{ERRCODE_ARRAY_SUBSCRIPT_ERROR, ERRCODE_NULL_VALUE_NOT_ALLOWED};
 use ::types_error::PgError;
+use ::types_error::{ERRCODE_ARRAY_SUBSCRIPT_ERROR, ERRCODE_NULL_VALUE_NOT_ALLOWED};
 
 use crate::repr::{intalign, read_i32, varsize};
 

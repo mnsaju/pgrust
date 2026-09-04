@@ -61,7 +61,13 @@ impl SharedTuplestore {
             meta_data_size,
             name: name.to_string(),
             participants: (0..nparticipants.max(0))
-                .map(|_| Mutex::new(StsParticipant { read_page: 0, npages: 0, writing: false }))
+                .map(|_| {
+                    Mutex::new(StsParticipant {
+                        read_page: 0,
+                        npages: 0,
+                        writing: false,
+                    })
+                })
                 .collect(),
         }
     }
@@ -127,16 +133,18 @@ impl<'mcx> SharedTuplestoreAccessor<'mcx> {
         }
     }
 
-    fn participant_mut(
-        &self,
-        i: i32,
-    ) -> std::sync::MutexGuard<'_, StsParticipant> {
-        self.sts.participants[i as usize].lock().unwrap_or_else(|e| e.into_inner())
+    fn participant_mut(&self, i: i32) -> std::sync::MutexGuard<'_, StsParticipant> {
+        self.sts.participants[i as usize]
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
     }
 
     // `sts_flush_chunk`.
     fn flush_chunk(&mut self) -> PgResult<()> {
-        let chunk = self.write_chunk.as_mut().expect("flush without a write chunk");
+        let chunk = self
+            .write_chunk
+            .as_mut()
+            .expect("flush without a write chunk");
         self.write_file
             .as_mut()
             .expect("flush without a write file")
@@ -217,16 +225,14 @@ impl<'mcx> SharedTuplestoreAccessor<'mcx> {
                     let wp = self.write_pointer + meta_size;
                     let chunk = self.write_chunk.as_mut().expect("chunk allocated");
                     chunk[wp..wp + written].copy_from_slice(&tuple[..written]);
-                    let ntuples =
-                        i32::from_ne_bytes(chunk[0..4].try_into().unwrap()) + 1;
+                    let ntuples = i32::from_ne_bytes(chunk[0..4].try_into().unwrap()) + 1;
                     chunk[0..4].copy_from_slice(&ntuples.to_ne_bytes());
                 }
                 size -= meta_size;
                 size -= written;
                 while size > 0 {
                     self.flush_chunk()?;
-                    let overflow =
-                        ((size + STS_CHUNK_DATA_SIZE - 1) / STS_CHUNK_DATA_SIZE) as i32;
+                    let overflow = ((size + STS_CHUNK_DATA_SIZE - 1) / STS_CHUNK_DATA_SIZE) as i32;
                     let chunk = self.write_chunk.as_mut().expect("chunk allocated");
                     chunk[4..8].copy_from_slice(&overflow.to_ne_bytes());
                     let written_this_chunk = size.min(STS_CHUNK_SIZE - self.write_pointer);
@@ -254,7 +260,10 @@ impl<'mcx> SharedTuplestoreAccessor<'mcx> {
     // `sts_read_tuple`: the image is valid until the next call.
     fn read_tuple(&mut self, meta_data: &mut [u8]) -> PgResult<NonNull<MinimalTupleData>> {
         let meta_size = self.sts.meta_data_size;
-        let file = self.read_file.as_mut().expect("read_tuple without an open file");
+        let file = self
+            .read_file
+            .as_mut()
+            .expect("read_tuple without an open file");
         if meta_size > 0 {
             file.read_exact(meta_data)?;
             self.read_bytes += meta_size;
@@ -266,9 +275,8 @@ impl<'mcx> SharedTuplestoreAccessor<'mcx> {
         self.read_buffer.clear();
         self.read_buffer.resize(size.div_ceil(8), 0);
         // SAFETY: u64 backing reinterpreted as bytes; length covers size.
-        let image: &mut [u8] = unsafe {
-            core::slice::from_raw_parts_mut(self.read_buffer.as_mut_ptr().cast(), size)
-        };
+        let image: &mut [u8] =
+            unsafe { core::slice::from_raw_parts_mut(self.read_buffer.as_mut_ptr().cast(), size) };
         image[0..4].copy_from_slice(&size_buf);
         let mut remaining_size = size - 4;
         let mut this_chunk_size = remaining_size.min(STS_CHUNK_SIZE - self.read_bytes);
@@ -377,8 +385,7 @@ impl<'mcx> SharedTuplestoreAccessor<'mcx> {
                 if let Some(f) = self.read_file.take() {
                     f.close()?;
                 }
-                self.read_participant =
-                    (self.read_participant + 1) % self.sts.nparticipants;
+                self.read_participant = (self.read_participant + 1) % self.sts.nparticipants;
                 if self.read_participant == self.participant {
                     break;
                 }

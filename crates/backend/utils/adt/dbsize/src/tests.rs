@@ -24,7 +24,10 @@ fn tablespace_dir_paths() {
     assert_eq!(builtins::tablespace_dir_path(1664), "global");
     assert_eq!(
         builtins::tablespace_dir_path(16385),
-        format!("pg_tblspc/16385/{}", types_storage::TABLESPACE_VERSION_DIRECTORY)
+        format!(
+            "pg_tblspc/16385/{}",
+            types_storage::TABLESPACE_VERSION_DIRECTORY
+        )
     );
 }
 

@@ -55,7 +55,9 @@ struct WaitList {
 
 impl WaitList {
     const fn new() -> Self {
-        WaitList { q: std::sync::Mutex::new(Vec::new()) }
+        WaitList {
+            q: std::sync::Mutex::new(Vec::new()),
+        }
     }
 
     fn enqueue(&self, v: Vpid) {
@@ -105,7 +107,10 @@ pub struct Mutex<T: ?Sized> {
 
 impl<T> Mutex<T> {
     pub const fn new(t: T) -> Mutex<T> {
-        Mutex { waiters: WaitList::new(), inner: std::sync::Mutex::new(t) }
+        Mutex {
+            waiters: WaitList::new(),
+            inner: std::sync::Mutex::new(t),
+        }
     }
 
     pub fn into_inner(self) -> LockResult<T> {
@@ -128,7 +133,11 @@ impl<T: ?Sized> Mutex<T> {
                 match self.inner.try_lock() {
                     Ok(g) => return Ok(MutexGuard::new(self, g, site)),
                     Err(TryLockError::Poisoned(p)) => {
-                        return Err(PoisonError::new(MutexGuard::new(self, p.into_inner(), site)))
+                        return Err(PoisonError::new(MutexGuard::new(
+                            self,
+                            p.into_inner(),
+                            site,
+                        )))
                     }
                     Err(TryLockError::WouldBlock) => {
                         let v = h.current_vpid();
@@ -171,7 +180,11 @@ fn wrap_lock<'a, T: ?Sized>(
 ) -> LockResult<MutexGuard<'a, T>> {
     match r {
         Ok(g) => Ok(MutexGuard::new(lock, g, site)),
-        Err(p) => Err(PoisonError::new(MutexGuard::new(lock, p.into_inner(), site))),
+        Err(p) => Err(PoisonError::new(MutexGuard::new(
+            lock,
+            p.into_inner(),
+            site,
+        ))),
     }
 }
 
@@ -199,7 +212,11 @@ impl<'a, T: ?Sized> MutexGuard<'a, T> {
         inner: std::sync::MutexGuard<'a, T>,
         site: &'static Location<'static>,
     ) -> Self {
-        MutexGuard { lock, site, inner: ManuallyDrop::new(inner) }
+        MutexGuard {
+            lock,
+            site,
+            inner: ManuallyDrop::new(inner),
+        }
     }
 }
 
@@ -270,7 +287,10 @@ pub struct Condvar {
 
 impl Condvar {
     pub const fn new() -> Condvar {
-        Condvar { waiters: WaitList::new(), inner: std::sync::Condvar::new() }
+        Condvar {
+            waiters: WaitList::new(),
+            inner: std::sync::Condvar::new(),
+        }
     }
 
     #[track_caller]
@@ -283,7 +303,11 @@ impl Condvar {
                 let (lock, inner) = into_parts(guard);
                 match self.inner.wait(inner) {
                     Ok(g) => Ok(MutexGuard::new(lock, g, site)),
-                    Err(p) => Err(PoisonError::new(MutexGuard::new(lock, p.into_inner(), site))),
+                    Err(p) => Err(PoisonError::new(MutexGuard::new(
+                        lock,
+                        p.into_inner(),
+                        site,
+                    ))),
                 }
             }
             Some(h) => {
@@ -324,9 +348,10 @@ impl Condvar {
             None => {
                 let (lock, inner) = into_parts(guard);
                 match self.inner.wait_timeout(inner, dur) {
-                    Ok((g, r)) => {
-                        Ok((MutexGuard::new(lock, g, site), WaitTimeoutResult(r.timed_out())))
-                    }
+                    Ok((g, r)) => Ok((
+                        MutexGuard::new(lock, g, site),
+                        WaitTimeoutResult(r.timed_out()),
+                    )),
                     Err(p) => {
                         let (g, r) = p.into_inner();
                         Err(PoisonError::new((
@@ -370,9 +395,10 @@ impl Condvar {
                 };
                 match lock.lock_at(site) {
                     Ok(g) => Ok((g, WaitTimeoutResult(timed_out))),
-                    Err(p) => {
-                        Err(PoisonError::new((p.into_inner(), WaitTimeoutResult(timed_out))))
-                    }
+                    Err(p) => Err(PoisonError::new((
+                        p.into_inner(),
+                        WaitTimeoutResult(timed_out),
+                    ))),
                 }
             }
         }
@@ -456,7 +482,10 @@ pub struct RwLock<T: ?Sized> {
 
 impl<T> RwLock<T> {
     pub const fn new(t: T) -> RwLock<T> {
-        RwLock { waiters: std::sync::Mutex::new(Vec::new()), inner: std::sync::RwLock::new(t) }
+        RwLock {
+            waiters: std::sync::Mutex::new(Vec::new()),
+            inner: std::sync::RwLock::new(t),
+        }
     }
 
     pub fn into_inner(self) -> LockResult<T> {
@@ -471,9 +500,11 @@ impl<T: ?Sized> RwLock<T> {
         match hooks::installed() {
             None => match self.inner.read() {
                 Ok(g) => Ok(RwLockReadGuard::new(self, g, site)),
-                Err(p) => {
-                    Err(PoisonError::new(RwLockReadGuard::new(self, p.into_inner(), site)))
-                }
+                Err(p) => Err(PoisonError::new(RwLockReadGuard::new(
+                    self,
+                    p.into_inner(),
+                    site,
+                ))),
             },
             Some(h) => loop {
                 match self.inner.try_read() {
@@ -502,9 +533,11 @@ impl<T: ?Sized> RwLock<T> {
         match hooks::installed() {
             None => match self.inner.write() {
                 Ok(g) => Ok(RwLockWriteGuard::new(self, g, site)),
-                Err(p) => {
-                    Err(PoisonError::new(RwLockWriteGuard::new(self, p.into_inner(), site)))
-                }
+                Err(p) => Err(PoisonError::new(RwLockWriteGuard::new(
+                    self,
+                    p.into_inner(),
+                    site,
+                ))),
             },
             Some(h) => loop {
                 match self.inner.try_write() {
@@ -560,7 +593,10 @@ impl<T: ?Sized> RwLock<T> {
     }
 
     fn enqueue(&self, v: Vpid, k: RwKind) {
-        self.waiters.lock().unwrap_or_else(|e| e.into_inner()).push((v, k));
+        self.waiters
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push((v, k));
     }
 
     fn cancel(&self, v: Vpid) {
@@ -697,7 +733,11 @@ pub struct Barrier {
 
 impl Barrier {
     pub const fn new(n: usize) -> Barrier {
-        Barrier { state: Mutex::new((0, 0)), cv: Condvar::new(), n }
+        Barrier {
+            state: Mutex::new((0, 0)),
+            cv: Condvar::new(),
+            n,
+        }
     }
 
     #[track_caller]
@@ -755,7 +795,11 @@ unsafe impl<T: Send> Send for OnceLock<T> {}
 
 impl<T> OnceLock<T> {
     pub const fn new() -> OnceLock<T> {
-        OnceLock { state: Mutex::new(ONCE_EMPTY), cv: Condvar::new(), value: UnsafeCell::new(None) }
+        OnceLock {
+            state: Mutex::new(ONCE_EMPTY),
+            cv: Condvar::new(),
+            value: UnsafeCell::new(None),
+        }
     }
 
     pub fn get(&self) -> Option<&T> {
@@ -887,9 +931,7 @@ pub mod mpsc {
     use std::collections::VecDeque;
     use std::sync::Arc;
 
-    pub use std::sync::mpsc::{
-        RecvError, RecvTimeoutError, SendError, TryRecvError, TrySendError,
-    };
+    pub use std::sync::mpsc::{RecvError, RecvTimeoutError, SendError, TryRecvError, TrySendError};
 
     struct State<T> {
         buf: VecDeque<T>,
@@ -910,7 +952,12 @@ pub mod mpsc {
 
     pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
         let sh = Arc::new(Shared {
-            st: Mutex::new(State { buf: VecDeque::new(), cap: None, senders: 1, rx_alive: true }),
+            st: Mutex::new(State {
+                buf: VecDeque::new(),
+                cap: None,
+                senders: 1,
+                rx_alive: true,
+            }),
             not_empty: Condvar::new(),
             not_full: Condvar::new(),
         });
@@ -1024,8 +1071,11 @@ pub mod mpsc {
                 if g.senders == 0 {
                     return Err(RecvTimeoutError::Disconnected);
                 }
-                let (g2, r) =
-                    self.0.not_empty.wait_timeout(g, dur).unwrap_or_else(|e| e.into_inner());
+                let (g2, r) = self
+                    .0
+                    .not_empty
+                    .wait_timeout(g, dur)
+                    .unwrap_or_else(|e| e.into_inner());
                 g = g2;
                 if r.timed_out() {
                     return match g.buf.pop_front() {
@@ -1166,15 +1216,21 @@ pub mod thread {
 
     impl Builder {
         pub fn new() -> Builder {
-            Builder { inner: std::thread::Builder::new() }
+            Builder {
+                inner: std::thread::Builder::new(),
+            }
         }
 
         pub fn name(self, name: String) -> Builder {
-            Builder { inner: self.inner.name(name) }
+            Builder {
+                inner: self.inner.name(name),
+            }
         }
 
         pub fn stack_size(self, size: usize) -> Builder {
-            Builder { inner: self.inner.stack_size(size) }
+            Builder {
+                inner: self.inner.stack_size(size),
+            }
         }
 
         #[track_caller]

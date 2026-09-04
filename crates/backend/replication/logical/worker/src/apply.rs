@@ -28,7 +28,7 @@ use types_error::{
     PgResult, ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE, ERRCODE_PROTOCOL_VIOLATION, ERROR, LOG,
 };
 use types_rel::Relation;
-use types_scan::scankey::{ScanKeyData, BTEqualStrategyNumber, SK_ISNULL, SK_SEARCHNULL};
+use types_scan::scankey::{BTEqualStrategyNumber, ScanKeyData, SK_ISNULL, SK_SEARCHNULL};
 use types_slot::SlotData;
 
 use walreceiver::client::PgConn;
@@ -73,7 +73,9 @@ pub(crate) struct InFuncs {
 
 impl InFuncs {
     fn new(natts: usize) -> Self {
-        InFuncs { per_col: (0..natts).map(|_| None).collect() }
+        InFuncs {
+            per_col: (0..natts).map(|_| None).collect(),
+        }
     }
     fn get(&mut self, i: usize, atttypid: Oid) -> PgResult<&mut (fmgr::FmgrInfo, Oid)> {
         if self.per_col[i].is_none() {
@@ -165,7 +167,10 @@ pub(crate) fn apply_dispatch(mcx: Mcx<'static>, conn: &mut PgConn, buf: &[u8]) -
         MSG_STREAM_PREPARE => {
             // Streamed two-phase is a named follow-up (GL-LOGDEC-1 ASK-1);
             // the publisher side refuses it before this can arrive.
-            panic!("unported: streamed two-phase apply (stream_prepare); message '{}'", action as char)
+            panic!(
+                "unported: streamed two-phase apply (stream_prepare); message '{}'",
+                action as char
+            )
         }
         MSG_BEGIN_PREPARE => apply_handle_begin_prepare(&mut r),
         MSG_PREPARE => apply_handle_prepare(mcx, conn, &mut r),
@@ -174,7 +179,9 @@ pub(crate) fn apply_dispatch(mcx: Mcx<'static>, conn: &mut PgConn, buf: &[u8]) -
         other => {
             ereport(ERROR)
                 .errcode(ERRCODE_PROTOCOL_VIOLATION)
-                .errmsg(format!("invalid logical replication message type \"??? ({other})\""))
+                .errmsg(format!(
+                    "invalid logical replication message type \"??? ({other})\""
+                ))
                 .finish(loc("apply_dispatch"))?;
             unreachable!();
         }
@@ -356,7 +363,11 @@ fn apply_handle_rollback_prepared(
     // It is possible that we haven't received the prepare because it occurred
     // before the walsender reached a consistent point or two_phase was not
     // yet enabled; skip the rollback in that case.
-    if twophase::LookupGXact(&gid, rollback_data.prepare_end_lsn, rollback_data.prepare_time)? {
+    if twophase::LookupGXact(
+        &gid,
+        rollback_data.prepare_end_lsn,
+        rollback_data.prepare_time,
+    )? {
         // Update origin state so we can restart streaming from the correct
         // position in case of a crash.
         origin::set_replorigin_session_origin_lsn(rollback_data.rollback_end_lsn);
@@ -572,8 +583,7 @@ fn tuples_equal(
         if n1 {
             continue;
         }
-        let typentry =
-            typcache::lookup_type_cache(att.atttypid, typcache::TYPECACHE_EQ_OPR_FINFO)?;
+        let typentry = typcache::lookup_type_cache(att.atttypid, typcache::TYPECACHE_EQ_OPR_FINFO)?;
         let mut finfo = typentry.eq_opr_finfo();
         if finfo.fn_oid == InvalidOid {
             return Err(Box::new(types_error::PgError::error(format!(
@@ -599,14 +609,18 @@ fn build_replindex_scan_key(
     let form = idxrel.rd_index.as_ref().expect("index form");
     let mut keys = Vec::new();
     exectuples::slot_getallattrs(searchslot);
-    for (i, &table_attno) in form.indkey.iter().take(form.indnkeyatts as usize).enumerate() {
+    for (i, &table_attno) in form
+        .indkey
+        .iter()
+        .take(form.indnkeyatts as usize)
+        .enumerate()
+    {
         if table_attno == 0 {
             // Expression index keys are not supported in the scan key.
             continue;
         }
         let att = rel.rd_att.attr((table_attno - 1) as usize);
-        let typentry =
-            typcache::lookup_type_cache(att.atttypid, typcache::TYPECACHE_EQ_OPR_FINFO)?;
+        let typentry = typcache::lookup_type_cache(att.atttypid, typcache::TYPECACHE_EQ_OPR_FINFO)?;
         let eq_finfo = typentry.eq_opr_finfo().clone();
         if eq_finfo.fn_oid == InvalidOid {
             return Err(Box::new(types_error::PgError::error(format!(
@@ -618,7 +632,11 @@ fn build_replindex_scan_key(
         key.sk_attno = (i + 1) as i16;
         key.sk_strategy = BTEqualStrategyNumber;
         key.sk_func = eq_finfo;
-        key.sk_collation = idxrel.rd_indcollation.get(i).copied().unwrap_or(att.attcollation);
+        key.sk_collation = idxrel
+            .rd_indcollation
+            .get(i)
+            .copied()
+            .unwrap_or(att.attcollation);
         let (isnull, value) = {
             let b = searchslot.base();
             (
@@ -764,8 +782,13 @@ fn find_repl_tuple_seq<'mcx>(
         // Registered for the scan's lifetime (see the by-index variant).
         let snap = snapmgr::RegisterSnapshot(Some(&snapmgr::GetLatestSnapshot()?))?
             .expect("registered snapshot");
-        let mut scan =
-            tableam_real::table_beginscan(mcx, rel, Some(snap.clone()), 0, mcx::PgVec::new_in(mcx))?;
+        let mut scan = tableam_real::table_beginscan(
+            mcx,
+            rel,
+            Some(snap.clone()),
+            0,
+            mcx::PgVec::new_in(mcx),
+        )?;
         let mut scanslot = tableam_real::table_slot_create(mcx, rel)?;
 
         let mut found = false;
@@ -842,16 +865,33 @@ fn do_insert<'mcx>(
     slot: &mut SlotData<'mcx>,
 ) -> PgResult<()> {
     refuse_row_triggers(rel, "INSERT");
-    execreplication::CheckCmdReplicaIdentity(mcx, rel, types_nodes::nodes_enums::CmdType::CMD_INSERT)?;
+    execreplication::CheckCmdReplicaIdentity(
+        mcx,
+        rel,
+        types_nodes::nodes_enums::CmdType::CMD_INSERT,
+    )?;
 
     let mut generated_exprs = None;
-    if rel.rd_att.constr.as_deref().is_some_and(|c| c.has_generated_stored) {
+    if rel
+        .rd_att
+        .constr
+        .as_deref()
+        .is_some_and(|c| c.has_generated_stored)
+    {
         nodemodifytable::exec_compute_stored_generated(mcx, &mut generated_exprs, rel, slot)?;
     }
     let mut check_exprs = None;
     let mut nn_exprs = None;
     if rel.rd_att.constr.is_some() {
-        nodemodifytable::exec_constraints(mcx, &mut check_exprs, &mut nn_exprs, rel, slot, None, None)?;
+        nodemodifytable::exec_constraints(
+            mcx,
+            &mut check_exprs,
+            &mut nn_exprs,
+            rel,
+            slot,
+            None,
+            None,
+        )?;
     }
 
     tableam_real::simple_table_tuple_insert(mcx, rel, slot)?;
@@ -885,16 +925,33 @@ fn do_update<'mcx>(
     use tableam_vocab::TU_UpdateIndexes;
 
     refuse_row_triggers(rel, "UPDATE");
-    execreplication::CheckCmdReplicaIdentity(mcx, rel, types_nodes::nodes_enums::CmdType::CMD_UPDATE)?;
+    execreplication::CheckCmdReplicaIdentity(
+        mcx,
+        rel,
+        types_nodes::nodes_enums::CmdType::CMD_UPDATE,
+    )?;
 
     let mut generated_exprs = None;
-    if rel.rd_att.constr.as_deref().is_some_and(|c| c.has_generated_stored) {
+    if rel
+        .rd_att
+        .constr
+        .as_deref()
+        .is_some_and(|c| c.has_generated_stored)
+    {
         nodemodifytable::exec_compute_stored_generated(mcx, &mut generated_exprs, rel, slot)?;
     }
     let mut check_exprs = None;
     let mut nn_exprs = None;
     if rel.rd_att.constr.is_some() {
-        nodemodifytable::exec_constraints(mcx, &mut check_exprs, &mut nn_exprs, rel, slot, None, None)?;
+        nodemodifytable::exec_constraints(
+            mcx,
+            &mut check_exprs,
+            &mut nn_exprs,
+            rel,
+            slot,
+            None,
+            None,
+        )?;
     }
 
     let otid = searchslot.base().tts_tid;
@@ -931,7 +988,11 @@ fn do_delete<'mcx>(
     searchslot: &mut SlotData<'mcx>,
 ) -> PgResult<()> {
     refuse_row_triggers(rel, "DELETE");
-    execreplication::CheckCmdReplicaIdentity(mcx, rel, types_nodes::nodes_enums::CmdType::CMD_DELETE)?;
+    execreplication::CheckCmdReplicaIdentity(
+        mcx,
+        rel,
+        types_nodes::nodes_enums::CmdType::CMD_DELETE,
+    )?;
     let tid = searchslot.base().tts_tid;
     let snap = Some(snapmgr::GetActiveSnapshot());
     tableam_real::simple_table_tuple_delete(mcx, rel, &tid, &snap)
@@ -996,11 +1057,18 @@ fn apply_handle_update(mcx: Mcx<'static>, r: &mut Reader<'_>) -> PgResult<()> {
         // which would invalidate remoteslot's datums mid-use otherwise.
         let mut modfuncs = InFuncs::new(rel.rd_att.natts as usize);
         let mut newslot = tableam_real::table_slot_create(mcx, &rel)?;
-        slot_modify_data(mcx, &mut newslot, &mut localslot, &entry, &rel, &upd.newtup, &mut modfuncs)?;
+        slot_modify_data(
+            mcx,
+            &mut newslot,
+            &mut localslot,
+            &entry,
+            &rel,
+            &upd.newtup,
+            &mut modfuncs,
+        )?;
         do_update(mcx, &rel, &mut localslot, &mut newslot)?;
     } else {
-        let (nsp, name) =
-            (&entry.remoterel.nspname, &entry.remoterel.relname);
+        let (nsp, name) = (&entry.remoterel.nspname, &entry.remoterel.relname);
         let _ = elog::elog(
             LOG,
             format!(
@@ -1038,8 +1106,7 @@ fn apply_handle_delete(mcx: Mcx<'static>, r: &mut Reader<'_>) -> PgResult<()> {
     if found {
         do_delete(mcx, &rel, &mut localslot)?;
     } else {
-        let (nsp, name) =
-            (&entry.remoterel.nspname, &entry.remoterel.relname);
+        let (nsp, name) = (&entry.remoterel.nspname, &entry.remoterel.relname);
         let _ = elog::elog(
             LOG,
             format!(

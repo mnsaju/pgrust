@@ -7,7 +7,7 @@
 use core::cell::{Cell, RefCell};
 
 use ::elog::ereport;
-use ::mcx::{MemoryContext, Mcx, PgHashMap, PgVec};
+use ::mcx::{Mcx, MemoryContext, PgHashMap, PgVec};
 use ::types_core::primitive::{
     BlockNumber, ForkNumber, InvalidBlockNumber, ProcNumber, INVALID_PROC_NUMBER,
 };
@@ -83,7 +83,6 @@ impl SmgrCache {
                 .expect("smgr slot gen is never zero"),
         }
     }
-
 }
 
 thread_local! {
@@ -106,15 +105,20 @@ fn with_cache<R>(f: impl FnOnce(&mut SmgrCache) -> R) -> R {
     CACHE.with(|c| {
         let mut slot = c.borrow_mut();
         let cache = slot.get_or_insert_with(|| {
-            let cx: &'static MemoryContext =
-                ::mcx::session_root("smgr relation table");
+            let cx: &'static MemoryContext = ::mcx::session_root("smgr relation table");
             // LIFO: empty the droppy TLS cache before its context is freed.
             ::mcx::register_session_cleanup(Box::new(|| {
                 CACHE.with(|c| drop(c.borrow_mut().take()));
             }));
             let mut relns = PgHashMap::new_in(cx.mcx());
             let _ = relns.try_reserve(400);
-            SmgrCache { cx, relns, slab: Vec::new(), free: Vec::new(), unpinned: Cell::new(0) }
+            SmgrCache {
+                cx,
+                relns,
+                slab: Vec::new(),
+                free: Vec::new(),
+                unpinned: Cell::new(0),
+            }
         });
         f(cache)
     })
@@ -155,7 +159,10 @@ fn open_entry(c: &mut SmgrCache, key: RelFileLocatorBackend) -> PgResult<u32> {
         }
         None => {
             let idx = u32::try_from(c.slab.len()).expect("smgr slab index fits u32");
-            c.slab.push(Slot { gen: 1, reln: Some(r) });
+            c.slab.push(Slot {
+                gen: 1,
+                reln: Some(r),
+            });
             idx
         }
     };
@@ -165,7 +172,10 @@ fn open_entry(c: &mut SmgrCache, key: RelFileLocatorBackend) -> PgResult<u32> {
 }
 
 fn opened_idx(c: &mut SmgrCache, key: RelFileLocatorBackend) -> PgResult<u32> {
-    debug_assert!(key.locator.relNumber != 0, "smgropen: invalid RelFileNumber");
+    debug_assert!(
+        key.locator.relNumber != 0,
+        "smgropen: invalid RelFileNumber"
+    );
     // Warm hit = ONE probe (C smgropen's HASH_ENTER-found), no capacity
     // bookkeeping.
     if let Some(&idx) = c.relns.get(&key) {
@@ -174,13 +184,13 @@ fn opened_idx(c: &mut SmgrCache, key: RelFileLocatorBackend) -> PgResult<u32> {
     open_entry(c, key)
 }
 
-fn opened<R>(
-    key: RelFileLocatorBackend,
-    f: impl FnOnce(&mut SMgrRelation) -> R,
-) -> PgResult<R> {
+fn opened<R>(key: RelFileLocatorBackend, f: impl FnOnce(&mut SMgrRelation) -> R) -> PgResult<R> {
     with_cache(|c| {
         let idx = opened_idx(c, key)?;
-        Ok(f(c.slab[idx as usize].reln.as_mut().expect("open smgr slot is live")))
+        Ok(f(c.slab[idx as usize]
+            .reln
+            .as_mut()
+            .expect("open smgr slot is live")))
     })
 }
 
@@ -198,12 +208,18 @@ pub fn smgrinit() -> PgResult<()> {
 }
 
 pub fn smgropen(rlocator: RelFileLocator, backend: ProcNumber) -> PgResult<()> {
-    let key = RelFileLocatorBackend { locator: rlocator, backend };
+    let key = RelFileLocatorBackend {
+        locator: rlocator,
+        backend,
+    };
     opened(key, |_| ())
 }
 
 pub fn smgropen_handle(rlocator: RelFileLocator, backend: ProcNumber) -> PgResult<SmgrHandle> {
-    let key = RelFileLocatorBackend { locator: rlocator, backend };
+    let key = RelFileLocatorBackend {
+        locator: rlocator,
+        backend,
+    };
     with_cache(|c| {
         let idx = opened_idx(c, key)?;
         Ok(c.handle_for(idx))
@@ -324,7 +340,11 @@ pub fn smgrdestroyall() -> PgResult<()> {
             return Err(oom("smgrdestroyall scratch"));
         }
         for (k, &idx) in c.relns.iter() {
-            if c.slab[idx as usize].reln.as_ref().is_some_and(|r| r.pincount == 0) {
+            if c.slab[idx as usize]
+                .reln
+                .as_ref()
+                .is_some_and(|r| r.pincount == 0)
+            {
                 keys.push(*k);
             }
         }
@@ -406,7 +426,13 @@ pub fn smgrwrite(
     buffer: &[u8],
     skip_fsync: bool,
 ) -> PgResult<()> {
-    smgrwritev(key, forknum, blocknum, &[WriteChunk::from_slice(buffer)], skip_fsync)
+    smgrwritev(
+        key,
+        forknum,
+        blocknum,
+        &[WriteChunk::from_slice(buffer)],
+        skip_fsync,
+    )
 }
 
 pub fn smgrreadv(
@@ -577,7 +603,9 @@ pub fn smgrtruncate(
             // Invalid while truncating so an error leaves the cache unbelieved.
             r.smgr_cached_nblocks[forknum[i] as usize] = InvalidBlockNumber;
             match r.which {
-                SmgrKind::Md => md::mdtruncate(key, &mut r.md, forknum[i], old_nblocks[i], nblocks[i])?,
+                SmgrKind::Md => {
+                    md::mdtruncate(key, &mut r.md, forknum[i], old_nblocks[i], nblocks[i])?
+                }
             }
             // nblocks > old_nblocks happens on replica restart (md no-ops).
             r.smgr_cached_nblocks[forknum[i] as usize] = if nblocks[i] > old_nblocks[i] {
@@ -666,7 +694,10 @@ pub fn drop_relation_files(delrels: &[RelFileLocator], is_redo: bool) -> PgResul
                 xlogutils::XLogDropRelation(delrel, fork)?;
             }
         }
-        srels.push(RelFileLocatorBackend { locator: delrel, backend: INVALID_PROC_NUMBER });
+        srels.push(RelFileLocatorBackend {
+            locator: delrel,
+            backend: INVALID_PROC_NUMBER,
+        });
     }
 
     smgrdounlinkall(&srels, is_redo)?;
@@ -683,7 +714,10 @@ pub fn ForgetDatabaseSyncRequests(dbid: ::types_core::Oid) -> PgResult<()> {
 
 // mdsyncfiletag (md.c): homed here — it resolves through the handle cache.
 pub fn mdsyncfiletag(ftag: FileTag) -> PgResult<FileTagOpResult> {
-    let key = RelFileLocatorBackend { locator: ftag.rlocator, backend: INVALID_PROC_NUMBER };
+    let key = RelFileLocatorBackend {
+        locator: ftag.rlocator,
+        backend: INVALID_PROC_NUMBER,
+    };
     let forknum =
         ForkNumber::from_i32(ftag.forknum as i32).expect("FileTag.forknum is a ForkNumber");
     let fk = forknum as usize;
@@ -700,12 +734,20 @@ pub fn mdsyncfiletag(ftag: FileTag) -> PgResult<FileTagOpResult> {
     })??;
 
     if file.0 < 0 {
-        return Ok(FileTagOpResult { result: -1, path, errno: md::last_errno() });
+        return Ok(FileTagOpResult {
+            result: -1,
+            path,
+            errno: md::last_errno(),
+        });
     }
 
     let io_start = pgstat::io::pgstat_prepare_io_time(md::track_io_timing());
 
-    let result = if md::file_sync_failed(file, md::WAIT_EVENT_DATA_FILE_SYNC)? { -1 } else { 0 };
+    let result = if md::file_sync_failed(file, md::WAIT_EVENT_DATA_FILE_SYNC)? {
+        -1
+    } else {
+        0
+    };
     let save_errno = md::last_errno();
 
     if need_to_close {
@@ -722,7 +764,11 @@ pub fn mdsyncfiletag(ftag: FileTag) -> PgResult<FileTagOpResult> {
     );
 
     md::set_errno(save_errno);
-    Ok(FileTagOpResult { result, path, errno: save_errno })
+    Ok(FileTagOpResult {
+        result,
+        path,
+        errno: save_errno,
+    })
 }
 
 pub fn mdunlinkfiletag(ftag: FileTag) -> PgResult<FileTagOpResult> {
@@ -853,7 +899,11 @@ fn compute_rel_locator(rel: &RelationData<'_>) -> RelFileLocator {
     } else {
         init_small::globals::MyDatabaseId()
     };
-    let locator = RelFileLocator { spcOid: spc, dbOid: db, relNumber: rel_number };
+    let locator = RelFileLocator {
+        spcOid: spc,
+        dbOid: db,
+        relNumber: rel_number,
+    };
     rel.rd_locator.set(locator);
     locator
 }
@@ -951,7 +1001,11 @@ pub fn init_seams() {
     smgr_seams::aio_smgr_reopen::set(|td, op, temp_procno, offset| {
         let key = RelFileLocatorBackend {
             locator: td.smgr.rlocator,
-            backend: if td.smgr.is_temp { temp_procno } else { INVALID_PROC_NUMBER },
+            backend: if td.smgr.is_temp {
+                temp_procno
+            } else {
+                INVALID_PROC_NUMBER
+            },
         };
         match op {
             types_storage::aio::PGAIO_OP_READV => opened(key, |r| match r.which {
@@ -966,9 +1020,14 @@ pub fn init_seams() {
     smgr_seams::aio_md_readv_report::set(md::md_readv_report);
     smgr_seams::smgr_write::set(|rlocator, forknum, blocknum, buffer, skip_fsync| {
         opened(rlocator, |r| match r.which {
-            SmgrKind::Md => {
-                md::mdwritev(rlocator, &mut r.md, forknum, blocknum, &[buffer], skip_fsync)
-            }
+            SmgrKind::Md => md::mdwritev(
+                rlocator,
+                &mut r.md,
+                forknum,
+                blocknum,
+                &[buffer],
+                skip_fsync,
+            ),
         })?
     });
     smgr_seams::smgr_zeroextend::set(smgrzeroextend);
@@ -987,7 +1046,11 @@ mod tests {
 
     fn key(rel: u32) -> RelFileLocatorBackend {
         RelFileLocatorBackend {
-            locator: RelFileLocator { spcOid: 1, dbOid: 2, relNumber: rel },
+            locator: RelFileLocator {
+                spcOid: 1,
+                dbOid: 2,
+                relNumber: rel,
+            },
             backend: INVALID_PROC_NUMBER,
         }
     }
@@ -1037,10 +1100,16 @@ mod tests {
     #[test]
     fn cached_nblocks_raw_field_semantics() {
         let k = key(31004);
-        assert_eq!(smgr_cached_nblocks_raw(k, ForkNumber::MAIN_FORKNUM), InvalidBlockNumber);
+        assert_eq!(
+            smgr_cached_nblocks_raw(k, ForkNumber::MAIN_FORKNUM),
+            InvalidBlockNumber
+        );
         smgr_set_cached_nblocks(k, ForkNumber::MAIN_FORKNUM, 7).unwrap();
         assert_eq!(smgr_cached_nblocks_raw(k, ForkNumber::MAIN_FORKNUM), 7);
-        assert_eq!(smgrnblocks_cached(k, ForkNumber::MAIN_FORKNUM), InvalidBlockNumber);
+        assert_eq!(
+            smgrnblocks_cached(k, ForkNumber::MAIN_FORKNUM),
+            InvalidBlockNumber
+        );
         smgrdestroy(k).unwrap();
     }
 
@@ -1065,8 +1134,15 @@ mod tests {
         smgrpin_h(h);
         // Force map growth past the initial reservation; slab slots must not move.
         for i in 0..600u32 {
-            smgropen(RelFileLocator { spcOid: 1, dbOid: 2, relNumber: 40000 + i }, k.backend)
-                .unwrap();
+            smgropen(
+                RelFileLocator {
+                    spcOid: 1,
+                    dbOid: 2,
+                    relNumber: 40000 + i,
+                },
+                k.backend,
+            )
+            .unwrap();
         }
         assert_eq!(with_handle(h, |r, _| r.smgr_rlocator), k);
         smgrrelease(k).unwrap();
@@ -1138,7 +1214,10 @@ mod tests {
             rd_firstRelfilelocatorSubid: Cell::new(0),
             rd_droppedSubid: Cell::new(0),
             rd_lockInfo: LockInfoData {
-                lockRelId: LockRelId { relId: k.locator.relNumber, dbId: k.locator.dbOid },
+                lockRelId: LockRelId {
+                    relId: k.locator.relNumber,
+                    dbId: k.locator.dbOid,
+                },
             },
             rd_rel: form,
             rd_att: Rc::new(TupleDescData {
@@ -1159,13 +1238,16 @@ mod tests {
             pgstat_enabled: Cell::new(false),
             pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
             rd_amcache: Default::default(),
-            rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+            rd_amcache_hash: Default::default(),
+            rd_amcache_gin: Default::default(),
+            rd_amcache_spgist: Default::default(),
             rd_support: PgVec::new_in(cx.mcx()),
             rd_supportinfo: Default::default(),
             rd_opcoptions: Default::default(),
             rd_indexlist: Default::default(),
             rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+            rd_hastriggers: false,
+            rd_hasrules: false,
         }
     }
 
@@ -1194,7 +1276,11 @@ mod tests {
             ::types_storage::smgr::RELSEG_SIZE
         );
         assert_eq!(
-            smgrmaxcombine(k, ForkNumber::MAIN_FORKNUM, ::types_storage::smgr::RELSEG_SIZE - 1),
+            smgrmaxcombine(
+                k,
+                ForkNumber::MAIN_FORKNUM,
+                ::types_storage::smgr::RELSEG_SIZE - 1
+            ),
             1
         );
     }

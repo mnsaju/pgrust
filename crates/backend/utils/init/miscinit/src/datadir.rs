@@ -94,7 +94,9 @@ pub fn checkDataDir() -> PgResult<()> {
     if st.st_mode as u32 & PG_MODE_MASK_GROUP != 0 {
         ereport(FATAL)
             .errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE)
-            .errmsg(format!("data directory \"{data_dir}\" has invalid permissions"))
+            .errmsg(format!(
+                "data directory \"{data_dir}\" has invalid permissions"
+            ))
             .errdetail("Permissions should be u=rwx (0700) or u=rwx,g=rx (0750).")
             .finish(loc(405, "checkDataDir"))?;
     }

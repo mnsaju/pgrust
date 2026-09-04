@@ -59,7 +59,9 @@
 //! cache and the OS page cache.
 
 use types_error::{ErrorLocation, PgResult, LOG};
-use types_guc::{GUC_UNIT_BLOCKS, GUC_UNIT_KB, GUC_UNIT_MEMORY, PGC_POSTMASTER, PGC_S_DYNAMIC_DEFAULT};
+use types_guc::{
+    GUC_UNIT_BLOCKS, GUC_UNIT_KB, GUC_UNIT_MEMORY, PGC_POSTMASTER, PGC_S_DYNAMIC_DEFAULT,
+};
 
 const MIB: u64 = 1024 * 1024;
 
@@ -311,14 +313,26 @@ pub fn apply_memory_autotune() -> PgResult<()> {
             format!("{}MB", t.effective_cache_size_mb),
             t.effective_cache_size_mb * blocks_per_mb,
         ),
-        ("work_mem", format!("{}MB", t.work_mem_mb), t.work_mem_mb * 1024),
+        (
+            "work_mem",
+            format!("{}MB", t.work_mem_mb),
+            t.work_mem_mb * 1024,
+        ),
         (
             "maintenance_work_mem",
             format!("{}MB", t.maintenance_work_mem_mb),
             t.maintenance_work_mem_mb * 1024,
         ),
-        ("max_worker_processes", t.max_worker_processes.to_string(), t.max_worker_processes),
-        ("max_parallel_workers", t.max_parallel_workers.to_string(), t.max_parallel_workers),
+        (
+            "max_worker_processes",
+            t.max_worker_processes.to_string(),
+            t.max_worker_processes,
+        ),
+        (
+            "max_parallel_workers",
+            t.max_parallel_workers.to_string(),
+            t.max_parallel_workers,
+        ),
         (
             "max_parallel_workers_per_gather",
             t.max_parallel_workers_per_gather.to_string(),
@@ -472,8 +486,12 @@ mod tests {
         let count_gucs: &[(&str, fn(&MemoryTuning) -> i64)] = &[
             ("max_worker_processes", |t| t.max_worker_processes),
             ("max_parallel_workers", |t| t.max_parallel_workers),
-            ("max_parallel_workers_per_gather", |t| t.max_parallel_workers_per_gather),
-            ("max_parallel_maintenance_workers", |t| t.max_parallel_maintenance_workers),
+            ("max_parallel_workers_per_gather", |t| {
+                t.max_parallel_workers_per_gather
+            }),
+            ("max_parallel_maintenance_workers", |t| {
+                t.max_parallel_maintenance_workers
+            }),
         ];
         for ram in [4 * 1024 * GIB, 64 * 1024 * GIB, 1024 * 1024 * GIB] {
             for cores in [16usize, 512, 4096] {
@@ -511,8 +529,8 @@ mod tests {
         assert_eq!(huge.effective_cache_size_mb, 16_777_215);
         assert_eq!(huge.max_parallel_workers, 1024);
         assert_eq!(huge.max_parallel_workers_per_gather, 8); // policy cap holds
-        // The review's 4 TiB example: in range, and NOT needlessly clamped
-        // (25% = 1 TiB and 75% = 3 TiB both fit their registered maxima).
+                                                             // The review's 4 TiB example: in range, and NOT needlessly clamped
+                                                             // (25% = 1 TiB and 75% = 3 TiB both fit their registered maxima).
         let t4 = compute_memory_tuning(4 * 1024 * GIB, 64, 100);
         assert_eq!(t4.shared_buffers_mb, 1024 * 1024);
         assert_eq!(t4.effective_cache_size_mb, 3 * 1024 * 1024);

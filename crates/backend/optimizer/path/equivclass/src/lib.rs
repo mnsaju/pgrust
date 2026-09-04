@@ -14,9 +14,9 @@ use types_pathnodes::{
 };
 
 use types_pathnodes::relids::{
-    find_base_rel, find_childrel_parents, pgvec_clone_shallow, relids_add_member, relids_copy, relids_empty,
-    relids_equal, relids_is_empty, relids_is_member, relids_is_subset, relids_members,
-    relids_num_members, relids_overlap, relids_union,
+    find_base_rel, find_childrel_parents, pgvec_clone_shallow, relids_add_member, relids_copy,
+    relids_empty, relids_equal, relids_is_empty, relids_is_member, relids_is_subset,
+    relids_members, relids_num_members, relids_overlap, relids_union,
 };
 use types_pathnodes::run::PlannerRun;
 
@@ -52,7 +52,9 @@ pub fn process_equivalence<'mcx>(
     }
 
     let clause = *run.root.expr_node(run.root.rinfo(rinfo).clause);
-    let op = clause.as_op_expr().expect("process_equivalence: not an opclause");
+    let op = clause
+        .as_op_expr()
+        .expect("process_equivalence: not an opclause");
     let opno = op.opno;
     let collation = op.inputcollid;
     let item1_relids = relids_copy(mcx, &run.root.rinfo(rinfo).left_relids);
@@ -83,7 +85,15 @@ pub fn process_equivalence<'mcx>(
                     location: -1,
                 },
             )?;
-            let (is_pushed_down, has_clone, is_clone, pseudoconstant, security, incompatible, outer) = {
+            let (
+                is_pushed_down,
+                has_clone,
+                is_clone,
+                pseudoconstant,
+                security,
+                incompatible,
+                outer,
+            ) = {
                 let ri = run.root.rinfo(rinfo);
                 (
                     ri.is_pushed_down,
@@ -138,7 +148,12 @@ pub fn process_equivalence<'mcx>(
             let em_id = run.root.ec(cur).ec_members[m];
             let (is_child, is_const, em_jd, em_type) = {
                 let em = run.root.em(em_id);
-                (em.em_is_child, em.em_is_const, em.em_jdomain, em.em_datatype)
+                (
+                    em.em_is_child,
+                    em.em_is_const,
+                    em.em_jdomain,
+                    em.em_datatype,
+                )
             };
             debug_assert!(!is_child);
             if is_const && em_jd != jdomain {
@@ -174,7 +189,10 @@ pub fn process_equivalence<'mcx>(
             ec.ec_max_security = ec.ec_max_security.max(security_level);
         }
         (Some(e1), Some(e2)) => {
-            assert!(!run.root.ec_merging_done, "too late to merge equivalence classes");
+            assert!(
+                !run.root.ec_merging_done,
+                "too late to merge equivalence classes"
+            );
             let (members2, sources2, derives2, relids2, has_const2, min2, max2) = {
                 let ec = run.root.ec_mut(e2);
                 (
@@ -208,14 +226,28 @@ pub fn process_equivalence<'mcx>(
             }
         }
         (Some(e1), None) => {
-            em2 = Some(add_eq_member(run, e1, item2, item2_relids, jdomain, item2_type));
+            em2 = Some(add_eq_member(
+                run,
+                e1,
+                item2,
+                item2_relids,
+                jdomain,
+                item2_type,
+            ));
             let ec = run.root.ec_mut(e1);
             ec.ec_sources.push(rinfo);
             ec.ec_min_security = ec.ec_min_security.min(security_level);
             ec.ec_max_security = ec.ec_max_security.max(security_level);
         }
         (None, Some(e2)) => {
-            em1 = Some(add_eq_member(run, e2, item1, item1_relids, jdomain, item1_type));
+            em1 = Some(add_eq_member(
+                run,
+                e2,
+                item1,
+                item1_relids,
+                jdomain,
+                item1_type,
+            ));
             let ec = run.root.ec_mut(e2);
             ec.ec_sources.push(rinfo);
             ec.ec_min_security = ec.ec_min_security.min(security_level);
@@ -229,8 +261,22 @@ pub fn process_equivalence<'mcx>(
             ec.ec_min_security = security_level;
             ec.ec_max_security = security_level;
             let id = run.root.alloc_ec(ec);
-            em1 = Some(add_eq_member(run, id, item1, item1_relids, jdomain, item1_type));
-            em2 = Some(add_eq_member(run, id, item2, item2_relids, jdomain, item2_type));
+            em1 = Some(add_eq_member(
+                run,
+                id,
+                item1,
+                item1_relids,
+                jdomain,
+                item1_type,
+            ));
+            em2 = Some(add_eq_member(
+                run,
+                id,
+                item2,
+                item2_relids,
+                jdomain,
+                item2_type,
+            ));
             ec1 = Some(id);
         }
     }
@@ -259,7 +305,11 @@ pub fn canonicalize_ec_expression<'mcx>(
         req_type
     };
     if expr_type != req_type || planner_seams::expr_collation::call(expr) != req_collation {
-        let req_typmod = if expr_type != req_type { -1 } else { expr_typmod };
+        let req_typmod = if expr_type != req_type {
+            -1
+        } else {
+            expr_typmod
+        };
         return clauses::fold::apply_relabel_type(
             mcx,
             expr,
@@ -399,7 +449,10 @@ pub fn add_child_rel_equivalences<'mcx>(
         if run.root.ec(cur_ec).ec_has_volatile {
             continue;
         }
-        debug_assert!(relids_is_subset(&top_parent_relids, &run.root.ec(cur_ec).ec_relids));
+        debug_assert!(relids_is_subset(
+            &top_parent_relids,
+            &run.root.ec(cur_ec).ec_relids
+        ));
         let n_members = run.root.ec(cur_ec).ec_members.len();
         for m in 0..n_members {
             let cur_em = run.root.ec(cur_ec).ec_members[m];
@@ -424,14 +477,24 @@ pub fn add_child_rel_equivalences<'mcx>(
                 let child_expr = if run.root.rel(parent_rel).reloptkind == RELOPT_BASEREL {
                     planner_seams::adjust_appendrel_attrs::call(run, expr, appinfo)?
                 } else {
-                    let top = run.root.rel(child_rel).top_parent.expect("child has top parent");
-                    planner_seams::adjust_appendrel_attrs_multilevel::call(run, expr, child_rel, top)?
+                    let top = run
+                        .root
+                        .rel(child_rel)
+                        .top_parent
+                        .expect("child has top parent");
+                    planner_seams::adjust_appendrel_attrs_multilevel::call(
+                        run, expr, child_rel, top,
+                    )?
                 };
                 // Not pull_varnos(child_expr): a substituted constant must
                 // not mark the child member const.
                 let new_relids = relids_union(
                     mcx,
-                    &types_pathnodes::relids::relids_difference(mcx, &em_relids, &top_parent_relids),
+                    &types_pathnodes::relids::relids_difference(
+                        mcx,
+                        &em_relids,
+                        &top_parent_relids,
+                    ),
                     &child_relids,
                 );
                 add_child_eq_member(
@@ -468,7 +531,14 @@ pub fn add_child_join_rel_equivalences<'mcx>(
     let top_parent_relids = relids_copy(mcx, &run.root.rel(child_joinrel).top_parent_relids);
     let child_relids = relids_copy(mcx, &run.root.rel(child_joinrel).relids);
     let first_component = relids_members(&child_relids)
-        .find(|&r| run.root.simple_rel_array.get(r as usize).copied().flatten().is_some())
+        .find(|&r| {
+            run.root
+                .simple_rel_array
+                .get(r as usize)
+                .copied()
+                .flatten()
+                .is_some()
+        })
         .expect("child joinrel has a baserel component") as usize;
     let matching_ecs = get_eclass_indexes_for_relids(run, &top_parent_relids);
     for i in relids_members(&matching_ecs) {
@@ -476,7 +546,10 @@ pub fn add_child_join_rel_equivalences<'mcx>(
         if run.root.ec(cur_ec).ec_has_volatile {
             continue;
         }
-        debug_assert!(relids_overlap(&top_parent_relids, &run.root.ec(cur_ec).ec_relids));
+        debug_assert!(relids_overlap(
+            &top_parent_relids,
+            &run.root.ec(cur_ec).ec_relids
+        ));
         let n_members = run.root.ec(cur_ec).ec_members.len();
         for m in 0..n_members {
             let cur_em = run.root.ec(cur_ec).ec_members[m];
@@ -500,18 +573,29 @@ pub fn add_child_join_rel_equivalences<'mcx>(
             }
             if relids_overlap(&em_relids, &top_parent_relids) {
                 let expr = *run.root.expr_node(run.root.em(cur_em).em_expr);
-                let child_expr = if run.root.rel(parent_joinrel).reloptkind
-                    == types_pathnodes::RELOPT_JOINREL
-                {
-                    planner_seams::adjust_appendrel_attrs_multi::call(run, expr, appinfos)?
-                } else {
-                    let top =
-                        run.root.rel(child_joinrel).top_parent.expect("child has top parent");
-                    planner_seams::adjust_appendrel_attrs_multilevel::call(run, expr, child_joinrel, top)?
-                };
+                let child_expr =
+                    if run.root.rel(parent_joinrel).reloptkind == types_pathnodes::RELOPT_JOINREL {
+                        planner_seams::adjust_appendrel_attrs_multi::call(run, expr, appinfos)?
+                    } else {
+                        let top = run
+                            .root
+                            .rel(child_joinrel)
+                            .top_parent
+                            .expect("child has top parent");
+                        planner_seams::adjust_appendrel_attrs_multilevel::call(
+                            run,
+                            expr,
+                            child_joinrel,
+                            top,
+                        )?
+                    };
                 let new_relids = relids_union(
                     mcx,
-                    &types_pathnodes::relids::relids_difference(mcx, &em_relids, &top_parent_relids),
+                    &types_pathnodes::relids::relids_difference(
+                        mcx,
+                        &em_relids,
+                        &top_parent_relids,
+                    ),
                     &child_relids,
                 );
                 add_child_eq_member(
@@ -612,7 +696,12 @@ pub fn get_eclass_for_sort_expr<'mcx>(
             let em_id = run.root.ec(id).ec_members[m];
             let (is_child, is_const, em_jd, em_type) = {
                 let em = run.root.em(em_id);
-                (em.em_is_child, em.em_is_const, em.em_jdomain, em.em_datatype)
+                (
+                    em.em_is_child,
+                    em.em_is_const,
+                    em.em_jdomain,
+                    em.em_datatype,
+                )
             };
             if is_child {
                 continue;
@@ -628,7 +717,9 @@ pub fn get_eclass_for_sort_expr<'mcx>(
         }
         // Child members match only when their em_relids equal the request.
         for r in relids_members(rel) {
-            let Some(list) = run.root.ec(id).ec_childmembers.get(r as usize) else { continue };
+            let Some(list) = run.root.ec(id).ec_childmembers.get(r as usize) else {
+                continue;
+            };
             let n = list.len();
             for m in 0..n {
                 let em_id = run.root.ec(id).ec_childmembers[r as usize][m];
@@ -650,7 +741,10 @@ pub fn get_eclass_for_sort_expr<'mcx>(
     }
 
     let has_volatile = clauses::contain_volatile_functions(expr)?;
-    assert!(!(has_volatile && sortref == 0), "volatile EquivalenceClass has no sortref");
+    assert!(
+        !(has_volatile && sortref == 0),
+        "volatile EquivalenceClass has no sortref"
+    );
 
     let mut ec = EquivalenceClass::new(mcx);
     ec.ec_opfamilies = pgvec_clone_shallow(mcx, opfamilies);
@@ -814,7 +908,14 @@ fn generate_base_implied_equalities_const(run: &mut PlannerRun<'_>, ec: EcId) ->
         let const_expr = *run.root.expr_node(run.root.em(const_em).em_expr);
         let both_const = run.root.em(cur_em).em_is_const;
         let rinfo = planner_seams::process_implied_equality::call(
-            run, eq_op, collation, cur_expr, const_expr, qualscope, min_security, both_const,
+            run,
+            eq_op,
+            collation,
+            cur_expr,
+            const_expr,
+            qualscope,
+            min_security,
+            both_const,
         )?;
         if let Some(rid) = rinfo {
             if !run.root.rinfo(rid).mergeopfamilies.is_empty() {
@@ -841,7 +942,8 @@ fn generate_base_implied_equalities_no_const(run: &mut PlannerRun<'_>, ec: EcId)
     for m in 0..run.root.ec(ec).ec_members.len() {
         let cur_em = run.root.ec(ec).ec_members[m];
         debug_assert!(!run.root.em(cur_em).em_is_child);
-        let Some(relid) = types_pathnodes::relids::relids_singleton_member(&run.root.em(cur_em).em_relids)
+        let Some(relid) =
+            types_pathnodes::relids::relids_singleton_member(&run.root.em(cur_em).em_relids)
         else {
             continue;
         };
@@ -866,7 +968,14 @@ fn generate_base_implied_equalities_no_const(run: &mut PlannerRun<'_>, ec: EcId)
             let prev_expr = *run.root.expr_node(run.root.em(prev_em).em_expr);
             let cur_expr = *run.root.expr_node(run.root.em(cur_em).em_expr);
             let rinfo = planner_seams::process_implied_equality::call(
-                run, eq_op, collation, prev_expr, cur_expr, qualscope, min_security, false,
+                run,
+                eq_op,
+                collation,
+                prev_expr,
+                cur_expr,
+                qualscope,
+                min_security,
+                false,
             )?;
             // Not recorded as a derived clause: non-join clauses are never
             // re-found via ec_derives.
@@ -930,7 +1039,10 @@ pub fn generate_join_implied_equalities<'mcx>(
         }
         (ninner, njoin)
     } else {
-        (relids_copy(mcx, &inner_relids), relids_copy(mcx, join_relids))
+        (
+            relids_copy(mcx, &inner_relids),
+            relids_copy(mcx, join_relids),
+        )
     };
 
     let matching_ecs = if sjinfo.is_some_and(|s| s.ojrelid != 0) {
@@ -947,7 +1059,10 @@ pub fn generate_join_implied_equalities<'mcx>(
         if run.root.ec(ec).ec_members.len() <= 1 {
             continue;
         }
-        debug_assert!(relids_overlap(&run.root.ec(ec).ec_relids, &nominal_join_relids));
+        debug_assert!(relids_overlap(
+            &run.root.ec(ec).ec_relids,
+            &nominal_join_relids
+        ));
 
         let mut sublist: PgVec<'mcx, RinfoId> = PgVec::new_in(mcx);
         if !run.root.ec(ec).ec_broken {
@@ -990,7 +1105,10 @@ pub fn generate_join_implied_equalities_for_ecs<'mcx>(
         let njoin = relids_union(mcx, outer_relids, &ninner);
         (ninner, njoin)
     } else {
-        (relids_copy(mcx, &inner_relids), relids_copy(mcx, join_relids))
+        (
+            relids_copy(mcx, &inner_relids),
+            relids_copy(mcx, join_relids),
+        )
     };
 
     for &ec in eclasses {
@@ -1031,9 +1149,7 @@ pub fn generate_join_implied_equalities_for_ecs<'mcx>(
 fn expr_is_var_shaped(node: Node<'_>) -> bool {
     match node.node_tag() {
         NodeTag::T_Var => true,
-        NodeTag::T_RelabelType => {
-            node.as_relabel_type().unwrap().arg.node_tag() == NodeTag::T_Var
-        }
+        NodeTag::T_RelabelType => node.as_relabel_type().unwrap().arg.node_tag() == NodeTag::T_Var,
         _ => false,
     }
 }
@@ -1178,7 +1294,11 @@ fn generate_join_implied_equalities_broken<'mcx>(
     // translated RestrictInfos are not registered in ec_derives (C comment:
     // narrow corner case, no duplication expected).
     if !relids_is_empty(&run.root.rel(inner_rel).top_parent_relids) && !result.is_empty() {
-        let top = run.root.rel(inner_rel).top_parent.expect("other rel has a top_parent");
+        let top = run
+            .root
+            .rel(inner_rel)
+            .top_parent
+            .expect("other rel has a top_parent");
         for i in 0..result.len() {
             result[i] =
                 planner_seams::adjust_child_rinfo_multilevel::call(run, result[i], inner_rel, top)?;
@@ -1245,7 +1365,13 @@ pub(crate) fn create_join_clause<'mcx>(
         &run.root.em(rightem).em_relids,
     );
     let rinfo = planner_seams::build_implied_join_equality::call(
-        run, opno, collation, left_expr, right_expr, qualscope, min_security,
+        run,
+        opno,
+        collation,
+        left_expr,
+        right_expr,
+        qualscope,
+        min_security,
     )?;
     // A pseudoconstant-translated child EM (UNION ALL const output) may leave
     // its relids out of clause_relids; force them in so
@@ -1375,7 +1501,9 @@ fn reconsider_outer_join_clause<'mcx>(
 ) -> PgResult<bool> {
     let mcx = run.mcx;
     let clause = *run.root.expr_node(run.root.rinfo(rinfo).clause);
-    let op = clause.as_op_expr().expect("outer-join clause is an opclause");
+    let op = clause
+        .as_op_expr()
+        .expect("outer-join clause is an opclause");
     let opno = op.opno;
     let collation = op.inputcollid;
     let (left_type, right_type) = lsyscache::op_input_types(opno)?;
@@ -1431,8 +1559,12 @@ fn reconsider_outer_join_clause<'mcx>(
             if !run.root.em(cur_em).em_is_const {
                 continue;
             }
-            let eq_op =
-                select_equality_operator(run, cur_ec, inner_datatype, run.root.em(cur_em).em_datatype)?;
+            let eq_op = select_equality_operator(
+                run,
+                cur_ec,
+                inner_datatype,
+                run.root.em(cur_em).em_datatype,
+            )?;
             if eq_op == 0 {
                 continue;
             }
@@ -1468,7 +1600,9 @@ fn reconsider_full_join_clause<'mcx>(
 ) -> PgResult<bool> {
     let mcx = run.mcx;
     let clause = *run.root.expr_node(run.root.rinfo(rinfo).clause);
-    let op = clause.as_op_expr().expect("full-join clause is an opclause");
+    let op = clause
+        .as_op_expr()
+        .expect("full-join clause is an opclause");
     let opno = op.opno;
     let collation = op.inputcollid;
     let (left_type, right_type) = lsyscache::op_input_types(opno)?;
@@ -1502,7 +1636,9 @@ fn reconsider_full_join_clause<'mcx>(
             let em_id = run.root.ec(cur_ec).ec_members[m];
             debug_assert!(!run.root.em(em_id).em_is_child);
             let em_expr = *run.root.expr_node(run.root.em(em_id).em_expr);
-            let Some(cexpr) = em_expr.as_coalesce_expr() else { continue };
+            let Some(cexpr) = em_expr.as_coalesce_expr() else {
+                continue;
+            };
             if cexpr.args.len() != 2 {
                 continue;
             }
@@ -1681,7 +1817,11 @@ pub fn remove_rel_from_eclasses(run: &mut PlannerRun<'_>, relid: i32, ojrelid: i
                 debug_assert!(!run.root.em(em_id).em_is_const);
                 let stripped = types_pathnodes::relids::relids_del_member(
                     mcx,
-                    &types_pathnodes::relids::relids_del_member(mcx, &run.root.em(em_id).em_relids, relid),
+                    &types_pathnodes::relids::relids_del_member(
+                        mcx,
+                        &run.root.em(em_id).em_relids,
+                        relid,
+                    ),
                     ojrelid,
                 );
                 run.root.em_mut(em_id).em_relids = stripped;
@@ -1756,7 +1896,13 @@ pub fn match_eclasses_to_foreign_key_col(
     let mcx = run.mcx;
     let (var1varno, var1attno, var2varno, var2attno, eqop) = {
         let fk = run.root.foreign_key(fkinfo_id);
-        (fk.con_relid, fk.conkey[colno], fk.ref_relid, fk.confkey[colno], fk.conpfeqop[colno])
+        (
+            fk.con_relid,
+            fk.conkey[colno],
+            fk.ref_relid,
+            fk.confkey[colno],
+            fk.conpfeqop[colno],
+        )
     };
     debug_assert!(run.root.ec_merging_done);
     let rel1 = find_base_rel(&run.root, var1varno as i32);
@@ -1828,11 +1974,13 @@ where
     let mcx = run.mcx;
     let mut result: PgVec<'mcx, RinfoId> = PgVec::new_in(mcx);
     debug_assert!(run.root.ec_merging_done);
-    let is_child_rel =
-        run.root.rel(rel).reloptkind == types_pathnodes::RELOPT_OTHER_MEMBER_REL;
+    let is_child_rel = run.root.rel(rel).reloptkind == types_pathnodes::RELOPT_OTHER_MEMBER_REL;
     // Ancestor relids, to skip useless joins from a child to its own parents.
-    let parent_relids =
-        if is_child_rel { find_childrel_parents(&run.root, rel) } else { relids_empty() };
+    let parent_relids = if is_child_rel {
+        find_childrel_parents(&run.root, rel)
+    } else {
+        relids_empty()
+    };
 
     let eclass_indexes = relids_copy(mcx, &run.root.rel(rel).eclass_indexes);
     for i in relids_members(&eclass_indexes) {
@@ -1864,14 +2012,10 @@ where
         for m in 0..run.root.ec(cur_ec).ec_members.len() {
             let other_em = run.root.ec(cur_ec).ec_members[m];
             debug_assert!(!run.root.em(other_em).em_is_child);
-            if other_em == cur_em
-                || relids_overlap(&run.root.em(other_em).em_relids, &rel_relids)
-            {
+            if other_em == cur_em || relids_overlap(&run.root.em(other_em).em_relids, &rel_relids) {
                 continue;
             }
-            if is_child_rel
-                && relids_overlap(&parent_relids, &run.root.em(other_em).em_relids)
-            {
+            if is_child_rel && relids_overlap(&parent_relids, &run.root.em(other_em).em_relids) {
                 continue;
             }
             if relids_overlap(&run.root.em(other_em).em_relids, prohibited_rels) {
@@ -1906,8 +2050,14 @@ pub fn have_relevant_eclass_joinclause(run: &PlannerRun<'_>, rel1: RelId, rel2: 
     );
     for i in relids_members(&matching_ecs) {
         let ec = EcId(i as u32);
-        debug_assert!(relids_overlap(&run.root.rel(rel1).relids, &run.root.ec(ec).ec_relids));
-        debug_assert!(relids_overlap(&run.root.rel(rel2).relids, &run.root.ec(ec).ec_relids));
+        debug_assert!(relids_overlap(
+            &run.root.rel(rel1).relids,
+            &run.root.ec(ec).ec_relids
+        ));
+        debug_assert!(relids_overlap(
+            &run.root.rel(rel2).relids,
+            &run.root.ec(ec).ec_relids
+        ));
         if run.root.ec(ec).ec_members.len() > 1 {
             return true;
         }
@@ -1963,7 +2113,9 @@ pub fn is_redundant_derived_clause(
     rinfo: RinfoId,
     clauselist: &[RinfoId],
 ) -> bool {
-    let Some(parent_ec) = run.root.rinfo(rinfo).parent_ec else { return false };
+    let Some(parent_ec) = run.root.rinfo(rinfo).parent_ec else {
+        return false;
+    };
     clauselist
         .iter()
         .any(|&other| run.root.rinfo(other).parent_ec == Some(parent_ec))
@@ -2034,12 +2186,24 @@ fn fill_ec_derives_key(
     parent_ec: Option<EcId>,
 ) -> ECDerivesKey {
     match rightem {
-        None => ECDerivesKey { em1: None, em2: Some(leftem), parent_ec },
+        None => ECDerivesKey {
+            em1: None,
+            em2: Some(leftem),
+            parent_ec,
+        },
         Some(r) => {
             if leftem < r {
-                ECDerivesKey { em1: Some(leftem), em2: Some(r), parent_ec }
+                ECDerivesKey {
+                    em1: Some(leftem),
+                    em2: Some(r),
+                    parent_ec,
+                }
             } else {
-                ECDerivesKey { em1: Some(r), em2: Some(leftem), parent_ec }
+                ECDerivesKey {
+                    em1: Some(r),
+                    em2: Some(leftem),
+                    parent_ec,
+                }
             }
         }
     }
@@ -2051,7 +2215,11 @@ fn derives_hash_key(run: &PlannerRun<'_>, rid: RinfoId) -> ECDerivesKey {
     let right_em = ri.right_em.expect("derived clause has right_em");
     debug_assert!(!run.root.em(left_em).em_is_const);
     debug_assert!(ri.parent_ec.is_none() || !run.root.em(right_em).em_is_const);
-    let right = if run.root.em(right_em).em_is_const { None } else { Some(right_em) };
+    let right = if run.root.em(right_em).em_is_const {
+        None
+    } else {
+        Some(right_em)
+    };
     fill_ec_derives_key(left_em, right, ri.parent_ec)
 }
 
@@ -2135,13 +2303,24 @@ fn ec_search_derived_clause_for_ems(
     }
     if run.root.ec(ec).ec_derives_hash.is_some() {
         let key = fill_ec_derives_key(leftem, rightem, parent_ec);
-        let found = run.root.ec(ec).ec_derives_hash.as_ref().unwrap().get(&key).copied();
+        let found = run
+            .root
+            .ec(ec)
+            .ec_derives_hash
+            .as_ref()
+            .unwrap()
+            .get(&key)
+            .copied();
         if let Some(rid) = found {
             debug_assert!(
                 rightem.is_some()
                     || run
                         .root
-                        .em(run.root.rinfo(rid).right_em.expect("derived clause right_em"))
+                        .em(run
+                            .root
+                            .rinfo(rid)
+                            .right_em
+                            .expect("derived clause right_em"))
                         .em_is_const
             );
             return Some(rid);

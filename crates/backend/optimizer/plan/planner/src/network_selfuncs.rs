@@ -8,8 +8,8 @@ use types_pathnodes::{NodeId, SpecialJoinInfo};
 
 use crate::run::PlannerRun;
 use crate::selfuncs::{
-    clamp_probability, get_join_variables, get_restriction_variable, mcv_selectivity,
-    opproc_for, VariableStatData, STATISTIC_KIND_HISTOGRAM, STATISTIC_KIND_MCV,
+    clamp_probability, get_join_variables, get_restriction_variable, mcv_selectivity, opproc_for,
+    VariableStatData, STATISTIC_KIND_HISTOGRAM, STATISTIC_KIND_MCV,
 };
 
 const DEFAULT_OVERLAP_SEL: f64 = 0.01;
@@ -23,7 +23,11 @@ const OID_INET_SUPEQ_OP: Oid = 934;
 const OID_INET_OVERLAP_OP: Oid = 3552;
 
 fn default_sel(operator: Oid) -> f64 {
-    if operator == OID_INET_OVERLAP_OP { DEFAULT_OVERLAP_SEL } else { DEFAULT_INCLUSION_SEL }
+    if operator == OID_INET_OVERLAP_OP {
+        DEFAULT_OVERLAP_SEL
+    } else {
+        DEFAULT_INCLUSION_SEL
+    }
 }
 
 fn inet_opr_codenum(operator: Oid) -> i32 {
@@ -62,8 +66,7 @@ pub fn networksel<'mcx>(
     varrelid: i32,
 ) -> PgResult<f64> {
     let opr_codenum = inet_opr_codenum(operator);
-    let Some((vardata, other, varonleft)) = get_restriction_variable(run, args, varrelid)?
-    else {
+    let Some((vardata, other, varonleft)) = get_restriction_variable(run, args, varrelid)? else {
         return Ok(default_sel(operator));
     };
     let Some(c) = other.as_const() else {
@@ -106,8 +109,7 @@ pub fn networkjoinsel<'mcx>(
     let (vardata1, vardata2, join_is_reversed) = get_join_variables(run, args, sjinfo)?;
 
     let selec = match sjinfo.jointype {
-        types_pathnodes::JOIN_INNER | types_pathnodes::JOIN_LEFT
-        | types_pathnodes::JOIN_FULL => {
+        types_pathnodes::JOIN_INNER | types_pathnodes::JOIN_LEFT | types_pathnodes::JOIN_FULL => {
             networkjoinsel_inner(run, operator, opr_codenum, &vardata1, &vardata2)?
         }
         types_pathnodes::JOIN_SEMI | types_pathnodes::JOIN_ANTI => {
@@ -137,7 +139,13 @@ struct SideStats<'a> {
 }
 
 fn side_stats<'a, 'mcx>(vardata: &'a VariableStatData<'mcx>) -> PgResult<SideStats<'a>> {
-    let mut s = SideStats { nullfrac: 0.0, mcv: None, hist: None, mcv_length: 0, sumcommon: 0.0 };
+    let mut s = SideStats {
+        nullfrac: 0.0,
+        mcv: None,
+        hist: None,
+        mcv_length: 0,
+        sumcommon: 0.0,
+    };
     if vardata.stats.is_some() {
         s.nullfrac = vardata.nullfrac();
         if let Some(mslot) = vardata.slot(STATISTIC_KIND_MCV, 0) {
@@ -214,9 +222,7 @@ fn networkjoinsel_semi<'mcx>(
     let mut proc = opproc_for(operator)?;
 
     let hist2_weight = match (s2.hist, vardata2.rel) {
-        (Some(_), Some(rel)) => {
-            (1.0 - s2.nullfrac - s2.sumcommon) * run.root.rel(rel).rows
-        }
+        (Some(_), Some(rel)) => (1.0 - s2.nullfrac - s2.sumcommon) * run.root.rel(rel).rows,
         _ => 0.0,
     };
 
@@ -288,9 +294,7 @@ fn inet_hist_value_sel(values: &[Datum], constvalue: Datum, opr_codenum: i32) ->
 
         if left_order == 0 && right_order == 0 {
             match_sum += 1.0;
-        } else if (left_order <= 0 && right_order >= 0)
-            || (left_order >= 0 && right_order <= 0)
-        {
+        } else if (left_order <= 0 && right_order >= 0) || (left_order >= 0 && right_order <= 0) {
             let left_divider = inet_hist_match_divider(&left, &query, opr_codenum);
             let right_divider = inet_hist_match_divider(&right, &query, opr_codenum);
             if left_divider >= 0 || right_divider >= 0 {
@@ -402,11 +406,7 @@ fn inet_inclusion_cmp(left: &InetRef<'_>, right: &InetRef<'_>, opr_codenum: i32)
     left.family as i32 - right.family as i32
 }
 
-fn inet_masklen_inclusion_cmp(
-    left: &InetRef<'_>,
-    right: &InetRef<'_>,
-    opr_codenum: i32,
-) -> i32 {
+fn inet_masklen_inclusion_cmp(left: &InetRef<'_>, right: &InetRef<'_>, opr_codenum: i32) -> i32 {
     let order = left.bits as i32 - right.bits as i32;
     if (order > 0 && opr_codenum >= 0)
         || (order == 0 && (-1..=1).contains(&opr_codenum))
@@ -417,11 +417,7 @@ fn inet_masklen_inclusion_cmp(
     opr_codenum
 }
 
-fn inet_hist_match_divider(
-    boundary: &InetRef<'_>,
-    query: &InetRef<'_>,
-    opr_codenum: i32,
-) -> i32 {
+fn inet_hist_match_divider(boundary: &InetRef<'_>, query: &InetRef<'_>, opr_codenum: i32) -> i32 {
     if boundary.family == query.family
         && inet_masklen_inclusion_cmp(boundary, query, opr_codenum) == 0
     {

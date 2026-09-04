@@ -94,13 +94,21 @@ pub fn fc_enum_cmp(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResu
 pub fn fc_enum_smaller(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let [a, b] = fcinfo.args_n::<2>();
     let (a, b) = (a.value.as_oid(), b.value.as_oid());
-    Ok(Datum::from_oid(if crate::cmp_via(fcinfo, flinfo)? < 0 { a } else { b }))
+    Ok(Datum::from_oid(if crate::cmp_via(fcinfo, flinfo)? < 0 {
+        a
+    } else {
+        b
+    }))
 }
 
 pub fn fc_enum_larger(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let [a, b] = fcinfo.args_n::<2>();
     let (a, b) = (a.value.as_oid(), b.value.as_oid());
-    Ok(Datum::from_oid(if crate::cmp_via(fcinfo, flinfo)? > 0 { a } else { b }))
+    Ok(Datum::from_oid(if crate::cmp_via(fcinfo, flinfo)? > 0 {
+        a
+    } else {
+        b
+    }))
 }
 
 pub fn fc_hashenum(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -110,22 +118,41 @@ pub fn fc_hashenum(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRes
 
 pub fn fc_hashenumextended(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let [a, seed] = fcinfo.args_n::<2>();
-    Ok(Datum::from_u64(hashfn::hash_bytes_uint32_extended(a.value.as_oid(), seed.value.as_u64())))
+    Ok(Datum::from_u64(hashfn::hash_bytes_uint32_extended(
+        a.value.as_oid(),
+        seed.value.as_u64(),
+    )))
 }
 
 pub fn fc_enum_first(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let mcx = fcinfo.result_mcx();
-    Ok(Datum::from_oid(crate::enum_first_last(mcx, flinfo.as_deref(), false)?))
+    Ok(Datum::from_oid(crate::enum_first_last(
+        mcx,
+        flinfo.as_deref(),
+        false,
+    )?))
 }
 
 pub fn fc_enum_last(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let mcx = fcinfo.result_mcx();
-    Ok(Datum::from_oid(crate::enum_first_last(mcx, flinfo.as_deref(), true)?))
+    Ok(Datum::from_oid(crate::enum_first_last(
+        mcx,
+        flinfo.as_deref(),
+        true,
+    )?))
 }
 
 pub fn fc_enum_range_bounds(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
-    let lower = if fcinfo.argisnull(0) { InvalidOid } else { fcinfo.arg(0).as_oid() };
-    let upper = if fcinfo.argisnull(1) { InvalidOid } else { fcinfo.arg(1).as_oid() };
+    let lower = if fcinfo.argisnull(0) {
+        InvalidOid
+    } else {
+        fcinfo.arg(0).as_oid()
+    };
+    let upper = if fcinfo.argisnull(1) {
+        InvalidOid
+    } else {
+        fcinfo.arg(1).as_oid()
+    };
     let enumtypoid = crate::enum_range_typoid(flinfo.as_deref())?;
     let mcx = fcinfo.result_mcx();
     crate::enum_range_internal(mcx, enumtypoid, lower, upper)
@@ -137,8 +164,21 @@ pub fn fc_enum_range_all(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> 
     crate::enum_range_internal(mcx, enumtypoid, InvalidOid, InvalidOid)
 }
 
-const fn b(foid: types_core::Oid, name: &'static str, nargs: i16, strict: bool, func: types_fmgr::PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict, retset: false, func }
+const fn b(
+    foid: types_core::Oid,
+    name: &'static str,
+    nargs: i16,
+    strict: bool,
+    func: types_fmgr::PGFunction,
+) -> FmgrBuiltin {
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict,
+        retset: false,
+        func,
+    }
 }
 
 // OIDs verified against pg_proc.dat 18.3.

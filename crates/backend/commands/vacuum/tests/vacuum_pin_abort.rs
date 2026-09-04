@@ -20,8 +20,7 @@ use types_core::{
 };
 use types_nodes::nodes_enums::CmdType;
 use types_rel::{
-    FormData_pg_class, LockInfoData, LockRelId, Relation, RelationData, LOCKMODE,
-    RELKIND_RELATION,
+    FormData_pg_class, LockInfoData, LockRelId, Relation, RelationData, LOCKMODE, RELKIND_RELATION,
 };
 use types_storage::{RelFileLocator, RelFileLocatorBackend};
 use types_tuple::{CompactAttribute, FormData_pg_attribute, NameData, TupleDescData};
@@ -69,17 +68,21 @@ fn install_smgr_disk() {
         });
         Ok(())
     });
-    smgr_seams::smgr_exists::set(|_loc, fork| {
-        Ok(with_disk(|d| d.fork(fork).is_some()))
-    });
+    smgr_seams::smgr_exists::set(|_loc, fork| Ok(with_disk(|d| d.fork(fork).is_some())));
     smgr_seams::smgr_nblocks::set(|_loc, fork| {
         Ok(with_disk(|d| {
-            d.fork(fork).as_ref().expect("smgr_nblocks on missing fork").len() as BlockNumber
+            d.fork(fork)
+                .as_ref()
+                .expect("smgr_nblocks on missing fork")
+                .len() as BlockNumber
         }))
     });
     smgr_seams::rel_smgr_nblocks::set(|_rel, fork| {
         Ok(with_disk(|d| {
-            d.fork(fork).as_ref().expect("rel_smgr_nblocks on missing fork").len() as BlockNumber
+            d.fork(fork)
+                .as_ref()
+                .expect("rel_smgr_nblocks on missing fork")
+                .len() as BlockNumber
         }))
     });
     smgr_seams::smgr_zeroextend::set(|_loc, fork, blocknum, nblocks, _skip_fsync| {
@@ -242,9 +245,7 @@ fn install_xact_periphery_seams() {
     be_fsstubs_seams::at_eoxact_large_object::set(|_| Ok(()));
     namespace_seams::at_eoxact_namespace::set(|_, _| {});
     catalog_index_seams::reset_reindex_state::set(|_| {});
-    catalog_storage_seams::smgr_get_pending_deletes::set(|mcx, _for_commit| {
-        Ok(PgVec::new_in(mcx))
-    });
+    catalog_storage_seams::smgr_get_pending_deletes::set(|mcx, _for_commit| Ok(PgVec::new_in(mcx)));
     catalog_storage_seams::smgr_do_pending_deletes::set(|_| Ok(()));
     catalog_storage_seams::smgr_do_pending_syncs::set(|_, _| Ok(()));
     combocid_seams::at_eoxact_combocid::set(|| {});
@@ -411,7 +412,10 @@ fn test_relation<'mcx>(mcx: Mcx<'mcx>) -> RelationData<'mcx> {
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
         rd_lockInfo: LockInfoData {
-            lockRelId: LockRelId { relId: REL_OID, dbId: 5 },
+            lockRelId: LockRelId {
+                relId: REL_OID,
+                dbId: 5,
+            },
         },
         rd_rel,
         rd_att: int4_x2_tupdesc(mcx),
@@ -424,13 +428,16 @@ fn test_relation<'mcx>(mcx: Mcx<'mcx>) -> RelationData<'mcx> {
         pgstat_enabled: Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: PgVec::new_in(mcx),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     }
 }
 
@@ -457,12 +464,8 @@ fn install_parser_fixture_seams() {
     syscache_seams::lookup_pg_statistic_bundle::set(|_, _, _, _| Ok(None));
     syscache_seams::pg_statistic_stawidth::set(|_, _, _| Ok(None));
     indexcmds_seams::get_default_opclass::set(|_typid, _am| Ok(0));
-    syscache_seams::syscache_hash_value_typeoid::set(|typid| {
-        Ok(typid.wrapping_mul(0x9e37_79b1))
-    });
-    syscache_seams::syscache_hash_value_procoid::set(|funcid| {
-        Ok(funcid.wrapping_mul(0x9e37_79b1))
-    });
+    syscache_seams::syscache_hash_value_typeoid::set(|typid| Ok(typid.wrapping_mul(0x9e37_79b1)));
+    syscache_seams::syscache_hash_value_procoid::set(|funcid| Ok(funcid.wrapping_mul(0x9e37_79b1)));
     syscache_seams::lookup_pg_type_typcache_shape::set(|_typid| {
         Ok(Some(syscache_seams::PgTypeTypcacheShape {
             typname: types_tuple::NameData::default(),
@@ -509,7 +512,8 @@ fn install_parser_fixture_seams() {
     syscache_seams::pg_operator_name_candidates_exist::set(|_, _| Ok(false));
     syscache_seams::lookup_pg_operator_shape::set(|opno| {
         Ok(match opno {
-            INT4LE_OP => Some(syscache_seams::PgOperatorShape { oprnamespace: 11,
+            INT4LE_OP => Some(syscache_seams::PgOperatorShape {
+                oprnamespace: 11,
                 oprleft: 23,
                 oprright: 23,
                 oprresult: 16,
@@ -599,8 +603,14 @@ fn run_stmt(sql: &str) -> (CmdType, u64) {
     let mut rewritten = rewrite_handler::QueryRewrite(mcx, query).unwrap();
     assert_eq!(rewritten.len(), 1);
     let query = rewritten.pop().unwrap();
-    let pstmt =
-        planner::planner(mcx, mcx::leak_in(mcx::alloc_in(mcx, query).unwrap()), sql, 0, types_portal::ParamListHandle::NULL).unwrap();
+    let pstmt = planner::planner(
+        mcx,
+        mcx::leak_in(mcx::alloc_in(mcx, query).unwrap()),
+        sql,
+        0,
+        types_portal::ParamListHandle::NULL,
+    )
+    .unwrap();
     let pstmt: &'static types_nodes::plannodes::PlannedStmt<'static> =
         mcx::leak_in(mcx::alloc_in(mcx, pstmt).unwrap());
 
@@ -628,7 +638,10 @@ fn run_stmt(sql: &str) -> (CmdType, u64) {
     (operation, processed)
 }
 
-fn parse_vacuum(sql: &'static str, mcx: Mcx<'static>) -> &'static types_nodes::parsenodes::VacuumStmt<'static> {
+fn parse_vacuum(
+    sql: &'static str,
+    mcx: Mcx<'static>,
+) -> &'static types_nodes::parsenodes::VacuumStmt<'static> {
     let list =
         gram_core::raw_parser(mcx, sql, parser_seams::RawParseMode::RAW_PARSE_DEFAULT).unwrap();
     assert_eq!(list.len(), 1);
@@ -638,12 +651,18 @@ fn parse_vacuum(sql: &'static str, mcx: Mcx<'static>) -> &'static types_nodes::p
 
 fn assert_no_pins(when: &str) {
     for b in 1..=TEST_NBUFFERS {
-        assert_eq!(bufmgr::GetPrivateRefCount(b), 0, "buffer {b} still pinned {when}");
+        assert_eq!(
+            bufmgr::GetPrivateRefCount(b),
+            0,
+            "buffer {b} still pinned {when}"
+        );
     }
 }
 
 fn pinned_count() -> usize {
-    (1..=TEST_NBUFFERS).filter(|&b| bufmgr::GetPrivateRefCount(b) > 0).count()
+    (1..=TEST_NBUFFERS)
+        .filter(|&b| bufmgr::GetPrivateRefCount(b) > 0)
+        .count()
 }
 
 #[test]
@@ -754,7 +773,10 @@ fn vacuum_error_mid_scan_abort_releases_all_pins() {
     bufmgr::BufferManagerShmemInit().unwrap();
     bufmgr::init_seams();
     smgr_seams::smgr_create::call(
-        RelFileLocatorBackend { locator: RLOC, backend: INVALID_PROC_NUMBER },
+        RelFileLocatorBackend {
+            locator: RLOC,
+            backend: INVALID_PROC_NUMBER,
+        },
         ForkNumber::MAIN_FORKNUM,
         false,
     )
@@ -769,8 +791,12 @@ fn vacuum_error_mid_scan_abort_releases_all_pins() {
     let ctl = transam_xlog::ctl::XLogCtl();
     ctl.InsertTimeLineID.store(1, Relaxed);
     ctl.PrevTimeLineID.store(1, Relaxed);
-    ctl.Insert.CurrBytePos.store(XLogRecPtrToBytePos(end_of_log), Relaxed);
-    ctl.Insert.PrevBytePos.store(XLogRecPtrToBytePos(prev_rec), Relaxed);
+    ctl.Insert
+        .CurrBytePos
+        .store(XLogRecPtrToBytePos(end_of_log), Relaxed);
+    ctl.Insert
+        .PrevBytePos
+        .store(XLogRecPtrToBytePos(prev_rec), Relaxed);
     ctl.Insert.fullPageWrites.store(true, Relaxed);
     ctl.Insert.RedoRecPtr.store(prev_rec, Relaxed);
     ctl.RedoRecPtr.store(prev_rec, Relaxed);
@@ -818,7 +844,10 @@ fn vacuum_error_mid_scan_abort_releases_all_pins() {
         "fault fired mid-scan (saw {} prune records)",
         PRUNE_RECORDS.load(Relaxed)
     );
-    assert!(pinned_count() > 0, "error path left a pinned buffer (the leak under test)");
+    assert!(
+        pinned_count() > 0,
+        "error path left a pinned buffer (the leak under test)"
+    );
 
     // C: no manual unpin on this path — AbortTransaction's
     // ResourceOwnerRelease(BEFORE_LOCKS) must drop the pins, and

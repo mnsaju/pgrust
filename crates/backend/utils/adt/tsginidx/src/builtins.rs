@@ -26,7 +26,14 @@ fn fc_gin_cmp_prefix(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 pub const TSGINIDX_BUILTINS: &[FmgrBuiltin] = &[

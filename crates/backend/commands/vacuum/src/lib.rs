@@ -15,8 +15,8 @@ use ::mcx::Mcx;
 use ::tableam_vocab::{
     VacOptValue, VacuumCutoffs, VacuumParams, VACOPT_ANALYZE, VACOPT_DISABLE_PAGE_SKIPPING,
     VACOPT_FREEZE, VACOPT_FULL, VACOPT_ONLY_DATABASE_STATS, VACOPT_PROCESS_MAIN,
-    VACOPT_PROCESS_TOAST,
-    VACOPT_SKIP_DATABASE_STATS, VACOPT_SKIP_LOCKED, VACOPT_VACUUM, VACOPT_VERBOSE,
+    VACOPT_PROCESS_TOAST, VACOPT_SKIP_DATABASE_STATS, VACOPT_SKIP_LOCKED, VACOPT_VACUUM,
+    VACOPT_VERBOSE,
 };
 use ::types_core::xact::{
     FirstNormalTransactionId, InvalidTransactionId, MultiXactIdPrecedes,
@@ -196,7 +196,9 @@ pub fn ExecVacuum<'mcx>(
     let mut only_database_stats = false;
     let mut ring_size: i32 = -1;
     for opt_node in vacstmt.options.iter() {
-        let opt = opt_node.as_def_elem().expect("VacuumStmt option is DefElem");
+        let opt = opt_node
+            .as_def_elem()
+            .expect("VacuumStmt option is DefElem");
         match opt.defname.unwrap_or("") {
             "verbose" => verbose = explain::defGetBoolean(opt)?,
             "skip_locked" => skip_locked = explain::defGetBoolean(opt)?,
@@ -214,9 +216,7 @@ pub fn ExecVacuum<'mcx>(
             }
             "full" => full = explain::defGetBoolean(opt)?,
             "freeze" => freeze = explain::defGetBoolean(opt)?,
-            "disable_page_skipping" => {
-                disable_page_skipping = explain::defGetBoolean(opt)?
-            }
+            "disable_page_skipping" => disable_page_skipping = explain::defGetBoolean(opt)?,
             "truncate" => {
                 params.truncate = if explain::defGetBoolean(opt)? {
                     VacOptValue::Enabled
@@ -272,15 +272,31 @@ pub fn ExecVacuum<'mcx>(
 
     params.options = VACOPT_VACUUM
         | (if process_main { VACOPT_PROCESS_MAIN } else { 0 })
-        | (if process_toast { VACOPT_PROCESS_TOAST } else { 0 })
+        | (if process_toast {
+            VACOPT_PROCESS_TOAST
+        } else {
+            0
+        })
         | (if verbose { VACOPT_VERBOSE } else { 0 })
         | (if skip_locked { VACOPT_SKIP_LOCKED } else { 0 })
         | (if freeze { VACOPT_FREEZE } else { 0 })
-        | (if disable_page_skipping { VACOPT_DISABLE_PAGE_SKIPPING } else { 0 })
+        | (if disable_page_skipping {
+            VACOPT_DISABLE_PAGE_SKIPPING
+        } else {
+            0
+        })
         | (if full { VACOPT_FULL } else { 0 })
         | (if analyze { VACOPT_ANALYZE } else { 0 })
-        | (if skip_database_stats { VACOPT_SKIP_DATABASE_STATS } else { 0 })
-        | (if only_database_stats { VACOPT_ONLY_DATABASE_STATS } else { 0 });
+        | (if skip_database_stats {
+            VACOPT_SKIP_DATABASE_STATS
+        } else {
+            0
+        })
+        | (if only_database_stats {
+            VACOPT_ONLY_DATABASE_STATS
+        } else {
+            0
+        });
 
     if full && params.nworkers > 0 {
         return Err(ereport(ERROR)
@@ -291,9 +307,7 @@ pub fn ExecVacuum<'mcx>(
     }
 
     // vacuum.c:342: VACUUM (FULL, ANALYZE) may use the ring; plain FULL errors.
-    if ring_size != -1
-        && params.options & VACOPT_FULL != 0
-        && params.options & VACOPT_ANALYZE == 0
+    if ring_size != -1 && params.options & VACOPT_FULL != 0 && params.options & VACOPT_ANALYZE == 0
     {
         return Err(ereport(ERROR)
             .errcode(ERRCODE_FEATURE_NOT_SUPPORTED)
@@ -480,9 +494,7 @@ pub fn vacuum<'mcx>(
     // Matches the CommitTransaction waiting in PostgresMain.
     xact::StartTransactionCommand()?;
 
-    if params.options & VACOPT_VACUUM != 0
-        && params.options & VACOPT_SKIP_DATABASE_STATS == 0
-    {
+    if params.options & VACOPT_VACUUM != 0 && params.options & VACOPT_SKIP_DATABASE_STATS == 0 {
         vac_update_datfrozenxid(mcx)?;
     }
     Ok(())
@@ -510,17 +522,20 @@ pub fn vacuum_is_permitted_for_relation(
         init_small::globals::MyDatabaseId(),
         roleid,
     )? && !relisshared)
-        || aclchk::pg_class_aclcheck(
-            relid,
-            roleid,
-            types_nodes::parsenodes::ACL_MAINTAIN as u64,
-        )? == aclchk::ACLCHECK_OK
+        || aclchk::pg_class_aclcheck(relid, roleid, types_nodes::parsenodes::ACL_MAINTAIN as u64)?
+            == aclchk::ACLCHECK_OK
     {
         return Ok(true);
     }
-    let verb = if options & VACOPT_VACUUM != 0 { "vacuum" } else { "analyze" };
+    let verb = if options & VACOPT_VACUUM != 0 {
+        "vacuum"
+    } else {
+        "analyze"
+    };
     ereport(WARNING)
-        .errmsg(format!("permission denied to {verb} \"{relname}\", skipping it"))
+        .errmsg(format!(
+            "permission denied to {verb} \"{relname}\", skipping it"
+        ))
         .finish(loc("vacuum_is_permitted_for_relation"))?;
     Ok(false)
 }
@@ -535,7 +550,11 @@ pub fn expand_vacuum_rel<'mcx>(
     vacrels: &mut ::mcx::PgVec<'mcx, ExpandedVacRel<'mcx>>,
 ) -> PgResult<()> {
     if vrel.oid != InvalidOid {
-        vacrels.push(ExpandedVacRel { oid: vrel.oid, relname: None, va_cols: &vrel.va_cols });
+        vacrels.push(ExpandedVacRel {
+            oid: vrel.oid,
+            relname: None,
+            va_cols: &vrel.va_cols,
+        });
         return Ok(());
     }
     let rv = vrel
@@ -543,8 +562,11 @@ pub fn expand_vacuum_rel<'mcx>(
         .and_then(|n| n.as_range_var())
         .expect("VacuumRelation.relation is RangeVar");
     let relname = rv.relname.expect("RangeVar.relname");
-    let rvr_opts =
-        if options & VACOPT_SKIP_LOCKED != 0 { namespace_seams::RVR_SKIP_LOCKED } else { 0 };
+    let rvr_opts = if options & VACOPT_SKIP_LOCKED != 0 {
+        namespace_seams::RVR_SKIP_LOCKED
+    } else {
+        0
+    };
     let relid = namespace_seams::range_var_get_relid_extended::call(
         mcx,
         &rel_vocab::RangeVar {
@@ -561,10 +583,16 @@ pub fn expand_vacuum_rel<'mcx>(
     // C: lock unavailable — emit the same log statement vacuum_rel()/
     // analyze_rel() would.
     if relid == InvalidOid {
-        let verb = if options & VACOPT_VACUUM != 0 { "vacuum" } else { "analyze" };
+        let verb = if options & VACOPT_VACUUM != 0 {
+            "vacuum"
+        } else {
+            "analyze"
+        };
         ereport(WARNING)
             .errcode(ERRCODE_LOCK_NOT_AVAILABLE)
-            .errmsg(format!("skipping {verb} of \"{relname}\" --- lock not available"))
+            .errmsg(format!(
+                "skipping {verb} of \"{relname}\" --- lock not available"
+            ))
             .finish(loc("expand_vacuum_rel"))?;
         return Ok(());
     }
@@ -572,7 +600,11 @@ pub fn expand_vacuum_rel<'mcx>(
         .unwrap_or_else(|| panic!("cache lookup failed for relation {relid}"));
 
     if vacuum_is_permitted_for_relation(relid, relname, class_shape.relisshared, options)? {
-        vacrels.push(ExpandedVacRel { oid: relid, relname: Some(relname), va_cols: &vrel.va_cols });
+        vacrels.push(ExpandedVacRel {
+            oid: relid,
+            relname: Some(relname),
+            va_cols: &vrel.va_cols,
+        });
     }
 
     let include_children = rv.inh;
@@ -591,7 +623,11 @@ pub fn expand_vacuum_rel<'mcx>(
             if part_oid == relid {
                 continue;
             }
-            vacrels.push(ExpandedVacRel { oid: part_oid, relname: None, va_cols: &vrel.va_cols });
+            vacrels.push(ExpandedVacRel {
+                oid: part_oid,
+                relname: None,
+                va_cols: &vrel.va_cols,
+            });
         }
     }
     lmgr_seams::unlock_relation_oid::call(relid, AccessShareLock)?;
@@ -611,7 +647,10 @@ pub fn get_all_vacuum_rels<'mcx>(
     let mut scan = genam::systable_beginscan(mcx, &pgclass, InvalidOid, false, None, &[])?;
     while let Some(tup) = genam::systable_getnext(mcx, &mut scan)? {
         let relkind = getattr(tup, Anum_pg_class_relkind, desc).as_u8();
-        if !matches!(relkind, RELKIND_RELATION | RELKIND_MATVIEW | RELKIND_PARTITIONED_TABLE) {
+        if !matches!(
+            relkind,
+            RELKIND_RELATION | RELKIND_MATVIEW | RELKIND_PARTITIONED_TABLE
+        ) {
             continue;
         }
         let relid = getattr(tup, Anum_pg_class_oid, desc).as_oid();
@@ -625,7 +664,11 @@ pub fn get_all_vacuum_rels<'mcx>(
         )? {
             continue;
         }
-        vacrels.push(ExpandedVacRel { oid: relid, relname: None, va_cols: nil_cols });
+        vacrels.push(ExpandedVacRel {
+            oid: relid,
+            relname: None,
+            va_cols: nil_cols,
+        });
     }
     genam::systable_endscan(mcx, scan)?;
     table::table_close(pgclass, AccessShareLock)?;
@@ -658,20 +701,15 @@ fn vacuum_rel<'mcx>(
     } else {
         ShareUpdateExclusiveLock
     };
-    let rel = match vacuum_open_relation(
-        mcx,
-        relid,
-        relname,
-        params.options & !VACOPT_ANALYZE,
-        lmode,
-    )? {
-        Some(rel) => rel,
-        None => {
-            snapmgr::PopActiveSnapshot()?;
-            xact::CommitTransactionCommand()?;
-            return Ok(false);
-        }
-    };
+    let rel =
+        match vacuum_open_relation(mcx, relid, relname, params.options & !VACOPT_ANALYZE, lmode)? {
+            Some(rel) => rel,
+            None => {
+                snapmgr::PopActiveSnapshot()?;
+                xact::CommitTransactionCommand()?;
+                return Ok(false);
+            }
+        };
 
     // vacuum.c:2119: privileges are re-checked per relation because VACUUM
     // spans transactions; priv_relid is the TOAST parent when recursing.
@@ -774,8 +812,11 @@ fn vacuum_rel<'mcx>(
         if params.options & VACOPT_FULL != 0 {
             // VACUUM FULL is a variant of CLUSTER (cluster.c); cluster_rel
             // closes the relation but keeps the lock.
-            let cluster_options: u32 =
-                if params.options & VACOPT_VERBOSE != 0 { 0x01 } else { 0 };
+            let cluster_options: u32 = if params.options & VACOPT_VERBOSE != 0 {
+                0x01
+            } else {
+                0
+            };
             cluster_seams::cluster_rel::call(mcx, rel, InvalidOid, cluster_options)?;
         } else {
             // C divergence (recorded): SetUserIdAndSecContext/NewGUCNestLevel/
@@ -832,7 +873,11 @@ pub fn vacuum_open_relation<'mcx>(
     {
         return Ok(None);
     }
-    let verb = if options & VACOPT_VACUUM != 0 { "vacuum" } else { "analyze" };
+    let verb = if options & VACOPT_VACUUM != 0 {
+        "vacuum"
+    } else {
+        "analyze"
+    };
     let (code, why) = if rel_lock {
         (ERRCODE_UNDEFINED_TABLE, "relation no longer exists")
     } else {
@@ -908,8 +953,7 @@ pub fn vacuum_get_cutoffs(
     if multixact_freeze_min_age < 0 {
         multixact_freeze_min_age = guc_tables::vars::vacuum_multixact_freeze_min_age.read();
     }
-    multixact_freeze_min_age =
-        multixact_freeze_min_age.min(effective_multixact_freeze_max_age / 2);
+    multixact_freeze_min_age = multixact_freeze_min_age.min(effective_multixact_freeze_max_age / 2);
     debug_assert!(multixact_freeze_min_age >= 0);
 
     cutoffs.MultiXactCutoff = next_mxid.wrapping_sub(multixact_freeze_min_age as u32);
@@ -936,8 +980,8 @@ pub fn vacuum_get_cutoffs(
     if multixact_freeze_table_age < 0 {
         multixact_freeze_table_age = guc_tables::vars::vacuum_multixact_freeze_table_age.read();
     }
-    multixact_freeze_table_age = multixact_freeze_table_age
-        .min((effective_multixact_freeze_max_age as f64 * 0.95) as i32);
+    multixact_freeze_table_age =
+        multixact_freeze_table_age.min((effective_multixact_freeze_max_age as f64 * 0.95) as i32);
     debug_assert!(multixact_freeze_table_age >= 0);
     let mut aggressive_mxid_cutoff: MultiXactId =
         next_mxid.wrapping_sub(multixact_freeze_table_age as u32);
@@ -1127,39 +1171,84 @@ pub fn vac_update_relstats(
     let nulls = [false; Natts_pg_class];
     let mut replaces = [false; Natts_pg_class];
     let mut dirty = false;
-    let set = |anum: usize, d: ::datum::Datum, values: &mut [::datum::Datum],
-                   replaces: &mut [bool], dirty: &mut bool| {
+    let set = |anum: usize,
+               d: ::datum::Datum,
+               values: &mut [::datum::Datum],
+               replaces: &mut [bool],
+               dirty: &mut bool| {
         values[anum - 1] = d;
         replaces[anum - 1] = true;
         *dirty = true;
     };
 
     if getattr(old, Anum_pg_class_relpages, desc).as_i32() != num_pages as i32 {
-        set(Anum_pg_class_relpages, ::datum::Datum::from_i32(num_pages as i32), &mut values, &mut replaces, &mut dirty);
+        set(
+            Anum_pg_class_relpages,
+            ::datum::Datum::from_i32(num_pages as i32),
+            &mut values,
+            &mut replaces,
+            &mut dirty,
+        );
     }
     if getattr(old, Anum_pg_class_reltuples, desc).as_f32() != num_tuples as f32 {
-        set(Anum_pg_class_reltuples, ::datum::Datum::from_f32(num_tuples as f32), &mut values, &mut replaces, &mut dirty);
+        set(
+            Anum_pg_class_reltuples,
+            ::datum::Datum::from_f32(num_tuples as f32),
+            &mut values,
+            &mut replaces,
+            &mut dirty,
+        );
     }
     if getattr(old, Anum_pg_class_relallvisible, desc).as_i32() != num_all_visible_pages as i32 {
-        set(Anum_pg_class_relallvisible, ::datum::Datum::from_i32(num_all_visible_pages as i32), &mut values, &mut replaces, &mut dirty);
+        set(
+            Anum_pg_class_relallvisible,
+            ::datum::Datum::from_i32(num_all_visible_pages as i32),
+            &mut values,
+            &mut replaces,
+            &mut dirty,
+        );
     }
     if getattr(old, Anum_pg_class_relallfrozen, desc).as_i32() != num_all_frozen_pages as i32 {
-        set(Anum_pg_class_relallfrozen, ::datum::Datum::from_i32(num_all_frozen_pages as i32), &mut values, &mut replaces, &mut dirty);
+        set(
+            Anum_pg_class_relallfrozen,
+            ::datum::Datum::from_i32(num_all_frozen_pages as i32),
+            &mut values,
+            &mut replaces,
+            &mut dirty,
+        );
     }
 
     if !in_outer_xact {
         if getattr(old, Anum_pg_class_relhasindex, desc).as_bool() && !hasindex {
-            set(Anum_pg_class_relhasindex, ::datum::Datum::from_bool(false), &mut values, &mut replaces, &mut dirty);
+            set(
+                Anum_pg_class_relhasindex,
+                ::datum::Datum::from_bool(false),
+                &mut values,
+                &mut replaces,
+                &mut dirty,
+            );
         }
         // C clears relhasrules/relhastriggers off rd_rules/trigdesc; the
         // relcache seams stand in for the open relcache entry, and are read
         // before the window opens (see the note at the top of this function --
         // a catalog scan in here self-deadlocks on the pg_class page).
         if getattr(old, Anum_pg_class_relhasrules, desc).as_bool() && rules_empty {
-            set(Anum_pg_class_relhasrules, ::datum::Datum::from_bool(false), &mut values, &mut replaces, &mut dirty);
+            set(
+                Anum_pg_class_relhasrules,
+                ::datum::Datum::from_bool(false),
+                &mut values,
+                &mut replaces,
+                &mut dirty,
+            );
         }
         if getattr(old, Anum_pg_class_relhastriggers, desc).as_bool() && trigdesc_none {
-            set(Anum_pg_class_relhastriggers, ::datum::Datum::from_bool(false), &mut values, &mut replaces, &mut dirty);
+            set(
+                Anum_pg_class_relhastriggers,
+                ::datum::Datum::from_bool(false),
+                &mut values,
+                &mut replaces,
+                &mut dirty,
+            );
         }
     }
 
@@ -1177,7 +1266,13 @@ pub fn vac_update_relstats(
             update = true;
         }
         if update {
-            set(Anum_pg_class_relfrozenxid, ::datum::Datum::from_u32(frozenxid), &mut values, &mut replaces, &mut dirty);
+            set(
+                Anum_pg_class_relfrozenxid,
+                ::datum::Datum::from_u32(frozenxid),
+                &mut values,
+                &mut replaces,
+                &mut dirty,
+            );
             frozenxid_updated = true;
         }
     }
@@ -1194,14 +1289,19 @@ pub fn vac_update_relstats(
             update = true;
         }
         if update {
-            set(Anum_pg_class_relminmxid, ::datum::Datum::from_u32(minmulti), &mut values, &mut replaces, &mut dirty);
+            set(
+                Anum_pg_class_relminmxid,
+                ::datum::Datum::from_u32(minmulti),
+                &mut values,
+                &mut replaces,
+                &mut dirty,
+            );
             minmulti_updated = true;
         }
     }
 
     if dirty {
-        let newtup =
-            heaptuple::heap_modify_tuple(mcx, old, desc, &values, &nulls, &replaces)?;
+        let newtup = heaptuple::heap_modify_tuple(mcx, old, desc, &values, &nulls, &replaces)?;
         genam::systable_inplace_update_finish(mcx, inplace_state, newtup.as_tuple())?;
     } else {
         genam::systable_inplace_update_cancel(mcx, inplace_state)?;
@@ -1248,7 +1348,10 @@ pub fn vac_update_datfrozenxid(mcx: Mcx<'_>) -> PgResult<()> {
         let relkind = getattr(tup, Anum_pg_class_relkind, desc).as_u8();
         let relfrozenxid = getattr(tup, Anum_pg_class_relfrozenxid, desc).as_u32();
         let relminmxid: MultiXactId = getattr(tup, Anum_pg_class_relminmxid, desc).as_u32();
-        if !matches!(relkind, RELKIND_RELATION | RELKIND_MATVIEW | RELKIND_TOASTVALUE) {
+        if !matches!(
+            relkind,
+            RELKIND_RELATION | RELKIND_MATVIEW | RELKIND_TOASTVALUE
+        ) {
             debug_assert!(!::types_core::xact::TransactionIdIsValid(relfrozenxid));
             debug_assert!(!MultiXactIdIsValid(relminmxid));
             continue;
@@ -1308,7 +1411,12 @@ pub fn vac_update_datfrozenxid(mcx: Mcx<'_>) -> PgResult<()> {
 
     let desc = rd.descr();
     let old = ctup.as_tuple();
-    let datfrozenxid = getattr(old, pg_database::Anum_pg_database_datfrozenxid as usize, desc).as_u32();
+    let datfrozenxid = getattr(
+        old,
+        pg_database::Anum_pg_database_datfrozenxid as usize,
+        desc,
+    )
+    .as_u32();
     let datminmxid: MultiXactId =
         getattr(old, pg_database::Anum_pg_database_datminmxid as usize, desc).as_u32();
 
@@ -1351,7 +1459,13 @@ pub fn vac_update_datfrozenxid(mcx: Mcx<'_>) -> PgResult<()> {
     table::table_close(rd, RowExclusiveLock)?;
 
     if dirty || varsup::ForceTransactionIdLimitUpdate()? {
-        vac_truncate_clog(mcx, new_frozen_xid, new_min_multi, last_sane_frozen_xid, last_sane_min_multi)?;
+        vac_truncate_clog(
+            mcx,
+            new_frozen_xid,
+            new_min_multi,
+            last_sane_frozen_xid,
+            last_sane_min_multi,
+        )?;
     }
     Ok(())
 }
@@ -1381,10 +1495,18 @@ fn vac_truncate_clog(
     let mut scan = genam::systable_beginscan(mcx, &rd, InvalidOid, false, None, &[])?;
     while let Some(tup) = genam::systable_getnext(mcx, &mut scan)? {
         let oid = getattr(tup, pg_database::Anum_pg_database_oid as usize, desc).as_oid();
-        let datconnlimit =
-            getattr(tup, pg_database::Anum_pg_database_datconnlimit as usize, desc).as_i32();
-        let datfrozenxid =
-            getattr(tup, pg_database::Anum_pg_database_datfrozenxid as usize, desc).as_u32();
+        let datconnlimit = getattr(
+            tup,
+            pg_database::Anum_pg_database_datconnlimit as usize,
+            desc,
+        )
+        .as_i32();
+        let datfrozenxid = getattr(
+            tup,
+            pg_database::Anum_pg_database_datfrozenxid as usize,
+            desc,
+        )
+        .as_u32();
         let datminmxid: MultiXactId =
             getattr(tup, pg_database::Anum_pg_database_datminmxid as usize, desc).as_u32();
 
@@ -1466,7 +1588,12 @@ vacuum_guc_int! {
     VACUUM_MXID_FAILSAFE_AGE, vacuum_multixact_failsafe_age_guc, set_vacuum_multixact_failsafe_age_guc, vacuum_multixact_failsafe_age, 1600000000;
 }
 
-guc_tables::session_guc_bool!(VACUUM_TRUNCATE, vacuum_truncate_guc, set_vacuum_truncate_guc, true);
+guc_tables::session_guc_bool!(
+    VACUUM_TRUNCATE,
+    vacuum_truncate_guc,
+    set_vacuum_truncate_guc,
+    true
+);
 // C home: vacuum.c `bool track_cost_delay_timing`.
 guc_tables::session_guc_bool!(
     TRACK_COST_DELAY_TIMING,

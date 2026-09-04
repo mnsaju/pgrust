@@ -65,7 +65,9 @@ pub fn process_shared_preload_libraries() -> PgResult<()> {
 // pg_init, run once, single-threaded, before any backend thread spawns
 // (the same window `process_shared_preload_libraries` runs in).
 pub fn process_preload_contrib() -> PgResult<()> {
-    let Some(list) = string_get(&PRELOAD_CONTRIB) else { return Ok(()) };
+    let Some(list) = string_get(&PRELOAD_CONTRIB) else {
+        return Ok(());
+    };
     // Same boot window as shared_preload_libraries: a pg_init loaded here may
     // install hooks/shmem exactly as if preloaded.
     IN_PROGRESS.set(true);

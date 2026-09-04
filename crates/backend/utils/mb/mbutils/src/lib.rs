@@ -699,10 +699,7 @@ pub fn pg_encoding_mb2wchar_with_len<'mcx>(
     Ok(to)
 }
 
-pub fn pg_wchar2mb_with_len<'mcx>(
-    mcx: Mcx<'mcx>,
-    from: &[pg_wchar],
-) -> PgResult<PgVec<'mcx, u8>> {
+pub fn pg_wchar2mb_with_len<'mcx>(mcx: Mcx<'mcx>, from: &[pg_wchar]) -> PgResult<PgVec<'mcx, u8>> {
     pg_encoding_wchar2mb_with_len(mcx, database_encoding(), from)
 }
 
@@ -728,7 +725,11 @@ pub fn pg_mblen_range(mbstr: &[u8]) -> PgResult<i32> {
     debug_assert!(!mbstr.is_empty());
     let length = pg_encoding_mblen(database_encoding(), mbstr);
     if length as usize > mbstr.len() {
-        return Err(report_invalid_encoding_db(mbstr, length, mbstr.len() as i32));
+        return Err(report_invalid_encoding_db(
+            mbstr,
+            length,
+            mbstr.len() as i32,
+        ));
     }
     Ok(length)
 }

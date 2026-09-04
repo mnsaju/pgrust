@@ -151,7 +151,9 @@ fn main_loop_reloads_config_and_clears_flag_first() {
     assert!(!ConfigReloadPending());
     assert_eq!(
         recorded_calls(),
-        vec![Call::ProcessConfigFile { context: types_guc::PGC_SIGHUP }]
+        vec![Call::ProcessConfigFile {
+            context: types_guc::PGC_SIGHUP
+        }]
     );
 }
 
@@ -163,7 +165,10 @@ fn main_loop_logs_memory_contexts_when_pending() {
 
     ProcessMainLoopInterrupts().unwrap();
 
-    assert_eq!(recorded_calls(), vec![Call::ProcessLogMemoryContextInterrupt]);
+    assert_eq!(
+        recorded_calls(),
+        vec![Call::ProcessLogMemoryContextInterrupt]
+    );
 }
 
 #[test]
@@ -192,7 +197,9 @@ fn main_loop_runs_all_arms_in_c_order() {
         recorded_calls(),
         vec![
             Call::ProcessProcSignalBarrier,
-            Call::ProcessConfigFile { context: types_guc::PGC_SIGHUP },
+            Call::ProcessConfigFile {
+                context: types_guc::PGC_SIGHUP
+            },
             Call::ProcessLogMemoryContextInterrupt,
         ]
     );

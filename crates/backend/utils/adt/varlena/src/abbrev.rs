@@ -138,7 +138,9 @@ mod tests {
         let mut st = VarStrAbbrevState::new(false);
         let mut x: u64 = 7;
         let mut next = |limit: u64| {
-            x = x.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            x = x
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             (x >> 33) % limit
         };
         let mut vals: Vec<Vec<u8>> = Vec::new();
@@ -183,7 +185,14 @@ mod tests {
     fn convert_slim_matches_convert_word() {
         let mut a = VarStrAbbrevState::new(false);
         let mut b = VarStrAbbrevState::new(false);
-        for v in [&b""[..], b"a", b"abcdefgh", b"abcdefghijkl", b"zz  ", &[0xffu8; 20]] {
+        for v in [
+            &b""[..],
+            b"a",
+            b"abcdefgh",
+            b"abcdefghijkl",
+            b"zz  ",
+            &[0xffu8; 20],
+        ] {
             assert_eq!(a.convert(v), b.convert_slim(v));
         }
         let mut a = VarStrAbbrevState::new(true);

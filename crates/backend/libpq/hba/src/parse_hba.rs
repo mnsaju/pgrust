@@ -118,7 +118,15 @@ pub fn parse_hba_line(
                 let msg =
                     "hostgssenc record cannot match because GSSAPI is not supported by this build"
                         .to_string();
-                report_config(elevel, 1399, "parse_hba_line", msg.clone(), None, line_num, &file_name)?;
+                report_config(
+                    elevel,
+                    1399,
+                    "parse_hba_line",
+                    msg.clone(),
+                    None,
+                    line_num,
+                    &file_name,
+                )?;
                 tok_line.err_msg = Some(msg);
             }
         } else if b.get(4) == Some(&b'n') && b.get(6) == Some(&b's') {

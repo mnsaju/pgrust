@@ -85,8 +85,7 @@ pub fn decompress_padded(input: &[u8], out: &mut [u8], raw_len: usize) -> Result
                 // terminal literal run): lit <= 14 means ip <= old_ip + 15,
                 // and the ip + 19 margin leaves >= 4 bytes — frames end via
                 // the general path below.
-                let offset =
-                    u16::from_le_bytes(input[ip..ip + 2].try_into().unwrap()) as usize;
+                let offset = u16::from_le_bytes(input[ip..ip + 2].try_into().unwrap()) as usize;
                 ip += 2;
                 // One unsigned compare for (offset != 0 && offset <= op).
                 if offset.wrapping_sub(1) >= op {
@@ -178,7 +177,11 @@ pub fn decompress_padded(input: &[u8], out: &mut [u8], raw_len: usize) -> Result
         if ip == ilen {
             // Block ends with its literal run (spec: the last sequence has
             // no match part).
-            return if op == raw_len { Ok(()) } else { Err(ERR_SHORT) };
+            return if op == raw_len {
+                Ok(())
+            } else {
+                Err(ERR_SHORT)
+            };
         }
 
         // --- match ---
@@ -353,10 +356,13 @@ mod tests {
     fn roundtrip_int_column_shapes() {
         // Sorted u32s (FOR-ish), sorted u64s with small deltas, constant runs
         // with breaks: the compressible-int shapes from the day-0 gap.
-        let sorted32: Vec<u8> = (0..100_000u32).flat_map(|v| (v / 7).to_le_bytes()).collect();
+        let sorted32: Vec<u8> = (0..100_000u32)
+            .flat_map(|v| (v / 7).to_le_bytes())
+            .collect();
         roundtrip(&sorted32);
-        let sorted64: Vec<u8> =
-            (0..50_000u64).flat_map(|v| (1_000_000 + v * 3).to_le_bytes()).collect();
+        let sorted64: Vec<u8> = (0..50_000u64)
+            .flat_map(|v| (1_000_000 + v * 3).to_le_bytes())
+            .collect();
         roundtrip(&sorted64);
         let mut runs = Vec::new();
         for r in 0..200u32 {
@@ -415,7 +421,11 @@ mod tests {
                     s ^= s << 13;
                     s ^= s >> 7;
                     s ^= s << 17;
-                    if s % 3 == 0 { (i % 251) as u8 } else { (s >> 24) as u8 }
+                    if s % 3 == 0 {
+                        (i % 251) as u8
+                    } else {
+                        (s >> 24) as u8
+                    }
                 })
                 .collect();
             let comp = lz4_flex::compress(&data);

@@ -7,9 +7,7 @@ use index_amvalidate::{
     identify_opfamily_groups, opclass_for_family_datatype, AMOP_SEARCH,
 };
 use mcx::MemoryContext;
-use types_core::{
-    InvalidOid, Oid, BOOLOID, BTREE_AM_OID, INT4OID, INTERNALOID, OIDOID, VOIDOID,
-};
+use types_core::{InvalidOid, Oid, BOOLOID, BTREE_AM_OID, INT4OID, INTERNALOID, OIDOID, VOIDOID};
 use types_error::{ErrorLocation, PgResult, ERRCODE_INVALID_OBJECT_DEFINITION, INFO};
 use types_nbtree::page::{
     BTEQUALIMAGE_PROC, BTINRANGE_PROC, BTOPTIONS_PROC, BTORDER_PROC, BTSKIPSUPPORT_PROC,
@@ -39,8 +37,9 @@ pub fn btvalidate(opclassoid: Oid) -> PgResult<bool> {
     let opcintype = shape.opcintype;
     let opclassname_data = syscache_seams::pg_opclass_opcname::call(opclassoid)?
         .unwrap_or_else(|| panic!("cache lookup failed for operator class {opclassoid}"));
-    let opclassname =
-        core::str::from_utf8(opclassname_data.name_str()).unwrap_or("").to_string();
+    let opclassname = core::str::from_utf8(opclassname_data.name_str())
+        .unwrap_or("")
+        .to_string();
 
     let opfamilyname = lsyscache::get_opfamily_name(mcx, opfamilyoid, false)?
         .expect("opfamily name")
@@ -147,8 +146,7 @@ pub fn btvalidate(opclassoid: Oid) -> PgResult<bool> {
     }
 
     // Check for inconsistent groups of operators/functions.
-    let grouplist =
-        identify_opfamily_groups(mcx, &oprlist, opr_ordered, &proclist, proc_ordered)?;
+    let grouplist = identify_opfamily_groups(mcx, &oprlist, opr_ordered, &proclist, proc_ordered)?;
     let mut usefulgroups = 0usize;
     let mut opclassgroup = None;
     let mut familytypes: mcx::PgVec<'_, Oid> = mcx::PgVec::new_in(mcx);
@@ -248,8 +246,7 @@ pub fn btadjustmembers(
         } else {
             if op.lefttype != opcintype {
                 opcintype = op.lefttype;
-                opclassoid =
-                    opclass_for_family_datatype(BTREE_AM_OID, opfamilyoid, opcintype)?;
+                opclassoid = opclass_for_family_datatype(BTREE_AM_OID, opfamilyoid, opcintype)?;
             }
             if opclassoid != InvalidOid {
                 op.ref_is_hard = true;

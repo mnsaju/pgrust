@@ -22,7 +22,10 @@ const RUSAGE_WHO: libc::c_int = libc::RUSAGE_SELF;
 
 #[cfg(not(target_family = "wasm"))]
 pub fn pg_rusage_init() -> PgRUsage {
-    let mut tv = libc::timeval { tv_sec: 0, tv_usec: 0 };
+    let mut tv = libc::timeval {
+        tv_sec: 0,
+        tv_usec: 0,
+    };
     let mut ru: libc::rusage = unsafe { core::mem::zeroed() };
     unsafe {
         libc::gettimeofday(&mut tv, core::ptr::null_mut());
@@ -81,7 +84,10 @@ pub fn pg_rusage_show(ru0: &PgRUsage) -> RUsageShow {
         ru1.ru_utime_usec += 1_000_000;
     }
 
-    let mut out = RUsageShow { buf: [0; 100], len: 0 };
+    let mut out = RUsageShow {
+        buf: [0; 100],
+        len: 0,
+    };
     let _ = write!(
         out,
         "CPU: user: {}.{:02} s, system: {}.{:02} s, elapsed: {}.{:02} s",

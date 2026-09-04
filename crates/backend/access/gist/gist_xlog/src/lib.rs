@@ -7,9 +7,9 @@
 use types_core::{BlockNumber, Buffer, InvalidBlockNumber, OffsetNumber};
 use types_error::PgResult;
 use types_gist::{
-    page_opaque_set, page_opaque_update, GISTPageOpaqueData, GistPageSetDeleted,
-    GistxlogDelete, GistxlogPageDelete, GistxlogPageSplit, GistxlogPageUpdate, F_FOLLOW_RIGHT,
-    F_HAS_GARBAGE, F_LEAF, F_TUPLES_DELETED, GIST_PAGE_ID, GIST_ROOT_BLKNO, SizeOfGistxlogDelete,
+    page_opaque_set, page_opaque_update, GISTPageOpaqueData, GistPageSetDeleted, GistxlogDelete,
+    GistxlogPageDelete, GistxlogPageSplit, GistxlogPageUpdate, SizeOfGistxlogDelete,
+    F_FOLLOW_RIGHT, F_HAS_GARBAGE, F_LEAF, F_TUPLES_DELETED, GIST_PAGE_ID, GIST_ROOT_BLKNO,
     XLOG_GIST_ASSIGN_LSN, XLOG_GIST_DELETE, XLOG_GIST_PAGE_DELETE, XLOG_GIST_PAGE_REUSE,
     XLOG_GIST_PAGE_SPLIT, XLOG_GIST_PAGE_UPDATE,
 };
@@ -22,7 +22,10 @@ const XLR_INFO_MASK: u8 = 0x0F;
 const FirstOffsetNumber: OffsetNumber = 1;
 
 fn main_data<'a>(record: &'a XLogReaderState) -> &'a [u8] {
-    let rec = record.record.as_ref().expect("gist redo with no decoded record");
+    let rec = record
+        .record
+        .as_ref()
+        .expect("gist redo with no decoded record");
     // SAFETY: points into the reader's decode buffer, valid for the redo
     // callback's duration.
     unsafe { rec.main_data_bytes() }
@@ -108,10 +111,7 @@ fn gistRedoPageUpdateRecord(record: &XLogReaderState) -> PgResult<()> {
             let n = xldata.ntodelete as usize;
             let mut todelete: Vec<OffsetNumber> = Vec::with_capacity(n);
             for i in 0..n {
-                todelete.push(OffsetNumber::from_ne_bytes([
-                    data[i * 2],
-                    data[i * 2 + 1],
-                ]));
+                todelete.push(OffsetNumber::from_ne_bytes([data[i * 2], data[i * 2 + 1]]));
             }
             off += 2 * n;
             pm.index_multi_delete(&todelete);
@@ -155,8 +155,9 @@ fn gistRedoDeleteRecord(record: &XLogReaderState) -> PgResult<()> {
     let xldata = GistxlogDelete::decode(md);
 
     if xlogutils::InHotStandby() {
-        let (rlocator, _, _, _) =
-            record.block_tag_extended(0).expect("gistRedoDeleteRecord: no block 0");
+        let (rlocator, _, _, _) = record
+            .block_tag_extended(0)
+            .expect("gistRedoDeleteRecord: no block 0");
         standby::ResolveRecoveryConflictWithSnapshot(
             xldata.snapshotConflictHorizon,
             xldata.isCatalogRel,

@@ -188,7 +188,11 @@ fn vacuum_leaf_page(
             }
 
             let mut intervening_deletable = false;
-            let mut prev_live = if deletable[i as usize] { InvalidOffsetNumber } else { i };
+            let mut prev_live = if deletable[i as usize] {
+                InvalidOffsetNumber
+            } else {
+                i
+            };
 
             let mut j = SpGistLeafTupleHeader::decode(head).nextOffset();
             while j != InvalidOffsetNumber {
@@ -288,7 +292,10 @@ fn vacuum_leaf_page(
             nPlaceholder: to_placeholder.len() as u16,
             nMove: move_src.len() as u16,
             nChain: chain_src.len() as u16,
-            stateSrc: spgxlogState { redirectXid: state.redirect_xid, isBuild: false },
+            stateSrc: spgxlogState {
+                redirectXid: state.redirect_xid,
+                isBuild: false,
+            },
         };
         let xl = xlrec.encode();
         let recptr = xloginsert_seams::xlog_insert_record::call(
@@ -304,7 +311,12 @@ fn vacuum_leaf_page(
                 offnum_bytes(&chain_src),
                 offnum_bytes(&chain_dest),
             ],
-            &[XLogRegBuf { block_id: 0, buffer, flags: REGBUF_STANDARD, bufdata: &[] }],
+            &[XLogRegBuf {
+                block_id: 0,
+                buffer,
+                flags: REGBUF_STANDARD,
+                bufdata: &[],
+            }],
         )?;
         buf_page_mut(buffer).set_lsn(recptr);
     }
@@ -350,7 +362,10 @@ fn vacuum_leaf_root(
     if relation_needs_wal(index) {
         let xlrec = spgxlogVacuumRoot {
             nDelete: to_delete.len() as u16,
-            stateSrc: spgxlogState { redirectXid: state.redirect_xid, isBuild: false },
+            stateSrc: spgxlogState {
+                redirectXid: state.redirect_xid,
+                isBuild: false,
+            },
         };
         let xl = xlrec.encode();
         let recptr = xloginsert_seams::xlog_insert_record::call(
@@ -358,7 +373,12 @@ fn vacuum_leaf_root(
             XLOG_SPGIST_VACUUM_ROOT,
             0,
             &[&xl, offnum_bytes(&to_delete)],
-            &[XLogRegBuf { block_id: 0, buffer, flags: REGBUF_STANDARD, bufdata: &[] }],
+            &[XLogRegBuf {
+                block_id: 0,
+                buffer,
+                flags: REGBUF_STANDARD,
+                bufdata: &[],
+            }],
         )?;
         buf_page_mut(buffer).set_lsn(recptr);
     }
@@ -400,9 +420,7 @@ fn vacuum_redirect_and_placeholder(
             // (REINDEX CONCURRENTLY).
             if dt.tupstate == SPGIST_REDIRECT
                 && (dt.xid == 0
-                    || procarray_seams::global_vis_test_is_removable_xid::call(
-                        vistest, dt.xid,
-                    )?)
+                    || procarray_seams::global_vis_test_is_removable_xid::call(vistest, dt.xid)?)
             {
                 debug_assert!(n_redirection > 0);
                 n_redirection -= 1;
@@ -468,7 +486,12 @@ fn vacuum_redirect_and_placeholder(
             XLOG_SPGIST_VACUUM_REDIRECT,
             0,
             &[&xl, offnum_bytes(&item_to_placeholder)],
-            &[XLogRegBuf { block_id: 0, buffer, flags: REGBUF_STANDARD, bufdata: &[] }],
+            &[XLogRegBuf {
+                block_id: 0,
+                buffer,
+                flags: REGBUF_STANDARD,
+                bufdata: &[],
+            }],
         )?;
         buf_page_mut(buffer).set_lsn(recptr);
     }
@@ -486,7 +509,11 @@ fn spgvacuumpage(state: &mut SpgVacState<'_, '_, '_>, buffer: Buffer) -> PgResul
     let (is_new, is_empty, is_leaf) = {
         let pm = buf_page_mut(buffer);
         let page = pm.as_ref();
-        (page.is_new(), page.max_offset_number() == 0, !page.is_new() && SpGistPageIsLeaf(&page))
+        (
+            page.is_new(),
+            page.max_offset_number() == 0,
+            !page.is_new() && SpGistPageIsLeaf(&page),
+        )
     };
 
     if is_new {
@@ -555,7 +582,10 @@ fn spgprocesspending(state: &mut SpgVacState<'_, '_, '_>) -> PgResult<()> {
             // Probably shouldn't happen, but ignore it
         } else if is_leaf {
             if SpGistBlockIsRoot(blkno) {
-                panic!("redirection leads to root page of index \"{}\"", index.name());
+                panic!(
+                    "redirection leads to root page of index \"{}\"",
+                    index.name()
+                );
             }
 
             vacuum_leaf_page(state, index, buffer, blkno, true)?;

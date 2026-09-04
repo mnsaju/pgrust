@@ -1,4 +1,4 @@
-use crate::{appendf, append_timestamptz, rec_data, rec_info, Rec, XLR_INFO_MASK};
+use crate::{append_timestamptz, appendf, rec_data, rec_info, Rec, XLR_INFO_MASK};
 use stringinfo::StringInfo;
 use types_core::ForkNumber;
 use types_error::PgResult;
@@ -80,7 +80,11 @@ pub fn xlog_desc(buf: &mut StringInfo<'_>, record: &XLogReaderState) -> PgResult
             checkpoint.redo as u32,
             checkpoint.ThisTimeLineID,
             checkpoint.PrevTimeLineID,
-            if checkpoint.fullPageWrites { "true" } else { "false" },
+            if checkpoint.fullPageWrites {
+                "true"
+            } else {
+                "false"
+            },
             get_wal_level_string(checkpoint.wal_level),
             checkpoint.nextXid.epoch(),
             checkpoint.nextXid.xid(),
@@ -94,7 +98,11 @@ pub fn xlog_desc(buf: &mut StringInfo<'_>, record: &XLogReaderState) -> PgResult
             checkpoint.oldestCommitTsXid,
             checkpoint.newestCommitTsXid,
             checkpoint.oldestActiveXid,
-            if info == XLOG_CHECKPOINT_SHUTDOWN { "shutdown" } else { "online" }
+            if info == XLOG_CHECKPOINT_SHUTDOWN {
+                "shutdown"
+            } else {
+                "online"
+            }
         )?;
     } else if info == XLOG_NEXTOID {
         let nextOid = rec.u32(0, "XLOG_NEXTOID")?;
@@ -106,7 +114,12 @@ pub fn xlog_desc(buf: &mut StringInfo<'_>, record: &XLogReaderState) -> PgResult
         // no further information to print
     } else if info == XLOG_BACKUP_END {
         let startpoint = rec.u64(0, "XLOG_BACKUP_END")?;
-        appendf!(buf, "{:X}/{:X}", (startpoint >> 32) as u32, startpoint as u32)?;
+        appendf!(
+            buf,
+            "{:X}/{:X}",
+            (startpoint >> 32) as u32,
+            startpoint as u32
+        )?;
     } else if info == XLOG_PARAMETER_CHANGE {
         // xl_parameter_change (xlog_internal.h): six ints then two bools.
         let max_connections = rec.i32(0, "xl_parameter_change")?;
@@ -224,7 +237,11 @@ pub fn XLogRecGetBlockRefInfo(
                         buf,
                         " (FPW{}); hole: offset: {}, length: {}, \
                          compression saved: {}, method: {method}",
-                        if record.block_image_apply(block_id) { "" } else { " for WAL verification" },
+                        if record.block_image_apply(block_id) {
+                            ""
+                        } else {
+                            " for WAL verification"
+                        },
                         bb.hole_offset,
                         bb.hole_length,
                         BLCKSZ - bb.hole_length as u32 - bb.bimg_len as u32
@@ -233,7 +250,11 @@ pub fn XLogRecGetBlockRefInfo(
                     appendf!(
                         buf,
                         " (FPW{}); hole: offset: {}, length: {}",
-                        if record.block_image_apply(block_id) { "" } else { " for WAL verification" },
+                        if record.block_image_apply(block_id) {
+                            ""
+                        } else {
+                            " for WAL verification"
+                        },
                         bb.hole_offset,
                         bb.hole_length
                     )?;

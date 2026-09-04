@@ -319,7 +319,9 @@ pub fn hash_bytes(b: &[u8]) -> u64 {
     // Short-key fast path (the GROUP BY-dominant case: SearchEngineID-class
     // 1-8 byte strings): one packed word, two mix rounds, no loop setup.
     if b.len() <= 8 {
-        return hash_int(hash_int(0x9E37_79B9_7F4A_7C15 ^ (b.len() as u64) ^ pack8(b)));
+        return hash_int(hash_int(
+            0x9E37_79B9_7F4A_7C15 ^ (b.len() as u64) ^ pack8(b),
+        ));
     }
     let mut h: u64 = 0x9E37_79B9_7F4A_7C15 ^ (b.len() as u64);
     let mut chunks = b.chunks_exact(8);
@@ -453,7 +455,12 @@ impl RowStore {
         let s = row & self.chunk_mask;
         // SAFETY: row < nrows ⇒ chunk exists and slot is within the chunk.
         // The base carries write provenance (captured from `&mut` at alloc).
-        unsafe { self.bases.get_unchecked(c).as_ptr().add(s * self.stride_words) }
+        unsafe {
+            self.bases
+                .get_unchecked(c)
+                .as_ptr()
+                .add(s * self.stride_words)
+        }
     }
 
     /// Allocate one zeroed row; returns its index (stable forever).
@@ -475,7 +482,8 @@ impl RowStore {
             // Vec: moving a Box retags under Stacked Borrows (miri F1's
             // lesson), so a pointer taken before the push would be dead.
             let base = self.chunks.last_mut().expect("just pushed").as_mut_ptr();
-            self.bases.push(core::ptr::NonNull::new(base).expect("chunk base"));
+            self.bases
+                .push(core::ptr::NonNull::new(base).expect("chunk base"));
         }
         self.nrows += 1;
         row
@@ -527,7 +535,12 @@ struct EntrySet {
 impl EntrySet {
     fn with_capacity_pow2(cap: usize, slot_words: usize) -> EntrySet {
         let cap = cap.next_power_of_two().max(64);
-        EntrySet { entries: vec![0u64; cap * slot_words], mask: cap - 1, members: 0, slot_words }
+        EntrySet {
+            entries: vec![0u64; cap * slot_words],
+            mask: cap - 1,
+            members: 0,
+            slot_words,
+        }
     }
 
     /// CH grower: fill < 0.5.
@@ -604,7 +617,13 @@ impl LaneAggTable {
     pub fn new(repr: KeyRepr, state_bytes: usize, capacity_hint: usize) -> LaneAggTable {
         // Production defaults, per the pod A/B (Stage-2.2 tableresidual
         // note): hardware CRC32C where available; Salt8 entries.
-        LaneAggTable::with_config(repr, state_bytes, capacity_hint, HashKind::best(), EntryLayout::Salt8)
+        LaneAggTable::with_config(
+            repr,
+            state_bytes,
+            capacity_hint,
+            HashKind::best(),
+            EntryLayout::Salt8,
+        )
     }
 
     /// Explicit-config constructor (the bench A/B entry point; `new` picks
@@ -624,7 +643,11 @@ impl LaneAggTable {
         };
         // Crc falls back where unsupported (single dispatch point: the
         // stored kind IS the executed kind everywhere downstream).
-        let hash = if hash == HashKind::Crc && !crc_supported() { HashKind::Fmix } else { hash };
+        let hash = if hash == HashKind::Crc && !crc_supported() {
+            HashKind::Fmix
+        } else {
+            hash
+        };
         let slot_words = match layout {
             EntryLayout::Salt8 => 1,
             EntryLayout::Inline16 => {
@@ -644,12 +667,18 @@ impl LaneAggTable {
         // from 1024 slots — cost the dict-key grouped count ~12% in rehash walks (grow_set +
         // convert_two_level + insert_int, serialgap2 profile).
         let (single, buckets) = if capacity_hint > TWO_LEVEL_THRESHOLD {
-            let per_bucket = (capacity_hint.saturating_mul(4) / 256).next_power_of_two().max(64);
-            let bs =
-                (0..256).map(|_| EntrySet::with_capacity_pow2(per_bucket, slot_words)).collect();
+            let per_bucket = (capacity_hint.saturating_mul(4) / 256)
+                .next_power_of_two()
+                .max(64);
+            let bs = (0..256)
+                .map(|_| EntrySet::with_capacity_pow2(per_bucket, slot_words))
+                .collect();
             (EntrySet::with_capacity_pow2(0, slot_words), Some(bs))
         } else {
-            (EntrySet::with_capacity_pow2(capacity_hint.saturating_mul(2), slot_words), None)
+            (
+                EntrySet::with_capacity_pow2(capacity_hint.saturating_mul(2), slot_words),
+                None,
+            )
         };
         let mut t = LaneAggTable {
             repr,
@@ -854,7 +883,11 @@ impl LaneAggTable {
         if self.slot_words == 2 {
             return self.probe_int_inline(key, hash);
         }
-        let salted = if self.salt_enabled() { salt_of(hash) } else { 0 };
+        let salted = if self.salt_enabled() {
+            salt_of(hash)
+        } else {
+            0
+        };
         let set = self.set_for(hash);
         let mask = set.mask;
         let mut pos = (hash as usize) & mask;
@@ -900,7 +933,10 @@ impl LaneAggTable {
             if k as i64 == key {
                 let p = self.rows.row_ptr((r - 1) as usize);
                 // SAFETY: states start at key_words within the live row.
-                return Probe { states: unsafe { p.add(self.key_words).cast() }, is_new: false };
+                return Probe {
+                    states: unsafe { p.add(self.key_words).cast() },
+                    is_new: false,
+                };
             }
             pos = (pos + 1) & mask;
         }
@@ -1189,7 +1225,10 @@ impl LaneAggTable {
         set.members += 1;
         self.total_members += 1;
         // SAFETY: states follow the key word in the fresh zeroed row.
-        Probe { states: unsafe { p.add(self.key_words).cast() }, is_new: true }
+        Probe {
+            states: unsafe { p.add(self.key_words).cast() },
+            is_new: true,
+        }
     }
 
     /// Batched int-key probe: hashes computed in one pass, then the probe
@@ -1212,8 +1251,7 @@ impl LaneAggTable {
         // per-row probe shape reloads table fields from memory every row).
         // Both prefetch idioms are L2-gated off there by construction, so
         // this changes no prefetch behavior.
-        let engaged = mode != PrefetchMode::None
-            && self.entry_bytes() > PREFETCH_MIN_TABLE_BYTES;
+        let engaged = mode != PrefetchMode::None && self.entry_bytes() > PREFETCH_MIN_TABLE_BYTES;
         if !engaged {
             self.probe_fold_int(keys, |states, i, is_new| {
                 out.push(states);
@@ -1251,9 +1289,8 @@ impl LaneAggTable {
                     for &h in hashes.iter() {
                         let set = self.set_for(h);
                         // SAFETY: masked slot index × slot words.
-                        sink ^= unsafe {
-                            *set.entries.get_unchecked(((h as usize) & set.mask) * sw)
-                        };
+                        sink ^=
+                            unsafe { *set.entries.get_unchecked(((h as usize) & set.mask) * sw) };
                     }
                     std::hint::black_box(sink);
                 }
@@ -1469,22 +1506,22 @@ impl LaneAggTable {
         for j in 0..new_out.len() {
             if la != 0 && j + la < new_out.len() {
                 // SAFETY: pending ordinals index keys/hashes.
-                let h = unsafe {
-                    *hashes.get_unchecked(*new_out.get_unchecked(j + la) as usize)
-                };
+                let h = unsafe { *hashes.get_unchecked(*new_out.get_unchecked(j + la) as usize) };
                 let set = self.set_for(h);
                 let sw = set.slot_words;
                 // SAFETY: masked slot index × slot words (hint only).
-                prefetch_w(unsafe {
-                    set.entries.as_ptr().add(((h as usize) & set.mask) * sw)
-                });
+                prefetch_w(unsafe { set.entries.as_ptr().add(((h as usize) & set.mask) * sw) });
             }
             let r = new_out[j];
             let key = keys[r as usize];
             let hash = hashes[r as usize];
             // Re-walk from the home slot (installs since pass 1 are
             // visible; the walk family is the incumbent probe's).
-            let salted = if !INLINE && self.salt_enabled() { salt_of(hash) } else { 0 };
+            let salted = if !INLINE && self.salt_enabled() {
+                salt_of(hash)
+            } else {
+                0
+            };
             let set = self.set_for(hash);
             let mask = set.mask;
             let e_ptr = set.entries.as_ptr();
@@ -1500,7 +1537,7 @@ impl LaneAggTable {
                         break;
                     }
                     if k as i64 == key {
-                        dup = Some(self.rows.row_ptr(((rw - 1)) as usize));
+                        dup = Some(self.rows.row_ptr((rw - 1) as usize));
                         break;
                     }
                 } else {
@@ -1548,7 +1585,11 @@ impl LaneAggTable {
     pub fn probe_i128(&mut self, key: [u64; 2], hash: u64) -> Probe {
         debug_assert_eq!(self.repr, KeyRepr::Int128);
         debug_assert_eq!(self.slot_words, 1, "Int128 is Salt8-only");
-        let salted = if self.salt_enabled() { salt_of(hash) } else { 0 };
+        let salted = if self.salt_enabled() {
+            salt_of(hash)
+        } else {
+            0
+        };
         let set = self.set_for(hash);
         let mask = set.mask;
         let mut pos = (hash as usize) & mask;
@@ -1776,7 +1817,10 @@ impl LaneAggTable {
         set.members += 1;
         self.total_members += 1;
         // SAFETY: states follow the key words in the fresh zeroed row.
-        Probe { states: unsafe { p.add(self.key_words).cast() }, is_new: true }
+        Probe {
+            states: unsafe { p.add(self.key_words).cast() },
+            is_new: true,
+        }
     }
 
     /// Batched Int128 probe — [`Self::probe_int_batch`]'s twin over a packed
@@ -1792,8 +1836,7 @@ impl LaneAggTable {
     ) {
         debug_assert_eq!(self.repr, KeyRepr::Int128);
         out.reserve(keys.len());
-        let engaged =
-            mode != PrefetchMode::None && self.entry_bytes() > PREFETCH_MIN_TABLE_BYTES;
+        let engaged = mode != PrefetchMode::None && self.entry_bytes() > PREFETCH_MIN_TABLE_BYTES;
         if !engaged {
             self.probe_fold_i128(keys, |states, i, is_new| {
                 out.push(states);
@@ -1860,7 +1903,11 @@ impl LaneAggTable {
     #[inline]
     pub fn probe_bytes(&mut self, key: &[u8], hash: u64) -> Probe {
         debug_assert_eq!(self.repr, KeyRepr::Bytes);
-        let salted = if self.salt_enabled() { salt_of(hash) } else { 0 };
+        let salted = if self.salt_enabled() {
+            salt_of(hash)
+        } else {
+            0
+        };
         let klen = key.len() as u64;
         let packed = if key.len() <= 8 { pack8(key) } else { 0 };
         let set = self.set_for(hash);
@@ -1876,8 +1923,7 @@ impl LaneAggTable {
                 let row = ((e & REF_MASK) - 1) as usize;
                 let p = self.rows.row_ptr(row);
                 // SAFETY: live Bytes row: [word0, len, hash][states...].
-                let (w0, rlen, rhash) =
-                    unsafe { (*p, *p.add(1), *p.add(2)) };
+                let (w0, rlen, rhash) = unsafe { (*p, *p.add(1), *p.add(2)) };
                 let matched = if rlen == klen {
                     if klen <= 8 {
                         w0 == packed
@@ -1936,7 +1982,10 @@ impl LaneAggTable {
         set.members += 1;
         self.total_members += 1;
         // SAFETY: states follow the key words in the fresh zeroed row.
-        Probe { states: unsafe { p.add(self.key_words).cast() }, is_new: true }
+        Probe {
+            states: unsafe { p.add(self.key_words).cast() },
+            is_new: true,
+        }
     }
 
     /// Grow the long-key arena toward its PROJECTED final size instead of
@@ -2068,8 +2117,9 @@ impl LaneAggTable {
         self.converts = self.converts.saturating_add(1);
         let sw = self.slot_words;
         let per_bucket = (self.total_members / 128).next_power_of_two().max(64);
-        let mut bs: Vec<EntrySet> =
-            (0..256).map(|_| EntrySet::with_capacity_pow2(per_bucket, sw)).collect();
+        let mut bs: Vec<EntrySet> = (0..256)
+            .map(|_| EntrySet::with_capacity_pow2(per_bucket, sw))
+            .collect();
         let old = std::mem::replace(&mut self.single, EntrySet::with_capacity_pow2(0, sw));
         let (repr, hk, rows) = (self.repr, self.hash, &self.rows);
         let hash_of = |kw: u64, row: usize| slot_hash(repr, hk, rows, sw, kw, row);

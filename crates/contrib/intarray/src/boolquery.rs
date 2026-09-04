@@ -41,7 +41,10 @@ pub struct ParseError {
 
 impl ParseError {
     fn soft(err: PgError) -> ParseError {
-        ParseError { err: Box::new(err), soft: true }
+        ParseError {
+            err: Box::new(err),
+            soft: true,
+        }
     }
 
     fn hard(err: Box<PgError>) -> ParseError {
@@ -262,7 +265,9 @@ fn findoprnd(items: &mut [Item], pos: &mut i32) -> Result<(), ParseError> {
         // Unreachable from the parser (operand/operator states pair up);
         // C reads out of bounds here.
         return Err(ParseError::hard(
-            PgError::error("syntax error").with_sqlstate(ERRCODE_SYNTAX_ERROR).into(),
+            PgError::error("syntax error")
+                .with_sqlstate(ERRCODE_SYNTAX_ERROR)
+                .into(),
         ));
     }
     let p = *pos as usize;
@@ -285,7 +290,13 @@ fn findoprnd(items: &mut [Item], pos: &mut i32) -> Result<(), ParseError> {
 
 /// bqarr_in core: cstring -> QUERYTYPE image.
 pub fn parse_query(buf: &[u8]) -> Result<Vec<u8>, ParseError> {
-    let mut ws = WorkState { buf, pos: 0, state: WAITOPERAND, count: 0, items: Vec::new() };
+    let mut ws = WorkState {
+        buf,
+        pos: 0,
+        state: WAITOPERAND,
+        count: 0,
+        items: Vec::new(),
+    };
     ws.makepol()?;
     if ws.items.is_empty() {
         return Err(ParseError::soft(
@@ -305,7 +316,11 @@ pub fn parse_query(buf: &[u8]) -> Result<Vec<u8>, ParseError> {
     let mut items: Vec<Item> = ws
         .items
         .iter()
-        .map(|&(t, v)| Item { typ: t as i16, left: 0, val: v })
+        .map(|&(t, v)| Item {
+            typ: t as i16,
+            left: 0,
+            val: v,
+        })
         .collect();
     let mut pos = items.len() as i32 - 1;
     findoprnd(&mut items, &mut pos)?;
@@ -326,7 +341,11 @@ pub fn execute(
     if cur.typ == VAL as i16 {
         Ok(chkcond(p, cur))
     } else if cur.val == '!' as i32 {
-        Ok(if calcnot { !execute(items, pos - 1, calcnot, chkcond)? } else { true })
+        Ok(if calcnot {
+            !execute(items, pos - 1, calcnot, chkcond)?
+        } else {
+            true
+        })
     } else if cur.val == '&' as i32 {
         if execute(items, pos + cur.left as i32, calcnot, chkcond)? {
             execute(items, pos - 1, calcnot, chkcond)
@@ -430,7 +449,14 @@ fn infix(items: &[Item], pos: i32, first: bool) -> PgResult<(String, i32)> {
         let operand = pos - 1;
         let isopr = items[operand as usize].typ == OPR as i16;
         let (s, next) = infix(items, operand, isopr)?;
-        Ok((if isopr { format!("!( {s} )") } else { format!("!{s}") }, next))
+        Ok((
+            if isopr {
+                format!("!( {s} )")
+            } else {
+                format!("!{s}")
+            },
+            next,
+        ))
     } else {
         let op = cur.val as u8 as char;
         let (right, rnext) = infix(items, pos - 1, false)?;

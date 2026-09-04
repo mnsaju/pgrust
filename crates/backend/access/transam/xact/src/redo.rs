@@ -4,10 +4,10 @@
 // bodies is critical and mirrors the C.
 
 use crate::*;
+use types_core::xact::XlXactStatsItem;
 use types_core::{Oid, RepOriginId};
 use types_error::PANIC;
 use types_storage::{RelFileLocator, SharedInvalidationMessage, SHARED_INVALIDATION_MESSAGE_SIZE};
-use types_core::xact::XlXactStatsItem;
 use xlogutils::{STANDBY_DISABLED, STANDBY_INITIALIZED};
 
 #[derive(Clone, Copy, Debug)]
@@ -157,7 +157,11 @@ fn parse_rel(c: &mut Cursor<'_>) -> PgResult<RelFileLocator> {
     let spc = c.u32()?;
     let db = c.u32()?;
     let rel = c.u32()?;
-    Ok(RelFileLocator { spcOid: spc, dbOid: db, relNumber: rel })
+    Ok(RelFileLocator {
+        spcOid: spc,
+        dbOid: db,
+        relNumber: rel,
+    })
 }
 
 fn parse_stat(c: &mut Cursor<'_>) -> PgResult<XlXactStatsItem> {
@@ -180,7 +184,11 @@ pub fn parse_commit_record(info: u8, data: &[u8]) -> PgResult<ParsedCommit> {
         ..Default::default()
     };
 
-    let xinfo = if (info & XLOG_XACT_HAS_INFO) != 0 { c.u32()? } else { 0 };
+    let xinfo = if (info & XLOG_XACT_HAS_INFO) != 0 {
+        c.u32()?
+    } else {
+        0
+    };
     parsed.xinfo = xinfo;
 
     if (xinfo & XACT_XINFO_HAS_DBINFO) != 0 {
@@ -212,8 +220,10 @@ pub fn parse_commit_record(info: u8, data: &[u8]) -> PgResult<ParsedCommit> {
     if (xinfo & XACT_XINFO_HAS_INVALS) != 0 {
         let n = c.read_count(SHARED_INVALIDATION_MESSAGE_SIZE, &mut parsed.msgs)?;
         for _ in 0..n {
-            let bytes: [u8; SHARED_INVALIDATION_MESSAGE_SIZE] =
-                c.take(SHARED_INVALIDATION_MESSAGE_SIZE)?.try_into().unwrap();
+            let bytes: [u8; SHARED_INVALIDATION_MESSAGE_SIZE] = c
+                .take(SHARED_INVALIDATION_MESSAGE_SIZE)?
+                .try_into()
+                .unwrap();
             let msg = SharedInvalidationMessage::from_wire_bytes(bytes).ok_or_else(|| {
                 PgError::error("invalid shared-invalidation message in transaction WAL record")
             })?;
@@ -244,7 +254,11 @@ pub fn parse_abort_record(info: u8, data: &[u8]) -> PgResult<ParsedAbort> {
         ..Default::default()
     };
 
-    let xinfo = if (info & XLOG_XACT_HAS_INFO) != 0 { c.u32()? } else { 0 };
+    let xinfo = if (info & XLOG_XACT_HAS_INFO) != 0 {
+        c.u32()?
+    } else {
+        0
+    };
     parsed.xinfo = xinfo;
 
     if (xinfo & XACT_XINFO_HAS_DBINFO) != 0 {
@@ -336,11 +350,7 @@ pub fn parse_prepare_record(_info: u8, data: &[u8]) -> PgResult<ParsedPrepare> {
     let mut off = HDR;
     let gid_bytes = data.get(off..off + gidlen).ok_or_else(truncated)?;
     // gidlen counts the NUL terminator (twophase.c: strlen(gid) + 1).
-    let twophase_gid = gid_bytes
-        .split(|&b| b == 0)
-        .next()
-        .unwrap_or(&[])
-        .to_vec();
+    let twophase_gid = gid_bytes.split(|&b| b == 0).next().unwrap_or(&[]).to_vec();
     off = maxalign(off + gidlen);
 
     let mut subxacts = Vec::new();
@@ -348,7 +358,9 @@ pub fn parse_prepare_record(_info: u8, data: &[u8]) -> PgResult<ParsedPrepare> {
         .try_reserve(nsubxacts as usize)
         .map_err(|_| PgError::error("out of memory parsing prepare WAL record"))?;
     for i in 0..nsubxacts as usize {
-        let b = data.get(off + i * 4..off + i * 4 + 4).ok_or_else(truncated)?;
+        let b = data
+            .get(off + i * 4..off + i * 4 + 4)
+            .ok_or_else(truncated)?;
         subxacts.push(u32::from_ne_bytes(b.try_into().unwrap()));
     }
 
@@ -477,7 +489,6 @@ fn xact_redo_abort(
             max_xid,
         )?;
 
-
         if (parsed.xinfo & XACT_XINFO_HAS_AE_LOCKS) != 0 {
             standby_seams::standby_release_lock_tree::call(xid, &parsed.subxacts)?;
         }
@@ -540,14 +551,12 @@ pub fn xact_redo(record: XactRedoInfo<'_>) -> PgResult<()> {
             )?;
             twophase_seams::prepare_redo_remove::call(parsed.twophase_xid, false)
         }
-        XLOG_XACT_PREPARE => {
-            twophase_seams::prepare_redo_add::call(
-                record.data,
-                record.read_rec_ptr,
-                record.end_rec_ptr,
-                record.origin_id,
-            )
-        }
+        XLOG_XACT_PREPARE => twophase_seams::prepare_redo_add::call(
+            record.data,
+            record.read_rec_ptr,
+            record.end_rec_ptr,
+            record.origin_id,
+        ),
         XLOG_XACT_ASSIGNMENT => {
             if xlogutils::standby_state() >= STANDBY_INITIALIZED {
                 let mut c = Cursor::new(record.data);
@@ -561,9 +570,7 @@ pub fn xact_redo(record: XactRedoInfo<'_>) -> PgResult<()> {
             }
             Ok(())
         }
-        XLOG_XACT_INVALIDATIONS => {
-            Ok(())
-        }
+        XLOG_XACT_INVALIDATIONS => Ok(()),
         other => Err(Box::new(PgError::new(
             PANIC,
             format!("xact_redo: unknown op code {other}"),

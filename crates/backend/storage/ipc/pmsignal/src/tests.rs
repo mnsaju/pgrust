@@ -48,9 +48,15 @@ fn send_and_check_postmaster_signal() {
     // The wake seam is pid-less now (the postmaster is the one well-known
     // route); the assertion is that exactly one PM kick was delivered.
     assert_eq!(WAKEUPS.lock().unwrap().len(), 1);
-    assert!(CheckPostmasterSignal(PMSignalReason::PMSIGNAL_START_AUTOVAC_WORKER));
-    assert!(!CheckPostmasterSignal(PMSignalReason::PMSIGNAL_START_AUTOVAC_WORKER));
-    assert!(!CheckPostmasterSignal(PMSignalReason::PMSIGNAL_ROTATE_LOGFILE));
+    assert!(CheckPostmasterSignal(
+        PMSignalReason::PMSIGNAL_START_AUTOVAC_WORKER
+    ));
+    assert!(!CheckPostmasterSignal(
+        PMSignalReason::PMSIGNAL_START_AUTOVAC_WORKER
+    ));
+    assert!(!CheckPostmasterSignal(
+        PMSignalReason::PMSIGNAL_ROTATE_LOGFILE
+    ));
 }
 
 #[test]
@@ -144,7 +150,9 @@ fn reset_after_crash_restores_boot_image() {
 
     PMSignalShmemResetAfterCrash();
 
-    assert!(!CheckPostmasterSignal(PMSignalReason::PMSIGNAL_RECOVERY_STARTED));
+    assert!(!CheckPostmasterSignal(
+        PMSignalReason::PMSIGNAL_RECOVERY_STARTED
+    ));
     assert_eq!(GetQuitSignalReason(), QuitSignalReason::PMQUIT_NOT_SENT);
     for flag in state().PMChildFlags {
         assert_eq!(flag.load(Acquire), PM_CHILD_UNUSED);

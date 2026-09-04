@@ -115,9 +115,9 @@ fn install_seams() {
             with_fake(|f| Ok(f.tables[&rel.rd_id].len() as u32))
         });
 
-        heapam_visibility_seams::heap_tuple_satisfies_visibility::set(
-            |_htup, _snap, _buf| Ok(true),
-        );
+        heapam_visibility_seams::heap_tuple_satisfies_visibility::set(|_htup, _snap, _buf| {
+            Ok(true)
+        });
         heapam_visibility_seams::heap_tuple_satisfies_mvcc_page::set(
             |_htup, _snap, _buf, _memo| Ok(true),
         );
@@ -160,7 +160,11 @@ fn install_seams() {
 fn quiesced() {
     with_fake(|f| {
         assert!(f.pins.iter().all(|p| *p == 0), "leaked pins: {:?}", f.pins);
-        assert!(f.locks.iter().all(|l| *l == 0), "leaked locks: {:?}", f.locks);
+        assert!(
+            f.locks.iter().all(|l| *l == 0),
+            "leaked locks: {:?}",
+            f.locks
+        );
     });
 }
 
@@ -266,7 +270,9 @@ fn test_relation<'mcx>(mcx: Mcx<'mcx>, oid: Oid) -> Relation<'mcx> {
         relfrozenxid: 3,
         relminmxid: 1,
     };
-    let data = RelationData { rd_locator: Default::default(), rd_smgr: Default::default(),
+    let data = RelationData {
+        rd_locator: Default::default(),
+        rd_smgr: Default::default(),
         rd_id: oid,
         rd_backend: INVALID_PROC_NUMBER,
         rd_islocaltemp: false,
@@ -276,7 +282,10 @@ fn test_relation<'mcx>(mcx: Mcx<'mcx>, oid: Oid) -> Relation<'mcx> {
         rd_firstRelfilelocatorSubid: std::cell::Cell::new(0),
         rd_droppedSubid: std::cell::Cell::new(0),
         rd_lockInfo: LockInfoData {
-            lockRelId: LockRelId { relId: oid, dbId: 5 },
+            lockRelId: LockRelId {
+                relId: oid,
+                dbId: 5,
+            },
         },
         rd_rel,
         rd_att: int4_tupdesc(mcx),
@@ -289,20 +298,26 @@ fn test_relation<'mcx>(mcx: Mcx<'mcx>, oid: Oid) -> Relation<'mcx> {
         pgstat_enabled: std::cell::Cell::new(true),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: PgVec::new_in(mcx),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     };
     Relation::open(data, None)
 }
 
 fn static_mvcc_snapshot() -> Rc<SnapshotData<'static>> {
     let ctx: &'static MemoryContext = Box::leak(Box::new(MemoryContext::new("snap-test")));
-    Rc::new(SnapshotData::sentinel(ctx.mcx(), SnapshotType::SNAPSHOT_MVCC))
+    Rc::new(SnapshotData::sentinel(
+        ctx.mcx(),
+        SnapshotType::SNAPSHOT_MVCC,
+    ))
 }
 
 static NEXT_OID: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(70000);
@@ -324,7 +339,11 @@ fn mk_seqscan<'mcx>(
     SeqScan {
         cb_scan_cols: None,
         scan: Scan {
-            plan: Plan { targetlist, qual, ..Default::default() },
+            plan: Plan {
+                targetlist,
+                qual,
+                ..Default::default()
+            },
             scanrelid,
         },
     }

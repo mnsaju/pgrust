@@ -1,8 +1,8 @@
 pub mod simple;
 pub mod synonym;
-pub mod thesaurus;
 #[cfg(test)]
 mod tests;
+pub mod thesaurus;
 
 use ::datum::Datum;
 use ::mcx::{alloc_in, vec_with_capacity_in, Mcx};
@@ -32,8 +32,11 @@ pub fn fc_ts_lexize(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRe
     let token = input.data();
 
     let dict = lookup_ts_dictionary_cache(dict_id)?;
-    let mut dstate =
-        DictSubState { isend: false, getnext: false, private_state: core::ptr::null_mut() };
+    let mut dstate = DictSubState {
+        isend: false,
+        getnext: false,
+        private_state: core::ptr::null_mut(),
+    };
     let mut res_word = dict.call_lexize(mcx, token, Some(&mut dstate))?;
     if dstate.getnext {
         dstate.isend = true;
@@ -151,7 +154,14 @@ pub mod builtins {
         nargs: i16,
         func: ::types_fmgr::PGFunction,
     ) -> FmgrBuiltin {
-        FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+        FmgrBuiltin {
+            foid,
+            name,
+            nargs,
+            strict: true,
+            retset: false,
+            func,
+        }
     }
 
     pub const DICT_BUILTINS: &[FmgrBuiltin] = &[

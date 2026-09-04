@@ -117,7 +117,11 @@ pub(crate) fn handle_streamed_transaction(action: u8, buf: &[u8]) -> PgResult<bo
 // stream_start_internal (worker.c:1439): open the spool file (create on the
 // first segment) inside a transaction that lasts until stream stop, and load
 // the subxact info for continued segments.
-fn stream_start_internal(mcx: Mcx<'static>, xid: TransactionId, first_segment: bool) -> PgResult<()> {
+fn stream_start_internal(
+    mcx: Mcx<'static>,
+    xid: TransactionId,
+    first_segment: bool,
+) -> PgResult<()> {
     begin_replication_step(mcx)?;
     stream_open_file(mcx, subid(), xid, first_segment)?;
     if !first_segment {
@@ -132,7 +136,10 @@ pub(crate) fn apply_handle_stream_start(
     r: &mut logicalproto::Reader<'_>,
 ) -> PgResult<()> {
     if in_streamed_transaction() {
-        protocol_violation("duplicate STREAM START message", "apply_handle_stream_start")?;
+        protocol_violation(
+            "duplicate STREAM START message",
+            "apply_handle_stream_start",
+        )?;
     }
     debug_assert!(STREAM_XID.get() == InvalidTransactionId);
 
@@ -192,9 +199,7 @@ fn stream_abort_internal(
     subxact_info_read(mcx, subid(), xid)?;
 
     // Scan from the tail: we're likely aborting the most recent subxact.
-    let subidx = SUBXACTS.with(|s| {
-        s.borrow().iter().rposition(|info| info.xid == subxid)
-    });
+    let subidx = SUBXACTS.with(|s| s.borrow().iter().rposition(|info| info.xid == subxid));
 
     let Some(subidx) = subidx else {
         // Empty subxact: just drop the loaded info.
@@ -350,7 +355,9 @@ fn stream_open_file(
 
 // stream_close_file (worker.c:4373).
 fn stream_close_file() {
-    let file = STREAM_FD.with(|f| f.borrow_mut().take()).expect("stream file open");
+    let file = STREAM_FD
+        .with(|f| f.borrow_mut().take())
+        .expect("stream file open");
     // The spool must be durable across chunks; close flushes the buffer.
     file.close().expect("closing streamed-changes spool file");
 }
@@ -453,10 +460,15 @@ fn subxact_info_add(xid: TransactionId) -> PgResult<()> {
         return Ok(());
     }
 
-    let (fileno, offset) = STREAM_FD.with(|f| {
-        f.borrow().as_ref().expect("stream file open").tell()
+    let (fileno, offset) =
+        STREAM_FD.with(|f| f.borrow().as_ref().expect("stream file open").tell());
+    SUBXACTS.with(|s| {
+        s.borrow_mut().push(SubXactInfo {
+            xid,
+            fileno,
+            offset,
+        })
     });
-    SUBXACTS.with(|s| s.borrow_mut().push(SubXactInfo { xid, fileno, offset }));
     Ok(())
 }
 

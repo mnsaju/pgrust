@@ -61,13 +61,19 @@ mod tests {
 
     #[test]
     fn vector_headers_prefix_matches_arraytype() {
-        assert_eq!(offset_of!(ArrayType, vl_len_), offset_of!(int2vector, vl_len_));
+        assert_eq!(
+            offset_of!(ArrayType, vl_len_),
+            offset_of!(int2vector, vl_len_)
+        );
         assert_eq!(offset_of!(ArrayType, ndim), offset_of!(int2vector, ndim));
         assert_eq!(
             offset_of!(ArrayType, dataoffset),
             offset_of!(int2vector, dataoffset)
         );
-        assert_eq!(offset_of!(ArrayType, elemtype), offset_of!(int2vector, elemtype));
+        assert_eq!(
+            offset_of!(ArrayType, elemtype),
+            offset_of!(int2vector, elemtype)
+        );
         assert_eq!(offset_of!(int2vector, dim1), 16);
         assert_eq!(offset_of!(int2vector, lbound1), 20);
         assert_eq!(offset_of!(oidvector, dim1), 16);

@@ -10,8 +10,14 @@ pub mod builtins;
 mod tests;
 
 // size_pretty_units name/unitbits pairs + the "B" alias for bytes.
-const UNITS: &[(&str, u32)] =
-    &[("bytes", 0), ("kB", 10), ("MB", 20), ("GB", 30), ("TB", 40), ("PB", 50)];
+const UNITS: &[(&str, u32)] = &[
+    ("bytes", 0),
+    ("kB", 10),
+    ("MB", 20),
+    ("GB", 30),
+    ("TB", 40),
+    ("PB", 50),
+];
 
 fn c_isspace(c: u8) -> bool {
     c == b' ' || (0x09..=0x0d).contains(&c)
@@ -81,8 +87,8 @@ pub fn pg_size_bytes(arg: &str) -> PgResult<i64> {
         }
     }
 
-    let mut num = adt_numeric::numeric_in(&arg[numstart..e], -1, None)?
-        .expect("hard-error path returns Err");
+    let mut num =
+        adt_numeric::numeric_in(&arg[numstart..e], -1, None)?.expect("hard-error path returns Err");
 
     let mut p = e;
     while p < s.len() && c_isspace(s[p]) {

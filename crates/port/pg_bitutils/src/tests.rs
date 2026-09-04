@@ -31,7 +31,10 @@ fn one_positions() {
         assert_eq!(pg_rightmost_one_pos32(1u32 << i), i as i32);
         if i > 0 {
             assert_eq!(pg_leftmost_one_pos32((1u32 << i) | 1), i as i32);
-            assert_eq!(pg_rightmost_one_pos32((1u32 << i) | (1u32 << (i - 1))), (i - 1) as i32);
+            assert_eq!(
+                pg_rightmost_one_pos32((1u32 << i) | (1u32 << (i - 1))),
+                (i - 1) as i32
+            );
         }
     }
     for i in 0..64 {
@@ -64,12 +67,24 @@ fn powers_and_logs() {
         assert_eq!(pg_nextpower2_32(num), next, "nextpower2_32({num})");
         assert_eq!(pg_nextpower2_64(num as u64), next as u64);
     }
-    assert_eq!(pg_nextpower2_64(0x4000_0000_0000_0001), 0x8000_0000_0000_0000);
+    assert_eq!(
+        pg_nextpower2_64(0x4000_0000_0000_0001),
+        0x8000_0000_0000_0000
+    );
     assert_eq!(pg_prevpower2_32(1), 1);
     assert_eq!(pg_prevpower2_32(3), 2);
     assert_eq!(pg_prevpower2_32(1025), 1024);
     assert_eq!(pg_prevpower2_64(u64::MAX), 1u64 << 63);
-    for (num, log) in [(0u32, 0u32), (1, 0), (2, 1), (3, 2), (4, 2), (5, 3), (1024, 10), (1025, 11)] {
+    for (num, log) in [
+        (0u32, 0u32),
+        (1, 0),
+        (2, 1),
+        (3, 2),
+        (4, 2),
+        (5, 3),
+        (1024, 10),
+        (1025, 11),
+    ] {
         assert_eq!(pg_ceil_log2_32(num), log, "ceil_log2_32({num})");
         assert_eq!(pg_ceil_log2_64(num as u64), log as u64);
     }
@@ -106,14 +121,21 @@ fn popcount_every_boundary() {
     }
     for len in 0..=300 {
         let s = &buf[..len];
-        let expect: u64 = s.iter().map(|&b| PG_NUMBER_OF_ONES[b as usize] as u64).sum();
+        let expect: u64 = s
+            .iter()
+            .map(|&b| PG_NUMBER_OF_ONES[b as usize] as u64)
+            .sum();
         assert_eq!(pg_popcount(s), expect, "len {len}");
         for mask in [0x01u8, 0x55, 0xAA, 0xFF] {
             let expect_m: u64 = s
                 .iter()
                 .map(|&b| PG_NUMBER_OF_ONES[(b & mask) as usize] as u64)
                 .sum();
-            assert_eq!(pg_popcount_masked(s, mask), expect_m, "len {len} mask {mask:#x}");
+            assert_eq!(
+                pg_popcount_masked(s, mask),
+                expect_m,
+                "len {len} mask {mask:#x}"
+            );
         }
     }
 }
@@ -123,12 +145,17 @@ fn popcount_unaligned_starts() {
     let mut buf = [0u8; 8300];
     let mut s = 0x243F_6A88_85A3_08D3u64;
     for b in buf.iter_mut() {
-        s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        s = s
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         *b = (s >> 56) as u8;
     }
     for off in 0..16 {
         let sl = &buf[off..off + 8192];
-        let expect: u64 = sl.iter().map(|&b| PG_NUMBER_OF_ONES[b as usize] as u64).sum();
+        let expect: u64 = sl
+            .iter()
+            .map(|&b| PG_NUMBER_OF_ONES[b as usize] as u64)
+            .sum();
         assert_eq!(pg_popcount(sl), expect, "off {off}");
         let expect_m: u64 = sl
             .iter()

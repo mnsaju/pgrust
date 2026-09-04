@@ -226,7 +226,10 @@ fn name_tables_round_trip_indices() {
     assert_eq!(GucContext_Names[PGC_USERSET as usize], "user");
     assert_eq!(GucSource_Names[PGC_S_DEFAULT as usize], "default");
     assert_eq!(GucSource_Names[PGC_S_FILE as usize], "configuration file");
-    assert_eq!(config_group_names[FILE_LOCATIONS as usize], "File Locations");
+    assert_eq!(
+        config_group_names[FILE_LOCATIONS as usize],
+        "File Locations"
+    );
     assert_eq!(config_type_names[PGC_BOOL as usize], "bool");
     assert_eq!(config_type_names[PGC_ENUM as usize], "enum");
 }
@@ -259,7 +262,10 @@ fn m5_probe_requires_a_live_pool() {
 
 #[test]
 fn lz4_build_config_is_reflected_in_option_sets() {
-    let opts = find("default_toast_compression").options().unwrap().entries();
+    let opts = find("default_toast_compression")
+        .options()
+        .unwrap()
+        .entries();
     assert!(!opts.iter().any(|o| o.name == "lz4"));
     let wal = find("wal_compression").options().unwrap().entries();
     assert!(!wal.iter().any(|o| o.name == "lz4" || o.name == "zstd"));

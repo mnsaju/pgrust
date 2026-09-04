@@ -29,13 +29,18 @@ fn deflist_quoted_and_unquoted() {
             ("synonyms".into(), "x".into(), None)
         ]
     );
-    assert_eq!(items(b"accept = off"), vec![("accept".into(), "off".into(), None)]);
-    assert_eq!(items(b"k = E'a''b'"), vec![("k".into(), "a'b".into(), None)]);
-    assert_eq!(items(b"\"Quoted Key\" = \"va\"\"l\""), vec![(
-        "Quoted Key".into(),
-        "va\"l".into(),
-        None
-    )]);
+    assert_eq!(
+        items(b"accept = off"),
+        vec![("accept".into(), "off".into(), None)]
+    );
+    assert_eq!(
+        items(b"k = E'a''b'"),
+        vec![("k".into(), "a'b".into(), None)]
+    );
+    assert_eq!(
+        items(b"\"Quoted Key\" = \"va\"\"l\""),
+        vec![("Quoted Key".into(), "va\"l".into(), None)]
+    );
     assert_eq!(items(b"  "), vec![]);
 }
 

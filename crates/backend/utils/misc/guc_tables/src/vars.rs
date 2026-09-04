@@ -35,7 +35,8 @@ pub static Geqo_selection_bias: GucRealVar = GucSlot::new("Geqo_selection_bias")
 pub static GinFuzzySearchLimit: GucIntVar = GucSlot::new("GinFuzzySearchLimit");
 pub static HbaFileName: GucStringVar = GucSlot::new("HbaFileName");
 pub static IdentFileName: GucStringVar = GucSlot::new("IdentFileName");
-pub static IdleInTransactionSessionTimeout: GucIntVar = GucSlot::new("IdleInTransactionSessionTimeout");
+pub static IdleInTransactionSessionTimeout: GucIntVar =
+    GucSlot::new("IdleInTransactionSessionTimeout");
 pub static IdleSessionTimeout: GucIntVar = GucSlot::new("IdleSessionTimeout");
 pub static IgnoreSystemIndexes: GucBoolVar = GucSlot::new("IgnoreSystemIndexes");
 pub static IntervalStyle: GucEnumVar = GucSlot::new("IntervalStyle");
@@ -103,7 +104,8 @@ pub static autovacuum_anl_scale: GucRealVar = GucSlot::new("autovacuum_anl_scale
 pub static autovacuum_anl_thresh: GucIntVar = GucSlot::new("autovacuum_anl_thresh");
 pub static autovacuum_freeze_max_age: GucIntVar = GucSlot::new("autovacuum_freeze_max_age");
 pub static autovacuum_max_workers: GucIntVar = GucSlot::new("autovacuum_max_workers");
-pub static autovacuum_multixact_freeze_max_age: GucIntVar = GucSlot::new("autovacuum_multixact_freeze_max_age");
+pub static autovacuum_multixact_freeze_max_age: GucIntVar =
+    GucSlot::new("autovacuum_multixact_freeze_max_age");
 pub static autovacuum_naptime: GucIntVar = GucSlot::new("autovacuum_naptime");
 pub static autovacuum_start_daemon: GucBoolVar = GucSlot::new("autovacuum_start_daemon");
 pub static autovacuum_vac_cost_delay: GucRealVar = GucSlot::new("autovacuum_vac_cost_delay");
@@ -126,7 +128,8 @@ pub static bonjour_name: GucStringVar = GucSlot::new("bonjour_name");
 pub static bytea_output: GucEnumVar = GucSlot::new("bytea_output");
 pub static check_function_bodies: GucBoolVar = GucSlot::new("check_function_bodies");
 pub static checkpoint_flush_after: GucIntVar = GucSlot::new("checkpoint_flush_after");
-pub static client_connection_check_interval: GucIntVar = GucSlot::new("client_connection_check_interval");
+pub static client_connection_check_interval: GucIntVar =
+    GucSlot::new("client_connection_check_interval");
 pub static client_encoding_string: GucStringVar = GucSlot::new("client_encoding_string");
 pub static client_min_messages: GucEnumVar = GucSlot::new("client_min_messages");
 pub static cluster_name: GucStringVar = GucSlot::new("cluster_name");
@@ -146,7 +149,8 @@ pub static data_sync_retry: GucBoolVar = GucSlot::new("data_sync_retry");
 pub static datestyle_string: GucStringVar = GucSlot::new("datestyle_string");
 pub static debug_discard_caches: GucIntVar = GucSlot::new("debug_discard_caches");
 pub static debug_io_direct_string: GucStringVar = GucSlot::new("debug_io_direct_string");
-pub static debug_logical_replication_streaming: GucEnumVar = GucSlot::new("debug_logical_replication_streaming");
+pub static debug_logical_replication_streaming: GucEnumVar =
+    GucSlot::new("debug_logical_replication_streaming");
 pub static debug_parallel_query: GucEnumVar = GucSlot::new("debug_parallel_query");
 pub static default_statistics_target: GucIntVar = GucSlot::new("default_statistics_target");
 pub static default_table_access_method: GucStringVar = GucSlot::new("default_table_access_method");
@@ -176,7 +180,8 @@ pub static enable_nestloop: GucBoolVar = GucSlot::new("enable_nestloop");
 pub static enable_parallel_append: GucBoolVar = GucSlot::new("enable_parallel_append");
 pub static enable_parallel_hash: GucBoolVar = GucSlot::new("enable_parallel_hash");
 pub static enable_partition_pruning: GucBoolVar = GucSlot::new("enable_partition_pruning");
-pub static enable_partitionwise_aggregate: GucBoolVar = GucSlot::new("enable_partitionwise_aggregate");
+pub static enable_partitionwise_aggregate: GucBoolVar =
+    GucSlot::new("enable_partitionwise_aggregate");
 pub static enable_partitionwise_join: GucBoolVar = GucSlot::new("enable_partitionwise_join");
 pub static enable_presorted_aggregate: GucBoolVar = GucSlot::new("enable_presorted_aggregate");
 pub static enable_self_join_elimination: GucBoolVar = GucSlot::new("enable_self_join_elimination");
@@ -200,7 +205,8 @@ pub static huge_page_size: GucIntVar = GucSlot::new("huge_page_size");
 pub static huge_pages: GucEnumVar = GucSlot::new("huge_pages");
 pub static huge_pages_status: GucEnumVar = GucSlot::new("huge_pages_status");
 pub static icu_validation_level: GucEnumVar = GucSlot::new("icu_validation_level");
-pub static idle_replication_slot_timeout_secs: GucIntVar = GucSlot::new("idle_replication_slot_timeout_secs");
+pub static idle_replication_slot_timeout_secs: GucIntVar =
+    GucSlot::new("idle_replication_slot_timeout_secs");
 pub static ignore_checksum_failure: GucBoolVar = GucSlot::new("ignore_checksum_failure");
 pub static ignore_invalid_pages: GucBoolVar = GucSlot::new("ignore_invalid_pages");
 pub static in_hot_standby_guc: GucBoolVar = GucSlot::new("in_hot_standby_guc");
@@ -223,7 +229,8 @@ pub static jit_tuple_deforming: GucBoolVar = GucSlot::new("jit_tuple_deforming")
 pub static join_collapse_limit: GucIntVar = GucSlot::new("join_collapse_limit");
 pub static regex_engine: GucEnumVar = GucSlot::new("regex_engine");
 pub static lo_compat_privileges: GucBoolVar = GucSlot::new("lo_compat_privileges");
-pub static local_preload_libraries_string: GucStringVar = GucSlot::new("local_preload_libraries_string");
+pub static local_preload_libraries_string: GucStringVar =
+    GucSlot::new("local_preload_libraries_string");
 pub static locale_messages: GucStringVar = GucSlot::new("locale_messages");
 pub static locale_monetary: GucStringVar = GucSlot::new("locale_monetary");
 pub static locale_numeric: GucStringVar = GucSlot::new("locale_numeric");
@@ -240,7 +247,8 @@ pub static log_min_duration_statement: GucIntVar = GucSlot::new("log_min_duratio
 pub static log_min_error_statement: GucEnumVar = GucSlot::new("log_min_error_statement");
 pub static log_min_messages: GucEnumVar = GucSlot::new("log_min_messages");
 pub static log_parameter_max_length: GucIntVar = GucSlot::new("log_parameter_max_length");
-pub static log_parameter_max_length_on_error: GucIntVar = GucSlot::new("log_parameter_max_length_on_error");
+pub static log_parameter_max_length_on_error: GucIntVar =
+    GucSlot::new("log_parameter_max_length_on_error");
 pub static log_parser_stats: GucBoolVar = GucSlot::new("log_parser_stats");
 pub static log_planner_stats: GucBoolVar = GucSlot::new("log_planner_stats");
 pub static log_recovery_conflict_waits: GucBoolVar = GucSlot::new("log_recovery_conflict_waits");
@@ -255,20 +263,26 @@ pub static log_xact_sample_rate: GucRealVar = GucSlot::new("log_xact_sample_rate
 pub static logical_decoding_work_mem: GucIntVar = GucSlot::new("logical_decoding_work_mem");
 pub static maintenance_io_concurrency: GucIntVar = GucSlot::new("maintenance_io_concurrency");
 pub static maintenance_work_mem: GucIntVar = GucSlot::new("maintenance_work_mem");
-pub static max_active_replication_origins: GucIntVar = GucSlot::new("max_active_replication_origins");
+pub static max_active_replication_origins: GucIntVar =
+    GucSlot::new("max_active_replication_origins");
 pub static max_files_per_process: GucIntVar = GucSlot::new("max_files_per_process");
 pub static max_function_args: GucIntVar = GucSlot::new("max_function_args");
 pub static max_identifier_length: GucIntVar = GucSlot::new("max_identifier_length");
 pub static max_index_keys: GucIntVar = GucSlot::new("max_index_keys");
 pub static max_locks_per_xact: GucIntVar = GucSlot::new("max_locks_per_xact");
-pub static max_logical_replication_workers: GucIntVar = GucSlot::new("max_logical_replication_workers");
+pub static max_logical_replication_workers: GucIntVar =
+    GucSlot::new("max_logical_replication_workers");
 pub static max_notify_queue_pages: GucIntVar = GucSlot::new("max_notify_queue_pages");
-pub static max_parallel_apply_workers_per_subscription: GucIntVar = GucSlot::new("max_parallel_apply_workers_per_subscription");
-pub static max_parallel_maintenance_workers: GucIntVar = GucSlot::new("max_parallel_maintenance_workers");
+pub static max_parallel_apply_workers_per_subscription: GucIntVar =
+    GucSlot::new("max_parallel_apply_workers_per_subscription");
+pub static max_parallel_maintenance_workers: GucIntVar =
+    GucSlot::new("max_parallel_maintenance_workers");
 pub static max_parallel_workers: GucIntVar = GucSlot::new("max_parallel_workers");
-pub static max_parallel_workers_per_gather: GucIntVar = GucSlot::new("max_parallel_workers_per_gather");
+pub static max_parallel_workers_per_gather: GucIntVar =
+    GucSlot::new("max_parallel_workers_per_gather");
 pub static max_predicate_locks_per_page: GucIntVar = GucSlot::new("max_predicate_locks_per_page");
-pub static max_predicate_locks_per_relation: GucIntVar = GucSlot::new("max_predicate_locks_per_relation");
+pub static max_predicate_locks_per_relation: GucIntVar =
+    GucSlot::new("max_predicate_locks_per_relation");
 pub static max_predicate_locks_per_xact: GucIntVar = GucSlot::new("max_predicate_locks_per_xact");
 pub static max_prepared_xacts: GucIntVar = GucSlot::new("max_prepared_xacts");
 pub static max_replication_slots: GucIntVar = GucSlot::new("max_replication_slots");
@@ -276,7 +290,8 @@ pub static max_slot_wal_keep_size_mb: GucIntVar = GucSlot::new("max_slot_wal_kee
 pub static max_stack_depth: GucIntVar = GucSlot::new("max_stack_depth");
 pub static max_standby_archive_delay: GucIntVar = GucSlot::new("max_standby_archive_delay");
 pub static max_standby_streaming_delay: GucIntVar = GucSlot::new("max_standby_streaming_delay");
-pub static max_sync_workers_per_subscription: GucIntVar = GucSlot::new("max_sync_workers_per_subscription");
+pub static max_sync_workers_per_subscription: GucIntVar =
+    GucSlot::new("max_sync_workers_per_subscription");
 pub static max_wal_senders: GucIntVar = GucSlot::new("max_wal_senders");
 pub static max_wal_size_mb: GucIntVar = GucSlot::new("max_wal_size_mb");
 pub static max_worker_processes: GucIntVar = GucSlot::new("max_worker_processes");
@@ -291,8 +306,10 @@ pub static namespace_search_path: GucStringVar = GucSlot::new("namespace_search_
 pub static notify_buffers: GucIntVar = GucSlot::new("notify_buffers");
 pub static num_os_semaphores: GucIntVar = GucSlot::new("num_os_semaphores");
 pub static num_temp_buffers: GucIntVar = GucSlot::new("num_temp_buffers");
-pub static oauth_validator_libraries_string: GucStringVar = GucSlot::new("oauth_validator_libraries_string");
-pub static parallel_leader_participation: GucBoolVar = GucSlot::new("parallel_leader_participation");
+pub static oauth_validator_libraries_string: GucStringVar =
+    GucSlot::new("oauth_validator_libraries_string");
+pub static parallel_leader_participation: GucBoolVar =
+    GucSlot::new("parallel_leader_participation");
 pub static parallel_setup_cost: GucRealVar = GucSlot::new("parallel_setup_cost");
 pub static parallel_tuple_cost: GucRealVar = GucSlot::new("parallel_tuple_cost");
 pub static pg_gss_accept_delegation: GucBoolVar = GucSlot::new("pg_gss_accept_delegation");
@@ -321,10 +338,13 @@ pub static pgrust_runtime_vacuum_pool: GucBoolVar = GucSlot::new("pgrust_runtime
 // and the developer per-query context hog for the standing e2e.
 pub static pgrust_memory_watchdog: GucBoolVar = GucSlot::new("pgrust_memory_watchdog");
 pub static pgrust_memory_watchdog_dump: GucBoolVar = GucSlot::new("pgrust_memory_watchdog_dump");
-pub static pgrust_memory_watchdog_interval: GucIntVar = GucSlot::new("pgrust_memory_watchdog_interval");
-pub static pgrust_memory_watchdog_threshold: GucIntVar = GucSlot::new("pgrust_memory_watchdog_threshold");
+pub static pgrust_memory_watchdog_interval: GucIntVar =
+    GucSlot::new("pgrust_memory_watchdog_interval");
+pub static pgrust_memory_watchdog_threshold: GucIntVar =
+    GucSlot::new("pgrust_memory_watchdog_threshold");
 pub static pgrust_memory_watchdog_limit: GucIntVar = GucSlot::new("pgrust_memory_watchdog_limit");
-pub static pgrust_memory_watchdog_test_hog: GucIntVar = GucSlot::new("pgrust_memory_watchdog_test_hog");
+pub static pgrust_memory_watchdog_test_hog: GucIntVar =
+    GucSlot::new("pgrust_memory_watchdog_test_hog");
 // pgrust-only (env-to-guc train, no C symbol): the per-arm runtime pool DOP
 // force-overrides + the Gather read-fairness stride. Registered from the
 // deferred pool-GUC recipe (docs/design/jit-parallel-defaults.md §3). Each is
@@ -383,7 +403,8 @@ pub static pg_krb_caseins_users: GucBoolVar = GucSlot::new("pg_krb_caseins_users
 pub static pg_krb_server_keyfile: GucStringVar = GucSlot::new("pg_krb_server_keyfile");
 pub static pgstat_fetch_consistency: GucEnumVar = GucSlot::new("pgstat_fetch_consistency");
 pub static pgstat_track_activities: GucBoolVar = GucSlot::new("pgstat_track_activities");
-pub static pgstat_track_activity_query_size: GucIntVar = GucSlot::new("pgstat_track_activity_query_size");
+pub static pgstat_track_activity_query_size: GucIntVar =
+    GucSlot::new("pgstat_track_activity_query_size");
 pub static pgstat_track_counts: GucBoolVar = GucSlot::new("pgstat_track_counts");
 pub static pgstat_track_functions: GucEnumVar = GucSlot::new("pgstat_track_functions");
 pub static phony_random_seed: GucRealVar = GucSlot::new("phony_random_seed");
@@ -401,12 +422,15 @@ pub static recovery_target_lsn_string: GucStringVar = GucSlot::new("recovery_tar
 pub static recovery_target_name_string: GucStringVar = GucSlot::new("recovery_target_name_string");
 pub static recovery_target_string: GucStringVar = GucSlot::new("recovery_target_string");
 pub static recovery_target_time_string: GucStringVar = GucSlot::new("recovery_target_time_string");
-pub static recovery_target_timeline_string: GucStringVar = GucSlot::new("recovery_target_timeline_string");
+pub static recovery_target_timeline_string: GucStringVar =
+    GucSlot::new("recovery_target_timeline_string");
 pub static recovery_target_xid_string: GucStringVar = GucSlot::new("recovery_target_xid_string");
 pub static recursive_worktable_factor: GucRealVar = GucSlot::new("recursive_worktable_factor");
-pub static remove_temp_files_after_crash: GucBoolVar = GucSlot::new("remove_temp_files_after_crash");
+pub static remove_temp_files_after_crash: GucBoolVar =
+    GucSlot::new("remove_temp_files_after_crash");
 pub static restart_after_crash: GucBoolVar = GucSlot::new("restart_after_crash");
-pub static restrict_nonsystem_relation_kind_string: GucStringVar = GucSlot::new("restrict_nonsystem_relation_kind_string");
+pub static restrict_nonsystem_relation_kind_string: GucStringVar =
+    GucSlot::new("restrict_nonsystem_relation_kind_string");
 pub static role_string: GucStringVar = GucSlot::new("role_string");
 pub static row_security: GucBoolVar = GucSlot::new("row_security");
 pub static scram_sha_256_iterations: GucIntVar = GucSlot::new("scram_sha_256_iterations");
@@ -418,12 +442,16 @@ pub static serializable_buffers: GucIntVar = GucSlot::new("serializable_buffers"
 pub static server_encoding_string: GucStringVar = GucSlot::new("server_encoding_string");
 pub static server_version_num: GucIntVar = GucSlot::new("server_version_num");
 pub static server_version_string: GucStringVar = GucSlot::new("server_version_string");
-pub static session_authorization_string: GucStringVar = GucSlot::new("session_authorization_string");
-pub static session_preload_libraries_string: GucStringVar = GucSlot::new("session_preload_libraries_string");
-pub static shared_memory_size_in_huge_pages: GucIntVar = GucSlot::new("shared_memory_size_in_huge_pages");
+pub static session_authorization_string: GucStringVar =
+    GucSlot::new("session_authorization_string");
+pub static session_preload_libraries_string: GucStringVar =
+    GucSlot::new("session_preload_libraries_string");
+pub static shared_memory_size_in_huge_pages: GucIntVar =
+    GucSlot::new("shared_memory_size_in_huge_pages");
 pub static shared_memory_size_mb: GucIntVar = GucSlot::new("shared_memory_size_mb");
 pub static shared_memory_type: GucEnumVar = GucSlot::new("shared_memory_type");
-pub static shared_preload_libraries_string: GucStringVar = GucSlot::new("shared_preload_libraries_string");
+pub static shared_preload_libraries_string: GucStringVar =
+    GucSlot::new("shared_preload_libraries_string");
 pub static preload_contrib_string: GucStringVar = GucSlot::new("preload_contrib_string");
 pub static ssl_ca_file: GucStringVar = GucSlot::new("ssl_ca_file");
 pub static ssl_cert_file: GucStringVar = GucSlot::new("ssl_cert_file");
@@ -435,7 +463,8 @@ pub static ssl_library: GucStringVar = GucSlot::new("ssl_library");
 pub static ssl_max_protocol_version: GucEnumVar = GucSlot::new("ssl_max_protocol_version");
 pub static ssl_min_protocol_version: GucEnumVar = GucSlot::new("ssl_min_protocol_version");
 pub static ssl_passphrase_command: GucStringVar = GucSlot::new("ssl_passphrase_command");
-pub static ssl_passphrase_command_supports_reload: GucBoolVar = GucSlot::new("ssl_passphrase_command_supports_reload");
+pub static ssl_passphrase_command_supports_reload: GucBoolVar =
+    GucSlot::new("ssl_passphrase_command_supports_reload");
 pub static ssl_renegotiation_limit: GucIntVar = GucSlot::new("ssl_renegotiation_limit");
 pub static standard_conforming_strings: GucBoolVar = GucSlot::new("standard_conforming_strings");
 pub static subtransaction_buffers: GucIntVar = GucSlot::new("subtransaction_buffers");
@@ -454,7 +483,8 @@ pub static tcp_keepalives_interval: GucIntVar = GucSlot::new("tcp_keepalives_int
 pub static tcp_user_timeout: GucIntVar = GucSlot::new("tcp_user_timeout");
 pub static temp_file_limit: GucIntVar = GucSlot::new("temp_file_limit");
 pub static temp_tablespaces: GucStringVar = GucSlot::new("temp_tablespaces");
-pub static timezone_abbreviations_string: GucStringVar = GucSlot::new("timezone_abbreviations_string");
+pub static timezone_abbreviations_string: GucStringVar =
+    GucSlot::new("timezone_abbreviations_string");
 pub static timezone_string: GucStringVar = GucSlot::new("timezone_string");
 pub static trace_sort: GucBoolVar = GucSlot::new("trace_sort");
 pub static track_commit_timestamp: GucBoolVar = GucSlot::new("track_commit_timestamp");
@@ -466,20 +496,25 @@ pub static update_process_title: GucBoolVar = GucSlot::new("update_process_title
 pub static vacuum_failsafe_age: GucIntVar = GucSlot::new("vacuum_failsafe_age");
 pub static vacuum_freeze_min_age: GucIntVar = GucSlot::new("vacuum_freeze_min_age");
 pub static vacuum_freeze_table_age: GucIntVar = GucSlot::new("vacuum_freeze_table_age");
-pub static vacuum_max_eager_freeze_failure_rate: GucRealVar = GucSlot::new("vacuum_max_eager_freeze_failure_rate");
+pub static vacuum_max_eager_freeze_failure_rate: GucRealVar =
+    GucSlot::new("vacuum_max_eager_freeze_failure_rate");
 pub static vacuum_multixact_failsafe_age: GucIntVar = GucSlot::new("vacuum_multixact_failsafe_age");
-pub static vacuum_multixact_freeze_min_age: GucIntVar = GucSlot::new("vacuum_multixact_freeze_min_age");
-pub static vacuum_multixact_freeze_table_age: GucIntVar = GucSlot::new("vacuum_multixact_freeze_table_age");
+pub static vacuum_multixact_freeze_min_age: GucIntVar =
+    GucSlot::new("vacuum_multixact_freeze_min_age");
+pub static vacuum_multixact_freeze_table_age: GucIntVar =
+    GucSlot::new("vacuum_multixact_freeze_table_age");
 pub static vacuum_truncate: GucBoolVar = GucSlot::new("vacuum_truncate");
 pub static wal_block_size: GucIntVar = GucSlot::new("wal_block_size");
 pub static wal_compression: GucEnumVar = GucSlot::new("wal_compression");
-pub static wal_consistency_checking_string: GucStringVar = GucSlot::new("wal_consistency_checking_string");
+pub static wal_consistency_checking_string: GucStringVar =
+    GucSlot::new("wal_consistency_checking_string");
 pub static wal_decode_buffer_size: GucIntVar = GucSlot::new("wal_decode_buffer_size");
 pub static wal_init_zero: GucBoolVar = GucSlot::new("wal_init_zero");
 pub static wal_keep_size_mb: GucIntVar = GucSlot::new("wal_keep_size_mb");
 pub static wal_level: GucEnumVar = GucSlot::new("wal_level");
 pub static wal_log_hints: GucBoolVar = GucSlot::new("wal_log_hints");
-pub static wal_receiver_create_temp_slot: GucBoolVar = GucSlot::new("wal_receiver_create_temp_slot");
+pub static wal_receiver_create_temp_slot: GucBoolVar =
+    GucSlot::new("wal_receiver_create_temp_slot");
 pub static wal_receiver_status_interval: GucIntVar = GucSlot::new("wal_receiver_status_interval");
 pub static wal_receiver_timeout: GucIntVar = GucSlot::new("wal_receiver_timeout");
 pub static wal_recycle: GucBoolVar = GucSlot::new("wal_recycle");

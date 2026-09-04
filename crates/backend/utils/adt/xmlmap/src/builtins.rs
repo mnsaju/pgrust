@@ -4,7 +4,9 @@ use datum::{Datum, Varlena};
 use mcx::Mcx;
 use types_core::Oid;
 use types_error::PgResult;
-use types_fmgr::{varlena_result, FmgrBuiltin, FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFunction};
+use types_fmgr::{
+    varlena_result, FmgrBuiltin, FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFunction,
+};
 
 fn arg_str<'a>(fcinfo: &'a Fcinfo, i: usize) -> PgResult<&'a str> {
     // SAFETY: catalog arg i is a non-null text/refcursor varlena (strict fn).
@@ -27,7 +29,8 @@ fn arg_name<'a>(fcinfo: &'a Fcinfo, i: usize) -> &'a str {
 
 fn ret_xml<'mcx>(mcx: Mcx<'mcx>, payload: &str) -> PgResult<Datum> {
     let payload = payload.as_bytes();
-    let mut image: mcx::PgVec<u8> = mcx::vec_with_capacity_in(mcx, payload.len() + datum::VARHDRSZ)?;
+    let mut image: mcx::PgVec<u8> =
+        mcx::vec_with_capacity_in(mcx, payload.len() + datum::VARHDRSZ)?;
     image.resize(datum::VARHDRSZ, 0);
     mcx::vec_append_bytes(&mut image, payload)?;
     Ok(varlena_result(Varlena::from_image(image)))
@@ -152,7 +155,14 @@ pub fn fc_database_to_xml_and_xmlschema(
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 // pg_proc.dat rows for xml.c's SQL/XML mapping section.
@@ -163,12 +173,32 @@ pub const XMLMAP_BUILTINS: &[FmgrBuiltin] = &[
     b(2926, "table_to_xmlschema", 4, fc_table_to_xmlschema),
     b(2927, "query_to_xmlschema", 4, fc_query_to_xmlschema),
     b(2928, "cursor_to_xmlschema", 4, fc_cursor_to_xmlschema),
-    b(2929, "table_to_xml_and_xmlschema", 4, fc_table_to_xml_and_xmlschema),
-    b(2930, "query_to_xml_and_xmlschema", 4, fc_query_to_xml_and_xmlschema),
+    b(
+        2929,
+        "table_to_xml_and_xmlschema",
+        4,
+        fc_table_to_xml_and_xmlschema,
+    ),
+    b(
+        2930,
+        "query_to_xml_and_xmlschema",
+        4,
+        fc_query_to_xml_and_xmlschema,
+    ),
     b(2933, "schema_to_xml", 4, fc_schema_to_xml),
     b(2934, "schema_to_xmlschema", 4, fc_schema_to_xmlschema),
-    b(2935, "schema_to_xml_and_xmlschema", 4, fc_schema_to_xml_and_xmlschema),
+    b(
+        2935,
+        "schema_to_xml_and_xmlschema",
+        4,
+        fc_schema_to_xml_and_xmlschema,
+    ),
     b(2936, "database_to_xml", 3, fc_database_to_xml),
     b(2937, "database_to_xmlschema", 3, fc_database_to_xmlschema),
-    b(2938, "database_to_xml_and_xmlschema", 3, fc_database_to_xml_and_xmlschema),
+    b(
+        2938,
+        "database_to_xml_and_xmlschema",
+        3,
+        fc_database_to_xml_and_xmlschema,
+    ),
 ];

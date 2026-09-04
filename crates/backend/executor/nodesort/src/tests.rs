@@ -124,7 +124,10 @@ struct Feed {
 }
 
 impl Feed {
-    fn fetch(&mut self, estate: &mut EStateData<'static>) -> ::types_error::PgResult<Option<ExecSlotId>> {
+    fn fetch(
+        &mut self,
+        estate: &mut EStateData<'static>,
+    ) -> ::types_error::PgResult<Option<ExecSlotId>> {
         if self.next >= self.rows.len() {
             return Ok(None);
         }
@@ -169,7 +172,12 @@ fn setup(
     ncols: usize,
     rows: Vec<Vec<Option<i32>>>,
     eflags: i32,
-) -> (SortState<'static>, EStateData<'static>, Rc<TupleDescData<'static>>, Feed) {
+) -> (
+    SortState<'static>,
+    EStateData<'static>,
+    Rc<TupleDescData<'static>>,
+    Feed,
+) {
     install_seams();
     let mcx = leaked_mcx();
     let desc = int4_desc(mcx, ncols as i32);
@@ -177,19 +185,34 @@ fn setup(
     let in_slot = estate.exec_init_extra_tuple_slot(Some(desc.clone()), TupleSlotKind::Virtual);
     let plan = mk_sort_plan(mcx, ncols);
     let node = exec_init_sort(plan, &mut estate, eflags, &desc, desc.clone()).unwrap();
-    let feed = Feed { slot: in_slot, rows, next: 0 };
+    let feed = Feed {
+        slot: in_slot,
+        rows,
+        next: 0,
+    };
     (node, estate, desc, feed)
 }
 
 #[test]
 fn datum_sort_lane_single_column() {
-    let rows: Vec<Vec<Option<i32>>> =
-        vec![vec![Some(3)], vec![None], vec![Some(1)], vec![Some(2)], vec![None]];
+    let rows: Vec<Vec<Option<i32>>> = vec![
+        vec![Some(3)],
+        vec![None],
+        vec![Some(1)],
+        vec![Some(2)],
+        vec![None],
+    ];
     let (mut node, mut estate, desc, mut feed) = setup(1, rows, 0);
     let out = drain(&mut node, &mut estate, &desc, &mut feed);
     assert_eq!(
         out,
-        vec![vec![Some(1)], vec![Some(2)], vec![Some(3)], vec![None], vec![None]]
+        vec![
+            vec![Some(1)],
+            vec![Some(2)],
+            vec![Some(3)],
+            vec![None],
+            vec![None]
+        ]
     );
 }
 
@@ -296,7 +319,13 @@ impl SortLaneBatchFeed<'static> for LaneKeyFeed {
 #[test]
 fn lane_datum_sort_direct_key_matches_emit_path() {
     let rows: Vec<Option<i32>> = (0..1000)
-        .map(|i| if i % 7 == 0 { None } else { Some((i * 48271) % 997) })
+        .map(|i| {
+            if i % 7 == 0 {
+                None
+            } else {
+                Some((i * 48271) % 997)
+            }
+        })
         .collect();
     let mut outs = Vec::new();
     for direct in [false, true] {
@@ -304,13 +333,15 @@ fn lane_datum_sort_direct_key_matches_emit_path() {
         let mcx = leaked_mcx();
         let desc = int4_desc(mcx, 1);
         let mut estate = EStateData::new_in(mcx);
-        let in_slot =
-            estate.exec_init_extra_tuple_slot(Some(desc.clone()), TupleSlotKind::Virtual);
+        let in_slot = estate.exec_init_extra_tuple_slot(Some(desc.clone()), TupleSlotKind::Virtual);
         let plan = mk_sort_plan(mcx, 1);
         let mut node = exec_init_sort(plan, &mut estate, 0, &desc, desc.clone()).unwrap();
         assert!(sort_lane_is_datum(&node));
         sort_lane_begin(&mut node, desc.clone()).unwrap();
-        let mut feed = LaneKeyFeed { slot: in_slot, rows: rows.clone() };
+        let mut feed = LaneKeyFeed {
+            slot: in_slot,
+            rows: rows.clone(),
+        };
         // Two batches, split mid-stream, exercising pos..n ranges.
         let n = rows.len() as u32;
         sort_lane_put_batch(&mut node, &mut estate, 0, n / 2, direct, &mut feed).unwrap();
@@ -429,8 +460,14 @@ fn refsort_feed_gather_emit_and_rescan() {
     // tuplesort ERRORS when read past its bound ("retrieved too many tuples
     // in a bounded sort"), exactly like C -- the production gather loop caps
     // at bound for this reason.
-    assert_eq!(sort_lane_refsort_next_ref(&mut node).unwrap(), Some((7, 101))); // key 1
-    assert_eq!(sort_lane_refsort_next_ref(&mut node).unwrap(), Some((7, 103))); // key 2
+    assert_eq!(
+        sort_lane_refsort_next_ref(&mut node).unwrap(),
+        Some((7, 101))
+    ); // key 1
+    assert_eq!(
+        sort_lane_refsort_next_ref(&mut node).unwrap(),
+        Some((7, 103))
+    ); // key 2
 
     // Buffer the gathered winners (outer format: key, payload).
     sort_lane_refsort_push_winner(
@@ -452,8 +489,14 @@ fn refsort_feed_gather_emit_and_rescan() {
     // Emit face 1: sort_lane_next pops the buffer, never the narrow sort.
     let id = sort_lane_next(&mut node, &mut estate).unwrap().unwrap();
     let mut isnull = false;
-    assert_eq!(exectuples::slot_getattr(estate.slot_mut(id), 1, &mut isnull).as_i32(), 1);
-    assert_eq!(exectuples::slot_getattr(estate.slot_mut(id), 2, &mut isnull).as_i32(), 11);
+    assert_eq!(
+        exectuples::slot_getattr(estate.slot_mut(id), 1, &mut isnull).as_i32(),
+        1
+    );
+    assert_eq!(
+        exectuples::slot_getattr(estate.slot_mut(id), 2, &mut isnull).as_i32(),
+        11
+    );
 
     // Emit face 2 (fallback safety): a mid-stream fall back to `exec_sort`'s
     // drain leg serves the SAME buffer — the outer fetch must never run
@@ -463,8 +506,14 @@ fn refsort_feed_gather_emit_and_rescan() {
     })
     .unwrap()
     .unwrap();
-    assert_eq!(exectuples::slot_getattr(estate.slot_mut(got), 1, &mut isnull).as_i32(), 2);
-    assert_eq!(exectuples::slot_getattr(estate.slot_mut(got), 2, &mut isnull).as_i32(), 22);
+    assert_eq!(
+        exectuples::slot_getattr(estate.slot_mut(got), 1, &mut isnull).as_i32(),
+        2
+    );
+    assert_eq!(
+        exectuples::slot_getattr(estate.slot_mut(got), 2, &mut isnull).as_i32(),
+        22
+    );
 
     // Drained: EOF from both faces.
     assert!(sort_lane_next(&mut node, &mut estate).unwrap().is_none());
@@ -497,12 +546,23 @@ fn refsort_rule2_ties_select_earliest_refs_in_ref_order() {
     // Rule-2 order: (1,100) < (1,102) < (1,103) < (2,101); bound 2 keeps
     // the two physically-earliest tie members.
     for (key, rg, row) in [(1i32, 7u32, 103u32), (2, 7, 101), (1, 7, 100), (1, 7, 102)] {
-        sort_lane_put_refsort(&mut node, Datum::from_i32(key), false, refsort_encode(rg, row))
-            .unwrap();
+        sort_lane_put_refsort(
+            &mut node,
+            Datum::from_i32(key),
+            false,
+            refsort_encode(rg, row),
+        )
+        .unwrap();
     }
     sort_lane_finish(&mut node, &mut estate).unwrap();
-    assert_eq!(sort_lane_refsort_next_ref(&mut node).unwrap(), Some((7, 100)));
-    assert_eq!(sort_lane_refsort_next_ref(&mut node).unwrap(), Some((7, 102)));
+    assert_eq!(
+        sort_lane_refsort_next_ref(&mut node).unwrap(),
+        Some((7, 100))
+    );
+    assert_eq!(
+        sort_lane_refsort_next_ref(&mut node).unwrap(),
+        Some((7, 102))
+    );
 }
 
 /// The demote reset (`sort_lane_reset_for_refeed`) drops the narrow sort,
@@ -609,17 +669,17 @@ fn lane_feed(
     sort_lane_finish(node, estate).unwrap();
 }
 
-fn slot_row(
-    estate: &mut EStateData<'static>,
-    id: ExecSlotId,
-    natts: i32,
-) -> Vec<Option<i32>> {
+fn slot_row(estate: &mut EStateData<'static>, id: ExecSlotId, natts: i32) -> Vec<Option<i32>> {
     let slot = estate.slot_mut(id);
     (1..=natts)
         .map(|a| {
             let mut isnull = false;
             let v = exectuples::slot_getattr(slot, a, &mut isnull);
-            if isnull { None } else { Some(v.as_i32()) }
+            if isnull {
+                None
+            } else {
+                Some(v.as_i32())
+            }
         })
         .collect()
 }
@@ -687,8 +747,7 @@ fn lane_feed_random_access_delegates_and_rescan_replays() {
 #[test]
 fn lane_feed_random_access_mark_restore_delegates() {
     let rows = vec![vec![Some(2)], vec![Some(3)], vec![Some(1)]];
-    let (mut node, mut estate, desc, mut feed) =
-        setup(1, rows, ::types_slot::EXEC_FLAG_MARK);
+    let (mut node, mut estate, desc, mut feed) = setup(1, rows, ::types_slot::EXEC_FLAG_MARK);
     assert!(node.randomAccess);
     lane_feed(&mut node, &mut estate, &desc, &mut feed);
     assert!(sort_lane_readback_delegated(&node));
@@ -697,16 +756,34 @@ fn lane_feed_random_access_mark_restore_delegates() {
     // restore protocol operates on the delegated tuplesort directly, and
     // the post-restore read resumes at the marked position on the ROW-PATH
     // face (cross-face), then the lane face continues in step.
-    assert_eq!(lane_next_row(&mut node, &mut estate, 1), Some(vec![Some(1)]));
-    exec_sort_mark_pos(&mut node).unwrap();
-    assert_eq!(lane_next_row(&mut node, &mut estate, 1), Some(vec![Some(2)]));
-    assert_eq!(lane_next_row(&mut node, &mut estate, 1), Some(vec![Some(3)]));
-    exec_sort_restr_pos(&mut node).unwrap();
     assert_eq!(
-        row_path_read(&mut node, &mut estate, &desc, ::types_scan::sdir::ForwardScanDirection, 1),
+        lane_next_row(&mut node, &mut estate, 1),
+        Some(vec![Some(1)])
+    );
+    exec_sort_mark_pos(&mut node).unwrap();
+    assert_eq!(
+        lane_next_row(&mut node, &mut estate, 1),
         Some(vec![Some(2)])
     );
-    assert_eq!(lane_next_row(&mut node, &mut estate, 1), Some(vec![Some(3)]));
+    assert_eq!(
+        lane_next_row(&mut node, &mut estate, 1),
+        Some(vec![Some(3)])
+    );
+    exec_sort_restr_pos(&mut node).unwrap();
+    assert_eq!(
+        row_path_read(
+            &mut node,
+            &mut estate,
+            &desc,
+            ::types_scan::sdir::ForwardScanDirection,
+            1
+        ),
+        Some(vec![Some(2)])
+    );
+    assert_eq!(
+        lane_next_row(&mut node, &mut estate, 1),
+        Some(vec![Some(3)])
+    );
     assert_eq!(lane_next_row(&mut node, &mut estate, 1), None);
 }
 

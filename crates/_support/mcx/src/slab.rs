@@ -372,7 +372,11 @@ mod tests {
         // SAFETY: p live from alloc.
         unsafe { a.dealloc(p, l(), &acct) };
         let r = a.alloc(l(), &acct).unwrap().cast::<u8>();
-        assert_eq!(p.as_ptr(), r.as_ptr(), "freed chunk reused before unused tail");
+        assert_eq!(
+            p.as_ptr(),
+            r.as_ptr(),
+            "freed chunk reused before unused tail"
+        );
         unsafe {
             a.dealloc(q, l(), &acct);
             a.dealloc(r, l(), &acct);
@@ -424,10 +428,17 @@ mod tests {
         }
         assert_eq!(a.emptyblocks.len(), SLAB_MAXIMUM_EMPTY_BLOCKS);
         assert_eq!(a.nblocks(), SLAB_MAXIMUM_EMPTY_BLOCKS);
-        assert_eq!(acct.self_used.get(), SLAB_MAXIMUM_EMPTY_BLOCKS * SLAB_DEFAULT_BLOCK_SIZE);
+        assert_eq!(
+            acct.self_used.get(),
+            SLAB_MAXIMUM_EMPTY_BLOCKS * SLAB_DEFAULT_BLOCK_SIZE
+        );
         let before = a.nblocks();
         let p = a.alloc(l(), &acct).unwrap();
-        assert_eq!(a.nblocks(), before, "parked empty block reused without malloc");
+        assert_eq!(
+            a.nblocks(),
+            before,
+            "parked empty block reused without malloc"
+        );
         // SAFETY: live chunk.
         unsafe { a.dealloc(p.cast(), l(), &acct) };
         a.reset();

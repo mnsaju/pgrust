@@ -1,9 +1,9 @@
-
 use super::consts::*;
 use super::mpi::{self, write_mpi, Mpi};
 use super::packet::write_packet;
-use super::pubkey::{KeyMaterial, PubKey, PGP_PUB_ELG_ENCRYPT, PGP_PUB_RSA_ENCRYPT,
-    PGP_PUB_RSA_ENCRYPT_SIGN};
+use super::pubkey::{
+    KeyMaterial, PubKey, PGP_PUB_ELG_ENCRYPT, PGP_PUB_RSA_ENCRYPT, PGP_PUB_RSA_ENCRYPT_SIGN,
+};
 use ::pg_strong_random::pg_strong_random;
 
 /// `res_len` bytes (pad must be >= 8 nonzero random bytes).

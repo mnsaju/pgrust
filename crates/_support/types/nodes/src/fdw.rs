@@ -42,7 +42,10 @@ pub struct FdwRoutine {
 
 impl FdwRoutine {
     pub const fn new(kind: FdwKind) -> Self {
-        FdwRoutine { tag: NodeTag::T_FdwRoutine, kind }
+        FdwRoutine {
+            tag: NodeTag::T_FdwRoutine,
+            kind,
+        }
     }
 }
 

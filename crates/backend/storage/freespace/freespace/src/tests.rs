@@ -23,7 +23,10 @@ fn view(page: &mut AlignedPage) -> FsmPage {
 struct Lcg(u64);
 impl Lcg {
     fn next(&mut self) -> u64 {
-        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        self.0 = self
+            .0
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         self.0 >> 16
     }
 }
@@ -81,7 +84,11 @@ fn search(page: &mut AlignedPage, minvalue: u8, advancenext: bool, excl: bool) -
 // First slot >= min at/after fp_next_slot, wrapping (fsmpage.c's result).
 fn model_search(leaves: &[u8; SLOTS_PER_FSM_PAGE as usize], target: i32, min: u8) -> i32 {
     let n = SLOTS_PER_FSM_PAGE as usize;
-    let start = if (0..SLOTS_PER_FSM_PAGE).contains(&target) { target as usize } else { 0 };
+    let start = if (0..SLOTS_PER_FSM_PAGE).contains(&target) {
+        target as usize
+    } else {
+        0
+    };
     for i in 0..n {
         let s = (start + i) % n;
         if leaves[s] >= min {
@@ -115,13 +122,20 @@ fn set_get_and_search_match_model() {
             let next = (rng.next() % (SLOTS_PER_FSM_PAGE as u64 + 7)) as i32;
             v.set_next_slot(next);
             let got = search(&mut page, min, false, true);
-            assert_eq!(got, model_search(&model, next, min), "min={min} next={next}");
+            assert_eq!(
+                got,
+                model_search(&model, next, min),
+                "min={min} next={next}"
+            );
             if got != -1 {
                 assert_eq!(view(&mut page).next_slot(), got);
             }
         }
     }
-    assert!(!fsm_rebuild_page(view(&mut page)), "propagation left the tree inconsistent");
+    assert!(
+        !fsm_rebuild_page(view(&mut page)),
+        "propagation left the tree inconsistent"
+    );
 }
 
 #[test]
@@ -162,7 +176,10 @@ fn search_torn_page_repairs_under_exclusive_and_restarts() {
     // Shared-lock caller: the repair relocks exclusive, rebuilds, restarts,
     // and still finds the genuine slot.
     assert_eq!(search(&mut page, 200, false, false), -1);
-    assert!(RELOCKS.load(Relaxed) >= 1, "repair did not take the exclusive lock");
+    assert!(
+        RELOCKS.load(Relaxed) >= 1,
+        "repair did not take the exclusive lock"
+    );
     assert!(DIRTY_HINTS.load(Relaxed) >= 1);
     assert_eq!(view(&mut page).node(0), 90, "rebuild did not fix the root");
     assert_eq!(search(&mut page, 90, false, true), 7);
@@ -211,7 +228,10 @@ fn category_math_matches_c() {
     assert_eq!(fsm_space_needed_to_cat(8129).unwrap(), 255);
     assert_eq!(fsm_space_needed_to_cat(8160).unwrap(), 255);
     let err = fsm_space_needed_to_cat(8161).unwrap_err();
-    assert!(err.message().contains("invalid FSM request size 8161"), "{err:?}");
+    assert!(
+        err.message().contains("invalid FSM request size 8161"),
+        "{err:?}"
+    );
 
     // avail_to_cat rounds down: the represented lower bound never overstates.
     for avail in [0usize, 1, 31, 32, 4000, 8128, 8159, 8160, 8191] {
@@ -241,7 +261,10 @@ fn physical_addresses_are_dense_dfs() {
     let mut phys = Vec::new();
     phys.push(fsm_logical_to_physical(FSM_ROOT_ADDRESS));
     for l1 in 0..2 {
-        phys.push(fsm_logical_to_physical(FSMAddress { level: 1, logpageno: l1 }));
+        phys.push(fsm_logical_to_physical(FSMAddress {
+            level: 1,
+            logpageno: l1,
+        }));
         for leaf in 0..SLOTS_PER_FSM_PAGE {
             phys.push(fsm_logical_to_physical(FSMAddress {
                 level: 0,

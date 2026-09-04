@@ -16,7 +16,6 @@ fn search_hv(t: *mut HTAB, k: *const u8, hv: u32, a: HASHACTION) -> PgResult<(*m
     Ok((p, f))
 }
 
-
 static SEAMS: Once = Once::new();
 
 fn install_test_seams() {
@@ -75,7 +74,10 @@ fn freelist_recycles_removed_element() {
         assert_eq!(p1, r);
         let (p2, found) = search(table, 2u32.to_ne_bytes().as_ptr(), HASH_ENTER).unwrap();
         assert!(!found);
-        assert_eq!(p1, p2, "freed element must be recycled LIFO from the freelist");
+        assert_eq!(
+            p1, p2,
+            "freed element must be recycled LIFO from the freelist"
+        );
     }
     hash_destroy(table);
 }
@@ -104,11 +106,9 @@ fn string_keys_truncate_at_nul_and_keysize_minus_one() {
     let table = hash_create("strings", 8, &ctl, HASH_ELEM | HASH_STRINGS).unwrap();
     unsafe {
         search(table, b"abc\0tail\0\0\0\0\0\0\0\0".as_ptr(), HASH_ENTER).unwrap();
-        let (_, found) =
-            search(table, b"abc\0zzzz\0\0\0\0\0\0\0\0".as_ptr(), HASH_FIND).unwrap();
+        let (_, found) = search(table, b"abc\0zzzz\0\0\0\0\0\0\0\0".as_ptr(), HASH_FIND).unwrap();
         assert!(found);
-        let (_, found) =
-            search(table, b"abcdzzzz\0\0\0\0\0\0\0\0".as_ptr(), HASH_FIND).unwrap();
+        let (_, found) = search(table, b"abcdzzzz\0\0\0\0\0\0\0\0".as_ptr(), HASH_FIND).unwrap();
         assert!(!found);
     }
     hash_destroy(table);
@@ -185,8 +185,14 @@ fn expansion_tracks_fill_factor_and_round_trips() {
         }
         assert_eq!(hash_get_num_entries(table), n as i64);
         let hctl = (*table).hctl;
-        assert!((*hctl).max_bucket as i64 + 1 >= n as i64, "ffactor 1: nentries <= max_bucket+1");
-        assert!((*hctl).nsegs > 1, "growth past ssize=256 buckets allocates segments");
+        assert!(
+            (*hctl).max_bucket as i64 + 1 >= n as i64,
+            "ffactor 1: nentries <= max_bucket+1"
+        );
+        assert!(
+            (*hctl).nsegs > 1,
+            "growth past ssize=256 buckets allocates segments"
+        );
         for i in 0..n {
             let key = i.to_ne_bytes();
             let (p, found) = search(table, key.as_ptr(), HASH_FIND).unwrap();
@@ -235,10 +241,17 @@ fn seq_scan_blocks_expansion_until_terminated() {
         for i in 0u32..64 {
             search(table, i.to_ne_bytes().as_ptr(), HASH_ENTER).unwrap();
         }
-        assert_eq!((*(*table).hctl).max_bucket, 3, "active scan must inhibit splits");
+        assert_eq!(
+            (*(*table).hctl).max_bucket,
+            3,
+            "active scan must inhibit splits"
+        );
         hash_seq_term(&mut scan).unwrap();
         search(table, 64u32.to_ne_bytes().as_ptr(), HASH_ENTER).unwrap();
-        assert!((*(*table).hctl).max_bucket > 3, "split resumes after scan ends");
+        assert!(
+            (*(*table).hctl).max_bucket > 3,
+            "split resumes after scan ends"
+        );
     }
     hash_destroy(table);
 }
@@ -347,9 +360,7 @@ fn partitioned_freelists_spread_lock_and_borrow() {
         for i in 0u32..24 {
             let hv = get_hash_value(table, i.to_ne_bytes().as_ptr());
             hit_nonzero_freelist |= (hv as usize) % NUM_FREELISTS != 0;
-            let (p, found) =
-                search_hv(table, i.to_ne_bytes().as_ptr(), hv, HASH_ENTER)
-                    .unwrap();
+            let (p, found) = search_hv(table, i.to_ne_bytes().as_ptr(), hv, HASH_ENTER).unwrap();
             assert!(!found);
             assert!(!p.is_null(), "isfixed borrow path must scavenge freelist 0");
         }
@@ -395,7 +406,11 @@ fn partitioned_shared_fixed_create_works() {
             let (_, found) = search(table, i.to_ne_bytes().as_ptr(), HASH_FIND).unwrap();
             assert!(found);
         }
-        assert_eq!((*(*table).hctl).max_bucket, before, "partitioned tables never split");
+        assert_eq!(
+            (*(*table).hctl).max_bucket,
+            before,
+            "partitioned tables never split"
+        );
         for i in 0u32..96 {
             let (_, found) = search(table, i.to_ne_bytes().as_ptr(), HASH_REMOVE).unwrap();
             assert!(found);
@@ -476,8 +491,7 @@ fn get_hash_value_matches_search_lane() {
     unsafe {
         search(table, key.as_ptr(), HASH_ENTER).unwrap();
         let hv = get_hash_value(table, key.as_ptr());
-        let (_, found) =
-            search_hv(table, key.as_ptr(), hv, HASH_FIND).unwrap();
+        let (_, found) = search_hv(table, key.as_ptr(), hv, HASH_FIND).unwrap();
         assert!(found);
     }
     hash_destroy(table);
@@ -511,7 +525,10 @@ fn subxact_cleanup_drops_only_deeper_scans() {
         let mut scan2 = HASH_SEQ_STATUS::new();
         hash_seq_init(&mut scan2, table).unwrap();
         AtEOSubXact_HashTables(false, 1);
-        assert!(hash_seq_term(&mut scan2).is_err(), "scan at level>=depth was dropped");
+        assert!(
+            hash_seq_term(&mut scan2).is_err(),
+            "scan at level>=depth was dropped"
+        );
     }
     hash_destroy(table);
 }
@@ -568,5 +585,9 @@ fn freelist_spin_uses_perform_spin_delay_backoff() {
         DELAY_CALLS.load(Ordering::Relaxed) >= 1,
         "contended acquire completed without any backoff call — it busy-spun"
     );
-    assert_eq!(LOCKWORD.load(Ordering::Relaxed), 1, "acquire must leave the lock held");
+    assert_eq!(
+        LOCKWORD.load(Ordering::Relaxed),
+        1,
+        "acquire must leave the lock held"
+    );
 }

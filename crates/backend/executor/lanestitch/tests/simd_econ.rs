@@ -10,21 +10,25 @@
 // engagement sanity: the A body is SIMD, the B body is not.
 
 use datum::{Datum, NullableDatum};
-use lanestitch::{
-    BoolTestKind, CmpOp, Lane, NullTestKind, Program, SelVec, Step, StitchedProgram,
-};
+use lanestitch::{BoolTestKind, CmpOp, Lane, NullTestKind, Program, SelVec, Step, StitchedProgram};
 
 struct Lcg(u64);
 
 impl Lcg {
     fn next(&mut self) -> u64 {
-        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        self.0 = self
+            .0
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         self.0
     }
 }
 
 fn nd(d: Datum) -> NullableDatum {
-    NullableDatum { value: d, isnull: false }
+    NullableDatum {
+        value: d,
+        isnull: false,
+    }
 }
 
 struct Col {
@@ -34,7 +38,9 @@ struct Col {
 
 fn int_col(r: &mut Lcg, n: usize) -> Col {
     Col {
-        values: (0..n).map(|_| Datum::from_i32((r.next() as i32) % 1000)).collect(),
+        values: (0..n)
+            .map(|_| Datum::from_i32((r.next() as i32) % 1000))
+            .collect(),
         isnull: (0..n).map(|_| r.next() % 100 < 5).collect(),
     }
 }
@@ -58,7 +64,10 @@ fn f64_col(r: &mut Lcg, n: usize) -> Col {
 fn time_body(jit: &StitchedProgram, prog: &Program, cols: &[Col], nrows: u32) -> f64 {
     let lanes: Vec<Lane<'_>> = cols
         .iter()
-        .map(|c| Lane { values: &c.values, isnull: &c.isnull })
+        .map(|c| Lane {
+            values: &c.values,
+            isnull: &c.isnull,
+        })
         .collect();
     // Warm up.
     for _ in 0..200 {
@@ -111,7 +120,11 @@ fn simd_shape_economics() {
     let mut p = Program::new();
     p.steps = vec![
         Step::LoadLane { col: 0, out: 0 },
-        Step::NullTest { a: 0, out: 1, kind: NullTestKind::IsNotNull },
+        Step::NullTest {
+            a: 0,
+            out: 1,
+            kind: NullTestKind::IsNotNull,
+        },
         Step::Qual { a: 1 },
     ];
     compare("nulltest(is not null)", &p, &[int_col(&mut r, n)]);
@@ -120,7 +133,11 @@ fn simd_shape_economics() {
     let mut p = Program::new();
     p.steps = vec![
         Step::LoadLane { col: 0, out: 0 },
-        Step::BoolTest { a: 0, out: 1, kind: BoolTestKind::IsNotFalse },
+        Step::BoolTest {
+            a: 0,
+            out: 1,
+            kind: BoolTestKind::IsNotFalse,
+        },
         Step::Qual { a: 1 },
     ];
     compare("booltest(is not false)", &p, &[int_col(&mut r, n)]);
@@ -131,7 +148,12 @@ fn simd_shape_economics() {
         let arr = p.push_array((0..k).map(|v| nd(Datum::from_i32(v as i32 * 7))).collect());
         p.steps = vec![
             Step::LoadLane { col: 0, out: 0 },
-            Step::SaopAny { a: 0, out: 1, op: CmpOp::Int4Eq, arr },
+            Step::SaopAny {
+                a: 0,
+                out: 1,
+                op: CmpOp::Int4Eq,
+                arr,
+            },
             Step::Qual { a: 1 },
         ];
         compare(&format!("saop int4 eq k={k}"), &p, &[int_col(&mut r, n)]);
@@ -142,19 +164,37 @@ fn simd_shape_economics() {
     p.steps = vec![
         Step::LoadLane { col: 0, out: 0 },
         Step::LoadLane { col: 1, out: 1 },
-        Step::Cmp { op: CmpOp::Float8Lt, a: 0, b: 1, out: 2 },
+        Step::Cmp {
+            op: CmpOp::Float8Lt,
+            a: 0,
+            b: 1,
+            out: 2,
+        },
         Step::Qual { a: 2 },
     ];
-    compare("fcmpvar float8 lt", &p, &[f64_col(&mut r, n), f64_col(&mut r, n)]);
+    compare(
+        "fcmpvar float8 lt",
+        &p,
+        &[f64_col(&mut r, n), f64_col(&mut r, n)],
+    );
 
     let mut p = Program::new();
     p.steps = vec![
         Step::LoadLane { col: 0, out: 0 },
         Step::LoadLane { col: 1, out: 1 },
-        Step::Cmp { op: CmpOp::Float8Eq, a: 0, b: 1, out: 2 },
+        Step::Cmp {
+            op: CmpOp::Float8Eq,
+            a: 0,
+            b: 1,
+            out: 2,
+        },
         Step::Qual { a: 2 },
     ];
-    compare("fcmpvar float8 eq", &p, &[f64_col(&mut r, n), f64_col(&mut r, n)]);
+    compare(
+        "fcmpvar float8 eq",
+        &p,
+        &[f64_col(&mut r, n), f64_col(&mut r, n)],
+    );
 
     // Founding shape as the reference point.
     let mut p = Program::new();
@@ -162,7 +202,12 @@ fn simd_shape_economics() {
     p.steps = vec![
         Step::LoadLane { col: 0, out: 0 },
         Step::LoadConst { k, out: 1 },
-        Step::Cmp { op: CmpOp::Int4Lt, a: 0, b: 1, out: 2 },
+        Step::Cmp {
+            op: CmpOp::Int4Lt,
+            a: 0,
+            b: 1,
+            out: 2,
+        },
         Step::Qual { a: 2 },
     ];
     compare("cmpconst int4 (reference)", &p, &[int_col(&mut r, n)]);

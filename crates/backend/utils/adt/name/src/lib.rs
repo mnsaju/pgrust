@@ -211,9 +211,8 @@ pub fn current_user(mcx: Mcx<'_>) -> PgResult<NameData> {
 }
 
 pub fn session_user(mcx: Mcx<'_>) -> PgResult<NameData> {
-    let name =
-        miscinit::GetUserNameFromId(mcx, miscinit::GetSessionUserId(), false)?
-            .expect("GetUserNameFromId(noerr=false) returns a name or errors");
+    let name = miscinit::GetUserNameFromId(mcx, miscinit::GetSessionUserId(), false)?
+        .expect("GetUserNameFromId(noerr=false) returns a name or errors");
     Ok(namein(name.as_bytes()))
 }
 

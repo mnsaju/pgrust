@@ -154,7 +154,9 @@ pub struct TypeCacheEntry {
 
 impl core::fmt::Debug for TypeCacheEntry {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("TypeCacheEntry").field("type_id", &self.type_id).finish_non_exhaustive()
+        f.debug_struct("TypeCacheEntry")
+            .field("type_id", &self.type_id)
+            .finish_non_exhaustive()
     }
 }
 
@@ -524,7 +526,9 @@ fn lookup_type_cache_slow(type_id: Oid, mut flags: i32) -> PgResult<Rc<TypeCache
     });
 
     with_state(|st| {
-        let TypCacheState { rel_id_to_type_id, .. } = st;
+        let TypCacheState {
+            rel_id_to_type_id, ..
+        } = st;
         invalidate::insert_rel_type_cache_if_needed(rel_id_to_type_id, &entry);
     });
 
@@ -612,9 +616,7 @@ fn fill_entry(e: &TypeCacheEntry, flags: &mut i32) -> PgResult<()> {
         }
         if eq_opr == ARRAY_EQ_OP && !array_element_has(e, TCFLAGS_HAVE_ELEM_EQUALITY)? {
             eq_opr = InvalidOid;
-        } else if eq_opr == RECORD_EQ_OP
-            && !record_fields_have(e, TCFLAGS_HAVE_FIELD_EQUALITY)?
-        {
+        } else if eq_opr == RECORD_EQ_OP && !record_fields_have(e, TCFLAGS_HAVE_FIELD_EQUALITY)? {
             eq_opr = InvalidOid;
         }
         if e.eq_opr.get() != eq_opr {
@@ -637,9 +639,7 @@ fn fill_entry(e: &TypeCacheEntry, flags: &mut i32) -> PgResult<()> {
         }
         if lt_opr == ARRAY_LT_OP && !array_element_has(e, TCFLAGS_HAVE_ELEM_COMPARE)? {
             lt_opr = InvalidOid;
-        } else if lt_opr == RECORD_LT_OP
-            && !record_fields_have(e, TCFLAGS_HAVE_FIELD_COMPARE)?
-        {
+        } else if lt_opr == RECORD_LT_OP && !record_fields_have(e, TCFLAGS_HAVE_FIELD_COMPARE)? {
             lt_opr = InvalidOid;
         }
         e.lt_opr.set(lt_opr);
@@ -658,9 +658,7 @@ fn fill_entry(e: &TypeCacheEntry, flags: &mut i32) -> PgResult<()> {
         }
         if gt_opr == ARRAY_GT_OP && !array_element_has(e, TCFLAGS_HAVE_ELEM_COMPARE)? {
             gt_opr = InvalidOid;
-        } else if gt_opr == RECORD_GT_OP
-            && !record_fields_have(e, TCFLAGS_HAVE_FIELD_COMPARE)?
-        {
+        } else if gt_opr == RECORD_GT_OP && !record_fields_have(e, TCFLAGS_HAVE_FIELD_COMPARE)? {
             gt_opr = InvalidOid;
         }
         e.gt_opr.set(gt_opr);
@@ -681,9 +679,7 @@ fn fill_entry(e: &TypeCacheEntry, flags: &mut i32) -> PgResult<()> {
         }
         if cmp_proc == F_BTARRAYCMP && !array_element_has(e, TCFLAGS_HAVE_ELEM_COMPARE)? {
             cmp_proc = InvalidOid;
-        } else if cmp_proc == F_BTRECORDCMP
-            && !record_fields_have(e, TCFLAGS_HAVE_FIELD_COMPARE)?
-        {
+        } else if cmp_proc == F_BTRECORDCMP && !record_fields_have(e, TCFLAGS_HAVE_FIELD_COMPARE)? {
             cmp_proc = InvalidOid;
         }
         if e.cmp_proc.get() != cmp_proc {
@@ -699,15 +695,13 @@ fn fill_entry(e: &TypeCacheEntry, flags: &mut i32) -> PgResult<()> {
         let mut hash_proc = resolve_hash_proc(e, HASHSTANDARD_PROC)?;
         if hash_proc == F_HASH_ARRAY && !array_element_has(e, TCFLAGS_HAVE_ELEM_HASHING)? {
             hash_proc = InvalidOid;
-        } else if hash_proc == F_HASH_RECORD
-            && !record_fields_have(e, TCFLAGS_HAVE_FIELD_HASHING)?
+        } else if hash_proc == F_HASH_RECORD && !record_fields_have(e, TCFLAGS_HAVE_FIELD_HASHING)?
         {
             hash_proc = InvalidOid;
         } else if hash_proc == F_HASH_RANGE && !range_element_has(e, TCFLAGS_HAVE_ELEM_HASHING)? {
             hash_proc = InvalidOid;
         }
-        if hash_proc == F_HASH_MULTIRANGE
-            && !multirange_element_has(e, TCFLAGS_HAVE_ELEM_HASHING)?
+        if hash_proc == F_HASH_MULTIRANGE && !multirange_element_has(e, TCFLAGS_HAVE_ELEM_HASHING)?
         {
             hash_proc = InvalidOid;
         }
@@ -800,7 +794,8 @@ fn fill_entry(e: &TypeCacheEntry, flags: &mut i32) -> PgResult<()> {
         && e.typtype.get() == TYPTYPE_DOMAIN
     {
         let mut typmod = -1;
-        e.domain_base_type.set(lsyscache::getBaseTypeAndTypmod(type_id, &mut typmod)?);
+        e.domain_base_type
+            .set(lsyscache::getBaseTypeAndTypmod(type_id, &mut typmod)?);
         e.domain_base_typmod.set(typmod);
         if lsyscache::get_typ_typrelid(e.domain_base_type.get())? != InvalidOid {
             e.set_flags(TCFLAGS_DOMAIN_BASE_IS_COMPOSITE);
@@ -830,7 +825,12 @@ fn resolve_hash_proc(e: &TypeCacheEntry, procnum: i16) -> PgResult<Oid> {
                 HTEqualStrategyNumber,
             )?;
     if eq_ok {
-        get_opfamily_proc(e.hash_opf.get(), e.hash_opintype.get(), e.hash_opintype.get(), procnum)
+        get_opfamily_proc(
+            e.hash_opf.get(),
+            e.hash_opintype.get(),
+            e.hash_opintype.get(),
+            procnum,
+        )
     } else {
         Ok(InvalidOid)
     }
@@ -951,7 +951,9 @@ fn cache_record_field_properties(e: &TypeCacheEntry) -> PgResult<()> {
             }
             let fe = lookup_type_cache(
                 attr.atttypid,
-                TYPECACHE_EQ_OPR | TYPECACHE_CMP_PROC | TYPECACHE_HASH_PROC
+                TYPECACHE_EQ_OPR
+                    | TYPECACHE_CMP_PROC
+                    | TYPECACHE_HASH_PROC
                     | TYPECACHE_HASH_EXTENDED_PROC,
             )?;
             if fe.eq_opr.get() == InvalidOid {
@@ -990,7 +992,9 @@ fn cache_array_element_properties(e: &TypeCacheEntry) -> PgResult<()> {
     if elem_type != InvalidOid {
         let el = lookup_type_cache(
             elem_type,
-            TYPECACHE_EQ_OPR | TYPECACHE_CMP_PROC | TYPECACHE_HASH_PROC
+            TYPECACHE_EQ_OPR
+                | TYPECACHE_CMP_PROC
+                | TYPECACHE_HASH_PROC
                 | TYPECACHE_HASH_EXTENDED_PROC,
         )?;
         if el.eq_opr.get() != InvalidOid {
@@ -1055,9 +1059,7 @@ pub(crate) fn compute_ready(e: &TypeCacheEntry) -> i32 {
     }
     if f & TCFLAGS_CHECKED_HASH_EXTENDED_PROC != 0 {
         r |= TYPECACHE_HASH_EXTENDED_PROC;
-        if e.hash_extended_proc.get() == InvalidOid
-            || finfo_resolved(&e.hash_extended_proc_finfo)
-        {
+        if e.hash_extended_proc.get() == InvalidOid || finfo_resolved(&e.hash_extended_proc_finfo) {
             r |= TYPECACHE_HASH_EXTENDED_PROC_FINFO;
         }
     }
@@ -1110,7 +1112,10 @@ pub fn init_seams() {
 }
 
 // C: equalRowTypes (attname/atttypid/atttypmod/natts).
-fn row_types_equal(a: &types_tuple::TupleDescData<'_>, b: &[types_tuple::FormData_pg_attribute]) -> bool {
+fn row_types_equal(
+    a: &types_tuple::TupleDescData<'_>,
+    b: &[types_tuple::FormData_pg_attribute],
+) -> bool {
     if a.natts as usize != b.len() {
         return false;
     }
@@ -1140,13 +1145,16 @@ pub fn assign_record_type_typmod(tupdesc: &mut types_tuple::TupleDescData<'_>) -
             return Ok(());
         }
     }
-    let attrs: Vec<_> = (0..tupdesc.natts as usize).map(|i| *tupdesc.attr(i)).collect();
+    let attrs: Vec<_> = (0..tupdesc.natts as usize)
+        .map(|i| *tupdesc.attr(i))
+        .collect();
     let id = with_state(|st| {
         st.tupledesc_id_counter += 1;
         st.tupledesc_id_counter
     });
     tupdesc.tdtypmod = reg.entries.len() as i32;
-    reg.entries.push(typcache_seams::SharedRecordEntry { attrs, id });
+    reg.entries
+        .push(typcache_seams::SharedRecordEntry { attrs, id });
     Ok(())
 }
 
@@ -1165,7 +1173,10 @@ pub fn assign_record_type_identifier(type_id: Oid, typmod: i32) -> PgResult<u64>
     }
     let handle = with_state(|st| std::sync::Arc::clone(&st.record_registry));
     let reg = handle.lock().unwrap_or_else(|e| e.into_inner());
-    match usize::try_from(typmod).ok().and_then(|i| reg.entries.get(i)) {
+    match usize::try_from(typmod)
+        .ok()
+        .and_then(|i| reg.entries.get(i))
+    {
         Some(e) => Ok(e.id),
         None => Err(record_type_not_registered()),
     }
@@ -1190,7 +1201,10 @@ pub fn lookup_rowtype_tupdesc_copy<'mcx>(
     if type_id == types_core::catalog::RECORDOID {
         let handle = with_state(|st| std::sync::Arc::clone(&st.record_registry));
         let reg = handle.lock().unwrap_or_else(|e| e.into_inner());
-        let Some(e) = usize::try_from(typmod).ok().and_then(|i| reg.entries.get(i)) else {
+        let Some(e) = usize::try_from(typmod)
+            .ok()
+            .and_then(|i| reg.entries.get(i))
+        else {
             return Err(record_type_not_registered());
         };
         let mut d = tupdesc::CreateTupleDesc(mcx, &e.attrs)?;

@@ -8,7 +8,10 @@ pub struct CopyDestState {
 
 impl CopyDestState {
     pub fn new(frame: *mut core::ffi::c_void) -> Self {
-        CopyDestState { frame, processed: 0 }
+        CopyDestState {
+            frame,
+            processed: 0,
+        }
     }
 }
 

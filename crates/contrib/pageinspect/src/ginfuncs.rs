@@ -17,7 +17,11 @@ struct GinOpaque {
 fn gin_opaque(b: &[u8]) -> GinOpaque {
     let sp = pd_special(b) as usize;
     if sp + GIN_OPAQUE_SIZE > b.len() {
-        return GinOpaque { rightlink: 0, maxoff: 0, flags: 0 };
+        return GinOpaque {
+            rightlink: 0,
+            maxoff: 0,
+            flags: 0,
+        };
     }
     GinOpaque {
         rightlink: r_u32(b, sp),
@@ -60,7 +64,10 @@ pub(crate) fn fc_gin_metapage_info(
         return Err(Box::new(
             PgError::error("input page is not a GIN metapage")
                 .with_sqlstate(ERRCODE_INVALID_PARAMETER_VALUE)
-                .with_detail(format!("Flags {:04X}, expected {:04X}", opaq.flags, GIN_META)),
+                .with_detail(format!(
+                    "Flags {:04X}, expected {:04X}",
+                    opaq.flags, GIN_META
+                )),
         ));
     }
 

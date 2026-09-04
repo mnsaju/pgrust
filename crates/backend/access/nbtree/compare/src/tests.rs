@@ -34,7 +34,10 @@ fn subtraction_family_matches_c() {
     assert_eq!(btboolcmp(false, true), -1);
     assert_eq!(btboolcmp(true, false), 1);
     assert_eq!(btboolcmp(true, true), 0);
-    assert_eq!(btint2cmp(i16::MIN, i16::MAX), i16::MIN as i32 - i16::MAX as i32);
+    assert_eq!(
+        btint2cmp(i16::MIN, i16::MAX),
+        i16::MIN as i32 - i16::MAX as i32
+    );
     assert_eq!(btint2cmp(5, 5), 0);
     assert_eq!(btcharcmp(0, 255), -255);
     assert_eq!(btcharcmp(200, 100), 100);
@@ -42,7 +45,10 @@ fn subtraction_family_matches_c() {
 
 #[test]
 fn fc_wrappers_round_trip() {
-    assert_eq!(call2(fc_btint4cmp, Datum::from_i32(-5), Datum::from_i32(9)), -1);
+    assert_eq!(
+        call2(fc_btint4cmp, Datum::from_i32(-5), Datum::from_i32(9)),
+        -1
+    );
     assert_eq!(
         call2(fc_btint8cmp, Datum::from_i64(i64::MAX), Datum::from_i64(0)),
         1
@@ -51,8 +57,18 @@ fn fc_wrappers_round_trip() {
         call2(fc_btint84cmp, Datum::from_i64(-1), Datum::from_i32(-1)),
         0
     );
-    assert_eq!(call2(fc_btcharcmp, Datum::from_u8(200), Datum::from_u8(100)), 100);
-    assert_eq!(call2(fc_btboolcmp, Datum::from_bool(false), Datum::from_bool(true)), -1);
+    assert_eq!(
+        call2(fc_btcharcmp, Datum::from_u8(200), Datum::from_u8(100)),
+        100
+    );
+    assert_eq!(
+        call2(
+            fc_btboolcmp,
+            Datum::from_bool(false),
+            Datum::from_bool(true)
+        ),
+        -1
+    );
 }
 
 #[test]

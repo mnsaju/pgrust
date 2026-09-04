@@ -11,13 +11,12 @@ use ::types_snapshot::SnapshotData;
 use ::types_tuple::itemptr::{ItemPointerData, ItemPointerEquals};
 
 use crate::page::{
-    page_opaque, page_ref, _hash_dropbuf, _hash_dropscanbuf, _hash_getbuf,
-    _hash_getbucketbuf_from_hashkey, _hash_relbuf,
+    _hash_dropbuf, _hash_dropscanbuf, _hash_getbucketbuf_from_hashkey, _hash_getbuf, _hash_relbuf,
+    page_opaque, page_ref,
 };
 use crate::util::{
-    _hash_binsearch, _hash_binsearch_last, _hash_checkpage, _hash_checkqual,
-    _hash_datum2hashkey, _hash_datum2hashkey_type, _hash_get_indextuple_hashkey,
-    _hash_get_oldblock_from_newbucket,
+    _hash_binsearch, _hash_binsearch_last, _hash_checkpage, _hash_checkqual, _hash_datum2hashkey,
+    _hash_datum2hashkey_type, _hash_get_indextuple_hashkey, _hash_get_oldblock_from_newbucket,
 };
 
 // The scan-side borrow split (nbtree ScanCtx precedent): opaque + the scan
@@ -387,7 +386,11 @@ fn _hash_load_qualified_items(
             let itup = unsafe { page.item_raw(id) }.0;
             // SAFETY: live on-page tuple.
             let (t_info, hashkey, tid) = unsafe {
-                (nbtree::itup::t_info(itup), _hash_get_indextuple_hashkey(itup), nbtree::itup::t_tid(itup))
+                (
+                    nbtree::itup::t_info(itup),
+                    _hash_get_indextuple_hashkey(itup),
+                    nbtree::itup::t_tid(itup),
+                )
             };
 
             // skip split-moved tuples for scans started mid-split, and killed
@@ -404,7 +407,10 @@ fn _hash_load_qualified_items(
             if ctx.so.hashso_sk_hash == hashkey && _hash_checkqual() {
                 ctx.so.currPos.set_item(
                     item_index as usize,
-                    HashScanPosItem { heapTid: tid, indexOffset: offnum },
+                    HashScanPosItem {
+                        heapTid: tid,
+                        indexOffset: offnum,
+                    },
                 );
                 item_index += 1;
             } else {
@@ -423,7 +429,11 @@ fn _hash_load_qualified_items(
             let itup = unsafe { page.item_raw(id) }.0;
             // SAFETY: live on-page tuple.
             let (t_info, hashkey, tid) = unsafe {
-                (nbtree::itup::t_info(itup), _hash_get_indextuple_hashkey(itup), nbtree::itup::t_tid(itup))
+                (
+                    nbtree::itup::t_info(itup),
+                    _hash_get_indextuple_hashkey(itup),
+                    nbtree::itup::t_tid(itup),
+                )
             };
 
             if (ctx.so.hashso_buc_populated
@@ -439,7 +449,10 @@ fn _hash_load_qualified_items(
                 item_index -= 1;
                 ctx.so.currPos.set_item(
                     item_index as usize,
-                    HashScanPosItem { heapTid: tid, indexOffset: offnum },
+                    HashScanPosItem {
+                        heapTid: tid,
+                        indexOffset: offnum,
+                    },
                 );
             } else {
                 break;
@@ -482,9 +495,7 @@ pub(crate) fn _hash_kill_items(ctx: &mut HashScanCtx<'_, '_>) -> PgResult<()> {
 
         for i in 0..num_killed {
             let item_index = so.killedItems[i];
-            debug_assert!(
-                item_index >= so.currPos.firstItem && item_index <= so.currPos.lastItem
-            );
+            debug_assert!(item_index >= so.currPos.firstItem && item_index <= so.currPos.lastItem);
             // SAFETY: killedItems holds indexes previously written by readpage.
             let curr_item = unsafe { so.currPos.item(item_index as usize) };
             let mut offnum = curr_item.indexOffset;

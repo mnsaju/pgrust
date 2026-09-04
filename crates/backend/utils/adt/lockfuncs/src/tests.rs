@@ -28,7 +28,10 @@ fn locktag_int64_split_matches_c() {
         (4_294_967_296, 1, 0),
     ] {
         let tag = set_locktag_int64(key);
-        assert_eq!(fields(&tag), (0, hi, lo, 1, LOCKTAG_ADVISORY, USER_LOCKMETHOD));
+        assert_eq!(
+            fields(&tag),
+            (0, hi, lo, 1, LOCKTAG_ADVISORY, USER_LOCKMETHOD)
+        );
     }
 }
 
@@ -41,7 +44,10 @@ fn locktag_int32_pair_matches_c() {
         (i32::MIN, i32::MAX, 0x8000_0000, 0x7FFF_FFFF),
     ] {
         let tag = set_locktag_int32(k1, k2);
-        assert_eq!(fields(&tag), (0, f2, f3, 2, LOCKTAG_ADVISORY, USER_LOCKMETHOD));
+        assert_eq!(
+            fields(&tag),
+            (0, f2, f3, 2, LOCKTAG_ADVISORY, USER_LOCKMETHOD)
+        );
     }
 }
 
@@ -49,7 +55,10 @@ fn locktag_int32_pair_matches_c() {
 fn locktag_type_names_match_c() {
     assert_eq!(LOCK_TAG_TYPE_NAMES[LOCKTAG_RELATION as usize], "relation");
     assert_eq!(LOCK_TAG_TYPE_NAMES[LOCKTAG_ADVISORY as usize], "advisory");
-    assert_eq!(LOCK_TAG_TYPE_NAMES[LOCKTAG_LAST_TYPE as usize], "applytransaction");
+    assert_eq!(
+        LOCK_TAG_TYPE_NAMES[LOCKTAG_LAST_TYPE as usize],
+        "applytransaction"
+    );
     assert_eq!(PREDICATE_LOCK_TAG_TYPE_NAMES, ["relation", "page", "tuple"]);
 }
 

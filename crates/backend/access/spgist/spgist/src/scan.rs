@@ -15,13 +15,13 @@ use ::types_scan::scankey::{ScanKeyData, SK_ISNULL, SK_SEARCHNOTNULL, SK_SEARCHN
 use ::types_scan::sdir::ScanDirection;
 use ::types_spgist::state::{
     spgInnerConsistentIn, spgInnerConsistentOut, spgLeafConsistentIn, spgLeafConsistentOut,
-    spg_search_item_cmp, SpGistScanOpaqueData, SpGistSearchItem, SpGistScanQueue,
+    spg_search_item_cmp, SpGistScanOpaqueData, SpGistScanQueue, SpGistSearchItem,
 };
 use ::types_spgist::*;
 use ::types_tuple::itemptr::{ItemPointerData, ItemPointerGetBlockNumber, ItemPointerIsValid};
 
-use crate::utils::*;
 use crate::utils::ItupExt as _;
+use crate::utils::*;
 
 const K: usize = INDEX_MAX_KEYS as usize;
 const MaxOffsetNumber: u16 = (::types_core::BLCKSZ / 4) as u16;
@@ -207,7 +207,11 @@ fn spg_add_start_item(so: &mut SpGistScanOpaqueData<'_>, isnull: bool) {
         traversalValue: 0,
         level: 0,
         heapPtr: ItemPointerData::new(
-            if isnull { SPGIST_NULL_BLKNO } else { SPGIST_ROOT_BLKNO },
+            if isnull {
+                SPGIST_NULL_BLKNO
+            } else {
+                SPGIST_ROOT_BLKNO
+            },
             FirstOffsetNumber,
         ),
         isNull: isnull,
@@ -374,8 +378,7 @@ fn store_result(
                 debug_assert_eq!(so.distances.len(), so.nPtrs);
                 let row = match non_null_distances {
                     Some(d) if !isnull && so.numberOfNonNullOrderBys > 0 => {
-                        let mut out =
-                            Vec::with_capacity(so.numberOfOrderBys.max(0) as usize);
+                        let mut out = Vec::with_capacity(so.numberOfOrderBys.max(0) as usize);
                         for i in 0..so.numberOfOrderBys as usize {
                             let offset = so.nonNullOrderByOffsets[i];
                             if offset >= 0 {
@@ -384,7 +387,10 @@ fn store_result(
                                     isnull: false,
                                 });
                             } else {
-                                out.push(IndexOrderByDistance { value: 0.0, isnull: true });
+                                out.push(IndexOrderByDistance {
+                                    value: 0.0,
+                                    isnull: true,
+                                });
                             }
                         }
                         Some(out)
@@ -480,10 +486,7 @@ fn spg_leaf_test(
         {
             // SAFETY: opclass contract — norderbys distances in the armed mcx.
             unsafe {
-                core::slice::from_raw_parts(
-                    leaf_out.distances,
-                    so.numberOfNonNullOrderBys as usize,
-                )
+                core::slice::from_raw_parts(leaf_out.distances, so.numberOfNonNullOrderBys as usize)
             }
             .to_vec()
         } else {
@@ -612,14 +615,16 @@ fn spg_inner_test(
         let out_n = inner_out.nNodes.max(0) as usize;
         if !inner_out.nodeNumbers.is_null() {
             // SAFETY: opclass contract — out_n entries in the armed mcx.
-            node_numbers
-                .extend_from_slice(unsafe { core::slice::from_raw_parts(inner_out.nodeNumbers, out_n) });
+            node_numbers.extend_from_slice(unsafe {
+                core::slice::from_raw_parts(inner_out.nodeNumbers, out_n)
+            });
         }
         if !inner_out.levelAdds.is_null() {
             have_level_adds = true;
             // SAFETY: as above.
-            level_adds
-                .extend_from_slice(unsafe { core::slice::from_raw_parts(inner_out.levelAdds, out_n) });
+            level_adds.extend_from_slice(unsafe {
+                core::slice::from_raw_parts(inner_out.levelAdds, out_n)
+            });
         }
         if !inner_out.reconstructedValues.is_null() {
             have_recon = true;
@@ -701,7 +706,11 @@ fn spg_inner_test(
         so.scanQueue.add(SpGistSearchItem {
             value,
             leafTuple: None,
-            traversalValue: if have_traversal { traversal_values[i] } else { 0 },
+            traversalValue: if have_traversal {
+                traversal_values[i]
+            } else {
+                0
+            },
             level: item.level + if have_level_adds { level_adds[i] } else { 0 },
             heapPtr: tid,
             isNull: isnull,
@@ -738,9 +747,7 @@ fn spg_test_leaf_tuple(
                 debug_assert!(offset == item.heapPtr.ip_posid);
                 let dt = SpGistDeadTupleHeader::decode(leaf_tuple);
                 item.heapPtr = dt.pointer;
-                debug_assert!(
-                    ItemPointerGetBlockNumber(&item.heapPtr) != SPGIST_METAPAGE_BLKNO
-                );
+                debug_assert!(ItemPointerGetBlockNumber(&item.heapPtr) != SPGIST_METAPAGE_BLKNO);
                 return Ok(SpGistRedirectOffsetNumber);
             }
             if st == SPGIST_DEAD {
@@ -798,7 +805,11 @@ fn spg_walk(
                     leaf_copy.as_deref(),
                     item.recheck,
                     item.recheckDistances,
-                    if item.isNull { None } else { Some(&item.distances) },
+                    if item.isNull {
+                        None
+                    } else {
+                        Some(&item.distances)
+                    },
                 )?;
                 reported_some = true;
                 so.tempCxt.reset();
@@ -949,8 +960,7 @@ pub fn spggettuple(scan: &mut IndexScanDescData<'_>, dir: ScanDirection) -> PgRe
                 scan.xs_recheck = so.recheck[so.iPtr];
                 if want_itup {
                     let off = so.recon_offs[so.iPtr] as usize;
-                    scan.xs_itup =
-                        core::ptr::NonNull::new(so.recon_buf[off..].as_ptr() as *mut u8);
+                    scan.xs_itup = core::ptr::NonNull::new(so.recon_buf[off..].as_ptr() as *mut u8);
                 }
                 if so.numberOfOrderBys > 0 {
                     // index_store_float8_orderby_distances (indexam.c).

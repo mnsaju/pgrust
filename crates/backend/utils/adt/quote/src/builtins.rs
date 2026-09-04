@@ -30,7 +30,14 @@ pub fn fc_quote_nullable(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) ->
 }
 
 const fn b(foid: Oid, name: &'static str, strict: bool, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs: 1, strict, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs: 1,
+        strict,
+        retset: false,
+        func,
+    }
 }
 
 // pg_proc.dat rows; 1285/1290 are the SQL-language anyelement variants.

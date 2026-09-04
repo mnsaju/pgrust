@@ -51,12 +51,12 @@
 //!     query (class, rel OID, group estimate) for the refusal-rate
 //!     reports.
 
+use crate::run::PlannerRun;
+use types_core::BTREE_AM_OID;
 use types_error::PgResult;
 use types_nodes::parsenodes::{Query, RTEKind};
 use types_nodes::primnodes::{Aggref, Var, AGGKIND_NORMAL};
 use types_nodes::{CmdType, LimitOption, Node};
-use crate::run::PlannerRun;
-use types_core::BTREE_AM_OID;
 use types_pathnodes::{AMFLAG_PGRCOLUMNAR, AMFLAG_PGRCOLUMNAR_ZEROCNT};
 
 // ---------------------------------------------------------------------------
@@ -312,7 +312,9 @@ pub const BOOTSTRAP_MATRIX: &[MatrixRow] = &[
 ];
 
 pub(crate) fn class_covered(class: CoverClass) -> bool {
-    BOOTSTRAP_MATRIX.iter().any(|r| r.class == class && r.covered)
+    BOOTSTRAP_MATRIX
+        .iter()
+        .any(|r| r.class == class && r.covered)
 }
 
 // ---------------------------------------------------------------------------
@@ -368,16 +370,20 @@ fn class_guard(class: CoverClass) -> FloorGuard {
     match class {
         // dop4: 1.21–1.26x ≥2.5M (WIN 0.34 at 1M); dop8 1.10; dop16
         // 0.89–1.04.
-        CoverClass::CbPlainAggFold => {
-            FloorGuard { min_dop: 12, low_dop_max_rows: 1_500_000.0, ..NO_GUARD }
-        }
+        CoverClass::CbPlainAggFold => FloorGuard {
+            min_dop: 12,
+            low_dop_max_rows: 1_500_000.0,
+            ..NO_GUARD
+        },
         // Wins everywhere engaged (0.49–0.76 at every measured point).
         CoverClass::CbGroupedAggIntKeys => NO_GUARD,
         // dop4@5M 1.60 / dop8@5M 1.24 (legacy partial-agg dedup wins at
         // this text NDV); dop16 0.95–1.05; dop4 wins ≤2.5M (0.60–0.78).
-        CoverClass::CbGroupedAggTextKey => {
-            FloorGuard { min_dop: 12, low_dop_max_rows: 3_000_000.0, ..NO_GUARD }
-        }
+        CoverClass::CbGroupedAggTextKey => FloorGuard {
+            min_dop: 12,
+            low_dop_max_rows: 3_000_000.0,
+            ..NO_GUARD
+        },
         // Wins everywhere engaged (0.34–0.85) — but only where the arm can
         // OWN the suppressed plan. Qualed-selective shapes whose post-qual
         // estimate is tiny elect the sorted serial grouping plan
@@ -399,9 +405,10 @@ fn class_guard(class: CoverClass) -> FloorGuard {
         // tiny-selective shapes. Knob paths carrying this guard verbatim
         // (strminmax-topn / decoroot / constkey) inherit the floor; their
         // letters own re-measuring their own tiny cells.
-        CoverClass::CbGroupedAggTopN => {
-            FloorGuard { min_rows: 500_000.0, ..NO_GUARD }
-        }
+        CoverClass::CbGroupedAggTopN => FloorGuard {
+            min_rows: 500_000.0,
+            ..NO_GUARD
+        },
         // GL-LOWDIST-1 re-derivation (2026-07-21, letter scratchpad/night/
         // GL-LOWDIST-1-letter.md; witnessed fix A/B @ a3d09b8ff, dop
         // {2,4,8} x 1M-10M): with the low-width combine + leader-parity
@@ -421,13 +428,19 @@ fn class_guard(class: CoverClass) -> FloorGuard {
         // Suppressing below the rowdrive 64MB block floor measured
         // 1.08–1.41x (arm refuses, serial fallback loses to Gather);
         // above it the arm WINS 0.27–0.37 at every DOP.
-        CoverClass::HeapPlainCountStar => FloorGuard { min_pages: 8192.0, ..NO_GUARD },
+        CoverClass::HeapPlainCountStar => FloorGuard {
+            min_pages: 8192.0,
+            ..NO_GUARD
+        },
         // 1.13–1.39x at dop4/8 at EVERY size (the arm engages even at
         // 100k); dop16 wins 0.73–0.76 (≥2.5M measured; 1M floor is the
         // unmeasured-corner conservatism).
-        CoverClass::HeapCmpFoldPrefix => {
-            FloorGuard { min_rows: 1_000_000.0, min_dop: 12, low_dop_max_rows: 0.0, ..NO_GUARD }
-        }
+        CoverClass::HeapCmpFoldPrefix => FloorGuard {
+            min_rows: 1_000_000.0,
+            min_dop: 12,
+            low_dop_max_rows: 0.0,
+            ..NO_GUARD
+        },
         // GL-COST-TOPN-1 GUARD-OFF (this letter; the GL-SORTECON-3 min_dop=4
         // re-flip retired): the re-flip was ratified on rt/SERIAL economics
         // only — the four-posture ladder (scripts/sortecon-topn-ladder.sh @
@@ -450,9 +463,16 @@ fn class_guard(class: CoverClass) -> FloorGuard {
         // rectangle for A/B vehicles and one-train rollback.
         CoverClass::CbTopnBoundedIntKeys => {
             if topn_rect_enabled() {
-                FloorGuard { min_dop: 4, low_dop_max_rows: 0.0, ..NO_GUARD }
+                FloorGuard {
+                    min_dop: 4,
+                    low_dop_max_rows: 0.0,
+                    ..NO_GUARD
+                }
             } else {
-                FloorGuard { max_rows: 0.0, ..NO_GUARD }
+                FloorGuard {
+                    max_rows: 0.0,
+                    ..NO_GUARD
+                }
             }
         }
         // Wins ≤1M (0.41 vs serial-shaped legacy); loses 1.39–1.50x once
@@ -522,9 +542,15 @@ fn class_guard(class: CoverClass) -> FloorGuard {
         // A/B vehicles and one-train rollback.
         CoverClass::CbHashJoinMultiBuild | CoverClass::CbHashJoinGroupedAgg => {
             if hjrider_curve_enabled() {
-                FloorGuard { max_rows: 2_000_000.0, ..NO_GUARD }
+                FloorGuard {
+                    max_rows: 2_000_000.0,
+                    ..NO_GUARD
+                }
             } else {
-                FloorGuard { max_rows: 0.0, ..NO_GUARD }
+                FloorGuard {
+                    max_rows: 0.0,
+                    ..NO_GUARD
+                }
             }
         }
         // Footer answers are O(1) — never floored.
@@ -534,9 +560,12 @@ fn class_guard(class: CoverClass) -> FloorGuard {
         // STRICTLY more per-row work than the int fold it was measured on,
         // which only widens the parallel win region — the reuse errs
         // conservative on the min side). GL-AGGPOLY-1 owns re-measuring.
-        CoverClass::AggPolyHeapPlain => {
-            FloorGuard { min_rows: 1_000_000.0, min_dop: 12, low_dop_max_rows: 0.0, ..NO_GUARD }
-        }
+        CoverClass::AggPolyHeapPlain => FloorGuard {
+            min_rows: 1_000_000.0,
+            min_dop: 12,
+            low_dop_max_rows: 0.0,
+            ..NO_GUARD
+        },
         // PARTWISE: unused by construction — the classifier never calls
         // finish(); its PROVISIONAL per-AM floors (cb vs heap differ, one
         // FloorGuard cannot express both) live in m5_partwise.rs with
@@ -562,14 +591,20 @@ fn class_guard(class: CoverClass) -> FloorGuard {
 fn mbshared_live() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
-        !matches!(std::env::var("PGRUST_LANE_V2_MBSHARED").as_deref(), Ok("0") | Ok("off"))
+        !matches!(
+            std::env::var("PGRUST_LANE_V2_MBSHARED").as_deref(),
+            Ok("0") | Ok("off")
+        )
     })
 }
 
 fn mbseat_live() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
-        !matches!(std::env::var("PGRUST_LANE_V2_MBSEAT").as_deref(), Ok("0") | Ok("off"))
+        !matches!(
+            std::env::var("PGRUST_LANE_V2_MBSEAT").as_deref(),
+            Ok("0") | Ok("off")
+        )
     })
 }
 
@@ -609,7 +644,9 @@ fn topn_rect_enabled() -> bool {
 /// not run).
 fn topn_heap_route_live() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| topn_heap_spelling_on(std::env::var("PGRUST_RUNTIME_TOPN_HEAP").ok().as_deref()))
+    *ON.get_or_init(|| {
+        topn_heap_spelling_on(std::env::var("PGRUST_RUNTIME_TOPN_HEAP").ok().as_deref())
+    })
 }
 
 /// Pure spelling law for PGRUST_RUNTIME_TOPN_HEAP (unit-pinned): unset or
@@ -711,7 +748,11 @@ fn textdistinct_plain_enabled() -> bool {
 /// sink whose own `agg_hashgroup_economical_sink` term is the real gate — a
 /// probe refusal here only costs "legacy instead of runtime".
 fn textdistinct_guard() -> FloorGuard {
-    FloorGuard { min_dop: 12, low_dop_max_rows: 3_000_000.0, ..NO_GUARD }
+    FloorGuard {
+        min_dop: 12,
+        low_dop_max_rows: 3_000_000.0,
+        ..NO_GUARD
+    }
 }
 
 /// GL-LOWDIST-4 B1 heap-distinct knob — the EXECUTOR spelling verbatim
@@ -761,7 +802,9 @@ fn classify_heap_grouped_distinct<'mcx>(
 ) -> PgResult<Option<bool>> {
     let mut key_refs: Vec<u32> = Vec::new();
     for gc_node in &parse.groupClause {
-        let Some(gc) = gc_node.as_sort_group_clause() else { return Ok(None) };
+        let Some(gc) = gc_node.as_sort_group_clause() else {
+            return Ok(None);
+        };
         let Some(tle) = tle_by_sortgroupref(parse, gc.tleSortGroupRef) else {
             return Ok(None);
         };
@@ -775,7 +818,9 @@ fn classify_heap_grouped_distinct<'mcx>(
     }
     let mut n_count_distinct = 0usize;
     for tle_node in &parse.targetList {
-        let Some(tle) = tle_node.as_target_entry() else { return Ok(None) };
+        let Some(tle) = tle_node.as_target_entry() else {
+            return Ok(None);
+        };
         if tle.ressortgroupref != 0 && key_refs.contains(&tle.ressortgroupref) {
             continue;
         }
@@ -789,8 +834,7 @@ fn classify_heap_grouped_distinct<'mcx>(
         return Ok(None);
     }
     let ngroups = {
-        let clauses =
-            crate::relnode::pgvec_clone_shallow(run.mcx, &run.root.processed_groupClause);
+        let clauses = crate::relnode::pgvec_clone_shallow(run.mcx, &run.root.processed_groupClause);
         let group_exprs =
             types_pathnodes::run::sortgrouplist_exprs(run, &clauses, &parse.targetList);
         let input_rows = run.root.rel(rel_id).rows.max(1.0);
@@ -842,7 +886,11 @@ fn distinct_lowwidth_guard(base: FloorGuard) -> FloorGuard {
         // post-deletion per-tuple fall at every measured dop1 cell; the
         // remaining sink-vs-hybrid dop1 gap on grouped-int is the
         // GL-LOWDIST-5 car: "continue optimizing dop1 so it always wins").
-        FloorGuard { min_dop: 1, low_dop_max_rows: 0.0, ..NO_GUARD }
+        FloorGuard {
+            min_dop: 1,
+            low_dop_max_rows: 0.0,
+            ..NO_GUARD
+        }
     } else {
         base
     }
@@ -895,7 +943,11 @@ pub(crate) fn topn_nonint_enabled() -> bool {
 /// its "best engine" reference should be re-witnessed with a forced-GM leg
 /// (the E1 lesson) before this floor is next widened.
 fn topn_nonint_guard() -> FloorGuard {
-    FloorGuard { min_dop: 4, low_dop_max_rows: 0.0, ..NO_GUARD }
+    FloorGuard {
+        min_dop: 4,
+        low_dop_max_rows: 0.0,
+        ..NO_GUARD
+    }
 }
 
 /// SE-TOPNNI selective-qual carve threshold (GL-TOPNNI-1 selective-qual x
@@ -926,7 +978,9 @@ fn topnni_selqual_priced_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
         tier2_car_kill_spelling_on(
-            std::env::var("PGRUST_LANE_V2_TOPNNI_SELQUAL_PRICED").as_deref().ok(),
+            std::env::var("PGRUST_LANE_V2_TOPNNI_SELQUAL_PRICED")
+                .as_deref()
+                .ok(),
         )
     })
 }
@@ -981,7 +1035,11 @@ fn topn_nonint_text_key_stitched(
 fn multikey_text_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
-        multikey_text_spelling_on(std::env::var("PGRUST_LANE_V2_MULTIKEY_TEXT").as_deref().ok())
+        multikey_text_spelling_on(
+            std::env::var("PGRUST_LANE_V2_MULTIKEY_TEXT")
+                .as_deref()
+                .ok(),
+        )
     })
 }
 
@@ -1017,10 +1075,16 @@ fn mk_text_agg_cars_live(n_text: usize) -> bool {
     static T1: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     static T2: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     let t1 = *T1.get_or_init(|| {
-        !matches!(std::env::var("PGRUST_RUNTIME_AGG_TEXT").as_deref(), Ok("0") | Ok("off"))
+        !matches!(
+            std::env::var("PGRUST_RUNTIME_AGG_TEXT").as_deref(),
+            Ok("0") | Ok("off")
+        )
     });
     let t2 = *T2.get_or_init(|| {
-        !matches!(std::env::var("PGRUST_RUNTIME_AGG_TEXT2").as_deref(), Ok("0") | Ok("off"))
+        !matches!(
+            std::env::var("PGRUST_RUNTIME_AGG_TEXT2").as_deref(),
+            Ok("0") | Ok("off")
+        )
     });
     t1 && (n_text < 2 || t2)
 }
@@ -1032,7 +1096,10 @@ fn mk_text_agg_cars_live(n_text: usize) -> bool {
 fn agg_freeze_car_live() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
-        !matches!(std::env::var("PGRUST_RUNTIME_AGG_FREEZE").as_deref(), Ok("0") | Ok("off"))
+        !matches!(
+            std::env::var("PGRUST_RUNTIME_AGG_FREEZE").as_deref(),
+            Ok("0") | Ok("off")
+        )
     })
 }
 
@@ -1066,7 +1133,11 @@ fn knob_spelling_on(v: Option<&str>) -> bool {
 fn extract_exprkey_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
-        knob_spelling_on(std::env::var("PGRUST_LANE_V2_EXPRKEY_EXTRACT").as_deref().ok())
+        knob_spelling_on(
+            std::env::var("PGRUST_LANE_V2_EXPRKEY_EXTRACT")
+                .as_deref()
+                .ok(),
+        )
     })
 }
 
@@ -1113,7 +1184,11 @@ fn agg_constkey_enabled() -> bool {
 fn agg_barelimit_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
-        knob_spelling_on(std::env::var("PGRUST_LANE_V2_AGG_BARELIMIT").as_deref().ok())
+        knob_spelling_on(
+            std::env::var("PGRUST_LANE_V2_AGG_BARELIMIT")
+                .as_deref()
+                .ok(),
+        )
     })
 }
 
@@ -1121,7 +1196,11 @@ fn agg_barelimit_enabled() -> bool {
 /// text-keyed-grouped economics (the ts-extract shape carries a text key too).
 /// GL-EXTRACTKEY-1 owns re-measuring.
 fn extract_exprkey_guard() -> FloorGuard {
-    FloorGuard { min_dop: 12, low_dop_max_rows: 3_000_000.0, ..NO_GUARD }
+    FloorGuard {
+        min_dop: 12,
+        low_dop_max_rows: 3_000_000.0,
+        ..NO_GUARD
+    }
 }
 
 /// GL-ELECT22-1 fix 4b — extract-exprkey winner-selection hold exemption
@@ -1150,7 +1229,9 @@ fn extractkey_topn_highgroups_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
         tier2_car_kill_spelling_on(
-            std::env::var("PGRUST_M5_EXTRACTKEY_TOPN_HIGHGROUPS").as_deref().ok(),
+            std::env::var("PGRUST_M5_EXTRACTKEY_TOPN_HIGHGROUPS")
+                .as_deref()
+                .ok(),
         )
     })
 }
@@ -1210,9 +1291,7 @@ fn knob_spelling_armed(v: Option<&str>) -> bool {
 /// (t35 exact-spelling law).
 fn decoroot_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| {
-        knob_spelling_on(std::env::var("PGRUST_LANE_V2_DECOROOT").as_deref().ok())
-    })
+    *ON.get_or_init(|| knob_spelling_on(std::env::var("PGRUST_LANE_V2_DECOROOT").as_deref().ok()))
 }
 
 /// SE-DECOROOT hash-election margin (PROVISIONAL, GL-DECOROOT-1 owns the
@@ -1257,7 +1336,11 @@ const DECOROOT_NGROUPS_MARGIN: f64 = 16.0;
 fn aggjoin_numeric_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
-        knob_spelling_on(std::env::var("PGRUST_LANE_V2_AGGJOIN_NUMERIC").as_deref().ok())
+        knob_spelling_on(
+            std::env::var("PGRUST_LANE_V2_AGGJOIN_NUMERIC")
+                .as_deref()
+                .ok(),
+        )
     })
 }
 
@@ -1290,9 +1373,7 @@ fn aggjoin_numeric_enabled() -> bool {
 /// switch (t35 exact-spelling law).
 fn jheap_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| {
-        knob_spelling_on(std::env::var("PGRUST_LANE_V2_JHEAP").as_deref().ok())
-    })
+    *ON.get_or_init(|| knob_spelling_on(std::env::var("PGRUST_LANE_V2_JHEAP").as_deref().ok()))
 }
 
 /// SE-JHEAP executor coherence (the m5p1 `multibuild_enabled` precedent):
@@ -1306,10 +1387,16 @@ fn k2_heapfeed_live() -> bool {
     static P: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     static H: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     let p = *P.get_or_init(|| {
-        !matches!(std::env::var("PGRUST_LANE_V2_K2_PROBE").as_deref(), Ok("0") | Ok("off"))
+        !matches!(
+            std::env::var("PGRUST_LANE_V2_K2_PROBE").as_deref(),
+            Ok("0") | Ok("off")
+        )
     });
     let h = *H.get_or_init(|| {
-        !matches!(std::env::var("PGRUST_LANE_V2_HEAPFEED").as_deref(), Ok("0") | Ok("off"))
+        !matches!(
+            std::env::var("PGRUST_LANE_V2_HEAPFEED").as_deref(),
+            Ok("0") | Ok("off")
+        )
     });
     p && h
 }
@@ -1336,7 +1423,10 @@ const JHEAP_NL_MARGIN: f64 = 4.0;
 /// name. Those letters own re-measuring it; the riders' zeroed guard
 /// governs only the finish(rider-class) bootstrap path.
 fn hj_knobpath_2m_guard() -> FloorGuard {
-    FloorGuard { max_rows: 2_000_000.0, ..NO_GUARD }
+    FloorGuard {
+        max_rows: 2_000_000.0,
+        ..NO_GUARD
+    }
 }
 
 /// PROVISIONAL floor for heap-fed join shapes: the heap fold arms'
@@ -1376,9 +1466,7 @@ fn jheap_guard() -> FloorGuard {
 /// (t35 exact-spelling law).
 fn cbkeys_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| {
-        knob_spelling_on(std::env::var("PGRUST_LANE_V2_CBKEYS").as_deref().ok())
-    })
+    *ON.get_or_init(|| knob_spelling_on(std::env::var("PGRUST_LANE_V2_CBKEYS").as_deref().ok()))
 }
 
 /// SE-BPCHAR (the GL-BPCHAR-1 lane) — the bpchar TIE-LAW sub-gate of the
@@ -1412,7 +1500,11 @@ fn cbkeys_enabled() -> bool {
 fn bpchar_keys_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
-        knob_spelling_on(std::env::var("PGRUST_LANE_V2_CBKEYS_BPCHAR").as_deref().ok())
+        knob_spelling_on(
+            std::env::var("PGRUST_LANE_V2_CBKEYS_BPCHAR")
+                .as_deref()
+                .ok(),
+        )
     })
 }
 
@@ -1467,7 +1559,10 @@ fn joinfilters_enabled() -> bool {
 /// by construction — the export refuses spill-mode tables — so matrix law
 /// 2c, bytes keys disable the word-mode spill arm, holds inherently.)
 fn cbkeys_guard() -> FloorGuard {
-    FloorGuard { max_rows: 2_000_000.0, ..NO_GUARD }
+    FloorGuard {
+        max_rows: 2_000_000.0,
+        ..NO_GUARD
+    }
 }
 
 /// SE-MKTEXT group-estimate ceiling, env-overridable
@@ -1513,7 +1608,11 @@ fn mktext_ceil_v2_enabled() -> bool {
 /// The mk-text family ceiling DEFAULT, pure for unit tests: the 16M
 /// provisional, or the GL-ELECT22-1 refit bound with the v2 knob armed.
 fn mktext_family_ceiling_default(ceil_v2: bool) -> f64 {
-    if ceil_v2 { 24_000_000.0 } else { 16_000_000.0 }
+    if ceil_v2 {
+        24_000_000.0
+    } else {
+        16_000_000.0
+    }
 }
 
 fn multikey_text_max_groups() -> f64 {
@@ -1578,7 +1677,11 @@ fn dictkey_max_groups() -> f64 {
 /// text-keyed grouped engagement, one more key word/tail). GL-MKTEXT-1
 /// owns re-measuring.
 fn multikey_text_guard() -> FloorGuard {
-    FloorGuard { min_dop: 12, low_dop_max_rows: 3_000_000.0, ..NO_GUARD }
+    FloorGuard {
+        min_dop: 12,
+        low_dop_max_rows: 3_000_000.0,
+        ..NO_GUARD
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1719,7 +1822,11 @@ fn grouped_avg_enabled() -> bool {
 /// The grouped-sink passenger vocabulary of record: base list, or the
 /// avg-of-int widening knob-ON.
 fn grouped_sink_aggs() -> &'static [u32] {
-    if grouped_avg_enabled() { GROUPED_SINK_AGGS_AVG } else { GROUPED_SINK_AGGS }
+    if grouped_avg_enabled() {
+        GROUPED_SINK_AGGS_AVG
+    } else {
+        GROUPED_SINK_AGGS
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1796,8 +1903,7 @@ fn dictkey_engine_live() -> bool {
 /// count's arg reads the isnull lane, and the strict len funcs make the
 /// result's NULL-ness the Var's). Function resolution guarantees the arg
 /// type matches the fnoid, so fnoid membership IS the arg-slot type check.
-const LEN_ARG_HOST_AGGS: &[u32] =
-    &[F_COUNT_ANY, F_SUM_INT4, F_AVG_INT4, F_MIN_INT4, F_MAX_INT4];
+const LEN_ARG_HOST_AGGS: &[u32] = &[F_COUNT_ANY, F_SUM_INT4, F_AVG_INT4, F_MIN_INT4, F_MAX_INT4];
 
 /// A textlen-family agg ARGUMENT the lane fold vocabulary proves
 /// (`length(v)`/`char_length(v)`/`octet_length(v)` over a bare
@@ -1806,7 +1912,9 @@ const LEN_ARG_HOST_AGGS: &[u32] =
 /// encoding half lives in lanefold (`len_arg_funcid_admits`) so the two
 /// seams share one table; collation is irrelevant to length semantics.
 fn is_lanefold_len_arg(expr: Node<'_>, rti: usize) -> bool {
-    let Some(f) = expr.as_func_expr() else { return false };
+    let Some(f) = expr.as_func_expr() else {
+        return false;
+    };
     if f.funcretset || f.args.len() != 1 || !::lanefold::len_arg_funcid_admits(f.funcid) {
         return false;
     }
@@ -1826,7 +1934,9 @@ fn is_lanefold_len_arg(expr: Node<'_>, rti: usize) -> bool {
 /// territory (this fn admits ONLY the widened 1-arg shape — callers try
 /// the bare-Var whitelist first).
 fn is_whitelisted_agg_lenarg(expr: Node<'_>, rti: usize, whitelist: &[u32]) -> bool {
-    let Some(agg) = expr.as_aggref() else { return false };
+    let Some(agg) = expr.as_aggref() else {
+        return false;
+    };
     if !whitelist.contains(&agg.aggfnoid) || !LEN_ARG_HOST_AGGS.contains(&agg.aggfnoid) {
         return false;
     }
@@ -1843,7 +1953,9 @@ fn is_whitelisted_agg_lenarg(expr: Node<'_>, rti: usize, whitelist: &[u32]) -> b
     if agg.args.len() != 1 {
         return false;
     }
-    let Some(arg_tle) = agg.args.nth(0).as_target_entry() else { return false };
+    let Some(arg_tle) = agg.args.nth(0).as_target_entry() else {
+        return false;
+    };
     is_lanefold_len_arg(arg_tle.expr, rti)
 }
 
@@ -1880,13 +1992,21 @@ fn having_term_admissible(hq: Node<'_>) -> bool {
         }
         None => hq,
     };
-    let Some(op) = hq.as_op_expr() else { return false };
+    let Some(op) = hq.as_op_expr() else {
+        return false;
+    };
     if op.opretset || op.args.len() != 2 || !HAVING_CMP_FNS.contains(&op.opfuncid) {
         return false;
     }
     let (a, b) = (op.args.nth(0), op.args.nth(1));
-    let (aggside, constside) = if a.as_aggref().is_some() { (a, b) } else { (b, a) };
-    let Some(agg) = aggside.as_aggref() else { return false };
+    let (aggside, constside) = if a.as_aggref().is_some() {
+        (a, b)
+    } else {
+        (b, a)
+    };
+    let Some(agg) = aggside.as_aggref() else {
+        return false;
+    };
     if agg.aggfnoid != F_COUNT_STAR
         || !agg.args.is_nil()
         || agg.agglevelsup != 0
@@ -1899,7 +2019,9 @@ fn having_term_admissible(hq: Node<'_>) -> bool {
     {
         return false;
     }
-    let Some(c) = constside.as_const() else { return false };
+    let Some(c) = constside.as_const() else {
+        return false;
+    };
     !c.constisnull && matches!(c.consttype, INT2OID | INT4OID | INT8OID)
 }
 
@@ -1985,7 +2107,9 @@ fn topn_highgroups_constkey_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
         tier2_car_kill_spelling_on(
-            std::env::var("PGRUST_M5_TOPN_HIGHGROUPS_CONSTKEY").as_deref().ok(),
+            std::env::var("PGRUST_M5_TOPN_HIGHGROUPS_CONSTKEY")
+                .as_deref()
+                .ok(),
         )
     })
 }
@@ -2022,7 +2146,9 @@ fn topn_highgroups_distinct_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
         tier2_car_kill_spelling_on(
-            std::env::var("PGRUST_M5_TOPN_HIGHGROUPS_DISTINCT").as_deref().ok(),
+            std::env::var("PGRUST_M5_TOPN_HIGHGROUPS_DISTINCT")
+                .as_deref()
+                .ok(),
         )
     })
 }
@@ -2164,11 +2290,21 @@ fn intcase_spelling_on(v: Option<&str>) -> bool {
 /// min/max removal is UNCONDITIONAL (fail-closed regardless of the knob);
 /// the e2e pins the shape NOT-KEYED.
 const DISTINCT_PASSENGER_AGGS: &[u32] = &[F_COUNT_STAR, F_COUNT_ANY, F_SUM_INT4, F_SUM_INT2];
-const DISTINCT_PASSENGER_AGGS_POLY: &[u32] =
-    &[F_COUNT_STAR, F_COUNT_ANY, F_SUM_INT4, F_SUM_INT2, F_AVG_INT4, F_AVG_INT2];
+const DISTINCT_PASSENGER_AGGS_POLY: &[u32] = &[
+    F_COUNT_STAR,
+    F_COUNT_ANY,
+    F_SUM_INT4,
+    F_SUM_INT2,
+    F_AVG_INT4,
+    F_AVG_INT2,
+];
 
 fn distinct_passenger_aggs() -> &'static [u32] {
-    if agg_poly_probe_enabled() { DISTINCT_PASSENGER_AGGS_POLY } else { DISTINCT_PASSENGER_AGGS }
+    if agg_poly_probe_enabled() {
+        DISTINCT_PASSENGER_AGGS_POLY
+    } else {
+        DISTINCT_PASSENGER_AGGS
+    }
 }
 
 /// Heap CMP fold prefix whitelist (M1-b): count(col)/min(int)/max(int).
@@ -2291,7 +2427,10 @@ fn groupby_high_floor() -> f64 {
 pub(crate) fn trace_armed() -> bool {
     static ARMED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ARMED.get_or_init(|| {
-        matches!(std::env::var("PGRUST_M5_SUPPRESS_TRACE").as_deref(), Ok("1"))
+        matches!(
+            std::env::var("PGRUST_M5_SUPPRESS_TRACE").as_deref(),
+            Ok("1")
+        )
     })
 }
 
@@ -2391,7 +2530,9 @@ fn classify_covered(run: &mut PlannerRun<'_>) -> PgResult<bool> {
     //   * TWO RangeTblRefs (row flip 2, flat form): the INNER-join shape as
     //     the planner sees it — `a JOIN b ON q` and `a, b WHERE q` are the
     //     same FromExpr by probe time, with the equi quals in top.quals.
-    let Some(top) = parse.jointree else { return Ok(false) };
+    let Some(top) = parse.jointree else {
+        return Ok(false);
+    };
     if top.fromlist.len() == 2 {
         let (Some(ra), Some(rb)) = (
             top.fromlist.nth(0).as_range_tbl_ref(),
@@ -2423,7 +2564,9 @@ fn classify_covered(run: &mut PlannerRun<'_>) -> PgResult<bool> {
     if (3..=6).contains(&top.fromlist.len()) {
         let mut rtis = Vec::with_capacity(top.fromlist.len());
         for f in &top.fromlist {
-            let Some(rtr) = f.as_range_tbl_ref() else { return Ok(false) };
+            let Some(rtr) = f.as_range_tbl_ref() else {
+                return Ok(false);
+            };
             rtis.push(rtr.rtindex as usize);
         }
         let mut quals = Vec::new();
@@ -2541,11 +2684,15 @@ fn classify_covered(run: &mut PlannerRun<'_>) -> PgResult<bool> {
             // selective-qual carve below.
             let mut lead_is_text = false;
             for (ki, sc_node) in parse.sortClause.iter().enumerate() {
-                let Some(sc) = sc_node.as_sort_group_clause() else { return Ok(false) };
+                let Some(sc) = sc_node.as_sort_group_clause() else {
+                    return Ok(false);
+                };
                 let Some(tle) = tle_by_sortgroupref(parse, sc.tleSortGroupRef) else {
                     return Ok(false);
                 };
-                let Some(v) = key_var(tle.expr, rti) else { return Ok(false) };
+                let Some(v) = key_var(tle.expr, rti) else {
+                    return Ok(false);
+                };
                 if ki == 0 {
                     lead_is_text = is_text_family(v.vartype);
                 }
@@ -2578,7 +2725,9 @@ fn classify_covered(run: &mut PlannerRun<'_>) -> PgResult<bool> {
             let mut tlist_natts = 0usize;
             let mut tlist_all_car_payload = true;
             for tle_node in &parse.targetList {
-                let Some(tle) = tle_node.as_target_entry() else { return Ok(false) };
+                let Some(tle) = tle_node.as_target_entry() else {
+                    return Ok(false);
+                };
                 let Some(v) = key_var(tle.expr, rti) else {
                     return Ok(false);
                 };
@@ -2739,7 +2888,11 @@ fn classify_covered(run: &mut PlannerRun<'_>) -> PgResult<bool> {
                 // plan band-refuses to the serial zone walk at exec (the
                 // priced engine).
             }
-            let label = if n_text > 0 { "topn-text-keys" } else { "topn-datetime-keys" };
+            let label = if n_text > 0 {
+                "topn-text-keys"
+            } else {
+                "topn-datetime-keys"
+            };
             let suppressed = finish_knob_path(
                 run,
                 "topnnonint",
@@ -2839,11 +2992,16 @@ fn classify_covered(run: &mut PlannerRun<'_>) -> PgResult<bool> {
             // sum/avg args (`sum(v+k)` batteries) the bare-Var whitelist
             // above does not key. No quals (footer answers are whole-table;
             // the zero-count qual sub-arm stays unkeyed — narrower probe).
-            if !has_quals
-                && parse.sortClause.is_nil()
-                && tlist_all_meta_footer_aggs(parse, rti)
-            {
-                return finish(run, CoverClass::CbMetaFooterAgg, rte.relid, 1.0, rel_rows, rel_pages, true);
+            if !has_quals && parse.sortClause.is_nil() && tlist_all_meta_footer_aggs(parse, rti) {
+                return finish(
+                    run,
+                    CoverClass::CbMetaFooterAgg,
+                    rte.relid,
+                    1.0,
+                    rel_rows,
+                    rel_pages,
+                    true,
+                );
             }
             // SE-TEXTDISTINCT (C1, band 86001): ungrouped count(DISTINCT
             // <int|default-collation text Var>) — the census's "plain distinct
@@ -2925,7 +3083,15 @@ fn classify_covered(run: &mut PlannerRun<'_>) -> PgResult<bool> {
             // is scan-shaped. Using rel_rows here floored a 1.5M-row scan
             // out at 23% selectivity (live finding, worklog §3).
             let scan_tuples = run.root.rel(rel_id).tuples.max(rel_rows);
-            return finish(run, CoverClass::AggPolyHeapPlain, rte.relid, 1.0, scan_tuples, rel_pages, true);
+            return finish(
+                run,
+                CoverClass::AggPolyHeapPlain,
+                rte.relid,
+                1.0,
+                scan_tuples,
+                rel_pages,
+                true,
+            );
         }
         // GL-LOWDIST-4 B1 (knob-gated): plain count(DISTINCT) over one HEAP
         // rel — the cb plain-count-distinct gates verbatim (the plain sink's
@@ -2961,10 +3127,26 @@ fn classify_covered(run: &mut PlannerRun<'_>) -> PgResult<bool> {
             return Ok(false);
         }
         if is_bare_count_star(parse) {
-            return finish(run, CoverClass::HeapPlainCountStar, rte.relid, 1.0, rel_rows, rel_pages, true);
+            return finish(
+                run,
+                CoverClass::HeapPlainCountStar,
+                rte.relid,
+                1.0,
+                rel_rows,
+                rel_pages,
+                true,
+            );
         }
         if tlist_all_whitelisted_aggs(parse, rti, HEAP_CMP_AGGS) {
-            return finish(run, CoverClass::HeapCmpFoldPrefix, rte.relid, 1.0, rel_rows, rel_pages, true);
+            return finish(
+                run,
+                CoverClass::HeapCmpFoldPrefix,
+                rte.relid,
+                1.0,
+                rel_rows,
+                rel_pages,
+                true,
+            );
         }
         return Ok(false);
     }
@@ -3047,7 +3229,9 @@ fn classify_covered(run: &mut PlannerRun<'_>) -> PgResult<bool> {
     // a min/max(text) over a GROUP KEY column keeps the refusal).
     let mut key_attnos: Vec<i16> = Vec::new();
     for gc_node in &parse.groupClause {
-        let Some(gc) = gc_node.as_sort_group_clause() else { return Ok(false) };
+        let Some(gc) = gc_node.as_sort_group_clause() else {
+            return Ok(false);
+        };
         let Some(tle) = tle_by_sortgroupref(parse, gc.tleSortGroupRef) else {
             return Ok(false);
         };
@@ -3057,7 +3241,9 @@ fn classify_covered(run: &mut PlannerRun<'_>) -> PgResult<bool> {
             key_refs.push(gc.tleSortGroupRef);
             continue;
         }
-        let Some(v) = key_var(tle.expr, rti) else { return Ok(false) };
+        let Some(v) = key_var(tle.expr, rti) else {
+            return Ok(false);
+        };
         key_attnos.push(v.varattno);
         if is_int_family(v.vartype) {
             // covered
@@ -3098,7 +3284,9 @@ fn classify_covered(run: &mut PlannerRun<'_>) -> PgResult<bool> {
     let mut n_count_distinct = 0usize;
     let mut passengers: Vec<Node<'_>> = Vec::new();
     for tle_node in &parse.targetList {
-        let Some(tle) = tle_node.as_target_entry() else { return Ok(false) };
+        let Some(tle) = tle_node.as_target_entry() else {
+            return Ok(false);
+        };
         if tle.ressortgroupref != 0 && const_key_refs.contains(&tle.ressortgroupref) {
             // SE-CONSTKEY: the const key's own tlist entry (same shape law).
             if !is_admissible_const_key(tle.expr) {
@@ -3155,8 +3343,11 @@ fn classify_covered(run: &mut PlannerRun<'_>) -> PgResult<bool> {
     // latent suppress-then-refuse channel; avg(int2/4) ADDED under the
     // AGG_POLY knob); everything else keeps the grouped-sink vocabulary
     // (base list, or the GROUPED-AVG widening knob-ON).
-    let passenger_list =
-        if n_count_distinct > 0 { distinct_passenger_aggs() } else { grouped_sink_aggs() };
+    let passenger_list = if n_count_distinct > 0 {
+        distinct_passenger_aggs()
+    } else {
+        grouped_sink_aggs()
+    };
     let mut n_strminmax = 0usize;
     let mut n_avg_widened = 0usize;
     let mut n_lenarg = 0usize;
@@ -3223,8 +3414,11 @@ fn classify_covered(run: &mut PlannerRun<'_>) -> PgResult<bool> {
     // order-column resolve wants a finalfn-free int8 transvalue), degrading
     // the suppressed plan to the full drain — fail closed on that
     // composition until a letter proves the degrade economics.
-    let sortkey_list =
-        if n_count_distinct > 0 { distinct_passenger_aggs() } else { GROUPED_SINK_AGGS };
+    let sortkey_list = if n_count_distinct > 0 {
+        distinct_passenger_aggs()
+    } else {
+        GROUPED_SINK_AGGS
+    };
     // Sort/limit composition: none at all (plain grouped emit), or the
     // top-N winner-selection shape — a single whitelisted-aggregate sort
     // key plus LIMIT without OFFSET (the grouped winner-selection census
@@ -3359,8 +3553,7 @@ fn classify_covered(run: &mut PlannerRun<'_>) -> PgResult<bool> {
         let Some(tle) = tle_by_sortgroupref(parse, sc.tleSortGroupRef) else {
             return Ok(false);
         };
-        if !is_whitelisted_agg(tle.expr, rti, sortkey_list)
-            && !is_count_distinct_int(tle.expr, rti)
+        if !is_whitelisted_agg(tle.expr, rti, sortkey_list) && !is_count_distinct_int(tle.expr, rti)
         {
             // conversion-flips composition: this arm owns AGG sort keys
             // only — a single GROUP-key sort without LIMIT is the
@@ -3449,8 +3642,7 @@ fn classify_covered(run: &mut PlannerRun<'_>) -> PgResult<bool> {
     let ngroups = if run.root.processed_groupClause.is_empty() {
         1.0
     } else {
-        let clauses =
-            crate::relnode::pgvec_clone_shallow(run.mcx, &run.root.processed_groupClause);
+        let clauses = crate::relnode::pgvec_clone_shallow(run.mcx, &run.root.processed_groupClause);
         let group_exprs =
             types_pathnodes::run::sortgrouplist_exprs(run, &clauses, &parse.targetList);
         let input_rows = run.root.rel(rel_id).rows.max(1.0);
@@ -3513,8 +3705,7 @@ fn classify_covered(run: &mut PlannerRun<'_>) -> PgResult<bool> {
         && n_strminmax == 0
         && (n_const == 0 || topn_highgroups_constkey_enabled())
         && !mk_text_family
-        && const_count(parse.limitCount)
-            .is_some_and(|b| b > 0 && b <= SINK_TOPN_MAX_BOUND_MIRROR);
+        && const_count(parse.limitCount).is_some_and(|b| b > 0 && b <= SINK_TOPN_MAX_BOUND_MIRROR);
     // GL-ELECT22-1 fix 4a — the DISTINCT-sink flavored exemption (fn doc
     // on the knob): exactly the witnessed one-text-key one-count-distinct
     // winner-selection shape, the sink's kernel-2 admission mirrored
@@ -3544,9 +3735,7 @@ fn classify_covered(run: &mut PlannerRun<'_>) -> PgResult<bool> {
     if over_groupby_high
         && !topn_highgroups_bypass
         && !topn_highgroups_distinct_bypass
-        && !(mk_text_family
-            && n_count_distinct == 0
-            && ngroups < multikey_text_max_groups())
+        && !(mk_text_family && n_count_distinct == 0 && ngroups < multikey_text_max_groups())
     {
         return Ok(false);
     }
@@ -3579,7 +3768,11 @@ fn classify_covered(run: &mut PlannerRun<'_>) -> PgResult<bool> {
         return finish_knob_path(
             run,
             "strminmax",
-            if topn { "strminmax-grouped-topn" } else { "strminmax-grouped-agg" },
+            if topn {
+                "strminmax-grouped-topn"
+            } else {
+                "strminmax-grouped-agg"
+            },
             class_guard(class),
             rte.relid,
             ngroups,
@@ -3604,7 +3797,11 @@ fn classify_covered(run: &mut PlannerRun<'_>) -> PgResult<bool> {
         return finish_knob_path(
             run,
             "aggsortnl",
-            if n_count_distinct > 0 { "sortnl-grouped-distinct" } else { "sortnl-grouped-agg" },
+            if n_count_distinct > 0 {
+                "sortnl-grouped-distinct"
+            } else {
+                "sortnl-grouped-agg"
+            },
             class_guard(class),
             rte.relid,
             ngroups,
@@ -3663,7 +3860,11 @@ fn classify_covered(run: &mut PlannerRun<'_>) -> PgResult<bool> {
     if mk_text_family && n_count_distinct == 0 && (n_text > 1 || mk_freeze || over_groupby_high) {
         return finish_multikey_text(
             run,
-            if mk_freeze { "twokey-text-freeze" } else { "twokey-text-grouped-agg" },
+            if mk_freeze {
+                "twokey-text-freeze"
+            } else {
+                "twokey-text-grouped-agg"
+            },
             multikey_text_guard(),
             rte.relid,
             ngroups,
@@ -3734,7 +3935,11 @@ fn classify_covered(run: &mut PlannerRun<'_>) -> PgResult<bool> {
         return finish_knob_path(
             run,
             "decoroot",
-            if n_text > 0 { "scan-grouped-text-decorated" } else { "scan-grouped-int-decorated" },
+            if n_text > 0 {
+                "scan-grouped-text-decorated"
+            } else {
+                "scan-grouped-int-decorated"
+            },
             class_guard(class),
             rte.relid,
             ngroups,
@@ -3812,7 +4017,11 @@ fn classify_covered(run: &mut PlannerRun<'_>) -> PgResult<bool> {
         return finish_knob_path(
             run,
             "groupedavg",
-            if topn { "avgint-grouped-topn" } else { "avgint-grouped-agg" },
+            if topn {
+                "avgint-grouped-topn"
+            } else {
+                "avgint-grouped-agg"
+            },
             class_guard(class),
             rte.relid,
             ngroups,
@@ -3891,7 +4100,10 @@ fn classify_join_covered<'mcx>(
 fn nlidx_enabled() -> bool {
     static KILLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     !*KILLED.get_or_init(|| {
-        matches!(std::env::var("PGRUST_LANE_V2_NLIDX").as_deref(), Ok("0") | Ok("off"))
+        matches!(
+            std::env::var("PGRUST_LANE_V2_NLIDX").as_deref(),
+            Ok("0") | Ok("off")
+        )
     })
 }
 
@@ -3904,7 +4116,10 @@ fn nlidx_enabled() -> bool {
 fn nlidx_exec_live() -> bool {
     static KILLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     !*KILLED.get_or_init(|| {
-        matches!(std::env::var("PGRUST_RUNTIME_NLINDEX").as_deref(), Ok("0") | Ok("off"))
+        matches!(
+            std::env::var("PGRUST_RUNTIME_NLINDEX").as_deref(),
+            Ok("0") | Ok("off")
+        )
     })
 }
 
@@ -3939,7 +4154,10 @@ fn nlidx_min_driver_pages() -> f64 {
 /// economics are the inline polarity guards above (driver/probe shaped,
 /// two-sided — FloorGuard's single rows/pages slots cannot carry them).
 fn nlidx_guard() -> FloorGuard {
-    FloorGuard { min_dop: 8, ..NO_GUARD }
+    FloorGuard {
+        min_dop: 8,
+        ..NO_GUARD
+    }
 }
 
 /// NLIDX named-refusal diagnostics (the `refuse_scanpass` discipline:
@@ -3988,17 +4206,26 @@ fn refuse_scanpass(why: &str) -> PgResult<bool> {
 /// arm of this recognizer keeps Gather; the reasons are the endgame §3.3
 /// "no class routed by accident" surface and the future arm's admission
 /// gates in embryo.
-fn classify_scanpass(parse: &Query<'_>, rti: usize, is_cb: bool, has_quals: bool) -> PgResult<bool> {
+fn classify_scanpass(
+    parse: &Query<'_>,
+    rti: usize,
+    is_cb: bool,
+    has_quals: bool,
+) -> PgResult<bool> {
     // Heap rels: the incumbent per-row drive owns them
     // (STANDALONE_SCAN_NO_UPSIDE — the row loop carries the identical
     // kernels; lanev2.rs:867). Not this arm's estate even if it existed.
     if !is_cb {
-        return refuse_scanpass("heap rel — incumbent row drive owns it (STANDALONE_SCAN_NO_UPSIDE)");
+        return refuse_scanpass(
+            "heap rel — incumbent row drive owns it (STANDALONE_SCAN_NO_UPSIDE)",
+        );
     }
     // Full sort with no LIMIT (the bounded shape was keyed above): the
     // uncovered fullsort-shape-b row, owned by the sort-arm program.
     if !parse.sortClause.is_nil() {
-        return refuse_scanpass("ordered passthrough (fullsort-shape-b) — sort-arm program owns it");
+        return refuse_scanpass(
+            "ordered passthrough (fullsort-shape-b) — sort-arm program owns it",
+        );
     }
     // Projection that is not a bare column reference: no vectorized
     // projection kernel is wired on a row-returning passthrough (the future
@@ -4123,7 +4350,9 @@ fn classify_join_sides<'mcx>(
         if ::nodehash::estimate_runtime_hj_build_peak_bytes(rel.rows.max(1.0), width)
             > ::nodehash::get_hash_memory_limit().saturating_mul(dop.max(1) as usize + 1) as u64
         {
-            return refuse_join("build estimate within the demote-unsafe envelope band (boundary guard)");
+            return refuse_join(
+                "build estimate within the demote-unsafe envelope band (boundary guard)",
+            );
         }
     }
     // >=1 hashjoinable int-family equi clause between the two sides in the
@@ -4150,10 +4379,7 @@ fn classify_join_sides<'mcx>(
             } else {
                 match q.as_bool_expr() {
                     Some(be)
-                        if matches!(
-                            be.boolop,
-                            types_nodes::primnodes::BoolExprType::AND_EXPR
-                        ) =>
+                        if matches!(be.boolop, types_nodes::primnodes::BoolExprType::AND_EXPR) =>
                     {
                         be.args.iter().collect()
                     }
@@ -4163,7 +4389,9 @@ fn classify_join_sides<'mcx>(
         }
     };
     for &qual in &quals {
-        let Some(op) = qual.as_op_expr() else { continue };
+        let Some(op) = qual.as_op_expr() else {
+            continue;
+        };
         if op.args.len() != 2 {
             continue;
         }
@@ -4247,14 +4475,14 @@ fn classify_join_sides<'mcx>(
     let mut n = 0usize;
     let mut n_numeric = 0usize;
     for tle_node in &parse.targetList {
-        let Some(tle) = tle_node.as_target_entry() else { return Ok(false) };
+        let Some(tle) = tle_node.as_target_entry() else {
+            return Ok(false);
+        };
         if is_whitelisted_agg_2rti(tle.expr, rti_l, rti_r, PLAIN_FOLD_AGGS) {
             n += 1;
             continue;
         }
-        if aggjoin_numeric_enabled()
-            && is_numeric_expr_agg_nrti(run, tle.expr, &[rti_l, rti_r])?
-        {
+        if aggjoin_numeric_enabled() && is_numeric_expr_agg_nrti(run, tle.expr, &[rti_l, rti_r])? {
             n += 1;
             n_numeric += 1;
             continue;
@@ -4307,7 +4535,11 @@ fn classify_join_sides<'mcx>(
         return finish_knob_path(
             run,
             "jheap",
-            if n_numeric > 0 { "plainjoin-heap+numeric" } else { "plainjoin-heap" },
+            if n_numeric > 0 {
+                "plainjoin-heap+numeric"
+            } else {
+                "plainjoin-heap"
+            },
             jheap_guard(),
             relids[0],
             0.0,
@@ -4440,9 +4672,13 @@ pub(crate) fn m5_suppress_gather_nlidx(
             best = Some((c, pid));
         }
     }
-    let Some((_, mut top_id)) = best else { return Ok(false) };
+    let Some((_, mut top_id)) = best else {
+        return Ok(false);
+    };
     if let types_pathnodes::PathNode::ProjectionPath(pp) = run.root.path(top_id) {
-        let Some(sub) = pp.subpath else { return Ok(false) };
+        let Some(sub) = pp.subpath else {
+            return Ok(false);
+        };
         top_id = sub;
     }
     let types_pathnodes::PathNode::NestPath(np) = run.root.path(top_id) else {
@@ -4451,8 +4687,7 @@ pub(crate) fn m5_suppress_gather_nlidx(
     if np.jpath.jointype != types_nodes::JoinType::JOIN_INNER as u32 {
         return refuse_nlidx("serial NL is not INNER");
     }
-    let (Some(outer_id), Some(inner_id)) = (np.jpath.outerjoinpath, np.jpath.innerjoinpath)
-    else {
+    let (Some(outer_id), Some(inner_id)) = (np.jpath.outerjoinpath, np.jpath.innerjoinpath) else {
         return Ok(false);
     };
     // The scanjoin-target application may wrap the outer in a Projection
@@ -4460,7 +4695,9 @@ pub(crate) fn m5_suppress_gather_nlidx(
     // emits the bare SeqScan node, as the serial EXPLAIN shows).
     let mut outer_id = outer_id;
     if let types_pathnodes::PathNode::ProjectionPath(pp) = run.root.path(outer_id) {
-        let Some(sub) = pp.subpath else { return Ok(false) };
+        let Some(sub) = pp.subpath else {
+            return Ok(false);
+        };
         outer_id = sub;
     }
     let outer_parent = match run.root.path(outer_id) {
@@ -4477,9 +4714,9 @@ pub(crate) fn m5_suppress_gather_nlidx(
     }
     match run.root.path(inner_id) {
         types_pathnodes::PathNode::IndexPath(ip) => {
-            let btree = ip
-                .indexinfo
-                .is_some_and(|ix| ix.relam == BTREE_AM_OID && ix.indexprs.is_empty() && ix.indpred.is_empty());
+            let btree = ip.indexinfo.is_some_and(|ix| {
+                ix.relam == BTREE_AM_OID && ix.indexprs.is_empty() && ix.indpred.is_empty()
+            });
             if !btree {
                 return refuse_nlidx("serial NL inner index is not a plain btree");
             }
@@ -4512,7 +4749,11 @@ pub(crate) fn m5_suppress_gather_nlidx(
         run,
         "nlidx",
         "nlidx-plain",
-        FloorGuard { min_dop: 8, min_pages: nlidx_min_driver_pages(), ..NO_GUARD },
+        FloorGuard {
+            min_dop: 8,
+            min_pages: nlidx_min_driver_pages(),
+            ..NO_GUARD
+        },
         relid,
         0.0,
         rows,
@@ -4579,7 +4820,9 @@ fn classify_nlidx_shape_uncached(run: &mut PlannerRun<'_>) -> PgResult<bool> {
     }
     // 2-rel INNER form: two flat RangeTblRefs, or one INNER JoinExpr over
     // two RangeTblRefs (the two forms the planner leaves at probe time).
-    let Some(top) = parse.jointree else { return Ok(false) };
+    let Some(top) = parse.jointree else {
+        return Ok(false);
+    };
     let (rti_l, rti_r, quals_node) = if top.fromlist.len() == 2 {
         let (Some(ra), Some(rb)) = (
             top.fromlist.nth(0).as_range_tbl_ref(),
@@ -4589,12 +4832,13 @@ fn classify_nlidx_shape_uncached(run: &mut PlannerRun<'_>) -> PgResult<bool> {
         };
         (ra.rtindex as usize, rb.rtindex as usize, top.quals)
     } else if top.fromlist.len() == 1 {
-        let Some(je) = top.fromlist.nth(0).as_join_expr() else { return Ok(false) };
+        let Some(je) = top.fromlist.nth(0).as_join_expr() else {
+            return Ok(false);
+        };
         if je.jointype != types_nodes::JoinType::JOIN_INNER {
             return refuse_nlidx("join family");
         }
-        let (Some(ra), Some(rb)) = (je.larg.as_range_tbl_ref(), je.rarg.as_range_tbl_ref())
-        else {
+        let (Some(ra), Some(rb)) = (je.larg.as_range_tbl_ref(), je.rarg.as_range_tbl_ref()) else {
             return Ok(false);
         };
         (ra.rtindex as usize, rb.rtindex as usize, je.quals)
@@ -4630,7 +4874,9 @@ fn classify_nlidx_shape_uncached(run: &mut PlannerRun<'_>) -> PgResult<bool> {
     let mut n = 0usize;
     let mut n_numeric = 0usize;
     for tle_node in &parse.targetList {
-        let Some(tle) = tle_node.as_target_entry() else { return Ok(false) };
+        let Some(tle) = tle_node.as_target_entry() else {
+            return Ok(false);
+        };
         if is_whitelisted_agg_2rti(tle.expr, rti_l, rti_r, PLAIN_FOLD_AGGS) {
             n += 1;
             continue;
@@ -4650,7 +4896,9 @@ fn classify_nlidx_shape_uncached(run: &mut PlannerRun<'_>) -> PgResult<bool> {
         {
             return refuse_nlidx("tlist entry not a whitelisted plain agg");
         }
-        let Some(arg_tle) = agg.args.nth(0).as_target_entry() else { return Ok(false) };
+        let Some(arg_tle) = agg.args.nth(0).as_target_entry() else {
+            return Ok(false);
+        };
         if !crate::is_parallel_safe_opt(run, Some(arg_tle.expr))? {
             return refuse_nlidx("numeric agg arg not parallel-safe");
         }
@@ -4704,7 +4952,8 @@ fn finish_seat_lifted(run: &mut PlannerRun<'_>, relid: u32, rows: f64) -> PgResu
     // whitelist verdict here IS the seat's suppress (true); the curve prices
     // the identical shape. OBSERVATION ONLY — the seat's verdict is already
     // returned below and nothing here is read back into it.
-    if covered && size_floors_enabled()
+    if covered
+        && size_floors_enabled()
         && !matches!(rtm::cost_route_mode(), rtm::CostRouteMode::Off)
     {
         let dop = guc_tables::runtime_pool::runtime_dop();
@@ -4788,7 +5037,9 @@ fn collect_inner_chain<'mcx>(
     if je.jointype != types_nodes::JoinType::JOIN_INNER {
         return false;
     }
-    let Some(rarg) = je.rarg.as_range_tbl_ref() else { return false };
+    let Some(rarg) = je.rarg.as_range_tbl_ref() else {
+        return false;
+    };
     push_and_terms(je.quals, out_quals);
     let deep_ok = if let Some(inner) = je.larg.as_join_expr() {
         collect_inner_chain(inner, rtis, out_quals)
@@ -4806,7 +5057,9 @@ fn collect_inner_chain<'mcx>(
 /// multibuild row): the aggregate's single Var arg may live on any joined
 /// rel.
 fn is_whitelisted_agg_nrti(expr: Node<'_>, rtis: &[usize], whitelist: &[u32]) -> bool {
-    let Some(agg) = expr.as_aggref() else { return false };
+    let Some(agg) = expr.as_aggref() else {
+        return false;
+    };
     if !whitelist.contains(&agg.aggfnoid) {
         return false;
     }
@@ -4832,7 +5085,9 @@ fn is_numeric_expr_agg_nrti<'mcx>(
     expr: Node<'mcx>,
     rtis: &[usize],
 ) -> PgResult<bool> {
-    let Some(agg) = expr.as_aggref() else { return Ok(false) };
+    let Some(agg) = expr.as_aggref() else {
+        return Ok(false);
+    };
     if !matches!(agg.aggfnoid, F_AVG_NUMERIC | F_SUM_NUMERIC)
         || agg.agglevelsup != 0
         || agg.aggkind != AGGKIND_NORMAL
@@ -4845,7 +5100,9 @@ fn is_numeric_expr_agg_nrti<'mcx>(
     {
         return Ok(false);
     }
-    let Some(arg_tle) = agg.args.nth(0).as_target_entry() else { return Ok(false) };
+    let Some(arg_tle) = agg.args.nth(0).as_target_entry() else {
+        return Ok(false);
+    };
     if !crate::is_parallel_safe_opt(run, Some(arg_tle.expr))? {
         return Ok(false);
     }
@@ -4902,7 +5159,9 @@ fn multibuild_enabled() -> bool {
 /// measured win — see notes/se-scanpass.md §4).
 fn scanpass_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| scanpass_spelling_on(std::env::var("PGRUST_LANE_V2_SCANPASS").as_deref().ok()))
+    *ON.get_or_init(|| {
+        scanpass_spelling_on(std::env::var("PGRUST_LANE_V2_SCANPASS").as_deref().ok())
+    })
 }
 
 /// The default-OFF spelling rule, factored pure for exhaustive unit tests:
@@ -4966,7 +5225,9 @@ fn classify_multibuild<'mcx>(
     let mut n = 0usize;
     let mut n_numeric = 0usize;
     for tle_node in &parse.targetList {
-        let Some(tle) = tle_node.as_target_entry() else { return Ok(false) };
+        let Some(tle) = tle_node.as_target_entry() else {
+            return Ok(false);
+        };
         if is_whitelisted_agg_nrti(tle.expr, rtis, PLAIN_FOLD_AGGS) {
             n += 1;
             continue;
@@ -4988,7 +5249,11 @@ fn classify_multibuild<'mcx>(
         return finish_knob_path(
             run,
             "jheap",
-            if n_numeric > 0 { "multibuild-heap+numeric" } else { "multibuild-heap" },
+            if n_numeric > 0 {
+                "multibuild-heap+numeric"
+            } else {
+                "multibuild-heap"
+            },
             jheap_guard(),
             relids[0],
             0.0,
@@ -5008,7 +5273,15 @@ fn classify_multibuild<'mcx>(
             0.0,
         );
     }
-    finish(run, CoverClass::CbHashJoinMultiBuild, relids[0], 0.0, max_rows, 0.0, true)
+    finish(
+        run,
+        CoverClass::CbHashJoinMultiBuild,
+        relids[0],
+        0.0,
+        max_rows,
+        0.0,
+        true,
+    )
 }
 
 /// The multibuild per-relation guards, shared by the plain and grouped rows
@@ -5159,16 +5432,13 @@ fn jheap_shape_guards<'mcx>(
                 let hit = |e: Node<'mcx>| rtis.iter().position(|&rti| key_var(e, rti).is_some());
                 if let (Some(ia), Some(ib)) = (hit(a), hit(b)) {
                     if ia != ib {
-                        if let (Some(va), Some(vb)) =
-                            (key_var(a, rtis[ia]), key_var(b, rtis[ib]))
-                        {
+                        if let (Some(va), Some(vb)) = (key_var(a, rtis[ia]), key_var(b, rtis[ib])) {
                             if is_int_family(va.vartype)
                                 && is_int_family(vb.vartype)
                                 && lsyscache::op_hashjoinable(op.opno, va.vartype)?
                             {
                                 if (heap_idx(ia) || heap_idx(ib))
-                                    && (!key_var_estimable(run, a)?
-                                        || !key_var_estimable(run, b)?)
+                                    && (!key_var_estimable(run, a)? || !key_var_estimable(run, b)?)
                                 {
                                     return refuse_join(
                                         "heap join key without statistics (X6, heap-flavored)",
@@ -5202,7 +5472,9 @@ fn jheap_shape_guards<'mcx>(
             vars::pull_varattnos(run.mcx, q, rti as i32, &mut all_bm)?;
         }
         for tle_node in &parse.targetList {
-            let Some(tle) = tle_node.as_target_entry() else { return Ok(false) };
+            let Some(tle) = tle_node.as_target_entry() else {
+                return Ok(false);
+            };
             vars::pull_varattnos(run.mcx, tle.expr, rti as i32, &mut all_bm)?;
         }
         for m in all_bm.iter() {
@@ -5250,7 +5522,9 @@ fn jheap_shape_guards<'mcx>(
             }
             // Referenced set = residuals + tlist (all_bm) + the join keys.
             let covers_all = all_bm.iter().all(|m| keys.iter().any(|&k| k == raw(m)))
-                && join_attnos.iter().all(|&j| keys.iter().any(|&k| k == i32::from(j)));
+                && join_attnos
+                    .iter()
+                    .all(|&j| keys.iter().any(|&k| k == i32::from(j)));
             if covers_all {
                 return refuse_join("heap covering index (index-only scan electable)");
             }
@@ -5262,8 +5536,7 @@ fn jheap_shape_guards<'mcx>(
                 if !keys[..nkey].iter().any(|&k| k == i32::from(attno)) {
                     continue;
                 }
-                let Some(p_rel) = run.root.simple_rel_array.get(rtis[p]).copied().flatten()
-                else {
+                let Some(p_rel) = run.root.simple_rel_array.get(rtis[p]).copied().flatten() else {
                     return Ok(false);
                 };
                 let p_rows = run.root.rel(p_rel).rows.max(0.0);
@@ -5291,13 +5564,17 @@ fn equi_graph_connected(rtis: &[usize], quals: &[Node<'_>]) -> PgResult<bool> {
     }
     let mut uf: Vec<usize> = (0..rtis.len()).collect();
     for &qual in quals {
-        let Some(op) = qual.as_op_expr() else { continue };
+        let Some(op) = qual.as_op_expr() else {
+            continue;
+        };
         if op.args.len() != 2 {
             continue;
         }
         let (a, b) = (op.args.nth(0), op.args.nth(1));
         let hit = |e: Node<'_>| rtis.iter().position(|&rti| key_var(e, rti).is_some());
-        let (Some(ia), Some(ib)) = (hit(a), hit(b)) else { continue };
+        let (Some(ia), Some(ib)) = (hit(a), hit(b)) else {
+            continue;
+        };
         if ia == ib {
             continue;
         }
@@ -5345,13 +5622,17 @@ fn equi_graph_connected(rtis: &[usize], quals: &[Node<'_>]) -> PgResult<bool> {
 fn ec_disjoint_equi_edges(rtis: &[usize], quals: &[Node<'_>]) -> PgResult<Option<usize>> {
     let mut edges: Vec<((usize, i32), (usize, i32))> = Vec::new();
     for &qual in quals {
-        let Some(op) = qual.as_op_expr() else { continue };
+        let Some(op) = qual.as_op_expr() else {
+            continue;
+        };
         if op.args.len() != 2 {
             continue;
         }
         let (a, b) = (op.args.nth(0), op.args.nth(1));
         let hit = |e: Node<'_>| rtis.iter().position(|&rti| key_var(e, rti).is_some());
-        let (Some(ia), Some(ib)) = (hit(a), hit(b)) else { continue };
+        let (Some(ia), Some(ib)) = (hit(a), hit(b)) else {
+            continue;
+        };
         if ia == ib {
             continue;
         }
@@ -5417,10 +5698,7 @@ const GROUPSINK_NGROUPS_FLOOR: f64 = 65_536.0;
 /// harvests stadistinct and is the class's admission ticket — GL-AGGJOIN-1
 /// leg (c) verifies the fleet fixtures key). Any key without one keeps
 /// Gather.
-fn key_var_estimable<'mcx>(
-    run: &mut PlannerRun<'mcx>,
-    v_node: Node<'mcx>,
-) -> PgResult<bool> {
+fn key_var_estimable<'mcx>(run: &mut PlannerRun<'mcx>, v_node: Node<'mcx>) -> PgResult<bool> {
     let id = run.intern_expr(v_node);
     let vd = crate::selfuncs::examine_variable(run, id, v_node, 0)?;
     Ok(vd.stats.is_some() || vd.isunique)
@@ -5448,7 +5726,9 @@ fn classify_filter_term<'mcx>(
     let strip = |e: Node<'mcx>| e.as_relabel_type().map_or(e, |r| r.arg);
     let var_side = |e: Node<'mcx>| {
         let e = strip(e);
-        rtis.iter().position(|&rti| key_var(e, rti).is_some()).map(|i| (i, e))
+        rtis.iter()
+            .position(|&rti| key_var(e, rti).is_some())
+            .map(|i| (i, e))
     };
     let const_ok = |e: Node<'mcx>| e.as_const().is_some_and(|c| !c.constisnull);
     let (i, v_node) = if let Some(op) = qual.as_op_expr() {
@@ -5507,9 +5787,8 @@ fn classify_aggjoin_grouped<'mcx>(
     if !parse.hasAggs || parse.groupClause.is_nil() || !parse.distinctClause.is_nil() {
         return refuse_join("not a bare grouped aggregation");
     }
-    let decorated = !parse.sortClause.is_nil()
-        || parse.limitCount.is_some()
-        || parse.limitOffset.is_some();
+    let decorated =
+        !parse.sortClause.is_nil() || parse.limitCount.is_some() || parse.limitOffset.is_some();
     if decorated && !decoroot_enabled() {
         return refuse_join("not a bare grouped aggregation");
     }
@@ -5605,7 +5884,9 @@ fn classify_aggjoin_grouped<'mcx>(
     let mut n_bytes_keys = 0usize;
     let mut n_bpchar_keys = 0usize;
     for gc_node in &parse.groupClause {
-        let Some(gc) = gc_node.as_sort_group_clause() else { return Ok(false) };
+        let Some(gc) = gc_node.as_sort_group_clause() else {
+            return Ok(false);
+        };
         let Some(tle) = tle_by_sortgroupref(parse, gc.tleSortGroupRef) else {
             return Ok(false);
         };
@@ -5660,7 +5941,9 @@ fn classify_aggjoin_grouped<'mcx>(
     let mut n_aggs = 0usize;
     let mut n_numeric = 0usize;
     for tle_node in &parse.targetList {
-        let Some(tle) = tle_node.as_target_entry() else { return Ok(false) };
+        let Some(tle) = tle_node.as_target_entry() else {
+            return Ok(false);
+        };
         if tle.ressortgroupref != 0 && key_refs.contains(&tle.ressortgroupref) {
             if rtis.iter().all(|&rti| key_var(tle.expr, rti).is_none()) {
                 return Ok(false);
@@ -5690,8 +5973,7 @@ fn classify_aggjoin_grouped<'mcx>(
     let ngroups = if run.root.processed_groupClause.is_empty() {
         1.0
     } else {
-        let clauses =
-            crate::relnode::pgvec_clone_shallow(run.mcx, &run.root.processed_groupClause);
+        let clauses = crate::relnode::pgvec_clone_shallow(run.mcx, &run.root.processed_groupClause);
         let group_exprs =
             types_pathnodes::run::sortgrouplist_exprs(run, &clauses, &parse.targetList);
         crate::selfuncs::estimate_num_groups(run, &group_exprs, max_rows.max(1.0))?
@@ -5704,7 +5986,9 @@ fn classify_aggjoin_grouped<'mcx>(
     // can elect Sort+GroupAggregate the walk refuses — suppress-then-refuse,
     // costing flavor); require the hash election safely dominant.
     if decorated && ngroups * DECOROOT_NGROUPS_MARGIN > max_rows {
-        return refuse_join("decorated root without hash-election margin (ngroups too close to input)");
+        return refuse_join(
+            "decorated root without hash-election margin (ngroups too close to input)",
+        );
     }
     // Knob-admitted shapes route through the dedicated knob-path finishes
     // (own trace tags, greppable apart from the bootstrap `m5-suppress:`
@@ -5772,8 +6056,14 @@ fn classify_aggjoin_grouped<'mcx>(
         if n_numeric > 0 {
             label.push_str("+numeric");
         }
-        let guard = if heap.is_empty() { cbkeys_guard() } else { jheap_guard() };
-        return finish_knob_path(run, "cbkeys", &label, guard, relids[0], ngroups, max_rows, 0.0);
+        let guard = if heap.is_empty() {
+            cbkeys_guard()
+        } else {
+            jheap_guard()
+        };
+        return finish_knob_path(
+            run, "cbkeys", &label, guard, relids[0], ngroups, max_rows, 0.0,
+        );
     }
     if !heap.is_empty() {
         let label = match (decorated, n_numeric > 0) {
@@ -5820,14 +6110,18 @@ fn classify_aggjoin_grouped<'mcx>(
     // live — every kill posture already keeps Gather via the rectangle,
     // and the HJRIDER A/B vehicles keep their pre-letter behavior.
     const NGROUPS_LIFT_MAX: f64 = 1024.0;
-    if !hjrider_curve_enabled()
-        && mbshared_live()
-        && mbseat_live()
-        && ngroups > NGROUPS_LIFT_MAX
-    {
+    if !hjrider_curve_enabled() && mbshared_live() && mbseat_live() && ngroups > NGROUPS_LIFT_MAX {
         return refuse_join("grouped ngroups above the seated win region (curve path)");
     }
-    finish(run, CoverClass::CbHashJoinGroupedAgg, relids[0], ngroups, max_rows, 0.0, true)
+    finish(
+        run,
+        CoverClass::CbHashJoinGroupedAgg,
+        relids[0],
+        ngroups,
+        max_rows,
+        0.0,
+        true,
+    )
 }
 
 /// Step-1 cost-route map: which fitted crossover curve
@@ -5851,7 +6145,11 @@ fn cover_class_curve(class: CoverClass) -> Option<costsize::runtime_model::Runti
         // the class routes by its guarded-off rectangle. The one-train
         // kill restores the refuted wiring for A/B vehicles only.
         CoverClass::CbHashJoinMultiBuild => {
-            if hjrider_curve_enabled() { Some(Rc::CbHashJoinPlainAgg) } else { None }
+            if hjrider_curve_enabled() {
+                Some(Rc::CbHashJoinPlainAgg)
+            } else {
+                None
+            }
         }
         // GL-MBSEAT-1 GUARD LIFT: the grouped rider decides by its OWN
         // fitted curve — valid ONLY on the seated arm (both seat-world
@@ -6067,7 +6365,11 @@ pub mod cost_shadow {
 
     /// Take (and clear) the last sample. `None` whenever the knob is off.
     pub fn take_last_sample() -> Option<ExplainSample> {
-        if explain_armed() { LAST_SAMPLE.take() } else { None }
+        if explain_armed() {
+            LAST_SAMPLE.take()
+        } else {
+            None
+        }
     }
 }
 
@@ -6196,7 +6498,11 @@ fn serial_shadow_tail(
             v.t_runtime.map_or("na".to_string(), |t| format!("{t:.1}")),
             v.t_gather,
             v.pick.name(),
-            if enforced_suppress { "suppress" } else { "gather" },
+            if enforced_suppress {
+                "suppress"
+            } else {
+                "gather"
+            },
             serial_shadow::agrees(enforced_suppress, v.pick),
         );
     }
@@ -6254,7 +6560,16 @@ fn finish(
     // plan-time META-band mirror (unqualed, or estimated survival ~1).
     serial_applies: bool,
 ) -> PgResult<bool> {
-    finish_out(run, class, relid, ngroups, rows, pages, serial_applies, None)
+    finish_out(
+        run,
+        class,
+        relid,
+        ngroups,
+        rows,
+        pages,
+        serial_applies,
+        None,
+    )
 }
 
 /// [`finish`] with the R2 output-cardinality input (None = OUT := rows,
@@ -6314,7 +6629,12 @@ fn finish_out(
                 // 0|off restores the regime-gated two-way for one train.
                 let v = if rtm::threeway_enabled() {
                     rtm::cost_route_verdict_threeway_out(
-                        curve, rows, dop, arm_admits, serial_applies, out_rows,
+                        curve,
+                        rows,
+                        dop,
+                        arm_admits,
+                        serial_applies,
+                        out_rows,
                     )
                 } else {
                     rtm::cost_route_verdict_regime(curve, rows, dop, arm_admits)
@@ -6333,8 +6653,7 @@ fn finish_out(
                 let cost_suppress = v.suppress
                     && (class != CoverClass::HeapPlainCountStar
                         || pages >= rtm::HEAP_COUNT_ADMISSION_MIN_PAGES)
-                    && (class != CoverClass::CbTopnBoundedIntKeys
-                        || rtm::topn_car_k_band(ngroups));
+                    && (class != CoverClass::CbTopnBoundedIntKeys || rtm::topn_car_k_band(ngroups));
                 if rtm::cost_route_decides(curve) && size_floors_enabled() {
                     suppress = cost_suppress;
                     decided_by = "cost";
@@ -6416,7 +6735,16 @@ fn finish_textdistinct(
     rows: f64,
     pages: f64,
 ) -> PgResult<bool> {
-    finish_knob_path(run, "textdistinct", label, guard, relid, ngroups, rows, pages)
+    finish_knob_path(
+        run,
+        "textdistinct",
+        label,
+        guard,
+        relid,
+        ngroups,
+        rows,
+        pages,
+    )
 }
 
 /// The shared knob-path finish body (SE-TEXTDISTINCT precedent, extracted
@@ -6581,7 +6909,9 @@ fn distinct_plainshape_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
         tier2_car_kill_spelling_on(
-            std::env::var("PGRUST_LANE_V2_DISTINCT_PLAINSHAPE").as_deref().ok(),
+            std::env::var("PGRUST_LANE_V2_DISTINCT_PLAINSHAPE")
+                .as_deref()
+                .ok(),
         )
     })
 }
@@ -6601,7 +6931,11 @@ fn plaindistinct_engine_live() -> bool {
 /// economics (the textdistinct guard verbatim — same sink family, same
 /// engagement shape). The fleet letter owns re-measuring.
 fn distinct_plainshape_guard() -> FloorGuard {
-    FloorGuard { min_dop: 12, low_dop_max_rows: 3_000_000.0, ..NO_GUARD }
+    FloorGuard {
+        min_dop: 12,
+        low_dop_max_rows: 3_000_000.0,
+        ..NO_GUARD
+    }
 }
 
 /// CAR B knob (`PGRUST_LANE_V2_AGG_STRMINMAX`, DEFAULT ON since the
@@ -6623,7 +6957,9 @@ fn agg_strminmax_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
         tier2_car_kill_spelling_on(
-            std::env::var("PGRUST_LANE_V2_AGG_STRMINMAX").as_deref().ok(),
+            std::env::var("PGRUST_LANE_V2_AGG_STRMINMAX")
+                .as_deref()
+                .ok(),
         )
     })
 }
@@ -6641,7 +6977,9 @@ fn agg_sort_nolimit_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
         tier2_car_kill_spelling_on(
-            std::env::var("PGRUST_LANE_V2_AGG_SORT_NOLIMIT").as_deref().ok(),
+            std::env::var("PGRUST_LANE_V2_AGG_SORT_NOLIMIT")
+                .as_deref()
+                .ok(),
         )
     })
 }
@@ -6724,7 +7062,9 @@ fn classify_distinct_plain<'mcx>(
     if tle.ressortgroupref == 0 || tle.ressortgroupref != dc.tleSortGroupRef {
         return Ok(None);
     }
-    let Some(v) = key_var(tle.expr, rti) else { return Ok(None) };
+    let Some(v) = key_var(tle.expr, rti) else {
+        return Ok(None);
+    };
     let type_ok = is_int_family(v.vartype)
         || (is_text_family(v.vartype) && v.varcollid == DEFAULT_COLLATION_OID);
     if !type_ok {
@@ -6768,7 +7108,9 @@ fn key_var<'mcx>(expr: Node<'mcx>, rti: usize) -> Option<&'mcx Var<'mcx>> {
 /// semantics), text/varlena consts (canonical-bytes derivation untested for
 /// consts), and every other type fail closed.
 fn is_admissible_const_key(expr: Node<'_>) -> bool {
-    let Some(c) = expr.as_const() else { return false };
+    let Some(c) = expr.as_const() else {
+        return false;
+    };
     !c.constisnull && is_int_family(c.consttype)
 }
 
@@ -6780,7 +7122,9 @@ fn is_covered_key_var(expr: Node<'_>, rti: usize, type_ok: impl Fn(u32) -> bool)
 /// no ORDER BY/DISTINCT/FILTER/variadic/ordered-set decoration, args
 /// either empty (count(*)) or a single int-family Var on the scanned rel.
 pub(crate) fn is_whitelisted_agg(expr: Node<'_>, rti: usize, whitelist: &[u32]) -> bool {
-    let Some(agg) = expr.as_aggref() else { return false };
+    let Some(agg) = expr.as_aggref() else {
+        return false;
+    };
     aggref_plain(agg, rti) && whitelist.contains(&agg.aggfnoid)
 }
 
@@ -6806,7 +7150,9 @@ const F_INT42MI_FN: u32 = 183;
 /// with divk == 1. Refuses when the walk would (empty safe interval), via
 /// the SAME lanefold guard math, so probe ⊂ walk holds coefficient-exactly.
 fn meta_affine_int4_arg(expr: Node<'_>, rti: usize) -> bool {
-    let Some(op) = expr.as_op_expr() else { return false };
+    let Some(op) = expr.as_op_expr() else {
+        return false;
+    };
     if op.opretset || op.args.len() != 2 {
         return false;
     }
@@ -6827,13 +7173,18 @@ fn meta_affine_int4_arg(expr: Node<'_>, rti: usize) -> bool {
     if !is_covered_key_var(var, rti, |t| t == vartype) {
         return false;
     }
-    let Some(c) = konst.as_const() else { return false };
+    let Some(c) = konst.as_const() else {
+        return false;
+    };
     if c.constisnull || c.consttype != INT4OID {
         return false;
     }
     let (addend, mulk) = mk(c.constvalue.as_i32() as i64);
-    let width =
-        if vartype == INT2OID { ::lanefold::LaneWidth::I16 } else { ::lanefold::LaneWidth::I32 };
+    let width = if vartype == INT2OID {
+        ::lanefold::LaneWidth::I16
+    } else {
+        ::lanefold::LaneWidth::I32
+    };
     if ::lanefold::type_proof(width, addend, mulk, 1) {
         return true;
     }
@@ -6848,7 +7199,9 @@ fn meta_affine_int4_arg(expr: Node<'_>, rti: usize) -> bool {
 /// transform; sum/avg(int2) and sum/avg(int8) over bare Vars of their type
 /// (classify_arg admits OpExprs for INT4-expected args only).
 fn is_meta_footer_agg(expr: Node<'_>, rti: usize) -> bool {
-    let Some(agg) = expr.as_aggref() else { return false };
+    let Some(agg) = expr.as_aggref() else {
+        return false;
+    };
     if agg.agglevelsup != 0
         || agg.aggkind != AGGKIND_NORMAL
         || agg.aggvariadic
@@ -6861,7 +7214,11 @@ fn is_meta_footer_agg(expr: Node<'_>, rti: usize) -> bool {
     }
     let one_arg = |ok: &dyn Fn(Node<'_>) -> bool| -> bool {
         agg.args.len() == 1
-            && agg.args.nth(0).as_target_entry().is_some_and(|tle| ok(tle.expr))
+            && agg
+                .args
+                .nth(0)
+                .as_target_entry()
+                .is_some_and(|tle| ok(tle.expr))
     };
     match agg.aggfnoid {
         F_COUNT_STAR => agg.args.is_nil(),
@@ -6885,7 +7242,9 @@ fn is_meta_footer_agg(expr: Node<'_>, rti: usize) -> bool {
 fn tlist_all_meta_footer_aggs(parse: &Query<'_>, rti: usize) -> bool {
     let mut n = 0usize;
     for tle_node in &parse.targetList {
-        let Some(tle) = tle_node.as_target_entry() else { return false };
+        let Some(tle) = tle_node.as_target_entry() else {
+            return false;
+        };
         if !is_meta_footer_agg(tle.expr, rti) {
             return false;
         }
@@ -6898,7 +7257,9 @@ fn tlist_all_meta_footer_aggs(parse: &Query<'_>, rti: usize) -> bool {
 /// one arg, one-entry aggdistinct, no order/filter/variadic decoration —
 /// the runtime distinct sink's aggregate (CbDistinctIntKeys).
 fn is_count_distinct_int(expr: Node<'_>, rti: usize) -> bool {
-    let Some(agg) = expr.as_aggref() else { return false };
+    let Some(agg) = expr.as_aggref() else {
+        return false;
+    };
     if agg.aggfnoid != F_COUNT_ANY
         || agg.agglevelsup != 0
         || agg.aggkind != AGGKIND_NORMAL
@@ -6911,7 +7272,9 @@ fn is_count_distinct_int(expr: Node<'_>, rti: usize) -> bool {
     {
         return false;
     }
-    let Some(arg_tle) = agg.args.nth(0).as_target_entry() else { return false };
+    let Some(arg_tle) = agg.args.nth(0).as_target_entry() else {
+        return false;
+    };
     // GL-LOWDIST-3: datetime args ride the int lanes under the widening
     // knob (is_distinct_arg_int_kind); int-family unchanged at knob-off.
     is_covered_key_var(arg_tle.expr, rti, is_distinct_arg_int_kind)
@@ -6928,7 +7291,9 @@ fn is_count_distinct_int(expr: Node<'_>, rti: usize) -> bool {
 /// `get_collation_isdeterministic` gate is the walk's stricter twin; probe ⊂
 /// walk holds because default-collation IS deterministic).
 fn is_count_distinct_any(expr: Node<'_>, rti: usize) -> bool {
-    let Some(agg) = expr.as_aggref() else { return false };
+    let Some(agg) = expr.as_aggref() else {
+        return false;
+    };
     if agg.aggfnoid != F_COUNT_ANY
         || agg.agglevelsup != 0
         || agg.aggkind != AGGKIND_NORMAL
@@ -6941,8 +7306,12 @@ fn is_count_distinct_any(expr: Node<'_>, rti: usize) -> bool {
     {
         return false;
     }
-    let Some(arg_tle) = agg.args.nth(0).as_target_entry() else { return false };
-    let Some(v) = key_var(arg_tle.expr, rti) else { return false };
+    let Some(arg_tle) = agg.args.nth(0).as_target_entry() else {
+        return false;
+    };
+    let Some(v) = key_var(arg_tle.expr, rti) else {
+        return false;
+    };
     // GL-LOWDIST-3: datetime args under the widening knob (int lanes);
     // GL-LOWDIST-4 B2: text collation admission via the catalog helper.
     is_distinct_arg_int_kind(v.vartype)
@@ -6973,9 +7342,7 @@ fn distinct_arg_collation_ok(collid: u32) -> bool {
             Ok("0") | Ok("off")
         )
     });
-    widened
-        && collid != 0
-        && lsyscache::get_collation_isdeterministic(collid).unwrap_or(false)
+    widened && collid != 0 && lsyscache::get_collation_isdeterministic(collid).unwrap_or(false)
 }
 
 /// SE-TEXTDISTINCT (band 86001) reduced-expr-key affine check: `expr`
@@ -6986,7 +7353,9 @@ fn distinct_arg_collation_ok(collid: u32) -> bool {
 /// int4-only (decide_reduced admits any uniform int width; the probe keeps
 /// to int4, the measured shape). Mul/Div refuse (decide_reduced refuses them too).
 fn reduced_affine_of_var(expr: Node<'_>, rti: usize, base_attno: i16) -> bool {
-    let Some(op) = expr.as_op_expr() else { return false };
+    let Some(op) = expr.as_op_expr() else {
+        return false;
+    };
     if op.opretset || op.args.len() != 2 {
         return false;
     }
@@ -7006,11 +7375,15 @@ fn reduced_affine_of_var(expr: Node<'_>, rti: usize, base_attno: i16) -> bool {
         F_INT4MI_FN => (op.args.nth(0), op.args.nth(1)),
         _ => return false,
     };
-    let Some(v) = key_var(var_node, rti) else { return false };
+    let Some(v) = key_var(var_node, rti) else {
+        return false;
+    };
     if v.varattno != base_attno || v.vartype != INT4OID {
         return false;
     }
-    let Some(c) = konst_node.as_const() else { return false };
+    let Some(c) = konst_node.as_const() else {
+        return false;
+    };
     !c.constisnull && c.consttype == INT4OID
 }
 
@@ -7081,7 +7454,9 @@ fn redkey_affine_dedup_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
         tier2_car_kill_spelling_on(
-            std::env::var("PGRUST_M5_REDKEY_AFFINE_DEDUP").as_deref().ok(),
+            std::env::var("PGRUST_M5_REDKEY_AFFINE_DEDUP")
+                .as_deref()
+                .ok(),
         )
     })
 }
@@ -7122,7 +7497,9 @@ fn classify_reduced_exprkey<'mcx>(
     let mut base_attno: Option<i16> = None;
     let mut n_bare = 0usize;
     for gc_node in &parse.groupClause {
-        let Some(gc) = gc_node.as_sort_group_clause() else { return Ok(None) };
+        let Some(gc) = gc_node.as_sort_group_clause() else {
+            return Ok(None);
+        };
         let Some(tle) = tle_by_sortgroupref(parse, gc.tleSortGroupRef) else {
             return Ok(None);
         };
@@ -7153,7 +7530,9 @@ fn classify_reduced_exprkey<'mcx>(
     // GROUPED_SINK_AGGS: includes avg/sum poly-state int aggs) because the
     // exprkey fold hosts them via lanefold — the census shape has avg(ResolutionWidth).
     for tle_node in &parse.targetList {
-        let Some(tle) = tle_node.as_target_entry() else { return Ok(None) };
+        let Some(tle) = tle_node.as_target_entry() else {
+            return Ok(None);
+        };
         if tle.ressortgroupref != 0 && key_refs.contains(&tle.ressortgroupref) {
             continue;
         }
@@ -7168,9 +7547,7 @@ fn classify_reduced_exprkey<'mcx>(
     // is captured here for the hold exemption below.
     let mut topn_hold_exempt_shape = false;
     if !parse.sortClause.is_nil() || parse.limitCount.is_some() {
-        if parse.sortClause.len() != 1
-            || parse.limitCount.is_none()
-            || parse.limitOffset.is_some()
+        if parse.sortClause.len() != 1 || parse.limitCount.is_none() || parse.limitOffset.is_some()
         {
             return Ok(None);
         }
@@ -7192,8 +7569,7 @@ fn classify_reduced_exprkey<'mcx>(
     let ngroups = if run.root.processed_groupClause.is_empty() {
         1.0
     } else {
-        let clauses =
-            crate::relnode::pgvec_clone_shallow(run.mcx, &run.root.processed_groupClause);
+        let clauses = crate::relnode::pgvec_clone_shallow(run.mcx, &run.root.processed_groupClause);
         let group_exprs =
             types_pathnodes::run::sortgrouplist_exprs(run, &clauses, &parse.targetList);
         let input_rows = run.root.rel(rel_id).rows.max(1.0);
@@ -7205,9 +7581,9 @@ fn classify_reduced_exprkey<'mcx>(
         // full-list estimate — today's behavior.
         let base_idx = redkey_affine_dedup_enabled()
             .then(|| {
-                group_exprs.iter().position(|(_, e)| {
-                    key_var(*e, rti).is_some_and(|v| v.varattno == base_attno)
-                })
+                group_exprs
+                    .iter()
+                    .position(|(_, e)| key_var(*e, rti).is_some_and(|v| v.varattno == base_attno))
             })
             .flatten();
         match base_idx {
@@ -7273,11 +7649,15 @@ const TIMESTAMPOID: u32 = 1114;
 /// errors identically on the suppressed serial plan (byte-identical
 /// behavior either way).
 fn is_extract_ts_key(expr: Node<'_>, rti: usize) -> bool {
-    let Some(f) = expr.as_func_expr() else { return false };
+    let Some(f) = expr.as_func_expr() else {
+        return false;
+    };
     if f.funcid != F_EXTRACT_TIMESTAMP || f.funcretset || f.args.len() != 2 {
         return false;
     }
-    let Some(c) = f.args.nth(0).as_const() else { return false };
+    let Some(c) = f.args.nth(0).as_const() else {
+        return false;
+    };
     if c.constisnull {
         return false;
     }
@@ -7330,7 +7710,9 @@ fn classify_extract_exprkey<'mcx>(
     let mut n_text = 0usize;
     let mut int_widths = 0usize;
     for gc_node in &parse.groupClause {
-        let Some(gc) = gc_node.as_sort_group_clause() else { return Ok(None) };
+        let Some(gc) = gc_node.as_sort_group_clause() else {
+            return Ok(None);
+        };
         let Some(tle) = tle_by_sortgroupref(parse, gc.tleSortGroupRef) else {
             return Ok(None);
         };
@@ -7366,7 +7748,9 @@ fn classify_extract_exprkey<'mcx>(
     // (count(DISTINCT) is not in the fold vocabulary — is_whitelisted_agg
     // refuses aggdistinct decoration, fail-closed).
     for tle_node in &parse.targetList {
-        let Some(tle) = tle_node.as_target_entry() else { return Ok(None) };
+        let Some(tle) = tle_node.as_target_entry() else {
+            return Ok(None);
+        };
         if tle.ressortgroupref != 0 && key_refs.contains(&tle.ressortgroupref) {
             continue;
         }
@@ -7381,9 +7765,7 @@ fn classify_extract_exprkey<'mcx>(
     // here for the hold exemption below.
     let mut topn_hold_exempt_shape = false;
     if !parse.sortClause.is_nil() || parse.limitCount.is_some() {
-        if parse.sortClause.len() != 1
-            || parse.limitCount.is_none()
-            || parse.limitOffset.is_some()
+        if parse.sortClause.len() != 1 || parse.limitCount.is_none() || parse.limitOffset.is_some()
         {
             return Ok(None);
         }
@@ -7405,8 +7787,7 @@ fn classify_extract_exprkey<'mcx>(
     let ngroups = if run.root.processed_groupClause.is_empty() {
         1.0
     } else {
-        let clauses =
-            crate::relnode::pgvec_clone_shallow(run.mcx, &run.root.processed_groupClause);
+        let clauses = crate::relnode::pgvec_clone_shallow(run.mcx, &run.root.processed_groupClause);
         let group_exprs =
             types_pathnodes::run::sortgrouplist_exprs(run, &clauses, &parse.targetList);
         let input_rows = run.root.rel(rel_id).rows.max(1.0);
@@ -7531,11 +7912,15 @@ fn tstrunc_max_pages() -> f64 {
 /// names + plurals only; aliases/abbreviations refuse — strictly narrower
 /// than the arm, which itself degrades per-row on an unrecognized unit).
 fn is_ts_trunc_key(expr: Node<'_>, rti: usize, mcx: mcx::Mcx<'_>) -> bool {
-    let Some(f) = expr.as_func_expr() else { return false };
+    let Some(f) = expr.as_func_expr() else {
+        return false;
+    };
     if f.funcid != F_TIMESTAMP_TRUNC_FN || f.funcretset || f.args.len() != 2 {
         return false;
     }
-    let Some(c) = f.args.nth(0).as_const() else { return false };
+    let Some(c) = f.args.nth(0).as_const() else {
+        return false;
+    };
     if c.constisnull || c.consttype != TEXTOID {
         return false;
     }
@@ -7592,11 +7977,17 @@ fn case_pred_ok(op: &types_nodes::primnodes::OpExpr<'_>, rti: usize) -> bool {
 /// gate — strictly narrower), ELSE a non-null TEXT Const (a NULL default
 /// derives NULL keys the packed image cannot carry — the feed refuses).
 fn is_case_dict_key(expr: Node<'_>, rti: usize) -> bool {
-    let Some(ce) = expr.as_case_expr() else { return false };
+    let Some(ce) = expr.as_case_expr() else {
+        return false;
+    };
     if ce.arg.is_some() || ce.casetype != TEXTOID || ce.args.len() != 1 {
         return false;
     }
-    let Some(when) = ce.args.nth(0).as_variant::<types_nodes::primnodes::CaseWhen>() else {
+    let Some(when) = ce
+        .args
+        .nth(0)
+        .as_variant::<types_nodes::primnodes::CaseWhen>()
+    else {
         return false;
     };
     let Some(cond) = when.expr else { return false };
@@ -7611,7 +8002,9 @@ fn is_case_dict_key(expr: Node<'_>, rti: usize) -> bool {
             return false;
         }
         for a in be.args.iter() {
-            let Some(op) = a.as_op_expr() else { return false };
+            let Some(op) = a.as_op_expr() else {
+                return false;
+            };
             if !case_pred_ok(op, rti) {
                 return false;
             }
@@ -7619,13 +8012,21 @@ fn is_case_dict_key(expr: Node<'_>, rti: usize) -> bool {
     } else {
         return false;
     }
-    let Some(tres) = when.result else { return false };
-    let Some(tv) = key_var(tres, rti) else { return false };
+    let Some(tres) = when.result else {
+        return false;
+    };
+    let Some(tv) = key_var(tres, rti) else {
+        return false;
+    };
     if tv.vartype != TEXTOID || tv.varcollid != DEFAULT_COLLATION_OID {
         return false;
     }
-    let Some(dres) = ce.defresult else { return false };
-    let Some(dc) = dres.as_const() else { return false };
+    let Some(dres) = ce.defresult else {
+        return false;
+    };
+    let Some(dc) = dres.as_const() else {
+        return false;
+    };
     !dc.constisnull && dc.consttype == TEXTOID
 }
 
@@ -7669,7 +8070,9 @@ fn classify_exprkey_topn<'mcx>(
     let mut n_text = 0usize;
     let mut int_widths = 0usize;
     for gc_node in &parse.groupClause {
-        let Some(gc) = gc_node.as_sort_group_clause() else { return Ok(None) };
+        let Some(gc) = gc_node.as_sort_group_clause() else {
+            return Ok(None);
+        };
         let Some(tle) = tle_by_sortgroupref(parse, gc.tleSortGroupRef) else {
             return Ok(None);
         };
@@ -7699,7 +8102,9 @@ fn classify_exprkey_topn<'mcx>(
         }
         key_refs.push(gc.tleSortGroupRef);
     }
-    let Some(kind) = computed else { return Ok(None) };
+    let Some(kind) = computed else {
+        return Ok(None);
+    };
     match kind {
         // The ts-trunc class is the feed's single-computed-key arm.
         Computed::TsTrunc if parse.groupClause.len() != 1 => return Ok(None),
@@ -7736,7 +8141,9 @@ fn classify_exprkey_topn<'mcx>(
     // Emit discipline: keys by sortgroupref, everything else a
     // fold-admissible aggregate.
     for tle_node in &parse.targetList {
-        let Some(tle) = tle_node.as_target_entry() else { return Ok(None) };
+        let Some(tle) = tle_node.as_target_entry() else {
+            return Ok(None);
+        };
         if tle.ressortgroupref != 0 && key_refs.contains(&tle.ressortgroupref) {
             continue;
         }
@@ -7745,8 +8152,7 @@ fn classify_exprkey_topn<'mcx>(
         }
     }
     // Sort/limit composition (block doc above).
-    if !parse.sortClause.is_nil() || parse.limitCount.is_some() || parse.limitOffset.is_some()
-    {
+    if !parse.sortClause.is_nil() || parse.limitCount.is_some() || parse.limitOffset.is_some() {
         if parse.sortClause.len() != 1 || parse.limitCount.is_none() {
             return Ok(None);
         }
@@ -7760,7 +8166,9 @@ fn classify_exprkey_topn<'mcx>(
         if !key_sorted && !is_whitelisted_agg(tle.expr, rti, PLAIN_FOLD_AGGS) {
             return Ok(None);
         }
-        let Some(limit) = const_count(parse.limitCount) else { return Ok(None) };
+        let Some(limit) = const_count(parse.limitCount) else {
+            return Ok(None);
+        };
         let offset = if parse.limitOffset.is_some() {
             match const_count(parse.limitOffset) {
                 Some(v) => v,
@@ -7769,7 +8177,9 @@ fn classify_exprkey_topn<'mcx>(
         } else {
             0
         };
-        let Some(bound) = limit.checked_add(offset) else { return Ok(None) };
+        let Some(bound) = limit.checked_add(offset) else {
+            return Ok(None);
+        };
         if bound < 1 || bound > SINK_TOPN_MAX_BOUND_MIRROR {
             return Ok(None);
         }
@@ -7779,8 +8189,7 @@ fn classify_exprkey_topn<'mcx>(
     let ngroups = if run.root.processed_groupClause.is_empty() {
         1.0
     } else {
-        let clauses =
-            crate::relnode::pgvec_clone_shallow(run.mcx, &run.root.processed_groupClause);
+        let clauses = crate::relnode::pgvec_clone_shallow(run.mcx, &run.root.processed_groupClause);
         let group_exprs =
             types_pathnodes::run::sortgrouplist_exprs(run, &clauses, &parse.targetList);
         let input_rows = run.root.rel(rel_id).rows.max(1.0);
@@ -7868,7 +8277,11 @@ fn regexp_dict_key_var<'mcx>(expr: Node<'mcx>, rti: usize) -> Option<&'mcx Var<'
 /// NO_GUARD's infinity which would make `min_dop` toothless). The
 /// witnessed ladder owns the re-derivation.
 fn dictkey_guard() -> FloorGuard {
-    FloorGuard { min_dop: 4, low_dop_max_rows: 0.0, ..NO_GUARD }
+    FloorGuard {
+        min_dop: 4,
+        low_dop_max_rows: 0.0,
+        ..NO_GUARD
+    }
 }
 
 /// GL-DICTDRAIN-1 recognizer: a single-cbstore-rel grouped agg whose ONE
@@ -7910,11 +8323,15 @@ fn classify_dictkey_exprkey<'mcx>(
     if parse.groupClause.len() != 1 {
         return Ok(None);
     }
-    let Some(gc) = parse.groupClause.nth(0).as_sort_group_clause() else { return Ok(None) };
+    let Some(gc) = parse.groupClause.nth(0).as_sort_group_clause() else {
+        return Ok(None);
+    };
     let Some(key_tle) = tle_by_sortgroupref(parse, gc.tleSortGroupRef) else {
         return Ok(None);
     };
-    let Some(kvar) = regexp_dict_key_var(key_tle.expr, rti) else { return Ok(None) };
+    let Some(kvar) = regexp_dict_key_var(key_tle.expr, rti) else {
+        return Ok(None);
+    };
     let key_ref = gc.tleSortGroupRef;
     // Plan-time dict answerability (the v7 stitch discipline).
     if !topn_nonint_text_key_stitched(run, rel_id, kvar.varattno as i32) {
@@ -7923,15 +8340,16 @@ fn classify_dictkey_exprkey<'mcx>(
     // Emit discipline: the key by sortgroupref; every other entry a
     // passenger from the class vocabulary.
     for tle_node in &parse.targetList {
-        let Some(tle) = tle_node.as_target_entry() else { return Ok(None) };
+        let Some(tle) = tle_node.as_target_entry() else {
+            return Ok(None);
+        };
         if tle.ressortgroupref != 0 && tle.ressortgroupref == key_ref {
             continue;
         }
         if is_whitelisted_agg(tle.expr, rti, grouped_sink_aggs()) {
             continue;
         }
-        if agg_lenarg_enabled() && is_whitelisted_agg_lenarg(tle.expr, rti, grouped_sink_aggs())
-        {
+        if agg_lenarg_enabled() && is_whitelisted_agg_lenarg(tle.expr, rti, grouped_sink_aggs()) {
             continue;
         }
         // min/max(text) passengers: RE-ADMITTED (GL-DICTDRAIN-3 — the t45
@@ -7958,11 +8376,8 @@ fn classify_dictkey_exprkey<'mcx>(
     }
     // Sort/limit composition: none (plain grouped emit), or ONE agg sort
     // key + Const LIMIT, no OFFSET (the sibling classifiers' block).
-    if !parse.sortClause.is_nil() || parse.limitCount.is_some() || parse.limitOffset.is_some()
-    {
-        if parse.sortClause.len() != 1
-            || parse.limitCount.is_none()
-            || parse.limitOffset.is_some()
+    if !parse.sortClause.is_nil() || parse.limitCount.is_some() || parse.limitOffset.is_some() {
+        if parse.sortClause.len() != 1 || parse.limitCount.is_none() || parse.limitOffset.is_some()
         {
             return Ok(None);
         }
@@ -7987,8 +8402,7 @@ fn classify_dictkey_exprkey<'mcx>(
     let ngroups = if run.root.processed_groupClause.is_empty() {
         1.0
     } else {
-        let clauses =
-            crate::relnode::pgvec_clone_shallow(run.mcx, &run.root.processed_groupClause);
+        let clauses = crate::relnode::pgvec_clone_shallow(run.mcx, &run.root.processed_groupClause);
         let group_exprs =
             types_pathnodes::run::sortgrouplist_exprs(run, &clauses, &parse.targetList);
         let input_rows = run.root.rel(rel_id).rows.max(1.0);
@@ -8027,7 +8441,9 @@ fn classify_dictkey_exprkey<'mcx>(
 /// `is_whitelisted_agg` over TWO candidate range-table indexes (the join
 /// row flip): the aggregate's single Var arg may live on either joined rel.
 fn is_whitelisted_agg_2rti(expr: Node<'_>, rti_l: usize, rti_r: usize, whitelist: &[u32]) -> bool {
-    let Some(agg) = expr.as_aggref() else { return false };
+    let Some(agg) = expr.as_aggref() else {
+        return false;
+    };
     if !whitelist.contains(&agg.aggfnoid) {
         return false;
     }
@@ -8072,7 +8488,9 @@ fn heap_poly_indexes_admit(
         vars::pull_varattnos(run.mcx, q, rti as i32, &mut all_bm)?;
     }
     for tle_node in &parse.targetList {
-        let Some(tle) = tle_node.as_target_entry() else { return Ok(false) };
+        let Some(tle) = tle_node.as_target_entry() else {
+            return Ok(false);
+        };
         vars::pull_varattnos(run.mcx, tle.expr, rti as i32, &mut all_bm)?;
     }
     let raw = |m: i32| m + FirstLowInvalidHeapAttributeNumber;
@@ -8098,9 +8516,7 @@ fn heap_poly_indexes_admit(
         }
         // (b) every referenced column inside the index (key + INCLUDE) —
         // index-only-scan coverable.
-        let covers_all = all_bm
-            .iter()
-            .all(|m| keys.iter().any(|&k| k == raw(m)));
+        let covers_all = all_bm.iter().all(|m| keys.iter().any(|&k| k == raw(m)));
         if covers_all {
             return Ok(false);
         }
@@ -8128,15 +8544,13 @@ fn heap_poly_indexes_admit(
 /// be the only "poly" entry would leave the manifest empty — the
 /// suppress-then-refuse channel this gate closes. All-rider/all-bare
 /// shapes keep their existing rows (narrow probe).
-fn heap_poly_tlist_admits(
-    run: &PlannerRun<'_>,
-    parse: &Query<'_>,
-    rti: usize,
-) -> PgResult<bool> {
+fn heap_poly_tlist_admits(run: &PlannerRun<'_>, parse: &Query<'_>, rti: usize) -> PgResult<bool> {
     let intcase = agg_intcase_probe_enabled();
     let mut n_poly = 0usize;
     for tle_node in &parse.targetList {
-        let Some(tle) = tle_node.as_target_entry() else { return Ok(false) };
+        let Some(tle) = tle_node.as_target_entry() else {
+            return Ok(false);
+        };
         if is_whitelisted_agg(tle.expr, rti, PLAIN_FOLD_AGGS) {
             continue;
         }
@@ -8185,7 +8599,9 @@ fn heap_poly_aggref_admits(
     if !numeric && !(intcase && INTCASE_POLY_AGGS.contains(&agg.aggfnoid)) {
         return Ok(false);
     }
-    let Some(arg_tle) = agg.args.nth(0).as_target_entry() else { return Ok(false) };
+    let Some(arg_tle) = agg.args.nth(0).as_target_entry() else {
+        return Ok(false);
+    };
     if !crate::is_parallel_safe_opt(run, Some(arg_tle.expr))? {
         return Ok(false);
     }
@@ -8312,7 +8728,9 @@ fn aggref_plain_typed(agg: &Aggref<'_>, rti: usize, arg_type_ok: impl Fn(u32) ->
     match agg.args.len() {
         0 => agg.aggstar || agg.aggfnoid == F_COUNT_STAR,
         1 => {
-            let Some(arg_tle) = agg.args.nth(0).as_target_entry() else { return false };
+            let Some(arg_tle) = agg.args.nth(0).as_target_entry() else {
+                return false;
+            };
             is_covered_key_var(arg_tle.expr, rti, arg_type_ok)
         }
         _ => false,
@@ -8330,7 +8748,9 @@ fn is_plain_fold_agg(expr: Node<'_>, rti: usize) -> bool {
     if is_whitelisted_agg(expr, rti, PLAIN_FOLD_AGGS) {
         return true;
     }
-    let Some(agg) = expr.as_aggref() else { return false };
+    let Some(agg) = expr.as_aggref() else {
+        return false;
+    };
     matches!(agg.aggfnoid, F_MAX_DATE | F_MIN_DATE)
         && aggref_plain_typed(agg, rti, |t| t == DATEOID)
 }
@@ -8340,7 +8760,9 @@ fn is_plain_fold_agg(expr: Node<'_>, rti: usize) -> bool {
 fn tlist_all_plain_fold_aggs(parse: &Query<'_>, rti: usize) -> bool {
     let mut n = 0usize;
     for tle_node in &parse.targetList {
-        let Some(tle) = tle_node.as_target_entry() else { return false };
+        let Some(tle) = tle_node.as_target_entry() else {
+            return false;
+        };
         if !is_plain_fold_agg(tle.expr, rti) {
             return false;
         }
@@ -8354,7 +8776,9 @@ fn tlist_all_plain_fold_aggs(parse: &Query<'_>, rti: usize) -> bool {
 fn tlist_all_whitelisted_aggs(parse: &Query<'_>, rti: usize, whitelist: &[u32]) -> bool {
     let mut n = 0usize;
     for tle_node in &parse.targetList {
-        let Some(tle) = tle_node.as_target_entry() else { return false };
+        let Some(tle) = tle_node.as_target_entry() else {
+            return false;
+        };
         if !is_whitelisted_agg(tle.expr, rti, whitelist) {
             return false;
         }
@@ -8369,8 +8793,12 @@ fn tlist_all_whitelisted_aggs(parse: &Query<'_>, rti: usize, whitelist: &[u32]) 
 fn tlist_all_count_star(parse: &Query<'_>) -> bool {
     let mut n = 0usize;
     for tle_node in &parse.targetList {
-        let Some(tle) = tle_node.as_target_entry() else { return false };
-        let Some(agg) = tle.expr.as_aggref() else { return false };
+        let Some(tle) = tle_node.as_target_entry() else {
+            return false;
+        };
+        let Some(agg) = tle.expr.as_aggref() else {
+            return false;
+        };
         if agg.aggfnoid != F_COUNT_STAR || !agg.args.is_nil() {
             return false;
         }
@@ -8384,8 +8812,12 @@ fn is_bare_count_star(parse: &Query<'_>) -> bool {
     if parse.targetList.len() != 1 {
         return false;
     }
-    let Some(tle) = parse.targetList.nth(0).as_target_entry() else { return false };
-    let Some(agg) = tle.expr.as_aggref() else { return false };
+    let Some(tle) = parse.targetList.nth(0).as_target_entry() else {
+        return false;
+    };
+    let Some(agg) = tle.expr.as_aggref() else {
+        return false;
+    };
     agg.aggfnoid == F_COUNT_STAR
         && agg.args.is_nil()
         && agg.aggfilter.is_none()
@@ -8410,11 +8842,15 @@ fn scan_sort_keys_covered(
         return false;
     }
     for sc_node in &parse.sortClause {
-        let Some(sc) = sc_node.as_sort_group_clause() else { return false };
+        let Some(sc) = sc_node.as_sort_group_clause() else {
+            return false;
+        };
         if key_refs.contains(&sc.tleSortGroupRef) {
             continue;
         }
-        let Some(tle) = tle_by_sortgroupref(parse, sc.tleSortGroupRef) else { return false };
+        let Some(tle) = tle_by_sortgroupref(parse, sc.tleSortGroupRef) else {
+            return false;
+        };
         if !is_whitelisted_agg(tle.expr, rti, passenger_list) {
             return false;
         }
@@ -8454,8 +8890,14 @@ mod tests {
         assert!(!scanpass_spelling_on(Some("0")));
         assert!(!scanpass_spelling_on(Some("off")));
         assert!(!scanpass_spelling_on(Some("")));
-        assert!(!scanpass_spelling_on(Some("true")), "typos fail safe to OFF");
-        assert!(!scanpass_spelling_on(Some("ON")), "case-sensitive, like the arm knobs");
+        assert!(
+            !scanpass_spelling_on(Some("true")),
+            "typos fail safe to OFF"
+        );
+        assert!(
+            !scanpass_spelling_on(Some("ON")),
+            "case-sensitive, like the arm knobs"
+        );
         assert!(scanpass_spelling_on(Some("1")));
         assert!(scanpass_spelling_on(Some("on")));
         // The live getter memoizes the process env; in the test binary the
@@ -8465,7 +8907,10 @@ mod tests {
 
     #[test]
     fn intcase_knob_is_default_on_with_kill() {
-        assert!(intcase_spelling_on(None), "unset must be ON (GL-INTCASE-1 default flip)");
+        assert!(
+            intcase_spelling_on(None),
+            "unset must be ON (GL-INTCASE-1 default flip)"
+        );
         assert!(!intcase_spelling_on(Some("0")), "kill spelling");
         assert!(!intcase_spelling_on(Some("off")), "kill spelling");
         assert!(intcase_spelling_on(Some("1")));
@@ -8474,7 +8919,10 @@ mod tests {
             intcase_spelling_on(Some("")) && intcase_spelling_on(Some("OFF")),
             "flipped-kill idiom: only exact 0/off kill (case-sensitive, like the sibling arm knobs)"
         );
-        assert!(agg_intcase_probe_enabled(), "test process has no knob set => ON");
+        assert!(
+            agg_intcase_probe_enabled(),
+            "test process has no knob set => ON"
+        );
     }
 
     /// AGG_INTCASE vocabulary discipline: the per-row int whitelist is
@@ -8519,11 +8967,20 @@ mod tests {
     /// kill switch's exact spellings.
     #[test]
     fn multikey_text_knob_is_default_on_with_kill() {
-        assert!(multikey_text_spelling_on(None), "unset must be ON (t35 flipped default)");
+        assert!(
+            multikey_text_spelling_on(None),
+            "unset must be ON (t35 flipped default)"
+        );
         assert!(!multikey_text_spelling_on(Some("0")), "kill spelling");
         assert!(!multikey_text_spelling_on(Some("off")), "kill spelling");
-        assert!(multikey_text_spelling_on(Some("")), "non-kill spellings stay ON");
-        assert!(multikey_text_spelling_on(Some("true")), "non-kill spellings stay ON");
+        assert!(
+            multikey_text_spelling_on(Some("")),
+            "non-kill spellings stay ON"
+        );
+        assert!(
+            multikey_text_spelling_on(Some("true")),
+            "non-kill spellings stay ON"
+        );
         assert!(
             multikey_text_spelling_on(Some("OFF")),
             "kill is case-sensitive, like the arm kills"
@@ -8532,7 +8989,10 @@ mod tests {
         assert!(multikey_text_spelling_on(Some("on")));
         // The live getter memoizes the process env; in the test binary the
         // var is unset, so it resolves ON — the flipped-default invariant.
-        assert!(multikey_text_enabled(), "test process has no kill set => ON");
+        assert!(
+            multikey_text_enabled(),
+            "test process has no kill set => ON"
+        );
     }
 
     /// SE-MKTEXT shape law: the knob-widened family is EXACTLY the two-key
@@ -8548,12 +9008,21 @@ mod tests {
         // REFUSED: all-int two-key (existing bootstrap rows own it).
         assert!(!mk_text_family_shape_ok(2, 0), "int+int is not this family");
         // REFUSED: single-key shapes (existing rows / sibling cars).
-        assert!(!mk_text_family_shape_ok(1, 1), "single text key is the C2/bootstrap row");
+        assert!(
+            !mk_text_family_shape_ok(1, 1),
+            "single text key is the C2/bootstrap row"
+        );
         assert!(!mk_text_family_shape_ok(1, 0));
         // REFUSED: 3+ keys — with or without a second text (fail-closed;
         // the ts-extract class additionally carries an expr key, refused upstream).
-        assert!(!mk_text_family_shape_ok(3, 1), "3-key with one text stays bootstrap-only");
-        assert!(!mk_text_family_shape_ok(3, 2), "3-key with two texts fails closed");
+        assert!(
+            !mk_text_family_shape_ok(3, 1),
+            "3-key with one text stays bootstrap-only"
+        );
+        assert!(
+            !mk_text_family_shape_ok(3, 2),
+            "3-key with two texts fails closed"
+        );
         assert!(!mk_text_family_shape_ok(4, 2));
         assert!(!mk_text_family_shape_ok(6, 1));
         // Degenerate censuses can never arise (n_text <= nkeys), but the
@@ -8582,17 +9051,29 @@ mod tests {
     /// each lane's flipped-default posture.
     #[test]
     fn sibling_lane_knobs_are_default_on_with_kill() {
-        assert!(knob_spelling_on(None), "unset must be ON (t35 flipped default)");
+        assert!(
+            knob_spelling_on(None),
+            "unset must be ON (t35 flipped default)"
+        );
         assert!(!knob_spelling_on(Some("0")), "kill spelling");
         assert!(!knob_spelling_on(Some("off")), "kill spelling");
         assert!(knob_spelling_on(Some("")), "non-kill spellings stay ON");
         assert!(knob_spelling_on(Some("true")), "non-kill spellings stay ON");
-        assert!(knob_spelling_on(Some("OFF")), "kill is case-sensitive, like the arm kills");
+        assert!(
+            knob_spelling_on(Some("OFF")),
+            "kill is case-sensitive, like the arm kills"
+        );
         assert!(knob_spelling_on(Some("1")));
         assert!(knob_spelling_on(Some("on")));
-        assert!(extract_exprkey_enabled(), "test process has no kill set => ON");
+        assert!(
+            extract_exprkey_enabled(),
+            "test process has no kill set => ON"
+        );
         assert!(agg_constkey_enabled(), "test process has no kill set => ON");
-        assert!(agg_barelimit_enabled(), "test process has no kill set => ON");
+        assert!(
+            agg_barelimit_enabled(),
+            "test process has no kill set => ON"
+        );
     }
 
     /// SE-EXTRACTKEY packed-image width law: mirrors the exprkey Multi
@@ -8668,7 +9149,10 @@ mod tests {
     #[test]
     fn hjrider_unwire_posture() {
         assert!(!hjrider_curve_enabled(), "default must be UNWIRED");
-        for class in [CoverClass::CbHashJoinMultiBuild, CoverClass::CbHashJoinGroupedAgg] {
+        for class in [
+            CoverClass::CbHashJoinMultiBuild,
+            CoverClass::CbHashJoinGroupedAgg,
+        ] {
             let g = class_guard(class);
             assert_eq!(g.max_rows, 0.0, "{class:?} rectangle must stay guarded off");
         }
@@ -8711,7 +9195,7 @@ mod tests {
     /// deltas are interference-free even if other tests plan queries.
     #[test]
     fn cost_shadow_census_counts_directions() {
-        use cost_shadow::{note, snapshot, class_idx};
+        use cost_shadow::{class_idx, note, snapshot};
         let c = CoverClass::CbMetaFooterAgg;
         let i = class_idx(c);
         let before = snapshot()[i];
@@ -8720,20 +9204,32 @@ mod tests {
         note(c, false, false);
         note(c, false, false);
         let (ws_mg, wg_ms) = note(c, true, false);
-        assert_eq!((ws_mg, wg_ms), (
-            before.wl_suppress_model_gather + 1,
-            before.wl_gather_model_suppress,
-        ));
+        assert_eq!(
+            (ws_mg, wg_ms),
+            (
+                before.wl_suppress_model_gather + 1,
+                before.wl_gather_model_suppress,
+            )
+        );
         let (ws_mg, wg_ms) = note(c, false, true);
-        assert_eq!((ws_mg, wg_ms), (
-            before.wl_suppress_model_gather + 1,
-            before.wl_gather_model_suppress + 1,
-        ));
+        assert_eq!(
+            (ws_mg, wg_ms),
+            (
+                before.wl_suppress_model_gather + 1,
+                before.wl_gather_model_suppress + 1,
+            )
+        );
         let after = snapshot()[i];
         assert_eq!(after.agree_suppress, before.agree_suppress + 1);
         assert_eq!(after.agree_gather, before.agree_gather + 2);
-        assert_eq!(after.wl_suppress_model_gather, before.wl_suppress_model_gather + 1);
-        assert_eq!(after.wl_gather_model_suppress, before.wl_gather_model_suppress + 1);
+        assert_eq!(
+            after.wl_suppress_model_gather,
+            before.wl_suppress_model_gather + 1
+        );
+        assert_eq!(
+            after.wl_gather_model_suppress,
+            before.wl_gather_model_suppress + 1
+        );
     }
 
     /// Serial-side shadow census plumbing: every (enforced, pick) pair
@@ -8787,8 +9283,15 @@ mod tests {
         // two-way — serial at both witnessed scales, outside parity.
         for rows in [1e7, 1e8] {
             let v = sm::topn_selqual_starwide_two_way(rows).unwrap();
-            assert_eq!(v.pick, sm::EnginePick::Serial, "priced carve at N={rows}: {v:?}");
-            assert!(!v.parity, "the enforcing pick must be outside the parity band");
+            assert_eq!(
+                v.pick,
+                sm::EnginePick::Serial,
+                "priced carve at N={rows}: {v:?}"
+            );
+            assert!(
+                !v.parity,
+                "the enforcing pick must be outside the parity band"
+            );
         }
         // Below the model's support the carve keeps Gather (abstain =
         // incumbent).
@@ -8808,7 +9311,10 @@ mod tests {
         let v = sm::topn_nonint_three_way(&losing).unwrap();
         assert!(agrees(false, v.pick), "carve keeps Gather, model {v:?}");
         // Above the bound the carve admits (suppress) — model agrees.
-        let winning = sm::TopnShape { survival: 0.75, ..losing };
+        let winning = sm::TopnShape {
+            survival: 0.75,
+            ..losing
+        };
         assert!(winning.survival >= TOPN_NONINT_MIN_QUAL_SURVIVAL);
         let v = sm::topn_nonint_three_way(&winning).unwrap();
         assert!(agrees(true, v.pick), "carve admits, model {v:?}");
@@ -8844,24 +9350,50 @@ mod tests {
             CoverClass::CbTopnBoundedIntKeys,
             CoverClass::CbHashJoinPlainAgg,
         ] {
-            assert!(!arm_admission_mirror(class, 500_000.0, 1e5), "{class:?} @500k");
-            assert!(arm_admission_mirror(class, 1_000_000.0, 1e5), "{class:?} @1M");
+            assert!(
+                !arm_admission_mirror(class, 500_000.0, 1e5),
+                "{class:?} @500k"
+            );
+            assert!(
+                arm_admission_mirror(class, 1_000_000.0, 1e5),
+                "{class:?} @1M"
+            );
             assert!(!arm_admission_mirror(class, HJ_ARM_MIN_ROWS - 1.0, 1e5));
             assert!(arm_admission_mirror(class, HJ_ARM_MIN_ROWS, 1e5));
         }
-        assert_eq!(HJ_ARM_MIN_ROWS, 64.0 * 8192.0, "the 64-granule geometry mirror");
+        assert_eq!(
+            HJ_ARM_MIN_ROWS,
+            64.0 * 8192.0,
+            "the 64-granule geometry mirror"
+        );
         // F1's post-qual floor.
-        assert!(!arm_admission_mirror(CoverClass::CbGroupedAggTopN, 499_999.0, 1e5));
-        assert!(arm_admission_mirror(CoverClass::CbGroupedAggTopN, 500_000.0, 1e5));
+        assert!(!arm_admission_mirror(
+            CoverClass::CbGroupedAggTopN,
+            499_999.0,
+            1e5
+        ));
+        assert!(arm_admission_mirror(
+            CoverClass::CbGroupedAggTopN,
+            500_000.0,
+            1e5
+        ));
         // Heap count: the block floor, rows-independent.
-        assert!(!arm_admission_mirror(CoverClass::HeapPlainCountStar, 1e7, 8191.0));
+        assert!(!arm_admission_mirror(
+            CoverClass::HeapPlainCountStar,
+            1e7,
+            8191.0
+        ));
         assert!(arm_admission_mirror(
             CoverClass::HeapPlainCountStar,
             1e7,
             rtm::HEAP_COUNT_ADMISSION_MIN_PAGES
         ));
         // Heap cmp-fold engaged at the 100k cells: always admits.
-        assert!(arm_admission_mirror(CoverClass::HeapCmpFoldPrefix, 1_000.0, 10.0));
+        assert!(arm_admission_mirror(
+            CoverClass::HeapCmpFoldPrefix,
+            1_000.0,
+            10.0
+        ));
     }
 
     /// The census index and the printable class-name table cannot drift
@@ -8915,7 +9447,10 @@ mod tests {
             }
             let cols: Vec<&str> = line.split('\t').collect();
             assert_eq!(cols.len(), 11, "malformed TSV row: {line}");
-            vals.insert((cols[0].to_string(), cols[1].to_string()), cols[2].to_string());
+            vals.insert(
+                (cols[0].to_string(), cols[1].to_string()),
+                cols[2].to_string(),
+            );
         }
         let get = |c: &str, t: &str| {
             vals.get(&(c.to_string(), t.to_string()))
@@ -8923,22 +9458,30 @@ mod tests {
                 .clone()
         };
         assert_eq!(
-            get("HeapPlainCountStar", "admission_min_pages").parse::<f64>().unwrap(),
+            get("HeapPlainCountStar", "admission_min_pages")
+                .parse::<f64>()
+                .unwrap(),
             class_guard(CoverClass::HeapPlainCountStar).min_pages
         );
         assert_eq!(
-            get("_grouped_classes", "hold_groups_min").parse::<f64>().unwrap(),
+            get("_grouped_classes", "hold_groups_min")
+                .parse::<f64>()
+                .unwrap(),
             groupby_high_floor(),
             "groupby-high HOLD drifted from its TSV row (env override in a test run?)"
         );
         // GL-COST-2 unwire rows: the riders' guarded-off rectangles are of
         // record in the TSV (witnessed grids in the note columns).
         assert_eq!(
-            get("CbHashJoinMultiBuild", "rectangle_max_rows").parse::<f64>().unwrap(),
+            get("CbHashJoinMultiBuild", "rectangle_max_rows")
+                .parse::<f64>()
+                .unwrap(),
             class_guard(CoverClass::CbHashJoinMultiBuild).max_rows
         );
         assert_eq!(
-            get("CbHashJoinGroupedAgg", "rectangle_max_rows").parse::<f64>().unwrap(),
+            get("CbHashJoinGroupedAgg", "rectangle_max_rows")
+                .parse::<f64>()
+                .unwrap(),
             class_guard(CoverClass::CbHashJoinGroupedAgg).max_rows
         );
         // The remaining reuse row points at a real curve class.
@@ -8959,15 +9502,24 @@ mod tests {
         assert!(!knob_spelling_armed(Some("off")));
         assert!(!knob_spelling_armed(Some("")));
         assert!(!knob_spelling_armed(Some("true")), "typos fail safe to OFF");
-        assert!(!knob_spelling_armed(Some("ON")), "case-sensitive, like the arm knobs");
+        assert!(
+            !knob_spelling_armed(Some("ON")),
+            "case-sensitive, like the arm knobs"
+        );
         assert!(knob_spelling_armed(Some("1")));
         assert!(knob_spelling_armed(Some("on")));
         // The live getters memoize the process env; unset in the test
         // binary. DECOROOT is DEFAULT ON since the conversion-flips train
         // (GL-DECOROOT-1; =0|off kills — the flipped-kill idiom).
-        assert!(decoroot_enabled(), "conversion-flips: unset => ON (GL-DECOROOT-1)");
+        assert!(
+            decoroot_enabled(),
+            "conversion-flips: unset => ON (GL-DECOROOT-1)"
+        );
         // NUMJOIN is DEFAULT ON since the conversion-flips train (GL-NUMJOIN-1).
-        assert!(aggjoin_numeric_enabled(), "conversion-flips: unset => ON (GL-NUMJOIN-1)");
+        assert!(
+            aggjoin_numeric_enabled(),
+            "conversion-flips: unset => ON (GL-NUMJOIN-1)"
+        );
     }
 
     /// SE-DECOROOT hash-election margin: the provisional bound must stay
@@ -8992,7 +9544,10 @@ mod tests {
     #[test]
     fn jheap_knob_default_off_mirror_live() {
         // conversion-flips: JHEAP is DEFAULT ON (GL-JHEAP-1; =0|off kills).
-        assert!(jheap_enabled(), "conversion-flips: unset => ON (GL-JHEAP-1)");
+        assert!(
+            jheap_enabled(),
+            "conversion-flips: unset => ON (GL-JHEAP-1)"
+        );
         assert!(
             k2_heapfeed_live(),
             "K2_PROBE/HEAPFEED default ON (SE9/SE15 flips) => mirror live"
@@ -9007,7 +9562,10 @@ mod tests {
     #[test]
     fn cbkeys_knob_default_off_and_floor() {
         // conversion-flips: CBKEYS is DEFAULT ON (GL-CBKEYS-1; =0|off kills).
-        assert!(cbkeys_enabled(), "conversion-flips: unset => ON (GL-CBKEYS-1)");
+        assert!(
+            cbkeys_enabled(),
+            "conversion-flips: unset => ON (GL-CBKEYS-1)"
+        );
         let g = cbkeys_guard();
         assert_eq!(g.max_rows, 2_000_000.0);
         assert_eq!(g.min_rows, 0.0);
@@ -9021,7 +9579,10 @@ mod tests {
     #[test]
     fn bpchar_subknob_default_off() {
         // conversion-flips: DEFAULT ON (GL-BPCHAR-1; =0|off kills).
-        assert!(bpchar_keys_enabled(), "conversion-flips: unset => ON (GL-BPCHAR-1)");
+        assert!(
+            bpchar_keys_enabled(),
+            "conversion-flips: unset => ON (GL-BPCHAR-1)"
+        );
     }
 
     /// SE-FILTERQUALS knob (the GL-FILTERQUALS-1 lane): DEFAULT OFF, `1`/
@@ -9031,7 +9592,10 @@ mod tests {
     fn joinfilters_knob_default_off() {
         // conversion-flips: DEFAULT ON (GL-FILTERQUALS-1; =0|off kills; the
         // ladder carried NO selectivity floor — its explicit verdict).
-        assert!(joinfilters_enabled(), "conversion-flips: unset => ON (GL-FILTERQUALS-1)");
+        assert!(
+            joinfilters_enabled(),
+            "conversion-flips: unset => ON (GL-FILTERQUALS-1)"
+        );
     }
 
     /// SE-JHEAP NL-election margin + floor: the margin must be a real
@@ -9058,7 +9622,9 @@ mod tests {
     /// rows); all rows sharing a key must agree on route_to.
     #[test]
     fn bootstrap_matrix_matches_tsv() {
-        let tsv = include_str!("../../../../../../crates/backend/executor/execmain/src/lanev2/m5-coverage.tsv");
+        let tsv = include_str!(
+            "../../../../../../crates/backend/executor/execmain/src/lanev2/m5-coverage.tsv"
+        );
         let mut keyed: std::collections::BTreeMap<String, bool> = std::collections::BTreeMap::new();
         for line in tsv.lines() {
             if line.starts_with('#') || line.trim().is_empty() {
@@ -9112,25 +9678,46 @@ mod tests {
         // Still-gated spelling rule (CARs A + B).
         assert!(!tier2_car_spelling_on(None), "unset must be OFF (default)");
         for v in ["0", "off", "", "true", "ON", "yes"] {
-            assert!(!tier2_car_spelling_on(Some(v)), "spelling {v:?} must fail safe to OFF");
+            assert!(
+                !tier2_car_spelling_on(Some(v)),
+                "spelling {v:?} must fail safe to OFF"
+            );
         }
         assert!(tier2_car_spelling_on(Some("1")));
         assert!(tier2_car_spelling_on(Some("on")));
         // Flipped kill rule (CAR C).
-        assert!(tier2_car_kill_spelling_on(None), "unset must be ON (t36 flipped default)");
+        assert!(
+            tier2_car_kill_spelling_on(None),
+            "unset must be ON (t36 flipped default)"
+        );
         assert!(!tier2_car_kill_spelling_on(Some("0")), "kill spelling");
         assert!(!tier2_car_kill_spelling_on(Some("off")), "kill spelling");
         for v in ["", "true", "OFF", "1", "on"] {
-            assert!(tier2_car_kill_spelling_on(Some(v)), "non-kill spelling {v:?} stays ON");
+            assert!(
+                tier2_car_kill_spelling_on(Some(v)),
+                "non-kill spelling {v:?} stays ON"
+            );
         }
         // The live getters memoize the process env; in the test binary no
         // vars are set, so the postures resolve to the shipped defaults.
-        assert!(distinct_plainshape_enabled(), "CAR A must be ON at default (GL-T2C flip)");
-        assert!(agg_strminmax_enabled(), "CAR B must be ON at default (GL-STRMM-2 flip)");
-        assert!(agg_sort_nolimit_enabled(), "CAR C must be ON at default (GL-T2B flip)");
+        assert!(
+            distinct_plainshape_enabled(),
+            "CAR A must be ON at default (GL-T2C flip)"
+        );
+        assert!(
+            agg_strminmax_enabled(),
+            "CAR B must be ON at default (GL-STRMM-2 flip)"
+        );
+        assert!(
+            agg_sort_nolimit_enabled(),
+            "CAR C must be ON at default (GL-T2B flip)"
+        );
         // SE-TOPNNI (gap:topn-nonint-keys car): DEFAULT ON since the
         // GL-TOPNNI-1 flip — the flipped-kill rule (kill =0|off).
-        assert!(topn_nonint_enabled(), "SE-TOPNNI must be ON at default (GL-TOPNNI-1 flip)");
+        assert!(
+            topn_nonint_enabled(),
+            "SE-TOPNNI must be ON at default (GL-TOPNNI-1 flip)"
+        );
     }
 
     /// SE-TOPNNI floor: its OWN min_dop=4 rectangle (GL-TOPNNI-1 verdict
@@ -9182,7 +9769,10 @@ mod tests {
         for t in [INT2OID, INT4OID, INT8OID, DATEOID, TIMESTAMPOID] {
             assert!(topn_car_payload_type(t));
         }
-        for t in [TEXTOID, VARCHAROID, 1700 /* numeric */, 2950 /* uuid */] {
+        for t in [
+            TEXTOID, VARCHAROID, 1700, /* numeric */
+            2950, /* uuid */
+        ] {
             assert!(!topn_car_payload_type(t), "type {t} must miss the mirror");
         }
     }
@@ -9209,11 +9799,20 @@ mod tests {
         assert!(!GROUPED_SINK_AGGS.contains(&F_AVG_INT2));
         assert!(GROUPED_SINK_AGGS_AVG.contains(&F_AVG_INT4));
         assert!(GROUPED_SINK_AGGS_AVG.contains(&F_AVG_INT2));
-        assert!(!GROUPED_SINK_AGGS_AVG.contains(&F_AVG_INT8), "INTERNAL transtype stays out");
-        assert!(!GROUPED_SINK_AGGS_AVG.contains(&F_SUM_INT8), "INTERNAL transtype stays out");
+        assert!(
+            !GROUPED_SINK_AGGS_AVG.contains(&F_AVG_INT8),
+            "INTERNAL transtype stays out"
+        );
+        assert!(
+            !GROUPED_SINK_AGGS_AVG.contains(&F_SUM_INT8),
+            "INTERNAL transtype stays out"
+        );
         assert_eq!(GROUPED_SINK_AGGS_AVG.len(), GROUPED_SINK_AGGS.len() + 2);
         for oid in GROUPED_SINK_AGGS {
-            assert!(GROUPED_SINK_AGGS_AVG.contains(oid), "widening is a superset");
+            assert!(
+                GROUPED_SINK_AGGS_AVG.contains(oid),
+                "widening is a superset"
+            );
         }
         // The knob rides the flipped-kill spelling helper (pinned above):
         // only 0|off restore the base list; unset stays widened.
@@ -9227,13 +9826,29 @@ mod tests {
     /// avg carries a finalfn (declines the resolve). Both stay out.
     #[test]
     fn topn_highgroups_sort_vocabulary_is_finalfn_free_int8() {
-        assert_eq!(TOPN_INT8_RAW_SORT_AGGS, &[F_COUNT_STAR, F_COUNT_ANY, F_SUM_INT4, F_SUM_INT2]);
+        assert_eq!(
+            TOPN_INT8_RAW_SORT_AGGS,
+            &[F_COUNT_STAR, F_COUNT_ANY, F_SUM_INT4, F_SUM_INT2]
+        );
         for oid in TOPN_INT8_RAW_SORT_AGGS {
-            assert!(GROUPED_SINK_AGGS.contains(oid), "subset of the base passenger list");
+            assert!(
+                GROUPED_SINK_AGGS.contains(oid),
+                "subset of the base passenger list"
+            );
         }
-        assert!(!TOPN_INT8_RAW_SORT_AGGS.contains(&F_AVG_INT4), "finalfn-bearing stays out");
-        assert!(!TOPN_INT8_RAW_SORT_AGGS.contains(&F_MAX_INT8), "unwitnessed order column");
-        assert_eq!(SINK_TOPN_MAX_BOUND_MIRROR, 1 << 16, "mirror of the sink bound cap");
+        assert!(
+            !TOPN_INT8_RAW_SORT_AGGS.contains(&F_AVG_INT4),
+            "finalfn-bearing stays out"
+        );
+        assert!(
+            !TOPN_INT8_RAW_SORT_AGGS.contains(&F_MAX_INT8),
+            "unwitnessed order column"
+        );
+        assert_eq!(
+            SINK_TOPN_MAX_BOUND_MIRROR,
+            1 << 16,
+            "mirror of the sink bound cap"
+        );
     }
 
     /// GL-ELECT22-1 fix 1: the mk-text family ceiling defaults — the 16M
@@ -9267,8 +9882,14 @@ mod tests {
                 "subset of the grouped-sink exemption vocabulary"
             );
         }
-        assert!(!DISTINCT_TOPN_SORT_AGGS.contains(&F_SUM_INT4), "nullable sum stays out");
-        assert!(!DISTINCT_TOPN_SORT_AGGS.contains(&F_SUM_INT2), "nullable sum stays out");
+        assert!(
+            !DISTINCT_TOPN_SORT_AGGS.contains(&F_SUM_INT4),
+            "nullable sum stays out"
+        );
+        assert!(
+            !DISTINCT_TOPN_SORT_AGGS.contains(&F_SUM_INT2),
+            "nullable sum stays out"
+        );
     }
 
     /// EXPRKEY-TOPN mirrors of record: the truncation funcid (the tz-less
@@ -9279,7 +9900,10 @@ mod tests {
     #[test]
     fn exprkey_topn_mirrors_of_record() {
         assert_eq!(F_TIMESTAMP_TRUNC_FN, 2020);
-        assert_eq!(INT_EQ_FNS_MIRROR, [63, 65, 467, 158, 159, 852, 474, 1850, 1856]);
+        assert_eq!(
+            INT_EQ_FNS_MIRROR,
+            [63, 65, 467, 158, 159, 852, 474, 1850, 1856]
+        );
     }
 
     /// GL-DICTDRAIN-1 mirrors of record: the 3-arg regexp_replace fmgr row
@@ -9308,8 +9932,14 @@ mod tests {
     fn tier2_strminmax_oids_of_record() {
         assert_eq!(F_MIN_TEXT, 2145);
         assert_eq!(F_MAX_TEXT, 2129);
-        assert!(!GROUPED_SINK_AGGS.contains(&F_MIN_TEXT), "text min/max stays knob-gated");
-        assert!(!GROUPED_SINK_AGGS.contains(&F_MAX_TEXT), "text min/max stays knob-gated");
+        assert!(
+            !GROUPED_SINK_AGGS.contains(&F_MIN_TEXT),
+            "text min/max stays knob-gated"
+        );
+        assert!(
+            !GROUPED_SINK_AGGS.contains(&F_MAX_TEXT),
+            "text min/max stays knob-gated"
+        );
         assert!(
             !DISTINCT_PASSENGER_AGGS.contains(&F_MIN_TEXT)
                 && !DISTINCT_PASSENGER_AGGS_POLY.contains(&F_MIN_TEXT),

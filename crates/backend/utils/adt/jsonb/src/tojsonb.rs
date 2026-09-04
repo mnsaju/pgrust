@@ -324,11 +324,7 @@ fn array_dim_to_jsonb<'mcx>(
 }
 
 /// C: composite_to_jsonb.
-fn composite_to_jsonb<'mcx>(
-    mcx: Mcx<'mcx>,
-    ps: &mut JsonbPush<'mcx>,
-    val: Datum,
-) -> PgResult<()> {
+fn composite_to_jsonb<'mcx>(mcx: Mcx<'mcx>, ps: &mut JsonbPush<'mcx>, val: Datum) -> PgResult<()> {
     let image = detoast_datum(mcx, val)?;
     // SAFETY: a detoasted composite datum is a HeapTupleHeader image; the
     // arena copy is 8-aligned and readable for its datum length.
@@ -525,8 +521,7 @@ fn obj_elem_payload<'mcx>(d: Datum) -> &'mcx [u8] {
 #[cold]
 fn obj_subscript_error(msg: &'static str) -> alloc::boxed::Box<types_error::PgError> {
     alloc::boxed::Box::new(
-        types_error::PgError::error(msg)
-            .with_sqlstate(types_error::ERRCODE_ARRAY_SUBSCRIPT_ERROR),
+        types_error::PgError::error(msg).with_sqlstate(types_error::ERRCODE_ARRAY_SUBSCRIPT_ERROR),
     )
 }
 
@@ -538,10 +533,7 @@ fn obj_null_key() -> alloc::boxed::Box<types_error::PgError> {
     )
 }
 
-fn jsonb_object_finish<'mcx>(
-    mcx: Mcx<'mcx>,
-    pairs: &[(Datum, bool)],
-) -> PgResult<PgVec<'mcx, u8>> {
+fn jsonb_object_finish<'mcx>(mcx: Mcx<'mcx>, pairs: &[(Datum, bool)]) -> PgResult<PgVec<'mcx, u8>> {
     let mut ps = crate::mutate::JsonbPush::new(mcx)?;
     ps.push_token(WjbToken::BeginObject)?;
     for chunk in pairs.chunks_exact(2) {
@@ -569,7 +561,9 @@ pub fn jsonb_object<'mcx>(mcx: Mcx<'mcx>, array: &'mcx [u8]) -> PgResult<PgVec<'
         0 => return jsonb_object_finish(mcx, &[]),
         1 => {
             if dims[0] % 2 != 0 {
-                return Err(obj_subscript_error("array must have even number of elements"));
+                return Err(obj_subscript_error(
+                    "array must have even number of elements",
+                ));
             }
         }
         2 => {

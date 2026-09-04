@@ -59,14 +59,23 @@ pub fn PrepareToInvalidateCacheTuple<'mcx>(
             }
         });
         let tupdesc = crate::init::cache_tupdesc(id).expect("initialized above");
-        let hashvalue =
-            compute_tuple_hash_value(&probe.cc_kind, probe.cc_nkeys, &probe.cc_keyno, tupdesc, tuple);
+        let hashvalue = compute_tuple_hash_value(
+            &probe.cc_kind,
+            probe.cc_nkeys,
+            &probe.cc_keyno,
+            tupdesc,
+            tuple,
+        );
         let dbid: Oid = if probe.cc_relisshared {
             0
         } else {
             init_small::globals::MyDatabaseId()
         };
-        requests.push(InvalRequest { cache_id: probe.id, hash_value: hashvalue, db_id: dbid });
+        requests.push(InvalRequest {
+            cache_id: probe.id,
+            hash_value: hashvalue,
+            db_id: dbid,
+        });
 
         if let Some(newtuple) = newtuple {
             let newhash = compute_tuple_hash_value(
@@ -77,7 +86,11 @@ pub fn PrepareToInvalidateCacheTuple<'mcx>(
                 newtuple,
             );
             if newhash != hashvalue {
-                requests.push(InvalRequest { cache_id: probe.id, hash_value: newhash, db_id: dbid });
+                requests.push(InvalRequest {
+                    cache_id: probe.id,
+                    hash_value: newhash,
+                    db_id: dbid,
+                });
             }
         }
     }

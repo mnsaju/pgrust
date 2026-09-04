@@ -172,7 +172,9 @@ pub fn fc_xidsend(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResu
 
 pub fn fc_hash_uint32(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let [a] = fcinfo.args_n::<1>();
-    Ok(Datum::from_u32(::hashfn::hash_bytes_uint32(a.value.as_u32())))
+    Ok(Datum::from_u32(::hashfn::hash_bytes_uint32(
+        a.value.as_u32(),
+    )))
 }
 
 pub fn fc_hash_uint32_extended(
@@ -247,7 +249,10 @@ fc_xid8_cmp! {
 
 pub fn fc_xid8cmp(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let [a, b] = fcinfo.args_n::<2>();
-    Ok(Datum::from_i32(crate::xid8cmp(a.value.as_u64(), b.value.as_u64())))
+    Ok(Datum::from_i32(crate::xid8cmp(
+        a.value.as_u64(),
+        b.value.as_u64(),
+    )))
 }
 
 pub fn fc_xid8toxid(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -274,10 +279,7 @@ pub fn fc_hashxid8(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRes
     Ok(Datum::from_u32(::hashfn::hash_bytes_uint32(lohalf)))
 }
 
-pub fn fc_hashxid8extended(
-    _flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_hashxid8extended(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let [a, b] = fcinfo.args_n::<2>();
     let val = a.value.as_i64();
     let lohalf = val as u32;
@@ -415,7 +417,6 @@ pub fn fc_hashtidextended(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -
     Ok(Datum::from_u64(::hashfn::hash_bytes_extended(b, seed)))
 }
 
-
 pub fn fc_oidvectoreq(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     // SAFETY: strict catalog args are non-null plain-storage oidvectors;
     // dim1 Oids follow the 24-byte header (buildoidvector shape).
@@ -473,7 +474,13 @@ pub fn fc_currtid_byrelname(
     let mcx = fcinfo.result_mcx();
     let ip = ::types_tuple::ItemPointerData::new(tid.block, tid.offset);
     let result = crate::currtid_byrelname(mcx, &relname, ip)?;
-    tid_result(fcinfo, Tid { block: ::types_tuple::ItemPointerGetBlockNumberNoCheck(&result), offset: result.ip_posid })
+    tid_result(
+        fcinfo,
+        Tid {
+            block: ::types_tuple::ItemPointerGetBlockNumberNoCheck(&result),
+            offset: result.ip_posid,
+        },
+    )
 }
 
 // SAFETY: as fc_oidvectoreq, but layout-checked (SQL-boundary contract).

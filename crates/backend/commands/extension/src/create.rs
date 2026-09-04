@@ -247,7 +247,9 @@ pub(crate) fn get_required_extension(
     if !cascade {
         let mut b = ereport(ERROR)
             .errcode(ERRCODE_UNDEFINED_OBJECT)
-            .errmsg(format!("required extension \"{req_extension_name}\" is not installed"));
+            .errmsg(format!(
+                "required extension \"{req_extension_name}\" is not installed"
+            ));
         if is_create {
             b = b.errhint("Use CREATE EXTENSION ... CASCADE to install required extensions too.");
         }
@@ -269,7 +271,9 @@ pub(crate) fn get_required_extension(
     }
 
     ereport(NOTICE)
-        .errmsg(format!("installing required extension \"{req_extension_name}\""))
+        .errmsg(format!(
+            "installing required extension \"{req_extension_name}\""
+        ))
         .finish(here("get_required_extension"))?;
 
     let mut cascade_parents: Vec<&str> = parents.to_vec();
@@ -445,7 +449,9 @@ pub fn RemoveExtensionById(mcx: Mcx<'_>, ext_id: Oid) -> PgResult<()> {
             .unwrap_or_default();
         return Err(ereport(ERROR)
             .errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE)
-            .errmsg(format!("cannot drop extension \"{name}\" because it is being modified"))
+            .errmsg(format!(
+                "cannot drop extension \"{name}\" because it is being modified"
+            ))
             .into_error()
             .into());
     }

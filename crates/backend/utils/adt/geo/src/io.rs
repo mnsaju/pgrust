@@ -728,7 +728,9 @@ pub fn circle_recv(buf: &mut StringInfo<'_>) -> PgResult<CIRCLE> {
         radius: ::pqformat::pq_getmsgfloat8(buf)?,
     };
     if circle.radius < 0.0 {
-        return Err(invalid_binary("invalid radius in external \"circle\" value"));
+        return Err(invalid_binary(
+            "invalid radius in external \"circle\" value",
+        ));
     }
     Ok(circle)
 }

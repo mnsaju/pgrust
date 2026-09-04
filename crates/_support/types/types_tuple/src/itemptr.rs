@@ -165,7 +165,10 @@ pub fn itemptr_encode(itemptr: &ItemPointerData) -> i64 {
 
 #[inline]
 pub fn itemptr_decode(encoded: i64) -> ItemPointerData {
-    ItemPointerData::new((encoded >> 16) as BlockNumber, (encoded & 0xffff) as OffsetNumber)
+    ItemPointerData::new(
+        (encoded >> 16) as BlockNumber,
+        (encoded & 0xffff) as OffsetNumber,
+    )
 }
 
 #[inline]

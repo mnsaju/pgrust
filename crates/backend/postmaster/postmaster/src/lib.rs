@@ -369,7 +369,9 @@ pub(crate) fn report_internal(
     line: i32,
     func: &'static str,
 ) {
-    let _ = elog::ereport(level).errmsg_internal(msg).finish(loc(line, func));
+    let _ = elog::ereport(level)
+        .errmsg_internal(msg)
+        .finish(loc(line, func));
 }
 
 pub fn process_pm_reload_request() -> PgResult<()> {
@@ -436,7 +438,12 @@ pub fn process_pm_reload_request() -> PgResult<()> {
             if be_secure::secure_initialize(false)? == 0 {
                 backend_startup::loaded_ssl::set(true);
             } else {
-                report(LOG, "SSL configuration was not reloaded".into(), 2030, "process_pm_reload_request");
+                report(
+                    LOG,
+                    "SSL configuration was not reloaded".into(),
+                    2030,
+                    "process_pm_reload_request",
+                );
             }
         } else {
             be_secure::secure_destroy();
@@ -501,7 +508,9 @@ pub fn process_pm_pmsignal() -> PgResult<()> {
     }
 
     if pmsignal::CheckPostmasterSignal(PMSIGNAL_BACKGROUND_WORKER_CHANGE) {
-        bgworker::BackgroundWorkerStateChange(with_pm(|pm| pm.pm_state < PMState::PM_STOP_BACKENDS));
+        bgworker::BackgroundWorkerStateChange(with_pm(|pm| {
+            pm.pm_state < PMState::PM_STOP_BACKENDS
+        }));
         with_pm(|pm| pm.start_worker_needed = true);
     }
 
@@ -542,14 +551,19 @@ pub fn process_pm_pmsignal() -> PgResult<()> {
             if let Some(pgarch) = pgarch {
                 statemachine::signal_child(&pgarch, procsignal::signums::SIGUSR2);
             }
-            pmchild_seams::signal_children::call(procsignal::signums::SIGUSR2, btmask(BackendType::WalSender));
+            pmchild_seams::signal_children::call(
+                procsignal::signums::SIGUSR2,
+                btmask(BackendType::WalSender),
+            );
             statemachine::UpdatePMState(PMState::PM_WAIT_XLOG_ARCHIVAL);
         } else if with_pm(|pm| !pm.fatal_error && pm.shutdown != ImmediateShutdown) {
-            report(LOG, "WAL was shut down unexpectedly".into(), 3846, "process_pm_pmsignal");
-            statemachine::HandleFatalError(
-                pmsignal::QuitSignalReason::PMQUIT_FOR_CRASH,
-                false,
-            )?;
+            report(
+                LOG,
+                "WAL was shut down unexpectedly".into(),
+                3846,
+                "process_pm_pmsignal",
+            );
+            statemachine::HandleFatalError(pmsignal::QuitSignalReason::PMQUIT_FOR_CRASH, false)?;
         }
     }
 
@@ -586,7 +600,10 @@ pub fn process_pm_pmsignal() -> PgResult<()> {
 static CHILD_EXIT_QUEUE: std::sync::Mutex<Vec<(pid_t, i32)>> = std::sync::Mutex::new(Vec::new());
 
 fn announce_child_exit(pid: pid_t, exitstatus: i32) {
-    CHILD_EXIT_QUEUE.lock().unwrap_or_else(|e| e.into_inner()).push((pid, exitstatus));
+    CHILD_EXIT_QUEUE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .push((pid, exitstatus));
     handle_pm_child_exit_signal(0);
 }
 
@@ -627,7 +644,10 @@ fn log_child_exit_at(level: types_error::ErrorLevel, procname: &str, pid: pid_t,
         ),
         None => report(
             level,
-            format!("{procname} (PID {pid}) was terminated by signal {}", exitstatus & 0x7f),
+            format!(
+                "{procname} (PID {pid}) was terminated by signal {}",
+                exitstatus & 0x7f
+            ),
             3844,
             "LogChildExit",
         ),
@@ -638,7 +658,12 @@ fn log_child_exit_at(level: types_error::ErrorLevel, procname: &str, pid: pid_t,
 pub fn process_pm_child_exit() -> PgResult<()> {
     PENDING_PM_CHILD_EXIT.store(false, Ordering::Release);
 
-    report_internal(DEBUG2, "reaping dead processes".into(), 2240, "process_pm_child_exit");
+    report_internal(
+        DEBUG2,
+        "reaping dead processes".into(),
+        2240,
+        "process_pm_child_exit",
+    );
 
     while let Some((pid, exitstatus)) = reap_one() {
         let status0 = exit_status_code(exitstatus) == Some(0);
@@ -656,7 +681,12 @@ pub fn process_pm_child_exit() -> PgResult<()> {
             }
 
             if status3 {
-                report(LOG, "shutdown at recovery target".into(), 2273, "process_pm_child_exit");
+                report(
+                    LOG,
+                    "shutdown at recovery target".into(),
+                    2273,
+                    "process_pm_child_exit",
+                );
                 with_pm(|pm| {
                     pm.startup_status = StartupStatusEnum::NotRunning;
                     pm.shutdown = pm.shutdown.max(SmartShutdown);
@@ -949,7 +979,9 @@ fn pm_service_pending() {
         process_pm_child_exit().unwrap_or_else(|e| panic!("pm_service_pending: {e:?}"));
     }
     if PENDING_PM_PMSIGNAL.swap(false, Ordering::AcqRel)
-        && pmsignal::CheckPostmasterSignal(pmsignal::PMSignalReason::PMSIGNAL_BACKGROUND_WORKER_CHANGE)
+        && pmsignal::CheckPostmasterSignal(
+            pmsignal::PMSignalReason::PMSIGNAL_BACKGROUND_WORKER_CHANGE,
+        )
     {
         bgworker::BackgroundWorkerStateChange(with_pm(|pm| {
             pm.pm_state < PMState::PM_STOP_BACKENDS
@@ -992,8 +1024,12 @@ pub fn init_seams() {
     postmaster_seams::bgworker_shmem_init::set(bgworker::BackgroundWorkerShmemInit);
     postmaster_seams::pm_promote_run::set(pm_promote_run);
     postmaster_seams::pm_service_pending::set(pm_service_pending);
-    postmaster_seams::signal_postmaster_sigusr1::set(|| handle_pm_pmsignal_signal(procsignal::signums::SIGUSR1));
-    postmaster_seams::signal_postmaster_sighup::set(|| handle_pm_reload_request_signal(procsignal::signums::SIGHUP));
+    postmaster_seams::signal_postmaster_sigusr1::set(|| {
+        handle_pm_pmsignal_signal(procsignal::signums::SIGUSR1)
+    });
+    postmaster_seams::signal_postmaster_sighup::set(|| {
+        handle_pm_reload_request_signal(procsignal::signums::SIGHUP)
+    });
     postmaster_seams::pg_start_time::set(main_entry::pg_start_time);
     postmaster_seams::set_pg_start_time::set(main_entry::set_pg_start_time);
 }

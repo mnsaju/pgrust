@@ -22,7 +22,9 @@ use crate::{
 pub fn initGinState(rel: &Relation<'_>) -> PgResult<GinState> {
     let natts = rel.rd_att.natts;
     if natts < 1 || natts as usize > GIN_MAX_KEY_COLS {
-        unported(&format!("GIN index with {natts} key columns (initGinState)"));
+        unported(&format!(
+            "GIN index with {natts} key columns (initGinState)"
+        ));
     }
     let mut cols = [GinColState {
         opclass: GinOpclass::JsonbOps,
@@ -80,8 +82,7 @@ fn init_gin_col(rel: &Relation<'_>, i: usize) -> PgResult<GinColState> {
         // Extension opclasses carry dynamic oids; match by proname.
         other => {
             let cx = ::mcx::MemoryContext::new("gin ext opclass probe");
-            let name = lsyscache::get_func_name(cx.mcx(), other)?
-                .map(|n| n.as_str().to_string());
+            let name = lsyscache::get_func_name(cx.mcx(), other)?.map(|n| n.as_str().to_string());
             let btree_ty = name
                 .as_deref()
                 .and_then(|n| n.strip_prefix("gin_extract_value_"))
@@ -123,16 +124,20 @@ fn init_gin_col(rel: &Relation<'_>, i: usize) -> PgResult<GinColState> {
     };
     debug_assert!(
         matches!(opclass, GinOpclass::BtreeOps(_))
-            || lsyscache::get_opfamily_proc(opfamily, opcintype, opcintype, GIN_COMPARE_PROC as i16)?
-                == match opclass {
-                    GinOpclass::JsonbOps => opclass::F_GIN_COMPARE_JSONB,
-                    GinOpclass::JsonbPathOps => opclass::F_BTINT4CMP,
-                    GinOpclass::TsvectorOps => opclass::F_GIN_CMP_TSLEXEME,
-                    GinOpclass::TrgmOps => opclass::F_BTINT4CMP,
-                    GinOpclass::HstoreOps => opclass::F_BTTEXTCMP,
-                    GinOpclass::IntArrayOps => opclass::F_BTINT4CMP,
-                    GinOpclass::ArrayOps | GinOpclass::BtreeOps(_) => InvalidOid,
-                }
+            || lsyscache::get_opfamily_proc(
+                opfamily,
+                opcintype,
+                opcintype,
+                GIN_COMPARE_PROC as i16
+            )? == match opclass {
+                GinOpclass::JsonbOps => opclass::F_GIN_COMPARE_JSONB,
+                GinOpclass::JsonbPathOps => opclass::F_BTINT4CMP,
+                GinOpclass::TsvectorOps => opclass::F_GIN_CMP_TSLEXEME,
+                GinOpclass::TrgmOps => opclass::F_BTINT4CMP,
+                GinOpclass::HstoreOps => opclass::F_BTTEXTCMP,
+                GinOpclass::IntArrayOps => opclass::F_BTINT4CMP,
+                GinOpclass::ArrayOps | GinOpclass::BtreeOps(_) => InvalidOid,
+            }
     );
     let partial = lsyscache::get_opfamily_proc(
         opfamily,
@@ -255,7 +260,8 @@ pub fn GinNewBuffer(rel: &Relation<'_>) -> PgResult<Buffer> {
 pub(crate) fn gin_init_page_bytes(bytes: &mut [u8], flags: u16) {
     // PageInit(page, BLCKSZ, sizeof(GinPageOpaqueData)).
     // SAFETY: BLCKSZ image with exclusive access.
-    let mut page = unsafe { PageMut::from_raw(core::ptr::NonNull::new(bytes.as_mut_ptr()).unwrap()) };
+    let mut page =
+        unsafe { PageMut::from_raw(core::ptr::NonNull::new(bytes.as_mut_ptr()).unwrap()) };
     page.init(core::mem::size_of::<GinPageOpaqueData>());
     write_opaque_to(
         bytes,
@@ -381,7 +387,11 @@ pub fn ginExtractEntries<'mcx>(
     } else {
         debug_assert!(null_flags.len() == entries.len());
         for &f in null_flags.iter() {
-            categories.push(if f { GIN_CAT_NULL_KEY } else { GIN_CAT_NORM_KEY });
+            categories.push(if f {
+                GIN_CAT_NULL_KEY
+            } else {
+                GIN_CAT_NORM_KEY
+            });
         }
     }
 
@@ -403,8 +413,14 @@ pub fn ginExtractEntries<'mcx>(
         if have_dups {
             let mut j = 0usize;
             for i in 1..keydata.len() {
-                if ginCompareEntries(state, attnum, keydata[j].0, keydata[j].1, keydata[i].0, keydata[i].1)
-                    != 0
+                if ginCompareEntries(
+                    state,
+                    attnum,
+                    keydata[j].0,
+                    keydata[j].1,
+                    keydata[i].0,
+                    keydata[i].1,
+                ) != 0
                 {
                     j += 1;
                     keydata[j] = keydata[i];

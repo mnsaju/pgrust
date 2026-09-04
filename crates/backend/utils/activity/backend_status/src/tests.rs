@@ -92,9 +92,8 @@ fn start_backend(procno: ProcNumber, pid: i32) {
 fn shmem_size_matches_c_formula() {
     let _g = bringup();
     let slots = (g::MaxBackends() + NUM_AUXILIARY_PROCS) as usize;
-    let expected = slots * std::mem::size_of::<PgBackendStatus>()
-        + 2 * slots * NAMELEN
-        + slots * 1024;
+    let expected =
+        slots * std::mem::size_of::<PgBackendStatus>() + 2 * slots * NAMELEN + slots * 1024;
     assert_eq!(BackendStatusShmemSize().unwrap(), expected);
 }
 
@@ -109,7 +108,10 @@ fn bestart_lifecycle_reaches_undefined_state() {
     assert_eq!(e.st_proc_start_timestamp.get(), 777);
     assert_eq!(e.st_state.get(), BackendState::STATE_UNDEFINED);
     assert_ne!(e.st_userid.get(), InvalidOid);
-    assert_eq!(pgstat_get_backend_type_by_proc_number(0), BackendType::Backend);
+    assert_eq!(
+        pgstat_get_backend_type_by_proc_number(0),
+        BackendType::Backend
+    );
 
     pgstat_beshutdown_hook(0, 0);
     assert!(MyBEEntry().is_none());
@@ -140,13 +142,13 @@ fn report_activity_stores_and_resets_ids() {
 
     let activity = pgstat_get_backend_current_activity(900002, false).unwrap();
     assert_eq!(activity, "SELECT 1");
-    assert_eq!(pgstat_get_crashed_backend_activity(900002).unwrap(), "SELECT 1");
+    assert_eq!(
+        pgstat_get_crashed_backend_activity(900002).unwrap(),
+        "SELECT 1"
+    );
 
     let long = "x".repeat(5000);
-    backend_status_seams::pgstat_report_activity::call(
-        BackendState::STATE_RUNNING,
-        Some(&long),
-    );
+    backend_status_seams::pgstat_report_activity::call(BackendState::STATE_RUNNING, Some(&long));
     assert_eq!(read_activity(e.slot).len(), 1023);
 
     backend_status_seams::pgstat_report_activity::call(BackendState::STATE_IDLE, None);
@@ -227,7 +229,10 @@ fn cross_thread_entry_is_readable() {
     });
     handle.join().unwrap();
 
-    assert_eq!(pgstat_get_backend_type_by_proc_number(4), BackendType::Backend);
+    assert_eq!(
+        pgstat_get_backend_type_by_proc_number(4),
+        BackendType::Backend
+    );
     assert_eq!(
         pgstat_get_backend_current_activity(900005, false).unwrap(),
         "CROSS THREAD QUERY"

@@ -12,8 +12,7 @@ use ::types_rel::Relation;
 use ::types_storage::lock::{ShareLock, LOCKMODE};
 
 fn amcheck_index_mainfork_expected(rel: &Relation<'_>) -> PgResult<bool> {
-    if rel.rd_rel.relpersistence != RELPERSISTENCE_UNLOGGED || !transam_xlog::RecoveryInProgress()
-    {
+    if rel.rd_rel.relpersistence != RELPERSISTENCE_UNLOGGED || !transam_xlog::RecoveryInProgress() {
         return Ok(true);
     }
 

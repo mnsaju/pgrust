@@ -448,10 +448,7 @@ fn elements<'mcx>(js: J<'_, 'mcx>, l: &NodeList<'mcx>, e: &p::ArrayExpr<'mcx>) -
     list(js, l)
 }
 
-pub(crate) fn jumble_query_struct<'mcx>(
-    js: J<'_, 'mcx>,
-    e: &q::Query<'mcx>,
-) -> PgResult<()> {
+pub(crate) fn jumble_query_struct<'mcx>(js: J<'_, 'mcx>, e: &q::Query<'mcx>) -> PgResult<()> {
     js.tag(NodeTag::T_Query);
     js.f_u32(e.commandType as u32);
     node(js, e.utilityStmt)?;

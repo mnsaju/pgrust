@@ -87,20 +87,23 @@ impl SaslMech for ScramMech {
     }
 }
 
-fn scram_init(port: &Port, selected_mech: &[u8], shadow_pass: Option<&str>) -> PgResult<ScramState> {
-    let channel_binding_in_use = if selected_mech == SCRAM_SHA_256_PLUS_NAME.as_bytes()
-        && port.ssl_in_use
-    {
-        true
-    } else if selected_mech == SCRAM_SHA_256_NAME.as_bytes() {
-        false
-    } else {
-        elog::ereport(ERROR)
-            .errcode(ERRCODE_PROTOCOL_VIOLATION)
-            .errmsg("client selected an invalid SASL authentication mechanism")
-            .finish(loc("scram_init"))?;
-        unreachable!()
-    };
+fn scram_init(
+    port: &Port,
+    selected_mech: &[u8],
+    shadow_pass: Option<&str>,
+) -> PgResult<ScramState> {
+    let channel_binding_in_use =
+        if selected_mech == SCRAM_SHA_256_PLUS_NAME.as_bytes() && port.ssl_in_use {
+            true
+        } else if selected_mech == SCRAM_SHA_256_NAME.as_bytes() {
+            false
+        } else {
+            elog::ereport(ERROR)
+                .errcode(ERRCODE_PROTOCOL_VIOLATION)
+                .errmsg("client selected an invalid SASL authentication mechanism")
+                .finish(loc("scram_init"))?;
+            unreachable!()
+        };
 
     let user_name = port.user_name.as_deref().unwrap_or("");
     let mut logdetail = None;
@@ -349,7 +352,13 @@ fn sanitize_char(c: u8) -> String {
 fn sanitize_str(s: &[u8]) -> String {
     s.iter()
         .take(30)
-        .map(|&c| if (0x21..=0x7e).contains(&c) { c as char } else { '?' })
+        .map(|&c| {
+            if (0x21..=0x7e).contains(&c) {
+                c as char
+            } else {
+                '?'
+            }
+        })
         .collect()
 }
 
@@ -543,7 +552,12 @@ fn read_client_final_message(state: &mut ScramState, input: &[u8]) -> PgResult<(
 
         let cap = pg_b64_enc_len(cbind_input.len() as i32);
         let mut b64_message = vec![0u8; cap as usize];
-        let n = pg_b64_encode(&cbind_input, cbind_input.len() as i32, &mut b64_message, cap);
+        let n = pg_b64_encode(
+            &cbind_input,
+            cbind_input.len() as i32,
+            &mut b64_message,
+            cap,
+        );
         if n < 0 {
             elog::ereport(ERROR)
                 .errmsg_internal("could not encode channel binding data")

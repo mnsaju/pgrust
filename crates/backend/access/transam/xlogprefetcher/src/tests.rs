@@ -27,8 +27,12 @@ thread_local! {
 fn rig() {
     RIG.call_once(|| {
         XLogPrefetchShmemInit();
-        guc_tables::vars::maintenance_io_concurrency
-            .install_if_absent(guc_tables::GucVarAccessors { get: || 10, set: |_| {} });
+        guc_tables::vars::maintenance_io_concurrency.install_if_absent(
+            guc_tables::GucVarAccessors {
+                get: || 10,
+                set: |_| {},
+            },
+        );
         waitevent_seams::pgstat_report_wait_start::set(|_| {});
         waitevent_seams::pgstat_report_wait_end::set(|| {});
         relpath::init_seams();
@@ -52,7 +56,12 @@ struct WalSim {
 impl WalSim {
     fn new() -> WalSim {
         let base = SEGSZ as u64;
-        let mut w = WalSim { buf: vec![0u8; SEGSZ as usize], base, insert: 0, prev: 0 };
+        let mut w = WalSim {
+            buf: vec![0u8; SEGSZ as usize],
+            base,
+            insert: 0,
+            prev: 0,
+        };
         w.buf[0..2].copy_from_slice(&XLOG_PAGE_MAGIC.to_ne_bytes());
         w.buf[2..4].copy_from_slice(&XLP_LONG_HEADER.to_ne_bytes());
         w.buf[4..8].copy_from_slice(&1u32.to_ne_bytes());
@@ -81,7 +90,10 @@ impl WalSim {
         ));
         rec[20..24].copy_from_slice(&crc.to_ne_bytes());
         let off = (start - self.base) as usize;
-        assert!(off + rec.len() < 8192, "test WAL must stay on the first page");
+        assert!(
+            off + rec.len() < 8192,
+            "test WAL must stay on the first page"
+        );
         self.buf[off..off + rec.len()].copy_from_slice(&rec);
         self.prev = start;
         self.insert = start + MAXALIGN(rec.len()) as u64;
@@ -142,7 +154,12 @@ struct SimRead<'w> {
 }
 
 impl XLogSegmentRoutine for SimRead<'_> {
-    fn segment_open(&mut self, _: &mut ReaderView, _: XLogSegNo, _: &mut TimeLineID) -> PgResult<()> {
+    fn segment_open(
+        &mut self,
+        _: &mut ReaderView,
+        _: XLogSegNo,
+        _: &mut TimeLineID,
+    ) -> PgResult<()> {
         unreachable!("in-memory reader")
     }
     fn segment_close(&mut self, _: &mut ReaderView) {}
@@ -213,19 +230,29 @@ fn lrq_admission_and_completion_match_c() {
         Ok(st)
     })
     .unwrap();
-    assert_eq!((lrq.inflight, lrq.completed, lrq.head, lrq.tail), (2, 1, 3, 0));
+    assert_eq!(
+        (lrq.inflight, lrq.completed, lrq.head, lrq.tail),
+        (2, 1, 3, 0)
+    );
     assert_eq!(i, 3, "stops at max_inflight");
 
     // Replaying past 25 retires 10 (no-io) and 20 (io); disabled: no refill.
     lrq_complete_lsn(&mut lrq, 25, false, |_| unreachable!("disabled")).unwrap();
-    assert_eq!((lrq.inflight, lrq.completed, lrq.head, lrq.tail), (1, 0, 3, 2));
+    assert_eq!(
+        (lrq.inflight, lrq.completed, lrq.head, lrq.tail),
+        (1, 0, 3, 2)
+    );
 
     // Enabled refill resumes admission until Again.
     let mut calls = 0;
     lrq_complete_lsn(&mut lrq, 35, true, |lsn| {
         calls += 1;
         *lsn = 100;
-        Ok(if calls == 1 { LsnReadQueueNextStatus::NoIo } else { LsnReadQueueNextStatus::Again })
+        Ok(if calls == 1 {
+            LsnReadQueueNextStatus::NoIo
+        } else {
+            LsnReadQueueNextStatus::Again
+        })
     })
     .unwrap();
     assert_eq!((lrq.inflight, lrq.completed, lrq.tail), (0, 1, 3));
@@ -262,7 +289,10 @@ fn filter_lsn_horizon_semantics() {
 
     // C: filters drop only when filter_until_replayed < replaying_lsn.
     pf.XLogPrefetcherCompleteFilters(200);
-    assert!(pf.XLogPrefetcherIsFiltered(a, 3), "until==replaying keeps the filter");
+    assert!(
+        pf.XLogPrefetcherIsFiltered(a, 3),
+        "until==replaying keeps the filter"
+    );
     pf.XLogPrefetcherCompleteFilters(201);
     assert!(!pf.XLogPrefetcherIsFiltered(a, 3));
     assert!(pf.XLogPrefetcherIsFiltered(other, 0));
@@ -275,7 +305,10 @@ fn filter_lsn_horizon_semantics() {
 fn guc_check_and_assign_arms() {
     assert!(check_recovery_prefetch(RECOVERY_PREFETCH_OFF).is_ok());
     assert!(check_recovery_prefetch(RECOVERY_PREFETCH_TRY).is_ok());
-    assert_eq!(check_recovery_prefetch(RECOVERY_PREFETCH_ON).is_ok(), USE_PREFETCH);
+    assert_eq!(
+        check_recovery_prefetch(RECOVERY_PREFETCH_ON).is_ok(),
+        USE_PREFETCH
+    );
 
     assign_recovery_prefetch(RECOVERY_PREFETCH_OFF);
     assert_eq!(recovery_prefetch(), RECOVERY_PREFETCH_OFF);
@@ -292,10 +325,21 @@ fn recovery_prefetch_off_bypasses_analysis() {
     let l2 = w.append(
         RM_HEAP_ID,
         0x30,
-        &block_body(&[BlockSpec { rlocator: (1663, 5, 42), blkno: 0, will_init: false, fpw: true }], b""),
+        &block_body(
+            &[BlockSpec {
+                rlocator: (1663, 5, 42),
+                blkno: 0,
+                will_init: false,
+                fpw: true,
+            }],
+            b"",
+        ),
     );
     let l3 = w.append(RM_HEAP_ID, 0x30, &block_body(&[], b"three"));
-    let mut src = SimRead { wal: &w, end: w.insert };
+    let mut src = SimRead {
+        wal: &w,
+        end: w.insert,
+    };
 
     assign_recovery_prefetch(RECOVERY_PREFETCH_OFF);
     let before = snapshot();
@@ -303,9 +347,18 @@ fn recovery_prefetch_off_bypasses_analysis() {
     let mut r = reader(&cx);
     let mut pf = XLogPrefetcher::XLogPrefetcherAllocate(cx.mcx());
     pf.XLogPrefetcherBeginRead(&mut r, l1);
-    assert_eq!(pf.XLogPrefetcherReadRecord(&mut r, &mut src).unwrap(), Some(l1));
-    assert_eq!(pf.XLogPrefetcherReadRecord(&mut r, &mut src).unwrap(), Some(l2));
-    assert_eq!(pf.XLogPrefetcherReadRecord(&mut r, &mut src).unwrap(), Some(l3));
+    assert_eq!(
+        pf.XLogPrefetcherReadRecord(&mut r, &mut src).unwrap(),
+        Some(l1)
+    );
+    assert_eq!(
+        pf.XLogPrefetcherReadRecord(&mut r, &mut src).unwrap(),
+        Some(l2)
+    );
+    assert_eq!(
+        pf.XLogPrefetcherReadRecord(&mut r, &mut src).unwrap(),
+        Some(l3)
+    );
     assert_eq!(pf.XLogPrefetcherReadRecord(&mut r, &mut src).unwrap(), None);
 
     // Off: records decode one at a time, nothing is analyzed or counted.
@@ -333,12 +386,28 @@ fn stats_classify_skips_like_c() {
     let _fpw = w.append(
         RM_HEAP_ID,
         0x30,
-        &block_body(&[BlockSpec { rlocator: y, blkno: 1, will_init: false, fpw: true }], b""),
+        &block_body(
+            &[BlockSpec {
+                rlocator: y,
+                blkno: 1,
+                will_init: false,
+                fpw: true,
+            }],
+            b"",
+        ),
     );
     let _init = w.append(
         RM_HEAP_ID,
         0x30,
-        &block_body(&[BlockSpec { rlocator: y, blkno: 2, will_init: true, fpw: false }], b""),
+        &block_body(
+            &[BlockSpec {
+                rlocator: y,
+                blkno: 2,
+                will_init: true,
+                fpw: false,
+            }],
+            b"",
+        ),
     );
     // SMGR_CREATE(x, main fork) filters x before its block is scanned.
     let mut create = Vec::new();
@@ -346,26 +415,57 @@ fn stats_classify_skips_like_c() {
     create.extend_from_slice(&x.1.to_ne_bytes());
     create.extend_from_slice(&x.2.to_ne_bytes());
     create.extend_from_slice(&0i32.to_ne_bytes());
-    let _smgr = w.append(RM_SMGR_ID, storage_xlog::XLOG_SMGR_CREATE, &block_body(&[], &create));
+    let _smgr = w.append(
+        RM_SMGR_ID,
+        storage_xlog::XLOG_SMGR_CREATE,
+        &block_body(&[], &create),
+    );
     let _filtered = w.append(
         RM_HEAP_ID,
         0x30,
-        &block_body(&[BlockSpec { rlocator: x, blkno: 9, will_init: false, fpw: false }], b""),
+        &block_body(
+            &[BlockSpec {
+                rlocator: x,
+                blkno: 9,
+                will_init: false,
+                fpw: false,
+            }],
+            b"",
+        ),
     );
     // y is absent on disk: smgrexists=false => skip_new + filter.
     let _missing = w.append(
         RM_HEAP_ID,
         0x30,
-        &block_body(&[BlockSpec { rlocator: y, blkno: 3, will_init: false, fpw: false }], b""),
+        &block_body(
+            &[BlockSpec {
+                rlocator: y,
+                blkno: 3,
+                will_init: false,
+                fpw: false,
+            }],
+            b"",
+        ),
     );
     // z is pre-seeded in the recent window => skip_rep before smgr probes.
     let _rep = w.append(
         RM_HEAP_ID,
         0x30,
-        &block_body(&[BlockSpec { rlocator: z, blkno: 4, will_init: false, fpw: false }], b""),
+        &block_body(
+            &[BlockSpec {
+                rlocator: z,
+                blkno: 4,
+                will_init: false,
+                fpw: false,
+            }],
+            b"",
+        ),
     );
     let end = w.append(RM_HEAP_ID, 0x30, &block_body(&[], b"end"));
-    let mut src = SimRead { wal: &w, end: w.insert };
+    let mut src = SimRead {
+        wal: &w,
+        end: w.insert,
+    };
 
     let before = snapshot();
     let cx = MemoryContext::new("t");
@@ -388,7 +488,11 @@ fn stats_classify_skips_like_c() {
     assert_eq!(got.len(), 8);
 
     let after = snapshot();
-    let delta: Vec<u64> = after.iter().zip(before.iter()).map(|(a, b)| a - b).collect();
+    let delta: Vec<u64> = after
+        .iter()
+        .zip(before.iter())
+        .map(|(a, b)| a - b)
+        .collect();
     // [prefetch, hit, skip_init, skip_new, skip_fpw, skip_rep]
     assert_eq!(delta, vec![0, 0, 1, 2, 1, 1]);
 

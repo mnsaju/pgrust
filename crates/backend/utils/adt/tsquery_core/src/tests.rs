@@ -2,7 +2,7 @@ use ::adt_tsvector_core::io::tsvector_in_core;
 use ::adt_tsvector_core::layout::TsVec;
 use ::adt_tsvector_core::op::ts_match_vq_core;
 use ::adt_tsvector_core::query::TsQueryRef;
-use ::mcx::{MemoryContext, Mcx};
+use ::mcx::{Mcx, MemoryContext};
 
 use crate::io::{tsq_mcontains_core, tsquery_in_core, tsquery_out_core, tsquerytree_core};
 
@@ -50,15 +50,24 @@ fn tsquery_io_matrix() {
     assert_eq!(roundtrip("1|(2|(4|(5|6)))"), "'1' | '2' | '4' | '5' | '6'");
     assert_eq!(roundtrip("1|2|4|5|6"), "'1' | '2' | '4' | '5' | '6'");
     assert_eq!(roundtrip("1&(2&(4&(5&6)))"), "'1' & '2' & '4' & '5' & '6'");
-    assert_eq!(roundtrip("1&(2&(4&(5|6)))"), "'1' & '2' & '4' & ( '5' | '6' )");
-    assert_eq!(roundtrip("1&(2&(4&(5|!6)))"), "'1' & '2' & '4' & ( '5' | !'6' )");
+    assert_eq!(
+        roundtrip("1&(2&(4&(5|6)))"),
+        "'1' & '2' & '4' & ( '5' | '6' )"
+    );
+    assert_eq!(
+        roundtrip("1&(2&(4&(5|!6)))"),
+        "'1' & '2' & '4' & ( '5' | !'6' )"
+    );
     assert_eq!(roundtrip("1<->2"), "'1' <-> '2'");
     assert_eq!(roundtrip("1 <2> 2"), "'1' <2> '2'");
     assert_eq!(roundtrip("(1&2)<->3"), "( '1' & '2' ) <-> '3'");
     assert_eq!(roundtrip("1<->(2&3)"), "'1' <-> ( '2' & '3' )");
     assert_eq!(roundtrip("(1<->2)<->3"), "'1' <-> '2' <-> '3'");
     assert_eq!(roundtrip("1<->(2<->3)"), "'1' <-> ( '2' <-> '3' )");
-    assert_eq!(roundtrip("a:* & nbb:*ac | doo:a* | goo"), "'a':* & 'nbb':*AC | 'doo':*A | 'goo'");
+    assert_eq!(
+        roundtrip("a:* & nbb:*ac | doo:a* | goo"),
+        "'a':* & 'nbb':*AC | 'doo':*A | 'goo'"
+    );
     assert_eq!(parse_err("1|"), "no operand in tsquery: \"1|\"");
     assert_eq!(parse_err("|2"), "syntax error in tsquery: \"|2\"");
 }
@@ -75,12 +84,16 @@ fn tsquery_soft_error() {
 
 fn q<'a>(mcx: Mcx<'a>, s: &str) -> TsQueryRef<'a> {
     let img = tsquery_in_core(mcx, s.as_bytes(), None).unwrap().unwrap();
-    TsQueryRef { payload: &img.leak()[4..] }
+    TsQueryRef {
+        payload: &img.leak()[4..],
+    }
 }
 
 fn v<'a>(mcx: Mcx<'a>, s: &str) -> TsVec<'a> {
     let img = tsvector_in_core(mcx, s.as_bytes(), None).unwrap().unwrap();
-    TsVec { payload: &img.leak()[4..] }
+    TsVec {
+        payload: &img.leak()[4..],
+    }
 }
 
 #[test]
@@ -97,7 +110,11 @@ fn match_matrix() {
         ("d:AC & c:*C", false),
         ("d:AC & c:*CB", true),
     ] {
-        assert_eq!(ts_match_vq_core(mcx, doc, q(mcx, query)).unwrap(), want, "{query}");
+        assert_eq!(
+            ts_match_vq_core(mcx, doc, q(mcx, query)).unwrap(),
+            want,
+            "{query}"
+        );
     }
 
     let doc2 = v(mcx, "wa:1D wb:2A");

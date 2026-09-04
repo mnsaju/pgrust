@@ -62,7 +62,12 @@ fn init_grant_role_options_defaults() {
 fn plan_single_revoke_missing_grant_returns_false() {
     let members = [row(1, 100, 200, 10, false)];
     let mut actions = noop_actions(1);
-    let popt = GrantRoleOptions { specified: 0, admin: false, inherit: false, set: true };
+    let popt = GrantRoleOptions {
+        specified: 0,
+        admin: false,
+        inherit: false,
+        set: true,
+    };
     let found = plan_single_revoke(
         &members,
         &mut actions,
@@ -80,7 +85,12 @@ fn plan_single_revoke_missing_grant_returns_false() {
 fn plan_single_revoke_deletes_plain_grant() {
     let members = [row(1, 100, 200, 10, false)];
     let mut actions = noop_actions(1);
-    let popt = GrantRoleOptions { specified: 0, admin: false, inherit: false, set: true };
+    let popt = GrantRoleOptions {
+        specified: 0,
+        admin: false,
+        inherit: false,
+        set: true,
+    };
     let found = plan_single_revoke(
         &members,
         &mut actions,
@@ -140,7 +150,12 @@ fn plan_recursive_revoke_restrict_errors_on_dependent_grant() {
     // 10 grants ADMIN to 200; 200 grants to 300.
     let members = [row(1, 100, 200, 10, true), row(2, 100, 300, 200, false)];
     let mut actions = noop_actions(2);
-    let popt = GrantRoleOptions { specified: 0, admin: false, inherit: false, set: true };
+    let popt = GrantRoleOptions {
+        specified: 0,
+        admin: false,
+        inherit: false,
+        set: true,
+    };
     let e = plan_single_revoke(
         &members,
         &mut actions,
@@ -158,7 +173,12 @@ fn plan_recursive_revoke_restrict_errors_on_dependent_grant() {
 fn plan_recursive_revoke_cascade_deletes_dependents() {
     let members = [row(1, 100, 200, 10, true), row(2, 100, 300, 200, false)];
     let mut actions = noop_actions(2);
-    let popt = GrantRoleOptions { specified: 0, admin: false, inherit: false, set: true };
+    let popt = GrantRoleOptions {
+        specified: 0,
+        admin: false,
+        inherit: false,
+        set: true,
+    };
     assert!(plan_single_revoke(
         &members,
         &mut actions,
@@ -205,7 +225,12 @@ fn plan_recursive_revoke_stops_when_other_admin_grant_survives() {
         row(3, 100, 300, 200, false),
     ];
     let mut actions = noop_actions(3);
-    let popt = GrantRoleOptions { specified: 0, admin: false, inherit: false, set: true };
+    let popt = GrantRoleOptions {
+        specified: 0,
+        admin: false,
+        inherit: false,
+        set: true,
+    };
     assert!(plan_single_revoke(
         &members,
         &mut actions,

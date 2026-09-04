@@ -118,9 +118,9 @@ fn install_seams() {
         bufmgr_seams::buffer_get_lsn_atomic::set(|_buf| 0x1234);
         transam_xlog_seams::xlog_standby_info_active::set(|| false);
 
-        heapam_visibility_seams::heap_tuple_satisfies_visibility::set(
-            |_htup, _snap, _buf| Ok(true),
-        );
+        heapam_visibility_seams::heap_tuple_satisfies_visibility::set(|_htup, _snap, _buf| {
+            Ok(true)
+        });
         heapam_visibility_seams::heap_tuple_satisfies_mvcc_page::set(
             |_htup, _snap, _buf, _memo| Ok(true),
         );
@@ -767,9 +767,16 @@ fn runtime_key_qual_builds_deferred_scan_key() {
         .unwrap();
         let quals = NodeList::make1(mcx, op).unwrap();
         let mut runtime = ::mcx::PgVec::new_in(mcx);
-        let keys =
-            exec_index_build_scan_keys(mcx, &index_rel, &quals, ParamBind::NONE, false, &mut runtime, None)
-                .unwrap();
+        let keys = exec_index_build_scan_keys(
+            mcx,
+            &index_rel,
+            &quals,
+            ParamBind::NONE,
+            false,
+            &mut runtime,
+            None,
+        )
+        .unwrap();
         assert_eq!(keys.len(), 1);
         assert_eq!(runtime.len(), 1);
         assert_eq!(runtime[0].scan_key, 0);
@@ -806,9 +813,16 @@ fn saop_runtime_array_qual_builds_deferred_search_array_key() {
         .unwrap();
         let quals = NodeList::make1(mcx, saop).unwrap();
         let mut runtime = ::mcx::PgVec::new_in(mcx);
-        let keys =
-            exec_index_build_scan_keys(mcx, &index_rel, &quals, ParamBind::NONE, false, &mut runtime, None)
-                .unwrap();
+        let keys = exec_index_build_scan_keys(
+            mcx,
+            &index_rel,
+            &quals,
+            ParamBind::NONE,
+            false,
+            &mut runtime,
+            None,
+        )
+        .unwrap();
         assert_eq!(keys.len(), 1);
         assert_eq!(runtime.len(), 1);
         assert_eq!(runtime[0].scan_key, 0);

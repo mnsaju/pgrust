@@ -8,7 +8,13 @@ use types_nodes::primnodes::{Var, VarReturningType};
 
 use crate::node_funcs::{expr_collation, expr_type};
 
-fn make_var<'mcx>(varno: Index, varattno: i16, vartype: types_core::Oid, varcollid: types_core::Oid, varlevelsup: Index) -> Var<'mcx> {
+fn make_var<'mcx>(
+    varno: Index,
+    varattno: i16,
+    vartype: types_core::Oid,
+    varcollid: types_core::Oid,
+    varlevelsup: Index,
+) -> Var<'mcx> {
     Var {
         varno: varno as i32,
         varattno,
@@ -89,25 +95,40 @@ pub fn make_whole_row_var<'mcx>(
             } else if allow_scalar {
                 Ok(make_var(varno, 1, toid, expr_collation(fexpr), varlevelsup))
             } else {
-                Ok(make_var(varno, 0, types_core::catalog::RECORDOID, InvalidOid, varlevelsup))
+                Ok(make_var(
+                    varno,
+                    0,
+                    types_core::catalog::RECORDOID,
+                    InvalidOid,
+                    varlevelsup,
+                ))
             }
         }
-        _ => Ok(make_var(varno, 0, types_core::catalog::RECORDOID, InvalidOid, varlevelsup)),
+        _ => Ok(make_var(
+            varno,
+            0,
+            types_core::catalog::RECORDOID,
+            InvalidOid,
+            varlevelsup,
+        )),
     }
 }
 
 #[cold]
-fn composite_type_err(
-    mcx: Mcx<'_>,
-    relid: types_core::Oid,
-) -> Box<types_error::PgError> {
+fn composite_type_err(mcx: Mcx<'_>, relid: types_core::Oid) -> Box<types_error::PgError> {
     let name = lsyscache::get_rel_name(mcx, relid).ok().flatten();
     let name = name.as_ref().map(|s| s.as_str()).unwrap_or("");
     Box::new(
         elog::ereport(ERROR)
             .errcode(ERRCODE_WRONG_OBJECT_TYPE)
-            .errmsg(format!("relation \"{name}\" does not have a composite type"))
+            .errmsg(format!(
+                "relation \"{name}\" does not have a composite type"
+            ))
             .into_error()
-            .with_error_location(ErrorLocation::new(file!(), line!() as i32, "makeWholeRowVar")),
+            .with_error_location(ErrorLocation::new(
+                file!(),
+                line!() as i32,
+                "makeWholeRowVar",
+            )),
     )
 }

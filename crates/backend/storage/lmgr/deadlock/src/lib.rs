@@ -92,8 +92,7 @@ fn backend_mcx() -> Mcx<'static> {
     CTX.with(|c| match c.get() {
         Some(m) => m.mcx(),
         None => {
-            let m: &'static MemoryContext =
-                ::mcx::session_root("DeadLockChecking");
+            let m: &'static MemoryContext = ::mcx::session_root("DeadLockChecking");
             // LIFO: empty the droppy workspace TLS before its context is
             // freed (all workspace vecs allocate from this context).
             ::mcx::register_session_cleanup(Box::new(|| {
@@ -429,8 +428,7 @@ fn FindLockCycleRecurseMember(
                 lastGroupMember = checkProc;
             } else {
                 lock::wq_foreach(lock, |other| {
-                    if GetPGProcByNumber(other).lockGroupLeader.load(Relaxed) == checkProcLeader
-                    {
+                    if GetPGProcByNumber(other).lockGroupLeader.load(Relaxed) == checkProcLeader {
                         lastGroupMember = other;
                     }
                     true
@@ -631,7 +629,10 @@ pub fn DeadLockReport() -> PgResult<()> {
         clientbuf.push_str(&format!(
             "Process {} waits for {} on {}; blocked by process {}.",
             info.pid,
-            lock::GetLockmodeName(info.locktag.locktag_lockmethodid as LOCKMETHODID, info.lockmode),
+            lock::GetLockmodeName(
+                info.locktag.locktag_lockmethodid as LOCKMETHODID,
+                info.lockmode
+            ),
             locktag_desc,
             nextpid
         ));

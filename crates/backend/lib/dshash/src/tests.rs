@@ -220,7 +220,10 @@ fn exclusive_guard_blocks_readers() {
     let reader = std::thread::spawn(move || {
         claim_proc();
         let e = t2.find_shared(&5).unwrap().unwrap();
-        assert!(RELEASED.load(Ordering::Acquire), "reader got in under the exclusive guard");
+        assert!(
+            RELEASED.load(Ordering::Acquire),
+            "reader got in under the exclusive guard"
+        );
         e.value
     });
 
@@ -249,7 +252,9 @@ fn stress_increment_no_lost_updates() {
                 let mut tally = [0u64; KEYS as usize];
                 let mut rng = 0x9e3779b97f4a7c15u64.wrapping_mul(ti as u64 + 1);
                 for _ in 0..OPS {
-                    rng = rng.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                    rng = rng
+                        .wrapping_mul(6364136223846793005)
+                        .wrapping_add(1442695040888963407);
                     let key = (rng >> 33) % KEYS;
                     let (mut e, _) = t.find_or_insert(&key).unwrap();
                     e.value += 1;
@@ -297,7 +302,9 @@ fn stress_insert_delete_churn() {
                 claim_proc();
                 let mut rng = 0xdeadbeefcafef00du64.wrapping_mul(ti as u64 + 3);
                 for _ in 0..OPS {
-                    rng = rng.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                    rng = rng
+                        .wrapping_mul(6364136223846793005)
+                        .wrapping_add(1442695040888963407);
                     let key = ((rng >> 33) as usize) % KEYS;
                     if rng & 1 == 0 {
                         let (_, found) = t.find_or_insert(&(key as u64)).unwrap();
@@ -382,5 +389,8 @@ fn drop_frees_all_entries() {
 #[test]
 fn hash_helpers_match_hashfn() {
     assert_eq!(dshash_memhash(b"abcd"), hashfn::tag_hash(b"abcd", 4));
-    assert_eq!(dshash_strhash(b"ab\0cd", 5), hashfn::string_hash(b"ab\0cd", 5));
+    assert_eq!(
+        dshash_strhash(b"ab\0cd", 5),
+        hashfn::string_hash(b"ab\0cd", 5)
+    );
 }

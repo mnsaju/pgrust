@@ -1,4 +1,3 @@
-
 pub const PGP_S2K_SIMPLE: i32 = 0;
 pub const PGP_S2K_SALTED: i32 = 1;
 pub const PGP_S2K_ISALTED: i32 = 3;
@@ -141,7 +140,11 @@ impl Digest {
             PGP_DIGEST_SHA512 => (Hasher::Sha512(::pg_sha2::PgSha512Ctx::init_sha512()), 64),
             _ => return None,
         };
-        Some(Digest { initial: state.clone(), state, len })
+        Some(Digest {
+            initial: state.clone(),
+            state,
+            len,
+        })
     }
 
     pub fn result_size(&self) -> usize {

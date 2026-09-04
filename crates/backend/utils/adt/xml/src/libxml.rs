@@ -40,8 +40,7 @@ pub const XML_SAVE_NO_DECL: c_int = 1 << 1;
 
 pub type xmlExternalEntityLoader =
     unsafe extern "C" fn(URL: *const c_char, ID: *const c_char, ctxt: *mut c_void) -> *mut c_void;
-pub type xmlStructuredErrorFunc =
-    unsafe extern "C" fn(user_data: *mut c_void, error: *mut c_void);
+pub type xmlStructuredErrorFunc = unsafe extern "C" fn(user_data: *mut c_void, error: *mut c_void);
 type xmlFreeFunc = unsafe extern "C" fn(mem: *mut c_void);
 
 // Prefixes of libxml2's public structs through the fields xml.c reads;
@@ -180,8 +179,7 @@ pub struct LibXml2 {
     pub xmlKeepBlanksDefault: unsafe extern "C" fn(val: c_int) -> c_int,
     pub xmlDocSetRootElement:
         unsafe extern "C" fn(doc: *mut xmlDoc, root: *mut xmlNode) -> *mut xmlNode,
-    pub xmlNewNode:
-        unsafe extern "C" fn(ns: *mut c_void, name: *const c_uchar) -> *mut xmlNode,
+    pub xmlNewNode: unsafe extern "C" fn(ns: *mut c_void, name: *const c_uchar) -> *mut xmlNode,
     pub xmlNewDocText:
         unsafe extern "C" fn(doc: *mut xmlDoc, content: *const c_uchar) -> *mut xmlNode,
     pub xmlAddChildList:

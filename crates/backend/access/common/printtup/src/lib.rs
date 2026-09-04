@@ -72,8 +72,7 @@ fn scratch_mcx() -> Mcx<'static> {
     CTX.with(|c| match c.get() {
         Some(m) => m.mcx(),
         None => {
-            let m: &'static MemoryContext =
-                ::mcx::session_root("PrinttupScratch");
+            let m: &'static MemoryContext = ::mcx::session_root("PrinttupScratch");
             // LIFO: drop the pooled wire buffer before its context is freed
             // (Cell<Option<StringInfo>> is a droppy TLS payload).
             ::mcx::register_session_cleanup(Box::new(|| {
@@ -261,9 +260,8 @@ impl<'mcx> DrPrinttup<'mcx> {
                 };
                 // SAFETY: text output fns return a NUL-terminated cstring
                 // datum (the contract C's DatumGetCString trusts).
-                let s =
-                    unsafe { CStr::from_ptr(out.as_usize() as *const core::ffi::c_char) }
-                        .to_bytes();
+                let s = unsafe { CStr::from_ptr(out.as_usize() as *const core::ffi::c_char) }
+                    .to_bytes();
                 if self.conv_needed {
                     pq_sendcountedtext(buf, s)?;
                 } else {

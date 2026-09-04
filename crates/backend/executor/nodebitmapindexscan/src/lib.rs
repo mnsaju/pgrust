@@ -249,7 +249,10 @@ pub fn multi_exec_bitmap_index_scan_clamped_into<'mcx>(
     hi: i64,
     tbm: &mut TIDBitmap<'_>,
 ) -> PgResult<f64> {
-    debug_assert!(node.biss_Runtime.is_none(), "mode C admission excludes runtime keys");
+    debug_assert!(
+        node.biss_Runtime.is_none(),
+        "mode C admission excludes runtime keys"
+    );
     write_arg(&mut node.biss_ScanKeys[clamp.ge.idx], clamp.ge.width, lo);
     write_arg(&mut node.biss_ScanKeys[clamp.le.idx], clamp.le.width, hi);
     let mcx = estate.es_query_cxt;
@@ -297,7 +300,13 @@ pub fn exec_rescan_bitmap_index_scan<'mcx>(
 ) -> PgResult<()> {
     if let Some(rt) = node.biss_Runtime.as_deref_mut() {
         estate.reset_expr_context(rt.ecxt);
-        exec_index_eval_runtime_keys(estate, rt.ecxt, &mut rt.keys, &mut node.biss_ScanKeys, &mut [])?;
+        exec_index_eval_runtime_keys(
+            estate,
+            rt.ecxt,
+            &mut rt.keys,
+            &mut node.biss_ScanKeys,
+            &mut [],
+        )?;
         rt.ready = true;
     }
     if let Some(scandesc) = node.biss_ScanDesc.as_deref_mut() {
@@ -400,10 +409,20 @@ mod clamp_tests {
         let mut k = key(1, BTGreaterEqualStrategyNumber, t, 0);
         write_arg(&mut k, ClampWidth::I64, -123456789012345);
         assert_eq!(read_arg(&k, ClampWidth::I64), -123456789012345);
-        let mut k = key(1, BTGreaterEqualStrategyNumber, ::types_core::catalog::INT2OID, 0);
+        let mut k = key(
+            1,
+            BTGreaterEqualStrategyNumber,
+            ::types_core::catalog::INT2OID,
+            0,
+        );
         write_arg(&mut k, ClampWidth::I16, -32000);
         assert_eq!(read_arg(&k, ClampWidth::I16), -32000);
-        let mut k = key(1, BTGreaterEqualStrategyNumber, ::types_core::catalog::INT4OID, 0);
+        let mut k = key(
+            1,
+            BTGreaterEqualStrategyNumber,
+            ::types_core::catalog::INT4OID,
+            0,
+        );
         write_arg(&mut k, ClampWidth::I32, 2_000_000_000);
         assert_eq!(read_arg(&k, ClampWidth::I32), 2_000_000_000);
     }

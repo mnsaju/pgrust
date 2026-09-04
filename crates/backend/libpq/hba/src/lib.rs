@@ -20,7 +20,6 @@ mod tests;
 mod token;
 mod tokenize;
 
-
 use elog::ereport;
 pub use pgstrcasecmp::pg_strcasecmp;
 use types_core::init::UserAuth;
@@ -122,7 +121,9 @@ pub(crate) fn report_config(
     line_num: i32,
     file_name: &str,
 ) -> PgResult<()> {
-    let mut b = ereport(elevel).errcode(ERRCODE_CONFIG_FILE_ERROR).errmsg(msg);
+    let mut b = ereport(elevel)
+        .errcode(ERRCODE_CONFIG_FILE_ERROR)
+        .errmsg(msg);
     if let Some(h) = hint {
         b = b.errhint(h);
     }
@@ -137,7 +138,10 @@ pub(crate) fn report_plain(
     sqlstate: SqlState,
     msg: String,
 ) -> PgResult<()> {
-    ereport(elevel).errcode(sqlstate).errmsg(msg).finish(loc(cline, func))
+    ereport(elevel)
+        .errcode(sqlstate)
+        .errmsg(msg)
+        .finish(loc(cline, func))
 }
 
 pub fn load_hba() -> PgResult<bool> {
@@ -221,7 +225,9 @@ pub fn load_ident() -> PgResult<bool> {
         return Ok(false);
     }
 
-    *PARSED_IDENT_LINES.write().unwrap_or_else(|e| e.into_inner()) = new_parsed_lines;
+    *PARSED_IDENT_LINES
+        .write()
+        .unwrap_or_else(|e| e.into_inner()) = new_parsed_lines;
     Ok(true)
 }
 

@@ -136,7 +136,9 @@ impl<'a> Cur<'a> {
         let id = if delta == 0 {
             self.zig_i16()?
         } else {
-            last_id.checked_add(delta).ok_or_else(|| corrupt("field id overflow"))?
+            last_id
+                .checked_add(delta)
+                .ok_or_else(|| corrupt("field id overflow"))?
         };
         *last_id = id;
         Ok(Some((t, id)))

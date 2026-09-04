@@ -10,10 +10,10 @@ pub mod builtins;
 pub mod chvalid;
 pub mod errhandler;
 pub mod libxml;
-pub mod xmltable;
-pub mod xpath;
 #[cfg(test)]
 mod tests;
+pub mod xmltable;
+pub mod xpath;
 
 use core::ffi::{c_char, c_int, c_void};
 
@@ -22,16 +22,16 @@ use ::types_error::{
     ereturn, PgError, PgResult, SoftErrorContext, ERRCODE_FEATURE_NOT_SUPPORTED,
     ERRCODE_INTERNAL_ERROR, ERRCODE_INVALID_PARAMETER_VALUE, ERRCODE_INVALID_XML_COMMENT,
     ERRCODE_INVALID_XML_CONTENT, ERRCODE_INVALID_XML_DOCUMENT,
-    ERRCODE_INVALID_XML_PROCESSING_INSTRUCTION, ERRCODE_NOT_AN_XML_DOCUMENT,
-    ERRCODE_OUT_OF_MEMORY, WARNING,
+    ERRCODE_INVALID_XML_PROCESSING_INSTRUCTION, ERRCODE_NOT_AN_XML_DOCUMENT, ERRCODE_OUT_OF_MEMORY,
+    WARNING,
 };
 
 use errhandler::{
-    pg_xml_init, xml_ereport, xml_err_occurred, PG_XML_STRICTNESS_ALL,
-    PG_XML_STRICTNESS_WELLFORMED,
+    pg_xml_init, xml_ereport, xml_err_occurred, PG_XML_STRICTNESS_ALL, PG_XML_STRICTNESS_WELLFORMED,
 };
-use libxml::{cstr, xml2, xmlDoc, xmlDocHdr, xmlNode, XML_PARSE_DTDATTR, XML_PARSE_NOBLANKS,
-    XML_PARSE_NOENT};
+use libxml::{
+    cstr, xml2, xmlDoc, xmlDocHdr, xmlNode, XML_PARSE_DTDATTR, XML_PARSE_NOBLANKS, XML_PARSE_NOENT,
+};
 
 pub const PG_UTF8: i32 = 6;
 pub const PG_XML_DEFAULT_VERSION: &[u8] = b"1.0";
@@ -130,11 +130,11 @@ fn oom(msg: &str) -> PgError {
 pub fn xmlChar_to_encoding(encoding_name: &str) -> PgResult<i32> {
     let encoding = ::mbutils::pg_char_to_encoding(encoding_name);
     if encoding < 0 {
-        return Err(PgError::error(format!(
-            "invalid encoding name \"{encoding_name}\""
-        ))
-        .with_sqlstate(ERRCODE_INVALID_PARAMETER_VALUE)
-        .into());
+        return Err(
+            PgError::error(format!("invalid encoding name \"{encoding_name}\""))
+                .with_sqlstate(ERRCODE_INVALID_PARAMETER_VALUE)
+                .into(),
+        );
     }
     Ok(encoding)
 }
@@ -212,10 +212,7 @@ pub fn xml_recv<'mcx>(mcx: ::mcx::Mcx<'mcx>, raw: &[u8]) -> PgResult<::mcx::PgVe
 }
 
 /// C `xml_send` (xml.c:438).
-pub fn xml_send<'mcx>(
-    mcx: ::mcx::Mcx<'mcx>,
-    x: &[u8],
-) -> PgResult<::datum::Varlena<'mcx>> {
+pub fn xml_send<'mcx>(mcx: ::mcx::Mcx<'mcx>, x: &[u8]) -> PgResult<::datum::Varlena<'mcx>> {
     let outval = xml_out_internal(x, ::mbutils::pg_get_client_encoding())?;
     let mut buf = pqformat::pq_begintypsend(mcx)?;
     pqformat::pq_sendtext(&mut buf, &outval)?;
@@ -527,15 +524,16 @@ fn serialize_indented(
             return Err(oom("could not allocate xmlSaveCtxt").into());
         }
 
-        let fail = |msg: &str, code| -> Box<PgError> {
-            Box::new(xml_ereport(msg, code))
-        };
+        let fail = |msg: &str, code| -> Box<PgError> { Box::new(xml_ereport(msg, code)) };
 
         if parsed.parsed_as_document() {
             if (x.xmlSaveDoc)(ctxt, parsed.doc) == -1 || xml_err_occurred() {
                 (x.xmlSaveClose)(ctxt);
                 (x.xmlBufferFree)(buf);
-                return Err(fail("could not save document to xmlBuffer", ERRCODE_OUT_OF_MEMORY));
+                return Err(fail(
+                    "could not save document to xmlBuffer",
+                    ERRCODE_OUT_OF_MEMORY,
+                ));
             }
         } else if !parsed.content_nodes.is_null() {
             // Non-singly-rooted XML: fake content-root container, newline
@@ -569,13 +567,19 @@ fn serialize_indented(
                     (x.xmlFreeNode)(newline);
                     (x.xmlSaveClose)(ctxt);
                     (x.xmlBufferFree)(buf);
-                    return Err(fail("could not save newline to xmlBuffer", ERRCODE_OUT_OF_MEMORY));
+                    return Err(fail(
+                        "could not save newline to xmlBuffer",
+                        ERRCODE_OUT_OF_MEMORY,
+                    ));
                 }
                 if (x.xmlSaveTree)(ctxt, node) == -1 || xml_err_occurred() {
                     (x.xmlFreeNode)(newline);
                     (x.xmlSaveClose)(ctxt);
                     (x.xmlBufferFree)(buf);
-                    return Err(fail("could not save content to xmlBuffer", ERRCODE_OUT_OF_MEMORY));
+                    return Err(fail(
+                        "could not save content to xmlBuffer",
+                        ERRCODE_OUT_OF_MEMORY,
+                    ));
                 }
                 node = hdr.next;
             }
@@ -584,7 +588,10 @@ fn serialize_indented(
 
         if (x.xmlSaveClose)(ctxt) == -1 || xml_err_occurred() {
             (x.xmlBufferFree)(buf);
-            return Err(fail("could not close xmlSaveCtxtPtr", ERRCODE_INTERNAL_ERROR));
+            return Err(fail(
+                "could not close xmlSaveCtxtPtr",
+                ERRCODE_INTERNAL_ERROR,
+            ));
         }
 
         let mut bytes = libxml::buffer_to_vec(buf);
@@ -755,7 +762,9 @@ fn pg_xml_is_name_char(c: i32) -> bool {
 }
 
 fn starts_with_at(str: &[u8], p: usize, needle: &[u8]) -> bool {
-    str.get(p..p + needle.len()).map(|s| s == needle).unwrap_or(false)
+    str.get(p..p + needle.len())
+        .map(|s| s == needle)
+        .unwrap_or(false)
 }
 
 fn memchr_from(str: &[u8], from: usize, byte: u8) -> Option<usize> {
@@ -931,7 +940,9 @@ pub fn print_xml_decl(
     encoding: i32,
     standalone: i32,
 ) -> bool {
-    let version_nondefault = version.map(|v| v != PG_XML_DEFAULT_VERSION).unwrap_or(false);
+    let version_nondefault = version
+        .map(|v| v != PG_XML_DEFAULT_VERSION)
+        .unwrap_or(false);
 
     if version_nondefault || (encoding != 0 && encoding != PG_UTF8) || standalone != -1 {
         buf.extend_from_slice(b"<?xml");
@@ -1042,9 +1053,8 @@ pub fn xml_parse_doc(
         None
     } else {
         let ctx = ::mcx::MemoryContext::new("xml_parse encoding conversion");
-        let conv =
-            ::mbutils::pg_do_encoding_conversion(ctx.mcx(), data, encoding, PG_UTF8)?
-                .map(|conv| conv.to_vec());
+        let conv = ::mbutils::pg_do_encoding_conversion(ctx.mcx(), data, encoding, PG_UTF8)?
+            .map(|conv| conv.to_vec());
         drop(ctx);
         conv
     };
@@ -1092,7 +1102,11 @@ pub fn xml_parse_doc(
             }
             let options = XML_PARSE_NOENT
                 | XML_PARSE_DTDATTR
-                | if preserve_whitespace { 0 } else { XML_PARSE_NOBLANKS };
+                | if preserve_whitespace {
+                    0
+                } else {
+                    XML_PARSE_NOBLANKS
+                };
             let doc = (x.xmlCtxtReadDoc)(
                 ctxt,
                 work.as_ptr(),
@@ -1188,7 +1202,13 @@ pub fn xml_parse_ok(
     encoding: i32,
     escontext: Option<&mut SoftErrorContext>,
 ) -> PgResult<bool> {
-    match xml_parse_doc(data, xmloption_arg, preserve_whitespace, encoding, escontext)? {
+    match xml_parse_doc(
+        data,
+        xmloption_arg,
+        preserve_whitespace,
+        encoding,
+        escontext,
+    )? {
         Some(parsed) => {
             parsed.free();
             Ok(true)

@@ -32,7 +32,11 @@ pub(crate) fn probe(relation_id: Oid) -> Probe {
 
 // RelationIdCacheLookup.
 pub(crate) fn lookup_ent(relation_id: Oid) -> Option<(Rc<RelationData<'static>>, bool)> {
-    with_state(|st| st.id_cache.get(&relation_id).map(|e| (Rc::clone(&e.rel), e.nailed)))
+    with_state(|st| {
+        st.id_cache
+            .get(&relation_id)
+            .map(|e| (Rc::clone(&e.rel), e.nailed))
+    })
 }
 
 pub(crate) fn is_nailed(relation_id: Oid) -> bool {
@@ -90,14 +94,16 @@ pub(crate) fn insert(
     replace_allowed: bool,
 ) -> PgResult<()> {
     let relid = rel.rd_id;
-    let leaked = with_state(|st| match st.id_cache.insert(relid, RelCacheEnt { rel, nailed }) {
-        Some(old) => {
-            debug_assert!(replace_allowed);
-            crate::note_stale(st, &old.rel);
-            (!refcount_zero(&old.rel, 0)).then(|| String::from(old.rel.name()))
-        }
-        None => None,
-    });
+    let leaked = with_state(
+        |st| match st.id_cache.insert(relid, RelCacheEnt { rel, nailed }) {
+            Some(old) => {
+                debug_assert!(replace_allowed);
+                crate::note_stale(st, &old.rel);
+                (!refcount_zero(&old.rel, 0)).then(|| String::from(old.rel.name()))
+            }
+            None => None,
+        },
+    );
     if let Some(name) = leaked {
         if !miscinit_seams::is_bootstrap_processing_mode::call() {
             elog::elog(

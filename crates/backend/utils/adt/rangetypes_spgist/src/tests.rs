@@ -14,7 +14,12 @@ fn int4_ri() -> RangeInfo {
         rngtypid: 3904,
         collation: InvalidOid,
         elem_typid: 23,
-        elem: ElemInfo { typlen: 4, typbyval: true, typalign: b'i', typstorage: b'p' },
+        elem: ElemInfo {
+            typlen: 4,
+            typbyval: true,
+            typalign: b'i',
+            typstorage: b'p',
+        },
         cmp: FmgrInfo::new(fc_i32_cmp, 351, 2, true, false),
         canonical_oid: 3914,
         elem_hash: None,
@@ -26,14 +31,21 @@ fn int4_ri() -> RangeInfo {
 }
 
 fn bound(val: i32, inclusive: bool, lower: bool) -> RangeBound {
-    RangeBound { val: Datum::from_i32(val), infinite: false, inclusive, lower }
+    RangeBound {
+        val: Datum::from_i32(val),
+        infinite: false,
+        inclusive,
+        lower,
+    }
 }
 
 fn mk<'m>(mcx: Mcx<'m>, ri: &mut RangeInfo, lo: i32, hi: i32) -> &'m [u8] {
     let mut l = bound(lo, true, true);
     let mut u = bound(hi, false, false);
     ::adt_multirangetypes::leak_image(
-        range_serialize(mcx, ri, &mut l, &mut u, false, None).unwrap().unwrap(),
+        range_serialize(mcx, ri, &mut l, &mut u, false, None)
+            .unwrap()
+            .unwrap(),
     )
 }
 
@@ -41,7 +53,9 @@ fn mk_empty<'m>(mcx: Mcx<'m>, ri: &mut RangeInfo) -> &'m [u8] {
     let mut l = bound(0, true, true);
     let mut u = bound(0, false, false);
     ::adt_multirangetypes::leak_image(
-        range_serialize(mcx, ri, &mut l, &mut u, true, None).unwrap().unwrap(),
+        range_serialize(mcx, ri, &mut l, &mut u, true, None)
+            .unwrap()
+            .unwrap(),
     )
 }
 
@@ -73,16 +87,40 @@ fn adjacent_cmp_bounds_table() {
     let mut ri = int4_ri();
     // C comment table: argument [..., 500) vs centroid lower bounds.
     let arg = bound(500, false, false);
-    assert_eq!(adjacent_cmp_bounds(mcx, &mut ri, &arg, &bound(498, true, true)).unwrap(), 1);
-    assert_eq!(adjacent_cmp_bounds(mcx, &mut ri, &arg, &bound(499, true, true)).unwrap(), 1);
-    assert_eq!(adjacent_cmp_bounds(mcx, &mut ri, &arg, &bound(500, true, true)).unwrap(), 1);
-    assert_eq!(adjacent_cmp_bounds(mcx, &mut ri, &arg, &bound(501, true, true)).unwrap(), -1);
+    assert_eq!(
+        adjacent_cmp_bounds(mcx, &mut ri, &arg, &bound(498, true, true)).unwrap(),
+        1
+    );
+    assert_eq!(
+        adjacent_cmp_bounds(mcx, &mut ri, &arg, &bound(499, true, true)).unwrap(),
+        1
+    );
+    assert_eq!(
+        adjacent_cmp_bounds(mcx, &mut ri, &arg, &bound(500, true, true)).unwrap(),
+        1
+    );
+    assert_eq!(
+        adjacent_cmp_bounds(mcx, &mut ri, &arg, &bound(501, true, true)).unwrap(),
+        -1
+    );
     // argument [500, ...) vs centroid upper bounds.
     let arg = bound(500, true, true);
-    assert_eq!(adjacent_cmp_bounds(mcx, &mut ri, &arg, &bound(499, false, false)).unwrap(), 1);
-    assert_eq!(adjacent_cmp_bounds(mcx, &mut ri, &arg, &bound(500, false, false)).unwrap(), 1);
-    assert_eq!(adjacent_cmp_bounds(mcx, &mut ri, &arg, &bound(501, false, false)).unwrap(), -1);
-    assert_eq!(adjacent_cmp_bounds(mcx, &mut ri, &arg, &bound(502, false, false)).unwrap(), -1);
+    assert_eq!(
+        adjacent_cmp_bounds(mcx, &mut ri, &arg, &bound(499, false, false)).unwrap(),
+        1
+    );
+    assert_eq!(
+        adjacent_cmp_bounds(mcx, &mut ri, &arg, &bound(500, false, false)).unwrap(),
+        1
+    );
+    assert_eq!(
+        adjacent_cmp_bounds(mcx, &mut ri, &arg, &bound(501, false, false)).unwrap(),
+        -1
+    );
+    assert_eq!(
+        adjacent_cmp_bounds(mcx, &mut ri, &arg, &bound(502, false, false)).unwrap(),
+        -1
+    );
 }
 
 #[test]

@@ -194,7 +194,11 @@ impl Drop for DsmSegment {
 
 impl std::fmt::Debug for DsmSegment {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "dynamic shared memory segment {}", dsm_segment_handle(self.id))
+        write!(
+            f,
+            "dynamic shared memory segment {}",
+            dsm_segment_handle(self.id)
+        )
     }
 }
 

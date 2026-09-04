@@ -42,7 +42,12 @@ pub fn CreateCommandTag(parsetree: Node<'_>) -> CommandTag {
 
         T_DeclareCursorStmt => CMDTAG_DECLARE_CURSOR,
         T_ClosePortalStmt => {
-            if parsetree.as_close_portal_stmt().unwrap().portalname.is_none() {
+            if parsetree
+                .as_close_portal_stmt()
+                .unwrap()
+                .portalname
+                .is_none()
+            {
                 CMDTAG_CLOSE_CURSOR_ALL
             } else {
                 CMDTAG_CLOSE_CURSOR
@@ -75,7 +80,11 @@ pub fn CreateCommandTag(parsetree: Node<'_>) -> CommandTag {
         T_ImportForeignSchemaStmt => CMDTAG_IMPORT_FOREIGN_SCHEMA,
         T_DropStmt => {
             use types_nodes::parsenodes::ObjectType::*;
-            match parsetree.as_drop_stmt().expect("T_DropStmt payload").removeType {
+            match parsetree
+                .as_drop_stmt()
+                .expect("T_DropStmt payload")
+                .removeType
+            {
                 OBJECT_TABLE => CMDTAG_DROP_TABLE,
                 OBJECT_SEQUENCE => CMDTAG_DROP_SEQUENCE,
                 OBJECT_VIEW => CMDTAG_DROP_VIEW,
@@ -123,8 +132,7 @@ pub fn CreateCommandTag(parsetree: Node<'_>) -> CommandTag {
             let stmt = parsetree
                 .as_variant::<types_nodes::parsenodes::RenameStmt>()
                 .expect("RenameStmt");
-            let objtype = if stmt.renameType
-                == types_nodes::parsenodes::ObjectType::OBJECT_COLUMN
+            let objtype = if stmt.renameType == types_nodes::parsenodes::ObjectType::OBJECT_COLUMN
                 && stmt.relationType != types_nodes::parsenodes::ObjectType::OBJECT_TABLE
                 && stmt.relationType as i32 != 0
             {
@@ -173,13 +181,21 @@ pub fn CreateCommandTag(parsetree: Node<'_>) -> CommandTag {
             let stmt = parsetree
                 .as_variant::<types_nodes::parsenodes::GrantStmt>()
                 .expect("GrantStmt");
-            if stmt.is_grant { CMDTAG_GRANT } else { CMDTAG_REVOKE }
+            if stmt.is_grant {
+                CMDTAG_GRANT
+            } else {
+                CMDTAG_REVOKE
+            }
         }
         T_GrantRoleStmt => {
             let stmt = parsetree
                 .as_variant::<types_nodes::parsenodes::GrantRoleStmt>()
                 .expect("GrantRoleStmt");
-            if stmt.is_grant { CMDTAG_GRANT_ROLE } else { CMDTAG_REVOKE_ROLE }
+            if stmt.is_grant {
+                CMDTAG_GRANT_ROLE
+            } else {
+                CMDTAG_REVOKE_ROLE
+            }
         }
         T_AlterDefaultPrivilegesStmt => CMDTAG_ALTER_DEFAULT_PRIVILEGES,
         T_DefineStmt => {

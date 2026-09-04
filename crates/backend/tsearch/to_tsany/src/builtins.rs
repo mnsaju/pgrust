@@ -175,7 +175,9 @@ fn ts_headline_common(fcinfo: &mut Fcinfo, cfg: Option<Oid>, has_opts: bool) -> 
 
     // The tsquery rides to prsd_headline as its 4-byte-header varlena image.
     let qimage = tsquery_image(mcx, fcinfo, base + 1)?;
-    let query = ::adt_tsvector_core::query::TsQueryRef { payload: &qimage[4..] };
+    let query = ::adt_tsvector_core::query::TsQueryRef {
+        payload: &qimage[4..],
+    };
 
     // C (wparser.c ts_headline_byid_opt): the config and parser are resolved
     // BEFORE the options list is parsed — a bogus config must win over bogus
@@ -194,7 +196,10 @@ fn ts_headline_common(fcinfo: &mut Fcinfo, cfg: Option<Oid>, has_opts: bool) -> 
     }
 
     let opts = if has_opts {
-        Some(::ts_cache::deserialize_deflist(mcx, text_data(fcinfo, base + 2)?)?)
+        Some(::ts_cache::deserialize_deflist(
+            mcx,
+            text_data(fcinfo, base + 2)?,
+        )?)
     } else {
         None
     };
@@ -245,7 +250,14 @@ pub fn fc_ts_headline(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResul
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 pub const TO_TSANY_BUILTINS: &[FmgrBuiltin] = &[
@@ -259,26 +271,111 @@ pub const TO_TSANY_BUILTINS: &[FmgrBuiltin] = &[
     b(3761, "ts_match_tq", 2, fc_ts_match_tq),
     b(5001, "phraseto_tsquery", 1, fc_phraseto_tsquery),
     b(5006, "phraseto_tsquery_byid", 2, fc_phraseto_tsquery_byid),
-    b(5007, "websearch_to_tsquery_byid", 2, fc_websearch_to_tsquery_byid),
+    b(
+        5007,
+        "websearch_to_tsquery_byid",
+        2,
+        fc_websearch_to_tsquery_byid,
+    ),
     b(5009, "websearch_to_tsquery", 1, fc_websearch_to_tsquery),
     b(3743, "ts_headline_byid_opt", 4, fc_ts_headline_byid_opt),
     b(3744, "ts_headline_byid", 3, fc_ts_headline_byid),
     b(3754, "ts_headline_opt", 3, fc_ts_headline_opt),
     b(3755, "ts_headline", 2, fc_ts_headline),
-    b(4201, "ts_headline_jsonb_byid_opt", 4, crate::json::fc_ts_headline_jsonb_byid_opt),
-    b(4202, "ts_headline_jsonb_byid", 3, crate::json::fc_ts_headline_jsonb_byid),
-    b(4203, "ts_headline_jsonb_opt", 3, crate::json::fc_ts_headline_jsonb_opt),
-    b(4204, "ts_headline_jsonb", 2, crate::json::fc_ts_headline_jsonb),
-    b(4205, "ts_headline_json_byid_opt", 4, crate::json::fc_ts_headline_json_byid_opt),
-    b(4206, "ts_headline_json_byid", 3, crate::json::fc_ts_headline_json_byid),
-    b(4207, "ts_headline_json_opt", 3, crate::json::fc_ts_headline_json_opt),
-    b(4208, "ts_headline_json", 2, crate::json::fc_ts_headline_json),
-    b(4209, "jsonb_string_to_tsvector", 1, crate::json::fc_jsonb_string_to_tsvector),
-    b(4210, "json_string_to_tsvector", 1, crate::json::fc_json_string_to_tsvector),
-    b(4211, "jsonb_string_to_tsvector_byid", 2, crate::json::fc_jsonb_string_to_tsvector_byid),
-    b(4212, "json_string_to_tsvector_byid", 2, crate::json::fc_json_string_to_tsvector_byid),
-    b(4213, "jsonb_to_tsvector", 2, crate::json::fc_jsonb_to_tsvector),
-    b(4214, "jsonb_to_tsvector_byid", 3, crate::json::fc_jsonb_to_tsvector_byid),
-    b(4215, "json_to_tsvector", 2, crate::json::fc_json_to_tsvector),
-    b(4216, "json_to_tsvector_byid", 3, crate::json::fc_json_to_tsvector_byid),
+    b(
+        4201,
+        "ts_headline_jsonb_byid_opt",
+        4,
+        crate::json::fc_ts_headline_jsonb_byid_opt,
+    ),
+    b(
+        4202,
+        "ts_headline_jsonb_byid",
+        3,
+        crate::json::fc_ts_headline_jsonb_byid,
+    ),
+    b(
+        4203,
+        "ts_headline_jsonb_opt",
+        3,
+        crate::json::fc_ts_headline_jsonb_opt,
+    ),
+    b(
+        4204,
+        "ts_headline_jsonb",
+        2,
+        crate::json::fc_ts_headline_jsonb,
+    ),
+    b(
+        4205,
+        "ts_headline_json_byid_opt",
+        4,
+        crate::json::fc_ts_headline_json_byid_opt,
+    ),
+    b(
+        4206,
+        "ts_headline_json_byid",
+        3,
+        crate::json::fc_ts_headline_json_byid,
+    ),
+    b(
+        4207,
+        "ts_headline_json_opt",
+        3,
+        crate::json::fc_ts_headline_json_opt,
+    ),
+    b(
+        4208,
+        "ts_headline_json",
+        2,
+        crate::json::fc_ts_headline_json,
+    ),
+    b(
+        4209,
+        "jsonb_string_to_tsvector",
+        1,
+        crate::json::fc_jsonb_string_to_tsvector,
+    ),
+    b(
+        4210,
+        "json_string_to_tsvector",
+        1,
+        crate::json::fc_json_string_to_tsvector,
+    ),
+    b(
+        4211,
+        "jsonb_string_to_tsvector_byid",
+        2,
+        crate::json::fc_jsonb_string_to_tsvector_byid,
+    ),
+    b(
+        4212,
+        "json_string_to_tsvector_byid",
+        2,
+        crate::json::fc_json_string_to_tsvector_byid,
+    ),
+    b(
+        4213,
+        "jsonb_to_tsvector",
+        2,
+        crate::json::fc_jsonb_to_tsvector,
+    ),
+    b(
+        4214,
+        "jsonb_to_tsvector_byid",
+        3,
+        crate::json::fc_jsonb_to_tsvector_byid,
+    ),
+    b(
+        4215,
+        "json_to_tsvector",
+        2,
+        crate::json::fc_json_to_tsvector,
+    ),
+    b(
+        4216,
+        "json_to_tsvector_byid",
+        3,
+        crate::json::fc_json_to_tsvector_byid,
+    ),
 ];

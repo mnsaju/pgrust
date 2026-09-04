@@ -8,12 +8,12 @@
 
 use std::cell::Cell;
 
+use adt_uuid::PgUuid;
 use datum::Datum;
 use types_error::{PgError, PgResult, ERRCODE_EXTERNAL_ROUTINE_EXCEPTION};
 use types_fmgr::{
     byref_result, FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFunction, UUID_LEN,
 };
-use adt_uuid::PgUuid;
 
 const LIBRARY: &str = "uuid-ossp";
 
@@ -115,7 +115,11 @@ fn v1_state() -> PgResult<V1State> {
     let mut node = [seed[2], seed[3], seed[4], seed[5], seed[6], seed[7]];
     // libuuid sets the multicast bit on a generated random node.
     node[0] |= 0x01;
-    let s = V1State { last_ts: 0, clock_seq, node };
+    let s = V1State {
+        last_ts: 0,
+        clock_seq,
+        node,
+    };
     V1_STATE.with(|c| c.set(Some(s)));
     Ok(s)
 }

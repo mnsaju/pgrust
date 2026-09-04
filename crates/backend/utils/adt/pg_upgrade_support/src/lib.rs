@@ -76,11 +76,20 @@ macro_rules! local_next_oid {
 }
 
 local_next_oid!(NEXT_HEAP_PG_CLASS_OID, take_next_heap_pg_class_oid);
-local_next_oid!(NEXT_HEAP_PG_CLASS_RELFILENUMBER, take_next_heap_pg_class_relfilenumber);
+local_next_oid!(
+    NEXT_HEAP_PG_CLASS_RELFILENUMBER,
+    take_next_heap_pg_class_relfilenumber
+);
 local_next_oid!(NEXT_INDEX_PG_CLASS_OID, take_next_index_pg_class_oid);
-local_next_oid!(NEXT_INDEX_PG_CLASS_RELFILENUMBER, take_next_index_pg_class_relfilenumber);
+local_next_oid!(
+    NEXT_INDEX_PG_CLASS_RELFILENUMBER,
+    take_next_index_pg_class_relfilenumber
+);
 local_next_oid!(NEXT_TOAST_PG_CLASS_OID, take_next_toast_pg_class_oid);
-local_next_oid!(NEXT_TOAST_PG_CLASS_RELFILENUMBER, take_next_toast_pg_class_relfilenumber);
+local_next_oid!(
+    NEXT_TOAST_PG_CLASS_RELFILENUMBER,
+    take_next_toast_pg_class_relfilenumber
+);
 local_next_oid!(NEXT_PG_AUTHID_OID, take_next_pg_authid_oid);
 
 thread_local! {
@@ -245,7 +254,9 @@ pub fn fc_binary_upgrade_logical_slot_has_caught_up(
     check_is_binary_upgrade("binary_upgrade_logical_slot_has_caught_up")?;
     let _ = fcinfo;
     // unported: LogicalReplicationSlotHasPendingWal (replication/walsender.c).
-    Err(upgrade_unported("binary_upgrade_logical_slot_has_caught_up"))
+    Err(upgrade_unported(
+        "binary_upgrade_logical_slot_has_caught_up",
+    ))
 }
 
 pub fn fc_binary_upgrade_replorigin_advance(
@@ -281,7 +292,11 @@ pub fn fc_binary_upgrade_add_sub_rel_state(
     };
 
     let mcx = fcinfo.result_mcx();
-    let subrel = table::table_open(mcx, pg_subscription::SubscriptionRelationId, RowExclusiveLock)?;
+    let subrel = table::table_open(
+        mcx,
+        pg_subscription::SubscriptionRelationId,
+        RowExclusiveLock,
+    )?;
     let subid = lsyscache::get_subscription_oid(subname, false)?;
     let rel = relation::relation_open(mcx, relid, AccessShareLock)?;
 
@@ -309,14 +324,23 @@ pub fn fc_binary_upgrade_create_empty_extension(
     let relocatable = fcinfo.arg_bool(2);
     let ext_version = arg_str(fcinfo, 3)?;
 
-    let ext_config = if fcinfo.argisnull(4) { None } else { Some(fcinfo.arg(4)) };
-    let ext_condition = if fcinfo.argisnull(5) { None } else { Some(fcinfo.arg(5)) };
+    let ext_config = if fcinfo.argisnull(4) {
+        None
+    } else {
+        Some(fcinfo.arg(4))
+    };
+    let ext_condition = if fcinfo.argisnull(5) {
+        None
+    } else {
+        Some(fcinfo.arg(5))
+    };
 
     let mut required_extensions: mcx::PgVec<'_, Oid> = mcx::vec_with_capacity_in(mcx, 0)?;
     if !fcinfo.argisnull(6) {
         // SAFETY: catalog arg 6 is `_text`, non-null per the check above.
         let image = unsafe { fcinfo.arg_varlena_packed(6)? };
-        let (elems, _nulls) = arrayfuncs::deconstruct_array_builtin(mcx, image.data(), TEXTOID, false)?;
+        let (elems, _nulls) =
+            arrayfuncs::deconstruct_array_builtin(mcx, image.data(), TEXTOID, false)?;
         required_extensions = mcx::vec_with_capacity_in(mcx, elems.len())?;
         for &d in elems.iter() {
             let name = datum_str(mcx, d)?;
@@ -339,12 +363,31 @@ pub fn fc_binary_upgrade_create_empty_extension(
     Ok(Datum::from_usize(0))
 }
 
-const fn b(foid: Oid, name: &'static str, nargs: i16, strict: bool, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict, retset: false, func }
+const fn b(
+    foid: Oid,
+    name: &'static str,
+    nargs: i16,
+    strict: bool,
+    func: PGFunction,
+) -> FmgrBuiltin {
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict,
+        retset: false,
+        func,
+    }
 }
 
 pub const PG_UPGRADE_SUPPORT_BUILTINS: &[FmgrBuiltin] = &[
-    b(3582, "binary_upgrade_set_next_pg_type_oid", 1, true, fc_binary_upgrade_set_next_pg_type_oid),
+    b(
+        3582,
+        "binary_upgrade_set_next_pg_type_oid",
+        1,
+        true,
+        fc_binary_upgrade_set_next_pg_type_oid,
+    ),
     b(
         3584,
         "binary_upgrade_set_next_array_pg_type_oid",
@@ -373,11 +416,41 @@ pub const PG_UPGRADE_SUPPORT_BUILTINS: &[FmgrBuiltin] = &[
         true,
         fc_binary_upgrade_set_next_toast_pg_class_oid,
     ),
-    b(3589, "binary_upgrade_set_next_pg_enum_oid", 1, true, fc_binary_upgrade_set_next_pg_enum_oid),
-    b(3590, "binary_upgrade_set_next_pg_authid_oid", 1, true, fc_binary_upgrade_set_next_pg_authid_oid),
-    b(3591, "binary_upgrade_create_empty_extension", 7, false, fc_binary_upgrade_create_empty_extension),
-    b(4083, "binary_upgrade_set_record_init_privs", 1, true, fc_binary_upgrade_set_record_init_privs),
-    b(4101, "binary_upgrade_set_missing_value", 3, true, fc_binary_upgrade_set_missing_value),
+    b(
+        3589,
+        "binary_upgrade_set_next_pg_enum_oid",
+        1,
+        true,
+        fc_binary_upgrade_set_next_pg_enum_oid,
+    ),
+    b(
+        3590,
+        "binary_upgrade_set_next_pg_authid_oid",
+        1,
+        true,
+        fc_binary_upgrade_set_next_pg_authid_oid,
+    ),
+    b(
+        3591,
+        "binary_upgrade_create_empty_extension",
+        7,
+        false,
+        fc_binary_upgrade_create_empty_extension,
+    ),
+    b(
+        4083,
+        "binary_upgrade_set_record_init_privs",
+        1,
+        true,
+        fc_binary_upgrade_set_record_init_privs,
+    ),
+    b(
+        4101,
+        "binary_upgrade_set_missing_value",
+        3,
+        true,
+        fc_binary_upgrade_set_missing_value,
+    ),
     b(
         4390,
         "binary_upgrade_set_next_multirange_pg_type_oid",
@@ -392,7 +465,13 @@ pub const PG_UPGRADE_SUPPORT_BUILTINS: &[FmgrBuiltin] = &[
         true,
         fc_binary_upgrade_set_next_multirange_array_pg_type_oid,
     ),
-    b(4545, "binary_upgrade_set_next_heap_relfilenode", 1, true, fc_binary_upgrade_set_next_heap_relfilenode),
+    b(
+        4545,
+        "binary_upgrade_set_next_heap_relfilenode",
+        1,
+        true,
+        fc_binary_upgrade_set_next_heap_relfilenode,
+    ),
     b(
         4546,
         "binary_upgrade_set_next_index_relfilenode",
@@ -421,8 +500,20 @@ pub const PG_UPGRADE_SUPPORT_BUILTINS: &[FmgrBuiltin] = &[
         true,
         fc_binary_upgrade_logical_slot_has_caught_up,
     ),
-    b(6319, "binary_upgrade_add_sub_rel_state", 4, false, fc_binary_upgrade_add_sub_rel_state),
-    b(6320, "binary_upgrade_replorigin_advance", 2, false, fc_binary_upgrade_replorigin_advance),
+    b(
+        6319,
+        "binary_upgrade_add_sub_rel_state",
+        4,
+        false,
+        fc_binary_upgrade_add_sub_rel_state,
+    ),
+    b(
+        6320,
+        "binary_upgrade_replorigin_advance",
+        2,
+        false,
+        fc_binary_upgrade_replorigin_advance,
+    ),
 ];
 
 #[cfg(test)]

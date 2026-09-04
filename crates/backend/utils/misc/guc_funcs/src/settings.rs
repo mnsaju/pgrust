@@ -35,10 +35,7 @@ fn opt_text_datum(
     Ok(())
 }
 
-pub fn fc_show_all_settings(
-    flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_show_all_settings(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let flinfo = flinfo.expect("show_all_settings: resolved FmgrInfo required");
     // SAFETY: executor arms es_query_cxt pre-call; it outlives this frame.
     let mcx = unsafe { fcinfo.result_mcx_detached() };
@@ -60,7 +57,13 @@ pub fn fc_show_all_settings(
 
             values[0] = text_datum(mcx, gen.name)?;
             values[1] = text_datum(mcx, &ShowGUCOption(conf, false))?;
-            opt_text_datum(mcx, get_config_unit_name(gen.flags), &mut values, &mut nulls, 2)?;
+            opt_text_datum(
+                mcx,
+                get_config_unit_name(gen.flags),
+                &mut values,
+                &mut nulls,
+                2,
+            )?;
             values[3] = text_datum(mcx, config_group_names[gen.group as usize])?;
             opt_text_datum(mcx, gen.short_desc, &mut values, &mut nulls, 4)?;
             opt_text_datum(mcx, gen.long_desc, &mut values, &mut nulls, 5)?;
@@ -101,8 +104,12 @@ pub fn fc_show_all_settings(
                 GucVariable::Enum(c) => {
                     nulls[9] = true;
                     nulls[10] = true;
-                    let mut names: Vec<&str> =
-                        c.entries().iter().filter(|e| !e.hidden).map(|e| e.name).collect();
+                    let mut names: Vec<&str> = c
+                        .entries()
+                        .iter()
+                        .filter(|e| !e.hidden)
+                        .map(|e| e.name)
+                        .collect();
                     // C's config_enum_get_options("{\"", "\"}", "\",\"") yields
                     // {""} (one empty element) when every entry is hidden.
                     if names.is_empty() {
@@ -249,7 +256,11 @@ pub fn fc_set_config_by_name(
         Some(String::from_utf8_lossy(v.data()).into_owned())
     };
     let is_local = !c.isnull && c.value.as_bool();
-    let action: GucAction = if is_local { GUC_ACTION_LOCAL } else { GUC_ACTION_SET };
+    let action: GucAction = if is_local {
+        GUC_ACTION_LOCAL
+    } else {
+        GUC_ACTION_SET
+    };
     guc::set_config_option(
         &name,
         value.as_deref(),
@@ -260,11 +271,10 @@ pub fn fc_set_config_by_name(
         types_error::ErrorLevel(0),
         false,
     )?;
-    let new_value = guc::store::with_store(|reg| {
-        guc::registry::get_config_option_by_name(reg, &name, false)
-    })
-    .expect("GUC store not initialized")?
-    .expect("missing_ok=false returned None");
+    let new_value =
+        guc::store::with_store(|reg| guc::registry::get_config_option_by_name(reg, &name, false))
+            .expect("GUC store not initialized")?
+            .expect("missing_ok=false returned None");
     text_datum(fcinfo.result_mcx(), &new_value)
 }
 
@@ -303,7 +313,13 @@ pub fn fc_pg_settings_get_flags(
         scratch.extend_from_slice(&datum::varlena::set_varsize_4b(4 + name.len()));
         scratch.extend_from_slice(name.as_bytes());
         let d = Datum::from_usize(scratch.as_ptr() as usize);
-        astate = Some(::arrayfuncs::accum_array_result(mcx, astate.take(), d, false, TEXTOID)?);
+        astate = Some(::arrayfuncs::accum_array_result(
+            mcx,
+            astate.take(),
+            d,
+            false,
+            TEXTOID,
+        )?);
     }
     let img = match &astate {
         None => ::arrayfuncs::construct_empty_array(mcx, TEXTOID)?,
@@ -320,14 +336,63 @@ const fn b(
     retset: bool,
     func: PGFunction,
 ) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict, retset, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict,
+        retset,
+        func,
+    }
 }
 
 pub const GUC_FUNCS_BUILTINS: &[FmgrBuiltin] = &[
-    b(2084, "show_all_settings", 0, true, true, fc_show_all_settings),
-    b(3329, "show_all_file_settings", 0, true, true, fc_show_all_file_settings),
-    b(2077, "show_config_by_name", 1, true, false, fc_show_config_by_name),
-    b(3294, "show_config_by_name_missing_ok", 2, true, false, fc_show_config_by_name_missing_ok),
-    b(2078, "set_config_by_name", 3, false, false, fc_set_config_by_name),
-    b(6240, "pg_settings_get_flags", 1, true, false, fc_pg_settings_get_flags),
+    b(
+        2084,
+        "show_all_settings",
+        0,
+        true,
+        true,
+        fc_show_all_settings,
+    ),
+    b(
+        3329,
+        "show_all_file_settings",
+        0,
+        true,
+        true,
+        fc_show_all_file_settings,
+    ),
+    b(
+        2077,
+        "show_config_by_name",
+        1,
+        true,
+        false,
+        fc_show_config_by_name,
+    ),
+    b(
+        3294,
+        "show_config_by_name_missing_ok",
+        2,
+        true,
+        false,
+        fc_show_config_by_name_missing_ok,
+    ),
+    b(
+        2078,
+        "set_config_by_name",
+        3,
+        false,
+        false,
+        fc_set_config_by_name,
+    ),
+    b(
+        6240,
+        "pg_settings_get_flags",
+        1,
+        true,
+        false,
+        fc_pg_settings_get_flags,
+    ),
 ];

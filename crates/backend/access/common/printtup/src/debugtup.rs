@@ -77,10 +77,9 @@ impl DrDebugtup {
             let value = function_call1_coll_in(&mut finfo, InvalidOid, out_ctx.mcx(), attr)?;
             // SAFETY: text output fns return a NUL-terminated cstring datum
             // (the contract C's DatumGetCString trusts).
-            let s = unsafe {
-                core::ffi::CStr::from_ptr(value.as_usize() as *const core::ffi::c_char)
-            }
-            .to_bytes();
+            let s =
+                unsafe { core::ffi::CStr::from_ptr(value.as_usize() as *const core::ffi::c_char) }
+                    .to_bytes();
             printatt(&mut out, i as u32 + 1, &typeinfo, i, Some(s));
         }
         let _ = writeln!(out, "\t----");
@@ -109,7 +108,9 @@ fn printatt(
         attribute_id,
         String::from_utf8_lossy(att.attname.name_str()),
         if value.is_some() { " = \"" } else { "" },
-        value.map(|v| String::from_utf8_lossy(v).into_owned()).unwrap_or_default(),
+        value
+            .map(|v| String::from_utf8_lossy(v).into_owned())
+            .unwrap_or_default(),
         if value.is_some() { "\"" } else { "" },
         att.atttypid,
         att.attlen,

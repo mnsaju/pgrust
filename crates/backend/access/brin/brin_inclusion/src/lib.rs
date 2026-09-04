@@ -3,10 +3,10 @@
 #![allow(non_upper_case_globals)]
 #![allow(clippy::too_many_arguments)]
 
+use ::adt_scalar::datum_ops::datum_copy;
 use ::datum::Datum;
 use ::fmgr::FmgrInfo;
 use ::mcx::Mcx;
-use ::adt_scalar::datum_ops::datum_copy;
 use ::types_brin::{
     BrinColInfo, BrinDesc, BrinOpcKind, BrinValues, InclusionOpaque, MinmaxOpaque,
     INCLUSION_MAX_PROCNUMS, RT_MAX_STRATEGY,
@@ -14,14 +14,14 @@ use ::types_brin::{
 use ::types_core::{Oid, BOOLOID};
 use ::types_error::{PgError, PgResult, ERRCODE_INVALID_OBJECT_DEFINITION};
 use ::types_scan::scankey::{
-    ScanKeyData, RTAboveStrategyNumber, RTAdjacentStrategyNumber, RTBelowStrategyNumber,
+    RTAboveStrategyNumber, RTAdjacentStrategyNumber, RTBelowStrategyNumber,
     RTContainedByStrategyNumber, RTContainsElemStrategyNumber, RTContainsStrategyNumber,
     RTEqualStrategyNumber, RTGreaterEqualStrategyNumber, RTGreaterStrategyNumber,
     RTLeftStrategyNumber, RTLessEqualStrategyNumber, RTLessStrategyNumber,
     RTOverAboveStrategyNumber, RTOverBelowStrategyNumber, RTOverLeftStrategyNumber,
     RTOverRightStrategyNumber, RTOverlapStrategyNumber, RTRightStrategyNumber,
     RTSameStrategyNumber, RTSubEqualStrategyNumber, RTSubStrategyNumber,
-    RTSuperEqualStrategyNumber, RTSuperStrategyNumber,
+    RTSuperEqualStrategyNumber, RTSuperStrategyNumber, ScanKeyData,
 };
 
 const PROCNUM_MERGE: u16 = 11;
@@ -154,8 +154,7 @@ pub fn brin_inclusion_consistent(
 
     let mut call = |strategynum: u16| -> PgResult<bool> {
         let mut finfo = inclusion_get_strategy_procinfo(bdesc, attno, subtype, strategynum)?;
-        Ok(fmgr_core::function_call2_coll_in(&mut finfo, colloid, mcx, unionval, query)?
-            .as_bool())
+        Ok(fmgr_core::function_call2_coll_in(&mut finfo, colloid, mcx, unionval, query)?.as_bool())
     };
 
     match key.sk_strategy {

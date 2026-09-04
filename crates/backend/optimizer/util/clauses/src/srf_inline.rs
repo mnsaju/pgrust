@@ -20,7 +20,9 @@ pub fn inline_set_returning_function<'mcx>(
     mcx: Mcx<'mcx>,
     rte_node: Node<'mcx>,
 ) -> PgResult<Option<&'mcx Query<'mcx>>> {
-    let rte = rte_node.as_range_tbl_entry().expect("RTE_FUNCTION RangeTblEntry");
+    let rte = rte_node
+        .as_range_tbl_entry()
+        .expect("RTE_FUNCTION RangeTblEntry");
     debug_assert_eq!(rte.rtekind, RTEKind::RTE_FUNCTION);
 
     // A SQL SRF referring to itself recurses here too; C only guards the
@@ -33,9 +35,17 @@ pub fn inline_set_returning_function<'mcx>(
     if rte.functions.len() != 1 {
         return Ok(None);
     }
-    let rtfunc = rte.functions.nth(0).as_range_tbl_function().expect("functions cell");
-    let Some(fexpr_node) = rtfunc.funcexpr else { return Ok(None) };
-    let Some(fexpr) = fexpr_node.as_func_expr() else { return Ok(None) };
+    let rtfunc = rte
+        .functions
+        .nth(0)
+        .as_range_tbl_function()
+        .expect("functions cell");
+    let Some(fexpr_node) = rtfunc.funcexpr else {
+        return Ok(None);
+    };
+    let Some(fexpr) = fexpr_node.as_func_expr() else {
+        return Ok(None);
+    };
     let func_oid = fexpr.funcid;
 
     // Inlining a non-set-returning call would change the results if the
@@ -52,12 +62,8 @@ pub fn inline_set_returning_function<'mcx>(
     }
 
     let userid = miscinit_seams::get_user_id::call();
-    let aclresult = aclchk_seams::object_aclcheck::call(
-        PROCEDURE_RELATION_ID,
-        func_oid,
-        userid,
-        ACL_EXECUTE,
-    )?;
+    let aclresult =
+        aclchk_seams::object_aclcheck::call(PROCEDURE_RELATION_ID, func_oid, userid, ACL_EXECUTE)?;
     if aclresult != ACLCHECK_OK {
         return Ok(None);
     }

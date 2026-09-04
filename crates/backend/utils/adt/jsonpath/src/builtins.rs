@@ -28,8 +28,7 @@ fn arg_jsonpath<'a, 'mcx>(
     // SAFETY: catalog arg i is a non-null jsonpath varlena (strict fns only).
     let p = unsafe { fcinfo.arg_ptr(i) };
     // SAFETY: a live varlena readable through its full VARSIZE_ANY.
-    let image =
-        unsafe { core::slice::from_raw_parts(p, types_tuple::varatt::varsize_any(p)) };
+    let image = unsafe { core::slice::from_raw_parts(p, types_tuple::varatt::varsize_any(p)) };
     if image[0] & 0x01 == 0x01 && image[0] != 0x01 {
         let payload = &image[1..];
         let mut v: PgVec<'mcx, u8> = ::mcx::vec_with_capacity_in(mcx, 4 + payload.len())?;
@@ -58,7 +57,10 @@ pub fn fc_jsonpath_in(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> Pg
         // SAFETY: context, if set, rides per the ErrorSaveNode contract.
         let esc = unsafe { fcinfo.soft_error_context() };
         let had_esc = esc.is_some();
-        (crate::path::jsonpath_in(mcx, s, esc)?.map(image_result), had_esc)
+        (
+            crate::path::jsonpath_in(mcx, s, esc)?.map(image_result),
+            had_esc,
+        )
     };
     match d {
         Some(d) => Ok(d),
@@ -70,7 +72,10 @@ pub fn fc_jsonpath_in(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> Pg
 pub fn fc_jsonpath_out(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let mcx = fcinfo.result_mcx();
     let jp = arg_jsonpath(fcinfo, 0, mcx)?;
-    Ok(cstring_result(crate::path::jsonpath_out(mcx, full_image(&jp))?))
+    Ok(cstring_result(crate::path::jsonpath_out(
+        mcx,
+        full_image(&jp),
+    )?))
 }
 
 pub fn fc_jsonpath_recv(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -83,11 +88,21 @@ pub fn fc_jsonpath_recv(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> 
 pub fn fc_jsonpath_send(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let mcx = fcinfo.result_mcx();
     let jp = arg_jsonpath(fcinfo, 0, mcx)?;
-    Ok(varlena_result(crate::path::jsonpath_send(mcx, full_image(&jp))?))
+    Ok(varlena_result(crate::path::jsonpath_send(
+        mcx,
+        full_image(&jp),
+    )?))
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 pub const JSONPATH_BUILTINS: &[FmgrBuiltin] = &[

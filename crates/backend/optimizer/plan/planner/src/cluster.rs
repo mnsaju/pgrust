@@ -49,8 +49,13 @@ pub fn plan_cluster_use_sort<'mcx>(
     setup_simple_rel_arrays(&mut run.root, 1);
     let rel_id = build_simple_rel(&mut run, 1, RTEKind::RTE_RELATION)?;
 
-    let Some(index) =
-        run.root.rel(rel_id).indexlist.iter().copied().find(|i| i.indexoid == index_oid)
+    let Some(index) = run
+        .root
+        .rel(rel_id)
+        .indexlist
+        .iter()
+        .copied()
+        .find(|i| i.indexoid == index_oid)
     else {
         // No usable IndexOptInfo (indcheckxmin horizon etc.): don't trust the
         // index contents, use seqscan-and-sort.
@@ -69,7 +74,11 @@ pub fn plan_cluster_use_sort<'mcx>(
         r.rows = tuples;
     }
     {
-        let pt = run.root.rel(rel_id).pathtarget_id.expect("baserel pathtarget");
+        let pt = run
+            .root
+            .rel(rel_id)
+            .pathtarget_id
+            .expect("baserel pathtarget");
         run.root.pathtarget_mut(pt).width = width;
     }
     run.root.total_table_pages = pages as f64;

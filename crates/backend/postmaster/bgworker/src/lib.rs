@@ -151,7 +151,11 @@ fn raw_registry_gate() -> Option<std::sync::MutexGuard<'static, ()>> {
     static ARMED: AtomicU8 = AtomicU8::new(0);
     let armed = match ARMED.load(Ordering::Relaxed) {
         0 => {
-            let v = if std::env::var_os("PGRUST_SIM_RAWREG").is_some() { 2 } else { 1 };
+            let v = if std::env::var_os("PGRUST_SIM_RAWREG").is_some() {
+                2
+            } else {
+                1
+            };
             ARMED.store(v, Ordering::Relaxed);
             v
         }
@@ -164,9 +168,9 @@ fn with_registry<R>(f: impl FnOnce(&mut Registry) -> R) -> R {
     #[cfg(pgrust_sim)]
     let _raw_gate = raw_registry_gate();
     let mut guard = REGISTRY.lock().unwrap_or_else(|e| e.into_inner());
-    let reg = guard
-        .as_mut()
-        .unwrap_or_else(|| panic!("BackgroundWorkerData accessed before BackgroundWorkerShmemInit"));
+    let reg = guard.as_mut().unwrap_or_else(|| {
+        panic!("BackgroundWorkerData accessed before BackgroundWorkerShmemInit")
+    });
     f(reg)
 }
 
@@ -181,7 +185,11 @@ pub fn BackgroundWorkerShmemInit() {
     // First init: adopt the static registrations (C copies BackgroundWorkerList
     // entries into slots here; on crash re-init the surviving `registered`
     // entries are re-slotted instead and the pending list is already empty).
-    for worker in STATIC_PENDING.lock().unwrap_or_else(|e| e.into_inner()).drain(..) {
+    for worker in STATIC_PENDING
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .drain(..)
+    {
         registered.push(Some(RegisteredBgWorker {
             worker,
             pid: 0,
@@ -288,7 +296,10 @@ pub fn BackgroundWorkerStateChange(allow_new_workers: bool) {
                 let slot = &mut reg.slots[slotno];
                 let worker = slot.worker.take();
                 let notify_pid = worker.as_ref().map_or(0, |w| w.bgw_notify_pid);
-                if worker.as_ref().is_some_and(|w| w.bgw_flags & BGWORKER_CLASS_PARALLEL != 0) {
+                if worker
+                    .as_ref()
+                    .is_some_and(|w| w.bgw_flags & BGWORKER_CLASS_PARALLEL != 0)
+                {
                     reg.parallel_terminate_count = reg.parallel_terminate_count.wrapping_add(1);
                 }
                 slot.pid = 0;
@@ -301,14 +312,20 @@ pub fn BackgroundWorkerStateChange(allow_new_workers: bool) {
 
             // C re-copies strings ascii_safe against corrupted shmem; intact
             // Rust values make the plain clone equivalent.
-            let mut worker = reg.slots[slotno].worker.clone().expect("in-use slot has a worker");
+            let mut worker = reg.slots[slotno]
+                .worker
+                .clone()
+                .expect("in-use slot has a worker");
             if worker.bgw_notify_pid != 0
                 && pmchild_seams::find_postmaster_child_by_pid::call(worker.bgw_notify_pid)
                     .is_none()
             {
                 let _ = report(
                     DEBUG1,
-                    format!("worker notification PID {} is not valid", worker.bgw_notify_pid),
+                    format!(
+                        "worker notification PID {} is not valid",
+                        worker.bgw_notify_pid
+                    ),
                 );
                 worker.bgw_notify_pid = 0;
             }
@@ -401,7 +418,9 @@ pub fn ForgetUnstartedBackgroundWorkers() {
     let mut notifies: Vec<pid_t> = Vec::new();
     with_registry(|reg| {
         for idx in 0..reg.registered.len() {
-            let Some(rw) = reg.registered[idx].as_ref() else { continue };
+            let Some(rw) = reg.registered[idx].as_ref() else {
+                continue;
+            };
             let notify_pid = rw.worker.bgw_notify_pid;
             if reg.slots[rw.shmem_slot as usize].pid == InvalidPid && notify_pid != 0 {
                 forget_locked(reg, idx);
@@ -417,7 +436,9 @@ pub fn ForgetUnstartedBackgroundWorkers() {
 pub fn ResetBackgroundWorkerCrashTimes() {
     with_registry(|reg| {
         for idx in 0..reg.registered.len() {
-            let Some(rw) = reg.registered[idx].as_mut() else { continue };
+            let Some(rw) = reg.registered[idx].as_mut() else {
+                continue;
+            };
             if rw.worker.bgw_restart_time == BGW_NEVER_RESTART {
                 forget_locked(reg, idx);
             } else {
@@ -536,7 +557,9 @@ pub fn RegisterBackgroundWorker(worker: &BackgroundWorker) {
     // C runs the sanity checks at LOG elevel here: reject the registration
     // but keep the postmaster going.
     if let Err(e) = SanityCheckBackgroundWorker(&mut worker) {
-        let _ = ereport(LOG).errmsg(e.message().to_string()).finish(loc(0, "RegisterBackgroundWorker"));
+        let _ = ereport(LOG)
+            .errmsg(e.message().to_string())
+            .finish(loc(0, "RegisterBackgroundWorker"));
         return;
     }
 
@@ -558,9 +581,7 @@ pub fn RegisterBackgroundWorker(worker: &BackgroundWorker) {
                 "Up to {} background workers can be registered with the current settings.",
                 g::max_worker_processes()
             ))
-            .errhint(
-                "Consider increasing the configuration parameter \"max_worker_processes\".",
-            )
+            .errhint("Consider increasing the configuration parameter \"max_worker_processes\".")
             .finish(loc(1028, "RegisterBackgroundWorker"));
         return;
     }
@@ -587,11 +608,14 @@ pub fn RegisterDynamicBackgroundWorker(
     let mut pool_pid: pid_t = 0;
     let handle = with_registry(|reg| {
         if parallel
-            && reg.parallel_register_count.wrapping_sub(reg.parallel_terminate_count)
+            && reg
+                .parallel_register_count
+                .wrapping_sub(reg.parallel_terminate_count)
                 >= g::max_parallel_workers() as u32
         {
             debug_assert!(
-                reg.parallel_register_count.wrapping_sub(reg.parallel_terminate_count)
+                reg.parallel_register_count
+                    .wrapping_sub(reg.parallel_terminate_count)
                     <= MAX_PARALLEL_WORKER_LIMIT
             );
             return None;
@@ -657,7 +681,10 @@ pub fn RegisterDynamicBackgroundWorker(
                         pool_pid = pid;
                     }
                 }
-                return Some(BackgroundWorkerHandle { slot: slotno as i32, generation });
+                return Some(BackgroundWorkerHandle {
+                    slot: slotno as i32,
+                    generation,
+                });
             }
         }
         None
@@ -726,7 +753,9 @@ pub fn WaitForBackgroundWorkerStartup(
     }
 }
 
-pub fn WaitForBackgroundWorkerShutdown(handle: &BackgroundWorkerHandle) -> PgResult<BgwHandleStatus> {
+pub fn WaitForBackgroundWorkerShutdown(
+    handle: &BackgroundWorkerHandle,
+) -> PgResult<BgwHandleStatus> {
     loop {
         postgres::check_for_interrupts()?;
 
@@ -787,7 +816,9 @@ pub fn find_registered_worker_by_pid(pid: pid_t) -> Option<usize> {
 
 pub fn registered_indexes() -> Vec<usize> {
     with_registry(|reg| {
-        (0..reg.registered.len()).filter(|&i| reg.registered[i].is_some()).collect()
+        (0..reg.registered.len())
+            .filter(|&i| reg.registered[i].is_some())
+            .collect()
     })
 }
 
@@ -877,9 +908,18 @@ fn install_signal_handlers(db_connection: bool) {
     use procsignal::ThreadSignalHandler::{Fallible, Ignore, Simple};
 
     if db_connection {
-        procsignal::pqsignal_thread(procsignal::signums::SIGINT, Simple(postgres::StatementCancelHandler));
-        procsignal::pqsignal_thread(procsignal::signums::SIGUSR1, Simple(procsignal::procsignal_sigusr1_handler));
-        procsignal::pqsignal_thread(procsignal::signums::SIGFPE, Fallible(postgres::FloatExceptionHandler));
+        procsignal::pqsignal_thread(
+            procsignal::signums::SIGINT,
+            Simple(postgres::StatementCancelHandler),
+        );
+        procsignal::pqsignal_thread(
+            procsignal::signums::SIGUSR1,
+            Simple(procsignal::procsignal_sigusr1_handler),
+        );
+        procsignal::pqsignal_thread(
+            procsignal::signums::SIGFPE,
+            Fallible(postgres::FloatExceptionHandler),
+        );
     } else {
         procsignal::pqsignal_thread(procsignal::signums::SIGINT, Ignore);
         procsignal::pqsignal_thread(procsignal::signums::SIGUSR1, Ignore);
@@ -1027,7 +1067,15 @@ fn initialize_connection(
     }
 
     let top = mcx::MemoryContext::new("BackgroundWorkerInit");
-    postinit::InitPostgres(top.mcx(), dbname, dboid, username, useroid, init_flags, None)?;
+    postinit::InitPostgres(
+        top.mcx(),
+        dbname,
+        dboid,
+        username,
+        useroid,
+        init_flags,
+        None,
+    )?;
 
     if !miscinit::IsInitProcessingMode() {
         return ereport(ERROR)

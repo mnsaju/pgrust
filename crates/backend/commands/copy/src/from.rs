@@ -18,8 +18,7 @@ use stringinfo::StringInfo;
 use types_core::Oid;
 use types_dest::CommandDest;
 use types_error::{
-    ErrorLocation, PgError, PgResult, ERRCODE_UNDEFINED_FUNCTION,
-    ERRCODE_WRONG_OBJECT_TYPE, ERROR,
+    ErrorLocation, PgError, PgResult, ERRCODE_UNDEFINED_FUNCTION, ERRCODE_WRONG_OBJECT_TYPE, ERROR,
 };
 use types_fmgr::FmgrInfo;
 use types_nodes::nodes_enums::CmdType;
@@ -33,15 +32,22 @@ use crate::{
 };
 
 pub(crate) enum CopySrc<'mcx, 's> {
-    File { fd: i32, filename: &'s str },
-    Frontend { msgbuf: StringInfo<'mcx> },
+    File {
+        fd: i32,
+        filename: &'s str,
+    },
+    Frontend {
+        msgbuf: StringInfo<'mcx>,
+    },
     // COPY_CALLBACK (copyfrom_internal.h): tablesync pulls bytes from the
     // publisher's COPY OUT stream. cb(buf, minread) fills up to buf.len()
     // bytes, at least minread unless the stream ends; 0 = EOF.
     // Lifetime-erased to 'static (SAFETY at construction): CopyFromState is
     // bounded by 's regardless, and a non-'static dyn's conservative dropck
     // ("Drop may observe borrows") breaks parallel.rs's worker teardown.
-    Callback { cb: Box<dyn FnMut(&mut [u8], usize) -> PgResult<usize> + 'static> },
+    Callback {
+        cb: Box<dyn FnMut(&mut [u8], usize) -> PgResult<usize> + 'static>,
+    },
     /// Parallel COPY worker: one segmentator-cut input chunk (whole rows,
     /// in-memory). EOF at the chunk's end.
     Chunk(crate::parallel::ChunkCursor),
@@ -108,7 +114,9 @@ impl CopyFromState<'_, '_> {
 
     /// `cstate->escontext->error_occurred` (file_fdw's soft-error probe).
     pub fn soft_error_occurred(&self) -> bool {
-        self.escontext.as_ref().is_some_and(|n| n.ctx.error_occurred())
+        self.escontext
+            .as_ref()
+            .is_some_and(|n| n.ctx.error_occurred())
     }
 
     pub fn reset_soft_error(&mut self) {
@@ -136,7 +144,16 @@ pub fn BeginCopyFrom<'mcx, 's>(
     options: &NodeList<'s>,
     source_text: Option<&str>,
 ) -> PgResult<CopyFromState<'mcx, 's>> {
-    begin_copy_from_guts(mcx, rel, where_clause, filename, None, attnamelist, options, source_text)
+    begin_copy_from_guts(
+        mcx,
+        rel,
+        where_clause,
+        filename,
+        None,
+        attnamelist,
+        options,
+        source_text,
+    )
 }
 
 // BeginCopyFrom's data_source_cb form (COPY_CALLBACK): tablesync feeds bytes
@@ -149,7 +166,16 @@ pub fn BeginCopyFromCallback<'mcx, 's>(
     options: &NodeList<'s>,
     cb: Box<dyn FnMut(&mut [u8], usize) -> PgResult<usize> + 's>,
 ) -> PgResult<CopyFromState<'mcx, 's>> {
-    begin_copy_from_guts(mcx, rel, NodeList::nil(), None, Some(cb), attnamelist, options, None)
+    begin_copy_from_guts(
+        mcx,
+        rel,
+        NodeList::nil(),
+        None,
+        Some(cb),
+        attnamelist,
+        options,
+        None,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -192,7 +218,12 @@ fn begin_copy_from_guts<'mcx, 's>(
     let convert_select_flags = if opts.convert_selectively {
         let mut flags = vec_from_elem_in(mcx, false, num_phys_attrs);
         let empty = NodeList::nil();
-        let sel = CopyGetAttnums(mcx, tup_desc, Some(rel), opts.convert_select.unwrap_or(&empty))?;
+        let sel = CopyGetAttnums(
+            mcx,
+            tup_desc,
+            Some(rel),
+            opts.convert_select.unwrap_or(&empty),
+        )?;
         for &attnum in sel.iter() {
             if !attnumlist.contains(&attnum) {
                 let att = tup_desc.attr(attnum as usize - 1);
@@ -270,8 +301,9 @@ fn begin_copy_from_guts<'mcx, 's>(
             };
             let defexpr = clauses::eval_const_expressions(mcx, defexpr)?;
             nodes_core::fix_opfuncids(defexpr)?;
-            let mut state = execexpr::exec_init_expr(mcx, Some(defexpr), execexpr::ParamBind::NONE)?
-                .expect("column default expression");
+            let mut state =
+                execexpr::exec_init_expr(mcx, Some(defexpr), execexpr::ParamBind::NONE)?
+                    .expect("column default expression");
             // SAFETY: default results land in the statement mcx, which
             // outlives every next_copy_from call (C per-tuple econtext;
             // WATCH: unbounded for very large loads, as the input values).
@@ -293,10 +325,8 @@ fn begin_copy_from_guts<'mcx, 's>(
         // sources error cleanly inside open_source / here).
         if data_source_cb.is_some() {
             return Err(Box::new(
-                PgError::error(
-                    "COPY FROM with parquet format only supports reading from a file",
-                )
-                .with_sqlstate(types_error::ERRCODE_FEATURE_NOT_SUPPORTED),
+                PgError::error("COPY FROM with parquet format only supports reading from a file")
+                    .with_sqlstate(types_error::ERRCODE_FEATURE_NOT_SUPPORTED),
             ));
         }
         let (psrc, file_len) = crate::fromparquet::open_source(
@@ -320,10 +350,10 @@ fn begin_copy_from_guts<'mcx, 's>(
         CopySrc::Callback { cb }
     } else {
         match filename {
-        Some(filename) => {
-            let fd = fd::AllocateFile(filename, "rb")?;
-            if fd < 0 {
-                ereport(ERROR)
+            Some(filename) => {
+                let fd = fd::AllocateFile(filename, "rb")?;
+                if fd < 0 {
+                    ereport(ERROR)
                     .with_saved_errno(std::io::Error::last_os_error().raw_os_error().unwrap_or(0))
                     .errcode_for_file_access()
                     .errmsg(format!("could not open file \"{filename}\" for reading: %m"))
@@ -332,32 +362,42 @@ fn begin_copy_from_guts<'mcx, 's>(
                          may want a client-side facility such as psql's \\copy.",
                     )
                     .finish(loc("BeginCopyFrom"))?;
+                }
+                progress_type = PROGRESS_COPY_TYPE_FILE;
+                let (is_dir, size) = fd::with_allocated_stdio(fd, |f| {
+                    f.metadata()
+                        .map(|m| (m.is_dir(), m.len()))
+                        .unwrap_or((false, 0))
+                })
+                .unwrap_or((false, 0));
+                if is_dir {
+                    return Err(Box::new(
+                        PgError::error(format!("\"{filename}\" is a directory"))
+                            .with_sqlstate(ERRCODE_WRONG_OBJECT_TYPE),
+                    ));
+                }
+                progress_bytes_total = size as i64;
+                CopySrc::File { fd, filename }
             }
-            progress_type = PROGRESS_COPY_TYPE_FILE;
-            let (is_dir, size) = fd::with_allocated_stdio(fd, |f| {
-                f.metadata().map(|m| (m.is_dir(), m.len())).unwrap_or((false, 0))
-            })
-            .unwrap_or((false, 0));
-            if is_dir {
-                return Err(Box::new(
-                    PgError::error(format!("\"{filename}\" is a directory"))
-                        .with_sqlstate(ERRCODE_WRONG_OBJECT_TYPE),
-                ));
+            None => {
+                if elog::config::where_to_send_output() != CommandDest::Remote {
+                    unported("FROM STDIN outside a remote session (stdin file arm)");
+                }
+                receive_copy_begin(mcx, attnumlist.len(), opts.binary)?
             }
-            progress_bytes_total = size as i64;
-            CopySrc::File { fd, filename }
-        }
-        None => {
-            if elog::config::where_to_send_output() != CommandDest::Remote {
-                unported("FROM STDIN outside a remote session (stdin file arm)");
-            }
-            receive_copy_begin(mcx, attnumlist.len(), opts.binary)?
-        }
         }
     };
     pgstat_progress_update_multi_param(
-        &[PROGRESS_COPY_COMMAND, PROGRESS_COPY_TYPE, PROGRESS_COPY_BYTES_TOTAL],
-        &[PROGRESS_COPY_COMMAND_FROM, progress_type, progress_bytes_total],
+        &[
+            PROGRESS_COPY_COMMAND,
+            PROGRESS_COPY_TYPE,
+            PROGRESS_COPY_BYTES_TOTAL,
+        ],
+        &[
+            PROGRESS_COPY_COMMAND_FROM,
+            progress_type,
+            progress_bytes_total,
+        ],
     );
 
     let max_fields = attnumlist.len();
@@ -452,7 +492,9 @@ pub fn CopyFrom<'mcx>(
     } else {
         None
     };
-    let has_instead = trigdesc.as_ref().is_some_and(|td| td.trig_insert_instead_row);
+    let has_instead = trigdesc
+        .as_ref()
+        .is_some_and(|td| td.trig_insert_instead_row);
     // A non-table target is allowed only with an INSTEAD OF INSERT row
     // trigger (copyfrom.c:809-841).
     if relkind != RELKIND_RELATION
@@ -466,8 +508,7 @@ pub fn CopyFrom<'mcx>(
     // (RELKIND_HAS_STORAGE arm; partitioned roots have none).
     let mut ti_options = if relkind == RELKIND_RELATION
         && (rel.rd_createSubid.get() != types_core::xact::InvalidSubTransactionId
-            || rel.rd_firstRelfilelocatorSubid.get()
-                != types_core::xact::InvalidSubTransactionId)
+            || rel.rd_firstRelfilelocatorSubid.get() != types_core::xact::InvalidSubTransactionId)
     {
         tableam_vocab::TABLE_INSERT_SKIP_FSM
     } else {
@@ -487,8 +528,7 @@ pub fn CopyFrom<'mcx>(
             ));
         }
         snapmgr::InvalidateCatalogSnapshot();
-        if !snapmgr::ThereAreNoPriorRegisteredSnapshots() || !portalmem::ThereAreNoReadyPortals()
-        {
+        if !snapmgr::ThereAreNoPriorRegisteredSnapshots() || !portalmem::ThereAreNoReadyPortals() {
             return Err(Box::new(
                 PgError::error("cannot perform COPY FREEZE because of prior transaction activity")
                     .with_sqlstate(types_error::ERRCODE_INVALID_TRANSACTION_STATE),
@@ -511,8 +551,11 @@ pub fn CopyFrom<'mcx>(
     // CheckValidResultRel error is the invariant outcome.
     if relkind == types_rel::RELKIND_FOREIGN_TABLE {
         return Err(Box::new(
-            PgError::error(format!("cannot insert into foreign table \"{}\"", rel.name()))
-                .with_sqlstate(types_error::ERRCODE_FEATURE_NOT_SUPPORTED),
+            PgError::error(format!(
+                "cannot insert into foreign table \"{}\"",
+                rel.name()
+            ))
+            .with_sqlstate(types_error::ERRCODE_FEATURE_NOT_SUPPORTED),
         ));
     }
     // Morsel-parallel COPY (parallel.rs; PGRUST_PARALLEL_COPY=1, pgrcolumnar
@@ -527,7 +570,10 @@ pub fn CopyFrom<'mcx>(
         if let Some(processed) =
             crate::parallel::copy_from_parallel(mcx, cstate, rel, trigdesc.is_some())?
         {
-            debug_assert!(trigdesc.is_none(), "parallel COPY engaged on a trigger-bearing rel");
+            debug_assert!(
+                trigdesc.is_none(),
+                "parallel COPY engaged on a trigger-bearing rel"
+            );
             return Ok(processed);
         }
     }
@@ -542,8 +588,7 @@ pub fn CopyFrom<'mcx>(
     // 961/972): the capture registry keys off the query depth it opens. A
     // triggerless partitioned target still needs it — routed-into leaves may
     // carry their own row triggers.
-    let open_trigger_query =
-        trigdesc.is_some() || relkind == types_rel::RELKIND_PARTITIONED_TABLE;
+    let open_trigger_query = trigdesc.is_some() || relkind == types_rel::RELKIND_PARTITIONED_TABLE;
     if open_trigger_query {
         trigger::AfterTriggerBeginQuery();
     }
@@ -554,8 +599,11 @@ pub fn CopyFrom<'mcx>(
     let mut trig_fmgr = trigger::TriggerFmgrCache::default();
     let mut trig_when = trigger::TriggerWhenCache::default();
     if let Some(td) = &trigdesc {
-        let mut when =
-            trigger::TriggerWhenEval { mcx, cache: &mut trig_when, modified_cols: None };
+        let mut when = trigger::TriggerWhenEval {
+            mcx,
+            cache: &mut trig_when,
+            modified_cols: None,
+        };
         trigger::ExecBSInsertTriggers(mcx, rel, td, &mut trig_fmgr, &mut when)?;
     }
     // CopyFromErrorCallback scope: C installs error_context_stack here, after
@@ -583,9 +631,17 @@ pub fn CopyFrom<'mcx>(
     match body {
         Ok(n) => {
             if let Some(td) = &trigdesc {
-                let mut when =
-                    trigger::TriggerWhenEval { mcx, cache: &mut trig_when, modified_cols: None };
-                trigger::ExecASInsertTriggers(rel, td, transition_capture.as_ref(), Some(&mut when))?;
+                let mut when = trigger::TriggerWhenEval {
+                    mcx,
+                    cache: &mut trig_when,
+                    modified_cols: None,
+                };
+                trigger::ExecASInsertTriggers(
+                    rel,
+                    td,
+                    transition_capture.as_ref(),
+                    Some(&mut when),
+                )?;
             }
             if open_trigger_query {
                 trigger::AfterTriggerEndQuery()?;
@@ -638,8 +694,11 @@ fn copy_from_body<'mcx>(
     let mut single_eval_cx = MemoryContext::new_bump("CopySingleInsertEval");
     let mut check_exprs = None;
 
-    let has_generated_stored =
-        rel.rd_att.constr.as_deref().is_some_and(|c| c.has_generated_stored);
+    let has_generated_stored = rel
+        .rd_att
+        .constr
+        .as_deref()
+        .is_some_and(|c| c.has_generated_stored);
     let mut generated_exprs = None;
     let mut virtual_nn_exprs = None;
 
@@ -673,11 +732,19 @@ fn copy_from_body<'mcx>(
                 break;
             }
         }
-        if cstate.escontext.as_ref().is_some_and(|n| n.ctx.error_occurred()) {
-            cstate.escontext.as_mut().unwrap().ctx.reset_error_occurred();
+        if cstate
+            .escontext
+            .as_ref()
+            .is_some_and(|n| n.ctx.error_occurred())
+        {
+            cstate
+                .escontext
+                .as_mut()
+                .unwrap()
+                .ctx
+                .reset_error_occurred();
             pgstat_progress_update_param(PROGRESS_COPY_TUPLES_SKIPPED, cstate.num_errors as i64);
-            if cstate.opts.reject_limit > 0 && cstate.num_errors > cstate.opts.reject_limit as u64
-            {
+            if cstate.opts.reject_limit > 0 && cstate.num_errors > cstate.opts.reject_limit as u64 {
                 return Err(reject_limit_exceeded(cstate.opts.reject_limit));
             }
             continue;
@@ -687,7 +754,11 @@ fn copy_from_body<'mcx>(
         slot.base_mut().tts_tableOid = rel.rd_id;
 
         if qualexpr.is_some() {
-            let mut eval = execexpr::EvalSlots { scan: Some(slot), inner: None, outer: None };
+            let mut eval = execexpr::EvalSlots {
+                scan: Some(slot),
+                inner: None,
+                outer: None,
+            };
             if !execexpr::exec_qual(qualexpr.as_deref_mut(), &mut eval)? {
                 excluded += 1;
                 pgstat_progress_update_param(PROGRESS_COPY_TUPLES_EXCLUDED, excluded);
@@ -699,8 +770,11 @@ fn copy_from_body<'mcx>(
         // suppresses the row and it is not counted.
         if has_br {
             let t = trig.as_deref_mut().expect("has_br implies trig");
-            let mut when =
-                trigger::TriggerWhenEval { mcx, cache: &mut *t.when, modified_cols: None };
+            let mut when = trigger::TriggerWhenEval {
+                mcx,
+                cache: &mut *t.when,
+                modified_cols: None,
+            };
             if !trigger::ExecBRInsertTriggers(mcx, rel, t.td, t.fmgr, &mut when, slot)? {
                 continue;
             }
@@ -710,8 +784,11 @@ fn copy_from_body<'mcx>(
         // (copyfrom.c:1340-1343).
         if has_ir {
             let t = trig.as_deref_mut().expect("has_ir implies trig");
-            let mut when =
-                trigger::TriggerWhenEval { mcx, cache: &mut *t.when, modified_cols: None };
+            let mut when = trigger::TriggerWhenEval {
+                mcx,
+                cache: &mut *t.when,
+                modified_cols: None,
+            };
             trigger::ExecIRInsertTriggers(mcx, rel, t.td, t.fmgr, &mut when, slot)?;
             processed += 1;
             flushed += 1;
@@ -753,8 +830,11 @@ fn copy_from_body<'mcx>(
                 PgVec::new_in(mcx)
             };
             if let Some(t) = trig.as_deref_mut() {
-                let mut when =
-                    trigger::TriggerWhenEval { mcx, cache: &mut *t.when, modified_cols: None };
+                let mut when = trigger::TriggerWhenEval {
+                    mcx,
+                    cache: &mut *t.when,
+                    modified_cols: None,
+                };
                 trigger::ExecARInsertTriggers(
                     mcx,
                     rel,
@@ -854,8 +934,7 @@ fn init_where_qual<'mcx>(
 }
 
 fn skipped_rows_notice(cstate: &CopyFromState<'_, '_>) -> PgResult<()> {
-    if cstate.num_errors > 0
-        && cstate.opts.log_verbosity >= crate::CopyLogVerbosityChoice::Default
+    if cstate.num_errors > 0 && cstate.opts.log_verbosity >= crate::CopyLogVerbosityChoice::Default
     {
         let n = cstate.num_errors;
         let msg = if n == 1 {
@@ -863,7 +942,9 @@ fn skipped_rows_notice(cstate: &CopyFromState<'_, '_>) -> PgResult<()> {
         } else {
             format!("{n} rows were skipped due to data type incompatibility")
         };
-        ereport(types_error::NOTICE).errmsg(msg).finish(loc("CopyFrom"))?;
+        ereport(types_error::NOTICE)
+            .errmsg(msg)
+            .finish(loc("CopyFrom"))?;
     }
     Ok(())
 }
@@ -939,8 +1020,7 @@ fn copy_from_partitioned_body<'mcx>(
     // CIM_SINGLE arms of copyfrom.c:1028-1052; the non-batch bistate exists
     // for CIM_MULTI_CONDITIONAL too (copyfrom.c:1083), pin released on
     // partition switch (copyfrom.c:1258-1260).
-    let single_insert =
-        force_single || cstate.volatile_defexprs || where_clause_volatile(cstate)?;
+    let single_insert = force_single || cstate.volatile_defexprs || where_clause_volatile(cstate)?;
     let mut single_bistate = heapam::GetBulkInsertState();
     let mut prev_leaf: Option<usize> = None;
     let mut leaf_slots: Vec<Option<types_slot::SlotData<'mcx>>> = Vec::new();
@@ -956,11 +1036,19 @@ fn copy_from_partitioned_body<'mcx>(
                 break;
             }
         }
-        if cstate.escontext.as_ref().is_some_and(|n| n.ctx.error_occurred()) {
-            cstate.escontext.as_mut().unwrap().ctx.reset_error_occurred();
+        if cstate
+            .escontext
+            .as_ref()
+            .is_some_and(|n| n.ctx.error_occurred())
+        {
+            cstate
+                .escontext
+                .as_mut()
+                .unwrap()
+                .ctx
+                .reset_error_occurred();
             pgstat_progress_update_param(PROGRESS_COPY_TUPLES_SKIPPED, cstate.num_errors as i64);
-            if cstate.opts.reject_limit > 0 && cstate.num_errors > cstate.opts.reject_limit as u64
-            {
+            if cstate.opts.reject_limit > 0 && cstate.num_errors > cstate.opts.reject_limit as u64 {
                 return Err(reject_limit_exceeded(cstate.opts.reject_limit));
             }
             continue;
@@ -970,8 +1058,11 @@ fn copy_from_partitioned_body<'mcx>(
         rootslot.base_mut().tts_tableOid = rel.rd_id;
 
         if qualexpr.is_some() {
-            let mut eval =
-                execexpr::EvalSlots { scan: Some(&mut rootslot), inner: None, outer: None };
+            let mut eval = execexpr::EvalSlots {
+                scan: Some(&mut rootslot),
+                inner: None,
+                outer: None,
+            };
             if !execexpr::exec_qual(qualexpr.as_deref_mut(), &mut eval)? {
                 excluded += 1;
                 pgstat_progress_update_param(PROGRESS_COPY_TUPLES_EXCLUDED, excluded);
@@ -1016,11 +1107,10 @@ fn copy_from_partitioned_body<'mcx>(
             };
             // C leafpart_use_multi_insert (copyfrom.c:1232-1236): a leaf with
             // BEFORE/INSTEAD row triggers takes the single-insert arm.
-            let use_multi = !td.as_ref().is_some_and(|t| {
-                t.trig_insert_before_row || t.trig_insert_instead_row
-            });
-            let c2r =
-                tupdesc::build_attrmap_by_name_if_req(mcx, &lrel.rd_att, &rel.rd_att, false)?;
+            let use_multi = !td
+                .as_ref()
+                .is_some_and(|t| t.trig_insert_before_row || t.trig_insert_instead_row);
+            let c2r = tupdesc::build_attrmap_by_name_if_req(mcx, &lrel.rd_att, &rel.rd_att, false)?;
             leaf_trig[leaf] = Some(LeafTrig {
                 td,
                 fmgr: trigger::TriggerFmgrCache::default(),
@@ -1031,7 +1121,10 @@ fn copy_from_partitioned_body<'mcx>(
             });
         }
         let leaf_use_multi = !single_insert
-            && leaf_trig[leaf].as_ref().expect("leaf initialized").use_multi;
+            && leaf_trig[leaf]
+                .as_ref()
+                .expect("leaf initialized")
+                .use_multi;
 
         if prev_leaf != Some(leaf) {
             // copyfrom.c:1245-1260: flush pending inserts before a
@@ -1075,14 +1168,23 @@ fn copy_from_partitioned_body<'mcx>(
                 None => &mut rootslot,
             };
             use_slot.base_mut().tts_tableOid = lrel.rd_id;
-            let LeafTrig { td, fmgr, when: when_cache, c2r, pcheck, .. } =
-                leaf_trig[leaf].as_mut().expect("leaf initialized");
+            let LeafTrig {
+                td,
+                fmgr,
+                when: when_cache,
+                c2r,
+                pcheck,
+                ..
+            } = leaf_trig[leaf].as_mut().expect("leaf initialized");
             let has_br = td.as_ref().is_some_and(|t| t.trig_insert_before_row);
             // BEFORE ROW INSERT triggers on the leaf (copyfrom.c:1327-1331);
             // a NULL return suppresses the row and it is not counted.
             if has_br {
-                let mut when =
-                    trigger::TriggerWhenEval { mcx, cache: &mut *when_cache, modified_cols: None };
+                let mut when = trigger::TriggerWhenEval {
+                    mcx,
+                    cache: &mut *when_cache,
+                    modified_cols: None,
+                };
                 if !trigger::ExecBRInsertTriggers(
                     mcx,
                     lrel,
@@ -1149,8 +1251,11 @@ fn copy_from_partitioned_body<'mcx>(
                     child_desc: lrel.rd_att.as_ref(),
                     root_desc: rel.rd_att.as_ref(),
                 });
-                let mut when =
-                    trigger::TriggerWhenEval { mcx, cache: &mut *when_cache, modified_cols: None };
+                let mut when = trigger::TriggerWhenEval {
+                    mcx,
+                    cache: &mut *when_cache,
+                    modified_cols: None,
+                };
                 trigger::ExecARInsertTriggers(
                     mcx,
                     lrel,
@@ -1293,8 +1398,12 @@ fn flush_part_buffers<'mcx>(
         // capture never reaches here — it forces the single-insert arm.
         let LeafTrig { td, fmgr, when, .. } =
             leaf_trig[buf.leaf].as_mut().expect("leaf initialized");
-        let mut trig =
-            td.as_deref().map(|td| CopyTrig { td, tc: transition_capture, when, fmgr });
+        let mut trig = td.as_deref().map(|td| CopyTrig {
+            td,
+            tc: transition_capture,
+            when,
+            fmgr,
+        });
         flush_multi_insert(
             mcx,
             cstate,
@@ -1358,8 +1467,11 @@ fn flush_multi_insert<'mcx>(
                 PgVec::new_in(mcx)
             };
             if let Some(t) = trig.as_deref_mut() {
-                let mut when =
-                    trigger::TriggerWhenEval { mcx, cache: &mut *t.when, modified_cols: None };
+                let mut when = trigger::TriggerWhenEval {
+                    mcx,
+                    cache: &mut *t.when,
+                    modified_cols: None,
+                };
                 trigger::ExecARInsertTriggers(
                     mcx,
                     rel,
@@ -1386,10 +1498,7 @@ fn flush_multi_insert<'mcx>(
 // attached on Err propagation instead of via error_context_stack.
 #[cold]
 #[inline(never)]
-pub fn copy_from_error_context(
-    cstate: &CopyFromState<'_, '_>,
-    e: Box<PgError>,
-) -> Box<PgError> {
+pub fn copy_from_error_context(cstate: &CopyFromState<'_, '_>, e: Box<PgError>) -> Box<PgError> {
     let relname = &cstate.relname;
     let lineno = cstate.cur_lineno;
     if cstate.opts.parquet {
@@ -1493,7 +1602,10 @@ fn cannot_copy_to_relkind(rel: &Relation<'_>) -> Box<PgError> {
         ),
         b'm' => (format!("cannot copy to materialized view \"{name}\""), None),
         b'S' => (format!("cannot copy to sequence \"{name}\""), None),
-        _ => (format!("cannot copy to non-table relation \"{name}\""), None),
+        _ => (
+            format!("cannot copy to non-table relation \"{name}\""),
+            None,
+        ),
     };
     let mut e = PgError::error(msg).with_sqlstate(ERRCODE_WRONG_OBJECT_TYPE);
     if let Some(h) = hint {

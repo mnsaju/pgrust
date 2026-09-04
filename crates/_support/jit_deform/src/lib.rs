@@ -26,7 +26,10 @@ pub fn available() -> bool {
     {
         static OFF: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
         !*OFF.get_or_init(|| {
-            matches!(std::env::var("PGRUST_JIT_DEFORM").as_deref(), Ok("0") | Ok("off"))
+            matches!(
+                std::env::var("PGRUST_JIT_DEFORM").as_deref(),
+                Ok("0") | Ok("off")
+            )
         })
     }
     #[cfg(not(target_arch = "aarch64"))]
@@ -118,7 +121,10 @@ impl CodeBlock {
 /// None = refused (arch, arena full): callers fail open to their interpreter.
 pub fn install_code(words: &[u32]) -> Option<CodeBlock> {
     let code = imp::alloc_code(words)?;
-    Some(CodeBlock { code, len: words.len() * 4 })
+    Some(CodeBlock {
+        code,
+        len: words.len() * 4,
+    })
 }
 
 // C JitInstrumentation slice we can attribute (created_functions +
@@ -219,7 +225,11 @@ mod imp {
         if base == libc::MAP_FAILED {
             return None;
         }
-        Some(Rc::new(Chunk { base: base.cast(), used: Cell::new(0), live: Cell::new(0) }))
+        Some(Rc::new(Chunk {
+            base: base.cast(),
+            used: Cell::new(0),
+            live: Cell::new(0),
+        }))
     }
 
     pub(crate) fn alloc_code(words: &[u32]) -> Option<CodeAlloc> {
@@ -303,7 +313,10 @@ mod imp {
 
     impl Emitter {
         fn new() -> Emitter {
-            Emitter { code: Vec::with_capacity(96), ok: true }
+            Emitter {
+                code: Vec::with_capacity(96),
+                ok: true,
+            }
         }
 
         // fetch_att Datum semantics: byval sign-extends by width, byref = address.
@@ -373,7 +386,9 @@ mod imp {
     fn emit_row(atts: &[CompactAttribute], ncols: usize) -> Option<(Vec<u32>, u32)> {
         let mut e = Emitter::new();
         e.zero_bytes(2, ncols);
-        let end = emit_loads(&mut e, atts, ncols, |e, rt, c| e.str64(rt, 1, (c * 8) as u32));
+        let end = emit_loads(&mut e, atts, ncols, |e, rt, c| {
+            e.str64(rt, 1, (c * 8) as u32)
+        });
         e.ret();
         e.ok.then_some((e.code, end))
     }

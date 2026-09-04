@@ -101,7 +101,9 @@ fn no_flinfo(name: &str) -> ! {
 struct OutBuf(Vec<u8>);
 
 fn out_scratch<'a>(flinfo: Option<&'a mut FmgrInfo>, name: &'static str) -> &'a mut Vec<u8> {
-    let Some(flinfo) = flinfo else { no_flinfo(name) };
+    let Some(flinfo) = flinfo else {
+        no_flinfo(name)
+    };
     if !flinfo.has_fn_extra() {
         flinfo.set_fn_extra(OutBuf(Vec::new()));
     }
@@ -133,7 +135,13 @@ pub fn fc_pg_node_tree_send(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) 
     varlena::builtins::fc_textsend(flinfo, fcinfo)
 }
 
-const fn b(foid: Oid, name: &'static str, nargs: i16, strict: bool, func: PGFunction) -> FmgrBuiltin {
+const fn b(
+    foid: Oid,
+    name: &'static str,
+    nargs: i16,
+    strict: bool,
+    func: PGFunction,
+) -> FmgrBuiltin {
     FmgrBuiltin {
         foid,
         name,
@@ -156,9 +164,21 @@ pub const PSEUDOTYPES_BUILTINS: &[FmgrBuiltin] = &[
     b(197, "pg_node_tree_recv", 1, true, fc_pg_node_tree_recv),
     b(198, "pg_node_tree_send", 1, true, fc_pg_node_tree_send),
     b(267, "table_am_handler_in", 1, false, fc_table_am_handler_in),
-    b(268, "table_am_handler_out", 1, true, fc_table_am_handler_out),
+    b(
+        268,
+        "table_am_handler_out",
+        1,
+        true,
+        fc_table_am_handler_out,
+    ),
     b(326, "index_am_handler_in", 1, false, fc_index_am_handler_in),
-    b(327, "index_am_handler_out", 1, true, fc_index_am_handler_out),
+    b(
+        327,
+        "index_am_handler_out",
+        1,
+        true,
+        fc_index_am_handler_out,
+    ),
     b(2292, "cstring_in", 1, true, fc_cstring_in),
     b(2293, "cstring_out", 1, true, fc_cstring_out),
     b(2294, "any_in", 1, true, fc_any_in),
@@ -168,8 +188,20 @@ pub const PSEUDOTYPES_BUILTINS: &[FmgrBuiltin] = &[
     b(2299, "void_out", 1, true, fc_void_out),
     b(2300, "trigger_in", 1, false, fc_trigger_in),
     b(2301, "trigger_out", 1, true, fc_trigger_out),
-    b(2302, "language_handler_in", 1, false, fc_language_handler_in),
-    b(2303, "language_handler_out", 1, true, fc_language_handler_out),
+    b(
+        2302,
+        "language_handler_in",
+        1,
+        false,
+        fc_language_handler_in,
+    ),
+    b(
+        2303,
+        "language_handler_out",
+        1,
+        true,
+        fc_language_handler_out,
+    ),
     b(2304, "internal_in", 1, false, fc_internal_in),
     b(2305, "internal_out", 1, true, fc_internal_out),
     b(2312, "anyelement_in", 1, true, fc_anyelement_in),
@@ -189,13 +221,49 @@ pub const PSEUDOTYPES_BUILTINS: &[FmgrBuiltin] = &[
     b(3594, "event_trigger_in", 1, false, fc_event_trigger_in),
     b(3595, "event_trigger_out", 1, true, fc_event_trigger_out),
     b(3832, "anyrange_in", 3, true, fc_anyrange_in),
-    b(4226, "anycompatiblemultirange_in", 3, true, fc_anycompatiblemultirange_in),
+    b(
+        4226,
+        "anycompatiblemultirange_in",
+        3,
+        true,
+        fc_anycompatiblemultirange_in,
+    ),
     b(4229, "anymultirange_in", 3, true, fc_anymultirange_in),
     b(5086, "anycompatible_in", 1, true, fc_anycompatible_in),
     b(5087, "anycompatible_out", 1, true, fc_anycompatible_out),
-    b(5088, "anycompatiblearray_in", 1, true, fc_anycompatiblearray_in),
-    b(5090, "anycompatiblearray_recv", 1, true, fc_anycompatiblearray_recv),
-    b(5092, "anycompatiblenonarray_in", 1, true, fc_anycompatiblenonarray_in),
-    b(5093, "anycompatiblenonarray_out", 1, true, fc_anycompatiblenonarray_out),
-    b(5094, "anycompatiblerange_in", 3, true, fc_anycompatiblerange_in),
+    b(
+        5088,
+        "anycompatiblearray_in",
+        1,
+        true,
+        fc_anycompatiblearray_in,
+    ),
+    b(
+        5090,
+        "anycompatiblearray_recv",
+        1,
+        true,
+        fc_anycompatiblearray_recv,
+    ),
+    b(
+        5092,
+        "anycompatiblenonarray_in",
+        1,
+        true,
+        fc_anycompatiblenonarray_in,
+    ),
+    b(
+        5093,
+        "anycompatiblenonarray_out",
+        1,
+        true,
+        fc_anycompatiblenonarray_out,
+    ),
+    b(
+        5094,
+        "anycompatiblerange_in",
+        3,
+        true,
+        fc_anycompatiblerange_in,
+    ),
 ];

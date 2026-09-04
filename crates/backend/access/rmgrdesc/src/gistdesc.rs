@@ -25,7 +25,11 @@ pub fn gist_desc(buf: &mut StringInfo<'_>, record: &XLogReaderState) -> PgResult
                 rec.u32(12, "gistxlogPageReuse")?,
                 (horizon >> 32) as u32,
                 horizon as u32,
-                if rec.u8(24, "gistxlogPageReuse")? != 0 { 'T' } else { 'F' }
+                if rec.u8(24, "gistxlogPageReuse")? != 0 {
+                    'T'
+                } else {
+                    'F'
+                }
             )?;
         }
         XLOG_GIST_DELETE => {
@@ -35,12 +39,20 @@ pub fn gist_desc(buf: &mut StringInfo<'_>, record: &XLogReaderState) -> PgResult
                 "delete: snapshotConflictHorizon {}, nitems: {}, isCatalogRel {}",
                 rec.u32(0, "gistxlogDelete")?,
                 rec.u16(4, "gistxlogDelete")?,
-                if rec.u8(6, "gistxlogDelete")? != 0 { 'T' } else { 'F' }
+                if rec.u8(6, "gistxlogDelete")? != 0 {
+                    'T'
+                } else {
+                    'F'
+                }
             )?;
         }
         XLOG_GIST_PAGE_SPLIT => {
             // gistxlogPageSplit: origrlink 0, orignsn 8, origleaf 16, npage 18, markfollowright 20.
-            appendf!(buf, "page_split: splits to {} pages", rec.u16(18, "gistxlogPageSplit")?)?;
+            appendf!(
+                buf,
+                "page_split: splits to {} pages",
+                rec.u16(18, "gistxlogPageSplit")?
+            )?;
         }
         XLOG_GIST_PAGE_DELETE => {
             // gistxlogPageDelete: deleteXid 0 (FullTransactionId, u64), downlinkOffset 8.

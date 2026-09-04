@@ -370,7 +370,9 @@ fn esc_encode(src: &[u8], out: &mut PgVec<'_, u8>) {
     // which set_len then covers.
     unsafe {
         let dst = core::slice::from_raw_parts_mut(
-            out.as_mut_ptr().add(old).cast::<core::mem::MaybeUninit<u8>>(),
+            out.as_mut_ptr()
+                .add(old)
+                .cast::<core::mem::MaybeUninit<u8>>(),
             spare,
         );
         let written = esc_encode_body(src, dst);
@@ -441,7 +443,9 @@ fn esc_decode(src: &[u8], out: &mut PgVec<'_, u8>) -> PgResult<()> {
     // which set_len then covers.
     unsafe {
         let dst = core::slice::from_raw_parts_mut(
-            out.as_mut_ptr().add(old).cast::<core::mem::MaybeUninit<u8>>(),
+            out.as_mut_ptr()
+                .add(old)
+                .cast::<core::mem::MaybeUninit<u8>>(),
             spare,
         );
         let written = esc_decode_body(src, dst)?;

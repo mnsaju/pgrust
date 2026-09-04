@@ -356,7 +356,10 @@ fn io_wait_with_cross_thread_completion() {
         },
     );
     assert!(
-        matches!(outcome, io::IoWaitOutcome::Completed | io::IoWaitOutcome::Reaped),
+        matches!(
+            outcome,
+            io::IoWaitOutcome::Completed | io::IoWaitOutcome::Reaped
+        ),
         "unexpected outcome {outcome:?}"
     );
     completer.join().unwrap();
@@ -386,7 +389,10 @@ fn io_wait_with_spurious_notify_retests_and_reparks() {
         || panic!("reap unreachable"),
     );
     assert_eq!(outcome, io::IoWaitOutcome::Completed);
-    assert!(parks.load(Ordering::Relaxed) >= 2, "spurious notify must re-park");
+    assert!(
+        parks.load(Ordering::Relaxed) >= 2,
+        "spurious notify must re-park"
+    );
 }
 
 #[test]

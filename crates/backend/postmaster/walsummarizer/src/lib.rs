@@ -9,10 +9,7 @@
 #![allow(clippy::result_large_err)]
 
 use std::cell::Cell;
-use std::sync::atomic::{
-    AtomicBool, AtomicI32, AtomicU32, AtomicU64,
-    Ordering::Relaxed,
-};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU64, Ordering::Relaxed};
 use std::sync::OnceLock;
 
 use condition_variable::{
@@ -22,23 +19,22 @@ use condition_variable::{
 use elog::{elog, ereport};
 use init_small::globals as g;
 use lwlock::{LWLockAcquire, LWLockRelease, LW_EXCLUSIVE, LW_SHARED};
-use mcx::{Mcx, MemoryContext};
 use mcx::vec_with_capacity_in;
 use mcx::PgVec;
+use mcx::{Mcx, MemoryContext};
 use transam_xlog::write::GetFlushRecPtr;
 use transam_xlog::{
-    wal_segment_size, GetRedoRecPtr, GetWALInsertionTimeLineIfSet,
-    RecoveryInProgress, XLogGetOldestSegno, XLogSegNoOffsetToRecPtr, RM_XLOG_ID,
-    WAL_LEVEL_MINIMAL, XLOGDIR, XLOG_CHECKPOINT_REDO, XLOG_CHECKPOINT_SHUTDOWN,
-    XLOG_END_OF_RECOVERY, XLOG_PARAMETER_CHANGE, XLR_INFO_MASK,
+    wal_segment_size, GetRedoRecPtr, GetWALInsertionTimeLineIfSet, RecoveryInProgress,
+    XLogGetOldestSegno, XLogSegNoOffsetToRecPtr, RM_XLOG_ID, WAL_LEVEL_MINIMAL, XLOGDIR,
+    XLOG_CHECKPOINT_REDO, XLOG_CHECKPOINT_SHUTDOWN, XLOG_END_OF_RECOVERY, XLOG_PARAMETER_CHANGE,
+    XLR_INFO_MASK,
 };
 use types_core::{
-    ForkNumber, RmgrIds, TimeLineID, TimestampTz, XLogRecPtr, XLogSegNo,
-    INVALID_PROC_NUMBER,
+    ForkNumber, RmgrIds, TimeLineID, TimestampTz, XLogRecPtr, XLogSegNo, INVALID_PROC_NUMBER,
 };
 use types_error::{
-    ErrorLocation, PgError, PgResult, ERRCODE_INTERNAL_ERROR,
-    ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE, DEBUG1, DEBUG2, ERROR, FATAL, WARNING,
+    ErrorLocation, PgError, PgResult, DEBUG1, DEBUG2, ERRCODE_INTERNAL_ERROR,
+    ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE, ERROR, FATAL, WARNING,
 };
 use types_startup::StartupData;
 use types_storage::waiteventset::{WL_EXIT_ON_PM_DEATH, WL_LATCH_SET, WL_TIMEOUT};
@@ -92,7 +88,9 @@ struct WalSummarizerData {
 static SHMEM: OnceLock<WalSummarizerData> = OnceLock::new();
 
 fn ctl() -> &'static WalSummarizerData {
-    SHMEM.get().expect("WalSummarizer shmem accessed before WalSummarizerShmemInit")
+    SHMEM
+        .get()
+        .expect("WalSummarizer shmem accessed before WalSummarizerShmemInit")
 }
 
 fn summarizer_lock() -> &'static lwlock::LWLock {
@@ -175,7 +173,10 @@ pub fn WalSummarizerMain(startup_data: &StartupData) -> ! {
 
     {
         use procsignal::ThreadSignalHandler::{Ignore, Simple};
-        procsignal::pqsignal_thread(procsignal::signums::SIGHUP, Simple(interrupt::SignalHandlerForConfigReload));
+        procsignal::pqsignal_thread(
+            procsignal::signums::SIGHUP,
+            Simple(interrupt::SignalHandlerForConfigReload),
+        );
         procsignal::pqsignal_thread(
             procsignal::signums::SIGINT,
             Simple(interrupt::SignalHandlerForShutdownRequest),
@@ -336,7 +337,9 @@ pub fn GetWalSummarizerState() -> PgResult<WalSummarizerState> {
                 summarizer_pid: -1,
             }
         } else {
-            let mut pid = lmgr_proc::ProcGlobal().allProcs[pgprocno as usize].pid.load(Relaxed);
+            let mut pid = lmgr_proc::ProcGlobal().allProcs[pgprocno as usize]
+                .pid
+                .load(Relaxed);
             if pid <= 0 {
                 pid = -1;
             }
@@ -408,8 +411,12 @@ fn oldest_unsummarized_slow(
         }
     }
 
-    let existing =
-        GetWalSummaries(history_cx.mcx(), unsummarized_tli, InvalidXLogRecPtr, InvalidXLogRecPtr)?;
+    let existing = GetWalSummaries(
+        history_cx.mcx(),
+        unsummarized_tli,
+        InvalidXLogRecPtr,
+        InvalidXLogRecPtr,
+    )?;
     for ws in &existing {
         if ws.end_lsn > unsummarized_lsn {
             unsummarized_lsn = ws.end_lsn;
@@ -508,7 +515,11 @@ pub fn WaitForWalSummarization(lsn: XLogRecPtr) -> PgResult<()> {
             }
 
             let elapsed_seconds = diff_ms(initial_time, current_time) / 1000;
-            let plural = if elapsed_seconds == 1 { "second" } else { "seconds" };
+            let plural = if elapsed_seconds == 1 {
+                "second"
+            } else {
+                "seconds"
+            };
             ereport(WARNING)
                 .errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE)
                 .errmsg(format!(
@@ -545,7 +556,9 @@ fn diff_ms(start: TimestampTz, stop: TimestampTz) -> i64 {
 }
 
 fn wal_summarizer_shutdown(_code: i32, _arg: usize) {
-    ctl().summarizer_pgprocno.store(INVALID_PROC_NUMBER, Relaxed);
+    ctl()
+        .summarizer_pgprocno
+        .store(INVALID_PROC_NUMBER, Relaxed);
 }
 
 fn GetLatestLSN() -> (XLogRecPtr, TimeLineID) {
@@ -643,8 +656,7 @@ impl XLogReaderRoutine for SummarizerPageRead {
                     let history_cx = MemoryContext::new("timeline history");
                     let tles =
                         timeline_seams::read_timeline_history::call(history_cx.mcx(), latest_tli)?;
-                    let (switchpoint, _) =
-                        timeline_seams::tli_switch_point::call(self.tli, &tles)?;
+                    let (switchpoint, _) = timeline_seams::tli_switch_point::call(self.tli, &tles)?;
 
                     self.historic = true;
                     self.read_upto = switchpoint;
@@ -718,12 +730,12 @@ fn SummarizeWAL(
                 switch_lsn = xlogreader.v.EndRecPtr;
             } else {
                 ereport(ERROR)
-                .errmsg(format!(
-                    "could not find a valid record after {}",
-                    lsn_fmt(start_lsn)
-                ))
-                .finish(loc("SummarizeWAL"))?;
-            unreachable!();
+                    .errmsg(format!(
+                        "could not find a valid record after {}",
+                        lsn_fmt(start_lsn)
+                    ))
+                    .finish(loc("SummarizeWAL"))?;
+                unreachable!();
             }
         } else {
             summary_start_lsn = found;
@@ -908,7 +920,11 @@ fn SummarizeDbaseRecord(
     if info == XLOG_DBASE_CREATE_FILE_COPY || info == XLOG_DBASE_CREATE_WAL_LOG {
         let db_id = u32::from_ne_bytes(data[0..4].try_into().unwrap());
         let tablespace_id = u32::from_ne_bytes(data[4..8].try_into().unwrap());
-        let rlocator = RelFileLocator { spcOid: tablespace_id, dbOid: db_id, relNumber: 0 };
+        let rlocator = RelFileLocator {
+            spcOid: tablespace_id,
+            dbOid: db_id,
+            relNumber: 0,
+        };
         brtab.set_limit_block(rlocator, MAIN_FORKNUM, 0);
     } else if info == XLOG_DBASE_DROP {
         let db_id = u32::from_ne_bytes(data[0..4].try_into().unwrap());
@@ -916,7 +932,11 @@ fn SummarizeDbaseRecord(
         for i in 0..ntablespaces {
             let off = 8 + 4 * i;
             let spc = u32::from_ne_bytes(data[off..off + 4].try_into().unwrap());
-            let rlocator = RelFileLocator { spcOid: spc, dbOid: db_id, relNumber: 0 };
+            let rlocator = RelFileLocator {
+                spcOid: spc,
+                dbOid: db_id,
+                relNumber: 0,
+            };
             brtab.set_limit_block(rlocator, MAIN_FORKNUM, 0);
         }
     }
@@ -1144,7 +1164,10 @@ fn parse_wal_summary_filename(name: &str) -> Option<(TimeLineID, XLogRecPtr, XLo
         return None;
     }
     let hex = &name[..40];
-    if !hex.bytes().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_lowercase()) {
+    if !hex
+        .bytes()
+        .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_lowercase())
+    {
         return None;
     }
     let f = |r: core::ops::Range<usize>| u32::from_str_radix(&hex[r], 16).unwrap();
@@ -1177,7 +1200,11 @@ pub fn RemoveWalSummaryIfOlderThan(ws: &WalSummaryFile, cutoff_time: i64) -> PgR
             .finish(loc("RemoveWalSummaryIfOlderThan"))?;
         unreachable!();
     }
-    let mtime = if md.mtime_sec >= 0 { md.mtime_sec } else { i64::MAX };
+    let mtime = if md.mtime_sec >= 0 {
+        md.mtime_sec
+    } else {
+        i64::MAX
+    };
     if mtime >= cutoff_time {
         return Ok(());
     }
@@ -1205,6 +1232,11 @@ pub fn init_seams() {
     });
     walsummarizer_seams::get_wal_summarizer_state::set(|| {
         let s = GetWalSummarizerState()?;
-        Ok((s.summarized_tli, s.summarized_lsn, s.pending_lsn, s.summarizer_pid))
+        Ok((
+            s.summarized_tli,
+            s.summarized_lsn,
+            s.pending_lsn,
+            s.summarizer_pid,
+        ))
     });
 }

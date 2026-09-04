@@ -19,7 +19,11 @@ pub fn UpdatePMState(new_state: PMState) {
     let old = with_pm(|pm| pm.pm_state);
     report_internal(
         DEBUG1,
-        format!("updating PMState from {} to {}", pmstate_name(old), pmstate_name(new_state)),
+        format!(
+            "updating PMState from {} to {}",
+            pmstate_name(old),
+            pmstate_name(new_state)
+        ),
         3277,
         "UpdatePMState",
     );
@@ -76,7 +80,9 @@ pub fn SignalChildren(signal: i32, target_mask: BackendTypeMask) -> bool {
 pub fn TerminateChildren(signal: i32) {
     SignalChildren(signal, btmask_all_except(&[BackendType::Logger]));
     if with_pm(|pm| pm.startup.is_some())
-        && (signal == procsignal::signums::SIGQUIT || signal == procsignal::signums::SIGKILL || signal == procsignal::signums::SIGABRT)
+        && (signal == procsignal::signums::SIGQUIT
+            || signal == procsignal::signums::SIGKILL
+            || signal == procsignal::signums::SIGABRT)
     {
         with_pm(|pm| pm.startup_status = StartupStatusEnum::Signaled);
     }
@@ -151,7 +157,12 @@ pub fn process_pm_shutdown_request() -> PgResult<()> {
                 return Ok(());
             }
             with_pm(|pm| pm.shutdown = SmartShutdown);
-            report(LOG, "received smart shutdown request".into(), 2113, "process_pm_shutdown_request");
+            report(
+                LOG,
+                "received smart shutdown request".into(),
+                2113,
+                "process_pm_shutdown_request",
+            );
 
             miscinit::AddToDataDirLockFile(LOCK_FILE_LINE_PM_STATUS, PM_STATUS_STOPPING)?;
 
@@ -169,7 +180,12 @@ pub fn process_pm_shutdown_request() -> PgResult<()> {
                 return Ok(());
             }
             with_pm(|pm| pm.shutdown = FastShutdown);
-            report(LOG, "received fast shutdown request".into(), 2153, "process_pm_shutdown_request");
+            report(
+                LOG,
+                "received fast shutdown request".into(),
+                2153,
+                "process_pm_shutdown_request",
+            );
 
             miscinit::AddToDataDirLockFile(LOCK_FILE_LINE_PM_STATUS, PM_STATUS_STOPPING)?;
 
@@ -177,7 +193,12 @@ pub fn process_pm_shutdown_request() -> PgResult<()> {
             if pm_state == PMState::PM_STARTUP || pm_state == PMState::PM_RECOVERY {
                 UpdatePMState(PMState::PM_STOP_BACKENDS);
             } else if pm_state == PMState::PM_RUN || pm_state == PMState::PM_HOT_STANDBY {
-                report(LOG, "aborting any active transactions".into(), 2170, "process_pm_shutdown_request");
+                report(
+                    LOG,
+                    "aborting any active transactions".into(),
+                    2170,
+                    "process_pm_shutdown_request",
+                );
                 UpdatePMState(PMState::PM_STOP_BACKENDS);
             }
 
@@ -189,7 +210,12 @@ pub fn process_pm_shutdown_request() -> PgResult<()> {
                 return Ok(());
             }
             with_pm(|pm| pm.shutdown = ImmediateShutdown);
-            report(LOG, "received immediate shutdown request".into(), 2193, "process_pm_shutdown_request");
+            report(
+                LOG,
+                "received immediate shutdown request".into(),
+                2193,
+                "process_pm_shutdown_request",
+            );
 
             miscinit::AddToDataDirLockFile(LOCK_FILE_LINE_PM_STATUS, PM_STATUS_STOPPING)?;
 
@@ -225,7 +251,10 @@ pub fn PostmasterStateMachine() -> PgResult<()> {
     }
 
     if with_pm(|pm| {
-        matches!(pm.pm_state, PMState::PM_STOP_BACKENDS | PMState::PM_WAIT_BACKENDS)
+        matches!(
+            pm.pm_state,
+            PMState::PM_STOP_BACKENDS | PMState::PM_WAIT_BACKENDS
+        )
     }) {
         let mut target_mask = BTYPE_MASK_NONE;
         for t in [
@@ -274,7 +303,10 @@ pub fn PostmasterStateMachine() -> PgResult<()> {
             if with_pm(|pm| pm.shutdown >= ImmediateShutdown || pm.fatal_error) {
                 UpdatePMState(PMState::PM_WAIT_DEAD_END);
                 ConfigurePostmasterWaitSet(false)?;
-                SignalChildren(procsignal::signums::SIGQUIT, btmask(BackendType::DeadEndBackend));
+                SignalChildren(
+                    procsignal::signums::SIGQUIT,
+                    btmask(BackendType::DeadEndBackend),
+                );
             } else {
                 debug_assert!(with_pm(|pm| pm.shutdown > crate::NoShutdown));
                 if with_pm(|pm| pm.checkpointer.is_none()) {
@@ -328,7 +360,12 @@ pub fn PostmasterStateMachine() -> PgResult<()> {
 
     if with_pm(|pm| pm.shutdown > crate::NoShutdown && pm.pm_state == PMState::PM_NO_CHILDREN) {
         if with_pm(|pm| pm.fatal_error) {
-            report(LOG, "abnormal database system shutdown".into(), 3168, "PostmasterStateMachine");
+            report(
+                LOG,
+                "abnormal database system shutdown".into(),
+                3168,
+                "PostmasterStateMachine",
+            );
             ExitPostmaster(1);
         } else {
             ExitPostmaster(0);
@@ -337,11 +374,21 @@ pub fn PostmasterStateMachine() -> PgResult<()> {
 
     if with_pm(|pm| pm.pm_state == PMState::PM_NO_CHILDREN) {
         if with_pm(|pm| pm.startup_status == StartupStatusEnum::Crashed) {
-            report(LOG, "shutting down due to startup process failure".into(), 3190, "PostmasterStateMachine");
+            report(
+                LOG,
+                "shutting down due to startup process failure".into(),
+                3190,
+                "PostmasterStateMachine",
+            );
             ExitPostmaster(1);
         }
         if !guc_tables::vars::restart_after_crash.read() {
-            report(LOG, "shutting down because \"restart_after_crash\" is off".into(), 3196, "PostmasterStateMachine");
+            report(
+                LOG,
+                "shutting down because \"restart_after_crash\" is off".into(),
+                3196,
+                "PostmasterStateMachine",
+            );
             ExitPostmaster(1);
         }
     }
@@ -409,7 +456,10 @@ pub fn StartChildProcess(child_type: BackendType) -> Option<PmChild> {
         pmchild_seams::release_postmaster_child_slot::call(child_slot);
         report(
             LOG,
-            format!("could not fork {} process", miscinit::GetBackendTypeDesc(child_type)),
+            format!(
+                "could not fork {} process",
+                miscinit::GetBackendTypeDesc(child_type)
+            ),
             3960,
             "StartChildProcess",
         );
@@ -419,7 +469,11 @@ pub fn StartChildProcess(child_type: BackendType) -> Option<PmChild> {
         return None;
     }
     pmchild_seams::set_child_pid::call(child_slot, pid);
-    Some(PmChild { child_slot, bkend_type: child_type, pid })
+    Some(PmChild {
+        child_slot,
+        bkend_type: child_type,
+        pid,
+    })
 }
 
 pub fn StartSysLogger() {
@@ -441,7 +495,11 @@ pub fn StartSysLogger() {
     } else {
         pmchild_seams::set_child_pid::call(child_slot, pid);
         with_pm(|pm| {
-            pm.syslogger = Some(PmChild { child_slot, bkend_type: BackendType::Logger, pid })
+            pm.syslogger = Some(PmChild {
+                child_slot,
+                bkend_type: BackendType::Logger,
+                pid,
+            })
         });
     }
 }
@@ -463,7 +521,10 @@ fn StartBackgroundWorker(idx: usize) -> bool {
 
     report_internal(
         DEBUG1,
-        format!("starting background worker process \"{}\"", bgworker::rw_name(idx)),
+        format!(
+            "starting background worker process \"{}\"",
+            bgworker::rw_name(idx)
+        ),
         4153,
         "StartBackgroundWorker",
     );
@@ -480,7 +541,12 @@ fn StartBackgroundWorker(idx: usize) -> bool {
         None,
     );
     if pid < 0 {
-        report(LOG, "could not fork background worker process".into(), 4162, "StartBackgroundWorker");
+        report(
+            LOG,
+            "could not fork background worker process".into(),
+            4162,
+            "StartBackgroundWorker",
+        );
         pmchild_seams::release_postmaster_child_slot::call(child_slot);
         bgworker::set_rw_crashed_at(idx, timestamp_seams::get_current_timestamp::call());
         return false;

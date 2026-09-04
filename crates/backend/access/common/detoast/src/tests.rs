@@ -75,7 +75,14 @@ fn detoast_attr_slice_on_inline_compressed() {
     let ctx = MemoryContext::new("t");
     let input = sample(4000);
     let image = compress_image(&input, TOAST_PGLZ_COMPRESSION_ID);
-    for (off, len) in [(0i32, 10i32), (100, 250), (3990, 100), (0, -1), (777, -1), (5000, 33)] {
+    for (off, len) in [
+        (0i32, 10i32),
+        (100, 250),
+        (3990, 100),
+        (0, -1),
+        (777, -1),
+        (5000, 33),
+    ] {
         let out = detoast_attr_slice(ctx.mcx(), &image, off, len).unwrap();
         let expect: &[u8] = if off as usize >= input.len() {
             &[]
@@ -190,8 +197,7 @@ fn seam_install_and_external_fetch_arm() {
             let phrase = b"toast toast toast and more toast, buttered ";
             (0..300).map(|i| phrase[i % phrase.len()]).collect()
         };
-        let mut dest =
-            vec![MaybeUninit::<u8>::uninit(); pglz::pglz_max_output(input.len())];
+        let mut dest = vec![MaybeUninit::<u8>::uninit(); pglz::pglz_max_output(input.len())];
         let n = pglz::pglz_compress_into(&input, &mut dest, &pglz::PGLZ_STRATEGY_ALWAYS).unwrap();
         let total = VARHDRSZ_COMPRESSED + n;
         let mut v = mcx::vec_with_capacity_in(mcx, total)?;

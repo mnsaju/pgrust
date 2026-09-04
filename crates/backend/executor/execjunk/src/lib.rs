@@ -36,7 +36,9 @@ pub fn exec_init_junk_filter<'mcx>(
         .try_reserve_exact(clean_length)
         .map_err(|_| mcx.oom(clean_length * 2))?;
     for tle_node in target_list.iter() {
-        let tle = tle_node.as_target_entry().expect("targetlist holds TargetEntries");
+        let tle = tle_node
+            .as_target_entry()
+            .expect("targetlist holds TargetEntries");
         if !tle.resjunk {
             clean_map.push(tle.resno);
         }
@@ -53,7 +55,10 @@ pub fn exec_init_junk_filter<'mcx>(
 /// `ExecFilterJunk` (execJunk.c): per output tuple; one deform + a map copy,
 /// no allocations.
 pub fn exec_filter_junk<'mcx>(estate: &mut EStateData<'mcx>, slot: ExecSlotId) -> ExecSlotId {
-    let jf = estate.es_junkFilter.as_ref().expect("ExecFilterJunk without es_junkFilter");
+    let jf = estate
+        .es_junkFilter
+        .as_ref()
+        .expect("ExecFilterJunk without es_junkFilter");
     let result_slot = jf.jf_resultSlot;
     let clean_map = jf.jf_cleanMap;
 

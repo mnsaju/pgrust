@@ -16,8 +16,8 @@ pub use libc::{
     accept, bind, chown, gai_strerror, getgrnam, getsockname, getsockopt, group, listen,
     sa_family_t, setsockopt, sockaddr, sockaddr_in, sockaddr_in6, sockaddr_un, socket, socklen_t,
     AF_INET, AF_INET6, AF_UNIX, AF_UNSPEC, AI_NUMERICHOST, AI_PASSIVE, EAI_NONAME, IPPROTO_IPV6,
-    IPPROTO_TCP, IPV6_V6ONLY, NI_NAMEREQD, NI_NUMERICHOST, NI_NUMERICSERV, SOCK_STREAM, SOL_SOCKET, SO_KEEPALIVE,
-    SO_REUSEADDR, TCP_KEEPCNT, TCP_KEEPINTVL, TCP_NODELAY,
+    IPPROTO_TCP, IPV6_V6ONLY, NI_NAMEREQD, NI_NUMERICHOST, NI_NUMERICSERV, SOCK_STREAM, SOL_SOCKET,
+    SO_KEEPALIVE, SO_REUSEADDR, TCP_KEEPCNT, TCP_KEEPINTVL, TCP_NODELAY,
 };
 // macOS spells the idle-probe option TCP_KEEPALIVE; consumers cfg that arm
 // themselves (pqcomm PG_TCP_KEEPALIVE_IDLE), so only re-export where it exists.

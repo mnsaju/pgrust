@@ -10,7 +10,10 @@ use types_error::{
     ERRCODE_WRONG_OBJECT_TYPE, ERROR, NOTICE,
 };
 use types_nodes::parsenodes::{DropBehavior, RenameStmt};
-use types_rel::{AccessExclusiveLock, InplaceUpdateTupleLock, NoLock, RowExclusiveLock, ShareUpdateExclusiveLock, RELKIND_RELATION};
+use types_rel::{
+    AccessExclusiveLock, InplaceUpdateTupleLock, NoLock, RowExclusiveLock,
+    ShareUpdateExclusiveLock, RELKIND_RELATION,
+};
 
 use crate::alter::{
     check_for_column_name_collision, update_pg_attribute, Anum_pg_attribute_attname,
@@ -24,12 +27,9 @@ fn renameatt_check<'mcx>(
     relname: &str,
     recursing: bool,
 ) -> PgResult<()> {
-    let reloftype = crate::alter::pg_class_read_attr(
-        mcx,
-        relid,
-        crate::alter::Anum_pg_class_reloftype,
-    )?
-    .as_oid();
+    let reloftype =
+        crate::alter::pg_class_read_attr(mcx, relid, crate::alter::Anum_pg_class_reloftype)?
+            .as_oid();
     if reloftype != InvalidOid && !recursing {
         return Err(Box::new(
             PgError::new(ERROR, "cannot rename column of typed table".to_string())
@@ -53,7 +53,9 @@ fn renameatt_check<'mcx>(
                 format!("cannot rename columns of relation \"{relname}\""),
             )
             .with_sqlstate(ERRCODE_WRONG_OBJECT_TYPE)
-            .with_detail(pg_class_seams::errdetail_relkind_not_supported::call(relkind)?),
+            .with_detail(pg_class_seams::errdetail_relkind_not_supported::call(
+                relkind,
+            )?),
         ));
     }
     if !aclchk::object_ownercheck(RELATION_RELATION_ID, relid, miscinit::GetUserId())? {
@@ -63,8 +65,7 @@ fn renameatt_check<'mcx>(
             relname,
         )?;
     }
-    let is_system =
-        catalog::IsCatalogRelationOid(relid) || catalog::IsToastNamespace(relnamespace);
+    let is_system = catalog::IsCatalogRelationOid(relid) || catalog::IsToastNamespace(relnamespace);
     if is_system && !init_small::globals::allowSystemTableMods() {
         return Err(Box::new(
             PgError::new(
@@ -93,7 +94,11 @@ fn rename_lookup_rangevar<'mcx>(
     let mut callback = |rv: &rel_vocab::RangeVar<'_>, relOid: Oid, _old: Oid| {
         RangeVarCallbackForRenameAttribute(mcx, rv, relOid)
     };
-    let flags = if missing_ok { catalog_namespace::RVR_MISSING_OK } else { 0 };
+    let flags = if missing_ok {
+        catalog_namespace::RVR_MISSING_OK
+    } else {
+        0
+    };
     catalog_namespace::RangeVarGetRelidExtended(
         &rv,
         AccessExclusiveLock,
@@ -255,9 +260,7 @@ fn renameatt_internal<'mcx>(
         return Err(Box::new(
             PgError::new(
                 ERROR,
-                format!(
-                    "inherited column \"{oldattname}\" must be renamed in child tables too"
-                ),
+                format!("inherited column \"{oldattname}\" must be renamed in child tables too"),
             )
             .with_sqlstate(ERRCODE_INVALID_TABLE_DEFINITION),
         ));
@@ -280,8 +283,11 @@ fn renameatt_internal<'mcx>(
     };
     if attnum <= 0 {
         return Err(Box::new(
-            PgError::new(ERROR, format!("cannot rename system column \"{oldattname}\""))
-                .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED),
+            PgError::new(
+                ERROR,
+                format!("cannot rename system column \"{oldattname}\""),
+            )
+            .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED),
         ));
     }
     if attinhcount as i32 > expected_parents {
@@ -299,7 +305,10 @@ fn renameatt_internal<'mcx>(
         mcx,
         relid,
         attnum,
-        &[(Anum_pg_attribute_attname, Datum::from_usize(namebuf.as_ptr() as usize))],
+        &[(
+            Anum_pg_attribute_attname,
+            Datum::from_usize(namebuf.as_ptr() as usize),
+        )],
     )?;
     rel.close(NoLock)
 }
@@ -366,9 +375,7 @@ fn rename_constraint_internal<'mcx>(
         return Err(Box::new(
             PgError::new(
                 ERROR,
-                format!(
-                    "constraint \"{oldconname}\" for table \"{relname}\" does not exist"
-                ),
+                format!("constraint \"{oldconname}\" for table \"{relname}\" does not exist"),
             )
             .with_sqlstate(types_error::ERRCODE_UNDEFINED_OBJECT),
         ));
@@ -396,8 +403,7 @@ fn rename_constraint_internal<'mcx>(
                 )?;
             }
         } else if expected_parents == 0
-            && !pg_inherits::find_inheritance_children(mcx, myrelid, types_rel::NoLock)?
-                .is_empty()
+            && !pg_inherits::find_inheritance_children(mcx, myrelid, types_rel::NoLock)?.is_empty()
         {
             return Err(Box::new(
                 PgError::new(
@@ -440,12 +446,15 @@ fn rename_constraint_internal<'mcx>(
 // RenameRelation: ALTER TABLE/INDEX/SEQUENCE/VIEW/MATVIEW/FOREIGN TABLE
 // RENAME TO ...
 pub fn RenameRelation<'mcx>(mcx: Mcx<'mcx>, stmt: &RenameStmt<'_>) -> PgResult<()> {
-    let mut is_index_stmt =
-        stmt.renameType == types_nodes::parsenodes::ObjectType::OBJECT_INDEX;
+    let mut is_index_stmt = stmt.renameType == types_nodes::parsenodes::ObjectType::OBJECT_INDEX;
     let relid = loop {
         // ALTER INDEX takes only ShareUpdateExclusiveLock; a mismatched
         // statement/object pair retries under the object's lock level.
-        let lockmode = if is_index_stmt { ShareUpdateExclusiveLock } else { AccessExclusiveLock };
+        let lockmode = if is_index_stmt {
+            ShareUpdateExclusiveLock
+        } else {
+            AccessExclusiveLock
+        };
         let relid = crate::alter::AlterTableLookupRangeVar(
             mcx,
             stmt.relation.expect("RenameStmt.relation"),
@@ -466,15 +475,20 @@ pub fn RenameRelation<'mcx>(mcx: Mcx<'mcx>, stmt: &RenameStmt<'_>) -> PgResult<(
             return Ok(());
         }
         let relkind = lsyscache::get_rel_relkind(relid)? as u8;
-        let obj_is_index = relkind == types_rel::RELKIND_INDEX
-            || relkind == types_rel::RELKIND_PARTITIONED_INDEX;
+        let obj_is_index =
+            relkind == types_rel::RELKIND_INDEX || relkind == types_rel::RELKIND_PARTITIONED_INDEX;
         if obj_is_index || is_index_stmt == obj_is_index {
             break relid;
         }
         lmgr::UnlockRelationOid(relid, lockmode)?;
         is_index_stmt = obj_is_index;
     };
-    RenameRelationInternal(mcx, relid, stmt.newname.expect("RenameStmt.newname"), is_index_stmt)
+    RenameRelationInternal(
+        mcx,
+        relid,
+        stmt.newname.expect("RenameStmt.newname"),
+        is_index_stmt,
+    )
 }
 
 pub fn RenameRelationInternal<'mcx>(
@@ -483,7 +497,11 @@ pub fn RenameRelationInternal<'mcx>(
     newrelname: &str,
     is_index: bool,
 ) -> PgResult<()> {
-    let lock = if is_index { ShareUpdateExclusiveLock } else { AccessExclusiveLock };
+    let lock = if is_index {
+        ShareUpdateExclusiveLock
+    } else {
+        AccessExclusiveLock
+    };
     let targetrelation = relation_seams::relation_open::call(mcx, myrelid, lock)?;
     let namespace_id = targetrelation.rd_rel.relnamespace;
 
@@ -523,8 +541,7 @@ pub fn RenameRelationInternal<'mcx>(
     replace.resize(n, false);
     values[2 - 1] = Datum::from_usize(namebuf.as_ptr() as usize); // relname
     replace[2 - 1] = true;
-    let mut newtup =
-        heaptuple::heap_modify_tuple(mcx, reltup, desc, &values, &nulls, &replace)?;
+    let mut newtup = heaptuple::heap_modify_tuple(mcx, reltup, desc, &values, &nulls, &replace)?;
     genam::systable_endscan(mcx, scan)?;
     catalog_indexing::CatalogTupleUpdate(mcx, &relrelation, &otid, &mut newtup)?;
     lmgr::UnlockTuple(&relrelation, &otid, InplaceUpdateTupleLock)?;
@@ -567,13 +584,11 @@ fn get_index_constraint<'mcx>(mcx: Mcx<'mcx>, index_id: Oid) -> PgResult<Oid> {
     while let Some(tup) = genam::systable_getnext(mcx, &mut scan)? {
         let mut isnull = false;
         // SAFETY (each): fixed NOT NULL pg_depend columns under its descriptor.
-        let refclassid =
-            unsafe { types_tuple::heap_getattr(tup, 4, desc, &mut isnull) }.as_oid();
+        let refclassid = unsafe { types_tuple::heap_getattr(tup, 4, desc, &mut isnull) }.as_oid();
         // SAFETY: as above.
         let refobjid = unsafe { types_tuple::heap_getattr(tup, 5, desc, &mut isnull) }.as_oid();
         // SAFETY: as above.
-        let deptype =
-            unsafe { types_tuple::heap_getattr(tup, 7, desc, &mut isnull) }.as_i8() as u8;
+        let deptype = unsafe { types_tuple::heap_getattr(tup, 7, desc, &mut isnull) }.as_i8() as u8;
         if refclassid == ConstraintRelationId && deptype == b'i' {
             constraint_id = refobjid;
             break;

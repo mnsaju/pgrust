@@ -16,7 +16,7 @@ use core::ffi::CStr;
 use datum::{Bytea, Varlena};
 use mcx::{Mcx, PgVec};
 use stringinfo::StringInfo;
-use types_core::{Oid, C_COLLATION_OID, CSTRINGOID, POSIX_COLLATION_OID};
+use types_core::{Oid, CSTRINGOID, C_COLLATION_OID, POSIX_COLLATION_OID};
 use types_error::{
     ereturn, PgError, PgResult, SoftErrorContext, ERRCODE_ARRAY_ELEMENT_ERROR,
     ERRCODE_ARRAY_SUBSCRIPT_ERROR, ERRCODE_INDETERMINATE_COLLATION,
@@ -426,11 +426,7 @@ fn hash_collation_err() -> Box<PgError> {
     )
 }
 
-fn bpchar_nondeterministic_hash(
-    collid: Oid,
-    k: &[u8],
-    seed: Option<u64>,
-) -> PgResult<Option<u64>> {
+fn bpchar_nondeterministic_hash(collid: Oid, k: &[u8], seed: Option<u64>) -> PgResult<Option<u64>> {
     if collid == C_COLLATION_OID || collid == POSIX_COLLATION_OID {
         return Ok(None);
     }

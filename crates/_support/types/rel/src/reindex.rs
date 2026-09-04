@@ -59,7 +59,10 @@ pub fn set_reindex_pending(indexes: &[Oid], nest_level: i32) {
         panic!("cannot reindex while reindexing");
     }
     if indexes.len() > PENDING_CAP {
-        panic!("unported: pendingReindexedIndexes overflow ({} indexes)", indexes.len());
+        panic!(
+            "unported: pendingReindexedIndexes overflow ({} indexes)",
+            indexes.len()
+        );
     }
     PENDING.with(|p| {
         let mut arr = [InvalidOid; PENDING_CAP];

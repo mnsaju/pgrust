@@ -30,7 +30,9 @@ use ::types_spgist::{spgConfigIn, spgConfigOut};
 #[track_caller]
 #[cold]
 fn unrecognized_range_strategy(strategy: u16) -> Box<PgError> {
-    Box::new(PgError::error(format!("unrecognized range strategy: {strategy}")))
+    Box::new(PgError::error(format!(
+        "unrecognized range strategy: {strategy}"
+    )))
 }
 
 fn fc_spg_range_quad_config(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -54,17 +56,19 @@ fn get_quadrant(mcx: Mcx<'_>, ri: &mut RangeInfo, centroid: &[u8], tst: &[u8]) -
         return Ok(5);
     }
 
-    Ok(if range_cmp_bounds(mcx, ri, &lower, &centroid_lower)? >= 0 {
-        if range_cmp_bounds(mcx, ri, &upper, &centroid_upper)? >= 0 {
-            1
+    Ok(
+        if range_cmp_bounds(mcx, ri, &lower, &centroid_lower)? >= 0 {
+            if range_cmp_bounds(mcx, ri, &upper, &centroid_upper)? >= 0 {
+                1
+            } else {
+                2
+            }
+        } else if range_cmp_bounds(mcx, ri, &upper, &centroid_upper)? >= 0 {
+            4
         } else {
-            2
-        }
-    } else if range_cmp_bounds(mcx, ri, &upper, &centroid_upper)? >= 0 {
-        4
-    } else {
-        3
-    })
+            3
+        },
+    )
 }
 
 fn fc_spg_range_quad_choose(f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -79,7 +83,11 @@ fn fc_spg_range_quad_choose(f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> Pg
 
     if input.allTheSame {
         // nodeN is set by the core for match-node on an allTheSame tuple.
-        *out = spgChooseOut::MatchNode { nodeN: 0, levelAdd: 0, restDatum: rest_datum };
+        *out = spgChooseOut::MatchNode {
+            nodeN: 0,
+            levelAdd: 0,
+            restDatum: rest_datum,
+        };
         return Ok(Datum::null());
     }
 
@@ -592,13 +600,35 @@ const fn b(
     nargs: i16,
     func: ::types_fmgr::PGFunction,
 ) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 pub const RANGETYPES_SPGIST_BUILTINS: &[FmgrBuiltin] = &[
     b(3469, "spg_range_quad_config", 2, fc_spg_range_quad_config),
     b(3470, "spg_range_quad_choose", 2, fc_spg_range_quad_choose),
-    b(3471, "spg_range_quad_picksplit", 2, fc_spg_range_quad_picksplit),
-    b(3472, "spg_range_quad_inner_consistent", 2, fc_spg_range_quad_inner_consistent),
-    b(3473, "spg_range_quad_leaf_consistent", 2, fc_spg_range_quad_leaf_consistent),
+    b(
+        3471,
+        "spg_range_quad_picksplit",
+        2,
+        fc_spg_range_quad_picksplit,
+    ),
+    b(
+        3472,
+        "spg_range_quad_inner_consistent",
+        2,
+        fc_spg_range_quad_inner_consistent,
+    ),
+    b(
+        3473,
+        "spg_range_quad_leaf_consistent",
+        2,
+        fc_spg_range_quad_leaf_consistent,
+    ),
 ];

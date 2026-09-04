@@ -50,7 +50,8 @@ pub const META_NEND_OFF: usize = 6;
 pub const META_OPTS_OFF: usize = 8;
 pub const META_NOTFULL_OFF: usize = META_OPTS_OFF + BLOOM_OPTIONS_SIZE; // 144
 
-pub const BLOOM_META_BLOCK_N: usize = { // FreeBlockNumberArray: 2004 @ 8K
+pub const BLOOM_META_BLOCK_N: usize = {
+    // FreeBlockNumberArray: 2004 @ 8K
     let inner = 2 * 2 + 4 + BLOOM_OPTIONS_SIZE; // nStart+nEnd+magick+opts
     let aligned_inner = (inner + MAXALIGN - 1) & !(MAXALIGN - 1);
     let free = BLCKSZ - SIZE_OF_PAGE_HEADER - BLOOM_PAGE_OPAQUE_SIZE - aligned_inner;

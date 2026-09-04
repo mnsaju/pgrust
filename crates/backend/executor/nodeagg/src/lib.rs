@@ -14,21 +14,21 @@ use std::ptr::NonNull;
 use std::rc::Rc;
 
 use ::datum::{Datum, NullableDatum};
-use ::types_fmgr::{AggStateNode, FmNodePtr, FmgrInfo, LocalFcinfo};
 use ::execexpr::{
     exec_build_agg_projection_info_subplans, exec_build_agg_qual_subplans, exec_build_agg_trans,
-    exec_build_agg_trans_hashed, exec_eval_expr, exec_project, exec_qual, AggBind,
-    AggOrderedSpec, AggPerGroup, AggTransSpec, EvalSlots, ExprState,
+    exec_build_agg_trans_hashed, exec_eval_expr, exec_project, exec_qual, AggBind, AggOrderedSpec,
+    AggPerGroup, AggTransSpec, EvalSlots, ExprState,
 };
-use ::tuplesort::{Tuplesort, TUPLESORT_NONE};
 use ::execgrouping::TupleHashTable;
-use ::hyperloglog::HyperLogLog32;
-use ::sort_storage::{LogicalTapeSet, TapeIdx};
 use ::executils::{EStateData, EcxtId, ExecSlotId};
+use ::hyperloglog::HyperLogLog32;
 use ::mcx::{vec_with_capacity_in, Allocator, MemoryContext, PgBox, PgVec};
+use ::sort_storage::{LogicalTapeSet, TapeIdx};
+use ::tuplesort::{Tuplesort, TUPLESORT_NONE};
 use ::types_core::catalog::PROCEDURE_RELATION_ID;
 use ::types_core::Oid;
 use ::types_error::{PgError, PgResult};
+use ::types_fmgr::{AggStateNode, FmNodePtr, FmgrInfo, LocalFcinfo};
 use ::types_nodes::node_tree::Node;
 use ::types_nodes::plannodes::Agg;
 use ::types_nodes::primnodes::{Aggref, AGGKIND_NORMAL};
@@ -55,34 +55,33 @@ mod hashgrouped;
 pub mod merge;
 pub mod pardistinct;
 pub mod plainpd;
-pub mod sink;
 pub mod runtime_partial;
+pub mod sink;
 pub mod sortedsink;
 pub mod spankey;
 
-pub use compact::{
-    agg_hash_compact_armed, agg_hash_compact_backstop, agg_hash_compact_batch,
-    compact_batch_install_enabled,
-    agg_emit_mark_drained, batch_emit_row, batch_emit_scan_block, batch_emit_set_block,
-    topk_finalize_select, BATCH_EMIT_BLOCK,
-    agg_hash_compact_batch_mk1, agg_hash_compact_batch_mk2, agg_hash_compact_disarm,
-    agg_hash_compact_intern, agg_hash_compact_mk_admit, agg_hash_compact_mk_admit1,
-    agg_hash_compact_over_limits, agg_hash_compact_probe_coded,
-    agg_hash_compact_probe_text_direct, agg_hash_compact_text_direct, text_direct_enabled,
-    agg_hash_compact_mk_admit_multi, agg_hash_compact_ngroups, agg_hash_compact_try_arm_mk_multi,
-    agg_hash_compact_mk_shape, agg_hash_compact_reduced_admissible,
-    agg_hash_compact_sink_admissible, agg_hash_compact_sink_would_refuse,
-    agg_hash_compact_try_arm, agg_hash_compact_try_arm_mk, agg_hash_compact_try_arm_mk1,
-    agg_hash_compact_try_arm_reduced,
-    agg_hash_spill_unlikely, mk_keys2_lane, mk_numeric_datum_bits, mk_numeric_i64_bits,
-    mk_numeric_key_bits, mk_numeric_mant_abs_max, CompactArm, MkComp, MkCompKind, MkShape,
-    RedDerived, RedOp, RedShape,
-};
+pub use ::execgrouping::GroupKeyKind;
 pub use codedgroup::{
     agg_codedgroup_accept_batch, agg_codedgroup_admissible, agg_codedgroup_begin,
     agg_codedgroup_economical, agg_codedgroup_emit_next, agg_codedgroup_emitting,
     agg_codedgroup_finish_build, agg_codedgroup_key_arg_atts, agg_codedgroup_mode_global,
     agg_codedgroup_next_replay, agg_codedgroup_reset, CgAccept,
+};
+pub use compact::{
+    agg_emit_mark_drained, agg_hash_compact_armed, agg_hash_compact_backstop,
+    agg_hash_compact_batch, agg_hash_compact_batch_mk1, agg_hash_compact_batch_mk2,
+    agg_hash_compact_disarm, agg_hash_compact_intern, agg_hash_compact_mk_admit,
+    agg_hash_compact_mk_admit1, agg_hash_compact_mk_admit_multi, agg_hash_compact_mk_shape,
+    agg_hash_compact_ngroups, agg_hash_compact_over_limits, agg_hash_compact_probe_coded,
+    agg_hash_compact_probe_text_direct, agg_hash_compact_reduced_admissible,
+    agg_hash_compact_sink_admissible, agg_hash_compact_sink_would_refuse,
+    agg_hash_compact_text_direct, agg_hash_compact_try_arm, agg_hash_compact_try_arm_mk,
+    agg_hash_compact_try_arm_mk1, agg_hash_compact_try_arm_mk_multi,
+    agg_hash_compact_try_arm_reduced, agg_hash_spill_unlikely, batch_emit_row,
+    batch_emit_scan_block, batch_emit_set_block, compact_batch_install_enabled, mk_keys2_lane,
+    mk_numeric_datum_bits, mk_numeric_i64_bits, mk_numeric_key_bits, mk_numeric_mant_abs_max,
+    text_direct_enabled, topk_finalize_select, CompactArm, MkComp, MkCompKind, MkShape, RedDerived,
+    RedOp, RedShape, BATCH_EMIT_BLOCK,
 };
 pub use hashgrouped::{
     agg_hashgroup_accept, agg_hashgroup_accept_batch_row, agg_hashgroup_accept_batch_span,
@@ -93,7 +92,6 @@ pub use hashgrouped::{
     agg_hashgroup_residual_active, agg_hashgroup_set_residual, agg_hashgroup_state_active,
     agg_hashgroup_text_key_count, HashGroupOrderKey, HgBatchRow, HgBatchShape, HgSpanStop,
 };
-pub use ::execgrouping::GroupKeyKind;
 
 const ACL_EXECUTE: u64 = 1 << 7;
 const ACLCHECK_OK: i32 = 0;
@@ -350,8 +348,11 @@ fn init_pertrans_sort<'mcx>(
     );
     // By construction aggorder is a prefix of aggdistinct
     // (transformDistinctClause).
-    let sortlist =
-        if !aggref.aggdistinct.is_nil() { &aggref.aggdistinct } else { &aggref.aggorder };
+    let sortlist = if !aggref.aggdistinct.is_nil() {
+        &aggref.aggdistinct
+    } else {
+        &aggref.aggorder
+    };
     let num_sort_cols = sortlist.len();
     let num_distinct_cols = aggref.aggdistinct.len();
     debug_assert!(num_sort_cols > 0);
@@ -372,7 +373,10 @@ fn init_pertrans_sort<'mcx>(
                 (t.ressortgroupref == scl.tleSortGroupRef).then_some(t)
             })
             .expect("agg ORDER BY/DISTINCT expression not found in Aggref.args");
-        assert!(scl.sortop != 0, "sortless SortGroupClause survived the parser");
+        assert!(
+            scl.sortop != 0,
+            "sortless SortGroupClause survived the parser"
+        );
         sort_col_idx.push(tle.resno);
         sort_ops.push(scl.sortop);
         sort_collations.push(execscan::expr_collation(tle.expr));
@@ -417,13 +421,16 @@ fn init_pertrans_sort<'mcx>(
     // transition type (carrier slot 0).
     let carrier = ::mcx::alloc_leak_in(
         mcx,
-        ::types_core::fmgr::AggFnArgTypes { rettype: aggref.aggtranstype, argtypes: fnexpr_types },
+        ::types_core::fmgr::AggFnArgTypes {
+            rettype: aggref.aggtranstype,
+            argtypes: fnexpr_types,
+        },
     )?;
     // SAFETY: carrier is arena-backed for the query, see above.
     transfn.fn_expr = Some(unsafe { ::types_core::fmgr::FnExprErased::from_node_ref(carrier) });
 
-    let scratch_layout = Layout::array::<NullableDatum>(num_inputs.max(1))
-        .expect("ordered scratch layout");
+    let scratch_layout =
+        Layout::array::<NullableDatum>(num_inputs.max(1)).expect("ordered scratch layout");
     let scratch: NonNull<NullableDatum> = ::mcx::Allocator::allocate(&mcx, scratch_layout)
         .map_err(|_| mcx.oom(scratch_layout.size()))?
         .cast();
@@ -505,9 +512,7 @@ fn init_pertrans_sort<'mcx>(
             aggref.args.iter().next().and_then(|n| {
                 let tle = n.as_target_entry().expect("Aggref.args cell");
                 tle.expr.as_var().and_then(|v| {
-                    (v.varno == ::execexpr::OUTER_VAR
-                        && v.varlevelsup == 0
-                        && v.varattno >= 1)
+                    (v.varno == ::execexpr::OUTER_VAR && v.varlevelsup == 0 && v.varattno >= 1)
                         .then(|| (v.varattno - 1) as u16)
                 })
             })
@@ -819,7 +824,9 @@ fn make_agg_state_node<'mcx>(
 #[cold]
 #[inline(never)]
 fn agg_lookup_failed(aggfnoid: Oid) -> Box<PgError> {
-    Box::new(PgError::error(format!("cache lookup failed for aggregate {aggfnoid}")))
+    Box::new(PgError::error(format!(
+        "cache lookup failed for aggregate {aggfnoid}"
+    )))
 }
 
 #[track_caller]
@@ -889,9 +896,7 @@ fn collect_aggrefs<'mcx>(
         NodeTag::T_ConvertRowtypeExpr => {
             collect_aggrefs(node.as_convert_rowtype_expr().unwrap().arg, out)?
         }
-        NodeTag::T_CoerceToDomain => {
-            collect_aggrefs(node.as_coerce_to_domain().unwrap().arg, out)?
-        }
+        NodeTag::T_CoerceToDomain => collect_aggrefs(node.as_coerce_to_domain().unwrap().arg, out)?,
         NodeTag::T_BoolExpr => {
             for a in node.as_bool_expr().unwrap().args.iter() {
                 collect_aggrefs(a, out)?;
@@ -1014,9 +1019,7 @@ fn collect_aggrefs<'mcx>(
                 collect_aggrefs(a, out)?;
             }
         }
-        NodeTag::T_FieldSelect => {
-            collect_aggrefs(node.as_field_select().unwrap().arg, out)?
-        }
+        NodeTag::T_FieldSelect => collect_aggrefs(node.as_field_select().unwrap().arg, out)?,
         NodeTag::T_FieldStore => {
             let fs = node.as_field_store().unwrap();
             collect_aggrefs(fs.arg, out)?;
@@ -1041,8 +1044,7 @@ fn collect_aggrefs<'mcx>(
 fn get_agg_init_val(mcx: ::mcx::Mcx<'_>, text: &str, transtype: Oid) -> PgResult<Datum> {
     let (typinput, typioparam) = lsyscache::getTypeInputInfo(transtype)?;
     let mut flinfo = fmgr_core::fmgr_info(typinput)?;
-    let cstr = std::ffi::CString::new(text)
-        .expect("agginitval text contains an interior NUL");
+    let cstr = std::ffi::CString::new(text).expect("agginitval text contains an interior NUL");
     let d = ::types_fmgr::input_function_call(&mut flinfo, Some(&cstr), typioparam, -1, mcx)?;
     let (typlen, typbyval) = lsyscache::get_typlenbyval(transtype)?;
     if typbyval {
@@ -1069,7 +1071,10 @@ pub fn exec_init_agg<'mcx>(
         && node.aggstrategy != AGG_SORTED
         && node.aggstrategy != AGG_MIXED
     {
-        panic!("ExecInitAgg (nodeAgg.c): aggstrategy {} cannot happen", node.aggstrategy);
+        panic!(
+            "ExecInitAgg (nodeAgg.c): aggstrategy {} cannot happen",
+            node.aggstrategy
+        );
     }
     assert!(
         node.aggstrategy != AGG_MIXED || has_grouping_sets,
@@ -1099,8 +1104,11 @@ pub fn exec_init_agg<'mcx>(
 
     // Hashed: the node context IS the table context (C hands
     // BuildTupleHashTable the same hashcontext memory).
-    let agg_ctx_name =
-        if node.aggstrategy == AGG_HASHED { "HashAgg hash table" } else { "AggContext" };
+    let agg_ctx_name = if node.aggstrategy == AGG_HASHED {
+        "HashAgg hash table"
+    } else {
+        "AggContext"
+    };
     let agg_node = make_agg_state_node(mcx, mcx.context().new_child_bump(agg_ctx_name))?;
     let fm_agg_node: FmNodePtr = Some(agg_node.cast());
     let tmpcontext = estate.create_expr_context();
@@ -1128,7 +1136,10 @@ pub fn exec_init_agg<'mcx>(
     let mut numtrans = 0usize;
     for &(anode, aggref) in aggrefs.iter() {
         let (aggno, transno) = (aggref.aggno, aggref.aggtransno);
-        assert!(aggno >= 0 && transno >= 0, "Aggref without planner aggno/aggtransno");
+        assert!(
+            aggno >= 0 && transno >= 0,
+            "Aggref without planner aggno/aggtransno"
+        );
         assert!((aggno as usize) < numaggs, "Aggref.aggno out of range");
         if let Some((_, prev)) = by_aggno[aggno as usize] {
             assert!(
@@ -1157,7 +1168,13 @@ pub fn exec_init_agg<'mcx>(
     let mut trans_deserialfn: PgVec<'mcx, Oid> = vec_with_capacity_in(mcx, numtrans)?;
     trans_deserialfn.resize(numtrans, 0);
     let mut trans_typ: PgVec<'mcx, TransTyp> = vec_with_capacity_in(mcx, numtrans)?;
-    trans_typ.resize(numtrans, TransTyp { len: 0, byval: true });
+    trans_typ.resize(
+        numtrans,
+        TransTyp {
+            len: 0,
+            byval: true,
+        },
+    );
 
     let mut pertrans_sort: PgVec<'mcx, PerTransSortData<'mcx>> = PgVec::new_in(mcx);
     let mut ordered_specs: PgVec<'mcx, Option<AggOrderedSpec>> =
@@ -1187,7 +1204,10 @@ pub fn exec_init_agg<'mcx>(
             panic!("ExecInitAgg (nodeAgg.c): DISTINCT/ORDER BY under AGG_HASHED cannot happen");
         }
         let transtype = aggref.aggtranstype;
-        assert!(transtype != 0, "Aggref.aggtranstype unset (planner must resolve it)");
+        assert!(
+            transtype != 0,
+            "Aggref.aggtranstype unset (planner must resolve it)"
+        );
         let (translen, transbyval) = lsyscache::get_typlenbyval(transtype)?;
 
         const INTERNALOID: Oid = 2281;
@@ -1195,7 +1215,10 @@ pub fn exec_init_agg<'mcx>(
         let mut deserialfn_oid: Oid = 0;
         if transtype == INTERNALOID {
             if do_serialize {
-                assert!(skip_final, "serialization only valid when not running finalfn");
+                assert!(
+                    skip_final,
+                    "serialization only valid when not running finalfn"
+                );
                 if shape.aggserialfn == 0 {
                     return Err(Box::new(PgError::error(
                         "serialfunc not provided for serialization aggregation".to_string(),
@@ -1204,7 +1227,10 @@ pub fn exec_init_agg<'mcx>(
                 serialfn_oid = shape.aggserialfn;
             }
             if do_deserialize {
-                assert!(do_combine, "deserialization only valid when combining states");
+                assert!(
+                    do_combine,
+                    "deserialization only valid when combining states"
+                );
                 if shape.aggdeserialfn == 0 {
                     return Err(Box::new(PgError::error(
                         "deserialfunc not provided for deserialization aggregation".to_string(),
@@ -1213,7 +1239,11 @@ pub fn exec_init_agg<'mcx>(
                 deserialfn_oid = shape.aggdeserialfn;
             }
         }
-        let serialfn = if serialfn_oid != 0 { Some(fmgr_core::fmgr_info(serialfn_oid)?) } else { None };
+        let serialfn = if serialfn_oid != 0 {
+            Some(fmgr_core::fmgr_info(serialfn_oid)?)
+        } else {
+            None
+        };
 
         let num_direct_args = aggref.aggdirectargs.len();
         let num_final_args = if shape.aggfinalextra {
@@ -1243,8 +1273,7 @@ pub fn exec_init_agg<'mcx>(
             }
             // SAFETY: leaked into the query arena; the flinfo dies with the
             // plan (init_pertrans_sort's carrier precedent).
-            let fnexpr_types: &'static [Oid] =
-                unsafe { core::mem::transmute(fnexpr_types.leak()) };
+            let fnexpr_types: &'static [Oid] = unsafe { core::mem::transmute(fnexpr_types.leak()) };
             // C build_aggregate_finalfn_expr: the fake FuncExpr returns the
             // aggregate result type.
             let carrier = ::mcx::alloc_leak_in(
@@ -1299,8 +1328,7 @@ pub fn exec_init_agg<'mcx>(
             // find_compatible_trans keys sharing on the transition state.
             Some((_, prev)) => {
                 assert!(
-                    trans_fnoid[transno] == transfn_oid
-                        && prev.aggtranstype == aggref.aggtranstype,
+                    trans_fnoid[transno] == transfn_oid && prev.aggtranstype == aggref.aggtranstype,
                     "shared transno with diverging transition state"
                 );
                 trans_shared[transno] = true;
@@ -1309,7 +1337,10 @@ pub fn exec_init_agg<'mcx>(
                 trans_aggref[transno] = Some((aggref_node, aggref));
                 trans_fnoid[transno] = transfn_oid;
                 trans_deserialfn[transno] = deserialfn_oid;
-                trans_typ[transno] = TransTyp { len: translen, byval: transbyval };
+                trans_typ[transno] = TransTyp {
+                    len: translen,
+                    byval: transbyval,
+                };
                 // C build_pertrans_for_aggref: aggpresorted ORDER BY (no
                 // DISTINCT) runs as a plain aggregate; aggpresorted DISTINCT
                 // keeps a pertrans for the consecutive-duplicate check.
@@ -1337,9 +1368,7 @@ pub fn exec_init_agg<'mcx>(
                         // resets tmpcontext per row (C: tmpcontext memory).
                         // SAFETY: the tmpcontext ExprContext outlives the
                         // program (same estate).
-                        unsafe {
-                            eq.arm_result_mcx_raw(estate.ecxt(tmpcontext).per_tuple_mcx())
-                        };
+                        unsafe { eq.arm_result_mcx_raw(estate.ecxt(tmpcontext).per_tuple_mcx()) };
                     }
                     pertrans_sort.push(ps);
                     ordered_specs[transno] = Some(ospec);
@@ -1364,8 +1393,7 @@ pub fn exec_init_agg<'mcx>(
                             .with_sqlstate(::types_error::ERRCODE_INVALID_FUNCTION_DEFINITION),
                         ));
                     }
-                } else if trans_init[transno].isnull
-                    && fmgr_core::fmgr_info(transfn_oid)?.fn_strict
+                } else if trans_init[transno].isnull && fmgr_core::fmgr_info(transfn_oid)?.fn_strict
                 {
                     // C checks the FIRST aggregated input (nodeAgg.c
                     // IsBinaryCoercible gate) — the strict first-value path
@@ -1390,7 +1418,11 @@ pub fn exec_init_agg<'mcx>(
     let mut pergroup: PgVec<'mcx, AggPerGroup> = vec_with_capacity_in(mcx, numtrans)?;
     pergroup.resize(
         numtrans,
-        AggPerGroup { trans_value: Datum::null(), trans_value_is_null: true, no_trans_value: true },
+        AggPerGroup {
+            trans_value: Datum::null(),
+            trans_value_is_null: true,
+            no_trans_value: true,
+        },
     );
     let pergroup_base = NonNull::new(pergroup.as_mut_ptr()).unwrap();
 
@@ -1406,12 +1438,15 @@ pub fn exec_init_agg<'mcx>(
 
     let mut specs: PgVec<'mcx, AggTransSpec<'mcx, 'mcx>> = vec_with_capacity_in(mcx, numtrans)?;
     for transno in 0..numtrans {
-        let (_, aggref) =
-            trans_aggref[transno].expect("planner aggtransno numbering has gaps");
+        let (_, aggref) = trans_aggref[transno].expect("planner aggtransno numbering has gaps");
         // SAFETY: transno < numtrans elements of the once-allocated pergroup.
         let pg = unsafe { NonNull::new_unchecked(pergroup_base.as_ptr().add(transno)) };
         let is_ordered_set = aggref.aggkind != AGGKIND_NORMAL;
-        let num_direct_args = if is_ordered_set { aggref.aggdirectargs.len() } else { 0 };
+        let num_direct_args = if is_ordered_set {
+            aggref.aggdirectargs.len()
+        } else {
+            0
+        };
         let mut arg_types: PgVec<'mcx, Oid>;
         if do_combine {
             // aggcombinefn always has two arguments of aggtranstype.
@@ -1423,8 +1458,7 @@ pub fn exec_init_agg<'mcx>(
             arg_types.push(aggref.aggtranstype);
             arg_types.push(aggref.aggtranstype);
         } else {
-            arg_types =
-                vec_with_capacity_in(mcx, aggref.aggargtypes.len() - num_direct_args + 1)?;
+            arg_types = vec_with_capacity_in(mcx, aggref.aggargtypes.len() - num_direct_args + 1)?;
             arg_types.push(aggref.aggtranstype);
             for t in aggref.aggargtypes.iter().skip(num_direct_args) {
                 arg_types.push(t);
@@ -1455,7 +1489,14 @@ pub fn exec_init_agg<'mcx>(
     };
     let (mut evaltrans, perhash, persort, gs) = if has_grouping_sets {
         let gs = gsets::init_grouping_sets(
-            node, estate, outer_desc, &specs, numtrans, fm_agg_node, params, tmpcontext,
+            node,
+            estate,
+            outer_desc,
+            &specs,
+            numtrans,
+            fm_agg_node,
+            params,
+            tmpcontext,
         )?;
         (None, None, None, Some(gs))
     } else if node.aggstrategy == AGG_HASHED {
@@ -1469,7 +1510,10 @@ pub fn exec_init_agg<'mcx>(
         // stay bounded by entering spill mode, not grow with the scan.
         // SAFETY: the tmpcontext ExprContext outlives the table (same
         // estate, arena-boxed).
-        unsafe { ph.hashtable.set_temp_ctx_raw(estate.ecxt(tmpcontext).per_tuple_mcx()) };
+        unsafe {
+            ph.hashtable
+                .set_temp_ctx_raw(estate.ecxt(tmpcontext).per_tuple_mcx())
+        };
         let evaltrans = ::executils::with_subplan_compile_env(estate, |env| {
             ::execexpr::exec_build_agg_trans_hashed_subplans(
                 mcx,
@@ -1585,7 +1629,10 @@ pub fn exec_init_agg<'mcx>(
         // the empty plan folds nothing, peragg is empty at finalize), the
         // compact tables carry 0-byte state rows, and the compact→C
         // backstop migrate skips its state copy.
-        Some(LaneFold { plan: ::lanefold::empty_plan(mcx), resid: None })
+        Some(LaneFold {
+            plan: ::lanefold::empty_plan(mcx),
+            resid: None,
+        })
     } else if lane_v2_enabled()
         && gs.is_none()
         && (node.aggstrategy == AGG_HASHED
@@ -1607,11 +1654,19 @@ pub fn exec_init_agg<'mcx>(
                         keep[r] = true;
                     }
                     let mut prog = if node.aggstrategy == AGG_HASHED {
-                        let base =
-                            perhash.as_ref().expect("hashed Agg has perhash").pergroup_cell;
+                        let base = perhash
+                            .as_ref()
+                            .expect("hashed Agg has perhash")
+                            .pergroup_cell;
                         ::executils::with_subplan_compile_env(estate, |env| {
                             ::execexpr::exec_build_agg_trans_hashed_masked(
-                                mcx, &specs, &keep, base, fm_agg_node, params, env,
+                                mcx,
+                                &specs,
+                                &keep,
+                                base,
+                                fm_agg_node,
+                                params,
+                                env,
                             )
                         })?
                     } else {
@@ -1620,15 +1675,18 @@ pub fn exec_init_agg<'mcx>(
                         // the full evaltrans both strategies build.
                         ::executils::with_subplan_compile_env(estate, |env| {
                             ::execexpr::exec_build_agg_trans_plain_masked(
-                                mcx, &specs, &keep, fm_agg_node, params, env,
+                                mcx,
+                                &specs,
+                                &keep,
+                                fm_agg_node,
+                                params,
+                                env,
                             )
                         })?
                     };
                     // Same result-mcx discipline as the full evaltrans.
                     // SAFETY: the tmpcontext ExprContext outlives the program.
-                    unsafe {
-                        prog.arm_result_mcx_raw(estate.ecxt(tmpcontext).per_tuple_mcx())
-                    };
+                    unsafe { prog.arm_result_mcx_raw(estate.ecxt(tmpcontext).per_tuple_mcx()) };
                     Some(prog)
                 };
                 Some(LaneFold { plan, resid })
@@ -1661,38 +1719,36 @@ pub fn exec_init_agg<'mcx>(
     // keys) — the narrow-sort arm needs it for internal-sort entries, the
     // sorted-fold arm (lanev2 sorted-agg over pgrcolumnar SeqScan) for its
     // raw-datum group-boundary compare.
-    let group_eq_representational = if lane_v2_enabled()
-        && node.aggstrategy == AGG_SORTED
-        && node.numCols > 0
-    {
-        let mut ok = true;
-        for (i, &op) in node.grpOperators.iter().enumerate() {
-            const F_BOOLEQ: Oid = 60;
-            const F_INT2EQ: Oid = 63;
-            const F_INT4EQ: Oid = 65;
-            const F_TEXTEQ: Oid = 67;
-            const F_INT8EQ: Oid = 467;
-            ok &= match lsyscache::get_opcode(op)? {
-                F_BOOLEQ | F_INT2EQ | F_INT4EQ | F_INT8EQ => true,
-                // Text keys serve only the narrow-sort arm (the sorted-fold
-                // arm's raw compare is by-value-width only), so probe the
-                // collation only where that arm can engage — and unit
-                // harnesses without the collation syscache seam never build
-                // internal-sort entries, so they never reach the lookup.
-                F_TEXTEQ if !pertrans_sort.is_empty() => {
-                    let coll = node.grpCollations[i];
-                    coll != 0 && lsyscache::get_collation_isdeterministic(coll)?
+    let group_eq_representational =
+        if lane_v2_enabled() && node.aggstrategy == AGG_SORTED && node.numCols > 0 {
+            let mut ok = true;
+            for (i, &op) in node.grpOperators.iter().enumerate() {
+                const F_BOOLEQ: Oid = 60;
+                const F_INT2EQ: Oid = 63;
+                const F_INT4EQ: Oid = 65;
+                const F_TEXTEQ: Oid = 67;
+                const F_INT8EQ: Oid = 467;
+                ok &= match lsyscache::get_opcode(op)? {
+                    F_BOOLEQ | F_INT2EQ | F_INT4EQ | F_INT8EQ => true,
+                    // Text keys serve only the narrow-sort arm (the sorted-fold
+                    // arm's raw compare is by-value-width only), so probe the
+                    // collation only where that arm can engage — and unit
+                    // harnesses without the collation syscache seam never build
+                    // internal-sort entries, so they never reach the lookup.
+                    F_TEXTEQ if !pertrans_sort.is_empty() => {
+                        let coll = node.grpCollations[i];
+                        coll != 0 && lsyscache::get_collation_isdeterministic(coll)?
+                    }
+                    _ => false,
+                };
+                if !ok {
+                    break;
                 }
-                _ => false,
-            };
-            if !ok {
-                break;
             }
-        }
-        ok
-    } else {
-        false
-    };
+            ok
+        } else {
+            false
+        };
 
     let avgpack_shape_mask = sink::sink_avgpack_shape_mask(&peragg);
     Ok(AggStateData {
@@ -1795,11 +1851,19 @@ fn init_persort<'mcx>(
     } else {
         None
     };
-    let first_slot =
-        exectuples::make_tuple_table_slot(mcx, TupleSlotKind::MinimalTuple, Some(outer_desc.clone()));
+    let first_slot = exectuples::make_tuple_table_slot(
+        mcx,
+        TupleSlotKind::MinimalTuple,
+        Some(outer_desc.clone()),
+    );
     let pending_slot =
         exectuples::make_tuple_table_slot(mcx, TupleSlotKind::MinimalTuple, Some(outer_desc));
-    Ok(PerSortData { first_slot, pending_slot, eq, have_pending: false })
+    Ok(PerSortData {
+        first_slot,
+        pending_slot,
+        eq,
+        have_pending: false,
+    })
 }
 
 // find_cols (nodeAgg.c): outer columns referenced outside aggregate args.
@@ -1811,9 +1875,7 @@ fn collect_base_var_cols(node: Node<'_>, out: &mut PgVec<'_, bool>) {
             out[(v.varattno - 1) as usize] = true;
         }
         NodeTag::T_Const | NodeTag::T_Aggref | NodeTag::T_GroupingFunc => {}
-        NodeTag::T_TargetEntry => {
-            collect_base_var_cols(node.as_target_entry().unwrap().expr, out)
-        }
+        NodeTag::T_TargetEntry => collect_base_var_cols(node.as_target_entry().unwrap().expr, out),
         NodeTag::T_FuncExpr => {
             for a in node.as_func_expr().unwrap().args.iter() {
                 collect_base_var_cols(a, out);
@@ -1977,7 +2039,10 @@ fn init_perhash<'mcx>(
         node.aggstrategy,
         node.groupingSets.len()
     );
-    assert!(node.numGroups > 0, "Agg.numGroups unset (planner must estimate it)");
+    assert!(
+        node.numGroups > 0,
+        "Agg.numGroups unset (planner must estimate it)"
+    );
 
     let mut base_cols: PgVec<'mcx, bool> = vec_with_capacity_in(mcx, outer_natts)?;
     base_cols.resize(outer_natts, false);
@@ -2025,8 +2090,7 @@ fn init_perhash<'mcx>(
         }
     }
 
-    let mut hash_grp_col_idx_input: PgVec<'mcx, i16> =
-        vec_with_capacity_in(mcx, outer_natts)?;
+    let mut hash_grp_col_idx_input: PgVec<'mcx, i16> = vec_with_capacity_in(mcx, outer_natts)?;
     for &attno in node.grpColIdx {
         hash_grp_col_idx_input.push(attno);
         base_cols[(attno - 1) as usize] = false;
@@ -2036,8 +2100,11 @@ fn init_perhash<'mcx>(
             hash_grp_col_idx_input.push((i + 1) as i16);
         }
     }
-    let largest_grp_col_idx =
-        hash_grp_col_idx_input.iter().map(|&a| a as i32).max().unwrap_or(0);
+    let largest_grp_col_idx = hash_grp_col_idx_input
+        .iter()
+        .map(|&a| a as i32)
+        .max()
+        .unwrap_or(0);
 
     let mut hash_tlist = types_nodes::list::NodeList::nil();
     for &attno in hash_grp_col_idx_input.iter() {
@@ -2099,13 +2166,14 @@ fn init_perhash<'mcx>(
         TupleSlotKind::MinimalTuple,
         Some(outer_desc.clone()),
     );
-    let wslot =
-        exectuples::make_tuple_table_slot(mcx, TupleSlotKind::Virtual, Some(outer_desc));
+    let wslot = exectuples::make_tuple_table_slot(mcx, TupleSlotKind::Virtual, Some(outer_desc));
     let table_ctx = mcx.context().new_child_bump("HashAgg table context");
     let tmp_ctx = mcx.context().new_child_bump("HashAgg spill tuple");
 
     let cell_layout = Layout::new::<NonNull<AggPerGroup>>();
-    let raw = mcx.allocate(cell_layout).map_err(|_| mcx.oom(cell_layout.size()))?;
+    let raw = mcx
+        .allocate(cell_layout)
+        .map_err(|_| mcx.oom(cell_layout.size()))?;
     let pergroup_cell: NonNull<NonNull<AggPerGroup>> = raw.cast();
     // SAFETY: fresh allocation of the cell's exact layout; repointed before
     // every evaltrans run (lookup_hash_entry).
@@ -2224,7 +2292,11 @@ pub fn hash_agg_set_limits(
 ) -> (usize, u64, usize) {
     let hash_mem_limit = ::execgrouping::get_hash_memory_limit();
     if input_groups * hashentrysize <= hash_mem_limit as f64 {
-        return (hash_mem_limit, (hash_mem_limit as f64 / hashentrysize) as u64, 0);
+        return (
+            hash_mem_limit,
+            (hash_mem_limit as f64 / hashentrysize) as u64,
+            0,
+        );
     }
     let (npartitions, _) = hash_choose_num_partitions(input_groups, hashentrysize, used_bits);
     let partition_mem =
@@ -2234,8 +2306,11 @@ pub fn hash_agg_set_limits(
     } else {
         (hash_mem_limit as f64 * 0.75) as usize
     };
-    let ngroups_limit =
-        if mem_limit as f64 > hashentrysize { (mem_limit as f64 / hashentrysize) as u64 } else { 1 };
+    let ngroups_limit = if mem_limit as f64 > hashentrysize {
+        (mem_limit as f64 / hashentrysize) as u64
+    } else {
+        1
+    };
     (mem_limit, ngroups_limit, npartitions)
 }
 
@@ -2440,8 +2515,19 @@ fn hashagg_spill_init<'mcx>(
         hll_card.push(HyperLogLog32::new(HASHAGG_HLL_BIT_WIDTH));
     }
     let shift = 32 - used_bits as i32 - partition_bits as i32;
-    let mask = if shift < 32 { ((npartitions - 1) as u32) << shift } else { 0 };
-    Ok(HashAggSpill { npartitions, partitions, ntuples, hll_card, mask, shift })
+    let mask = if shift < 32 {
+        ((npartitions - 1) as u32) << shift
+    } else {
+        0
+    };
+    Ok(HashAggSpill {
+        npartitions,
+        partitions,
+        ntuples,
+        hll_card,
+        mask,
+        shift,
+    })
 }
 
 // hashagg_spill_tuple (nodeAgg.c); `input` None = the batch rslot (refill).
@@ -2470,7 +2556,13 @@ fn hashagg_spill_tuple<'mcx>(
     } = ss;
     let tapeset = tapeset.as_mut().expect("spill mode has a tapeset");
     if spill.is_none() {
-        *spill = Some(hashagg_spill_init(mcx, tapeset, *used_bits, *input_card, *hashentrysize)?);
+        *spill = Some(hashagg_spill_init(
+            mcx,
+            tapeset,
+            *used_bits,
+            *input_card,
+            *hashentrysize,
+        )?);
     }
     let spill = spill.as_mut().unwrap();
     let input = match input {
@@ -2506,8 +2598,11 @@ fn hashagg_spill_tuple<'mcx>(
             }
             exectuples::FetchedMinimalTuple::Copied(t) => (t.as_ptr(), t.t_len() as usize),
         };
-        let partition =
-            if spill.shift < 32 { ((hash & spill.mask) >> spill.shift) as usize } else { 0 };
+        let partition = if spill.shift < 32 {
+            ((hash & spill.mask) >> spill.shift) as usize
+        } else {
+            0
+        };
         spill.ntuples[partition] += 1;
         // Hash the hash: partition-shared bits skew the HLL otherwise.
         spill.hll_card[partition].add(::hashfn::hash_bytes_uint32(hash));
@@ -2549,7 +2644,10 @@ fn hashagg_batch_read(
         return Err(tape_eof_error(4, n));
     }
     let t_len = u32::from_ne_bytes(word) as usize;
-    assert!(t_len >= 4, "hashagg batch tuple shorter than its length word");
+    assert!(
+        t_len >= 4,
+        "hashagg batch tuple shorter than its length word"
+    );
     read_buf.clear();
     read_buf.resize(t_len.div_ceil(8), 0);
     // SAFETY: t_len <= the freshly-sized buffer's bytes.
@@ -2672,7 +2770,13 @@ fn agg_refill_hash_table<'mcx>(
             postgres_seams::check_for_interrupts::call()?;
         }
         let advance = {
-            let AggStateData { perhash, trans_init, trans_typ, agg_node, .. } = node;
+            let AggStateData {
+                perhash,
+                trans_init,
+                trans_typ,
+                agg_node,
+                ..
+            } = node;
             let ph = perhash.as_mut().unwrap();
             let got = hashagg_batch_read(
                 ph.spill.tapeset.as_mut().expect("batches imply a tapeset"),
@@ -2688,7 +2792,11 @@ fn agg_refill_hash_table<'mcx>(
             unsafe { exectuples::exec_store_minimal_tuple_ptr(&mut ph.spill.rslot, mcx, tup) };
             {
                 let PerHashData {
-                    hashslot, hash_grp_col_idx_input, largest_grp_col_idx, spill, ..
+                    hashslot,
+                    hash_grp_col_idx_input,
+                    largest_grp_col_idx,
+                    spill,
+                    ..
                 } = &mut *ph;
                 prepare_hash_slot(
                     hashslot,
@@ -2700,12 +2808,9 @@ fn agg_refill_hash_table<'mcx>(
             }
             let table_mcx = ph.table_ctx.mcx();
             let use_table = !ph.spill.mode;
-            let (ix, isnew) = ph.hashtable.lookup(
-                &mut ph.hashslot,
-                hash,
-                use_table.then_some(table_mcx),
-                mcx,
-            )?;
+            let (ix, isnew) =
+                ph.hashtable
+                    .lookup(&mut ph.hashslot, hash, use_table.then_some(table_mcx), mcx)?;
             match ix {
                 Some(ix) => {
                     if isnew {
@@ -2729,7 +2834,9 @@ fn agg_refill_hash_table<'mcx>(
         };
         if advance {
             let tmpcontext = node.tmpcontext;
-            let AggStateData { perhash, evaltrans, .. } = node;
+            let AggStateData {
+                perhash, evaltrans, ..
+            } = node;
             let ph = perhash.as_mut().unwrap();
             let et = evaltrans.as_mut().unwrap();
             if et.has_subplan() {
@@ -2740,8 +2847,11 @@ fn agg_refill_hash_table<'mcx>(
                     tmpcontext,
                 )?;
             } else {
-                let mut slots =
-                    EvalSlots { scan: None, inner: None, outer: Some(&mut ph.spill.rslot) };
+                let mut slots = EvalSlots {
+                    scan: None,
+                    inner: None,
+                    outer: Some(&mut ph.spill.rslot),
+                };
                 exec_eval_expr(et, &mut slots)?;
             }
         }
@@ -2750,7 +2860,11 @@ fn agg_refill_hash_table<'mcx>(
 
     let id = node.plan.plan.plan_node_id;
     let ph = node.perhash.as_mut().unwrap();
-    ph.spill.tapeset.as_mut().unwrap().close_tape(batch.input_tape);
+    ph.spill
+        .tapeset
+        .as_mut()
+        .unwrap()
+        .close_tape(batch.input_tape);
     let spilled = ph.spill.spill.take();
     let npartitions = spilled.as_ref().map_or(0, |s| s.npartitions);
     if let Some(spill) = spilled {
@@ -2882,7 +2996,12 @@ pub(crate) fn collect_ordered_input<'mcx>(
     let mcx = estate.es_query_cxt;
     let tmp = node.tmpcontext;
     let AggStateData {
-        pertrans_sort, trans_typ, agg_node, pergroup_base, force_distinct_set, ..
+        pertrans_sort,
+        trans_typ,
+        agg_node,
+        pergroup_base,
+        force_distinct_set,
+        ..
     } = node;
     for ps in pertrans_sort.iter_mut() {
         // SAFETY: once-allocated cells the trans program writes (steps.rs).
@@ -2918,14 +3037,18 @@ pub(crate) fn collect_ordered_input<'mcx>(
             continue;
         }
         for setno in 0..nsets {
-            let sort = ps.sortstates[setno].as_mut().expect("ordered pertrans sort begun");
+            let sort = ps.sortstates[setno]
+                .as_mut()
+                .expect("ordered pertrans sort begun");
             if ps.num_inputs == 1 {
                 // SAFETY: scratch slot 0 written by the program this row.
                 let nd = unsafe { ps.scratch.read() };
                 sort.putdatum(nd.value, nd.isnull)?;
             } else {
-                let slot =
-                    ps.insert_slot.as_mut().expect("multi-input ordered agg has a slot");
+                let slot = ps
+                    .insert_slot
+                    .as_mut()
+                    .expect("multi-input ordered agg has a slot");
                 exectuples::exec_clear_tuple(slot, mcx);
                 {
                     let base = slot.base_mut();
@@ -2965,7 +3088,10 @@ fn distinct_set_budget() -> usize {
 fn distinctfin_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
-        !matches!(std::env::var("PGRUST_LANE_V2_DISTINCTFIN").as_deref(), Ok("0") | Ok("off"))
+        !matches!(
+            std::env::var("PGRUST_LANE_V2_DISTINCTFIN").as_deref(),
+            Ok("0") | Ok("off")
+        )
     })
 }
 
@@ -2981,9 +3107,10 @@ fn distinctfin_enabled() -> bool {
 pub(crate) unsafe fn count_distinct_apply(pg: *mut AggPerGroup, n: i64) -> PgResult<()> {
     let cur = unsafe { (*pg).trans_value.as_i64() };
     let Some(newv) = cur.checked_add(n) else {
-        return Err(Box::new(PgError::error("bigint out of range").with_sqlstate(
-            ::types_error::ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE,
-        )));
+        return Err(Box::new(
+            PgError::error("bigint out of range")
+                .with_sqlstate(::types_error::ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+        ));
     };
     unsafe {
         (*pg).trans_value = Datum::from_i64(newv);
@@ -3148,13 +3275,27 @@ where
                 K::Int16 | K::Int32 | K::Int64 => {
                     for i in 0..dset.ints().len() {
                         let d = datum_of(kind, dset.ints()[i]);
-                        replay(ps, estate, NullableDatum { value: d, isnull: false })?;
+                        replay(
+                            ps,
+                            estate,
+                            NullableDatum {
+                                value: d,
+                                isnull: false,
+                            },
+                        )?;
                     }
                 }
                 K::Bytes => {
                     for i in 0..dset.n_bytes() {
                         let d = dset.bytes_datum(i);
-                        replay(ps, estate, NullableDatum { value: d, isnull: false })?;
+                        replay(
+                            ps,
+                            estate,
+                            NullableDatum {
+                                value: d,
+                                isnull: false,
+                            },
+                        )?;
                     }
                 }
             }
@@ -3210,7 +3351,11 @@ where
         // (process_ordered_aggregates_set's single-input arm, sans NULLs:
         // partition tapes never carry them).
         let sort_spilled = sort.spilled();
-        let byref_typlen = if sort_spilled { sort.datum_byref_typlen() } else { 0 };
+        let byref_typlen = if sort_spilled {
+            sort.datum_byref_typlen()
+        } else {
+            0
+        };
         let mut old_buf: PgVec<'mcx, u8> = PgVec::new_in(mcx);
         let mut old: Option<NullableDatum> = None;
         while let Some(nd) = sort.getdatum(true)? {
@@ -3221,8 +3366,14 @@ where
                 // SAFETY: the per-tuple context outlives the call (resets
                 // recycle the same context object).
                 unsafe { fc2.set_result_mcx(estate.ecxt(tmp).per_tuple_mcx()) };
-                fc2.args[0] = NullableDatum { value: o.value, isnull: false };
-                fc2.args[1] = NullableDatum { value: nd.value, isnull: false };
+                fc2.args[0] = NullableDatum {
+                    value: o.value,
+                    isnull: false,
+                };
+                fc2.args[1] = NullableDatum {
+                    value: nd.value,
+                    isnull: false,
+                };
                 if eq.invoke(&mut fc2)?.as_bool() {
                     continue;
                 }
@@ -3268,8 +3419,14 @@ fn advance_presorted_distinct<'mcx>(
             // SAFETY: the per-tuple context outlives the call (resets recycle
             // the same context object).
             unsafe { fc2.set_result_mcx(estate.ecxt(tmp).per_tuple_mcx()) };
-            fc2.args[0] = NullableDatum { value: ps.last_single.value, isnull: false };
-            fc2.args[1] = NullableDatum { value: nd.value, isnull: false };
+            fc2.args[0] = NullableDatum {
+                value: ps.last_single.value,
+                isnull: false,
+            };
+            fc2.args[1] = NullableDatum {
+                value: nd.value,
+                isnull: false,
+            };
             !eq.invoke(&mut fc2)?.as_bool()
         };
         if !isdistinct {
@@ -3287,7 +3444,10 @@ fn advance_presorted_distinct<'mcx>(
         };
     } else {
         {
-            let slot = ps.insert_slot.as_mut().expect("multi-input ordered agg has a slot");
+            let slot = ps
+                .insert_slot
+                .as_mut()
+                .expect("multi-input ordered agg has a slot");
             exectuples::exec_clear_tuple(slot, mcx);
             {
                 let base = slot.base_mut();
@@ -3317,7 +3477,8 @@ fn advance_presorted_distinct<'mcx>(
         ps.haslast = true;
         let (cur, uniq) = (&mut ps.insert_slot, &mut ps.slot2);
         exectuples::exec_copy_slot(
-            uniq.as_mut().expect("presorted multi-col DISTINCT has a uniq slot"),
+            uniq.as_mut()
+                .expect("presorted multi-col DISTINCT has a uniq slot"),
             cur.as_mut().expect("multi-input ordered agg has a slot"),
             mcx,
             mcx,
@@ -3383,8 +3544,10 @@ fn advance_transition_function(
                 return Ok(());
             }
         }
-        fcinfo.args[0] =
-            NullableDatum { value: (*pg).trans_value, isnull: (*pg).trans_value_is_null };
+        fcinfo.args[0] = NullableDatum {
+            value: (*pg).trans_value,
+            isnull: (*pg).trans_value_is_null,
+        };
         fcinfo.isnull = false;
         let result = transfn.invoke(fcinfo)?;
         let isnull = fcinfo.isnull;
@@ -3427,7 +3590,11 @@ pub(crate) fn process_ordered_aggregates_set<'mcx>(
     let mcx = estate.es_query_cxt;
     let tmp = node.tmpcontext;
     let AggStateData {
-        pertrans_sort, trans_typ, agg_node, force_distinct_set, ..
+        pertrans_sort,
+        trans_typ,
+        agg_node,
+        force_distinct_set,
+        ..
     } = node;
     let pergroup_base = &set_pergroup_base;
     for ps in pertrans_sort.iter_mut() {
@@ -3495,14 +3662,7 @@ pub(crate) fn process_ordered_aggregates_set<'mcx>(
                             n += 1;
                             Ok(())
                         };
-                        replay_spilled_distinct_set(
-                            &mut dset,
-                            ps,
-                            kind,
-                            estate,
-                            tmp,
-                            &mut count,
-                        )?;
+                        replay_spilled_distinct_set(&mut dset, ps, kind, estate, tmp, &mut count)?;
                         n
                     } else {
                         match kind {
@@ -3535,14 +3695,7 @@ pub(crate) fn process_ordered_aggregates_set<'mcx>(
                 if dset.spilled() {
                     // v2 spilled group: per-partition load-dedup-replay
                     // (oversize partitions finish on a bounded tuplesort).
-                    replay_spilled_distinct_set(
-                        &mut dset,
-                        ps,
-                        kind,
-                        estate,
-                        tmp,
-                        &mut replay,
-                    )?;
+                    replay_spilled_distinct_set(&mut dset, ps, kind, estate, tmp, &mut replay)?;
                     if dset.seen_null {
                         replay(ps, estate, NullableDatum::null())?;
                     }
@@ -3557,7 +3710,10 @@ pub(crate) fn process_ordered_aggregates_set<'mcx>(
                             replay(
                                 ps,
                                 estate,
-                                NullableDatum { value: Datum::from_i16(k as i16), isnull: false },
+                                NullableDatum {
+                                    value: Datum::from_i16(k as i16),
+                                    isnull: false,
+                                },
                             )?;
                         }
                     }
@@ -3567,7 +3723,10 @@ pub(crate) fn process_ordered_aggregates_set<'mcx>(
                             replay(
                                 ps,
                                 estate,
-                                NullableDatum { value: Datum::from_i32(k as i32), isnull: false },
+                                NullableDatum {
+                                    value: Datum::from_i32(k as i32),
+                                    isnull: false,
+                                },
                             )?;
                         }
                     }
@@ -3577,14 +3736,24 @@ pub(crate) fn process_ordered_aggregates_set<'mcx>(
                             replay(
                                 ps,
                                 estate,
-                                NullableDatum { value: Datum::from_i64(k), isnull: false },
+                                NullableDatum {
+                                    value: Datum::from_i64(k),
+                                    isnull: false,
+                                },
                             )?;
                         }
                     }
                     distinctset::DistinctKeyKind::Bytes => {
                         for i in 0..dset.n_bytes() {
                             let d = dset.bytes_datum(i);
-                            replay(ps, estate, NullableDatum { value: d, isnull: false })?;
+                            replay(
+                                ps,
+                                estate,
+                                NullableDatum {
+                                    value: d,
+                                    isnull: false,
+                                },
+                            )?;
                         }
                     }
                 }
@@ -3600,14 +3769,20 @@ pub(crate) fn process_ordered_aggregates_set<'mcx>(
             // the next group.
             ps.dset_degraded = false;
         }
-        let mut sort = ps.sortstates[setno].take().expect("ordered pertrans sort begun");
+        let mut sort = ps.sortstates[setno]
+            .take()
+            .expect("ordered pertrans sort begun");
         sort.performsort()?;
         // Spilled by-ref values live in recycled slab slots (valid until the
         // next fetch): the held DISTINCT comparand needs C's datumCopy shape.
         // The in-memory lever (images live until end, no copy) stays.
         let spilled = sort.spilled();
         if ps.num_inputs == 1 {
-            let byref_typlen = if spilled { sort.datum_byref_typlen() } else { 0 };
+            let byref_typlen = if spilled {
+                sort.datum_byref_typlen()
+            } else {
+                0
+            };
             let mut old_buf: PgVec<'mcx, u8> = PgVec::new_in(mcx);
             let mut old: Option<NullableDatum> = None;
             while let Some(nd) = sort.getdatum(true)? {
@@ -3623,8 +3798,14 @@ pub(crate) fn process_ordered_aggregates_set<'mcx>(
                             let mut fc2 = LocalFcinfo::<2>::fresh(ps.agg_collation);
                             // SAFETY: as the transfn arming above.
                             unsafe { fc2.set_result_mcx(estate.ecxt(tmp).per_tuple_mcx()) };
-                            fc2.args[0] = NullableDatum { value: o.value, isnull: false };
-                            fc2.args[1] = NullableDatum { value: nd.value, isnull: false };
+                            fc2.args[0] = NullableDatum {
+                                value: o.value,
+                                isnull: false,
+                            };
+                            fc2.args[1] = NullableDatum {
+                                value: nd.value,
+                                isnull: false,
+                            };
                             eq.invoke(&mut fc2)?.as_bool()
                         };
                         if equal {
@@ -3714,11 +3895,7 @@ pub(crate) fn process_ordered_aggregates_set<'mcx>(
 
 /// The held-comparand copy for spilled by-ref datum sorts (C datumCopy +
 /// pfree per replaced value; retained scratch here).
-fn copy_scratch_datum<'m>(
-    buf: &mut PgVec<'m, u8>,
-    val: Datum,
-    typlen: i16,
-) -> PgResult<Datum> {
+fn copy_scratch_datum<'m>(buf: &mut PgVec<'m, u8>, val: Datum, typlen: i16) -> PgResult<Datum> {
     let src = val.as_usize() as *const u8;
     // SAFETY: non-null by-ref datum readable for its full size.
     let size = unsafe {
@@ -3781,7 +3958,12 @@ where
         return gsets::exec_agg_gsets(node, estate, &mut fetch_outer);
     }
     if node.plan.aggstrategy == AGG_HASHED {
-        if !node.perhash.as_ref().expect("hashed Agg has perhash").table_filled {
+        if !node
+            .perhash
+            .as_ref()
+            .expect("hashed Agg has perhash")
+            .table_filled
+        {
             agg_fill_hash_table(node, estate, &mut fetch_outer)?;
         }
         if node.merge.as_ref().is_some_and(|m| m.has_run()) {
@@ -3801,7 +3983,11 @@ where
             ::executils::exec_eval_expr_with_subplans(et, estate, node.tmpcontext)?;
         } else {
             let outer_slot = estate.slot_mut(outer_id);
-            let mut slots = EvalSlots { scan: None, inner: None, outer: Some(outer_slot) };
+            let mut slots = EvalSlots {
+                scan: None,
+                inner: None,
+                outer: Some(outer_slot),
+            };
             exec_eval_expr(et, &mut slots)?;
         }
         if !node.pertrans_sort.is_empty() {
@@ -3838,14 +4024,22 @@ fn plain_finish<'mcx>(
         )?;
         return Ok(Some(node.ps_ResultTupleSlot));
     }
-    let mut slots = EvalSlots { scan: None, inner: None, outer: None };
+    let mut slots = EvalSlots {
+        scan: None,
+        inner: None,
+        outer: None,
+    };
     if !exec_qual(node.qual.as_deref_mut(), &mut slots)? {
         estate.instr_count_filtered1(node.instr_idx);
         return Ok(None);
     }
     let mcx = estate.es_query_cxt;
     let result_slot = estate.slot_mut(node.ps_ResultTupleSlot);
-    let mut slots = EvalSlots { scan: None, inner: None, outer: None };
+    let mut slots = EvalSlots {
+        scan: None,
+        inner: None,
+        outer: None,
+    };
     exec_project(&mut node.proj, &mut slots, result_slot, mcx)?;
     Ok(Some(node.ps_ResultTupleSlot))
 }
@@ -3868,7 +4062,10 @@ pub fn agg_batch_drainable(node: &AggStateData<'_>) -> bool {
         && node.merge.is_none()
         && node.pertrans_sort.is_empty()
         && (node.plan.aggstrategy == AGG_PLAIN || node.plan.aggstrategy == AGG_HASHED)
-        && node.evaltrans.as_deref().is_some_and(|et| !et.has_subplan())
+        && node
+            .evaltrans
+            .as_deref()
+            .is_some_and(|et| !et.has_subplan())
 }
 
 /// Outer-slot deform prefix the batched drive reads per row (evaltrans
@@ -3882,7 +4079,12 @@ pub fn agg_batch_outer_prefix(node: &AggStateData<'_>) -> Option<i32> {
         .expect("drainable Agg has evaltrans")
         .max_fetch(::execexpr::SlotSrc::Outer)?;
     if node.plan.aggstrategy == AGG_HASHED {
-        p = p.max(node.perhash.as_ref().expect("hashed Agg has perhash").largest_grp_col_idx);
+        p = p.max(
+            node.perhash
+                .as_ref()
+                .expect("hashed Agg has perhash")
+                .largest_grp_col_idx,
+        );
     }
     Some(p)
 }
@@ -3900,7 +4102,12 @@ pub fn exec_agg_batched<'mcx, S: AggBatchSource<'mcx>>(
         return Ok(None);
     }
     if node.plan.aggstrategy == AGG_HASHED {
-        if !node.perhash.as_ref().expect("hashed Agg has perhash").table_filled {
+        if !node
+            .perhash
+            .as_ref()
+            .expect("hashed Agg has perhash")
+            .table_filled
+        {
             agg_fill_hash_table_batched(node, estate, &mut src)?;
         }
         return agg_retrieve_hash_table(node, estate, None);
@@ -3926,7 +4133,11 @@ pub fn exec_agg_batched<'mcx, S: AggBatchSource<'mcx>>(
             // Qual'd count(*): the source's bitmap census replaces the
             // per-row fetch+transition walk; a None census or refused
             // advance falls to the per-row drain below.
-            let c = if storeless { Some(n) } else { src.qualifying_count(estate, n)? };
+            let c = if storeless {
+                Some(n)
+            } else {
+                src.qualifying_count(estate, n)?
+            };
             if let Some(c) = c {
                 if ::execexpr::agg_count_star_advance(pergroup, strict, c) {
                     estate.reset_expr_context(node.tmpcontext);
@@ -3952,8 +4163,11 @@ pub fn exec_agg_batched<'mcx, S: AggBatchSource<'mcx>>(
                 let outer_id = src.outer_slot();
                 estate.ecxt_mut(node.tmpcontext).ecxt_outertuple = Some(outer_id);
                 let outer_slot = estate.slot_mut(outer_id);
-                let mut slots =
-                    EvalSlots { scan: None, inner: None, outer: Some(outer_slot) };
+                let mut slots = EvalSlots {
+                    scan: None,
+                    inner: None,
+                    outer: Some(outer_slot),
+                };
                 exec_eval_expr(node.evaltrans.as_mut().unwrap(), &mut slots)?;
                 estate.reset_expr_context(node.tmpcontext);
                 Ok(())
@@ -3984,8 +4198,11 @@ fn agg_fill_hash_table_batched<'mcx, S: AggBatchSource<'mcx>>(
             estate.ecxt_mut(node.tmpcontext).ecxt_outertuple = Some(outer_id);
             if lookup_hash_entry(node, estate, outer_id)? {
                 let outer_slot = estate.slot_mut(outer_id);
-                let mut slots =
-                    EvalSlots { scan: None, inner: None, outer: Some(outer_slot) };
+                let mut slots = EvalSlots {
+                    scan: None,
+                    inner: None,
+                    outer: Some(outer_slot),
+                };
                 exec_eval_expr(node.evaltrans.as_mut().unwrap(), &mut slots)?;
             }
             estate.reset_expr_context(node.tmpcontext);
@@ -4021,7 +4238,10 @@ pub fn agg_hash_breaker_admissible(node: &AggStateData<'_>) -> bool {
             .as_deref()
             .is_none_or(|et| et.param_exec_deps().is_empty())
         && node.proj.param_exec_deps().is_empty()
-        && node.qual.as_deref().is_none_or(|q| q.param_exec_deps().is_empty())
+        && node
+            .qual
+            .as_deref()
+            .is_none_or(|q| q.param_exec_deps().is_empty())
 }
 
 /// `agg_done` read for the lane driver (exec_agg's top-of-call guard).
@@ -4053,7 +4273,11 @@ pub fn agg_hash_build_accept<'mcx>(
     estate.ecxt_mut(node.tmpcontext).ecxt_outertuple = Some(outer_id);
     if lookup_hash_entry(node, estate, outer_id)? {
         let outer_slot = estate.slot_mut(outer_id);
-        let mut slots = EvalSlots { scan: None, inner: None, outer: Some(outer_slot) };
+        let mut slots = EvalSlots {
+            scan: None,
+            inner: None,
+            outer: Some(outer_slot),
+        };
         exec_eval_expr(node.evaltrans.as_mut().unwrap(), &mut slots)?;
     }
     estate.reset_expr_context(node.tmpcontext);
@@ -4175,8 +4399,7 @@ fn grouped_key_kind(
         return Some(GroupedKeyKind::Bytes);
     }
     // char(n) under the tie law: typmod = n + VARHDRSZ(4), n >= 1.
-    (admit_bpchar && att.atttypid == 1042 && att.atttypmod >= 5)
-        .then_some(GroupedKeyKind::Bytes)
+    (admit_bpchar && att.atttypid == 1042 && att.atttypmod >= 5).then_some(GroupedKeyKind::Bytes)
 }
 
 /// Fail-closed admission for the grouped runtime sink: a serial simple-split
@@ -4198,8 +4421,7 @@ pub fn agg_grouped_runtime_admissible(node: &AggStateData<'_>) -> bool {
 /// PGRUST_LANE_V2_AGGJOIN_NUMERIC knob and tries the plan-based admission
 /// FIRST — plan-covered shapes never reach this.
 pub fn agg_grouped_poly_runtime_admissible(node: &AggStateData<'_>) -> bool {
-    agg_grouped_runtime_shell_admissible(node)
-        && runtime_partial::agg_poly_partial_admissible(node)
+    agg_grouped_runtime_shell_admissible(node) && runtime_partial::agg_poly_partial_admissible(node)
 }
 
 /// SE-CBKEYS: the BYTES-key admission pair — the identical structural
@@ -4232,7 +4454,9 @@ fn agg_grouped_runtime_shell_admissible(node: &AggStateData<'_>) -> bool {
     }
     let ph = node.perhash.as_ref().expect("core verified perhash");
     let base = ph.hashslot.base();
-    let Some(desc) = base.tts_tupleDescriptor.as_ref() else { return false };
+    let Some(desc) = base.tts_tupleDescriptor.as_ref() else {
+        return false;
+    };
     let nkeys = ph.hash_grp_col_idx_input.len();
     if desc.attrs.len() < nkeys || nkeys == 0 {
         return false;
@@ -4244,9 +4468,13 @@ fn agg_grouped_runtime_shell_admissible(node: &AggStateData<'_>) -> bool {
 /// column; bpchar and non-deterministic collations refuse via
 /// `grouped_key_kind`).
 fn grouped_keys_bytes_admissible(node: &AggStateData<'_>, admit_bpchar: bool) -> bool {
-    let Some(ph) = node.perhash.as_ref() else { return false };
+    let Some(ph) = node.perhash.as_ref() else {
+        return false;
+    };
     let base = ph.hashslot.base();
-    let Some(desc) = base.tts_tupleDescriptor.as_ref() else { return false };
+    let Some(desc) = base.tts_tupleDescriptor.as_ref() else {
+        return false;
+    };
     let nkeys = ph.hash_grp_col_idx_input.len();
     if desc.attrs.len() < nkeys || nkeys == 0 {
         return false;
@@ -4275,7 +4503,9 @@ fn agg_grouped_runtime_shell_core(node: &AggStateData<'_>) -> bool {
     {
         return false;
     }
-    let Some(ph) = node.perhash.as_ref() else { return false };
+    let Some(ph) = node.perhash.as_ref() else {
+        return false;
+    };
     !(ph.compact.is_some() || ph.sink_cap.is_some() || node.sink_emit.is_some())
 }
 
@@ -4388,9 +4618,7 @@ pub fn agg_hash_export_grouped_into<'mcx>(
             let tup = ph.hashtable.entry_tuple(ix);
             // SAFETY: entry images live in the node's table context for the
             // table's lifetime (the retrieve path's identical store).
-            unsafe {
-                exectuples::exec_store_minimal_tuple_ptr(&mut ph.retrieve_slot, mcx, tup)
-            };
+            unsafe { exectuples::exec_store_minimal_tuple_ptr(&mut ph.retrieve_slot, mcx, tup) };
             exectuples::slot_getallattrs(&mut ph.retrieve_slot);
             let base = ph.retrieve_slot.base();
             let desc = base
@@ -4426,11 +4654,15 @@ pub fn agg_hash_export_grouped_into<'mcx>(
                 .hashtable
                 .entry_additional(ix)
                 .expect("numtrans > 0 tables carry additional space");
-            out.groups.push((key, runtime_partial::RuntimePartial::default()));
+            out.groups
+                .push((key, runtime_partial::RuntimePartial::default()));
             out.scratch_ptrs.push(pg.as_ptr() as usize);
         }
     }
-    let runtime_partial::GroupedRuntimePartial { groups, scratch_ptrs } = out;
+    let runtime_partial::GroupedRuntimePartial {
+        groups,
+        scratch_ptrs,
+    } = out;
     for (i, (_key, partial)) in groups.iter_mut().enumerate() {
         let base = NonNull::new(scratch_ptrs[i] as *mut AggPerGroup)
             .expect("entry pergroup pointer is non-null");
@@ -4469,7 +4701,10 @@ fn grouped_absorb_reset(node: &mut AggStateData<'_>) {
 pub fn exec_agg_grouped_runtime_partials<'mcx>(
     node: &mut AggStateData<'mcx>,
     estate: &mut EStateData<'mcx>,
-    combined: &[(runtime_partial::GroupKeyWords, runtime_partial::RuntimePartial)],
+    combined: &[(
+        runtime_partial::GroupKeyWords,
+        runtime_partial::RuntimePartial,
+    )],
 ) -> PgResult<bool> {
     debug_assert_eq!(node.plan.aggstrategy, AGG_HASHED);
     let mcx = estate.es_query_cxt;
@@ -4477,7 +4712,9 @@ pub fn exec_agg_grouped_runtime_partials<'mcx>(
     // export's twin note).
     let schema = runtime_partial::trans_schema(node)?;
     {
-        let Some(ph) = node.perhash.as_ref() else { return Ok(false) };
+        let Some(ph) = node.perhash.as_ref() else {
+            return Ok(false);
+        };
         if ph.table_filled
             || ph.hash_ngroups_current != 0
             || ph.spill.mode
@@ -4494,7 +4731,13 @@ pub fn exec_agg_grouped_runtime_partials<'mcx>(
     }
     for (key, partial) in combined {
         let pergroup = {
-            let AggStateData { perhash, trans_init, trans_typ, agg_node, .. } = &mut *node;
+            let AggStateData {
+                perhash,
+                trans_init,
+                trans_typ,
+                agg_node,
+                ..
+            } = &mut *node;
             let ph = perhash.as_mut().expect("hashed Agg has perhash");
             exectuples::exec_clear_tuple(&mut ph.hashslot, mcx);
             {
@@ -4825,7 +5068,10 @@ pub fn batch_emit_resolve(node: &AggStateData<'_>) -> Option<BatchEmitPlan> {
             }
             NodeTag::T_Const => {
                 let c = te.expr.as_const()?;
-                cols.push(BatchEmitCol::Const { value: c.constvalue, isnull: c.constisnull });
+                cols.push(BatchEmitCol::Const {
+                    value: c.constvalue,
+                    isnull: c.constisnull,
+                });
             }
             NodeTag::T_Aggref => {
                 let aggref = te.expr.as_aggref().expect("tag-checked Aggref");
@@ -4886,7 +5132,12 @@ pub fn batch_emit_resolve(node: &AggStateData<'_>) -> Option<BatchEmitPlan> {
             }
         }
     }
-    Some(BatchEmitPlan { cols, idx: Vec::new(), keyvals: Vec::new(), vals: Vec::new() })
+    Some(BatchEmitPlan {
+        cols,
+        idx: Vec::new(),
+        keyvals: Vec::new(),
+        vals: Vec::new(),
+    })
 }
 
 /// SE-AGGPOLY (band 101001): every aggregate's ARGUMENT expressions (and
@@ -4978,11 +5229,13 @@ pub fn agg_hash_build_probe_resid<'mcx>(
             // in the cell (numtrans > 0 on this arm).
             unsafe { ph.pergroup_cell.as_ptr().read() }
         });
-        if let Some(resid) =
-            node.lanefold.as_mut().and_then(|lf| lf.resid.as_mut())
-        {
+        if let Some(resid) = node.lanefold.as_mut().and_then(|lf| lf.resid.as_mut()) {
             let outer_slot = estate.slot_mut(outer_id);
-            let mut slots = EvalSlots { scan: None, inner: None, outer: Some(outer_slot) };
+            let mut slots = EvalSlots {
+                scan: None,
+                inner: None,
+                outer: Some(outer_slot),
+            };
             exec_eval_expr(resid, &mut slots)?;
         }
     }
@@ -5012,7 +5265,11 @@ pub fn agg_hash_build_resid_group<'mcx>(
     }
     if let Some(resid) = node.lanefold.as_mut().and_then(|lf| lf.resid.as_mut()) {
         let outer_slot = estate.slot_mut(outer_id);
-        let mut slots = EvalSlots { scan: None, inner: None, outer: Some(outer_slot) };
+        let mut slots = EvalSlots {
+            scan: None,
+            inner: None,
+            outer: Some(outer_slot),
+        };
         exec_eval_expr(resid, &mut slots)?;
     }
     estate.reset_expr_context(node.tmpcontext);
@@ -5040,7 +5297,10 @@ pub fn agg_pertrans_all_distinct_set(node: &AggStateData<'_>) -> bool {
     // the entries the way the collect/replay run them (sticky, value-safe —
     // the force doc).
     !node.pertrans_sort.is_empty()
-        && node.pertrans_sort.iter().all(|ps| ps.set_active(node.force_distinct_set))
+        && node
+            .pertrans_sort
+            .iter()
+            .all(|ps| ps.set_active(node.force_distinct_set))
 }
 
 /// Skip-sort admission (lanev2 `try_own_plain_distinct_agg_over_sort`):
@@ -5059,13 +5319,19 @@ pub fn agg_plain_distinct_set_only(node: &AggStateData<'_>) -> bool {
         && node.merge.is_none()
         && node.pertrans_sort.len() == node.numtrans
         && node.pertrans_sort.iter().all(|ps| ps.set_kind.is_some())
-        && node.evaltrans.as_deref().is_some_and(|et| !et.has_subplan())
+        && node
+            .evaltrans
+            .as_deref()
+            .is_some_and(|et| !et.has_subplan())
         && node
             .evaltrans
             .as_deref()
             .is_none_or(|et| et.param_exec_deps().is_empty())
         && node.proj.param_exec_deps().is_empty()
-        && node.qual.as_deref().is_none_or(|q| q.param_exec_deps().is_empty())
+        && node
+            .qual
+            .as_deref()
+            .is_none_or(|q| q.param_exec_deps().is_empty())
 }
 
 /// Arm skip-sort set-mode (see `force_distinct_set` field doc): the lane's
@@ -5091,13 +5357,19 @@ pub fn agg_plain_distinct_set_admissible(node: &AggStateData<'_>) -> bool {
         && node.gsets.is_none()
         && node.merge.is_none()
         && agg_pertrans_all_distinct_set(node)
-        && node.evaltrans.as_deref().is_some_and(|et| !et.has_subplan())
+        && node
+            .evaltrans
+            .as_deref()
+            .is_some_and(|et| !et.has_subplan())
         && node
             .evaltrans
             .as_deref()
             .is_none_or(|et| et.param_exec_deps().is_empty())
         && node.proj.param_exec_deps().is_empty()
-        && node.qual.as_deref().is_none_or(|q| q.param_exec_deps().is_empty())
+        && node
+            .qual
+            .as_deref()
+            .is_none_or(|q| q.param_exec_deps().is_empty())
 }
 
 /// Agg-side admission for the lane-v2 plain-agg fold drive: batch-drainable,
@@ -5112,7 +5384,10 @@ pub fn agg_plain_fold_admissible(node: &AggStateData<'_>) -> bool {
             .as_deref()
             .is_none_or(|et| et.param_exec_deps().is_empty())
         && node.proj.param_exec_deps().is_empty()
-        && node.qual.as_deref().is_none_or(|q| q.param_exec_deps().is_empty())
+        && node
+            .qual
+            .as_deref()
+            .is_none_or(|q| q.param_exec_deps().is_empty())
 }
 
 /// Agg-side admission for the lane-v2 plain-agg PER-ROW drain feed (the
@@ -5129,7 +5404,10 @@ pub fn agg_plain_perrow_admissible(node: &AggStateData<'_>) -> bool {
             .as_deref()
             .is_none_or(|et| et.param_exec_deps().is_empty())
         && node.proj.param_exec_deps().is_empty()
-        && node.qual.as_deref().is_none_or(|q| q.param_exec_deps().is_empty())
+        && node
+            .qual
+            .as_deref()
+            .is_none_or(|q| q.param_exec_deps().is_empty())
 }
 
 /// Feed-phase begin: `exec_agg`'s `initialize_aggregates` (fresh initval
@@ -5156,7 +5434,11 @@ pub fn agg_plain_build_accept<'mcx>(
     estate.ecxt_mut(node.tmpcontext).ecxt_outertuple = Some(outer_id);
     {
         let outer_slot = estate.slot_mut(outer_id);
-        let mut slots = EvalSlots { scan: None, inner: None, outer: Some(outer_slot) };
+        let mut slots = EvalSlots {
+            scan: None,
+            inner: None,
+            outer: Some(outer_slot),
+        };
         exec_eval_expr(node.evaltrans.as_mut().unwrap(), &mut slots)?;
     }
     if !node.pertrans_sort.is_empty() {
@@ -5216,7 +5498,9 @@ pub fn agg_plain_distinct_insert_batch<'mcx>(
     let ps = &mut node.pertrans_sort[0];
     let kind = ps.set_kind.expect("set-mode pertrans");
     if ps.dset_degraded {
-        let sort = ps.sortstates[0].as_mut().expect("degraded group has a sortstate");
+        let sort = ps.sortstates[0]
+            .as_mut()
+            .expect("degraded group has a sortstate");
         for &d in keys {
             sort.putdatum(d, false)?;
         }
@@ -5276,7 +5560,9 @@ pub fn agg_plain_distinct_insert_lane_batch<'mcx>(
     let ps = &mut node.pertrans_sort[0];
     let kind = ps.set_kind.expect("set-mode pertrans");
     if ps.dset_degraded {
-        let sort = ps.sortstates[0].as_mut().expect("degraded group has a sortstate");
+        let sort = ps.sortstates[0]
+            .as_mut()
+            .expect("degraded group has a sortstate");
         for (&d, &nl) in vals.iter().zip(isnull) {
             if !nl {
                 sort.putdatum(d, false)?;
@@ -5292,7 +5578,10 @@ pub fn agg_plain_distinct_insert_lane_batch<'mcx>(
         distinctset::DistinctKeyKind::Int16 => {
             if saw_null {
                 ints.extend(
-                    vals.iter().zip(isnull).filter(|&(_, &nl)| !nl).map(|(d, _)| d.as_i16() as i64),
+                    vals.iter()
+                        .zip(isnull)
+                        .filter(|&(_, &nl)| !nl)
+                        .map(|(d, _)| d.as_i16() as i64),
                 );
             } else {
                 ints.extend(vals.iter().map(|d| d.as_i16() as i64));
@@ -5301,7 +5590,10 @@ pub fn agg_plain_distinct_insert_lane_batch<'mcx>(
         distinctset::DistinctKeyKind::Int32 => {
             if saw_null {
                 ints.extend(
-                    vals.iter().zip(isnull).filter(|&(_, &nl)| !nl).map(|(d, _)| d.as_i32() as i64),
+                    vals.iter()
+                        .zip(isnull)
+                        .filter(|&(_, &nl)| !nl)
+                        .map(|(d, _)| d.as_i32() as i64),
                 );
             } else {
                 ints.extend(vals.iter().map(|d| d.as_i32() as i64));
@@ -5309,7 +5601,12 @@ pub fn agg_plain_distinct_insert_lane_batch<'mcx>(
         }
         distinctset::DistinctKeyKind::Int64 => {
             if saw_null {
-                ints.extend(vals.iter().zip(isnull).filter(|&(_, &nl)| !nl).map(|(d, _)| d.as_i64()));
+                ints.extend(
+                    vals.iter()
+                        .zip(isnull)
+                        .filter(|&(_, &nl)| !nl)
+                        .map(|(d, _)| d.as_i64()),
+                );
             } else {
                 ints.extend(vals.iter().map(|d| d.as_i64()));
             }
@@ -5351,7 +5648,9 @@ pub fn agg_plain_distinct_insert_bytes_batch<'mcx>(
     let ps = &mut node.pertrans_sort[0];
     debug_assert_eq!(ps.set_kind, Some(distinctset::DistinctKeyKind::Bytes));
     if ps.dset_degraded {
-        let sort = ps.sortstates[0].as_mut().expect("degraded group has a sortstate");
+        let sort = ps.sortstates[0]
+            .as_mut()
+            .expect("degraded group has a sortstate");
         for &d in keys {
             sort.putdatum(d, false)?;
         }
@@ -5364,9 +5663,7 @@ pub fn agg_plain_distinct_insert_bytes_batch<'mcx>(
     for &d in keys {
         // SAFETY: non-null live text/varchar varlena — the admission proved
         // the argument type; detoast copies land in per-tuple memory.
-        let v = unsafe {
-            ::types_fmgr::datum_varlena_packed(d, estate.ecxt(tmp).per_tuple_mcx())
-        }?;
+        let v = unsafe { ::types_fmgr::datum_varlena_packed(d, estate.ecxt(tmp).per_tuple_mcx()) }?;
         dset.insert_bytes(v.data());
     }
     if saw_null {
@@ -5426,7 +5723,9 @@ pub fn agg_plain_distinct_insert_dict_batch<'mcx>(
         // Degraded group: feed each identity-new value once (the sort's
         // drain re-dedups; feeding one representative per value is the same
         // distinct multiset the per-row feed produces).
-        let sort = ps.sortstates[0].as_mut().expect("degraded group has a sortstate");
+        let sort = ps.sortstates[0]
+            .as_mut()
+            .expect("degraded group has a sortstate");
         for &c in codes {
             let i = bit(c);
             let (w, b) = (i / 64, i % 64);
@@ -5478,7 +5777,11 @@ pub fn agg_plain_build_accept_resid<'mcx>(
     };
     estate.ecxt_mut(node.tmpcontext).ecxt_outertuple = Some(outer_id);
     let outer_slot = estate.slot_mut(outer_id);
-    let mut slots = EvalSlots { scan: None, inner: None, outer: Some(outer_slot) };
+    let mut slots = EvalSlots {
+        scan: None,
+        inner: None,
+        outer: Some(outer_slot),
+    };
     exec_eval_expr(resid, &mut slots)?;
     estate.reset_expr_context(node.tmpcontext);
     Ok(())
@@ -5499,7 +5802,10 @@ pub fn agg_plain_pergroup_base(node: &AggStateData<'_>) -> NonNull<AggPerGroup> 
 /// `Kernel::Program` and probes false.
 pub fn agg_plain_count_star_shape(node: &AggStateData<'_>) -> bool {
     node.plan.aggstrategy == AGG_PLAIN
-        && node.evaltrans.as_deref().is_some_and(|et| et.agg_count_star().is_some())
+        && node
+            .evaltrans
+            .as_deref()
+            .is_some_and(|et| et.agg_count_star().is_some())
 }
 
 /// One page batch of `n` VISIBLE rows through the bare-count storeless
@@ -5516,9 +5822,7 @@ pub fn agg_plain_count_star_accept_batch<'mcx>(
     n: u32,
 ) -> PgResult<()> {
     debug_assert_eq!(node.plan.aggstrategy, AGG_PLAIN);
-    if let Some((pergroup, strict)) =
-        node.evaltrans.as_deref().and_then(|et| et.agg_count_star())
-    {
+    if let Some((pergroup, strict)) = node.evaltrans.as_deref().and_then(|et| et.agg_count_star()) {
         if ::execexpr::agg_count_star_advance(pergroup, strict, n) {
             estate.reset_expr_context(node.tmpcontext);
             return Ok(());
@@ -5570,7 +5874,10 @@ pub fn agg_plain_finish<'mcx>(
 fn pd_derive_trace(msg: &str) {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     if *ON.get_or_init(|| {
-        matches!(std::env::var("PGRUST_LANE_V2_TRACE").as_deref(), Ok("1") | Ok("on"))
+        matches!(
+            std::env::var("PGRUST_LANE_V2_TRACE").as_deref(),
+            Ok("1") | Ok("on")
+        )
     }) {
         eprintln!("[lane-v2] pd_derive_spec refused: {msg}");
     }
@@ -5674,7 +5981,10 @@ pub fn pd_derive_spec(
             pd_derive_trace("set transition inactive or multi-input");
             return None;
         }
-        let pa = node.peragg.iter().find(|pa| pa.transno as usize == ps.transno)?;
+        let pa = node
+            .peragg
+            .iter()
+            .find(|pa| pa.transno as usize == ps.transno)?;
         if !pa.aggref.aggorder.is_nil() || pa.aggref.aggdistinct.is_nil() {
             pd_derive_trace("set aggref has aggorder / lacks aggdistinct");
             return None;
@@ -5740,7 +6050,10 @@ pub fn pd_derive_spec(
             pd_derive_trace("vocab transfn outside the exact-integer whitelist");
             return None;
         };
-        vocab.push(PdVocab { transno: transno as u32, kind });
+        vocab.push(PdVocab {
+            transno: transno as u32,
+            kind,
+        });
     }
     if !seen.iter().all(|&s| s) {
         pd_derive_trace("uncovered transition (neither set nor vocab)");
@@ -5767,11 +6080,11 @@ pub fn pd_derive_spec(
 pub use pardistinct::{
     pd_batch_insert_enabled, pd_bucket_precount, pd_concat_buckets, pd_emit_bucket,
     pd_empty_grouped_table, pd_merge_bucket, pd_merge_bucket_refs, pd_paremit_recipe,
-    pd_paremit_state, pd_route_value_records, pd_spill_bytes_mode,
-    pd_spill_min_record_width, pd_spill_record_width, pd_table_from_spill, pd_vec_plan,
-    PdBucketMerger, PdBuilder, PdEmitBucket, PdEmitRecipe, PdFeed, PdHandedTable, PdInt,
-    PdKeyKind, PdMerged, PdParemitCol, PdParemitState, PdSinkLocal, PdSinkMerged, PdSpec,
-    PdTopnCand, PdTopnKey, PdTopnSpec, PdVecPlan, PdVecScratch, PD_SINK_GROUP_PARTS,
+    pd_paremit_state, pd_route_value_records, pd_spill_bytes_mode, pd_spill_min_record_width,
+    pd_spill_record_width, pd_table_from_spill, pd_vec_plan, PdBucketMerger, PdBuilder,
+    PdEmitBucket, PdEmitRecipe, PdFeed, PdHandedTable, PdInt, PdKeyKind, PdMerged, PdParemitCol,
+    PdParemitState, PdSinkLocal, PdSinkMerged, PdSpec, PdTopnCand, PdTopnKey, PdTopnSpec,
+    PdVecPlan, PdVecScratch, PD_SINK_GROUP_PARTS,
 };
 
 /// PAREMIT shape probe (runtime distinct sink, emission-in-combine fast
@@ -5850,7 +6163,10 @@ pub fn pd_paremit_cols(node: &AggStateData<'_>) -> Option<Vec<pardistinct::PdPar
                 AGG_SUM_INT2 | AGG_SUM_INT4 => true,
                 _ => return None,
             };
-            cols.push(PdParemitCol::Vocab { transno: pa.transno, sum });
+            cols.push(PdParemitCol::Vocab {
+                transno: pa.transno,
+                sum,
+            });
             continue;
         }
         // Consts / expressions keep the projection interpreter (adopt).
@@ -5888,7 +6204,10 @@ pub fn agg_pdemit_emit_next<'mcx>(
 ) -> PgResult<Option<ExecSlotId>> {
     let mcx = estate.es_query_cxt;
     let result = node.ps_ResultTupleSlot;
-    let st = node.pdemit.as_deref_mut().expect("pdemit emit without state");
+    let st = node
+        .pdemit
+        .as_deref_mut()
+        .expect("pdemit emit without state");
     let Some((bucket, row)) = pardistinct::pd_paremit_next(st)? else {
         // Stream end: clear the slot's borrowed arena datums BEFORE the
         // buckets drop (the hashgrouped end arm's discipline).
@@ -5960,7 +6279,10 @@ pub fn exec_agg_meta<'mcx>(
     }
     initialize_aggregates(node, estate)?;
     if rows > 0 {
-        let metas = node.meta_aggs.as_deref().expect("meta arm requires a meta plan");
+        let metas = node
+            .meta_aggs
+            .as_deref()
+            .expect("meta arm requires a meta plan");
         for t in metas {
             // Affine derivation over the exact footer sum: mod-2^64 equal to
             // the per-row wrapped fold (SumBase legality argument); i128
@@ -5984,7 +6306,11 @@ pub fn exec_agg_meta<'mcx>(
                         .iter()
                         .find(|e| e.0 == t.col)
                         .expect("meta arm supplies every min/max column");
-                    if t.kind == ::lanefold::MetaKind::Min { mn } else { mx }
+                    if t.kind == ::lanefold::MetaKind::Min {
+                        mn
+                    } else {
+                        mx
+                    }
                 }
                 // i128 narrows wrapping — the lane fold's i64 wrapping-add
                 // contract (C -fwrapv parity for int2/int4_sum).
@@ -6003,8 +6329,7 @@ pub fn exec_agg_meta<'mcx>(
                                 && arr.add(8).cast::<i32>().read() == 0,
                             "expected 2-element int8 array"
                         );
-                        let td =
-                            arr.add(::lanefold::ARR_OVERHEAD_NONULLS_1).cast::<i64>();
+                        let td = arr.add(::lanefold::ARR_OVERHEAD_NONULLS_1).cast::<i64>();
                         *td = rows as i64;
                         *td.add(1) = sum(t.col) as i64;
                     }
@@ -6077,13 +6402,19 @@ pub fn agg_sorted_lane_admissible(node: &AggStateData<'_>) -> bool {
         && node.gsets.is_none()
         && node.merge.is_none()
         && (node.pertrans_sort.is_empty() || agg_pertrans_all_distinct_set(node))
-        && node.evaltrans.as_deref().is_some_and(|et| !et.has_subplan())
+        && node
+            .evaltrans
+            .as_deref()
+            .is_some_and(|et| !et.has_subplan())
         && node
             .evaltrans
             .as_deref()
             .is_none_or(|et| et.param_exec_deps().is_empty())
         && node.proj.param_exec_deps().is_empty()
-        && node.qual.as_deref().is_none_or(|q| q.param_exec_deps().is_empty())
+        && node
+            .qual
+            .as_deref()
+            .is_none_or(|q| q.param_exec_deps().is_empty())
 }
 
 /// Grouped narrow-sort admission (lanev2 `try_own_sorted_agg_over_sort`'s
@@ -6105,13 +6436,19 @@ pub fn agg_sorted_distinct_narrow_admissible(node: &AggStateData<'_>) -> bool {
         && node.pertrans_sort.iter().all(|ps| ps.set_kind.is_some())
         && node.trans_order_insensitive
         && node.group_eq_representational
-        && node.evaltrans.as_deref().is_some_and(|et| !et.has_subplan())
+        && node
+            .evaltrans
+            .as_deref()
+            .is_some_and(|et| !et.has_subplan())
         && node
             .evaltrans
             .as_deref()
             .is_none_or(|et| et.param_exec_deps().is_empty())
         && node.proj.param_exec_deps().is_empty()
-        && node.qual.as_deref().is_none_or(|q| q.param_exec_deps().is_empty())
+        && node
+            .qual
+            .as_deref()
+            .is_none_or(|q| q.param_exec_deps().is_empty())
 }
 
 /// Arm set-mode for the grouped narrow-sort drive (see `force_distinct_set`
@@ -6180,11 +6517,16 @@ pub fn agg_sorted_group_begin<'mcx>(
     }
     initialize_aggregates(node, estate)?;
     {
-        let AggStateData { persort, evaltrans, .. } = node;
+        let AggStateData {
+            persort, evaltrans, ..
+        } = node;
         let ps = persort.as_mut().expect("sorted Agg has persort");
         let et = evaltrans.as_mut().unwrap();
-        let mut slots =
-            EvalSlots { scan: None, inner: None, outer: Some(&mut ps.first_slot) };
+        let mut slots = EvalSlots {
+            scan: None,
+            inner: None,
+            outer: Some(&mut ps.first_slot),
+        };
         exec_eval_expr(et, &mut slots)?;
     }
     // Ordered-input collection (the pull loop's interleave) — a no-op unless
@@ -6235,7 +6577,11 @@ pub fn agg_sorted_accept<'mcx>(
     debug_assert_eq!(node.plan.aggstrategy, AGG_SORTED);
     {
         let outer_slot = estate.slot_mut(outer_id);
-        let mut slots = EvalSlots { scan: None, inner: None, outer: Some(outer_slot) };
+        let mut slots = EvalSlots {
+            scan: None,
+            inner: None,
+            outer: Some(outer_slot),
+        };
         exec_eval_expr(node.evaltrans.as_mut().unwrap(), &mut slots)?;
     }
     if !node.pertrans_sort.is_empty() {
@@ -6281,7 +6627,12 @@ pub fn agg_sorted_emit<'mcx>(
         let ecxt = node.ps_ExprContext;
         let result = node.ps_ResultTupleSlot;
         let instr_idx = node.instr_idx;
-        let AggStateData { persort, qual, proj, .. } = node;
+        let AggStateData {
+            persort,
+            qual,
+            proj,
+            ..
+        } = node;
         let ps = persort.as_mut().expect("sorted Agg has persort");
         if !::executils::exec_qual_with_subplans_outer(
             qual.as_deref_mut(),
@@ -6304,8 +6655,11 @@ pub fn agg_sorted_emit<'mcx>(
     {
         let AggStateData { persort, qual, .. } = node;
         let ps = persort.as_mut().expect("sorted Agg has persort");
-        let mut slots =
-            EvalSlots { scan: None, inner: None, outer: Some(&mut ps.first_slot) };
+        let mut slots = EvalSlots {
+            scan: None,
+            inner: None,
+            outer: Some(&mut ps.first_slot),
+        };
         if !exec_qual(qual.as_deref_mut(), &mut slots)? {
             estate.instr_count_filtered1(node.instr_idx);
             return Ok(None);
@@ -6313,7 +6667,11 @@ pub fn agg_sorted_emit<'mcx>(
     }
     let result_slot = estate.slot_mut(node.ps_ResultTupleSlot);
     let ps = node.persort.as_mut().unwrap();
-    let mut slots = EvalSlots { scan: None, inner: None, outer: Some(&mut ps.first_slot) };
+    let mut slots = EvalSlots {
+        scan: None,
+        inner: None,
+        outer: Some(&mut ps.first_slot),
+    };
     exec_project(&mut node.proj, &mut slots, result_slot, mcx)?;
     Ok(Some(node.ps_ResultTupleSlot))
 }
@@ -6365,7 +6723,11 @@ pub fn agg_sorted_accept_resid<'mcx>(
     };
     estate.ecxt_mut(node.tmpcontext).ecxt_outertuple = Some(outer_id);
     let outer_slot = estate.slot_mut(outer_id);
-    let mut slots = EvalSlots { scan: None, inner: None, outer: Some(outer_slot) };
+    let mut slots = EvalSlots {
+        scan: None,
+        inner: None,
+        outer: Some(outer_slot),
+    };
     exec_eval_expr(resid, &mut slots)?;
     estate.reset_expr_context(node.tmpcontext);
     Ok(())
@@ -6439,9 +6801,7 @@ pub fn agg_hash_staged_probe_is_text(node: &AggStateData<'_>) -> bool {
 /// Multi-key admission input (multikey spike §2.4): the grouping key
 /// columns' (0-based INPUT colno, packing classification) pairs, in key
 /// order. Empty = not a hashed agg.
-pub fn agg_hash_key_cols(
-    node: &AggStateData<'_>,
-) -> Vec<(u16, ::execgrouping::GroupKeyKind)> {
+pub fn agg_hash_key_cols(node: &AggStateData<'_>) -> Vec<(u16, ::execgrouping::GroupKeyKind)> {
     match node.perhash.as_ref() {
         Some(ph) => ph
             .hashtable
@@ -6492,7 +6852,13 @@ pub fn agg_hash_probe_staged<'mcx>(
 ) -> PgResult<Option<NonNull<AggPerGroup>>> {
     debug_assert_eq!(node.plan.aggstrategy, AGG_HASHED);
     let mcx = estate.es_query_cxt;
-    let AggStateData { perhash, trans_init, trans_typ, agg_node, .. } = node;
+    let AggStateData {
+        perhash,
+        trans_init,
+        trans_typ,
+        agg_node,
+        ..
+    } = node;
     let ph = perhash.as_mut().expect("hashed Agg has perhash");
     debug_assert_eq!(ph.num_cols, 1);
     // The miss leg below presents ONLY the key in the hashslot; a stored
@@ -6528,12 +6894,9 @@ pub fn agg_hash_probe_staged<'mcx>(
             }
             let table_mcx = ph.table_ctx.mcx();
             let use_table = !ph.spill.mode;
-            let (ix, isnew) = ph.hashtable.lookup(
-                &mut ph.hashslot,
-                hash,
-                use_table.then_some(table_mcx),
-                mcx,
-            )?;
+            let (ix, isnew) =
+                ph.hashtable
+                    .lookup(&mut ph.hashslot, hash, use_table.then_some(table_mcx), mcx)?;
             let Some(ix) = ix else {
                 return Ok(None);
             };
@@ -6584,7 +6947,14 @@ pub(crate) fn finalize_aggregates<'mcx>(
     let per_tuple = estate.ecxt(node.ps_ExprContext).per_tuple_mcx();
     let skip_final = node.skip_final;
     let AggStateData {
-        peragg, trans_typ, agg_node, agg_values_base, agg_nulls_base, persort, gsets, ..
+        peragg,
+        trans_typ,
+        agg_node,
+        agg_values_base,
+        agg_nulls_base,
+        persort,
+        gsets,
+        ..
     } = node;
     for (aggno, pa) in peragg.iter_mut().enumerate() {
         // SAFETY: transno < the once-allocated pergroup array length; base
@@ -6592,11 +6962,8 @@ pub(crate) fn finalize_aggregates<'mcx>(
         let pg = unsafe { &*pergroup.as_ptr().add(pa.transno as usize) };
         // C MakeExpandedObjectReadOnly on the transvalue (both arms).
         // SAFETY: a non-null by-ref transvalue points at a live image.
-        let trans_value = if !pg.trans_value_is_null && trans_typ[pa.transno as usize].len == -1
-        {
-            unsafe {
-                datum::expandeddatum::make_expanded_object_read_only_internal(pg.trans_value)
-            }
+        let trans_value = if !pg.trans_value_is_null && trans_typ[pa.transno as usize].len == -1 {
+            unsafe { datum::expandeddatum::make_expanded_object_read_only_internal(pg.trans_value) }
         } else {
             pg.trans_value
         };
@@ -6642,8 +7009,7 @@ pub(crate) fn finalize_aggregates<'mcx>(
             }
             continue;
         }
-        let mut direct: [NullableDatum; MAX_FINAL_ARGS] =
-            [NullableDatum::null(); MAX_FINAL_ARGS];
+        let mut direct: [NullableDatum; MAX_FINAL_ARGS] = [NullableDatum::null(); MAX_FINAL_ARGS];
         let mut anynull = false;
         assert!(
             pa.direct_args.len() < MAX_FINAL_ARGS,
@@ -6657,7 +7023,11 @@ pub(crate) fn finalize_aggregates<'mcx>(
                 Some(ps) => Some(&mut ps.first_slot),
                 None => gsets.as_mut().map(|gs| &mut gs.first_slot),
             };
-            let mut slots = EvalSlots { scan: None, inner: None, outer };
+            let mut slots = EvalSlots {
+                scan: None,
+                inner: None,
+                outer,
+            };
             let nd = exec_eval_expr(es, &mut slots)?;
             direct[i] = nd;
             anynull |= nd.isnull;
@@ -6676,13 +7046,15 @@ pub(crate) fn finalize_aggregates<'mcx>(
                 // SAFETY: the per-tuple context outlives this stack frame's
                 // single call.
                 unsafe { fcinfo.set_result_mcx(per_tuple) };
-                fcinfo.args[0] =
-                    NullableDatum { value: trans_value, isnull: pg.trans_value_is_null };
+                fcinfo.args[0] = NullableDatum {
+                    value: trans_value,
+                    isnull: pg.trans_value_is_null,
+                };
                 for i in 0..pa.direct_args.len() {
                     fcinfo.args[i + 1] = direct[i];
                 }
-                anynull |= pg.trans_value_is_null
-                    || pa.num_final_args as usize > pa.direct_args.len() + 1;
+                anynull |=
+                    pg.trans_value_is_null || pa.num_final_args as usize > pa.direct_args.len() + 1;
                 // SAFETY: query-lifetime node; no &mut lives across the call.
                 let agg = unsafe { agg_node.as_ref() };
                 agg.set_current_agg(NonNull::from(pa.aggref).cast(), pa.trans_shared);
@@ -6760,7 +7132,9 @@ where
         initialize_aggregates(node, estate)?;
         {
             let tmpcontext = node.tmpcontext;
-            let AggStateData { persort, evaltrans, .. } = node;
+            let AggStateData {
+                persort, evaltrans, ..
+            } = node;
             let ps = persort.as_mut().expect("sorted Agg has persort");
             let et = evaltrans.as_mut().unwrap();
             if et.has_subplan() {
@@ -6771,8 +7145,11 @@ where
                     tmpcontext,
                 )?;
             } else {
-                let mut slots =
-                    EvalSlots { scan: None, inner: None, outer: Some(&mut ps.first_slot) };
+                let mut slots = EvalSlots {
+                    scan: None,
+                    inner: None,
+                    outer: Some(&mut ps.first_slot),
+                };
                 exec_eval_expr(et, &mut slots)?;
             }
         }
@@ -6786,7 +7163,9 @@ where
                 break;
             };
             let tmpcontext = node.tmpcontext;
-            let AggStateData { persort, evaltrans, .. } = node;
+            let AggStateData {
+                persort, evaltrans, ..
+            } = node;
             let ps = persort.as_mut().expect("sorted Agg has persort");
             let outer_slot = estate.slot_mut(outer_id);
             let mut slots = EvalSlots {
@@ -6809,8 +7188,11 @@ where
                 estate.ecxt_mut(tmpcontext).ecxt_outertuple = Some(outer_id);
                 ::executils::exec_eval_expr_with_subplans(et, estate, tmpcontext)?;
             } else {
-                let mut slots =
-                    EvalSlots { scan: None, inner: None, outer: Some(&mut *outer_slot) };
+                let mut slots = EvalSlots {
+                    scan: None,
+                    inner: None,
+                    outer: Some(&mut *outer_slot),
+                };
                 exec_eval_expr(et, &mut slots)?;
             }
             if !node.pertrans_sort.is_empty() {
@@ -6825,7 +7207,12 @@ where
             let ecxt = node.ps_ExprContext;
             let result = node.ps_ResultTupleSlot;
             let instr_idx = node.instr_idx;
-            let AggStateData { persort, qual, proj, .. } = node;
+            let AggStateData {
+                persort,
+                qual,
+                proj,
+                ..
+            } = node;
             let ps = persort.as_mut().expect("sorted Agg has persort");
             if !::executils::exec_qual_with_subplans_outer(
                 qual.as_deref_mut(),
@@ -6848,8 +7235,11 @@ where
         {
             let AggStateData { persort, qual, .. } = node;
             let ps = persort.as_mut().expect("sorted Agg has persort");
-            let mut slots =
-                EvalSlots { scan: None, inner: None, outer: Some(&mut ps.first_slot) };
+            let mut slots = EvalSlots {
+                scan: None,
+                inner: None,
+                outer: Some(&mut ps.first_slot),
+            };
             if !exec_qual(qual.as_deref_mut(), &mut slots)? {
                 estate.instr_count_filtered1(node.instr_idx);
                 continue;
@@ -6857,7 +7247,11 @@ where
         }
         let result_slot = estate.slot_mut(node.ps_ResultTupleSlot);
         let ps = node.persort.as_mut().unwrap();
-        let mut slots = EvalSlots { scan: None, inner: None, outer: Some(&mut ps.first_slot) };
+        let mut slots = EvalSlots {
+            scan: None,
+            inner: None,
+            outer: Some(&mut ps.first_slot),
+        };
         exec_project(&mut node.proj, &mut slots, result_slot, mcx)?;
         return Ok(Some(node.ps_ResultTupleSlot));
     }
@@ -6878,7 +7272,11 @@ where
         estate.ecxt_mut(node.tmpcontext).ecxt_outertuple = Some(outer_id);
         if lookup_hash_entry(node, estate, outer_id)? {
             let outer_slot = estate.slot_mut(outer_id);
-            let mut slots = EvalSlots { scan: None, inner: None, outer: Some(outer_slot) };
+            let mut slots = EvalSlots {
+                scan: None,
+                inner: None,
+                outer: Some(outer_slot),
+            };
             exec_eval_expr(node.evaltrans.as_mut().unwrap(), &mut slots)?;
         }
         estate.reset_expr_context(node.tmpcontext);
@@ -6907,7 +7305,11 @@ fn hash_agg_update_metrics(
     let entry_mem = ph.table_ctx.subtree_used() as u64;
     let hashkey_mem = aggctx.context().subtree_used() as u64;
     let buffer_mem = npartitions as u64 * HASHAGG_WRITE_BUFFER_SIZE as u64
-        + if from_tape { HASHAGG_READ_BUFFER_SIZE as u64 } else { 0 };
+        + if from_tape {
+            HASHAGG_READ_BUFFER_SIZE as u64
+        } else {
+            0
+        };
     let total = meta_mem + entry_mem + hashkey_mem + buffer_mem;
     let id = node.plan.plan.plan_node_id;
     let ai = agg_instrumentation(estate, id);
@@ -6922,7 +7324,11 @@ fn hash_agg_update_metrics(
         ph.spill.hashentrysize = 16.0 + hashkey_mem as f64 / ph.hash_ngroups_current as f64;
     }
     if hashagg_memdebug_enabled() {
-        let tag = if from_tape { "batch_done" } else { "initial_fill_done" };
+        let tag = if from_tape {
+            "batch_done"
+        } else {
+            "initial_fill_done"
+        };
         hashagg_memdebug(tag, ph, hashkey_mem as usize, buffer_mem as usize);
     }
 }
@@ -6958,13 +7364,23 @@ fn lookup_hash_entry<'mcx>(
     outer_id: ExecSlotId,
 ) -> PgResult<bool> {
     let mcx = estate.es_query_cxt;
-    let AggStateData { perhash, trans_init, trans_typ, agg_node, .. } = node;
+    let AggStateData {
+        perhash,
+        trans_init,
+        trans_typ,
+        agg_node,
+        ..
+    } = node;
     let ph = perhash.as_mut().expect("hashed Agg has perhash");
 
     let outer_slot = estate.slot_mut(outer_id);
     {
-        let PerHashData { hashslot, hash_grp_col_idx_input, largest_grp_col_idx, .. } =
-            &mut *ph;
+        let PerHashData {
+            hashslot,
+            hash_grp_col_idx_input,
+            largest_grp_col_idx,
+            ..
+        } = &mut *ph;
         prepare_hash_slot(
             hashslot,
             hash_grp_col_idx_input,
@@ -6978,7 +7394,8 @@ fn lookup_hash_entry<'mcx>(
     let table_mcx = ph.table_ctx.mcx();
     let use_table = !ph.spill.mode;
     let (ix, isnew) =
-        ph.hashtable.lookup(&mut ph.hashslot, hash, use_table.then_some(table_mcx), mcx)?;
+        ph.hashtable
+            .lookup(&mut ph.hashslot, hash, use_table.then_some(table_mcx), mcx)?;
     let Some(ix) = ix else {
         hashagg_spill_tuple(&mut ph.spill, Some(outer_slot), hash, mcx)?;
         return Ok(false);
@@ -7032,59 +7449,69 @@ fn agg_retrieve_hash_table<'mcx>(
                 }
             }
         } else {
-        let next = {
-            let ph = node.perhash.as_mut().expect("hashed Agg has perhash");
-            ph.hashtable.iterate(&mut ph.hashiter)
-        };
-        let Some(ix) = next else {
-            if !agg_refill_hash_table(node, estate)? {
-                node.agg_done = true;
-                return Ok(None);
-            }
-            continue;
-        };
-        // Top-N boundary cut, hoisted in front of the entry-tuple store and
-        // the grouping-key copy: the group's pergroup state is reachable
-        // without either.
-        if let Some(c) = cut.as_mut() {
-            let ph = node.perhash.as_ref().expect("hashed Agg has perhash");
-            if let Some(p) = ph.hashtable.entry_additional(ix) {
-                // SAFETY: transno < the entry's once-allocated pergroup
-                // array length (resolve checked it against this node).
-                let pg =
-                    unsafe { &*p.cast::<AggPerGroup>().as_ptr().add(c.spec.transno as usize) };
-                if c.skips(pg) {
-                    *c.skipped += 1;
-                    // The elided sort put's per-row cadence.
-                    postgres_seams::check_for_interrupts::call()?;
-                    continue;
+            let next = {
+                let ph = node.perhash.as_mut().expect("hashed Agg has perhash");
+                ph.hashtable.iterate(&mut ph.hashiter)
+            };
+            let Some(ix) = next else {
+                if !agg_refill_hash_table(node, estate)? {
+                    node.agg_done = true;
+                    return Ok(None);
+                }
+                continue;
+            };
+            // Top-N boundary cut, hoisted in front of the entry-tuple store and
+            // the grouping-key copy: the group's pergroup state is reachable
+            // without either.
+            if let Some(c) = cut.as_mut() {
+                let ph = node.perhash.as_ref().expect("hashed Agg has perhash");
+                if let Some(p) = ph.hashtable.entry_additional(ix) {
+                    // SAFETY: transno < the entry's once-allocated pergroup
+                    // array length (resolve checked it against this node).
+                    let pg = unsafe {
+                        &*p.cast::<AggPerGroup>()
+                            .as_ptr()
+                            .add(c.spec.transno as usize)
+                    };
+                    if c.skips(pg) {
+                        *c.skipped += 1;
+                        // The elided sort put's per-row cadence.
+                        postgres_seams::check_for_interrupts::call()?;
+                        continue;
+                    }
                 }
             }
-        }
-        {
-            let ph = node.perhash.as_mut().expect("hashed Agg has perhash");
-
-            let tup = ph.hashtable.entry_tuple(ix);
-            // SAFETY: entry images live in the node's table context for the
-            // table's lifetime.
-            unsafe { exectuples::exec_store_minimal_tuple_ptr(&mut ph.retrieve_slot, mcx, tup) };
-            exectuples::slot_getallattrs(&mut ph.retrieve_slot);
-
-            exectuples::exec_store_all_null_tuple(&mut ph.first_slot, mcx);
             {
-                let PerHashData {
-                    retrieve_slot: hashslot, first_slot, hash_grp_col_idx_input, ..
-                } = &mut *ph;
-                let src = hashslot.base();
-                let dst = first_slot.base_mut();
-                for (i, &attno) in hash_grp_col_idx_input.iter().enumerate() {
-                    let v = (attno - 1) as usize;
-                    dst.tts_values[v] = src.tts_values[i];
-                    dst.tts_isnull[v] = src.tts_isnull[i];
+                let ph = node.perhash.as_mut().expect("hashed Agg has perhash");
+
+                let tup = ph.hashtable.entry_tuple(ix);
+                // SAFETY: entry images live in the node's table context for the
+                // table's lifetime.
+                unsafe {
+                    exectuples::exec_store_minimal_tuple_ptr(&mut ph.retrieve_slot, mcx, tup)
+                };
+                exectuples::slot_getallattrs(&mut ph.retrieve_slot);
+
+                exectuples::exec_store_all_null_tuple(&mut ph.first_slot, mcx);
+                {
+                    let PerHashData {
+                        retrieve_slot: hashslot,
+                        first_slot,
+                        hash_grp_col_idx_input,
+                        ..
+                    } = &mut *ph;
+                    let src = hashslot.base();
+                    let dst = first_slot.base_mut();
+                    for (i, &attno) in hash_grp_col_idx_input.iter().enumerate() {
+                        let v = (attno - 1) as usize;
+                        dst.tts_values[v] = src.tts_values[i];
+                        dst.tts_isnull[v] = src.tts_isnull[i];
+                    }
                 }
+                ph.hashtable
+                    .entry_additional(ix)
+                    .map_or(NonNull::dangling(), |p| p.cast())
             }
-            ph.hashtable.entry_additional(ix).map_or(NonNull::dangling(), |p| p.cast())
-        }
         };
         // Written by lookup_hash_entry; unread (and dangling) when peragg is
         // empty.
@@ -7094,7 +7521,12 @@ fn agg_retrieve_hash_table<'mcx>(
             let ecxt = node.ps_ExprContext;
             let result = node.ps_ResultTupleSlot;
             let instr_idx = node.instr_idx;
-            let AggStateData { perhash, qual, proj, .. } = node;
+            let AggStateData {
+                perhash,
+                qual,
+                proj,
+                ..
+            } = node;
             let ph = perhash.as_mut().unwrap();
             if !::executils::exec_qual_with_subplans_outer(
                 qual.as_deref_mut(),
@@ -7117,8 +7549,11 @@ fn agg_retrieve_hash_table<'mcx>(
         {
             let AggStateData { perhash, qual, .. } = node;
             let ph = perhash.as_mut().unwrap();
-            let mut slots =
-                EvalSlots { scan: None, inner: None, outer: Some(&mut ph.first_slot) };
+            let mut slots = EvalSlots {
+                scan: None,
+                inner: None,
+                outer: Some(&mut ph.first_slot),
+            };
             if !exec_qual(qual.as_deref_mut(), &mut slots)? {
                 estate.instr_count_filtered1(node.instr_idx);
                 continue;
@@ -7126,7 +7561,11 @@ fn agg_retrieve_hash_table<'mcx>(
         }
         let result_slot = estate.slot_mut(node.ps_ResultTupleSlot);
         let ph = node.perhash.as_mut().unwrap();
-        let mut slots = EvalSlots { scan: None, inner: None, outer: Some(&mut ph.first_slot) };
+        let mut slots = EvalSlots {
+            scan: None,
+            inner: None,
+            outer: Some(&mut ph.first_slot),
+        };
         exec_project(&mut node.proj, &mut slots, result_slot, mcx)?;
         return Ok(Some(node.ps_ResultTupleSlot));
     }

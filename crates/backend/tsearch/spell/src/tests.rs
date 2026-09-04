@@ -37,21 +37,24 @@ fn make_dict(mcx: Mcx<'static>, dictfile: &str, afffile: &str) -> Result<DictISp
 }
 
 fn lexize(mcx: Mcx<'static>, d: &DictISpell, word: &str) -> Option<Vec<String>> {
-    dispell_lexize(mcx, d, word.as_bytes())
-        .unwrap()
-        .map(|r| {
-            r.0.iter()
-                .map(|l| String::from_utf8_lossy(&l.lexeme).into_owned())
-                .collect()
-        })
+    dispell_lexize(mcx, d, word.as_bytes()).unwrap().map(|r| {
+        r.0.iter()
+            .map(|l| String::from_utf8_lossy(&l.lexeme).into_owned())
+            .collect()
+    })
 }
 
-fn check(mcx: Mcx<'static>, d: &DictISpell, cases: &[(&str, Option<&[&str]>)], failures: &mut Vec<String>, tag: &str) {
+fn check(
+    mcx: Mcx<'static>,
+    d: &DictISpell,
+    cases: &[(&str, Option<&[&str]>)],
+    failures: &mut Vec<String>,
+    tag: &str,
+) {
     for (word, want) in cases {
         let got = lexize(mcx, d, word);
-        let got_ref: Option<Vec<&str>> = got
-            .as_ref()
-            .map(|v| v.iter().map(String::as_str).collect());
+        let got_ref: Option<Vec<&str>> =
+            got.as_ref().map(|v| v.iter().map(String::as_str).collect());
         let want_vec: Option<Vec<&str>> = want.map(|w| w.to_vec());
         if got_ref != want_vec {
             failures.push(format!("{tag} {word}: got {got:?}, want {want:?}"));
@@ -85,7 +88,14 @@ fn tsdicts_ts_lexize_oracle() {
         ("footklubber", Some(&["foot", "klubber"])),
         (
             "footballklubber",
-            Some(&["footballklubber", "foot", "ball", "klubber", "football", "klubber"]),
+            Some(&[
+                "footballklubber",
+                "foot",
+                "ball",
+                "klubber",
+                "football",
+                "klubber",
+            ]),
         ),
         ("ballyklubber", Some(&["ball", "klubber"])),
         ("footballyklubber", Some(&["foot", "ball", "klubber"])),
@@ -119,7 +129,12 @@ fn tsdicts_ts_lexize_oracle() {
         "hunspell_num",
     );
 
-    assert!(failures.is_empty(), "{} mismatches:\n{}", failures.len(), failures.join("\n"));
+    assert!(
+        failures.is_empty(),
+        "{} mismatches:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
 }
 
 // Oracle: the affix/dict suitability errors in expected/tsdicts.out.
@@ -131,16 +146,22 @@ fn tsdicts_bad_pairs_oracle() {
     );
     let mcx = static_mcx();
 
-    let err = make_dict(mcx, "ispell_sample", "hunspell_sample_long").err().unwrap();
+    let err = make_dict(mcx, "ispell_sample", "hunspell_sample_long")
+        .err()
+        .unwrap();
     assert_eq!(err, "invalid affix alias \"GJUS\"");
 
-    let err = make_dict(mcx, "ispell_sample", "hunspell_sample_num").err().unwrap();
+    let err = make_dict(mcx, "ispell_sample", "hunspell_sample_num")
+        .err()
+        .unwrap();
     assert_eq!(err, "invalid affix flag \"SZ\\\"");
 
     assert!(make_dict(mcx, "hunspell_sample_long", "ispell_sample").is_ok());
     assert!(make_dict(mcx, "hunspell_sample_long", "hunspell_sample_num").is_ok());
     assert!(make_dict(mcx, "hunspell_sample_num", "ispell_sample").is_ok());
 
-    let err = make_dict(mcx, "hunspell_sample_num", "hunspell_sample_long").err().unwrap();
+    let err = make_dict(mcx, "hunspell_sample_num", "hunspell_sample_long")
+        .err()
+        .unwrap();
     assert_eq!(err, "invalid affix alias \"302,301,202,303\"");
 }

@@ -2,10 +2,8 @@
 //! `ltree`, `lquery`, and `ltxtquery`. Each parser is a faithful port of the
 //! C state machine (the regression suite compares exact parse results AND the
 
-use ::types_error::{
-    ERRCODE_NAME_TOO_LONG, ERRCODE_PROGRAM_LIMIT_EXCEEDED, ERRCODE_SYNTAX_ERROR,
-};
 use ::types_error::PgError;
+use ::types_error::{ERRCODE_NAME_TOO_LONG, ERRCODE_PROGRAM_LIMIT_EXCEEDED, ERRCODE_SYNTAX_ERROR};
 
 use crate::crc::ltree_crc32_sz;
 use crate::repr::*;
@@ -27,7 +25,8 @@ fn is_label(s: &[u8]) -> bool {
 // The regression .out compares sqlstate + message + (sometimes) detail, so we
 // attach all three exactly as the C `ereport` does.
 fn syntax_at(kind: &str, pos: i32) -> PgError {
-    PgError::error(format!("{kind} syntax error at character {pos}")).with_sqlstate(ERRCODE_SYNTAX_ERROR)
+    PgError::error(format!("{kind} syntax error at character {pos}"))
+        .with_sqlstate(ERRCODE_SYNTAX_ERROR)
 }
 
 fn syntax_detail(kind_msg: &str, detail: &str) -> PgError {
@@ -51,7 +50,6 @@ fn name_too_long(detail: &str) -> PgError {
         .with_sqlstate(ERRCODE_NAME_TOO_LONG)
         .with_detail(detail.to_string())
 }
-
 
 #[derive(Clone, Copy)]
 struct NodeItem {
@@ -167,7 +165,10 @@ pub fn parse_ltree(buf: &[u8]) -> Result<Vec<u8>, PgError> {
         finish_nodeitem(buf, &mut list[lptr_idx], n, false, pos)?;
         lptr_idx += 1;
     } else if !(state == LTPRS_WAITNAME && lptr_idx == 0) {
-        return Err(syntax_detail("ltree syntax error", "Unexpected end of input."));
+        return Err(syntax_detail(
+            "ltree syntax error",
+            "Unexpected end of input.",
+        ));
     }
 
     let labels: Vec<&[u8]> = list[..lptr_idx]
@@ -188,7 +189,6 @@ pub fn deparse_ltree(image: &[u8]) -> Vec<u8> {
     }
     out
 }
-
 
 const LQPRS_WAITLEVEL: i32 = 0;
 const LQPRS_WAITDELIM: i32 = 1;
@@ -443,7 +443,10 @@ pub fn parse_lquery(buf: &[u8]) -> Result<Vec<u8>, PgError> {
     } else if state == LQPRS_WAITOPEN {
         levels[cur].high = LTREE_MAX_LEVELS as u16;
     } else if state != LQPRS_WAITEND {
-        return Err(syntax_detail("lquery syntax error", "Unexpected end of input."));
+        return Err(syntax_detail(
+            "lquery syntax error",
+            "Unexpected end of input.",
+        ));
     }
 
     debug_assert_eq!(levels.len() as i32, num);
@@ -572,7 +575,6 @@ pub fn deparse_lquery(image: &[u8]) -> Vec<u8> {
     out
 }
 
-
 const WAITOPERAND: i32 = 1;
 const INOPERAND: i32 = 2;
 const WAITOPERATOR: i32 = 3;
@@ -601,8 +603,8 @@ struct QprsState<'a> {
 struct Tok {
     kind: i32,
     val: i32,
-    lenval: i32,    // byte length of operand
-    strval: usize,  // byte offset of operand start
+    lenval: i32,   // byte length of operand
+    strval: usize, // byte offset of operand start
     flag: u16,
 }
 
@@ -638,11 +640,23 @@ fn gettoken_query(st: &mut QprsState) -> Result<Tok, PgError> {
                 let c = st.cur();
                 if c == b'!' {
                     st.i += 1;
-                    return Ok(Tok { kind: OPR, val: b'!' as i32, lenval: 0, strval: 0, flag: 0 });
+                    return Ok(Tok {
+                        kind: OPR,
+                        val: b'!' as i32,
+                        lenval: 0,
+                        strval: 0,
+                        flag: 0,
+                    });
                 } else if c == b'(' {
                     st.count += 1;
                     st.i += 1;
-                    return Ok(Tok { kind: OPEN, val: 0, lenval: 0, strval: 0, flag: 0 });
+                    return Ok(Tok {
+                        kind: OPEN,
+                        val: 0,
+                        lenval: 0,
+                        strval: 0,
+                        flag: 0,
+                    });
                 } else if !st.at_end() && is_label(&st.buf[st.i..]) {
                     st.state = INOPERAND;
                     strval = st.i;
@@ -655,10 +669,17 @@ fn gettoken_query(st: &mut QprsState) -> Result<Tok, PgError> {
                     // gettoken when not at END; reaching here means empty input
                     // → the `!state.num` empty-query check fires. Return END so
                     // makepol terminates and the caller reports "Empty query".
-                    return Ok(Tok { kind: END, val: 0, lenval: 0, strval: 0, flag: 0 });
+                    return Ok(Tok {
+                        kind: END,
+                        val: 0,
+                        lenval: 0,
+                        strval: 0,
+                        flag: 0,
+                    });
                 } else if !(c as char).is_whitespace() {
-                    return Err(PgError::error("operand syntax error")
-                        .with_sqlstate(ERRCODE_SYNTAX_ERROR));
+                    return Err(
+                        PgError::error("operand syntax error").with_sqlstate(ERRCODE_SYNTAX_ERROR)
+                    );
                 }
             }
             INOPERAND => {
@@ -678,7 +699,13 @@ fn gettoken_query(st: &mut QprsState) -> Result<Tok, PgError> {
                         flag |= LVAR_ANYEND as u16;
                     } else {
                         st.state = WAITOPERATOR;
-                        return Ok(Tok { kind: VAL, val: 0, lenval, strval, flag });
+                        return Ok(Tok {
+                            kind: VAL,
+                            val: 0,
+                            lenval,
+                            strval,
+                            flag,
+                        });
                     }
                 }
             }
@@ -688,24 +715,50 @@ fn gettoken_query(st: &mut QprsState) -> Result<Tok, PgError> {
                     st.state = WAITOPERAND;
                     let v = c as i32;
                     st.i += 1;
-                    return Ok(Tok { kind: OPR, val: v, lenval: 0, strval: 0, flag: 0 });
+                    return Ok(Tok {
+                        kind: OPR,
+                        val: v,
+                        lenval: 0,
+                        strval: 0,
+                        flag: 0,
+                    });
                 } else if c == b')' {
                     st.i += 1;
                     st.count -= 1;
                     return Ok(Tok {
                         kind: if st.count < 0 { ERR } else { CLOSE },
-                        val: 0, lenval: 0, strval: 0, flag: 0,
+                        val: 0,
+                        lenval: 0,
+                        strval: 0,
+                        flag: 0,
                     });
                 } else if st.at_end() {
                     return Ok(Tok {
                         kind: if st.count != 0 { ERR } else { END },
-                        val: 0, lenval: 0, strval: 0, flag: 0,
+                        val: 0,
+                        lenval: 0,
+                        strval: 0,
+                        flag: 0,
                     });
                 } else if c != b' ' {
-                    return Ok(Tok { kind: ERR, val: 0, lenval: 0, strval: 0, flag: 0 });
+                    return Ok(Tok {
+                        kind: ERR,
+                        val: 0,
+                        lenval: 0,
+                        strval: 0,
+                        flag: 0,
+                    });
                 }
             }
-            _ => return Ok(Tok { kind: ERR, val: 0, lenval: 0, strval: 0, flag: 0 }),
+            _ => {
+                return Ok(Tok {
+                    kind: ERR,
+                    val: 0,
+                    lenval: 0,
+                    strval: 0,
+                    flag: 0,
+                })
+            }
         }
         st.i += charlen;
     }
@@ -720,14 +773,18 @@ fn pushquery(
     flag: u16,
 ) -> Result<(), PgError> {
     if distance > 0xffff {
-        return Err(PgError::error("value is too big")
-            .with_sqlstate(ERRCODE_SYNTAX_ERROR));
+        return Err(PgError::error("value is too big").with_sqlstate(ERRCODE_SYNTAX_ERROR));
     }
     if lenval > 0xff {
-        return Err(PgError::error("operand is too long")
-            .with_sqlstate(ERRCODE_SYNTAX_ERROR));
+        return Err(PgError::error("operand is too long").with_sqlstate(ERRCODE_SYNTAX_ERROR));
     }
-    st.str.push(QNode { typ, val, distance, length: lenval, flag });
+    st.str.push(QNode {
+        typ,
+        val,
+        distance,
+        length: lenval,
+        flag,
+    });
     st.num += 1;
     Ok(())
 }
@@ -740,13 +797,13 @@ fn pushval_asis(
     flag: u16,
 ) -> Result<(), PgError> {
     if lenval > 0xffff {
-        return Err(PgError::error("word is too long")
-            .with_sqlstate(ERRCODE_SYNTAX_ERROR));
+        return Err(PgError::error("word is too long").with_sqlstate(ERRCODE_SYNTAX_ERROR));
     }
     let distance = st.op.len() as i32;
     let crc = ltree_crc32_sz(&st.buf[strval..strval + lenval as usize]) as i32;
     pushquery(st, typ, crc, distance, lenval, flag)?;
-    st.op.extend_from_slice(&st.buf[strval..strval + lenval as usize]);
+    st.op
+        .extend_from_slice(&st.buf[strval..strval + lenval as usize]);
     st.op.push(0u8); // NUL terminator
     st.sumlen += lenval + 1;
     Ok(())

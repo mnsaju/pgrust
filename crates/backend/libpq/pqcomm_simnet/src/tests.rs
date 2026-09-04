@@ -128,7 +128,10 @@ fn consumer_pq_getbyte_if_available_noblock_arms() {
     // Dead writer: EOF, not eternal would-block (the N2 class of bug on the
     // fd providers; structural here).
     client_close();
-    assert_eq!(pqcomm::pq_getbyte_if_available(&mut c).unwrap(), pqcomm::EOF);
+    assert_eq!(
+        pqcomm::pq_getbyte_if_available(&mut c).unwrap(),
+        pqcomm::EOF
+    );
     pqcomm::pq_endmsgread();
 }
 
@@ -262,7 +265,10 @@ fn byte_silent_op_consulting_pump_panics() {
     let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let _ = secure_read(&mut buf);
     }));
-    assert!(r.is_err(), "byte-silent op-consulting pump must panic deterministically");
+    assert!(
+        r.is_err(),
+        "byte-silent op-consulting pump must panic deterministically"
+    );
 }
 
 /// SIM-CONVERGE inc-2: a pump that YIELDS (no byte progress, not finished) is
@@ -288,7 +294,11 @@ fn yielded_pump_is_a_legal_turn_wait_not_a_stall() {
     let mut buf = [0u8; 8];
     // Must NOT panic on the three yields; resolves to the 2-byte send.
     let n = secure_read(&mut buf).unwrap().unwrap();
-    assert_eq!(&buf[..n], b"go", "yields must resolve to real progress, never panic");
+    assert_eq!(
+        &buf[..n],
+        b"go",
+        "yields must resolve to real progress, never panic"
+    );
 }
 
 // ===========================================================================
@@ -320,7 +330,9 @@ fn fault_short_read_is_partial_but_lossless() {
     }
     assert_eq!(got, b"hello world");
     let log = op_log();
-    assert!(log.iter().any(|l| l.contains("NETFAULT") && l.contains("op=Read")));
+    assert!(log
+        .iter()
+        .any(|l| l.contains("NETFAULT") && l.contains("op=Read")));
     assert!(log.iter().any(|l| l.contains("decision=Short")));
 }
 
@@ -372,8 +384,14 @@ fn fault_delayed_delivery_holds_then_delivers() {
     let n = secure_read(&mut buf).unwrap().unwrap();
     assert_eq!(&buf[..n], b"delayed message");
     let log = op_log();
-    assert!(log.iter().any(|l| l.contains("decision=Delay")), "NETFAULT Delay line");
-    assert!(log.iter().any(|l| l.contains("decision=Hold")), "Hold steps while staged");
+    assert!(
+        log.iter().any(|l| l.contains("decision=Delay")),
+        "NETFAULT Delay line"
+    );
+    assert!(
+        log.iter().any(|l| l.contains("decision=Hold")),
+        "Hold steps while staged"
+    );
 }
 
 /// Delay preserves stream order: a delayed first send holds a later
@@ -417,7 +435,11 @@ fn fault_drop_mid_message_truncates_then_eof() {
     client_send(b"12345678");
     let mut buf = [0u8; 16];
     let n = secure_read(&mut buf).unwrap().unwrap();
-    assert_eq!(&buf[..n], b"123", "only the kept in-flight prefix survives the drop");
+    assert_eq!(
+        &buf[..n],
+        b"123",
+        "only the kept in-flight prefix survives the drop"
+    );
     let n = secure_read(&mut buf).unwrap().unwrap();
     assert_eq!(n, 0, "mid-message EOF after the drop");
 }
@@ -545,7 +567,10 @@ fn fault_plan_replay_identity() {
 
     let (log1, sent1, recv1) = run_script();
     let (log2, sent2, recv2) = run_script();
-    assert_eq!(log1, log2, "fault-run op logs must be byte-identical across replays");
+    assert_eq!(
+        log1, log2,
+        "fault-run op logs must be byte-identical across replays"
+    );
     assert_eq!(sent1, sent2);
     assert_eq!(recv1, recv2);
     assert!(log1.iter().any(|l| l.starts_with("NETPLAN seed=0x")));

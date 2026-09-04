@@ -40,7 +40,10 @@ pub struct RegMatch {
 impl RegMatch {
     /// C: `{-1, -1}` — the "no match" value `pg_regexec` stores for unset
     /// submatch slots.
-    pub const UNSET: RegMatch = RegMatch { rm_so: -1, rm_eo: -1 };
+    pub const UNSET: RegMatch = RegMatch {
+        rm_so: -1,
+        rm_eo: -1,
+    };
 }
 
 /// The successful result of `pg_regcomp`: a live compiled RE plus the one

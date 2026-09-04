@@ -8,17 +8,17 @@ pub mod builtins;
 mod io;
 mod membership;
 mod ops;
-pub mod varlena;
 #[cfg(test)]
 mod tests;
+pub mod varlena;
 
 pub use io::{aclitemin, aclitemout, aclparse, ACL_ALL_RIGHTS_STR};
+pub(crate) use membership::RoleRecurseType;
 pub use membership::{
     get_language_oid, get_role_oid, get_role_oid_or_public, has_privs_of_role, initialize_acl,
     is_admin_of_role, is_member_of_role, is_member_of_role_nosuper, member_can_set_role,
     select_best_admin, RoleMembershipCacheCallback,
 };
-pub(crate) use membership::RoleRecurseType;
 pub use ops::{
     aclconcat, aclcontains, aclcopy, aclequal, aclitem_comparator, aclitem_match, aclitemsort,
     aclmask_direct, aclmembers, aclmerge, aclnewowner, aclupdate, convert_any_priv_string,
@@ -170,7 +170,11 @@ pub fn acldefault(objtype: AclObjectType, owner_id: Oid) -> DefaultAcl {
     };
 
     let mut acl = DefaultAcl {
-        items: [AclItem { ai_grantee: 0, ai_grantor: 0, ai_privs: 0 }; 2],
+        items: [AclItem {
+            ai_grantee: 0,
+            ai_grantor: 0,
+            ai_privs: 0,
+        }; 2],
         n: 0,
     };
     if world_default != ACL_NO_RIGHTS {

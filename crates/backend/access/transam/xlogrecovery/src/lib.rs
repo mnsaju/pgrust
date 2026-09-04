@@ -15,8 +15,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering::Relaxed};
 use elog::{elog, ereport};
 use types_core::{TimeLineID, TimestampTz, TransactionId, XLogRecPtr, XLogSegNo};
 use types_error::{
-    ErrorLevel, ErrorLocation, PgError, PgResult, DEBUG1, DEBUG2, ERROR, FATAL, LOG, PANIC,
-    WARNING,
+    ErrorLevel, ErrorLocation, PgError, PgResult, DEBUG1, DEBUG2, ERROR, FATAL, LOG, PANIC, WARNING,
 };
 use types_storage::waiteventset::{WL_EXIT_ON_PM_DEATH, WL_LATCH_SET, WL_TIMEOUT};
 use xlogreader::{
@@ -148,7 +147,10 @@ pub fn GetXLogReplayRecPtr() -> (XLogRecPtr, TimeLineID) {
 }
 
 pub fn GetCurrentReplayRecPtr() -> (XLogRecPtr, TimeLineID) {
-    (REPLAY_END_REC_PTR.load(Relaxed), REPLAY_END_TLI.load(Relaxed))
+    (
+        REPLAY_END_REC_PTR.load(Relaxed),
+        REPLAY_END_TLI.load(Relaxed),
+    )
 }
 
 // stat(2)-succeeds existence probe over the fd-crate front (DST P1 inc-3).
@@ -517,8 +519,7 @@ impl PageSource {
                                 latch::ResetLatch(targets::recovery_wakeup_latch());
                                 startup_seams::process_startup_proc_interrupts::call()?;
                             }
-                            self.last_fail_time =
-                                timestamp_seams::get_current_timestamp::call();
+                            self.last_fail_time = timestamp_seams::get_current_timestamp::call();
                             self.cur_source = XLogSource::Archive;
                         }
                     }
@@ -526,7 +527,7 @@ impl PageSource {
                         ereport(ERROR)
                             .errmsg("unexpected WAL source".to_string())
                             .finish(loc("WaitForWALToBecomeAvailable"))?;
-        unreachable!()
+                        unreachable!()
                     }
                 }
             } else if self.cur_source == XLogSource::PgWal && IN_ARCHIVE_RECOVERY.load(Relaxed) {
@@ -541,7 +542,11 @@ impl PageSource {
                         "switched WAL source from {} to {} after {}",
                         xlog_source_name(old_source),
                         xlog_source_name(self.cur_source),
-                        if self.last_source_failed { "failure" } else { "success" }
+                        if self.last_source_failed {
+                            "failure"
+                        } else {
+                            "success"
+                        }
                     ),
                 );
             }
@@ -584,20 +589,22 @@ impl PageSource {
                         } else {
                             let tli = tli_of_point_in_history(tli_rec_ptr, &self.expected_tles)?;
                             if self.cur_file_tli > 0 && tli < self.cur_file_tli {
-                                { ereport(ERROR)
+                                {
+                                    ereport(ERROR)
                                     .errmsg(format!(
                                         "according to history file, WAL location {} belongs to timeline {tli}, but previous recovered WAL file came from timeline {}",
                                         lsn_fmt(tli_rec_ptr),
                                         self.cur_file_tli
                                     ))
-                                    .finish(loc("WaitForWALToBecomeAvailable"))?; unreachable!() }
+                                    .finish(loc("WaitForWALToBecomeAvailable"))?;
+                                    unreachable!()
+                                }
                             }
                             (rec_ptr, tli)
                         };
                         self.cur_file_tli = tli;
                         transam_xlog::SetInstallXLogFileSegmentActive()?;
-                        let slotname =
-                            guc_tables::vars::PrimarySlotName.read().unwrap_or_default();
+                        let slotname = guc_tables::vars::PrimarySlotName.read().unwrap_or_default();
                         let create_temp_slot =
                             guc_tables::vars::wal_receiver_create_temp_slot.read();
                         walreceiverfuncs_seams::request_xlog_streaming::call(
@@ -630,8 +637,7 @@ impl PageSource {
                         if rec_ptr < self.flushed_upto && self.receive_tli == self.cur_file_tli {
                             havedata = true;
                             if latest_chunk_start <= rec_ptr {
-                                let rt =
-                                    timestamp_seams::get_current_timestamp::call();
+                                let rt = timestamp_seams::get_current_timestamp::call();
                                 RECEIPT_TIME.with(|c| c.set(rt));
                                 targets::SetCurrentChunkStartTime(rt);
                             }
@@ -686,7 +692,7 @@ impl PageSource {
                     ereport(ERROR)
                         .errmsg("unexpected WAL source".to_string())
                         .finish(loc("WaitForWALToBecomeAvailable"))?;
-        unreachable!()
+                    unreachable!()
                 }
             }
 
@@ -847,11 +853,8 @@ impl XLogReaderRoutine for PageSource {
                     && !page_header_plausible(cur_page, target_page_ptr)
                 {
                     let emode = self.emode;
-                    let fname = transam_xlog::XLogFileName(
-                        self.cur_file_tli,
-                        self.read_seg_no,
-                        wal_segsz,
-                    );
+                    let fname =
+                        transam_xlog::XLogFileName(self.cur_file_tli, self.read_seg_no, wal_segsz);
                     self.report(
                         emode,
                         rec_end_for_report(target_page_ptr, req_len),
@@ -862,15 +865,16 @@ impl XLogReaderRoutine for PageSource {
                         ),
                     )?;
                 } else {
-                let read_len = if self.read_source == XLogSource::Stream
-                    && target_page_ptr / XLOG_BLCKSZ as u64 == self.flushed_upto / XLOG_BLCKSZ as u64
-                {
-                    (transam_xlog::XLogSegmentOffset(self.flushed_upto, wal_segsz)
-                        - target_page_off) as i32
-                } else {
-                    XLOG_BLCKSZ as i32
-                };
-                return Ok(read_len);
+                    let read_len = if self.read_source == XLogSource::Stream
+                        && target_page_ptr / XLOG_BLCKSZ as u64
+                            == self.flushed_upto / XLOG_BLCKSZ as u64
+                    {
+                        (transam_xlog::XLogSegmentOffset(self.flushed_upto, wal_segsz)
+                            - target_page_off) as i32
+                    } else {
+                        XLOG_BLCKSZ as i32
+                    };
+                    return Ok(read_len);
                 }
             }
 
@@ -914,7 +918,9 @@ fn read_record(
     rec.src.last_source_failed = false;
 
     loop {
-        let got = rec.prefetcher.XLogPrefetcherReadRecord(&mut rec.reader, &mut rec.src)?;
+        let got = rec
+            .prefetcher
+            .XLogPrefetcherReadRecord(&mut rec.reader, &mut rec.src)?;
         let mut have_record = got.is_some();
         match got {
             None => {
@@ -999,13 +1005,17 @@ fn read_checkpoint_record(
         let _ = elog(LOG, "invalid checkpoint location".to_string());
         return Ok(false);
     }
-    rec.prefetcher.XLogPrefetcherBeginRead(&mut rec.reader, rec_ptr);
+    rec.prefetcher
+        .XLogPrefetcherBeginRead(&mut rec.reader, rec_ptr);
     if !read_record(rec, LOG, true, replay_tli)? {
         let _ = elog(LOG, "invalid checkpoint record".to_string());
         return Ok(false);
     }
     if rec.reader.XLogRecGetRmid() != transam_xlog::RM_XLOG_ID {
-        let _ = elog(LOG, "invalid resource manager ID in checkpoint record".to_string());
+        let _ = elog(
+            LOG,
+            "invalid resource manager ID in checkpoint record".to_string(),
+        );
         return Ok(false);
     }
     let info = rec.reader.XLogRecGetInfo() & !transam_xlog::XLR_INFO_MASK;
@@ -1027,11 +1037,14 @@ fn read_recovery_signal_file() -> PgResult<()> {
         return Ok(());
     }
     if recovery_file_exists(RECOVERY_COMMAND_FILE) {
-        { ereport(FATAL)
-            .errmsg(format!(
-                "using recovery command file \"{RECOVERY_COMMAND_FILE}\" is not supported"
-            ))
-            .finish(loc("readRecoverySignalFile"))?; unreachable!() }
+        {
+            ereport(FATAL)
+                .errmsg(format!(
+                    "using recovery command file \"{RECOVERY_COMMAND_FILE}\" is not supported"
+                ))
+                .finish(loc("readRecoverySignalFile"))?;
+            unreachable!()
+        }
     }
     let _ = fd::pg_unlink(&data_path(RECOVERY_COMMAND_DONE));
 
@@ -1114,9 +1127,12 @@ fn validate_recovery_parameters() -> PgResult<()> {
         RecoveryTargetTimeLineGoal::Numeric => {
             let rtli = targets::recovery_target_tli_requested();
             if rtli != 1 && !timeline_seams::exists_timeline_history::call(rtli)? {
-                { ereport(FATAL)
-                    .errmsg(format!("recovery target timeline {rtli} does not exist"))
-                    .finish(loc("validateRecoveryParameters"))?; unreachable!() }
+                {
+                    ereport(FATAL)
+                        .errmsg(format!("recovery target timeline {rtli} does not exist"))
+                        .finish(loc("validateRecoveryParameters"))?;
+                    unreachable!()
+                }
             }
             RECOVERY_TARGET_TLI.store(rtli, Relaxed);
         }
@@ -1159,8 +1175,7 @@ pub fn InitWalRecovery() -> PgResult<InitWalRecoveryResult> {
         }
     }
 
-    let context: &'static mcx::MemoryContext =
-        mcx::session_root("wal recovery");
+    let context: &'static mcx::MemoryContext = mcx::session_root("wal recovery");
     // LIFO: empty the droppy TLS slot before its context is freed.
     mcx::register_session_cleanup(Box::new(|| {
         RECOVERY.with(|r| drop(r.borrow_mut().take()));
@@ -1218,7 +1233,8 @@ pub fn InitWalRecovery() -> PgResult<InitWalRecoveryResult> {
         let (cp_loc, cp_tli) = (rec.check_point_loc, rec.check_point_tli);
         if !read_checkpoint_record(&mut rec, cp_loc, cp_tli)? {
             let dd = init_small::globals::DataDir().unwrap_or(".");
-            { ereport(FATAL)
+            {
+                ereport(FATAL)
                 .errmsg(format!(
                     "could not locate required checkpoint record at {}",
                     lsn_fmt(cp_loc)
@@ -1226,7 +1242,9 @@ pub fn InitWalRecovery() -> PgResult<InitWalRecoveryResult> {
                 .errhint(format!(
                     "If you are restoring from a backup, touch \"{dd}/recovery.signal\" or \"{dd}/standby.signal\" and add required recovery options.\nIf you are not restoring from a backup, try removing the file \"{dd}/backup_label\".\nBe careful: removing \"{dd}/backup_label\" will result in a corrupt cluster if restoring from a backup."
                 ))
-                .finish(loc("InitWalRecovery"))?; unreachable!() }
+                .finish(loc("InitWalRecovery"))?;
+                unreachable!()
+            }
         }
         check_point = controldata_utils::CheckPoint::from_bytes(rec.reader.XLogRecGetData());
         was_shutdown = (rec.reader.XLogRecGetInfo() & !transam_xlog::XLR_INFO_MASK)
@@ -1235,10 +1253,12 @@ pub fn InitWalRecovery() -> PgResult<InitWalRecoveryResult> {
 
         if check_point.redo < rec.check_point_loc {
             let redo = check_point.redo;
-            rec.prefetcher.XLogPrefetcherBeginRead(&mut rec.reader, redo);
+            rec.prefetcher
+                .XLogPrefetcherBeginRead(&mut rec.reader, redo);
             if !read_record(&mut rec, LOG, false, check_point.ThisTimeLineID)? {
                 let dd = init_small::globals::DataDir().unwrap_or(".");
-                { ereport(FATAL)
+                {
+                    ereport(FATAL)
                     .errmsg(format!(
                         "could not find redo location {} referenced by checkpoint record at {}",
                         lsn_fmt(check_point.redo),
@@ -1247,7 +1267,9 @@ pub fn InitWalRecovery() -> PgResult<InitWalRecoveryResult> {
                     .errhint(format!(
                         "If you are restoring from a backup, touch \"{dd}/recovery.signal\" or \"{dd}/standby.signal\" and add required recovery options.\nIf you are not restoring from a backup, try removing the file \"{dd}/backup_label\".\nBe careful: removing \"{dd}/backup_label\" will result in a corrupt cluster if restoring from a backup."
                     ))
-                    .finish(loc("InitWalRecovery"))?; unreachable!() }
+                    .finish(loc("InitWalRecovery"))?;
+                    unreachable!()
+                }
             }
         }
 
@@ -1260,16 +1282,16 @@ pub fn InitWalRecovery() -> PgResult<InitWalRecoveryResult> {
                 // error shape (52 = WASI ENOSYS), the tablespace wasm arm's
                 // convention. tablespace_map restores are unsupported there.
                 #[cfg(target_family = "wasm")]
-                let link_result: std::io::Result<()> =
-                    Err(std::io::Error::from_raw_os_error(52));
+                let link_result: std::io::Result<()> = Err(std::io::Error::from_raw_os_error(52));
                 #[cfg(not(target_family = "wasm"))]
                 let link_result = std::os::unix::fs::symlink(&ti.path, &linkloc);
                 if let Err(e) = link_result {
-                    { ereport(ERROR)
-                        .errmsg(format!(
-                            "could not create symbolic link \"{linkloc}\": {e}"
-                        ))
-                        .finish(loc("InitWalRecovery"))?; unreachable!() }
+                    {
+                        ereport(ERROR)
+                            .errmsg(format!("could not create symbolic link \"{linkloc}\": {e}"))
+                            .finish(loc("InitWalRecovery"))?;
+                        unreachable!()
+                    }
                 }
             }
             have_tblspc_map = true;
@@ -1339,7 +1361,8 @@ pub fn InitWalRecovery() -> PgResult<InitWalRecoveryResult> {
 
         if check_point.redo < rec.check_point_loc {
             let redo = check_point.redo;
-            rec.prefetcher.XLogPrefetcherBeginRead(&mut rec.reader, redo);
+            rec.prefetcher
+                .XLogPrefetcherBeginRead(&mut rec.reader, redo);
             if !read_record(&mut rec, LOG, false, check_point.ThisTimeLineID)? {
                 ereport(PANIC)
                     .errmsg(format!(
@@ -1390,8 +1413,7 @@ pub fn InitWalRecovery() -> PgResult<InitWalRecoveryResult> {
 
     let target_tli = RECOVERY_TARGET_TLI.load(Relaxed);
     debug_assert!(!rec.src.expected_tles.is_empty());
-    if tli_of_point_in_history(rec.check_point_loc, &rec.src.expected_tles)?
-        != rec.check_point_tli
+    if tli_of_point_in_history(rec.check_point_loc, &rec.src.expected_tles)? != rec.check_point_tli
     {
         ereport(FATAL)
             .errmsg(format!(
@@ -1490,7 +1512,7 @@ pub fn InitWalRecovery() -> PgResult<InitWalRecoveryResult> {
                     "This means that the backup is corrupted and you will have to use another backup for recovery.",
                 )
                 .finish(loc("InitWalRecovery"))?;
-        unreachable!()
+            unreachable!()
         }
         xlogutils::set_in_recovery(true);
     }
@@ -1629,30 +1651,39 @@ fn check_timeline_switch(
     replay_tli: TimeLineID,
 ) -> PgResult<()> {
     if prev_tli != replay_tli {
-        { ereport(PANIC)
+        {
+            ereport(PANIC)
             .errmsg(format!(
                 "unexpected previous timeline ID {prev_tli} (current timeline ID {replay_tli}) in checkpoint record"
             ))
-            .finish(loc("checkTimeLineSwitch"))?; unreachable!() }
+            .finish(loc("checkTimeLineSwitch"))?;
+            unreachable!()
+        }
     }
     if new_tli < replay_tli || !tli_in_history(new_tli, &rec.src.expected_tles) {
-        { ereport(PANIC)
-            .errmsg(format!(
-                "unexpected timeline ID {new_tli} (after {replay_tli}) in checkpoint record"
-            ))
-            .finish(loc("checkTimeLineSwitch"))?; unreachable!() }
+        {
+            ereport(PANIC)
+                .errmsg(format!(
+                    "unexpected timeline ID {new_tli} (after {replay_tli}) in checkpoint record"
+                ))
+                .finish(loc("checkTimeLineSwitch"))?;
+            unreachable!()
+        }
     }
     if rec.src.min_recovery_point != InvalidXLogRecPtr
         && lsn < rec.src.min_recovery_point
         && new_tli > rec.src.min_recovery_point_tli
     {
-        { ereport(PANIC)
+        {
+            ereport(PANIC)
             .errmsg(format!(
                 "unexpected timeline ID {new_tli} in checkpoint record, before reaching minimum recovery point {} on timeline {}",
                 lsn_fmt(rec.src.min_recovery_point),
                 rec.src.min_recovery_point_tli
             ))
-            .finish(loc("checkTimeLineSwitch"))?; unreachable!() }
+            .finish(loc("checkTimeLineSwitch"))?;
+            unreachable!()
+        }
     }
     Ok(())
 }
@@ -1668,13 +1699,16 @@ fn xlogrecovery_redo(rec: &mut Recovery) -> PgResult<()> {
         let overwritten_lsn = u64::from_ne_bytes(data[..8].try_into().unwrap());
         let overwrite_time = i64::from_ne_bytes(data[8..16].try_into().unwrap());
         if overwritten_lsn != rec.reader.overwrittenRecPtr {
-            { ereport(FATAL)
-                .errmsg(format!(
-                    "mismatching overwritten LSN {} -> {}",
-                    lsn_fmt(overwritten_lsn),
-                    lsn_fmt(rec.reader.overwrittenRecPtr)
-                ))
-                .finish(loc("xlogrecovery_redo"))?; unreachable!() }
+            {
+                ereport(FATAL)
+                    .errmsg(format!(
+                        "mismatching overwritten LSN {} -> {}",
+                        lsn_fmt(overwritten_lsn),
+                        lsn_fmt(rec.reader.overwrittenRecPtr)
+                    ))
+                    .finish(loc("xlogrecovery_redo"))?;
+                unreachable!()
+            }
         }
 
         rec.aborted_rec_ptr = InvalidXLogRecPtr;
@@ -1774,7 +1808,9 @@ fn apply_wal_record(rec: &mut Recovery, replay_tli: &mut TimeLineID) -> PgResult
         if !pins.is_empty() {
             let desc: Vec<String> = pins
                 .iter()
-                .map(|&(b, rc)| format!("buf={b} rc={rc} tag={}", bufmgr::debug_buffer_tag_string(b)))
+                .map(|&(b, rc)| {
+                    format!("buf={b} rc={rc} tag={}", bufmgr::debug_buffer_tag_string(b))
+                })
                 .collect();
             panic!(
                 "redo pin leak after rmid={} info={:#04x} end_lsn={:X}: [{}]",
@@ -1823,7 +1859,6 @@ fn apply_wal_record(rec: &mut Recovery, replay_tli: &mut TimeLineID) -> PgResult
     Ok(())
 }
 
-
 fn redo_pin_check() -> bool {
     use std::sync::OnceLock;
     static ON: OnceLock<bool> = OnceLock::new();
@@ -1869,7 +1904,8 @@ fn perform_wal_recovery_guts(rec: &mut Recovery) -> PgResult<()> {
     if rec.src.redo_start_lsn < rec.check_point_loc {
         replay_tli = rec.src.redo_start_tli;
         let redo_start = rec.src.redo_start_lsn;
-        rec.prefetcher.XLogPrefetcherBeginRead(&mut rec.reader, redo_start);
+        rec.prefetcher
+            .XLogPrefetcherBeginRead(&mut rec.reader, redo_start);
         have_record = read_record(rec, PANIC, false, replay_tli)?;
         debug_assert!(have_record);
         if rec.reader.XLogRecGetRmid() != transam_xlog::RM_XLOG_ID
@@ -1981,7 +2017,9 @@ fn perform_wal_recovery_guts(rec: &mut Recovery) -> PgResult<()> {
 pub fn FinishWalRecovery() -> PgResult<EndOfWalRecoveryInfo> {
     RECOVERY.with(|cell| {
         let mut guard = cell.borrow_mut();
-        let rec = guard.as_mut().expect("FinishWalRecovery before InitWalRecovery");
+        let rec = guard
+            .as_mut()
+            .expect("FinishWalRecovery before InitWalRecovery");
 
         xlog_shutdown_wal_rcv();
 
@@ -2002,7 +2040,8 @@ pub fn FinishWalRecovery() -> PgResult<EndOfWalRecoveryInfo> {
                 LAST_REPLAYED_TLI.load(Relaxed),
             )
         };
-        rec.prefetcher.XLogPrefetcherBeginRead(&mut rec.reader, last_rec);
+        rec.prefetcher
+            .XLogPrefetcherBeginRead(&mut rec.reader, last_rec);
         if !read_record(rec, PANIC, false, last_rec_tli)? {
             ereport(PANIC)
                 .errmsg(format!("could not re-read record at {}", lsn_fmt(last_rec)))
@@ -2017,21 +2056,20 @@ pub fn FinishWalRecovery() -> PgResult<EndOfWalRecoveryInfo> {
             rec.src.close_read_file();
         }
 
-        let (last_page_begin_ptr, last_page): (XLogRecPtr, Box<[u8]>) =
-            if end_of_log % XLOG_BLCKSZ as u64 != 0 {
-                let page_begin_ptr = end_of_log - (end_of_log % XLOG_BLCKSZ as u64);
-                debug_assert_eq!(
-                    rec.src.read_off,
-                    transam_xlog::XLogSegmentOffset(
-                        page_begin_ptr,
-                        transam_xlog::wal_segment_size()
-                    )
-                );
-                let len = (end_of_log % XLOG_BLCKSZ as u64) as usize;
-                (page_begin_ptr, rec.reader.read_buf()[..len].into())
-            } else {
-                (end_of_log, Box::default())
-            };
+        let (last_page_begin_ptr, last_page): (XLogRecPtr, Box<[u8]>) = if end_of_log
+            % XLOG_BLCKSZ as u64
+            != 0
+        {
+            let page_begin_ptr = end_of_log - (end_of_log % XLOG_BLCKSZ as u64);
+            debug_assert_eq!(
+                rec.src.read_off,
+                transam_xlog::XLogSegmentOffset(page_begin_ptr, transam_xlog::wal_segment_size())
+            );
+            let len = (end_of_log % XLOG_BLCKSZ as u64) as usize;
+            (page_begin_ptr, rec.reader.read_buf()[..len].into())
+        } else {
+            (end_of_log, Box::default())
+        };
 
         Ok(EndOfWalRecoveryInfo {
             lastRec: last_rec,
@@ -2074,7 +2112,11 @@ pub fn ShutdownWalRecovery() -> PgResult<()> {
 // what the running walreceiver was started with.
 pub fn StartupRereadWalRcvConfig() {
     let read_str = |v: &guc_tables::GucStringVar| -> String {
-        if v.installed() { v.read().unwrap_or_default() } else { String::new() }
+        if v.installed() {
+            v.read().unwrap_or_default()
+        } else {
+            String::new()
+        }
     };
     let started = WALRCV_STARTED_WITH.with(|c| c.borrow().clone());
     let Some((conninfo, slotname, temp_slot)) = started else {

@@ -18,13 +18,14 @@ macro_rules! plain_fixed {
             out: &mut Vec<$ty>,
         ) -> PgResult<()> {
             const W: usize = core::mem::size_of::<$ty>();
-            let need = n.checked_mul(W).ok_or_else(|| corrupt_page("value count overflow"))?;
+            let need = n
+                .checked_mul(W)
+                .ok_or_else(|| corrupt_page("value count overflow"))?;
             if *pos + need > end || end > buf.len() {
                 return Err(corrupt_page("values end before the declared count"));
             }
-            out.try_reserve(n).map_err(|_| {
-                Box::new(PgError::error("out of memory decoding parquet values"))
-            })?;
+            out.try_reserve(n)
+                .map_err(|_| Box::new(PgError::error("out of memory decoding parquet values")))?;
             let src = &buf[*pos..*pos + need];
             for chunk in src.chunks_exact(W) {
                 out.push(<$ty>::from_le_bytes(chunk.try_into().expect("exact chunk")));

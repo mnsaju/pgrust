@@ -9,12 +9,17 @@
 pub mod qsort;
 
 use ::adt_float::float8_cmp_internal;
-use ::adt_geo::{adjust_box, box_contain_box, box_ov, point_eq_point, rt_box_union, FPeq, FPge, FPgt, FPle, FPlt, PolyRef};
+use ::adt_geo::{
+    adjust_box, box_contain_box, box_ov, point_eq_point, rt_box_union, FPeq, FPge, FPgt, FPle,
+    FPlt, PolyRef,
+};
 use ::datum::Datum;
 use ::types_core::geo::{Point, BOX, CIRCLE};
 use ::types_core::Oid;
 use ::types_error::{PgError, PgResult};
-use ::types_fmgr::{byref_result, datum_varlena_packed, FmgrBuiltin, FmgrInfo, FunctionCallInfoBaseData as Fcinfo};
+use ::types_fmgr::{
+    byref_result, datum_varlena_packed, FmgrBuiltin, FmgrInfo, FunctionCallInfoBaseData as Fcinfo,
+};
 use ::types_gist::{GistEntryVector, GistSplitVec, GISTENTRY};
 
 use qsort::pg_qsort;
@@ -85,7 +90,10 @@ fn circle_bbox(c: &CIRCLE) -> PgResult<BOX> {
     let high_y = ::adt_float::float8_pl(c.center.y, c.radius)?;
     let low_y = ::adt_float::float8_mi(c.center.y, c.radius)?;
     Ok(BOX {
-        high: Point { x: high_x, y: high_y },
+        high: Point {
+            x: high_x,
+            y: high_y,
+        },
         low: Point { x: low_x, y: low_y },
     })
 }
@@ -149,9 +157,7 @@ fn gist_box_leaf_consistent(key: &BOX, query: &BOX, strategy: u16) -> PgResult<b
         RTOverlap => box_ov(key, query),
         RTOverRight => FPge(key.low.x, query.low.x),
         RTRight => FPgt(key.low.x, query.high.x),
-        RTSame => {
-            point_eq_point(&key.high, &query.high) && point_eq_point(&key.low, &query.low)
-        }
+        RTSame => point_eq_point(&key.high, &query.high) && point_eq_point(&key.low, &query.low),
         RTContains => box_contain_box(key, query),
         RTContainedBy => box_contain_box(query, key),
         RTOverBelow => FPle(key.high.y, query.high.y),
@@ -165,7 +171,7 @@ fn gist_box_leaf_consistent(key: &BOX, query: &BOX, strategy: u16) -> PgResult<b
 // rtree_internal_consistent.
 fn rtree_internal_consistent(key: &BOX, query: &BOX, strategy: u16) -> PgResult<bool> {
     Ok(match strategy {
-        RTLeft => !FPge(key.low.x, query.low.x),   // !box_overright
+        RTLeft => !FPge(key.low.x, query.low.x), // !box_overright
         RTOverLeft => !FPgt(key.low.x, query.high.x), // !box_right
         RTOverlap => box_ov(key, query),
         RTOverRight => !FPlt(key.high.x, query.low.x), // !box_left
@@ -257,7 +263,11 @@ fn fc_gist_box_same(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<
 }
 
 // fallbackSplit.
-fn fallback_split(entryvec: &GistEntryVector, v: &mut GistSplitVec, fcinfo: &Fcinfo) -> PgResult<()> {
+fn fallback_split(
+    entryvec: &GistEntryVector,
+    v: &mut GistSplitVec,
+    fcinfo: &Fcinfo,
+) -> PgResult<()> {
     let maxoff = (entryvec.n - 1) as usize;
     v.spl_left = Vec::with_capacity(maxoff + 2);
     v.spl_right = Vec::with_capacity(maxoff + 2);
@@ -356,9 +366,7 @@ fn g_box_consider_split(
         if context.first {
             selectthis = true;
         } else if context.dim == dim_num {
-            if overlap < context.overlap
-                || (overlap == context.overlap && ratio > context.ratio)
-            {
+            if overlap < context.overlap || (overlap == context.overlap && ratio > context.ratio) {
                 selectthis = true;
             }
         } else if non_negative(overlap) < non_negative(context.overlap)
@@ -422,9 +430,15 @@ fn fc_gist_box_picksplit(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRe
         for i in 1..=maxoff {
             let b = key_at(i);
             intervals_lower[i - 1] = if dim == 0 {
-                SplitInterval { lower: b.low.x, upper: b.high.x }
+                SplitInterval {
+                    lower: b.low.x,
+                    upper: b.high.x,
+                }
             } else {
-                SplitInterval { lower: b.low.y, upper: b.high.y }
+                SplitInterval {
+                    lower: b.low.y,
+                    upper: b.high.y,
+                }
             };
         }
         intervals_upper.copy_from_slice(&intervals_lower);
@@ -456,7 +470,14 @@ fn fc_gist_box_picksplit(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRe
                 i2 += 1;
             }
 
-            g_box_consider_split(&mut context, dim, right_lower, i1 as i32, left_upper, i2 as i32)?;
+            g_box_consider_split(
+                &mut context,
+                dim,
+                right_lower,
+                i1 as i32,
+                left_upper,
+                i2 as i32,
+            )?;
         }
 
         // upper bound of left group sweep
@@ -534,7 +555,10 @@ fn fc_gist_box_picksplit(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRe
 
         if upper <= context.left_upper {
             if lower >= context.right_lower {
-                common_entries.push(CommonEntry { index: i, delta: 0.0 });
+                common_entries.push(CommonEntry {
+                    index: i,
+                    delta: 0.0,
+                });
             } else {
                 place_left!(b, i);
             }
@@ -741,7 +765,9 @@ fn compute_distance(is_leaf: bool, b: &BOX, point: &Point) -> PgResult<f64> {
         if point.y < b.low.y {
             return ::adt_float::float8_mi(b.low.y, point.y);
         }
-        return Err(Box::new(PgError::error("inconsistent point values".to_string())));
+        return Err(Box::new(PgError::error(
+            "inconsistent point values".to_string(),
+        )));
     }
     if point.y <= b.high.y && point.y >= b.low.y {
         if point.x > b.high.x {
@@ -750,14 +776,22 @@ fn compute_distance(is_leaf: bool, b: &BOX, point: &Point) -> PgResult<f64> {
         if point.x < b.low.x {
             return ::adt_float::float8_mi(b.low.x, point.x);
         }
-        return Err(Box::new(PgError::error("inconsistent point values".to_string())));
+        return Err(Box::new(PgError::error(
+            "inconsistent point values".to_string(),
+        )));
     }
     // closest point is a vertex
     let mut result = ::adt_geo::point_dt(point, &b.low)?;
     for p in [
         b.high,
-        Point { x: b.low.x, y: b.high.y },
-        Point { x: b.high.x, y: b.low.y },
+        Point {
+            x: b.low.x,
+            y: b.high.y,
+        },
+        Point {
+            x: b.high.x,
+            y: b.low.y,
+        },
     ] {
         let sub = ::adt_geo::point_dt(point, &p)?;
         if result > sub {
@@ -925,7 +959,12 @@ fn fc_gisthandler(_f: Option<&mut FmgrInfo>, _fcinfo: &mut Fcinfo) -> PgResult<D
     panic!("gisthandler: the closed AM set dispatches via IndexAmKind, never through fmgr")
 }
 
-const fn b(foid: Oid, name: &'static str, nargs: i16, func: ::types_fmgr::PGFunction) -> FmgrBuiltin {
+const fn b(
+    foid: Oid,
+    name: &'static str,
+    nargs: i16,
+    func: ::types_fmgr::PGFunction,
+) -> FmgrBuiltin {
     FmgrBuiltin {
         foid,
         name,
@@ -955,7 +994,12 @@ pub const GISTPROC_BUILTINS: &[FmgrBuiltin] = &[
     b(3288, "gist_poly_distance", 5, fc_gist_poly_distance),
     b(3435, "gist_point_sortsupport", 1, fc_gist_point_sortsupport),
     b(3998, "gist_box_distance", 5, fc_gist_box_distance),
-    b(6347, "gist_translate_cmptype_common", 1, fc_gist_translate_cmptype_common),
+    b(
+        6347,
+        "gist_translate_cmptype_common",
+        1,
+        fc_gist_translate_cmptype_common,
+    ),
 ];
 
 #[cfg(test)]

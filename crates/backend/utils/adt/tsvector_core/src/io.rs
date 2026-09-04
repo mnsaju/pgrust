@@ -1,7 +1,5 @@
 use ::mcx::{vec_with_capacity_in, Mcx, PgVec};
-use ::types_error::{
-    ereturn, PgError, PgResult, SoftErrorContext, ERRCODE_PROGRAM_LIMIT_EXCEEDED,
-};
+use ::types_error::{ereturn, PgError, PgResult, SoftErrorContext, ERRCODE_PROGRAM_LIMIT_EXCEEDED};
 
 use crate::layout::*;
 use crate::parser::{Next, TsvParser};
@@ -115,7 +113,10 @@ pub fn tsvector_in_core<'mcx>(
                 if res != ptr {
                     arr[res] = core::mem::replace(
                         &mut arr[ptr],
-                        EntryIn { word: PgVec::new_in(mcx), pos: PgVec::new_in(mcx) },
+                        EntryIn {
+                            word: PgVec::new_in(mcx),
+                            pos: PgVec::new_in(mcx),
+                        },
                     );
                 }
             } else if !arr[ptr].pos.is_empty() {
@@ -204,10 +205,7 @@ pub fn tsvector_out_core<'mcx>(mcx: Mcx<'mcx>, v: TsVec<'_>) -> PgResult<PgVec<'
     Ok(out)
 }
 
-pub fn tsvector_send_core<'mcx>(
-    mcx: Mcx<'mcx>,
-    v: TsVec<'_>,
-) -> PgResult<::datum::Bytea<'mcx>> {
+pub fn tsvector_send_core<'mcx>(mcx: Mcx<'mcx>, v: TsVec<'_>) -> PgResult<::datum::Bytea<'mcx>> {
     let mut buf = ::pqformat::pq_begintypsend(mcx)?;
     ::pqformat::pq_sendint32(&mut buf, v.size() as u32)?;
     for i in 0..v.size() {

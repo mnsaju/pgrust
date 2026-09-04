@@ -79,7 +79,9 @@ fn bringup() {
         // AsyncShmemInit scans pg_notify/ at boot; no datadir in this test.
         file_seams::with_allocated_dir::set(|dirname, cb| {
             let mut ret = false;
-            let Ok(entries) = std::fs::read_dir(dirname) else { return Ok(false) };
+            let Ok(entries) = std::fs::read_dir(dirname) else {
+                return Ok(false);
+            };
             for entry in entries {
                 ret = cb(entry.unwrap().file_name().to_str().unwrap())?;
                 if ret {
@@ -126,15 +128,14 @@ fn create_shared_memory_and_semaphores_end_to_end() {
     let semas = guc::GetConfigOption("num_os_semaphores", false, false)
         .unwrap()
         .unwrap();
-    assert_eq!(
-        semas.parse::<i32>().unwrap(),
-        lmgr_proc::ProcGlobalSemas()
-    );
+    assert_eq!(semas.parse::<i32>().unwrap(), lmgr_proc::ProcGlobalSemas());
 
     // Crash-cycle reset walk over the same live structures: dirty a probe per
     // reset family, replay shmem_exit(1) (LIFO — tears down the dsm control
     // segment), then assert the boot image is restored.
-    varsup::TransamVariables().nextOid.store(777, Ordering::Relaxed);
+    varsup::TransamVariables()
+        .nextOid
+        .store(777, Ordering::Relaxed);
     let lock0 = lwlock::main_lock(0);
     lock0
         .state
@@ -146,8 +147,14 @@ fn create_shared_memory_and_semaphores_end_to_end() {
 
     ResetShmemAfterCrash().unwrap();
 
-    assert_eq!(varsup::TransamVariables().nextOid.load(Ordering::Relaxed), 0);
-    assert_eq!(lock0.state.load(Ordering::Relaxed), lwlock::LW_FLAG_RELEASE_OK);
+    assert_eq!(
+        varsup::TransamVariables().nextOid.load(Ordering::Relaxed),
+        0
+    );
+    assert_eq!(
+        lock0.state.load(Ordering::Relaxed),
+        lwlock::LW_FLAG_RELEASE_OK
+    );
     assert_eq!(BE_STATUS_RESETS.load(Ordering::Relaxed), 1);
     assert_eq!(BARRIER_CV_RESETS.load(Ordering::Relaxed), 1);
     assert_eq!(CHECKPOINTER_CV_RESETS.load(Ordering::Relaxed), 1);

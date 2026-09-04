@@ -26,8 +26,10 @@ fn loc(func: &'static str) -> ErrorLocation {
 }
 
 fn existing_oid(collname: &str, encoding: i32, nsp: Oid) -> PgResult<Oid> {
-    Ok(syscache_seams::lookup_pg_collation_by_name_enc_nsp::call(collname, encoding, nsp)?
-        .map_or(InvalidOid, |row| row.oid))
+    Ok(
+        syscache_seams::lookup_pg_collation_by_name_enc_nsp::call(collname, encoding, nsp)?
+            .map_or(InvalidOid, |row| row.oid),
+    )
 }
 
 pub struct CollationForm<'a> {
@@ -71,7 +73,9 @@ pub fn CollationCreate<'mcx>(
                 format!("collation \"{collname}\" already exists, skipping")
             } else {
                 let encname = mbutils::pg_encoding_to_char(form.collencoding);
-                format!("collation \"{collname}\" for encoding \"{encname}\" already exists, skipping")
+                format!(
+                    "collation \"{collname}\" for encoding \"{encname}\" already exists, skipping"
+                )
             };
             ereport(NOTICE)
                 .errcode(ERRCODE_DUPLICATE_OBJECT)
@@ -92,8 +96,11 @@ pub fn CollationCreate<'mcx>(
 
     let rel = table::table_open(mcx, COLLATION_RELATION_ID, ShareRowExclusiveLock)?;
 
-    let shadow_enc =
-        if form.collencoding == -1 { mbutils::GetDatabaseEncoding() } else { -1 };
+    let shadow_enc = if form.collencoding == -1 {
+        mbutils::GetDatabaseEncoding()
+    } else {
+        -1
+    };
     let oid = existing_oid(collname, shadow_enc, collnamespace)?;
     if OidIsValid(oid) {
         if quiet {
@@ -116,8 +123,7 @@ pub fn CollationCreate<'mcx>(
 
     let mut name = NameData::default();
     name.namestrcpy(collname);
-    let oid =
-        catalog::GetNewOidWithIndex(mcx, &rel, CollationOidIndexId, Anum_pg_collation_oid)?;
+    let oid = catalog::GetNewOidWithIndex(mcx, &rel, CollationOidIndexId, Anum_pg_collation_oid)?;
 
     let mut values = [Datum::null(); Natts_pg_collation];
     let mut nulls = [false; Natts_pg_collation];
@@ -141,9 +147,8 @@ pub fn CollationCreate<'mcx>(
             Some(s) => {
                 let t = varlena::cstring_to_text(mcx, s.as_bytes())?;
                 images[slot] = Some(t);
-                values[i] = Datum::from_usize(
-                    images[slot].as_ref().unwrap().as_bytes().as_ptr() as usize,
-                );
+                values[i] =
+                    Datum::from_usize(images[slot].as_ref().unwrap().as_bytes().as_ptr() as usize);
             }
             None => nulls[i] = true,
         }

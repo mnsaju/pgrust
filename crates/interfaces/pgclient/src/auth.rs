@@ -172,7 +172,11 @@ fn scram_exchange(conn: &mut PgConn, password: &str) -> PgResult<Result<(), Stri
     };
     let iterations: i32 = match scram_attr(&fields, 'i').map(|s| s.parse::<i32>()) {
         Ok(Ok(v)) => v,
-        _ => return Ok(Err("malformed SCRAM message (invalid iteration count)".into())),
+        _ => {
+            return Ok(Err(
+                "malformed SCRAM message (invalid iteration count)".into()
+            ))
+        }
     };
 
     let salted = scram_common::scram_salted_password(&prep, &salt, iterations)?;

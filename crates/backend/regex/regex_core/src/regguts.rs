@@ -1,4 +1,3 @@
-
 extern crate alloc;
 
 use alloc::vec::Vec;
@@ -6,7 +5,6 @@ use alloc::vec::Vec;
 use ::types_core::PgWChar;
 
 use crate::regex_consts::NUM_CCLASSES;
-
 
 pub type chr = PgWChar; // = u32
 
@@ -23,7 +21,6 @@ pub const fn CHR_IS_IN_RANGE(c: chr) -> bool {
     c <= CHR_MAX
 }
 
-
 pub type color = i16;
 
 pub const MAX_COLOR: color = 32767;
@@ -31,7 +28,6 @@ pub const COLORLESS: color = -1;
 pub const RAINBOW: color = -2;
 pub const WHITE: color = 0;
 pub const NOSUB: color = COLORLESS;
-
 
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -52,7 +48,6 @@ pub enum char_classes {
     CC_WORD,
 }
 
-
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Carc {
     pub co: color,
@@ -65,7 +60,6 @@ impl Carc {
         (self.co as i32) >= ncolors
     }
 }
-
 
 pub const HASLACONS: i32 = 1;
 pub const MATCHALL: i32 = 2;
@@ -113,7 +107,6 @@ impl Cnfa {
     }
 }
 
-
 pub const FREECOL: i32 = 1;
 pub const PSEUDO: i32 = 2;
 pub const COLMARK: i32 = 4;
@@ -159,13 +152,11 @@ pub struct Cvec {
     pub cclasscode: i32,
 }
 
-
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct StateId(pub u32);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ArcId(pub u32);
-
 
 pub const EMPTY: i32 = b'n' as i32; /* no token present */
 pub const EOS: i32 = b'e' as i32; /* end of string */
@@ -189,7 +180,6 @@ pub const SBEGIN: i32 = b'A' as i32; /* beginning of string (even if not BOL) */
 pub const SEND: i32 = b'Z' as i32; /* end of string (even if not EOL) */
 pub const ARC_BOS: i32 = b'^' as i32;
 pub const ARC_EOS: i32 = b'$' as i32;
-
 
 #[derive(Copy, Clone, Debug)]
 pub struct State {
@@ -238,7 +228,6 @@ pub struct Nfa {
     pub spaceused: usize,
 }
 
-
 pub const LONGER: u8 = 1;
 pub const SHORTER: u8 = 2;
 pub const MIXED: u8 = 4;
@@ -267,7 +256,6 @@ pub struct Subre {
     pub chain: Option<NodeId>,
 }
 
-
 pub type FnsStackTooDeep = fn() -> i32;
 
 #[derive(Copy, Clone)]
@@ -276,7 +264,6 @@ pub struct Fns {
 }
 
 pub type GutsCompare = fn(&[chr], &[chr], usize) -> i32;
-
 
 pub struct Guts {
     pub magic: i32,
@@ -292,7 +279,6 @@ pub struct Guts {
     pub lacons: Vec<Subre>,
     pub nlacons: i32,
 }
-
 
 pub struct RegexT {
     pub re_magic: i32,

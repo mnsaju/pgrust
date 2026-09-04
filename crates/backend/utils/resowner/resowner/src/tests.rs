@@ -340,10 +340,16 @@ fn reparent_and_delete_recurse() {
 fn release_callbacks_run_most_recent_first() {
     setup();
     fn cb1(phase: ResourceReleasePhase, _c: bool, _t: bool, arg: Datum) {
-        RELEASED.with(|r| r.borrow_mut().push(("cb1", arg.as_usize() + phase as usize)));
+        RELEASED.with(|r| {
+            r.borrow_mut()
+                .push(("cb1", arg.as_usize() + phase as usize))
+        });
     }
     fn cb2(phase: ResourceReleasePhase, _c: bool, _t: bool, arg: Datum) {
-        RELEASED.with(|r| r.borrow_mut().push(("cb2", arg.as_usize() + phase as usize)));
+        RELEASED.with(|r| {
+            r.borrow_mut()
+                .push(("cb2", arg.as_usize() + phase as usize))
+        });
     }
     RegisterResourceReleaseCallback(cb1, Datum::from_usize(10)).unwrap();
     RegisterResourceReleaseCallback(cb2, Datum::from_usize(20)).unwrap();

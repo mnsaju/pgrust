@@ -2,7 +2,9 @@
 //! (no ReturningExpr node type).
 
 use types_error::PgResult;
-use types_nodes::primnodes::{Aggref, GroupingFunc, MergeSupportFunc, Param, ParamKind, PlaceHolderVar, Var};
+use types_nodes::primnodes::{
+    Aggref, GroupingFunc, MergeSupportFunc, Param, ParamKind, PlaceHolderVar, Var,
+};
 use types_nodes::Node;
 use types_pathnodes::PlannerParamItem;
 
@@ -74,7 +76,10 @@ fn assign_param_for_var<'mcx>(run: &mut PlannerRun<'mcx>, var: &Var<'mcx>) -> Pg
     run.glob.param_exec_types.lappend(mcx, var.vartype)?;
     let target = &mut run.suspended_roots[idx].root;
     let item_id = target.alloc_expr_node(item);
-    let pp = target.alloc_planner_param_item(PlannerParamItem { item: item_id, paramId: param_id });
+    let pp = target.alloc_planner_param_item(PlannerParamItem {
+        item: item_id,
+        paramId: param_id,
+    });
     target.plan_params.push(pp);
     Ok(param_id)
 }
@@ -114,7 +119,10 @@ fn assign_param_for_placeholdervar<'mcx>(
     run.glob.param_exec_types.lappend(mcx, ptype)?;
     let target = &mut run.suspended_roots[idx].root;
     let item_id = target.alloc_expr_node(copy);
-    let pp = target.alloc_planner_param_item(PlannerParamItem { item: item_id, paramId: param_id });
+    let pp = target.alloc_planner_param_item(PlannerParamItem {
+        item: item_id,
+        paramId: param_id,
+    });
     target.plan_params.push(pp);
     Ok(param_id)
 }
@@ -165,7 +173,10 @@ pub(crate) fn replace_outer_agg<'mcx>(
     run.glob.param_exec_types.lappend(mcx, agg.aggtype)?;
     let target = &mut run.suspended_roots[idx].root;
     let item_id = target.alloc_expr_node(copy);
-    let pp = target.alloc_planner_param_item(PlannerParamItem { item: item_id, paramId: param_id });
+    let pp = target.alloc_planner_param_item(PlannerParamItem {
+        item: item_id,
+        paramId: param_id,
+    });
     target.plan_params.push(pp);
     Node::mk(
         mcx,
@@ -211,7 +222,10 @@ pub(crate) fn replace_outer_returning<'mcx>(
     run.glob.param_exec_types.lappend(mcx, ptype)?;
     let target = &mut run.suspended_roots[idx].root;
     let item_id = target.alloc_expr_node(copy);
-    let pp = target.alloc_planner_param_item(PlannerParamItem { item: item_id, paramId: param_id });
+    let pp = target.alloc_planner_param_item(PlannerParamItem {
+        item: item_id,
+        paramId: param_id,
+    });
     target.plan_params.push(pp);
     Node::mk(
         mcx,
@@ -252,7 +266,10 @@ pub(crate) fn replace_outer_grouping<'mcx>(
     run.glob.param_exec_types.lappend(mcx, ptype)?;
     let target = &mut run.suspended_roots[idx].root;
     let item_id = target.alloc_expr_node(copy);
-    let pp = target.alloc_planner_param_item(PlannerParamItem { item: item_id, paramId: param_id });
+    let pp = target.alloc_planner_param_item(PlannerParamItem {
+        item: item_id,
+        paramId: param_id,
+    });
     target.plan_params.push(pp);
     Node::mk(
         mcx,
@@ -277,11 +294,11 @@ pub(crate) fn replace_outer_merge_support<'mcx>(
 ) -> PgResult<Node<'mcx>> {
     let idx = (0..run.suspended_roots.len())
         .rev()
-        .find(|&i| {
-            run.suspended_roots[i].root.command_type == types_nodes::CmdType::CMD_MERGE
-        })
+        .find(|&i| run.suspended_roots[i].root.command_type == types_nodes::CmdType::CMD_MERGE)
         .unwrap_or_else(|| {
-            panic!("replace_outer_merge_support (paramassign.c): MergeSupportFunc found outside MERGE")
+            panic!(
+                "replace_outer_merge_support (paramassign.c): MergeSupportFunc found outside MERGE"
+            )
         });
     let mcx = run.mcx;
     let ptype = msf.msftype;
@@ -290,7 +307,10 @@ pub(crate) fn replace_outer_merge_support<'mcx>(
     run.glob.param_exec_types.lappend(mcx, ptype)?;
     let target = &mut run.suspended_roots[idx].root;
     let item_id = target.alloc_expr_node(copy);
-    let pp = target.alloc_planner_param_item(PlannerParamItem { item: item_id, paramId: param_id });
+    let pp = target.alloc_planner_param_item(PlannerParamItem {
+        item: item_id,
+        paramId: param_id,
+    });
     target.plan_params.push(pp);
     Node::mk(
         mcx,
@@ -334,20 +354,22 @@ pub(crate) fn replace_nestloop_param_var<'mcx>(
             );
         }
     }
-    let (mut prm, _) = crate::subselect::generate_new_exec_param(
-        run,
-        var.vartype,
-        var.vartypmod,
-        var.varcollid,
-    )?;
+    let (mut prm, _) =
+        crate::subselect::generate_new_exec_param(run, var.vartype, var.vartypmod, var.varcollid)?;
     prm.location = var.location;
     let paramval = Node::mk(
         mcx,
-        Var { varnullingrels: var.varnullingrels.clone_in(mcx)?, ..*var },
+        Var {
+            varnullingrels: var.varnullingrels.clone_in(mcx)?,
+            ..*var
+        },
     )?;
     let nlp = Node::mk(
         mcx,
-        types_nodes::plannodes::NestLoopParam { paramno: prm.paramid, paramval },
+        types_nodes::plannodes::NestLoopParam {
+            paramno: prm.paramid,
+            paramval,
+        },
     )?;
     let id = run.intern_expr(nlp);
     run.root.curOuterParams.push(id);
@@ -392,7 +414,10 @@ pub(crate) fn replace_nestloop_param_placeholdervar<'mcx>(
     let paramval = rewrite_manip::copy_node(mcx, phv_node)?;
     let nlp = Node::mk(
         mcx,
-        types_nodes::plannodes::NestLoopParam { paramno: prm.paramid, paramval },
+        types_nodes::plannodes::NestLoopParam {
+            paramno: prm.paramid,
+            paramval,
+        },
     )?;
     let id = run.intern_expr(nlp);
     run.root.curOuterParams.push(id);
@@ -422,8 +447,7 @@ pub(crate) fn process_subquery_nestloop_params<'mcx>(
             types_nodes::NodeTag::T_PlaceHolderVar => {
                 let phv = item.as_place_holder_var().unwrap();
                 let phid = crate::placeholder::find_placeholder_info(run, phv)?;
-                let eval_at =
-                    crate::relnode::relids_copy(mcx, &run.root.phinfo(phid).ph_eval_at);
+                let eval_at = crate::relnode::relids_copy(mcx, &run.root.phinfo(phid).ph_eval_at);
                 if !crate::relnode::relids_is_subset(&eval_at, &run.root.curOuterRels) {
                     panic!("non-LATERAL parameter required by subquery");
                 }
@@ -451,7 +475,10 @@ pub(crate) fn process_subquery_nestloop_params<'mcx>(
             let paramval = rewrite_manip::copy_node(mcx, item)?;
             let nlp = Node::mk(
                 mcx,
-                types_nodes::plannodes::NestLoopParam { paramno: param_id, paramval },
+                types_nodes::plannodes::NestLoopParam {
+                    paramno: param_id,
+                    paramval,
+                },
             )?;
             let id = run.intern_expr(nlp);
             run.root.curOuterParams.push(id);
@@ -516,7 +543,10 @@ pub(crate) fn identify_current_nestloop_params<'mcx>(
                 .expect("PlaceHolderVar");
                 let nlp_node = Node::mk(
                     mcx,
-                    types_nodes::plannodes::NestLoopParam { paramno, paramval: base },
+                    types_nodes::plannodes::NestLoopParam {
+                        paramno,
+                        paramval: base,
+                    },
                 )?;
                 result.lappend(mcx, nlp_node)?;
             } else {
@@ -538,10 +568,19 @@ pub(crate) fn identify_current_nestloop_params<'mcx>(
             for x in crate::relnode::relids_members(&nulling) {
                 nullingrels.add_member(mcx, x)?;
             }
-            let newvar = Node::mk(mcx, Var { varnullingrels: nullingrels, ..*var })?;
+            let newvar = Node::mk(
+                mcx,
+                Var {
+                    varnullingrels: nullingrels,
+                    ..*var
+                },
+            )?;
             let nlp_node = Node::mk(
                 mcx,
-                types_nodes::plannodes::NestLoopParam { paramno, paramval: newvar },
+                types_nodes::plannodes::NestLoopParam {
+                    paramno,
+                    paramval: newvar,
+                },
             )?;
             result.lappend(mcx, nlp_node)?;
         } else {

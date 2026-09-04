@@ -42,7 +42,10 @@ pub enum TupleSlotKind {
 impl TupleSlotKind {
     #[inline]
     pub const fn has_get_heap_tuple(self) -> bool {
-        matches!(self, TupleSlotKind::HeapTuple | TupleSlotKind::BufferHeapTuple)
+        matches!(
+            self,
+            TupleSlotKind::HeapTuple | TupleSlotKind::BufferHeapTuple
+        )
     }
 
     #[inline]
@@ -125,7 +128,11 @@ impl<'mcx> TupleTableSlot<'mcx> {
     // getsomeattrs_int is C's extern slot_getsomeattrs_int (the per-kind
     // deform), monomorphized to a direct call; postcondition tts_nvalid >= attnum.
     #[inline]
-    pub fn slot_getsomeattrs(&mut self, attnum: i32, getsomeattrs_int: impl FnOnce(&mut Self, i32)) {
+    pub fn slot_getsomeattrs(
+        &mut self,
+        attnum: i32,
+        getsomeattrs_int: impl FnOnce(&mut Self, i32),
+    ) {
         if (self.tts_nvalid as i32) < attnum {
             getsomeattrs_int(self, attnum);
             debug_assert!(self.tts_nvalid as i32 >= attnum);

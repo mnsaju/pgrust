@@ -71,8 +71,8 @@ fn list_ne_drops_matched_bound() {
     let mcx = static_mcx();
     let bi = list_bounds(mcx);
     let empty = Bitmapset::empty();
-    let r = get_matching_list_bounds(mcx, &bi, InvalidStrategy, 1, &empty, |b| i32_cmp(b, 10))
-        .unwrap();
+    let r =
+        get_matching_list_bounds(mcx, &bi, InvalidStrategy, 1, &empty, |b| i32_cmp(b, 10)).unwrap();
     assert_eq!(members(&r.bound_offsets), [1, 2]);
     assert!(r.scan_default);
 }
@@ -133,10 +133,15 @@ fn range_eq_picks_covering_partition() {
     let mcx = static_mcx();
     let bi = range_bounds(mcx);
     let empty = Bitmapset::empty();
-    let r = get_matching_range_bounds(mcx, &bi, 1, BTEqualStrategyNumber, 1, &empty, &mut |_,
-             b| {
-        i32_cmp(b, 15)
-    })
+    let r = get_matching_range_bounds(
+        mcx,
+        &bi,
+        1,
+        BTEqualStrategyNumber,
+        1,
+        &empty,
+        &mut |_, b| i32_cmp(b, 15),
+    )
     .unwrap();
     let sel = matching_bounds_to_partitions(mcx, &bi, &r, b'r').unwrap();
     assert_eq!(members(&sel), [1]);
@@ -147,11 +152,10 @@ fn range_lt_min_prunes_to_first() {
     let mcx = static_mcx();
     let bi = range_bounds(mcx);
     let empty = Bitmapset::empty();
-    let r =
-        get_matching_range_bounds(mcx, &bi, 1, BTLessStrategyNumber, 1, &empty, &mut |_, b| {
-            i32_cmp(b, 5)
-        })
-        .unwrap();
+    let r = get_matching_range_bounds(mcx, &bi, 1, BTLessStrategyNumber, 1, &empty, &mut |_, b| {
+        i32_cmp(b, 5)
+    })
+    .unwrap();
     let sel = matching_bounds_to_partitions(mcx, &bi, &r, b'r').unwrap();
     assert_eq!(members(&sel), [0]);
 }
@@ -200,11 +204,11 @@ fn hash_full_key_prunes_to_remainder() {
     let mcx = static_mcx();
     let bi = hash_bounds(mcx);
     let empty = Bitmapset::empty();
-    let r = get_matching_hash_bounds(mcx, &bi, 1, HTEqualStrategyNumber, 1, &empty, || 7u64)
-        .unwrap();
+    let r =
+        get_matching_hash_bounds(mcx, &bi, 1, HTEqualStrategyNumber, 1, &empty, || 7u64).unwrap();
     assert_eq!(members(&r.bound_offsets), [3]);
-    let r = get_matching_hash_bounds(mcx, &bi, 2, HTEqualStrategyNumber, 1, &empty, || 0u64)
-        .unwrap();
+    let r =
+        get_matching_hash_bounds(mcx, &bi, 2, HTEqualStrategyNumber, 1, &empty, || 0u64).unwrap();
     assert_eq!(members(&r.bound_offsets), [0, 1, 2, 3]);
 }
 
@@ -217,7 +221,11 @@ fn combine_union_and_intersect() {
         for &x in xs {
             b.add_member(mcx, x).unwrap();
         }
-        PruneStepResult { bound_offsets: b, scan_default: false, scan_null: false }
+        PruneStepResult {
+            bound_offsets: b,
+            scan_default: false,
+            scan_null: false,
+        }
     };
     let results = vec![Some(mk(&[0, 1])), Some(mk(&[1, 2]))];
     let u = perform_pruning_combine_step(

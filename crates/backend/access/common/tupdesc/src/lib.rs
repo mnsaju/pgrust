@@ -15,9 +15,9 @@ use ::types_error::{PgError, PgResult};
 use ::types_tuple::varatt::varsize_any;
 use ::types_tuple::{
     AttrDefault, AttrMissing, CompactAttribute, ConstrCheck, FormData_pg_attribute,
-    InvalidCompressionMethod, NameData, PgTypeShape, TupleConstr, TupleDescData,
-    ATTNULLABLE_VALID, MAXIMUM_ALIGNOF, TYPALIGN_CHAR, TYPALIGN_DOUBLE, TYPALIGN_INT,
-    TYPSTORAGE_EXTENDED, TYPSTORAGE_PLAIN,
+    InvalidCompressionMethod, NameData, PgTypeShape, TupleConstr, TupleDescData, ATTNULLABLE_VALID,
+    MAXIMUM_ALIGNOF, TYPALIGN_CHAR, TYPALIGN_DOUBLE, TYPALIGN_INT, TYPSTORAGE_EXTENDED,
+    TYPSTORAGE_PLAIN,
 };
 
 #[cfg(test)]
@@ -294,8 +294,12 @@ pub fn equalTupleDescs(tupdesc1: &TupleDescData<'_>, tupdesc2: &TupleDescData<'_
                         }
                         if m1.am_present {
                             let cattr = tupdesc1.compact_attr(i);
-                            if !datum_is_equal(m1.am_value, m2.am_value, cattr.attbyval, cattr.attlen)
-                            {
+                            if !datum_is_equal(
+                                m1.am_value,
+                                m2.am_value,
+                                cattr.attbyval,
+                                cattr.attlen,
+                            ) {
                                 return false;
                             }
                         }
@@ -365,7 +369,15 @@ pub fn TupleDescInitEntry(
     // is never observed, so lookup-first is equivalent.
     let shape = syscache_seams::lookup_pg_type_shape::call(oidtypeid)?
         .ok_or_else(|| type_lookup_failed(oidtypeid))?;
-    init_entry(desc, attributeNumber, attributeName, oidtypeid, typmod, attdim, shape);
+    init_entry(
+        desc,
+        attributeNumber,
+        attributeName,
+        oidtypeid,
+        typmod,
+        attdim,
+        shape,
+    );
     populate_compact_attribute(desc, attributeNumber as usize - 1);
     Ok(())
 }
@@ -379,7 +391,15 @@ pub fn TupleDescInitBuiltinEntry(
     attdim: i32,
 ) -> PgResult<()> {
     let shape = builtin_type_shape(oidtypeid)?;
-    init_entry(desc, attributeNumber, Some(attributeName), oidtypeid, typmod, attdim, shape);
+    init_entry(
+        desc,
+        attributeNumber,
+        Some(attributeName),
+        oidtypeid,
+        typmod,
+        attdim,
+        shape,
+    );
     populate_compact_attribute(desc, attributeNumber as usize - 1);
     Ok(())
 }
@@ -606,7 +626,9 @@ fn datum_is_equal(v1: Datum, v2: Datum, attbyval: bool, attlen: i16) -> bool {
 #[cold]
 #[inline(never)]
 fn type_lookup_failed(oidtypeid: Oid) -> Box<PgError> {
-    Box::new(PgError::error(format!("cache lookup failed for type {oidtypeid}")))
+    Box::new(PgError::error(format!(
+        "cache lookup failed for type {oidtypeid}"
+    )))
 }
 
 #[track_caller]
@@ -695,7 +717,11 @@ pub fn build_attrmap_by_name_missing_ok<'mcx>(
 
 // check_attrmap_match (attmap.c): true when the map is a one-to-one identity,
 // so the caller can skip runtime tuple conversion entirely.
-fn check_attrmap_match(indesc: &TupleDescData<'_>, outdesc: &TupleDescData<'_>, attmap: &[i16]) -> bool {
+fn check_attrmap_match(
+    indesc: &TupleDescData<'_>,
+    outdesc: &TupleDescData<'_>,
+    attmap: &[i16],
+) -> bool {
     if indesc.natts != outdesc.natts {
         return false;
     }

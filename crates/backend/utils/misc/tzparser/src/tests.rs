@@ -121,7 +121,10 @@ fn include_recursion_and_override() {
     let tbl = load_tzoffsets_from(&dir, "Top").unwrap();
     assert_eq!(tbl.abbrevs.len(), 3);
     assert_eq!(find(tbl, "aaa").value, 300);
-    assert_eq!((find(tbl, "bbb").typ as i32, find(tbl, "bbb").value), (DTZ, 200));
+    assert_eq!(
+        (find(tbl, "bbb").typ as i32, find(tbl, "bbb").value),
+        (DTZ, 200)
+    );
     assert_eq!(find(tbl, "ccc").typ as i32, DYNTZ);
 }
 
@@ -217,7 +220,10 @@ fn filename_and_open_failures() {
     assert_eq!(load_err(&dir, "Nope").message, None);
     std::fs::write(format!("{dir}/IncNope"), "@INCLUDE Nope\n").unwrap();
     let e = load_err(&dir, "IncNope");
-    assert!(e.message.unwrap().starts_with("could not read time zone file \"Nope\":"));
+    assert!(e
+        .message
+        .unwrap()
+        .starts_with("could not read time zone file \"Nope\":"));
 
     let e = load_err(&format!("{dir}/absent"), "Default");
     assert!(e.message.unwrap().starts_with("could not open directory"));
@@ -247,7 +253,10 @@ fn strtol_semantics() {
     assert_eq!(strtol10(b""), None);
     // C: strtol saturates at LONG_MAX/LONG_MIN, then truncates into the int
     // field.
-    assert_eq!(strtol10(b"99999999999999999999999999"), Some(i64::MAX as i32));
+    assert_eq!(
+        strtol10(b"99999999999999999999999999"),
+        Some(i64::MAX as i32)
+    );
     assert_eq!(strtol10(b"4294967296"), Some(0));
 }
 
@@ -256,7 +265,11 @@ fn directive_prefix_matching_is_c_loose() {
     // C matches @INCLUDE/@OVERRIDE by prefix, no word boundary.
     let dir = scratch_dir("loose");
     std::fs::write(format!("{dir}/Base"), "AAA 100\n").unwrap();
-    std::fs::write(format!("{dir}/Loose"), "@includeBase\n@overrideX\nAAA 200\n").unwrap();
+    std::fs::write(
+        format!("{dir}/Loose"),
+        "@includeBase\n@overrideX\nAAA 200\n",
+    )
+    .unwrap();
     let tbl = load_tzoffsets_from(&dir, "Loose").unwrap();
     assert_eq!(find(tbl, "aaa").value, 200);
 }

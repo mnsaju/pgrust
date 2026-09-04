@@ -146,10 +146,8 @@ pub fn toast_save_datum<'mcx>(
         let todo = unsafe { varsize_4b(p) } - VARHDRSZ;
         toast_pointer.va_rawsize =
             (toastdesc::toast_compress_extsize(value)? as usize + VARHDRSZ) as i32;
-        toast_pointer.set_size_and_compress_method(
-            todo as u32,
-            toastdesc::toast_compress_method(value)?,
-        );
+        toast_pointer
+            .set_size_and_compress_method(todo as u32, toastdesc::toast_compress_method(value)?);
         debug_assert!(toast_pointer.is_compressed());
         (&value[VARHDRSZ..], todo)
     } else {
@@ -159,8 +157,11 @@ pub fn toast_save_datum<'mcx>(
         (&value[VARHDRSZ..], todo)
     };
 
-    toast_pointer.va_toastrelid =
-        if rd_toastoid != InvalidOid { rd_toastoid } else { toastrel.rd_id };
+    toast_pointer.va_toastrelid = if rd_toastoid != InvalidOid {
+        rd_toastoid
+    } else {
+        toastrel.rd_id
+    };
 
     let mut data_todo = data_todo;
     if rd_toastoid == InvalidOid {
@@ -353,7 +354,8 @@ pub(crate) fn valueid_scan_key(valueid: Oid) -> ScanKeyData {
     k.sk_attno = 1;
     k.sk_strategy = BTEqualStrategyNumber;
     k.sk_collation = ::types_core::C_COLLATION_OID;
-    k.sk_func = ::types_fmgr::FmgrInfo::new(adt_scalar::builtins::fc_oideq, F_OIDEQ, 2, true, false);
+    k.sk_func =
+        ::types_fmgr::FmgrInfo::new(adt_scalar::builtins::fc_oideq, F_OIDEQ, 2, true, false);
     k.sk_argument = Datum::from_oid(valueid);
     k
 }
@@ -404,10 +406,7 @@ fn no_valid_index(relid: Oid) -> Box<PgError> {
 }
 
 /// C `toast_close_indexes`.
-pub fn toast_close_indexes(
-    toastidxs: PgVec<'_, Relation<'_>>,
-    lock: LOCKMODE,
-) -> PgResult<()> {
+pub fn toast_close_indexes(toastidxs: PgVec<'_, Relation<'_>>, lock: LOCKMODE) -> PgResult<()> {
     for idx in toastidxs {
         indexam::index_close(idx, lock)?;
     }

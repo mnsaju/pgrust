@@ -414,7 +414,12 @@ fn getsome_narrow(base: &mut SlotBase<'_>, img: TupleImage, offp: &mut u32, attn
 
 #[inline]
 pub(crate) fn heap_getsomeattrs_int(h: &mut HeapTupleTableSlot<'_>, attnum: i32) {
-    let HeapTupleTableSlot { base, tuple, off, jit_deform } = h;
+    let HeapTupleTableSlot {
+        base,
+        tuple,
+        off,
+        jit_deform,
+    } = h;
     debug_assert!(!base.is_empty());
     check_attnum(base, attnum);
     let img = TupleImage::from_heap(tuple.as_ref().expect("heap slot without tuple"));
@@ -529,7 +534,12 @@ pub fn slot_attisnull(slot: &mut SlotData<'_>, attnum: i32) -> bool {
 // deform kernel is a direct call, no SlotData dispatch (types_slot design).
 #[inline]
 pub fn heap_slot_getattr(h: &mut HeapTupleTableSlot<'_>, attnum: i32, isnull: &mut bool) -> Datum {
-    let HeapTupleTableSlot { base, tuple, off, jit_deform } = h;
+    let HeapTupleTableSlot {
+        base,
+        tuple,
+        off,
+        jit_deform,
+    } = h;
     base.slot_getattr(attnum, isnull, |b, n| {
         check_attnum(b, n);
         let img = TupleImage::from_heap(tuple.as_ref().expect("heap slot without tuple"));

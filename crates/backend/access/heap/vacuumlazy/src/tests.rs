@@ -32,7 +32,11 @@ fn with_fake<R>(f: impl FnOnce(&mut Fake) -> R) -> R {
 
 fn fake_page(fork: u8, block: BlockNumber) -> Buffer {
     with_fake(|f| {
-        if let Some(i) = f.entries.iter().position(|&(fk, b, _)| fk == fork && b == block) {
+        if let Some(i) = f
+            .entries
+            .iter()
+            .position(|&(fk, b, _)| fk == fork && b == block)
+        {
             f.pins[i] += 1;
             return (i + 1) as Buffer;
         }
@@ -92,12 +96,18 @@ fn install_seams() {
                 })
             },
         );
-        bufmgr_seams::extend_buffered_rel_to_rel::set(|rel, fork, strategy, flags, extend_to, mode| {
-            bufmgr_seams::extend_buffered_rel_to::call(
-                bufmgr_seams::relation_smgr_locator::call(rel),
-                fork, strategy, flags, extend_to, mode,
-            )
-        });
+        bufmgr_seams::extend_buffered_rel_to_rel::set(
+            |rel, fork, strategy, flags, extend_to, mode| {
+                bufmgr_seams::extend_buffered_rel_to::call(
+                    bufmgr_seams::relation_smgr_locator::call(rel),
+                    fork,
+                    strategy,
+                    flags,
+                    extend_to,
+                    mode,
+                )
+            },
+        );
         bufmgr_seams::lock_buffer::set(|buf, mode| {
             with_fake(|f| {
                 let l = &mut f.locks[(buf - 1) as usize];
@@ -164,18 +174,25 @@ fn install_seams() {
         transam_xlog_seams::data_checksums_enabled::set(|| false);
         transam_xlog_seams::recovery_in_progress::set(|| false);
         sinval_seams::send_shared_invalid_messages::set(|_| Ok(()));
-        guc_tables::vars::wal_log_hints
-            .install(guc_tables::GucVarAccessors { get: || false, set: |_| {} });
+        guc_tables::vars::wal_log_hints.install(guc_tables::GucVarAccessors {
+            get: || false,
+            set: |_| {},
+        });
     });
     let mut g = FAKE.lock().unwrap_or_else(|e| e.into_inner());
-    *g = Some(Fake { entries: Vec::new(), pins: Vec::new(), locks: Vec::new(), wal: Vec::new() });
+    *g = Some(Fake {
+        entries: Vec::new(),
+        pins: Vec::new(),
+        locks: Vec::new(),
+        wal: Vec::new(),
+    });
 }
 
 fn test_relation<'mcx>(mcx: Mcx<'mcx>) -> RelationData<'mcx> {
-    use std::cell::Cell;
-    use std::rc::Rc;
     use ::types_rel::{LockInfoData, LockRelId};
     use ::types_tuple::{CompactAttribute, FormData_pg_attribute, TupleDescData};
+    use std::cell::Cell;
+    use std::rc::Rc;
     let att = FormData_pg_attribute {
         attnum: 1,
         attlen: 4,
@@ -235,7 +252,10 @@ fn test_relation<'mcx>(mcx: Mcx<'mcx>) -> RelationData<'mcx> {
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
         rd_lockInfo: LockInfoData {
-            lockRelId: LockRelId { relId: REL_OID, dbId: 5 },
+            lockRelId: LockRelId {
+                relId: REL_OID,
+                dbId: 5,
+            },
         },
         rd_rel,
         rd_att,
@@ -248,13 +268,16 @@ fn test_relation<'mcx>(mcx: Mcx<'mcx>) -> RelationData<'mcx> {
         pgstat_enabled: Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: ::mcx::PgVec::new_in(mcx),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     }
 }
 
@@ -290,10 +313,16 @@ fn vacrel<'a, 'mcx>(rel: &'a RelationData<'mcx>, mcx: Mcx<'mcx>) -> LVRelState<'
             // Seed = (OldestXmin, OldestMxact), as heap_vacuum_rel.
             let mut counters = ::vacuum_morsels::ScanCounters::seed(1000, 1);
             counters.lpdead_item_pages = 1;
-            ScanFolds { counters, offnum: InvalidOffsetNumber }
+            ScanFolds {
+                counters,
+                offnum: InvalidOffsetNumber,
+            }
         },
         dead_items: Some(TidStore::create_local(mcx, 64 * 1024 * 1024, true).unwrap()),
-        dead_items_info: VacDeadItemsInfo { max_bytes: 64 * 1024 * 1024, num_items: 0 },
+        dead_items_info: VacDeadItemsInfo {
+            max_bytes: 64 * 1024 * 1024,
+            num_items: 0,
+        },
         pvs: None,
         num_index_scans: 1,
         new_rel_tuples: 0.0,
@@ -330,7 +359,12 @@ fn with_scan_parts<R>(
         nindexes: *nindexes,
     };
     let mut sink = |blkno: BlockNumber, offsets: &[OffsetNumber]| {
-        dead_items_add(dead_items.as_mut().unwrap(), dead_items_info, blkno, offsets)
+        dead_items_add(
+            dead_items.as_mut().unwrap(),
+            dead_items_info,
+            blkno,
+            offsets,
+        )
     };
     f(&env, folds, &mut sink)
 }
@@ -359,7 +393,9 @@ fn lazy_vacuum_heap_rel_reaps_dead_items() {
         pm.init(0);
         let tuple = [0u8; 32];
         for expected in 1..=3u16 {
-            let off = pm.add_item(&tuple, InvalidOffsetNumber, PAI_IS_HEAP).unwrap();
+            let off = pm
+                .add_item(&tuple, InvalidOffsetNumber, PAI_IS_HEAP)
+                .unwrap();
             assert_eq!(off, expected);
             let mut lp = pm.as_ref().item_id(off);
             lp.set_dead();
@@ -370,7 +406,11 @@ fn lazy_vacuum_heap_rel_reaps_dead_items() {
 
     let mut vr = vacrel(&rel, mcx);
     {
-        let LVRelState { dead_items, dead_items_info, .. } = &mut vr;
+        let LVRelState {
+            dead_items,
+            dead_items_info,
+            ..
+        } = &mut vr;
         dead_items_add(dead_items.as_mut().unwrap(), dead_items_info, 0, &[1, 2, 3]).unwrap();
     }
     vr.folds.counters.lpdead_items = 3;
@@ -380,7 +420,11 @@ fn lazy_vacuum_heap_rel_reaps_dead_items() {
     let buf = fake_page(0, 0);
     // SAFETY: test page, live.
     let page = unsafe { PageRef::from_raw(bufmgr_seams::buffer_get_page::call(buf)) };
-    assert_eq!(page.max_offset_number(), 1, "lp array truncated to one entry");
+    assert_eq!(
+        page.max_offset_number(),
+        1,
+        "lp array truncated to one entry"
+    );
     assert!(!page.item_id(1).is_used(), "remaining lp is LP_UNUSED");
     assert!(page.is_all_visible(), "PD_ALL_VISIBLE set");
     assert!(page.heap_free_space() > BLCKSZ / 2);
@@ -406,7 +450,11 @@ fn lazy_vacuum_heap_rel_reaps_dead_items() {
 
     with_fake(|f| {
         assert!(f.pins.iter().all(|&p| p == 0), "leaked pins: {:?}", f.pins);
-        assert!(f.locks.iter().all(|&l| l == 0), "leaked locks: {:?}", f.locks);
+        assert!(
+            f.locks.iter().all(|&l| l == 0),
+            "leaked locks: {:?}",
+            f.locks
+        );
     });
 }
 
@@ -418,7 +466,9 @@ fn noprune_page(block: BlockNumber) -> Buffer {
     let mut tuple = [0u8; 32];
     for (expected, xmin) in [(1u16, 500u32), (2, 0), (3, 1500), (4, 700)] {
         tuple[0..4].copy_from_slice(&xmin.to_ne_bytes());
-        let off = pm.add_item(&tuple, InvalidOffsetNumber, PAI_IS_HEAP).unwrap();
+        let off = pm
+            .add_item(&tuple, InvalidOffsetNumber, PAI_IS_HEAP)
+            .unwrap();
         assert_eq!(off, expected);
     }
     let mut lp = pm.as_ref().item_id(2);
@@ -457,9 +507,18 @@ fn lazy_scan_noprune_counts_and_collects() {
     assert_eq!(vr.folds.counters.lpdead_item_pages, 1);
     let dead_tids = collect_dead_tids(&vr);
     assert_eq!(dead_tids.len(), 1);
-    assert_eq!(::types_tuple::ItemPointerGetBlockNumberNoCheck(&dead_tids[0]), 3);
-    assert_eq!(::types_tuple::ItemPointerGetOffsetNumberNoCheck(&dead_tids[0]), 2);
-    assert_eq!(vr.folds.counters.NewRelfrozenXid, 500, "ratcheted to oldest unfrozen xmin");
+    assert_eq!(
+        ::types_tuple::ItemPointerGetBlockNumberNoCheck(&dead_tids[0]),
+        3
+    );
+    assert_eq!(
+        ::types_tuple::ItemPointerGetOffsetNumberNoCheck(&dead_tids[0]),
+        2
+    );
+    assert_eq!(
+        vr.folds.counters.NewRelfrozenXid, 500,
+        "ratcheted to oldest unfrozen xmin"
+    );
     assert_eq!(vr.folds.counters.nonempty_pages, 4);
     assert_eq!(vr.folds.offnum, InvalidOffsetNumber);
 
@@ -490,7 +549,10 @@ fn lazy_scan_noprune_aggressive_requires_prune() {
     assert_eq!(vr.folds.counters.missed_dead_tuples, 0);
     assert_eq!(vr.folds.counters.lpdead_items, 0);
     assert_eq!(vr.dead_items_info.num_items, 0);
-    assert_eq!(vr.folds.counters.NewRelfrozenXid, 1000, "tracker untouched on bailout");
+    assert_eq!(
+        vr.folds.counters.NewRelfrozenXid, 1000,
+        "tracker untouched on bailout"
+    );
     assert_eq!(vr.folds.counters.nonempty_pages, 0);
     assert_eq!(vr.folds.offnum, InvalidOffsetNumber);
 
@@ -519,7 +581,10 @@ fn lazy_scan_noprune_one_pass_counts_lpdead_as_missed() {
     .unwrap());
 
     assert!(has_lpdead_items);
-    assert_eq!(vr.folds.counters.missed_dead_tuples, 2, "HTSV-dead + folded LP_DEAD");
+    assert_eq!(
+        vr.folds.counters.missed_dead_tuples, 2,
+        "HTSV-dead + folded LP_DEAD"
+    );
     assert_eq!(vr.folds.counters.lpdead_items, 0);
     assert_eq!(vr.folds.counters.lpdead_item_pages, 0);
     assert_eq!(vr.dead_items_info.num_items, 0);
@@ -538,7 +603,8 @@ fn truncate_line_pointer_array_keeps_used_prefix() {
     pm.init(0);
     let tuple = [0u8; 16];
     for _ in 1..=5u16 {
-        pm.add_item(&tuple, InvalidOffsetNumber, PAI_IS_HEAP).unwrap();
+        pm.add_item(&tuple, InvalidOffsetNumber, PAI_IS_HEAP)
+            .unwrap();
     }
     for off in [2u16, 4, 5] {
         let mut lp = pm.as_ref().item_id(off);

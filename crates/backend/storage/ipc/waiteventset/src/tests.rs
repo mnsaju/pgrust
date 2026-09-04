@@ -91,7 +91,10 @@ fn socket_readiness_and_modify_to_closed() {
     // C's kqueue arm); epoll merges them into one.
     let n = WaitEventSetWait(set, 1000, &mut occurred, 0).unwrap();
     assert!(n >= 1);
-    let union: u32 = occurred[..n as usize].iter().map(|e| e.events).fold(0, |a, e| a | e);
+    let union: u32 = occurred[..n as usize]
+        .iter()
+        .map(|e| e.events)
+        .fold(0, |a, e| a | e);
     assert_eq!(union, WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
     assert!(occurred[..n as usize].iter().all(|e| e.fd == a));
 
@@ -356,11 +359,17 @@ fn latch_plus_socket_wakes_on_late_socket_data() {
     let mut occurred = [WaitEvent::default(); 3];
     let n = WaitEventSetWait(set, 5000, &mut occurred, 0).unwrap();
     writer.join().unwrap();
-    assert!(start.elapsed().as_millis() < 3000, "timed out instead of waking on socket");
+    assert!(
+        start.elapsed().as_millis() < 3000,
+        "timed out instead of waking on socket"
+    );
     assert_eq!(n, 1);
     assert_eq!(occurred[0].events & WL_SOCKET_READABLE, WL_SOCKET_READABLE);
 
     FreeWaitEventSet(set);
     // SAFETY: closing our socketpair.
-    unsafe { libc::close(a); libc::close(b); }
+    unsafe {
+        libc::close(a);
+        libc::close(b);
+    }
 }

@@ -22,7 +22,11 @@ fn install_fixture() {
     ONCE.call_once(|| {
         syscache_seams::pg_type_base_shape::set(|typid| {
             Ok(Some(syscache_seams::PgTypeBaseShape {
-                typtype: if typid == UNKNOWNOID { b'p' as i8 } else { b'b' as i8 },
+                typtype: if typid == UNKNOWNOID {
+                    b'p' as i8
+                } else {
+                    b'b' as i8
+                },
                 typbasetype: InvalidOid,
                 typtypmod: -1,
                 typelem: InvalidOid,
@@ -66,11 +70,19 @@ fn install_fixture() {
         });
         syscache_seams::lookup_pg_type_shape::set(|typid| {
             Ok(Some(types_tuple::PgTypeShape {
-                typlen: if typid == TEXTOID || typid == VARCHAROID { -1 } else { 4 },
+                typlen: if typid == TEXTOID || typid == VARCHAROID {
+                    -1
+                } else {
+                    4
+                },
                 typbyval: !(typid == TEXTOID || typid == VARCHAROID),
                 typalign: b'i' as i8,
                 typstorage: b'p' as i8,
-                typcollation: if typid == TEXTOID || typid == VARCHAROID { 100 } else { InvalidOid },
+                typcollation: if typid == TEXTOID || typid == VARCHAROID {
+                    100
+                } else {
+                    InvalidOid
+                },
             }))
         });
         // pg_cast.dat: text -> varchar is binary-coercible, implicit.
@@ -83,12 +95,14 @@ fn install_fixture() {
                     castmethod: b'f' as i8,
                 }));
             }
-            Ok((src == TEXTOID && tgt == VARCHAROID).then_some(syscache_seams::PgCastShape {
-                oid: TEXT_TO_VARCHAR_CAST,
-                castfunc: InvalidOid,
-                castcontext: b'i' as i8,
-                castmethod: b'b' as i8,
-            }))
+            Ok(
+                (src == TEXTOID && tgt == VARCHAROID).then_some(syscache_seams::PgCastShape {
+                    oid: TEXT_TO_VARCHAR_CAST,
+                    castfunc: InvalidOid,
+                    castcontext: b'i' as i8,
+                    castmethod: b'b' as i8,
+                }),
+            )
         });
         syscache_seams::pg_type_element_shape::set(|typid| {
             if typid == MISSING_TYPE {
@@ -100,22 +114,24 @@ fn install_fixture() {
             }))
         });
         syscache_seams::lookup_pg_proc_shape::set(|funcid| {
-            Ok((funcid == BPCHAR_LEN_COERCION_FUNC).then_some(syscache_seams::PgProcShape {
-                prolang: 12,
-                prosecdef: false,
-                proconfig_isnull: true,
-                pronamespace: 11,
-                prorettype: BPCHAROID,
-                provariadic: InvalidOid,
-                prosupport: InvalidOid,
-                pronargs: 3,
-                prokind: b'f' as i8,
-                provolatile: b'i' as i8,
-                proparallel: b's' as i8,
-                proretset: false,
-                proisstrict: true,
-                proleakproof: false,
-            }))
+            Ok(
+                (funcid == BPCHAR_LEN_COERCION_FUNC).then_some(syscache_seams::PgProcShape {
+                    prolang: 12,
+                    prosecdef: false,
+                    proconfig_isnull: true,
+                    pronamespace: 11,
+                    prorettype: BPCHAROID,
+                    provariadic: InvalidOid,
+                    prosupport: InvalidOid,
+                    pronargs: 3,
+                    prokind: b'f' as i8,
+                    provolatile: b'i' as i8,
+                    proparallel: b's' as i8,
+                    proretset: false,
+                    proisstrict: true,
+                    proleakproof: false,
+                }),
+            )
         });
         syscache_seams::pg_type_category::set(|typid| {
             Ok(Some(if typid == TEXTOID || typid == VARCHAROID {
@@ -161,7 +177,10 @@ fn unknown_const_coerces_to_text_via_textin() {
     let c = out.as_const().unwrap();
     assert_eq!(c.consttype, TEXTOID);
     assert_eq!((c.consttypmod, c.constcollid), (-1, 100));
-    assert_eq!((c.constlen, c.constbyval, c.constisnull), (-1, false, false));
+    assert_eq!(
+        (c.constlen, c.constbyval, c.constisnull),
+        (-1, false, false)
+    );
     // SAFETY: the datum points at a flat 4B-header text varlena owned by mcx.
     let v = unsafe { datum::varlena::VarlenaRef::from_ptr(c.constvalue.as_usize() as *const u8) };
     assert_eq!(v.data(), b"hello");
@@ -173,9 +192,17 @@ fn null_unknown_const_coerces_without_calling_input() {
     let ctx = MemoryContext::new("t");
     let mcx = ctx.mcx();
     let pstate = make_parsestate(mcx, None);
-    let node =
-        Node::mk_const(mcx, UNKNOWNOID, -1, InvalidOid, -2, datum::Datum::null(), true, false)
-            .unwrap();
+    let node = Node::mk_const(
+        mcx,
+        UNKNOWNOID,
+        -1,
+        InvalidOid,
+        -2,
+        datum::Datum::null(),
+        true,
+        false,
+    )
+    .unwrap();
 
     let out = coerce_type(
         mcx,
@@ -234,7 +261,10 @@ fn unknown_const_coercion_error_carries_cursor_position() {
     )
     .unwrap_err();
 
-    assert_eq!(err.sqlstate(), types_error::ERRCODE_INVALID_TEXT_REPRESENTATION);
+    assert_eq!(
+        err.sqlstate(),
+        types_error::ERRCODE_INVALID_TEXT_REPRESENTATION
+    );
     // C: setup_parser_errposition_callback(con->location=7) -> char pos 8.
     assert_eq!(err.cursor_position(), Some(8));
 }
@@ -289,8 +319,7 @@ fn own_datum_flattens_expanded_datum() {
         datum::expandeddatum::eohp_get_ro_datum(hdr)
     };
     let out = crate::own_datum(mcx, d, -1, false).unwrap();
-    let image =
-        unsafe { core::slice::from_raw_parts(out.as_usize() as *const u8, 8) };
+    let image = unsafe { core::slice::from_raw_parts(out.as_usize() as *const u8, 8) };
     assert_eq!(&image[4..], b"flat");
     drop(unsafe { Box::from_raw(obj) });
 }
@@ -301,8 +330,17 @@ fn same_type_is_identity() {
     let ctx = MemoryContext::new("t");
     let mcx = ctx.mcx();
     let pstate = make_parsestate(mcx, None);
-    let node = Node::mk_const(mcx, INT4OID, -1, InvalidOid, 4, datum::Datum::from_i32(7), false, true)
-        .unwrap();
+    let node = Node::mk_const(
+        mcx,
+        INT4OID,
+        -1,
+        InvalidOid,
+        4,
+        datum::Datum::from_i32(7),
+        false,
+        true,
+    )
+    .unwrap();
 
     let out = coerce_type(
         mcx,
@@ -317,7 +355,10 @@ fn same_type_is_identity() {
     )
     .unwrap();
     assert_eq!(out.node_tag(), NodeTag::T_Const);
-    assert_eq!(out.as_const().unwrap().constvalue, datum::Datum::from_i32(7));
+    assert_eq!(
+        out.as_const().unwrap().constvalue,
+        datum::Datum::from_i32(7)
+    );
 }
 
 #[test]
@@ -326,7 +367,8 @@ fn binary_compatible_cast_wraps_relabel() {
     let ctx = MemoryContext::new("t");
     let mcx = ctx.mcx();
     let pstate = make_parsestate(mcx, None);
-    let node = Node::mk_const(mcx, TEXTOID, -1, 100, -1, datum::Datum::null(), true, false).unwrap();
+    let node =
+        Node::mk_const(mcx, TEXTOID, -1, 100, -1, datum::Datum::null(), true, false).unwrap();
 
     let out = coerce_type(
         mcx,
@@ -353,16 +395,22 @@ fn binary_compatible_cast_wraps_relabel() {
 fn pathways_and_predicates() {
     install_fixture();
     assert_eq!(
-        find_coercion_pathway(VARCHAROID, TEXTOID, COERCION_IMPLICIT).unwrap().0,
+        find_coercion_pathway(VARCHAROID, TEXTOID, COERCION_IMPLICIT)
+            .unwrap()
+            .0,
         COERCION_PATH_RELABELTYPE
     );
     assert_eq!(
-        find_coercion_pathway(TEXTOID, INT4OID, COERCION_IMPLICIT).unwrap().0,
+        find_coercion_pathway(TEXTOID, INT4OID, COERCION_IMPLICIT)
+            .unwrap()
+            .0,
         COERCION_PATH_NONE
     );
     // assignment-to-string CoerceViaIO fallback (find_coercion_pathway tail).
     assert_eq!(
-        find_coercion_pathway(TEXTOID, INT4OID, COERCION_ASSIGNMENT).unwrap().0,
+        find_coercion_pathway(TEXTOID, INT4OID, COERCION_ASSIGNMENT)
+            .unwrap()
+            .0,
         COERCION_PATH_COERCEVIAIO
     );
 
@@ -400,8 +448,17 @@ fn typmod_coercion_builds_three_arg_funcexpr() {
     install_fixture();
     let ctx = MemoryContext::new("t");
     let mcx = ctx.mcx();
-    let node =
-        Node::mk_const(mcx, BPCHAROID, -1, 100, -1, datum::Datum::null(), true, false).unwrap();
+    let node = Node::mk_const(
+        mcx,
+        BPCHAROID,
+        -1,
+        100,
+        -1,
+        datum::Datum::null(),
+        true,
+        false,
+    )
+    .unwrap();
 
     let out = crate::coerce_type_typmod(
         mcx,
@@ -494,8 +551,17 @@ fn typmod_coercion_skips_when_typmod_matches() {
     install_fixture();
     let ctx = MemoryContext::new("t");
     let mcx = ctx.mcx();
-    let node =
-        Node::mk_const(mcx, BPCHAROID, 9, 100, -1, datum::Datum::null(), true, false).unwrap();
+    let node = Node::mk_const(
+        mcx,
+        BPCHAROID,
+        9,
+        100,
+        -1,
+        datum::Datum::null(),
+        true,
+        false,
+    )
+    .unwrap();
     let out = crate::coerce_type_typmod(
         mcx,
         node,
@@ -515,8 +581,17 @@ fn negative_typmod_retypes_const_to_unspecified_typmod() {
     install_fixture();
     let ctx = MemoryContext::new("t");
     let mcx = ctx.mcx();
-    let node =
-        Node::mk_const(mcx, BPCHAROID, 9, 100, -1, datum::Datum::null(), true, false).unwrap();
+    let node = Node::mk_const(
+        mcx,
+        BPCHAROID,
+        9,
+        100,
+        -1,
+        datum::Datum::null(),
+        true,
+        false,
+    )
+    .unwrap();
     let out = crate::coerce_type_typmod(
         mcx,
         node,

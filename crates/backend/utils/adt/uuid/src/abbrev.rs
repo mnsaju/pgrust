@@ -62,7 +62,9 @@ mod tests {
         let mut x: u64 = 42;
         let mut uuids: Vec<PgUuid> = Vec::new();
         for i in 0..200u64 {
-            x = x.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            x = x
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             let mut u = [0u8; 16];
             u[..8].copy_from_slice(&(x >> (i % 5)).to_be_bytes());
             u[8..].copy_from_slice(&x.to_le_bytes());

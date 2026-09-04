@@ -66,14 +66,20 @@ impl PosixVfs {
         let mut highestfd: i32 = 0;
         let mut stop_errno: i32 = 0;
 
-        let mut rlim = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+        let mut rlim = libc::rlimit {
+            rlim_cur: 0,
+            rlim_max: 0,
+        };
         // SAFETY: getrlimit writes the out-param struct.
         let getrlimit_status = unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut rlim) };
-        let getrlimit_errno = if getrlimit_status != 0 { get_errno() } else { 0 };
+        let getrlimit_errno = if getrlimit_status != 0 {
+            get_errno()
+        } else {
+            0
+        };
 
         loop {
-            if getrlimit_status == 0 && highestfd as u64 >= (rlim.rlim_cur as u64).wrapping_sub(1)
-            {
+            if getrlimit_status == 0 && highestfd as u64 >= (rlim.rlim_cur as u64).wrapping_sub(1) {
                 break;
             }
 
@@ -137,7 +143,10 @@ impl PosixVfs {
 
     #[cfg(not(target_family = "wasm"))]
     pub fn raise_fd_soft_limit_to_hard(&self) -> FdSoftLimitRaise {
-        let mut rlim = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+        let mut rlim = libc::rlimit {
+            rlim_cur: 0,
+            rlim_max: 0,
+        };
         // SAFETY: getrlimit writes the out-param struct.
         if unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut rlim) } != 0 {
             return FdSoftLimitRaise {
@@ -156,7 +165,11 @@ impl PosixVfs {
         let mut report = FdSoftLimitRaise {
             soft_before,
             soft_after: soft_before,
-            hard: if hard == libc::RLIM_INFINITY { u64::MAX } else { hard },
+            hard: if hard == libc::RLIM_INFINITY {
+                u64::MAX
+            } else {
+                hard
+            },
             getrlimit_failed: false,
             getrlimit_errno: 0,
             setrlimit_errno: 0,
@@ -177,7 +190,10 @@ impl PosixVfs {
 
         let mut last_errno = 0;
         while target > soft_before {
-            let want = libc::rlimit { rlim_cur: target, rlim_max: hard };
+            let want = libc::rlimit {
+                rlim_cur: target,
+                rlim_max: hard,
+            };
             // SAFETY: setrlimit reads the struct; failure leaves limits as-is.
             if unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &want) } == 0 {
                 report.soft_after = target;
@@ -205,9 +221,8 @@ impl Vfs for PosixVfs {
         {
             // SAFETY: NUL-terminated path; PG_O_DIRECT is a synthetic bit
             // masked off before reaching the kernel.
-            let raw = unsafe {
-                libc::open(path.as_ptr(), flags & !PG_O_DIRECT, mode as libc::c_uint)
-            };
+            let raw =
+                unsafe { libc::open(path.as_ptr(), flags & !PG_O_DIRECT, mode as libc::c_uint) };
             if raw >= 0 && flags & PG_O_DIRECT != 0 {
                 // SAFETY: `raw` is live; F_NOCACHE is macOS's O_DIRECT analogue.
                 if unsafe { libc::fcntl(raw, libc::F_NOCACHE, 1) } < 0 {
@@ -223,7 +238,7 @@ impl Vfs for PosixVfs {
         #[cfg(not(target_os = "macos"))]
         {
             let _ = PG_O_DIRECT; // real O_DIRECT (or 0): passes straight through
-            // SAFETY: NUL-terminated path.
+                                 // SAFETY: NUL-terminated path.
             unsafe { libc::open(path.as_ptr(), flags, mode as libc::c_uint) }
         }
     }
@@ -342,7 +357,10 @@ impl Vfs for PosixVfs {
                 ra_offset: libc::off_t,
                 ra_count: libc::c_int,
             }
-            let ra = Radvisory { ra_offset: off, ra_count: len as libc::c_int };
+            let ra = Radvisory {
+                ra_offset: off,
+                ra_count: len as libc::c_int,
+            };
             // SAFETY: F_RDADVISE reads `ra`; fd is caller-owned.
             unsafe { libc::fcntl(fd, libc::F_RDADVISE, &ra) }
         }

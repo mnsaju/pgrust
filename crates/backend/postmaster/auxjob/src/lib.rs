@@ -413,8 +413,7 @@ impl<D: AuxDaemon> BgJob for AuxJob<D> {
 
     fn latch(&self) -> Option<&'static Latch> {
         let procno = self.procno();
-        (procno != INVALID_PROC_NUMBER)
-            .then(|| &lmgr_proc::GetPGProcByNumber(procno).procLatch)
+        (procno != INVALID_PROC_NUMBER).then(|| &lmgr_proc::GetPGProcByNumber(procno).procLatch)
     }
 
     /// The daemon main's prelude, on the dispatcher thread under the job's

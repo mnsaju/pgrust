@@ -5,8 +5,10 @@ use types_core::{Oid, TEXTOID};
 use types_error::PgResult;
 use types_fmgr::{byref_result, FmgrInfo, FunctionCallInfoBaseData as Fcinfo};
 
-use crate::{text_position_get_match_len, text_position_get_match_off, text_position_next,
-    text_position_setup, texteq};
+use crate::{
+    text_position_get_match_len, text_position_get_match_off, text_position_next,
+    text_position_setup, texteq,
+};
 
 fn accum_field<'m>(
     mcx: Mcx<'m>,
@@ -65,7 +67,10 @@ fn split_fields(fcinfo: &Fcinfo) -> PgResult<Vec<TableField>> {
             Some(n) => texteq(field, n, collation)?,
             None => false,
         };
-        out.push(TableField { bytes: field.to_vec(), is_null });
+        out.push(TableField {
+            bytes: field.to_vec(),
+            is_null,
+        });
         Ok(())
     };
 
@@ -89,7 +94,8 @@ fn split_fields(fcinfo: &Fcinfo) -> PgResult<Vec<TableField>> {
                     if !found {
                         break;
                     }
-                    start = text_position_get_match_off(&state) + text_position_get_match_len(&state);
+                    start =
+                        text_position_get_match_off(&state) + text_position_get_match_len(&state);
                 }
             }
         }
@@ -168,8 +174,14 @@ pub fn fc_text_to_array(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> P
             if inputstring.is_empty() {
                 // empty input: valid, zero elements
             } else if sep.is_empty() {
-                astate =
-                    Some(accum_field(mcx, astate.take(), &mut scratch, &inputstring, ns, collation)?);
+                astate = Some(accum_field(
+                    mcx,
+                    astate.take(),
+                    &mut scratch,
+                    &inputstring,
+                    ns,
+                    collation,
+                )?);
             } else {
                 let mut state = text_position_setup(&inputstring, sep, collation)?;
                 let mut start = 0usize;
@@ -180,13 +192,19 @@ pub fn fc_text_to_array(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> P
                     } else {
                         &inputstring[start..]
                     };
-                    astate =
-                        Some(accum_field(mcx, astate.take(), &mut scratch, chunk, ns, collation)?);
+                    astate = Some(accum_field(
+                        mcx,
+                        astate.take(),
+                        &mut scratch,
+                        chunk,
+                        ns,
+                        collation,
+                    )?);
                     if !found {
                         break;
                     }
-                    start = text_position_get_match_off(&state)
-                        + text_position_get_match_len(&state);
+                    start =
+                        text_position_get_match_off(&state) + text_position_get_match_len(&state);
                 }
             }
         }

@@ -68,8 +68,16 @@ pub fn bits_in<'mcx>(
         atttypmod as i64
     };
 
-    let stored_bits = if fixed { atttypmod } else { bitlen.min(atttypmod) };
-    let len = varbit_total_len(if fixed { atttypmod as usize } else { bitlen as usize });
+    let stored_bits = if fixed {
+        atttypmod
+    } else {
+        bitlen.min(atttypmod)
+    };
+    let len = varbit_total_len(if fixed {
+        atttypmod as usize
+    } else {
+        bitlen as usize
+    });
     let mut out: PgVec<'mcx, u8> = vec_with_capacity_in(mcx, len)?;
     out.extend_from_slice(&::datum::varlena::set_varsize_4b(len));
     out.extend_from_slice(&(stored_bits as i32).to_ne_bytes());
@@ -150,8 +158,10 @@ fn length_mismatch_err(bitlen: i64, atttypmod: i32) -> PgError {
 #[cold]
 #[inline(never)]
 fn too_long_for_varying_err(atttypmod: i32) -> PgError {
-    PgError::error(format!("bit string too long for type bit varying({atttypmod})"))
-        .with_sqlstate(ERRCODE_STRING_DATA_RIGHT_TRUNCATION)
+    PgError::error(format!(
+        "bit string too long for type bit varying({atttypmod})"
+    ))
+    .with_sqlstate(ERRCODE_STRING_DATA_RIGHT_TRUNCATION)
 }
 
 #[cold]
@@ -168,10 +178,7 @@ pub fn bit_in_cstr<'mcx>(mcx: Mcx<'mcx>, s: &[u8]) -> PgResult<PgVec<'mcx, u8>> 
     Ok(bits_in(mcx, s, -1, true, None)?.expect("hard-error path returns Err"))
 }
 
-fn fc_bits_in(
-    fcinfo: &mut Fcinfo,
-    fixed: bool,
-) -> PgResult<Datum> {
+fn fc_bits_in(fcinfo: &mut Fcinfo, fixed: bool) -> PgResult<Datum> {
     // SAFETY: catalog arg 0 is a non-null cstring (strict fn).
     let s = unsafe { fcinfo.arg_cstring(0) }.to_bytes();
     let atttypmod = fcinfo.arg(2).as_i32();
@@ -207,14 +214,12 @@ pub fn fc_varbit_out(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgR
     fc_bits_out(fcinfo)
 }
 
-
 // varbit.c anybit_typmodin/out: typmod is the raw bit length (no VARHDRSZ).
 // Pub for proofs/varbit-rows (Kani C-equivalence harness; visibility only).
 pub fn anybit_typmodin(tl: &[i32], typename: &str) -> PgResult<i32> {
     if tl.len() != 1 {
         return Err(Box::new(
-            PgError::error("invalid type modifier")
-                .with_sqlstate(ERRCODE_INVALID_PARAMETER_VALUE),
+            PgError::error("invalid type modifier").with_sqlstate(ERRCODE_INVALID_PARAMETER_VALUE),
         ));
     }
     if tl[0] < 1 {
@@ -227,8 +232,10 @@ pub fn anybit_typmodin(tl: &[i32], typename: &str) -> PgResult<i32> {
     const MAX_BITS: i32 = 10 * 1024 * 1024 * 8;
     if tl[0] > MAX_BITS {
         return Err(Box::new(
-            PgError::error(format!("length for type {typename} cannot exceed {MAX_BITS}"))
-                .with_sqlstate(ERRCODE_INVALID_PARAMETER_VALUE),
+            PgError::error(format!(
+                "length for type {typename} cannot exceed {MAX_BITS}"
+            ))
+            .with_sqlstate(ERRCODE_INVALID_PARAMETER_VALUE),
         ));
     }
     Ok(tl[0])
@@ -276,10 +283,13 @@ pub fn fc_varbittypmodout(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -
     fc_bit_typmodout(fcinfo)
 }
 
-
 // varbit.c bitfromint4: int4 -> bit(typmod), sign-filled, MSB-first.
 pub fn bitfromint4_core<'mcx>(mcx: Mcx<'mcx>, a: i32, typmod: i32) -> PgResult<PgVec<'mcx, u8>> {
-    let typmod = if typmod <= 0 || typmod as i64 > VARBITMAXLEN { 1 } else { typmod };
+    let typmod = if typmod <= 0 || typmod as i64 > VARBITMAXLEN {
+        1
+    } else {
+        typmod
+    };
     let nbits = typmod as usize;
     let len = varbit_total_len(nbits);
     let mut out: PgVec<'mcx, u8> = vec_with_capacity_in(mcx, len)?;
@@ -325,10 +335,13 @@ pub fn fc_bitfromint4(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> Pg
     Ok(Datum::from_usize(img.leak().as_ptr() as usize))
 }
 
-
 // varbit.c bitfromint8: same fill as bitfromint4 with a 64-bit source.
 pub fn bitfromint8_core<'mcx>(mcx: Mcx<'mcx>, a: i64, typmod: i32) -> PgResult<PgVec<'mcx, u8>> {
-    let typmod = if typmod <= 0 || typmod as i64 > VARBITMAXLEN { 1 } else { typmod };
+    let typmod = if typmod <= 0 || typmod as i64 > VARBITMAXLEN {
+        1
+    } else {
+        typmod
+    };
     let nbits = typmod as usize;
     let len = varbit_total_len(nbits);
     let mut out: PgVec<'mcx, u8> = vec_with_capacity_in(mcx, len)?;
@@ -385,7 +398,11 @@ pub fn bit_cmp_payload(a: &[u8], b: &[u8]) -> i32 {
         core::cmp::Ordering::Greater => 1,
         core::cmp::Ordering::Equal => {
             if abits != bbits {
-                if abits < bbits { -1 } else { 1 }
+                if abits < bbits {
+                    -1
+                } else {
+                    1
+                }
             } else {
                 0
             }
@@ -471,8 +488,7 @@ pub fn size_mismatch_err(opname: &'static str) -> PgError {
 #[cold]
 #[inline(never)]
 fn negative_substring_err() -> PgError {
-    PgError::error("negative substring length not allowed")
-        .with_sqlstate(ERRCODE_SUBSTRING_ERROR)
+    PgError::error("negative substring length not allowed").with_sqlstate(ERRCODE_SUBSTRING_ERROR)
 }
 
 #[cold]
@@ -659,22 +675,14 @@ fn bitshiftright_pos(r: &mut [u8], bits: &[u8], bitlen: usize, shft: i32) {
     pad_last(r, bitlen);
 }
 
-pub fn bitshiftleft_core<'mcx>(
-    mcx: Mcx<'mcx>,
-    p: &[u8],
-    shft: i32,
-) -> PgResult<PgVec<'mcx, u8>> {
+pub fn bitshiftleft_core<'mcx>(mcx: Mcx<'mcx>, p: &[u8], shft: i32) -> PgResult<PgVec<'mcx, u8>> {
     let bitlen = payload_bitlen(p);
     let mut out = varbit_alloc(mcx, bitlen)?;
     bitshiftleft_body(&mut out[HDRSZ..], payload_bits(p), bitlen, shft);
     Ok(out)
 }
 
-pub fn bitshiftright_core<'mcx>(
-    mcx: Mcx<'mcx>,
-    p: &[u8],
-    shft: i32,
-) -> PgResult<PgVec<'mcx, u8>> {
+pub fn bitshiftright_core<'mcx>(mcx: Mcx<'mcx>, p: &[u8], shft: i32) -> PgResult<PgVec<'mcx, u8>> {
     let bitlen = payload_bitlen(p);
     let mut out = varbit_alloc(mcx, bitlen)?;
     bitshiftright_body(&mut out[HDRSZ..], payload_bits(p), bitlen, shft);
@@ -1193,7 +1201,14 @@ pub fn fc_bitgetbit(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgRe
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 pub const VARBIT_BUILTINS: &[FmgrBuiltin] = &[

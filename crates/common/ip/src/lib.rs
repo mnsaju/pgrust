@@ -247,7 +247,11 @@ fn getaddrinfo_unix(
 // passes those sizes); the same bounds keep the EAI_MEMORY truncation branch
 // firing under C's predicate (long Unix socket paths overflow `service`).
 #[cfg(not(target_family = "wasm"))]
-fn getnameinfo_unix(addr: &SockAddr, node: Option<&mut String>, service: Option<&mut String>) -> i32 {
+fn getnameinfo_unix(
+    addr: &SockAddr,
+    node: Option<&mut String>,
+    service: Option<&mut String>,
+) -> i32 {
     if sockaddr_family(addr) != libc::AF_UNIX || (node.is_none() && service.is_none()) {
         return libc::EAI_FAIL;
     }

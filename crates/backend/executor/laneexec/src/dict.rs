@@ -139,7 +139,9 @@ struct SubstrFinder {
 impl SubstrFinder {
     fn new(needle: Vec<u8>) -> Self {
         debug_assert!(!needle.is_empty());
-        SubstrFinder { finder: memchr::memmem::Finder::new(&needle).into_owned() }
+        SubstrFinder {
+            finder: memchr::memmem::Finder::new(&needle).into_owned(),
+        }
     }
 
     fn find(&self, hay: &[u8]) -> bool {
@@ -199,7 +201,11 @@ fn like_kernel_for(pat: &[u8]) -> Option<LikeKernel> {
         segs.push(cur);
     }
     match (segs.len(), leading_pct, trailing_pct) {
-        (0, ..) => Some(if any_pct { LikeKernel::Any } else { LikeKernel::Exact(Vec::new()) }),
+        (0, ..) => Some(if any_pct {
+            LikeKernel::Any
+        } else {
+            LikeKernel::Exact(Vec::new())
+        }),
         (1, false, false) => Some(LikeKernel::Exact(segs.pop().unwrap())),
         (1, false, true) => Some(LikeKernel::Prefix(segs.pop().unwrap())),
         (1, true, false) => Some(LikeKernel::Suffix(segs.pop().unwrap())),
@@ -302,7 +308,9 @@ pub(crate) fn dict_clause_for(cl: &LaneCmpClause) -> Option<DictClause> {
     if cl.commuted && (is_like || is_iclike || op.is_regex()) {
         return None;
     }
-    let LaneCmpRhs::Const(k) = cl.rhs else { return None };
+    let LaneCmpRhs::Const(k) = cl.rhs else {
+        return None;
+    };
     let konst = inline_varlena_payload(k)?.to_vec();
     if !collation_usable(cl.collation) {
         return None;
@@ -344,7 +352,10 @@ pub(crate) fn dict_clause_for(cl: &LaneCmpClause) -> Option<DictClause> {
         crate::log_dict_kernel(cl.col, k.shape());
     }
     if op.is_regex() {
-        crate::log_dict_regex(cl.col, matches!(op, DictPredOp::IcRegex | DictPredOp::NotIcRegex));
+        crate::log_dict_regex(
+            cl.col,
+            matches!(op, DictPredOp::IcRegex | DictPredOp::NotIcRegex),
+        );
     }
     Some(DictClause {
         col: cl.col,
@@ -353,8 +364,7 @@ pub(crate) fn dict_clause_for(cl: &LaneCmpClause) -> Option<DictClause> {
         konst,
         kernel,
         ic: IcScratch::default(),
-        arena: (is_iclike || op.is_regex())
-            .then(|| MemoryContext::new_bump("LaneDictPredContext")),
+        arena: (is_iclike || op.is_regex()).then(|| MemoryContext::new_bump("LaneDictPredContext")),
         memo_epoch: None,
         memo: Vec::new(),
         range: None,
@@ -565,7 +575,11 @@ fn eval_dict_lane(
         // per-entry memo fill): materialize a lazy sub-framed dict up front.
         // Once per epoch — the same total decompress the eager build paid.
         lane.table.ensure_all();
-        cl.range = if lane.table.sorted { prefix_code_range(cl, dict)? } else { None };
+        cl.range = if lane.table.sorted {
+            prefix_code_range(cl, dict)?
+        } else {
+            None
+        };
         if cl.range.is_some() {
             if cl.memo_epoch.is_none() {
                 crate::log_dict_range(cl.col, lane.table.ndict);
@@ -746,7 +760,9 @@ fn fill_memo_contains_sweep(
     let mut e = 0usize;
     let mut pos = 0usize;
     while pos < hay.len() {
-        let Some(h) = f.find_pos(&hay[pos..]) else { break };
+        let Some(h) = f.find_pos(&hay[pos..]) else {
+            break;
+        };
         let h = pos + h;
         // Owning entry: the last entry whose image starts at or before the hit.
         while e + 1 < n && dict[e + 1].as_usize() - base <= h {
@@ -777,8 +793,13 @@ fn prefix_code_range(cl: &DictClause, dict: &[Datum]) -> PgResult<Option<(u32, u
     if !matches!(cl.op, DictPredOp::Like | DictPredOp::NotLike) {
         return Ok(None);
     }
-    let Some(LikeKernel::Prefix(p)) = &cl.kernel else { return Ok(None) };
-    debug_assert!(!p.is_empty(), "empty prefix classifies as Any/Exact, never Prefix");
+    let Some(LikeKernel::Prefix(p)) = &cl.kernel else {
+        return Ok(None);
+    };
+    debug_assert!(
+        !p.is_empty(),
+        "empty prefix classifies as Any/Exact, never Prefix"
+    );
     let lo = dict_partition_point(dict, |s| s < &p[..])?;
     let hi = dict_partition_point(dict, |s| s < &p[..] || s.starts_with(p))?;
     debug_assert!(lo <= hi && hi as usize <= dict.len());
@@ -892,7 +913,9 @@ fn eval_contains_blob(
     let mut row = 0usize;
     let mut pos = 0usize;
     while pos < hay.len() {
-        let Some(h) = f.find_pos(&hay[pos..]) else { break };
+        let Some(h) = f.find_pos(&hay[pos..]) else {
+            break;
+        };
         let h = pos + h;
         // Owning row: the last row whose image starts at or before the hit.
         while row + 1 < n && values[row + 1].as_usize() - base <= h {
@@ -958,21 +981,30 @@ mod tests {
 
     fn run_blob(rows: &[&[u8]], needle: &[u8], negated: bool) -> Vec<bool> {
         let (blob, offs) = blob_of(rows);
-        let values: Vec<Datum> =
-            offs.iter().map(|&o| Datum::from_usize(blob.as_ptr() as usize + o)).collect();
+        let values: Vec<Datum> = offs
+            .iter()
+            .map(|&o| Datum::from_usize(blob.as_ptr() as usize + o))
+            .collect();
         let isnull = vec![false; rows.len()];
-        let span = SoaTextSpan { base: blob.as_ptr(), len: blob.len() };
+        let span = SoaTextSpan {
+            base: blob.as_ptr(),
+            len: blob.len(),
+        };
         let f = SubstrFinder::new(needle.to_vec());
         let n = rows.len() as u32;
         let mut sv = SelVec::all(n);
-        assert!(eval_contains_blob(&f, span, &values, &isnull, negated, n, &mut sv));
+        assert!(eval_contains_blob(
+            &f, span, &values, &isnull, negated, n, &mut sv
+        ));
         (0..n).map(|i| sv.contains(i)).collect()
     }
 
     fn run_dict_sweep(entries: &[&[u8]], needle: &[u8], negated: bool) -> Option<Vec<bool>> {
         let (blob, offs) = blob_of(entries);
-        let dict: Vec<Datum> =
-            offs.iter().map(|&o| Datum::from_usize(blob.as_ptr() as usize + o)).collect();
+        let dict: Vec<Datum> = offs
+            .iter()
+            .map(|&o| Datum::from_usize(blob.as_ptr() as usize + o))
+            .collect();
         let f = SubstrFinder::new(needle.to_vec());
         let mut memo = Vec::new();
         // contig: the helper's blob IS one Vec allocation.
@@ -981,15 +1013,21 @@ mod tests {
 
     #[test]
     fn dict_sweep_matches_per_entry_fill() {
-        let entries: &[&[u8]] =
-            &[b"hello world", b"", b"worldly", b"say hell", b"w", b"aworld", b"world"];
+        let entries: &[&[u8]] = &[
+            b"hello world",
+            b"",
+            b"worldly",
+            b"say hell",
+            b"w",
+            b"aworld",
+            b"world",
+        ];
         for negated in [false, true] {
             let memo = run_dict_sweep(entries, b"world", negated).expect("contiguous dict sweeps");
             let expect: Vec<bool> = entries
                 .iter()
                 .map(|e| {
-                    LikeKernel::Contains(SubstrFinder::new(b"world".to_vec())).matches(e)
-                        != negated
+                    LikeKernel::Contains(SubstrFinder::new(b"world".to_vec())).matches(e) != negated
                 })
                 .collect();
             assert_eq!(memo, expect);
@@ -1003,15 +1041,23 @@ mod tests {
         // entry's payload.
         let e1 = [b'z'; 21];
         let entries: &[&[u8]] = &[b"xxab", &e1];
-        assert_eq!(run_dict_sweep(entries, b"ab\x64", false).unwrap(), [false, false]);
-        assert_eq!(run_dict_sweep(entries, b"ab", false).unwrap(), [true, false]);
+        assert_eq!(
+            run_dict_sweep(entries, b"ab\x64", false).unwrap(),
+            [false, false]
+        );
+        assert_eq!(
+            run_dict_sweep(entries, b"ab", false).unwrap(),
+            [true, false]
+        );
     }
 
     #[test]
     fn dict_sweep_refuses_non_ascending() {
         let (blob, offs) = blob_of(&[b"aaa", b"bbb"]);
-        let mut dict: Vec<Datum> =
-            offs.iter().map(|&o| Datum::from_usize(blob.as_ptr() as usize + o)).collect();
+        let mut dict: Vec<Datum> = offs
+            .iter()
+            .map(|&o| Datum::from_usize(blob.as_ptr() as usize + o))
+            .collect();
         dict.swap(0, 1);
         let f = SubstrFinder::new(b"a".to_vec());
         let mut memo = Vec::new();
@@ -1024,11 +1070,15 @@ mod tests {
     #[test]
     fn dict_sweep_refuses_without_contig_witness() {
         let (blob, offs) = blob_of(&[b"aaa", b"bbb"]);
-        let dict: Vec<Datum> =
-            offs.iter().map(|&o| Datum::from_usize(blob.as_ptr() as usize + o)).collect();
+        let dict: Vec<Datum> = offs
+            .iter()
+            .map(|&o| Datum::from_usize(blob.as_ptr() as usize + o))
+            .collect();
         let f = SubstrFinder::new(b"a".to_vec());
         let mut memo = Vec::new();
-        assert!(!fill_memo_contains_sweep(&f, &dict, false, false, &mut memo));
+        assert!(!fill_memo_contains_sweep(
+            &f, &dict, false, false, &mut memo
+        ));
     }
 
     #[test]
@@ -1064,9 +1114,22 @@ mod tests {
 
     #[test]
     fn blob_contains_basic() {
-        let rows: &[&[u8]] = &[b"hello world", b"", b"worldly", b"say hell", b"w", b"aworld"];
-        assert_eq!(run_blob(rows, b"world", false), [true, false, true, false, false, true]);
-        assert_eq!(run_blob(rows, b"world", true), [false, true, false, true, true, false]);
+        let rows: &[&[u8]] = &[
+            b"hello world",
+            b"",
+            b"worldly",
+            b"say hell",
+            b"w",
+            b"aworld",
+        ];
+        assert_eq!(
+            run_blob(rows, b"world", false),
+            [true, false, true, false, false, true]
+        );
+        assert_eq!(
+            run_blob(rows, b"world", true),
+            [false, true, false, true, true, false]
+        );
     }
 
     #[test]
@@ -1114,7 +1177,11 @@ mod tests {
             let refs: Vec<&[u8]> = rows.iter().map(|r| r.as_slice()).collect();
             let f = SubstrFinder::new(needle.clone());
             let want: Vec<bool> = rows.iter().map(|r| f.find(r)).collect();
-            assert_eq!(run_blob(&refs, &needle, false), want, "needle={needle:?} rows={rows:?}");
+            assert_eq!(
+                run_blob(&refs, &needle, false),
+                want,
+                "needle={needle:?} rows={rows:?}"
+            );
         }
     }
 
@@ -1207,7 +1274,9 @@ mod tests {
             if !like_pattern_safe(pat) {
                 continue;
             }
-            let Some(k) = like_kernel_for(pat) else { continue };
+            let Some(k) = like_kernel_for(pat) else {
+                continue;
+            };
             for s in &strs {
                 let want = adt_like::textlike(s, pat, C_COLLATION_OID).unwrap();
                 assert_eq!(k.matches(s), want, "pat={:?} s={:?}", pat, s);

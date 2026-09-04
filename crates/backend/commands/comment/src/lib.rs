@@ -50,7 +50,10 @@ pub fn CommentObject<'mcx>(
     // pg_restore replays COMMENT ON DATABASE under the dump-time name;
     // wrong-name is a WARNING, not an ERROR.
     if stmt.objtype == ObjectType::OBJECT_DATABASE {
-        let database = object.as_string().expect("database object is a String node").sval;
+        let database = object
+            .as_string()
+            .expect("database object is a String node")
+            .sval;
         if dbcommands_seams::get_database_oid::call(mcx, database, true)? == InvalidOid {
             elog_seams::ereport::call(
                 PgError::new(WARNING, format!("database \"{database}\" does not exist"))
@@ -83,7 +86,9 @@ pub fn CommentObject<'mcx>(
     )?;
 
     if stmt.objtype == ObjectType::OBJECT_COLUMN {
-        let rel = relation.as_ref().expect("column comment carries its relation");
+        let rel = relation
+            .as_ref()
+            .expect("column comment carries its relation");
         let relkind = rel.rd_rel.relkind;
         if !matches!(
             relkind,
@@ -112,7 +117,13 @@ pub fn CommentObject<'mcx>(
     ) {
         CreateSharedComments(mcx, address.objectId, address.classId, stmt.comment)?;
     } else {
-        CreateComments(mcx, address.objectId, address.classId, address.objectSubId, stmt.comment)?;
+        CreateComments(
+            mcx,
+            address.objectId,
+            address.classId,
+            address.objectSubId,
+            stmt.comment,
+        )?;
     }
 
     if let Some(rel) = relation {
@@ -145,8 +156,9 @@ pub fn CreateComments<'mcx>(
         Some(c) => Some(varlena::cstring_to_text(mcx, c.as_bytes())?),
         None => None,
     };
-    let text_datum =
-        text.as_ref().map(|t| Datum::from_usize(t.as_bytes().as_ptr() as usize));
+    let text_datum = text
+        .as_ref()
+        .map(|t| Datum::from_usize(t.as_bytes().as_ptr() as usize));
 
     let old = genam::systable_getnext(mcx, &mut scan)?;
     match (old, text_datum) {
@@ -184,8 +196,7 @@ pub fn CreateComments<'mcx>(
                 d,
             ];
             let nulls = [false; Natts_pg_description];
-            let mut tup =
-                heaptuple::heap_form_tuple(mcx, description.descr(), &values, &nulls)?;
+            let mut tup = heaptuple::heap_form_tuple(mcx, description.descr(), &values, &nulls)?;
             catalog_indexing::CatalogTupleInsert(mcx, &description, &mut tup)?;
         }
         (None, None) => genam::systable_endscan(mcx, scan)?,
@@ -203,8 +214,7 @@ pub fn CreateSharedComments<'mcx>(
         Some("") => None,
         c => c,
     };
-    let shdescription =
-        table::table_open(mcx, SharedDescriptionRelationId, RowExclusiveLock)?;
+    let shdescription = table::table_open(mcx, SharedDescriptionRelationId, RowExclusiveLock)?;
     let keys = [
         eq_key(1, F_OIDEQ, Datum::from_oid(oid)),
         eq_key(2, F_OIDEQ, Datum::from_oid(classoid)),
@@ -222,8 +232,9 @@ pub fn CreateSharedComments<'mcx>(
         Some(c) => Some(varlena::cstring_to_text(mcx, c.as_bytes())?),
         None => None,
     };
-    let text_datum =
-        text.as_ref().map(|t| Datum::from_usize(t.as_bytes().as_ptr() as usize));
+    let text_datum = text
+        .as_ref()
+        .map(|t| Datum::from_usize(t.as_bytes().as_ptr() as usize));
 
     let old = genam::systable_getnext(mcx, &mut scan)?;
     match (old, text_datum) {
@@ -255,8 +266,7 @@ pub fn CreateSharedComments<'mcx>(
             genam::systable_endscan(mcx, scan)?;
             let values = [Datum::from_oid(oid), Datum::from_oid(classoid), d];
             let nulls = [false; Natts_pg_shdescription];
-            let mut tup =
-                heaptuple::heap_form_tuple(mcx, shdescription.descr(), &values, &nulls)?;
+            let mut tup = heaptuple::heap_form_tuple(mcx, shdescription.descr(), &values, &nulls)?;
             catalog_indexing::CatalogTupleInsert(mcx, &shdescription, &mut tup)?;
         }
         (None, None) => genam::systable_endscan(mcx, scan)?,

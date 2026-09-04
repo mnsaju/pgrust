@@ -124,7 +124,10 @@ impl VacuumBlockSource {
                 } else {
                     // Short run: scanned anyway, all-visible per the VM.
                     for b in start..end {
-                        entries.push(ScanBlock { block: b, all_visible_according_to_vm: true });
+                        entries.push(ScanBlock {
+                            block: b,
+                            all_visible_according_to_vm: true,
+                        });
                     }
                 }
             }
@@ -136,10 +139,7 @@ impl VacuumBlockSource {
             let all_frozen = status & VM_ALL_FROZEN != 0;
             let last = b == p.rel_pages - 1;
 
-            let skippable = !last
-                && p.skipwithvm
-                && all_visible
-                && (all_frozen || !p.aggressive);
+            let skippable = !last && p.skipwithvm && all_visible && (all_frozen || !p.aggressive);
 
             if skippable {
                 let avnotaf = !all_frozen;
@@ -149,7 +149,10 @@ impl VacuumBlockSource {
                 }
             } else {
                 flush_run(&mut run, b, &mut entries, &mut skipsallvis, &mut skip_runs);
-                entries.push(ScanBlock { block: b, all_visible_according_to_vm: all_visible });
+                entries.push(ScanBlock {
+                    block: b,
+                    all_visible_according_to_vm: all_visible,
+                });
             }
         }
         // A trailing skippable run is impossible: the last block is never
@@ -157,7 +160,12 @@ impl VacuumBlockSource {
         // or resume >= rel_pages yields an empty map.)
         debug_assert!(run.is_none() || p.resume_block >= p.rel_pages);
 
-        VacuumBlockSource { entries, skipsallvis, rel_pages: p.rel_pages, skip_runs }
+        VacuumBlockSource {
+            entries,
+            skipsallvis,
+            rel_pages: p.rel_pages,
+            skip_runs,
+        }
     }
 
     pub fn entries(&self) -> &[ScanBlock] {
@@ -182,7 +190,9 @@ impl VacuumBlockSource {
     /// point are re-decided from fresh VM state and must not commit here.
     /// `skipsallvis_before(total_granules()) == skipsallvis()`.
     pub fn skipsallvis_before(&self, resume_granule: u64) -> bool {
-        self.skip_runs.iter().any(|&(pos, avnotaf)| avnotaf && resume_granule >= pos)
+        self.skip_runs
+            .iter()
+            .any(|&(pos, avnotaf)| avnotaf && resume_granule >= pos)
     }
 
     pub fn rel_pages(&self) -> u32 {
@@ -286,7 +296,10 @@ impl ScanCounters {
         // value by XID rules — the inc-2 fleet battery caught the stricter
         // assert panicking on the very first engaged fold). Compare with
         // MultiXactIdPrecedes, C's own comparator for this tracker.
-        debug_assert!(other.NewRelminMxid != 0, "vacuum folds only valid MultiXactIds");
+        debug_assert!(
+            other.NewRelminMxid != 0,
+            "vacuum folds only valid MultiXactIds"
+        );
         if TransactionIdPrecedes(other.NewRelfrozenXid, self.NewRelfrozenXid) {
             self.NewRelfrozenXid = other.NewRelfrozenXid;
         }
@@ -380,7 +393,11 @@ pub struct QuiesceState {
 
 impl QuiesceState {
     pub fn new(max_bytes: u64) -> Self {
-        QuiesceState { max_bytes, bytes: AtomicU64::new(0), tripped: AtomicBool::new(false) }
+        QuiesceState {
+            max_bytes,
+            bytes: AtomicU64::new(0),
+            tripped: AtomicBool::new(false),
+        }
     }
 
     /// Account `n` estimated dead-TID bytes; trips the round when the
@@ -430,10 +447,7 @@ pub enum CoverageError {
     ScannedBeyondResume { start: u64, resume: u64 },
 }
 
-pub fn verify_prefix_coverage(
-    locals: &[VacScanLocal],
-    resume: u64,
-) -> Result<(), CoverageError> {
+pub fn verify_prefix_coverage(locals: &[VacScanLocal], resume: u64) -> Result<(), CoverageError> {
     let mut scanned: Vec<(u64, u64)> = locals
         .iter()
         .flat_map(|l| l.claims.iter())

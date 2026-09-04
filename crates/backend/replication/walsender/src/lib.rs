@@ -5,8 +5,8 @@
 // UPLOAD_MANIFEST (inc 5) and logical START_REPLICATION (inc 6) are loud panics.
 #![allow(non_snake_case)]
 
-pub mod replies;
 pub mod logical_stream;
+pub mod replies;
 mod streaming;
 pub mod wakeup;
 
@@ -18,16 +18,16 @@ use condition_variable::ConditionVariable;
 use datum::Datum;
 use elog::ereport;
 use repl_gram::{
-    AlterReplicationSlotCmd, CreateReplicationSlotCmd, DropReplicationSlotCmd, ReadReplicationSlotCmd,
-    ReplCommand, ReplOptionArg, ReplicationKind, TimeLineHistoryCmd,
+    AlterReplicationSlotCmd, CreateReplicationSlotCmd, DropReplicationSlotCmd,
+    ReadReplicationSlotCmd, ReplCommand, ReplOptionArg, ReplicationKind, TimeLineHistoryCmd,
 };
 use types_core::{
     InvalidOid, InvalidXLogRecPtr, TimeLineID, TimestampTz, XLogRecPtr, INT8OID, TEXTOID,
 };
 use types_error::{
     ErrorLocation, PgResult, DEBUG1, ERRCODE_FEATURE_NOT_SUPPORTED,
-    ERRCODE_IN_FAILED_SQL_TRANSACTION, ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE, ERRCODE_SYNTAX_ERROR,
-    ERROR, LOG,
+    ERRCODE_IN_FAILED_SQL_TRANSACTION, ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE,
+    ERRCODE_SYNTAX_ERROR, ERROR, LOG,
 };
 
 const SRC: &str = "src/backend/replication/walsender.c";
@@ -198,7 +198,11 @@ pub fn InitWalSender() {
 
 // InitWalSenderSlot (walsender.c:2937).
 fn InitWalSenderSlot() {
-    assert_eq!(MY_WAL_SND.get(), -1, "InitWalSenderSlot: MyWalSnd already set");
+    assert_eq!(
+        MY_WAL_SND.get(),
+        -1,
+        "InitWalSenderSlot: MyWalSnd already set"
+    );
 
     let ctl = WalSndCtl();
     let my_pid = init_small::globals::MyProcPid();
@@ -221,7 +225,10 @@ fn InitWalSenderSlot() {
         break;
     }
     // C: must not fail, per the free-WAL-sender check in InitProcess.
-    assert!(MY_WAL_SND.get() >= 0, "InitWalSenderSlot: no free walsender slot");
+    assert!(
+        MY_WAL_SND.get() >= 0,
+        "InitWalSenderSlot: no free walsender slot"
+    );
 
     ipc_seams::on_shmem_exit::call(WalSndKill, 0);
 }
@@ -233,7 +240,10 @@ fn WalSndKill(_code: i32, _arg: usize) {
         return;
     }
     MY_WAL_SND.set(-1);
-    WalSndCtl().walsnds[i as usize].lock().expect("walsnd mutex").pid = 0;
+    WalSndCtl().walsnds[i as usize]
+        .lock()
+        .expect("walsnd mutex")
+        .pid = 0;
 }
 
 // HandleWalSndInitStopping (walsender.c:3560): if replication has not yet
@@ -307,12 +317,11 @@ pub fn WalSndGetStateString(state: WalSndState) -> &'static str {
 // not linked or synchronous_standby_names is unset — C-identical).
 fn pg_stat_wal_senders_snapshot() -> Vec<walsender_seams::WalSndStatRow> {
     let ctl = WalSndCtl();
-    let candidates: Vec<(i32, i32)> =
-        if syncrep_seams::sync_rep_candidate_indexes::is_installed() {
-            syncrep_seams::sync_rep_candidate_indexes::call().unwrap_or_default()
-        } else {
-            Vec::new()
-        };
+    let candidates: Vec<(i32, i32)> = if syncrep_seams::sync_rep_candidate_indexes::is_installed() {
+        syncrep_seams::sync_rep_candidate_indexes::call().unwrap_or_default()
+    } else {
+        Vec::new()
+    };
     let method_is_priority = if syncrep_seams::sync_rep_method_is_priority::is_installed() {
         syncrep_seams::sync_rep_method_is_priority::call()
     } else {
@@ -485,7 +494,9 @@ pub fn exec_replication_command(cmd_string: &str) -> PgResult<bool> {
     if xact::IsAbortedTransactionBlockState() {
         return ereport(ERROR)
             .errcode(ERRCODE_IN_FAILED_SQL_TRANSACTION)
-            .errmsg("current transaction is aborted, commands ignored until end of transaction block")
+            .errmsg(
+                "current transaction is aborted, commands ignored until end of transaction block",
+            )
             .finish(loc(2103, "exec_replication_command"))
             .map(|()| false);
     }
@@ -704,7 +715,11 @@ fn ReadReplicationSlot(mcx: mcx::Mcx<'_>, cmd: ReadReplicationSlotCmd) -> PgResu
     let mut restart_lsn_v = None;
 
     let control = lwlock::main_lock(types_storage::storage::REPLICATION_SLOT_CONTROL_LOCK);
-    lwlock::LWLockAcquire(control, lwlock::LW_SHARED, init_small::globals::MyProcNumber())?;
+    lwlock::LWLockAcquire(
+        control,
+        lwlock::LW_SHARED,
+        init_small::globals::MyProcNumber(),
+    )?;
     let slotname = cmd.slotname.as_deref().unwrap_or("");
     let slot = slot::SearchNamedReplicationSlot(slotname, false)?;
     match slot.filter(|s| s.in_use.get()) {
@@ -803,11 +818,7 @@ fn def_get_boolean(name: &str, arg: &Option<ReplOptionArg>, func: &'static str) 
 }
 
 // defGetString (define.c), the arms replication options use.
-fn def_get_string(
-    name: &str,
-    arg: &Option<ReplOptionArg>,
-    func: &'static str,
-) -> PgResult<String> {
+fn def_get_string(name: &str, arg: &Option<ReplOptionArg>, func: &'static str) -> PgResult<String> {
     match arg {
         Some(ReplOptionArg::Str(s)) => Ok(s.clone()),
         Some(ReplOptionArg::Int(i)) => Ok(i.to_string()),
@@ -882,21 +893,24 @@ fn parse_create_repl_slot_options(
                     conflicting_or_redundant("parseCreateReplSlotOptions", 1158)?;
                 }
                 reserve_wal_given = true;
-                opts.reserve_wal = def_get_boolean("reserve_wal", &defel.arg, "parseCreateReplSlotOptions")?;
+                opts.reserve_wal =
+                    def_get_boolean("reserve_wal", &defel.arg, "parseCreateReplSlotOptions")?;
             }
             "two_phase" => {
                 if two_phase_given || cmd.kind != ReplicationKind::REPLICATION_KIND_LOGICAL {
                     conflicting_or_redundant("parseCreateReplSlotOptions", 1168)?;
                 }
                 two_phase_given = true;
-                opts.two_phase = def_get_boolean("two_phase", &defel.arg, "parseCreateReplSlotOptions")?;
+                opts.two_phase =
+                    def_get_boolean("two_phase", &defel.arg, "parseCreateReplSlotOptions")?;
             }
             "failover" => {
                 if failover_given || cmd.kind != ReplicationKind::REPLICATION_KIND_LOGICAL {
                     conflicting_or_redundant("parseCreateReplSlotOptions", 1177)?;
                 }
                 failover_given = true;
-                opts.failover = def_get_boolean("failover", &defel.arg, "parseCreateReplSlotOptions")?;
+                opts.failover =
+                    def_get_boolean("failover", &defel.arg, "parseCreateReplSlotOptions")?;
             }
             other => {
                 ereport(ERROR)
@@ -920,7 +934,11 @@ fn CreateReplicationSlot(mcx: mcx::Mcx<'_>, cmd: CreateReplicationSlotCmd) -> Pg
     let mut snapshot_name: Option<String> = None;
 
     if cmd.kind == ReplicationKind::REPLICATION_KIND_PHYSICAL {
-        let persistency = if cmd.temporary { slot::RS_TEMPORARY } else { slot::RS_PERSISTENT };
+        let persistency = if cmd.temporary {
+            slot::RS_TEMPORARY
+        } else {
+            slot::RS_PERSISTENT
+        };
         slot::ReplicationSlotCreate(slotname, false, persistency, false, false, false)?;
 
         if opts.reserve_wal {
@@ -971,7 +989,11 @@ fn CreateReplicationSlot(mcx: mcx::Mcx<'_>, cmd: CreateReplicationSlotCmd) -> Pg
         slot::ReplicationSlotCreate(
             slotname,
             true,
-            if cmd.temporary { slot::RS_TEMPORARY } else { slot::RS_EPHEMERAL },
+            if cmd.temporary {
+                slot::RS_TEMPORARY
+            } else {
+                slot::RS_EPHEMERAL
+            },
             opts.two_phase,
             opts.failover,
             false,
@@ -1009,8 +1031,7 @@ fn CreateReplicationSlot(mcx: mcx::Mcx<'_>, cmd: CreateReplicationSlotCmd) -> Pg
             // snapshot (walsender.c:1326: SnapBuildInitialSnapshot +
             // RestoreTransactionSnapshot against our own proc).
             let snap = ctx.snapshot_builder.initial_snapshot()?;
-            let my_procno =
-                lmgr_proc::MyProc().expect("walsender has a PGPROC");
+            let my_procno = lmgr_proc::MyProc().expect("walsender has a PGPROC");
             snapmgr::RestoreTransactionSnapshot(&snap, my_procno)?;
         }
 
@@ -1023,7 +1044,11 @@ fn CreateReplicationSlot(mcx: mcx::Mcx<'_>, cmd: CreateReplicationSlotCmd) -> Pg
 
     let slot_ref = slot::MyReplicationSlot().expect("CreateReplicationSlot: no slot acquired");
     let d = slot_ref.data.get();
-    let xloc = format!("{:X}/{:X}", (d.confirmed_flush >> 32) as u32, d.confirmed_flush as u32);
+    let xloc = format!(
+        "{:X}/{:X}",
+        (d.confirmed_flush >> 32) as u32,
+        d.confirmed_flush as u32
+    );
     let slot_name = String::from_utf8_lossy(d.name.name_str()).into_owned();
 
     let mut dest = tcop_dest::CreateDestReceiver(types_dest::CommandDest::RemoteSimple);
@@ -1105,7 +1130,11 @@ fn AlterReplicationSlot(cmd: AlterReplicationSlotCmd) -> PgResult<()> {
     slot::ReplicationSlotAlter(
         cmd.slotname.as_deref().unwrap_or(""),
         if failover_given { Some(failover) } else { None },
-        if two_phase_given { Some(two_phase) } else { None },
+        if two_phase_given {
+            Some(two_phase)
+        } else {
+            None
+        },
     )
 }
 
@@ -1177,7 +1206,6 @@ fn SendTimeLineHistory(mcx: mcx::Mcx<'_>, cmd: TimeLineHistoryCmd) -> PgResult<(
 pub(crate) const WAIT_EVENT_WAIT_FOR_STANDBY_CONFIRMATION: u32 = 0x0600_0000 | 6;
 
 fn wait_for_standby_confirmation_loop(wait_for_lsn: types_core::XLogRecPtr) -> PgResult<()> {
-
     condition_variable::ConditionVariablePrepareToSleep(&WalSndCtl().wal_confirm_rcv_cv);
 
     loop {

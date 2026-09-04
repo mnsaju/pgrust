@@ -76,10 +76,8 @@ fn fg_mutate<'mcx>(
             // copyObject: mark_nullable_by_grouping and the sublevel shift
             // mutate the replacement in place, so it must not alias the
             // shared groupexprs entry.
-            let newnode = rewrite_manip::copy_node(
-                mcx,
-                rte.groupexprs.nth(var.varattno as usize - 1),
-            )?;
+            let newnode =
+                rewrite_manip::copy_node(mcx, rte.groupexprs.nth(var.varattno as usize - 1))?;
             if ctx.sublevels_up != 0 {
                 rewrite_manip::IncrementVarSublevelsUp(newnode, ctx.sublevels_up, 0)?;
             }
@@ -87,15 +85,16 @@ fn fg_mutate<'mcx>(
                 let location = var.location;
                 // SAFETY: newnode is the fresh copy above.
                 unsafe {
-                    newnode
-                        .with_mut::<types_nodes::primnodes::Var, _>(|v| v.location = location)
+                    newnode.with_mut::<types_nodes::primnodes::Var, _>(|v| v.location = location)
                 }
                 .expect("Var");
             }
             if ctx.possible_sublink && !ctx.inserted_sublink {
                 ctx.inserted_sublink = rewrite_manip::checkExprHasSubLink(newnode)?;
             }
-            Ok(Some(mark_nullable_by_grouping(run, ctx.parse, newnode, var)?))
+            Ok(Some(mark_nullable_by_grouping(
+                run, ctx.parse, newnode, var,
+            )?))
         }
         NodeTag::T_Aggref => {
             let agg = node.as_aggref().unwrap();
@@ -239,9 +238,9 @@ fn fg_query_inplace<'mcx>(
                     if let Some(new) = fg_mutate(run, ctx, tf)? {
                         // SAFETY: as above.
                         unsafe {
-                            rte_node.with_mut::<types_nodes::parsenodes::RangeTblEntry, _>(
-                                |r| r.tablefunc = Some(new),
-                            )
+                            rte_node.with_mut::<types_nodes::parsenodes::RangeTblEntry, _>(|r| {
+                                r.tablefunc = Some(new)
+                            })
                         }
                         .expect("RangeTblEntry");
                     }
@@ -264,9 +263,8 @@ fn fg_query_inplace<'mcx>(
         if let Some(l) = fg_list_opt(run, ctx, &rte.securityQuals)? {
             // SAFETY: as above.
             unsafe {
-                rte_node.with_mut::<types_nodes::parsenodes::RangeTblEntry, _>(|r| {
-                    r.securityQuals = l
-                })
+                rte_node
+                    .with_mut::<types_nodes::parsenodes::RangeTblEntry, _>(|r| r.securityQuals = l)
             }
             .expect("RangeTblEntry");
         }
@@ -384,7 +382,11 @@ fn grouped_outer_var_in_subquery<'mcx>(
             r
         }
     }
-    let mut w = W { parse: ctx.parse, sublevels_up: ctx.sublevels_up + 1, found: false };
+    let mut w = W {
+        parse: ctx.parse,
+        sublevels_up: ctx.sublevels_up + 1,
+        found: false,
+    };
     nodes_core::query_tree_walker(q, &mut w, 0)?;
     Ok(w.found)
 }
@@ -416,8 +418,7 @@ fn mark_nullable_by_grouping<'mcx>(
         )?;
         return Ok(newnode);
     }
-    if !clauses::contain_volatile_functions(newnode)? && !coerce::expression_returns_set(newnode)
-    {
+    if !clauses::contain_volatile_functions(newnode)? && !coerce::expression_returns_set(newnode) {
         let mut phrels = types_nodes::Bitmapset::empty();
         if let Some(jt) = parse.jointree {
             for child in &jt.fromlist {
@@ -457,7 +458,10 @@ pub(crate) fn strip_group_nulling<'mcx>(
                 nr.del_member(group_rtindex);
                 return Ok(Some(Node::mk(
                     mcx,
-                    types_nodes::primnodes::Var { varnullingrels: nr, ..*v },
+                    types_nodes::primnodes::Var {
+                        varnullingrels: nr,
+                        ..*v
+                    },
                 )?));
             }
             Ok(None)

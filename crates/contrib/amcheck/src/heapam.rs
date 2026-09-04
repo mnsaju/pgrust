@@ -4,23 +4,20 @@ use std::sync::atomic::Ordering::Relaxed;
 
 use datum::Datum;
 use mcx::{Mcx, PgVec};
-use types_core::{
-    Buffer, ForkNumber, MultiXactId, Oid, OffsetNumber, TransactionId, BLCKSZ,
-    C_COLLATION_OID,
-};
 use types_core::xact::{
     BootstrapTransactionId, FirstNormalFullTransactionId, FirstNormalTransactionId,
     FrozenTransactionId, FullTransactionId, InvalidTransactionId, MultiXactIdPrecedes,
     MultiXactIdPrecedesOrEquals, TransactionIdEquals, TransactionIdIsNormal, TransactionIdIsValid,
     TransactionIdPrecedes,
 };
+use types_core::{
+    Buffer, ForkNumber, MultiXactId, OffsetNumber, Oid, TransactionId, BLCKSZ, C_COLLATION_OID,
+};
 use types_error::{
     PgError, PgResult, ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_INVALID_PARAMETER_VALUE,
     ERRCODE_WRONG_OBJECT_TYPE,
 };
-use types_fmgr::{
-    varlena_result, FmgrInfo, FunctionCallInfoBaseData as Fcinfo,
-};
+use types_fmgr::{varlena_result, FmgrInfo, FunctionCallInfoBaseData as Fcinfo};
 use types_rel::{AccessShareLock, Relation};
 use types_scan::scankey::{BTEqualStrategyNumber, ScanKeyData};
 use types_scan::sdir::ForwardScanDirection;
@@ -28,9 +25,9 @@ use types_storage::buf::{BufferAccessStrategy, BufferAccessStrategyType, BUFFER_
 use types_storage::bufpage::{MaxOffsetNumber, PageRef};
 use types_storage::storage::ReadBufferMode;
 use types_tuple::htup::{
-    BITMAPLEN, HEAP_HASEXTERNAL, HEAP_HASNULL, HEAP_HOT_UPDATED, HEAP_MOVED_IN, HEAP_MOVED_OFF,
-    HEAP_UPDATED, HEAP_XMAX_COMMITTED, HEAP_XMAX_INVALID, HEAP_XMAX_IS_MULTI,
-    HEAP_XMAX_IS_LOCKED_ONLY, HeapTupleHeaderData, SizeofHeapTupleHeader,
+    HeapTupleHeaderData, SizeofHeapTupleHeader, BITMAPLEN, HEAP_HASEXTERNAL, HEAP_HASNULL,
+    HEAP_HOT_UPDATED, HEAP_MOVED_IN, HEAP_MOVED_OFF, HEAP_UPDATED, HEAP_XMAX_COMMITTED,
+    HEAP_XMAX_INVALID, HEAP_XMAX_IS_LOCKED_ONLY, HEAP_XMAX_IS_MULTI,
 };
 use types_tuple::itemptr::{ItemPointerGetBlockNumber, ItemPointerGetOffsetNumberNoCheck};
 use types_tuple::varatt::{
@@ -40,9 +37,7 @@ use types_tuple::varatt::{
 
 use funcapi::{InitMaterializedSRF, MaterializedSRF};
 use heaptoast::{toast_close_indexes, toast_open_indexes, TOAST_MAX_CHUNK_SIZE};
-use toastdesc::{
-    VarattExternal, TOAST_LZ4_COMPRESSION_ID, TOAST_PGLZ_COMPRESSION_ID,
-};
+use toastdesc::{VarattExternal, TOAST_LZ4_COMPRESSION_ID, TOAST_PGLZ_COMPRESSION_ID};
 use visibilitymap::{
     visibilitymap_get_status, VmBuffer, VISIBILITYMAP_ALL_FROZEN, VISIBILITYMAP_ALL_VISIBLE,
 };
@@ -136,7 +131,12 @@ struct HeapCheckContext<'mcx> {
 
 #[inline]
 unsafe fn header_at<'p>(page: PageRef<'p>, lp_off: u16) -> &'p HeapTupleHeaderData {
-    unsafe { &*page.as_ptr().add(lp_off as usize).cast::<HeapTupleHeaderData>() }
+    unsafe {
+        &*page
+            .as_ptr()
+            .add(lp_off as usize)
+            .cast::<HeapTupleHeaderData>()
+    }
 }
 
 #[inline]
@@ -245,7 +245,10 @@ fn check_mxid_in_range(mxid: MultiXactId, ctx: &HeapCheckContext) -> XidBoundsVi
     XID_BOUNDS_OK
 }
 
-fn check_mxid_valid_in_rel(mxid: MultiXactId, ctx: &mut HeapCheckContext) -> PgResult<XidBoundsViolation> {
+fn check_mxid_valid_in_rel(
+    mxid: MultiXactId,
+    ctx: &mut HeapCheckContext,
+) -> PgResult<XidBoundsViolation> {
     let result = check_mxid_in_range(mxid, ctx);
     if result == XID_BOUNDS_OK {
         return Ok(XID_BOUNDS_OK);
@@ -359,23 +362,39 @@ fn check_tuple_header<'mcx>(
     let mut result = true;
 
     if tuphdr.t_hoff as u16 > ctx.lp_len {
-        report(ctx, srf, format!(
-            "data begins at offset {} beyond the tuple length {}",
-            tuphdr.t_hoff, ctx.lp_len
-        ))?;
+        report(
+            ctx,
+            srf,
+            format!(
+                "data begins at offset {} beyond the tuple length {}",
+                tuphdr.t_hoff, ctx.lp_len
+            ),
+        )?;
         result = false;
     }
 
     if (infomask & HEAP_XMAX_COMMITTED) != 0 && (infomask & HEAP_XMAX_IS_MULTI) != 0 {
-        report(ctx, srf, "multixact should not be marked committed".to_string())?;
+        report(
+            ctx,
+            srf,
+            "multixact should not be marked committed".to_string(),
+        )?;
     }
 
     if !TransactionIdIsValid(curr_xmax) && tuphdr.is_hot_updated() {
-        report(ctx, srf, "tuple has been HOT updated, but xmax is 0".to_string())?;
+        report(
+            ctx,
+            srf,
+            "tuple has been HOT updated, but xmax is 0".to_string(),
+        )?;
     }
 
     if tuphdr.is_heap_only() && (infomask & HEAP_UPDATED) == 0 {
-        report(ctx, srf, "tuple is heap only, but not the result of an update".to_string())?;
+        report(
+            ctx,
+            srf,
+            "tuple is heap only, but not the result of an update".to_string(),
+        )?;
     }
 
     let expected_hoff = if (infomask & HEAP_HASNULL) != 0 {
@@ -424,24 +443,39 @@ fn check_tuple_visibility<'mcx>(
             xmin_commit_status = xmin_status_opt.expect("XID_BOUNDS_OK carries a status");
         }
         XID_IN_FUTURE => {
-            report(ctx, srf, format!(
-                "xmin {xmin} equals or exceeds next valid transaction ID {}:{}",
-                ctx.next_fxid.epoch(), ctx.next_fxid.xid()
-            ))?;
+            report(
+                ctx,
+                srf,
+                format!(
+                    "xmin {xmin} equals or exceeds next valid transaction ID {}:{}",
+                    ctx.next_fxid.epoch(),
+                    ctx.next_fxid.xid()
+                ),
+            )?;
             return Ok((false, false, XID_COMMITTED));
         }
         XID_PRECEDES_CLUSTERMIN => {
-            report(ctx, srf, format!(
-                "xmin {xmin} precedes oldest valid transaction ID {}:{}",
-                ctx.oldest_fxid.epoch(), ctx.oldest_fxid.xid()
-            ))?;
+            report(
+                ctx,
+                srf,
+                format!(
+                    "xmin {xmin} precedes oldest valid transaction ID {}:{}",
+                    ctx.oldest_fxid.epoch(),
+                    ctx.oldest_fxid.xid()
+                ),
+            )?;
             return Ok((false, false, XID_COMMITTED));
         }
         XID_PRECEDES_RELMIN => {
-            report(ctx, srf, format!(
-                "xmin {xmin} precedes relation freeze threshold {}:{}",
-                ctx.relfrozenfxid.epoch(), ctx.relfrozenfxid.xid()
-            ))?;
+            report(
+                ctx,
+                srf,
+                format!(
+                    "xmin {xmin} precedes relation freeze threshold {}:{}",
+                    ctx.relfrozenfxid.epoch(),
+                    ctx.relfrozenfxid.xid()
+                ),
+            )?;
             return Ok((false, false, XID_COMMITTED));
         }
     }
@@ -455,7 +489,12 @@ fn check_tuple_visibility<'mcx>(
             let (bound, xvac_status) = get_xid_status(xvac, ctx, true)?;
             match bound {
                 XID_INVALID => {
-                    report(ctx, srf, "old-style VACUUM FULL transaction ID for moved off tuple is invalid".to_string())?;
+                    report(
+                        ctx,
+                        srf,
+                        "old-style VACUUM FULL transaction ID for moved off tuple is invalid"
+                            .to_string(),
+                    )?;
                     return Ok((false, xmin_commit_status_ok, xmin_commit_status));
                 }
                 XID_IN_FUTURE => {
@@ -491,7 +530,12 @@ fn check_tuple_visibility<'mcx>(
             let (bound, xvac_status) = get_xid_status(xvac, ctx, true)?;
             match bound {
                 XID_INVALID => {
-                    report(ctx, srf, "old-style VACUUM FULL transaction ID for moved in tuple is invalid".to_string())?;
+                    report(
+                        ctx,
+                        srf,
+                        "old-style VACUUM FULL transaction ID for moved in tuple is invalid"
+                            .to_string(),
+                    )?;
                     return Ok((false, xmin_commit_status_ok, xmin_commit_status));
                 }
                 XID_IN_FUTURE => {
@@ -569,15 +613,39 @@ fn check_tuple_visibility<'mcx>(
                 return Ok((true, xmin_commit_status_ok, xmin_commit_status));
             }
             XID_IN_FUTURE => {
-                report(ctx, srf, format!("update xid {xmax} equals or exceeds next valid transaction ID {}:{}", ctx.next_fxid.epoch(), ctx.next_fxid.xid()))?;
+                report(
+                    ctx,
+                    srf,
+                    format!(
+                        "update xid {xmax} equals or exceeds next valid transaction ID {}:{}",
+                        ctx.next_fxid.epoch(),
+                        ctx.next_fxid.xid()
+                    ),
+                )?;
                 return Ok((true, xmin_commit_status_ok, xmin_commit_status));
             }
             XID_PRECEDES_RELMIN => {
-                report(ctx, srf, format!("update xid {xmax} precedes relation freeze threshold {}:{}", ctx.relfrozenfxid.epoch(), ctx.relfrozenfxid.xid()))?;
+                report(
+                    ctx,
+                    srf,
+                    format!(
+                        "update xid {xmax} precedes relation freeze threshold {}:{}",
+                        ctx.relfrozenfxid.epoch(),
+                        ctx.relfrozenfxid.xid()
+                    ),
+                )?;
                 return Ok((true, xmin_commit_status_ok, xmin_commit_status));
             }
             XID_PRECEDES_CLUSTERMIN => {
-                report(ctx, srf, format!("update xid {xmax} precedes oldest valid transaction ID {}:{}", ctx.oldest_fxid.epoch(), ctx.oldest_fxid.xid()))?;
+                report(
+                    ctx,
+                    srf,
+                    format!(
+                        "update xid {xmax} precedes oldest valid transaction ID {}:{}",
+                        ctx.oldest_fxid.epoch(),
+                        ctx.oldest_fxid.xid()
+                    ),
+                )?;
                 return Ok((true, xmin_commit_status_ok, xmin_commit_status));
             }
             XID_BOUNDS_OK => {}
@@ -604,15 +672,39 @@ fn check_tuple_visibility<'mcx>(
             return Ok((true, xmin_commit_status_ok, xmin_commit_status));
         }
         XID_IN_FUTURE => {
-            report(ctx, srf, format!("xmax {xmax} equals or exceeds next valid transaction ID {}:{}", ctx.next_fxid.epoch(), ctx.next_fxid.xid()))?;
+            report(
+                ctx,
+                srf,
+                format!(
+                    "xmax {xmax} equals or exceeds next valid transaction ID {}:{}",
+                    ctx.next_fxid.epoch(),
+                    ctx.next_fxid.xid()
+                ),
+            )?;
             return Ok((false, xmin_commit_status_ok, xmin_commit_status));
         }
         XID_PRECEDES_RELMIN => {
-            report(ctx, srf, format!("xmax {xmax} precedes relation freeze threshold {}:{}", ctx.relfrozenfxid.epoch(), ctx.relfrozenfxid.xid()))?;
+            report(
+                ctx,
+                srf,
+                format!(
+                    "xmax {xmax} precedes relation freeze threshold {}:{}",
+                    ctx.relfrozenfxid.epoch(),
+                    ctx.relfrozenfxid.xid()
+                ),
+            )?;
             return Ok((false, xmin_commit_status_ok, xmin_commit_status));
         }
         XID_PRECEDES_CLUSTERMIN => {
-            report(ctx, srf, format!("xmax {xmax} precedes oldest valid transaction ID {}:{}", ctx.oldest_fxid.epoch(), ctx.oldest_fxid.xid()))?;
+            report(
+                ctx,
+                srf,
+                format!(
+                    "xmax {xmax} precedes oldest valid transaction ID {}:{}",
+                    ctx.oldest_fxid.epoch(),
+                    ctx.oldest_fxid.xid()
+                ),
+            )?;
             return Ok((false, xmin_commit_status_ok, xmin_commit_status));
         }
         XID_BOUNDS_OK => {}
@@ -647,10 +739,15 @@ fn check_tuple_attribute<'mcx>(
     let t_hoff = tuphdr.t_hoff as u32;
 
     if t_hoff + ctx.offset > ctx.lp_len as u32 {
-        report(ctx, srf, format!(
-            "attribute with length {attlen} starts at offset {} beyond total tuple length {}",
-            t_hoff + ctx.offset, ctx.lp_len
-        ))?;
+        report(
+            ctx,
+            srf,
+            format!(
+                "attribute with length {attlen} starts at offset {} beyond total tuple length {}",
+                t_hoff + ctx.offset,
+                ctx.lp_len
+            ),
+        )?;
         return Ok(false);
     }
 
@@ -664,25 +761,36 @@ fn check_tuple_attribute<'mcx>(
 
     if attlen != -1 {
         ctx.offset = att_nominal_alignby(ctx.offset, attalignby);
-        ctx.offset = unsafe { att_addlength_pointer(ctx.offset, attlen, tp.add(ctx.offset as usize)) };
+        ctx.offset =
+            unsafe { att_addlength_pointer(ctx.offset, attlen, tp.add(ctx.offset as usize)) };
         if t_hoff + ctx.offset > ctx.lp_len as u32 {
-            report(ctx, srf, format!(
-                "attribute with length {attlen} ends at offset {} beyond total tuple length {}",
-                t_hoff + ctx.offset, ctx.lp_len
-            ))?;
+            report(
+                ctx,
+                srf,
+                format!(
+                    "attribute with length {attlen} ends at offset {} beyond total tuple length {}",
+                    t_hoff + ctx.offset,
+                    ctx.lp_len
+                ),
+            )?;
             return Ok(false);
         }
         return Ok(true);
     }
 
-    ctx.offset = unsafe { att_pointer_alignby(ctx.offset, attalignby, tp.add(ctx.offset as usize)) };
+    ctx.offset =
+        unsafe { att_pointer_alignby(ctx.offset, attalignby, tp.add(ctx.offset as usize)) };
 
     let attr = unsafe { tp.add(ctx.offset as usize) };
 
     if unsafe { varatt_is_1b_e(attr) } {
         let va_tag = unsafe { *attr.add(1) };
         if va_tag != VARTAG_ONDISK {
-            report(ctx, srf, format!("toasted attribute has unexpected TOAST tag {va_tag}"))?;
+            report(
+                ctx,
+                srf,
+                format!("toasted attribute has unexpected TOAST tag {va_tag}"),
+            )?;
             return Ok(false);
         }
     }
@@ -690,10 +798,15 @@ fn check_tuple_attribute<'mcx>(
     ctx.offset = unsafe { att_addlength_pointer(ctx.offset, attlen, tp.add(ctx.offset as usize)) };
 
     if t_hoff + ctx.offset > ctx.lp_len as u32 {
-        report(ctx, srf, format!(
-            "attribute with length {attlen} ends at offset {} beyond total tuple length {}",
-            t_hoff + ctx.offset, ctx.lp_len
-        ))?;
+        report(
+            ctx,
+            srf,
+            format!(
+                "attribute with length {attlen} ends at offset {} beyond total tuple length {}",
+                t_hoff + ctx.offset,
+                ctx.lp_len
+            ),
+        )?;
         return Ok(false);
     }
 
@@ -702,40 +815,58 @@ fn check_tuple_attribute<'mcx>(
     }
 
     let mut payload = [0u8; 16];
-    unsafe { core::ptr::copy_nonoverlapping(attr.add(VARHDRSZ_EXTERNAL), payload.as_mut_ptr(), 16) };
+    unsafe {
+        core::ptr::copy_nonoverlapping(attr.add(VARHDRSZ_EXTERNAL), payload.as_mut_ptr(), 16)
+    };
     let toast_pointer = VarattExternal::from_payload(payload);
 
     if toast_pointer.va_rawsize > VARLENA_SIZE_LIMIT {
-        report(ctx, srf, format!(
-            "toast value {} rawsize {} exceeds limit {}",
-            toast_pointer.va_valueid, toast_pointer.va_rawsize, VARLENA_SIZE_LIMIT
-        ))?;
+        report(
+            ctx,
+            srf,
+            format!(
+                "toast value {} rawsize {} exceeds limit {}",
+                toast_pointer.va_valueid, toast_pointer.va_rawsize, VARLENA_SIZE_LIMIT
+            ),
+        )?;
     }
 
     if toast_pointer.is_compressed() {
         let cmid = toast_pointer.compress_method();
         let valid = matches!(cmid, TOAST_PGLZ_COMPRESSION_ID | TOAST_LZ4_COMPRESSION_ID);
         if !valid {
-            report(ctx, srf, format!(
-                "toast value {} has invalid compression method id {cmid}",
-                toast_pointer.va_valueid
-            ))?;
+            report(
+                ctx,
+                srf,
+                format!(
+                    "toast value {} has invalid compression method id {cmid}",
+                    toast_pointer.va_valueid
+                ),
+            )?;
         }
     }
 
     if (infomask & HEAP_HASEXTERNAL) == 0 {
-        report(ctx, srf, format!(
-            "toast value {} is external but tuple header flag HEAP_HASEXTERNAL not set",
-            toast_pointer.va_valueid
-        ))?;
+        report(
+            ctx,
+            srf,
+            format!(
+                "toast value {} is external but tuple header flag HEAP_HASEXTERNAL not set",
+                toast_pointer.va_valueid
+            ),
+        )?;
         return Ok(true);
     }
 
     if rel.rd_rel.reltoastrelid == 0 {
-        report(ctx, srf, format!(
-            "toast value {} is external but relation has no toast relation",
-            toast_pointer.va_valueid
-        ))?;
+        report(
+            ctx,
+            srf,
+            format!(
+                "toast value {} is external but relation has no toast relation",
+                toast_pointer.va_valueid
+            ),
+        )?;
         return Ok(true);
     }
 
@@ -769,10 +900,15 @@ fn check_toast_tuple<'mcx>(
 
     let (chunk_seq_val, seq_isnull) = chunk_seq_col;
     if seq_isnull {
-        report_toast(ctx, srf, ta, format!(
-            "toast value {} has toast chunk with null sequence number",
-            ta.toast_pointer.va_valueid
-        ))?;
+        report_toast(
+            ctx,
+            srf,
+            ta,
+            format!(
+                "toast value {} has toast chunk with null sequence number",
+                ta.toast_pointer.va_valueid
+            ),
+        )?;
         return Ok(expected_chunk_seq);
     }
     let chunk_seq = chunk_seq_val.as_i32();
@@ -786,10 +922,15 @@ fn check_toast_tuple<'mcx>(
 
     let (chunk_val, data_isnull) = chunk_data_col;
     if data_isnull {
-        report_toast(ctx, srf, ta, format!(
-            "toast value {} chunk {chunk_seq} has null data",
-            ta.toast_pointer.va_valueid
-        ))?;
+        report_toast(
+            ctx,
+            srf,
+            ta,
+            format!(
+                "toast value {} chunk {chunk_seq} has null data",
+                ta.toast_pointer.va_valueid
+            ),
+        )?;
         return Ok(next_expected);
     }
     let chunk = chunk_val.as_usize() as *const u8;
@@ -800,18 +941,28 @@ fn check_toast_tuple<'mcx>(
         (unsafe { varsize_1b(chunk) }) as i32 - VARHDRSZ_SHORT as i32
     } else {
         let header = unsafe { chunk.cast::<u32>().read_unaligned() };
-        report_toast(ctx, srf, ta, format!(
-            "toast value {} chunk {chunk_seq} has invalid varlena header {header:x}",
-            ta.toast_pointer.va_valueid
-        ))?;
+        report_toast(
+            ctx,
+            srf,
+            ta,
+            format!(
+                "toast value {} chunk {chunk_seq} has invalid varlena header {header:x}",
+                ta.toast_pointer.va_valueid
+            ),
+        )?;
         return Ok(next_expected);
     };
 
     if chunk_seq > last_chunk_seq {
-        report_toast(ctx, srf, ta, format!(
-            "toast value {} chunk {chunk_seq} follows last expected chunk {last_chunk_seq}",
-            ta.toast_pointer.va_valueid
-        ))?;
+        report_toast(
+            ctx,
+            srf,
+            ta,
+            format!(
+                "toast value {} chunk {chunk_seq} follows last expected chunk {last_chunk_seq}",
+                ta.toast_pointer.va_valueid
+            ),
+        )?;
         return Ok(next_expected);
     }
 
@@ -878,9 +1029,11 @@ fn check_toasted_attribute<'mcx>(
         found_toasttup = true;
         let mut seq_isnull = false;
         // SAFETY: toast tuples match the 3-column toast descriptor.
-        let seq_datum = unsafe { types_tuple::heap_getattr(toasttup, 2, toastdesc_td, &mut seq_isnull) };
+        let seq_datum =
+            unsafe { types_tuple::heap_getattr(toasttup, 2, toastdesc_td, &mut seq_isnull) };
         let mut data_isnull = false;
-        let data_datum = unsafe { types_tuple::heap_getattr(toasttup, 3, toastdesc_td, &mut data_isnull) };
+        let data_datum =
+            unsafe { types_tuple::heap_getattr(toasttup, 3, toastdesc_td, &mut data_isnull) };
         expected_chunk_seq = check_toast_tuple(
             (seq_datum, seq_isnull),
             (data_datum, data_isnull),
@@ -894,10 +1047,15 @@ fn check_toasted_attribute<'mcx>(
     genam::systable_endscan_ordered(mcx, toastscan)?;
 
     if !found_toasttup {
-        report_toast(ctx, srf, ta, format!(
-            "toast value {} not found in toast table",
-            ta.toast_pointer.va_valueid
-        ))?;
+        report_toast(
+            ctx,
+            srf,
+            ta,
+            format!(
+                "toast value {} not found in toast table",
+                ta.toast_pointer.va_valueid
+            ),
+        )?;
     } else if expected_chunk_seq <= last_chunk_seq {
         report_toast(ctx, srf, ta, format!(
             "toast value {} was expected to end at chunk {last_chunk_seq}, but ended while expecting chunk {expected_chunk_seq}",
@@ -925,10 +1083,14 @@ fn check_tuple<'mcx>(
     }
 
     if rel.rd_att.natts < ctx.natts {
-        report(ctx, srf, format!(
-            "number of attributes {} exceeds maximum expected for table {}",
-            ctx.natts, rel.rd_att.natts
-        ))?;
+        report(
+            ctx,
+            srf,
+            format!(
+                "number of attributes {} exceeds maximum expected for table {}",
+                ctx.natts, rel.rd_att.natts
+            ),
+        )?;
         return Ok((xmin_ok, xmin_status));
     }
 
@@ -993,8 +1155,16 @@ pub(crate) fn verify_heapam(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) 
     };
     let _ = skip_bytes;
 
-    let startblock: Option<i64> = if fcinfo.argisnull(4) { None } else { Some(fcinfo.arg_i64(4)) };
-    let endblock: Option<i64> = if fcinfo.argisnull(5) { None } else { Some(fcinfo.arg_i64(5)) };
+    let startblock: Option<i64> = if fcinfo.argisnull(4) {
+        None
+    } else {
+        Some(fcinfo.arg_i64(4))
+    };
+    let endblock: Option<i64> = if fcinfo.argisnull(5) {
+        None
+    } else {
+        Some(fcinfo.arg_i64(5))
+    };
 
     let safe_xmin = snapmgr::GetTransactionSnapshot()?.xmin;
 
@@ -1022,7 +1192,8 @@ pub(crate) fn verify_heapam(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) 
     {
         rel.close(AccessShareLock)?;
         return Err(Box::new(
-            PgError::error("only heap AM is supported").with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED),
+            PgError::error("only heap AM is supported")
+                .with_sqlstate(ERRCODE_FEATURE_NOT_SUPPORTED),
         ));
     }
 
@@ -1185,15 +1356,23 @@ pub(crate) fn verify_heapam(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) 
                 }
                 let rditem = page.item_id(rdoffnum);
                 if !rditem.is_used() {
-                    report(&mut ctx, &mut srf, format!(
-                        "redirected line pointer points to an unused item at offset {rdoffnum}"
-                    ))?;
+                    report(
+                        &mut ctx,
+                        &mut srf,
+                        format!(
+                            "redirected line pointer points to an unused item at offset {rdoffnum}"
+                        ),
+                    )?;
                     off = offset_number_next(off);
                     continue;
                 } else if rditem.is_dead() {
-                    report(&mut ctx, &mut srf, format!(
-                        "redirected line pointer points to a dead item at offset {rdoffnum}"
-                    ))?;
+                    report(
+                        &mut ctx,
+                        &mut srf,
+                        format!(
+                            "redirected line pointer points to a dead item at offset {rdoffnum}"
+                        ),
+                    )?;
                     off = offset_number_next(off);
                     continue;
                 } else if rditem.is_redirected() {
@@ -1214,17 +1393,23 @@ pub(crate) fn verify_heapam(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) 
             let lp_len = lp.lp_len();
 
             if lp_off as u32 != maxalign(lp_off as u32) {
-                report(&mut ctx, &mut srf, format!(
-                    "line pointer to page offset {lp_off} is not maximally aligned"
-                ))?;
+                report(
+                    &mut ctx,
+                    &mut srf,
+                    format!("line pointer to page offset {lp_off} is not maximally aligned"),
+                )?;
                 off = offset_number_next(off);
                 continue;
             }
             if (lp_len as u32) < maxalign(SizeofHeapTupleHeader as u32) {
-                report(&mut ctx, &mut srf, format!(
+                report(
+                    &mut ctx,
+                    &mut srf,
+                    format!(
                     "line pointer length {lp_len} is less than the minimum tuple header size {}",
                     maxalign(SizeofHeapTupleHeader as u32)
-                ))?;
+                ),
+                )?;
                 off = offset_number_next(off);
                 continue;
             }
@@ -1320,14 +1505,22 @@ pub(crate) fn verify_heapam(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) 
             predecessor[nextoffnum as usize] = off;
 
             if (curr_htup.t_infomask2 & HEAP_HOT_UPDATED) == 0 && next_htup.is_heap_only() {
-                report(&mut ctx, &mut srf, format!(
-                    "non-heap-only update produced a heap-only tuple at offset {nextoffnum}"
-                ))?;
+                report(
+                    &mut ctx,
+                    &mut srf,
+                    format!(
+                        "non-heap-only update produced a heap-only tuple at offset {nextoffnum}"
+                    ),
+                )?;
             }
             if (curr_htup.t_infomask2 & HEAP_HOT_UPDATED) != 0 && !next_htup.is_heap_only() {
-                report(&mut ctx, &mut srf, format!(
-                    "heap-only update produced a non-heap only tuple at offset {nextoffnum}"
-                ))?;
+                report(
+                    &mut ctx,
+                    &mut srf,
+                    format!(
+                        "heap-only update produced a non-heap only tuple at offset {nextoffnum}"
+                    ),
+                )?;
             }
 
             let curr_xmin = curr_htup.xmin();
@@ -1373,7 +1566,11 @@ pub(crate) fn verify_heapam(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) 
                     // SAFETY: curr_lp is a validated LP_NORMAL line pointer.
                     let curr_htup = unsafe { header_at(page, curr_lp.lp_off()) };
                     if curr_htup.is_heap_only() {
-                        report(&mut ctx, &mut srf, "tuple is root of chain but is marked as heap-only tuple".to_string())?;
+                        report(
+                            &mut ctx,
+                            &mut srf,
+                            "tuple is root of chain but is marked as heap-only tuple".to_string(),
+                        )?;
                     }
                 }
             }

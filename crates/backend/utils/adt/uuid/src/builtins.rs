@@ -138,7 +138,14 @@ pub fn fc_uuidv7_interval(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 // pg_proc.dat rows for uuid.c (all proisstrict, none retset), OID-ascending.

@@ -19,7 +19,9 @@ fn composite_tupdesc<'m>(mcx: Mcx<'m>, flinfo: &FmgrInfo) -> PgResult<TupleDescD
     if resolved.class != funcapi::TypeFuncClass::Composite {
         return Err(Box::new(PgError::error("return type must be a row type")));
     }
-    Ok(resolved.result_tuple_desc.expect("composite result has tupdesc"))
+    Ok(resolved
+        .result_tuple_desc
+        .expect("composite result has tupdesc"))
 }
 
 fn composite_result(
@@ -48,7 +50,9 @@ fn get_snapbuild_state_desc(state: i32) -> &'static str {
 #[track_caller]
 #[cold]
 fn invalid_filename_err(name: &str) -> Box<PgError> {
-    Box::new(PgError::error(format!("invalid snapshot file name \"{name}\"")))
+    Box::new(PgError::error(format!(
+        "invalid snapshot file name \"{name}\""
+    )))
 }
 
 // parse_snapshot_filename: sscanf("%X-%X.snap") then a strict round-trip
@@ -109,7 +113,10 @@ fn xid_array_or_null(mcx: Mcx<'_>, xids: &[TransactionId]) -> PgResult<(Datum, b
     if xids.is_empty() {
         return Ok((Datum::null(), true));
     }
-    let elems: Vec<Datum> = xids.iter().map(|&x| Datum::from_transaction_id(x)).collect();
+    let elems: Vec<Datum> = xids
+        .iter()
+        .map(|&x| Datum::from_transaction_id(x))
+        .collect();
     let image = datum::array_build::construct_array_image(mcx, &elems, XIDOID, 4, true, b'i')?;
     Ok((byref_result(mcx, &image)?, false))
 }
@@ -178,7 +185,10 @@ mod tests {
 
     #[test]
     fn snapshot_filename_roundtrip() {
-        assert_eq!(parse_snapshot_filename("0-40796E18.snap").unwrap(), 0x40796E18);
+        assert_eq!(
+            parse_snapshot_filename("0-40796E18.snap").unwrap(),
+            0x40796E18
+        );
         assert_eq!(
             parse_snapshot_filename("A-1.snap").unwrap(),
             (0xA_u64 << 32) | 1
@@ -192,11 +202,14 @@ mod tests {
             "",
             "../snapshots",
             "../snapshots/0-40796E18.snap",
-            "0-abc.snap",          // lowercase can't round-trip through %X
-            "00-1.snap",           // leading zeros can't round-trip
-            "1-123456789.snap",    // >8 hex digits can't round-trip
+            "0-abc.snap",       // lowercase can't round-trip through %X
+            "00-1.snap",        // leading zeros can't round-trip
+            "1-123456789.snap", // >8 hex digits can't round-trip
         ] {
-            assert!(parse_snapshot_filename(bad).is_err(), "{bad} should be rejected");
+            assert!(
+                parse_snapshot_filename(bad).is_err(),
+                "{bad} should be rejected"
+            );
         }
     }
 

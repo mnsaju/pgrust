@@ -50,7 +50,10 @@ pub fn pushval_morph<'mcx, E: TsParseEnv<'mcx>>(
             while pos + 1 < next_pos {
                 out.push(QPush::Stop);
                 if cntpos > 0 {
-                    out.push(QPush::Op { oper: qoperator, distance: 1 });
+                    out.push(QPush::Op {
+                        oper: qoperator,
+                        distance: 1,
+                    });
                 }
                 cntpos += 1;
                 pos += 1;
@@ -74,19 +77,28 @@ pub fn pushval_morph<'mcx, E: TsParseEnv<'mcx>>(
                     word: w.word,
                 });
                 if cnt > 0 {
-                    out.push(QPush::Op { oper: OP_AND, distance: 0 });
+                    out.push(QPush::Op {
+                        oper: OP_AND,
+                        distance: 0,
+                    });
                 }
                 cnt += 1;
                 count += 1;
             }
             if cntvar > 0 {
-                out.push(QPush::Op { oper: OP_OR, distance: 0 });
+                out.push(QPush::Op {
+                    oper: OP_OR,
+                    distance: 0,
+                });
             }
             cntvar += 1;
         }
 
         if cntpos > 0 {
-            out.push(QPush::Op { oper: qoperator, distance: 1 });
+            out.push(QPush::Op {
+                oper: qoperator,
+                distance: 1,
+            });
         }
         cntpos += 1;
     }

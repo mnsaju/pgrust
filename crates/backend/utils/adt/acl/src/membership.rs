@@ -181,8 +181,10 @@ fn roles_is_member_of_walk(
     let mut i = 0;
     while i < roles_list.len() {
         let memberid = roles_list[i];
-        let memlist =
-            SearchSysCacheList1(AUTHMEMMEMROLE, SysCacheKey::Value(Datum::from_oid(memberid)))?;
+        let memlist = SearchSysCacheList1(
+            AUTHMEMMEMROLE,
+            SysCacheKey::Value(Datum::from_oid(memberid)),
+        )?;
         for m in 0..memlist.n_members() as usize {
             let member = memlist.member(m);
             let tuple = member.tuple();
@@ -285,10 +287,7 @@ pub fn is_member_of_role_nosuper(member: Oid, role: Oid) -> PgResult<bool> {
 }
 
 // roles_is_member_of (acl.c) list form: snapshot of the cached expansion.
-pub(crate) fn roles_is_member_of_list(
-    roleid: Oid,
-    rtype: RoleRecurseType,
-) -> PgResult<Vec<Oid>> {
+pub(crate) fn roles_is_member_of_list(roleid: Oid, rtype: RoleRecurseType) -> PgResult<Vec<Oid>> {
     roles_is_member_of_contains(roleid, rtype, InvalidOid)?;
     let t = rtype as usize;
     Ok(CACHE.with(|c| {

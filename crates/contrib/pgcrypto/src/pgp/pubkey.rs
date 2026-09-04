@@ -1,4 +1,3 @@
-
 use super::cfb::PgpCfb;
 use super::consts::*;
 use super::mpi::{mpi_cksum, read_mpi, Mpi};
@@ -91,16 +90,7 @@ fn read_public_key(body: &[u8], pos: &mut usize) -> Result<PubKey, String> {
             let g = read_mpi(body, pos)?;
             let y = read_mpi(body, pos)?;
             let pubm = vec![p.clone(), g.clone(), y.clone()];
-            (
-                KeyMaterial::Elg {
-                    p,
-                    g,
-                    y,
-                    x: None,
-                },
-                true,
-                pubm,
-            )
+            (KeyMaterial::Elg { p, g, y, x: None }, true, pubm)
         }
         _ => return Err("Unknown public-key encryption algorithm".to_string()),
     };
@@ -137,10 +127,7 @@ fn calc_key_id(ver: u8, time: &[u8; 4], algo: i32, mpis: &[Mpi]) -> Result<[u8; 
     Ok(id)
 }
 
-fn process_secret_key(
-    body: &[u8],
-    psw: Option<&[u8]>,
-) -> Result<PubKey, String> {
+fn process_secret_key(body: &[u8], psw: Option<&[u8]>) -> Result<PubKey, String> {
     let mut pos = 0usize;
     let mut pk = read_public_key(body, &mut pos)?;
 
@@ -171,8 +158,8 @@ fn process_secret_key(
         let iv = &body[pos..pos + bs];
         pos += bs;
 
-        let mut cfb = PgpCfb::create(cipher_algo, &s2k.key, false, Some(iv))
-            .map_err(|e| e.to_string())?;
+        let mut cfb =
+            PgpCfb::create(cipher_algo, &s2k.key, false, Some(iv)).map_err(|e| e.to_string())?;
         let dec = cfb.decrypt(&body[pos..]);
         (dec, hide_type == HIDE_SHA1)
     } else if hide_type == HIDE_CLEAR {
@@ -271,9 +258,7 @@ pub fn read_key(data: &[u8], psw: Option<&[u8]>, pubtype: i32) -> Result<PubKey,
         match hdr.tag {
             t if t == PGP_PKT_PUBLIC_KEY || t == PGP_PKT_SECRET_KEY => {
                 if got_main_key {
-                    return Err(
-                        "Several keys given - pgcrypto does not handle keyring".to_string(),
-                    );
+                    return Err("Several keys given - pgcrypto does not handle keyring".to_string());
                 }
                 got_main_key = true;
             }

@@ -80,17 +80,32 @@ fn timestamp2tm_tm2timestamp_round_trip() {
 
 #[test]
 fn tm2timestamp_range_errors_match_c() {
-    let tm = pg_tm { tm_year: 294277, tm_mon: 1, tm_mday: 1, ..Default::default() };
+    let tm = pg_tm {
+        tm_year: 294277,
+        tm_mon: 1,
+        tm_mday: 1,
+        ..Default::default()
+    };
     let mut out = 5;
     assert!(tm2timestamp(&tm, 0, None, &mut out).is_err());
     assert_eq!(out, 0);
 
-    let tm = pg_tm { tm_year: -4713, tm_mon: 11, tm_mday: 24, ..Default::default() };
+    let tm = pg_tm {
+        tm_year: -4713,
+        tm_mon: 11,
+        tm_mday: 24,
+        ..Default::default()
+    };
     let mut out = 0;
     tm2timestamp(&tm, 0, None, &mut out).unwrap();
     assert_eq!(out, MIN_TIMESTAMP);
 
-    let tm = pg_tm { tm_year: -4713, tm_mon: 11, tm_mday: 23, ..Default::default() };
+    let tm = pg_tm {
+        tm_year: -4713,
+        tm_mon: 11,
+        tm_mday: 23,
+        ..Default::default()
+    };
     assert!(tm2timestamp(&tm, 0, None, &mut out).is_err());
 }
 
@@ -115,7 +130,9 @@ fn adjust_timestamp_for_typmod_rounds_like_c() {
     let mut t = 42i64;
     let err = AdjustTimestampForTypmod(&mut t, 7, None).unwrap_err();
     assert_eq!(err.sqlstate, ERRCODE_INVALID_PARAMETER_VALUE);
-    assert!(err.message.contains("timestamp(7) precision must be between 0 and 6"));
+    assert!(err
+        .message
+        .contains("timestamp(7) precision must be between 0 and 6"));
 
     let mut soft = SoftErrorContext::new(true);
     assert!(AdjustTimestampForTypmod(&mut t, 9, Some(&mut soft)).is_ok());
@@ -135,7 +152,10 @@ fn timestamp_io_differential_vs_pg18_iso() {
         ("infinity", "infinity"),
         ("-infinity", "-infinity"),
         ("4714-11-24 00:00:00 BC", "4714-11-24 00:00:00 BC"),
-        ("294276-12-31 23:59:59.999999", "294276-12-31 23:59:59.999999"),
+        (
+            "294276-12-31 23:59:59.999999",
+            "294276-12-31 23:59:59.999999",
+        ),
         ("1999-01-08 04:05:06", "1999-01-08 04:05:06"),
     ];
     for (input, expected) in cases {
@@ -160,10 +180,17 @@ fn timestamptz_io_differential_vs_pg18_gmt_iso() {
         ("infinity", "infinity"),
         ("1997-06-10 18:32:01 +05:30", "1997-06-10 13:02:01+00"),
         ("4714-11-24 00:00:00+00 BC", "4714-11-24 00:00:00+00 BC"),
-        ("294276-12-31 23:59:59.999999+00", "294276-12-31 23:59:59.999999+00"),
+        (
+            "294276-12-31 23:59:59.999999+00",
+            "294276-12-31 23:59:59.999999+00",
+        ),
     ];
     for (input, expected) in cases {
-        assert_eq!(tstz_out(tstz_in(input)), expected, "timestamptz_in({input:?})");
+        assert_eq!(
+            tstz_out(tstz_in(input)),
+            expected,
+            "timestamptz_in({input:?})"
+        );
     }
 }
 
@@ -173,20 +200,35 @@ fn timestamp_io_differential_vs_pg18_other_styles() {
 
     set_date_style(USE_POSTGRES_DATES);
     adt_datetime::set_date_order(DATEORDER_MDY);
-    assert_eq!(ts_out(ts_in("2001-02-03 04:05:06.789")), "Sat Feb 03 04:05:06.789 2001");
+    assert_eq!(
+        ts_out(ts_in("2001-02-03 04:05:06.789")),
+        "Sat Feb 03 04:05:06.789 2001"
+    );
     assert_eq!(
         tstz_out(tstz_in("2001-02-03 04:05:06.789")),
         "Sat Feb 03 04:05:06.789 2001 GMT"
     );
-    assert_eq!(tstz_out(tstz_in("1997-12-17 07:37:16-08")), "Wed Dec 17 15:37:16 1997 GMT");
+    assert_eq!(
+        tstz_out(tstz_in("1997-12-17 07:37:16-08")),
+        "Wed Dec 17 15:37:16 1997 GMT"
+    );
 
     set_date_style(USE_SQL_DATES);
     adt_datetime::set_date_order(DATEORDER_DMY);
-    assert_eq!(ts_out(ts_in("2001-02-03 04:05:06.789")), "03/02/2001 04:05:06.789");
-    assert_eq!(tstz_out(tstz_in("03/02/2001 04:05:06.789")), "03/02/2001 04:05:06.789 GMT");
+    assert_eq!(
+        ts_out(ts_in("2001-02-03 04:05:06.789")),
+        "03/02/2001 04:05:06.789"
+    );
+    assert_eq!(
+        tstz_out(tstz_in("03/02/2001 04:05:06.789")),
+        "03/02/2001 04:05:06.789 GMT"
+    );
 
     set_date_style(USE_GERMAN_DATES);
-    assert_eq!(ts_out(ts_in("2001-02-03 04:05:06.789")), "03.02.2001 04:05:06.789");
+    assert_eq!(
+        ts_out(ts_in("2001-02-03 04:05:06.789")),
+        "03.02.2001 04:05:06.789"
+    );
 
     set_date_style(USE_ISO_DATES);
     adt_datetime::set_date_order(DATEORDER_MDY);
@@ -199,17 +241,29 @@ fn timestamp_in_errors_match_c_surface() {
     // decode as DTERR_BAD_FORMAT; a time-only string exercises the same
     // BAD_FORMAT surface here)
     let err = timestamp_in("17:32:01", -1, None).unwrap_err();
-    assert_eq!(err.message, "invalid input syntax for type timestamp: \"17:32:01\"");
+    assert_eq!(
+        err.message,
+        "invalid input syntax for type timestamp: \"17:32:01\""
+    );
 
     let err = timestamp_in("1997-02-30 10:00:00", -1, None).unwrap_err();
-    assert_eq!(err.message, "date/time field value out of range: \"1997-02-30 10:00:00\"");
+    assert_eq!(
+        err.message,
+        "date/time field value out of range: \"1997-02-30 10:00:00\""
+    );
 
     let err = timestamp_in("295000-01-01 00:00:00", -1, None).unwrap_err();
-    assert_eq!(err.message, "timestamp out of range: \"295000-01-01 00:00:00\"");
+    assert_eq!(
+        err.message,
+        "timestamp out of range: \"295000-01-01 00:00:00\""
+    );
     assert_eq!(err.sqlstate, ERRCODE_DATETIME_VALUE_OUT_OF_RANGE);
 
     let err = timestamp_in("4714-11-23 23:59:59 BC", -1, None).unwrap_err();
-    assert_eq!(err.message, "timestamp out of range: \"4714-11-23 23:59:59 BC\"");
+    assert_eq!(
+        err.message,
+        "timestamp out of range: \"4714-11-23 23:59:59 BC\""
+    );
 
     let mut soft = SoftErrorContext::new(true);
     let v = timestamp_in("17:32:01", -1, Some(&mut soft)).unwrap();
@@ -254,8 +308,14 @@ fn timestamp_differences_match_c() {
     assert_eq!(TimestampDifferenceMilliseconds(0, 1), 1);
     assert_eq!(TimestampDifferenceMilliseconds(0, 1000), 1);
     assert_eq!(TimestampDifferenceMilliseconds(0, 1001), 2);
-    assert_eq!(TimestampDifferenceMilliseconds(DT_NOBEGIN, DT_NOEND), i32::MAX as i64);
-    assert_eq!(TimestampDifferenceMilliseconds(0, DT_NOEND), i32::MAX as i64);
+    assert_eq!(
+        TimestampDifferenceMilliseconds(DT_NOBEGIN, DT_NOEND),
+        i32::MAX as i64
+    );
+    assert_eq!(
+        TimestampDifferenceMilliseconds(0, DT_NOEND),
+        i32::MAX as i64
+    );
 
     assert!(TimestampDifferenceExceeds(0, 2_000_000, 2000));
     assert!(!TimestampDifferenceExceeds(0, 1_999_999, 2000));
@@ -290,25 +350,55 @@ fn timestamp_zone_matches_pg18() {
     // the "Default" timezone_abbreviations entries these cases need: EST is
     // a fixed offset, MSK a dynamic abbreviation over Europe/Moscow
     tz::InstallTimeZoneAbbrevs(tz::ConvertTimeZoneAbbrevs(&[
-        tz::TzEntry { abbrev: b"est", zone: None, offset: -18000, is_dst: false },
-        tz::TzEntry { abbrev: b"msk", zone: Some(b"Europe/Moscow"), offset: 0, is_dst: false },
+        tz::TzEntry {
+            abbrev: b"est",
+            zone: None,
+            offset: -18000,
+            is_dst: false,
+        },
+        tz::TzEntry {
+            abbrev: b"msk",
+            zone: Some(b"Europe/Moscow"),
+            offset: 0,
+            is_dst: false,
+        },
     ]));
     // 2025-03-09 02:30 America/New_York is inside the spring-forward gap:
     // DetermineTimeZoneOffset prefers the before-interpretation (EST).
     // 2025-11-02 01:30 is ambiguous: fall-back prefers the after (EST).
     let cases: [(&[u8], &str, &str); 5] = [
-        (b"America/New_York", "2025-03-09 02:30:00", "2025-03-09 07:30:00+00"),
-        (b"America/New_York", "2025-11-02 01:30:00", "2025-11-02 06:30:00+00"),
-        (b"Asia/Kolkata", "2025-06-01 12:00:00", "2025-06-01 06:30:00+00"),
+        (
+            b"America/New_York",
+            "2025-03-09 02:30:00",
+            "2025-03-09 07:30:00+00",
+        ),
+        (
+            b"America/New_York",
+            "2025-11-02 01:30:00",
+            "2025-11-02 06:30:00+00",
+        ),
+        (
+            b"Asia/Kolkata",
+            "2025-06-01 12:00:00",
+            "2025-06-01 06:30:00+00",
+        ),
         (b"EST", "2025-06-01 12:00:00", "2025-06-01 17:00:00+00"),
         (b"MSK", "2014-01-01 12:00:00", "2014-01-01 08:00:00+00"),
     ];
     for (zone, input, expect) in cases {
         let r = timestamp_zone(zone, ts_in(input)).unwrap();
-        assert_eq!(tstz_out(r), expect, "timestamp_zone({:?}, {input})", String::from_utf8_lossy(zone));
+        assert_eq!(
+            tstz_out(r),
+            expect,
+            "timestamp_zone({:?}, {input})",
+            String::from_utf8_lossy(zone)
+        );
     }
 
-    assert_eq!(timestamp_zone(b"America/New_York", DT_NOEND).unwrap(), DT_NOEND);
+    assert_eq!(
+        timestamp_zone(b"America/New_York", DT_NOEND).unwrap(),
+        DT_NOEND
+    );
 
     let err = timestamp_zone(b"Nowhere/Land", 0).unwrap_err();
     assert_eq!(err.message, "time zone \"Nowhere/Land\" not recognized");
@@ -320,15 +410,36 @@ fn timestamptz_zone_matches_pg18() {
     gmt_session();
     set_date_style(USE_ISO_DATES);
     let cases: [(&[u8], &str, &str); 4] = [
-        (b"America/New_York", "2025-03-09 07:30:00+00", "2025-03-09 03:30:00"),
-        (b"America/New_York", "2025-11-02 05:30:00+00", "2025-11-02 01:30:00"),
-        (b"America/New_York", "2025-11-02 06:30:00+00", "2025-11-02 01:30:00"),
-        (b"Asia/Kolkata", "2025-06-01 12:00:00+00", "2025-06-01 17:30:00"),
+        (
+            b"America/New_York",
+            "2025-03-09 07:30:00+00",
+            "2025-03-09 03:30:00",
+        ),
+        (
+            b"America/New_York",
+            "2025-11-02 05:30:00+00",
+            "2025-11-02 01:30:00",
+        ),
+        (
+            b"America/New_York",
+            "2025-11-02 06:30:00+00",
+            "2025-11-02 01:30:00",
+        ),
+        (
+            b"Asia/Kolkata",
+            "2025-06-01 12:00:00+00",
+            "2025-06-01 17:30:00",
+        ),
     ];
     for (zone, input, expect) in cases {
         let r = timestamptz_zone(zone, tstz_in(input)).unwrap();
         assert_eq!(tstz_out(tstz_in(input)), input, "sanity");
-        assert_eq!(ts_out(r), expect, "timestamptz_zone({:?}, {input})", String::from_utf8_lossy(zone));
+        assert_eq!(
+            ts_out(r),
+            expect,
+            "timestamptz_zone({:?}, {input})",
+            String::from_utf8_lossy(zone)
+        );
     }
 }
 
@@ -354,17 +465,38 @@ fn part_f64(v: &PartValue) -> f64 {
 fn extract_timezone_fields_match_pg18() {
     zone_session(b"America/New_York");
     let ts = tstz_in("2025-06-01 12:00:00+00");
-    assert_eq!(part_f64(&timestamptz_part_common(b"timezone", ts, false).unwrap()), -14400.0);
-    assert_eq!(part_f64(&timestamptz_part_common(b"timezone_hour", ts, false).unwrap()), -4.0);
-    assert_eq!(part_f64(&timestamptz_part_common(b"timezone_minute", ts, false).unwrap()), 0.0);
+    assert_eq!(
+        part_f64(&timestamptz_part_common(b"timezone", ts, false).unwrap()),
+        -14400.0
+    );
+    assert_eq!(
+        part_f64(&timestamptz_part_common(b"timezone_hour", ts, false).unwrap()),
+        -4.0
+    );
+    assert_eq!(
+        part_f64(&timestamptz_part_common(b"timezone_minute", ts, false).unwrap()),
+        0.0
+    );
     let winter = tstz_in("2025-01-01 12:00:00+00");
-    assert_eq!(part_num(&timestamptz_part_common(b"timezone", winter, true).unwrap()), "-18000");
+    assert_eq!(
+        part_num(&timestamptz_part_common(b"timezone", winter, true).unwrap()),
+        "-18000"
+    );
 
     zone_session(b"Asia/Kolkata");
     let ts = tstz_in("2025-06-01 12:00:00+00");
-    assert_eq!(part_f64(&timestamptz_part_common(b"timezone", ts, false).unwrap()), 19800.0);
-    assert_eq!(part_num(&timestamptz_part_common(b"timezone_hour", ts, true).unwrap()), "5");
-    assert_eq!(part_num(&timestamptz_part_common(b"timezone_minute", ts, true).unwrap()), "30");
+    assert_eq!(
+        part_f64(&timestamptz_part_common(b"timezone", ts, false).unwrap()),
+        19800.0
+    );
+    assert_eq!(
+        part_num(&timestamptz_part_common(b"timezone_hour", ts, true).unwrap()),
+        "5"
+    );
+    assert_eq!(
+        part_num(&timestamptz_part_common(b"timezone_minute", ts, true).unwrap()),
+        "30"
+    );
 
     // timezone fields are timestamptz-only
     let err = timestamp_part_common(b"timezone", 0, true).unwrap_err();
@@ -381,10 +513,18 @@ fn extract_fields_match_pg18() {
     set_date_style(USE_ISO_DATES);
 
     let ts = ts_in("2025-03-09 07:30:00");
-    assert_eq!(part_num(&timestamp_part_common(b"epoch", ts, true).unwrap()), "1741505400.000000");
-    assert_eq!(part_f64(&timestamp_part_common(b"epoch", ts, false).unwrap()), 1741505400.0);
     assert_eq!(
-        part_num(&timestamptz_part_common(b"epoch", tstz_in("2025-03-09 07:30:00+00"), true).unwrap()),
+        part_num(&timestamp_part_common(b"epoch", ts, true).unwrap()),
+        "1741505400.000000"
+    );
+    assert_eq!(
+        part_f64(&timestamp_part_common(b"epoch", ts, false).unwrap()),
+        1741505400.0
+    );
+    assert_eq!(
+        part_num(
+            &timestamptz_part_common(b"epoch", tstz_in("2025-03-09 07:30:00+00"), true).unwrap()
+        ),
         "1741505400.000000"
     );
 
@@ -394,19 +534,45 @@ fn extract_fields_match_pg18() {
     );
 
     let t = ts_in("2001-02-16 20:38:40.5");
-    assert_eq!(part_num(&timestamp_part_common(b"second", t, true).unwrap()), "40.500000");
-    assert_eq!(part_num(&timestamp_part_common(b"milliseconds", t, true).unwrap()), "40500.000");
-    assert_eq!(part_f64(&timestamp_part_common(b"dow", ts, false).unwrap()), 0.0);
-    assert_eq!(part_f64(&timestamp_part_common(b"week", ts_in("2005-01-01 12:00:00"), false).unwrap()), 53.0);
     assert_eq!(
-        part_f64(&timestamp_part_common(b"isoyear", ts_in("0001-01-01 00:00:00 BC"), false).unwrap()),
+        part_num(&timestamp_part_common(b"second", t, true).unwrap()),
+        "40.500000"
+    );
+    assert_eq!(
+        part_num(&timestamp_part_common(b"milliseconds", t, true).unwrap()),
+        "40500.000"
+    );
+    assert_eq!(
+        part_f64(&timestamp_part_common(b"dow", ts, false).unwrap()),
+        0.0
+    );
+    assert_eq!(
+        part_f64(&timestamp_part_common(b"week", ts_in("2005-01-01 12:00:00"), false).unwrap()),
+        53.0
+    );
+    assert_eq!(
+        part_f64(
+            &timestamp_part_common(b"isoyear", ts_in("0001-01-01 00:00:00 BC"), false).unwrap()
+        ),
         -2.0
     );
 
-    assert_eq!(part_num(&timestamp_part_common(b"epoch", DT_NOEND, true).unwrap()), "Infinity");
-    assert_eq!(part_num(&timestamp_part_common(b"epoch", DT_NOBEGIN, true).unwrap()), "-Infinity");
-    assert_eq!(part_f64(&timestamp_part_common(b"epoch", DT_NOEND, false).unwrap()), f64::INFINITY);
-    assert!(matches!(timestamp_part_common(b"dow", DT_NOEND, true), Ok(PartValue::Null)));
+    assert_eq!(
+        part_num(&timestamp_part_common(b"epoch", DT_NOEND, true).unwrap()),
+        "Infinity"
+    );
+    assert_eq!(
+        part_num(&timestamp_part_common(b"epoch", DT_NOBEGIN, true).unwrap()),
+        "-Infinity"
+    );
+    assert_eq!(
+        part_f64(&timestamp_part_common(b"epoch", DT_NOEND, false).unwrap()),
+        f64::INFINITY
+    );
+    assert!(matches!(
+        timestamp_part_common(b"dow", DT_NOEND, true),
+        Ok(PartValue::Null)
+    ));
 
     let err = timestamp_part_common(b"gibberish", 0, true).unwrap_err();
     assert_eq!(
@@ -431,7 +597,11 @@ fn date_trunc_matches_pg18() {
         ("millennium", "2025-08-15 07:30:00", "2001-01-01 00:00:00"),
         ("decade", "2025-08-15 07:30:00", "2020-01-01 00:00:00"),
         ("hour", "2025-08-15 07:30:59.5", "2025-08-15 07:00:00"),
-        ("milliseconds", "2025-08-15 07:30:59.5009", "2025-08-15 07:30:59.5"),
+        (
+            "milliseconds",
+            "2025-08-15 07:30:59.5009",
+            "2025-08-15 07:30:59.5",
+        ),
     ] {
         let got = timestamp_trunc(unit.as_bytes(), ts_in(input)).unwrap();
         let want = if unit == "week" {
@@ -454,9 +624,12 @@ fn date_trunc_matches_pg18() {
     assert_eq!(tstz_out(got), "2025-03-09 00:00:00-05");
 
     tz::set_session_timezone(tz::pg_tzset(b"GMT"));
-    let got =
-        timestamptz_trunc_zone(b"day", tstz_in("2025-03-10 03:30:00+00"), b"America/New_York")
-            .unwrap();
+    let got = timestamptz_trunc_zone(
+        b"day",
+        tstz_in("2025-03-10 03:30:00+00"),
+        b"America/New_York",
+    )
+    .unwrap();
     assert_eq!(tstz_out(got), "2025-03-09 05:00:00+00");
 }
 
@@ -474,11 +647,15 @@ fn make_timestamp_family_matches_pg18() {
         "2025-03-09 03:30:00-04"
     );
     assert_eq!(
-        tstz_out(make_timestamptz_at_timezone(2025, 3, 9, 2, 30, 0.0, b"America/New_York").unwrap()),
+        tstz_out(
+            make_timestamptz_at_timezone(2025, 3, 9, 2, 30, 0.0, b"America/New_York").unwrap()
+        ),
         "2025-03-09 03:30:00-04"
     );
     assert_eq!(
-        tstz_out(make_timestamptz_at_timezone(2025, 11, 2, 1, 30, 0.0, b"America/New_York").unwrap()),
+        tstz_out(
+            make_timestamptz_at_timezone(2025, 11, 2, 1, 30, 0.0, b"America/New_York").unwrap()
+        ),
         "2025-11-02 01:30:00-05"
     );
     assert_eq!(
@@ -487,7 +664,10 @@ fn make_timestamp_family_matches_pg18() {
     );
 
     let err = make_timestamptz_at_timezone(2025, 6, 1, 12, 0, 0.0, b"5").unwrap_err();
-    assert_eq!(err.message, "invalid input syntax for type numeric time zone: \"5\"");
+    assert_eq!(
+        err.message,
+        "invalid input syntax for type numeric time zone: \"5\""
+    );
     assert_eq!(
         err.hint.as_deref(),
         Some("Numeric time zones must have \"-\" or \"+\" as first character.")
@@ -509,16 +689,24 @@ fn get_current_time_usec_memoizes_per_ts_and_zone() {
     GetCurrentTimeUsec(&mut tm, &mut fsec, Some(&mut tzv)).unwrap();
     // test-thread xact start timestamp is 0 = 2000-01-01 00:00:00 UTC
     assert_eq!((tm.tm_year, tm.tm_mon, tm.tm_mday), (2000, 1, 1));
-    assert_eq!((tm.tm_hour, tm.tm_min, tm.tm_sec, fsec, tzv), (0, 0, 0, 0, 0));
+    assert_eq!(
+        (tm.tm_hour, tm.tm_min, tm.tm_sec, fsec, tzv),
+        (0, 0, 0, 0, 0)
+    );
 
-    let cached = CURRENT_TM_CACHE.with(core::cell::Cell::get).expect("memo populated");
+    let cached = CURRENT_TM_CACHE
+        .with(core::cell::Cell::get)
+        .expect("memo populated");
     assert_eq!(cached.ts, 0);
 
     let mut tm2 = pg_tm::default();
     GetCurrentDateTime(&mut tm2).unwrap();
     assert_eq!(tm2, tm);
     let still = CURRENT_TM_CACHE.with(core::cell::Cell::get).unwrap();
-    assert!(core::ptr::eq(still.zone, cached.zone), "second call reused the memo entry");
+    assert!(
+        core::ptr::eq(still.zone, cached.zone),
+        "second call reused the memo entry"
+    );
 
     // timezone change invalidates the memo
     let kolkata = zone_session(b"Asia/Kolkata");
@@ -542,14 +730,26 @@ fn conversions_round_trip_under_session_zone() {
     set_date_style(USE_ISO_DATES);
     let ts = ts_in("2025-03-09 02:30:00");
     // spring-forward gap resolves to the before-interpretation (EST)
-    assert_eq!(tstz_out(timestamp2timestamptz(ts).unwrap()), "2025-03-09 03:30:00-04");
+    assert_eq!(
+        tstz_out(timestamp2timestamptz(ts).unwrap()),
+        "2025-03-09 03:30:00-04"
+    );
     let tstz = tstz_in("2025-06-01 12:00:00+00");
-    assert_eq!(ts_out(timestamptz2timestamp(tstz).unwrap()), "2025-06-01 08:00:00");
+    assert_eq!(
+        ts_out(timestamptz2timestamp(tstz).unwrap()),
+        "2025-06-01 08:00:00"
+    );
     assert_eq!(timestamp2timestamptz(DT_NOBEGIN).unwrap(), DT_NOBEGIN);
-    assert_eq!(timestamp_cmp_timestamptz_internal(ts, timestamp2timestamptz(ts).unwrap()), 0);
+    assert_eq!(
+        timestamp_cmp_timestamptz_internal(ts, timestamp2timestamptz(ts).unwrap()),
+        0
+    );
 
     let local = GetSQLLocalTimestamp(-1).unwrap();
-    assert_eq!(local, timestamptz2timestamp(xact::GetCurrentTransactionStartTimestamp()).unwrap());
+    assert_eq!(
+        local,
+        timestamptz2timestamp(xact::GetCurrentTransactionStartTimestamp()).unwrap()
+    );
 }
 
 #[test]
@@ -561,18 +761,23 @@ fn timeofday_formats_like_c() {
     assert!(s.ends_with(" IST"), "{s}");
     let dot = s.find('.').unwrap();
     // "Thu Jul 03 12:34:56.123456 2026 IST" shape: 6 usec digits after the dot
-    assert!(s.as_bytes()[dot + 1..dot + 7].iter().all(u8::is_ascii_digit), "{s}");
+    assert!(
+        s.as_bytes()[dot + 1..dot + 7]
+            .iter()
+            .all(u8::is_ascii_digit),
+        "{s}"
+    );
     assert_eq!(&s[3..4], " ");
 }
 
-use adt_datetime::Interval;
 use crate::interval::{
     interval_cmp_internal, interval_in, interval_justify_days, interval_justify_hours,
     interval_justify_interval, interval_mi, interval_out, interval_part_common, interval_pl,
-    interval_trunc, interval_um, intervaltypmodin, intervaltypmodout, make_interval,
-    timestamp_age, timestamp_izone, timestamp_mi, timestamp_mi_interval, timestamp_pl_interval,
+    interval_trunc, interval_um, intervaltypmodin, intervaltypmodout, make_interval, timestamp_age,
+    timestamp_izone, timestamp_mi, timestamp_mi_interval, timestamp_pl_interval,
     timestamptz_pl_interval,
 };
+use adt_datetime::Interval;
 
 fn iv_in(s: &str) -> Interval {
     interval_in(s, -1, None).unwrap()
@@ -588,7 +793,10 @@ fn iv_out(iv: &Interval) -> String {
 fn interval_io_round_trips() {
     gmt_session();
     for (input, expect) in [
-        ("1 year 2 mons 3 days 04:05:06.789", "1 year 2 mons 3 days 04:05:06.789"),
+        (
+            "1 year 2 mons 3 days 04:05:06.789",
+            "1 year 2 mons 3 days 04:05:06.789",
+        ),
         ("-1 day +5 hours", "-1 days +05:00:00"),
         ("1-2", "1 year 2 mons"),
         ("@ 1 day ago", "-1 days"),
@@ -610,8 +818,8 @@ fn interval_io_round_trips() {
 #[test]
 fn interval_typmod_rounds_and_truncates_like_c() {
     gmt_session();
-    use adt_datetime::{INTERVAL_MASK, MINUTE};
     use crate::interval::INTERVAL_TYPMOD;
+    use adt_datetime::{INTERVAL_MASK, MINUTE};
     // INTERVAL MINUTE truncation
     let tmod = intervaltypmodin(&[INTERVAL_MASK(MINUTE)]).unwrap();
     let iv = interval_in("1 day 02:03:04.5", tmod, None).unwrap();
@@ -630,7 +838,9 @@ fn interval_typmod_rounds_and_truncates_like_c() {
     assert_eq!(core::str::from_utf8(&buf[..n]).unwrap(), " minute");
     // negative precision
     let err = intervaltypmodin(&[adt_datetime::INTERVAL_FULL_RANGE, -3]).unwrap_err();
-    assert!(err.message.contains("INTERVAL(-3) precision must not be negative"));
+    assert!(err
+        .message
+        .contains("INTERVAL(-3) precision must not be negative"));
     // bogus mask
     let err = intervaltypmodin(&[1000]).unwrap_err();
     assert!(err.message.contains("invalid INTERVAL type modifier"));
@@ -661,16 +871,37 @@ fn interval_agg_family_matches_c() {
     for s in ["1 year", "2 years", "6 years 3 days"] {
         do_interval_accum(&mut st, &iv_in(s)).unwrap();
     }
-    assert_eq!(iv_out(&interval_avg_final(&st).unwrap().unwrap()), "3 years 1 day");
-    assert_eq!(iv_out(&interval_sum_final(&st).unwrap().unwrap()), "9 years 3 days");
+    assert_eq!(
+        iv_out(&interval_avg_final(&st).unwrap().unwrap()),
+        "3 years 1 day"
+    );
+    assert_eq!(
+        iv_out(&interval_sum_final(&st).unwrap().unwrap()),
+        "9 years 3 days"
+    );
     do_interval_discard(&mut st, &iv_in("6 years 3 days")).unwrap();
-    assert_eq!(iv_out(&interval_avg_final(&st).unwrap().unwrap()), "1 year 6 mons");
+    assert_eq!(
+        iv_out(&interval_avg_final(&st).unwrap().unwrap()),
+        "1 year 6 mons"
+    );
     do_interval_accum(&mut st, &iv_in("infinity")).unwrap();
-    assert_eq!(iv_out(&interval_avg_final(&st).unwrap().unwrap()), "infinity");
-    assert_eq!(iv_out(&interval_sum_final(&st).unwrap().unwrap()), "infinity");
+    assert_eq!(
+        iv_out(&interval_avg_final(&st).unwrap().unwrap()),
+        "infinity"
+    );
+    assert_eq!(
+        iv_out(&interval_sum_final(&st).unwrap().unwrap()),
+        "infinity"
+    );
     do_interval_accum(&mut st, &iv_in("-infinity")).unwrap();
-    assert!(interval_avg_final(&st).unwrap_err().message.contains("interval out of range"));
-    assert!(interval_sum_final(&st).unwrap_err().message.contains("interval out of range"));
+    assert!(interval_avg_final(&st)
+        .unwrap_err()
+        .message
+        .contains("interval out of range"));
+    assert!(interval_sum_final(&st)
+        .unwrap_err()
+        .message
+        .contains("interval out of range"));
 
     let mut a = IntervalAggState::default();
     do_interval_accum(&mut a, &iv_in("1 day")).unwrap();
@@ -683,8 +914,8 @@ fn interval_agg_family_matches_c() {
 
 #[test]
 fn interval_typmod_least_field_matches_c() {
-    use adt_datetime::{DAY, HOUR, INTERVAL_MASK, MINUTE, MONTH, SECOND, YEAR};
     use crate::interval::{intervaltypmodleastfield, INTERVAL_FULL_PRECISION, INTERVAL_TYPMOD};
+    use adt_datetime::{DAY, HOUR, INTERVAL_MASK, MINUTE, MONTH, SECOND, YEAR};
     let lf =
         |r: i32| intervaltypmodleastfield(INTERVAL_TYPMOD(INTERVAL_FULL_PRECISION, r)).unwrap();
     assert_eq!(intervaltypmodleastfield(-1).unwrap(), 0);
@@ -711,11 +942,20 @@ fn make_interval_secs_overflow_is_22003() {
 fn anytimestamp_typmod_out_shapes() {
     let mut buf = [0u8; 64];
     let n = crate::builtins::typmod_paren_suffix_out(2, b" with time zone", &mut buf);
-    assert_eq!(core::str::from_utf8(&buf[..n]).unwrap(), "(2) with time zone");
+    assert_eq!(
+        core::str::from_utf8(&buf[..n]).unwrap(),
+        "(2) with time zone"
+    );
     let n = crate::builtins::typmod_paren_suffix_out(-1, b" without time zone", &mut buf);
-    assert_eq!(core::str::from_utf8(&buf[..n]).unwrap(), " without time zone");
+    assert_eq!(
+        core::str::from_utf8(&buf[..n]).unwrap(),
+        " without time zone"
+    );
     let n = crate::builtins::typmod_paren_suffix_out(0, b" without time zone", &mut buf);
-    assert_eq!(core::str::from_utf8(&buf[..n]).unwrap(), "(0) without time zone");
+    assert_eq!(
+        core::str::from_utf8(&buf[..n]).unwrap(),
+        "(0) without time zone"
+    );
 }
 
 #[test]
@@ -723,16 +963,34 @@ fn interval_arithmetic_matches_c() {
     gmt_session();
     let a = iv_in("1 mon 5 days 03:00:00");
     let b = iv_in("2 mons -1 day 01:30:00");
-    assert_eq!(iv_out(&interval_pl(&a, &b).unwrap()), "3 mons 4 days 04:30:00");
-    assert_eq!(iv_out(&interval_mi(&a, &b).unwrap()), "-1 mons +6 days 01:30:00");
-    assert_eq!(iv_out(&interval_um(&a).unwrap()), "-1 mons -5 days -03:00:00");
+    assert_eq!(
+        iv_out(&interval_pl(&a, &b).unwrap()),
+        "3 mons 4 days 04:30:00"
+    );
+    assert_eq!(
+        iv_out(&interval_mi(&a, &b).unwrap()),
+        "-1 mons +6 days 01:30:00"
+    );
+    assert_eq!(
+        iv_out(&interval_um(&a).unwrap()),
+        "-1 mons -5 days -03:00:00"
+    );
 
     assert!(interval_pl(&Interval::NOBEGIN, &Interval::NOEND).is_err());
-    assert_eq!(interval_mi(&a, &Interval::NOBEGIN).unwrap(), Interval::NOEND);
+    assert_eq!(
+        interval_mi(&a, &Interval::NOBEGIN).unwrap(),
+        Interval::NOEND
+    );
 
     assert_eq!(interval_cmp_internal(&iv_in("30 days"), &iv_in("1 mon")), 0);
-    assert_eq!(interval_cmp_internal(&iv_in("24 hours"), &iv_in("1 day")), 0);
-    assert_eq!(interval_cmp_internal(&iv_in("25 hours"), &iv_in("1 day")), 1);
+    assert_eq!(
+        interval_cmp_internal(&iv_in("24 hours"), &iv_in("1 day")),
+        0
+    );
+    assert_eq!(
+        interval_cmp_internal(&iv_in("25 hours"), &iv_in("1 day")),
+        1
+    );
     assert!(interval_cmp_internal(&Interval::NOBEGIN, &iv_in("0")) < 0);
 
     let j = interval_justify_hours(&iv_in("27 hours")).unwrap();
@@ -754,11 +1012,20 @@ fn timestamp_interval_arithmetic_and_dst() {
     let tstz = tstz_in("2025-03-08 12:00:00");
     let one_day = iv_in("1 day");
     let day_24h = iv_in("24 hours");
-    assert_eq!(tstz_out(timestamptz_pl_interval(tstz, &one_day).unwrap()), "2025-03-09 12:00:00-04");
-    assert_eq!(tstz_out(timestamptz_pl_interval(tstz, &day_24h).unwrap()), "2025-03-09 13:00:00-04");
+    assert_eq!(
+        tstz_out(timestamptz_pl_interval(tstz, &one_day).unwrap()),
+        "2025-03-09 12:00:00-04"
+    );
+    assert_eq!(
+        tstz_out(timestamptz_pl_interval(tstz, &day_24h).unwrap()),
+        "2025-03-09 13:00:00-04"
+    );
 
     let ts = ts_in("2025-01-31 10:00:00");
-    assert_eq!(ts_out(timestamp_pl_interval(ts, &iv_in("1 mon")).unwrap()), "2025-02-28 10:00:00");
+    assert_eq!(
+        ts_out(timestamp_pl_interval(ts, &iv_in("1 mon")).unwrap()),
+        "2025-02-28 10:00:00"
+    );
     assert_eq!(
         ts_out(timestamp_mi_interval(ts, &iv_in("1 mon")).unwrap()),
         "2024-12-31 10:00:00"
@@ -804,11 +1071,23 @@ fn interval_part_and_trunc_match_c() {
     let err = interval_part_common(b"bogus", &iv, false).unwrap_err();
     assert_eq!(err.sqlstate, ERRCODE_INVALID_PARAMETER_VALUE);
 
-    assert_eq!(iv_out(&interval_trunc(b"hour", &iv).unwrap()), "2 years 5 mons 10 days 12:00:00");
-    assert_eq!(iv_out(&interval_trunc(b"month", &iv).unwrap()), "2 years 5 mons");
+    assert_eq!(
+        iv_out(&interval_trunc(b"hour", &iv).unwrap()),
+        "2 years 5 mons 10 days 12:00:00"
+    );
+    assert_eq!(
+        iv_out(&interval_trunc(b"month", &iv).unwrap()),
+        "2 years 5 mons"
+    );
     let err = interval_trunc(b"week", &iv).unwrap_err();
-    assert!(err.detail.as_deref() == Some("Months usually have fractional weeks."), "{err:?}");
-    assert_eq!(interval_trunc(b"day", &Interval::NOEND).unwrap(), Interval::NOEND);
+    assert!(
+        err.detail.as_deref() == Some("Months usually have fractional weeks."),
+        "{err:?}"
+    );
+    assert_eq!(
+        interval_trunc(b"day", &Interval::NOEND).unwrap(),
+        Interval::NOEND
+    );
 }
 
 // date_bin rows diffed vs live C 18.3 (psql, 2026-07-03).
@@ -828,7 +1107,10 @@ fn date_bin_rows() {
         bin("1 day", "2020-02-11 15:44:17", "2001-01-01 01:00:00"),
         "2020-02-11 01:00:00"
     );
-    assert_eq!(bin("5 min", "1999-12-31 23:59:59", "2000-01-01"), "1999-12-31 23:55:00");
+    assert_eq!(
+        bin("5 min", "1999-12-31 23:59:59", "2000-01-01"),
+        "1999-12-31 23:55:00"
+    );
     assert_eq!(
         timestamp_bin(&iv("2 hours"), ts_in("infinity"), ts_in("2001-01-01")).unwrap(),
         DT_NOEND
@@ -872,7 +1154,10 @@ fn float8_timestamptz_vectors() {
 
     let err = float8_timestamptz(f64::NAN).unwrap_err();
     assert_eq!(err.message(), "timestamp cannot be NaN");
-    assert_eq!(err.sqlstate(), ::types_error::ERRCODE_DATETIME_VALUE_OUT_OF_RANGE);
+    assert_eq!(
+        err.sqlstate(),
+        ::types_error::ERRCODE_DATETIME_VALUE_OUT_OF_RANGE
+    );
 
     let err = float8_timestamptz(1e18).unwrap_err();
     assert_eq!(err.message(), "timestamp out of range: \"1e+18\"");

@@ -6,7 +6,10 @@ fn disk_state_layout_matches_c() {
     let b = serialize_disk_state(0x1234, 0x0102030405060708);
     assert_eq!(b.len(), 16);
     assert_eq!(u16::from_ne_bytes(b[0..2].try_into().unwrap()), 0x1234);
-    assert_eq!(u64::from_ne_bytes(b[8..16].try_into().unwrap()), 0x0102030405060708);
+    assert_eq!(
+        u64::from_ne_bytes(b[8..16].try_into().unwrap()),
+        0x0102030405060708
+    );
 }
 
 #[test]

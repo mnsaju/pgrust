@@ -1,6 +1,6 @@
 pub use types_core::{
-    TimestampTz, DATEORDER_DMY, DATEORDER_MDY, DATEORDER_YMD, INTSTYLE_POSTGRES,
-    USE_GERMAN_DATES, USE_ISO_DATES, USE_POSTGRES_DATES, USE_SQL_DATES,
+    TimestampTz, DATEORDER_DMY, DATEORDER_MDY, DATEORDER_YMD, INTSTYLE_POSTGRES, USE_GERMAN_DATES,
+    USE_ISO_DATES, USE_POSTGRES_DATES, USE_SQL_DATES,
 };
 
 #[allow(non_camel_case_types)]
@@ -208,8 +208,16 @@ const _: () = {
 };
 
 impl Interval {
-    pub const NOBEGIN: Interval = Interval { time: i64::MIN, day: i32::MIN, month: i32::MIN };
-    pub const NOEND: Interval = Interval { time: i64::MAX, day: i32::MAX, month: i32::MAX };
+    pub const NOBEGIN: Interval = Interval {
+        time: i64::MIN,
+        day: i32::MIN,
+        month: i32::MIN,
+    };
+    pub const NOEND: Interval = Interval {
+        time: i64::MAX,
+        day: i32::MAX,
+        month: i32::MAX,
+    };
 
     #[inline]
     pub const fn is_nobegin(&self) -> bool {
@@ -245,7 +253,11 @@ const _: () = assert!(core::mem::size_of::<DateTkn>() == 16);
 impl DateTkn {
     #[inline]
     pub fn token_bytes(&self) -> &[u8] {
-        let len = self.token.iter().position(|&b| b == 0).unwrap_or(TOKMAXLEN + 1);
+        let len = self
+            .token
+            .iter()
+            .position(|&b| b == 0)
+            .unwrap_or(TOKMAXLEN + 1);
         &self.token[..len]
     }
 }

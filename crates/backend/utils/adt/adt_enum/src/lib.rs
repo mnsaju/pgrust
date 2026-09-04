@@ -6,6 +6,8 @@ pub mod builtins;
 
 use datum::Datum;
 use mcx::{Mcx, PgVec};
+use pg_enum_seams::EnumSortedRow;
+use syscache_seams::PgEnumShape;
 use types_core::fmgr::FnExprErased;
 use types_core::{InvalidOid, Oid, NAMEDATALEN};
 use types_error::{
@@ -15,8 +17,6 @@ use types_error::{
 };
 use types_fmgr::FmgrInfo;
 use types_nodes::{Node, NodeTag};
-use pg_enum_seams::EnumSortedRow;
-use syscache_seams::PgEnumShape;
 
 const TYPALIGN_INT: u8 = b'i';
 
@@ -44,7 +44,13 @@ fn check_safe_enum_use(
 }
 
 fn shape_safe(en: &PgEnumShape) -> PgResult<()> {
-    check_safe_enum_use(en.oid, en.enumtypid, en.enumlabel.name_str(), en.xmin, en.xmin_committed)
+    check_safe_enum_use(
+        en.oid,
+        en.enumtypid,
+        en.enumlabel.name_str(),
+        en.xmin,
+        en.xmin_committed,
+    )
 }
 
 fn row_safe(row: &EnumSortedRow) -> PgResult<()> {
@@ -86,11 +92,7 @@ pub fn enum_out(enumval: Oid) -> PgResult<PgEnumShape> {
 // builds one), so a None flinfo skips memoization — the odd-OID fallback then
 // pays an ENUMOID probe per comparison (cold; C Assert(flinfo) covered by the
 // fmgr surface always passing one).
-fn enum_cmp_internal(
-    arg1: Oid,
-    arg2: Oid,
-    flinfo: Option<&mut FmgrInfo>,
-) -> PgResult<i32> {
+fn enum_cmp_internal(arg1: Oid, arg2: Oid, flinfo: Option<&mut FmgrInfo>) -> PgResult<i32> {
     if arg1 == arg2 {
         return Ok(0);
     }
@@ -98,7 +100,10 @@ fn enum_cmp_internal(
         return Ok(if arg1 < arg2 { -1 } else { 1 });
     }
 
-    let typeoid = match flinfo.as_ref().and_then(|f| f.fn_extra_ref::<Oid>().copied()) {
+    let typeoid = match flinfo
+        .as_ref()
+        .and_then(|f| f.fn_extra_ref::<Oid>().copied())
+    {
         Some(t) => t,
         None => {
             let Some(en) = syscache_seams::lookup_pg_enum_by_oid::call(arg1)? else {
@@ -115,11 +120,7 @@ fn enum_cmp_internal(
 
 // btree_gist's CallerFInfoFunctionCall2(enum_cmp, ...) surface: same
 // engine, caller-owned flinfo carries the fn_extra type-OID memo.
-pub fn enum_cmp_with_flinfo(
-    arg1: Oid,
-    arg2: Oid,
-    flinfo: Option<&mut FmgrInfo>,
-) -> PgResult<i32> {
+pub fn enum_cmp_with_flinfo(arg1: Oid, arg2: Oid, flinfo: Option<&mut FmgrInfo>) -> PgResult<i32> {
     enum_cmp_internal(arg1, arg2, flinfo)
 }
 
@@ -150,7 +151,9 @@ fn get_fn_expr_argtype(flinfo: Option<&FmgrInfo>, argnum: usize) -> Oid {
 }
 
 fn fn_expr_node(expr: &FnExprErased) -> Node<'static> {
-    *expr.downcast_ref::<Node<'static>>().expect("fn_expr does not carry a Node")
+    *expr
+        .downcast_ref::<Node<'static>>()
+        .expect("fn_expr does not carry a Node")
 }
 
 fn expr_type(node: Node<'_>) -> Oid {
@@ -241,8 +244,11 @@ pub fn init_seams() {}
 fn invalid_input(enumtypoid: Oid, name: &str) -> PgResult<Box<PgError>> {
     let ty = format_type::format_type_be(enumtypoid)?;
     Ok(Box::new(
-        PgError::new(ERROR, format!("invalid input value for enum {ty}: \"{name}\""))
-            .with_sqlstate(ERRCODE_INVALID_TEXT_REPRESENTATION),
+        PgError::new(
+            ERROR,
+            format!("invalid input value for enum {ty}: \"{name}\""),
+        )
+        .with_sqlstate(ERRCODE_INVALID_TEXT_REPRESENTATION),
     ))
 }
 
@@ -262,9 +268,12 @@ fn unsafe_new_value(label: &[u8], enumtypid: Oid) -> PgResult<Box<PgError>> {
     let ty = format_type::format_type_be(enumtypid)?;
     let label = core::str::from_utf8(label).unwrap_or("");
     Ok(Box::new(
-        PgError::new(ERROR, format!("unsafe use of new value \"{label}\" of enum type {ty}"))
-            .with_sqlstate(ERRCODE_UNSAFE_NEW_ENUM_VALUE_USAGE)
-            .with_hint("New enum values must be committed before they can be used."),
+        PgError::new(
+            ERROR,
+            format!("unsafe use of new value \"{label}\" of enum type {ty}"),
+        )
+        .with_sqlstate(ERRCODE_UNSAFE_NEW_ENUM_VALUE_USAGE)
+        .with_hint("New enum values must be committed before they can be used."),
     ))
 }
 

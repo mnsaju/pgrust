@@ -10,9 +10,10 @@ use std::rc::Rc;
 use std::sync::{Mutex, Once};
 
 use ::datum::Datum;
+use ::execexpr::INDEX_VAR;
 use ::mcx::{Mcx, MemoryContext, PgVec};
 use ::types_core::{
-    BlockNumber, Buffer, GlobalVisStateHandle, InvalidBuffer, Oid, OffsetNumber, BLCKSZ,
+    BlockNumber, Buffer, GlobalVisStateHandle, InvalidBuffer, OffsetNumber, Oid, BLCKSZ,
     BTREE_AM_OID, INVALID_PROC_NUMBER, RELPERSISTENCE_PERMANENT,
 };
 use ::types_nbtree::{
@@ -34,7 +35,6 @@ use ::types_tuple::{
     CompactAttribute, FormData_pg_attribute, NameData, PgTypeShape, TupleDescData,
     HEAP_XMAX_INVALID, TYPALIGN_INT, TYPSTORAGE_PLAIN,
 };
-use ::execexpr::INDEX_VAR;
 use executils::EStateData;
 use nodebitmapindexscan::{
     exec_init_bitmap_index_scan_rel, multi_exec_bitmap_index_scan, BitmapIndexScanState,
@@ -132,9 +132,9 @@ fn install_seams() {
         transam_xlog_seams::xlog_standby_info_active::set(|| false);
         xact_seams::isolation_is_serializable::set(|| false);
 
-        heapam_visibility_seams::heap_tuple_satisfies_visibility::set(
-            |_htup, _snap, _buf| Ok(true),
-        );
+        heapam_visibility_seams::heap_tuple_satisfies_visibility::set(|_htup, _snap, _buf| {
+            Ok(true)
+        });
         heapam_visibility_seams::heap_tuple_satisfies_mvcc_page::set(
             |_htup, _snap, _buf, _memo| Ok(true),
         );
@@ -334,7 +334,13 @@ fn register_pages(relid: Oid, pages: Vec<Box<TestPage>>) {
 // Heap pages hold `heap_pages[b]` at offsets 1..=n on block b; a root leaf
 // indexes every tuple in ascending key order.
 fn register_indexed_table(heap_oid: Oid, index_oid: Oid, heap_pages: &[&[i32]]) {
-    register_pages(heap_oid, heap_pages.iter().map(|vals| build_heap_page(vals)).collect());
+    register_pages(
+        heap_oid,
+        heap_pages
+            .iter()
+            .map(|vals| build_heap_page(vals))
+            .collect(),
+    );
 
     let mut keyed: Vec<(i32, ItemPointerData)> = Vec::new();
     for (b, vals) in heap_pages.iter().enumerate() {
@@ -403,7 +409,9 @@ fn heap_relation<'mcx>(mcx: Mcx<'mcx>, oid: Oid) -> Relation<'mcx> {
         relfrozenxid: 3,
         relminmxid: 1,
     };
-    let data = RelationData { rd_locator: Default::default(), rd_smgr: Default::default(),
+    let data = RelationData {
+        rd_locator: Default::default(),
+        rd_smgr: Default::default(),
         rd_id: oid,
         rd_backend: INVALID_PROC_NUMBER,
         rd_islocaltemp: false,
@@ -413,7 +421,10 @@ fn heap_relation<'mcx>(mcx: Mcx<'mcx>, oid: Oid) -> Relation<'mcx> {
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
         rd_lockInfo: LockInfoData {
-            lockRelId: LockRelId { relId: oid, dbId: 5 },
+            lockRelId: LockRelId {
+                relId: oid,
+                dbId: 5,
+            },
         },
         rd_rel,
         rd_att: int4_tupdesc(mcx),
@@ -426,13 +437,16 @@ fn heap_relation<'mcx>(mcx: Mcx<'mcx>, oid: Oid) -> Relation<'mcx> {
         pgstat_enabled: Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: PgVec::new_in(mcx),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     };
     Relation::open(data, None)
 }
@@ -453,7 +467,9 @@ fn index_relation<'mcx>(mcx: Mcx<'mcx>, oid: Oid, heap_oid: Oid) -> Relation<'mc
     indkey.push(1);
     let mut indoption = PgVec::new_in(mcx);
     indoption.push(0i16);
-    let data = RelationData { rd_locator: Default::default(), rd_smgr: Default::default(),
+    let data = RelationData {
+        rd_locator: Default::default(),
+        rd_smgr: Default::default(),
         rd_id: oid,
         rd_backend: INVALID_PROC_NUMBER,
         rd_islocaltemp: false,
@@ -463,7 +479,10 @@ fn index_relation<'mcx>(mcx: Mcx<'mcx>, oid: Oid, heap_oid: Oid) -> Relation<'mc
         rd_firstRelfilelocatorSubid: Cell::new(0),
         rd_droppedSubid: Cell::new(0),
         rd_lockInfo: LockInfoData {
-            lockRelId: LockRelId { relId: oid, dbId: 5 },
+            lockRelId: LockRelId {
+                relId: oid,
+                dbId: 5,
+            },
         },
         rd_rel: FormData_pg_class {
             relname,
@@ -504,8 +523,8 @@ fn index_relation<'mcx>(mcx: Mcx<'mcx>, oid: Oid, heap_oid: Oid) -> Relation<'mc
             indisready: true,
             indkey,
             has_indpred: false,
-        indexprs_src: None,
-        indpred_src: None,
+            indexprs_src: None,
+            indpred_src: None,
         }),
         rd_opcintype: one(INT4OID),
         rd_opfamily: one(INT4_BTREE_OPFAMILY),
@@ -515,20 +534,26 @@ fn index_relation<'mcx>(mcx: Mcx<'mcx>, oid: Oid, heap_oid: Oid) -> Relation<'mc
         pgstat_enabled: Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: PgVec::new_in(mcx),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
     };
     Relation::open(data, Some(noop_close))
 }
 
 fn static_mvcc_snapshot() -> Rc<SnapshotData<'static>> {
     let ctx: &'static MemoryContext = Box::leak(Box::new(MemoryContext::new("snap-test")));
-    Rc::new(SnapshotData::sentinel(ctx.mcx(), SnapshotType::SNAPSHOT_MVCC))
+    Rc::new(SnapshotData::sentinel(
+        ctx.mcx(),
+        SnapshotType::SNAPSHOT_MVCC,
+    ))
 }
 
 static NEXT_OID: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(90000);
@@ -576,7 +601,10 @@ fn mk_bitmap_index_scan<'mcx>(
     k: i32,
 ) -> BitmapIndexScan<'mcx> {
     BitmapIndexScan {
-        scan: Scan { plan: Plan::default(), scanrelid: 1 },
+        scan: Scan {
+            plan: Plan::default(),
+            scanrelid: 1,
+        },
         indexid: 0,
         isshared: false,
         indexqual: indexqual(mcx, INDEX_VAR, opno, opfuncid, k),
@@ -592,7 +620,10 @@ fn mk_bitmap_heap_scan<'mcx>(
 ) -> BitmapHeapScan<'mcx> {
     BitmapHeapScan {
         scan: Scan {
-            plan: Plan { targetlist: matching_tlist(mcx), ..Default::default() },
+            plan: Plan {
+                targetlist: matching_tlist(mcx),
+                ..Default::default()
+            },
             scanrelid: 1,
         },
         bitmapqualorig: indexqual(mcx, 1, opno, opfuncid, k),
@@ -620,8 +651,7 @@ fn setup<'mcx>(
     let mut estate = EStateData::new_in(mcx);
     estate.es_snapshot = Some(static_mvcc_snapshot());
     let biss_plan = mk_bitmap_index_scan(mcx, opno, opfuncid, k);
-    let biss =
-        exec_init_bitmap_index_scan_rel(mcx, &biss_plan, &mut estate, 0, index_rel).unwrap();
+    let biss = exec_init_bitmap_index_scan_rel(mcx, &biss_plan, &mut estate, 0, index_rel).unwrap();
     let bhs_plan = mk_bitmap_heap_scan(mcx, opno, opfuncid, k);
     let bhs = exec_init_bitmap_heap_scan_rel(mcx, &bhs_plan, &mut estate, rel).unwrap();
     Composed { estate, biss, bhs }
@@ -647,7 +677,11 @@ fn teardown(mut c: Composed<'_>) {
 
 // The seqscan+qual reference: heap order (block asc, offset asc).
 fn seqscan_reference(heap_pages: &[&[i32]], pred: impl Fn(i32) -> bool) -> Vec<i32> {
-    heap_pages.iter().flat_map(|p| p.iter().copied()).filter(|v| pred(*v)).collect()
+    heap_pages
+        .iter()
+        .flat_map(|p| p.iter().copied())
+        .filter(|v| pred(*v))
+        .collect()
 }
 
 #[test]
@@ -720,7 +754,9 @@ fn rescan_rebuilds_from_fresh_bitmap() {
         let mut c = setup(mcx, pages, OP_INT4GT, F_INT4GT, 15);
         let tbm = multi_exec_bitmap_index_scan(&mut c.biss, &mut c.estate).unwrap();
         bitmap_table_scan_setup(&mut c.bhs, &mut c.estate, Some(tbm)).unwrap();
-        assert!(exec_bitmap_heap_scan(&mut c.bhs, &mut c.estate).unwrap().is_some());
+        assert!(exec_bitmap_heap_scan(&mut c.bhs, &mut c.estate)
+            .unwrap()
+            .is_some());
         exec_rescan_bitmap_heap_scan(&mut c.bhs, &mut c.estate).unwrap();
         assert!(!c.bhs.initialized);
         nodebitmapindexscan::exec_rescan_bitmap_index_scan(&mut c.biss, &mut c.estate).unwrap();

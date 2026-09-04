@@ -39,10 +39,22 @@ fn drandom_seeded_sequences() {
     }
 
     for (seed, want) in [
-        (-0.25, [0.5553213340039351, 0.25148985326005135, 0.7088686957046861]),
-        (0.0, [0.8702553105818676, 0.426569726107606, 0.6684808914837377]),
-        (1.0, [0.3978842227698167, 0.7438732417540841, 0.3875091442400458]),
-        (-1.0, [0.725656831544149, 0.21342431605981593, 0.08668744483804192]),
+        (
+            -0.25,
+            [0.5553213340039351, 0.25148985326005135, 0.7088686957046861],
+        ),
+        (
+            0.0,
+            [0.8702553105818676, 0.426569726107606, 0.6684808914837377],
+        ),
+        (
+            1.0,
+            [0.3978842227698167, 0.7438732417540841, 0.3875091442400458],
+        ),
+        (
+            -1.0,
+            [0.725656831544149, 0.21342431605981593, 0.08668744483804192],
+        ),
     ] {
         setseed(seed).unwrap();
         for w in want {
@@ -144,31 +156,15 @@ fn numeric_random_bounds() {
     assert_eq!(nrandom("3.14", "3.14"), "3.14");
     let inf = num("Infinity");
     let one = num("1");
-    let e = numeric_random(
-        one.num(),
-        inf.num(),
-    )
-    .unwrap_err();
+    let e = numeric_random(one.num(), inf.num()).unwrap_err();
     assert!(format!("{e:?}").contains("upper bound cannot be infinity"));
-    let e = numeric_random(
-        inf.num(),
-        one.num(),
-    )
-    .unwrap_err();
+    let e = numeric_random(inf.num(), one.num()).unwrap_err();
     assert!(format!("{e:?}").contains("lower bound cannot be infinity"));
     let nan = num("NaN");
-    let e = numeric_random(
-        nan.num(),
-        one.num(),
-    )
-    .unwrap_err();
+    let e = numeric_random(nan.num(), one.num()).unwrap_err();
     assert!(format!("{e:?}").contains("lower bound cannot be NaN"));
     let two = num("2");
-    let e = numeric_random(
-        two.num(),
-        one.num(),
-    )
-    .unwrap_err();
+    let e = numeric_random(two.num(), one.num()).unwrap_err();
     assert!(format!("{e:?}").contains("lower bound must be less than or equal to upper bound"));
 }
 
@@ -177,7 +173,10 @@ fn bound_order_errors() {
     assert!(int4random(1, 0).is_err());
     assert!(int8random(1000000000001, 1000000000000).is_err());
     assert_eq!(int4random(101, 101).unwrap(), 101);
-    assert_eq!(int8random(1000000000001, 1000000000001).unwrap(), 1000000000001);
+    assert_eq!(
+        int8random(1000000000001, 1000000000001).unwrap(),
+        1000000000001
+    );
 }
 
 #[test]

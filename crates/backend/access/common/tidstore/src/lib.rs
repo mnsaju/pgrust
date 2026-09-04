@@ -189,13 +189,19 @@ pub struct TidStore {
 impl TidStore {
     /// `max_bytes` is a sizing hint only; drop is TidStoreDestroy. C caps the
     /// context maxBlockSize at max_bytes/16 — mcx arenas grow on their own ladder.
-    pub fn create_local(parent: Mcx<'_>, _max_bytes: usize, insert_only: bool) -> PgResult<TidStore> {
+    pub fn create_local(
+        parent: Mcx<'_>,
+        _max_bytes: usize,
+        insert_only: bool,
+    ) -> PgResult<TidStore> {
         let rt_context = if insert_only {
             parent.context().new_child_bump("TID storage")
         } else {
             parent.context().new_child("TID storage")
         };
-        Ok(TidStore { tree: RadixTree::create_in(rt_context)? })
+        Ok(TidStore {
+            tree: RadixTree::create_in(rt_context)?,
+        })
     }
 
     /// Creates or replaces the entry for `blkno`; `offsets` sorted ascending.
@@ -213,7 +219,9 @@ impl TidStore {
 
     /// Ascending block order; the borrow enforces C's no-modify contract.
     pub fn begin_iterate(&self) -> TidStoreIter<'_> {
-        TidStoreIter { iter: self.tree.begin_iterate() }
+        TidStoreIter {
+            iter: self.tree.begin_iterate(),
+        }
     }
 
     pub fn memory_usage(&self) -> usize {
@@ -234,7 +242,9 @@ pub struct SharedTidStore {
 impl SharedTidStore {
     /// `max_bytes` sized C's dsa segments; `tranche_id` named the LWLock tranche.
     pub fn create_shared(_max_bytes: usize, _tranche_id: i32) -> PgResult<SharedTidStore> {
-        Ok(SharedTidStore { tree: SharedRadixTree::create()? })
+        Ok(SharedTidStore {
+            tree: SharedRadixTree::create()?,
+        })
     }
 
     pub fn attach() -> ! {
@@ -254,11 +264,15 @@ impl SharedTidStore {
     }
 
     pub fn lock_exclusive(&self) -> SharedTidStoreExclusive<'_> {
-        SharedTidStoreExclusive { tree: self.tree.lock_exclusive() }
+        SharedTidStoreExclusive {
+            tree: self.tree.lock_exclusive(),
+        }
     }
 
     pub fn lock_share(&self) -> SharedTidStoreShare<'_> {
-        SharedTidStoreShare { tree: self.tree.lock_share() }
+        SharedTidStoreShare {
+            tree: self.tree.lock_share(),
+        }
     }
 
     pub fn memory_usage(&self) -> usize {
@@ -294,7 +308,9 @@ impl SharedTidStoreShare<'_> {
     }
 
     pub fn begin_iterate(&self) -> TidStoreIter<'_, SharedStore> {
-        TidStoreIter { iter: self.tree.begin_iterate() }
+        TidStoreIter {
+            iter: self.tree.begin_iterate(),
+        }
     }
 }
 

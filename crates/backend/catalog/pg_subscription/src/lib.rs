@@ -183,9 +183,8 @@ pub fn GetSubscription<'mcx>(
             "cache lookup failed for subscription {subid}"
         ))));
     };
-    let attr = |anum: i32| -> PgResult<Datum> {
-        Ok(SysCacheGetAttr(SUBSCRIPTIONOID, &tup, anum)?.0)
-    };
+    let attr =
+        |anum: i32| -> PgResult<Datum> { Ok(SysCacheGetAttr(SUBSCRIPTIONOID, &tup, anum)?.0) };
 
     let name_data = name_from_datum(attr(Anum_pg_subscription_subname)?);
     let name = PgString::from_str_in(
@@ -292,14 +291,8 @@ pub fn DisableSubscription<'mcx>(mcx: Mcx<'mcx>, subid: Oid) -> PgResult<()> {
     values[(Anum_pg_subscription_subenabled - 1) as usize] = Datum::from_bool(false);
     replaces[(Anum_pg_subscription_subenabled - 1) as usize] = true;
 
-    let mut new_tup = heaptuple::heap_modify_tuple(
-        mcx,
-        tup.as_tuple(),
-        rel.descr(),
-        &values,
-        &nulls,
-        &replaces,
-    )?;
+    let mut new_tup =
+        heaptuple::heap_modify_tuple(mcx, tup.as_tuple(), rel.descr(), &values, &nulls, &replaces)?;
     let otid = tup.as_tuple().t_self;
     catalog_indexing::CatalogTupleUpdate(mcx, &rel, &otid, &mut new_tup)?;
 
@@ -409,14 +402,8 @@ pub fn UpdateSubscriptionRelState<'mcx>(
         nulls[(Anum_pg_subscription_rel_srsublsn - 1) as usize] = true;
     }
 
-    let mut new_tup = heaptuple::heap_modify_tuple(
-        mcx,
-        tup.as_tuple(),
-        rel.descr(),
-        &values,
-        &nulls,
-        &replaces,
-    )?;
+    let mut new_tup =
+        heaptuple::heap_modify_tuple(mcx, tup.as_tuple(), rel.descr(), &values, &nulls, &replaces)?;
     let otid = tup.as_tuple().t_self;
     catalog_indexing::CatalogTupleUpdate(mcx, &rel, &otid, &mut new_tup)?;
 
@@ -456,14 +443,8 @@ pub fn UpdateTwoPhaseState<'mcx>(mcx: Mcx<'mcx>, suboid: Oid, new_state: u8) -> 
         Datum::from_char(new_state as i8);
     replaces[(Anum_pg_subscription_subtwophasestate - 1) as usize] = true;
 
-    let mut new_tup = heaptuple::heap_modify_tuple(
-        mcx,
-        tup.as_tuple(),
-        rel.descr(),
-        &values,
-        &nulls,
-        &replaces,
-    )?;
+    let mut new_tup =
+        heaptuple::heap_modify_tuple(mcx, tup.as_tuple(), rel.descr(), &values, &nulls, &replaces)?;
     let otid = tup.as_tuple().t_self;
     catalog_indexing::CatalogTupleUpdate(mcx, &rel, &otid, &mut new_tup)?;
 
@@ -487,11 +468,19 @@ pub fn GetSubscriptionRelState<'mcx>(
         return Ok((SUBREL_STATE_UNKNOWN, InvalidXLogRecPtr));
     };
 
-    let substate =
-        SysCacheGetAttr(SUBSCRIPTIONRELMAP, &tup, Anum_pg_subscription_rel_srsubstate)?.0.as_u8();
-    let (d, isnull) =
-        SysCacheGetAttr(SUBSCRIPTIONRELMAP, &tup, Anum_pg_subscription_rel_srsublsn)?;
-    let sublsn = if isnull { InvalidXLogRecPtr } else { d.as_u64() };
+    let substate = SysCacheGetAttr(
+        SUBSCRIPTIONRELMAP,
+        &tup,
+        Anum_pg_subscription_rel_srsubstate,
+    )?
+    .0
+    .as_u8();
+    let (d, isnull) = SysCacheGetAttr(SUBSCRIPTIONRELMAP, &tup, Anum_pg_subscription_rel_srsublsn)?;
+    let sublsn = if isnull {
+        InvalidXLogRecPtr
+    } else {
+        d.as_u64()
+    };
 
     ReleaseSysCache(tup);
     rel.close(AccessShareLock)?;
@@ -520,8 +509,12 @@ pub fn RemoveSubscriptionRel<'mcx>(mcx: Mcx<'mcx>, subid: Oid, relid: Oid) -> Pg
     let mut scan = genam::systable_beginscan(mcx, &rel, InvalidOid, false, None, &keys)?;
     let td = rel.descr();
     while let Some(tup) = genam::systable_getnext(mcx, &mut scan)? {
-        let srsubid = getattr(td, tup, Anum_pg_subscription_rel_srsubid).0.as_oid();
-        let srsubstate = getattr(td, tup, Anum_pg_subscription_rel_srsubstate).0.as_u8();
+        let srsubid = getattr(td, tup, Anum_pg_subscription_rel_srsubid)
+            .0
+            .as_oid();
+        let srsubstate = getattr(td, tup, Anum_pg_subscription_rel_srsubstate)
+            .0
+            .as_u8();
         if subid == InvalidOid && srsubstate != SUBREL_STATE_READY {
             let subname = lsyscache::get_subscription_name(mcx, srsubid, false)?
                 .expect("missing_ok=false yields an error");
@@ -591,10 +584,18 @@ pub fn GetSubscriptionRelations<'mcx>(
     let mut scan = genam::systable_beginscan(mcx, &rel, InvalidOid, false, None, &keys)?;
     let td = rel.descr();
     while let Some(tup) = genam::systable_getnext(mcx, &mut scan)? {
-        let relid = getattr(td, tup, Anum_pg_subscription_rel_srrelid).0.as_oid();
-        let state = getattr(td, tup, Anum_pg_subscription_rel_srsubstate).0.as_u8();
+        let relid = getattr(td, tup, Anum_pg_subscription_rel_srrelid)
+            .0
+            .as_oid();
+        let state = getattr(td, tup, Anum_pg_subscription_rel_srsubstate)
+            .0
+            .as_u8();
         let (d, isnull) = getattr(td, tup, Anum_pg_subscription_rel_srsublsn);
-        let lsn = if isnull { InvalidXLogRecPtr } else { d.as_u64() };
+        let lsn = if isnull {
+            InvalidXLogRecPtr
+        } else {
+            d.as_u64()
+        };
         res.push(SubscriptionRelState { relid, lsn, state });
     }
     genam::systable_endscan(mcx, scan)?;
@@ -627,7 +628,9 @@ pub fn GetSubscriptionList<'mcx>(mcx: Mcx<'mcx>) -> PgResult<Vec<SubscriptionLis
             oid: getattr(td, tup, Anum_pg_subscription_oid).0.as_oid(),
             dbid: getattr(td, tup, Anum_pg_subscription_subdbid).0.as_oid(),
             owner: getattr(td, tup, Anum_pg_subscription_subowner).0.as_oid(),
-            enabled: getattr(td, tup, Anum_pg_subscription_subenabled).0.as_bool(),
+            enabled: getattr(td, tup, Anum_pg_subscription_subenabled)
+                .0
+                .as_bool(),
             name: String::from_utf8_lossy(name.name_str()).into_owned(),
         });
     }

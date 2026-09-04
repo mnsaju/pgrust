@@ -97,7 +97,10 @@ enum OutForm {
 /// Per-window representation of a prog's source column.
 pub enum ColView<'a> {
     Dict(SoaDictLane),
-    Raw { values: &'a [Datum], isnull: &'a [bool] },
+    Raw {
+        values: &'a [Datum],
+        isnull: &'a [bool],
+    },
     Missing,
 }
 
@@ -270,7 +273,11 @@ fn validate_calls(calls: &[DictCallSpec]) -> Result<(), &'static str> {
         if shape.pronargs as usize != c.args.len() {
             return Err("arity mismatch");
         }
-        if c.args.iter().enumerate().any(|(i, a)| i != c.var_argno as usize && a.isnull) {
+        if c.args
+            .iter()
+            .enumerate()
+            .any(|(i, a)| i != c.var_argno as usize && a.isnull)
+        {
             // A NULL const under a strict fn makes the whole expr NULL per
             // row; the per-row path answers that shape without us.
             return Err("null const sibling");
@@ -349,7 +356,10 @@ impl ValueChain {
         let mut cur = input;
         for call in self.calls.iter_mut() {
             if cur.isnull {
-                return Ok(NullableDatum { value: Datum::null(), isnull: true });
+                return Ok(NullableDatum {
+                    value: Datum::null(),
+                    isnull: true,
+                });
             }
             let mut fcinfo = LocalFcinfo::<KERNEL_MAX_ARGS>::fresh(call.collation);
             fcinfo.nargs = call.args.len() as i16;
@@ -361,15 +371,16 @@ impl ValueChain {
             // cadence (per batch) strictly follows its consumers.
             unsafe { fcinfo.set_result_mcx(mcx) };
             let d = call.flinfo.invoke(&mut fcinfo)?;
-            cur = NullableDatum { value: d, isnull: fcinfo.isnull };
+            cur = NullableDatum {
+                value: d,
+                isnull: fcinfo.isnull,
+            };
         }
         Ok(cur)
     }
 }
 
-fn compile_kernel(
-    spec: &DictExprSpec,
-) -> Result<(DictKernel, bool, bool, Oid), &'static str> {
+fn compile_kernel(spec: &DictExprSpec) -> Result<(DictKernel, bool, bool, Oid), &'static str> {
     validate_calls(&spec.calls)?;
     let rettype = spec.calls.last().unwrap().rettype;
     // Proof-carrying fast kernel: a lone length()/octet_length() call.
@@ -388,7 +399,12 @@ fn compile_kernel(
             }
         }
     }
-    Ok((DictKernel::Fmgr(build_fmgr_calls(&spec.calls)?), false, true, rettype))
+    Ok((
+        DictKernel::Fmgr(build_fmgr_calls(&spec.calls)?),
+        false,
+        true,
+        rettype,
+    ))
 }
 
 /// Pseudo-type argument refusal for the walker: any call whose CATALOG
@@ -413,8 +429,15 @@ fn eval_kernel(
 ) -> PgResult<NullableDatum> {
     match kernel {
         DictKernel::TextLen { octet } => {
-            let n = if *octet { varlena::textoctetlen(s) } else { varlena::text_length(s)? };
-            Ok(NullableDatum { value: Datum::from_i32(n), isnull: false })
+            let n = if *octet {
+                varlena::textoctetlen(s)
+            } else {
+                varlena::text_length(s)?
+            };
+            Ok(NullableDatum {
+                value: Datum::from_i32(n),
+                isnull: false,
+            })
         }
         DictKernel::Fmgr(calls) => {
             // The dict entry payload re-images as a fresh 4B-header text
@@ -422,13 +445,18 @@ fn eval_kernel(
             // intermediate and result (§4 epoch-lifetime contract).
             let mcx = arena.expect("fmgr kernel always carries an arena").mcx();
             let image = varlena::cstring_to_text(mcx, s)?.into_image();
-            let mut cur =
-                NullableDatum { value: Datum::from_usize(image.as_ptr() as usize), isnull: false };
+            let mut cur = NullableDatum {
+                value: Datum::from_usize(image.as_ptr() as usize),
+                isnull: false,
+            };
             core::mem::forget(image);
             for call in calls.iter_mut() {
                 if cur.isnull {
                     // Strict by admission: NULL propagates without a call.
-                    return Ok(NullableDatum { value: Datum::null(), isnull: true });
+                    return Ok(NullableDatum {
+                        value: Datum::null(),
+                        isnull: true,
+                    });
                 }
                 let mut fcinfo = LocalFcinfo::<KERNEL_MAX_ARGS>::fresh(call.collation);
                 fcinfo.nargs = call.args.len() as i16;
@@ -440,7 +468,10 @@ fn eval_kernel(
                 // there follow the §4 epoch-lifetime contract.
                 unsafe { fcinfo.set_result_mcx(mcx) };
                 let d = call.flinfo.invoke(&mut fcinfo)?;
-                cur = NullableDatum { value: d, isnull: fcinfo.isnull };
+                cur = NullableDatum {
+                    value: d,
+                    isnull: fcinfo.isnull,
+                };
             }
             Ok(cur)
         }
@@ -470,7 +501,10 @@ fn byref_size(d: Datum) -> usize {
 fn dicteval_touched_clear_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
-        !matches!(std::env::var("PGRUST_LANE_DICTEVAL_TOUCHED").as_deref(), Ok("0") | Ok("off"))
+        !matches!(
+            std::env::var("PGRUST_LANE_DICTEVAL_TOUCHED").as_deref(),
+            Ok("0") | Ok("off")
+        )
     })
 }
 
@@ -634,8 +668,14 @@ fn prepare_views(
                         // staged window's rows, dict covers ndict entries.
                         let code = unsafe { *lane.codes.add(i) } as usize;
                         let DictEvalProg {
-                            kernel, arena, out, memo_bytes, byte_cap, ret_byval,
-                            memo_touched, ..
+                            kernel,
+                            arena,
+                            out,
+                            memo_bytes,
+                            byte_cap,
+                            ret_byval,
+                            memo_touched,
+                            ..
                         } = &mut **p;
                         let OutForm::Value { memo } = out else {
                             return Ok(Prepared::Demote("bitmap prog on value surface"));
@@ -647,8 +687,7 @@ fn prepare_views(
                                 // dict entry's bytes (code < ndict by the
                                 // lane contract).
                                 let entry = lane.table.datum(code as u32);
-                                let Some(s) = crate::dict::inline_varlena_payload(entry)
-                                else {
+                                let Some(s) = crate::dict::inline_varlena_payload(entry) else {
                                     return Ok(Prepared::Demote("non-inline dict entry"));
                                 };
                                 let nd = eval_kernel(kernel, arena.as_ref(), s)?;
@@ -774,9 +813,15 @@ mod tests {
     impl DictFixture {
         fn new(entries: &[&[u8]], codes: &[u32]) -> Self {
             let images: Vec<Vec<u8>> = entries.iter().map(|e| text_image(e)).collect();
-            let datums =
-                images.iter().map(|i| Datum::from_usize(i.as_ptr() as usize)).collect();
-            DictFixture { _images: images, datums, codes: codes.to_vec() }
+            let datums = images
+                .iter()
+                .map(|i| Datum::from_usize(i.as_ptr() as usize))
+                .collect();
+            DictFixture {
+                _images: images,
+                datums,
+                codes: codes.to_vec(),
+            }
         }
 
         fn lane(&self, epoch: u64) -> SoaDictLane {
@@ -829,7 +874,10 @@ mod tests {
     fn len_kernel(counter: Rc<Cell<u32>>) -> impl Fn(&[u8]) -> PgResult<NullableDatum> {
         move |s| {
             counter.set(counter.get() + 1);
-            Ok(NullableDatum { value: Datum::from_i32(s.len() as i32), isnull: false })
+            Ok(NullableDatum {
+                value: Datum::from_i32(s.len() as i32),
+                isnull: false,
+            })
         }
     }
 
@@ -878,8 +926,7 @@ mod tests {
         // fill must see the new entry (8).
         let e1 = DictFixture::new(&[b"a", b"bb", b"ccc", b"dd", b"eeee"], &[4, 4]);
         let e2 = DictFixture::new(&[b"x", b"yy", b"zzz"], &[2]);
-        let e3 =
-            DictFixture::new(&[b"a", b"bb", b"ccc", b"dd", b"eeeeeeee"], &[4]);
+        let e3 = DictFixture::new(&[b"a", b"bb", b"ccc", b"dd", b"eeeeeeee"], &[4]);
         let n = Rc::new(Cell::new(0));
         let mut ps = vec![prog(false, true, usize::MAX, len_kernel(n.clone()))];
         // Epoch 1: two rows, one distinct code — exactly one kernel call.
@@ -911,7 +958,10 @@ mod tests {
                 if s == b"bad" {
                     Err(types_error::PgError::error("boom").into())
                 } else {
-                    Ok(NullableDatum { value: Datum::from_i32(s.len() as i32), isnull: false })
+                    Ok(NullableDatum {
+                        value: Datum::from_i32(s.len() as i32),
+                        isnull: false,
+                    })
                 }
             })
         };
@@ -937,14 +987,20 @@ mod tests {
             if s == b"r3" {
                 Err(types_error::PgError::error("prog A").into())
             } else {
-                Ok(NullableDatum { value: Datum::from_i32(0), isnull: false })
+                Ok(NullableDatum {
+                    value: Datum::from_i32(0),
+                    isnull: false,
+                })
             }
         });
         let b = prog(false, true, usize::MAX, |s| {
             if s == b"r1" {
                 Err(types_error::PgError::error("prog B").into())
             } else {
-                Ok(NullableDatum { value: Datum::from_i32(0), isnull: false })
+                Ok(NullableDatum {
+                    value: Datum::from_i32(0),
+                    isnull: false,
+                })
             }
         });
         let mut ps = vec![a, b];
@@ -962,7 +1018,9 @@ mod tests {
         prepare_views(&mut ps, &views, &rows(&[0], 3), 3).unwrap();
         // One selected row, but the proof-carrying eager fill covers ndict.
         assert_eq!(n.get(), 4);
-        let OutForm::Value { memo } = &ps[0].out else { unreachable!() };
+        let OutForm::Value { memo } = &ps[0].out else {
+            unreachable!()
+        };
         assert!(memo.iter().all(|m| m.is_some()));
     }
 
@@ -972,7 +1030,10 @@ mod tests {
         let img: &'static Vec<u8> = Box::leak(Box::new(text_image(BIG)));
         let fx = DictFixture::new(&[b"a", b"b"], &[0, 1]);
         let mut p = prog(false, true, 80, move |_| {
-            Ok(NullableDatum { value: Datum::from_usize(img.as_ptr() as usize), isnull: false })
+            Ok(NullableDatum {
+                value: Datum::from_usize(img.as_ptr() as usize),
+                isnull: false,
+            })
         });
         p.ret_byval = false;
         let mut ps = vec![p];
@@ -993,10 +1054,15 @@ mod tests {
         assert_eq!(n.get(), 2);
         // Raw window between two dict windows: per-row eval, memo dropped.
         let raw_imgs: Vec<Vec<u8>> = vec![text_image(b"xyz"), text_image(b"q")];
-        let raw_vals: Vec<Datum> =
-            raw_imgs.iter().map(|i| Datum::from_usize(i.as_ptr() as usize)).collect();
+        let raw_vals: Vec<Datum> = raw_imgs
+            .iter()
+            .map(|i| Datum::from_usize(i.as_ptr() as usize))
+            .collect();
         let isnull = vec![false, true];
-        let views = [ColView::Raw { values: &raw_vals, isnull: &isnull }];
+        let views = [ColView::Raw {
+            values: &raw_vals,
+            isnull: &isnull,
+        }];
         prepare_views(&mut ps, &views, &sel, 2).unwrap();
         assert_eq!(n.get(), 3);
         let (vals, nulls) = ps[0].scratch();
@@ -1015,7 +1081,10 @@ mod tests {
     #[test]
     fn missing_view_demotes_representation() {
         let mut ps = vec![prog(false, true, usize::MAX, |_| {
-            Ok(NullableDatum { value: Datum::from_i32(0), isnull: false })
+            Ok(NullableDatum {
+                value: Datum::from_i32(0),
+                isnull: false,
+            })
         })];
         match prepare_views(&mut ps, &[ColView::Missing], &rows(&[0], 1), 1).unwrap() {
             Prepared::Demote(r) => assert_eq!(r, "representation"),
@@ -1027,12 +1096,20 @@ mod tests {
     fn bitmap_form_eager_fill() {
         let fx = DictFixture::new(&[b"x", b"yy", b"zzz"], &[0, 1, 2]);
         let mut p = prog(true, false, usize::MAX, |s| {
-            Ok(NullableDatum { value: Datum::from_i32((s.len() % 2 == 0) as i32), isnull: false })
+            Ok(NullableDatum {
+                value: Datum::from_i32((s.len() % 2 == 0) as i32),
+                isnull: false,
+            })
         });
-        p.out = OutForm::Bitmap { bits: Vec::new(), filled: Vec::new() };
+        p.out = OutForm::Bitmap {
+            bits: Vec::new(),
+            filled: Vec::new(),
+        };
         p.reset_epoch(Some(1), 3);
         fill_eager(&mut p, fx.lane(1)).unwrap();
-        let OutForm::Bitmap { bits, filled } = &p.out else { unreachable!() };
+        let OutForm::Bitmap { bits, filled } = &p.out else {
+            unreachable!()
+        };
         assert_eq!(filled[0] & 0b111, 0b111);
         assert_eq!(bits[0] & 0b111, 0b010);
     }

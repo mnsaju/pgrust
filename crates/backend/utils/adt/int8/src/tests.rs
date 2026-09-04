@@ -2,10 +2,8 @@ use super::*;
 use crate::builtins::*;
 
 use ::datum::Datum;
+use ::types_error::ERRCODE_INVALID_TEXT_REPRESENTATION;
 use ::types_fmgr::{FmgrInfo, LocalFcinfo};
-use ::types_error::{
-    ERRCODE_INVALID_TEXT_REPRESENTATION,
-};
 
 extern crate std;
 use std::string::String;
@@ -43,7 +41,10 @@ fn in_error_surface_matches_c() {
     assert_eq!(int8in("-9223372036854775808", None).unwrap(), i64::MIN);
     let err = int8in("xyz", None).unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_INVALID_TEXT_REPRESENTATION);
-    assert_eq!(err.message(), "invalid input syntax for type bigint: \"xyz\"");
+    assert_eq!(
+        err.message(),
+        "invalid input syntax for type bigint: \"xyz\""
+    );
     assert_eq!(int8in(" 42 ", None).unwrap(), 42);
     assert_eq!(int8in("0b101", None).unwrap(), 5);
     assert!(int8in("", None).is_err());
@@ -86,9 +87,18 @@ fn division_semantics() {
     assert!(int82div(1, 0).is_err());
     assert!(int28div(1, 0).is_err());
 
-    assert_eq!(int8div(i64::MIN, -1).unwrap_err().message(), "bigint out of range");
-    assert_eq!(int84div(i64::MIN, -1).unwrap_err().message(), "bigint out of range");
-    assert_eq!(int82div(i64::MIN, -1).unwrap_err().message(), "bigint out of range");
+    assert_eq!(
+        int8div(i64::MIN, -1).unwrap_err().message(),
+        "bigint out of range"
+    );
+    assert_eq!(
+        int84div(i64::MIN, -1).unwrap_err().message(),
+        "bigint out of range"
+    );
+    assert_eq!(
+        int82div(i64::MIN, -1).unwrap_err().message(),
+        "bigint out of range"
+    );
     assert_eq!(int8mod(i64::MIN, -1).unwrap(), 0);
     assert_eq!(int8div(7, -2).unwrap(), -3);
     assert_eq!(int8mod(-7, 2).unwrap(), -1);
@@ -98,12 +108,15 @@ fn division_semantics() {
 #[test]
 fn gcd_lcm_rows_from_int8_sql() {
     assert_eq!(int8gcd(0, 0).unwrap(), 0);
-    assert_eq!(int8gcd(0, 29893644334, ).unwrap(), 29893644334);
+    assert_eq!(int8gcd(0, 29893644334,).unwrap(), 29893644334);
     assert_eq!(int8gcd(288484263558, 29893644334).unwrap(), 6835958);
     assert_eq!(int8gcd(-288484263558, 29893644334).unwrap(), 6835958);
     assert_eq!(int8gcd(i64::MIN, 1).unwrap(), 1);
     assert_eq!(int8gcd(i64::MIN, -1).unwrap(), 1);
-    assert_eq!(int8gcd(i64::MIN, 4611686018427387904).unwrap(), 4611686018427387904);
+    assert_eq!(
+        int8gcd(i64::MIN, 4611686018427387904).unwrap(),
+        4611686018427387904
+    );
     assert!(int8gcd(i64::MIN, 0).is_err());
     assert!(int8gcd(i64::MIN, i64::MIN).is_err());
 
@@ -118,7 +131,10 @@ fn gcd_lcm_rows_from_int8_sql() {
 #[test]
 fn casts_and_floats() {
     assert!(int84(PG_INT32_MAX + 1).is_err());
-    assert_eq!(int84(PG_INT32_MAX + 1).unwrap_err().message(), "integer out of range");
+    assert_eq!(
+        int84(PG_INT32_MAX + 1).unwrap_err().message(),
+        "integer out of range"
+    );
     assert!(int84(PG_INT32_MIN - 1).is_err());
     assert_eq!(int84(-5).unwrap(), -5);
     assert_eq!(int48(-5), -5);
@@ -169,7 +185,10 @@ fn bit_ops_larger_smaller_in_range() {
 #[test]
 fn series() {
     let mut g = GenerateSeriesInt8::new(1, 3, 1).unwrap();
-    assert_eq!(core::iter::from_fn(|| g.next()).collect::<Vec<_>>(), [1, 2, 3]);
+    assert_eq!(
+        core::iter::from_fn(|| g.next()).collect::<Vec<_>>(),
+        [1, 2, 3]
+    );
     let mut g = GenerateSeriesInt8::new(i64::MAX - 1, i64::MAX, 1).unwrap();
     assert_eq!(
         core::iter::from_fn(|| g.next()).collect::<Vec<_>>(),
@@ -190,7 +209,10 @@ fn fmgr_wrappers_and_table() {
     assert_eq!(flinfo.invoke(&mut fci).unwrap().as_i64(), 42);
     fci.set_arg(0, Datum::from_i64(i64::MAX));
     fci.set_arg(1, Datum::from_i64(1));
-    assert_eq!(flinfo.invoke(&mut fci).unwrap_err().message(), "bigint out of range");
+    assert_eq!(
+        flinfo.invoke(&mut fci).unwrap_err().message(),
+        "bigint out of range"
+    );
 
     let mut flinfo = FmgrInfo::new(fc_int8out, 461, 1, true, false);
     let mut fci = LocalFcinfo::<1>::new(0);
@@ -228,7 +250,16 @@ fn fmgr_wrappers_and_table() {
 // (hashfunc.c cross-type hash joins).
 #[test]
 fn hashint8_folds_to_int4_hash() {
-    for v in [0i64, 1, 42, -1, -42, 550273, i32::MAX as i64, i32::MIN as i64] {
+    for v in [
+        0i64,
+        1,
+        42,
+        -1,
+        -42,
+        550273,
+        i32::MAX as i64,
+        i32::MIN as i64,
+    ] {
         let lohalf = v as u32;
         let hihalf = (v >> 32) as u32;
         let folded = lohalf ^ if v >= 0 { hihalf } else { !hihalf };

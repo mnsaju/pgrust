@@ -70,7 +70,10 @@ fn tzset_offset_builds_iso_abbreviation() {
 
     let east = pg_tzset_offset(-(4 * 3600 + 30 * 60)).unwrap();
     assert_eq!(east.name(), b"<+04:30>-04:30");
-    assert_eq!(localtime::pg_get_timezone_offset(east), Some(4 * 3600 + 30 * 60));
+    assert_eq!(
+        localtime::pg_get_timezone_offset(east),
+        Some(4 * 3600 + 30 * 60)
+    );
 
     let odd = pg_tzset_offset(-(3600 + 61)).unwrap();
     assert_eq!(odd.name(), b"<+01:01:01>-01:01:01");

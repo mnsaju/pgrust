@@ -23,7 +23,11 @@ pub fn logicalmsg_desc(buf: &mut StringInfo<'_>, record: &XLogReaderState) -> Pg
         appendf!(
             buf,
             "{}, prefix \"{prefix_str}\"; payload ({message_size} bytes): ",
-            if transactional { "transactional" } else { "non-transactional" }
+            if transactional {
+                "transactional"
+            } else {
+                "non-transactional"
+            }
         )?;
         let mut sep = "";
         for &byte in message {

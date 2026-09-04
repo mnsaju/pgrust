@@ -10,14 +10,13 @@ mod tests;
 use ::adt_multirangetypes::{leak_image, multirange_get_bounds, multirange_is_empty};
 use ::adt_rangetypes::ops;
 use ::adt_rangetypes::{
-    make_range, range_bound_slots, range_cmp_bounds, range_deserialize_into,
-    range_get_flags, range_is_empty,
-    range_type_oid, range_types_do_not_match, RangeBound, RangeInfo, RANGE_CONTAIN_EMPTY,
-    RANGE_EMPTY, RANGE_LB_INF, RANGE_UB_INF,
+    make_range, range_bound_slots, range_cmp_bounds, range_deserialize_into, range_get_flags,
+    range_is_empty, range_type_oid, range_types_do_not_match, RangeBound, RangeInfo,
+    RANGE_CONTAIN_EMPTY, RANGE_EMPTY, RANGE_LB_INF, RANGE_UB_INF,
 };
 use ::datum::Datum;
 use ::mcx::{Mcx, PgVec};
-use ::types_core::{ANYMULTIRANGEOID, ANYRANGEOID, InvalidOid, Oid};
+use ::types_core::{InvalidOid, Oid, ANYMULTIRANGEOID, ANYRANGEOID};
 use ::types_error::{PgError, PgResult};
 use ::types_fmgr::{
     function_call2_coll_in, FmgrBuiltin, FmgrInfo, FunctionCallInfoBaseData as Fcinfo,
@@ -65,7 +64,10 @@ impl RangeGistCache {
             let f = e.rng_subdiff_finfo();
             (f.fn_oid != InvalidOid).then(|| f.clone())
         };
-        Ok(RangeGistCache { ri: RangeInfo::from_entry(e)?, subdiff })
+        Ok(RangeGistCache {
+            ri: RangeInfo::from_entry(e)?,
+            subdiff,
+        })
     }
 }
 
@@ -124,7 +126,10 @@ fn call_subtype_diff(
     val1: Datum,
     val2: Datum,
 ) -> PgResult<f64> {
-    let f = cache.subdiff.as_mut().expect("caller checked has_subtype_diff");
+    let f = cache
+        .subdiff
+        .as_mut()
+        .expect("caller checked has_subtype_diff");
     let value = function_call2_coll_in(f, cache.ri.collation, mcx, val1, val2)?.as_f64();
     // C: buggy subtype_diff results (negative or NaN) read as zero.
     Ok(if value >= 0.0 { value } else { 0.0 })
@@ -199,8 +204,11 @@ fn multirange_union_range_equal(
     let (mut lower1, mut upper1) = range_bound_slots();
     let _empty = range_deserialize_into(&ri.elem, r, &mut lower1, &mut upper1);
     let (lower2, _t1) = multirange_get_bounds(ri, mr, 0);
-    let (_t2, upper2) =
-        multirange_get_bounds(ri, mr, ::adt_multirangetypes::multirange_count(mr) as usize - 1);
+    let (_t2, upper2) = multirange_get_bounds(
+        ri,
+        mr,
+        ::adt_multirangetypes::multirange_count(mr) as usize - 1,
+    );
     Ok(range_cmp_bounds(mcx, ri, &lower1, &lower2)? == 0
         && range_cmp_bounds(mcx, ri, &upper1, &upper2)? == 0)
 }
@@ -208,7 +216,9 @@ fn multirange_union_range_equal(
 #[track_caller]
 #[cold]
 fn unrecognized_range_strategy(strategy: u16) -> Box<PgError> {
-    Box::new(PgError::error(format!("unrecognized range strategy: {strategy}")))
+    Box::new(PgError::error(format!(
+        "unrecognized range strategy: {strategy}"
+    )))
 }
 
 fn consistent_int_range(
@@ -282,13 +292,17 @@ fn consistent_int_multirange(
             if range_is_empty(key) || multirange_is_empty(query) {
                 return Ok(false);
             }
-            Ok(!::adt_multirangetypes::range_overright_multirange_internal(mcx, ri, key, query)?)
+            Ok(!::adt_multirangetypes::range_overright_multirange_internal(
+                mcx, ri, key, query,
+            )?)
         }
         RANGESTRAT_OVERLEFT => {
             if range_is_empty(key) || multirange_is_empty(query) {
                 return Ok(false);
             }
-            Ok(!::adt_multirangetypes::range_after_multirange_internal(mcx, ri, key, query)?)
+            Ok(!::adt_multirangetypes::range_after_multirange_internal(
+                mcx, ri, key, query,
+            )?)
         }
         RANGESTRAT_OVERLAPS => {
             ::adt_multirangetypes::range_overlaps_multirange_internal(mcx, ri, key, query)
@@ -297,13 +311,17 @@ fn consistent_int_multirange(
             if range_is_empty(key) || multirange_is_empty(query) {
                 return Ok(false);
             }
-            Ok(!::adt_multirangetypes::range_before_multirange_internal(mcx, ri, key, query)?)
+            Ok(!::adt_multirangetypes::range_before_multirange_internal(
+                mcx, ri, key, query,
+            )?)
         }
         RANGESTRAT_AFTER => {
             if range_is_empty(key) || multirange_is_empty(query) {
                 return Ok(false);
             }
-            Ok(!::adt_multirangetypes::range_overleft_multirange_internal(mcx, ri, key, query)?)
+            Ok(!::adt_multirangetypes::range_overleft_multirange_internal(
+                mcx, ri, key, query,
+            )?)
         }
         RANGESTRAT_ADJACENT => {
             if range_is_empty(key) || multirange_is_empty(query) {
@@ -442,7 +460,9 @@ fn fc_range_gist_consistent(f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> Pg
     let result = if entry.page_is_leaf {
         if subtype == InvalidOid || subtype == ANYRANGEOID {
             // SAFETY: range query arg per opclass amop signature.
-            consistent_leaf_range(mcx, ri, strategy, key, unsafe { varlena_image(mcx, query) }?)?
+            consistent_leaf_range(mcx, ri, strategy, key, unsafe {
+                varlena_image(mcx, query)
+            }?)?
         } else if subtype == ANYMULTIRANGEOID {
             // SAFETY: multirange query arg per opclass amop signature.
             consistent_leaf_multirange(mcx, ri, strategy, key, unsafe {
@@ -453,10 +473,14 @@ fn fc_range_gist_consistent(f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> Pg
         }
     } else if subtype == InvalidOid || subtype == ANYRANGEOID {
         // SAFETY: as above.
-        consistent_int_range(mcx, ri, strategy, key, unsafe { varlena_image(mcx, query) }?)?
+        consistent_int_range(mcx, ri, strategy, key, unsafe {
+            varlena_image(mcx, query)
+        }?)?
     } else if subtype == ANYMULTIRANGEOID {
         // SAFETY: as above.
-        consistent_int_multirange(mcx, ri, strategy, key, unsafe { varlena_image(mcx, query) }?)?
+        consistent_int_multirange(mcx, ri, strategy, key, unsafe {
+            varlena_image(mcx, query)
+        }?)?
     } else {
         consistent_int_element(mcx, ri, strategy, key, query)?
     };
@@ -489,16 +513,22 @@ fn fc_multirange_gist_consistent(f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) 
             }?)?
         } else if subtype == ANYRANGEOID {
             // SAFETY: range query arg per opclass amop signature.
-            consistent_leaf_range(mcx, ri, strategy, key, unsafe { varlena_image(mcx, query) }?)?
+            consistent_leaf_range(mcx, ri, strategy, key, unsafe {
+                varlena_image(mcx, query)
+            }?)?
         } else {
             consistent_leaf_element(mcx, ri, strategy, key, query)?
         }
     } else if subtype == InvalidOid || subtype == ANYMULTIRANGEOID {
         // SAFETY: as above.
-        consistent_int_multirange(mcx, ri, strategy, key, unsafe { varlena_image(mcx, query) }?)?
+        consistent_int_multirange(mcx, ri, strategy, key, unsafe {
+            varlena_image(mcx, query)
+        }?)?
     } else if subtype == ANYRANGEOID {
         // SAFETY: as above.
-        consistent_int_range(mcx, ri, strategy, key, unsafe { varlena_image(mcx, query) }?)?
+        consistent_int_range(mcx, ri, strategy, key, unsafe {
+            varlena_image(mcx, query)
+        }?)?
     } else {
         consistent_int_element(mcx, ri, strategy, key, query)?
     };
@@ -851,7 +881,10 @@ fn fallback_split<'m>(
     let split_idx = (maxoff - 1) / 2 + 1;
     v.spl_left.clear();
     v.spl_right.clear();
-    let mut placer = Placer { left: None, right: None };
+    let mut placer = Placer {
+        left: None,
+        right: None,
+    };
     for (i, &range) in ranges.iter().enumerate().skip(1) {
         if i < split_idx {
             placer.place_left(mcx, cache, v, range, i)?;
@@ -872,7 +905,10 @@ fn class_split<'m>(
 ) -> PgResult<()> {
     v.spl_left.clear();
     v.spl_right.clear();
-    let mut placer = Placer { left: None, right: None };
+    let mut placer = Placer {
+        left: None,
+        right: None,
+    };
     for (i, &range) in ranges.iter().enumerate().skip(1) {
         if classes_groups[get_gist_range_class(range)] == SplitLR::Left {
             placer.place_left(mcx, cache, v, range, i)?;
@@ -917,7 +953,10 @@ fn single_sorting_split<'m>(
     let split_idx = maxoff / 2;
     v.spl_left.clear();
     v.spl_right.clear();
-    let mut placer = Placer { left: None, right: None };
+    let mut placer = Placer {
+        left: None,
+        right: None,
+    };
     for (i, item) in sort_items.iter().enumerate() {
         let range = ranges[item.index];
         if i < split_idx {
@@ -1087,8 +1126,12 @@ fn double_sorting_split<'m>(
         let mut left_upper = by_upper[i2 as usize].upper;
         loop {
             while i2 >= 0
-                && range_cmp_bounds(mcx, &mut cache.ri, &left_upper, &by_upper[i2 as usize].upper)?
-                    == 0
+                && range_cmp_bounds(
+                    mcx,
+                    &mut cache.ri,
+                    &left_upper,
+                    &by_upper[i2 as usize].upper,
+                )? == 0
             {
                 if range_cmp_bounds(
                     mcx,
@@ -1135,7 +1178,10 @@ fn double_sorting_split<'m>(
 
     v.spl_left.clear();
     v.spl_right.clear();
-    let mut placer = Placer { left: None, right: None };
+    let mut placer = Placer {
+        left: None,
+        right: None,
+    };
 
     let mut common_entries: Vec<CommonEntry> = Vec::with_capacity(maxoff);
     for (i, &range) in ranges.iter().enumerate().skip(1) {
@@ -1154,9 +1200,7 @@ fn double_sorting_split<'m>(
                 placer.place_left(mcx, cache, v, range, i)?;
             }
         } else {
-            debug_assert!(
-                range_cmp_bounds(mcx, &mut cache.ri, &lower, &context.right_lower)? >= 0
-            );
+            debug_assert!(range_cmp_bounds(mcx, &mut cache.ri, &lower, &context.right_lower)? >= 0);
             placer.place_right(mcx, cache, v, range, i)?;
         }
     }
@@ -1192,7 +1236,14 @@ const fn b(
     nargs: i16,
     func: ::types_fmgr::PGFunction,
 ) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 pub const RANGETYPES_GIST_BUILTINS: &[FmgrBuiltin] = &[
@@ -1201,6 +1252,16 @@ pub const RANGETYPES_GIST_BUILTINS: &[FmgrBuiltin] = &[
     b(3879, "range_gist_penalty", 3, fc_range_gist_penalty),
     b(3880, "range_gist_picksplit", 2, fc_range_gist_picksplit),
     b(3881, "range_gist_same", 3, fc_range_gist_same),
-    b(6154, "multirange_gist_consistent", 5, fc_multirange_gist_consistent),
-    b(6156, "multirange_gist_compress", 1, fc_multirange_gist_compress),
+    b(
+        6154,
+        "multirange_gist_consistent",
+        5,
+        fc_multirange_gist_consistent,
+    ),
+    b(
+        6156,
+        "multirange_gist_compress",
+        1,
+        fc_multirange_gist_compress,
+    ),
 ];

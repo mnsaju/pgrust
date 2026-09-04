@@ -24,7 +24,11 @@
 pub(crate) fn memory_headroom_bytes() -> Option<u64> {
     let self_cgroup = std::fs::read_to_string("/proc/self/cgroup").ok()?;
     let meminfo = std::fs::read_to_string("/proc/meminfo").unwrap_or_default();
-    headroom_with(std::path::Path::new("/sys/fs/cgroup"), &self_cgroup, &meminfo)
+    headroom_with(
+        std::path::Path::new("/sys/fs/cgroup"),
+        &self_cgroup,
+        &meminfo,
+    )
 }
 
 /// Non-Linux (macOS dev): no reliable signal; auto stays off.
@@ -46,13 +50,19 @@ fn read_num(p: &Path) -> Option<u64> {
 #[cfg(any(target_os = "linux", test))]
 fn read_stat_field(p: &Path, key: &str) -> Option<u64> {
     let s = std::fs::read_to_string(p).ok()?;
-    s.lines().find_map(|l| l.strip_prefix(key)?.trim().parse().ok())
+    s.lines()
+        .find_map(|l| l.strip_prefix(key)?.trim().parse().ok())
 }
 
 #[cfg(any(target_os = "linux", test))]
 fn meminfo_available(meminfo: &str) -> Option<u64> {
     let kb = meminfo.lines().find_map(|l| {
-        l.strip_prefix("MemAvailable:")?.trim().strip_suffix("kB")?.trim().parse::<u64>().ok()
+        l.strip_prefix("MemAvailable:")?
+            .trim()
+            .strip_suffix("kB")?
+            .trim()
+            .parse::<u64>()
+            .ok()
     })?;
     Some(kb * 1024)
 }
@@ -64,7 +74,11 @@ fn meminfo_available(meminfo: &str) -> Option<u64> {
 /// ancestor the defect row asks for. Returns (bound, leaf_dir_exists).
 #[cfg(any(target_os = "linux", test))]
 fn walk(base: &Path, rel: &str, v2: bool) -> (Option<u64>, bool) {
-    let leaf: PathBuf = if rel.is_empty() { base.to_path_buf() } else { base.join(rel) };
+    let leaf: PathBuf = if rel.is_empty() {
+        base.to_path_buf()
+    } else {
+        base.join(rel)
+    };
     let leaf_visible = leaf.is_dir();
     let mut best: Option<u64> = None;
     let mut p = leaf;
@@ -156,7 +170,8 @@ mod tests {
     use std::fs;
 
     const GIB: u64 = 1 << 30;
-    const MEMINFO: &str = "MemTotal:       32000000 kB\nMemFree:         1000000 kB\nMemAvailable:   30000000 kB\n";
+    const MEMINFO: &str =
+        "MemTotal:       32000000 kB\nMemFree:         1000000 kB\nMemAvailable:   30000000 kB\n";
 
     struct Fixture {
         root: PathBuf,
@@ -200,8 +215,16 @@ mod tests {
         let leaf = "kubepods.slice/kubepods-pod1.slice/cri-abc.scope";
         f.write(leaf, "memory.max", "max\n");
         f.write(leaf, "memory.current", "1073741824\n");
-        f.write("kubepods.slice/kubepods-pod1.slice", "memory.max", &(27 * GIB).to_string());
-        f.write("kubepods.slice/kubepods-pod1.slice", "memory.current", &(2 * GIB).to_string());
+        f.write(
+            "kubepods.slice/kubepods-pod1.slice",
+            "memory.max",
+            &(27 * GIB).to_string(),
+        );
+        f.write(
+            "kubepods.slice/kubepods-pod1.slice",
+            "memory.current",
+            &(2 * GIB).to_string(),
+        );
         f.write(
             "kubepods.slice/kubepods-pod1.slice",
             "memory.stat",
@@ -230,8 +253,16 @@ mod tests {
         let leaf = "kubepods.slice/pod.slice/c.scope";
         f.write(leaf, "memory.max", &(100 * GIB).to_string());
         f.write(leaf, "memory.current", &GIB.to_string());
-        f.write("kubepods.slice/pod.slice", "memory.max", &(27 * GIB).to_string());
-        f.write("kubepods.slice/pod.slice", "memory.current", &(26 * GIB).to_string());
+        f.write(
+            "kubepods.slice/pod.slice",
+            "memory.max",
+            &(27 * GIB).to_string(),
+        );
+        f.write(
+            "kubepods.slice/pod.slice",
+            "memory.current",
+            &(26 * GIB).to_string(),
+        );
         let got = headroom_with(&f.root, &format!("0::/{leaf}\n"), MEMINFO);
         assert_eq!(got, Some(GIB));
     }
@@ -278,10 +309,22 @@ mod tests {
     #[test]
     fn v1_bounded_ancestor() {
         let f = Fixture::new("v1-ancestor");
-        f.write("memory/docker/abc", "memory.limit_in_bytes", "9223372036854771712\n");
+        f.write(
+            "memory/docker/abc",
+            "memory.limit_in_bytes",
+            "9223372036854771712\n",
+        );
         f.write("memory/docker/abc", "memory.usage_in_bytes", "1024\n");
-        f.write("memory/docker", "memory.limit_in_bytes", &(27 * GIB).to_string());
-        f.write("memory/docker", "memory.usage_in_bytes", &(2 * GIB).to_string());
+        f.write(
+            "memory/docker",
+            "memory.limit_in_bytes",
+            &(27 * GIB).to_string(),
+        );
+        f.write(
+            "memory/docker",
+            "memory.usage_in_bytes",
+            &(2 * GIB).to_string(),
+        );
         let cg = "12:cpu,cpuacct:/docker/abc\n4:memory:/docker/abc\n0::/docker/abc\n";
         assert_eq!(headroom_with(&f.root, cg, MEMINFO), Some(25 * GIB));
     }
@@ -290,7 +333,11 @@ mod tests {
     #[test]
     fn v1_visible_unbounded_uses_meminfo() {
         let f = Fixture::new("v1-host");
-        f.write("memory/user.slice", "memory.limit_in_bytes", "9223372036854771712\n");
+        f.write(
+            "memory/user.slice",
+            "memory.limit_in_bytes",
+            "9223372036854771712\n",
+        );
         f.write("memory/user.slice", "memory.usage_in_bytes", "1024\n");
         let cg = "4:memory:/user.slice\n";
         assert_eq!(headroom_with(&f.root, cg, MEMINFO), Some(30000000 * 1024));

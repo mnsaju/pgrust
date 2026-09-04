@@ -10,6 +10,8 @@ use mcx::Mcx;
 use types_core::catalog::RELATION_RELATION_ID;
 use types_core::fmgr::F_OIDEQ;
 use types_core::{AttrNumber, Oid, RegProcedure};
+use types_core::{SECURITY_LOCAL_USERID_CHANGE, SECURITY_RESTRICTED_OPERATION};
+use types_error::ERRCODE_CARDINALITY_VIOLATION;
 use types_error::{
     PgError, PgResult, ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE,
     ERRCODE_SYNTAX_ERROR, ERROR,
@@ -21,8 +23,6 @@ use types_portal::{
     ParamListHandle, QueryCompletion, QueryEnvHandle, CMDTAG_REFRESH_MATERIALIZED_VIEW,
     CMDTAG_SELECT, CURSOR_OPT_PARALLEL_OK,
 };
-use types_core::{SECURITY_LOCAL_USERID_CHANGE, SECURITY_RESTRICTED_OPERATION};
-use types_error::ERRCODE_CARDINALITY_VIOLATION;
 use types_rel::{
     AccessExclusiveLock, AccessShareLock, ExclusiveLock, NoLock, Relation, RowExclusiveLock,
     RELKIND_MATVIEW,
@@ -68,7 +68,11 @@ pub fn ExecRefreshMatView<'mcx>(
     query_string: &str,
     qc: Option<&mut QueryCompletion>,
 ) -> PgResult<Oid> {
-    let lockmode = if stmt.concurrent { ExclusiveLock } else { AccessExclusiveLock };
+    let lockmode = if stmt.concurrent {
+        ExclusiveLock
+    } else {
+        AccessExclusiveLock
+    };
     let rv_node = stmt.relation.expect("RefreshMatViewStmt.relation");
     let rv = rel_vocab::RangeVar {
         catalogname: rv_node.catalogname,
@@ -81,9 +85,16 @@ pub fn ExecRefreshMatView<'mcx>(
     let mut cb = |rv2: &rel_vocab::RangeVar<'_>, rel_id: Oid, old_rel_id: Oid| -> PgResult<()> {
         tablecmds_seams::range_var_callback_maintains_table::call(rv2, rel_id, old_rel_id)
     };
-    let matview_oid =
-        catalog_namespace::RangeVarGetRelidExtended(&rv, lockmode, 0, Some(&mut cb))?;
-    RefreshMatViewByOid(mcx, matview_oid, false, stmt.skipData, stmt.concurrent, query_string, qc)?;
+    let matview_oid = catalog_namespace::RangeVarGetRelidExtended(&rv, lockmode, 0, Some(&mut cb))?;
+    RefreshMatViewByOid(
+        mcx,
+        matview_oid,
+        false,
+        stmt.skipData,
+        stmt.concurrent,
+        query_string,
+        qc,
+    )?;
     Ok(matview_oid)
 }
 
@@ -100,17 +111,17 @@ pub fn RefreshMatViewByOid<'mcx>(
     let relowner = matview_rel.rd_rel.relowner;
 
     let (save_userid, save_sec_context) = miscinit::GetUserIdAndSecContext();
-    miscinit::SetUserIdAndSecContext(
-        relowner,
-        save_sec_context | SECURITY_RESTRICTED_OPERATION,
-    );
+    miscinit::SetUserIdAndSecContext(relowner, save_sec_context | SECURITY_RESTRICTED_OPERATION);
     let save_nestlevel = guc::NewGUCNestLevel();
     guc::RestrictSearchPath()?;
 
     if matview_rel.rd_rel.relkind != RELKIND_MATVIEW {
         return Err(elog::ereport(ERROR)
             .errcode(ERRCODE_FEATURE_NOT_SUPPORTED)
-            .errmsg(format!("\"{}\" is not a materialized view", matview_rel.name()))
+            .errmsg(format!(
+                "\"{}\" is not a materialized view",
+                matview_rel.name()
+            ))
             .into_error()
             .into());
     }
@@ -171,7 +182,9 @@ pub fn RefreshMatViewByOid<'mcx>(
             );
             return Err(elog::ereport(ERROR)
                 .errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE)
-                .errmsg(format!("cannot refresh materialized view \"{qualified}\" concurrently"))
+                .errmsg(format!(
+                    "cannot refresh materialized view \"{qualified}\" concurrently"
+                ))
                 .errhint(
                     "Create a unique index with no WHERE clause on one or more columns \
                      of the materialized view.",
@@ -193,7 +206,11 @@ pub fn RefreshMatViewByOid<'mcx>(
 
     catalog_heap::CheckTableNotInUse(
         &matview_rel,
-        if is_create { "CREATE MATERIALIZED VIEW" } else { "REFRESH MATERIALIZED VIEW" },
+        if is_create {
+            "CREATE MATERIALIZED VIEW"
+        } else {
+            "REFRESH MATERIALIZED VIEW"
+        },
     )?;
 
     SetMatViewPopulatedState(mcx, &matview_rel, !skip_data)?;
@@ -255,7 +272,11 @@ pub fn RefreshMatViewByOid<'mcx>(
     miscinit::SetUserIdAndSecContext(save_userid, save_sec_context);
 
     if let Some(qc) = qc {
-        qc.commandTag = if is_create { CMDTAG_SELECT } else { CMDTAG_REFRESH_MATERIALIZED_VIEW };
+        qc.commandTag = if is_create {
+            CMDTAG_SELECT
+        } else {
+            CMDTAG_REFRESH_MATERIALIZED_VIEW
+        };
         qc.nprocessed = processed;
     }
     Ok(())
@@ -270,11 +291,21 @@ pub fn SetMatViewPopulatedState<'mcx>(
 ) -> PgResult<()> {
     debug_assert!(rel.rd_rel.relkind == RELKIND_MATVIEW);
     let pg_class = table::table_open(mcx, RELATION_RELATION_ID, RowExclusiveLock)?;
-    let keys = [eq_key(Anum_pg_class_oid, F_OIDEQ, Datum::from_oid(rel.rd_id))];
-    let mut scan = genam::systable_beginscan(mcx, &pg_class, CLASS_OID_INDEX_ID, true, None, &keys)?;
+    let keys = [eq_key(
+        Anum_pg_class_oid,
+        F_OIDEQ,
+        Datum::from_oid(rel.rd_id),
+    )];
+    let mut scan =
+        genam::systable_beginscan(mcx, &pg_class, CLASS_OID_INDEX_ID, true, None, &keys)?;
     let tup = match genam::systable_getnext(mcx, &mut scan)? {
         Some(t) => t,
-        None => return Err(internal(format!("cache lookup failed for relation {}", rel.rd_id))),
+        None => {
+            return Err(internal(format!(
+                "cache lookup failed for relation {}",
+                rel.rd_id
+            )))
+        }
     };
     let natts = pg_class.descr().natts as usize;
     let mut repl_values: mcx::PgVec<'_, Datum> = mcx::vec_with_capacity_in(mcx, natts)?;
@@ -285,8 +316,14 @@ pub fn SetMatViewPopulatedState<'mcx>(
     repl.resize(natts, false);
     repl_values[Anum_pg_class_relispopulated - 1] = Datum::from_bool(newstate);
     repl[Anum_pg_class_relispopulated - 1] = true;
-    let mut newtup =
-        heaptuple::heap_modify_tuple(mcx, tup, pg_class.descr(), &repl_values, &repl_isnull, &repl)?;
+    let mut newtup = heaptuple::heap_modify_tuple(
+        mcx,
+        tup,
+        pg_class.descr(),
+        &repl_values,
+        &repl_isnull,
+        &repl,
+    )?;
     let otid = tup.t_self;
     genam::systable_endscan(mcx, scan)?;
     catalog_indexing::CatalogTupleUpdate(mcx, &pg_class, &otid, &mut newtup)?;
@@ -318,7 +355,11 @@ fn refresh_matview_datafill<'mcx>(
     if rewritten.len() != 1 {
         return Err(internal(format!(
             "unexpected rewrite result for {}",
-            if is_create { "CREATE MATERIALIZED VIEW " } else { "REFRESH MATERIALIZED VIEW" }
+            if is_create {
+                "CREATE MATERIALIZED VIEW "
+            } else {
+                "REFRESH MATERIALIZED VIEW"
+            }
         )));
     }
     let query = rewritten.into_iter().next().expect("checked above");
@@ -461,11 +502,16 @@ fn refresh_by_match_merge<'mcx>(
     for &idx_oid in relcache::RelationGetIndexList(mcx, matview_oid)?.iter() {
         let index_rel = indexam::index_open(mcx, idx_oid, RowExclusiveLock)?;
         if is_usable_unique_index(mcx, &index_rel)? {
-            let form = index_rel.rd_index.as_ref().expect("usable index has rd_index");
+            let form = index_rel
+                .rd_index
+                .as_ref()
+                .expect("usable index has rd_index");
             for i in 0..form.indnkeyatts as usize {
                 let attnum = form.indkey[i];
                 let opclass = syscache_seams::pg_index_indclass_element::call(idx_oid, i as i32)?
-                    .ok_or_else(|| internal(format!("cache lookup failed for index {idx_oid}")))?;
+                    .ok_or_else(|| {
+                    internal(format!("cache lookup failed for index {idx_oid}"))
+                })?;
                 let attr = &matview_rel.descr().attrs[attnum as usize - 1];
                 let attrtype = attr.atttypid;
 
@@ -495,7 +541,13 @@ fn refresh_by_match_merge<'mcx>(
                 let leftop = ruleutils::quote_qualified_identifier(Some("newdata"), &attname);
                 let rightop = ruleutils::quote_qualified_identifier(Some("mv"), &attname);
                 ruleutils::generate_operator_clause(
-                    mcx, &mut querybuf, &leftop, attrtype, op, &rightop, attrtype,
+                    mcx,
+                    &mut querybuf,
+                    &leftop,
+                    attrtype,
+                    op,
+                    &rightop,
+                    attrtype,
                 )?;
                 found_unique_index = true;
             }
@@ -548,7 +600,10 @@ fn refresh_by_match_merge<'mcx>(
     temp_rel.close(NoLock)?;
     matview_rel.close(NoLock)?;
 
-    spi_exec_expect(&format!("DROP TABLE {diffname}, {tempname}"), spi::SPI_OK_UTILITY)?;
+    spi_exec_expect(
+        &format!("DROP TABLE {diffname}, {tempname}"),
+        spi::SPI_OK_UTILITY,
+    )?;
 
     if spi::SPI_finish()? != spi::SPI_OK_FINISH {
         return Err(internal("SPI_finish failed".to_string()));
@@ -582,7 +637,9 @@ fn refresh_by_heap_swap<'mcx>(
 // RelationGetIndexPredicate: eval_const_expressions can fold a partial
 // index's predicate to constant TRUE (== NIL), making it usable.
 fn is_usable_unique_index(mcx: Mcx<'_>, index_rel: &Relation<'_>) -> PgResult<bool> {
-    let Some(form) = index_rel.rd_index.as_ref() else { return Ok(false) };
+    let Some(form) = index_rel.rd_index.as_ref() else {
+        return Ok(false);
+    };
     Ok(form.indisunique
         && form.indimmediate
         && form.indisvalid

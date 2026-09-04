@@ -177,11 +177,7 @@ pub fn lane_group_eof(node: &mut GroupState<'_>) {
 }
 
 impl<'mcx> GroupState<'mcx> {
-    fn store_first(
-        &mut self,
-        estate: &mut EStateData<'mcx>,
-        outer_id: ExecSlotId,
-    ) -> PgResult<()> {
+    fn store_first(&mut self, estate: &mut EStateData<'mcx>, outer_id: ExecSlotId) -> PgResult<()> {
         let mcx = estate.es_query_cxt;
         let outer_slot = estate.slot_mut(outer_id);
         exectuples::exec_copy_slot(&mut self.firsttuple_slot, outer_slot, mcx, mcx)?;
@@ -200,8 +196,11 @@ impl<'mcx> GroupState<'mcx> {
                 ::executils::exec_eval_param_exec_params(estate, deps)?;
             }
         }
-        let mut slots =
-            EvalSlots { scan: None, inner: None, outer: Some(&mut self.firsttuple_slot) };
+        let mut slots = EvalSlots {
+            scan: None,
+            inner: None,
+            outer: Some(&mut self.firsttuple_slot),
+        };
         exec_qual(self.qual.as_deref_mut(), &mut slots)
     }
 
@@ -212,8 +211,11 @@ impl<'mcx> GroupState<'mcx> {
         }
         let mcx = estate.es_query_cxt;
         let result_slot = estate.slot_mut(self.ps_ResultTupleSlot);
-        let mut slots =
-            EvalSlots { scan: None, inner: None, outer: Some(&mut self.firsttuple_slot) };
+        let mut slots = EvalSlots {
+            scan: None,
+            inner: None,
+            outer: Some(&mut self.firsttuple_slot),
+        };
         exec_project(&mut self.proj, &mut slots, result_slot, mcx)?;
         Ok(Some(self.ps_ResultTupleSlot))
     }

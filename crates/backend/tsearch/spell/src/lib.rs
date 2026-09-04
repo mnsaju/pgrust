@@ -77,7 +77,13 @@ pub struct SpNodeData {
 
 impl SpNodeData {
     fn empty() -> Self {
-        SpNodeData { val: 0, isword: false, compoundflag: 0, affix: 0, node: None }
+        SpNodeData {
+            val: 0,
+            isword: false,
+            compoundflag: 0,
+            affix: 0,
+            node: None,
+        }
     }
 }
 
@@ -93,7 +99,11 @@ pub struct AffixNodeData<'mcx> {
 
 impl<'mcx> AffixNodeData<'mcx> {
     fn empty(mcx: Mcx<'mcx>) -> Self {
-        AffixNodeData { val: 0, aff: PgVec::new_in(mcx), node: None }
+        AffixNodeData {
+            val: 0,
+            aff: PgVec::new_in(mcx),
+            node: None,
+        }
     }
     #[inline]
     fn naff(&self) -> usize {

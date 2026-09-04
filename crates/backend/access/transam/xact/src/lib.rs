@@ -15,14 +15,14 @@ use elog::{elog, ereport, message_level_is_interesting};
 use mcx::MemoryContext;
 use types_core::xact::*;
 use types_core::{TimestampTz, TransactionId, XLogRecPtr};
-use types_resowner::{
-    RESOURCE_RELEASE_AFTER_LOCKS, RESOURCE_RELEASE_BEFORE_LOCKS, RESOURCE_RELEASE_LOCKS,
-};
 use types_error::{
     ErrorLocation, PgError, PgResult, DEBUG5, ERRCODE_ACTIVE_SQL_TRANSACTION,
     ERRCODE_INVALID_TRANSACTION_STATE, ERRCODE_NO_ACTIVE_SQL_TRANSACTION,
     ERRCODE_PROGRAM_LIMIT_EXCEEDED, ERRCODE_READ_ONLY_SQL_TRANSACTION,
     ERRCODE_S_E_INVALID_SPECIFICATION, ERROR, FATAL, WARNING,
+};
+use types_resowner::{
+    RESOURCE_RELEASE_AFTER_LOCKS, RESOURCE_RELEASE_BEFORE_LOCKS, RESOURCE_RELEASE_LOCKS,
 };
 
 pub(crate) use transam_xlog_seams as xlog_seams;
@@ -30,25 +30,26 @@ pub(crate) use transam_xlog_seams as xlog_seams;
 mod engine;
 mod redo;
 mod state;
-mod wal;
 #[cfg(test)]
 mod tests;
+mod wal;
 
-pub(crate) use state::{xs, xs_ptr, TransactionNode, XsPtr};
 pub use state::session_mem_teardown;
+pub(crate) use state::{xs, xs_ptr, TransactionNode, XsPtr};
 
 pub use engine::{
     AbortCurrentTransaction, AbortOutOfAnyTransaction, BeginImplicitTransactionBlock,
-    BeginInternalSubTransaction, BeginTransactionBlock, CommitTransactionCommand,
-    DefineSavepoint, EndImplicitTransactionBlock, EndParallelWorkerTransaction,
-    EndTransactionBlock, EstimateTransactionStateSpace, PrepareTransactionBlock,
-    ReleaseCurrentSubTransaction, ReleaseSavepoint, RestoreTransactionCharacteristics,
-    RollbackAndReleaseCurrentSubTransaction, RollbackToSavepoint,
-    SaveTransactionCharacteristics, SerializeTransactionState, StartParallelWorkerTransaction,
-    StartTransactionCommand, UserAbortTransactionBlock,
+    BeginInternalSubTransaction, BeginTransactionBlock, CommitTransactionCommand, DefineSavepoint,
+    EndImplicitTransactionBlock, EndParallelWorkerTransaction, EndTransactionBlock,
+    EstimateTransactionStateSpace, PrepareTransactionBlock, ReleaseCurrentSubTransaction,
+    ReleaseSavepoint, RestoreTransactionCharacteristics, RollbackAndReleaseCurrentSubTransaction,
+    RollbackToSavepoint, SaveTransactionCharacteristics, SerializeTransactionState,
+    StartParallelWorkerTransaction, StartTransactionCommand, UserAbortTransactionBlock,
 };
-pub use redo::{parse_abort_record, parse_commit_record, parse_prepare_record, xact_redo,
-    ParsedAbort, ParsedCommit, ParsedPrepare, XactRedoInfo};
+pub use redo::{
+    parse_abort_record, parse_commit_record, parse_prepare_record, xact_redo, ParsedAbort,
+    ParsedCommit, ParsedPrepare, XactRedoInfo,
+};
 pub use wal::{XactLogAbortRecord, XactLogCommitRecord};
 
 // Verified against access/xact.h / xlogrecord.h / xloginsert.h / rmgrlist.h.
@@ -124,7 +125,8 @@ impl std::fmt::Debug for XactCallbackItem {
 }
 impl std::fmt::Debug for SubXactCallbackItem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SubXactCallbackItem").finish_non_exhaustive()
+        f.debug_struct("SubXactCallbackItem")
+            .finish_non_exhaustive()
     }
 }
 
@@ -149,14 +151,39 @@ macro_rules! scalar_get_set {
     };
 }
 
-scalar_get_set!(DefaultXactIsoLevel, SetDefaultXactIsoLevel, DefaultXactIsoLevel, i32);
+scalar_get_set!(
+    DefaultXactIsoLevel,
+    SetDefaultXactIsoLevel,
+    DefaultXactIsoLevel,
+    i32
+);
 scalar_get_set!(XactIsoLevel, SetXactIsoLevel, XactIsoLevel, i32);
-scalar_get_set!(DefaultXactReadOnly, SetDefaultXactReadOnly, DefaultXactReadOnly, bool);
+scalar_get_set!(
+    DefaultXactReadOnly,
+    SetDefaultXactReadOnly,
+    DefaultXactReadOnly,
+    bool
+);
 scalar_get_set!(XactReadOnly, SetXactReadOnly, XactReadOnly, bool);
-scalar_get_set!(DefaultXactDeferrable, SetDefaultXactDeferrable, DefaultXactDeferrable, bool);
+scalar_get_set!(
+    DefaultXactDeferrable,
+    SetDefaultXactDeferrable,
+    DefaultXactDeferrable,
+    bool
+);
 scalar_get_set!(XactDeferrable, SetXactDeferrable, XactDeferrable, bool);
-scalar_get_set!(synchronous_commit, SetSynchronousCommit, synchronous_commit, i32);
-scalar_get_set!(CheckXidAlive, SetCheckXidAlive, CheckXidAlive, TransactionId);
+scalar_get_set!(
+    synchronous_commit,
+    SetSynchronousCommit,
+    synchronous_commit,
+    i32
+);
+scalar_get_set!(
+    CheckXidAlive,
+    SetCheckXidAlive,
+    CheckXidAlive,
+    TransactionId
+);
 scalar_get_set!(bsysscan, SetBsysscan, bsysscan, bool);
 scalar_get_set!(MyXactFlags, SetMyXactFlags, MyXactFlags, i32);
 scalar_get_set!(xact_is_sampled, SetXactIsSampled, xact_is_sampled, bool);
@@ -370,11 +397,9 @@ fn assign_transaction_id_at(idx: usize) -> PgResult<()> {
 
     if is_subxact && xlog_seams::xlog_standby_info_active::call() {
         xs(|s| {
-            s.unreported_xids
-                .try_reserve(1)
-                .map_err(|_| {
-                    PgError::error("out of memory tracking unreported subtransaction IDs")
-                })?;
+            s.unreported_xids.try_reserve(1).map_err(|_| {
+                PgError::error("out of memory tracking unreported subtransaction IDs")
+            })?;
             s.unreported_xids.push(full.xid());
             Ok::<(), PgError>(())
         })?;
@@ -388,9 +413,7 @@ fn assign_transaction_id_at(idx: usize) -> PgResult<()> {
                 hdr[4..8].copy_from_slice(&(s.unreported_xids.len() as i32).to_ne_bytes());
                 let mut body: Vec<u8> = Vec::new();
                 body.try_reserve(s.unreported_xids.len() * 4)
-                    .map_err(|_| {
-                        PgError::error("out of memory building xid-assignment record")
-                    })?;
+                    .map_err(|_| PgError::error("out of memory building xid-assignment record"))?;
                 for x in &s.unreported_xids {
                     body.extend_from_slice(&x.to_ne_bytes());
                 }
@@ -855,7 +878,8 @@ pub fn RegisterXactCallback(callback: XactCallback, arg: Datum) {
         s.xact_callbacks
             .try_reserve(1)
             .expect("out of memory registering transaction callback");
-        s.xact_callbacks.insert(0, XactCallbackItem { callback, arg });
+        s.xact_callbacks
+            .insert(0, XactCallbackItem { callback, arg });
     });
 }
 
@@ -876,7 +900,8 @@ pub fn RegisterSubXactCallback(callback: SubXactCallback, arg: Datum) {
         s.subxact_callbacks
             .try_reserve(1)
             .expect("out of memory registering subtransaction callback");
-        s.subxact_callbacks.insert(0, SubXactCallbackItem { callback, arg });
+        s.subxact_callbacks
+            .insert(0, SubXactCallbackItem { callback, arg });
     });
 }
 
@@ -1061,7 +1086,9 @@ pub fn PreventCommandIfReadOnly(cmdname: &str) -> PgResult<()> {
     if xs(|s| s.XactReadOnly) {
         return ereport(ERROR)
             .errcode(ERRCODE_READ_ONLY_SQL_TRANSACTION)
-            .errmsg(format!("cannot execute {cmdname} in a read-only transaction"))
+            .errmsg(format!(
+                "cannot execute {cmdname} in a read-only transaction"
+            ))
             .finish(xact_location("PreventCommandIfReadOnly"));
     }
     Ok(())
@@ -1072,7 +1099,9 @@ pub fn PreventCommandIfParallelMode(cmdname: &str) -> PgResult<()> {
     if IsInParallelMode() {
         return ereport(ERROR)
             .errcode(ERRCODE_INVALID_TRANSACTION_STATE)
-            .errmsg(format!("cannot execute {cmdname} during a parallel operation"))
+            .errmsg(format!(
+                "cannot execute {cmdname} during a parallel operation"
+            ))
             .finish(xact_location("PreventCommandIfParallelMode"));
     }
     Ok(())
@@ -1099,7 +1128,10 @@ pub fn PreventInTransactionBlock(isTopLevel: bool, stmtType: &str) -> PgResult<(
     }
     let bs = cur_block_state();
     if bs != TBLOCK_DEFAULT && bs != TBLOCK_STARTED {
-        return Err(Box::new(PgError::new(FATAL, "cannot prevent transaction chain")));
+        return Err(Box::new(PgError::new(
+            FATAL,
+            "cannot prevent transaction chain",
+        )));
     }
     xs(|s| s.MyXactFlags |= XACT_FLAGS_NEEDIMMEDIATECOMMIT);
     Ok(())
@@ -1190,17 +1222,34 @@ pub fn init_seams() {
     xact_seams::mark_current_transaction_id_logged_if_any::set(MarkCurrentTransactionIdLoggedIfAny);
     xact_seams::mark_subxact_top_xid_logged::set(MarkSubxactTopXidLogged);
 
-    vars::XactIsoLevel.install(GucVarAccessors { get: XactIsoLevel, set: SetXactIsoLevel });
-    vars::DefaultXactIsoLevel
-        .install(GucVarAccessors { get: DefaultXactIsoLevel, set: SetDefaultXactIsoLevel });
-    vars::XactReadOnly.install(GucVarAccessors { get: XactReadOnly, set: SetXactReadOnly });
-    vars::DefaultXactReadOnly
-        .install(GucVarAccessors { get: DefaultXactReadOnly, set: SetDefaultXactReadOnly });
-    vars::XactDeferrable.install(GucVarAccessors { get: XactDeferrable, set: SetXactDeferrable });
-    vars::DefaultXactDeferrable
-        .install(GucVarAccessors { get: DefaultXactDeferrable, set: SetDefaultXactDeferrable });
-    vars::synchronous_commit
-        .install(GucVarAccessors { get: synchronous_commit, set: SetSynchronousCommit });
+    vars::XactIsoLevel.install(GucVarAccessors {
+        get: XactIsoLevel,
+        set: SetXactIsoLevel,
+    });
+    vars::DefaultXactIsoLevel.install(GucVarAccessors {
+        get: DefaultXactIsoLevel,
+        set: SetDefaultXactIsoLevel,
+    });
+    vars::XactReadOnly.install(GucVarAccessors {
+        get: XactReadOnly,
+        set: SetXactReadOnly,
+    });
+    vars::DefaultXactReadOnly.install(GucVarAccessors {
+        get: DefaultXactReadOnly,
+        set: SetDefaultXactReadOnly,
+    });
+    vars::XactDeferrable.install(GucVarAccessors {
+        get: XactDeferrable,
+        set: SetXactDeferrable,
+    });
+    vars::DefaultXactDeferrable.install(GucVarAccessors {
+        get: DefaultXactDeferrable,
+        set: SetDefaultXactDeferrable,
+    });
+    vars::synchronous_commit.install(GucVarAccessors {
+        get: synchronous_commit,
+        set: SetSynchronousCommit,
+    });
 
     xact_seams::transaction_block_status_code::set(TransactionBlockStatusCode);
     xact_seams::get_xact_iso_level::set(XactIsoLevel);

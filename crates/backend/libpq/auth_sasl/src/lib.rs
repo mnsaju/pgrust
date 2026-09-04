@@ -116,7 +116,9 @@ pub fn CheckSASLAuth<M: SaslMech>(
         pqformat::pq_getmsgend(&buf)?;
         drop(buf);
 
-        let state = opaq.as_mut().expect("SASL state initialized on first message");
+        let state = opaq
+            .as_mut()
+            .expect("SASL state initialized on first message");
         let (r, output) = mech.exchange(state, port, input.as_deref(), logdetail)?;
         result = r;
 

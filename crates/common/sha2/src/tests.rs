@@ -15,7 +15,9 @@ fn sha256_nist_vectors() {
         "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
     );
     assert_eq!(
-        hex(&sha256(b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq")),
+        hex(&sha256(
+            b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"
+        )),
         "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"
     );
     assert_eq!(
@@ -35,7 +37,9 @@ fn sha224_nist_vectors() {
         "23097d223405d8228642a477bda255b32aadbce4bda0b3f7e36c9da7"
     );
     assert_eq!(
-        hex(&sha224(b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq")),
+        hex(&sha224(
+            b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"
+        )),
         "75388b16512776cc5dba5da1fd890150b0c6455cb4f58b1952522525"
     );
     assert_eq!(
@@ -88,18 +92,28 @@ fn sha512_nist_vectors() {
 // straddle SHA-512's; +1 block variants hit the two-transform finalization.
 #[test]
 fn padding_boundaries_match_single_shot() {
-    for len in [55, 56, 57, 63, 64, 65, 111, 112, 113, 119, 120, 127, 128, 129, 256] {
+    for len in [
+        55, 56, 57, 63, 64, 65, 111, 112, 113, 119, 120, 127, 128, 129, 256,
+    ] {
         let data = vec![0xa5u8; len];
         for split in [0, 1, len / 2, len.saturating_sub(1)] {
             let mut c256 = PgSha256Ctx::init_sha256();
             c256.update(&data[..split]);
             c256.update(&data[split..]);
-            assert_eq!(c256.final_sha256(), sha256(&data), "sha256 len={len} split={split}");
+            assert_eq!(
+                c256.final_sha256(),
+                sha256(&data),
+                "sha256 len={len} split={split}"
+            );
 
             let mut c512 = PgSha512Ctx::init_sha512();
             c512.update(&data[..split]);
             c512.update(&data[split..]);
-            assert_eq!(c512.final_sha512(), sha512(&data), "sha512 len={len} split={split}");
+            assert_eq!(
+                c512.final_sha512(),
+                sha512(&data),
+                "sha512 len={len} split={split}"
+            );
         }
     }
 }

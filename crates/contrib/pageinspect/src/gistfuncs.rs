@@ -1,9 +1,12 @@
 //! gistfuncs.c — gist_page_opaque_info, gist_page_items(_bytea).
 
 use crate::*;
-use types_core::{GIST_AM_OID, InvalidOid};
+use types_core::{InvalidOid, GIST_AM_OID};
 use types_error::ERRCODE_WRONG_OBJECT_TYPE;
-use types_gist::{GistPageIsDeleted, GIST_PAGE_ID, F_DELETED, F_FOLLOW_RIGHT, F_HAS_GARBAGE, F_LEAF, F_TUPLES_DELETED};
+use types_gist::{
+    GistPageIsDeleted, F_DELETED, F_FOLLOW_RIGHT, F_HAS_GARBAGE, F_LEAF, F_TUPLES_DELETED,
+    GIST_PAGE_ID,
+};
 use types_rel::pg_class::RELKIND_INDEX;
 
 const GIST_OPAQUE_SIZE: usize = 16;
@@ -169,8 +172,12 @@ pub(crate) fn fc_gist_page_items(
     }
     if index_rel.rd_rel.relam != GIST_AM_OID {
         return Err(Box::new(
-            PgError::error(format!("\"{}\" is not a {} index", index_rel.name(), "GiST"))
-                .with_sqlstate(ERRCODE_WRONG_OBJECT_TYPE),
+            PgError::error(format!(
+                "\"{}\" is not a {} index",
+                index_rel.name(),
+                "GiST"
+            ))
+            .with_sqlstate(ERRCODE_WRONG_OBJECT_TYPE),
         ));
     }
 
@@ -188,7 +195,10 @@ pub(crate) fn fc_gist_page_items(
     // Leaf pages carry included attributes; non-leaf pages only key ones.
     let nkeyatts = index_rel.indnkeyatts();
     let (tupdesc, keys_only) = if flagbits & F_LEAF != 0 {
-        (tupdesc::CreateTupleDescCopy(mcx, index_rel.rd_att.as_ref())?, false)
+        (
+            tupdesc::CreateTupleDescCopy(mcx, index_rel.rd_att.as_ref())?,
+            false,
+        )
     } else {
         (
             tupdesc::CreateTupleDescTruncatedCopy(mcx, index_rel.rd_att.as_ref(), nkeyatts)?,
@@ -258,8 +268,9 @@ pub(crate) fn fc_gist_page_items(
             for i in 0..natts {
                 let mut isnull = false;
                 // SAFETY: itup points at a tuple_len-byte in-bounds image.
-                let val_datum =
-                    unsafe { nbtree::itup::index_getattr(itup, (i + 1) as i16, &tupdesc, &mut isnull) };
+                let val_datum = unsafe {
+                    nbtree::itup::index_getattr(itup, (i + 1) as i16, &tupdesc, &mut isnull)
+                };
                 let value = if isnull {
                     "null".to_string()
                 } else {

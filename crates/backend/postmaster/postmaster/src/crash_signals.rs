@@ -14,8 +14,7 @@ const CRASH_SIGS: [(i32, &str); 4] = [
     (libc::SIGABRT, "SIGABRT"),
 ];
 
-static mut PREV_ACTIONS: [MaybeUninit<libc::sigaction>; 4] =
-    [const { MaybeUninit::uninit() }; 4];
+static mut PREV_ACTIONS: [MaybeUninit<libc::sigaction>; 4] = [const { MaybeUninit::uninit() }; 4];
 static INSTALLED: AtomicBool = AtomicBool::new(false);
 
 pub fn install_crash_signal_reporter() {
@@ -44,13 +43,20 @@ extern "C" fn crash_handler(sig: i32, info: *mut libc::siginfo_t, _uctx: *mut li
             name = n;
             // SAFETY: restoring the sigaction saved at install.
             unsafe {
-                libc::sigaction(sig, (&raw const PREV_ACTIONS[idx]).cast(), core::ptr::null_mut());
+                libc::sigaction(
+                    sig,
+                    (&raw const PREV_ACTIONS[idx]).cast(),
+                    core::ptr::null_mut(),
+                );
             }
         }
     }
 
     let mut buf = [0u8; 160];
-    let mut w = Writer { buf: &mut buf, at: 0 };
+    let mut w = Writer {
+        buf: &mut buf,
+        at: 0,
+    };
     w.put(b"\npgrust: FATAL: server process was terminated by signal ");
     w.dec(sig as u64);
     w.put(b" (");
@@ -58,9 +64,17 @@ extern "C" fn crash_handler(sig: i32, info: *mut libc::siginfo_t, _uctx: *mut li
     w.put(b"), fault address 0x");
     // SAFETY: siginfo pointer is kernel-provided and valid for SA_SIGINFO.
     #[cfg(target_os = "linux")]
-    let addr = if info.is_null() { 0 } else { (unsafe { (*info).si_addr() }) as usize };
+    let addr = if info.is_null() {
+        0
+    } else {
+        (unsafe { (*info).si_addr() }) as usize
+    };
     #[cfg(not(target_os = "linux"))]
-    let addr = if info.is_null() { 0 } else { (unsafe { (*info).si_addr }) as usize };
+    let addr = if info.is_null() {
+        0
+    } else {
+        (unsafe { (*info).si_addr }) as usize
+    };
     w.hex(addr as u64);
     w.put(b"\n");
     // SAFETY: write(2) is async-signal-safe; fd 2 is the server log.

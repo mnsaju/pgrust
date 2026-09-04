@@ -7,8 +7,7 @@ use mcx::MemoryContext;
 pub const VARTAG_EXPANDED_RO: u8 = 2;
 pub const VARTAG_EXPANDED_RW: u8 = 3;
 pub const VARHDRSZ_EXTERNAL: usize = 2;
-pub const EXPANDED_POINTER_SIZE: usize =
-    VARHDRSZ_EXTERNAL + size_of::<*mut ExpandedObjectHeader>();
+pub const EXPANDED_POINTER_SIZE: usize = VARHDRSZ_EXTERNAL + size_of::<*mut ExpandedObjectHeader>();
 pub const EOH_HEADER_MAGIC: i32 = -1;
 
 #[cfg(target_endian = "little")]
@@ -18,7 +17,8 @@ const HEADER_1B_E: u8 = 0x80;
 
 pub struct ExpandedObjectMethods {
     pub get_flat_size: unsafe fn(eohptr: *mut ExpandedObjectHeader) -> usize,
-    pub flatten_into: unsafe fn(eohptr: *mut ExpandedObjectHeader, result: *mut u8, allocated_size: usize),
+    pub flatten_into:
+        unsafe fn(eohptr: *mut ExpandedObjectHeader, result: *mut u8, allocated_size: usize),
 }
 
 // Self-referential: both images embed this struct's own address, so a header
@@ -80,7 +80,8 @@ pub unsafe fn datum_get_eohp(d: Datum) -> *mut ExpandedObjectHeader {
     debug_assert!(datum_is_external_expanded(d));
     let p = d.as_usize() as *const u8;
     // read_unaligned of pointer bytes keeps provenance (C memcpy's the same).
-    let eohptr = core::ptr::read_unaligned(p.add(VARHDRSZ_EXTERNAL) as *const *mut ExpandedObjectHeader);
+    let eohptr =
+        core::ptr::read_unaligned(p.add(VARHDRSZ_EXTERNAL) as *const *mut ExpandedObjectHeader);
     debug_assert!((*eohptr).vl_len_ == EOH_HEADER_MAGIC);
     eohptr
 }
@@ -100,7 +101,10 @@ pub unsafe fn eoh_init_header(
     for (image, tag) in [(rw, VARTAG_EXPANDED_RW), (ro, VARTAG_EXPANDED_RO)] {
         *image = HEADER_1B_E;
         *image.add(1) = tag;
-        core::ptr::write_unaligned(image.add(VARHDRSZ_EXTERNAL) as *mut *mut ExpandedObjectHeader, eohptr);
+        core::ptr::write_unaligned(
+            image.add(VARHDRSZ_EXTERNAL) as *mut *mut ExpandedObjectHeader,
+            eohptr,
+        );
     }
 }
 

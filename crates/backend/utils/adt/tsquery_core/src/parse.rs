@@ -1,7 +1,6 @@
 use ::adt_tsvector_core::layout::MAXENTRYPOS;
 use ::adt_tsvector_core::parser::{
-    is_ts_operator, ts_isspace, Next, TsvParser, P_TSV_IS_TSQUERY, P_TSV_IS_WEB,
-    P_TSV_OPR_IS_DELIM,
+    is_ts_operator, ts_isspace, Next, TsvParser, P_TSV_IS_TSQUERY, P_TSV_IS_WEB, P_TSV_OPR_IS_DELIM,
 };
 use ::adt_tsvector_core::query::*;
 use ::mcx::{vec_with_capacity_in, Mcx, PgVec};
@@ -114,7 +113,11 @@ impl<'s, 'e, 'mcx> QueryParser<'s, 'e, 'mcx> {
     }
 
     pub fn soft_error_occurred(&self) -> bool {
-        self.vals.esc.as_deref().map(|c| c.error_occurred()).unwrap_or(false)
+        self.vals
+            .esc
+            .as_deref()
+            .map(|c| c.error_occurred())
+            .unwrap_or(false)
     }
 
     pub fn take_esc(&mut self) -> Option<&'e mut SoftErrorContext> {
@@ -180,7 +183,9 @@ impl<'s, 'e, 'mcx> QueryParser<'s, 'e, 'mcx> {
                     let start = ptr;
                     let mut v: i64 = 0;
                     while ptr < input.len() && input[ptr].is_ascii_digit() {
-                        v = v.saturating_mul(10).saturating_add((input[ptr] - b'0') as i64);
+                        v = v
+                            .saturating_mul(10)
+                            .saturating_add((input[ptr] - b'0') as i64);
                         ptr += 1;
                     }
                     if ptr == start {
@@ -224,7 +229,8 @@ impl<'s, 'e, 'mcx> QueryParser<'s, 'e, 'mcx> {
         if input.len() < start + 2 {
             return false;
         }
-        if !input[start].eq_ignore_ascii_case(&b'o') || !input[start + 1].eq_ignore_ascii_case(&b'r')
+        if !input[start].eq_ignore_ascii_case(&b'o')
+            || !input[start + 1].eq_ignore_ascii_case(&b'r')
         {
             return false;
         }
@@ -232,10 +238,7 @@ impl<'s, 'e, 'mcx> QueryParser<'s, 'e, 'mcx> {
         if ptr >= input.len() {
             return false;
         }
-        if input[ptr] == b'-'
-            || input[ptr] == b'_'
-            || ::ts_locale::t_isalnum(&input[ptr..])
-        {
+        if input[ptr] == b'-' || input[ptr] == b'_' || ::ts_locale::t_isalnum(&input[ptr..]) {
             return false;
         }
         loop {
@@ -324,7 +327,11 @@ impl<'s, 'e, 'mcx> QueryParser<'s, 'e, 'mcx> {
                         self.state = PState::WaitOperand;
                         return Ok(Tok::Opr(OP_OR));
                     } else {
-                        match if self.at_end() { Some(false) } else { self.parse_phrase_operator()? } {
+                        match if self.at_end() {
+                            Some(false)
+                        } else {
+                            self.parse_phrase_operator()?
+                        } {
                             None => return Ok(Tok::Err),
                             Some(true) => {
                                 self.state = PState::WaitOperand;
@@ -559,11 +566,7 @@ impl<'s, 'e, 'mcx> QueryParser<'s, 'e, 'mcx> {
     }
 }
 
-fn findoprnd_recurse(
-    items: &mut [Item],
-    pos: &mut usize,
-    needcleanup: &mut bool,
-) -> PgResult<()> {
+fn findoprnd_recurse(items: &mut [Item], pos: &mut usize, needcleanup: &mut bool) -> PgResult<()> {
     if *pos >= items.len() {
         return Err(PgError::error("malformed tsquery: operand not found").into());
     }
@@ -672,7 +675,10 @@ pub fn parse_tsquery<'mcx>(
     let img = build_query_image(mcx, &items, &p.op_pool)?;
     if needcleanup {
         let cleaned = crate::cleanup::cleanup_tsquery_stopwords(mcx, &img, noisy)?;
-        return Ok(Some(ParsedQuery { img: cleaned, empty: false }));
+        return Ok(Some(ParsedQuery {
+            img: cleaned,
+            empty: false,
+        }));
     }
     Ok(Some(ParsedQuery { img, empty: false }))
 }

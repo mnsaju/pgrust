@@ -43,7 +43,11 @@ pub fn register_builtin_library(entry: BuiltinLibraryEntry) {
 
 pub fn library_present(filename: &str) -> bool {
     match simple_library_name(filename) {
-        Some(key) => BUILTIN_LIBRARIES.lock().unwrap().iter().any(|e| e.name == key),
+        Some(key) => BUILTIN_LIBRARIES
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|e| e.name == key),
         None => false,
     }
 }
@@ -60,7 +64,9 @@ thread_local! {
 pub fn load_file(filename: &str) -> PgResult<()> {
     let entry = simple_library_name(filename).and_then(|key| {
         let libs = BUILTIN_LIBRARIES.lock().unwrap();
-        libs.iter().find(|e| e.name == key).map(|e| (e.name, e.pg_init))
+        libs.iter()
+            .find(|e| e.name == key)
+            .map(|e| (e.name, e.pg_init))
     });
     let Some((name, pg_init)) = entry else {
         return Err(Box::new(
@@ -136,18 +142,26 @@ mod tests {
     #[test]
     fn unknown_library_is_file_error() {
         let err = load_external_function("nosuchfile", "f", true).unwrap_err();
-        assert!(err.message().contains("could not access file \"nosuchfile\""));
+        assert!(err
+            .message()
+            .contains("could not access file \"nosuchfile\""));
     }
 
     #[test]
     fn missing_symbol() {
-        register_builtin_library(BuiltinLibraryEntry { name: "tlib", lookup: |_| None, pg_init: None });
+        register_builtin_library(BuiltinLibraryEntry {
+            name: "tlib",
+            lookup: |_| None,
+            pg_init: None,
+        });
         let err = load_external_function("$libdir/tlib", "nosuchsymbol", true).unwrap_err();
         assert!(err
             .message()
             .contains("could not find function \"nosuchsymbol\" in file \"$libdir/tlib\""));
-        assert!(load_external_function("$libdir/tlib", "nosuchsymbol", false)
-            .unwrap()
-            .is_none());
+        assert!(
+            load_external_function("$libdir/tlib", "nosuchsymbol", false)
+                .unwrap()
+                .is_none()
+        );
     }
 }

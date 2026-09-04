@@ -89,8 +89,12 @@ fn select_from_enr_scans_registered_tuplestore() {
     let desc = int4_tupdesc(mcx, &["a", "b"]);
     let mut ts = tuplestore::Tuplestore::begin_heap(true, false, 1024);
     for (a, b) in [(1, 10), (7, 70), (4, 40)] {
-        ts.putvalues(&desc, &[Datum::from_i32(a), Datum::from_i32(b)], &[false, false])
-            .unwrap();
+        ts.putvalues(
+            &desc,
+            &[Datum::from_i32(a), Datum::from_i32(b)],
+            &[false, false],
+        )
+        .unwrap();
     }
     let reldata = tuplestore::hold::register(ts);
 
@@ -120,7 +124,14 @@ fn select_from_enr_scans_registered_tuplestore() {
     let mut rewritten = rewrite_handler::QueryRewrite(mcx, query).unwrap();
     assert_eq!(rewritten.len(), 1);
     let query = rewritten.pop().unwrap();
-    let pstmt = planner::planner(mcx, mcx::leak_in(mcx::alloc_in(mcx, query).unwrap()), sql, 0, ParamListHandle::NULL).unwrap();
+    let pstmt = planner::planner(
+        mcx,
+        mcx::leak_in(mcx::alloc_in(mcx, query).unwrap()),
+        sql,
+        0,
+        ParamListHandle::NULL,
+    )
+    .unwrap();
     let pstmt: &'static PlannedStmt<'static> = mcx::leak_in(mcx::alloc_in(mcx, pstmt).unwrap());
 
     let scan = pstmt.planTree.expect("planned SELECT has a plan tree");
@@ -171,14 +182,12 @@ fn select_from_enr_scans_registered_tuplestore() {
     execmain_seams::executor_end::call(qd).unwrap();
     execmain_seams::free_query_desc::call(qd);
 
-    let mut slot =
-        exectuples::make_tuple_table_slot(mcx, TupleSlotKind::MinimalTuple, Some(desc));
+    let mut slot = exectuples::make_tuple_table_slot(mcx, TupleSlotKind::MinimalTuple, Some(desc));
     let mut rows = Vec::new();
     loop {
-        let got = tuplestore::hold::with_store(out, |s| {
-            s.gettupleslot(true, false, &mut slot, mcx)
-        })
-        .unwrap();
+        let got =
+            tuplestore::hold::with_store(out, |s| s.gettupleslot(true, false, &mut slot, mcx))
+                .unwrap();
         if !got {
             break;
         }

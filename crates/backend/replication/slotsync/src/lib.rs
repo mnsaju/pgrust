@@ -14,12 +14,12 @@ use pgsync::Mutex;
 
 use elog::{elog, ereport};
 use types_core::{Oid, TransactionId, XLogRecPtr};
-use types_tuple::NameData;
 use types_error::{
     ErrorLocation, PgResult, DEBUG1, ERRCODE_CONNECTION_FAILURE, ERRCODE_FEATURE_NOT_SUPPORTED,
     ERRCODE_INVALID_PARAMETER_VALUE, ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE, ERROR, LOG,
 };
 use types_storage::waiteventset::{WL_EXIT_ON_PM_DEATH, WL_LATCH_SET, WL_TIMEOUT};
+use types_tuple::NameData;
 
 use slot::{
     GetSlotInvalidationCause, MyReplicationSlot, ReplicationSlot, ReplicationSlotAcquire,
@@ -398,9 +398,10 @@ fn reserve_wal_for_local_slot(restart_lsn: XLogRecPtr) -> PgResult<()> {
     slot::with_allocation_lock_exclusive(|| -> PgResult<()> {
         let mut min_safe_lsn = transam_xlog::GetRedoRecPtr();
         let ctl = transam_xlog::ctl::XLogCtl();
-        let slot_min_lsn = ctl
-            .info_lck
-            .with(|| ctl.replicationSlotMinLSN.load(std::sync::atomic::Ordering::Relaxed));
+        let slot_min_lsn = ctl.info_lck.with(|| {
+            ctl.replicationSlotMinLSN
+                .load(std::sync::atomic::Ordering::Relaxed)
+        });
 
         if slot_min_lsn != InvalidXLogRecPtr && min_safe_lsn > slot_min_lsn {
             min_safe_lsn = slot_min_lsn;
@@ -415,9 +416,10 @@ fn reserve_wal_for_local_slot(restart_lsn: XLogRecPtr) -> PgResult<()> {
         ReplicationSlotsComputeRequiredLSN()?;
 
         let segno = slot.data.get().restart_lsn / transam_xlog::wal_segment_size() as u64;
-        let last_removed = ctl
-            .info_lck
-            .with(|| ctl.lastRemovedSegNo.load(std::sync::atomic::Ordering::Relaxed));
+        let last_removed = ctl.info_lck.with(|| {
+            ctl.lastRemovedSegNo
+                .load(std::sync::atomic::Ordering::Relaxed)
+        });
         if last_removed >= segno {
             elog(
                 ERROR,
@@ -860,8 +862,7 @@ pub fn ValidateSlotSyncParams(elevel_error: bool) -> PgResult<bool> {
     let primary_slot_name = guc_tables::vars::PrimarySlotName.read().unwrap_or_default();
     if primary_slot_name.is_empty() {
         return fail(
-            "replication slot synchronization requires \"primary_slot_name\" to be set"
-                .to_string(),
+            "replication slot synchronization requires \"primary_slot_name\" to be set".to_string(),
         );
     }
 
@@ -1128,7 +1129,15 @@ fn repl_slot_sync_worker_inner() -> PgResult<()> {
 
     // Database connection: walrcv_exec-equivalent queries need syscache.
     let top = mcx::MemoryContext::new("SlotSyncWorkerInit");
-    postinit::InitPostgres(top.mcx(), Some(&dbname), InvalidOid, None, InvalidOid, 0, None)?;
+    postinit::InitPostgres(
+        top.mcx(),
+        Some(&dbname),
+        InvalidOid,
+        None,
+        InvalidOid,
+        0,
+        None,
+    )?;
     miscinit::SetProcessingMode(types_core::ProcessingMode::NormalProcessing);
 
     let cluster_name = guc_tables::vars::cluster_name.read().unwrap_or_default();

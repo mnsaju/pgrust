@@ -73,7 +73,10 @@ pub fn dsynonym_init(init: &DictInitData<'static>) -> PgResult<DictSyn> {
         .into());
     };
     let syn = load_synonyms(mcx, &lines, case_sensitive)?;
-    Ok(DictSyn { syn, case_sensitive })
+    Ok(DictSyn {
+        syn,
+        case_sensitive,
+    })
 }
 
 pub(crate) fn load_synonyms(
@@ -103,7 +106,11 @@ pub(crate) fn load_synonyms(
         } else {
             (lowerstr(mcx, &line[bi..ei])?, lowerstr(mcx, &line[bo..eo])?)
         };
-        syn.push(Syn { input, output, flags });
+        syn.push(Syn {
+            input,
+            output,
+            flags,
+        });
     }
     syn.sort_unstable_by(|a, b| a.input.as_slice().cmp(b.input.as_slice()));
     Ok(syn)
@@ -131,6 +138,10 @@ pub fn dsynonym_lexize<'mcx>(
     let mut lexeme = vec_with_capacity_in(mcx, found.output.len())?;
     lexeme.extend_from_slice(&found.output);
     let mut out = PgVec::new_in(mcx);
-    out.push(TsLexeme { nvariant: 0, flags: found.flags, lexeme });
+    out.push(TsLexeme {
+        nvariant: 0,
+        flags: found.flags,
+        lexeme,
+    });
     Ok(Some(LexizeResult(out)))
 }

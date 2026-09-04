@@ -12,7 +12,9 @@ use std::cell::Cell;
 use elog::ereport;
 use mcx::Mcx;
 use types_core::{InvalidOid, InvalidRepOriginId, InvalidXLogRecPtr, Oid, XLogRecPtr};
-use types_error::{PgResult, ERRCODE_CONNECTION_FAILURE, ERRCODE_FEATURE_NOT_SUPPORTED, ERROR, LOG};
+use types_error::{
+    PgResult, ERRCODE_CONNECTION_FAILURE, ERRCODE_FEATURE_NOT_SUPPORTED, ERROR, LOG,
+};
 use types_storage::waiteventset::{WL_EXIT_ON_PM_DEATH, WL_LATCH_SET, WL_TIMEOUT};
 
 use launcher::{SUBREL_STATE_CATCHUP, SUBREL_STATE_SYNCWAIT};
@@ -38,7 +40,12 @@ pub(crate) fn invalidate_table_states_cb(_arg: datum::Datum, _cacheid: i32, _has
 
 // ReplicationSlotNameForTablesync (tablesync.c:1302).
 pub fn ReplicationSlotNameForTablesync(suboid: Oid, relid: Oid) -> String {
-    format!("pg_{}_sync_{}_{}", suboid, relid, transam_xlog::control_file::GetSystemIdentifier())
+    format!(
+        "pg_{}_sync_{}_{}",
+        suboid,
+        relid,
+        transam_xlog::control_file::GetSystemIdentifier()
+    )
 }
 
 fn wait_latch_10ms() -> PgResult<()> {
@@ -160,7 +167,10 @@ fn process_syncing_tables_for_sync(
 
     // Drop the tablesync slot on the publisher.
     let slotname = ReplicationSlotNameForTablesync(subid, relid);
-    let res = conn.exec(&format!("DROP_REPLICATION_SLOT \"{}\" WAIT", slotname.replace('"', "\"\"")))?;
+    let res = conn.exec(&format!(
+        "DROP_REPLICATION_SLOT \"{}\" WAIT",
+        slotname.replace('"', "\"\"")
+    ))?;
     if res.status == ExecStatus::Error {
         ereport(ERROR)
             .errcode(ERRCODE_CONNECTION_FAILURE)
@@ -324,7 +334,10 @@ fn fetch_remote_table_info(
     relname: &str,
 ) -> PgResult<logicalproto::LogicalRepRelation> {
     fn text(r: &[Option<Vec<u8>>], i: usize) -> String {
-        r.get(i).and_then(|c| c.as_ref()).map(|b| String::from_utf8_lossy(b).into_owned()).unwrap_or_default()
+        r.get(i)
+            .and_then(|c| c.as_ref())
+            .map(|b| String::from_utf8_lossy(b).into_owned())
+            .unwrap_or_default()
     }
     let lit = |s: &str| format!("'{}'", s.replace('\'', "''"));
 
@@ -353,14 +366,21 @@ fn fetch_remote_table_info(
     // Row filters: any non-null qual for this relation in the subscribed
     // publications is out of the ported subset.
     let pubnames = my_sub(|s| s.publications.clone());
-    let publist = pubnames.iter().map(|p| lit(p)).collect::<Vec<_>>().join(", ");
+    let publist = pubnames
+        .iter()
+        .map(|p| lit(p))
+        .collect::<Vec<_>>()
+        .join(", ");
     let cmd = format!(
         "SELECT DISTINCT pg_get_expr(gpt.qual, gpt.relid) FROM pg_publication p, LATERAL \
          pg_get_publication_tables(p.pubname) gpt WHERE gpt.relid = {remoteid} AND p.pubname IN ({publist})"
     );
     let res = conn.exec(&cmd)?;
     if res.status == ExecStatus::TuplesOk
-        && res.rows.iter().any(|r| r.first().map(|c| c.is_some()).unwrap_or(false))
+        && res
+            .rows
+            .iter()
+            .any(|r| r.first().map(|c| c.is_some()).unwrap_or(false))
     {
         panic!("unported: row-filter publication in tablesync (round-5 subset)");
     }
@@ -412,7 +432,10 @@ fn copy_table(mcx: Mcx<'static>, conn: &mut PgConn, nspname: &str, relname: &str
 
     if lrel.relkind != b'r' {
         // Sequences/views/partitioned publisher rels: COPY (SELECT ...) arm.
-        panic!("unported: tablesync of non-plain publisher relation (relkind '{}')", lrel.relkind as char);
+        panic!(
+            "unported: tablesync of non-plain publisher relation (relkind '{}')",
+            lrel.relkind as char
+        );
     }
 
     logicalrelation::logicalrep_relmap_update(&lrel);
@@ -425,7 +448,14 @@ fn copy_table(mcx: Mcx<'static>, conn: &mut PgConn, nspname: &str, relname: &str
     let mut cmd = format!("COPY {}.{}", quote_ident(nspname), quote_ident(relname));
     if lrel.natts > 0 {
         cmd.push_str(" (");
-        cmd.push_str(&lrel.attnames.iter().map(|a| quote_ident(a)).collect::<Vec<_>>().join(", "));
+        cmd.push_str(
+            &lrel
+                .attnames
+                .iter()
+                .map(|a| quote_ident(a))
+                .collect::<Vec<_>>()
+                .join(", "),
+        );
         cmd.push(')');
     }
     cmd.push_str(" TO STDOUT");
@@ -434,7 +464,10 @@ fn copy_table(mcx: Mcx<'static>, conn: &mut PgConn, nspname: &str, relname: &str
     if res.status != ExecStatus::CopyOut {
         ereport(ERROR)
             .errcode(ERRCODE_CONNECTION_FAILURE)
-            .errmsg(format!("could not start initial contents copy for table \"{nspname}.{relname}\": {}", res.err))
+            .errmsg(format!(
+                "could not start initial contents copy for table \"{nspname}.{relname}\": {}",
+                res.err
+            ))
             .finish(loc("copy_table"))?;
     }
 
@@ -446,38 +479,38 @@ fn copy_table(mcx: Mcx<'static>, conn: &mut PgConn, nspname: &str, relname: &str
     let pending: std::cell::RefCell<Vec<u8>> = std::cell::RefCell::new(Vec::new());
     let cb: Box<dyn FnMut(&mut [u8], usize) -> PgResult<usize> + '_> =
         Box::new(|buf: &mut [u8], _minread: usize| -> PgResult<usize> {
-        let mut pending = pending.borrow_mut();
-        loop {
-            if !pending.is_empty() {
-                let n = pending.len().min(buf.len());
-                buf[..n].copy_from_slice(&pending[..n]);
-                pending.drain(..n);
-                return Ok(n);
-            }
-            let mut conn = conn_cell.borrow_mut();
-            match conn.get_copy_data() {
-                Ok(CopyData::Msg(m)) => {
-                    *pending = m;
+            let mut pending = pending.borrow_mut();
+            loop {
+                if !pending.is_empty() {
+                    let n = pending.len().min(buf.len());
+                    buf[..n].copy_from_slice(&pending[..n]);
+                    pending.drain(..n);
+                    return Ok(n);
                 }
-                Ok(CopyData::End) => return Ok(0),
-                Ok(CopyData::Block) => {
-                    postgres_seams::check_for_interrupts::call()?;
-                    conn.wait_readable()?;
-                    if !conn.consume_input() {
-                        elog::elog(
-                            ERROR,
-                            format!("could not read COPY data: {}", conn.error_message()),
-                        )?;
+                let mut conn = conn_cell.borrow_mut();
+                match conn.get_copy_data() {
+                    Ok(CopyData::Msg(m)) => {
+                        *pending = m;
+                    }
+                    Ok(CopyData::End) => return Ok(0),
+                    Ok(CopyData::Block) => {
+                        postgres_seams::check_for_interrupts::call()?;
+                        conn.wait_readable()?;
+                        if !conn.consume_input() {
+                            elog::elog(
+                                ERROR,
+                                format!("could not read COPY data: {}", conn.error_message()),
+                            )?;
+                            unreachable!();
+                        }
+                    }
+                    Err(e) => {
+                        elog::elog(ERROR, format!("could not read COPY data: {e}"))?;
                         unreachable!();
                     }
                 }
-                Err(e) => {
-                    elog::elog(ERROR, format!("could not read COPY data: {e}"))?;
-                    unreachable!();
-                }
             }
-        }
-    });
+        });
 
     let mut cstate = copy_cmd::BeginCopyFromCallback(mcx, &rel, &attnamelist, &options, cb)?;
     copy_cmd::CopyFrom(mcx, &mut cstate, &rel)?;
@@ -519,7 +552,10 @@ fn create_slot_use_snapshot(
     if res.status != ExecStatus::TuplesOk || res.rows.is_empty() {
         ereport(ERROR)
             .errcode(ERRCODE_CONNECTION_FAILURE)
-            .errmsg(format!("could not create replication slot \"{slotname}\": {}", res.err))
+            .errmsg(format!(
+                "could not create replication slot \"{slotname}\": {}",
+                res.err
+            ))
             .finish(loc("create_slot_use_snapshot"))?;
     }
     // Row: slot_name, consistent_point, snapshot_name, output_plugin.
@@ -529,8 +565,8 @@ fn create_slot_use_snapshot(
         .map(|b| String::from_utf8_lossy(b).into_owned())
         .unwrap_or_default();
     let (hi, lo) = lsn_text.split_once('/').unwrap_or(("0", "0"));
-    let lsn = (u64::from_str_radix(hi, 16).unwrap_or(0) << 32)
-        | u64::from_str_radix(lo, 16).unwrap_or(0);
+    let lsn =
+        (u64::from_str_radix(hi, 16).unwrap_or(0) << 32) | u64::from_str_radix(lo, 16).unwrap_or(0);
     Ok(lsn)
 }
 
@@ -548,7 +584,10 @@ pub(crate) fn LogicalRepSyncTableStart(
 
     launcher::my_worker_set_relstate(relstate, relstate_lsn);
 
-    if matches!(relstate, SUBREL_STATE_SYNCDONE | SUBREL_STATE_READY | SUBREL_STATE_UNKNOWN) {
+    if matches!(
+        relstate,
+        SUBREL_STATE_SYNCDONE | SUBREL_STATE_READY | SUBREL_STATE_UNKNOWN
+    ) {
         finish_sync_worker()?;
         // The caller sees the exit flag and unwinds.
         return Err(Box::new(types_error::PgError::error(
@@ -560,19 +599,24 @@ pub(crate) fn LogicalRepSyncTableStart(
     let must_use_password = my_sub(|s| s.passwordrequired && !s.ownersuperuser);
     let (conninfo, name) = my_sub(|s| (s.conninfo.clone(), s.name.clone()));
 
-    let mut conn =
-        match walreceiver::client::connect_extended(&conninfo, true, true, must_use_password, &slotname)? {
-            Ok(c) => c,
-            Err(e) => {
-                ereport(ERROR)
+    let mut conn = match walreceiver::client::connect_extended(
+        &conninfo,
+        true,
+        true,
+        must_use_password,
+        &slotname,
+    )? {
+        Ok(c) => c,
+        Err(e) => {
+            ereport(ERROR)
                     .errcode(ERRCODE_CONNECTION_FAILURE)
                     .errmsg(format!(
                         "table synchronization worker for subscription \"{name}\" could not connect to the publisher: {e}"
                     ))
                     .finish(loc("LogicalRepSyncTableStart"))?;
-                unreachable!();
-            }
-        };
+            unreachable!();
+        }
+    };
 
     debug_assert!(matches!(
         relstate,
@@ -597,15 +641,24 @@ pub(crate) fn LogicalRepSyncTableStart(
 
     if relstate == SUBREL_STATE_DATASYNC {
         // Previous attempt crashed mid-copy: drop its slot, missing_ok.
-        let res = conn
-            .exec(&format!("DROP_REPLICATION_SLOT \"{}\" WAIT", slotname.replace('"', "\"\"")))?;
+        let res = conn.exec(&format!(
+            "DROP_REPLICATION_SLOT \"{}\" WAIT",
+            slotname.replace('"', "\"\"")
+        ))?;
         let _ = res; // missing slot is fine
     }
 
     launcher::my_worker_set_relstate(SUBREL_STATE_DATASYNC, InvalidXLogRecPtr);
 
     xact::StartTransactionCommand()?;
-    UpdateSubscriptionRelState(mcx, subid, relid, SUBREL_STATE_DATASYNC, InvalidXLogRecPtr, false)?;
+    UpdateSubscriptionRelState(
+        mcx,
+        subid,
+        relid,
+        SUBREL_STATE_DATASYNC,
+        InvalidXLogRecPtr,
+        false,
+    )?;
     let mut originid = origin::replorigin_by_name(&originname, true)?;
     if originid == InvalidRepOriginId {
         originid = origin::replorigin_create(mcx, &originname)?;
@@ -628,7 +681,10 @@ pub(crate) fn LogicalRepSyncTableStart(
     if res.status == ExecStatus::Error {
         ereport(ERROR)
             .errcode(ERRCODE_CONNECTION_FAILURE)
-            .errmsg(format!("table copy could not start transaction on publisher: {}", res.err))
+            .errmsg(format!(
+                "table copy could not start transaction on publisher: {}",
+                res.err
+            ))
             .finish(loc("LogicalRepSyncTableStart"))?;
     }
 
@@ -658,7 +714,10 @@ pub(crate) fn LogicalRepSyncTableStart(
     if res.status == ExecStatus::Error {
         ereport(ERROR)
             .errcode(ERRCODE_CONNECTION_FAILURE)
-            .errmsg(format!("table copy could not finish transaction on publisher: {}", res.err))
+            .errmsg(format!(
+                "table copy could not finish transaction on publisher: {}",
+                res.err
+            ))
             .finish(loc("LogicalRepSyncTableStart"))?;
     }
 
@@ -708,7 +767,10 @@ mod tests {
     // C format "pg_%u_sync_%u_" UINT64 (tablesync.c:1302) structurally.
     #[test]
     fn tablesync_slot_name_format() {
-        let name = format!("pg_{}_sync_{}_{}", 16385u32, 16401u32, 7234567890123456789u64);
+        let name = format!(
+            "pg_{}_sync_{}_{}",
+            16385u32, 16401u32, 7234567890123456789u64
+        );
         assert!(name.starts_with("pg_16385_sync_16401_"));
         let parts: Vec<&str> = name.split('_').collect();
         assert_eq!(parts.len(), 5);

@@ -37,10 +37,9 @@ use types_core::xact::{
 };
 use types_core::Oid;
 use types_error::{
-    make_sqlstate, PgError, PgResult, WARNING, ERRCODE_CONNECTION_EXCEPTION,
-    ERRCODE_CONNECTION_FAILURE, ERRCODE_FEATURE_NOT_SUPPORTED,
-    ERRCODE_SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION,
-    ERRCODE_S_R_E_PROHIBITED_SQL_STATEMENT_ATTEMPTED,
+    make_sqlstate, PgError, PgResult, ERRCODE_CONNECTION_EXCEPTION, ERRCODE_CONNECTION_FAILURE,
+    ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION,
+    ERRCODE_S_R_E_PROHIBITED_SQL_STATEMENT_ATTEMPTED, WARNING,
 };
 
 use foreigncmds::foreign::{ForeignServer, UserMapping};
@@ -168,7 +167,9 @@ pub(crate) fn remote_error(res: &QueryResult, sql: Option<&str>) -> Box<PgError>
 // pgfdw_report_error(WARNING, ...): emit and continue (cleanup paths).
 fn remote_warning(res: &QueryResult, sql: Option<&str>) {
     let e = remote_error(res, sql);
-    let mut b = ereport(WARNING).errcode(e.sqlstate).errmsg_internal(e.message.clone());
+    let mut b = ereport(WARNING)
+        .errcode(e.sqlstate)
+        .errmsg_internal(e.message.clone());
     if let Some(d) = &e.detail {
         b = b.errdetail_internal(d.clone());
     }
@@ -188,7 +189,9 @@ fn pchomp(s: &str) -> String {
 // ---------- entry access ----------
 
 fn take_entry(key: Oid) -> ConnCacheEntry {
-    CONNECTIONS.with(|c| c.borrow_mut().remove(&key)).unwrap_or_else(ConnCacheEntry::new)
+    CONNECTIONS
+        .with(|c| c.borrow_mut().remove(&key))
+        .unwrap_or_else(ConnCacheEntry::new)
 }
 
 fn put_entry(key: Oid, entry: ConnCacheEntry) {
@@ -199,10 +202,7 @@ fn put_entry(key: Oid, entry: ConnCacheEntry) {
 
 // Remote-I/O access to a cached connection. The closure MUST NOT touch
 // catalogs (see the RefCell discipline note at the top).
-pub(crate) fn with_entry<R>(
-    key: Oid,
-    f: impl FnOnce(&mut ConnCacheEntry) -> R,
-) -> PgResult<R> {
+pub(crate) fn with_entry<R>(key: Oid, f: impl FnOnce(&mut ConnCacheEntry) -> R) -> PgResult<R> {
     CONNECTIONS.with(|c| {
         let mut map = c.borrow_mut();
         let Some(entry) = map.get_mut(&key) else {
@@ -237,7 +237,9 @@ pub(crate) fn exec_query_params(
 
 #[allow(dead_code)] // phase 3: MOVE BACKWARD gate for pre-15 remotes
 pub(crate) fn server_version(key: Oid) -> PgResult<i32> {
-    with_entry(key, |e| e.conn.as_ref().expect("live connection").server_version())
+    with_entry(key, |e| {
+        e.conn.as_ref().expect("live connection").server_version()
+    })
 }
 
 // ---------- GetConnection ----------
@@ -286,8 +288,11 @@ pub(crate) fn get_connection<'mcx>(
         put_entry(key, entry);
         let server = foreigncmds::foreign::GetForeignServer(mcx, serverid)?;
         return Err(Box::new(
-            PgError::error(format!("connection to server \"{}\" was lost", server.servername))
-                .with_sqlstate(ERRCODE_CONNECTION_EXCEPTION),
+            PgError::error(format!(
+                "connection to server \"{}\" was lost",
+                server.servername
+            ))
+            .with_sqlstate(ERRCODE_CONNECTION_EXCEPTION),
         ));
     }
 
@@ -408,7 +413,10 @@ fn def_get_boolean(value: Option<&str>) -> bool {
     // C defGetBoolean: a DefElem with a NULL arg means true.
     match value {
         None => true,
-        Some(v) => matches!(v.to_ascii_lowercase().as_str(), "true" | "t" | "on" | "1" | "yes" | "y"),
+        Some(v) => matches!(
+            v.to_ascii_lowercase().as_str(),
+            "true" | "t" | "on" | "1" | "yes" | "y"
+        ),
     }
 }
 
@@ -454,7 +462,10 @@ fn connect_pg_server<'mcx>(
     }
     // fallback_application_name "postgres_fdw" (libpq applies the fallback
     // only when no application_name won; emulated here).
-    if !opts.iter().any(|(k, v)| k == "application_name" && !v.is_empty()) {
+    if !opts
+        .iter()
+        .any(|(k, v)| k == "application_name" && !v.is_empty())
+    {
         opts.push(("application_name".to_string(), "postgres_fdw".to_string()));
     }
 
@@ -723,7 +734,10 @@ fn pgfdw_subxact_callback(
     _parent_subid: types_core::xact::SubTransactionId,
     _arg: Datum,
 ) -> PgResult<()> {
-    if !matches!(event, SUBXACT_EVENT_PRE_COMMIT_SUB | SUBXACT_EVENT_ABORT_SUB) {
+    if !matches!(
+        event,
+        SUBXACT_EVENT_PRE_COMMIT_SUB | SUBXACT_EVENT_ABORT_SUB
+    ) {
         return Ok(());
     }
     if !XACT_GOT_CONNECTION.with(Cell::get) {
@@ -798,8 +812,7 @@ fn pgfdw_reset_xact_state(entry: &mut ConnCacheEntry, toplevel: bool) {
         let unhealthy = match entry.conn.as_ref() {
             None => false,
             Some(conn) => {
-                conn.connection_bad()
-                    || conn.transaction_status() != TransactionStatus::Idle
+                conn.connection_bad() || conn.transaction_status() != TransactionStatus::Idle
             }
         };
         if entry.conn.is_some()
@@ -867,8 +880,7 @@ fn pgfdw_abort_cleanup(entry: &mut ConnCacheEntry, toplevel: bool) -> PgResult<(
 // its result within the cleanup deadline.
 fn pgfdw_cancel_query(conn: &mut PgConn) -> PgResult<bool> {
     let endtime = Instant::now() + Duration::from_millis(CONNECTION_CLEANUP_TIMEOUT_MS as u64);
-    let retrycanceltime =
-        Instant::now() + Duration::from_millis(RETRY_CANCEL_TIMEOUT_MS as u64);
+    let retrycanceltime = Instant::now() + Duration::from_millis(RETRY_CANCEL_TIMEOUT_MS as u64);
     // pgfdw_cancel_query_begin: send the cancel request.
     if let Some(msg) = conn.cancel(CONNECTION_CLEANUP_TIMEOUT_MS)? {
         let _ = ereport(WARNING)
@@ -901,11 +913,7 @@ fn pgfdw_cancel_query(conn: &mut PgConn) -> PgResult<bool> {
 
 // pgfdw_exec_cleanup_query: run a cleanup command with the 30s deadline.
 // false = the connection is unsalvageable (warnings already emitted).
-fn pgfdw_exec_cleanup_query(
-    conn: &mut PgConn,
-    query: &str,
-    ignore_errors: bool,
-) -> PgResult<bool> {
+fn pgfdw_exec_cleanup_query(conn: &mut PgConn, query: &str, ignore_errors: bool) -> PgResult<bool> {
     let endtime = Instant::now() + Duration::from_millis(CONNECTION_CLEANUP_TIMEOUT_MS as u64);
     if !conn.send_query(query) {
         remote_warning(&QueryResult::conn_error(conn.error_message()), Some(query));
@@ -924,7 +932,10 @@ fn pgfdw_exec_cleanup_query(
             Ok(false)
         }
         CleanupResult::Done(res) => {
-            if res.as_ref().is_some_and(|r| r.status == pgclient::ExecStatus::CommandOk) {
+            if res
+                .as_ref()
+                .is_some_and(|r| r.status == pgclient::ExecStatus::CommandOk)
+            {
                 Ok(true)
             } else {
                 if let Some(r) = res {
@@ -1008,7 +1019,9 @@ fn get_connections_internal(
     let mut srf = funcapi::InitMaterializedSRF(mcx, flinfo, fcinfo, 0)?;
     let expected = if v1_2 { 6 } else { 2 };
     if srf.tupdesc.natts != expected {
-        return Err(Box::new(PgError::error("incorrect number of output arguments")));
+        return Err(Box::new(PgError::error(
+            "incorrect number of output arguments",
+        )));
     }
     let rows: Vec<ConnRow> = CONNECTIONS.with(|c| {
         c.borrow()
@@ -1125,7 +1138,9 @@ pub(crate) fn fc_postgres_fdw_disconnect(
         String::from_utf8_lossy(v.data()).into_owned()
     };
     let serverid = foreigncmds::foreign::get_foreign_server_oid(&name, false)?;
-    Ok(Datum::from_bool(disconnect_cached_connections(Some(serverid))?))
+    Ok(Datum::from_bool(disconnect_cached_connections(Some(
+        serverid,
+    ))?))
 }
 
 pub(crate) fn fc_postgres_fdw_disconnect_all(

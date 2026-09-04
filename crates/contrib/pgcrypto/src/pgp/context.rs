@@ -1,4 +1,3 @@
-
 use super::consts::*;
 
 #[derive(Clone)]
@@ -75,13 +74,7 @@ impl PgpContext {
     pub fn parse_args(&mut self, args: &[u8]) -> Result<(), String> {
         let lower: Vec<u8> = args
             .iter()
-            .map(|&c| {
-                if c.is_ascii_uppercase() {
-                    c + 32
-                } else {
-                    c
-                }
-            })
+            .map(|&c| if c.is_ascii_uppercase() { c + 32 } else { c })
             .collect();
         let s = String::from_utf8_lossy(&lower);
         for pair in s.split(',') {

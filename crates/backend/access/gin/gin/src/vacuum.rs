@@ -9,29 +9,29 @@ use ::mcx::{Mcx, MemoryContext, PgVec};
 use ::nbtree::itup;
 use ::types_core::{BlockNumber, Buffer, ForkNumber, InvalidBlockNumber, InvalidBuffer, BLCKSZ};
 
+use ::types_core::OffsetNumber;
 use ::types_error::PgResult;
 use ::types_nbtree::IndexBulkDeleteResult;
 use ::types_rel::Relation;
 use ::types_storage::bufpage::{PageMut, PageRef, PageTemp};
-use ::types_core::OffsetNumber;
 use ::types_tuple::itemptr::{
     FirstOffsetNumber, InvalidOffsetNumber, ItemPointerCompare, ItemPointerData,
 };
 use ::xloginsert_seams::{XLogRegBuf, REGBUF_FORCE_IMAGE, REGBUF_STANDARD};
 
 use crate::datapage::{
-    gin_data_leaf_page_is_empty, gin_page_delete_posting_item, ginVacuumPostingTreeLeaf,
+    ginVacuumPostingTreeLeaf, gin_data_leaf_page_is_empty, gin_page_delete_posting_item,
     posting_item_at,
 };
 use crate::entrypage::{
-    gin_get_downlink, gin_get_nposting, gin_is_posting_tree, gintuple_get_attrnum,
-    gintuple_get_key, ginReadTuple, GinFormTuple, ITup,
+    ginReadTuple, gin_get_downlink, gin_get_nposting, gin_is_posting_tree, gintuple_get_attrnum,
+    gintuple_get_key, GinFormTuple, ITup,
 };
 use crate::fast::ginInsertCleanup;
-use crate::util::{gin_page_is_recyclable, initGinState, ginUpdateStats};
+use crate::util::{ginUpdateStats, gin_page_is_recyclable, initGinState};
 use crate::{
-    page_bytes, page_mut, page_opaque, page_ref, relation_needs_wal, GinPageIsData,
-    GinPageIsLeaf, GinPageIsList, GinPageRightMost, GIN_EXCLUSIVE, GIN_SHARE, GIN_UNLOCK, RM_GIN,
+    page_bytes, page_mut, page_opaque, page_ref, relation_needs_wal, GinPageIsData, GinPageIsLeaf,
+    GinPageIsList, GinPageRightMost, GIN_EXCLUSIVE, GIN_SHARE, GIN_UNLOCK, RM_GIN,
 };
 
 pub use ::nbtree::IndexVacuumInfo;
@@ -155,9 +155,7 @@ fn ginDeletePage(
         let mut ppage = unsafe { page_mut(p_buffer) };
         // SAFETY: borrow confined here.
         let bytes = unsafe { crate::page_bytes_mut(&mut ppage) };
-        debug_assert!(
-            PostingItemGetBlockNumber(&posting_item_at(bytes, myoff)) == delete_blkno
-        );
+        debug_assert!(PostingItemGetBlockNumber(&posting_item_at(bytes, myoff)) == delete_blkno);
         gin_page_delete_posting_item(bytes, myoff);
     }
     let delete_xid = varsup_seams::read_next_transaction_id::call()?;
@@ -183,9 +181,24 @@ fn ginDeletePage(
             0,
             &[&data],
             &[
-                XLogRegBuf { block_id: 0, buffer: d_buffer, flags: 0, bufdata: &[] },
-                XLogRegBuf { block_id: 1, buffer: p_buffer, flags: REGBUF_STANDARD, bufdata: &[] },
-                XLogRegBuf { block_id: 2, buffer: l_buffer, flags: 0, bufdata: &[] },
+                XLogRegBuf {
+                    block_id: 0,
+                    buffer: d_buffer,
+                    flags: 0,
+                    bufdata: &[],
+                },
+                XLogRegBuf {
+                    block_id: 1,
+                    buffer: p_buffer,
+                    flags: REGBUF_STANDARD,
+                    bufdata: &[],
+                },
+                XLogRegBuf {
+                    block_id: 2,
+                    buffer: l_buffer,
+                    flags: 0,
+                    bufdata: &[],
+                },
             ],
         )?;
         // SAFETY: pins + exclusive locks held.
@@ -261,8 +274,7 @@ fn ginScanToDelete(
         }
         // SAFETY: as above.
         let rightmost = { GinPageRightMost(&page_opaque(&unsafe { page_ref(buffer) })) };
-        if rightmost && levels.len() > depth + 1 && levels[depth + 1].left_buffer != InvalidBuffer
-        {
+        if rightmost && levels.len() > depth + 1 && levels[depth + 1].left_buffer != InvalidBuffer {
             let lb = levels[depth + 1].left_buffer;
             bm::lock_buffer::call(lb, GIN_UNLOCK)?;
             bm::release_buffer::call(lb)?;
@@ -444,8 +456,7 @@ fn ginVacuumEntryPage<'s>(
                 let mut items: PgVec<'_, ItemPointerData> = mcx::vec_new_in(scratch);
                 ginReadTuple(scratch, itup, &mut items)?;
 
-                let Some(cleaned) = ginVacuumItemPointers(scratch, gvs, items.as_slice())?
-                else {
+                let Some(cleaned) = ginVacuumItemPointers(scratch, gvs, items.as_slice())? else {
                     i += 1;
                     continue;
                 };
@@ -467,12 +478,11 @@ fn ginVacuumEntryPage<'s>(
 
                 let (plist, nitems) = if !cleaned.is_empty() {
                     let n = cleaned.len();
-                    let (packed, npacked) =
-                        crate::postinglist::ginCompressPostingList(
-                            scratch,
-                            cleaned.as_slice(),
-                            GinMaxItemSize,
-                        )?;
+                    let (packed, npacked) = crate::postinglist::ginCompressPostingList(
+                        scratch,
+                        cleaned.as_slice(),
+                        GinMaxItemSize,
+                    )?;
                     debug_assert!(npacked == n);
                     (packed, n)
                 } else {
@@ -503,8 +513,10 @@ fn ginVacuumEntryPage<'s>(
                     core::ptr::NonNull::new(t.as_mut_bytes().as_mut_ptr()).unwrap(),
                 );
                 pm.index_tuple_delete(i);
-                let bytes =
-                    core::slice::from_raw_parts(newtup.as_ptr(), itup::index_tuple_size(newtup.as_ptr()));
+                let bytes = core::slice::from_raw_parts(
+                    newtup.as_ptr(),
+                    itup::index_tuple_size(newtup.as_ptr()),
+                );
                 if pm.add_item(bytes, i, 0) != Some(i) {
                     panic!("failed to add item to index page in \"{}\"", rel.name());
                 }
@@ -593,8 +605,7 @@ fn ginbulkdelete_guts<'mcx>(
             bm::lock_buffer::call(buffer, GIN_EXCLUSIVE)?;
             if blkno == GIN_ROOT_BLKNO {
                 // SAFETY: pin + exclusive lock held.
-                let still_leaf =
-                    { GinPageIsLeaf(&page_opaque(&unsafe { page_ref(buffer) })) };
+                let still_leaf = { GinPageIsLeaf(&page_opaque(&unsafe { page_ref(buffer) })) };
                 if !still_leaf {
                     bm::lock_buffer::call(buffer, GIN_UNLOCK)?;
                     continue;

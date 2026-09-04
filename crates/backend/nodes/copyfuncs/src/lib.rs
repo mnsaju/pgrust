@@ -22,7 +22,10 @@ pub fn copy_object<'d>(mcx: Mcx<'d>, node: Node<'_>) -> PgResult<Node<'d>> {
     copy_node(mcx, node)
 }
 
-pub fn copy_query<'d>(mcx: Mcx<'d>, src: &types_nodes::parsenodes::Query<'_>) -> PgResult<types_nodes::parsenodes::Query<'d>> {
+pub fn copy_query<'d>(
+    mcx: Mcx<'d>,
+    src: &types_nodes::parsenodes::Query<'_>,
+) -> PgResult<types_nodes::parsenodes::Query<'d>> {
     generated::copy_Query(mcx, src)
 }
 
@@ -38,7 +41,12 @@ pub(crate) fn copy_node<'d>(mcx: Mcx<'d>, node: Node<'_>) -> PgResult<Node<'d>> 
     match node.node_tag() {
         NodeTag::T_String => {
             let s = node.as_string().expect("String");
-            Node::mk(mcx, types_nodes::String { sval: str_in(mcx, s.sval)? })
+            Node::mk(
+                mcx,
+                types_nodes::String {
+                    sval: str_in(mcx, s.sval)?,
+                },
+            )
         }
         NodeTag::T_Integer => {
             let i = node.as_integer().expect("Integer");
@@ -46,7 +54,12 @@ pub(crate) fn copy_node<'d>(mcx: Mcx<'d>, node: Node<'_>) -> PgResult<Node<'d>> 
         }
         NodeTag::T_Float => {
             let f = node.as_float().expect("Float");
-            Node::mk(mcx, types_nodes::Float { fval: str_in(mcx, f.fval)? })
+            Node::mk(
+                mcx,
+                types_nodes::Float {
+                    fval: str_in(mcx, f.fval)?,
+                },
+            )
         }
         NodeTag::T_Boolean => {
             let b = node.as_boolean().expect("Boolean");
@@ -54,7 +67,12 @@ pub(crate) fn copy_node<'d>(mcx: Mcx<'d>, node: Node<'_>) -> PgResult<Node<'d>> 
         }
         NodeTag::T_BitString => {
             let b = node.as_bitstring().expect("BitString");
-            Node::mk(mcx, types_nodes::BitString { bsval: str_in(mcx, b.bsval)? })
+            Node::mk(
+                mcx,
+                types_nodes::BitString {
+                    bsval: str_in(mcx, b.bsval)?,
+                },
+            )
         }
         NodeTag::T_List => {
             let l = node.as_list().expect("List");
@@ -67,15 +85,24 @@ pub(crate) fn copy_node<'d>(mcx: Mcx<'d>, node: Node<'_>) -> PgResult<Node<'d>> 
         }
         NodeTag::T_IntList => {
             let l = node.as_int_list().expect("IntList");
-            Node::mk_int_list(mcx, types_nodes::list::IntList::from_slice(mcx, l.as_slice())?)
+            Node::mk_int_list(
+                mcx,
+                types_nodes::list::IntList::from_slice(mcx, l.as_slice())?,
+            )
         }
         NodeTag::T_OidList => {
             let l = node.as_oid_list().expect("OidList");
-            Node::mk_oid_list(mcx, types_nodes::list::OidList::from_slice(mcx, l.as_slice())?)
+            Node::mk_oid_list(
+                mcx,
+                types_nodes::list::OidList::from_slice(mcx, l.as_slice())?,
+            )
         }
         NodeTag::T_XidList => {
             let l = node.as_xid_list().expect("XidList");
-            Node::mk_xid_list(mcx, types_nodes::list::XidList::from_slice(mcx, l.as_slice())?)
+            Node::mk_xid_list(
+                mcx,
+                types_nodes::list::XidList::from_slice(mcx, l.as_slice())?,
+            )
         }
         NodeTag::T_Bitmapset => {
             let b = node.as_bitmapset().expect("Bitmapset");
@@ -96,7 +123,13 @@ pub(crate) fn copy_node<'d>(mcx: Mcx<'d>, node: Node<'_>) -> PgResult<Node<'d>> 
                 Some(v) => Some(copy_val(mcx, v)?),
                 None => None,
             };
-            Node::mk(mcx, A_Const { val, location: c.location })
+            Node::mk(
+                mcx,
+                A_Const {
+                    val,
+                    location: c.location,
+                },
+            )
         }
         _ => match generated::copy_generated(mcx, node)? {
             Some(copy) => Ok(copy),
@@ -129,18 +162,24 @@ fn datum_copy_in<'d>(mcx: Mcx<'d>, d: Datum, typlen: i32) -> PgResult<Datum> {
     };
     // SAFETY: `size` readable bytes at `p` per the invariant above.
     let src = unsafe { core::slice::from_raw_parts(p, size) };
-    Ok(Datum::from_usize(mcx::slice_in(mcx, src)?.leak().as_ptr() as usize))
+    Ok(Datum::from_usize(
+        mcx::slice_in(mcx, src)?.leak().as_ptr() as usize
+    ))
 }
 
 fn copy_val<'d>(mcx: Mcx<'d>, v: &ValUnion<'_>) -> PgResult<ValUnion<'d>> {
     Ok(match v {
         ValUnion::Integer(i) => ValUnion::Integer(types_nodes::Integer { ival: i.ival }),
-        ValUnion::Float(f) => ValUnion::Float(types_nodes::Float { fval: str_in(mcx, f.fval)? }),
+        ValUnion::Float(f) => ValUnion::Float(types_nodes::Float {
+            fval: str_in(mcx, f.fval)?,
+        }),
         ValUnion::Boolean(b) => ValUnion::Boolean(types_nodes::Boolean { boolval: b.boolval }),
-        ValUnion::String(s) => ValUnion::String(types_nodes::String { sval: str_in(mcx, s.sval)? }),
-        ValUnion::BitString(b) => {
-            ValUnion::BitString(types_nodes::BitString { bsval: str_in(mcx, b.bsval)? })
-        }
+        ValUnion::String(s) => ValUnion::String(types_nodes::String {
+            sval: str_in(mcx, s.sval)?,
+        }),
+        ValUnion::BitString(b) => ValUnion::BitString(types_nodes::BitString {
+            bsval: str_in(mcx, b.bsval)?,
+        }),
     })
 }
 

@@ -1,7 +1,5 @@
 use ::mcx::{Mcx, PgVec};
-use ::types_error::{
-    ereturn, PgError, PgResult, SoftErrorContext, ERRCODE_SYNTAX_ERROR,
-};
+use ::types_error::{ereturn, PgError, PgResult, SoftErrorContext, ERRCODE_SYNTAX_ERROR};
 
 use crate::layout::{limitpos, wep_getpos, wep_getweight, wep_setpos, wep_setweight, WordEntryPos};
 
@@ -95,12 +93,17 @@ impl<'s, 'e, 'mcx> TsvParser<'s, 'e, 'mcx> {
 
     fn copy_char(&mut self) {
         let cl = self.mblen().min(self.input.len() - self.off);
-        self.word.extend_from_slice(&self.input[self.off..self.off + cl]);
+        self.word
+            .extend_from_slice(&self.input[self.off..self.off + cl]);
     }
 
     #[cold]
     fn syntax_error(&mut self) -> PgResult<Next> {
-        let kind = if self.is_tsquery { "tsquery" } else { "tsvector" };
+        let kind = if self.is_tsquery {
+            "tsquery"
+        } else {
+            "tsvector"
+        };
         ereturn(
             self.esc.as_deref_mut(),
             Next::Err,
@@ -128,9 +131,7 @@ impl<'s, 'e, 'mcx> TsvParser<'s, 'e, 'mcx> {
                         state = St::WaitEndCmplx;
                     } else if !self.is_web && c == b'\\' {
                         state = St::WaitNextChar(0);
-                    } else if (self.oprisdelim && is_ts_operator(c))
-                        || (self.is_web && c == b'"')
-                    {
+                    } else if (self.oprisdelim && is_ts_operator(c)) || (self.is_web && c == b'"') {
                         return self.syntax_error();
                     } else if !ts_isspace(c) {
                         self.copy_char();
@@ -150,7 +151,11 @@ impl<'s, 'e, 'mcx> TsvParser<'s, 'e, 'mcx> {
                         );
                     }
                     self.copy_char();
-                    state = if oldstate == 1 { St::WaitEndCmplx } else { St::WaitEndWord };
+                    state = if oldstate == 1 {
+                        St::WaitEndCmplx
+                    } else {
+                        St::WaitEndWord
+                    };
                 }
                 St::WaitEndWord => {
                     if !self.is_web && c == b'\\' {
@@ -214,7 +219,9 @@ impl<'s, 'e, 'mcx> TsvParser<'s, 'e, 'mcx> {
                         let mut v: u32 = 0;
                         let mut i = self.off;
                         while i < self.input.len() && self.input[i].is_ascii_digit() {
-                            v = v.saturating_mul(10).saturating_add((self.input[i] - b'0') as u32);
+                            v = v
+                                .saturating_mul(10)
+                                .saturating_add((self.input[i] - b'0') as u32);
                             i += 1;
                         }
                         let mut p: WordEntryPos = 0;

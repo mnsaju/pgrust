@@ -222,7 +222,9 @@ thread_local! {
 pub fn try_grant_yield_current() -> bool {
     CURRENT_SERVE_BOARD.with(|slot| {
         let slot = slot.borrow();
-        let Some(board) = slot.as_ref() else { return false };
+        let Some(board) = slot.as_ref() else {
+            return false;
+        };
         if board.try_grant_yield() {
             YIELD_PENDING.with(|c| c.set(true));
             true
@@ -342,9 +344,7 @@ fn gang() -> &'static (Mutex<GangState>, Condvar) {
 /// PGRUST_RUNTIME_POOLBIND=0 kills this module (launched-path fallback).
 pub fn pool_binding_enabled() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
-    *ON.get_or_init(|| {
-        std::env::var("PGRUST_RUNTIME_POOLBIND").map_or(true, |v| v.trim() != "0")
-    })
+    *ON.get_or_init(|| std::env::var("PGRUST_RUNTIME_POOLBIND").map_or(true, |v| v.trim() != "0"))
 }
 
 /// PGPROC-LEASING POOL WORKERS (M2 inc-2 keystone) — rtpool threads take
@@ -365,9 +365,7 @@ pub fn pool_binding_enabled() -> bool {
 /// layer under THIS switch and flip with it.
 pub fn pooldb_enabled() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
-    *ON.get_or_init(|| {
-        pooldb_posture(std::env::var("PGRUST_RUNTIME_POOLDB").ok().as_deref())
-    })
+    *ON.get_or_init(|| pooldb_posture(std::env::var("PGRUST_RUNTIME_POOLDB").ok().as_deref()))
 }
 
 /// The flip's pure parse (unit-pinned): default ON; `0`/`off` kill; any
@@ -645,7 +643,10 @@ pub(crate) fn engage_deferred_visibility() -> types_error::PgResult<()> {
     if let Err(e) = procsignal::ProcSignalReinitStanding(&[]) {
         let _ = elog::elog(
             WARNING,
-            format!("standing executor ProcSignal re-init failed: {}", e.message()),
+            format!(
+                "standing executor ProcSignal re-init failed: {}",
+                e.message()
+            ),
         );
     }
     super::gtrace("w.vis.end");
@@ -732,9 +733,8 @@ pub fn gang_worker_loop(_ordinal: usize) -> GangExit {
                 // bracket); the exit-callback chain (RemoveProcFromArray)
                 // expects membership — rejoin before proc_exit.
                 if init_small::globals::MyDatabaseId() != InvalidOid {
-                    let _ = procarray_seams::proc_array_add::call(
-                        init_small::globals::MyProcNumber(),
-                    );
+                    let _ =
+                        procarray_seams::proc_array_add::call(init_small::globals::MyProcNumber());
                 }
                 return GangExit::Clean;
             }
@@ -795,9 +795,7 @@ fn warm_connect(entry: &Arc<StandingEngagement>) {
             entry.shared.authenticated_user_id,
             bgworker::BGWORKER_BYPASS_ALLOWCONN | bgworker::BGWORKER_BYPASS_ROLELOGINCHECK,
         )
-        .and_then(|()| {
-            mbutils::SetClientEncoding(mbutils::GetDatabaseEncoding()).map(|_| ())
-        })
+        .and_then(|()| mbutils::SetClientEncoding(mbutils::GetDatabaseEncoding()).map(|_| ()))
     }));
     super::gtrace("g.warmconn.end");
     match connected {
@@ -914,9 +912,7 @@ fn serve_ticket(entry: &Arc<StandingEngagement>, ticket: usize) {
                 shared.authenticated_user_id,
                 bgworker::BGWORKER_BYPASS_ALLOWCONN | bgworker::BGWORKER_BYPASS_ROLELOGINCHECK,
             )
-            .and_then(|()| {
-                mbutils::SetClientEncoding(mbutils::GetDatabaseEncoding()).map(|_| ())
-            })
+            .and_then(|()| mbutils::SetClientEncoding(mbutils::GetDatabaseEncoding()).map(|_| ()))
         }));
         super::gtrace("g.conn.end");
         match connected {
@@ -945,10 +941,7 @@ fn serve_ticket(entry: &Arc<StandingEngagement>, ticket: usize) {
                 if is_exit_unwind(&*payload) {
                     resume_unwind(payload);
                 }
-                let _ = elog::elog(
-                    WARNING,
-                    "standing executor connect panicked".to_string(),
-                );
+                let _ = elog::elog(WARNING, "standing executor connect panicked".to_string());
                 connect_failed_die();
             }
         }
@@ -971,15 +964,12 @@ fn serve_ticket(entry: &Arc<StandingEngagement>, ticket: usize) {
             // restore publishes xmin, which only counts while visible),
             // and retake a ProcSignal slot (released at every park — see
             // the tail).
-            if let Err(e) = procarray_seams::proc_array_add::call(
-                init_small::globals::MyProcNumber(),
-            ) {
+            if let Err(e) =
+                procarray_seams::proc_array_add::call(init_small::globals::MyProcNumber())
+            {
                 let _ = elog::elog(
                     WARNING,
-                    format!(
-                        "standing executor procarray re-add failed: {}",
-                        e.message()
-                    ),
+                    format!("standing executor procarray re-add failed: {}", e.message()),
                 );
                 entry.refused.fetch_add(1, SeqCst);
                 return;
@@ -1021,10 +1011,7 @@ fn serve_ticket(entry: &Arc<StandingEngagement>, ticket: usize) {
             Err(e) => {
                 let _ = elog::elog(
                     WARNING,
-                    format!(
-                        "standing executor sticky eviction failed: {}",
-                        e.message()
-                    ),
+                    format!("standing executor sticky eviction failed: {}", e.message()),
                 );
                 entry.refused.fetch_add(1, SeqCst);
                 false
@@ -1537,9 +1524,7 @@ pub fn pool_serve(payload: &Arc<dyn std::any::Any + Send + Sync>) -> PoolServe {
         };
         if retired {
             super::query_task_guard::sticky_clear();
-            let _ = procarray_seams::proc_array_add::call(
-                init_small::globals::MyProcNumber(),
-            );
+            let _ = procarray_seams::proc_array_add::call(init_small::globals::MyProcNumber());
             ipc::proc_exit(0, init_small::globals::MyProcPid());
         }
     }
@@ -1602,7 +1587,10 @@ mod pooldb_flip_tests {
     #[test]
     fn pooldb_default_on_kill_spellings() {
         assert!(super::pooldb_posture(None), "unset = flipped default ON");
-        assert!(super::pooldb_posture(Some("1")), "historical arming spelling stays ON");
+        assert!(
+            super::pooldb_posture(Some("1")),
+            "historical arming spelling stays ON"
+        );
         assert!(super::pooldb_posture(Some("on")), "affirmative spelling ON");
         assert!(!super::pooldb_posture(Some("0")), "=0 kills");
         assert!(!super::pooldb_posture(Some("off")), "=off kills");

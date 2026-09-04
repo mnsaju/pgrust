@@ -206,7 +206,10 @@ fn putmessage_errors_propagate() {
     let f = setup();
     PUT_FAIL.with(|c| c.set(true));
     let buf = pq_beginmessage(f.ctx.mcx(), b'P').unwrap();
-    assert_eq!(pq_endmessage(buf).unwrap_err().message(), "putmessage failed");
+    assert_eq!(
+        pq_endmessage(buf).unwrap_err().message(),
+        "putmessage failed"
+    );
     let buf = pq_beginmessage(f.ctx.mcx(), b'P').unwrap();
     assert!(pq_endmessage_reuse(&buf).is_err());
     assert!(pq_putemptymessage(b'Z').is_err());

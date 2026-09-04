@@ -80,7 +80,10 @@ impl RecoveryLockState {
             return false;
         }
         let mcx = self.mcx;
-        self.by_xid.entry(xid).or_insert_with(|| PgVec::new_in(mcx)).push((db_oid, rel_oid));
+        self.by_xid
+            .entry(xid)
+            .or_insert_with(|| PgVec::new_in(mcx))
+            .push((db_oid, rel_oid));
         true
     }
 }
@@ -108,7 +111,10 @@ fn new_lock_state() -> RecoveryLockState {
 
 pub fn InitRecoveryTransactionEnvironment() -> PgResult<()> {
     RECOVERY_LOCKS.with(|s| {
-        assert!(s.borrow().is_none(), "InitRecoveryTransactionEnvironment called twice");
+        assert!(
+            s.borrow().is_none(),
+            "InitRecoveryTransactionEnvironment called twice"
+        );
         *s.borrow_mut() = Some(new_lock_state());
     });
 
@@ -162,7 +168,9 @@ fn WaitExceedsMaxStandbyDelay(wait_event_info: u32) -> PgResult<bool> {
     }
 
     waitevent::pgstat_report_wait_start(wait_event_info);
-    std::thread::sleep(std::time::Duration::from_micros(STANDBY_WAIT_US.get() as u64));
+    std::thread::sleep(std::time::Duration::from_micros(
+        STANDBY_WAIT_US.get() as u64
+    ));
     waitevent::pgstat_report_wait_end();
 
     // Progressive backoff, capped at 1s as C.
@@ -261,8 +269,7 @@ fn ResolveRecoveryConflictWithVirtualXIDs(
             if wait_start != 0 && (!logged_recovery_conflict || !waiting) {
                 let maybe_log_conflict =
                     LOG_RECOVERY_CONFLICT_WAITS.load(Relaxed) && !logged_recovery_conflict;
-                let maybe_update_title =
-                    guc_tables::vars::update_process_title.read() && !waiting;
+                let maybe_update_title = guc_tables::vars::update_process_title.read() && !waiting;
 
                 let mut now: TimestampTz = 0;
                 if maybe_log_conflict || maybe_update_title {
@@ -309,8 +316,7 @@ pub fn ResolveRecoveryConflictWithSnapshot(
     }
 
     debug_assert!(TransactionIdIsNormal(snapshot_conflict_horizon));
-    let backends =
-        procarray::GetConflictingVirtualXIDs(snapshot_conflict_horizon, locator.dbOid)?;
+    let backends = procarray::GetConflictingVirtualXIDs(snapshot_conflict_horizon, locator.dbOid)?;
     ResolveRecoveryConflictWithVirtualXIDs(
         &backends,
         PROCSIG_RECOVERY_CONFLICT_SNAPSHOT,
@@ -336,7 +342,9 @@ pub fn ResolveRecoveryConflictWithSnapshotFullXid(
 ) -> PgResult<()> {
     // If the logged value already wrapped around, no snapshot can see it.
     let next_xid = varsup::ReadNextFullTransactionId()?;
-    let diff = next_xid.to_u64().wrapping_sub(snapshot_conflict_horizon.to_u64());
+    let diff = next_xid
+        .to_u64()
+        .wrapping_sub(snapshot_conflict_horizon.to_u64());
     if diff < (MaxTransactionId / 2) as u64 {
         ResolveRecoveryConflictWithSnapshot(
             snapshot_conflict_horizon.xid(),
@@ -391,12 +399,17 @@ pub fn ResolveRecoveryConflictWithLock(locktag: LOCKTAG, logging_conflict: bool)
             false,
         )?;
     } else {
-        let mut timeouts =
-            [EnableTimeoutParams::After { id: STANDBY_DEADLOCK_TIMEOUT, delay_ms: 0 }; 2];
+        let mut timeouts = [EnableTimeoutParams::After {
+            id: STANDBY_DEADLOCK_TIMEOUT,
+            delay_ms: 0,
+        }; 2];
         let mut cnt = 0;
         if ltime != 0 {
             GOT_STANDBY_LOCK_TIMEOUT.store(false, Relaxed);
-            timeouts[cnt] = EnableTimeoutParams::At { id: STANDBY_LOCK_TIMEOUT, fin_time: ltime };
+            timeouts[cnt] = EnableTimeoutParams::At {
+                id: STANDBY_LOCK_TIMEOUT,
+                fin_time: ltime,
+            };
             cnt += 1;
         }
         GOT_STANDBY_DEADLOCK_TIMEOUT.store(false, Relaxed);
@@ -446,11 +459,16 @@ pub fn ResolveRecoveryConflictWithBufferPin() -> PgResult<()> {
     if GetCurrentTimestamp() >= ltime && ltime != 0 {
         SendRecoveryConflictWithBufferPin(PROCSIG_RECOVERY_CONFLICT_BUFFERPIN)?;
     } else {
-        let mut timeouts =
-            [EnableTimeoutParams::After { id: STANDBY_DEADLOCK_TIMEOUT, delay_ms: 0 }; 2];
+        let mut timeouts = [EnableTimeoutParams::After {
+            id: STANDBY_DEADLOCK_TIMEOUT,
+            delay_ms: 0,
+        }; 2];
         let mut cnt = 0;
         if ltime != 0 {
-            timeouts[cnt] = EnableTimeoutParams::At { id: STANDBY_TIMEOUT, fin_time: ltime };
+            timeouts[cnt] = EnableTimeoutParams::At {
+                id: STANDBY_TIMEOUT,
+                fin_time: ltime,
+            };
             cnt += 1;
         }
         GOT_STANDBY_DEADLOCK_TIMEOUT.store(false, Relaxed);
@@ -526,7 +544,10 @@ pub fn StandbyAcquireAccessExclusiveLock(
         return Ok(());
     }
 
-    elog(DEBUG4, format!("adding recovery lock: db {db_oid} rel {rel_oid}"))?;
+    elog(
+        DEBUG4,
+        format!("adding recovery lock: db {db_oid} rel {rel_oid}"),
+    )?;
 
     // dbOid is InvalidOid when locking a shared relation.
     debug_assert!(rel_oid != InvalidOid);
@@ -551,7 +572,10 @@ fn release_xid_entry_locks(
     chain: &[(Oid, Oid)],
 ) -> PgResult<()> {
     for &(db_oid, rel_oid) in chain {
-        elog(DEBUG4, format!("releasing recovery lock: xid {xid} db {db_oid} rel {rel_oid}"))?;
+        elog(
+            DEBUG4,
+            format!("releasing recovery lock: xid {xid} db {db_oid} rel {rel_oid}"),
+        )?;
         let locktag = LOCKTAG::relation(db_oid, rel_oid);
         if !lock::LockRelease(&locktag, AccessExclusiveLock, true)? {
             elog(
@@ -572,7 +596,9 @@ fn StandbyReleaseLocks(xid: TransactionId) -> PgResult<()> {
     if TransactionIdIsValid(xid) {
         RECOVERY_LOCKS.with(|s| {
             let mut st = s.borrow_mut();
-            let st = st.as_mut().expect("StandbyReleaseLocks: recovery lock tables not active");
+            let st = st
+                .as_mut()
+                .expect("StandbyReleaseLocks: recovery lock tables not active");
             if let Some(chain) = st.by_xid.remove(&xid) {
                 release_xid_entry_locks(st, xid, &chain)?;
             }
@@ -595,7 +621,9 @@ pub fn StandbyReleaseAllLocks() -> PgResult<()> {
     elog(DEBUG2, "release all standby locks")?;
     RECOVERY_LOCKS.with(|s| {
         let mut st = s.borrow_mut();
-        let st = st.as_mut().expect("StandbyReleaseAllLocks: recovery lock tables not active");
+        let st = st
+            .as_mut()
+            .expect("StandbyReleaseAllLocks: recovery lock tables not active");
         let xids: Vec<TransactionId> = st.by_xid.keys().copied().collect();
         for xid in xids {
             let chain = st.by_xid.remove(&xid).unwrap();
@@ -608,7 +636,9 @@ pub fn StandbyReleaseAllLocks() -> PgResult<()> {
 pub fn StandbyReleaseOldLocks(oldxid: TransactionId) -> PgResult<()> {
     RECOVERY_LOCKS.with(|s| {
         let mut st = s.borrow_mut();
-        let st = st.as_mut().expect("StandbyReleaseOldLocks: recovery lock tables not active");
+        let st = st
+            .as_mut()
+            .expect("StandbyReleaseOldLocks: recovery lock tables not active");
         let xids: Vec<TransactionId> = st.by_xid.keys().copied().collect();
         for xid in xids {
             debug_assert!(TransactionIdIsValid(xid));
@@ -658,7 +688,10 @@ pub(crate) mod test_support {
 
     pub fn insert_entry(xid: TransactionId, db_oid: Oid, rel_oid: Oid) -> bool {
         RECOVERY_LOCKS.with(|s| {
-            s.borrow_mut().as_mut().unwrap().insert_entry(xid, db_oid, rel_oid)
+            s.borrow_mut()
+                .as_mut()
+                .unwrap()
+                .insert_entry(xid, db_oid, rel_oid)
         })
     }
 

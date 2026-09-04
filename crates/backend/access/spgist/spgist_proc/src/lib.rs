@@ -70,12 +70,32 @@ mod tests {
 
     #[test]
     fn point_box() {
-        let b = BOX { high: Point { x: 2.0, y: 3.0 }, low: Point { x: -1.0, y: -1.0 } };
-        assert_eq!(point_box_distance(&Point { x: 0.0, y: 0.0 }, &b).unwrap(), 0.0);
-        assert_eq!(point_box_distance(&Point { x: 5.0, y: 3.0 }, &b).unwrap(), 3.0);
-        assert_eq!(point_box_distance(&Point { x: 2.0, y: 7.0 }, &b).unwrap(), 4.0);
+        let b = BOX {
+            high: Point { x: 2.0, y: 3.0 },
+            low: Point { x: -1.0, y: -1.0 },
+        };
+        assert_eq!(
+            point_box_distance(&Point { x: 0.0, y: 0.0 }, &b).unwrap(),
+            0.0
+        );
+        assert_eq!(
+            point_box_distance(&Point { x: 5.0, y: 3.0 }, &b).unwrap(),
+            3.0
+        );
+        assert_eq!(
+            point_box_distance(&Point { x: 2.0, y: 7.0 }, &b).unwrap(),
+            4.0
+        );
         let d = point_box_distance(&Point { x: 5.0, y: 7.0 }, &b).unwrap();
         assert_eq!(d, 5.0);
-        assert!(point_box_distance(&Point { x: f64::NAN, y: 0.0 }, &b).unwrap().is_nan());
+        assert!(point_box_distance(
+            &Point {
+                x: f64::NAN,
+                y: 0.0
+            },
+            &b
+        )
+        .unwrap()
+        .is_nan());
     }
 }

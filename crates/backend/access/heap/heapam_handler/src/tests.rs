@@ -5,13 +5,13 @@ use ::types_core::{
 };
 use ::types_rel::{FormData_pg_class, LockInfoData, LockRelId, RELKIND_RELATION};
 use ::types_scan::sdir::ForwardScanDirection;
+use ::types_slot::TupleSlotKind;
 use ::types_snapshot::SnapshotType;
 use ::types_storage::bufpage::{ItemIdData, SizeOfPageHeaderData, LP_NORMAL, LP_REDIRECT};
 use ::types_tuple::{
     CompactAttribute, FormData_pg_attribute, NameData, TupleDescData, HEAP_HOT_UPDATED,
     HEAP_ONLY_TUPLE, HEAP_XMAX_INVALID,
 };
-use ::types_slot::TupleSlotKind;
 use core::ptr::NonNull;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -161,7 +161,11 @@ fn install_seams() {
 fn quiesced() {
     with_fake(|f| {
         assert!(f.pins.iter().all(|p| *p == 0), "leaked pins: {:?}", f.pins);
-        assert!(f.locks.iter().all(|l| *l == 0), "leaked locks: {:?}", f.locks);
+        assert!(
+            f.locks.iter().all(|l| *l == 0),
+            "leaked locks: {:?}",
+            f.locks
+        );
     });
 }
 
@@ -299,7 +303,9 @@ fn test_relation<'mcx>(mcx: Mcx<'mcx>, oid: Oid) -> Relation<'mcx> {
         relfrozenxid: 3,
         relminmxid: 1,
     };
-    let data = ::types_rel::RelationData { rd_locator: Default::default(), rd_smgr: Default::default(),
+    let data = ::types_rel::RelationData {
+        rd_locator: Default::default(),
+        rd_smgr: Default::default(),
         rd_id: oid,
         rd_backend: INVALID_PROC_NUMBER,
         rd_islocaltemp: false,
@@ -309,7 +315,10 @@ fn test_relation<'mcx>(mcx: Mcx<'mcx>, oid: Oid) -> Relation<'mcx> {
         rd_firstRelfilelocatorSubid: std::cell::Cell::new(0),
         rd_droppedSubid: std::cell::Cell::new(0),
         rd_lockInfo: LockInfoData {
-            lockRelId: LockRelId { relId: oid, dbId: 5 },
+            lockRelId: LockRelId {
+                relId: oid,
+                dbId: 5,
+            },
         },
         rd_rel,
         rd_att: int4_tupdesc(mcx),
@@ -320,13 +329,16 @@ fn test_relation<'mcx>(mcx: Mcx<'mcx>, oid: Oid) -> Relation<'mcx> {
         rd_indcollation: PgVec::new_in(mcx),
         rd_options: None,
         rd_amcache: Default::default(),
-        rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+        rd_amcache_hash: Default::default(),
+        rd_amcache_gin: Default::default(),
+        rd_amcache_spgist: Default::default(),
         rd_support: PgVec::new_in(mcx),
         rd_supportinfo: Default::default(),
         rd_opcoptions: Default::default(),
         rd_indexlist: Default::default(),
-            rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+        rd_trigdesc: Default::default(),
+        rd_hastriggers: false,
+        rd_hasrules: false,
         pgstat_enabled: std::cell::Cell::new(false),
         pgstat_link: core::cell::Cell::new((0, core::ptr::null_mut())),
     };
@@ -378,7 +390,11 @@ fn index_fetch_hot_chain_lifecycle() {
     set_ctid(&mut t3, 0, 3);
     register_table(
         oid,
-        vec![build_page(&[Item::Redirect(2), Item::Tuple(t2), Item::Tuple(t3)])],
+        vec![build_page(&[
+            Item::Redirect(2),
+            Item::Tuple(t2),
+            Item::Tuple(t3),
+        ])],
     );
     let rel = test_relation(mcx, oid);
     let snap = mvcc_snapshot(mcx);
@@ -462,7 +478,11 @@ fn index_fetch_dead_chain_reports_all_dead() {
     let oid = fresh_oid();
     register_table(
         oid,
-        vec![build_page(&[Item::Tuple(tuple_image(INVISIBLE_XMIN, 0, 1))])],
+        vec![build_page(&[Item::Tuple(tuple_image(
+            INVISIBLE_XMIN,
+            0,
+            1,
+        ))])],
     );
     let rel = test_relation(mcx, oid);
     let snap = mvcc_snapshot(mcx);
@@ -634,8 +654,7 @@ fn fetch_row_version_transfers_pin() {
     let mut slot = buffer_slot(mcx, &rel);
 
     let found =
-        heapam_fetch_row_version(mcx, &rel, &ItemPointerData::new(0, 1), &snap, &mut slot)
-            .unwrap();
+        heapam_fetch_row_version(mcx, &rel, &ItemPointerData::new(0, 1), &snap, &mut slot).unwrap();
     assert!(found);
     // Pin transferred: exactly the slot's pin remains.
     assert_eq!(pins_of(oid, 0), 1);
@@ -651,8 +670,7 @@ fn fetch_row_version_transfers_pin() {
 
     // Invisible version: not found, nothing pinned.
     let found =
-        heapam_fetch_row_version(mcx, &rel, &ItemPointerData::new(0, 2), &snap, &mut slot)
-            .unwrap();
+        heapam_fetch_row_version(mcx, &rel, &ItemPointerData::new(0, 2), &snap, &mut slot).unwrap();
     assert!(!found);
     quiesced();
 }
@@ -725,8 +743,14 @@ fn tableam_seqscan_composition() {
     assert_eq!(vals, vec![1, 2]);
 
     // TID validity consults the scan's nblocks through the dispatch layer.
-    assert!(::tableam::table_tuple_tid_valid(&mut scan, &ItemPointerData::new(1, 1)));
-    assert!(!::tableam::table_tuple_tid_valid(&mut scan, &ItemPointerData::new(2, 1)));
+    assert!(::tableam::table_tuple_tid_valid(
+        &mut scan,
+        &ItemPointerData::new(1, 1)
+    ));
+    assert!(!::tableam::table_tuple_tid_valid(
+        &mut scan,
+        &ItemPointerData::new(2, 1)
+    ));
 
     ::tableam::table_endscan(scan).unwrap();
     exectuples::exec_clear_tuple(&mut slot, mcx);
@@ -738,8 +762,7 @@ fn tuple_lock_chase_dirty_fail_keeps_pin_and_reports_deleted() {
     // keep_buf dirty-fail arm: xmin/t_ctid must be read through the
     // still-held pin (C reads t_data before ReleaseBuffer) -> TM_Deleted.
     use ::tableam_vocab::{
-        LockTupleMode, LockWaitPolicy, TM_FailureData, TM_Result,
-        TUPLE_LOCK_FLAG_FIND_LAST_VERSION,
+        LockTupleMode, LockWaitPolicy, TM_FailureData, TM_Result, TUPLE_LOCK_FLAG_FIND_LAST_VERSION,
     };
 
     install_seams();

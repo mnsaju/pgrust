@@ -37,7 +37,10 @@
 fn m5_suppress_killed() -> bool {
     static KILLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *KILLED.get_or_init(|| {
-        matches!(std::env::var("PGRUST_M5_SUPPRESS").as_deref(), Ok("0") | Ok("off"))
+        matches!(
+            std::env::var("PGRUST_M5_SUPPRESS").as_deref(),
+            Ok("0") | Ok("off")
+        )
     })
 }
 

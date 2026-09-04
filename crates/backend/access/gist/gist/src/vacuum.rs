@@ -376,10 +376,7 @@ fn gistdeletepage<'mcx>(
         }
 
         let parent_page = parent.page();
-        if parent_page.is_new()
-            || GistPageIsDeleted(&parent_page)
-            || GistPageIsLeaf(&parent_page)
-        {
+        if parent_page.is_new() || GistPageIsDeleted(&parent_page) || GistPageIsLeaf(&parent_page) {
             debug_assert!(false, "internal pages are never deleted");
             return Ok(false);
         }

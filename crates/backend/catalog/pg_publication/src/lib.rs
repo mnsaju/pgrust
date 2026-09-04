@@ -19,7 +19,9 @@ use types_error::{
     PgError, PgResult, ERRCODE_DUPLICATE_OBJECT, ERRCODE_INVALID_COLUMN_REFERENCE,
     ERRCODE_INVALID_PARAMETER_VALUE, ERRCODE_UNDEFINED_COLUMN,
 };
-use types_fmgr::{byref_result, FmgrBuiltin, FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFunction};
+use types_fmgr::{
+    byref_result, FmgrBuiltin, FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFunction,
+};
 use types_nodes::bitmapset::Bitmapset;
 use types_nodes::{Node, NodeList};
 use types_rel::pg_class::{RELKIND_PARTITIONED_TABLE, RELKIND_RELATION};
@@ -34,7 +36,9 @@ use cache_syscache::{
     GetSysCacheOid, ReleaseSysCache, ReleaseSysCacheList, SearchSysCache1, SearchSysCache2,
     SearchSysCacheExists, SearchSysCacheList1, SysCacheGetAttr, SysCacheKey,
 };
-use pg_depend::{recordDependencyOn, recordDependencyOnSingleRelExpr, DependencyType, ObjectAddress};
+use pg_depend::{
+    recordDependencyOn, recordDependencyOnSingleRelExpr, DependencyType, ObjectAddress,
+};
 
 pub const PublicationRelationId: Oid = 6104;
 pub const PublicationObjectIndexId: Oid = 6110;
@@ -160,7 +164,9 @@ fn varlena_payload(image: &[u8]) -> &[u8] {
 }
 
 fn text_datum(mcx: Mcx<'_>, s: &str) -> PgResult<Datum> {
-    let img = varlena::cstring_to_text(mcx, s.as_bytes())?.into_image().leak();
+    let img = varlena::cstring_to_text(mcx, s.as_bytes())?
+        .into_image()
+        .leak();
     Ok(Datum::from_usize(img.as_ptr() as usize))
 }
 
@@ -223,7 +229,10 @@ fn check_publication_add_schema(mcx: Mcx<'_>, schemaid: Oid) -> PgResult<()> {
         let nspname = lsyscache::get_namespace_name(mcx, schemaid)?
             .map(|n| n.as_str().to_string())
             .unwrap_or_default();
-        return Err(cannot_add_schema(&nspname, "Temporary schemas cannot be replicated."));
+        return Err(cannot_add_schema(
+            &nspname,
+            "Temporary schemas cannot be replicated.",
+        ));
     }
     Ok(())
 }
@@ -236,7 +245,11 @@ pub fn is_publishable_class(relid: Oid, relkind: u8, relpersistence: u8) -> bool
 }
 
 pub fn is_publishable_relation(rel: &Relation<'_>) -> bool {
-    is_publishable_class(rel.rd_id, rel.rd_rel.relkind as u8, rel.rd_rel.relpersistence)
+    is_publishable_class(
+        rel.rd_id,
+        rel.rd_rel.relkind as u8,
+        rel.rd_rel.relpersistence,
+    )
 }
 
 pub fn is_schema_publication<'mcx>(mcx: Mcx<'mcx>, pubid: Oid) -> PgResult<bool> {
@@ -345,7 +358,8 @@ pub fn GetTopMostAncestorInPublication<'mcx>(
 }
 
 fn attnumstoint2vector<'mcx>(mcx: Mcx<'mcx>, attrs: &Bitmapset<'_>) -> PgResult<PgVec<'mcx, u8>> {
-    let mut values: PgVec<'mcx, i16> = mcx::vec_with_capacity_in(mcx, attrs.num_members() as usize)?;
+    let mut values: PgVec<'mcx, i16> =
+        mcx::vec_with_capacity_in(mcx, attrs.num_members() as usize)?;
     let mut i = -1;
     loop {
         i = attrs.next_member(i);
@@ -498,7 +512,10 @@ pub fn pub_collist_validate<'mcx>(
     let mut set = Bitmapset::empty();
     let tupdesc = targetrel.descr();
     for cell in columns.iter() {
-        let colname = cell.as_string().expect("publication column list cell is a String").sval;
+        let colname = cell
+            .as_string()
+            .expect("publication column list cell is a String")
+            .sval;
         let attnum = lsyscache::get_attnum(targetrel.rd_id, colname)?;
         if attnum == 0 {
             return Err(Box::new(
@@ -628,8 +645,10 @@ pub fn publication_add_schema<'mcx>(
 
 pub fn GetRelationPublications<'mcx>(mcx: Mcx<'mcx>, relid: Oid) -> PgResult<PgVec<'mcx, Oid>> {
     let mut result: PgVec<'mcx, Oid> = PgVec::new_in(mcx);
-    let pubrellist =
-        SearchSysCacheList1(PUBLICATIONRELMAP, SysCacheKey::Value(Datum::from_oid(relid)))?;
+    let pubrellist = SearchSysCacheList1(
+        PUBLICATIONRELMAP,
+        SysCacheKey::Value(Datum::from_oid(relid)),
+    )?;
     let td = cache_td(PUBLICATIONRELMAP)?;
     for i in 0..pubrellist.n_members() as usize {
         let m = pubrellist.member(i);
@@ -852,9 +871,8 @@ pub fn GetPublication<'mcx>(mcx: Mcx<'mcx>, pubid: Oid) -> PgResult<Publication<
             "cache lookup failed for publication {pubid}"
         ))));
     };
-    let attr = |anum: i32| -> PgResult<Datum> {
-        Ok(SysCacheGetAttr(PUBLICATIONOID, &tup, anum)?.0)
-    };
+    let attr =
+        |anum: i32| -> PgResult<Datum> { Ok(SysCacheGetAttr(PUBLICATIONOID, &tup, anum)?.0) };
     let name_data = name_from_datum(attr(Anum_pg_publication_pubname)?);
     let name = PgString::from_str_in(
         core::str::from_utf8(name_data.name_str()).expect("pubname is UTF-8"),
@@ -920,10 +938,18 @@ fn fc_pg_relation_is_publishable(
         fcinfo.isnull = true;
         return Ok(Datum::null());
     };
-    let relkind = SysCacheGetAttr(RELOID, &tup, Anum_pg_class_relkind)?.0.as_u8();
-    let relpersistence = SysCacheGetAttr(RELOID, &tup, Anum_pg_class_relpersistence)?.0.as_u8();
+    let relkind = SysCacheGetAttr(RELOID, &tup, Anum_pg_class_relkind)?
+        .0
+        .as_u8();
+    let relpersistence = SysCacheGetAttr(RELOID, &tup, Anum_pg_class_relpersistence)?
+        .0
+        .as_u8();
     ReleaseSysCache(tup);
-    Ok(Datum::from_bool(is_publishable_class(relid, relkind, relpersistence)))
+    Ok(Datum::from_bool(is_publishable_class(
+        relid,
+        relkind,
+        relpersistence,
+    )))
 }
 
 // Cross-arena SRF carrier (fn_extra is 'static): std Vec by necessity.
@@ -1030,8 +1056,11 @@ fn collect_publication_tables(fcinfo: &Fcinfo) -> PgResult<PubTablesRows> {
                 SysCacheKey::Value(Datum::from_oid(relid)),
                 SysCacheKey::Value(Datum::from_oid(pubid)),
             )? {
-                let (d, isnull) =
-                    SysCacheGetAttr(PUBLICATIONRELMAP, &pubtuple, Anum_pg_publication_rel_prattrs)?;
+                let (d, isnull) = SysCacheGetAttr(
+                    PUBLICATIONRELMAP,
+                    &pubtuple,
+                    Anum_pg_publication_rel_prattrs,
+                )?;
                 if !isnull {
                     attrs_img = Some(detoast_datum(mcx, d)?);
                 }
@@ -1115,13 +1144,38 @@ fn fc_pg_get_publication_tables(
     }
 }
 
-const fn b(foid: Oid, name: &'static str, nargs: i16, retset: bool, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset, func }
+const fn b(
+    foid: Oid,
+    name: &'static str,
+    nargs: i16,
+    retset: bool,
+    func: PGFunction,
+) -> FmgrBuiltin {
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset,
+        func,
+    }
 }
 
 pub const PUBLICATION_BUILTINS: &[FmgrBuiltin] = &[
-    b(6119, "pg_get_publication_tables", 1, true, fc_pg_get_publication_tables),
-    b(6121, "pg_relation_is_publishable", 1, false, fc_pg_relation_is_publishable),
+    b(
+        6119,
+        "pg_get_publication_tables",
+        1,
+        true,
+        fc_pg_get_publication_tables,
+    ),
+    b(
+        6121,
+        "pg_relation_is_publishable",
+        1,
+        false,
+        fc_pg_relation_is_publishable,
+    ),
 ];
 
 pub fn init_seams() {

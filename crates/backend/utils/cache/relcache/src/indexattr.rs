@@ -66,12 +66,14 @@ fn build_bitmaps(
         identity: PgVec::new_in(cmcx),
     };
     for &index_oid in index_oids.iter() {
-        let irel = store::RelationIdGetRelation(index_oid)?
+        let irel =
+            store::RelationIdGetRelation(index_oid)?.ok_or_else(|| index_missing(index_oid))?;
+        let form = irel
+            .rd_index
+            .as_ref()
             .ok_or_else(|| index_missing(index_oid))?;
-        let form = irel.rd_index.as_ref().ok_or_else(|| index_missing(index_oid))?;
         let summarizing = irel.rd_rel.relam == BRIN_AM_OID;
-        let is_key =
-            form.indisunique && form.indexprs_src.is_none() && form.indpred_src.is_none();
+        let is_key = form.indisunique && form.indexprs_src.is_none() && form.indpred_src.is_none();
         let is_pk = index_oid == pk_index;
         let is_id_key = index_oid == replident_index;
         for (i, &attnum) in form.indkey.iter().enumerate() {
@@ -102,7 +104,11 @@ fn build_bitmaps(
             .into_iter()
             .flatten()
         {
-            let target = if summarizing { &mut bm.summarized } else { &mut bm.hot_blocking };
+            let target = if summarizing {
+                &mut bm.summarized
+            } else {
+                &mut bm.hot_blocking
+            };
             pull_expr_attrs(src.as_str(), target)?;
         }
     }

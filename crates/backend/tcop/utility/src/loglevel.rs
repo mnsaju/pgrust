@@ -30,25 +30,12 @@ pub fn GetCommandLogLevel(parsetree: Node<'_>) -> i32 {
 
         T_PLAssignStmt => LOGSTMT_ALL,
 
-        T_TransactionStmt
-        | T_DeclareCursorStmt
-        | T_ClosePortalStmt
-        | T_FetchStmt
-        | T_DeallocateStmt
-        | T_DoStmt
-        | T_NotifyStmt
-        | T_ListenStmt
-        | T_UnlistenStmt
-        | T_LoadStmt
-        | T_CallStmt
-        | T_VacuumStmt
-        | T_VariableSetStmt
-        | T_VariableShowStmt
-        | T_DiscardStmt
-        | T_LockStmt
-        | T_ConstraintsSetStmt
-        | T_CheckPointStmt
-        | T_ReindexStmt => LOGSTMT_ALL,
+        T_TransactionStmt | T_DeclareCursorStmt | T_ClosePortalStmt | T_FetchStmt
+        | T_DeallocateStmt | T_DoStmt | T_NotifyStmt | T_ListenStmt | T_UnlistenStmt
+        | T_LoadStmt | T_CallStmt | T_VacuumStmt | T_VariableSetStmt | T_VariableShowStmt
+        | T_DiscardStmt | T_LockStmt | T_ConstraintsSetStmt | T_CheckPointStmt | T_ReindexStmt => {
+            LOGSTMT_ALL
+        }
 
         T_PrepareStmt => {
             let stmt = parsetree.as_prepare_stmt().unwrap();

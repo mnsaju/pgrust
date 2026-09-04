@@ -25,7 +25,11 @@ pub fn pg_get_viewdef_worker(
     let Some(rules) = relcache::rules::RelationGetRules(mcx, viewoid)? else {
         return Ok(None);
     };
-    let Some(rule) = rules.rules.iter().find(|r| r.event == CmdType::CMD_SELECT as i32) else {
+    let Some(rule) = rules
+        .rules
+        .iter()
+        .find(|r| r.event == CmdType::CMD_SELECT as i32)
+    else {
         return Ok(None);
     };
     if !rule.is_instead || rule.qual_src.is_some() {
@@ -70,19 +74,16 @@ pub(crate) fn view_attnames(relid: Oid) -> PgResult<Vec<String>> {
 // (NoLock, hard error) — the by-name pg_get_viewdef and
 // pg_get_serial_sequence forms.
 pub(crate) fn qualified_name_to_relid(mcx: Mcx<'_>, rawname: &str) -> PgResult<Oid> {
-    let names = match varlena::split_identifier_string(
-        mcx,
-        rawname,
-        b'.',
-        mbutils::GetDatabaseEncoding(),
-    )? {
-        Some(names) if !names.is_empty() => names,
-        _ => {
-            return Err(types_error::PgError::error("invalid name syntax")
-                .with_sqlstate(types_error::ERRCODE_INVALID_NAME)
-                .into())
-        }
-    };
+    let names =
+        match varlena::split_identifier_string(mcx, rawname, b'.', mbutils::GetDatabaseEncoding())?
+        {
+            Some(names) if !names.is_empty() => names,
+            _ => {
+                return Err(types_error::PgError::error("invalid name syntax")
+                    .with_sqlstate(types_error::ERRCODE_INVALID_NAME)
+                    .into())
+            }
+        };
     let mut rv = rel_vocab::RangeVar {
         catalogname: None,
         schemaname: None,

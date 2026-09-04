@@ -93,7 +93,10 @@ fn arithmetic_matches_c() {
     let err = cash_pl(i64::MAX, 1).unwrap_err();
     assert_eq!(err.sqlstate(), ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE);
     assert_eq!(err.message(), "money out of range");
-    assert_eq!(cash_mi(i64::MIN, 1).unwrap_err().message(), "money out of range");
+    assert_eq!(
+        cash_mi(i64::MIN, 1).unwrap_err().message(),
+        "money out of range"
+    );
 
     assert_eq!(cash_mul_int64(12345, 2).unwrap(), 24690);
     assert_eq!(
@@ -242,10 +245,16 @@ fn live_pg_in_out_corpus() {
         assert_eq!(&out(parse(input)), expected, "input {input:?}");
     }
 
-    let syntax_errs = ["--1.23", "1.2.3", "1e5", "0x10", "abc", "12abc", "$abc", "12$34", "1 2"];
+    let syntax_errs = [
+        "--1.23", "1.2.3", "1e5", "0x10", "abc", "12abc", "$abc", "12$34", "1 2",
+    ];
     for input in syntax_errs {
         let err = cash_in(input, None).unwrap_err();
-        assert_eq!(err.sqlstate(), ERRCODE_INVALID_TEXT_REPRESENTATION, "input {input:?}");
+        assert_eq!(
+            err.sqlstate(),
+            ERRCODE_INVALID_TEXT_REPRESENTATION,
+            "input {input:?}"
+        );
         assert_eq!(
             err.message(),
             format!("invalid input syntax for type money: \"{input}\""),
@@ -260,7 +269,11 @@ fn live_pg_in_out_corpus() {
     ];
     for input in range_errs {
         let err = cash_in(input, None).unwrap_err();
-        assert_eq!(err.sqlstate(), ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE, "input {input:?}");
+        assert_eq!(
+            err.sqlstate(),
+            ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE,
+            "input {input:?}"
+        );
         assert_eq!(
             err.message(),
             format!("value \"{input}\" is out of range for type money"),
@@ -272,10 +285,16 @@ fn live_pg_in_out_corpus() {
 #[test]
 fn live_pg_arithmetic_corpus() {
     assert_eq!(out(cash_pl(parse("1.23"), parse("2.77")).unwrap()), "$4.00");
-    assert_eq!(out(cash_mi(parse("5.00"), parse("7.25")).unwrap()), "-$2.25");
+    assert_eq!(
+        out(cash_mi(parse("5.00"), parse("7.25")).unwrap()),
+        "-$2.25"
+    );
     assert_eq!(out(cash_mul_int64(parse("3.00"), 2).unwrap()), "$6.00");
     assert_eq!(out(cash_mul_float8(parse("3.00"), 2.5).unwrap()), "$7.50");
-    assert_eq!(out(cash_mul_float8(parse("3.00"), 2.5f32 as f64).unwrap()), "$7.50");
+    assert_eq!(
+        out(cash_mul_float8(parse("3.00"), 2.5f32 as f64).unwrap()),
+        "$7.50"
+    );
     assert_eq!(out(cash_div_int64(parse("7.00"), 2).unwrap()), "$3.50");
     assert_eq!(out(cash_div_float8(parse("7.00"), 2.0).unwrap()), "$3.50");
     assert_eq!(cash_div_cash(parse("7.00"), parse("2.00")).unwrap(), 3.5);
@@ -303,9 +322,8 @@ fn live_pg_arithmetic_corpus() {
     assert_eq!(out(int4_cash(2147483647).unwrap()), "$2,147,483,647.00");
 
     let ctx = MemoryContext::new("t");
-    let words = |v: Cash| {
-        String::from_utf8(cash_words(ctx.mcx(), v).unwrap().data().to_vec()).unwrap()
-    };
+    let words =
+        |v: Cash| String::from_utf8(cash_words(ctx.mcx(), v).unwrap().data().to_vec()).unwrap();
     assert_eq!(words(parse("0.05")), "Zero dollars and five cents");
     assert_eq!(
         words(parse("-12345678.90")),
@@ -346,7 +364,10 @@ fn cash_numeric_matches_c() {
 fn numeric_cash_matches_c() {
     assert_eq!(numeric_cash(parse_numeric("0").num()).unwrap(), 0);
     assert_eq!(numeric_cash(parse_numeric("123.45").num()).unwrap(), 12345);
-    assert_eq!(numeric_cash(parse_numeric("-123.45").num()).unwrap(), -12345);
+    assert_eq!(
+        numeric_cash(parse_numeric("-123.45").num()).unwrap(),
+        -12345
+    );
     // numeric_int8 rounds to the nearest integer after scaling.
     assert_eq!(numeric_cash(parse_numeric("1.005").num()).unwrap(), 101);
     assert_eq!(numeric_cash(parse_numeric("1.004").num()).unwrap(), 100);
@@ -370,6 +391,12 @@ fn div_min_by_neg_one_errors() {
     let e = cash_div_int64(super::Cash::MIN, -1).unwrap_err();
     assert_eq!(e.sqlstate, types_error::ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE);
     // neighbours still work
-    assert_eq!(cash_div_int64(super::Cash::MIN, 1).unwrap(), super::Cash::MIN);
-    assert_eq!(cash_div_int64(super::Cash::MIN + 1, -1).unwrap(), super::Cash::MAX);
+    assert_eq!(
+        cash_div_int64(super::Cash::MIN, 1).unwrap(),
+        super::Cash::MIN
+    );
+    assert_eq!(
+        cash_div_int64(super::Cash::MIN + 1, -1).unwrap(),
+        super::Cash::MAX
+    );
 }

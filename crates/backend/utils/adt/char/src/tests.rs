@@ -52,7 +52,10 @@ fn int_casts_signed() {
     assert_eq!(i4tochar(65).unwrap(), 65);
     assert_eq!(i4tochar(-128).unwrap(), -128);
     let e = i4tochar(128).unwrap_err();
-    assert_eq!(e.sqlstate(), types_error::ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE);
+    assert_eq!(
+        e.sqlstate(),
+        types_error::ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE
+    );
     assert_eq!(e.message(), "\"char\" out of range");
     assert!(i4tochar(-129).is_err());
 }

@@ -1,7 +1,5 @@
 use elog::{ereport, errno};
-use types_core::{
-    FullTransactionId, TransactionId, TransactionIdIsNormal, TransactionIdIsValid,
-};
+use types_core::{FullTransactionId, TransactionId, TransactionIdIsNormal, TransactionIdIsValid};
 use types_error::{PgResult, ERRCODE_DATA_CORRUPTED, ERROR, WARNING};
 
 use crate::codec::{
@@ -84,7 +82,10 @@ pub(crate) fn read_twophase_file(
     }
 
     let crc_offset = st_size - 4;
-    let calc = crc32c::fin_crc32c(crc32c::pg_comp_crc32c(crc32c::CRC32C_INIT, &buf[..crc_offset]));
+    let calc = crc32c::fin_crc32c(crc32c::pg_comp_crc32c(
+        crc32c::CRC32C_INIT,
+        &buf[..crc_offset],
+    ));
     let file_crc = u32::from_ne_bytes(buf[crc_offset..crc_offset + 4].try_into().unwrap());
     if calc != file_crc {
         ereport(ERROR)
@@ -116,7 +117,9 @@ fn read_twophase_body(fd: i32, path: &str) -> PgResult<Vec<u8>> {
     if st_size < lower || st_size > MAX_ALLOC_SIZE as i64 {
         ereport(ERROR)
             .errcode(ERRCODE_DATA_CORRUPTED)
-            .errmsg(format!("incorrect size of file \"{path}\": {st_size} bytes"))
+            .errmsg(format!(
+                "incorrect size of file \"{path}\": {st_size} bytes"
+            ))
             .finish(here("ReadTwoPhaseFile"))?;
     }
     let crc_offset = (st_size - 4) as usize;

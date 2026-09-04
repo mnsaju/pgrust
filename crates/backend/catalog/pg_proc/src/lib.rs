@@ -8,16 +8,15 @@ use datum::Datum;
 use mcx::Mcx;
 use types_core::{
     AttrNumber, InvalidOid, Oid, OidIsValid, ANYARRAYOID, ANYCOMPATIBLEARRAYOID,
-    ANYCOMPATIBLEMULTIRANGEOID,
-    ANYCOMPATIBLENONARRAYOID, ANYCOMPATIBLEOID, ANYCOMPATIBLERANGEOID, ANYELEMENTOID, ANYENUMOID,
-    ANYMULTIRANGEOID, ANYNONARRAYOID, ANYOID, ANYRANGEOID, CHAROID, INTERNALOID,
-    LANGUAGE_RELATION_ID, NAMESPACE_RELATION_ID, OIDOID, PROCEDURE_RELATION_ID, RECORDOID,
-    TYPE_RELATION_ID,
+    ANYCOMPATIBLEMULTIRANGEOID, ANYCOMPATIBLENONARRAYOID, ANYCOMPATIBLEOID, ANYCOMPATIBLERANGEOID,
+    ANYELEMENTOID, ANYENUMOID, ANYMULTIRANGEOID, ANYNONARRAYOID, ANYOID, ANYRANGEOID, CHAROID,
+    INTERNALOID, LANGUAGE_RELATION_ID, NAMESPACE_RELATION_ID, OIDOID, PROCEDURE_RELATION_ID,
+    RECORDOID, TYPE_RELATION_ID,
 };
 use types_error::{
     PgError, PgResult, ERRCODE_DUPLICATE_FUNCTION, ERRCODE_INSUFFICIENT_PRIVILEGE,
-    ERRCODE_INVALID_FUNCTION_DEFINITION, ERRCODE_TOO_MANY_ARGUMENTS,
-    ERRCODE_UNDEFINED_FUNCTION, ERRCODE_WRONG_OBJECT_TYPE, ERROR,
+    ERRCODE_INVALID_FUNCTION_DEFINITION, ERRCODE_TOO_MANY_ARGUMENTS, ERRCODE_UNDEFINED_FUNCTION,
+    ERRCODE_WRONG_OBJECT_TYPE, ERROR,
 };
 use types_rel::RowExclusiveLock;
 use types_tuple::NameData;
@@ -158,7 +157,10 @@ fn family2(t: Oid) -> bool {
 // check_valid_polymorphic_signature (parse_coerce.c).
 pub fn check_valid_polymorphic_signature(ret_type: Oid, args: &[Oid]) -> PgResult<Option<String>> {
     let detail = if ret_type == ANYRANGEOID || ret_type == ANYMULTIRANGEOID {
-        if args.iter().any(|&a| a == ANYRANGEOID || a == ANYMULTIRANGEOID) {
+        if args
+            .iter()
+            .any(|&a| a == ANYRANGEOID || a == ANYMULTIRANGEOID)
+        {
             return Ok(None);
         }
         format!(
@@ -351,7 +353,10 @@ pub fn ProcedureCreate<'mcx>(
     };
     // pg_proc.c:372-373: CStringGetTextDatum(nodeToString(prosqlbody)).
     let prosqlbody_text = match a.prosqlbody {
-        Some(n) => Some(varlena::cstring_to_text(mcx, outfuncs::nodeToString(mcx, n)?.as_bytes())?),
+        Some(n) => Some(varlena::cstring_to_text(
+            mcx,
+            outfuncs::nodeToString(mcx, n)?.as_bytes(),
+        )?),
         None => None,
     };
     let argtypes_image = build_oidvector_image(mcx, a.parameterTypes)?;
@@ -359,24 +364,96 @@ pub fn ProcedureCreate<'mcx>(
     let mut values = [Datum::null(); Natts_pg_proc];
     let mut nulls = [false; Natts_pg_proc];
     let set = |values: &mut [Datum], attnum: usize, d: Datum| values[attnum - 1] = d;
-    set(&mut values, Anum_pg_proc_proname, Datum::from_usize(procname.data.as_ptr() as usize));
-    set(&mut values, Anum_pg_proc_pronamespace, Datum::from_oid(a.procNamespace));
-    set(&mut values, Anum_pg_proc_proowner, Datum::from_oid(a.proowner));
-    set(&mut values, Anum_pg_proc_prolang, Datum::from_oid(a.languageObjectId));
-    set(&mut values, Anum_pg_proc_procost, Datum::from_f32(a.procost));
-    set(&mut values, Anum_pg_proc_prorows, Datum::from_f32(a.prorows));
-    set(&mut values, Anum_pg_proc_provariadic, Datum::from_oid(variadicType));
-    set(&mut values, Anum_pg_proc_prosupport, Datum::from_oid(a.prosupport));
-    set(&mut values, Anum_pg_proc_prokind, Datum::from_char(a.prokind));
-    set(&mut values, Anum_pg_proc_prosecdef, Datum::from_bool(a.security_definer));
-    set(&mut values, Anum_pg_proc_proleakproof, Datum::from_bool(a.isLeakProof));
-    set(&mut values, Anum_pg_proc_proisstrict, Datum::from_bool(a.isStrict));
-    set(&mut values, Anum_pg_proc_proretset, Datum::from_bool(a.returnsSet));
-    set(&mut values, Anum_pg_proc_provolatile, Datum::from_char(a.volatility));
-    set(&mut values, Anum_pg_proc_proparallel, Datum::from_char(a.parallel));
-    set(&mut values, Anum_pg_proc_pronargs, Datum::from_i16(parameterCount as i16));
-    set(&mut values, Anum_pg_proc_pronargdefaults, Datum::from_i16(a.numDefaults));
-    set(&mut values, Anum_pg_proc_prorettype, Datum::from_oid(a.returnType));
+    set(
+        &mut values,
+        Anum_pg_proc_proname,
+        Datum::from_usize(procname.data.as_ptr() as usize),
+    );
+    set(
+        &mut values,
+        Anum_pg_proc_pronamespace,
+        Datum::from_oid(a.procNamespace),
+    );
+    set(
+        &mut values,
+        Anum_pg_proc_proowner,
+        Datum::from_oid(a.proowner),
+    );
+    set(
+        &mut values,
+        Anum_pg_proc_prolang,
+        Datum::from_oid(a.languageObjectId),
+    );
+    set(
+        &mut values,
+        Anum_pg_proc_procost,
+        Datum::from_f32(a.procost),
+    );
+    set(
+        &mut values,
+        Anum_pg_proc_prorows,
+        Datum::from_f32(a.prorows),
+    );
+    set(
+        &mut values,
+        Anum_pg_proc_provariadic,
+        Datum::from_oid(variadicType),
+    );
+    set(
+        &mut values,
+        Anum_pg_proc_prosupport,
+        Datum::from_oid(a.prosupport),
+    );
+    set(
+        &mut values,
+        Anum_pg_proc_prokind,
+        Datum::from_char(a.prokind),
+    );
+    set(
+        &mut values,
+        Anum_pg_proc_prosecdef,
+        Datum::from_bool(a.security_definer),
+    );
+    set(
+        &mut values,
+        Anum_pg_proc_proleakproof,
+        Datum::from_bool(a.isLeakProof),
+    );
+    set(
+        &mut values,
+        Anum_pg_proc_proisstrict,
+        Datum::from_bool(a.isStrict),
+    );
+    set(
+        &mut values,
+        Anum_pg_proc_proretset,
+        Datum::from_bool(a.returnsSet),
+    );
+    set(
+        &mut values,
+        Anum_pg_proc_provolatile,
+        Datum::from_char(a.volatility),
+    );
+    set(
+        &mut values,
+        Anum_pg_proc_proparallel,
+        Datum::from_char(a.parallel),
+    );
+    set(
+        &mut values,
+        Anum_pg_proc_pronargs,
+        Datum::from_i16(parameterCount as i16),
+    );
+    set(
+        &mut values,
+        Anum_pg_proc_pronargdefaults,
+        Datum::from_i16(a.numDefaults),
+    );
+    set(
+        &mut values,
+        Anum_pg_proc_prorettype,
+        Datum::from_oid(a.returnType),
+    );
     set(
         &mut values,
         Anum_pg_proc_proargtypes,
@@ -388,7 +465,9 @@ pub fn ProcedureCreate<'mcx>(
             for &o in oids {
                 elems.push(Datum::from_oid(o));
             }
-            Some(datum::array_build::construct_array_image(mcx, &elems, OIDOID, 4, true, b'i')?)
+            Some(datum::array_build::construct_array_image(
+                mcx, &elems, OIDOID, 4, true, b'i',
+            )?)
         }
         None => None,
     };
@@ -406,7 +485,9 @@ pub fn ProcedureCreate<'mcx>(
             for &m in modes {
                 elems.push(Datum::from_char(m));
             }
-            Some(datum::array_build::construct_array_image(mcx, &elems, CHAROID, 1, true, b'c')?)
+            Some(datum::array_build::construct_array_image(
+                mcx, &elems, CHAROID, 1, true, b'c',
+            )?)
         }
         None => None,
     };
@@ -454,8 +535,10 @@ pub fn ProcedureCreate<'mcx>(
         None => None,
     };
     match &argdefaults_text {
-        Some(t) => values[Anum_pg_proc_proargdefaults - 1] =
-            Datum::from_usize(t.as_bytes().as_ptr() as usize),
+        Some(t) => {
+            values[Anum_pg_proc_proargdefaults - 1] =
+                Datum::from_usize(t.as_bytes().as_ptr() as usize)
+        }
         None => nulls[Anum_pg_proc_proargdefaults - 1] = true,
     }
     nulls[Anum_pg_proc_protrftypes - 1] = true;
@@ -624,7 +707,8 @@ pub fn ProcedureCreate<'mcx>(
                         Some(ns) => {
                             let mut v: mcx::PgVec<'mcx, mcx::PgString<'mcx>> =
                                 mcx::PgVec::new_in(mcx);
-                            v.try_reserve_exact(ns.len()).map_err(|_| mcx.oom(ns.len()))?;
+                            v.try_reserve_exact(ns.len())
+                                .map_err(|_| mcx.oom(ns.len()))?;
                             for n in ns {
                                 v.push(mcx::PgString::from_str_in(n, mcx)?);
                             }
@@ -699,9 +783,8 @@ pub fn ProcedureCreate<'mcx>(
             let old_arrays = syscache_seams::pg_proc_result_arrays::call(mcx, old_oid)?
                 .expect("pg_proc row visible above");
             let old_modes = old_arrays.proargmodes.as_deref();
-            let is_input = |m: Option<i8>| {
-                !matches!(m, Some(m) if m == b'o' as i8 || m == b't' as i8)
-            };
+            let is_input =
+                |m: Option<i8>| !matches!(m, Some(m) if m == b'o' as i8 || m == b't' as i8);
             let old_input: Vec<&[u8]> = olds
                 .iter()
                 .enumerate()
@@ -726,9 +809,7 @@ pub fn ProcedureCreate<'mcx>(
                 Some(ns) => ns
                     .iter()
                     .enumerate()
-                    .filter(|(j, _)| {
-                        is_input(a.parameterModes.and_then(|ms| ms.get(*j).copied()))
-                    })
+                    .filter(|(j, _)| is_input(a.parameterModes.and_then(|ms| ms.get(*j).copied())))
                     .map(|(_, &n)| n)
                     .collect(),
             };
@@ -784,7 +865,10 @@ pub fn ProcedureCreate<'mcx>(
                 ));
             }
             let (old_defaults_d, old_defaults_null) = getattr(Anum_pg_proc_proargdefaults);
-            assert!(!old_defaults_null, "pronargdefaults set but proargdefaults is null");
+            assert!(
+                !old_defaults_null,
+                "pronargdefaults set but proargdefaults is null"
+            );
             let old_str = text_datum_to_string(mcx, old_defaults_d)?;
             let old_node = readfuncs::stringToNode(mcx, &old_str)?;
             let old_defaults = old_node.as_list().expect("proargdefaults holds a List");
@@ -793,7 +877,8 @@ pub fn ProcedureCreate<'mcx>(
             // deserialize for the per-default exprType comparison.
             let new_node = readfuncs::stringToNode(
                 mcx,
-                a.parameterDefaults.expect("ndefaults >= old_nargdefaults > 0"),
+                a.parameterDefaults
+                    .expect("ndefaults >= old_nargdefaults > 0"),
             )?;
             let newlist = new_node.as_list().expect("parameterDefaults holds a List");
             let skip = ndefaults - old_nargdefaults as usize;
@@ -828,8 +913,7 @@ pub fn ProcedureCreate<'mcx>(
         cache_syscache::ReleaseSysCache(oldtup);
         (old_oid, true)
     } else {
-        let newOid =
-            catalog::GetNewOidWithIndex(mcx, &rel, ProcedureOidIndexId, Anum_pg_proc_oid)?;
+        let newOid = catalog::GetNewOidWithIndex(mcx, &rel, ProcedureOidIndexId, Anum_pg_proc_oid)?;
         values[Anum_pg_proc_oid as usize - 1] = Datum::from_oid(newOid);
         let mut tup = heaptuple::heap_form_tuple(mcx, rel.descr(), &values, &nulls)?;
         catalog_indexing::CatalogTupleInsert(mcx, &rel, &mut tup)?;
@@ -950,7 +1034,12 @@ pub fn function_parse_error_transpose(e: &mut types_error::PgError, prosrc: &str
     // sourceText.
     let query = pquery::ActivePortal()
         .filter(|p| p.borrow().status == types_portal::PortalStatus::PORTAL_ACTIVE)
-        .and_then(|p| p.borrow().sourceText.as_ref().map(|s| s.as_str().to_string()));
+        .and_then(|p| {
+            p.borrow()
+                .sourceText
+                .as_ref()
+                .map(|s| s.as_str().to_string())
+        });
     if let Some(q) = query {
         let newpos = match_prosrc_to_query(prosrc, &q, origpos);
         if newpos > 0 {
@@ -987,9 +1076,7 @@ fn match_prosrc_to_query(prosrc: &str, query_text: &str, cursorpos: i32) -> i32 
             }
             matchpos = mbstrlen_with_len(query_text, curpos + 1) + cursorpos;
         } else if qb[curpos] == b'\'' {
-            if let Some(newcursorpos) =
-                match_prosrc_to_literal(pb, &qb[curpos + 1..], cursorpos)
-            {
+            if let Some(newcursorpos) = match_prosrc_to_literal(pb, &qb[curpos + 1..], cursorpos) {
                 if matchpos != 0 {
                     return 0;
                 }
@@ -1055,9 +1142,11 @@ fn utf8_len(b: u8) -> usize {
 // unported; they only bite non-superuser callers.
 fn check_function_validator_access(validator_oid: Oid, funcoid: Oid) -> PgResult<()> {
     let Some(proc_shape) = syscache_seams::lookup_pg_proc_fmgr::call(funcoid)? else {
-        return Err(PgError::error(format!("function with OID {funcoid} does not exist"))
-            .with_sqlstate(ERRCODE_UNDEFINED_FUNCTION)
-            .into());
+        return Err(
+            PgError::error(format!("function with OID {funcoid} does not exist"))
+                .with_sqlstate(ERRCODE_UNDEFINED_FUNCTION)
+                .into(),
+        );
     };
     let Some(lang) = syscache_seams::lookup_pg_language_fmgr::call(proc_shape.prolang)? else {
         return Err(PgError::error(format!(

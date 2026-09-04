@@ -12,9 +12,9 @@ use types_core::{
 };
 use types_error::{ErrorLocation, PgResult, ERRCODE_INVALID_OBJECT_DEFINITION, INFO};
 use types_gist::{
-    GISTNProcs, GIST_COMPRESS_PROC, GIST_CONSISTENT_PROC, GIST_DECOMPRESS_PROC,
-    GIST_DISTANCE_PROC, GIST_EQUAL_PROC, GIST_FETCH_PROC, GIST_OPTIONS_PROC, GIST_PENALTY_PROC,
-    GIST_PICKSPLIT_PROC, GIST_SORTSUPPORT_PROC, GIST_TRANSLATE_CMPTYPE_PROC, GIST_UNION_PROC,
+    GISTNProcs, GIST_COMPRESS_PROC, GIST_CONSISTENT_PROC, GIST_DECOMPRESS_PROC, GIST_DISTANCE_PROC,
+    GIST_EQUAL_PROC, GIST_FETCH_PROC, GIST_OPTIONS_PROC, GIST_PENALTY_PROC, GIST_PICKSPLIT_PROC,
+    GIST_SORTSUPPORT_PROC, GIST_TRANSLATE_CMPTYPE_PROC, GIST_UNION_PROC,
 };
 
 fn info(msg: String) -> PgResult<()> {
@@ -33,11 +33,16 @@ pub fn gistvalidate(opclassoid: Oid) -> PgResult<bool> {
         .unwrap_or_else(|| panic!("cache lookup failed for operator class {opclassoid}"));
     let opfamilyoid = shape.opcfamily;
     let opcintype = shape.opcintype;
-    let opckeytype = if shape.opckeytype != InvalidOid { shape.opckeytype } else { opcintype };
+    let opckeytype = if shape.opckeytype != InvalidOid {
+        shape.opckeytype
+    } else {
+        opcintype
+    };
     let opclassname_data = syscache_seams::pg_opclass_opcname::call(opclassoid)?
         .unwrap_or_else(|| panic!("cache lookup failed for operator class {opclassoid}"));
-    let opclassname =
-        core::str::from_utf8(opclassname_data.name_str()).unwrap_or("").to_string();
+    let opclassname = core::str::from_utf8(opclassname_data.name_str())
+        .unwrap_or("")
+        .to_string();
 
     let opfamilyname = lsyscache::get_opfamily_name(mcx, opfamilyoid, false)?
         .expect("opfamily name")

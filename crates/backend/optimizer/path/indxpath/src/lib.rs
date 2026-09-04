@@ -62,17 +62,16 @@ pub fn check_index_predicates<'mcx>(run: &mut PlannerRun<'mcx>, rel: RelId) -> P
     };
     let mut otherrels =
         types_pathnodes::relids::relids_difference(mcx, &run.root.all_query_rels, &subtract);
-    otherrels =
-        types_pathnodes::relids::relids_difference(mcx, &otherrels, &run.root.rel(rel).nulling_relids);
+    otherrels = types_pathnodes::relids::relids_difference(
+        mcx,
+        &otherrels,
+        &run.root.rel(rel).nulling_relids,
+    );
     if !types_pathnodes::relids::relids_is_empty(&otherrels) {
-        let join_relids = types_pathnodes::relids::relids_union(mcx, &run.root.rel(rel).relids, &otherrels);
-        let derived = equivclass::generate_join_implied_equalities(
-            run,
-            &join_relids,
-            &otherrels,
-            rel,
-            None,
-        )?;
+        let join_relids =
+            types_pathnodes::relids::relids_union(mcx, &run.root.rel(rel).relids, &otherrels);
+        let derived =
+            equivclass::generate_join_implied_equalities(run, &join_relids, &otherrels, rel, None)?;
         clause_rids.extend(derived.iter().copied());
     }
     let mut clauselist: PgVec<'mcx, Node<'mcx>> = PgVec::new_in(mcx);
@@ -214,7 +213,8 @@ pub fn create_index_paths<'mcx>(run: &mut PlannerRun<'mcx>, rel: RelId) -> PgRes
 
     if !bitindexpaths.is_empty() {
         let bitmapqual = choose_bitmap_and(run, rel, &bitindexpaths)?;
-        let lateral_relids = types_pathnodes::relids::relids_copy(mcx, &run.root.rel(rel).lateral_relids);
+        let lateral_relids =
+            types_pathnodes::relids::relids_copy(mcx, &run.root.rel(rel).lateral_relids);
         let bpath =
             pathnode::create_bitmap_heap_path(run, rel, bitmapqual, &lateral_relids, 1.0, 0)?;
         add_path(run, rel, bpath);
@@ -364,7 +364,8 @@ fn consider_index_join_outer_rels<'mcx>(
     let mcx = run.mcx;
     for iclause in indexjoinclauses {
         let rid = iclause.rinfo.expect("IndexClause rinfo");
-        let clause_relids = types_pathnodes::relids::relids_copy(mcx, &run.root.rinfo(rid).clause_relids);
+        let clause_relids =
+            types_pathnodes::relids::relids_copy(mcx, &run.root.rinfo(rid).clause_relids);
         let parent_ec = run.root.rinfo(rid).parent_ec;
         if considered_relids
             .iter()
@@ -585,7 +586,8 @@ fn match_join_clauses_to_index<'mcx>(
     clauseset: &mut IndexClauseSet<'mcx>,
     joinorclauses: &mut PgVec<'mcx, RinfoId>,
 ) -> PgResult<()> {
-    let joininfo = types_pathnodes::relids::pgvec_clone_shallow(run.mcx, &run.root.rel(rel).joininfo);
+    let joininfo =
+        types_pathnodes::relids::pgvec_clone_shallow(run.mcx, &run.root.rel(rel).joininfo);
     for &rid in joininfo.iter() {
         if !join_clause_is_movable_to(run, rid, rel) {
             continue;
@@ -770,7 +772,16 @@ fn match_boolean_index_clause<'mcx>(
     let Some(op) = op else { return Ok(None) };
     let mut indexquals = PgVec::new_in(mcx);
     indexquals.push(planner_seams::make_restrictinfo::call(
-        run, op, true, false, false, false, 0, relids_empty(), relids_empty(), relids_empty(),
+        run,
+        op,
+        true,
+        false,
+        false,
+        false,
+        0,
+        relids_empty(),
+        relids_empty(),
+        relids_empty(),
     )?);
     Ok(Some(IndexClause {
         rinfo: Some(rinfo),
@@ -923,8 +934,7 @@ fn match_rowcompare_to_indexcol<'mcx>(
     match lsyscache::run_memo::get_op_opfamily_strategy(run, expr_op, opfamily)? {
         1 | 2 | 4 | 5 => {
             // BTLess/BTLessEqual/BTGreaterEqual/BTGreater
-            expand_indexqual_rowcompare(run, rinfo, indexcol, index, expr_op, var_on_left)
-                .map(Some)
+            expand_indexqual_rowcompare(run, rinfo, indexcol, index, expr_op, var_on_left).map(Some)
         }
         _ => Ok(None),
     }
@@ -949,11 +959,19 @@ fn expand_indexqual_rowcompare<'mcx>(
     let index_relid = run.root.rel(index.rel.expect("index rel set")).relid;
     let clause = *run.root.expr_node(run.root.rinfo(rinfo).clause);
     let rc = clause.as_row_compare_expr().expect("RowCompareExpr");
-    let (var_args, non_var_args) =
-        if var_on_left { (&rc.largs, &rc.rargs) } else { (&rc.rargs, &rc.largs) };
+    let (var_args, non_var_args) = if var_on_left {
+        (&rc.largs, &rc.rargs)
+    } else {
+        (&rc.rargs, &rc.largs)
+    };
 
     let (mut op_strategy, op_lefttype, op_righttype) =
-        lsyscache::run_memo::get_op_opfamily_properties(run, first_op, index.opfamily[indexcol], false)?;
+        lsyscache::run_memo::get_op_opfamily_properties(
+            run,
+            first_op,
+            index.opfamily[indexcol],
+            false,
+        )?;
 
     let mut indexcols: PgVec<'mcx, i16> = PgVec::new_in(mcx);
     indexcols.push(indexcol as i16);
@@ -1002,8 +1020,12 @@ fn expand_indexqual_rowcompare<'mcx>(
         let Some(i) = matched else { break };
 
         indexcols.push(i as i16);
-        let (strat, lefttype, righttype) =
-            lsyscache::run_memo::get_op_opfamily_properties(run, expr_op, index.opfamily[i], false)?;
+        let (strat, lefttype, righttype) = lsyscache::run_memo::get_op_opfamily_properties(
+            run,
+            expr_op,
+            index.opfamily[i],
+            false,
+        )?;
         op_strategy = strat;
         expr_ops.push(expr_op);
         opfamilies.push(index.opfamily[i]);
@@ -1083,7 +1105,16 @@ fn expand_indexqual_rowcompare<'mcx>(
             },
         )?;
         planner_seams::make_restrictinfo::call(
-            run, new_rc, true, false, false, false, 0, relids_empty(), relids_empty(), relids_empty(),
+            run,
+            new_rc,
+            true,
+            false,
+            false,
+            false,
+            0,
+            relids_empty(),
+            relids_empty(),
+            relids_empty(),
         )?
     } else {
         indexcols.clear();
@@ -1095,7 +1126,16 @@ fn expand_indexqual_rowcompare<'mcx>(
             rc.inputcollids.nth(0),
         )?;
         planner_seams::make_restrictinfo::call(
-            run, op, true, false, false, false, 0, relids_empty(), relids_empty(), relids_empty(),
+            run,
+            op,
+            true,
+            false,
+            false,
+            false,
+            0,
+            relids_empty(),
+            relids_empty(),
+            relids_empty(),
         )?
     };
 
@@ -1333,7 +1373,16 @@ fn match_orclause_to_indexcol<'mcx>(
     .expect("array type verified on the first arm");
     let mut indexquals = PgVec::new_in(mcx);
     indexquals.push(planner_seams::make_restrictinfo::call(
-        run, saop, true, false, false, false, 0, relids_empty(), relids_empty(), relids_empty(),
+        run,
+        saop,
+        true,
+        false,
+        false,
+        false,
+        0,
+        relids_empty(),
+        relids_empty(),
+        relids_empty(),
     )?);
     Ok(Some(IndexClause {
         rinfo: Some(rinfo),
@@ -1422,11 +1471,8 @@ fn get_index_clause_from_support<'mcx>(
                 index.indexcollations[indexcol],
             );
             let addr = core::ptr::from_mut(&mut req) as usize;
-            let result = fmgr_core::oid_function_call1_coll(
-                prosupport,
-                0,
-                datum::Datum::from_usize(addr),
-            )?;
+            let result =
+                fmgr_core::oid_function_call1_coll(prosupport, 0, datum::Datum::from_usize(addr))?;
             match core::ptr::NonNull::new(result.as_usize() as *mut ()) {
                 None => None,
                 Some(p) => {
@@ -1451,7 +1497,16 @@ fn get_index_clause_from_support<'mcx>(
     for expr in exprs.iter() {
         // make_simple_restrictinfo (restrictinfo.h).
         indexquals.push(planner_seams::make_restrictinfo::call(
-            run, *expr, true, false, false, false, 0, relids_empty(), relids_empty(), relids_empty(),
+            run,
+            *expr,
+            true,
+            false,
+            false,
+            false,
+            0,
+            relids_empty(),
+            relids_empty(),
+            relids_empty(),
         )?);
     }
     Ok(Some(IndexClause {
@@ -1578,8 +1633,8 @@ pub fn match_index_to_operand<'mcx>(
     indexcol: usize,
     index: &IndexOptInfo<'_>,
 ) -> bool {
-    operand = vars::strip_noop_phvs(run.mcx, operand)
-        .expect("strip_noop_phvs: arena allocation failed");
+    operand =
+        vars::strip_noop_phvs(run.mcx, operand).expect("strip_noop_phvs: arena allocation failed");
     while operand.node_tag() == NodeTag::T_RelabelType {
         operand = operand.as_relabel_type().unwrap().arg;
     }
@@ -1826,7 +1881,8 @@ fn build_index_paths<'mcx>(
     let mut result: PgVec<'mcx, PathId> = PgVec::new_in(mcx);
 
     let mut index_clauses: PgVec<'mcx, IndexClause<'mcx>> = PgVec::new_in(mcx);
-    let mut outer_relids = types_pathnodes::relids::relids_copy(mcx, &run.root.rel(rel).lateral_relids);
+    let mut outer_relids =
+        types_pathnodes::relids::relids_copy(mcx, &run.root.rel(rel).lateral_relids);
     for indexcol in 0..index.nkeycolumns as usize {
         for ic in clauses.indexclauses[indexcol].iter() {
             let rid = ic.rinfo.expect("IndexClause rinfo");
@@ -1841,8 +1897,11 @@ fn build_index_paths<'mcx>(
             return Ok(result);
         }
     }
-    outer_relids =
-        types_pathnodes::relids::relids_del_member(mcx, &outer_relids, run.root.rel(rel).relid as i32);
+    outer_relids = types_pathnodes::relids::relids_del_member(
+        mcx,
+        &outer_relids,
+        run.root.rel(rel).relid as i32,
+    );
 
     let cur_relid = run.root.rel(rel).relid;
     let loop_count = get_loop_count(run, cur_relid, &outer_relids)?;
@@ -1870,7 +1929,13 @@ fn build_index_paths<'mcx>(
             // over the partially sorted output (C build_index_paths step 2).
             (orderbyclauses, orderbyclausecols) = match_pathkeys_to_index(run, index)?;
             let mut v: PgVec<'mcx, types_pathnodes::PathKey> = PgVec::new_in(mcx);
-            v.extend(run.root.query_pathkeys.iter().take(orderbyclauses.len()).copied());
+            v.extend(
+                run.root
+                    .query_pathkeys
+                    .iter()
+                    .take(orderbyclauses.len())
+                    .copied(),
+            );
             v
         } else {
             PgVec::new_in(mcx)
@@ -1919,7 +1984,10 @@ fn build_index_paths<'mcx>(
             v
         };
         let (forward_orderbys, forward_orderbycols) = if parallel_arm {
-            (clone_orderbys(&orderbyclauses), clone_ints(&orderbyclausecols))
+            (
+                clone_orderbys(&orderbyclauses),
+                clone_ints(&orderbyclausecols),
+            )
         } else {
             (
                 core::mem::replace(&mut orderbyclauses, PgVec::new_in(mcx)),
@@ -2694,8 +2762,7 @@ fn bitmap_scan_cost_est<'mcx>(
     );
     let cur_relid = run.root.rel(rel).relid;
     let loop_count = get_loop_count(run, cur_relid, &required_outer)?;
-    let bpath =
-        pathnode::create_bitmap_heap_path(run, rel, ipath, &required_outer, loop_count, 0)?;
+    let bpath = pathnode::create_bitmap_heap_path(run, rel, ipath, &required_outer, loop_count, 0)?;
     Ok(run.root.path(bpath).base().total_cost)
 }
 
@@ -2785,8 +2852,14 @@ pub fn relation_has_unique_index_ext<'mcx>(
                 )? {
                     continue;
                 }
-                let o = clause.as_op_expr().expect("mergejoinable clause is an OpExpr");
-                let rexpr = if outer_is_left { o.args.nth(1) } else { o.args.nth(0) };
+                let o = clause
+                    .as_op_expr()
+                    .expect("mergejoinable clause is an OpExpr");
+                let rexpr = if outer_is_left {
+                    o.args.nth(1)
+                } else {
+                    o.args.nth(0)
+                };
                 if match_index_to_operand(run, rexpr, c, ind) {
                     matched = true;
                     if extra_clauses.is_some()

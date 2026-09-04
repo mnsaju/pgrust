@@ -15,11 +15,11 @@ use crate::btree::{ginFindLeafPage, ginInsertValue};
 use crate::bulk::BuildAccumulator;
 use crate::datapage::{createPostingTree, ginInsertItemPointers};
 use crate::entrypage::{
-    gin_get_posting_tree, gin_is_posting_tree, gin_set_posting_tree, ginReadTuple, EntryBtree,
+    ginReadTuple, gin_get_posting_tree, gin_is_posting_tree, gin_set_posting_tree, EntryBtree,
     EntryPayload, GinFormTuple,
 };
 use crate::postinglist::{ginCompressPostingList, ginMergeItemPointers};
-use crate::util::{gin_use_fastupdate, ginExtractEntries, initGinState};
+use crate::util::{ginExtractEntries, gin_use_fastupdate, initGinState};
 use crate::{page_ref, unported, GinPageIsLeaf, GIN_UNLOCK};
 
 use std::cell::RefCell;
@@ -157,8 +157,7 @@ fn addItemPointersToLeafTuple<'s>(
 
     let new_items = ginMergeItemPointers(mcx, items, old_items.as_slice())?;
 
-    let (compressed, npacked) =
-        ginCompressPostingList(mcx, new_items.as_slice(), GinMaxItemSize)?;
+    let (compressed, npacked) = ginCompressPostingList(mcx, new_items.as_slice(), GinMaxItemSize)?;
     if npacked == new_items.len() {
         if let Some(res) = GinFormTuple(
             mcx,
@@ -185,8 +184,8 @@ fn addItemPointersToLeafTuple<'s>(
         buffer,
     )?;
     ginInsertItemPointers(mcx, rel, posting_root, items, buildStats)?;
-    let mut res =
-        GinFormTuple(mcx, rel, state, attnum, key, category, &[], 0, 0, true)?.expect("errorTooBig");
+    let mut res = GinFormTuple(mcx, rel, state, attnum, key, category, &[], 0, 0, true)?
+        .expect("errorTooBig");
     // SAFETY: owned tuple image.
     unsafe { gin_set_posting_tree(res.as_mut_ptr(), posting_root) };
     Ok(res)
@@ -222,8 +221,8 @@ fn buildFreshLeafTuple<'s>(
         }
     }
 
-    let mut res =
-        GinFormTuple(mcx, rel, state, attnum, key, category, &[], 0, 0, true)?.expect("errorTooBig");
+    let mut res = GinFormTuple(mcx, rel, state, attnum, key, category, &[], 0, 0, true)?
+        .expect("errorTooBig");
     let posting_root = createPostingTree(mcx, rel, items, buildStats, buffer)?;
     // SAFETY: owned tuple image.
     unsafe { gin_set_posting_tree(res.as_mut_ptr(), posting_root) };

@@ -112,6 +112,10 @@ fn seat_bind_unwinds_on_panic() {
     assert_eq!(g::MyProcPid(), neutral_pid);
     {
         let _bind = a.bind();
-        assert_eq!(g::MyProcPid(), 303, "identity survived the panic in the seat");
+        assert_eq!(
+            g::MyProcPid(),
+            303,
+            "identity survived the panic in the seat"
+        );
     }
 }

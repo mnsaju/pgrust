@@ -5,7 +5,7 @@ use types_error::PgResult;
 use types_tuple::varatt;
 use types_tuple::{HeapTupleData, TupleDescData};
 
-use crate::compute::{compute_hash_value, hash_index, CatCKey, CCFastKind, NAMEDATALEN};
+use crate::compute::{compute_hash_value, hash_index, CCFastKind, CatCKey, NAMEDATALEN};
 use crate::{
     pack_ref, payload_alloc, payload_free, with_state, CatCInProgress, CatCTup, CatCache,
     CatCacheState, CATCACHE_MAXKEYS, NONE,
@@ -42,7 +42,7 @@ impl<'mcx> CatCache<'mcx> {
         }
     }
 
-        #[inline]
+    #[inline]
     pub(crate) fn ct_move_head(&mut self, bucket: usize, slot: u32) {
         if self.cc_bucket[bucket] == slot {
             return;
@@ -210,7 +210,10 @@ pub fn InitCatCache(
         if st.caches.len() <= idx {
             st.caches.resize_with(idx + 1, || None);
         }
-        assert!(st.caches[idx].is_none(), "catcache: cache id {id} registered twice");
+        assert!(
+            st.caches[idx].is_none(),
+            "catcache: cache id {id} registered twice"
+        );
         st.caches[idx] = Some(cache);
     });
     Ok(())
@@ -325,7 +328,12 @@ fn bump_inval_epoch() {
 pub fn CatCacheInvalidate(cache_id: i32, hash_value: u32) {
     bump_inval_epoch();
     with_state(|st| {
-        if st.caches.get(cache_id as usize).map(|c| c.is_none()).unwrap_or(true) {
+        if st
+            .caches
+            .get(cache_id as usize)
+            .map(|c| c.is_none())
+            .unwrap_or(true)
+        {
             return;
         }
         invalidate_one(st, cache_id, hash_value);
@@ -473,11 +481,17 @@ pub(crate) unsafe fn varlena_payload(p: *const u8) -> (*const u8, usize) {
     let b = unsafe { *p };
     if b != 0x01 && (b & 0x01) == 0x01 {
         let total = ((b >> 1) & 0x7F) as usize;
-        (unsafe { p.add(1) }, total.saturating_sub(varatt::VARHDRSZ_SHORT))
+        (
+            unsafe { p.add(1) },
+            total.saturating_sub(varatt::VARHDRSZ_SHORT),
+        )
     } else {
         let word = unsafe { core::ptr::read_unaligned(p.cast::<u32>()) };
         let total = varatt::varsize_4b_word(word) as usize;
-        (unsafe { p.add(varatt::VARHDRSZ) }, total.saturating_sub(varatt::VARHDRSZ))
+        (
+            unsafe { p.add(varatt::VARHDRSZ) },
+            total.saturating_sub(varatt::VARHDRSZ),
+        )
     }
 }
 
@@ -554,7 +568,10 @@ pub(crate) fn create_entry_positive(
     ntp: &HeapTupleData<'_>,
     hash_value: u32,
 ) -> PgResult<u32> {
-    debug_assert!(!ntp.has_external(), "caller flattens via create_entry_from_scan");
+    debug_assert!(
+        !ntp.has_external(),
+        "caller flattens via create_entry_from_scan"
+    );
     let mcx = st.mcx;
     let t_len = ntp.t_len;
     let payload_len = crate::IMG_PREFIX + t_len as usize;
@@ -571,12 +588,13 @@ pub(crate) fn create_entry_positive(
         image
     };
     // SAFETY: `image` now holds a valid tuple image (verbatim copy).
-    let cached_view: HeapTupleData<'_> = unsafe {
-        HeapTupleData::from_raw_parts(image, t_len, ntp.t_self, ntp.t_tableOid)
-    };
+    let cached_view: HeapTupleData<'_> =
+        unsafe { HeapTupleData::from_raw_parts(image, t_len, ntp.t_self, ntp.t_tableOid) };
 
     let cache = st.cache(cache_id);
-    let tupdesc = cache.cc_tupdesc.expect("catcache: entry created before phase-2 init");
+    let tupdesc = cache
+        .cc_tupdesc
+        .expect("catcache: entry created before phase-2 init");
     let (nkeys, kinds, keyno) = (cache.cc_nkeys, cache.cc_kind, cache.cc_keyno);
     let mut keys = [Datum::null(); CATCACHE_MAXKEYS];
     for i in 0..nkeys as usize {
@@ -651,7 +669,10 @@ pub(crate) fn create_entry_negative(
     let (nkeys, kinds) = (cache.cc_nkeys, cache.cc_kind);
     let mut byref_len = 0usize;
     for i in 0..nkeys as usize {
-        if matches!(kinds[i], CCFastKind::Name | CCFastKind::Text | CCFastKind::OidVector) {
+        if matches!(
+            kinds[i],
+            CCFastKind::Name | CCFastKind::Text | CCFastKind::OidVector
+        ) {
             byref_len += probes[i].bytes().len();
         }
     }
@@ -708,10 +729,23 @@ pub(crate) fn maybe_rehash(st: &mut CatCacheState<'_>, cache_id: i32) {
     }
 }
 
-pub(crate) fn push_in_progress(st: &mut CatCacheState<'_>, cache_id: i32, hash_value: u32, list: bool) {
-    st.in_progress.push(CatCInProgress { cache_id, hash_value, list, dead: false });
+pub(crate) fn push_in_progress(
+    st: &mut CatCacheState<'_>,
+    cache_id: i32,
+    hash_value: u32,
+    list: bool,
+) {
+    st.in_progress.push(CatCInProgress {
+        cache_id,
+        hash_value,
+        list,
+        dead: false,
+    });
 }
 
 pub(crate) fn pop_in_progress(st: &mut CatCacheState<'_>) -> bool {
-    st.in_progress.pop().expect("catcache: empty in-progress stack").dead
+    st.in_progress
+        .pop()
+        .expect("catcache: empty in-progress stack")
+        .dead
 }

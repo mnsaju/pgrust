@@ -15,7 +15,9 @@ pub fn instr_time_current() -> instr_time {
     use std::time::Instant;
     static ANCHOR: OnceLock<Instant> = OnceLock::new();
     let anchor = *ANCHOR.get_or_init(Instant::now);
-    instr_time { ticks: anchor.elapsed().as_nanos() as i64 + 1 }
+    instr_time {
+        ticks: anchor.elapsed().as_nanos() as i64 + 1,
+    }
 }
 
 // pgBufferUsage (instrument.c): shared/local blks tick in bufmgr::counters
@@ -231,12 +233,18 @@ pub fn buffer_usage_accum_diff(dst: &mut BufferUsage, add: &BufferUsage, sub: &B
     dst.local_blks_written += add.local_blks_written - sub.local_blks_written;
     dst.temp_blks_read += add.temp_blks_read - sub.temp_blks_read;
     dst.temp_blks_written += add.temp_blks_written - sub.temp_blks_written;
-    dst.shared_blk_read_time.accum_diff(add.shared_blk_read_time, sub.shared_blk_read_time);
-    dst.shared_blk_write_time.accum_diff(add.shared_blk_write_time, sub.shared_blk_write_time);
-    dst.local_blk_read_time.accum_diff(add.local_blk_read_time, sub.local_blk_read_time);
-    dst.local_blk_write_time.accum_diff(add.local_blk_write_time, sub.local_blk_write_time);
-    dst.temp_blk_read_time.accum_diff(add.temp_blk_read_time, sub.temp_blk_read_time);
-    dst.temp_blk_write_time.accum_diff(add.temp_blk_write_time, sub.temp_blk_write_time);
+    dst.shared_blk_read_time
+        .accum_diff(add.shared_blk_read_time, sub.shared_blk_read_time);
+    dst.shared_blk_write_time
+        .accum_diff(add.shared_blk_write_time, sub.shared_blk_write_time);
+    dst.local_blk_read_time
+        .accum_diff(add.local_blk_read_time, sub.local_blk_read_time);
+    dst.local_blk_write_time
+        .accum_diff(add.local_blk_write_time, sub.local_blk_write_time);
+    dst.temp_blk_read_time
+        .accum_diff(add.temp_blk_read_time, sub.temp_blk_read_time);
+    dst.temp_blk_write_time
+        .accum_diff(add.temp_blk_write_time, sub.temp_blk_write_time);
 }
 
 pub fn wal_usage_add(dst: &mut WalUsage, add: &WalUsage) {
@@ -247,7 +255,9 @@ pub fn wal_usage_add(dst: &mut WalUsage, add: &WalUsage) {
 }
 
 pub fn wal_usage_accum_diff(dst: &mut WalUsage, add: &WalUsage, sub: &WalUsage) {
-    dst.wal_bytes = dst.wal_bytes.wrapping_add(add.wal_bytes.wrapping_sub(sub.wal_bytes));
+    dst.wal_bytes = dst
+        .wal_bytes
+        .wrapping_add(add.wal_bytes.wrapping_sub(sub.wal_bytes));
     dst.wal_records += add.wal_records - sub.wal_records;
     dst.wal_fpi += add.wal_fpi - sub.wal_fpi;
     dst.wal_buffers_full += add.wal_buffers_full - sub.wal_buffers_full;

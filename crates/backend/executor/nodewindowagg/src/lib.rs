@@ -82,11 +82,17 @@ enum WfKind {
     PercentRank,
     CumeDist,
     Ntile,
-    LeadLag { forward: bool, withoffset: bool, withdefault: bool },
+    LeadLag {
+        forward: bool,
+        withoffset: bool,
+        withdefault: bool,
+    },
     FirstValue,
     LastValue,
     NthValue,
-    PlainAgg { aggno: u16 },
+    PlainAgg {
+        aggno: u16,
+    },
 }
 
 // C WindowStatePerFuncData + the WindowObject position fields (markptr is
@@ -127,9 +133,16 @@ struct DefaultFinal {
 }
 
 enum AggKernel {
-    Generic { transfn: FmgrInfo },
-    MovingByVal { transfn: FmgrInfo, invtransfn: FmgrInfo },
-    MovingIntSum { int2: bool },
+    Generic {
+        transfn: FmgrInfo,
+    },
+    MovingByVal {
+        transfn: FmgrInfo,
+        invtransfn: FmgrInfo,
+    },
+    MovingIntSum {
+        int2: bool,
+    },
 }
 
 // C WindowStatePerAggData, byval-transtype closed set (framed lane only; the
@@ -249,7 +262,9 @@ pub struct WindowAggStateData<'mcx> {
 #[cold]
 #[inline(never)]
 fn wfunc_lookup_failed(fnoid: Oid) -> Box<PgError> {
-    Box::new(PgError::error(format!("cache lookup failed for aggregate {fnoid}")))
+    Box::new(PgError::error(format!(
+        "cache lookup failed for aggregate {fnoid}"
+    )))
 }
 
 #[track_caller]
@@ -370,8 +385,13 @@ fn erased_agg_argtypes<'mcx>(
     // SAFETY: arena-backed for the query; the carrier FmgrInfos die with the
     // plan they serve (execexpr's ExecBuildAggTrans precedent).
     let leaked: &'static [Oid] = unsafe { core::mem::transmute(argtypes.leak()) };
-    let carrier =
-        ::mcx::alloc_leak_in(mcx, ::types_core::fmgr::AggFnArgTypes { rettype, argtypes: leaked })?;
+    let carrier = ::mcx::alloc_leak_in(
+        mcx,
+        ::types_core::fmgr::AggFnArgTypes {
+            rettype,
+            argtypes: leaked,
+        },
+    )?;
     // SAFETY: as above.
     Ok(unsafe { ::types_core::fmgr::FnExprErased::from_node_ref(carrier) })
 }
@@ -449,20 +469,36 @@ fn wfkind_for_builtin(oid: Oid) -> Option<WfKind> {
         F_WINDOW_PERCENT_RANK => WfKind::PercentRank,
         F_WINDOW_CUME_DIST => WfKind::CumeDist,
         F_WINDOW_NTILE => WfKind::Ntile,
-        F_WINDOW_LAG => WfKind::LeadLag { forward: false, withoffset: false, withdefault: false },
-        F_WINDOW_LAG_WITH_OFFSET => {
-            WfKind::LeadLag { forward: false, withoffset: true, withdefault: false }
-        }
-        F_WINDOW_LAG_WITH_OFFSET_AND_DEFAULT => {
-            WfKind::LeadLag { forward: false, withoffset: true, withdefault: true }
-        }
-        F_WINDOW_LEAD => WfKind::LeadLag { forward: true, withoffset: false, withdefault: false },
-        F_WINDOW_LEAD_WITH_OFFSET => {
-            WfKind::LeadLag { forward: true, withoffset: true, withdefault: false }
-        }
-        F_WINDOW_LEAD_WITH_OFFSET_AND_DEFAULT => {
-            WfKind::LeadLag { forward: true, withoffset: true, withdefault: true }
-        }
+        F_WINDOW_LAG => WfKind::LeadLag {
+            forward: false,
+            withoffset: false,
+            withdefault: false,
+        },
+        F_WINDOW_LAG_WITH_OFFSET => WfKind::LeadLag {
+            forward: false,
+            withoffset: true,
+            withdefault: false,
+        },
+        F_WINDOW_LAG_WITH_OFFSET_AND_DEFAULT => WfKind::LeadLag {
+            forward: false,
+            withoffset: true,
+            withdefault: true,
+        },
+        F_WINDOW_LEAD => WfKind::LeadLag {
+            forward: true,
+            withoffset: false,
+            withdefault: false,
+        },
+        F_WINDOW_LEAD_WITH_OFFSET => WfKind::LeadLag {
+            forward: true,
+            withoffset: true,
+            withdefault: false,
+        },
+        F_WINDOW_LEAD_WITH_OFFSET_AND_DEFAULT => WfKind::LeadLag {
+            forward: true,
+            withoffset: true,
+            withdefault: true,
+        },
         F_WINDOW_FIRST_VALUE => WfKind::FirstValue,
         F_WINDOW_LAST_VALUE => WfKind::LastValue,
         F_WINDOW_NTH_VALUE => WfKind::NthValue,
@@ -558,8 +594,10 @@ pub fn exec_init_window_agg<'mcx>(
     let mut agg_node: Option<NonNull<AggStateNode>> = None;
     for &(_, wfunc) in wfuncs.iter() {
         if wfunc.winagg {
-            agg_node =
-                Some(make_agg_state_node(mcx, mcx.context().new_child_bump("WindowAgg Aggregates"))?);
+            agg_node = Some(make_agg_state_node(
+                mcx,
+                mcx.context().new_child_bump("WindowAgg Aggregates"),
+            )?);
             break;
         }
     }
@@ -671,7 +709,11 @@ pub fn exec_init_window_agg<'mcx>(
     let mut pergroup: PgVec<'mcx, AggPerGroup> = vec_with_capacity_in(mcx, numaggs)?;
     pergroup.resize(
         numaggs,
-        AggPerGroup { trans_value: Datum::null(), trans_value_is_null: true, no_trans_value: true },
+        AggPerGroup {
+            trans_value: Datum::null(),
+            trans_value_is_null: true,
+            no_trans_value: true,
+        },
     );
     let pergroup_base = NonNull::new(pergroup.as_mut_ptr()).unwrap();
 
@@ -721,13 +763,21 @@ pub fn exec_init_window_agg<'mcx>(
         None
     };
 
-    let bind = AggBind { values: agg_values_base, nulls: agg_nulls_base, naggs: numfuncs as u16, grouping: None };
+    let bind = AggBind {
+        values: agg_values_base,
+        nulls: agg_nulls_base,
+        naggs: numfuncs as u16,
+        grouping: None,
+    };
     let proj = ::executils::with_subplan_compile_env(estate, |env| {
         ::execexpr::exec_build_window_projection_info_subplans(
             mcx,
             &node.plan.targetlist,
             None,
-            WinBind { agg: bind, wfuncnos: &wfuncnos },
+            WinBind {
+                agg: bind,
+                wfuncnos: &wfuncnos,
+            },
             params,
             env,
         )
@@ -894,7 +944,14 @@ fn build_eq<'mcx>(
     for &op in operators {
         eqfuncoids.push(lsyscache::get_opcode(op)?);
     }
-    Ok(Some(exec_build_grouping_equal(mcx, desc, desc, col_idx, &eqfuncoids, collations)?))
+    Ok(Some(exec_build_grouping_equal(
+        mcx,
+        desc,
+        desc,
+        col_idx,
+        &eqfuncoids,
+        collations,
+    )?))
 }
 
 // initialize_peragg (nodeWindowAgg.c), default-frame slice (nodeAgg
@@ -956,12 +1013,21 @@ fn initialize_peragg_default<'mcx>(
     }
     let finalfn = if shape.aggfinalfn != 0 {
         let mut f = fmgr_core::fmgr_info(shape.aggfinalfn)?;
-        f.fn_expr = Some(erased_agg_argtypes(mcx, wfunc.wintype, transtype, &wfunc.args)?);
+        f.fn_expr = Some(erased_agg_argtypes(
+            mcx,
+            wfunc.wintype,
+            transtype,
+            &wfunc.args,
+        )?);
         Some(f)
     } else {
         None
     };
-    let num_final_args = if shape.aggfinalextra { wfunc.args.len() as u16 + 1 } else { 1 };
+    let num_final_args = if shape.aggfinalextra {
+        wfunc.args.len() as u16 + 1
+    } else {
+        1
+    };
     let (resulttype_len, resulttype_byval) = lsyscache::get_typlenbyval(wfunc.wintype)?;
     default_final.push(DefaultFinal {
         finalfn,
@@ -987,9 +1053,10 @@ fn initialize_peragg_default<'mcx>(
     }
     trans_init.push(match initval {
         None => NullableDatum::null(),
-        Some(text) => {
-            NullableDatum { value: get_agg_init_val(mcx, &text, transtype)?, isnull: false }
-        }
+        Some(text) => NullableDatum {
+            value: get_agg_init_val(mcx, &text, transtype)?,
+            isnull: false,
+        },
     });
     trans_fnoid.push(shape.aggtransfn);
     trans_collid.push(wfunc.inputcollid);
@@ -998,7 +1065,10 @@ fn initialize_peragg_default<'mcx>(
     // Aggref-shaped TargetEntry cells.
     let mut args = NodeList::nil();
     for (i, arg) in wfunc.args.iter().enumerate() {
-        args.lappend(mcx, Node::mk_target_entry(mcx, arg, (i + 1) as i16, None, false)?)?;
+        args.lappend(
+            mcx,
+            Node::mk_target_entry(mcx, arg, (i + 1) as i16, None, false)?,
+        )?;
     }
     agg_specs_args.push(args);
     Ok(())
@@ -1075,8 +1145,7 @@ fn initialize_peragg_framed<'mcx>(
     }
     .ok_or_else(|| wfunc_lookup_failed(wfunc.winfnoid))?;
 
-    let aggtranstype =
-        resolve_aggregate_transtype(mcx, wfunc.winfnoid, aggtranstype, &wfunc.args)?;
+    let aggtranstype = resolve_aggregate_transtype(mcx, wfunc.winfnoid, aggtranstype, &wfunc.args)?;
     let (trans_typlen, trans_byval) = lsyscache::get_typlenbyval(aggtranstype)?;
     let mut kernel;
     let fn_strict;
@@ -1091,10 +1160,15 @@ fn initialize_peragg_framed<'mcx>(
                 initval.as_ref().map(|s| s.as_str()) == Some("{0,0}"),
                 "MovingIntSum kernel: unexpected minitval {initval:?}"
             );
-            kernel = AggKernel::MovingIntSum { int2: transfn_oid == F_INT2_AVG_ACCUM };
+            kernel = AggKernel::MovingIntSum {
+                int2: transfn_oid == F_INT2_AVG_ACCUM,
+            };
             fn_strict = true;
             has_inverse = true;
-            init_value = NullableDatum { value: Datum::null(), isnull: false };
+            init_value = NullableDatum {
+                value: Datum::null(),
+                isnull: false,
+            };
         }
         (t, 0) => {
             if finalfn_oid != 0 {
@@ -1125,7 +1199,10 @@ fn initialize_peragg_framed<'mcx>(
                 );
             }
             fn_strict = transfn.fn_strict;
-            kernel = AggKernel::MovingByVal { transfn, invtransfn };
+            kernel = AggKernel::MovingByVal {
+                transfn,
+                invtransfn,
+            };
             init_value = match initval {
                 Some(ref text) => NullableDatum {
                     value: get_agg_init_val(mcx, text.as_str(), aggtranstype)?,
@@ -1138,21 +1215,36 @@ fn initialize_peragg_framed<'mcx>(
     let erased = erased_agg_argtypes(mcx, aggtranstype, aggtranstype, &wfunc.args)?;
     match &mut kernel {
         AggKernel::Generic { transfn } => transfn.fn_expr = Some(erased),
-        AggKernel::MovingByVal { transfn, invtransfn } => {
+        AggKernel::MovingByVal {
+            transfn,
+            invtransfn,
+        } => {
             transfn.fn_expr = Some(erased);
             invtransfn.fn_expr = Some(erased);
         }
         AggKernel::MovingIntSum { .. } => {}
     }
     if let Some(f) = finalfn.as_mut() {
-        f.fn_expr = Some(erased_agg_argtypes(mcx, wfunc.wintype, aggtranstype, &wfunc.args)?);
+        f.fn_expr = Some(erased_agg_argtypes(
+            mcx,
+            wfunc.wintype,
+            aggtranstype,
+            &wfunc.args,
+        )?);
     }
-    let num_final_args = if finalextra { wfunc.args.len() as u16 + 1 } else { 1 };
+    let num_final_args = if finalextra {
+        wfunc.args.len() as u16 + 1
+    } else {
+        1
+    };
     let (resulttype_len, resulttype_byval) = lsyscache::get_typlenbyval(wfunc.wintype)?;
     // C gives each moving aggregate a private aggcontext (independent restart
     // resets); non-moving aggregates share winstate->aggcontext.
     let (agg_state, private_ctx) = if use_ma_code {
-        (make_agg_state_node(mcx, mcx.context().new_child_bump("WindowAgg Per Agg"))?, true)
+        (
+            make_agg_state_node(mcx, mcx.context().new_child_bump("WindowAgg Per Agg"))?,
+            true,
+        )
     } else {
         (shared_agg_state, false)
     };
@@ -1240,14 +1332,12 @@ impl<'mcx> WindowAggStateData<'mcx> {
             }
         }
         if self.frameOptions & (FRAMEOPTION_RANGE | FRAMEOPTION_GROUPS) != 0 {
-            if (self.frameOptions & FRAMEOPTION_START_CURRENT_ROW != 0
-                && self.plan.ordNumCols != 0)
+            if (self.frameOptions & FRAMEOPTION_START_CURRENT_ROW != 0 && self.plan.ordNumCols != 0)
                 || self.frameOptions & FRAMEOPTION_START_OFFSET != 0
             {
                 self.framehead_ptr = buffer.alloc_read_pointer(0);
             }
-            if (self.frameOptions & FRAMEOPTION_END_CURRENT_ROW != 0
-                && self.plan.ordNumCols != 0)
+            if (self.frameOptions & FRAMEOPTION_END_CURRENT_ROW != 0 && self.plan.ordNumCols != 0)
                 || self.frameOptions & FRAMEOPTION_END_OFFSET != 0
             {
                 self.frametail_ptr = buffer.alloc_read_pointer(0);
@@ -1320,7 +1410,10 @@ impl<'mcx> WindowAggStateData<'mcx> {
                 pf.remainder = 0;
             }
         }
-        self.buffer.as_mut().unwrap().puttupleslot(&mut self.first_part_slot, mcx)?;
+        self.buffer
+            .as_mut()
+            .unwrap()
+            .puttupleslot(&mut self.first_part_slot, mcx)?;
         self.spooled_rows += 1;
         Ok(())
     }
@@ -1383,7 +1476,10 @@ impl<'mcx> WindowAggStateData<'mcx> {
             }
             if self.status != WaStatus::PassThroughStrict {
                 let outer_slot = estate.slot_mut(outer_id);
-                self.buffer.as_mut().unwrap().puttupleslot(outer_slot, mcx)?;
+                self.buffer
+                    .as_mut()
+                    .unwrap()
+                    .puttupleslot(outer_slot, mcx)?;
                 self.spooled_rows += 1;
             }
         }
@@ -1416,7 +1512,11 @@ impl<'mcx> WindowAggStateData<'mcx> {
         let Some(ord_eq) = ord_eq else {
             return Ok(true);
         };
-        let mut slots = EvalSlots { scan: None, inner: Some(slot2), outer: Some(slot1) };
+        let mut slots = EvalSlots {
+            scan: None,
+            inner: Some(slot2),
+            outer: Some(slot1),
+        };
         let r = exec_qual(Some(ord_eq), &mut slots)?;
         estate.reset_expr_context(tmpcontext);
         Ok(r)
@@ -1550,9 +1650,20 @@ impl<'mcx> WindowAggStateData<'mcx> {
         if !self.gettupleslot_at(estate, fetch, Some(perfunc_ix), pos2, WhichSlot::Temp2)? {
             panic!("specified position is out of window: {pos2}");
         }
-        let Self { ref mut temp_slot_1, ref mut temp_slot_2, ref mut ord_eq, tmpcontext, .. } =
-            *self;
-        Self::are_peers(estate, ord_eq.as_deref_mut(), tmpcontext, temp_slot_1, temp_slot_2)
+        let Self {
+            ref mut temp_slot_1,
+            ref mut temp_slot_2,
+            ref mut ord_eq,
+            tmpcontext,
+            ..
+        } = *self;
+        Self::are_peers(
+            estate,
+            ord_eq.as_deref_mut(),
+            tmpcontext,
+            temp_slot_1,
+            temp_slot_2,
+        )
     }
 
     // rank_up (windowfuncs.c): peer check against the prior row, then the
@@ -1608,8 +1719,12 @@ impl<'mcx> WindowAggStateData<'mcx> {
                     return Ok(());
                 }
                 if self.frameheadpos == 0 && self.framehead_slot.base().is_empty() {
-                    let Self { ref mut buffer, ref mut framehead_slot, framehead_ptr, .. } =
-                        *self;
+                    let Self {
+                        ref mut buffer,
+                        ref mut framehead_slot,
+                        framehead_ptr,
+                        ..
+                    } = *self;
                     let buffer = buffer.as_mut().unwrap();
                     buffer.select_read_pointer(framehead_ptr)?;
                     if !buffer.gettupleslot(true, false, framehead_slot, mcx)? {
@@ -1639,8 +1754,12 @@ impl<'mcx> WindowAggStateData<'mcx> {
                     self.frameheadpos += 1;
                     self.spool_tuples(estate, fetch, self.frameheadpos)?;
                     let more_rows = self.frameheadpos < self.spooled_rows;
-                    let Self { ref mut buffer, ref mut framehead_slot, framehead_ptr, .. } =
-                        *self;
+                    let Self {
+                        ref mut buffer,
+                        ref mut framehead_slot,
+                        framehead_ptr,
+                        ..
+                    } = *self;
                     let buffer = buffer.as_mut().unwrap();
                     buffer.select_read_pointer(framehead_ptr)?;
                     if !more_rows || !buffer.gettupleslot(true, false, framehead_slot, mcx)? {
@@ -1678,8 +1797,12 @@ impl<'mcx> WindowAggStateData<'mcx> {
                     less = true;
                 }
                 if self.frameheadpos == 0 && self.framehead_slot.base().is_empty() {
-                    let Self { ref mut buffer, ref mut framehead_slot, framehead_ptr, .. } =
-                        *self;
+                    let Self {
+                        ref mut buffer,
+                        ref mut framehead_slot,
+                        framehead_ptr,
+                        ..
+                    } = *self;
                     let buffer = buffer.as_mut().unwrap();
                     buffer.select_read_pointer(framehead_ptr)?;
                     if !buffer.gettupleslot(true, false, framehead_slot, mcx)? {
@@ -1728,8 +1851,12 @@ impl<'mcx> WindowAggStateData<'mcx> {
                     self.frameheadpos += 1;
                     self.spool_tuples(estate, fetch, self.frameheadpos)?;
                     let more_rows = self.frameheadpos < self.spooled_rows;
-                    let Self { ref mut buffer, ref mut framehead_slot, framehead_ptr, .. } =
-                        *self;
+                    let Self {
+                        ref mut buffer,
+                        ref mut framehead_slot,
+                        framehead_ptr,
+                        ..
+                    } = *self;
                     let buffer = buffer.as_mut().unwrap();
                     buffer.select_read_pointer(framehead_ptr)?;
                     if !more_rows || !buffer.gettupleslot(true, false, framehead_slot, mcx)? {
@@ -1749,8 +1876,12 @@ impl<'mcx> WindowAggStateData<'mcx> {
                     self.currentgroup.checked_add(offset).unwrap_or(i64::MAX)
                 };
                 if self.frameheadpos == 0 && self.framehead_slot.base().is_empty() {
-                    let Self { ref mut buffer, ref mut framehead_slot, framehead_ptr, .. } =
-                        *self;
+                    let Self {
+                        ref mut buffer,
+                        ref mut framehead_slot,
+                        framehead_ptr,
+                        ..
+                    } = *self;
                     let buffer = buffer.as_mut().unwrap();
                     buffer.select_read_pointer(framehead_ptr)?;
                     if !buffer.gettupleslot(true, false, framehead_slot, mcx)? {
@@ -1762,15 +1893,23 @@ impl<'mcx> WindowAggStateData<'mcx> {
                         break;
                     }
                     {
-                        let Self { ref mut temp_slot_2, ref mut framehead_slot, .. } = *self;
+                        let Self {
+                            ref mut temp_slot_2,
+                            ref mut framehead_slot,
+                            ..
+                        } = *self;
                         exectuples::exec_copy_slot(temp_slot_2, framehead_slot, mcx, mcx)?;
                     }
                     self.frameheadpos += 1;
                     self.spool_tuples(estate, fetch, self.frameheadpos)?;
                     let more_rows = self.frameheadpos < self.spooled_rows;
                     let fetched = {
-                        let Self { ref mut buffer, ref mut framehead_slot, framehead_ptr, .. } =
-                            *self;
+                        let Self {
+                            ref mut buffer,
+                            ref mut framehead_slot,
+                            framehead_ptr,
+                            ..
+                        } = *self;
                         let buffer = buffer.as_mut().unwrap();
                         buffer.select_read_pointer(framehead_ptr)?;
                         more_rows && buffer.gettupleslot(true, false, framehead_slot, mcx)?
@@ -1839,8 +1978,12 @@ impl<'mcx> WindowAggStateData<'mcx> {
                     return Ok(());
                 }
                 if self.frametailpos == 0 && self.frametail_slot.base().is_empty() {
-                    let Self { ref mut buffer, ref mut frametail_slot, frametail_ptr, .. } =
-                        *self;
+                    let Self {
+                        ref mut buffer,
+                        ref mut frametail_slot,
+                        frametail_ptr,
+                        ..
+                    } = *self;
                     let buffer = buffer.as_mut().unwrap();
                     buffer.select_read_pointer(frametail_ptr)?;
                     if !buffer.gettupleslot(true, false, frametail_slot, mcx)? {
@@ -1872,8 +2015,12 @@ impl<'mcx> WindowAggStateData<'mcx> {
                     self.frametailpos += 1;
                     self.spool_tuples(estate, fetch, self.frametailpos)?;
                     let more_rows = self.frametailpos < self.spooled_rows;
-                    let Self { ref mut buffer, ref mut frametail_slot, frametail_ptr, .. } =
-                        *self;
+                    let Self {
+                        ref mut buffer,
+                        ref mut frametail_slot,
+                        frametail_ptr,
+                        ..
+                    } = *self;
                     let buffer = buffer.as_mut().unwrap();
                     buffer.select_read_pointer(frametail_ptr)?;
                     if !more_rows || !buffer.gettupleslot(true, false, frametail_slot, mcx)? {
@@ -1915,8 +2062,12 @@ impl<'mcx> WindowAggStateData<'mcx> {
                     less = false;
                 }
                 if self.frametailpos == 0 && self.frametail_slot.base().is_empty() {
-                    let Self { ref mut buffer, ref mut frametail_slot, frametail_ptr, .. } =
-                        *self;
+                    let Self {
+                        ref mut buffer,
+                        ref mut frametail_slot,
+                        frametail_ptr,
+                        ..
+                    } = *self;
                     let buffer = buffer.as_mut().unwrap();
                     buffer.select_read_pointer(frametail_ptr)?;
                     if !buffer.gettupleslot(true, false, frametail_slot, mcx)? {
@@ -1965,8 +2116,12 @@ impl<'mcx> WindowAggStateData<'mcx> {
                     self.frametailpos += 1;
                     self.spool_tuples(estate, fetch, self.frametailpos)?;
                     let more_rows = self.frametailpos < self.spooled_rows;
-                    let Self { ref mut buffer, ref mut frametail_slot, frametail_ptr, .. } =
-                        *self;
+                    let Self {
+                        ref mut buffer,
+                        ref mut frametail_slot,
+                        frametail_ptr,
+                        ..
+                    } = *self;
                     let buffer = buffer.as_mut().unwrap();
                     buffer.select_read_pointer(frametail_ptr)?;
                     if !more_rows || !buffer.gettupleslot(true, false, frametail_slot, mcx)? {
@@ -1986,8 +2141,12 @@ impl<'mcx> WindowAggStateData<'mcx> {
                     self.currentgroup.checked_add(offset).unwrap_or(i64::MAX)
                 };
                 if self.frametailpos == 0 && self.frametail_slot.base().is_empty() {
-                    let Self { ref mut buffer, ref mut frametail_slot, frametail_ptr, .. } =
-                        *self;
+                    let Self {
+                        ref mut buffer,
+                        ref mut frametail_slot,
+                        frametail_ptr,
+                        ..
+                    } = *self;
                     let buffer = buffer.as_mut().unwrap();
                     buffer.select_read_pointer(frametail_ptr)?;
                     if !buffer.gettupleslot(true, false, frametail_slot, mcx)? {
@@ -1999,15 +2158,23 @@ impl<'mcx> WindowAggStateData<'mcx> {
                         break;
                     }
                     {
-                        let Self { ref mut temp_slot_2, ref mut frametail_slot, .. } = *self;
+                        let Self {
+                            ref mut temp_slot_2,
+                            ref mut frametail_slot,
+                            ..
+                        } = *self;
                         exectuples::exec_copy_slot(temp_slot_2, frametail_slot, mcx, mcx)?;
                     }
                     self.frametailpos += 1;
                     self.spool_tuples(estate, fetch, self.frametailpos)?;
                     let more_rows = self.frametailpos < self.spooled_rows;
                     let fetched = {
-                        let Self { ref mut buffer, ref mut frametail_slot, frametail_ptr, .. } =
-                            *self;
+                        let Self {
+                            ref mut buffer,
+                            ref mut frametail_slot,
+                            frametail_ptr,
+                            ..
+                        } = *self;
                         let buffer = buffer.as_mut().unwrap();
                         buffer.select_read_pointer(frametail_ptr)?;
                         more_rows && buffer.gettupleslot(true, false, frametail_slot, mcx)?
@@ -2065,13 +2232,23 @@ impl<'mcx> WindowAggStateData<'mcx> {
             return Ok(());
         }
         debug_assert!(self.grouptailpos <= self.currentpos);
-        self.buffer.as_mut().unwrap().select_read_pointer(self.grouptail_ptr)?;
+        self.buffer
+            .as_mut()
+            .unwrap()
+            .select_read_pointer(self.grouptail_ptr)?;
         loop {
             self.grouptailpos += 1;
             self.spool_tuples(estate, fetch, self.grouptailpos)?;
             let fetched = {
-                let Self { ref mut buffer, ref mut temp_slot_2, .. } = *self;
-                buffer.as_mut().unwrap().gettupleslot(true, false, temp_slot_2, mcx)?
+                let Self {
+                    ref mut buffer,
+                    ref mut temp_slot_2,
+                    ..
+                } = *self;
+                buffer
+                    .as_mut()
+                    .unwrap()
+                    .gettupleslot(true, false, temp_slot_2, mcx)?
             };
             if !fetched {
                 break;
@@ -2159,7 +2336,11 @@ impl<'mcx> WindowAggStateData<'mcx> {
                 }
                 // On overflow the frame end is beyond i64 range: the frame
                 // extends to end of partition, so the row is in frame.
-                if self.currentpos.checked_add(offset).is_some_and(|end| pos > end) {
+                if self
+                    .currentpos
+                    .checked_add(offset)
+                    .is_some_and(|end| pos > end)
+                {
                     return Ok(-1);
                 }
             } else {
@@ -2239,10 +2420,12 @@ impl<'mcx> WindowAggStateData<'mcx> {
             // C evaluates the offset exprs before any row is fetched;
             // every other dep waits for a first spooled row (hoist below).
             let mut deps: Vec<u32> = Vec::new();
-            for state in
-                [self.start_offset_state.as_deref(), self.end_offset_state.as_deref()]
-                    .into_iter()
-                    .flatten()
+            for state in [
+                self.start_offset_state.as_deref(),
+                self.end_offset_state.as_deref(),
+            ]
+            .into_iter()
+            .flatten()
             {
                 deps.extend_from_slice(state.param_exec_deps());
             }
@@ -2251,7 +2434,10 @@ impl<'mcx> WindowAggStateData<'mcx> {
             }
         }
         if fo & FRAMEOPTION_START_OFFSET != 0 {
-            let state = self.start_offset_state.as_deref_mut().expect("startOffset ExprState");
+            let state = self
+                .start_offset_state
+                .as_deref_mut()
+                .expect("startOffset ExprState");
             let mut slots = EvalSlots::default();
             let nd = exec_eval_expr(state, &mut slots)?;
             if nd.isnull {
@@ -2267,7 +2453,10 @@ impl<'mcx> WindowAggStateData<'mcx> {
             }
         }
         if fo & FRAMEOPTION_END_OFFSET != 0 {
-            let state = self.end_offset_state.as_deref_mut().expect("endOffset ExprState");
+            let state = self
+                .end_offset_state
+                .as_deref_mut()
+                .expect("endOffset ExprState");
             let mut slots = EvalSlots::default();
             let nd = exec_eval_expr(state, &mut slots)?;
             if nd.isnull {
@@ -2322,7 +2511,12 @@ impl<'mcx> WindowAggStateData<'mcx> {
         perfunc_ix: usize,
         argno: usize,
     ) -> PgResult<NullableDatum> {
-        let Self { ref mut perfunc, ref mut scan_slot, tmpcontext, .. } = *self;
+        let Self {
+            ref mut perfunc,
+            ref mut scan_slot,
+            tmpcontext,
+            ..
+        } = *self;
         ::executils::exec_eval_expr_with_subplans_outer(
             &mut perfunc[perfunc_ix].argstates[argno],
             scan_slot,
@@ -2403,18 +2597,14 @@ impl<'mcx> WindowAggStateData<'mcx> {
                     }
                     FRAMEOPTION_EXCLUDE_GROUP => {
                         self.update_grouptailpos(estate, fetch)?;
-                        if abs_pos >= self.groupheadpos
-                            && self.grouptailpos > self.frameheadpos
-                        {
+                        if abs_pos >= self.groupheadpos && self.grouptailpos > self.frameheadpos {
                             let overlapstart = self.groupheadpos.max(self.frameheadpos);
                             abs_pos += self.grouptailpos - overlapstart;
                         }
                     }
                     FRAMEOPTION_EXCLUDE_TIES => {
                         self.update_grouptailpos(estate, fetch)?;
-                        if abs_pos >= self.groupheadpos
-                            && self.grouptailpos > self.frameheadpos
-                        {
+                        if abs_pos >= self.groupheadpos && self.grouptailpos > self.frameheadpos {
                             let overlapstart = self.groupheadpos.max(self.frameheadpos);
                             if abs_pos == overlapstart {
                                 abs_pos = self.currentpos;
@@ -2450,9 +2640,7 @@ impl<'mcx> WindowAggStateData<'mcx> {
                     }
                     FRAMEOPTION_EXCLUDE_GROUP => {
                         self.update_grouptailpos(estate, fetch)?;
-                        if abs_pos < self.grouptailpos
-                            && self.groupheadpos < self.frametailpos
-                        {
+                        if abs_pos < self.grouptailpos && self.groupheadpos < self.frametailpos {
                             let overlapend = self.grouptailpos.min(self.frametailpos);
                             abs_pos -= overlapend - self.groupheadpos;
                         }
@@ -2464,9 +2652,7 @@ impl<'mcx> WindowAggStateData<'mcx> {
                     }
                     FRAMEOPTION_EXCLUDE_TIES => {
                         self.update_grouptailpos(estate, fetch)?;
-                        if abs_pos < self.grouptailpos
-                            && self.groupheadpos < self.frametailpos
-                        {
+                        if abs_pos < self.grouptailpos && self.groupheadpos < self.frametailpos {
                             let overlapend = self.grouptailpos.min(self.frametailpos);
                             if abs_pos == overlapend - 1 {
                                 abs_pos = self.currentpos;
@@ -2600,7 +2786,11 @@ impl<'mcx> WindowAggStateData<'mcx> {
                 }
                 NullableDatum::value(Datum::from_i32(pf.ntile))
             }
-            WfKind::LeadLag { forward, withoffset, withdefault } => {
+            WfKind::LeadLag {
+                forward,
+                withoffset,
+                withdefault,
+            } => {
                 let (offset, const_offset) = if withoffset {
                     let nd = self.win_get_func_arg_current(estate, perfunc_ix, 1)?;
                     if nd.isnull {
@@ -2611,7 +2801,11 @@ impl<'mcx> WindowAggStateData<'mcx> {
                 } else {
                     (1, true)
                 };
-                let relpos = if forward { offset as i64 } else { -(offset as i64) };
+                let relpos = if forward {
+                    offset as i64
+                } else {
+                    -(offset as i64)
+                };
                 let (mut nd, isout) = self.win_get_func_arg_in_partition(
                     estate,
                     fetch,
@@ -2686,8 +2880,14 @@ impl<'mcx> WindowAggStateData<'mcx> {
     fn write_agg_result(&mut self, wfuncno: usize, result: NullableDatum) {
         // SAFETY: wfuncno < numfuncs elements of the once-allocated arrays.
         unsafe {
-            self.agg_values_base.as_ptr().add(wfuncno).write(result.value);
-            self.agg_nulls_base.as_ptr().add(wfuncno).write(result.isnull);
+            self.agg_values_base
+                .as_ptr()
+                .add(wfuncno)
+                .write(result.value);
+            self.agg_nulls_base
+                .as_ptr()
+                .add(wfuncno)
+                .write(result.isnull);
         }
     }
 
@@ -2749,7 +2949,12 @@ impl<'mcx> WindowAggStateData<'mcx> {
                 }
             }
             {
-                let Self { ref mut evaltrans, ref mut agg_row_slot, tmpcontext, .. } = *self;
+                let Self {
+                    ref mut evaltrans,
+                    ref mut agg_row_slot,
+                    tmpcontext,
+                    ..
+                } = *self;
                 let et = evaltrans.as_mut().unwrap();
                 if et.has_subplan() {
                     ::executils::exec_eval_expr_with_subplans_outer(
@@ -2759,8 +2964,11 @@ impl<'mcx> WindowAggStateData<'mcx> {
                         tmpcontext,
                     )?;
                 } else {
-                    let mut slots =
-                        EvalSlots { scan: None, inner: None, outer: Some(&mut *agg_row_slot) };
+                    let mut slots = EvalSlots {
+                        scan: None,
+                        inner: None,
+                        outer: Some(&mut *agg_row_slot),
+                    };
                     exec_eval_expr(et, &mut slots)?;
                 }
             }
@@ -2839,9 +3047,10 @@ impl<'mcx> WindowAggStateData<'mcx> {
                 pg.trans_value
             };
             let result = match df.finalfn.as_mut() {
-                None => {
-                    NullableDatum { value: trans_value, isnull: pg.trans_value_is_null }
-                }
+                None => NullableDatum {
+                    value: trans_value,
+                    isnull: pg.trans_value_is_null,
+                },
                 Some(flinfo) => {
                     let mut fcinfo = LocalFcinfo::<4>::fresh(df.agg_collation);
                     assert!(df.num_final_args <= 4, "finalfn arg count");
@@ -2849,8 +3058,10 @@ impl<'mcx> WindowAggStateData<'mcx> {
                     fcinfo.context = agg_fm;
                     // SAFETY: the per-tuple context outlives this call.
                     unsafe { fcinfo.set_result_mcx(per_tuple) };
-                    fcinfo.args[0] =
-                        NullableDatum { value: trans_value, isnull: pg.trans_value_is_null };
+                    fcinfo.args[0] = NullableDatum {
+                        value: trans_value,
+                        isnull: pg.trans_value_is_null,
+                    };
                     for i in 1..df.num_final_args as usize {
                         fcinfo.args[i] = NullableDatum::null();
                     }
@@ -2859,7 +3070,10 @@ impl<'mcx> WindowAggStateData<'mcx> {
                         NullableDatum::null()
                     } else {
                         let v = flinfo.invoke(&mut fcinfo)?;
-                        NullableDatum { value: v, isnull: fcinfo.isnull }
+                        NullableDatum {
+                            value: v,
+                            isnull: fcinfo.isnull,
+                        }
                     }
                 }
             };
@@ -2937,7 +3151,11 @@ impl<'mcx> WindowAggStateData<'mcx> {
             out[i] = if st.has_subplan() {
                 ::executils::exec_eval_expr_with_subplans_outer(st, slot, estate, tmpcontext)?
             } else {
-                let mut slots = EvalSlots { scan: None, inner: None, outer: Some(&mut *slot) };
+                let mut slots = EvalSlots {
+                    scan: None,
+                    inner: None,
+                    outer: Some(&mut *slot),
+                };
                 exec_eval_expr(st, &mut slots)?
             };
         }
@@ -2970,7 +3188,11 @@ impl<'mcx> WindowAggStateData<'mcx> {
         let res = if f.has_subplan() {
             ::executils::exec_eval_expr_with_subplans_outer(f, slot, estate, tmpcontext)?
         } else {
-            let mut slots = EvalSlots { scan: None, inner: None, outer: Some(&mut *slot) };
+            let mut slots = EvalSlots {
+                scan: None,
+                inner: None,
+                outer: Some(&mut *slot),
+            };
             exec_eval_expr(f, &mut slots)?
         };
         Ok(!res.isnull && res.value.as_bool())
@@ -3057,7 +3279,10 @@ impl<'mcx> WindowAggStateData<'mcx> {
                     newval = unsafe { ::execexpr::agg_datum_copy(ctx, newval, pa.trans_typlen)? };
                 }
                 pa.trans_count += 1;
-                pa.trans_value = NullableDatum { value: newval, isnull: fcinfo.isnull };
+                pa.trans_value = NullableDatum {
+                    value: newval,
+                    isnull: fcinfo.isnull,
+                };
             }
         }
         Ok(())
@@ -3125,7 +3350,10 @@ impl<'mcx> WindowAggStateData<'mcx> {
                     newval = unsafe { ::execexpr::agg_datum_copy(ctx, newval, pa.trans_typlen)? };
                 }
                 pa.trans_count -= 1;
-                pa.trans_value = NullableDatum { value: newval, isnull: false };
+                pa.trans_value = NullableDatum {
+                    value: newval,
+                    isnull: false,
+                };
             }
             AggKernel::Generic { .. } => unreachable!("no inverse transition"),
         }
@@ -3163,7 +3391,10 @@ impl<'mcx> WindowAggStateData<'mcx> {
                     pa.trans_value.value
                 };
                 match pa.finalfn.as_mut() {
-                    None => NullableDatum { value: trans_value, isnull: pa.trans_value.isnull },
+                    None => NullableDatum {
+                        value: trans_value,
+                        isnull: pa.trans_value.isnull,
+                    },
                     Some(flinfo) => {
                         assert!(pa.num_final_args <= 4, "finalfn arg count");
                         let mut fcinfo = LocalFcinfo::<4>::fresh(pa.win_collation);
@@ -3171,8 +3402,10 @@ impl<'mcx> WindowAggStateData<'mcx> {
                         fcinfo.context = Some(pa.agg_state.cast());
                         // SAFETY: the per-tuple context outlives this call.
                         unsafe { fcinfo.set_result_mcx(per_tuple) };
-                        fcinfo.args[0] =
-                            NullableDatum { value: trans_value, isnull: pa.trans_value.isnull };
+                        fcinfo.args[0] = NullableDatum {
+                            value: trans_value,
+                            isnull: pa.trans_value.isnull,
+                        };
                         for i in 1..pa.num_final_args as usize {
                             fcinfo.args[i] = NullableDatum::null();
                         }
@@ -3181,7 +3414,10 @@ impl<'mcx> WindowAggStateData<'mcx> {
                             NullableDatum::null()
                         } else {
                             let v = flinfo.invoke(&mut fcinfo)?;
-                            NullableDatum { value: v, isnull: fcinfo.isnull }
+                            NullableDatum {
+                                value: v,
+                                isnull: fcinfo.isnull,
+                            }
                         }
                     }
                 }
@@ -3234,8 +3470,7 @@ impl<'mcx> WindowAggStateData<'mcx> {
         }
 
         while numaggs_restart < numaggs && self.aggregatedbase < self.frameheadpos {
-            if !self.gettupleslot_at(estate, fetch, None, self.aggregatedbase, WhichSlot::Temp1)?
-            {
+            if !self.gettupleslot_at(estate, fetch, None, self.aggregatedbase, WhichSlot::Temp1)? {
                 panic!("could not re-fetch previously fetched frame row");
             }
             for aggno in 0..numaggs {
@@ -3398,8 +3633,11 @@ where
                 && state.currentpos > 0
             {
                 {
-                    let WindowAggStateData { ref mut temp_slot_2, ref mut scan_slot, .. } =
-                        *state;
+                    let WindowAggStateData {
+                        ref mut temp_slot_2,
+                        ref mut scan_slot,
+                        ..
+                    } = *state;
                     exectuples::exec_copy_slot(temp_slot_2, scan_slot, mcx, mcx)?;
                 }
                 {
@@ -3460,20 +3698,31 @@ where
         if state.proj.has_subplan() {
             let ecxt = state.ps_ExprContext;
             let result = state.ps_ResultTupleSlot;
-            let WindowAggStateData { ref mut proj, ref mut scan_slot, .. } = *state;
+            let WindowAggStateData {
+                ref mut proj,
+                ref mut scan_slot,
+                ..
+            } = *state;
             ::executils::exec_project_with_subplans_outer(proj, scan_slot, estate, ecxt, result)?;
         } else {
             let mcx = estate.es_query_cxt;
             let result_slot = estate.slot_mut(state.ps_ResultTupleSlot);
-            let mut slots =
-                EvalSlots { scan: None, inner: None, outer: Some(&mut state.scan_slot) };
+            let mut slots = EvalSlots {
+                scan: None,
+                inner: None,
+                outer: Some(&mut state.scan_slot),
+            };
             exec_project(&mut state.proj, &mut slots, result_slot, mcx)?;
         }
 
         if state.status == WaStatus::Run {
             let result_id = state.ps_ResultTupleSlot;
             let rc_pass = {
-                let WindowAggStateData { ref mut runcondition, ref mut scan_slot, .. } = *state;
+                let WindowAggStateData {
+                    ref mut runcondition,
+                    ref mut scan_slot,
+                    ..
+                } = *state;
                 let result_slot = estate.slot_mut(result_id);
                 let mut slots = EvalSlots {
                     scan: Some(result_slot),
@@ -3502,7 +3751,11 @@ where
                 }
             }
             let qual_pass = {
-                let WindowAggStateData { ref mut qual, ref mut scan_slot, .. } = *state;
+                let WindowAggStateData {
+                    ref mut qual,
+                    ref mut scan_slot,
+                    ..
+                } = *state;
                 let result_slot = estate.slot_mut(result_id);
                 let mut slots = EvalSlots {
                     scan: Some(result_slot),
@@ -3546,7 +3799,10 @@ pub fn exec_end_window_agg(node: &mut WindowAggStateData<'_>) {
         pa.finalfn = None;
         match &mut pa.kernel {
             AggKernel::Generic { transfn } => transfn.fn_extra = None,
-            AggKernel::MovingByVal { transfn, invtransfn } => {
+            AggKernel::MovingByVal {
+                transfn,
+                invtransfn,
+            } => {
                 transfn.fn_extra = None;
                 invtransfn.fn_extra = None;
             }

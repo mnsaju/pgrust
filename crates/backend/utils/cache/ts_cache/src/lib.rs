@@ -197,7 +197,10 @@ pub fn lookup_ts_parser_cache(prsId: Oid) -> PgResult<Rc<TSParserCacheEntry>> {
                 return Some(Rc::clone(last));
             }
         }
-        st.parsers.get(&prsId).filter(|e| e.isvalid.get()).map(Rc::clone)
+        st.parsers
+            .get(&prsId)
+            .filter(|e| e.isvalid.get())
+            .map(Rc::clone)
     }) {
         with_state(|st| st.last_parser = Some(Rc::clone(&hit)));
         return Ok(hit);
@@ -264,7 +267,10 @@ pub fn lookup_ts_dictionary_cache(dictId: Oid) -> PgResult<Rc<TSDictionaryCacheE
                 return Some(Rc::clone(last));
             }
         }
-        st.dicts.get(&dictId).filter(|e| e.isvalid.get()).map(Rc::clone)
+        st.dicts
+            .get(&dictId)
+            .filter(|e| e.isvalid.get())
+            .map(Rc::clone)
     }) {
         with_state(|st| st.last_dict = Some(Rc::clone(&hit)));
         return Ok(hit);
@@ -275,15 +281,15 @@ pub fn lookup_ts_dictionary_cache(dictId: Oid) -> PgResult<Rc<TSDictionaryCacheE
     {
         // SAFETY: 'static stands for "as long as the Box in _dict_ctx lives";
         // the box pins the context address across the move into the entry.
-        let dmcx: Mcx<'static> = unsafe { core::mem::transmute::<Mcx<'_>, Mcx<'static>>(ctx.mcx()) };
+        let dmcx: Mcx<'static> =
+            unsafe { core::mem::transmute::<Mcx<'_>, Mcx<'static>>(ctx.mcx()) };
         let dict = syscache_seams::lookup_pg_ts_dict_shape::call(dmcx, dictId)?
             .ok_or_else(|| cache_lookup_failed("dictionary", dictId))?;
         template_oid = dict.dicttemplate;
         if template_oid == InvalidOid {
-            return Err(PgError::error(format!(
-                "text search dictionary {dictId} has no template"
-            ))
-            .into());
+            return Err(
+                PgError::error(format!("text search dictionary {dictId} has no template")).into(),
+            );
         }
         let tmpl = syscache_seams::lookup_pg_ts_template_shape::call(template_oid)?
             .ok_or_else(|| cache_lookup_failed("template", template_oid))?;
@@ -305,7 +311,11 @@ pub fn lookup_ts_dictionary_cache(dictId: Oid) -> PgResult<Rc<TSDictionaryCacheE
                     int_options.push(item.int_value);
                 }
             }
-            let init_data = DictInitData { mcx: dmcx, dict_options, int_options };
+            let init_data = DictInitData {
+                mcx: dmcx,
+                dict_options,
+                int_options,
+            };
             let mut init_f = fmgr_seams::fmgr_info::call(init_oid)?;
             function_call1_coll_in(
                 &mut init_f,
@@ -323,7 +333,11 @@ pub fn lookup_ts_dictionary_cache(dictId: Oid) -> PgResult<Rc<TSDictionaryCacheE
         dict_id: dictId,
         isvalid: Cell::new(true),
         lexize_oid,
-        _dict_ctx: if init_oid != InvalidOid { Some(ctx) } else { None },
+        _dict_ctx: if init_oid != InvalidOid {
+            Some(ctx)
+        } else {
+            None
+        },
         dict_data,
         lexize: RefCell::new(fmgr_seams::fmgr_info::call(lexize_oid)?),
     });
@@ -361,7 +375,10 @@ pub fn lookup_ts_config_cache(cfgId: Oid) -> PgResult<Rc<TSConfigCacheEntry>> {
                 return Some(Rc::clone(last));
             }
         }
-        st.configs.get(&cfgId).filter(|e| e.isvalid.get()).map(Rc::clone)
+        st.configs
+            .get(&cfgId)
+            .filter(|e| e.isvalid.get())
+            .map(Rc::clone)
     }) {
         with_state(|st| st.last_config = Some(Rc::clone(&hit)));
         return Ok(hit);
@@ -372,7 +389,7 @@ pub fn lookup_ts_config_cache(cfgId: Oid) -> PgResult<Rc<TSConfigCacheEntry>> {
     let prs_id = cfg.cfgparser;
     if prs_id == InvalidOid {
         return Err(
-            PgError::error(format!("text search configuration {cfgId} has no parser")).into()
+            PgError::error(format!("text search configuration {cfgId} has no parser")).into(),
         );
     }
 
@@ -385,22 +402,25 @@ pub fn lookup_ts_config_cache(cfgId: Oid) -> PgResult<Rc<TSConfigCacheEntry>> {
         let toktype = r.maptokentype;
         if toktype <= 0 || toktype as usize > MAXTOKENTYPE {
             return Err(
-                PgError::error(format!("maptokentype value {toktype} is out of range")).into()
+                PgError::error(format!("maptokentype value {toktype} is out of range")).into(),
             );
         }
         maxtokentype = toktype as usize;
     }
     let lenmap = if rows.is_empty() { 0 } else { maxtokentype + 1 };
     let mut map: PgVec<'static, ListDictionary> = PgVec::new_in(state_mcx);
-    map.try_reserve_exact(lenmap).map_err(|_| state_mcx.oom(lenmap))?;
+    map.try_reserve_exact(lenmap)
+        .map_err(|_| state_mcx.oom(lenmap))?;
     for _ in 0..lenmap {
-        map.push(ListDictionary { dict_ids: PgVec::new_in(state_mcx) });
+        map.push(ListDictionary {
+            dict_ids: PgVec::new_in(state_mcx),
+        });
     }
     for r in rows.iter() {
         let dicts = &mut map[r.maptokentype as usize].dict_ids;
         if dicts.len() >= MAXDICTSPERTT {
             return Err(
-                PgError::error("too many pg_ts_config_map entries for one token type").into()
+                PgError::error("too many pg_ts_config_map entries for one token type").into(),
             );
         }
         dicts.push(r.mapdict);
@@ -458,7 +478,8 @@ fn ts_name_lookup(
     let (schemaname, name) = deconstruct_qualified_name(names)?;
     let mut result = InvalidOid;
     if let Some(schemaname) = schemaname {
-        let namespace_id = namespace_seams::lookup_explicit_namespace::call(schemaname, missing_ok)?;
+        let namespace_id =
+            namespace_seams::lookup_explicit_namespace::call(schemaname, missing_ok)?;
         if namespace_id != InvalidOid {
             result = by_name(name, namespace_id)?;
         }
@@ -606,11 +627,12 @@ fn assign_default_text_search_config(
 }
 
 pub fn init_hooks() {
-    guc_tables::vars::TSCurrentConfig
-        .install(guc_tables::GucVarAccessors { get: guc_get, set: guc_set });
+    guc_tables::vars::TSCurrentConfig.install(guc_tables::GucVarAccessors {
+        get: guc_get,
+        set: guc_set,
+    });
     guc_tables::hooks::check_default_text_search_config.install(check_default_text_search_config);
-    guc_tables::hooks::assign_default_text_search_config
-        .install(assign_default_text_search_config);
+    guc_tables::hooks::assign_default_text_search_config.install(assign_default_text_search_config);
 }
 
 pub fn fc_get_current_ts_config(
@@ -629,9 +651,20 @@ pub mod builtins {
         nargs: i16,
         func: types_fmgr::PGFunction,
     ) -> FmgrBuiltin {
-        FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+        FmgrBuiltin {
+            foid,
+            name,
+            nargs,
+            strict: true,
+            retset: false,
+            func,
+        }
     }
 
-    pub const TS_CACHE_BUILTINS: &[FmgrBuiltin] =
-        &[b(3759, "get_current_ts_config", 0, fc_get_current_ts_config)];
+    pub const TS_CACHE_BUILTINS: &[FmgrBuiltin] = &[b(
+        3759,
+        "get_current_ts_config",
+        0,
+        fc_get_current_ts_config,
+    )];
 }

@@ -6,7 +6,7 @@
 use datum::Datum;
 use types_tuple::TupleDescData;
 
-use crate::compute::{compute_hash_value, hash_index, CatCKey, CCFastKind};
+use crate::compute::{compute_hash_value, hash_index, CCFastKind, CatCKey};
 use crate::graph::create_entry_negative;
 use crate::{pack_ref, payload_alloc, with_state, CatCTup, CATCACHE_MAXKEYS, NONE};
 
@@ -36,7 +36,10 @@ pub fn insert_positive(cache_id: i32, keys: &[CatCKey<'_>; 4], image: &[u8]) {
 
         let mut byref_len = 0usize;
         for i in 0..nkeys as usize {
-            if matches!(kinds[i], CCFastKind::Name | CCFastKind::Text | CCFastKind::OidVector) {
+            if matches!(
+                kinds[i],
+                CCFastKind::Name | CCFastKind::Text | CCFastKind::OidVector
+            ) {
                 byref_len += keys[i].bytes().len();
             }
         }

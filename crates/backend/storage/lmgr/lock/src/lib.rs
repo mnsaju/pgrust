@@ -13,9 +13,8 @@ mod waitqueue;
 mod tests;
 
 pub use acquire::{
-    GetLockConflicts, LockAcquire, LockAcquireExtended, LockHasWaiters, LockRelease,
-    LockReassignCurrentOwner, LockReleaseAll, LockReleaseCurrentOwner, LockReleaseSession,
-    LockWaiterCount,
+    GetLockConflicts, LockAcquire, LockAcquireExtended, LockHasWaiters, LockReassignCurrentOwner,
+    LockRelease, LockReleaseAll, LockReleaseCurrentOwner, LockReleaseSession, LockWaiterCount,
 };
 pub use fastpath::{
     FastPathLockSlotsPerBackend, VirtualXactLock, VirtualXactLockTableCleanup,

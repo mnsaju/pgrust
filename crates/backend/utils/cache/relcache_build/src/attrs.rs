@@ -4,13 +4,13 @@ use datum::Datum;
 use mcx::{Mcx, MemoryContext, PgString, PgVec};
 use relcache::schemapg::ATTRIBUTE_RELID_NUM_INDEX_ID;
 use types_core::fmgr::F_INT2GT;
+use types_core::{AttrNumber, INDEX_MAX_KEYS};
 use types_core::{
-    ATTRIBUTE_RELATION_ID, ATTR_DEFAULT_INDEX_ID, ATTR_DEFAULT_RELATION_ID,
-    CONSTRAINT_RELATION_ID, CONSTRAINT_RELID_TYPID_NAME_INDEX_ID, InvalidOid, Oid, RECORDOID,
+    InvalidOid, Oid, ATTRIBUTE_RELATION_ID, ATTR_DEFAULT_INDEX_ID, ATTR_DEFAULT_RELATION_ID,
+    CONSTRAINT_RELATION_ID, CONSTRAINT_RELID_TYPID_NAME_INDEX_ID, RECORDOID,
 };
 use types_error::{PgError, PgResult, ERRCODE_INTERNAL_ERROR};
-use types_core::{AttrNumber, INDEX_MAX_KEYS};
-use types_rel::{AccessShareLock, FormData_pg_class, ForeignKeyCacheInfo};
+use types_rel::{AccessShareLock, ForeignKeyCacheInfo, FormData_pg_class};
 use types_scan::scankey::BTGreaterStrategyNumber;
 use types_tuple::{
     AttrDefault, ConstrCheck, FormData_pg_attribute, HeapTupleData, TupleConstr, TupleDescData,
@@ -111,7 +111,11 @@ pub(crate) fn relation_build_tuple_desc(
     let has_missing = !missing_pairs.is_empty();
 
     let mut td = tupdesc::CreateTupleDesc(mcx, &slots)?;
-    td.tdtypeid = if form.reltype != InvalidOid { form.reltype } else { RECORDOID };
+    td.tdtypeid = if form.reltype != InvalidOid {
+        form.reltype
+    } else {
+        RECORDOID
+    };
     td.tdtypmod = -1;
     td.tdrefcount = 1;
     if natts > 0 {
@@ -144,24 +148,28 @@ pub(crate) fn relation_build_tuple_desc(
                 } else {
                     debug_assert!(
                         attr.attnullability == ATTNULLABLE_INVALID
-                            || attr.attnullability
-                                == types_tuple::ATTNULLABLE_UNRESTRICTED
+                            || attr.attnullability == types_tuple::ATTNULLABLE_UNRESTRICTED
                     );
                 }
             }
         }
         let mut missing: PgVec<'static, types_tuple::AttrMissing> = PgVec::new_in(mcx);
         if has_missing {
-            missing
-                .try_reserve_exact(natts)
-                .map_err(|_| Box::new(mcx.oom(natts * core::mem::size_of::<types_tuple::AttrMissing>())))?;
+            missing.try_reserve_exact(natts).map_err(|_| {
+                Box::new(mcx.oom(natts * core::mem::size_of::<types_tuple::AttrMissing>()))
+            })?;
             missing.resize(
                 natts,
-                types_tuple::AttrMissing { am_present: false, am_value: Datum::null() },
+                types_tuple::AttrMissing {
+                    am_present: false,
+                    am_value: Datum::null(),
+                },
             );
             for &(attnum, v) in missing_pairs.iter() {
-                missing[attnum as usize - 1] =
-                    types_tuple::AttrMissing { am_present: true, am_value: v };
+                missing[attnum as usize - 1] = types_tuple::AttrMissing {
+                    am_present: true,
+                    am_value: v,
+                };
             }
         }
         td.constr = Some(mcx::box_new_in(
@@ -183,12 +191,15 @@ pub(crate) fn relation_build_tuple_desc(
 }
 
 // TextDatumGetCString over a possibly packed/toasted pg_node_tree column.
-pub(crate) fn text_str<'mcx>(mcx: Mcx<'mcx>, scratch: Mcx<'_>, d: Datum) -> PgResult<PgString<'mcx>> {
+pub(crate) fn text_str<'mcx>(
+    mcx: Mcx<'mcx>,
+    scratch: Mcx<'_>,
+    d: Datum,
+) -> PgResult<PgString<'mcx>> {
     let p = d.as_usize() as *const u8;
     // SAFETY: d comes off a not-null text column: a live varlena image
     // readable through its varsize_any extent.
-    let image =
-        unsafe { std::slice::from_raw_parts(p, types_tuple::varatt::varsize_any(p)) };
+    let image = unsafe { std::slice::from_raw_parts(p, types_tuple::varatt::varsize_any(p)) };
     let payload = varlena::open_image(scratch, image)?;
     let s = core::str::from_utf8(payload.as_bytes())
         .unwrap_or_else(|_| panic!("non-UTF-8 pg_node_tree text"));
@@ -226,7 +237,10 @@ fn attr_default_fetch(
         if isnull {
             continue;
         }
-        defval.push(AttrDefault { adnum, adbin: Some(text_str(mcx, smcx, val)?) });
+        defval.push(AttrDefault {
+            adnum,
+            adbin: Some(text_str(mcx, smcx, val)?),
+        });
     }
     genam::systable_endscan(smcx, scan)?;
     rel.close(AccessShareLock)?;
@@ -292,7 +306,10 @@ fn check_nn_constraint_fetch(
     genam::systable_endscan(smcx, scan)?;
     rel.close(AccessShareLock)?;
     check.sort_unstable_by(|a, b| {
-        a.ccname.as_ref().map(|s| s.as_str()).cmp(&b.ccname.as_ref().map(|s| s.as_str()))
+        a.ccname
+            .as_ref()
+            .map(|s| s.as_str())
+            .cmp(&b.ccname.as_ref().map(|s| s.as_str()))
     });
     Ok(check)
 }
@@ -328,8 +345,7 @@ pub(crate) fn scan_pg_constraint_fkeys<'mcx>(
             "foreign key constraint cannot have {nkeys} columns"
         );
         let confkey = fk_array_elems(smcx, req(td, tup, Anum_pg_constraint_confkey)?, 2, b's')?;
-        let conpfeqop =
-            fk_array_elems(smcx, req(td, tup, Anum_pg_constraint_conpfeqop)?, 4, b'i')?;
+        let conpfeqop = fk_array_elems(smcx, req(td, tup, Anum_pg_constraint_conpfeqop)?, 4, b'i')?;
         assert!(
             confkey.len() == nkeys && conpfeqop.len() == nkeys,
             "confkey/conpfeqop length differs from conkey"
@@ -393,7 +409,11 @@ fn extract_not_null_column(
     mcx::vec_append_bytes(&mut full, &(((total as u32) << 2).to_ne_bytes()))?;
     mcx::vec_append_bytes(&mut full, body)?;
     let elems = datum::array_build::deconstruct_array_image(smcx, &full, 2, true, b's')?;
-    assert!(elems.len() == 1, "not-null constraint with {} conkey entries", elems.len());
+    assert!(
+        elems.len() == 1,
+        "not-null constraint with {} conkey entries",
+        elems.len()
+    );
     Ok(elems[0].as_i16())
 }
 
@@ -427,7 +447,11 @@ fn attr_missing_fetch(
         a.attbyval,
         a.attalign as u8,
     )?;
-    assert!(elems.len() == 1, "attmissingval with {} entries", elems.len());
+    assert!(
+        elems.len() == 1,
+        "attmissingval with {} entries",
+        elems.len()
+    );
     let v = elems[0];
     if a.attbyval {
         return Ok(Some(v));

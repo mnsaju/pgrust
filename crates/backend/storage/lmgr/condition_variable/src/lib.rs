@@ -170,7 +170,9 @@ pub fn ConditionVariableTimedSleep(
     timeout: i64,
     wait_event_info: u32,
 ) -> PgResult<bool> {
-    let target_is_cv = CV_SLEEP_TARGET.with(|t| t.get()).is_some_and(|t| core::ptr::eq(t, cv));
+    let target_is_cv = CV_SLEEP_TARGET
+        .with(|t| t.get())
+        .is_some_and(|t| core::ptr::eq(t, cv));
     if !target_is_cv {
         ConditionVariablePrepareToSleep(cv);
         return Ok(false);
@@ -216,7 +218,10 @@ pub fn ConditionVariableTimedSleep(
         cv.mutex.unlock();
 
         postgres_seams::check_for_interrupts::call()?;
-        if !CV_SLEEP_TARGET.with(|t| t.get()).is_some_and(|t| core::ptr::eq(t, cv)) {
+        if !CV_SLEEP_TARGET
+            .with(|t| t.get())
+            .is_some_and(|t| core::ptr::eq(t, cv))
+        {
             done = true;
         }
 

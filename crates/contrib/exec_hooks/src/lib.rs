@@ -19,8 +19,8 @@
 //! consumers in REVERSE registration order and leave-style taps (run_leave,
 //! finish_leave — C's PG_FINALLY unwind) run them in registration order.
 
-use std::sync::atomic::{AtomicPtr, Ordering};
 use pgsync::Mutex;
+use std::sync::atomic::{AtomicPtr, Ordering};
 
 use types_portal::QueryDescHandle;
 
@@ -168,10 +168,14 @@ mod tests {
         // C chain semantics: the later-loaded module wraps the earlier one —
         // enter runs last-registered first, the PG_FINALLY leave runs
         // first-registered first.
-        let (f_start, s_start) =
-            (FIRST_START_AT.load(Ordering::Relaxed), SECOND_START_AT.load(Ordering::Relaxed));
-        let (f_leave, s_leave) =
-            (FIRST_LEAVE_AT.load(Ordering::Relaxed), SECOND_LEAVE_AT.load(Ordering::Relaxed));
+        let (f_start, s_start) = (
+            FIRST_START_AT.load(Ordering::Relaxed),
+            SECOND_START_AT.load(Ordering::Relaxed),
+        );
+        let (f_leave, s_leave) = (
+            FIRST_LEAVE_AT.load(Ordering::Relaxed),
+            SECOND_LEAVE_AT.load(Ordering::Relaxed),
+        );
         assert!(s_start < f_start, "enter: last-registered runs first");
         assert!(f_leave < s_leave, "leave: first-registered runs first");
     }

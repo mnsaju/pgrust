@@ -6,9 +6,7 @@ use ::datum::Datum;
 use ::mcx::{Mcx, PgVec};
 use ::types_core::{AttrNumber, INDEX_MAX_KEYS};
 use ::types_error::{PgError, PgResult, ERRCODE_PROGRAM_LIMIT_EXCEEDED};
-use ::types_nbtree::{
-    BT_IS_POSTING, BT_OFFSET_MASK, BT_PIVOT_HEAP_TID_ATTR, INDEX_ALT_TID_MASK,
-};
+use ::types_nbtree::{BT_IS_POSTING, BT_OFFSET_MASK, BT_PIVOT_HEAP_TID_ATTR, INDEX_ALT_TID_MASK};
 use ::types_tuple::itemptr::{ItemPointerData, ItemPointerGetBlockNumberNoCheck};
 use ::types_tuple::tupmacs::{
     att_addlength_pointer, att_isnull, att_nominal_alignby, att_pointer_alignby, fetchatt,
@@ -55,14 +53,12 @@ pub const fn index_info_find_data_offset(info: u16) -> usize {
 
 #[inline]
 pub unsafe fn bt_tuple_is_pivot(itup: ITup) -> bool {
-    (t_info(itup) & INDEX_ALT_TID_MASK) != 0
-        && (t_tid(itup).ip_posid & BT_IS_POSTING) == 0
+    (t_info(itup) & INDEX_ALT_TID_MASK) != 0 && (t_tid(itup).ip_posid & BT_IS_POSTING) == 0
 }
 
 #[inline]
 pub unsafe fn bt_tuple_is_posting(itup: ITup) -> bool {
-    (t_info(itup) & INDEX_ALT_TID_MASK) != 0
-        && (t_tid(itup).ip_posid & BT_IS_POSTING) != 0
+    (t_info(itup) & INDEX_ALT_TID_MASK) != 0 && (t_tid(itup).ip_posid & BT_IS_POSTING) != 0
 }
 
 #[inline]
@@ -97,7 +93,6 @@ pub unsafe fn bt_tuple_get_natts(itup: ITup, indnatts: i32) -> i32 {
 pub unsafe fn bt_tuple_get_downlink(pivot: ITup) -> ::types_core::BlockNumber {
     ItemPointerGetBlockNumberNoCheck(&t_tid(pivot))
 }
-
 
 pub unsafe fn bt_tuple_get_heap_tid(itup: ITup) -> Option<ItemPointerData> {
     if bt_tuple_is_pivot(itup) {
@@ -263,7 +258,8 @@ pub fn index_form_tuple<'mcx>(
     let natts = tupdesc.natts as usize;
     debug_assert!(natts <= INDEX_MAX_KEYS as usize);
 
-    let mut untoasted: [Datum; INDEX_MAX_KEYS as usize] = [Datum::from_usize(0); INDEX_MAX_KEYS as usize];
+    let mut untoasted: [Datum; INDEX_MAX_KEYS as usize] =
+        [Datum::from_usize(0); INDEX_MAX_KEYS as usize];
     untoasted[..natts].copy_from_slice(&values[..natts]);
 
     const TOAST_INDEX_TARGET: usize = 8160 / 4; // MaximumBytesPerTuple(4)
@@ -338,10 +334,7 @@ pub fn index_form_tuple<'mcx>(
 ///
 /// # Safety
 /// `itup` per module contract.
-pub unsafe fn copy_index_tuple<'mcx>(
-    mcx: Mcx<'mcx>,
-    itup: ITup,
-) -> PgResult<ItupBuf<'mcx>> {
+pub unsafe fn copy_index_tuple<'mcx>(mcx: Mcx<'mcx>, itup: ITup) -> PgResult<ItupBuf<'mcx>> {
     let size = maxalign(index_tuple_size(itup));
     let mut buf = ItupBuf::with_size(mcx, size)?;
     core::ptr::copy_nonoverlapping(itup, buf.as_mut_ptr(), index_tuple_size(itup));
@@ -383,7 +376,12 @@ pub(crate) unsafe fn index_truncate_tuple<'mcx>(
     for i in 0..leavenatts {
         values[i] = index_getattr(source, (i + 1) as AttrNumber, tupdesc, &mut isnull[i]);
     }
-    let mut truncated = index_form_tuple(mcx, &truncdesc, &values[..leavenatts], &isnull[..leavenatts])?;
+    let mut truncated = index_form_tuple(
+        mcx,
+        &truncdesc,
+        &values[..leavenatts],
+        &isnull[..leavenatts],
+    )?;
     set_t_tid(truncated.as_mut_ptr(), t_tid(source));
     debug_assert!(index_tuple_size(truncated.as_ptr()) <= index_tuple_size(source));
     Ok(truncated)

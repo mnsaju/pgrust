@@ -128,7 +128,10 @@ fn by_am_id_probes_pg_am() {
     assert_eq!(GetIndexAmRoutineByAmId(777, true).unwrap(), None);
     let e = GetIndexAmRoutineByAmId(777, false).unwrap_err();
     assert_eq!(e.sqlstate(), ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE);
-    assert_eq!(e.message, "index access method \"broken\" does not have a handler");
+    assert_eq!(
+        e.message,
+        "index access method \"broken\" does not have a handler"
+    );
 
     assert_eq!(GetIndexAmRoutineByAmId(4242, true).unwrap(), None);
     let e = GetIndexAmRoutineByAmId(4242, false).unwrap_err();
@@ -160,14 +163,20 @@ fn translate_out_of_range_needs_the_am_row() {
         COMPARE_INVALID
     );
     let e = IndexAmTranslateStrategy(6, BTREE_AM_OID, InvalidOid, false).unwrap_err();
-    assert_eq!(e.message, "could not translate strategy number 6 for index AM 403");
+    assert_eq!(
+        e.message,
+        "could not translate strategy number 6 for index AM 403"
+    );
 
     assert_eq!(
         IndexAmTranslateCompareType(COMPARE_NE, BTREE_AM_OID, InvalidOid, true).unwrap(),
         InvalidStrategy
     );
     let e = IndexAmTranslateCompareType(COMPARE_NE, BTREE_AM_OID, InvalidOid, false).unwrap_err();
-    assert_eq!(e.message, "could not translate compare type 6 for index AM 403");
+    assert_eq!(
+        e.message,
+        "could not translate compare type 6 for index AM 403"
+    );
 }
 
 #[test]

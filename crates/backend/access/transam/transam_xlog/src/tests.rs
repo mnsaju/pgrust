@@ -206,8 +206,7 @@ fn insert_flush_smoke() {
         cf.float8ByVal = true;
         cf.crc = controldata_utils::crc_of_image(&cf.to_disk_bytes());
         let mut image = vec![0u8; PG_CONTROL_FILE_SIZE];
-        image[..controldata_utils::SIZEOF_CONTROL_FILE_DATA]
-            .copy_from_slice(&cf.to_disk_bytes());
+        image[..controldata_utils::SIZEOF_CONTROL_FILE_DATA].copy_from_slice(&cf.to_disk_bytes());
         std::fs::write(dir.join("global/pg_control"), &image).unwrap();
     }
     ReadControlFile().unwrap();
@@ -220,8 +219,12 @@ fn insert_flush_smoke() {
     let ctl = XLogCtl();
     ctl.InsertTimeLineID.store(1, Relaxed);
     ctl.PrevTimeLineID.store(1, Relaxed);
-    ctl.Insert.PrevBytePos.store(XLogRecPtrToBytePos(redo), Relaxed);
-    ctl.Insert.CurrBytePos.store(XLogRecPtrToBytePos(end_of_log), Relaxed);
+    ctl.Insert
+        .PrevBytePos
+        .store(XLogRecPtrToBytePos(redo), Relaxed);
+    ctl.Insert
+        .CurrBytePos
+        .store(XLogRecPtrToBytePos(end_of_log), Relaxed);
     ctl.Insert.fullPageWrites.store(true, Relaxed);
     ctl.Insert.RedoRecPtr.store(redo, Relaxed);
     ctl.RedoRecPtr.store(redo, Relaxed);
@@ -238,7 +241,8 @@ fn insert_flush_smoke() {
         crate::insert::write_u64(page, 8, page_begin);
     }
     ctl.xlblocks[first_idx].store(page_begin + XLOG_BLCKSZ as u64, Relaxed);
-    ctl.InitializedUpTo.store(page_begin + XLOG_BLCKSZ as u64, Relaxed);
+    ctl.InitializedUpTo
+        .store(page_begin + XLOG_BLCKSZ as u64, Relaxed);
     crate::write::set_logwrt_result(end_of_log, end_of_log);
     ctl.logInsertResult.store(end_of_log, Relaxed);
     ctl.logWriteResult.store(end_of_log, Relaxed);
@@ -411,9 +415,15 @@ fn insert_flush_smoke() {
         guc_tables::vars::CommitDelay.write(0);
         init_small::globals::set_enableFsync(false);
     }
-    let segpath = dir.join(format!("pg_wal/{}", XLogFileName(1, XLByteToSeg(end_of_log, seg), seg)));
+    let segpath = dir.join(format!(
+        "pg_wal/{}",
+        XLogFileName(1, XLByteToSeg(end_of_log, seg), seg)
+    ));
     let file = std::fs::read(&segpath).unwrap_or_else(|e| {
-        let names: Vec<_> = std::fs::read_dir(dir.join("pg_wal")).unwrap().map(|x| x.unwrap().file_name()).collect();
+        let names: Vec<_> = std::fs::read_dir(dir.join("pg_wal"))
+            .unwrap()
+            .map(|x| x.unwrap().file_name())
+            .collect();
         panic!("segment missing: {e}; pg_wal = {names:?}")
     });
     assert_eq!(file.len(), seg as usize);
@@ -456,7 +466,9 @@ fn insert_flush_smoke() {
     }
     unsafe {
         let page = ctl.page_ptr(first_idx);
-        assert!(std::slice::from_raw_parts(page, XLOG_BLCKSZ).iter().all(|&b| b == 0));
+        assert!(std::slice::from_raw_parts(page, XLOG_BLCKSZ)
+            .iter()
+            .all(|&b| b == 0));
     }
 
     let _ = std::fs::remove_dir_all(&dir);
@@ -512,7 +524,9 @@ fn checkpoint_no_sync_seams_child() {
     std::fs::write(dir.join("global/pg_control"), &image).unwrap();
     ReadControlFile().unwrap();
     XLOGShmemInit();
-    crate::ctl::XLogCtl().SharedRecoveryState.store(RECOVERY_STATE_DONE, Relaxed);
+    crate::ctl::XLogCtl()
+        .SharedRecoveryState
+        .store(RECOVERY_STATE_DONE, Relaxed);
     xlogutils::set_in_recovery(false);
 
     // Sync seams deliberately NOT installed: the checkpoint must panic
@@ -533,7 +547,10 @@ fn checkpoint_without_sync_seams_is_loud() {
         ])
         .output()
         .unwrap();
-    assert!(!out.status.success(), "checkpoint must not succeed: {out:?}");
+    assert!(
+        !out.status.success(),
+        "checkpoint must not succeed: {out:?}"
+    );
     let text = format!(
         "{}{}",
         String::from_utf8_lossy(&out.stdout),
@@ -549,14 +566,25 @@ fn checkpoint_without_sync_seams_is_loud() {
 fn xlog_filename_parse_roundtrip() {
     let seg = 16 * 1024 * 1024;
     with_seg(seg, || {
-        for segno in [1u64, 255, 256, 0xFF_FFFF, 0x1_0000_0000 / seg as u64, 12345678] {
+        for segno in [
+            1u64,
+            255,
+            256,
+            0xFF_FFFF,
+            0x1_0000_0000 / seg as u64,
+            12345678,
+        ] {
             let name = XLogFileName(3, segno, seg);
             assert!(crate::removal::IsXLogFileName(&name), "{name}");
             assert_eq!(crate::removal::XLogFromFileName(&name, seg), (3, segno));
         }
         assert!(!crate::removal::IsXLogFileName("00000001000000000000000g"));
-        assert!(!crate::removal::IsXLogFileName("000000010000000000000001.partial"));
-        assert!(crate::removal::IsPartialXLogFileName("000000010000000000000001.partial"));
+        assert!(!crate::removal::IsXLogFileName(
+            "000000010000000000000001.partial"
+        ));
+        assert!(crate::removal::IsPartialXLogFileName(
+            "000000010000000000000001.partial"
+        ));
     });
 }
 
@@ -571,31 +599,51 @@ fn keep_log_seg_matches_c() {
         guc_tables::vars::wal_keep_size_mb.write(0);
         guc_tables::vars::max_slot_wal_keep_size_mb.write(-1);
         let mut segno = 90;
-        assert!(!crate::removal::keep_log_seg_with(recptr, &mut segno, InvalidXLogRecPtr));
+        assert!(!crate::removal::keep_log_seg_with(
+            recptr,
+            &mut segno,
+            InvalidXLogRecPtr
+        ));
         assert_eq!(segno, 90);
 
         // A slot restart_lsn pins its segment.
         let mut segno = 90;
-        assert!(!crate::removal::keep_log_seg_with(recptr, &mut segno, 40 * seg as u64 + 7));
+        assert!(!crate::removal::keep_log_seg_with(
+            recptr,
+            &mut segno,
+            40 * seg as u64 + 7
+        ));
         assert_eq!(segno, 40);
 
         // max_slot_wal_keep_size caps the slot horizon and reports it.
         guc_tables::vars::max_slot_wal_keep_size_mb.write(16 * 10);
         let mut segno = 90;
-        assert!(crate::removal::keep_log_seg_with(recptr, &mut segno, 40 * seg as u64 + 7));
+        assert!(crate::removal::keep_log_seg_with(
+            recptr,
+            &mut segno,
+            40 * seg as u64 + 7
+        ));
         assert_eq!(segno, 100 - 10);
 
         // wal_keep_size holds segments back without any slot.
         guc_tables::vars::max_slot_wal_keep_size_mb.write(-1);
         guc_tables::vars::wal_keep_size_mb.write(16 * 5);
         let mut segno = 99;
-        assert!(!crate::removal::keep_log_seg_with(recptr, &mut segno, InvalidXLogRecPtr));
+        assert!(!crate::removal::keep_log_seg_with(
+            recptr,
+            &mut segno,
+            InvalidXLogRecPtr
+        ));
         assert_eq!(segno, 95);
 
         // wal_keep_size larger than history bottoms out at segment 1.
         guc_tables::vars::wal_keep_size_mb.write(16 * 200);
         let mut segno = 99;
-        assert!(!crate::removal::keep_log_seg_with(recptr, &mut segno, InvalidXLogRecPtr));
+        assert!(!crate::removal::keep_log_seg_with(
+            recptr,
+            &mut segno,
+            InvalidXLogRecPtr
+        ));
         assert_eq!(segno, 1);
         guc_tables::vars::wal_keep_size_mb.write(0);
     });

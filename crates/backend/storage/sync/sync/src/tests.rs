@@ -67,7 +67,11 @@ fn setup() {
 
 fn key(rel: u32) -> RelFileLocatorBackend {
     RelFileLocatorBackend {
-        locator: RelFileLocator { spcOid: 1663, dbOid: 5, relNumber: rel },
+        locator: RelFileLocator {
+            spcOid: 1663,
+            dbOid: 5,
+            relNumber: rel,
+        },
         backend: INVALID_PROC_NUMBER,
     }
 }
@@ -145,7 +149,10 @@ fn filter_leaves_other_database() {
     fd::vfd::set_data_sync_retry(true);
     RegisterSyncRequest(md_tag(20006), SyncRequestType::SYNC_REQUEST, false).unwrap();
     smgr::ForgetDatabaseSyncRequests(999).unwrap();
-    assert!(ProcessSyncRequests().is_err(), "uncanceled missing file still fsyncs");
+    assert!(
+        ProcessSyncRequests().is_err(),
+        "uncanceled missing file still fsyncs"
+    );
 }
 
 #[test]
@@ -187,10 +194,22 @@ fn fsync_failure_abort_child() {
 #[test]
 fn fsync_failure_aborts_process() {
     let out = std::process::Command::new(std::env::current_exe().unwrap())
-        .args(["tests::fsync_failure_abort_child", "--exact", "--ignored", "--test-threads=1"])
+        .args([
+            "tests::fsync_failure_abort_child",
+            "--exact",
+            "--ignored",
+            "--test-threads=1",
+        ])
         .output()
         .unwrap();
-    assert_eq!(out.status.code(), Some(42), "child must unwind PanicExitThread: {out:?}");
+    assert_eq!(
+        out.status.code(),
+        Some(42),
+        "child must unwind PanicExitThread: {out:?}"
+    );
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains("PANIC:  could not fsync file"), "missing PANIC report: {stderr}");
+    assert!(
+        stderr.contains("PANIC:  could not fsync file"),
+        "missing PANIC report: {stderr}"
+    );
 }

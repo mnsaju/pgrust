@@ -53,7 +53,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         assert!((0..=yynrules).contains(&r), "yydefact[{i}]={r}");
     }
     for (i, &s) in yyr1.iter().enumerate().skip(1) {
-        assert!((yyntokens..yyntokens + yynnts).contains(&s), "yyr1[{i}]={s}");
+        assert!(
+            (yyntokens..yyntokens + yynnts).contains(&s),
+            "yyr1[{i}]={s}"
+        );
     }
     // Shift/goto targets are valid states; reduces are -rule — licenses
     // indexing yypact/yydefact by any state the walk produces.
@@ -137,7 +140,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     emit(&mut t, "YYCHECK", "i16", &yycheck);
     emit(&mut t, "YYR1", "u16", &yyr1);
     emit(&mut t, "YYR2", "u8", &yyr2);
-    emit(&mut t, "DISPATCH", "u8", &dispatch.iter().map(|&b| b as i64).collect::<Vec<_>>());
+    emit(
+        &mut t,
+        "DISPATCH",
+        "u8",
+        &dispatch.iter().map(|&b| b as i64).collect::<Vec<_>>(),
+    );
     fs::write(out.join("tables.rs"), t)?;
 
     let mut n = String::new();
@@ -153,7 +161,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 fn define(src: &str, name: &str) -> Result<i64, Box<dyn Error>> {
     let prefix = format!("#define {name} ");
-    let start = src.find(&prefix).ok_or_else(|| format!("missing {prefix}"))? + prefix.len();
+    let start = src
+        .find(&prefix)
+        .ok_or_else(|| format!("missing {prefix}"))?
+        + prefix.len();
     let rest = src[start..].trim_start();
     let end = rest
         .find(|c: char| !(c.is_ascii_digit() || c == '-'))
@@ -203,7 +214,10 @@ fn strings(src: &str, name: &str) -> Result<Vec<String>, Box<dyn Error>> {
 // `break;`), from yyparse's reduction switch.
 fn case_labels(src: &str) -> Result<Vec<(i64, String)>, Box<dyn Error>> {
     let start = src.find("  switch (yyn)").ok_or("missing action switch")?;
-    let end = start + src[start..].find("\n/* Line ").ok_or("missing switch end")?;
+    let end = start
+        + src[start..]
+            .find("\n/* Line ")
+            .ok_or("missing switch end")?;
     let mut out: Vec<(i64, String)> = Vec::new();
     let mut lines = src[start..end].lines().peekable();
     while let Some(line) = lines.next() {

@@ -119,14 +119,21 @@ fn cfi() -> PgResult<()> {
     Ok(())
 }
 
-const RP0: ReadPointer =
-    ReadPointer { eflags: 0, eof_reached: false, current: 0, file: 0, offset: 0 };
+const RP0: ReadPointer = ReadPointer {
+    eflags: 0,
+    eof_reached: false,
+    current: 0,
+    file: 0,
+    offset: 0,
+};
 
 #[track_caller]
 #[cold]
 #[inline(never)]
 fn seek_failed() -> Box<PgError> {
-    Box::new(PgError::error("could not seek in tuplestore temporary file"))
+    Box::new(PgError::error(
+        "could not seek in tuplestore temporary file",
+    ))
 }
 
 // C's tuplestore_begin_heap creates no memory context; our two-context shell
@@ -215,11 +222,7 @@ impl Tuplestore {
         Tuplestore(owned)
     }
 
-    pub fn puttupleslot<'q>(
-        &mut self,
-        slot: &mut SlotData<'q>,
-        slot_mcx: Mcx<'q>,
-    ) -> PgResult<()> {
+    pub fn puttupleslot<'q>(&mut self, slot: &mut SlotData<'q>, slot_mcx: Mcx<'q>) -> PgResult<()> {
         self.0.with_mut(|st| {
             let mtup =
                 exectuples::exec_copy_slot_minimal_tuple(slot, slot_mcx, st.tuplecontext.mcx(), 0)?;
@@ -234,8 +237,7 @@ impl Tuplestore {
 
     pub fn put_heap_tuple(&mut self, htup: &::types_tuple::HeapTupleData<'_>) -> PgResult<()> {
         self.0.with_mut(|st| {
-            let mtup =
-                heaptuple::minimal_tuple_from_heap_tuple(st.tuplecontext.mcx(), htup, 0)?;
+            let mtup = heaptuple::minimal_tuple_from_heap_tuple(st.tuplecontext.mcx(), htup, 0)?;
             let t_len = mtup.t_len() as usize;
             let tuple = mtup.as_ptr().cast_mut().cast::<MinimalTupleData>();
             mem::forget(mtup);
@@ -250,8 +252,13 @@ impl Tuplestore {
         isnull: &[bool],
     ) -> PgResult<()> {
         self.0.with_mut(|st| {
-            let mtup =
-                heaptuple::heap_form_minimal_tuple(st.tuplecontext.mcx(), tdesc, values, isnull, 0)?;
+            let mtup = heaptuple::heap_form_minimal_tuple(
+                st.tuplecontext.mcx(),
+                tdesc,
+                values,
+                isnull,
+                0,
+            )?;
             let t_len = mtup.t_len() as usize;
             let tuple = mtup.as_ptr().cast_mut().cast::<MinimalTupleData>();
             mem::forget(mtup);
@@ -276,8 +283,7 @@ impl Tuplestore {
                 }
                 StoreTuple::File => {
                     // File tuples are always fresh copies (C should_free).
-                    let owned =
-                        heaptuple::heap_copy_minimal_tuple(slot_mcx, &st.read_scratch, 0)?;
+                    let owned = heaptuple::heap_copy_minimal_tuple(slot_mcx, &st.read_scratch, 0)?;
                     exectuples::exec_store_minimal_tuple_owned(slot, slot_mcx, owned);
                     return Ok(true);
                 }
@@ -654,8 +660,8 @@ impl<'m> TuplestoreData<'m> {
                 // C's WRITETUP pfrees each dumped tuple; the bump arena
                 // releases them wholesale instead.
                 self.tuplecontext.reset();
-                self.avail_mem = self.allowed_mem
-                    - aset_chunk_space(self.memtuples.capacity() * PTR_SIZE);
+                self.avail_mem =
+                    self.allowed_mem - aset_chunk_space(self.memtuples.capacity() * PTR_SIZE);
                 Ok(())
             }
             TupStoreStatus::WriteFile => {
@@ -737,7 +743,10 @@ impl<'m> TuplestoreData<'m> {
         let (body, bodylen) = unsafe {
             let t_len = (*tuple).t_len as usize;
             (
-                tuple.cast_const().cast::<u8>().add(MINIMAL_TUPLE_DATA_OFFSET),
+                tuple
+                    .cast_const()
+                    .cast::<u8>()
+                    .add(MINIMAL_TUPLE_DATA_OFFSET),
                 t_len - MINIMAL_TUPLE_DATA_OFFSET,
             )
         };
@@ -774,7 +783,11 @@ impl<'m> TuplestoreData<'m> {
             self.read_scratch.truncate(t_len);
         }
         self.read_scratch[..4].copy_from_slice(&(t_len as u32).to_ne_bytes());
-        let TuplestoreData { myfile, read_scratch, .. } = self;
+        let TuplestoreData {
+            myfile,
+            read_scratch,
+            ..
+        } = self;
         let file = myfile.as_mut().expect("readtup without file");
         file.read_exact(&mut read_scratch[MINIMAL_TUPLE_DATA_OFFSET..])?;
         if self.backward {
@@ -815,9 +828,13 @@ impl<'m> TuplestoreData<'m> {
         }
 
         self.avail_mem += aset_chunk_space(memtupsize * PTR_SIZE);
-        self.memtuples.reserve_exact(newmemtupsize - self.memtuples.len());
+        self.memtuples
+            .reserve_exact(newmemtupsize - self.memtuples.len());
         self.avail_mem -= aset_chunk_space(self.memtuples.capacity() * PTR_SIZE);
-        assert!(self.avail_mem >= 0, "unexpected out-of-memory situation in tuplestore");
+        assert!(
+            self.avail_mem >= 0,
+            "unexpected out-of-memory situation in tuplestore"
+        );
         true
     }
 
@@ -839,9 +856,7 @@ impl<'m> TuplestoreData<'m> {
     }
 
     fn gettuple(&mut self, forward: bool) -> PgResult<StoreTuple> {
-        debug_assert!(
-            forward || self.readptrs[self.activeptr].eflags & EXEC_FLAG_BACKWARD != 0
-        );
+        debug_assert!(forward || self.readptrs[self.activeptr].eflags & EXEC_FLAG_BACKWARD != 0);
         match self.status {
             TupStoreStatus::InMem => {
                 let count = self.memtuples.len();

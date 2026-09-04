@@ -233,7 +233,8 @@ fn dispatch_switch<'mcx>(
                     for item in stmt.options.iter() {
                         let item = item.as_def_elem().expect("BEGIN options: DefElem list");
                         match item.defname.unwrap_or("") {
-                            name @ ("transaction_isolation" | "transaction_read_only"
+                            name @ ("transaction_isolation"
+                            | "transaction_read_only"
                             | "transaction_deferrable") => {
                                 guc_funcs::SetPGVariable(name, item.arg, true)?;
                             }
@@ -279,7 +280,8 @@ fn dispatch_switch<'mcx>(
                 TRANS_STMT_RELEASE => {
                     xact::RequireTransactionBlock(is_top_level, "RELEASE SAVEPOINT")?;
                     xact::ReleaseSavepoint(
-                        stmt.savepoint_name.expect("RELEASE SAVEPOINT: name is NULL"),
+                        stmt.savepoint_name
+                            .expect("RELEASE SAVEPOINT: name is NULL"),
                     )?;
                 }
 
@@ -390,7 +392,15 @@ fn dispatch_switch<'mcx>(
             let stmt = parsetree.as_execute_stmt().unwrap();
             // SAFETY: see unify_execute_lifetime.
             let stmt = unsafe { unify_execute_lifetime(stmt) };
-            prepare::ExecuteQuery(mcx, stmt, source_text, params, None, dest, qc.as_deref_mut())?;
+            prepare::ExecuteQuery(
+                mcx,
+                stmt,
+                source_text,
+                params,
+                None,
+                dest,
+                qc.as_deref_mut(),
+            )?;
         }
         T_DeallocateStmt => {
             CheckRestrictedOperation("DEALLOCATE")?;
@@ -401,7 +411,14 @@ fn dispatch_switch<'mcx>(
             let stmt = parsetree.as_grant_stmt().unwrap();
             if event_trigger::EventTriggerSupportsObjectType(stmt.objtype) {
                 process_utility_slow(
-                    mcx, parsetree, pstmt, source_text, context, params, query_env, qc,
+                    mcx,
+                    parsetree,
+                    pstmt,
+                    source_text,
+                    context,
+                    params,
+                    query_env,
+                    qc,
                 )?;
             } else {
                 aclchk::ExecuteGrantStmt(mcx, stmt)?;
@@ -681,10 +698,7 @@ fn dispatch_switch<'mcx>(
             trigger::AfterTriggerSetState(mcx, stmt)?;
         }
         T_CheckPointStmt => {
-            if !acl_seams::has_privs_of_role::call(
-                miscinit::GetUserId(),
-                ROLE_PG_CHECKPOINT,
-            )? {
+            if !acl_seams::has_privs_of_role::call(miscinit::GetUserId(), ROLE_PG_CHECKPOINT)? {
                 return Err(::elog::ereport(types_error::ERROR)
                     .errcode(types_error::ERRCODE_INSUFFICIENT_PRIVILEGE)
                     .errmsg("permission denied to execute CHECKPOINT command")
@@ -696,8 +710,11 @@ fn dispatch_switch<'mcx>(
                     .into_error()
                     .into());
             }
-            let force =
-                if transam_xlog::RecoveryInProgress() { 0 } else { transam_xlog::CHECKPOINT_FORCE };
+            let force = if transam_xlog::RecoveryInProgress() {
+                0
+            } else {
+                transam_xlog::CHECKPOINT_FORCE
+            };
             checkpointer_seams::request_checkpoint::call(
                 transam_xlog::CHECKPOINT_IMMEDIATE | transam_xlog::CHECKPOINT_WAIT | force,
             )?;
@@ -707,7 +724,14 @@ fn dispatch_switch<'mcx>(
             let stmt = parsetree.as_drop_stmt().unwrap();
             if event_trigger::EventTriggerSupportsObjectType(stmt.removeType) {
                 process_utility_slow(
-                    mcx, parsetree, pstmt, source_text, context, params, query_env, qc,
+                    mcx,
+                    parsetree,
+                    pstmt,
+                    source_text,
+                    context,
+                    params,
+                    query_env,
+                    qc,
                 )?;
             } else {
                 exec_drop_stmt(mcx, parsetree, is_top_level)?;
@@ -718,7 +742,14 @@ fn dispatch_switch<'mcx>(
             let stmt = parsetree.as_comment_stmt().unwrap();
             if event_trigger::EventTriggerSupportsObjectType(stmt.objtype) {
                 process_utility_slow(
-                    mcx, parsetree, pstmt, source_text, context, params, query_env, qc,
+                    mcx,
+                    parsetree,
+                    pstmt,
+                    source_text,
+                    context,
+                    params,
+                    query_env,
+                    qc,
                 )?;
             } else {
                 exec_comment_stmt(mcx, parsetree)?;
@@ -729,7 +760,14 @@ fn dispatch_switch<'mcx>(
             let stmt = parsetree.as_sec_label_stmt().unwrap();
             if event_trigger::EventTriggerSupportsObjectType(stmt.objtype) {
                 process_utility_slow(
-                    mcx, parsetree, pstmt, source_text, context, params, query_env, qc,
+                    mcx,
+                    parsetree,
+                    pstmt,
+                    source_text,
+                    context,
+                    params,
+                    query_env,
+                    qc,
                 )?;
             } else {
                 exec_seclabel_stmt(mcx, parsetree)?;
@@ -742,7 +780,14 @@ fn dispatch_switch<'mcx>(
                 .expect("RenameStmt");
             if event_trigger::EventTriggerSupportsObjectType(stmt.renameType) {
                 process_utility_slow(
-                    mcx, parsetree, pstmt, source_text, context, params, query_env, qc,
+                    mcx,
+                    parsetree,
+                    pstmt,
+                    source_text,
+                    context,
+                    params,
+                    query_env,
+                    qc,
                 )?;
             } else {
                 exec_rename_stmt(mcx, parsetree)?;
@@ -755,7 +800,14 @@ fn dispatch_switch<'mcx>(
                 .expect("AlterOwnerStmt");
             if event_trigger::EventTriggerSupportsObjectType(stmt.objectType) {
                 process_utility_slow(
-                    mcx, parsetree, pstmt, source_text, context, params, query_env, qc,
+                    mcx,
+                    parsetree,
+                    pstmt,
+                    source_text,
+                    context,
+                    params,
+                    query_env,
+                    qc,
                 )?;
             } else {
                 exec_alter_owner_non_et(mcx, stmt)?;
@@ -764,7 +816,14 @@ fn dispatch_switch<'mcx>(
 
         // All other statement types have event trigger support.
         _ => process_utility_slow(
-            mcx, parsetree, pstmt, source_text, context, params, query_env, qc,
+            mcx,
+            parsetree,
+            pstmt,
+            source_text,
+            context,
+            params,
+            query_env,
+            qc,
         )?,
     }
     Ok(())
@@ -806,7 +865,15 @@ fn process_utility_slow<'mcx>(
     }
 
     let address = slow_switch(
-        mcx, parsetree, pstmt, source_text, context, is_top_level, params, query_env, qc,
+        mcx,
+        parsetree,
+        pstmt,
+        source_text,
+        context,
+        is_top_level,
+        params,
+        query_env,
+        qc,
     )?;
 
     if let Some(address) = address {
@@ -896,8 +963,7 @@ fn slow_switch<'mcx>(
         T_CreateStmt | T_CreateForeignTableStmt => {
             // Retention contract as unify_stmt_lifetime: the statement arena
             // outlives the utility call; nothing derived escapes it.
-            let stmt_node =
-                unsafe { core::mem::transmute::<Node<'_>, Node<'mcx>>(parsetree) };
+            let stmt_node = unsafe { core::mem::transmute::<Node<'_>, Node<'mcx>>(parsetree) };
             let mut stmts = parse_utilcmd::transformCreateStmt(mcx, stmt_node, source_text)?;
             let mut table_rv: Option<&'mcx types_nodes::primnodes::RangeVar<'mcx>> = None;
             let mut i = 0;
@@ -1093,8 +1159,7 @@ fn slow_switch<'mcx>(
         T_IndexStmt => {
             // Retention contract as unify_stmt_lifetime: the statement arena
             // outlives the utility call; nothing derived escapes it.
-            let stmt_node =
-                unsafe { core::mem::transmute::<Node<'_>, Node<'mcx>>(parsetree) };
+            let stmt_node = unsafe { core::mem::transmute::<Node<'_>, Node<'mcx>>(parsetree) };
             exec_index_stmt(mcx, stmt_node, source_text, is_top_level)?;
             // CREATE INDEX collects itself ahead of any ALTER TABLE subcmds.
             Ok(None)
@@ -1103,13 +1168,15 @@ fn slow_switch<'mcx>(
         T_CreateTrigStmt => {
             // Retention contract as unify_stmt_lifetime: the statement arena
             // outlives the utility call; nothing derived escapes it.
-            let stmt_node =
-                unsafe { core::mem::transmute::<Node<'_>, Node<'mcx>>(parsetree) };
+            let stmt_node = unsafe { core::mem::transmute::<Node<'_>, Node<'mcx>>(parsetree) };
             let stmt = stmt_node
                 .as_variant::<types_nodes::rawnodes::CreateTrigStmt>()
                 .expect("CreateTrigStmt");
             let trigoid = trigger::CreateTrigger(mcx, stmt, source_text)?;
-            Ok(Some(ObjectAddress::set(types_core::TRIGGER_RELATION_ID, trigoid)))
+            Ok(Some(ObjectAddress::set(
+                types_core::TRIGGER_RELATION_ID,
+                trigoid,
+            )))
         }
 
         T_ReindexStmt => {
@@ -1146,8 +1213,7 @@ fn slow_switch<'mcx>(
         T_CreateStatsStmt => {
             // Retention contract as unify_stmt_lifetime: the statement arena
             // outlives the utility call; nothing derived escapes it.
-            let stmt_node =
-                unsafe { core::mem::transmute::<Node<'_>, Node<'mcx>>(parsetree) };
+            let stmt_node = unsafe { core::mem::transmute::<Node<'_>, Node<'mcx>>(parsetree) };
             let address = exec_create_stats_stmt(mcx, stmt_node, source_text)?;
             Ok(Some(address))
         }
@@ -1194,7 +1260,9 @@ fn slow_switch<'mcx>(
             aclchk::ExecAlterDefaultPrivilegesStmt(mcx, stmt)?;
             event_trigger::EventTriggerCollectAlterDefPrivs(
                 CreateCommandTag(parsetree),
-                stmt.action.expect("AlterDefaultPrivilegesStmt.action").objtype,
+                stmt.action
+                    .expect("AlterDefaultPrivilegesStmt.action")
+                    .objtype,
             );
             Ok(None)
         }
@@ -1246,7 +1314,10 @@ fn slow_switch<'mcx>(
                 .as_variant::<types_nodes::rawnodes::CreateForeignServerStmt>()
                 .expect("CreateForeignServerStmt");
             let srvoid = foreigncmds::CreateForeignServer(mcx, stmt)?;
-            Ok(Some(ObjectAddress::set(types_core::FOREIGN_SERVER_RELATION_ID, srvoid)))
+            Ok(Some(ObjectAddress::set(
+                types_core::FOREIGN_SERVER_RELATION_ID,
+                srvoid,
+            )))
         }
         T_AlterForeignServerStmt => {
             let stmt_node = unsafe { core::mem::transmute::<Node<'_>, Node<'mcx>>(parsetree) };
@@ -1317,8 +1388,7 @@ fn slow_switch<'mcx>(
         T_CreateTableAsStmt => {
             // Retention contract as unify_stmt_lifetime: the statement arena
             // outlives the utility call; nothing derived escapes it.
-            let stmt_node =
-                unsafe { core::mem::transmute::<Node<'_>, Node<'mcx>>(parsetree) };
+            let stmt_node = unsafe { core::mem::transmute::<Node<'_>, Node<'mcx>>(parsetree) };
             let stmt = stmt_node
                 .as_variant::<types_nodes::rawnodes::CreateTableAsStmt>()
                 .expect("CreateTableAsStmt");
@@ -1331,13 +1401,15 @@ fn slow_switch<'mcx>(
                 qc.as_deref_mut(),
             )?;
             // C collects InvalidObjectAddress on the if-not-exists skip.
-            Ok(Some(ObjectAddress::set(types_core::RELATION_RELATION_ID, relid)))
+            Ok(Some(ObjectAddress::set(
+                types_core::RELATION_RELATION_ID,
+                relid,
+            )))
         }
         T_RefreshMatViewStmt => {
             // REFRESH CONCURRENTLY executes DDL internally; inhibit command
             // collection around it exactly as C.
-            let stmt_node =
-                unsafe { core::mem::transmute::<Node<'_>, Node<'mcx>>(parsetree) };
+            let stmt_node = unsafe { core::mem::transmute::<Node<'_>, Node<'mcx>>(parsetree) };
             let stmt = stmt_node
                 .as_variant::<types_nodes::rawnodes::RefreshMatViewStmt>()
                 .expect("RefreshMatViewStmt");
@@ -1350,11 +1422,13 @@ fn slow_switch<'mcx>(
             );
             event_trigger::EventTriggerUndoInhibitCommandCollection();
             let matview_oid = res?;
-            Ok(Some(ObjectAddress::set(types_core::RELATION_RELATION_ID, matview_oid)))
+            Ok(Some(ObjectAddress::set(
+                types_core::RELATION_RELATION_ID,
+                matview_oid,
+            )))
         }
         T_CreateSeqStmt => {
-            let stmt_node =
-                unsafe { core::mem::transmute::<Node<'_>, Node<'mcx>>(parsetree) };
+            let stmt_node = unsafe { core::mem::transmute::<Node<'_>, Node<'mcx>>(parsetree) };
             let seqstmt = stmt_node
                 .as_variant::<types_nodes::rawnodes::CreateSeqStmt>()
                 .expect("CreateSeqStmt");
@@ -1366,23 +1440,27 @@ fn slow_switch<'mcx>(
             }
             let seqoid = sequence::DefineSequence(mcx, Some(&pstate), seqstmt)?;
             parser_small1::free_parsestate(pstate)?;
-            Ok(Some(ObjectAddress::set(types_core::RELATION_RELATION_ID, seqoid)))
+            Ok(Some(ObjectAddress::set(
+                types_core::RELATION_RELATION_ID,
+                seqoid,
+            )))
         }
         T_AlterSeqStmt => {
-            let stmt_node =
-                unsafe { core::mem::transmute::<Node<'_>, Node<'mcx>>(parsetree) };
-            let altstmt =
-                stmt_node.as_variant::<types_nodes::AlterSeqStmt>().expect("AlterSeqStmt");
+            let stmt_node = unsafe { core::mem::transmute::<Node<'_>, Node<'mcx>>(parsetree) };
+            let altstmt = stmt_node
+                .as_variant::<types_nodes::AlterSeqStmt>()
+                .expect("AlterSeqStmt");
             let seqoid = sequence::AlterSequence(mcx, altstmt)?;
-            Ok(Some(ObjectAddress::set(types_core::RELATION_RELATION_ID, seqoid)))
+            Ok(Some(ObjectAddress::set(
+                types_core::RELATION_RELATION_ID,
+                seqoid,
+            )))
         }
         T_CreateDomainStmt => {
             // Retention contract as unify_stmt_lifetime: the statement arena
             // outlives the utility call; nothing derived escapes it.
             let stmt_node = unsafe { core::mem::transmute::<Node<'_>, Node<'mcx>>(parsetree) };
-            let stmt = stmt_node
-                .as_create_domain_stmt()
-                .expect("CreateDomainStmt");
+            let stmt = stmt_node.as_create_domain_stmt().expect("CreateDomainStmt");
             let mut pstate = parser_small1::make_parsestate(mcx, None);
             {
                 let mut v: mcx::PgVec<'mcx, u8> = mcx::PgVec::new_in(mcx);
@@ -1943,7 +2021,11 @@ fn exec_comment_stmt<'mcx>(mcx: Mcx<'mcx>, parsetree: Node<'_>) -> PgResult<Obje
         >(stmt)
     };
     let addr = commands_comment::CommentObject(mcx, stmt)?;
-    Ok(ObjectAddress { classId: addr.classId, objectId: addr.objectId, objectSubId: addr.objectSubId })
+    Ok(ObjectAddress {
+        classId: addr.classId,
+        objectId: addr.objectId,
+        objectSubId: addr.objectSubId,
+    })
 }
 
 fn exec_seclabel_stmt<'mcx>(mcx: Mcx<'mcx>, parsetree: Node<'_>) -> PgResult<()> {
@@ -2201,8 +2283,7 @@ fn exec_create_stats_stmt<'mcx>(
             return Err(Box::new(
                 types_error::PgError::new(
                     types_error::ERROR,
-                    "CREATE STATISTICS only supports relation names in the FROM clause"
-                        .to_string(),
+                    "CREATE STATISTICS only supports relation names in the FROM clause".to_string(),
                 )
                 .with_sqlstate(types_error::ERRCODE_FEATURE_NOT_SUPPORTED),
             ));
@@ -2210,7 +2291,9 @@ fn exec_create_stats_stmt<'mcx>(
         let rv = rel_vocab::RangeVar {
             catalogname: rv_node.catalogname,
             schemaname: rv_node.schemaname,
-            relname: rv_node.relname.expect("CreateStatsStmt relation without relname"),
+            relname: rv_node
+                .relname
+                .expect("CreateStatsStmt relation without relname"),
             inh: rv_node.inh,
             relpersistence: rv_node.relpersistence,
             location: rv_node.location,
@@ -2259,16 +2342,15 @@ fn exec_index_stmt<'mcx>(
         relpersistence: rv_node.relpersistence,
         location: rv_node.location,
     };
-    let mut cb = |rv2: &rel_vocab::RangeVar<'_>,
-                  rel_id: types_core::Oid,
-                  old_rel_id: types_core::Oid|
-     -> PgResult<()> { range_var_callback_owns_relation(mcx, rv2, rel_id, old_rel_id) };
+    let mut cb =
+        |rv2: &rel_vocab::RangeVar<'_>,
+         rel_id: types_core::Oid,
+         old_rel_id: types_core::Oid|
+         -> PgResult<()> { range_var_callback_owns_relation(mcx, rv2, rel_id, old_rel_id) };
     let relid = catalog_namespace::RangeVarGetRelidExtended(&rv, lockmode, 0, Some(&mut cb))?;
     // Partitioned recursion locks every partition up front (deadlock
     // avoidance) and pre-checks partition relkinds.
-    if rv.inh
-        && lsyscache::get_rel_relkind(relid)? as u8 == types_rel::RELKIND_PARTITIONED_TABLE
-    {
+    if rv.inh && lsyscache::get_rel_relkind(relid)? as u8 == types_rel::RELKIND_PARTITIONED_TABLE {
         let inheritors = pg_inherits::find_all_inheritors(mcx, relid, lockmode)?;
         for &partrelid in inheritors.iter() {
             let relkind = lsyscache::get_rel_relkind(partrelid)? as u8;
@@ -2350,10 +2432,7 @@ fn exec_alter_table_stmt<'mcx>(
                 .and_then(|d| d.as_variant::<types_nodes::rawnodes::PartitionCmd>())
                 .is_some_and(|p| p.concurrent)
         {
-            xact::PreventInTransactionBlock(
-                is_top_level,
-                "ALTER TABLE ... DETACH CONCURRENTLY",
-            )?;
+            xact::PreventInTransactionBlock(is_top_level, "ALTER TABLE ... DETACH CONCURRENTLY")?;
         }
     }
     let lockmode = tablecmds::AlterTableGetLockLevel(&stmt.cmds);

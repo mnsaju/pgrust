@@ -19,7 +19,10 @@ const TEMP_OPEN_FLAGS: i32 = libc::O_RDWR | libc::O_CREAT | libc::O_TRUNC;
 pub fn OpenTemporaryFile(inter_xact: bool) -> PgResult<File> {
     let mut file = File(0);
 
-    debug_assert!(with_fd(|fd| fd.temporary_files_allowed), "temp file access not up");
+    debug_assert!(
+        with_fd(|fd| fd.temporary_files_allowed),
+        "temp file access not up"
+    );
 
     // Make sure the current resource owner has space for this File before we
     // open it, if we'll be registering it below.
@@ -118,7 +121,10 @@ pub(crate) fn OpenTemporaryFileInTablespace(tblspc_oid: Oid, reject_error: bool)
 }
 
 pub fn PathNameCreateTemporaryFile(path: &str, error_on_failure: bool) -> PgResult<File> {
-    debug_assert!(with_fd(|fd| fd.temporary_files_allowed), "temp file access not up");
+    debug_assert!(
+        with_fd(|fd| fd.temporary_files_allowed),
+        "temp file access not up"
+    );
 
     resowner::resource_owner_enlarge(resowner::current_resource_owner());
 
@@ -143,7 +149,10 @@ pub fn PathNameCreateTemporaryFile(path: &str, error_on_failure: bool) -> PgResu
 }
 
 pub fn PathNameOpenTemporaryFile(path: &str, mode: i32) -> PgResult<File> {
-    debug_assert!(with_fd(|fd| fd.temporary_files_allowed), "temp file access not up");
+    debug_assert!(
+        with_fd(|fd| fd.temporary_files_allowed),
+        "temp file access not up"
+    );
 
     resowner::resource_owner_enlarge(resowner::current_resource_owner());
 
@@ -177,7 +186,9 @@ pub fn PathNameCreateTemporaryDir(basedir: &str, directory: &str) -> PgResult<()
             ereport(ERROR)
                 .with_saved_errno(get_errno())
                 .errcode_for_file_access()
-                .errmsg(format!("cannot create temporary directory \"{basedir}\": %m"))
+                .errmsg(format!(
+                    "cannot create temporary directory \"{basedir}\": %m"
+                ))
                 .finish(loc("PathNameCreateTemporaryDir"))?;
         }
 

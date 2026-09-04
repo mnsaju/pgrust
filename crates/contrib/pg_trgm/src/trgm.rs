@@ -172,7 +172,13 @@ fn generate_trgm_only(
         buf.push(b' ');
 
         let oldlen = dst.len();
-        make_trigrams(&mut dst, &buf, lowered.len() + LPADDING + RPADDING, env, legacy_crc32);
+        make_trigrams(
+            &mut dst,
+            &buf,
+            lowered.len() + LPADDING + RPADDING,
+            env,
+            legacy_crc32,
+        );
 
         if let Some(b) = bounds.as_mut() {
             while b.len() < dst.len() {
@@ -504,7 +510,10 @@ pub fn calc_word_similarity(
         ptrg.push(PosTrgm { trg: *t, index: -1 });
     }
     for (i, t) in trg2.iter().enumerate() {
-        ptrg.push(PosTrgm { trg: *t, index: i as i32 });
+        ptrg.push(PosTrgm {
+            trg: *t,
+            index: i as i32,
+        });
     }
     ptrg.sort_by(comp_ptrgm);
 
@@ -551,7 +560,11 @@ mod tests {
         TrgmEnv {
             max_encoding_len: 1,
             mblen: &|_s| 1,
-            isalnum: &|s| s.first().map(|c| c.is_ascii_alphanumeric()).unwrap_or(false),
+            isalnum: &|s| {
+                s.first()
+                    .map(|c| c.is_ascii_alphanumeric())
+                    .unwrap_or(false)
+            },
             tolower: &|s| s.iter().map(|c| c.to_ascii_lowercase()).collect(),
         }
     }
@@ -561,7 +574,9 @@ mod tests {
     }
 
     fn show(v: &[Trgm]) -> Vec<String> {
-        v.iter().map(|t| String::from_utf8_lossy(t).into_owned()).collect()
+        v.iter()
+            .map(|t| String::from_utf8_lossy(t).into_owned())
+            .collect()
     }
 
     #[test]

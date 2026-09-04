@@ -6,8 +6,8 @@ use ::vfs::VfsFd;
 use ::elog::ereport;
 use ::types_core::Oid;
 use ::types_error::{
-    ErrorLevel, ErrorLocation, PgResult, DEBUG2, ERRCODE_INSUFFICIENT_RESOURCES, FATAL, LOG,
-    PANIC, WARNING,
+    ErrorLevel, ErrorLocation, PgResult, DEBUG2, ERRCODE_INSUFFICIENT_RESOURCES, FATAL, LOG, PANIC,
+    WARNING,
 };
 use ::types_resowner::ResourceOwner;
 use ::types_storage::{FD_MINFREE, NUM_RESERVED_FDS};
@@ -151,10 +151,8 @@ scalar_global! {
 // backend at the 0600/0700 defaults after the postmaster enabled group access
 // (thread-model hazard class 1; caught by pg_basebackup/010 group-permission
 // leg: runtime-created tablespace/WAL files came out 0600 on a 0750 cluster).
-static PG_FILE_CREATE_MODE: std::sync::atomic::AtomicU32 =
-    std::sync::atomic::AtomicU32::new(0o600);
-static PG_DIR_CREATE_MODE: std::sync::atomic::AtomicU32 =
-    std::sync::atomic::AtomicU32::new(0o700);
+static PG_FILE_CREATE_MODE: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0o600);
+static PG_DIR_CREATE_MODE: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0o700);
 
 pub fn pg_file_create_mode() -> u32 {
     PG_FILE_CREATE_MODE.load(std::sync::atomic::Ordering::Relaxed)
@@ -227,7 +225,10 @@ pub(crate) fn LruDelete(fd: &mut FdState, file: i32) -> PgResult<()> {
     debug_assert!(file != 0);
 
     CloseDioFd(fd, file);
-    let handle = fd.vfd_cache[file as usize].fd.take().expect("LruDelete on closed VFD");
+    let handle = fd.vfd_cache[file as usize]
+        .fd
+        .take()
+        .expect("LruDelete on closed VFD");
     crate::pgaio_closing_fd_if_engine_present(handle.as_raw());
 
     // Live descriptor just released from the guard (disarmed); closed
@@ -244,7 +245,10 @@ pub(crate) fn LruDelete(fd: &mut FdState, file: i32) -> PgResult<()> {
         } else {
             data_sync_elevel(LOG)
         };
-        let name = fd.vfd_cache[file as usize].file_name.clone().unwrap_or_default();
+        let name = fd.vfd_cache[file as usize]
+            .file_name
+            .clone()
+            .unwrap_or_default();
         ereport(elevel)
             .with_saved_errno(en)
             .errmsg_internal(format!("could not close file \"{name}\": %m"))
@@ -268,7 +272,10 @@ pub(crate) fn LruInsert(fd: &mut FdState, file: i32) -> PgResult<i32> {
     if FileIsNotOpen(fd, file) {
         ReleaseLruFiles(fd)?;
 
-        let name = fd.vfd_cache[file as usize].file_name.clone().unwrap_or_default();
+        let name = fd.vfd_cache[file as usize]
+            .file_name
+            .clone()
+            .unwrap_or_default();
         let flags = fd.vfd_cache[file as usize].file_flags;
         let mode = fd.vfd_cache[file as usize].file_mode;
         let raw = BasicOpenFilePermInternal(fd, &name, flags, mode)?;
@@ -363,7 +370,10 @@ pub(crate) fn FileAccessDio(fd: &mut FdState, file: i32) -> PgResult<i32> {
         return Ok(-1);
     }
     ReleaseLruFiles(fd)?;
-    let name = fd.vfd_cache[file as usize].file_name.clone().unwrap_or_default();
+    let name = fd.vfd_cache[file as usize]
+        .file_name
+        .clone()
+        .unwrap_or_default();
     let flags = (fd.vfd_cache[file as usize].file_flags | PG_O_DIRECT)
         & !(libc::O_CREAT | libc::O_TRUNC | libc::O_EXCL);
     let mode = fd.vfd_cache[file as usize].file_mode;
@@ -417,7 +427,10 @@ pub fn InitFileAccess() {
 
 pub fn InitTemporaryFileAccess() -> PgResult<()> {
     debug_assert!(with_fd(|fd| fd.size_vfd_cache() != 0));
-    debug_assert!(!with_fd(|fd| fd.temporary_files_allowed), "call me only once");
+    debug_assert!(
+        !with_fd(|fd| fd.temporary_files_allowed),
+        "call me only once"
+    );
 
     ipc_seams::before_shmem_exit::call(before_shmem_exit_files_cb, datum::Datum::from_i32(0))?;
 
@@ -467,9 +480,7 @@ pub(crate) fn count_usable_fds(max_to_probe: i32) -> PgResult<(i32, i32)> {
             .finish(loc("count_usable_fds"))?;
     }
 
-    if probe.stop_errno != 0
-        && probe.stop_errno != libc::EMFILE
-        && probe.stop_errno != libc::ENFILE
+    if probe.stop_errno != 0 && probe.stop_errno != libc::EMFILE && probe.stop_errno != libc::ENFILE
     {
         let used = probe.used;
         ereport(WARNING)
@@ -574,8 +585,13 @@ pub fn set_max_safe_fds(max_child_threads: i32, max_session_threads: i32) -> PgR
         Some(limits.soft_after.min(i32::MAX as u64) as i32)
     };
 
-    let new_max =
-        compute_max_safe_fds(usable_fds, mfp, ceiling, max_child_threads, max_session_threads);
+    let new_max = compute_max_safe_fds(
+        usable_fds,
+        mfp,
+        ceiling,
+        max_child_threads,
+        max_session_threads,
+    );
     set_max_safe_fds_value(new_max);
 
     if new_max < FD_MINFREE {
@@ -583,8 +599,7 @@ pub fn set_max_safe_fds(max_child_threads: i32, max_session_threads: i32) -> PgR
         // C refuses the same way when one backend cannot get enough
         // descriptors, and here the shortage is the whole server's.
         let needed_per_session = FD_MINFREE + NUM_RESERVED_FDS;
-        let needed_total = (needed_per_session as i64)
-            * (max_session_threads.max(1) as i64)
+        let needed_total = (needed_per_session as i64) * (max_session_threads.max(1) as i64)
             + (PER_SESSION_SETUP_FDS as i64) * (max_child_threads.max(1) as i64)
             + POSTMASTER_RESERVED_FDS as i64;
         return ereport(FATAL)
@@ -598,7 +613,9 @@ pub fn set_max_safe_fds(max_child_threads: i32, max_session_threads: i32) -> PgR
                  cache plus {} for its socket, wake pipe and wait sets.",
                 max_session_threads.max(1),
                 needed_total,
-                ceiling.map(|c| c.to_string()).unwrap_or_else(|| usable_fds.to_string()),
+                ceiling
+                    .map(|c| c.to_string())
+                    .unwrap_or_else(|| usable_fds.to_string()),
                 already_open,
                 hard_limit_text(limits.hard),
                 needed_per_session,

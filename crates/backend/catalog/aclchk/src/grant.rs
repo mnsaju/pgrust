@@ -4,11 +4,10 @@ use adt_acl::{
     ACL_ALL_RIGHTS_COLUMN, ACL_ALL_RIGHTS_DATABASE, ACL_ALL_RIGHTS_FDW,
     ACL_ALL_RIGHTS_FOREIGN_SERVER, ACL_ALL_RIGHTS_FUNCTION, ACL_ALL_RIGHTS_LANGUAGE,
     ACL_ALL_RIGHTS_LARGEOBJECT, ACL_ALL_RIGHTS_PARAMETER_ACL, ACL_ALL_RIGHTS_RELATION,
-    ACL_ALL_RIGHTS_SCHEMA, ACL_ALL_RIGHTS_SEQUENCE, ACL_ALL_RIGHTS_TABLESPACE,
-    ACL_ALL_RIGHTS_TYPE, ACL_ALTER_SYSTEM,
-    ACL_CONNECT, ACL_CREATE, ACL_CREATE_TEMP, ACL_DELETE, ACL_EXECUTE, ACL_ID_PUBLIC, ACL_INSERT,
-    ACL_MAINTAIN, ACL_MODECHG_ADD, ACL_MODECHG_DEL, ACL_NO_RIGHTS, ACL_REFERENCES, ACL_SELECT,
-    ACL_SET, ACL_TRIGGER, ACL_TRUNCATE, ACL_UPDATE, ACL_USAGE,
+    ACL_ALL_RIGHTS_SCHEMA, ACL_ALL_RIGHTS_SEQUENCE, ACL_ALL_RIGHTS_TABLESPACE, ACL_ALL_RIGHTS_TYPE,
+    ACL_ALTER_SYSTEM, ACL_CONNECT, ACL_CREATE, ACL_CREATE_TEMP, ACL_DELETE, ACL_EXECUTE,
+    ACL_ID_PUBLIC, ACL_INSERT, ACL_MAINTAIN, ACL_MODECHG_ADD, ACL_MODECHG_DEL, ACL_NO_RIGHTS,
+    ACL_REFERENCES, ACL_SELECT, ACL_SET, ACL_TRIGGER, ACL_TRUNCATE, ACL_UPDATE, ACL_USAGE,
 };
 use cache_syscache::cacheinfo::{ATTNAME, ATTNUM, PARAMETERACLOID, RELOID};
 use cache_syscache::{
@@ -38,8 +37,8 @@ use types_storage::lock::{InplaceUpdateTupleLock, LOCKTAG};
 use types_tuple::ItemPointerData;
 
 use crate::{
-    aclcheck_error, pg_aclmask_for_grant, with_acl_datum, ACLCHECK_NO_PRIV,
-    ANUM_PG_CLASS_RELACL, ANUM_PG_CLASS_RELNATTS, ANUM_PG_TYPE_TYPTYPE,
+    aclcheck_error, pg_aclmask_for_grant, with_acl_datum, ACLCHECK_NO_PRIV, ANUM_PG_CLASS_RELACL,
+    ANUM_PG_CLASS_RELNATTS, ANUM_PG_TYPE_TYPTYPE,
 };
 
 const ANUM_PG_CLASS_OID: i32 = 1;
@@ -76,16 +75,18 @@ fn warn(msg: String, sqlstate: types_error::SqlState) -> PgResult<()> {
     elog::ereport(WARNING)
         .errcode(sqlstate)
         .errmsg(msg)
-        .finish(types_error::ErrorLocation::new(file!(), line!() as i32, "ExecuteGrantStmt"))
+        .finish(types_error::ErrorLocation::new(
+            file!(),
+            line!() as i32,
+            "ExecuteGrantStmt",
+        ))
 }
 
 // get_rolespec_oid (acl.c).
 pub fn get_rolespec_oid(role: &RoleSpec<'_>, missing_ok: bool) -> PgResult<Oid> {
     use RoleSpecType::*;
     match role.roletype {
-        ROLESPEC_CSTRING => {
-            adt_acl::get_role_oid(role.rolename.unwrap_or_default(), missing_ok)
-        }
+        ROLESPEC_CSTRING => adt_acl::get_role_oid(role.rolename.unwrap_or_default(), missing_ok),
         ROLESPEC_CURRENT_ROLE | ROLESPEC_CURRENT_USER => Ok(miscinit::GetUserId()),
         ROLESPEC_SESSION_USER => Ok(miscinit::GetSessionUserId()),
         ROLESPEC_PUBLIC => Err(err(
@@ -155,7 +156,11 @@ pub(crate) fn merge_acl_with_grant<'mcx>(
     grantor_id: Oid,
     owner_id: Oid,
 ) -> PgResult<PgVec<'mcx, AclItem>> {
-    let modechg = if is_grant { ACL_MODECHG_ADD } else { ACL_MODECHG_DEL };
+    let modechg = if is_grant {
+        ACL_MODECHG_ADD
+    } else {
+        ACL_MODECHG_DEL
+    };
     let mut new_acl = adt_acl::aclcopy(mcx, old_acl)?;
     for &grantee in grantees {
         // Grant options can only be granted to roles, not PUBLIC: privileges
@@ -175,8 +180,16 @@ pub(crate) fn merge_acl_with_grant<'mcx>(
         // REVOKE GRANT OPTION FOR revokes only the option (SQL spec).
         aclitem_set_privs_goptions(
             &mut aclitem,
-            if is_grant || !grant_option { privileges } else { ACL_NO_RIGHTS },
-            if !is_grant || grant_option { privileges } else { ACL_NO_RIGHTS },
+            if is_grant || !grant_option {
+                privileges
+            } else {
+                ACL_NO_RIGHTS
+            },
+            if !is_grant || grant_option {
+                privileges
+            } else {
+                ACL_NO_RIGHTS
+            },
         );
         new_acl = aclupdate(mcx, &new_acl, &aclitem, modechg, owner_id, behavior)?;
     }
@@ -229,9 +242,7 @@ fn restrict_and_check_grant(
     {
         if let (ObjectType::OBJECT_COLUMN, Some(colname)) = (objtype, colname) {
             return Err(err(
-                format!(
-                    "permission denied for column {colname} of relation {objname}"
-                ),
+                format!("permission denied for column {colname} of relation {objname}"),
                 types_error::ERRCODE_INSUFFICIENT_PRIVILEGE,
             ));
         }
@@ -247,9 +258,7 @@ fn restrict_and_check_grant(
     if this_privileges == 0 {
         match colname {
             Some(colname) => warn(
-                format!(
-                    "no privileges {verb} for column \"{colname}\" of relation \"{objname}\""
-                ),
+                format!("no privileges {verb} for column \"{colname}\" of relation \"{objname}\""),
                 code,
             )?,
             None => warn(format!("no privileges {verb} for \"{objname}\""), code)?,
@@ -321,7 +330,10 @@ pub fn ExecuteGrantStmt<'mcx>(mcx: Mcx<'mcx>, stmt: &GrantStmt<'_>) -> PgResult<
 
     let (all_privileges, errnoun) = match stmt.objtype {
         // GRANT TABLE may target a sequence: test the union, refine later.
-        ObjectType::OBJECT_TABLE => (ACL_ALL_RIGHTS_RELATION | ACL_ALL_RIGHTS_SEQUENCE, "relation"),
+        ObjectType::OBJECT_TABLE => (
+            ACL_ALL_RIGHTS_RELATION | ACL_ALL_RIGHTS_SEQUENCE,
+            "relation",
+        ),
         ObjectType::OBJECT_SEQUENCE => (ACL_ALL_RIGHTS_SEQUENCE, "sequence"),
         ObjectType::OBJECT_DATABASE => (ACL_ALL_RIGHTS_DATABASE, "database"),
         ObjectType::OBJECT_DOMAIN => (ACL_ALL_RIGHTS_TYPE, "domain"),
@@ -336,7 +348,10 @@ pub fn ExecuteGrantStmt<'mcx>(mcx: Mcx<'mcx>, stmt: &GrantStmt<'_>) -> PgResult<
         ObjectType::OBJECT_FDW => (ACL_ALL_RIGHTS_FDW, "foreign-data wrapper"),
         ObjectType::OBJECT_FOREIGN_SERVER => (ACL_ALL_RIGHTS_FOREIGN_SERVER, "foreign server"),
         ObjectType::OBJECT_PARAMETER_ACL => (ACL_ALL_RIGHTS_PARAMETER_ACL, "parameter"),
-        other => panic!("ExecuteGrantStmt (aclchk.c): unrecognized objtype {}", other as i32),
+        other => panic!(
+            "ExecuteGrantStmt (aclchk.c): unrecognized objtype {}",
+            other as i32
+        ),
     };
 
     let mut istmt = InternalGrant {
@@ -442,14 +457,17 @@ fn object_names_to_oids<'mcx>(
                     relpersistence: relvar.relpersistence,
                     location: relvar.location,
                 };
-                objects.push(catalog_namespace::RangeVarGetRelid(&rv, AccessShareLock, false)?);
+                objects.push(catalog_namespace::RangeVarGetRelid(
+                    &rv,
+                    AccessShareLock,
+                    false,
+                )?);
             }
         }
         ObjectType::OBJECT_FUNCTION | ObjectType::OBJECT_PROCEDURE | ObjectType::OBJECT_ROUTINE => {
             for cell in objnames.iter() {
                 let owa = cell.as_object_with_args().expect("ObjectWithArgs");
-                let oid =
-                    parse_func_seams::LookupFuncWithArgs::call(objtype as i32, owa, false)?;
+                let oid = parse_func_seams::LookupFuncWithArgs::call(objtype as i32, owa, false)?;
                 lmgr::LockDatabaseObject(PROCEDURE_RELATION_ID, oid, 0, AccessShareLock)?;
                 objects.push(oid);
             }
@@ -518,7 +536,12 @@ fn object_names_to_oids<'mcx>(
                         types_error::ERRCODE_UNDEFINED_OBJECT,
                     ));
                 }
-                lmgr::LockDatabaseObject(pg_largeobject::LargeObjectRelationId, oid, 0, AccessShareLock)?;
+                lmgr::LockDatabaseObject(
+                    pg_largeobject::LargeObjectRelationId,
+                    oid,
+                    0,
+                    AccessShareLock,
+                )?;
                 objects.push(oid);
             }
         }
@@ -628,8 +651,7 @@ fn objects_in_schema_to_oids<'mcx>(
                     .as_i8();
                     // OBJECT_FUNCTION includes aggregates and window functions.
                     if (objtype == ObjectType::OBJECT_FUNCTION && prokind == PROKIND_PROCEDURE)
-                        || (objtype == ObjectType::OBJECT_PROCEDURE
-                            && prokind != PROKIND_PROCEDURE)
+                        || (objtype == ObjectType::OBJECT_PROCEDURE && prokind != PROKIND_PROCEDURE)
                     {
                         continue;
                     }
@@ -658,23 +680,20 @@ fn get_relations_in_namespace<'mcx>(
 ) -> PgResult<()> {
     let rel = table::table_open(mcx, RELATION_RELATION_ID, AccessShareLock)?;
     let key = [oid_scan_key(ANUM_PG_CLASS_RELNAMESPACE, namespace_id)];
-    let mut scan =
-        genam::systable_beginscan(mcx, &rel, types_core::InvalidOid, false, None, &key)?;
+    let mut scan = genam::systable_beginscan(mcx, &rel, types_core::InvalidOid, false, None, &key)?;
     let desc = rel.descr();
     while let Some(tup) = genam::systable_getnext(mcx, &mut scan)? {
         let mut isnull = false;
         // SAFETY: fixed NOT NULL pg_class columns under its descriptor.
-        let kind = unsafe {
-            types_tuple::heap_getattr(tup, ANUM_PG_CLASS_RELKIND, desc, &mut isnull)
-        }
-        .as_i8() as u8;
+        let kind =
+            unsafe { types_tuple::heap_getattr(tup, ANUM_PG_CLASS_RELKIND, desc, &mut isnull) }
+                .as_i8() as u8;
         if kind != relkind {
             continue;
         }
         // SAFETY: fixed NOT NULL pg_class columns under its descriptor.
-        let oid =
-            unsafe { types_tuple::heap_getattr(tup, ANUM_PG_CLASS_OID, desc, &mut isnull) }
-                .as_oid();
+        let oid = unsafe { types_tuple::heap_getattr(tup, ANUM_PG_CLASS_OID, desc, &mut isnull) }
+            .as_oid();
         relations.push(oid);
     }
     genam::systable_endscan(mcx, scan)?;
@@ -705,9 +724,12 @@ fn check_is_domain(type_oid: Oid, typname: &types_nodes::list::NodeList<'_>) -> 
             "cache lookup failed for type {type_oid}"
         ))));
     };
-    let typtype =
-        SysCacheGetAttrNotNull(cache_syscache::cacheinfo::TYPEOID, &tuple, ANUM_PG_TYPE_TYPTYPE)?
-            .as_u8();
+    let typtype = SysCacheGetAttrNotNull(
+        cache_syscache::cacheinfo::TYPEOID,
+        &tuple,
+        ANUM_PG_TYPE_TYPTYPE,
+    )?
+    .as_u8();
     ReleaseSysCache(tuple);
     if typtype != TYPTYPE_DOMAIN {
         let mut name = String::new();
@@ -717,7 +739,10 @@ fn check_is_domain(type_oid: Oid, typname: &types_nodes::list::NodeList<'_>) -> 
             }
             name.push_str(part.as_string().expect("type name part").sval);
         }
-        return Err(err(format!("\"{name}\" is not a domain"), ERRCODE_WRONG_OBJECT_TYPE));
+        return Err(err(
+            format!("\"{name}\" is not a domain"),
+            ERRCODE_WRONG_OBJECT_TYPE,
+        ));
     }
     Ok(())
 }
@@ -757,7 +782,10 @@ fn exec_grant_relation<'mcx>(mcx: Mcx<'mcx>, istmt: &mut InternalGrant<'_, '_>) 
         let owner_id = SysCacheGetAttrNotNull(RELOID, &tuple, ANUM_PG_CLASS_RELOWNER)?.as_oid();
 
         if relkind == RELKIND_INDEX || relkind == RELKIND_PARTITIONED_INDEX {
-            return Err(err(format!("\"{relname}\" is an index"), ERRCODE_WRONG_OBJECT_TYPE));
+            return Err(err(
+                format!("\"{relname}\" is an index"),
+                ERRCODE_WRONG_OBJECT_TYPE,
+            ));
         }
         if relkind == RELKIND_COMPOSITE_TYPE {
             return Err(err(
@@ -803,7 +831,8 @@ fn exec_grant_relation<'mcx>(mcx: Mcx<'mcx>, istmt: &mut InternalGrant<'_, '_>) 
 
         // Column-privilege accumulator, entry [0] = FirstLowInvalidHeapAttributeNumber.
         let num_col_privileges = (relnatts as i32 - FIRST_LOW_INVALID_HEAP_ATTNUM + 1) as usize;
-        let mut col_privileges: PgVec<'mcx, u64> = mcx::vec_with_capacity_in(mcx, num_col_privileges)?;
+        let mut col_privileges: PgVec<'mcx, u64> =
+            mcx::vec_with_capacity_in(mcx, num_col_privileges)?;
         col_privileges.resize(num_col_privileges, ACL_NO_RIGHTS);
         let mut have_col_privileges = false;
 
@@ -992,8 +1021,7 @@ fn expand_col_privileges(
         // get_attnum (lsyscache.c): SearchSysCacheAttName misses dropped rows.
         let attnum = match cache_syscache::SearchSysCacheAttName(rel_oid, colname)? {
             Some(tuple) => {
-                let n =
-                    SysCacheGetAttrNotNull(ATTNAME, &tuple, ANUM_PG_ATTRIBUTE_ATTNUM)?.as_i16();
+                let n = SysCacheGetAttrNotNull(ATTNAME, &tuple, ANUM_PG_ATTRIBUTE_ATTNUM)?.as_i16();
                 ReleaseSysCache(tuple);
                 n
             }
@@ -1007,7 +1035,9 @@ fn expand_col_privileges(
         }
         let idx = attnum as i32 - FIRST_LOW_INVALID_HEAP_ATTNUM;
         if idx <= 0 || idx as usize >= col_privileges.len() {
-            return Err(Box::new(PgError::error("column number out of range".to_string())));
+            return Err(Box::new(PgError::error(
+                "column number out of range".to_string(),
+            )));
         }
         col_privileges[idx as usize] |= this_privileges;
     }
@@ -1080,8 +1110,11 @@ fn exec_grant_attribute<'mcx>(
     } else {
         with_acl_datum(acl_datum, |acl| adt_acl::aclcopy(mcx, acl))?
     };
-    let old_members: Option<PgVec<'mcx, Oid>> =
-        if isnull { None } else { Some(aclmembers(mcx, &old_acl)?) };
+    let old_members: Option<PgVec<'mcx, Oid>> = if isnull {
+        None
+    } else {
+        Some(aclmembers(mcx, &old_acl)?)
+    };
 
     // select_best_grantor considers table-level bits as well as the
     // per-column ACL (cheap concatenation, duplicates are fine here).
@@ -1339,17 +1372,39 @@ fn init_priv_owner(classid: Oid, objid: Oid) -> PgResult<Oid> {
     } else if classid == TYPE_RELATION_ID {
         (cache_syscache::cacheinfo::TYPEOID, 4, "type")
     } else if classid == CLASS_DATABASE.classid {
-        (CLASS_DATABASE.cacheid, CLASS_DATABASE.owner_attnum, CLASS_DATABASE.descr)
+        (
+            CLASS_DATABASE.cacheid,
+            CLASS_DATABASE.owner_attnum,
+            CLASS_DATABASE.descr,
+        )
     } else if classid == CLASS_TABLESPACE.classid {
-        (CLASS_TABLESPACE.cacheid, CLASS_TABLESPACE.owner_attnum, CLASS_TABLESPACE.descr)
+        (
+            CLASS_TABLESPACE.cacheid,
+            CLASS_TABLESPACE.owner_attnum,
+            CLASS_TABLESPACE.descr,
+        )
     } else if classid == CLASS_PROC.classid {
-        (CLASS_PROC.cacheid, CLASS_PROC.owner_attnum, CLASS_PROC.descr)
+        (
+            CLASS_PROC.cacheid,
+            CLASS_PROC.owner_attnum,
+            CLASS_PROC.descr,
+        )
     } else if classid == CLASS_LANGUAGE.classid {
-        (CLASS_LANGUAGE.cacheid, CLASS_LANGUAGE.owner_attnum, CLASS_LANGUAGE.descr)
+        (
+            CLASS_LANGUAGE.cacheid,
+            CLASS_LANGUAGE.owner_attnum,
+            CLASS_LANGUAGE.descr,
+        )
     } else if classid == CLASS_NAMESPACE.classid {
-        (CLASS_NAMESPACE.cacheid, CLASS_NAMESPACE.owner_attnum, CLASS_NAMESPACE.descr)
+        (
+            CLASS_NAMESPACE.cacheid,
+            CLASS_NAMESPACE.owner_attnum,
+            CLASS_NAMESPACE.descr,
+        )
     } else {
-        panic!("RemoveRoleFromInitPriv (aclchk.c): owner lookup for object class {classid} unported")
+        panic!(
+            "RemoveRoleFromInitPriv (aclchk.c): owner lookup for object class {classid} unported"
+        )
     };
 
     let Some(tuple) = SearchSysCache1(cacheid, SysCacheKey::Value(Datum::from_oid(objid)))? else {
@@ -1445,7 +1500,14 @@ pub fn RemoveRoleFromInitPriv<'mcx>(
     }
 
     let newmembers = aclmembers(mcx, &new_acl)?;
-    pg_shdepend::updateInitAclDependencies(mcx, classid, objid, objsubid, &oldmembers, &newmembers)?;
+    pg_shdepend::updateInitAclDependencies(
+        mcx,
+        classid,
+        objid,
+        objsubid,
+        &oldmembers,
+        &newmembers,
+    )?;
 
     genam::systable_endscan(mcx, scan)?;
     xact::CommandCounterIncrement()?;
@@ -1526,7 +1588,14 @@ pub fn ReplaceRoleInInitPriv<'mcx>(
 
     let oldmembers = aclmembers(mcx, &old_acl)?;
     let newmembers = aclmembers(mcx, &new_acl)?;
-    pg_shdepend::updateInitAclDependencies(mcx, classid, objid, objsubid, &oldmembers, &newmembers)?;
+    pg_shdepend::updateInitAclDependencies(
+        mcx,
+        classid,
+        objid,
+        objsubid,
+        &oldmembers,
+        &newmembers,
+    )?;
 
     genam::systable_endscan(mcx, scan)?;
 
@@ -1648,8 +1717,11 @@ fn exec_grant_common<'mcx>(
         } else {
             with_acl_datum(acl_datum, |acl| adt_acl::aclcopy(mcx, acl))?
         };
-        let old_members: Option<PgVec<'mcx, Oid>> =
-            if acl_is_null { None } else { Some(aclmembers(mcx, &old_acl)?) };
+        let old_members: Option<PgVec<'mcx, Oid>> = if acl_is_null {
+            None
+        } else {
+            Some(aclmembers(mcx, &old_acl)?)
+        };
 
         let (grantor_id, avail_goptions) =
             select_best_grantor(miscinit::GetUserId(), istmt.privileges, &old_acl, owner_id)?;
@@ -1741,7 +1813,10 @@ fn exec_grant_largeobject<'mcx>(mcx: Mcx<'mcx>, istmt: &mut InternalGrant<'_, '_
 
     for i in 0..istmt.objects.len() {
         let loid = istmt.objects[i];
-        let skey = [pg_largeobject::oid_key(Anum_pg_largeobject_metadata_oid, loid)];
+        let skey = [pg_largeobject::oid_key(
+            Anum_pg_largeobject_metadata_oid,
+            loid,
+        )];
         let mut scan = genam::systable_beginscan(
             mcx,
             &relation,
@@ -1779,12 +1854,18 @@ fn exec_grant_largeobject<'mcx>(mcx: Mcx<'mcx>, istmt: &mut InternalGrant<'_, '_
             )
         };
         let old_acl: PgVec<'mcx, AclItem> = if acl_is_null {
-            adt_acl::aclcopy(mcx, acldefault(AclObjectType::LargeObject, owner_id).as_slice())?
+            adt_acl::aclcopy(
+                mcx,
+                acldefault(AclObjectType::LargeObject, owner_id).as_slice(),
+            )?
         } else {
             with_acl_datum(acl_datum, |acl| adt_acl::aclcopy(mcx, acl))?
         };
-        let old_members: Option<PgVec<'mcx, Oid>> =
-            if acl_is_null { None } else { Some(aclmembers(mcx, &old_acl)?) };
+        let old_members: Option<PgVec<'mcx, Oid>> = if acl_is_null {
+            None
+        } else {
+            Some(aclmembers(mcx, &old_acl)?)
+        };
 
         let (grantor_id, avail_goptions) =
             select_best_grantor(miscinit::GetUserId(), istmt.privileges, &old_acl, owner_id)?;
@@ -1862,7 +1943,10 @@ fn text_attr(d: Datum) -> String {
             panic!("ExecGrant_Parameter: compressed/external parname varlena — detoast gap");
         }
         let (off, len) = if varatt::varatt_is_1b(p) {
-            (varatt::VARHDRSZ_SHORT, varatt::varsize_1b(p) - varatt::VARHDRSZ_SHORT)
+            (
+                varatt::VARHDRSZ_SHORT,
+                varatt::varsize_1b(p) - varatt::VARHDRSZ_SHORT,
+            )
         } else {
             (varatt::VARHDRSZ, varatt::varsize_4b(p) - varatt::VARHDRSZ)
         };
@@ -1885,8 +1969,10 @@ fn exec_grant_parameter<'mcx>(mcx: Mcx<'mcx>, istmt: &mut InternalGrant<'_, '_>)
 
     for i in 0..istmt.objects.len() {
         let parameter_id = istmt.objects[i];
-        let Some(tuple) =
-            SearchSysCache1(PARAMETERACLOID, SysCacheKey::Value(Datum::from_oid(parameter_id)))?
+        let Some(tuple) = SearchSysCache1(
+            PARAMETERACLOID,
+            SysCacheKey::Value(Datum::from_oid(parameter_id)),
+        )?
         else {
             return Err(Box::new(PgError::error(format!(
                 "cache lookup failed for parameter ACL {parameter_id}"
@@ -1905,12 +1991,18 @@ fn exec_grant_parameter<'mcx>(mcx: Mcx<'mcx>, istmt: &mut InternalGrant<'_, '_>)
         let (acl_datum, acl_is_null) =
             SysCacheGetAttr(PARAMETERACLOID, &tuple, Anum_pg_parameter_acl_paracl)?;
         let old_acl: PgVec<'mcx, AclItem> = if acl_is_null {
-            adt_acl::aclcopy(mcx, acldefault(AclObjectType::ParameterAcl, owner_id).as_slice())?
+            adt_acl::aclcopy(
+                mcx,
+                acldefault(AclObjectType::ParameterAcl, owner_id).as_slice(),
+            )?
         } else {
             with_acl_datum(acl_datum, |acl| adt_acl::aclcopy(mcx, acl))?
         };
-        let old_members: Option<PgVec<'mcx, Oid>> =
-            if acl_is_null { None } else { Some(aclmembers(mcx, &old_acl)?) };
+        let old_members: Option<PgVec<'mcx, Oid>> = if acl_is_null {
+            None
+        } else {
+            Some(aclmembers(mcx, &old_acl)?)
+        };
 
         let (grantor_id, avail_goptions) =
             select_best_grantor(miscinit::GetUserId(), istmt.privileges, &old_acl, owner_id)?;
@@ -1942,8 +2034,10 @@ fn exec_grant_parameter<'mcx>(mcx: Mcx<'mcx>, istmt: &mut InternalGrant<'_, '_>)
         let new_members = aclmembers(mcx, &new_acl)?;
 
         // A default-equal ACL row is degenerate: delete it instead.
-        if adt_acl::aclequal(&new_acl, acldefault(AclObjectType::ParameterAcl, owner_id).as_slice())
-        {
+        if adt_acl::aclequal(
+            &new_acl,
+            acldefault(AclObjectType::ParameterAcl, owner_id).as_slice(),
+        ) {
             catalog_indexing::CatalogTupleDelete(&relation, &tuple.tuple().t_self)?;
         } else {
             let mut values = [Datum::null(); Natts_pg_parameter_acl];

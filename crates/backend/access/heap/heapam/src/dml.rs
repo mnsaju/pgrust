@@ -5,35 +5,35 @@
 // C divergences: crit sections pend miscadmin; WAL prefix/suffix
 // compression off (XLogCheckBufferNeedsBackup pends xloginsert; C also
 // disables it under wal_level=logical), records stay redo-compatible.
-use ::bufmgr_seams::{BUFFER_LOCK_EXCLUSIVE, BUFFER_LOCK_UNLOCK, BufferPin};
+use ::bufmgr_seams::{BufferPin, BUFFER_LOCK_EXCLUSIVE, BUFFER_LOCK_UNLOCK};
 use ::tableam_vocab::{
     BulkInsertStateData, LockTupleMode, LockWaitPolicy, TM_FailureData, TM_Result, TU_UpdateIndexes,
 };
 use ::types_core::xact::{InvalidTransactionId, InvalidXLogRecPtr, TransactionIdIsValid};
 use ::types_core::{CommandId, InvalidBlockNumber, MultiXactId, TransactionId};
-use ::types_error::{ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE, PgError, PgResult};
+use ::types_error::{PgError, PgResult, ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE};
 use ::types_rel::{
-    RELKIND_FOREIGN_TABLE, RELKIND_MATVIEW, RELKIND_RELATION, REPLICA_IDENTITY_FULL,
-    REPLICA_IDENTITY_NOTHING, RelationData,
+    RelationData, RELKIND_FOREIGN_TABLE, RELKIND_MATVIEW, RELKIND_RELATION, REPLICA_IDENTITY_FULL,
+    REPLICA_IDENTITY_NOTHING,
 };
 use ::types_snapshot::SnapshotData;
 use ::types_storage::bufpage::{ItemIdData, PageMut, PageRef, SizeofHeapTupleHeader};
 use ::types_storage::lock::{
-    AccessExclusiveLock, AccessShareLock, ExclusiveLock, LOCKMODE, RowShareLock,
+    AccessExclusiveLock, AccessShareLock, ExclusiveLock, RowShareLock, LOCKMODE,
 };
 use ::types_storage::multixact::{
     ISUPDATE_from_mxstatus, MultiXactConflict, MultiXactMember, MultiXactStatus,
 };
 use ::types_tuple::{
-    FirstOffsetNumber, HEAP_COMBOCID, HEAP_KEYS_UPDATED, HEAP_LOCK_MASK, HEAP_LOCKED_UPGRADED,
-    HEAP_MOVED, HEAP_UPDATED, HEAP_XACT_MASK, HEAP_XMAX_BITS, HEAP_XMAX_COMMITTED,
-    HEAP_XMAX_EXCL_LOCK, HEAP_XMAX_INVALID, HEAP_XMAX_IS_LOCKED_ONLY, HEAP_XMAX_IS_MULTI,
-    HEAP_XMAX_KEYSHR_LOCK, HEAP_XMAX_LOCK_ONLY, HEAP_XMAX_SHR_LOCK, HEAP2_XACT_MASK, HeapTupleData,
-    ItemPointerData, ItemPointerGetBlockNumber, ItemPointerGetOffsetNumber,
+    FirstOffsetNumber, HeapTupleData, ItemPointerData, ItemPointerGetBlockNumber,
+    ItemPointerGetOffsetNumber, HEAP2_XACT_MASK, HEAP_COMBOCID, HEAP_KEYS_UPDATED,
+    HEAP_LOCKED_UPGRADED, HEAP_LOCK_MASK, HEAP_MOVED, HEAP_UPDATED, HEAP_XACT_MASK, HEAP_XMAX_BITS,
+    HEAP_XMAX_COMMITTED, HEAP_XMAX_EXCL_LOCK, HEAP_XMAX_INVALID, HEAP_XMAX_IS_LOCKED_ONLY,
+    HEAP_XMAX_IS_MULTI, HEAP_XMAX_KEYSHR_LOCK, HEAP_XMAX_LOCK_ONLY, HEAP_XMAX_SHR_LOCK,
 };
 use ::xloginsert_seams::{REGBUF_KEEP_DATA, REGBUF_STANDARD, REGBUF_WILL_INIT};
 
-use crate::hio::{HEAP_INSERT_SPECULATIVE, RelationGetBufferForTuple, RelationPutHeapTuple};
+use crate::hio::{RelationGetBufferForTuple, RelationPutHeapTuple, HEAP_INSERT_SPECULATIVE};
 use crate::{HeapTupleHeaderGetUpdateXid, MultiXactIdGetUpdateXid};
 use heapam_visibility_seams as hv_seam;
 
@@ -2478,11 +2478,9 @@ fn log_heap_update(
         _ => 1,
     };
     let main_data = &main_data[..n_main];
-    debug_assert!(
-        vmbuf_old
-            .zip(vmbuf_new)
-            .is_none_or(|(old, new)| { old.buffer() != new.buffer() })
-    );
+    debug_assert!(vmbuf_old
+        .zip(vmbuf_new)
+        .is_none_or(|(old, new)| { old.buffer() != new.buffer() }));
     let mut blocks = vec![new_reg];
     if !same_buf {
         blocks.push(crate::wal::reg_block(

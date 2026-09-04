@@ -11,7 +11,9 @@ use crate::run::PlannerRun;
 
 pub fn extract_restriction_or_clauses<'mcx>(run: &mut PlannerRun<'mcx>) -> PgResult<()> {
     for rti in 1..run.root.simple_rel_array_size as usize {
-        let Some(rel) = run.root.simple_rel_array[rti] else { continue };
+        let Some(rel) = run.root.simple_rel_array[rti] else {
+            continue;
+        };
         debug_assert_eq!(run.root.rel(rel).relid as usize, rti);
         if run.root.rel(rel).reloptkind != RELOPT_BASEREL {
             continue;
@@ -33,7 +35,11 @@ pub fn extract_restriction_or_clauses<'mcx>(run: &mut PlannerRun<'mcx>) -> PgRes
     Ok(())
 }
 
-fn is_safe_restriction_clause_for(run: &PlannerRun<'_>, rid: RinfoId, rel: RelId) -> PgResult<bool> {
+fn is_safe_restriction_clause_for(
+    run: &PlannerRun<'_>,
+    rid: RinfoId,
+    rel: RelId,
+) -> PgResult<bool> {
     let ri = run.root.rinfo(rid);
     if ri.pseudoconstant {
         return Ok(false);
@@ -135,7 +141,11 @@ fn consider_new_or_clause<'mcx>(
         return Ok(());
     }
     run.root.rel_mut(rel).baserestrictinfo.push(or_rid);
-    let minsec = run.root.rel(rel).baserestrict_min_security.min(security_level);
+    let minsec = run
+        .root
+        .rel(rel)
+        .baserestrict_min_security
+        .min(security_level);
     run.root.rel_mut(rel).baserestrict_min_security = minsec;
 
     // Compensate the join OR clause's cached inner-join selectivity so the

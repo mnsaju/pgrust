@@ -89,7 +89,9 @@ fn round_trips_through_readfuncs_scanner_shape() {
     let mcx = ctx.mcx();
     let node = Node::mk(mcx, int4_const(-7)).unwrap();
     let s = nodeToString(mcx, node).unwrap();
-    assert!(s.as_str().contains(":constvalue 4 [ 249 255 255 255 255 255 255 255 ]"));
+    assert!(s
+        .as_str()
+        .contains(":constvalue 4 [ 249 255 255 255 255 255 255 255 ]"));
 }
 
 // Captured from live PostgreSQL 18.3: CREATE TABLE (e bigint DEFAULT 42).
@@ -104,7 +106,8 @@ fn funcexpr_matches_live_adbin_and_round_trips() {
     let ctx = MemoryContext::new("t");
     let mcx = ctx.mcx();
     let mut args = NodeList::nil();
-    args.lappend(mcx, Node::mk(mcx, int4_const(42)).unwrap()).unwrap();
+    args.lappend(mcx, Node::mk(mcx, int4_const(42)).unwrap())
+        .unwrap();
     let f = Node::mk(
         mcx,
         types_nodes::primnodes::FuncExpr {
@@ -123,7 +126,9 @@ fn funcexpr_matches_live_adbin_and_round_trips() {
     let s = nodeToString(mcx, f).unwrap();
     assert_eq!(s.as_str(), ADBIN_BIGINT_DEFAULT_42);
     let back = readfuncs::stringToNode(mcx, s.as_str()).unwrap();
-    let fx = back.as_variant::<types_nodes::primnodes::FuncExpr>().unwrap();
+    let fx = back
+        .as_variant::<types_nodes::primnodes::FuncExpr>()
+        .unwrap();
     assert_eq!(fx.funcid, 481);
     assert_eq!(fx.args.len(), 1);
 }
@@ -142,7 +147,12 @@ fn domain_check_matches_live_conbin() {
     let mcx = ctx.mcx();
     let domval = Node::mk(
         mcx,
-        CoerceToDomainValue { typeId: 23, typeMod: -1, collation: 0, location: 35 },
+        CoerceToDomainValue {
+            typeId: 23,
+            typeMod: -1,
+            collation: 0,
+            location: 35,
+        },
     )
     .unwrap();
     let zero = Node::mk(mcx, int4_const(0)).unwrap();
@@ -196,15 +206,23 @@ fn nulltest_saop_write_and_round_trip() {
     .unwrap();
     let s = nodeToString(mcx, ntest).unwrap();
     assert!(s.as_str().starts_with("{NULLTEST :arg {VAR "));
-    assert!(s.as_str().ends_with(":nulltesttype 1 :argisrow false :location -1}"));
+    assert!(s
+        .as_str()
+        .ends_with(":nulltesttype 1 :argisrow false :location -1}"));
     let back = readfuncs::stringToNode(mcx, s.as_str()).unwrap();
-    let nt = back.as_variant::<types_nodes::primnodes::NullTest>().unwrap();
-    assert!(matches!(nt.nulltesttype, types_nodes::primnodes::NullTestType::IS_NOT_NULL));
+    let nt = back
+        .as_variant::<types_nodes::primnodes::NullTest>()
+        .unwrap();
+    assert!(matches!(
+        nt.nulltesttype,
+        types_nodes::primnodes::NullTestType::IS_NOT_NULL
+    ));
     assert!(!nt.argisrow);
 
     let mut args = NodeList::nil();
     args.lappend(mcx, var).unwrap();
-    args.lappend(mcx, Node::mk(mcx, int4_const(3)).unwrap()).unwrap();
+    args.lappend(mcx, Node::mk(mcx, int4_const(3)).unwrap())
+        .unwrap();
     let saop = Node::mk(
         mcx,
         types_nodes::primnodes::ScalarArrayOpExpr {
@@ -224,7 +242,9 @@ fn nulltest_saop_write_and_round_trip() {
         "{SCALARARRAYOPEXPR :opno 96 :opfuncid 65 :hashfuncid 0 :negfuncid 0 :useOr true :inputcollid 0 :args ("
     ));
     let back = readfuncs::stringToNode(mcx, s.as_str()).unwrap();
-    let sx = back.as_variant::<types_nodes::primnodes::ScalarArrayOpExpr>().unwrap();
+    let sx = back
+        .as_variant::<types_nodes::primnodes::ScalarArrayOpExpr>()
+        .unwrap();
     assert_eq!(sx.opno, 96);
     assert!(sx.useOr);
     assert_eq!(sx.args.len(), 2);
@@ -275,13 +295,19 @@ fn copy_boundary_arms_round_trip() {
 
     let collate = Node::mk(
         mcx,
-        types_nodes::primnodes::CollateExpr { arg: row, collOid: 100, location: -1 },
+        types_nodes::primnodes::CollateExpr {
+            arg: row,
+            collOid: 100,
+            location: -1,
+        },
     )
     .unwrap();
 
     let mut mm_args = NodeList::nil();
     mm_args.lappend(mcx, collate).unwrap();
-    mm_args.lappend(mcx, Node::mk(mcx, int4_const(9)).unwrap()).unwrap();
+    mm_args
+        .lappend(mcx, Node::mk(mcx, int4_const(9)).unwrap())
+        .unwrap();
     let minmax = Node::mk(
         mcx,
         types_nodes::primnodes::MinMaxExpr {
@@ -352,7 +378,10 @@ fn notify_stmt_matches_c_format() {
     let mcx = ctx.mcx();
     let n = Node::mk(
         mcx,
-        types_nodes::parsenodes::NotifyStmt { conditionname: Some("chan"), payload: Some("hi") },
+        types_nodes::parsenodes::NotifyStmt {
+            conditionname: Some("chan"),
+            payload: Some("hi"),
+        },
     )
     .unwrap();
     assert_eq!(
@@ -367,7 +396,10 @@ fn notify_stmt_no_payload_matches_c_format() {
     let mcx = ctx.mcx();
     let n = Node::mk(
         mcx,
-        types_nodes::parsenodes::NotifyStmt { conditionname: Some("chan"), payload: None },
+        types_nodes::parsenodes::NotifyStmt {
+            conditionname: Some("chan"),
+            payload: None,
+        },
     )
     .unwrap();
     assert_eq!(
@@ -380,8 +412,14 @@ fn notify_stmt_no_payload_matches_c_format() {
 fn next_value_expr_matches_c_format() {
     let ctx = MemoryContext::new("t");
     let mcx = ctx.mcx();
-    let n = Node::mk(mcx, types_nodes::primnodes::NextValueExpr { seqid: 16400, typeId: 20 })
-        .unwrap();
+    let n = Node::mk(
+        mcx,
+        types_nodes::primnodes::NextValueExpr {
+            seqid: 16400,
+            typeId: 20,
+        },
+    )
+    .unwrap();
     assert_eq!(
         nodeToString(mcx, n).unwrap().as_str(),
         "{NEXTVALUEEXPR :seqid 16400 :typeId 20}"
@@ -406,11 +444,19 @@ fn row_compare_expr_matches_c_format() {
     inputcollids.lappend(mcx, 0).unwrap();
 
     let mut largs = NodeList::nil();
-    largs.lappend(mcx, Node::mk(mcx, int4_const(1)).unwrap()).unwrap();
-    largs.lappend(mcx, Node::mk(mcx, int4_const(2)).unwrap()).unwrap();
+    largs
+        .lappend(mcx, Node::mk(mcx, int4_const(1)).unwrap())
+        .unwrap();
+    largs
+        .lappend(mcx, Node::mk(mcx, int4_const(2)).unwrap())
+        .unwrap();
     let mut rargs = NodeList::nil();
-    rargs.lappend(mcx, Node::mk(mcx, int4_const(3)).unwrap()).unwrap();
-    rargs.lappend(mcx, Node::mk(mcx, int4_const(4)).unwrap()).unwrap();
+    rargs
+        .lappend(mcx, Node::mk(mcx, int4_const(3)).unwrap())
+        .unwrap();
+    rargs
+        .lappend(mcx, Node::mk(mcx, int4_const(4)).unwrap())
+        .unwrap();
 
     let n = Node::mk(
         mcx,

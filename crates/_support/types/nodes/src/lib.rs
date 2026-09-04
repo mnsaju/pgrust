@@ -30,7 +30,6 @@ pub use fdw::{FdwExplainFlags, FdwExplainProp, FdwKind, FdwRoutine, NUM_FDW_KIND
 pub use jointype::JoinType;
 // pg_stat_statements scribbles PlannedStmt.queryId in place (C parity);
 // re-exported so constructors need no direct types_storage edge.
-pub use types_storage::storage::SyncCell;
 pub use list::{IntList, List, ListFlavor, NodeList, OidList, OptNodeList, XidList};
 pub use node_tree::{BitString, Boolean, Float, Integer, Node, NodeMut, NodeVariant, String};
 pub use nodes_enums::{CmdType, LimitOption, LockClauseStrength, LockWaitPolicy};
@@ -38,35 +37,37 @@ pub use parsenodes::{
     AclMode, DefineStmt, Query, QuerySource, RTEKind, RTEPermissionInfo, RangeTblEntry,
     RangeTblFunction, RowMarkClause, SetOperation, TableSampleClause,
 };
+pub use plannodes::ModifyTable;
 pub use plannodes::{AppendRelInfo, Plan, PlanVariant, PlannedStmt, Result, TidRangeScan, TidScan};
 pub use plannodes::{BitmapAnd, BitmapHeapScan, BitmapIndexScan, BitmapOr};
 pub use primnodes::{
     Alias, ArrayCoerceExpr, ArrayExpr, BoolExpr, BoolExprType, BoolTestType, BooleanTest,
     CaseTestExpr, CoerceToDomain, CoerceToDomainValue, CoerceViaIO, CoercionForm, CollateExpr,
-    Const, ConvertRowtypeExpr, CurrentOfExpr, DistinctExpr, FieldSelect, FieldStore, FromExpr, FuncExpr, InferenceElem, JoinExpr, MergeAction,
-    MergeMatchKind, NamedArgExpr, NullIfExpr, NullTest, NullTestType,
-    JsonBehavior, JsonBehaviorType, JsonConstructorExpr, JsonConstructorType, JsonEncoding,
-    JsonExpr, JsonExprOp, JsonFormat, JsonFormatType, JsonIsPredicate, JsonReturning,
-    JsonValueExpr, JsonValueType, JsonWrapper,
-    OnConflictAction, OnConflictExpr, OpExpr, OverridingKind, Param, ParamKind, PlaceHolderVar, RangeTblRef,
-    RangeVar, RelabelType, ReturningExpr, RowCompareExpr, RowExpr, SQLValueFunction, SQLValueFunctionOp, ScalarArrayOpExpr,
-    SetToDefault, SubLink, SubLinkType, SubPlan, SubscriptingRef, TableFunc, TableFuncType,
-    TargetEntry, Var, VarReturningType, XmlExpr, XmlExprOp, XmlOptionType,
+    Const, ConvertRowtypeExpr, CurrentOfExpr, DistinctExpr, FieldSelect, FieldStore, FromExpr,
+    FuncExpr, InferenceElem, JoinExpr, JsonBehavior, JsonBehaviorType, JsonConstructorExpr,
+    JsonConstructorType, JsonEncoding, JsonExpr, JsonExprOp, JsonFormat, JsonFormatType,
+    JsonIsPredicate, JsonReturning, JsonValueExpr, JsonValueType, JsonWrapper, MergeAction,
+    MergeMatchKind, NamedArgExpr, NullIfExpr, NullTest, NullTestType, OnConflictAction,
+    OnConflictExpr, OpExpr, OverridingKind, Param, ParamKind, PlaceHolderVar, RangeTblRef,
+    RangeVar, RelabelType, ReturningExpr, RowCompareExpr, RowExpr, SQLValueFunction,
+    SQLValueFunctionOp, ScalarArrayOpExpr, SetToDefault, SubLink, SubLinkType, SubPlan,
+    SubscriptingRef, TableFunc, TableFuncType, TargetEntry, Var, VarReturningType, XmlExpr,
+    XmlExprOp, XmlOptionType,
 };
-pub use plannodes::ModifyTable;
 pub use rawnodes::{
-    A_ArrayExpr, A_Const, A_Expr, A_Expr_Kind, A_Indices, A_Indirection, A_Star, AlterEnumStmt, CompositeTypeStmt,
-    AlterSeqStmt, CallStmt, CollateClause, ColumnRef,
-    CreateDomainStmt, CreateEnumStmt, CreateSeqStmt, DeleteStmt, DistinctClause, FuncCall, IndexElem, IndexStmt,
-    InferClause, InsertStmt, JsonAggConstructor, JsonArgument, JsonArrayAgg,
-    JsonArrayConstructor, JsonArrayQueryConstructor, JsonFuncExpr, JsonKeyValue, JsonObjectAgg,
-    JsonObjectConstructor, JsonOutput, JsonParseExpr, JsonQuotes, JsonScalarExpr,
-    JsonSerializeExpr, LockingClause, MergeStmt, MergeWhenClause, OnConflictClause, PLAssignStmt, ParamRef, RangeFunction, RangeTableFunc,
-    RangeTableFuncCol, RangeTableSample, RawStmt,
-    ResTarget, ReturningClause, SelectStmt, SortBy, SortByDir, SortByNulls, TypeCast, TypeName,
-    UpdateStmt, ValUnion, XmlSerialize,
+    A_ArrayExpr, A_Const, A_Expr, A_Expr_Kind, A_Indices, A_Indirection, A_Star, AlterEnumStmt,
+    AlterSeqStmt, CallStmt, CollateClause, ColumnRef, CompositeTypeStmt, CreateDomainStmt,
+    CreateEnumStmt, CreateSeqStmt, DeleteStmt, DistinctClause, FuncCall, IndexElem, IndexStmt,
+    InferClause, InsertStmt, JsonAggConstructor, JsonArgument, JsonArrayAgg, JsonArrayConstructor,
+    JsonArrayQueryConstructor, JsonFuncExpr, JsonKeyValue, JsonObjectAgg, JsonObjectConstructor,
+    JsonOutput, JsonParseExpr, JsonQuotes, JsonScalarExpr, JsonSerializeExpr, LockingClause,
+    MergeStmt, MergeWhenClause, OnConflictClause, PLAssignStmt, ParamRef, RangeFunction,
+    RangeTableFunc, RangeTableFuncCol, RangeTableSample, RawStmt, ResTarget, ReturningClause,
+    SelectStmt, SortBy, SortByDir, SortByNulls, TypeCast, TypeName, UpdateStmt, ValUnion,
+    XmlSerialize,
 };
 pub use tags::NodeTag;
+pub use types_storage::storage::SyncCell;
 
 #[cfg(test)]
 mod bms_c_vectors;

@@ -42,7 +42,8 @@ struct FindExprContext<'w, 'mcx> {
 
 impl FindExprContext<'_, '_> {
     fn add(&mut self, class_id: Oid, object_id: Oid, sub_id: i32) {
-        self.addrs.push(ObjectAddress::sub_set(class_id, object_id, sub_id));
+        self.addrs
+            .push(ObjectAddress::sub_set(class_id, object_id, sub_id));
     }
 }
 
@@ -61,7 +62,10 @@ pub fn find_expr_references<'mcx>(
     expr: Node<'mcx>,
     rtable: &NodeList<'mcx>,
 ) -> PgResult<Vec<ObjectAddress>> {
-    let mut context = FindExprContext { addrs: Vec::new(), rtables: vec![rtable] };
+    let mut context = FindExprContext {
+        addrs: Vec::new(),
+        rtables: vec![rtable],
+    };
     walker(expr, &mut context)?;
     let mut addrs = context.addrs;
     eliminate_duplicate_dependencies(&mut addrs);
@@ -76,9 +80,7 @@ pub fn eliminate_duplicate_dependencies(addrs: &mut Vec<ObjectAddress>) {
     let mut prior = 0;
     for oldref in 1..addrs.len() {
         let thisobj = addrs[oldref];
-        if addrs[prior].classId == thisobj.classId
-            && addrs[prior].objectId == thisobj.objectId
-        {
+        if addrs[prior].classId == thisobj.classId && addrs[prior].objectId == thisobj.objectId {
             if addrs[prior].objectSubId == thisobj.objectSubId {
                 continue;
             }
@@ -115,10 +117,7 @@ fn walk_opt<'w, 'mcx: 'w>(
     }
 }
 
-fn walker<'w, 'mcx: 'w>(
-    node: Node<'mcx>,
-    context: &mut FindExprContext<'w, 'mcx>,
-) -> PgResult<()> {
+fn walker<'w, 'mcx: 'w>(node: Node<'mcx>, context: &mut FindExprContext<'w, 'mcx>) -> PgResult<()> {
     match node.node_tag() {
         NodeTag::T_Var => {
             let var = node.as_var().unwrap();
@@ -321,9 +320,9 @@ fn walker<'w, 'mcx: 'w>(
             walk_opt(sbsref.refexpr, context)?;
             walk_opt(sbsref.refassgnexpr, context)
         }
-        NodeTag::T_SubPlan => {
-            Err(walker_error("already-planned subqueries not supported".into()))
-        }
+        NodeTag::T_SubPlan => Err(walker_error(
+            "already-planned subqueries not supported".into(),
+        )),
         NodeTag::T_FieldSelect => {
             let fselect = node.as_field_select().unwrap();
             let argtype = lsyscache::getBaseType(nodes_core::expr_type(fselect.arg))?;
@@ -335,9 +334,7 @@ fn walker<'w, 'mcx: 'w>(
             } else {
                 context.add(TYPE_RELATION_ID, fselect.resulttype, 0);
             }
-            if fselect.resultcollid != InvalidOid
-                && fselect.resultcollid != DEFAULT_COLLATION_OID
-            {
+            if fselect.resultcollid != InvalidOid && fselect.resultcollid != DEFAULT_COLLATION_OID {
                 context.add(CollationRelationId, fselect.resultcollid, 0);
             }
             walker(fselect.arg, context)
@@ -358,8 +355,7 @@ fn walker<'w, 'mcx: 'w>(
         NodeTag::T_CoerceViaIO => {
             let iocoerce = node.as_coerce_via_io().unwrap();
             context.add(TYPE_RELATION_ID, iocoerce.resulttype, 0);
-            if iocoerce.resultcollid != InvalidOid
-                && iocoerce.resultcollid != DEFAULT_COLLATION_OID
+            if iocoerce.resultcollid != InvalidOid && iocoerce.resultcollid != DEFAULT_COLLATION_OID
             {
                 context.add(CollationRelationId, iocoerce.resultcollid, 0);
             }
@@ -394,7 +390,9 @@ fn walker<'w, 'mcx: 'w>(
             walker(cd.arg, context)
         }
         NodeTag::T_NextValueExpr => {
-            let nve = node.as_variant::<types_nodes::primnodes::NextValueExpr>().unwrap();
+            let nve = node
+                .as_variant::<types_nodes::primnodes::NextValueExpr>()
+                .unwrap();
             context.add(RELATION_RELATION_ID, nve.seqid, 0);
             Ok(())
         }
@@ -459,9 +457,7 @@ fn walker<'w, 'mcx: 'w>(
         NodeTag::T_RelabelType => {
             let relab = node.as_relabel_type().unwrap();
             context.add(TYPE_RELATION_ID, relab.resulttype, 0);
-            if relab.resultcollid != InvalidOid
-                && relab.resultcollid != DEFAULT_COLLATION_OID
-            {
+            if relab.resultcollid != InvalidOid && relab.resultcollid != DEFAULT_COLLATION_OID {
                 context.add(CollationRelationId, relab.resultcollid, 0);
             }
             walker(relab.arg, context)
@@ -593,12 +589,10 @@ fn walker<'w, 'mcx: 'w>(
             }
             Ok(())
         }
-        NodeTag::T_JsonIsPredicate => {
-            match node.as_json_is_predicate().unwrap().expr {
-                Some(e) => walker(e, context),
-                None => Ok(()),
-            }
-        }
+        NodeTag::T_JsonIsPredicate => match node.as_json_is_predicate().unwrap().expr {
+            Some(e) => walker(e, context),
+            None => Ok(()),
+        },
         NodeTag::T_JsonBehavior => match node.as_json_behavior().unwrap().expr {
             Some(e) => walker(e, context),
             None => Ok(()),
@@ -646,7 +640,9 @@ fn process_function_rte_ref<'w, 'mcx: 'w>(
 ) -> PgResult<()> {
     let mut atts_done: i32 = 0;
     for f in &rte.functions {
-        let rtfunc = f.as_variant::<RangeTblFunction>().expect("functions holds RangeTblFunction");
+        let rtfunc = f
+            .as_variant::<RangeTblFunction>()
+            .expect("functions holds RangeTblFunction");
         if attnum as i32 > atts_done && attnum as i32 <= atts_done + rtfunc.funccolcount {
             // A coldeflist means RECORD: no column dep possible. DIVERGENCE:
             // C probes get_expr_result_tupdesc(funcexpr, true) and tests
@@ -738,8 +734,7 @@ fn walk_query<'w, 'mcx: 'w>(
     }
 
     if matches!(query.commandType, CmdType::CMD_INSERT | CmdType::CMD_UPDATE) {
-        if query.resultRelation <= 0 || query.resultRelation as usize > query.rtable.len()
-        {
+        if query.resultRelation <= 0 || query.resultRelation as usize > query.rtable.len() {
             return Err(walker_error(format!(
                 "invalid resultRelation {}",
                 query.resultRelation
@@ -752,7 +747,9 @@ fn walk_query<'w, 'mcx: 'w>(
             .expect("rtable entry is a RangeTblEntry");
         if rte.rtekind == RTEKind::RTE_RELATION {
             for tle_node in &query.targetList {
-                let tle = tle_node.as_target_entry().expect("targetList holds TargetEntry");
+                let tle = tle_node
+                    .as_target_entry()
+                    .expect("targetList holds TargetEntry");
                 if tle.resjunk {
                     continue;
                 }
@@ -805,9 +802,7 @@ fn walk_query_fields<'w, 'mcx: 'w>(
                 walk_query(rte.subquery.expect("RTE_SUBQUERY has a subquery"), context)?
             }
             RTEKind::RTE_JOIN | RTEKind::RTE_CTE => {}
-            RTEKind::RTE_TABLEFUNC => {
-                walk_opt(rte.tablefunc, context)?
-            }
+            RTEKind::RTE_TABLEFUNC => walk_opt(rte.tablefunc, context)?,
             RTEKind::RTE_FUNCTION => walk_list(&rte.functions, context)?,
             RTEKind::RTE_VALUES => walk_list(&rte.values_lists, context)?,
             // range_table_walker without QTW_IGNORE_GROUPEXPRS: the grouping
@@ -863,8 +858,7 @@ mod tests {
         )
         .unwrap();
         let rtable =
-            NodeList::from_slice(mcx, &[rel_rte(mcx, T1), rel_rte(mcx, T2), join_rte])
-                .unwrap();
+            NodeList::from_slice(mcx, &[rel_rte(mcx, T1), rel_rte(mcx, T2), join_rte]).unwrap();
 
         let t1_a = Node::mk_var(mcx, 1, 1, INT4OID, -1, 0, 0).unwrap();
         let t1_b = Node::mk_var(mcx, 1, 2, INT8OID, -1, 0, 0).unwrap();
@@ -908,8 +902,7 @@ mod tests {
         )
         .unwrap();
 
-        let ten = Node::mk_const(mcx, INT4OID, -1, 0, 4, Datum::from_i32(10), false, true)
-            .unwrap();
+        let ten = Node::mk_const(mcx, INT4OID, -1, 0, 4, Datum::from_i32(10), false, true).unwrap();
         let where_qual = Node::mk(
             mcx,
             types_nodes::primnodes::OpExpr {

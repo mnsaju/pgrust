@@ -267,7 +267,11 @@ pub fn CheckBufferIsPinnedOnce(buffer: Buffer) -> PgResult<()> {
     if count != 1 {
         return Err(Box::new(
             types_error::PgError::new(ERROR, format!("incorrect local pin count: {count}"))
-                .with_error_location(ErrorLocation::new(file!(), line!() as i32, "CheckBufferIsPinnedOnce")),
+                .with_error_location(ErrorLocation::new(
+                    file!(),
+                    line!() as i32,
+                    "CheckBufferIsPinnedOnce",
+                )),
         ));
     }
     Ok(())

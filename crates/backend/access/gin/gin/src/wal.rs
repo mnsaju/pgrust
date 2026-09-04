@@ -37,7 +37,10 @@ pub(crate) fn ginxlog_recompress_header(nactions: u16) -> [u8; 2] {
     nactions.to_ne_bytes()
 }
 
-pub(crate) fn ginxlog_insert_data_internal(offset: OffsetNumber, newitem: &PostingItem) -> [u8; 12] {
+pub(crate) fn ginxlog_insert_data_internal(
+    offset: OffsetNumber,
+    newitem: &PostingItem,
+) -> [u8; 12] {
     let mut b = [0u8; 12];
     b[0..2].copy_from_slice(&offset.to_ne_bytes());
     // SAFETY: PostingItem is a 10-byte POD.

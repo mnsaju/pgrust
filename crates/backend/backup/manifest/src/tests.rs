@@ -74,7 +74,15 @@ fn crc32c_is_default_and_renders() {
 
     let mut cc = PgChecksumContext::init(PgChecksumType::Crc32c);
     cc.update(b"123456789");
-    AddFileToBackupManifest(&mut m, 0, b"global/pg_control", 8192, 1_700_000_000, &mut cc).unwrap();
+    AddFileToBackupManifest(
+        &mut m,
+        0,
+        b"global/pg_control",
+        8192,
+        1_700_000_000,
+        &mut cc,
+    )
+    .unwrap();
     AddWALInfoToBackupManifest(mcx, &mut m, 0x016B3D50, 1, 0x016C0000, 1).unwrap();
     let bytes = SendBackupManifest(&mut m).unwrap().to_vec();
     let text = std::str::from_utf8(&bytes).unwrap();
@@ -96,7 +104,10 @@ fn tablespace_path_prefix() {
     AddFileToBackupManifest(&mut m, 16400, b"16401/12345", 100, 1_700_000_000, &mut cc).unwrap();
     let bytes = SendBackupManifest(&mut m).unwrap().to_vec();
     let text = String::from_utf8(bytes).unwrap();
-    assert!(text.contains("\"Path\": \"pg_tblspc/16400/16401/12345\""), "{text}");
+    assert!(
+        text.contains("\"Path\": \"pg_tblspc/16400/16401/12345\""),
+        "{text}"
+    );
 }
 
 #[test]

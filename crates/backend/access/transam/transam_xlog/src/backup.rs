@@ -9,12 +9,12 @@ use std::io::Write;
 use std::sync::atomic::Ordering::Relaxed;
 
 use elog::ereport;
+use lwlock::LW_SHARED;
 use types_core::{TimeLineID, XLogRecPtr, XLogSegNo};
 use types_error::{
     ErrorLocation, PgResult, DEBUG2, ERRCODE_INVALID_PARAMETER_VALUE,
     ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE, ERROR, NOTICE, WARNING,
 };
-use lwlock::LW_SHARED;
 use xlogbackup::BackupState;
 
 use crate::control_file::control_file;
@@ -167,7 +167,11 @@ fn do_pg_backup_start_body(
 
         // Fetch the checkpoint record location and its REDO pointer.
         let checkpointfpw = {
-            lwlock::LWLockAcquire(ControlFileLock(), LW_SHARED, init_small::globals::MyProcNumber())?;
+            lwlock::LWLockAcquire(
+                ControlFileLock(),
+                LW_SHARED,
+                init_small::globals::MyProcNumber(),
+            )?;
             let cf = control_file();
             state.checkpointloc = cf.checkPoint;
             state.startpoint = cf.checkPointCopy.redo;
@@ -394,7 +398,11 @@ pub fn do_pg_backup_stop(state: &mut BackupState, waitforarchive: bool) -> PgRes
                 .finish(loc("do_pg_backup_stop"));
         }
 
-        lwlock::LWLockAcquire(ControlFileLock(), LW_SHARED, init_small::globals::MyProcNumber())?;
+        lwlock::LWLockAcquire(
+            ControlFileLock(),
+            LW_SHARED,
+            init_small::globals::MyProcNumber(),
+        )?;
         let cf = control_file();
         state.stoppoint = cf.minRecoveryPoint;
         state.stoptli = cf.minRecoveryPointTLI;
@@ -402,8 +410,11 @@ pub fn do_pg_backup_stop(state: &mut BackupState, waitforarchive: bool) -> PgRes
     } else {
         // Write the backup-end xlog record.
         let startpoint_bytes = state.startpoint.to_ne_bytes();
-        state.stoppoint =
-            xloginsert_seams::xlog_insert::call(RM_XLOG_ID, XLOG_BACKUP_END, &[&startpoint_bytes[..]])?;
+        state.stoppoint = xloginsert_seams::xlog_insert::call(
+            RM_XLOG_ID,
+            XLOG_BACKUP_END,
+            &[&startpoint_bytes[..]],
+        )?;
 
         // Not in recovery, so InsertTimeLineID is set and stable (read lock-free).
         state.stoptli = XLogCtl().InsertTimeLineID.load(Relaxed);
@@ -450,9 +461,7 @@ pub fn do_pg_backup_stop(state: &mut BackupState, waitforarchive: bool) -> PgRes
             postgres_seams::check_for_interrupts::call()?;
             if !reported_waiting && waits > 5 {
                 ereport(NOTICE)
-                    .errmsg(
-                        "base backup done, waiting for required WAL segments to be archived",
-                    )
+                    .errmsg("base backup done, waiting for required WAL segments to be archived")
                     .finish(loc("do_pg_backup_stop"))
                     .ok();
                 reported_waiting = true;
@@ -514,9 +523,7 @@ fn write_backup_history_file(
             .finish(loc("do_pg_backup_stop"));
     }
 
-    let wrote = fd::with_allocated_stdio(idx, |f| {
-        f.write_all(&content).and_then(|()| f.flush())
-    });
+    let wrote = fd::with_allocated_stdio(idx, |f| f.write_all(&content).and_then(|()| f.flush()));
     let write_ok = matches!(wrote, Some(Ok(())));
     let freed = fd::FreeFile(idx)?;
 
@@ -575,7 +582,10 @@ pub fn register_persistent_abort_backup_handler() -> PgResult<()> {
     if ABORT_HANDLER_REGISTERED.with(core::cell::Cell::get) {
         return Ok(());
     }
-    ipc_seams::before_shmem_exit::call(do_pg_abort_backup_callback, datum::Datum::from_bool(false))?;
+    ipc_seams::before_shmem_exit::call(
+        do_pg_abort_backup_callback,
+        datum::Datum::from_bool(false),
+    )?;
     ABORT_HANDLER_REGISTERED.with(|c| c.set(true));
     Ok(())
 }
@@ -590,7 +600,9 @@ pub fn register_persistent_abort_backup_handler() -> PgResult<()> {
 fn CleanupBackupHistory() -> PgResult<()> {
     let mut to_remove: Vec<String> = Vec::new();
     fd::with_allocated_dir(XLOGDIR, &mut |d_name: &str| {
-        if IsBackupHistoryFileName(d_name) && xlogarchive_seams::xlog_archive_check_done::call(d_name)? {
+        if IsBackupHistoryFileName(d_name)
+            && xlogarchive_seams::xlog_archive_check_done::call(d_name)?
+        {
             to_remove.push(d_name.to_string());
         }
         Ok(false)
@@ -615,7 +627,10 @@ fn BackupHistoryFilePath(
     startpoint: XLogRecPtr,
     wal_segsz: i32,
 ) -> String {
-    format!("{XLOGDIR}/{}", BackupHistoryFileName(tli, log_seg_no, startpoint, wal_segsz))
+    format!(
+        "{XLOGDIR}/{}",
+        BackupHistoryFileName(tli, log_seg_no, startpoint, wal_segsz)
+    )
 }
 
 /// BackupHistoryFileName (xlog_internal.h): <tli><log><seg>.<startoff>.backup.
@@ -639,6 +654,9 @@ fn BackupHistoryFileName(
 /// ".backup".
 fn IsBackupHistoryFileName(fname: &str) -> bool {
     const XLOG_FNAME_LEN: usize = 24;
-    let hex_run = fname.bytes().take_while(|b| b.is_ascii_digit() || (b'A'..=b'F').contains(b)).count();
+    let hex_run = fname
+        .bytes()
+        .take_while(|b| b.is_ascii_digit() || (b'A'..=b'F').contains(b))
+        .count();
     fname.len() > XLOG_FNAME_LEN && hex_run == XLOG_FNAME_LEN && fname.ends_with(".backup")
 }

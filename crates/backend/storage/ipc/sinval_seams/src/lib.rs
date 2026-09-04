@@ -16,7 +16,6 @@ seam_core::seam!(
     pub fn send_shared_invalid_messages(msgs: &[SharedInvalidationMessage]) -> PgResult<()>
 );
 
-
 seam_core::seam!(
     // HandleCatchupInterrupt() (sinval.c); signal-handler-reachable, so the
     // implementation must be allocation-free.

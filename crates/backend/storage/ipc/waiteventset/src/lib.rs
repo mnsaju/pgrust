@@ -261,7 +261,12 @@ pub fn AddWaitEventToSet(
             assert!(set.nevents < set.nevents_space, "no space for wait event");
             let pos = set.nevents;
             set.nevents += 1;
-            set.events.push(WaitEvent { pos, fd: PGINVALID_SOCKET, events, user_data });
+            set.events.push(WaitEvent {
+                pos,
+                fd: PGINVALID_SOCKET,
+                events,
+                user_data,
+            });
             Ok(pos)
         });
     }

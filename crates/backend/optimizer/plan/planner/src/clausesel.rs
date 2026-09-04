@@ -58,14 +58,18 @@ pub(crate) fn clauselist_selectivity_ext<'mcx>(
     let mut s1 = 1.0;
     let mut estimated: PgVec<'_, bool> = mcx::vec_from_elem_in(run.mcx, false, clauses.len());
     if use_extended_stats {
-        if let Some(rel) =
-            crate::extended_stats::find_single_rel_for_clauses(run, clauses)
-        {
+        if let Some(rel) = crate::extended_stats::find_single_rel_for_clauses(run, clauses) {
             if run.root.rel(rel).rtekind == types_pathnodes::RTE_RELATION
                 && !run.root.rel(rel).statlist.is_empty()
             {
                 s1 *= crate::extended_stats::statext_clauselist_selectivity(
-                    run, clauses, varrelid, jointype, sjinfo, rel, &mut estimated,
+                    run,
+                    clauses,
+                    varrelid,
+                    jointype,
+                    sjinfo,
+                    rel,
+                    &mut estimated,
                 )?;
             }
         }
@@ -109,8 +113,14 @@ fn clauselist_selectivity_nodes<'mcx>(
     let mut s1 = 1.0;
     let mut rqlist: PgVec<'mcx, RangeQueryClause<'mcx>> = PgVec::new_in(run.mcx);
     for &clause in clauses {
-        let s2 =
-            clause_selectivity_node_ext(run, clause, varrelid, jointype, sjinfo, use_extended_stats)?;
+        let s2 = clause_selectivity_node_ext(
+            run,
+            clause,
+            varrelid,
+            jointype,
+            sjinfo,
+            use_extended_stats,
+        )?;
         merge_clause(run, None, clause, s2, &mut s1, &mut rqlist)?;
     }
     merge_range_pairs(run, &rqlist, varrelid, &mut s1)?;
@@ -130,14 +140,18 @@ pub(crate) fn clauselist_selectivity_or_nodes<'mcx>(
     let mut s1 = 0.0;
     let mut estimated: PgVec<'_, bool> = mcx::vec_from_elem_in(run.mcx, false, clauses.len());
     if use_extended_stats {
-        if let Some(rel) =
-            crate::extended_stats::find_single_rel_for_clause_nodes(run, clauses)?
-        {
+        if let Some(rel) = crate::extended_stats::find_single_rel_for_clause_nodes(run, clauses)? {
             if run.root.rel(rel).rtekind == types_pathnodes::RTE_RELATION
                 && !run.root.rel(rel).statlist.is_empty()
             {
                 s1 = crate::extended_stats::statext_clauselist_selectivity_or_nodes(
-                    run, clauses, varrelid, jointype, sjinfo, rel, &mut estimated,
+                    run,
+                    clauses,
+                    varrelid,
+                    jointype,
+                    sjinfo,
+                    rel,
+                    &mut estimated,
                 )?;
             }
         }
@@ -146,8 +160,14 @@ pub(crate) fn clauselist_selectivity_or_nodes<'mcx>(
         if estimated[i] {
             continue;
         }
-        let s2 =
-            clause_selectivity_node_ext(run, clause, varrelid, jointype, sjinfo, use_extended_stats)?;
+        let s2 = clause_selectivity_node_ext(
+            run,
+            clause,
+            varrelid,
+            jointype,
+            sjinfo,
+            use_extended_stats,
+        )?;
         s1 = s1 + s2 - s1 * s2;
     }
     Ok(s1)
@@ -168,8 +188,7 @@ fn merge_clause<'mcx>(
             Some(rid) => {
                 let right_empty =
                     crate::relnode::relids_is_empty(&run.root.rinfo(rid).right_relids);
-                let left_empty =
-                    crate::relnode::relids_is_empty(&run.root.rinfo(rid).left_relids);
+                let left_empty = crate::relnode::relids_is_empty(&run.root.rinfo(rid).left_relids);
                 run.root.rinfo(rid).num_base_rels == 1
                     && ((right_empty && !clauses::contain_volatile_functions(arg1)?) || {
                         varonleft = false;
@@ -258,7 +277,11 @@ fn merge_range_pairs<'mcx>(
                 let mut s2 = rq.hibound + rq.lobound - 1.0;
                 s2 += crate::selfuncs::nulltestsel(run, true, rq.var, varrelid)?;
                 if s2 <= 0.0 {
-                    s2 = if s2 < -0.01 { DEFAULT_RANGE_INEQ_SEL } else { 1.0e-10 };
+                    s2 = if s2 < -0.01 {
+                        DEFAULT_RANGE_INEQ_SEL
+                    } else {
+                        1.0e-10
+                    };
                 }
                 s2
             };
@@ -334,7 +357,14 @@ fn clause_selectivity_rinfo_ext<'mcx>(
                 crate::plancat::restriction_selectivity(run, opno, &args, inputcollid, varrelid)?
             }
         }
-        _ => clause_selectivity_node_ext(run, clause, varrelid, jointype, sjinfo, use_extended_stats)?,
+        _ => clause_selectivity_node_ext(
+            run,
+            clause,
+            varrelid,
+            jointype,
+            sjinfo,
+            use_extended_stats,
+        )?,
     };
 
     if cacheable {
@@ -378,7 +408,11 @@ pub(crate) fn clause_selectivity_node_ext<'mcx>(
         }
         NodeTag::T_Const => {
             let c = clause.as_const().unwrap();
-            Ok(if c.constisnull || !c.constvalue.as_bool() { 0.0 } else { 1.0 })
+            Ok(if c.constisnull || !c.constvalue.as_bool() {
+                0.0
+            } else {
+                1.0
+            })
         }
         NodeTag::T_RelabelType => clause_selectivity_node_ext(
             run,
@@ -500,13 +534,10 @@ pub(crate) fn clause_selectivity_node_ext<'mcx>(
         | NodeTag::T_CoalesceExpr
         | NodeTag::T_JsonIsPredicate
         | NodeTag::T_NullIfExpr
-        | NodeTag::T_PlaceHolderVar => {
-            crate::selfuncs::boolvarsel(run, clause, varrelid)
-        }
+        | NodeTag::T_PlaceHolderVar => crate::selfuncs::boolvarsel(run, clause, varrelid),
         other => panic!("clause_selectivity_ext (clausesel.c): {other:?}; M2 qual lane"),
     }
 }
-
 
 // rowcomparesel (selfuncs.c): estimate on the leading column pair only.
 fn rowcomparesel<'mcx>(

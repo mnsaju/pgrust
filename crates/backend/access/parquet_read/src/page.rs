@@ -56,8 +56,15 @@ impl Enc {
 
 pub(crate) enum PageKind {
     /// v1 data page.
-    Data { num_values: usize, encoding: Enc, def_encoding: Enc },
-    Dict { num_values: usize, encoding: Enc },
+    Data {
+        num_values: usize,
+        encoding: Enc,
+        def_encoding: Enc,
+    },
+    Dict {
+        num_values: usize,
+        encoding: Enc,
+    },
     /// Index pages are skipped, not decoded.
     Skip,
 }
@@ -117,8 +124,7 @@ pub(crate) fn parse_page_header(chunk: &[u8], at: usize, column: &str) -> PgResu
                     }
                 }
                 let n = num_values.ok_or_else(|| corrupt("data page without num_values"))?;
-                let n = usize::try_from(n)
-                    .map_err(|_| corrupt("negative data page num_values"))?;
+                let n = usize::try_from(n).map_err(|_| corrupt("negative data page num_values"))?;
                 data_hdr = Some((n, enc, def_enc));
             }
             7 => {
@@ -135,10 +141,9 @@ pub(crate) fn parse_page_header(chunk: &[u8], at: usize, column: &str) -> PgResu
                         _ => cur.skip(ft, 0)?,
                     }
                 }
+                let n = num_values.ok_or_else(|| corrupt("dictionary page without num_values"))?;
                 let n =
-                    num_values.ok_or_else(|| corrupt("dictionary page without num_values"))?;
-                let n = usize::try_from(n)
-                    .map_err(|_| corrupt("negative dictionary num_values"))?;
+                    usize::try_from(n).map_err(|_| corrupt("negative dictionary num_values"))?;
                 dict_hdr = Some((n, enc));
             }
             8 => {
@@ -166,19 +171,24 @@ pub(crate) fn parse_page_header(chunk: &[u8], at: usize, column: &str) -> PgResu
         0 => {
             let (num_values, encoding, def_encoding) =
                 data_hdr.ok_or_else(|| corrupt("data page without its header"))?;
-            PageKind::Data { num_values, encoding, def_encoding }
+            PageKind::Data {
+                num_values,
+                encoding,
+                def_encoding,
+            }
         }
         1 => PageKind::Skip, // index page: skip payload, keep walking
         2 => {
             let (num_values, encoding) =
                 dict_hdr.ok_or_else(|| corrupt("dictionary page without its header"))?;
-            PageKind::Dict { num_values, encoding }
+            PageKind::Dict {
+                num_values,
+                encoding,
+            }
         }
         3 => {
             let _ = saw_v2_hdr;
-            return Err(unsupported(format!(
-                "data page v2 (column \"{column}\")"
-            )));
+            return Err(unsupported(format!("data page v2 (column \"{column}\")")));
         }
         _ => return Err(corrupt("unrecognized page type")),
     };

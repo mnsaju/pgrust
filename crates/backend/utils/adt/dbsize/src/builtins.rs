@@ -13,7 +13,14 @@ pub fn fc_pg_size_bytes(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> 
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 // calculate_relation_size (dbsize.c). C stats the segment files; one backend
@@ -58,10 +65,7 @@ fn calculate_all_forks_size(key: ::types_storage::RelFileLocatorBackend) -> PgRe
     Ok(size)
 }
 
-pub fn fc_pg_relation_size(
-    _flinfo: Option<&mut FmgrInfo>,
-    fcinfo: &mut Fcinfo,
-) -> PgResult<Datum> {
+pub fn fc_pg_relation_size(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
     let rel_oid = fcinfo.arg_oid(0);
     // SAFETY: catalog arg 1 is a non-null text varlena (strict fn).
     let forkname_b = unsafe { fcinfo.arg_varlena_packed(1)? };
@@ -98,7 +102,12 @@ pub const DBSIZE_BUILTINS: &[FmgrBuiltin] = &[
     b(2324, "pg_database_size_oid", 1, fc_pg_database_size_oid),
     b(3166, "pg_size_pretty_numeric", 1, fc_pg_size_pretty_numeric),
     b(2322, "pg_tablespace_size_oid", 1, fc_pg_tablespace_size_oid),
-    b(2323, "pg_tablespace_size_name", 1, fc_pg_tablespace_size_name),
+    b(
+        2323,
+        "pg_tablespace_size_name",
+        1,
+        fc_pg_tablespace_size_name,
+    ),
     b(2997, "pg_table_size", 1, fc_pg_table_size),
     b(2998, "pg_indexes_size", 1, fc_pg_indexes_size),
     b(2286, "pg_total_relation_size", 1, fc_pg_total_relation_size),
@@ -122,7 +131,10 @@ fn half_rounded(x: i64) -> i64 {
 }
 
 fn text_result(fcinfo: &Fcinfo, s: &str) -> PgResult<Datum> {
-    Ok(types_fmgr::varlena_result(varlena::cstring_to_text(fcinfo.result_mcx(), s.as_bytes())?))
+    Ok(types_fmgr::varlena_result(varlena::cstring_to_text(
+        fcinfo.result_mcx(),
+        s.as_bytes(),
+    )?))
 }
 
 pub fn fc_pg_size_pretty(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
@@ -130,8 +142,11 @@ pub fn fc_pg_size_pretty(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) ->
     let mut buf = String::new();
     for (i, &(name, limit, round, unitbits)) in SIZE_PRETTY_UNITS.iter().enumerate() {
         let next = SIZE_PRETTY_UNITS.get(i + 1);
-        let abs_size: u64 =
-            if size < 0 { 0u64.wrapping_sub(size as u64) } else { size as u64 };
+        let abs_size: u64 = if size < 0 {
+            0u64.wrapping_sub(size as u64)
+        } else {
+            size as u64
+        };
         if next.is_none() || abs_size < limit as u64 {
             if round {
                 size = half_rounded(size);
@@ -153,10 +168,12 @@ pub fn fc_pg_size_pretty_numeric(
     use adt_numeric::ops;
     // SAFETY: catalog arg 0 is a non-null numeric varlena (strict fn).
     let v = unsafe { fcinfo.arg_varlena_packed(0)? };
-    let payload =
-        if v.is_short() { v.data_expanded(fcinfo.result_mcx())? } else { v.data() };
-    let mut size =
-        adt_numeric::NumericImage::from_num(adt_numeric::Num::from_payload(payload));
+    let payload = if v.is_short() {
+        v.data_expanded(fcinfo.result_mcx())?
+    } else {
+        v.data()
+    };
+    let mut size = adt_numeric::NumericImage::from_num(adt_numeric::Num::from_payload(payload));
     let mut result = String::new();
     for (i, &(name, limit, round, unitbits)) in SIZE_PRETTY_UNITS.iter().enumerate() {
         let next = SIZE_PRETTY_UNITS.get(i + 1);
@@ -226,9 +243,9 @@ const DATABASE_RELATION_ID: Oid = 1262;
 
 fn calculate_database_size(db_oid: Oid) -> PgResult<i64> {
     let uid = miscinit_seams::get_user_id::call();
-    let aclresult = aclchk_seams::object_aclcheck::call(DATABASE_RELATION_ID, db_oid, uid, ACL_CONNECT)?;
-    if aclresult != ACLCHECK_OK
-        && !acl_seams::has_privs_of_role::call(uid, ROLE_PG_READ_ALL_STATS)?
+    let aclresult =
+        aclchk_seams::object_aclcheck::call(DATABASE_RELATION_ID, db_oid, uid, ACL_CONNECT)?;
+    if aclresult != ACLCHECK_OK && !acl_seams::has_privs_of_role::call(uid, ROLE_PG_READ_ALL_STATS)?
     {
         let datname = dbcommands_seams::get_database_name::call(db_oid)?.unwrap_or_default();
         aclchk_seams::aclcheck_error::call(
@@ -317,8 +334,12 @@ fn calculate_tablespace_size(mcx: ::mcx::Mcx<'_>, tblspc_oid: Oid) -> PgResult<i
     if tblspc_oid != init_small::globals::MyDatabaseTableSpace()
         && !acl_seams::has_privs_of_role::call(uid, ROLE_PG_READ_ALL_STATS)?
     {
-        let aclresult =
-            aclchk_seams::object_aclcheck::call(TABLESPACE_RELATION_ID, tblspc_oid, uid, ACL_CREATE)?;
+        let aclresult = aclchk_seams::object_aclcheck::call(
+            TABLESPACE_RELATION_ID,
+            tblspc_oid,
+            uid,
+            ACL_CREATE,
+        )?;
         if aclresult != ACLCHECK_OK {
             let spcname = tablespace_seams::get_tablespace_name::call(mcx, tblspc_oid)?;
             let spcname = spcname
@@ -571,9 +592,8 @@ pub fn fc_pg_relation_filepath(
             if namespace_seams::is_temp_or_temp_toast_namespace::call(relform.relnamespace) {
                 init_small::globals::ProcNumberForTempRelations()
             } else {
-                let backend = namespace_seams::get_temp_namespace_proc_number::call(
-                    relform.relnamespace,
-                )?;
+                let backend =
+                    namespace_seams::get_temp_namespace_proc_number::call(relform.relnamespace)?;
                 debug_assert!(backend != types_core::INVALID_PROC_NUMBER);
                 backend
             }

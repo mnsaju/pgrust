@@ -31,7 +31,12 @@ fn arg_array_bytes<'m>(fcinfo: &Fcinfo, i: usize, mcx: Mcx<'m>) -> PgResult<PgVe
 
 fn elem_meta(element_type: Oid) -> PgResult<ElemMeta> {
     let (typlen, typbyval, typalign) = ::lsyscache::get_typlenbyvalalign(element_type)?;
-    Ok(ElemMeta { element_type, typlen: typlen as i32, typbyval, typalign: typalign as u8 })
+    Ok(ElemMeta {
+        element_type,
+        typlen: typlen as i32,
+        typbyval,
+        typalign: typalign as u8,
+    })
 }
 
 fn cached_elem_meta(flinfo: &mut FmgrInfo, element_type: Oid) -> PgResult<ElemMeta> {
@@ -93,7 +98,10 @@ fn append_prepend_common(
             ));
         }
         let meta = cached_elem_meta(flinfo, element_type)?;
-        (::arrayfuncs::construct::construct_empty_array(mcx, element_type)?, meta)
+        (
+            ::arrayfuncs::construct::construct_empty_array(mcx, element_type)?,
+            meta,
+        )
     };
 
     let elem_null = fcinfo.argisnull(elem_i);
@@ -193,7 +201,11 @@ fn larger_smaller(
     )?
     .as_i32();
     let pick_first = if larger { r > 0 } else { r < 0 };
-    Ok(if pick_first { fcinfo.arg(0) } else { fcinfo.arg(1) })
+    Ok(if pick_first {
+        fcinfo.arg(0)
+    } else {
+        fcinfo.arg(1)
+    })
 }
 
 struct PosMemo {
@@ -201,10 +213,7 @@ struct PosMemo {
     proc: FmgrInfo,
 }
 
-fn cached_pos_memo<'f>(
-    flinfo: &'f mut FmgrInfo,
-    element_type: Oid,
-) -> PgResult<&'f mut PosMemo> {
+fn cached_pos_memo<'f>(flinfo: &'f mut FmgrInfo, element_type: Oid) -> PgResult<&'f mut PosMemo> {
     let need = match flinfo.fn_extra_ref::<PosMemo>() {
         Some(m) => m.meta.element_type != element_type,
         None => true,
@@ -246,7 +255,11 @@ fn position_compute(
     if null_search && !::arrayfuncs::array_contains_nulls(&array) {
         return Ok(None);
     }
-    let searched = if null_search { Datum::null() } else { fcinfo.arg(1) };
+    let searched = if null_search {
+        Datum::null()
+    } else {
+        fcinfo.arg(1)
+    };
 
     let position_min = if has_start {
         if fcinfo.argisnull(2) {
@@ -312,7 +325,11 @@ pub fn fc_array_positions(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) ->
         let empty = ::arrayfuncs::construct::construct_empty_array(mcx, 23)?;
         return byref_result(mcx, &empty);
     }
-    let searched = if null_search { Datum::null() } else { fcinfo.arg(1) };
+    let searched = if null_search {
+        Datum::null()
+    } else {
+        fcinfo.arg(1)
+    };
     let memo = cached_pos_memo(flinfo, arr_elemtype(&array))?;
     let s = PositionSearch {
         searched,
@@ -341,8 +358,8 @@ pub fn fc_array_agg_array_transfn(
     let stp: *mut ArrayBuildStateArr<'_> = if fcinfo.argisnull(0) {
         let st = init_array_result_arr(aggmcx, arg1_typeid, 0)?;
         let layout = core::alloc::Layout::new::<ArrayBuildStateArr<'_>>();
-        let raw = ::mcx::Allocator::allocate(&aggmcx, layout)
-            .map_err(|_| aggmcx.oom(layout.size()))?;
+        let raw =
+            ::mcx::Allocator::allocate(&aggmcx, layout).map_err(|_| aggmcx.oom(layout.size()))?;
         let p: *mut ArrayBuildStateArr<'_> = raw.cast().as_ptr();
         // SAFETY: fresh aggcontext allocation of the exact layout; no drop
         // glue runs (PgVec fields are arena-plain).
@@ -371,8 +388,7 @@ fn alloc_state_arr<'m>(
     st: ArrayBuildStateArr<'m>,
 ) -> PgResult<*mut ArrayBuildStateArr<'m>> {
     let layout = core::alloc::Layout::new::<ArrayBuildStateArr<'_>>();
-    let raw =
-        ::mcx::Allocator::allocate(&mcx, layout).map_err(|_| mcx.oom(layout.size()))?;
+    let raw = ::mcx::Allocator::allocate(&mcx, layout).map_err(|_| mcx.oom(layout.size()))?;
     let p: *mut ArrayBuildStateArr<'m> = raw.cast().as_ptr();
     // SAFETY: fresh allocation of the exact layout; no drop glue runs
     // (PgVec fields are arena-plain).
@@ -570,7 +586,11 @@ fn sort_common(
                 .with_sqlstate(ERRCODE_UNDEFINED_OBJECT),
             ));
         }
-        (typarray, if descending { ARRAY_GT_OP } else { ARRAY_LT_OP }, Some(typarray))
+        (
+            typarray,
+            if descending { ARRAY_GT_OP } else { ARRAY_LT_OP },
+            Some(typarray),
+        )
     };
     if sort_opr == 0 {
         return Err(Box::new(
@@ -616,11 +636,25 @@ pub fn fc_array_sort_order_nulls_first(
 }
 
 const fn b(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: true, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: true,
+        retset: false,
+        func,
+    }
 }
 
 const fn ns(foid: Oid, name: &'static str, nargs: i16, func: PGFunction) -> FmgrBuiltin {
-    FmgrBuiltin { foid, name, nargs, strict: false, retset: false, func }
+    FmgrBuiltin {
+        foid,
+        name,
+        nargs,
+        strict: false,
+        retset: false,
+        func,
+    }
 }
 
 pub const ARRAY_USERFUNCS_BUILTINS: &[FmgrBuiltin] = &[
@@ -631,18 +665,48 @@ pub const ARRAY_USERFUNCS_BUILTINS: &[FmgrBuiltin] = &[
     ns(3277, "array_position", 2, fc_array_position),
     ns(3278, "array_position_start", 3, fc_array_position_start),
     ns(3279, "array_positions", 2, fc_array_positions),
-    ns(4051, "array_agg_array_transfn", 2, fc_array_agg_array_transfn),
-    ns(4052, "array_agg_array_finalfn", 2, fc_array_agg_array_finalfn),
+    ns(
+        4051,
+        "array_agg_array_transfn",
+        2,
+        fc_array_agg_array_transfn,
+    ),
+    ns(
+        4052,
+        "array_agg_array_finalfn",
+        2,
+        fc_array_agg_array_finalfn,
+    ),
     b(6172, "trim_array", 2, fc_trim_array),
     b(6215, "array_shuffle", 1, fc_array_shuffle),
     b(6216, "array_sample", 2, fc_array_sample),
-    ns(6296, "array_agg_array_combine", 2, fc_array_agg_array_combine),
-    b(6297, "array_agg_array_serialize", 1, fc_array_agg_array_serialize),
-    b(6298, "array_agg_array_deserialize", 2, fc_array_agg_array_deserialize),
+    ns(
+        6296,
+        "array_agg_array_combine",
+        2,
+        fc_array_agg_array_combine,
+    ),
+    b(
+        6297,
+        "array_agg_array_serialize",
+        1,
+        fc_array_agg_array_serialize,
+    ),
+    b(
+        6298,
+        "array_agg_array_deserialize",
+        2,
+        fc_array_agg_array_deserialize,
+    ),
     b(6378, "array_append_support", 1, fc_array_append_support),
     b(6379, "array_prepend_support", 1, fc_array_prepend_support),
     b(6381, "array_reverse", 1, fc_array_reverse),
     b(6388, "array_sort", 1, fc_array_sort),
     b(6389, "array_sort_order", 2, fc_array_sort_order),
-    b(6390, "array_sort_order_nulls_first", 3, fc_array_sort_order_nulls_first),
+    b(
+        6390,
+        "array_sort_order_nulls_first",
+        3,
+        fc_array_sort_order_nulls_first,
+    ),
 ];

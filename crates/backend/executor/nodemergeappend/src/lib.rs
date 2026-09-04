@@ -61,7 +61,10 @@ pub fn exec_init_merge_append<'mcx>(
             ssup_attno: node.sortColIdx[i],
         };
         // abbreviate = false: tuples enter the heap one at a time.
-        st.ms_sortkeys.push(prepare_sort_support_from_ordering_op(node.sortOperators[i], &init)?);
+        st.ms_sortkeys.push(prepare_sort_support_from_ordering_op(
+            node.sortOperators[i],
+            &init,
+        )?);
     }
     Ok(st)
 }
@@ -142,7 +145,11 @@ fn heap_compare_slots<'mcx>(
         let datum2 = ::exectuples::slot_getattr(s2, attno, &mut isnull2);
         let compare = apply_sort_comparator_in(mcx, datum1, isnull1, datum2, isnull2, key);
         if compare != 0 {
-            return if compare < 0 { 1 } else { compare.wrapping_neg() };
+            return if compare < 0 {
+                1
+            } else {
+                compare.wrapping_neg()
+            };
         }
     }
     0
@@ -161,7 +168,10 @@ fn binaryheap_build<'mcx>(node: &mut MergeAppendState<'mcx>, estate: &mut EState
 
 // binaryheap_remove_first (binaryheap.c).
 fn binaryheap_remove_first<'mcx>(node: &mut MergeAppendState<'mcx>, estate: &mut EStateData<'mcx>) {
-    let last = node.ms_heap.pop().expect("binaryheap_remove_first on empty heap");
+    let last = node
+        .ms_heap
+        .pop()
+        .expect("binaryheap_remove_first on empty heap");
     if !node.ms_heap.is_empty() {
         node.ms_heap[0] = last;
         sift_down(node, 0, estate);
@@ -169,7 +179,11 @@ fn binaryheap_remove_first<'mcx>(node: &mut MergeAppendState<'mcx>, estate: &mut
 }
 
 // sift_down (binaryheap.c), hole-motion form.
-fn sift_down<'mcx>(node: &mut MergeAppendState<'mcx>, mut node_off: i32, estate: &mut EStateData<'mcx>) {
+fn sift_down<'mcx>(
+    node: &mut MergeAppendState<'mcx>,
+    mut node_off: i32,
+    estate: &mut EStateData<'mcx>,
+) {
     let size = node.ms_heap.len() as i32;
     let node_val = node.ms_heap[node_off as usize];
     loop {
@@ -208,7 +222,10 @@ pub fn exec_rescan_merge_append(node: &mut MergeAppendState<'_>) {
     node.ms_initialized = false;
 }
 
-pub fn exec_rescan_merge_append_chg<'mcx>(node: &mut MergeAppendState<'mcx>, chg: &Bitmapset<'mcx>) {
+pub fn exec_rescan_merge_append_chg<'mcx>(
+    node: &mut MergeAppendState<'mcx>,
+    chg: &Bitmapset<'mcx>,
+) {
     if let Some(ps) = node.ms_prune_state.as_ref() {
         if chg.overlap(&ps.execparamids) {
             node.ms_valid_subplans_identified = false;

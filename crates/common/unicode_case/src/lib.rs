@@ -61,22 +61,38 @@ fn find_case_map(ucs: u32, map: &[u32; 1704]) -> u32 {
 
 pub fn unicode_lowercase_simple(code: u32) -> u32 {
     let cp = find_case_map(code, &CASE_MAP_LOWER);
-    if cp != 0 { cp } else { code }
+    if cp != 0 {
+        cp
+    } else {
+        code
+    }
 }
 
 pub fn unicode_titlecase_simple(code: u32) -> u32 {
     let cp = find_case_map(code, &CASE_MAP_TITLE);
-    if cp != 0 { cp } else { code }
+    if cp != 0 {
+        cp
+    } else {
+        code
+    }
 }
 
 pub fn unicode_uppercase_simple(code: u32) -> u32 {
     let cp = find_case_map(code, &CASE_MAP_UPPER);
-    if cp != 0 { cp } else { code }
+    if cp != 0 {
+        cp
+    } else {
+        code
+    }
 }
 
 pub fn unicode_casefold_simple(code: u32) -> u32 {
     let cp = find_case_map(code, &CASE_MAP_FOLD);
-    if cp != 0 { cp } else { code }
+    if cp != 0 {
+        cp
+    } else {
+        code
+    }
 }
 
 pub fn unicode_strlower(dst: &mut [u8], src: &[u8], full: bool) -> usize {
@@ -135,7 +151,11 @@ fn convert_case<W: FnMut() -> usize>(
 
         if str_casekind == CaseKind::Title {
             if srcoff == boundary {
-                chr_casekind = if full { CaseKind::Title } else { CaseKind::Upper };
+                chr_casekind = if full {
+                    CaseKind::Title
+                } else {
+                    CaseKind::Upper
+                };
                 boundary = wbnext.as_mut().expect("title needs wbnext")();
             } else {
                 chr_casekind = CaseKind::Lower;

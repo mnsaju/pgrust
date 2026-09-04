@@ -79,9 +79,18 @@ pub fn fc_mic_to_win1250(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) ->
     Ok(Datum::from_i32(n))
 }
 
-pub fn fc_latin2_to_win1250(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+pub fn fc_latin2_to_win1250(
+    _flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     let a = unsafe { ConvArgs::from(fcinfo) };
-    check_encoding_conversion_args(a.src_encoding, a.dest_encoding, a.len, PG_LATIN2, PG_WIN1250)?;
+    check_encoding_conversion_args(
+        a.src_encoding,
+        a.dest_encoding,
+        a.len,
+        PG_LATIN2,
+        PG_WIN1250,
+    )?;
     let n = unsafe {
         local2local(
             a.src(),
@@ -95,9 +104,18 @@ pub fn fc_latin2_to_win1250(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo)
     Ok(Datum::from_i32(n))
 }
 
-pub fn fc_win1250_to_latin2(_flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum> {
+pub fn fc_win1250_to_latin2(
+    _flinfo: Option<&mut FmgrInfo>,
+    fcinfo: &mut Fcinfo,
+) -> PgResult<Datum> {
     let a = unsafe { ConvArgs::from(fcinfo) };
-    check_encoding_conversion_args(a.src_encoding, a.dest_encoding, a.len, PG_WIN1250, PG_LATIN2)?;
+    check_encoding_conversion_args(
+        a.src_encoding,
+        a.dest_encoding,
+        a.len,
+        PG_WIN1250,
+        PG_LATIN2,
+    )?;
     let n = unsafe {
         local2local(
             a.src(),

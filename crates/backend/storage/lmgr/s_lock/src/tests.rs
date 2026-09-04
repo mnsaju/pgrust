@@ -7,7 +7,10 @@ fn spins_per_delay_adapts_like_c() {
     super::finish_spin_delay(&no_delay);
     assert_eq!(super::update_spins_per_delay(100), (100 * 15 + 200) / 16);
 
-    let delayed = SpinDelayStatus { cur_delay: 1000, ..SpinDelayStatus::new("f", 1, "t") };
+    let delayed = SpinDelayStatus {
+        cur_delay: 1000,
+        ..SpinDelayStatus::new("f", 1, "t")
+    };
     super::set_spins_per_delay(100);
     super::finish_spin_delay(&delayed);
     assert_eq!(super::update_spins_per_delay(100), (100 * 15 + 99) / 16);

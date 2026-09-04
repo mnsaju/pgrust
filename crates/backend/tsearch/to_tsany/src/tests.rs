@@ -1,5 +1,5 @@
 use ::adt_tsvector_core::layout::TsVec;
-use ::mcx::{MemoryContext, Mcx, PgVec};
+use ::mcx::{Mcx, MemoryContext, PgVec};
 use ::ts_locale::{DictSubState, TsLexeme};
 use ::ts_parse::{ParsedText, ParsedWord, TsParseEnv};
 use ::types_core::Oid;
@@ -12,7 +12,13 @@ use crate::{OP_AND, OP_OR, OP_PHRASE};
 fn word<'mcx>(mcx: Mcx<'mcx>, w: &str, pos: u16, nvariant: u16) -> ParsedWord<'mcx> {
     let mut v = PgVec::new_in(mcx);
     v.extend_from_slice(w.as_bytes());
-    ParsedWord { word: v, nvariant, flags: 0, pos, apos: PgVec::new_in(mcx) }
+    ParsedWord {
+        word: v,
+        nvariant,
+        flags: 0,
+        pos,
+        apos: PgVec::new_in(mcx),
+    }
 }
 
 #[test]
@@ -57,7 +63,11 @@ const D_MOCK: Oid = 900;
 
 impl<'mcx> MorphEnv<'mcx> {
     fn new(mcx: Mcx<'mcx>) -> Self {
-        MorphEnv { mcx, toks: Vec::new(), next: 0 }
+        MorphEnv {
+            mcx,
+            toks: Vec::new(),
+            next: 0,
+        }
     }
 }
 
@@ -119,7 +129,11 @@ impl<'mcx> TsParseEnv<'mcx> for MorphEnv<'mcx> {
         for (w, nv) in variants {
             let mut b = PgVec::new_in(self.mcx);
             b.extend_from_slice(w.as_bytes());
-            out.push(TsLexeme { nvariant: nv, flags: 0, lexeme: b });
+            out.push(TsLexeme {
+                nvariant: nv,
+                flags: 0,
+                lexeme: b,
+            });
         }
         Ok(Some(out))
     }

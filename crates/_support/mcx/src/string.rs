@@ -11,7 +11,9 @@ pub struct PgString<'mcx> {
 
 impl<'mcx> PgString<'mcx> {
     pub fn new_in(mcx: Mcx<'mcx>) -> Self {
-        PgString { bytes: PgVec::new_in(mcx) }
+        PgString {
+            bytes: PgVec::new_in(mcx),
+        }
     }
 
     pub fn from_str_in(s: &str, mcx: Mcx<'mcx>) -> PgResult<Self> {
@@ -78,7 +80,10 @@ impl<'mcx> PgString<'mcx> {
 
     pub fn truncate(&mut self, new_len: usize) {
         if new_len < self.len() {
-            assert!(self.as_str().is_char_boundary(new_len), "truncate off char boundary");
+            assert!(
+                self.as_str().is_char_boundary(new_len),
+                "truncate off char boundary"
+            );
             self.bytes.truncate(new_len);
         }
     }

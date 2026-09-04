@@ -22,7 +22,6 @@ use std::string::String;
 use ::heapam::HeapScanDescData;
 use ::heapam_handler::IndexFetchHeapData;
 use ::mcx::{Mcx, PgVec};
-use ::types_snapshot::IsMVCCSnapshot;
 use ::types_core::fmgr::NAMEDATALEN;
 use ::types_core::primitive::{BlockNumber, Buffer, ForkNumber, TransactionId};
 use ::types_core::xact::{CommandId, TransactionIdIsValid};
@@ -34,6 +33,7 @@ use ::types_rel::{
 use ::types_scan::scankey::ScanKeyData;
 use ::types_scan::sdir::ScanDirection;
 use ::types_slot::{SlotData, TupleSlotKind};
+use ::types_snapshot::IsMVCCSnapshot;
 use ::types_storage::RelFileLocator;
 use ::types_tuple::{ItemPointerData, ItemPointerGetBlockNumber};
 
@@ -55,8 +55,7 @@ pub fn init_seams() {
             set_default_table_access_method(v.as_deref().unwrap_or(DEFAULT_TABLE_ACCESS_METHOD))
         },
     });
-    guc_tables::hooks::check_default_table_access_method
-        .install(check_default_table_access_method);
+    guc_tables::hooks::check_default_table_access_method.install(check_default_table_access_method);
     tableam_seams::table_tid_get_latest::set(table_tid_get_latest);
 }
 
@@ -151,9 +150,9 @@ mod cb {
             rs_parallel: parallel,
             rs_am: TableAm::Pgrcolumnar,
         };
-        Ok(TableScanDesc::Pgrcolumnar(std::boxed::Box::new(::pgrcolumnar::CbScanDescData::new(
-            rs_base,
-        )?)))
+        Ok(TableScanDesc::Pgrcolumnar(std::boxed::Box::new(
+            ::pgrcolumnar::CbScanDescData::new(rs_base)?,
+        )))
     }
 
     // Shared parallel descriptor: phs_nallocated is the row-group claim
@@ -165,13 +164,19 @@ mod cb {
         pscan.phs_locator = rel.rd_locator.get();
         pscan.phs_syncscan = false;
         pscan.phs_nblocks = 0;
-        pscan.phs_startblock.store(0, std::sync::atomic::Ordering::Relaxed);
-        pscan.phs_nallocated.store(0, std::sync::atomic::Ordering::Relaxed);
+        pscan
+            .phs_startblock
+            .store(0, std::sync::atomic::Ordering::Relaxed);
+        pscan
+            .phs_nallocated
+            .store(0, std::sync::atomic::Ordering::Relaxed);
         0
     }
 
     pub(super) fn parallelscan_reinitialize(pscan: &ParallelBlockTableScanDescData) {
-        pscan.phs_nallocated.store(0, std::sync::atomic::Ordering::SeqCst);
+        pscan
+            .phs_nallocated
+            .store(0, std::sync::atomic::Ordering::SeqCst);
     }
 }
 
@@ -219,7 +224,14 @@ mod heap {
         allow_sync: bool,
         allow_pagemode: bool,
     ) -> PgResult<()> {
-        ::heapam::heap_rescan(scan, key, set_params, allow_strat, allow_sync, allow_pagemode)
+        ::heapam::heap_rescan(
+            scan,
+            key,
+            set_params,
+            allow_strat,
+            allow_sync,
+            allow_pagemode,
+        )
     }
 
     #[inline]
@@ -290,13 +302,20 @@ mod heap {
         slot.base_mut().tts_tableOid = rel.rd_id;
         let t_self = match slot {
             SlotData::Heap(h) => {
-                let tuple = h.tuple.as_mut().expect("materialized heap slot holds a tuple");
+                let tuple = h
+                    .tuple
+                    .as_mut()
+                    .expect("materialized heap slot holds a tuple");
                 tuple.t_tableOid = rel.rd_id;
                 ::heapam::heap_insert(rel, tuple, cid, options, bistate)?;
                 tuple.t_self
             }
             SlotData::BufferHeap(b) => {
-                let tuple = b.base.tuple.as_mut().expect("materialized heap slot holds a tuple");
+                let tuple = b
+                    .base
+                    .tuple
+                    .as_mut()
+                    .expect("materialized heap slot holds a tuple");
                 tuple.t_tableOid = rel.rd_id;
                 ::heapam::heap_insert(rel, tuple, cid, options, bistate)?;
                 tuple.t_self
@@ -326,22 +345,44 @@ mod heap {
         bistate: Option<&mut BulkInsertStateData>,
         spec_token: u32,
     ) -> PgResult<()> {
-        debug_assert!(bistate.is_none(), "GetBulkInsertState lane (COPY) not ported");
+        debug_assert!(
+            bistate.is_none(),
+            "GetBulkInsertState lane (COPY) not ported"
+        );
         exectuples::exec_materialize_slot(slot, mcx)?;
         slot.base_mut().tts_tableOid = rel.rd_id;
         let t_self = match slot {
             SlotData::Heap(h) => {
-                let tuple = h.tuple.as_mut().expect("materialized heap slot holds a tuple");
+                let tuple = h
+                    .tuple
+                    .as_mut()
+                    .expect("materialized heap slot holds a tuple");
                 tuple.t_tableOid = rel.rd_id;
                 tuple.t_data_mut().set_speculative_token(spec_token);
-                ::heapam::heap_insert(rel, tuple, cid, options | ::heapam::hio::HEAP_INSERT_SPECULATIVE, bistate)?;
+                ::heapam::heap_insert(
+                    rel,
+                    tuple,
+                    cid,
+                    options | ::heapam::hio::HEAP_INSERT_SPECULATIVE,
+                    bistate,
+                )?;
                 tuple.t_self
             }
             SlotData::BufferHeap(b) => {
-                let tuple = b.base.tuple.as_mut().expect("materialized heap slot holds a tuple");
+                let tuple = b
+                    .base
+                    .tuple
+                    .as_mut()
+                    .expect("materialized heap slot holds a tuple");
                 tuple.t_tableOid = rel.rd_id;
                 tuple.t_data_mut().set_speculative_token(spec_token);
-                ::heapam::heap_insert(rel, tuple, cid, options | ::heapam::hio::HEAP_INSERT_SPECULATIVE, bistate)?;
+                ::heapam::heap_insert(
+                    rel,
+                    tuple,
+                    cid,
+                    options | ::heapam::hio::HEAP_INSERT_SPECULATIVE,
+                    bistate,
+                )?;
                 tuple.t_self
             }
             // ExecFetchSlotHeapTuple copy arm (virtual/minimal source slots,
@@ -350,7 +391,13 @@ mod heap {
                 let mut tuple = exectuples::exec_copy_slot_heap_tuple(slot, mcx, mcx)?;
                 tuple.t_tableOid = rel.rd_id;
                 tuple.t_data_mut().set_speculative_token(spec_token);
-                ::heapam::heap_insert(rel, &mut tuple, cid, options | ::heapam::hio::HEAP_INSERT_SPECULATIVE, bistate)?;
+                ::heapam::heap_insert(
+                    rel,
+                    &mut tuple,
+                    cid,
+                    options | ::heapam::hio::HEAP_INSERT_SPECULATIVE,
+                    bistate,
+                )?;
                 tuple.t_self
             }
         };
@@ -397,7 +444,15 @@ mod heap {
         tmfd: &mut TM_FailureData,
         changing_part: bool,
     ) -> PgResult<TM_Result> {
-        ::heapam::heap_delete(rel, tid, cid, crosscheck.as_deref(), wait, tmfd, changing_part)
+        ::heapam::heap_delete(
+            rel,
+            tid,
+            cid,
+            crosscheck.as_deref(),
+            wait,
+            tmfd,
+            changing_part,
+        )
     }
 
     // heapam_tuple_update: the TU_* verdict passes through unfiltered.
@@ -476,7 +531,16 @@ mod heap {
         tmfd: &mut TM_FailureData,
     ) -> PgResult<TM_Result> {
         ::heapam_handler::heapam_tuple_lock(
-            mcx, rel, tid, snapshot, slot, cid, mode, wait_policy, flags, tmfd,
+            mcx,
+            rel,
+            tid,
+            snapshot,
+            slot,
+            cid,
+            mode,
+            wait_policy,
+            flags,
+            tmfd,
         )
     }
 
@@ -487,12 +551,10 @@ mod heap {
     ) -> PgResult<(TransactionId, TransactionId)> {
         let freeze_xid = procarray::RecentXmin();
         let min_multi = multixact::GetOldestMultiXactId()?;
-        let srel =
-            catalog_storage::RelationCreateStorage(*newrlocator, persistence as u8, true)?;
+        let srel = catalog_storage::RelationCreateStorage(*newrlocator, persistence as u8, true)?;
         if persistence as u8 == ::types_core::catalog::RELPERSISTENCE_UNLOGGED {
             debug_assert!(
-                rel.rd_rel.relkind == RELKIND_RELATION
-                    || rel.rd_rel.relkind == RELKIND_TOASTVALUE
+                rel.rd_rel.relkind == RELKIND_RELATION || rel.rd_rel.relkind == RELKIND_TOASTVALUE
             );
             smgr::smgrcreate(srel, ForkNumber::INIT_FORKNUM, false)?;
             catalog_storage::log_smgrcreate(newrlocator, ForkNumber::INIT_FORKNUM)?;
@@ -513,12 +575,7 @@ mod heap {
         ::bufmgr_seams::flush_relation_buffers::call(src)?;
         let persistence = rel.rd_rel.relpersistence;
         let dstrel = catalog_storage::RelationCreateStorage(*newrlocator, persistence, true)?;
-        catalog_storage::RelationCopyStorage(
-            src,
-            dstrel,
-            ForkNumber::MAIN_FORKNUM,
-            persistence,
-        )?;
+        catalog_storage::RelationCopyStorage(src, dstrel, ForkNumber::MAIN_FORKNUM, persistence)?;
         for fork_i in ForkNumber::MAIN_FORKNUM as i32 + 1..=::types_core::MAX_FORKNUM as i32 {
             let fork = ForkNumber::from_i32(fork_i).expect("valid fork number");
             if smgr::smgrexists(src, fork)? {
@@ -542,7 +599,7 @@ mod heap {
 
     pub(super) fn relation_needs_toast_table(rel: &Relation<'_>) -> bool {
         use ::types_tuple::tupmacs::att_nominal_alignby;
-        use ::types_tuple::{BITMAPLEN, MAXALIGN, SizeofHeapTupleHeader, TYPSTORAGE_PLAIN};
+        use ::types_tuple::{SizeofHeapTupleHeader, BITMAPLEN, MAXALIGN, TYPSTORAGE_PLAIN};
         const ATTRIBUTE_GENERATED_VIRTUAL: i8 = b'v' as i8;
 
         let tupdesc = &rel.rd_att;
@@ -554,8 +611,7 @@ mod heap {
             if att.attisdropped || att.attgenerated == ATTRIBUTE_GENERATED_VIRTUAL {
                 continue;
             }
-            data_length =
-                att_nominal_alignby(data_length, tupdesc.compact_attr(i).attalignby);
+            data_length = att_nominal_alignby(data_length, tupdesc.compact_attr(i).attalignby);
             if att.attlen > 0 {
                 data_length += att.attlen as usize;
             } else {
@@ -615,7 +671,10 @@ mod heap {
         slot: &mut SlotData<'mcx>,
     ) -> PgResult<bool> {
         use ::types_snapshot::HTSV_Result::*;
-        let pin = scan.rs_cbuf.take().expect("analyze scan positioned without a buffer");
+        let pin = scan
+            .rs_cbuf
+            .take()
+            .expect("analyze scan positioned without a buffer");
         let rd_id = scan.rs_base.rs_rd.rd_id;
         let block = scan.rs_cblock;
         let mut cindex = scan.rs_cindex;
@@ -719,7 +778,14 @@ mod heap {
         exact_pages: &mut u64,
     ) -> PgResult<bool> {
         heapam::bitmap::heap_scan_bitmap_next_tuple(
-            mcx, scan, tbm, iterator, slot, recheck, lossy_pages, exact_pages,
+            mcx,
+            scan,
+            tbm,
+            iterator,
+            slot,
+            recheck,
+            lossy_pages,
+            exact_pages,
         )
     }
 
@@ -1266,11 +1332,7 @@ pub fn table_scan_cb_set_granule_range(
 /// one row group — the runtime clamps claims to the boundaries
 /// `table_scan_cb_granule_geometry` reports) or heap blocks (any contiguous
 /// in-relation range; heap reports no interior boundaries).
-pub fn table_scan_set_morsel_range(
-    scan: &mut TableScanDesc<'_>,
-    g0: u64,
-    g1: u64,
-) -> PgResult<()> {
+pub fn table_scan_set_morsel_range(scan: &mut TableScanDesc<'_>, g0: u64, g1: u64) -> PgResult<()> {
     match scan {
         TableScanDesc::Heap(h) => ::heapam::heap_set_block_range(h, g0, g1),
         TableScanDesc::Pgrcolumnar(c) => c.set_granule_range(g0, g1),
@@ -1400,7 +1462,6 @@ pub fn table_scan_cb_ea_counters(scan: &TableScanDesc<'_>) -> Option<[u64; 7]> {
             c.blocks_pruned,
             c.windows_staged,
         ]),
-
     }
 }
 
@@ -1489,10 +1550,7 @@ pub fn table_scan_update_scan_bound(scan: &mut TableScanDesc<'_>, key: ::datum::
 
 /// Footer value min/max covering every row of the staged window (pgrcolumnar
 /// granule zone entry; int-family columns only). None = no zone metadata.
-pub fn table_scan_window_value_minmax(
-    scan: &TableScanDesc<'_>,
-    col: usize,
-) -> Option<(i64, i64)> {
+pub fn table_scan_window_value_minmax(scan: &TableScanDesc<'_>, col: usize) -> Option<(i64, i64)> {
     match scan {
         TableScanDesc::Heap(_) => None,
         TableScanDesc::Pgrcolumnar(c) => c.staged_window_value_minmax(col),
@@ -1600,10 +1658,7 @@ pub fn table_scan_meta_agg(
 /// Compressed-domain constant-fold of `q` against the currently staged
 /// pgrcolumnar granule (int/date/timestamp). Heap has no granule metadata, so
 /// its verdict is always Mixed (the staged drive is pgrcolumnar-only anyway).
-pub fn table_scan_staged_granule_verdict(
-    scan: &TableScanDesc<'_>,
-    q: &ZoneQual,
-) -> ZoneVerdict {
+pub fn table_scan_staged_granule_verdict(scan: &TableScanDesc<'_>, q: &ZoneQual) -> ZoneVerdict {
     match scan {
         TableScanDesc::Heap(_) => ZoneVerdict::Mixed,
         TableScanDesc::Pgrcolumnar(c) => c.staged_granule_verdict(q),
@@ -1722,9 +1777,7 @@ pub fn table_scan_batch_complete_deform<'mcx>(
     sel: &[u64],
 ) {
     match scan {
-        TableScanDesc::Heap(h) => {
-            ::heapam::heap_batch_complete_deform_soa(h, plan, soa, cols, sel)
-        }
+        TableScanDesc::Heap(h) => ::heapam::heap_batch_complete_deform_soa(h, plan, soa, cols, sel),
         TableScanDesc::Pgrcolumnar(_) => {}
     }
 }
@@ -1864,7 +1917,12 @@ pub fn table_scan_bitmap_next_pagebatch<'mcx>(
 ) -> PgResult<u32> {
     match scan {
         TableScanDesc::Heap(h) => ::heapam::bitmap::heap_scan_bitmap_next_pagebatch(
-            h, tbm, iterator, recheck, lossy_pages, exact_pages,
+            h,
+            tbm,
+            iterator,
+            recheck,
+            lossy_pages,
+            exact_pages,
         ),
         TableScanDesc::Pgrcolumnar(_) => cb_refused("bitmap scans"),
     }
@@ -1946,10 +2004,7 @@ pub struct ParallelTableScanDescShared {
     pub snapshot: Option<::snapmgr::SerializedSnapshot>,
 }
 
-pub fn table_parallelscan_estimate(
-    rel: &Relation<'_>,
-    snapshot: &Snapshot<'_>,
-) -> PgResult<usize> {
+pub fn table_parallelscan_estimate(rel: &Relation<'_>, snapshot: &Snapshot<'_>) -> PgResult<usize> {
     let mut sz: usize = 0;
 
     match snapshot {
@@ -1993,10 +2048,7 @@ pub fn table_parallelscan_initialize(
     Ok(())
 }
 
-pub fn table_parallelscan_reinitialize(
-    rel: &Relation<'_>,
-    pscan: &ParallelBlockTableScanDescData,
-) {
+pub fn table_parallelscan_reinitialize(rel: &Relation<'_>, pscan: &ParallelBlockTableScanDescData) {
     match am(rel) {
         TableAm::Heap => heap::parallelscan_reinitialize(rel, pscan),
         TableAm::Pgrcolumnar => cb::parallelscan_reinitialize(pscan),
@@ -2060,9 +2112,7 @@ pub fn table_beginscan_parallel<'mcx>(
 
 pub fn table_index_fetch_begin<'mcx>(rel: &Relation<'mcx>) -> IndexFetchTableData<'mcx> {
     match am(rel) {
-        TableAm::Heap => {
-            IndexFetchTableData::Heap(::heapam_handler::heapam_index_fetch_begin(rel))
-        }
+        TableAm::Heap => IndexFetchTableData::Heap(::heapam_handler::heapam_index_fetch_begin(rel)),
         TableAm::Pgrcolumnar => cb_refused("index scans"),
     }
 }
@@ -2182,9 +2232,7 @@ pub fn table_tuple_fetch_row_version<'mcx>(
         ));
     }
     match am(rel) {
-        TableAm::Heap => {
-            ::heapam_handler::heapam_fetch_row_version(mcx, rel, tid, snapshot, slot)
-        }
+        TableAm::Heap => ::heapam_handler::heapam_fetch_row_version(mcx, rel, tid, snapshot, slot),
         TableAm::Pgrcolumnar => Err(::pgrcolumnar::unsupported("TID row fetches")),
     }
 }
@@ -2249,8 +2297,11 @@ fn cbstore_eoxact_callback(
 ) -> PgResult<()> {
     use ::types_core::xact::XactEvent::*;
     match event {
-        XACT_EVENT_COMMIT | XACT_EVENT_PARALLEL_COMMIT | XACT_EVENT_ABORT
-        | XACT_EVENT_PARALLEL_ABORT | XACT_EVENT_PREPARE => ::pgrcolumnar::at_eoxact(),
+        XACT_EVENT_COMMIT
+        | XACT_EVENT_PARALLEL_COMMIT
+        | XACT_EVENT_ABORT
+        | XACT_EVENT_PARALLEL_ABORT
+        | XACT_EVENT_PREPARE => ::pgrcolumnar::at_eoxact(),
         XACT_EVENT_PRE_COMMIT | XACT_EVENT_PARALLEL_PRE_COMMIT | XACT_EVENT_PRE_PREPARE => {}
     }
     Ok(())
@@ -2532,9 +2583,16 @@ pub fn table_scan_bitmap_next_tuple<'mcx>(
     exact_pages: &mut u64,
 ) -> PgResult<bool> {
     match scan {
-        TableScanDesc::Heap(h) => {
-            heap::scan_bitmap_next_tuple(mcx, h, tbm, iterator, slot, recheck, lossy_pages, exact_pages)
-        }
+        TableScanDesc::Heap(h) => heap::scan_bitmap_next_tuple(
+            mcx,
+            h,
+            tbm,
+            iterator,
+            slot,
+            recheck,
+            lossy_pages,
+            exact_pages,
+        ),
         TableScanDesc::Pgrcolumnar(_) => cb_refused("bitmap scans"),
     }
 }
@@ -2569,9 +2627,7 @@ pub fn table_scan_sample_next_tuple<'mcx>(
         ));
     }
     match scan {
-        TableScanDesc::Heap(h) => {
-            heap::scan_sample_next_tuple(mcx, h, scanstate, donetuples, slot)
-        }
+        TableScanDesc::Heap(h) => heap::scan_sample_next_tuple(mcx, h, scanstate, donetuples, slot),
         TableScanDesc::Pgrcolumnar(_) => Err(::pgrcolumnar::unsupported("TABLESAMPLE")),
     }
 }
@@ -2662,9 +2718,9 @@ pub fn table_block_parallelscan_initialize(
     rel: &Relation<'_>,
     pscan: &mut ParallelBlockTableScanDescData,
 ) -> PgResult<usize> {
-    use core::sync::atomic::{AtomicU32, AtomicU64};
     use ::types_core::primitive::InvalidBlockNumber;
     use ::types_storage::Spinlock;
+    use core::sync::atomic::{AtomicU32, AtomicU64};
 
     pscan.phs_locator = relation_locator(rel);
     let phs_nblocks = relation_nblocks(rel)?;
