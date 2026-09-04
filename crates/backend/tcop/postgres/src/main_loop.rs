@@ -911,13 +911,27 @@ pub(crate) fn pg_error_from_panic(payload: Box<dyn std::any::Any + Send>) -> PgE
     {
         std::panic::resume_unwind(payload);
     }
+    // DEFERRED (see PLAN-critical-improvements.md sec. 7): 78ff5128c1 made a raw
+    // panic escape as PanicExitThread, which is the correct P0-7 semantics --
+    // an internal-invariant failure must not be caught and the session resumed.
+    // It is held back here because ~138 `unported` panic sites are still
+    // reachable from ordinary SQL, so promoting them turns each one into a
+    // server-wide crash: `SET TRANSACTION SNAPSHOT` under SERIALIZABLE, valid
+    // SQL that PostgreSQL 18.6 executes, was measured taking the whole engine
+    // down and forcing crash recovery. Any role with CONNECT could do it.
+    //
+    // Re-land the promotion together with the reachable-panic inventory that
+    // converts those sites to controlled FEATURE_NOT_SUPPORTED errors; until
+    // then the demotion below is the lesser of two defects.
     match ::types_error::pg_error_from_panic(payload) {
         Ok(e) => e,
-        Err(_raw_panic) => {
-            // The original panic hook has already logged the message and
-            // location.  Replace the arbitrary payload with the crash-class
-            // marker consumed by the backend-thread/postmaster choreography.
-            std::panic::resume_unwind(Box::new(types_error::PanicExitThread))
+        Err(payload) => {
+            let msg = payload
+                .downcast_ref::<String>()
+                .cloned()
+                .or_else(|| payload.downcast_ref::<&str>().map(|s| s.to_string()))
+                .unwrap_or_else(|| "backend panicked".to_string());
+            PgError::new(ERROR, msg)
         }
     }
 }

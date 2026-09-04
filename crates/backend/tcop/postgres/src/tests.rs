@@ -14,15 +14,19 @@ fn typed_pgerror_panic_remains_recoverable() {
     assert_eq!(err.message(), "expected");
 }
 
+// Pins the DEFERRED state described in main_loop::pg_error_from_panic: a raw
+// panic is still demoted to a recoverable ERROR. That is not the end state --
+// 78ff5128c1 promotes it to a backend crash, which is correct P0-7 semantics --
+// but promoting it while ~138 `unported` panic sites remain reachable from
+// ordinary SQL turns each of them into a server-wide denial of service.
+//
+// When the reachable-panic inventory lands, restore the promotion and invert
+// this test back to asserting a PanicExitThread payload.
 #[test]
-fn raw_panic_is_promoted_to_backend_crash() {
-    let outcome = std::panic::catch_unwind(|| {
-        crate::main_loop::pg_error_from_panic(Box::new(String::from("invariant failed")))
-    });
-    match outcome {
-        Err(payload) => assert!(payload.is::<types_error::PanicExitThread>()),
-        Ok(_) => panic!("raw panic was incorrectly demoted to a recoverable error"),
-    }
+fn raw_panic_is_demoted_pending_reachable_panic_inventory() {
+    let err = crate::main_loop::pg_error_from_panic(Box::new(String::from("invariant failed")));
+    assert_eq!(err.level(), types_error::ERROR);
+    assert_eq!(err.message(), "invariant failed");
 }
 
 // Serializes tests that reach the QueryCancel arm: the timeout-indicator
