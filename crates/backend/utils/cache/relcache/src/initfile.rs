@@ -4,36 +4,45 @@ use std::rc::Rc;
 use mcx::{Mcx, MemoryContext, PgString, PgVec};
 use types_core::{InvalidSubTransactionId, Oid, RECORDOID};
 use types_error::{PgError, PgResult, DEBUG1, ERRCODE_INTERNAL_ERROR, WARNING};
-use types_rel::{FormData_pg_class, FormData_pg_index, RelationData, RELKIND_INDEX};
 use types_rel::{
     AutoVacOpts, BTOptions, BrinOptions, GinOptions, GistOptions, HashOptions, RdOptions,
     SpGistOptions, StdRdOptions, ViewOptions, GIST_OPTION_BUFFERING_AUTO,
-    GIST_OPTION_BUFFERING_OFF, GIST_OPTION_BUFFERING_ON,
-    STDRD_OPTION_VACUUM_INDEX_CLEANUP_AUTO, STDRD_OPTION_VACUUM_INDEX_CLEANUP_OFF,
-    STDRD_OPTION_VACUUM_INDEX_CLEANUP_ON, VIEW_OPTION_CHECK_OPTION_CASCADED,
-    VIEW_OPTION_CHECK_OPTION_LOCAL, VIEW_OPTION_CHECK_OPTION_NOT_SET,
+    GIST_OPTION_BUFFERING_OFF, GIST_OPTION_BUFFERING_ON, STDRD_OPTION_VACUUM_INDEX_CLEANUP_AUTO,
+    STDRD_OPTION_VACUUM_INDEX_CLEANUP_OFF, STDRD_OPTION_VACUUM_INDEX_CLEANUP_ON,
+    VIEW_OPTION_CHECK_OPTION_CASCADED, VIEW_OPTION_CHECK_OPTION_LOCAL,
+    VIEW_OPTION_CHECK_OPTION_NOT_SET,
 };
+use types_rel::{FormData_pg_class, FormData_pg_index, RelationData, RELKIND_INDEX};
 use types_tuple::{FormData_pg_attribute, NameData, TupleConstr};
 
 use crate::schemapg::{
     ACCESS_METHOD_PROCEDURE_INDEX_ID, ACCESS_METHOD_PROCEDURE_RELATION_ID,
     ATTRIBUTE_RELID_NUM_INDEX_ID, AUTH_ID_OID_INDEX_ID, AUTH_ID_ROLNAME_INDEX_ID,
     AUTH_MEM_MEM_ROLE_INDEX_ID, CAT_PG_SHSECLABEL, CLASS_OID_INDEX_ID, DATABASE_NAME_INDEX_ID,
-    DATABASE_OID_INDEX_ID, INDEX_RELID_INDEX_ID, LOCAL_BOOTSTRAP_CATALOGS,
-    OPCLASS_OID_INDEX_ID, OPERATOR_CLASS_RELATION_ID, REWRITE_RELATION_ID,
-    REWRITE_REL_RULENAME_INDEX_ID, SHARED_BOOTSTRAP_CATALOGS, SHARED_SEC_LABEL_OBJECT_INDEX_ID,
-    TRIGGER_RELATION_ID, TRIGGER_RELID_NAME_INDEX_ID,
+    DATABASE_OID_INDEX_ID, INDEX_RELID_INDEX_ID, LOCAL_BOOTSTRAP_CATALOGS, OPCLASS_OID_INDEX_ID,
+    OPERATOR_CLASS_RELATION_ID, REWRITE_RELATION_ID, REWRITE_REL_RULENAME_INDEX_ID,
+    SHARED_BOOTSTRAP_CATALOGS, SHARED_SEC_LABEL_OBJECT_INDEX_ID, TRIGGER_RELATION_ID,
+    TRIGGER_RELID_NAME_INDEX_ID,
 };
 use crate::{build, store, with_state};
 use types_rel::AccessShareLock;
 
-// Divergence from C: our file is a different on-disk format, so it lives under
-// a different name; C 18.3 writes/reads its own pg_internal.init in the same
-// datadir and neither binary ever opens the other's file. Our unlink paths
-// remove BOTH names so a later C boot cannot trust a file our DDL made stale.
-pub const RELCACHE_INIT_FILENAME: &str = "pgrust_internal.init";
-pub const C_RELCACHE_INIT_FILENAME: &str = "pg_internal.init";
-pub const RELCACHE_INIT_FILEMAGIC: i32 = 0x573266;
+// Same name as C (pg_internal.init), different magic. The file is a rebuildable
+// relcache cache, and the two implementations keep each other out by MAGIC, not
+// by filename: C's RelationCacheInitFileRead rejects a magic it does not know
+// and rebuilds, and parse_init_file below does the same to C's file. Sharing
+// the name is what makes that work -- it also means C's DDL unlink invalidates
+// the file we would have read, closing the stale-read window that a separate
+// name left open.
+//
+// The name must stay C's for external tooling as well: backup tools exclude
+// "pg_internal.init" by exact name (pgBackRest, pg_basebackup and friends).
+// Under the old pgrust_internal.init name pgBackRest treated it as a relation
+// file, page-checksum validated it, and reported every backup as having
+// errors because 80,019 bytes is not a multiple of 8192.
+pub const RELCACHE_INIT_FILENAME: &str = "pg_internal.init";
+// NOT C's 0x573266: a shared name makes a distinct magic load-bearing.
+pub const RELCACHE_INIT_FILEMAGIC: i32 = 0x5047_5255;
 // Bump whenever the entry codec below changes shape; a mismatch rejects the file.
 pub const RELCACHE_INIT_FORMAT: u32 = 1;
 const TABLESPACE_VERSION_DIRECTORY: &str = "PG_18_202506291";
@@ -50,7 +59,6 @@ const BTREE_AM_OID: Oid = 403;
 const HASH_AM_OID: Oid = 405;
 const MAX_ATTS: usize = 1600;
 
-
 // PGRUST_GATHER_TRACE sub-attribution of RelationCacheInitializePhase3's
 // cost (the §2 table's 2.1ms line): which of file-load / critical-index /
 // finish / warm+write burns it decides the P-share-lite retention shape.
@@ -59,7 +67,10 @@ fn gtrace_us(label: &str, t0: std::time::Instant) {
     if !*ON.get_or_init(|| std::env::var_os("PGRUST_GATHER_TRACE").is_some()) {
         return;
     }
-    eprintln!("GTRACE relcache3.{label} dt_us={}", t0.elapsed().as_micros());
+    eprintln!(
+        "GTRACE relcache3.{label} dt_us={}",
+        t0.elapsed().as_micros()
+    );
 }
 
 pub fn RelationCacheInitialize() {
@@ -105,10 +116,16 @@ pub fn RelationCacheInitializePhase3() -> PgResult<()> {
     // nailed, ScanPgRelation heapscans (criticalRelcachesBuilt gates index_ok).
     if !crate::criticalRelcachesBuilt() {
         load_critical_index(CLASS_OID_INDEX_ID, types_core::RELATION_RELATION_ID)?;
-        load_critical_index(ATTRIBUTE_RELID_NUM_INDEX_ID, types_core::ATTRIBUTE_RELATION_ID)?;
+        load_critical_index(
+            ATTRIBUTE_RELID_NUM_INDEX_ID,
+            types_core::ATTRIBUTE_RELATION_ID,
+        )?;
         load_critical_index(INDEX_RELID_INDEX_ID, types_core::INDEX_RELATION_ID)?;
         load_critical_index(OPCLASS_OID_INDEX_ID, OPERATOR_CLASS_RELATION_ID)?;
-        load_critical_index(ACCESS_METHOD_PROCEDURE_INDEX_ID, ACCESS_METHOD_PROCEDURE_RELATION_ID)?;
+        load_critical_index(
+            ACCESS_METHOD_PROCEDURE_INDEX_ID,
+            ACCESS_METHOD_PROCEDURE_RELATION_ID,
+        )?;
         load_critical_index(REWRITE_REL_RULENAME_INDEX_ID, REWRITE_RELATION_ID)?;
         load_critical_index(TRIGGER_RELID_NAME_INDEX_ID, TRIGGER_RELATION_ID)?;
         with_state(|st| st.critical_relcaches_built = true);
@@ -173,7 +190,9 @@ fn finish_relcache_entries() -> PgResult<()> {
         }
         // formrdesc set up rd_att correctly by construction (C asserts, never
         // copies it: catcache entries may already share it).
-        let newrel = std::rc::Rc::new(types_rel::RelationData { rd_locator: Default::default(), rd_smgr: Default::default(),
+        let newrel = std::rc::Rc::new(types_rel::RelationData {
+            rd_locator: Default::default(),
+            rd_smgr: Default::default(),
             rd_id: relid,
             rd_backend: rel.rd_backend,
             rd_islocaltemp: rel.rd_islocaltemp,
@@ -196,13 +215,16 @@ fn finish_relcache_entries() -> PgResult<()> {
             // still governs validity.
             pgstat_link: core::cell::Cell::new(rel.pgstat_link.get()),
             rd_amcache: Default::default(),
-            rd_amcache_hash: Default::default(), rd_amcache_gin: Default::default(), rd_amcache_spgist: Default::default(),
+            rd_amcache_hash: Default::default(),
+            rd_amcache_gin: Default::default(),
+            rd_amcache_spgist: Default::default(),
             rd_support: mcx::PgVec::new_in(crate::cache_mcx()),
             rd_supportinfo: Default::default(),
             rd_opcoptions: Default::default(),
             rd_indexlist: Default::default(),
             rd_trigdesc: Default::default(),
-            rd_hastriggers: false, rd_hasrules: false,
+            rd_hastriggers: false,
+            rd_hasrules: false,
         });
         crate::build::RelationInitPhysicalAddr(&newrel)?;
         with_state(|st| {
@@ -250,8 +272,7 @@ fn init_file_path(shared: bool) -> Option<PathBuf> {
     if shared {
         Some(Path::new("global").join(RELCACHE_INIT_FILENAME))
     } else {
-        init_small::globals::DatabasePath()
-            .map(|p| Path::new(p).join(RELCACHE_INIT_FILENAME))
+        init_small::globals::DatabasePath().map(|p| Path::new(p).join(RELCACHE_INIT_FILENAME))
     }
 }
 
@@ -296,7 +317,9 @@ impl<'a> Rd<'a> {
         Some(f32::from_bits(self.u32()?))
     }
     fn f64(&mut self) -> Option<f64> {
-        Some(f64::from_bits(u64::from_ne_bytes(self.bytes(8)?.try_into().ok()?)))
+        Some(f64::from_bits(u64::from_ne_bytes(
+            self.bytes(8)?.try_into().ok()?,
+        )))
     }
     fn at_end(&self) -> bool {
         self.off == self.b.len()
@@ -360,7 +383,9 @@ fn put_class(buf: &mut Buf<'_>, f: &FormData_pg_class) {
 
 fn parse_class(rd: &mut Rd<'_>) -> Option<FormData_pg_class> {
     Some(FormData_pg_class {
-        relname: NameData { data: rd.bytes(64)?.try_into().ok()? },
+        relname: NameData {
+            data: rd.bytes(64)?.try_into().ok()?,
+        },
         relnamespace: rd.u32()?,
         reltype: rd.u32()?,
         relowner: rd.u32()?,
@@ -411,7 +436,9 @@ fn put_attr(buf: &mut Buf<'_>, a: &FormData_pg_attribute) {
 fn parse_attr(rd: &mut Rd<'_>) -> Option<FormData_pg_attribute> {
     Some(FormData_pg_attribute {
         attrelid: rd.u32()?,
-        attname: NameData { data: rd.bytes(64)?.try_into().ok()? },
+        attname: NameData {
+            data: rd.bytes(64)?.try_into().ok()?,
+        },
         atttypid: rd.u32()?,
         attlen: rd.i16()?,
         attnum: rd.i16()?,
@@ -586,7 +613,9 @@ fn parse_options(rd: &mut Rd<'_>) -> Option<Option<RdOptions>> {
             vacuum_cleanup_index_scale_factor: rd.f64()?,
             deduplicate_items: rd.boolean()?,
         }))),
-        4 => Some(Some(RdOptions::Hash(HashOptions { fillfactor: rd.i32()? }))),
+        4 => Some(Some(RdOptions::Hash(HashOptions {
+            fillfactor: rd.i32()?,
+        }))),
         5 => Some(Some(RdOptions::Gin(GinOptions {
             use_fast_update: rd.boolean()?,
             pending_list_cleanup_size: rd.i32()?,
@@ -600,7 +629,9 @@ fn parse_options(rd: &mut Rd<'_>) -> Option<Option<RdOptions>> {
                 _ => return None,
             },
         }))),
-        7 => Some(Some(RdOptions::SpGist(SpGistOptions { fillfactor: rd.i32()? }))),
+        7 => Some(Some(RdOptions::SpGist(SpGistOptions {
+            fillfactor: rd.i32()?,
+        }))),
         8 => Some(Some(RdOptions::Brin(BrinOptions {
             pages_per_range: rd.i32()?,
             autosummarize: rd.boolean()?,
@@ -637,10 +668,12 @@ fn parse_options(rd: &mut Rd<'_>) -> Option<Option<RdOptions>> {
             for b in bit_size.iter_mut() {
                 *b = rd.i32()?;
             }
-            Some(Some(RdOptions::Bloom(types_rel::reloptions::BloomOptions {
-                bloom_length,
-                bit_size,
-            })))
+            Some(Some(RdOptions::Bloom(
+                types_rel::reloptions::BloomOptions {
+                    bloom_length,
+                    bit_size,
+                },
+            )))
         }
         _ => None,
     }
@@ -753,7 +786,10 @@ pub(crate) fn encode_entry(buf: &mut Buf<'_>, rel: &RelationData<'static>, naile
     }
     put_options(buf, &rel.rd_options);
     if rel.rd_rel.relkind == RELKIND_INDEX {
-        put_index(buf, rel.rd_index.as_ref().expect("index entry without rd_index"));
+        put_index(
+            buf,
+            rel.rd_index.as_ref().expect("index entry without rd_index"),
+        );
         put_oid_vec(buf, &rel.rd_opcintype);
         put_oid_vec(buf, &rel.rd_opfamily);
         put_i16_vec(buf, &rel.rd_indoption);
@@ -784,7 +820,11 @@ fn parse_entry(rd: &mut Rd<'_>, mcx: Mcx<'static>) -> Option<(RelationData<'stat
         attrs.push(a);
     }
     let mut td = tupdesc::CreateTupleDesc(mcx, &attrs).ok()?;
-    td.tdtypeid = if form.reltype != 0 { form.reltype } else { RECORDOID };
+    td.tdtypeid = if form.reltype != 0 {
+        form.reltype
+    } else {
+        RECORDOID
+    };
     td.tdtypmod = -1;
     td.tdrefcount = 1;
     if has_not_null {
@@ -839,7 +879,15 @@ fn parse_entry(rd: &mut Rd<'_>, mcx: Mcx<'static>) -> Option<(RelationData<'stat
                     None
                 });
             }
-            (Some(idx), opcintype, opfamily, indoption, indcollation, support, supportinfo)
+            (
+                Some(idx),
+                opcintype,
+                opfamily,
+                indoption,
+                indcollation,
+                support,
+                supportinfo,
+            )
         } else {
             (
                 None,
@@ -893,7 +941,10 @@ fn parse_entry(rd: &mut Rd<'_>, mcx: Mcx<'static>) -> Option<(RelationData<'stat
 // precedent); boot-only scratch.
 type ParsedEntries = Vec<(RelationData<'static>, bool)>;
 
-pub(crate) fn parse_init_file(data: &[u8], mcx: Mcx<'static>) -> Option<(ParsedEntries, usize, usize)> {
+pub(crate) fn parse_init_file(
+    data: &[u8],
+    mcx: Mcx<'static>,
+) -> Option<(ParsedEntries, usize, usize)> {
     let mut rd = Rd { b: data, off: 0 };
     if rd.i32()? != RELCACHE_INIT_FILEMAGIC || rd.u32()? != RELCACHE_INIT_FORMAT {
         return None;
@@ -928,22 +979,9 @@ fn load_relcache_init_file(shared: bool) -> PgResult<bool> {
     let Ok(bytes) = fd::read_whole_file(path_s) else {
         return Ok(false);
     };
-    // A newer C pg_internal.init beside ours means a C backend served this
-    // datadir after we wrote our file; C's DDL unlinks only its own name, so
-    // ours may be stale — rebuild. (Under sim, vfs mtimes are all zero and
-    // no C backend can enter the sim world, so this never fires there.)
-    let mtime_of = |p: &Path| -> Option<(i64, i64)> {
-        let mut st = fd::FileInfo::zeroed();
-        (fd::pg_stat(p.to_str()?, &mut st) == 0).then_some((st.mtime_sec, st.mtime_nsec))
-    };
-    if let (Some(ours), Some(theirs)) = (
-        mtime_of(&path),
-        mtime_of(&path.with_file_name(C_RELCACHE_INIT_FILENAME)),
-    ) {
-        if theirs > ours {
-            return Ok(false);
-        }
-    }
+    // No C-vs-ours mtime check is needed now that both write the same name:
+    // C's DDL unlink removes the very file we would read, and a C-written file
+    // is rejected by parse_init_file's magic check below.
     let mcx = crate::cache_mcx();
     let Some((rels, nailed_rels, nailed_indexes)) = parse_init_file(&bytes, mcx) else {
         return Ok(false);
@@ -996,7 +1034,10 @@ fn write_relcache_init_file(shared: bool) -> PgResult<()> {
     };
     // Snapshot outside the state borrow: RelationIdIsInInitFile crosses seams.
     let entries: Vec<(Rc<RelationData<'static>>, bool)> = with_state(|st| {
-        st.id_cache.iter().map(|(_, e)| (Rc::clone(&e.rel), e.nailed)).collect()
+        st.id_cache
+            .iter()
+            .map(|(_, e)| (Rc::clone(&e.rel), e.nailed))
+            .collect()
     });
 
     let cx = MemoryContext::new("RelCacheInitFileWrite");
@@ -1051,14 +1092,20 @@ fn write_relcache_init_file(shared: bool) -> PgResult<()> {
         off += n as usize;
     }
     if fd::CloseTransientFile(fd_) != 0 {
-        return Err(could_not_write(std::io::Error::from_raw_os_error(fd::get_errno())));
+        return Err(could_not_write(std::io::Error::from_raw_os_error(
+            fd::get_errno(),
+        )));
     }
 
     // Stale-write race: recheck invals under RelCacheInitLock after draining
     // SI; another backend's committed DDL between our snapshot and here must
     // win (its unlink already happened or its SI reaches us now).
     let lock = lwlock::main_lock(RELCACHE_INIT_LOCK_OFFSET);
-    lwlock::LWLockAcquire(lock, lwlock::LW_EXCLUSIVE, init_small::globals::MyProcNumber())?;
+    lwlock::LWLockAcquire(
+        lock,
+        lwlock::LW_EXCLUSIVE,
+        init_small::globals::MyProcNumber(),
+    )?;
     let result = (|| -> PgResult<()> {
         inval_seams::accept_invalidation_messages::call()?;
         if with_state(|st| st.invals_received == 0) {
@@ -1082,7 +1129,9 @@ pub fn RelationIdIsInInitFile(relationId: Oid) -> bool {
         || relationId == SHARED_SEC_LABEL_OBJECT_INDEX_ID
     {
         // Init-file members without syscache support (C asserts the same).
-        debug_assert!(!syscache_seams::relation_supports_sys_cache::call(relationId));
+        debug_assert!(!syscache_seams::relation_supports_sys_cache::call(
+            relationId
+        ));
         return true;
     }
     syscache_seams::relation_supports_sys_cache::call(relationId)
@@ -1097,23 +1146,30 @@ fn unlink_initfile(path: &Path, error_level: bool) -> PgResult<()> {
     if error_level {
         let e = std::io::Error::from_raw_os_error(fd::get_errno());
         return Err(Box::new(
-            PgError::error(format!("could not remove cache file \"{}\": {e}", path.display()))
-                .with_sqlstate(ERRCODE_INTERNAL_ERROR),
+            PgError::error(format!(
+                "could not remove cache file \"{}\": {e}",
+                path.display()
+            ))
+            .with_sqlstate(ERRCODE_INTERNAL_ERROR),
         ));
     }
     Ok(())
 }
 
 fn unlink_both(dir: &Path, error_level: bool) -> PgResult<()> {
-    unlink_initfile(&dir.join(RELCACHE_INIT_FILENAME), error_level)?;
-    unlink_initfile(&dir.join(C_RELCACHE_INIT_FILENAME), error_level)
+    // One name now covers both implementations (see RELCACHE_INIT_FILENAME).
+    unlink_initfile(&dir.join(RELCACHE_INIT_FILENAME), error_level)
 }
 
 // Serializes against write_relcache_init_file via RelCacheInitLock: unlink
 // under the lock, send SI between Pre and Post, release in Post.
 pub fn RelationCacheInitFilePreInvalidate() -> PgResult<()> {
     let lock = lwlock::main_lock(RELCACHE_INIT_LOCK_OFFSET);
-    lwlock::LWLockAcquire(lock, lwlock::LW_EXCLUSIVE, init_small::globals::MyProcNumber())?;
+    lwlock::LWLockAcquire(
+        lock,
+        lwlock::LW_EXCLUSIVE,
+        init_small::globals::MyProcNumber(),
+    )?;
     if let Some(db) = init_small::globals::DatabasePath() {
         unlink_both(Path::new(db), true)?;
     }
@@ -1135,7 +1191,9 @@ pub fn RelationCacheInitFileRemove() {
         while let Some(de) = fd::ReadDirExtended(dir, PG_TBLSPC_DIR, DEBUG1)? {
             if de.d_name.bytes().all(|b| b.is_ascii_digit()) {
                 remove_in_dir(
-                    &Path::new(PG_TBLSPC_DIR).join(&de.d_name).join(TABLESPACE_VERSION_DIRECTORY),
+                    &Path::new(PG_TBLSPC_DIR)
+                        .join(&de.d_name)
+                        .join(TABLESPACE_VERSION_DIRECTORY),
                 );
             }
         }
