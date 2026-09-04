@@ -74,3 +74,16 @@ seam_core::seam!(
     // without a dependency edge onto the full guc crate. None = never set.
     pub fn get_config_option_missing_ok(name: &str) -> PgResult<Option<String>>
 );
+
+seam_core::seam!(
+    // has_privs_of_role(GetUserId(), ROLE_PG_READ_ALL_SETTINGS) (acl.c), the
+    // privilege half of ConfigOptionIsVisible (guc_funcs.c). Installed by
+    // guc_funcs, which owns the ACL dependency edge; the guc crate sits below
+    // it and reaches the check through this seam.
+    //
+    // Uninstalled means the ACL machinery is not up yet (bootstrap, single-
+    // user, unit tests), which is BEFORE any untrusted SQL can run, so the
+    // caller treats "not installed" as DENY and only privileged settings are
+    // affected.
+    pub fn privileged_guc_readable() -> PgResult<bool>
+);

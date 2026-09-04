@@ -361,4 +361,11 @@ pub fn get_explain_guc_options() -> PgResult<Vec<(&'static str, Option<String>)>
 
 pub fn init_seams() {
     guc_seams::get_explain_guc_options::set(get_explain_guc_options);
+    guc_seams::privileged_guc_readable::set(privileged_guc_readable);
+}
+
+// The privilege half of ConfigOptionIsVisible, exposed to the guc crate (which
+// sits below the ACL layer) through guc_seams::privileged_guc_readable.
+fn privileged_guc_readable() -> PgResult<bool> {
+    adt_acl::has_privs_of_role(miscinit::GetUserId(), ROLE_PG_READ_ALL_SETTINGS)
 }

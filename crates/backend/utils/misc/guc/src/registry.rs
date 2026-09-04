@@ -942,10 +942,42 @@ pub fn get_config_option_by_name(
     missing_ok: bool,
 ) -> PgResult<Option<String>> {
     match reg.find_option(name) {
-        Some(record) => Ok(Some(show_guc_option(record, true))),
+        Some(record) => {
+            guc_option_visible_or_err(record, name)?;
+            Ok(Some(show_guc_option(record, true)))
+        }
         None if missing_ok => Ok(None),
         None => Err(unrecognized(name).into()),
     }
+}
+
+// GetConfigOptionByName's privilege gate (guc_funcs.c:GetConfigOptionByName):
+// GUC_SUPERUSER_ONLY settings are readable only by roles with privileges of
+// pg_read_all_settings. C raises here rather than returning NULL, and every
+// SQL-visible read path -- current_setting(), SHOW, set_config()'s return
+// value -- goes through this function, so the gate belongs here and not in
+// each caller.
+//
+// Fail closed: an uninstalled seam means the ACL machinery is not up, which is
+// strictly before any untrusted SQL can run. Unprivileged settings never
+// consult the seam at all, so bootstrap and single-user reads are unaffected.
+fn guc_option_visible_or_err(record: &GucVariable, name: &str) -> PgResult<()> {
+    if record.gen().flags & types_guc::GUC_SUPERUSER_ONLY == 0 {
+        return Ok(());
+    }
+    let permitted = guc_seams::privileged_guc_readable::is_installed()
+        && guc_seams::privileged_guc_readable::call()?;
+    if permitted {
+        return Ok(());
+    }
+    Err(Box::new(
+        PgError::error(format!("permission denied to examine \"{name}\""))
+            .with_sqlstate(ERRCODE_INSUFFICIENT_PRIVILEGE)
+            .with_detail(
+                "Only roles with privileges of the \"pg_read_all_settings\" role may examine this parameter."
+                    .to_string(),
+            ),
+    ))
 }
 
 pub fn get_config_option_flags(reg: &GucRegistry, name: &str, missing_ok: bool) -> PgResult<i32> {
