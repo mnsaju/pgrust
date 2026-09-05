@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Manual trigger: the regression tiers are expensive and occasionally need
+  # a re-run against an unchanged tree (flaky Docker pulls, ledger triage).
+  workflow_dispatch:
 
 # Cancel superseded runs on the same PR/branch.
 concurrency:
