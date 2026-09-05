@@ -75,8 +75,18 @@ chmod 0777 "$WORK"
 
 # One long-lived container; TAP starts and stops its own clusters inside it.
 # --user postgres because pgrust refuses to run as root, like C.
+# The stack limit MUST come from the container, not from the shim. pgrust
+# records its real path in postmaster.opts, so `pg_ctl restart` re-execs the
+# binary directly and the shim -- along with its `ulimit -s` -- is not in the
+# loop at all. The server then refuses to boot:
+#     FATAL: invalid value for parameter "max_stack_depth": 60000
+#     DETAIL: "max_stack_depth" must not exceed 7680kB.
+# 001_stream_rep calls restart, BAIL_OUTs on the failure, and one bail aborts
+# the whole prove run -- 42 tests reduced to 1. Setting the limit on the
+# container makes every start path work, however the server is launched.
 docker run -d --name "$CONTAINER" \
     -v "$SRC:/pgsrc:ro" -v "$WORK:/tapwork" \
+    --ulimit stack=67092480:67092480 -e RUST_MIN_STACK=33554432 \
     --user postgres --entrypoint sleep "$TAP_IMAGE" infinity >/dev/null
 # Upstream's suite writes into its own directory, so give it a writable copy.
 docker exec "$CONTAINER" cp -a /pgsrc/src/test/recovery /tapwork/suite
@@ -141,36 +151,103 @@ esac
 # ---------------------------------------------------------------------------
 # The suite
 # ---------------------------------------------------------------------------
-if [ $# -eq 0 ]; then
-    TESTS="t/001_stream_rep.pl"
-elif [ "$1" = "ALL" ]; then
+# Five of the 47 cannot run here for architectural reasons, not because they
+# are hard: they take a pid out of SQL and signal it from outside the server,
+# and pgrust's pids are synthetic. They are excluded rather than ledgered --
+# see regress/recovery-not-applicable.txt for why, and for what each one costs
+# us -- but they are ALWAYS printed, because an absent test is not a passing
+# one and a suite that quietly runs 42 while reporting on 47 is exactly the
+# defect this tier was built to rule out.
+NA_FILE="$REPO_ROOT/regress/recovery-not-applicable.txt"
+declare -a NA=()
+if [ -f "$NA_FILE" ]; then
+    while IFS=$'\t' read -r t reason; do
+        case "$t" in ''|\#*) continue ;; esac
+        NA+=("$t")
+        printf '  NOT APPLICABLE  %-30s %s\n' "$t" "$(echo "$reason" | cut -c1-84)..."
+    done < "$NA_FILE"
+fi
+echo "==> ${#NA[@]} of 47 excluded as architecturally inapplicable (see $(basename "$NA_FILE"))"
+echo
+
+na_excluded() {
+    for n in ${NA[@]+"${NA[@]}"}; do [ "t/$n" = "$1" ] && return 0; done
+    return 1
+}
+
+if [ $# -eq 0 ] || [ "$1" = "ALL" ]; then
     TESTS=""
+    for f in "$SRC/src/test/recovery/t"/*.pl; do
+        rel="t/$(basename "$f")"
+        na_excluded "$rel" || TESTS="$TESTS $rel"
+    done
+    TESTS="${TESTS# }"
 else
     TESTS="$*"
 fi
 
-echo "==> Running recovery TAP: ${TESTS:-<all>}"
-set +e
-docker exec \
-    -e "PATH=$SHIM_PATH" \
-    -e "PERL5LIB=/pgsrc/src/test/perl" \
-    -e "PGRUST_TAP_WITNESS=$WITNESS" \
-    -e "TESTDIR=/tapwork/suite" \
-    -e "PG_REGRESS=/usr/lib/postgresql/18/lib/pgxs/src/test/regress/pg_regress" \
-    -e "TMPDIR=/tapwork/tmp" -e TZ=UTC -e PG_TEST_NOCLEAN=1 \
-    -w /tapwork/suite \
-    "$CONTAINER" sh -c "timeout -k 30 ${PGRUST_TAP_TIMEOUT:-1800} prove --verbose ${TESTS:-t/*.pl}"
-STATUS=$?
-set -e
+echo "==> Running recovery TAP: $(printf %s "$TESTS" | wc -w) tests, one prove per file"
+echo
+
+# ONE PROVE INVOCATION PER FILE, deliberately. PostgreSQL::Test calls BAIL_OUT
+# when a cluster will not start or restart, and a bail aborts every remaining
+# file in the SAME prove run: the first attempt at this suite reported on 1
+# file of 42 for that reason, the second on 23. A tier whose job is to seed a
+# ledger cannot let one sick test hide the other forty-one -- the same rule
+# regress/run-compat-lanes.sh follows for the Gate B lanes.
+declare -a T_PASS=() T_FAIL=() T_BAIL=() T_TIMEOUT=() T_SKIP=()
+: > "$WORK/recovery-full.log"
+for t in $TESTS; do
+    out="$WORK/tap-one.out"
+    set +e
+    docker exec \
+        -e "PATH=$SHIM_PATH" \
+        -e "PERL5LIB=/pgsrc/src/test/perl" \
+        -e "PGRUST_TAP_WITNESS=$WITNESS" \
+        -e "TESTDIR=/tapwork/suite" \
+        -e "PG_REGRESS=/usr/lib/postgresql/18/lib/pgxs/src/test/regress/pg_regress" \
+        -e "TMPDIR=/tapwork/tmp" -e TZ=UTC -e PG_TEST_NOCLEAN=1 \
+        -e "enable_injection_points=no" \
+        -w /tapwork/suite \
+        "$CONTAINER" sh -c "timeout -k 30 ${PGRUST_TAP_PER_TEST:-600} prove --verbose $t" \
+        > "$out" 2>&1
+    rc=$?
+    set -e
+    name="$(basename "$t")"
+    # A skip is NOT a pass. Five of these tests skip themselves when the build
+    # lacks injection points, and folding those into the pass count would
+    # inflate the evidence with tests that never ran a single assertion --
+    # `enable_injection_points=no` above is what lets them skip cleanly instead
+    # of dying on an uninitialized-value warning, which is how they first
+    # showed up as failures.
+    case "$rc" in
+        0)  # prove renders a skip_all as "skipped: <reason>" with
+            # "Result: NOTESTS" -- NOT as "1..0 # SKIP", which is what a first
+            # attempt at this guard looked for and why four skipped tests were
+            # briefly reported as passes.
+            if grep -qE '^Result: NOTESTS|skipped: ' "$out"; then
+                T_SKIP+=("$name"); printf '  SKIP     %-32s %s\n' "$name" \
+                    "$(grep -m1 -oE 'skipped: .*' "$out" | cut -c1-52)"
+            else
+                T_PASS+=("$name"); printf '  PASS     %s\n' "$name"
+            fi ;;
+        124) T_TIMEOUT+=("$name"); printf '  TIMEOUT  %-32s killed after %ss\n' "$name" "${PGRUST_TAP_PER_TEST:-600}" ;;
+        255) T_BAIL+=("$name");    printf '  BAIL     %-32s %s\n' "$name" \
+                 "$(grep -m1 -oE 'Further testing stopped:.*' "$out" | cut -c1-56)" ;;
+        *)   T_FAIL+=("$name");    printf '  FAIL     %-32s exit %-4s %s\n' "$name" "$rc" \
+                 "$(grep -m1 -oE 'poll_query_until timed out.*' "$out" | cut -c1-44)" ;;
+    esac
+    { echo "########## $name (exit $rc)"; cat "$out"; } >> "$WORK/recovery-full.log"
+    rm -f "$out"
+done
 
 echo
-if [ "$STATUS" -eq 124 ]; then
-    echo "==> prove TIMED OUT after ${PGRUST_TAP_TIMEOUT:-1800}s (raise PGRUST_TAP_TIMEOUT)."
-    echo "    A timeout is a FAILURE, not an inconclusive run: upstream's own"
-    echo "    pump_until waits are 180s each, so a test that outruns this budget"
-    echo "    is one where pgrust never produced the signal the test waits for."
-fi
-echo "==> prove exit status: $STATUS"
+echo "==> recovery TAP: ${#T_PASS[@]} passed, ${#T_FAIL[@]} failed, ${#T_SKIP[@]} skipped, ${#T_BAIL[@]} bailed, ${#T_TIMEOUT[@]} timed out"
+echo "    plus ${#NA[@]} excluded as architecturally inapplicable"
+for pair in "FAIL:${T_FAIL[*]-}" "SKIP:${T_SKIP[*]-}" "BAIL:${T_BAIL[*]-}" "TIMEOUT:${T_TIMEOUT[*]-}"; do
+    [ -n "${pair#*:}" ] && printf '    %-8s %s\n' "${pair%%:*}" "${pair#*:}"
+done
+STATUS=$([ $(( ${#T_FAIL[@]} + ${#T_BAIL[@]} + ${#T_TIMEOUT[@]} )) -eq 0 ] && echo 0 || echo 1)
 echo "==> logs + node data kept under $WORK (PG_TEST_NOCLEAN=1)"
-echo "==> backend launches recorded: $(docker exec "$CONTAINER" wc -l < "$WITNESS" 2>/dev/null || echo 0)"
+echo "==> backend launches recorded: $(docker exec "$CONTAINER" sh -c "wc -l < $WITNESS" 2>/dev/null || echo 0)"
 exit "$STATUS"

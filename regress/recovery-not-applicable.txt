@@ -1,0 +1,38 @@
+# recovery-not-applicable.txt — recovery TAP tests that cannot run against
+# pgrust for ARCHITECTURAL reasons, with the coverage each one costs us.
+#
+# Companion: regress/run-recovery-tap-docker.sh. Precedent: the contrib
+# runner's SKIP classification, whose ledger says recording an unported module
+# as a known failure "would misrepresent an absent feature as a bug". These
+# are the same shape and are kept OUT of the failure ledger for the same
+# reason -- but they are printed on every run and listed as untested in
+# regress/contract.json, because an absent test is not a passing one.
+#
+# THE MECHANISM, once, since every entry shares it. pgrust is
+# thread-per-backend: there are no per-backend processes, so it allocates a
+# synthetic pid space (pg_stat_activity reports 1000, 1001, 1029, ...;
+# /proc/<pid> exists for none of them). Every test below takes a pid out of
+# SQL -- pg_backend_pid(), pg_stat_activity, pg_stat_replication -- and
+# signals it from outside the server with `pg_ctl kill` or Perl's `kill`.
+# Those calls reach the OS, which has no such process, and return ESRCH.
+# Confirmed empirically on 013: `kill -QUIT $(pg_backend_pid())` exits 1 and
+# the three assertions that follow it fail mechanically, having never reached
+# their subject.
+#
+# WHY NOT ADAPT THEM. pgrust cannot make a synthetic pid signal-addressable;
+# there is no process to receive the signal. Rewriting them to use
+# pg_terminate_backend would substitute a graceful, catchable termination for
+# an uncatchable SIGKILL, and the test would then pass while no longer testing
+# crash isolation at all -- a green run of the wrong thing, which is the exact
+# failure mode this tier was built to rule out.
+#
+# WHAT WOULD CHANGE THIS. Only a process boundary per backend. If pgrust ever
+# gains one, delete this file and let the ledger take over.
+#
+# Format: <test file> <TAB> <what the coverage loss is>
+
+013_crash_restart.pl	Backend crash isolation: SIGQUIT then SIGKILL to one backend, expecting sibling sessions to be terminated and the cluster to restart and stay usable. Partially recovered by regress/run-crash-restart-docker.sh (lane B5), which crashes the WHOLE server and verifies committed data survives and uncommitted does not -- that covers the outcome, not the isolation.
+017_shm.pl	Postmaster/shared-memory interaction when a backend is SIGQUIT'd while holding the shm segment, including the ordering of SIGKILL delivery against a slow child exit. No substitute lane.
+019_replslot_limit.pl	Replication slot size limits with the walsender and walreceiver SIGSTOPped mid-stream, so WAL accumulates past max_slot_wal_keep_size. The stop/continue pattern needs real processes. No substitute lane.
+022_crash_temp_files.pl	Temp-file cleanup after a backend is SIGKILLed mid-query, both for a normal backend and for one holding an orphaned temp file. No substitute lane; this is a genuine gap in what we can say about disk reclamation after a crash.
+041_checkpoint_at_promote.pl	Checkpoint behaviour when a standby is promoted while a backend is SIGKILLed, forcing all backends to restart during promotion. No substitute lane.

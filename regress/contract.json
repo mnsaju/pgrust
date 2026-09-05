@@ -10,6 +10,11 @@
       "title": "archive_library accepts a library it cannot load",
       "detail": "Setting archive_library to an unloadable name is accepted without complaint, so archiving silently never happens. This is the mechanism behind the contrib ledger's basic_archive entry. Until it is closed, archive-based backup cannot be claimed safe to configure by hand.",
       "evidence": "regress/refusal-known-failures.allow"
+    },
+    {
+      "title": "pg_ctl restart fails unless the stack limit is raised in the environment",
+      "detail": "pgrust needs a large stack (it runs with max_stack_depth=60000 and ulimit -s 65520). The Docker entrypoint raises the limit itself, so the normal container start works. But pgrust writes its real binary path into postmaster.opts, so `pg_ctl restart` re-execs it directly, inherits whatever stack limit the shell had, and dies with 'invalid value for parameter max_stack_depth ... must not exceed 7680kB'. Any operator restarting via pg_ctl rather than the entrypoint hits this. Set the limit at the container or service level (docker --ulimit stack=67092480, or LimitSTACK= in a systemd unit).",
+      "evidence": "regress/run-recovery-tap-docker.sh"
     }
   ],
   "absent": [
