@@ -1,0 +1,60 @@
+#!/bin/sh
+# The `postgres` that PostgreSQL::Test::Cluster ends up starting.
+#
+# WHY THIS EXISTS. Cluster.pm starts servers with a bare `pg_ctl` (Cluster.pm
+# :1142), and pg_ctl locates the backend with find_other_exec(argv0,
+# "postgres", ...) -- relative to ITS OWN directory, not $PATH. In the pgrust
+# image the bare name `postgres` in /usr/lib/postgresql/18/bin is the *C*
+# backend (the pgrust server is /usr/local/bin/pgrust-postgres, renamed so
+# initdb's bootstrap keeps working). So an unmodified TAP run tests C
+# PostgreSQL and reports a GREEN result -- the most expensive failure mode
+# available to this project.
+#
+# The fix is a directory containing exactly TWO entries -- a copy of pg_ctl and
+# this script named `postgres` -- placed FIRST on $PATH. Then:
+#   pg_ctl -> the shim copy -> finds this script beside it       -> pgrust
+#   initdb -> the real dir  -> finds the C backend beside itself -> C
+# which is what we want, because pgrust has no bootstrap (--boot) mode and
+# initdb must keep using the C backend. Adding any other binary to the shim
+# directory breaks that split.
+#
+# THE VERSION LIE, and why it is confined here. find_other_exec runs
+# `postgres -V` and does an exact strcmp against pg_ctl's own
+# PG_BACKEND_VERSIONSTR (src/common/exec.c:335). Debian builds carry an extra
+# version suffix, so pg_ctl expects
+#     postgres (PostgreSQL) 18.3 (Debian 18.3-1.pgdg12+1)
+# whereas pgrust prints
+#     postgres (PostgreSQL) 18.3
+# and pg_ctl refuses to launch it. This script answers -V with the string
+# pg_ctl demands. That is a deliberate untruth, so it is bounded three ways:
+# it lives only in the test shim, it is derived from the C pg_ctl actually
+# installed (never hardcoded), and every run asserts through SQL that the
+# server which came up really is pgrust (see PGRUST_TAP_WITNESS below and the
+# version() guard in run-recovery-tap-docker.sh).
+set -e
+
+PGRUST_BIN="${PGRUST_BIN:-/usr/local/bin/pgrust-postgres}"
+
+case "$1" in
+    -V|--version)
+        # Mirror the co-installed pg_ctl exactly. NOT `exec ... | sed`: exec in
+        # a pipeline only replaces the subshell, so the script would fall
+        # through and launch the real backend with --version.
+        /usr/lib/postgresql/18/bin/pg_ctl --version | sed 's/^pg_ctl /postgres /'
+        exit 0
+        ;;
+esac
+
+# Witness: every real backend launch appends here, so a run that never started
+# pgrust cannot look the same as a run that did.
+if [ -n "${PGRUST_TAP_WITNESS:-}" ]; then
+    echo "pgrust-shim exec $*" >> "$PGRUST_TAP_WITNESS" 2>/dev/null || true
+fi
+
+# pgrust's per-statement frames are large; the C stack default refuses to boot.
+# Same values docker/entrypoint.sh applies to the user-facing server.
+ulimit -s 65520 2>/dev/null || true
+RUST_MIN_STACK="${RUST_MIN_STACK:-33554432}"
+export RUST_MIN_STACK
+
+exec "$PGRUST_BIN" "$@" -c io_method=sync -c max_stack_depth=60000

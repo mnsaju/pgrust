@@ -74,9 +74,16 @@ docker run -d --name "$CONTAINER" \
     -v "$WORK/isolation:/isolation-input:ro" \
     "$IMAGE" postgres -c max_prepared_transactions=10 >/dev/null
 
+# Gate on a TCP connection, not on the unix socket. The postgres entrypoint
+# runs initdb against a temporary server started with listen_addresses='' and
+# then shuts it down before starting the real one; `pg_isready` over the socket
+# answers YES to that temporary server, so the script raced ahead and the next
+# psql got "FATAL: the database system is shutting down". A TCP probe cannot
+# see the init server at all, which is why the contrib and plpgsql runners --
+# both of which connect over the network -- never hit this.
 ready=0
-for _ in $(seq 1 30); do
-    if docker exec "$CONTAINER" pg_isready -U postgres >/dev/null 2>&1; then
+for _ in $(seq 1 90); do
+    if docker exec "$CONTAINER" psql -U postgres -h localhost -c 'SELECT 1' >/dev/null 2>&1; then
         ready=1
         break
     fi
@@ -148,7 +155,18 @@ if [ -f "$WORK/isolation-output/regression.diffs" ]; then
     echo "==> raw isolation diffs: $WORK/isolation-output/regression.diffs"
 fi
 
-echo "==> Next: scripts/rowsort_compare.py to reclassify diffs against -- pgrust:rowsort/-- pgrust:stable-tie annotations"
+# Pass --schedule-file: it is the only input that tells the comparator what this
+# run was asked to execute, so a test that died before writing any output is an
+# error rather than a silent absence.
+cat <<HINT
+==> Next: reclassify the raw diffs against the overlay's annotations and ratchet:
+    python3 scripts/rowsort_compare.py \\
+        --sql-dir regress/overlay/sql \\
+        --actual-dir $WORK/regress-output/results \\
+        --expected-dir $WORK/regress/expected \\
+        --schedule-file $WORK/regress/schedule.run \\
+        --allow-file regress/known-failures.allow
+HINT
 
 # Exit status 2 from either driver means "could not run at all" (a harness
 # problem, e.g. the server never came up correctly) -- that's a real script
