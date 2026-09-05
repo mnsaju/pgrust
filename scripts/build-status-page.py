@@ -171,6 +171,53 @@ def main() -> int:
         missing("regress-work/rowsort-report.json was not produced")
     w('</section>')
 
+    # ---- per-test detail -------------------------------------------------
+    # Counts alone invite the wrong question ("12 out of 218?"). The full roll
+    # is 230 scheduled tests; showing every one with its verdict makes the
+    # arithmetic self-evident and lets a reader check any individual claim.
+    section("Every scheduled test",
+            "All 230, failures first. \u201cLedger\u201d says whether a failure is "
+            "already recorded as known: NEW breaks the build, and so does a "
+            "ledger entry whose test has started passing.")
+    if core:
+        allowed = set(parse_ledger(ROOT / "regress" / "known-failures.allow")[0])
+        files = core.get("files", [])
+        rank = {"fail": 0, "error": 1, "rowsort-relaxed": 2, "exact": 3}
+        rows = sorted(files, key=lambda f: (rank.get(f["status"], 9), f["name"]))
+        w('<p><input id="q" type="search" placeholder="Filter tests\u2026" '
+          'oninput="filterTests()" autocomplete="off"></p>')
+        w('<table id="tests"><thead><tr><th>Test</th><th>Result</th>'
+          '<th>Ledger</th><th>Compared as</th><th>Baseline</th>'
+          '</tr></thead><tbody>')
+        for f in rows:
+            st = f["status"]
+            bad_ = st in ("fail", "error")
+            cls = "fail" if bad_ else "pass"
+            shown = "FAIL" if st == "fail" else ("ERROR" if st == "error" else "pass")
+            if not bad_:
+                led = ('<span class="stale">stale entry</span>'
+                       if f["name"] in allowed else "")
+            else:
+                led = ("known" if f["name"] in allowed
+                       else '<span class="new">NEW</span>')
+            how = "overlay" if f.get("overlaid") else "verbatim"
+            w(f'<tr><td><code>{esc(f["name"])}</code></td>'
+              f'<td class="{cls}">{shown}</td><td>{led}</td>'
+              f'<td class="mut">{how}</td>'
+              f'<td class="mut"><code>{esc(f.get("expected_file") or "")}</code></td></tr>')
+        w('</tbody></table>')
+        w('<script>function filterTests(){var v=document.getElementById("q")'
+          '.value.toLowerCase(),r=document.querySelectorAll("#tests tbody tr");'
+          'for(var i=0;i<r.length;i++){r[i].hidden=v&&'
+          'r[i].textContent.toLowerCase().indexOf(v)<0;}}</script>')
+        npass = sum(1 for f in files if f["status"] in ("exact", "rowsort-relaxed"))
+        nbad = sum(1 for f in files if f["status"] in ("fail", "error"))
+        w(f'<p class="sub">{npass} passing + {nbad} failing = {len(files)} '
+          f'scheduled tests.</p>')
+    else:
+        missing("regress-work/rowsort-report.json was not produced")
+    w('</section>')
+
     # ---- ledgers ---------------------------------------------------------
     section("Known failures", "Every entry is a defect this build has, "
             "recorded with its mechanism. A ledger can only shrink: an "
@@ -248,6 +295,13 @@ td.num{color:var(--mut);text-align:right;font-variant-numeric:tabular-nums}
 padding:.6rem .9rem;min-width:6rem}
 .stat .n{display:block;font-size:1.5rem;font-weight:650;font-variant-numeric:tabular-nums}
 .stat .l{display:block;color:var(--mut);font-size:.78rem}
+.mut{color:var(--mut)}
+.stale{color:var(--warn);font-weight:600}
+.new{color:var(--fail);font-weight:700}
+#q{width:100%;max-width:22rem;padding:.45rem .6rem;border-radius:.4rem;
+border:1px solid var(--line);background:var(--card);color:var(--fg);font:inherit}
+#tests{font-size:.88rem}
+#tests tbody tr:hover{background:var(--card)}
 .chips code{display:inline-block;margin:.12rem .18rem .12rem 0}
 code{background:var(--card);border:1px solid var(--line);border-radius:.3rem;
 padding:.08rem .32rem;font:.86em ui-monospace,SFMono-Regular,Menlo,monospace}
