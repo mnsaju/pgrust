@@ -26,7 +26,12 @@
 # pg_stat_statements pass in full and test_decoding's entry is re-annotated.
 # pgcrypto's newly-reachable pgp-armor failure was fixed the same day rather
 # than ledgered (armor() dropped its header arrays); it passes 24/24.
-# Sweep: 34 passed, 4 failed, 12 skipped.
+#
+# 2026-09-05: citext removed. create_index_acl failed because ComputeIndexAttrs
+# resolved the COLLATE, opclass and exclusion-operator names as the table owner
+# instead of switching back to the original DDL user, so a qualified name
+# needed schema USAGE the owner does not have. Sweep: 35 passed, 3 failed,
+# 12 skipped.
 #
 # NOT in this file, deliberately: the 12 skipped modules. pgrust has no
 # extension ABI (crates/backend/utils/fmgr/dfmgr: "probin is a registry KEY,
@@ -36,10 +41,6 @@
 
 # --- genuine pgrust defects -------------------------------------------------
 
-# citext/create_index_acl: "ERROR: permission denied for schema s" where
-# upstream succeeds. citext's own tests pass; this is the ACL path. Same
-# territory as the core suite's privileges/rowsecurity failures.
-citext
 
 # postgres_fdw: "use_remote_estimate is not yet supported (phase 3)" — an
 # explicitly unported feature, self-reported by the code. Largest diff in the

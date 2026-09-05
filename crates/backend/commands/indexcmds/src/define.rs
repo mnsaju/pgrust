@@ -183,6 +183,8 @@ pub fn CheckIndexCompatible<'mcx>(
         amname,
         amcanorder,
         None,
+        InvalidOid,
+        0,
     )?;
     rel.close(types_rel::AccessShareLock)?;
 
@@ -728,6 +730,8 @@ pub fn DefineIndex<'mcx>(
         amname,
         amcanorder,
         Some(&mut root_save_nestlevel),
+        root_save_userid,
+        root_save_sec_context,
     )?;
 
     if stmt.primary {
@@ -1482,6 +1486,13 @@ fn set_pg_index_invalid<'mcx>(mcx: Mcx<'mcx>, indexRelationId: Oid) -> PgResult<
 }
 
 #[allow(clippy::too_many_arguments)]
+// C guards each switch with `if (OidIsValid(ddl_userid))`; the guard's Drop
+// restores the table-owner userid, matching C's explicit
+// SetUserIdAndSecContext(save_userid, save_sec_context) on the way out.
+fn ddl_sec_guard(ddl_userid: Oid, ddl_sec_context: i32) -> Option<miscinit::SecContextGuard> {
+    (ddl_userid != InvalidOid).then(|| miscinit::SecContextGuard::set(ddl_userid, ddl_sec_context))
+}
+
 fn ComputeIndexAttrs<'mcx>(
     mcx: Mcx<'mcx>,
     rel: &Relation<'mcx>,
@@ -1499,6 +1510,13 @@ fn ComputeIndexAttrs<'mcx>(
     amname: &str,
     amcanorder: bool,
     mut ddl_save_nestlevel: Option<&mut i32>,
+    // C's ddl_userid / ddl_sec_context (indexcmds.c ComputeIndexAttrs). The
+    // caller has already switched to the table owner under
+    // SECURITY_RESTRICTED_OPERATION; three lookups below must run as the
+    // ORIGINAL user because they perform ACL checks of their own. InvalidOid
+    // means "no switching", which is what CheckIndexCompatible passes.
+    ddl_userid: Oid,
+    ddl_sec_context: i32,
 ) -> PgResult<()> {
     let nkeycols = indexInfo.ii_NumIndexKeyAttrs as usize;
     debug_assert!(exclusionOpNames.is_nil() || exclusionOpNames.len() == nkeycols);
@@ -1594,7 +1612,12 @@ fn ComputeIndexAttrs<'mcx>(
             if let Some(lvl) = ddl_save_nestlevel.as_deref_mut() {
                 guc::AtEOXact_GUC(false, *lvl);
             }
-            let resolved = catalog_namespace::get_collation_oid_list(&attribute.collation, false);
+            // Safe despite the elevated userid because collations contain no
+            // expressions, opaque or otherwise (indexcmds.c:2185-2192).
+            let resolved = {
+                let _sec = ddl_sec_guard(ddl_userid, ddl_sec_context);
+                catalog_namespace::get_collation_oid_list(&attribute.collation, false)
+            };
             if let Some(lvl) = ddl_save_nestlevel.as_deref_mut() {
                 *lvl = guc::NewGUCNestLevel();
                 guc::RestrictSearchPath()?;
@@ -1629,10 +1652,15 @@ fn ComputeIndexAttrs<'mcx>(
         if let Some(lvl) = ddl_save_nestlevel.as_deref_mut() {
             guc::AtEOXact_GUC(false, *lvl);
         }
-        let resolved = if !attribute.opclass.is_nil() {
-            ResolveOpClass(&attribute.opclass, atttype, amname, accessMethodId)
-        } else {
-            GetDefaultOpClass(atttype, accessMethodId)
+        // Safe despite opclasses containing opaque expressions (functions),
+        // because only superusers can define opclasses (indexcmds.c:2230-2239).
+        let resolved = {
+            let _sec = ddl_sec_guard(ddl_userid, ddl_sec_context);
+            if !attribute.opclass.is_nil() {
+                ResolveOpClass(&attribute.opclass, atttype, amname, accessMethodId)
+            } else {
+                GetDefaultOpClass(atttype, accessMethodId)
+            }
         };
         if let Some(lvl) = ddl_save_nestlevel.as_deref_mut() {
             *lvl = guc::NewGUCNestLevel();
@@ -1660,7 +1688,21 @@ fn ComputeIndexAttrs<'mcx>(
         if let Some(opnode) = excl_iter.next() {
             let opname = opnode.as_list().expect("exclusion op name list");
             let pstate = parser_small1::make_parsestate(mcx, None);
-            let opid = parse_oper::compatible_oper_opid(&pstate, opname, atttype, atttype, false)?;
+            // compatible_oper_opid boils down to oper() and IsBinaryCoercible();
+            // C runs it as the DDL user for the same ACL reason, under the same
+            // nest-level dance (indexcmds.c:2264-2285).
+            if let Some(lvl) = ddl_save_nestlevel.as_deref_mut() {
+                guc::AtEOXact_GUC(false, *lvl);
+            }
+            let resolved_op = {
+                let _sec = ddl_sec_guard(ddl_userid, ddl_sec_context);
+                parse_oper::compatible_oper_opid(&pstate, opname, atttype, atttype, false)
+            };
+            if let Some(lvl) = ddl_save_nestlevel.as_deref_mut() {
+                *lvl = guc::NewGUCNestLevel();
+                guc::RestrictSearchPath()?;
+            }
+            let opid = resolved_op?;
             if lsyscache::get_commutator(opid)? != opid {
                 return Err(Box::new(
                     (*err(
