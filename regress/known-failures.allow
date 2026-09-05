@@ -7,63 +7,49 @@
 # is reported stale and also breaks the build, so this file can only shrink.
 # Removing an entry is the unit of progress.
 #
-# SEED: 2026-09-04, first execution of the vendored suite (submodule pinned to
-# REL_18_3 = 62d6c7d3df6287f1bd83199c1a746e50d31571a0) against a pgrust server
-# built from main @ 489c1fc542. pg_regress raw: 157/230 "failed", but 136 of
-# those were the overlay's own -- pgrust:rowsort marker echo, which this
-# comparator strips.
+# RESEEDED: 2026-09-05 (second time that day) against main @ ead804de2f, built
+# with the PGDG oracle pinned to 18.3. 230 tests checked, 218 exact, 12 fail,
+# 0 error; isolation 131/131. Reproduced independently on a GitHub runner
+# (run 33965983742) and locally.
 #
-# RESEEDED: 2026-09-05 against main @ d3eeb7edb3, after three comparator
-# defects were fixed. 230 tests checked, 210 exact, 20 fail, 0 error;
-# isolation 131/131. The seed's "17 fail + 1 error" was wrong in three ways,
-# and the corrections are the entries below:
+# WHY IT SHRANK 20 -> 12, AND THE MISTAKE THAT PUT IT AT 20. The earlier
+# reseed that day was measured against an image still carrying PGDG 18.6,
+# because the ledger was rewritten BEFORE the oracle was pinned to 18.3 and
+# the suite was never re-run afterwards. Eight entries were therefore harness
+# artefacts, not defects:
 #
-#   * The comparator's test set was the overlay directory, so only 154 of the
-#     230 scheduled tests were classified at all. create_index, tidscan,
-#     incremental_sort and memoize were failing the whole time behind a green
-#     ratchet. They are now listed.
-#   * compression was never failing. pg_regress accepts expected/<name>.out OR
-#     any of expected/<name>_0..9.out; compression matches compression_1.out
-#     (the no-LZ4 baseline) exactly. Comparing only against compression.out
-#     produced a 181-line diff where the right baseline gives none. Removed.
-#   * numeric_big never ran. It is overlaid but absent from parallel_schedule
-#     (upstream runs it only via EXTRA_TESTS), and "produced no output at all"
-#     was the comparator describing a test nobody asked to execute. Removed;
-#     it is now reported as NOT CHECKED rather than scored.
+#     alter_table  copy  copy2  copyselect
+#     generated_stored  generated_virtual  privileges  rowsecurity
 #
-# Clusters, for whoever picks these up:
-#   generated columns   — output stops early (~900 deleted lines, 0 added):
-#                         reads as an unported feature or an aborting error,
-#                         not a wrong answer.
-#   COPY                — copy/copy2/copyselect.
-#   partitioning/planner— mixed +/-, consistent with plan-shape divergence from
-#                         the redesigned executor. Whoever picks these up will
-#                         need to write the adjudication from scratch against
-#                         main: is the differing plan shape permitted by the
-#                         SQL semantics, or does a row actually change?
-#   parallel plan shape — create_index, tidscan, incremental_sort, memoize.
-#                         One mechanism: pgrust plans these queries in parallel
-#                         (Gather / Workers Planned: 1 / Parallel Seq Scan)
-#                         where C's expected output is serial. Every changed
-#                         line in all four diffs is inside an EXPLAIN block and
-#                         no result row differs, so this is plan shape, not a
-#                         wrong answer. Adjudicate against main: EXPLAIN output
-#                         is not part of the SQL contract, so the question is
-#                         whether any result row differs, and none does here.
-#   security            — privileges, rowsecurity. NOT the same defect as
-#                         contrib/citext's create_index_acl (fixed d3eeb7edb3):
-#                         citext's test confirms DefineIndex uses the ORIGINAL
-#                         userid where necessary, privileges' regress_sro_user
-#                         tests look for the opposite, that it uses the TABLE
-#                         OWNER userid where necessary. Two items, not one.
+# The pgrust binary is byte-identical between the two images
+# (sha256 030758105b70...), so nothing about pgrust changed; only the C
+# tooling did. For copyselect the mechanism is visible in the diff: under
+# psql 18.6 a failing `COPY (SELECT ...) FROM STDIN` leaves the inline data
+# block unconsumed, psql emits "invalid command \.", then feeds the data
+# lines back as SQL and the rest of the file desynchronises -- 63 lines
+# produced against 161 expected. Under psql 18.3, the release pgrust targets,
+# the same server handles it correctly. The COPY entries and the two
+# generated-column entries share that "output stops early" signature;
+# alter_table, privileges and rowsecurity were not individually characterised
+# before they started passing.
+#
+# That divergence is worth keeping rather than discarding: it is a
+# forward-compatibility signal against PostgreSQL 18.6, and belongs to
+# UPSTREAM.md's 18.4/18.6 triage.
+#
+# The remaining 12 are ONE class. Every one is plan shape: pgrust chooses a
+# different plan (frequently a parallel one -- Gather / Workers Planned: 1 /
+# Parallel Seq Scan -- where C's expected output is serial) and every changed
+# line sits inside an EXPLAIN block. No result row differs in any of them.
+# EXPLAIN output is not part of the SQL contract, so closing these means
+# deciding, per test, whether the shape difference is permitted; no
+# adjudication of this territory exists on main yet and one has to be written.
+#
+# NOT an entry: numeric_big. It is overlaid but absent from parallel_schedule
+# (upstream runs it only via EXTRA_TESTS), so it never executes and the
+# comparator reports it as unchecked rather than scoring it.
 
-alter_table
-copy
-copy2
-copyselect
 create_index
-generated_stored
-generated_virtual
 incremental_sort
 join
 limit
@@ -72,8 +58,6 @@ partition_aggregate
 partition_join
 partition_prune
 portals
-privileges
-rowsecurity
 select_distinct
 subselect
 tidscan
