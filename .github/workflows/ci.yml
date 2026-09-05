@@ -71,8 +71,22 @@ jobs:
         with:
           submodules: recursive
 
+      # The base-image digests live in the Dockerfile; read them back out
+      # rather than repeating them here, so there is one place to bump. They
+      # are passed in so the build manifest baked into the image records what
+      # the binary was actually built from.
       - name: Build pgrust image
-        run: docker build -t pgrust:regress .
+        run: |
+          RUST_D=$(sed -n 's|^FROM rust:1-bookworm@\(sha256:[0-9a-f]*\).*|\1|p' Dockerfile | head -1)
+          DEB_D=$(sed -n 's|^FROM debian:bookworm-slim@\(sha256:[0-9a-f]*\).*|\1|p' Dockerfile | head -1)
+          test -n "$RUST_D" && test -n "$DEB_D" \
+            || { echo "base images are not pinned by digest"; exit 1; }
+          docker build \
+            --build-arg "RUST_BASE_DIGEST=$RUST_D" \
+            --build-arg "DEBIAN_BASE_DIGEST=$DEB_D" \
+            -t pgrust:regress .
+          docker run --rm --entrypoint cat pgrust:regress \
+            /usr/local/share/pgrust/build-manifest.txt
 
       - name: Run regression + isolation suites
         run: regress/run-regress-docker.sh
@@ -122,6 +136,21 @@ jobs:
         run: |
           regress/run-contrib-regress-docker.sh \
             --allow-file regress/contrib-known-failures.allow
+
+      # Gate B: the ecosystem-compatibility lanes. Each drives the REAL C tool
+      # against pgrust -- pg_dump, pg_basebackup, pgBackRest, pgBouncer, and C
+      # PostgreSQL 18.3 itself booting pgrust's data directory -- because only
+      # the genuine binary answers the compatibility question. Together they
+      # are the evidence behind any claim that data put into a pgrust image can
+      # be backed up, survived a crash with, and got back out again.
+      #
+      # Runs every lane before gating, so one failure never hides the six
+      # behind it. Reuses the image built above; the lanes take it from
+      # PGRUST_IMAGE and pass it down to the driver images they derive.
+      - name: Run ecosystem compatibility lanes (Gate B)
+        env:
+          PGRUST_IMAGE: pgrust:regress
+        run: regress/run-compat-lanes.sh
 
       - name: Upload regression artifacts
         if: always()
