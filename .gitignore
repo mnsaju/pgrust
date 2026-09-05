@@ -5,3 +5,6 @@ fleet-results/
 **/target-*/
 scripts/__pycache__/
 /regress-work/
+
+# Generated status page (scripts/build-status-page.py).
+/site/

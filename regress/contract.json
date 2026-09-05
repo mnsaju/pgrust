@@ -1,0 +1,29 @@
+{
+  "_comment": "The parts of the compatibility contract that cannot be derived from test artifacts. Everything else on the status page is generated from CI output and the ratchet ledgers, so it cannot drift; these entries are hand-maintained and should be reviewed whenever a gate is added or a divergence closed.",
+  "divergences": [
+    {
+      "title": "pg_backend_pid() is not an OS process id",
+      "detail": "pgrust is thread-per-backend, so there are no per-backend processes. It allocates a synthetic pid space (pg_stat_activity reports 1000, 1001, 1029, ...; /proc/<pid> exists for none of them). Anything that signals that pid from outside the server fails, including parts of upstream's own TAP suite. pg_cancel_backend and pg_terminate_backend work normally.",
+      "evidence": "regress/run-crash-restart-docker.sh"
+    },
+    {
+      "title": "archive_library accepts a library it cannot load",
+      "detail": "Setting archive_library to an unloadable name is accepted without complaint, so archiving silently never happens. This is the mechanism behind the contrib ledger's basic_archive entry. Until it is closed, archive-based backup cannot be claimed safe to configure by hand.",
+      "evidence": "regress/refusal-known-failures.allow"
+    }
+  ],
+  "absent": [
+    "No stable extension ABI; existing PostgreSQL extensions do not load.",
+    "PL/Python, PL/Perl and PL/Tcl are not ported. PL/pgSQL is.",
+    "No in-place major-version upgrade. A wrong-version data directory is refused.",
+    "No automated failover or switchover.",
+    "The JIT targets Graviton4; other platforms run but without comparable performance."
+  ],
+  "untested": [
+    "src/test/recovery (47 TAP tests) - harness exists and its preflight is gated, but the suite is not yet seeded into a ledger",
+    "src/test/subscription (36 TAP tests) - logical replication end to end",
+    "src/bin/*/t (89 TAP tests) - upstream's own tests for the client tools",
+    "authentication, ssl, ldap, kerberos (13 TAP tests)",
+    "icu, locale, mb, postmaster, modules trees; ECPG"
+  ]
+}

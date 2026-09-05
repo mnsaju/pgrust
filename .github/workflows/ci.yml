@@ -7,7 +7,19 @@ on:
     branches: [main]
   # Manual trigger: the regression tiers are expensive and occasionally need
   # a re-run against an unchanged tree (flaky Docker pulls, ledger triage).
+  # The inputs exist because an all-or-nothing re-run is the wrong tool for
+  # the common case -- chasing ONE lane -- and a solo operator will not sit
+  # through the core suite to get to it.
   workflow_dispatch:
+    inputs:
+      only_compat:
+        description: "Skip the core/plpgsql/contrib tiers; run only the Gate B lanes"
+        type: boolean
+        default: false
+      lanes:
+        description: "Gate B lanes to run, space separated (e.g. 'B4 B5'); empty means all"
+        type: string
+        default: ""
 
 # Cancel superseded runs on the same PR/branch.
 concurrency:
@@ -85,10 +97,13 @@ jobs:
             --build-arg "RUST_BASE_DIGEST=$RUST_D" \
             --build-arg "DEBIAN_BASE_DIGEST=$DEB_D" \
             -t pgrust:regress .
+          mkdir -p regress-work
           docker run --rm --entrypoint cat pgrust:regress \
-            /usr/local/share/pgrust/build-manifest.txt
+            /usr/local/share/pgrust/build-manifest.txt \
+            | tee regress-work/build-manifest.txt
 
       - name: Run regression + isolation suites
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.only_compat }}
         run: regress/run-regress-docker.sh
 
       # run-regress-docker.sh deliberately exits 0 on "some tests failed"
@@ -106,6 +121,7 @@ jobs:
       # failed nor mentioned, which is how four real failures sat behind a
       # green ratchet until 5 Sep.
       - name: Gate regression results (rowsort comparator + ratchet)
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.only_compat }}
         run: |
           python3 scripts/rowsort_compare.py \
             --sql-dir regress/overlay/sql \
@@ -124,6 +140,7 @@ jobs:
       # pgrust server over a docker network, so a driver fault cannot be
       # mistaken for a server fault. Gated by its own ratchet ledger.
       - name: Run plpgsql supplementary suites (gated)
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.only_compat }}
         run: |
           regress/run-plpgsql-regress-docker.sh \
             --allow-file regress/plpgsql-known-failures.allow
@@ -133,6 +150,7 @@ jobs:
       # ledger. Modules pgrust does not port are classified SKIP by the runner
       # (no extension ABI exists to load them), never counted as failures.
       - name: Run contrib regression suites (gated)
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.only_compat }}
         run: |
           regress/run-contrib-regress-docker.sh \
             --allow-file regress/contrib-known-failures.allow
@@ -150,7 +168,22 @@ jobs:
       - name: Run ecosystem compatibility lanes (Gate B)
         env:
           PGRUST_IMAGE: pgrust:regress
-        run: regress/run-compat-lanes.sh
+        run: regress/run-compat-lanes.sh ${{ inputs.lanes }}
+
+      # The status page is PLAN-production-readiness.md's C2 made executable:
+      # the compatibility contract generated from CI's own artifacts and the
+      # ratchet ledgers, so it cannot drift from what the gates actually prove.
+      # Built even when a gate failed -- a status page that only exists on a
+      # green run is a status page that never shows a problem.
+      - name: Build status page
+        if: always()
+        run: python3 scripts/build-status-page.py --out site
+
+      - name: Upload status page
+        if: always()
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
 
       - name: Upload regression artifacts
         if: always()
@@ -159,8 +192,30 @@ jobs:
           name: regress-results
           path: |
             regress-work/rowsort-report.json
+            regress-work/compat-lanes.json
+            regress-work/build-manifest.txt
             regress-work/regress-output/regression.diffs
             regress-work/contrib/*.log
             regress-work/plpgsql/plpgsql.log
             regress-work/plpgsql/output/regression.diffs
           if-no-files-found: ignore
+
+  # Publishing is its own job so a failed gate still gets a page: `needs` plus
+  # `if: always()` means the page reflects whatever the run actually produced,
+  # red included. Only main publishes -- a PR must not be able to overwrite the
+  # published contract.
+  pages:
+    name: Publish status page
+    needs: regress
+    if: always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - id: deploy
+        uses: actions/deploy-pages@v4

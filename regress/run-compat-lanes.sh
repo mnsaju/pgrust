@@ -45,6 +45,9 @@ selected() {
     return 1
 }
 
+JSON_OUT="${COMPAT_JSON:-regress-work/compat-lanes.json}"
+mkdir -p "$(dirname "$JSON_OUT")"
+
 declare -a RESULTS=()
 fails=0; ran=0
 for spec in "${LANES[@]}"; do
@@ -72,7 +75,27 @@ for r in "${RESULTS[@]}"; do
     IFS='|' read -r st id desc dur <<<"$r"
     printf '  %-4s %-4s %-38s %s\n' "$st" "$id" "$desc" "$dur"
 done
+# Machine-readable, for scripts/build-status-page.py. Written even when lanes
+# fail -- a status page that only exists on a green run is a status page that
+# never shows a problem.
+{
+    printf '{\n  "generated": "%s",\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf '  "commit": "%s",\n' "$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+    printf '  "image": "%s",\n' "$PGRUST_IMAGE"
+    printf '  "ran": %d,\n  "failed": %d,\n  "lanes": [\n' "$ran" "$fails"
+    first=1
+    for r in "${RESULTS[@]}"; do
+        IFS='|' read -r st id desc dur <<<"$r"
+        [ "$first" -eq 1 ] || printf ',\n'
+        first=0
+        printf '    {"id": "%s", "status": "%s", "description": "%s", "duration": "%s"}' \
+            "$id" "$st" "$desc" "$dur"
+    done
+    printf '\n  ]\n}\n'
+} > "$JSON_OUT"
+
 echo
 echo "  $ran lanes run, $fails failed"
+echo "  machine-readable: $JSON_OUT"
 [ "$fails" -eq 0 ] || echo "  A failing lane means an ecosystem tool no longer works against pgrust."
 exit $([ "$fails" -eq 0 ] && echo 0 || echo 1)
