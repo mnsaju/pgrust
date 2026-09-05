@@ -41,6 +41,8 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=regress/lib/makefile-regress.sh
+source "$REPO_ROOT/regress/lib/makefile-regress.sh"
 IMAGE="${PGRUST_IMAGE:-pgrust:regress}"
 SRC="$REPO_ROOT/vendor/postgresql/src/pl/plpgsql/src"
 WORK="$REPO_ROOT/regress-work/plpgsql"
@@ -79,19 +81,7 @@ set -- "${ARGS[@]+"${ARGS[@]}"}"
 if [ $# -gt 0 ]; then
     TESTS="$*"
 else
-    # REGRESS is continued across lines with backslashes, and this list is
-    # three lines long. A plain `sed -n 's/^REGRESS *= *//p'` returns only the
-    # first line -- 4 of the 13 tests -- and the run still looks healthy, so
-    # join the continuations explicitly.
-    TESTS="$(awk '
-        /^REGRESS[[:space:]]*=/ { sub(/^REGRESS[[:space:]]*=[[:space:]]*/, ""); inlist = 1 }
-        inlist {
-            cont = /\\$/
-            sub(/[[:space:]]*\\$/, "")
-            printf "%s ", $0
-            if (!cont) exit
-        }
-    ' "$SRC/Makefile")"
+    TESTS="$(regress_list_from_makefile "$SRC/Makefile" plpgsql)"
 fi
 [ -n "${TESTS// }" ] || { echo "FAIL: no tests to run" >&2; exit 2; }
 
