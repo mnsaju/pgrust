@@ -1,0 +1,36 @@
+# refusal-known-failures.allow — ratchet ledger for the B6/B8 refusal lanes.
+# Companion: regress/run-refusal-compat-docker.sh. Precedent:
+# regress/known-failures.allow, contrib-known-failures.allow,
+# plpgsql-known-failures.allow.
+#
+# Semantics are the other ledgers': a listed check may fail without failing CI;
+# an unlisted check that fails breaks the build; a listed check that starts
+# passing is stale and also breaks it. The file can only shrink.
+#
+# SEED: 2026-09-05 against main @ e5971f6b2c. 10 passed, 1 failed.
+#
+# What these lanes assert, and why the ledger is short: when pgrust cannot do
+# something it must say so LOUDLY. Every refusal is also checked for not being
+# a Rust panic -- in a thread-per-backend server an unported path that panics
+# is a crash, not a refusal.
+#
+# Passing today, recorded so a regression is visible: CREATE EXTENSION on
+# dict_int, xml2 and passwordcheck each errors with an actionable message and
+# leaves the server alive; LOAD of a missing library errors; a data directory
+# whose PG_VERSION is an older (17) or newer (19) major is refused with
+# "database files are incompatible with server"; a truncated pg_control is a
+# clean FATAL rather than a panic.
+
+# --- genuine defect ---------------------------------------------------------
+
+# archive_library accepts the name of a library pgrust cannot load, without
+# complaint, so archiving silently never happens. This is the mechanism behind
+# contrib-known-failures.allow's basic_archive entry, which that ledger
+# describes as failing "SILENTLY (no LOAD error), so the runner's not-ported
+# detector cannot see it" -- this check is that observation made executable.
+#
+# It is the most dangerous shape of defect this project has found: a
+# configuration that looks accepted, a backup story that looks configured, and
+# no archived WAL. Closing it means rejecting an unloadable archive_library at
+# ALTER SYSTEM / startup the way C rejects an unloadable shared library.
+archive_library-refused
