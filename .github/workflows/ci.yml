@@ -85,12 +85,19 @@ jobs:
       # before judging. --allow-file ratchets against the known-failure
       # ledger: a new failure fails the build, and so does a ledger entry
       # that has started passing.
+      #
+      # --schedule-file makes the gate cover the whole run. Without it the
+      # comparator's test set is the overlay directory -- 154 of the 230 tests
+      # the step above just executed -- and the other 76 are neither passed nor
+      # failed nor mentioned, which is how four real failures sat behind a
+      # green ratchet until 5 Sep.
       - name: Gate regression results (rowsort comparator + ratchet)
         run: |
           python3 scripts/rowsort_compare.py \
             --sql-dir regress/overlay/sql \
             --actual-dir regress-work/regress-output/results \
             --expected-dir regress-work/regress/expected \
+            --schedule-file regress-work/regress/schedule.run \
             --allow-file regress/known-failures.allow \
             --json regress-work/rowsort-report.json
 

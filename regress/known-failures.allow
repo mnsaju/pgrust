@@ -2,38 +2,72 @@
 # Companion: scripts/rowsort_compare.py --allow-file. Precedent:
 # crates/_support/seams_init/tests/lint-determinism.allow.
 #
-# One overlaid test name per line. A listed test may fail without failing CI;
-# a test NOT listed that fails breaks the build, and a listed test that starts
-# PASSING is reported stale and also breaks the build, so this file can only
-# shrink. Removing an entry is the unit of progress.
+# One test name per line. A listed test may fail without failing CI; a test
+# NOT listed that fails breaks the build, and a listed test that stops failing
+# is reported stale and also breaks the build, so this file can only shrink.
+# Removing an entry is the unit of progress.
 #
 # SEED: 2026-09-04, first execution of the vendored suite (submodule pinned to
 # REL_18_3 = 62d6c7d3df6287f1bd83199c1a746e50d31571a0) against a pgrust server
 # built from main @ 489c1fc542. pg_regress raw: 157/230 "failed", but 136 of
 # those were the overlay's own -- pgrust:rowsort marker echo, which this
-# comparator strips. Real residual: 17 fail + 1 error, seeded below.
+# comparator strips.
+#
+# RESEEDED: 2026-09-05 against main @ d3eeb7edb3, after three comparator
+# defects were fixed. 230 tests checked, 210 exact, 20 fail, 0 error;
+# isolation 131/131. The seed's "17 fail + 1 error" was wrong in three ways,
+# and the corrections are the entries below:
+#
+#   * The comparator's test set was the overlay directory, so only 154 of the
+#     230 scheduled tests were classified at all. create_index, tidscan,
+#     incremental_sort and memoize were failing the whole time behind a green
+#     ratchet. They are now listed.
+#   * compression was never failing. pg_regress accepts expected/<name>.out OR
+#     any of expected/<name>_0..9.out; compression matches compression_1.out
+#     (the no-LZ4 baseline) exactly. Comparing only against compression.out
+#     produced a 181-line diff where the right baseline gives none. Removed.
+#   * numeric_big never ran. It is overlaid but absent from parallel_schedule
+#     (upstream runs it only via EXTRA_TESTS), and "produced no output at all"
+#     was the comparator describing a test nobody asked to execute. Removed;
+#     it is now reported as NOT CHECKED rather than scored.
 #
 # Clusters, for whoever picks these up:
 #   generated columns   — output stops early (~900 deleted lines, 0 added):
 #                         reads as an unported feature or an aborting error,
 #                         not a wrong answer.
-#   COPY                — copy/copy2/copyselect/compression.
+#   COPY                — copy/copy2/copyselect.
 #   partitioning/planner— mixed +/-, consistent with plan-shape divergence from
-#                         the redesigned executor. feat/pgbackrest-compat has
-#                         two written adjudications of exactly this territory
-#                         (ADJUDICATION-PARALLEL-PLAN-SHAPE.md,
-#                         ADJUDICATION-PORTALS-CURSOR-ORDER.md) not on main.
-#   security            — privileges, rowsecurity.
+#                         the redesigned executor. Whoever picks these up will
+#                         need to write the adjudication from scratch against
+#                         main: is the differing plan shape permitted by the
+#                         SQL semantics, or does a row actually change?
+#   parallel plan shape — create_index, tidscan, incremental_sort, memoize.
+#                         One mechanism: pgrust plans these queries in parallel
+#                         (Gather / Workers Planned: 1 / Parallel Seq Scan)
+#                         where C's expected output is serial. Every changed
+#                         line in all four diffs is inside an EXPLAIN block and
+#                         no result row differs, so this is plan shape, not a
+#                         wrong answer. Adjudicate against main: EXPLAIN output
+#                         is not part of the SQL contract, so the question is
+#                         whether any result row differs, and none does here.
+#   security            — privileges, rowsecurity. NOT the same defect as
+#                         contrib/citext's create_index_acl (fixed d3eeb7edb3):
+#                         citext's test confirms DefineIndex uses the ORIGINAL
+#                         userid where necessary, privileges' regress_sro_user
+#                         tests look for the opposite, that it uses the TABLE
+#                         OWNER userid where necessary. Two items, not one.
 
 alter_table
-compression
 copy
 copy2
 copyselect
+create_index
 generated_stored
 generated_virtual
+incremental_sort
 join
 limit
+memoize
 partition_aggregate
 partition_join
 partition_prune
@@ -42,6 +76,4 @@ privileges
 rowsecurity
 select_distinct
 subselect
-
-# error, not a diff: produced no output at all on the seed run.
-numeric_big
+tidscan

@@ -34,10 +34,19 @@ not talk to a database; it operates purely on already-produced .out files
 plus the overlay .sql that was used as pg_regress's/pg_isolation_regress's
 input.
 
+Scope: every test in the schedule gets a verdict, not just the overlaid ones.
+The overlay covers 154 of the suite's 230 scheduled tests; the rest are
+compared verbatim against vendor's expected output, because a comparator that
+examines only the files it has annotations for reports a green ratchet over a
+silently shortened list. Baseline selection follows pg_regress: a test matching
+any of expected/<name>.out or expected/<name>_0..9.out passes, and a failing
+test's diff is reported against the closest of them, named in the output.
+
 Usage:
     rowsort_compare.py --sql-dir regress/overlay/sql \\
         --actual-dir regress-work/regress-output/results \\
         --expected-dir regress-work/regress/expected \\
+        --schedule-file regress-work/regress/schedule.run \\
         [--json report.json]
 
 Exit status: 0 if every file classifies as PASS (exact or rowsort-relaxed),
@@ -55,6 +64,16 @@ from pathlib import Path
 ROWSORT_RE = re.compile(r"^-- pgrust:rowsort\s*$")
 STABLE_TIE_RE = re.compile(r"^-- pgrust:stable-tie\b.*$")
 ANNOTATION_RE = re.compile(r"^-- pgrust:(rowsort|stable-tie)\b")
+
+
+def read_lines(path: Path) -> list[str]:
+    """Reads a .out/.sql file for byte-exact comparison. Several of vendor's
+    expected files are not UTF-8 (euc_kr, collate.windows.win1252, ...), and
+    pg_regress compares them with plain diff, i.e. as bytes. surrogateescape
+    round-trips those bytes losslessly, so equality here means byte equality;
+    _unified_diff sanitises before anything is printed or serialised.
+    """
+    return path.read_text(encoding="utf-8", errors="surrogateescape").splitlines()
 
 
 def strip_annotations(lines: list[str]) -> list[str]:
@@ -161,18 +180,74 @@ class FileResult:
     relaxed_statements: int = 0
     residual_diff: list[str] = field(default_factory=list)
     error: str | None = None
+    # Which baseline the verdict was reached against, and whether this test
+    # carries an overlay .sql (and therefore rowsort/stable-tie annotations)
+    # or was compared verbatim against vendor's expected output.
+    expected_file: str | None = None
+    overlaid: bool = False
 
 
-def compare_file(sql_path: Path, actual_path: Path, expected_path: Path) -> FileResult:
-    name = sql_path.stem
+def expected_candidates(expected_dir: Path, name: str) -> list[Path]:
+    """pg_regress's comparison baselines for one test, in its own order:
+    expected/<name>.out first, then the secondary comparison files
+    expected/<name>_0.out .. <name>_9.out (pg_regress.c results_differ ->
+    get_alternative_expectfile). A test PASSES if it matches ANY of them, and
+    the diff pg_regress reports is the one against the closest match.
+
+    32 of the vendored suite's expected files are such alternatives, 8 of them
+    for overlaid tests. Comparing only against <name>.out therefore both
+    invents failures (collate.linux.utf8, collate.windows.win1252 and numa all
+    legitimately match their _1 variant) and, worse, describes the ones that do
+    fail against the wrong baseline: `compression` diffs by 181 lines against
+    compression.out and by 6 against compression_1.out, so a ledger entry
+    written from the former would be describing the wrong mechanism.
+
+    resultmap (the other pg_regress baseline override) is not consulted: the
+    vendored REL_18_3 resultmap maps float4 on cygwin/mingw only, and this
+    harness runs on Linux.
+    """
+    out = []
+    default = expected_dir / f"{name}.out"
+    if default.exists():
+        out.append(default)
+    for i in range(10):
+        alt = expected_dir / f"{name}_{i}.out"
+        if alt.exists():
+            out.append(alt)
+    return out
+
+
+def compare_test(name: str, sql_path: Path | None, actual_path: Path, expected_dir: Path) -> FileResult:
+    """Verdict for one test against every baseline pg_regress would have
+    tried, keeping the closest match's diff when none of them pass."""
     if not actual_path.exists():
-        return FileResult(name, "error", error=f"no actual output at {actual_path}")
-    if not expected_path.exists():
-        return FileResult(name, "error", error=f"no expected output at {expected_path}")
+        return FileResult(name, "error", overlaid=sql_path is not None, error=f"no actual output at {actual_path}")
+    candidates = expected_candidates(expected_dir, name)
+    if not candidates:
+        return FileResult(
+            name, "error", overlaid=sql_path is not None, error=f"no expected output at {expected_dir}/{name}.out"
+        )
 
-    sql_lines = sql_path.read_text().splitlines()
-    actual_raw = actual_path.read_text().splitlines()
-    expected_lines = expected_path.read_text().splitlines()
+    best: FileResult | None = None
+    for expected_path in candidates:
+        r = compare_file(name, sql_path, actual_path, expected_path)
+        r.expected_file = expected_path.name
+        r.overlaid = sql_path is not None
+        if r.status in ("exact", "rowsort-relaxed"):
+            return r
+        if best is None or len(r.residual_diff) < len(best.residual_diff):
+            best = r
+    assert best is not None
+    return best
+
+
+def compare_file(name: str, sql_path: Path | None, actual_path: Path, expected_path: Path) -> FileResult:
+    # sql_path is None for a test with no overlay .sql: there are no
+    # rowsort/stable-tie annotations to honour, so the comparison is the plain
+    # one pg_regress itself does.
+    sql_lines = read_lines(sql_path) if sql_path is not None else []
+    actual_raw = read_lines(actual_path)
+    expected_lines = read_lines(expected_path)
     actual_lines = strip_annotations(actual_raw)
 
     if actual_lines == expected_lines:
@@ -241,7 +316,11 @@ def compare_file(sql_path: Path, actual_path: Path, expected_path: Path) -> File
 def _unified_diff(expected: list[str], actual: list[str]):
     import difflib
 
-    yield from difflib.unified_diff(expected, actual, fromfile="expected", tofile="actual", lineterm="")
+    for line in difflib.unified_diff(expected, actual, fromfile="expected", tofile="actual", lineterm=""):
+        # Undo read_lines' surrogateescape so the diff can be printed and
+        # JSON-serialised; the comparison itself already happened on the
+        # lossless form.
+        yield line.encode("utf-8", "surrogateescape").decode("utf-8", "backslashreplace")
 
 
 def main() -> int:
@@ -249,6 +328,15 @@ def main() -> int:
     ap.add_argument("--sql-dir", required=True, type=Path, help="overlay sql dir (regress/overlay/sql)")
     ap.add_argument("--actual-dir", required=True, type=Path, help="pg_regress results dir (results/*.out)")
     ap.add_argument("--expected-dir", required=True, type=Path, help="vendor expected dir (expected/*.out)")
+    ap.add_argument(
+        "--schedule-file",
+        type=Path,
+        help="the pg_regress schedule that was run (regress-work/regress/schedule.run). It is the "
+        "authoritative list of what had to be checked: every test in it gets a verdict, a scheduled "
+        "test with no results file is an error, and an overlay .sql that is not in it is reported as "
+        "unchecked rather than silently dropped. Without it the test set is whatever .out files the "
+        "run produced, which cannot show a test that died before writing any.",
+    )
     ap.add_argument("--json", type=Path, help="write a JSON report here")
     ap.add_argument("--show-diffs", action="store_true", help="print residual diffs for failing files")
     ap.add_argument(
@@ -270,31 +358,76 @@ def main() -> int:
             if line:
                 allowed.add(line)
 
-    sql_files = sorted(args.sql_dir.glob("*.sql"))
-    if not sql_files:
+    overlay = {p.stem: p for p in sorted(args.sql_dir.glob("*.sql"))}
+    if not overlay:
         print(f"no .sql files found in {args.sql_dir}", file=sys.stderr)
         return 2
 
+    # What had to be checked. The overlay is only 154 of the suite's 230
+    # scheduled tests; deriving the test set from it alone gave the other 76 no
+    # verdict at all -- a silently shortened test list, in which four real
+    # failures sat invisible behind a green ratchet. The schedule is the
+    # authoritative answer to "what ran"; the results directory is the fallback.
+    if args.schedule_file:
+        if not args.schedule_file.exists():
+            print(f"schedule-file not found: {args.schedule_file}", file=sys.stderr)
+            return 2
+        names: list[str] = []
+        seen: set[str] = set()
+        for line in args.schedule_file.read_text().splitlines():
+            line = line.split("#", 1)[0].strip()
+            if not line.startswith("test:"):
+                continue
+            for n in line[len("test:") :].split():
+                if n not in seen:
+                    seen.add(n)
+                    names.append(n)
+        source = f"schedule {args.schedule_file}"
+    else:
+        # Fallback: "what ran" is whatever the run produced. Taking the union
+        # with the overlay instead would score numeric_big -- overlaid, never
+        # scheduled -- as an error again. A test that crashed before writing
+        # any output is invisible here, which is why --schedule-file is the
+        # supported path and the source is printed either way.
+        names = sorted(p.stem for p in args.actual_dir.glob("*.out"))
+        source = f"{args.actual_dir} (no --schedule-file)"
+    names = sorted(names)
+
     results: list[FileResult] = []
-    for sql_path in sql_files:
-        name = sql_path.stem
-        results.append(compare_file(sql_path, args.actual_dir / f"{name}.out", args.expected_dir / f"{name}.out"))
+    for name in names:
+        results.append(
+            compare_test(name, overlay.get(name), args.actual_dir / f"{name}.out", args.expected_dir)
+        )
+
+    # Overlay files outside the test set were never run, so they carry no
+    # verdict either way. Say so instead of scoring them: numeric_big is
+    # overlaid but absent from parallel_schedule (upstream runs it only via
+    # EXTRA_TESTS), and calling that an "error" put a test that never executed
+    # into the ledger as though pgrust had failed it.
+    not_run = sorted(set(overlay) - set(names))
 
     by_status: dict[str, list[FileResult]] = {}
     for r in results:
         by_status.setdefault(r.status, []).append(r)
 
     total = len(results)
-    print(f"{total} overlaid files checked")
+    n_overlaid = sum(1 for r in results if r.overlaid)
+    print(f"{total} tests checked (from {source})")
+    print(f"  {n_overlaid} with an overlay .sql (rowsort/stable-tie honoured), {total - n_overlaid} compared verbatim")
     for status in ("exact", "rowsort-relaxed", "fail", "error"):
         rs = by_status.get(status, [])
         print(f"  {status}: {len(rs)}")
         if status in ("fail", "error"):
             for r in rs:
-                print(f"    - {r.name}" + (f": {r.error}" if r.error else ""))
+                detail = r.error if r.error else f"vs {r.expected_file}"
+                print(f"    - {r.name}: {detail}")
                 if args.show_diffs and r.residual_diff:
                     for line in r.residual_diff[:40]:
                         print(f"        {line}")
+    if not_run:
+        print(f"  NOT CHECKED (overlaid but not in the test set): {len(not_run)}")
+        for n in not_run:
+            print(f"    - {n}")
 
     if args.json:
         args.json.write_text(
@@ -302,10 +435,13 @@ def main() -> int:
                 {
                     "total": total,
                     "counts": {k: len(v) for k, v in by_status.items()},
+                    "not_checked": not_run,
                     "files": [
                         {
                             "name": r.name,
                             "status": r.status,
+                            "overlaid": r.overlaid,
+                            "expected_file": r.expected_file,
                             "relaxed_statements": r.relaxed_statements,
                             "error": r.error,
                             "residual_diff": r.residual_diff,
@@ -337,7 +473,10 @@ def main() -> int:
     if stale:
         print(f"  STALE entries (now passing)  : {len(stale)}")
         for n in stale:
-            print(f"    - {n}  <- fixed; remove it from the ledger")
+            # Not necessarily "fixed": an entry also goes stale when the test
+            # stopped being scored at all, which is how numeric_big -- never in
+            # parallel_schedule -- sat in the ledger as a pgrust failure.
+            print(f"    - {n}  <- no longer failing; remove it from the ledger")
     if new_failures or stale:
         return 1
     print("  no new failures, no stale entries")
