@@ -15,6 +15,7 @@ types_core = { path = "../../_support/types/types_core" }
 types_error = { path = "../../_support/types/types_error" }
 types_fmgr = { path = "../../_support/types/fmgr" }
 varlena = { path = "../../backend/utils/adt/varlena" }
+detoast = { path = "../../backend/access/common/detoast" }
 adt_uuid = { path = "../../backend/utils/adt/uuid" }
 pg_md5 = { path = "../../common/md5" }
 pg_sha1 = { path = "../../common/sha1" }

@@ -337,10 +337,17 @@ pub fn fc_binary_upgrade_create_empty_extension(
 
     let mut required_extensions: mcx::PgVec<'_, Oid> = mcx::vec_with_capacity_in(mcx, 0)?;
     if !fcinfo.argisnull(6) {
+        // C's PG_GETARG_ARRAYTYPE_P is DatumGetArrayTypeP -> pg_detoast_datum,
+        // not the _packed form: deconstruct_array_builtin reads the ArrayType
+        // header at fixed offsets from the datum start, so it needs the plain
+        // 4-byte-header image. `.data()` strips the header, which makes
+        // `dataoffset` (0 for a no-nulls array) read as `ndim` and the array
+        // deconstruct to zero elements with no error -- silently dropping
+        // every required extension.
         // SAFETY: catalog arg 6 is `_text`, non-null per the check above.
-        let image = unsafe { fcinfo.arg_varlena_packed(6)? };
-        let (elems, _nulls) =
-            arrayfuncs::deconstruct_array_builtin(mcx, image.data(), TEXTOID, false)?;
+        let raw = unsafe { fcinfo.arg_varlena_raw(6) };
+        let image = detoast::detoast_attr(mcx, raw)?;
+        let (elems, _nulls) = arrayfuncs::deconstruct_array_builtin(mcx, &image, TEXTOID, false)?;
         required_extensions = mcx::vec_with_capacity_in(mcx, elems.len())?;
         for &d in elems.iter() {
             let name = datum_str(mcx, d)?;

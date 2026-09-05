@@ -23,8 +23,10 @@
 # their test list — btree_gin 8/30, btree_gist 10/32, pgcrypto 7/25,
 # pg_stat_statements 6/15, test_decoding 6/19 — each reporting PASS on the
 # subset. 83 tests ran for the first time. btree_gin, btree_gist and
-# pg_stat_statements pass in full; pgcrypto is added below; test_decoding's
-# entry is re-annotated. Sweep: 33 passed, 5 failed, 12 skipped.
+# pg_stat_statements pass in full and test_decoding's entry is re-annotated.
+# pgcrypto's newly-reachable pgp-armor failure was fixed the same day rather
+# than ledgered (armor() dropped its header arrays); it passes 24/24.
+# Sweep: 34 passed, 4 failed, 12 skipped.
 #
 # NOT in this file, deliberately: the 12 skipped modules. pgrust has no
 # extension ABI (crates/backend/utils/fmgr/dfmgr: "probin is a registry KEY,
@@ -53,21 +55,6 @@ postgres_fdw
 # a real logical-decoding defect, not a config gap — but its size is now known
 # to be larger than the entry originally implied.
 test_decoding
-
-# pgcrypto: 1 of 24 tests fails — pgp-armor. armor(data, keys, values) ignores
-# the optional header arrays entirely: C emits "Version: ..." / "Comment: ..."
-# lines between the BEGIN marker and the payload, pgrust emits none. The other
-# 23 tests (md5, sha1/sha2, hmac, blowfish, rijndael, des/3des, cast5, the
-# crypt-* family, pgp-decrypt, pgp-encrypt, pgp-pubkey-*, pgp-info) pass.
-# Only reachable since the REGRESS parser fix — pgp-armor is on the second
-# physical line of the list.
-#
-# NOT run, deliberately and visibly: pgcrypto's REGRESS list also contains the
-# make variable $(CF_PGP_TESTS), which expands through $(if $(subst ...)) to
-# pgp-compression under --with-zlib. The runner drops unexpandable tokens and
-# prints a NOTE rather than evaluating make; pgp-compression is therefore
-# uncovered, but visibly so.
-pgcrypto
 
 # --- NOT a defect: unported archive_library ---------------------------------
 

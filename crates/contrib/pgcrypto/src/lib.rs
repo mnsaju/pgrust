@@ -6,8 +6,9 @@ mod pgp;
 use datum::Datum;
 use elog::ereport;
 use types_error::{
-    ErrorLocation, PgError, PgResult, ERRCODE_EXTERNAL_ROUTINE_INVOCATION_EXCEPTION,
-    ERRCODE_FEATURE_NOT_SUPPORTED, ERRCODE_INVALID_PARAMETER_VALUE, NOTICE,
+    ErrorLocation, PgError, PgResult, ERRCODE_ARRAY_SUBSCRIPT_ERROR,
+    ERRCODE_EXTERNAL_ROUTINE_INVOCATION_EXCEPTION, ERRCODE_FEATURE_NOT_SUPPORTED,
+    ERRCODE_INVALID_PARAMETER_VALUE, ERRCODE_NULL_VALUE_NOT_ALLOWED, NOTICE,
 };
 use types_fmgr::{FmgrInfo, FunctionCallInfoBaseData as Fcinfo, PGFunction};
 
@@ -297,16 +298,9 @@ fn fc_pg_armor(_f: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> PgResult<Datum
     let data = unsafe { fcinfo.arg_varlena_packed(0)? }.data().to_vec();
     let (keys, values) = if fcinfo.nargs() == 3 {
         let scratch = mcx::MemoryContext::new("pgp_armor headers");
-        let ki = unsafe { fcinfo.arg_varlena_packed(1)? }.data().to_vec();
-        let vi = unsafe { fcinfo.arg_varlena_packed(2)? }.data().to_vec();
-        let k = deconstruct_nonnull_text(scratch.mcx(), &ki)?;
-        let v = deconstruct_nonnull_text(scratch.mcx(), &vi)?;
-        if k.len() != v.len() {
-            return Err(px_err(
-                "pgp_armor: number of keys and values must be equal".to_string(),
-            ));
-        }
-        (k, v)
+        // SAFETY: strict fn — args 1/2 are non-null text[] varlenas.
+        let (ki, vi) = unsafe { (fcinfo.arg_varlena_raw(1), fcinfo.arg_varlena_raw(2)) };
+        parse_key_value_arrays(scratch.mcx(), ki, vi)?
     } else {
         (Vec::new(), Vec::new())
     };
@@ -339,30 +333,119 @@ fn fc_pgp_armor_headers(flinfo: Option<&mut FmgrInfo>, fcinfo: &mut Fcinfo) -> P
     Ok(srf.finish(fcinfo))
 }
 
-fn deconstruct_nonnull_text(mcx: mcx::Mcx<'_>, image: &[u8]) -> PgResult<Vec<Vec<u8>>> {
-    let (elems, nulls) =
-        arrayfuncs::construct::deconstruct_array_builtin(mcx, image, types_core::TEXTOID, true)?;
-    let mut out = Vec::with_capacity(elems.len());
-    for (d, &isnull) in elems.iter().zip(nulls.iter()) {
-        if isnull {
-            return Err(px_err(
-                "pgp_armor: null value not allowed in header".to_string(),
+// parse_key_value_arrays (pgp-pgsql.c:757). Every check below is C's, in C's
+// order: all key checks for element i, then all value checks for element i.
+//
+// The arrays arrive as raw argument images. C reaches them through
+// PG_GETARG_ARRAYTYPE_P, i.e. DatumGetArrayTypeP -> pg_detoast_datum, NOT the
+// _packed form, and that matters: deconstruct_array_builtin reads the
+// ArrayType header at fixed offsets from the datum start (ndim at 4, elemtype
+// at 12), so it needs the plain 4-byte-header image. Handing it a
+// header-stripped image makes `dataoffset` (0 for a no-nulls array) read as
+// `ndim`, and the array then deconstructs to zero elements with no error --
+// which is how armor(data, keys, values) silently dropped every header, and
+// why the count check below never fired either.
+fn parse_key_value_arrays(
+    mcx: mcx::Mcx<'_>,
+    key_image: &[u8],
+    val_image: &[u8],
+) -> PgResult<(Vec<Vec<u8>>, Vec<Vec<u8>>)> {
+    let key_array = detoast::detoast_attr(mcx, key_image)?;
+    let val_array = detoast::detoast_attr(mcx, val_image)?;
+
+    let nkdims = arrayfuncs::arr_ndim(&key_array);
+    let nvdims = arrayfuncs::arr_ndim(&val_array);
+    if nkdims > 1 || nkdims != nvdims {
+        return Err(PgError::error("wrong number of array subscripts")
+            .with_sqlstate(ERRCODE_ARRAY_SUBSCRIPT_ERROR)
+            .into());
+    }
+    if nkdims == 0 {
+        return Ok((Vec::new(), Vec::new()));
+    }
+
+    let (key_datums, key_nulls) = arrayfuncs::construct::deconstruct_array_builtin(
+        mcx,
+        &key_array,
+        types_core::TEXTOID,
+        true,
+    )?;
+    let (val_datums, val_nulls) = arrayfuncs::construct::deconstruct_array_builtin(
+        mcx,
+        &val_array,
+        types_core::TEXTOID,
+        true,
+    )?;
+
+    if key_datums.len() != val_datums.len() {
+        return Err(PgError::error("mismatched array dimensions")
+            .with_sqlstate(ERRCODE_ARRAY_SUBSCRIPT_ERROR)
+            .into());
+    }
+
+    let mut keys = Vec::with_capacity(key_datums.len());
+    let mut values = Vec::with_capacity(val_datums.len());
+    for i in 0..key_datums.len() {
+        if key_nulls[i] {
+            return Err(null_not_allowed("header key"));
+        }
+        let k = text_datum_bytes(key_datums[i]);
+        if !k.is_ascii() {
+            return Err(bad_header(
+                "header key must not contain non-ASCII characters",
             ));
         }
-        let p = d.as_usize() as *const u8;
-        // SAFETY: non-null text element datum inside the array image.
-        let bytes = unsafe {
-            let total = types_tuple::varatt::varsize_any(p);
-            let hdr = if types_tuple::varatt::varatt_is_1b(p) {
-                1
-            } else {
-                4
-            };
-            core::slice::from_raw_parts(p.add(hdr), total - hdr).to_vec()
-        };
-        out.push(bytes);
+        if k.windows(2).any(|w| w == b": ") {
+            return Err(bad_header("header key must not contain \": \""));
+        }
+        if k.contains(&b'\n') {
+            return Err(bad_header("header key must not contain newlines"));
+        }
+
+        if val_nulls[i] {
+            return Err(null_not_allowed("header value"));
+        }
+        let v = text_datum_bytes(val_datums[i]);
+        if !v.is_ascii() {
+            return Err(bad_header(
+                "header value must not contain non-ASCII characters",
+            ));
+        }
+        if v.contains(&b'\n') {
+            return Err(bad_header("header value must not contain newlines"));
+        }
+
+        keys.push(k);
+        values.push(v);
     }
-    Ok(out)
+    Ok((keys, values))
+}
+
+fn null_not_allowed(what: &str) -> Box<PgError> {
+    PgError::error(format!("null value not allowed for {what}"))
+        .with_sqlstate(ERRCODE_NULL_VALUE_NOT_ALLOWED)
+        .into()
+}
+
+fn bad_header(msg: &str) -> Box<PgError> {
+    PgError::error(msg)
+        .with_sqlstate(ERRCODE_INVALID_PARAMETER_VALUE)
+        .into()
+}
+
+// TextDatumGetCString on a non-null text element inside a deconstructed array.
+fn text_datum_bytes(d: Datum) -> Vec<u8> {
+    let p = d.as_usize() as *const u8;
+    // SAFETY: non-null text element datum inside the array image.
+    unsafe {
+        let total = types_tuple::varatt::varsize_any(p);
+        let hdr = if types_tuple::varatt::varatt_is_1b(p) {
+            1
+        } else {
+            4
+        };
+        core::slice::from_raw_parts(p.add(hdr), total - hdr).to_vec()
+    }
 }
 
 fn lookup(function: &str) -> Option<PGFunction> {
