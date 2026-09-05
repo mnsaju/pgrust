@@ -94,6 +94,19 @@ jobs:
             --allow-file regress/known-failures.allow \
             --json regress-work/rowsort-report.json
 
+      # PL/pgSQL tier: upstream's 13 supplementary plpgsql suites, which are
+      # NOT part of src/test/regress -- the core schedule runs one large
+      # `plpgsql` test, while procedure/transaction control, record and
+      # composite datums, domains over composites and CONSTANT/NOT NULL
+      # variable properties live only here. Unlike the two runners above, this
+      # one keeps the pg_regress driver in its own container and drives the
+      # pgrust server over a docker network, so a driver fault cannot be
+      # mistaken for a server fault. Gated by its own ratchet ledger.
+      - name: Run plpgsql supplementary suites (gated)
+        run: |
+          regress/run-plpgsql-regress-docker.sh \
+            --allow-file regress/plpgsql-known-failures.allow
+
       # Extensions tier: upstream's per-contrib suites, same pg_regress
       # --use-existing mechanism as the core suite. Gated by its own ratchet
       # ledger. Modules pgrust does not port are classified SKIP by the runner
@@ -112,4 +125,6 @@ jobs:
             regress-work/rowsort-report.json
             regress-work/regress-output/regression.diffs
             regress-work/contrib/*.log
+            regress-work/plpgsql/plpgsql.log
+            regress-work/plpgsql/output/regression.diffs
           if-no-files-found: ignore

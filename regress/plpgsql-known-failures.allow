@@ -1,0 +1,55 @@
+# plpgsql-known-failures.allow — ratchet ledger for upstream's *supplementary*
+# PL/pgSQL suites (vendor/postgresql/src/pl/plpgsql/src). Companion:
+# regress/run-plpgsql-regress-docker.sh. Precedent: regress/known-failures.allow
+# and regress/contrib-known-failures.allow.
+#
+# Semantics are the other two ledgers': a listed test may fail without failing
+# CI; an unlisted test that fails breaks the build; a listed test that starts
+# PASSING is stale and also breaks the build. The file can only shrink.
+#
+# SEED: 2026-09-05, first execution of these suites against pgrust
+# (submodule REL_18_3 = 62d6c7d3df6287f1bd83199c1a746e50d31571a0, server built
+# from main @ 96703051d5). Result: 5 passed, 8 failed, 0 harness errors.
+# Every entry below was read before it was written; none is a raw count.
+#
+# Note what these suites add over the core suite's single 122 KB `plpgsql`
+# test, which passes: procedure/transaction control, record and composite
+# datums, domains over composites, and CONSTANT/NOT NULL variable properties.
+# The failures cluster in exactly the area the core test does not reach.
+#
+# Clusters, for whoever picks these up:
+#
+#   composite / record datums (PLPGSQL_TTYPE_REC) — four of the eight, and
+#     almost certainly one root cause:
+#       plpgsql_trigger   "record type has not been registered" for row(old.*)
+#       plpgsql_record    "cannot cast type record to two_int8s"
+#       plpgsql_varprops  composite variables initialise to NULL, and CONSTANT
+#                         is not enforced on a composite field assignment
+#       plpgsql_domain    self-reported: "domain-over-composite variables
+#                         (PLPGSQL_TTYPE_REC) unported — unit
+#                         backend-pl-plpgsql-comp" (pl_comp.c:1998-2005)
+#
+#   error CONTEXT / message text — divergences in what is reported, not in
+#     what happens:
+#       plpgsql_cache     wrong statement kind in the CONTEXT frame ("at
+#                         assignment" for "at RETURN"), and a missing
+#                         "SQL statement" frame
+#       plpgsql_misc      3-part %ROWTYPE name gives "improper qualified name"
+#                         where C gives "cross-database references are not
+#                         implemented"
+#
+#   CALL / procedures:
+#       plpgsql_call        "cache lookup failed for function <oid>" when a
+#                           procedure argument is itself a function call —
+#                           reads as a genuine OID/cache defect, not unported
+#       plpgsql_transaction self-reported: "stmt_call (pl_gram.y): DO unported
+#                           — unit backend-pl-plpgsql-gram"
+
+plpgsql_cache
+plpgsql_call
+plpgsql_domain
+plpgsql_misc
+plpgsql_record
+plpgsql_transaction
+plpgsql_trigger
+plpgsql_varprops
