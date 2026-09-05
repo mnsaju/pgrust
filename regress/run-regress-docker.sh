@@ -122,9 +122,17 @@ for db in regression isolation_regression; do
 done
 
 echo "==> Running pg_regress"
+# A hang must be a defined failure, not an open-ended wait. This suite runs in
+# about a minute on a hosted runner and a few minutes locally; run
+# 33967785391 sat in it for over half an hour with no output and would have
+# burned GitHub's six-hour default job timeout before failing with nothing to
+# show. `timeout` runs INSIDE the container so the driver dies with it, and
+# exit 124 is reported distinctly below -- a hang and a test failure are
+# different findings and must not arrive looking the same.
+REGRESS_TIMEOUT="${PGRUST_REGRESS_TIMEOUT:-1200}"
 REGRESS_BIN=/usr/lib/postgresql/18/lib/pgxs/src/test/regress/pg_regress
 REGRESS_STATUS=0
-docker exec -u postgres "$CONTAINER" "$REGRESS_BIN" \
+docker exec -u postgres "$CONTAINER" timeout -k 30 "$REGRESS_TIMEOUT" "$REGRESS_BIN" \
     --use-existing --host=localhost --port=5432 --user=postgres \
     --dbname=regression \
     --inputdir=/regress-input --outputdir=/tmp/regress-output \
@@ -134,7 +142,7 @@ docker exec -u postgres "$CONTAINER" "$REGRESS_BIN" \
 echo "==> Running pg_isolation_regress"
 ISOLATION_BIN=/usr/lib/postgresql/18/lib/pgxs/src/test/isolation/pg_isolation_regress
 ISOLATION_STATUS=0
-docker exec -u postgres "$CONTAINER" "$ISOLATION_BIN" \
+docker exec -u postgres "$CONTAINER" timeout -k 30 "$REGRESS_TIMEOUT" "$ISOLATION_BIN" \
     --use-existing --host=localhost --port=5432 --user=postgres \
     --dbname=isolation_regression \
     --inputdir=/isolation-input --outputdir=/tmp/isolation-output \
@@ -148,6 +156,15 @@ docker cp "$CONTAINER:/tmp/isolation-output" "$WORK/isolation-output" >/dev/null
 
 echo "==> pg_regress exit status: $REGRESS_STATUS (0=all passed, 1=some failed, 2=could not run)"
 echo "==> pg_isolation_regress exit status: $ISOLATION_STATUS"
+for pair in "pg_regress:$REGRESS_STATUS" "pg_isolation_regress:$ISOLATION_STATUS"; do
+    if [ "${pair#*:}" -eq 124 ]; then
+        echo "FAIL: ${pair%%:*} HUNG and was killed after ${REGRESS_TIMEOUT}s."
+        echo "      This is not a test failure. The suite normally finishes in"
+        echo "      about a minute on a hosted runner. Treat it as a"
+        echo "      concurrency finding and keep the artifacts: something"
+        echo "      blocked and never came back."
+    fi
+done
 if [ -f "$WORK/regress-output/regression.diffs" ]; then
     echo "==> raw regress diffs: $WORK/regress-output/regression.diffs"
 fi
@@ -172,6 +189,11 @@ HINT
 # problem, e.g. the server never came up correctly) -- that's a real script
 # failure. Status 1 ("some tests failed") is a legitimate, expected outcome
 # to report on, not a script error.
+if [ "$REGRESS_STATUS" -eq 124 ] || [ "$ISOLATION_STATUS" -eq 124 ]; then
+    echo "FAIL: a driver hung (see above); failing rather than letting the job"
+    echo "      run to its own timeout with nothing collected."
+    exit 1
+fi
 if [ "$REGRESS_STATUS" -eq 2 ] || [ "$ISOLATION_STATUS" -eq 2 ]; then
     echo "FAIL: a driver could not run the suite at all (status 2) -- see docker logs $CONTAINER"
     exit 1

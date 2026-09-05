@@ -33,6 +33,7 @@ jobs:
   checks:
     name: build / test / fmt (clippy informational)
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
@@ -78,6 +79,11 @@ jobs:
   regress:
     name: PostgreSQL regression/isolation suite
     runs-on: ubuntu-latest
+    # GitHub's default is SIX HOURS. A hung suite would burn all of it and then
+    # fail with nothing collected, which is what run 33967785391 was doing.
+    # The runners themselves also bound their drivers (PGRUST_REGRESS_TIMEOUT),
+    # so this is the outer backstop, not the primary guard.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
