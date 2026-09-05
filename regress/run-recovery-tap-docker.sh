@@ -199,12 +199,24 @@ declare -a T_PASS=() T_FAIL=() T_BAIL=() T_TIMEOUT=() T_SKIP=()
 : > "$WORK/recovery-full.log"
 for t in $TESTS; do
     out="$WORK/tap-one.out"
+    # TESTDATADIR/TESTLOGDIR, not TESTDIR: PostgreSQL::Test::Utils reads
+    #     $tmp_check = $ENV{TESTDATADIR} ? "$ENV{TESTDATADIR}" : "tmp_check";
+    # and ignores TESTDIR entirely. With only TESTDIR set, tmp_check fell back
+    # to the RELATIVE "tmp_check", and Cluster.pm then built
+    #     archive_command = 'cp "%p" "tmp_check/t_..._data/archives/%f"'
+    # The test process resolves that (its cwd is the suite dir); the archiver
+    # process does not, because the postmaster chdirs to PGDATA at startup. So
+    # every cp wrote into a path that did not exist, the archive stayed empty,
+    # and all eight archive/replay tests timed out waiting for WAL that was
+    # never archived -- looking exactly like a pgrust durability defect.
     set +e
     docker exec \
         -e "PATH=$SHIM_PATH" \
         -e "PERL5LIB=/pgsrc/src/test/perl" \
         -e "PGRUST_TAP_WITNESS=$WITNESS" \
         -e "TESTDIR=/tapwork/suite" \
+        -e "TESTDATADIR=/tapwork/suite/tmp_check" \
+        -e "TESTLOGDIR=/tapwork/suite/log" \
         -e "PG_REGRESS=/usr/lib/postgresql/18/lib/pgxs/src/test/regress/pg_regress" \
         -e "TMPDIR=/tapwork/tmp" -e TZ=UTC -e PG_TEST_NOCLEAN=1 \
         -e "enable_injection_points=no" \
