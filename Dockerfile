@@ -45,13 +45,28 @@
 # it would make initdb's bootstrap backend look for dict_snowball.so etc. in
 # the wrong place.
 ARG PG_MAJOR=18
+# The PGDG package version. This is the project's TEST ORACLE, not just a build
+# input: the harness runs PGDG's pg_regress, diffs against PGDG's psql
+# rendering, and TAP drives PGDG's pg_ctl. Pin it to the release pgrust
+# actually targets -- GOAL.md says PostgreSQL 18.3, the vendored corpus is
+# REL_18_3, and the pgrust binary reports "postgres (PostgreSQL) 18.3".
+#
+# It had drifted to 18.6, which meant an 18.6 pg_regress and an 18.6 psql were
+# judging an 18.3 corpus, and pg_ctl's find_other_exec() version check would
+# have refused to launch the pgrust backend at all (it compares `postgres -V`
+# against pg_ctl's own PG_VERSION) -- the reason the TAP tiers could not simply
+# be pointed at pgrust.
+ARG PG_PKG_VERSION=18.3-1.pgdg12+1
 ARG PG_LIBROOT=/usr/lib/postgresql/18
 ARG PG_SHAREDIR=/usr/share/postgresql/18
 
 # ---------------------------------------------------------------------------
 # Stage 1: build the pgrust `postgres` binary
 # ---------------------------------------------------------------------------
-FROM rust:1-bookworm AS rustbuild
+# Pinned by digest: a floating tag makes every rebuild a different product.
+# `rust:1-bookworm` as of 2026-09-05. Bump deliberately, never incidentally --
+# and re-record the build manifest (stage `manifest`) when you do.
+FROM rust:1-bookworm@sha256:82150a52ec202c1b14d7817e14516c392bb7f5cfebd88f1ed531cb37ebd39922 AS rustbuild
 
 ARG PG_SHAREDIR
 ENV DEBIAN_FRONTEND=noninteractive
@@ -81,16 +96,49 @@ COPY . /src
 # staged share tree (contrib extension control/SQL files + tsearch data, staged
 # by main_main's build.rs next to the binary) are copied OUT of the cache mount
 # within the same RUN, because cache mounts are not part of the image.
+# The base image's bundled rustc is NOT what builds this: rustup honours
+# rust-toolchain.toml and fetches the pinned channel on first invocation. That
+# is correct but invisible, so assert it -- a silently different compiler is a
+# silently different binary, and `--locked` guards the crate graph but not the
+# toolchain.
+RUN set -eux; \
+    want="$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)"; \
+    test -n "$want"; \
+    got="$(rustc --version | cut -d' ' -f2)"; \
+    if [ "$got" != "$want" ]; then \
+        echo "toolchain mismatch: rust-toolchain.toml wants $want, rustc is $got" >&2; \
+        exit 1; \
+    fi; \
+    echo "rustc $got (pinned)"
+
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/build/target \
     cargo build --release --locked --bin postgres \
     && cp /build/target/release/postgres /opt/pgrust-postgres \
     && cp -r /build/target/release/share /opt/pgrust-share
 
+# Build manifest: the inputs that decide what this binary IS. Two builds of the
+# same commit must produce the same manifest; if they do not, the difference is
+# named here rather than discovered in a bug report. Gate C's release artifacts
+# are signed against this.
+ARG RUST_BASE_DIGEST
+ARG DEBIAN_BASE_DIGEST
+ARG PG_PKG_VERSION
+RUN set -eux; \
+    { \
+        echo "rustc=$(rustc --version | cut -d' ' -f2)"; \
+        echo "cargo_lock_sha256=$(sha256sum Cargo.lock | cut -d' ' -f1)"; \
+        echo "rust_base=${RUST_BASE_DIGEST:-unset}"; \
+        echo "debian_base=${DEBIAN_BASE_DIGEST:-unset}"; \
+        echo "pg_pkg_version=${PG_PKG_VERSION:-unset}"; \
+    } > /opt/build-manifest.txt; \
+    cat /opt/build-manifest.txt
+
 # ---------------------------------------------------------------------------
 # Stage 2: obtain the minimal C tools (initdb, psql, libpq, share) from PGDG
 # ---------------------------------------------------------------------------
-FROM debian:bookworm-slim AS pgtools
+# `debian:bookworm-slim` as of 2026-09-05, pinned by digest (see above).
+FROM debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171 AS pgtools
 
 ARG PG_LIBROOT
 ARG PG_SHAREDIR
@@ -99,6 +147,20 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Add the PGDG apt repo and install the PostgreSQL 18 server + client packages
 # (server package carries initdb + postgres + the loadable modules + the
 # share/ tree; client package carries psql + libpq).
+#
+# PINNED, and the pin matters more here than anywhere else in this file: these
+# packages are not just build inputs, they are the project's TEST ORACLE. The
+# regression harness runs PGDG's pg_regress, compares against PGDG's psql
+# rendering, and Gate B will drive PGDG's pg_dump/pg_basebackup. An unpinned
+# `postgresql-18` silently re-points that oracle at whatever minor release
+# happens to be current -- it had already drifted to 18.6 while pgrust targets
+# 18.3 and the vendored corpus is REL_18_3.
+#
+# Override deliberately when moving the oracle (PGDG expires old versions from
+# the repo, so this pin will eventually need bumping -- that is the point: it
+# fails loudly instead of drifting quietly):
+#   docker build --build-arg PG_PKG_VERSION=18.4-1.pgdg12+1 .
+ARG PG_PKG_VERSION
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates gnupg wget \
     && install -d /usr/share/postgresql-common/pgdg \
@@ -108,7 +170,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         > /etc/apt/sources.list.d/pgdg.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
-        postgresql-18 postgresql-client-18 \
+        "postgresql-18=${PG_PKG_VERSION}" "postgresql-client-18=${PG_PKG_VERSION}" \
     && rm -rf /var/lib/apt/lists/*
 
 # Sanity-check the layout the final stage relies on, and gather the non-glibc
@@ -121,6 +183,11 @@ RUN set -eux; \
     test -f "${PG_LIBROOT}/lib/dict_snowball.so"; \
     test -f "${PG_SHAREDIR}/postgres.bki"; \
     test -d "${PG_SHAREDIR}/timezonesets"; \
+    dpkg-query -W -f='pg_pkg_installed=${Package}=${Version}\n' \
+        postgresql-18 postgresql-client-18 > /opt/pgtools-manifest.txt; \
+    "${PG_LIBROOT}/bin/postgres" --version \
+        | sed 's/^/pg_server_version=/' >> /opt/pgtools-manifest.txt; \
+    cat /opt/pgtools-manifest.txt; \
     mkdir -p /opt/runlibs; \
     for b in "${PG_LIBROOT}"/bin/initdb "${PG_LIBROOT}"/bin/psql "${PG_LIBROOT}"/bin/postgres; do \
         ldd "$b" | awk '/=> \//{print $3}'; \
@@ -131,7 +198,8 @@ RUN set -eux; \
 # ---------------------------------------------------------------------------
 # Stage 3: runtime image — drop-in compatible with the official postgres image
 # ---------------------------------------------------------------------------
-FROM debian:bookworm-slim AS final
+# `debian:bookworm-slim` as of 2026-09-05, pinned by digest (see above).
+FROM debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171 AS final
 
 ARG PG_MAJOR
 ARG PG_LIBROOT
@@ -172,6 +240,12 @@ ENV PG_MAJOR=${PG_MAJOR}
 # The pgrust binary (this IS the user-facing server). It is named
 # `pgrust-postgres` so the C `postgres` (needed by initdb) keeps the bare
 # `postgres` name on PATH; the entrypoint launches the server by this path.
+# The build manifest travels with the image: `docker run --rm <img> cat
+# /usr/local/share/pgrust/build-manifest.txt` answers "what exactly is this?"
+# without a rebuild. Gate D's diagnostic bundle collects it.
+COPY --from=rustbuild /opt/build-manifest.txt /usr/local/share/pgrust/build-manifest.txt
+COPY --from=pgtools /opt/pgtools-manifest.txt /usr/local/share/pgrust/pgtools-manifest.txt
+
 COPY --from=rustbuild /opt/pgrust-postgres /usr/local/bin/pgrust-postgres
 # pgrust's own contrib extension files + tsearch data, staged by the build
 # next to the binary (CREATE EXTENSION resolves <exe dir>/share/extension
