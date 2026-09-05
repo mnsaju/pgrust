@@ -11,6 +11,13 @@
 # (62d6c7d3df6287f1bd83199c1a746e50d31571a0) against pgrust built from
 # main @ 4ea755227a. Result: 33 passed, 5 failed, 12 skipped, 0 hard failures.
 #
+# 2026-09-05: hstore removed (now 34 passed, 4 failed). Its parser kept a local
+# copy of scansup.c's scanner_isspace that omitted \v (0x0b), so
+# E'key\u000B=>value\u000B'::hstore left the vertical tab inside the key and
+# value instead of skipping it as surrounding whitespace. The \x0B seen in the
+# diff was psql rendering that raw byte (mbprint.c pg_wcsformat), not an
+# escaping bug in hstore's output — cpw already matches C exactly.
+#
 # NOT in this file, deliberately: the 12 skipped modules. pgrust has no
 # extension ABI (crates/backend/utils/fmgr/dfmgr: "probin is a registry KEY,
 # never a file: no C ABI exists to dlopen"), so an unported module reports
@@ -23,13 +30,6 @@
 # upstream succeeds. citext's own tests pass; this is the ACL path. Same
 # territory as the core suite's privileges/rowsecurity failures.
 citext
-
-# hstore/hstore_utf8: 16-line diff, one bug — control characters are escaped
-# on output where upstream emits them literally:
-#   expected  "key"=>"value"
-#   actual    "key\x0B"=>"value\x0B"
-# hstore's main test passes.
-hstore
 
 # postgres_fdw: "use_remote_estimate is not yet supported (phase 3)" — an
 # explicitly unported feature, self-reported by the code. Largest diff in the

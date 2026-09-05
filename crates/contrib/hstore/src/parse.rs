@@ -7,9 +7,12 @@ use types_error::{PgError, PgResult, ERRCODE_SYNTAX_ERROR};
 use crate::repr::Pair;
 use crate::{check_key_len, check_val_len};
 
-// scanner_isspace (scansup.c).
+// scanner_isspace (scansup.c), which must match scan.l's {space} list. Kept
+// local rather than importing parser_small1: that crate reaches into the
+// catalog (table, lsyscache, elog), which a contrib type crate has no business
+// depending on for a pure byte predicate. `is_space_matches_scansup` pins it.
 fn is_space(c: u8) -> bool {
-    matches!(c, b' ' | b'\t' | b'\n' | b'\r' | 0x0c)
+    matches!(c, b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c)
 }
 
 enum Gv {
@@ -233,6 +236,37 @@ mod tests {
         assert_eq!(kv(r#"a=>"NULL""#), vec![("a".into(), Some("NULL".into()))]);
         assert_eq!(kv(r"a\=>b=>1"), vec![("a=>b".into(), Some("1".into()))]);
         assert!(kv("").is_empty());
+    }
+
+    // scansup.c's scanner_isspace: ' ', \t, \n, \r, \v, \f and nothing else.
+    // 0x0b was missing here, so `E'key\u000B=>value\u000B'::hstore` kept the
+    // vertical tab inside the key and value instead of skipping it as
+    // surrounding whitespace (contrib/hstore's hstore_utf8 test).
+    #[test]
+    fn is_space_matches_scansup() {
+        for c in [b' ', b'\t', b'\n', b'\r', 0x0b, 0x0c] {
+            assert!(is_space(c), "0x{c:02x} should be scanner whitespace");
+        }
+        for c in 0u8..=0xff {
+            if !matches!(c, b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c) {
+                assert!(!is_space(c), "0x{c:02x} should not be scanner whitespace");
+            }
+        }
+    }
+
+    #[test]
+    fn whitespace_around_tokens_is_skipped() {
+        // One case per scanner_isspace character, in the shape hstore_utf8
+        // uses: the byte surrounds the key and the value and must vanish.
+        for ws in [b' ', b'\t', b'\n', b'\r', 0x0b, 0x0c] {
+            let w = ws as char;
+            let input = format!("key{w}=>value{w}");
+            assert_eq!(
+                kv(&input),
+                vec![("key".into(), Some("value".into()))],
+                "whitespace 0x{ws:02x} was not skipped"
+            );
+        }
     }
 
     #[test]
