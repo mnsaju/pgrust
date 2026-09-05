@@ -62,7 +62,22 @@ fn park_timeout_expires() {
 // dropped cross-thread unpark leaves the caller's predicate flagged but the
 // slot un-notified; a minutes-class caller timeout (the checkpointer main
 // lap) must not be the only backstop. Driven through Slot::park_core with a
-// virtual clock: deterministic, no wall-time sleeps.
+// virtual clock, so no wall-time sleeps.
+//
+// NOT deterministic, despite what this comment used to claim. The ticker
+// thread advances the virtual clock freely, with no handshake against the
+// parking thread, so if the parker is scheduled late the clock can already
+// be past the caller deadline by the time it parks -- and the assertion then
+// sees TimedOut where it expects Recheck. That is exactly how it failed on a
+// loaded CI runner (run 33970035319), having passed everywhere until then.
+//
+// The margins below make the race implausible rather than impossible: the
+// clock moves one unit per tick instead of a hundred, and the caller deadline
+// sits four thousand cadences away instead of twenty, so a spurious TimedOut
+// needs the parker starved for a million ticks. The real fix is a handshake
+// -- VirtualClock already tracks registered `sleepers`, so a ticker that only
+// advances once a sleeper is present would be genuinely deterministic -- and
+// belongs to whoever owns the waiter contract.
 #[test]
 fn timed_park_lapped_by_cadence_returns_recheck() {
     static CLK: clock::virtual_time::VirtualClock = clock::virtual_time::VirtualClock::new();
@@ -72,14 +87,14 @@ fn timed_park_lapped_by_cadence_returns_recheck() {
     let stop2 = Arc::clone(&stop);
     let ticker = std::thread::spawn(move || {
         while !stop2.load(Ordering::SeqCst) {
-            CLK.advance(100);
+            CLK.advance(1);
             std::thread::yield_now();
         }
     });
-    // Caller deadline 5000ms, cadence 250ms: the cadence lap fires FIRST and
+    // Caller deadline far beyond the cadence: the cadence lap fires FIRST and
     // reports Recheck (re-test + re-park), never sleeping out the deadline.
     assert_eq!(
-        slot.park_core(Some(5_000), Some(250), &CLK),
+        slot.park_core(Some(1_000_000), Some(250), &CLK),
         ParkResult::Recheck
     );
     // Caller deadline shorter than the cadence: TimedOut, exactly as before.
