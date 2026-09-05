@@ -115,8 +115,34 @@ for mod in "${MODULES[@]}"; do
     mk="$CONTRIB_SRC/$mod/Makefile"
     [ -f "$mk" ] || { SKIPPED+=("$mod (no Makefile)"); skip=$((skip+1)); continue; }
 
-    # REGRESS may be continued across lines with backslashes.
-    tests="$(sed -n 's/^REGRESS[[:space:]]*=[[:space:]]*//p' "$mk" | tr -d '\\' | tr '\n' ' ')"
+    # REGRESS is continued across backslashes in five modules (btree_gin,
+    # btree_gist, pgcrypto, pg_stat_statements, test_decoding). A plain
+    # `sed -n 's/^REGRESS *= *//p'` matches only lines that START with REGRESS,
+    # so every continuation line is dropped -- 84 tests silently unrun across
+    # those five, each still reporting PASS on the subset. Join explicitly.
+    tests="$(awk '
+        /^REGRESS[[:space:]]*=/ { sub(/^REGRESS[[:space:]]*=[[:space:]]*/, ""); inlist = 1 }
+        inlist {
+            cont = /\\$/
+            sub(/[[:space:]]*\\$/, "")
+            printf "%s ", $0
+            if (!cont) exit
+        }
+    ' "$mk")"
+
+    # A REGRESS entry can be a make variable (pgcrypto's $(CF_PGP_TESTS), which
+    # expands through $(if $(subst ...)) to pgp-compression or a DISABLED
+    # placeholder depending on --with-zlib). Evaluating make is not this
+    # runner's job, but passing the token through unexpanded makes pg_regress
+    # try to open "sql/$(CF_PGP_TESTS).sql" and bail out the whole module. Drop
+    # such tokens -- and SAY SO, because a silently shortened list is precisely
+    # the defect this parser was fixed for.
+    unexpanded="$(tr ' ' '\n' <<<"$tests" | grep -F '$(' || true)"
+    if [ -n "$unexpanded" ]; then
+        tests="$(tr ' ' '\n' <<<"$tests" | grep -vF '$(' | tr '\n' ' ')"
+        printf '  NOTE  %-22s skipping unexpanded make variable(s): %s\n' \
+            "$mod" "$(tr '\n' ' ' <<<"$unexpanded")"
+    fi
     [ -n "${tests// }" ] || { SKIPPED+=("$mod (no REGRESS tests)"); skip=$((skip+1)); continue; }
 
     # The extension the module provides: its .control file's stem. Some modules
